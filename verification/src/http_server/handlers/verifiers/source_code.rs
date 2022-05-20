@@ -1,7 +1,7 @@
 use actix_web::{web::Json, Error};
 use serde::{Deserialize, Serialize};
 
-use super::common::CommonFields;
+use super::common::VerificationBase;
 
 #[derive(Debug, Deserialize)]
 pub struct ContractLibrary {
@@ -20,7 +20,7 @@ pub struct FlattenedSource {
 
 #[derive(Debug, Deserialize)]
 pub struct VerificateRequest {
-    common_fields: CommonFields,
+    base: VerificationBase,
     flattended_source: FlattenedSource,
 }
 
