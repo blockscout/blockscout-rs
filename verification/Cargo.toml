@@ -1,0 +1,8 @@
+[package]
+name = "verification"
+version = "0.1.0"
+# authors = [""]
+edition = "2021"
+repository = "https://github.com/blockscout/blockscout-rs/verification"
+
+[dependencies]
