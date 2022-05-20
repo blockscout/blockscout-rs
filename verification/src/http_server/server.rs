@@ -1,5 +1,6 @@
+use crate::cli::CLIArgs;
+
 use super::routes::routes;
-use crate::CLIArgs;
 use actix_web::{App, HttpServer};
 
 pub async fn run_server(args: CLIArgs) -> std::io::Result<()> {

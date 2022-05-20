@@ -1,6 +1,3 @@
-mod http_server;
-mod solidity;
-
 use clap::Parser;
 
 #[derive(Parser)]
