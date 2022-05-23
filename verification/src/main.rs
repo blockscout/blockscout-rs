@@ -1,14 +1,9 @@
-mod cli;
-mod config;
-mod http_server;
-mod solidity;
-
-use config::Config;
-use http_server::server::run_server;
+use verification::Config;
+use verification::run_http_server;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     env_logger::init();
     let config = Config::parse();
-    run_server(config).await
+    run_http_server(config).await
 }

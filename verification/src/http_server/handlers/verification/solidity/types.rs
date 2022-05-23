@@ -12,7 +12,7 @@ pub struct VerificationRequest<T> {
     pub content: T,
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Serialize, PartialEq)]
 pub struct VerificationResponse {
     pub verified: bool,
 }
