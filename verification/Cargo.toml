@@ -9,6 +9,7 @@ repository = "https://github.com/blockscout/blockscout-rs/verification"
 actix-web = "4"
 clap = { version = "3", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
+tokio = { version = "0.2", features = ["macros"]}
 serde_json = "1"
 log = "0.4"
 env_logger = "0.9"

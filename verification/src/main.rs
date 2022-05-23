@@ -1,7 +1,7 @@
 use verification::Config;
 use verification::run_http_server;
 
-#[actix_web::main]
+#[tokio::main]
 async fn main() -> std::io::Result<()> {
     env_logger::init();
     let config = Config::parse();
