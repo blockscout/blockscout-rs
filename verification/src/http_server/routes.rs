@@ -1,6 +1,6 @@
 use actix_web::web;
 
-use super::{handlers::verification, status};
+use super::handlers::{status::status, verification};
 
 pub fn config(service_config: &mut web::ServiceConfig) {
     service_config

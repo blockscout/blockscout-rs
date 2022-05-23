@@ -1,4 +1,4 @@
-use crate::{config::Config};
+use crate::config::Config;
 
 use super::routes;
 use actix_web::{middleware::Logger, App, HttpServer};

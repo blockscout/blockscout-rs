@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct VerificationBase {
     pub contract_name: String,
@@ -56,8 +55,8 @@ pub struct FlattenedSource {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fmt::Debug;
     use serde::de::DeserializeOwned;
+    use std::fmt::Debug;
 
     fn test_parse_ok<T>(tests: Vec<(&str, T)>)
     where
