@@ -1,5 +1,5 @@
-use verification::Config;
 use verification::run_http_server;
+use verification::Config;
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {

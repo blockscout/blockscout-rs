@@ -6,10 +6,8 @@ use log::info;
 
 pub async fn run_server(config: Config) -> std::io::Result<()> {
     info!("Verification server is starting at {}", config.socket_addr);
-    HttpServer::new(move || {
-        App::new().configure(routes::config)
-    })
-    .bind(config.socket_addr)?
-    .run()
-    .await
+    HttpServer::new(move || App::new().configure(routes::config))
+        .bind(config.socket_addr)?
+        .run()
+        .await
 }
