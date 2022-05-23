@@ -1,37 +1,12 @@
 use actix_web::{web::Json, Error};
-use serde::{Deserialize, Serialize};
-
-use super::base_input::VerificationBase;
 
 use log::debug;
 
-#[derive(Debug, Deserialize)]
-pub struct ContractLibrary {
-    lib_name: String,
-    lib_address: String,
-}
+use super::types::{FlattenedSource, VerificationRequest, VerificationResponse};
 
-#[derive(Debug, Deserialize)]
-pub struct FlattenedSource {
-    source_code: String,
-    evm_version: String,
-    optimization: bool,
-    optimization_runs: Option<u32>,
-    contract_libraries: Option<Vec<ContractLibrary>>,
-}
+type Request = VerificationRequest<FlattenedSource>;
 
-#[derive(Debug, Deserialize)]
-pub struct VerifyRequest {
-    base: VerificationBase,
-    flattended_source: FlattenedSource,
-}
-
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
-pub struct VerifyResponse {
-    verified: bool,
-}
-
-pub async fn verify(params: Json<VerifyRequest>) -> Result<Json<VerifyResponse>, Error> {
+pub async fn verify(params: Json<Request>) -> Result<Json<VerificationResponse>, Error> {
     debug!("verify contract with params {:?}", params);
-    Ok(Json(VerifyResponse { verified: true }))
+    Ok(Json(VerificationResponse { verified: true }))
 }
