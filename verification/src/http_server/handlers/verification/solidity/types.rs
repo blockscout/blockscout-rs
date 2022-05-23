@@ -1,18 +1,13 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, PartialEq)]
-pub struct VerificationBase {
+pub struct VerificationRequest<T> {
     pub contract_name: String,
     pub deployed_bytecode: String,
     pub creation_bytecode: String,
     pub compiler_version: String,
     pub constructor_arguments: Option<String>,
-}
 
-#[derive(Debug, Deserialize, PartialEq)]
-pub struct VerificationRequest<T> {
-    #[serde(flatten)]
-    pub base: VerificationBase,
     #[serde(flatten)]
     pub content: T,
 }
@@ -22,7 +17,7 @@ pub struct VerificationResponse {
     pub verified: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 enum EvmVersion {
     Homestead,
@@ -37,17 +32,16 @@ enum EvmVersion {
     Default,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 struct ContractLibrary {
     lib_name: String,
     lib_address: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct FlattenedSource {
     source_code: String,
     evm_version: EvmVersion,
-    optimization: bool,
     optimization_runs: Option<u32>,
     contract_libraries: Option<Vec<ContractLibrary>>,
 }
@@ -70,32 +64,27 @@ mod tests {
 
     #[test]
     fn verification_request() {
-        #[derive(Debug, PartialEq, Deserialize)]
-        struct TestData {
-            a: i32,
-            b: String,
-        }
-
         test_parse_ok(vec![(
             r#"{
                     "contract_name": "test",
                     "deployed_bytecode": "0x6001",
                     "creation_bytecode": "0x6001",
                     "compiler_version": "test",
-                    "a": 3,
-                    "b": "test"
+                    "source_code": "pragma",
+                    "evm_version": "london",
+                    "optimization_runs": 200
                 }"#,
-            VerificationRequest::<TestData> {
-                base: VerificationBase {
-                    contract_name: "test".into(),
-                    deployed_bytecode: "0x6001".into(),
-                    creation_bytecode: "0x6001".into(),
-                    compiler_version: "test".into(),
-                    constructor_arguments: None,
-                },
-                content: TestData {
-                    a: 3,
-                    b: "test".into(),
+            VerificationRequest::<FlattenedSource> {
+                contract_name: "test".into(),
+                deployed_bytecode: "0x6001".into(),
+                creation_bytecode: "0x6001".into(),
+                compiler_version: "test".into(),
+                constructor_arguments: None,
+                content: FlattenedSource {
+                    source_code: "pragma".into(),
+                    evm_version: EvmVersion::London,
+                    optimization_runs: Some(200),
+                    contract_libraries: None,
                 },
             },
         )])
