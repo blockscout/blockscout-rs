@@ -1,21 +1,16 @@
-use crate::cli::Args;
+use crate::{config::Config};
 
-use super::routes::config;
+use super::routes;
 use actix_web::{middleware::Logger, App, HttpServer};
 
-pub async fn run_server(args: Args) -> std::io::Result<()> {
-    println!(
-        "Verification server is starting at {}:{}",
-        args.address, args.port
-    );
+pub async fn run_server(config: Config) -> std::io::Result<()> {
+    println!("Verification server is starting at {}", config.socket_addr);
     HttpServer::new(move || {
         let logger = Logger::default();
 
-        App::new()
-            .wrap(logger)
-            .configure(config)
+        App::new().wrap(logger).configure(routes::config)
     })
-    .bind((args.address, args.port))?
+    .bind(config.socket_addr)?
     .run()
     .await
 }

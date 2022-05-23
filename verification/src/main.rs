@@ -1,13 +1,14 @@
 mod cli;
+mod config;
 mod http_server;
 mod solidity;
 
-use clap::Parser;
+use config::Config;
 use http_server::server::run_server;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let args = cli::Args::parse();
     env_logger::init();
-    run_server(args).await
+    let config = Config::parse();
+    run_server(config).await
 }
