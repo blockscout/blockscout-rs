@@ -1,7 +1,9 @@
 use actix_web::{web::Json, Error};
 use serde::{Deserialize, Serialize};
 
-use super::common::VerificationBase;
+use super::base_input::VerificationBase;
+
+use log::debug;
 
 #[derive(Debug, Deserialize)]
 pub struct ContractLibrary {
@@ -19,19 +21,17 @@ pub struct FlattenedSource {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct VerificateRequest {
+pub struct VerifyRequest {
     base: VerificationBase,
     flattended_source: FlattenedSource,
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
-pub struct VerificateResponse {
-    verificated: bool,
+pub struct VerifyResponse {
+    verified: bool,
 }
 
-pub async fn verificate(
-    params: Json<VerificateRequest>,
-) -> Result<Json<VerificateResponse>, Error> {
-    println!("{:?}", params);
-    Ok(Json(VerificateResponse { verificated: true }))
+pub async fn verify(params: Json<VerifyRequest>) -> Result<Json<VerifyResponse>, Error> {
+    debug!("verify contract with params {:?}", params);
+    Ok(Json(VerifyResponse { verified: true }))
 }

@@ -8,4 +8,3 @@ pub struct Args {
     #[clap(short, long, default_value = "8043")]
     pub port: u16,
 }
-
