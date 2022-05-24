@@ -1,4 +1,9 @@
+use ethers_solc::{
+    artifacts::{Libraries, Settings},
+    CompilerInput,
+};
 use serde::{Deserialize, Serialize};
+use std::{collections::BTreeMap, path::PathBuf};
 
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct VerificationRequest<T> {
@@ -17,20 +22,7 @@ pub struct VerificationResponse {
     pub verified: bool,
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-enum EvmVersion {
-    Homestead,
-    TangerineWhistle,
-    SpuriousDragon,
-    Byzantium,
-    Constantinople,
-    Petersburg,
-    Istanbul,
-    Berlin,
-    London,
-    Default,
-}
+type EvmVersion = ethers_solc::EvmVersion;
 
 #[derive(Debug, Deserialize, PartialEq)]
 struct ContractLibrary {
@@ -42,8 +34,36 @@ struct ContractLibrary {
 pub struct FlattenedSource {
     source_code: String,
     evm_version: EvmVersion,
-    optimization_runs: Option<u32>,
+    optimization_runs: Option<usize>,
     contract_libraries: Option<Vec<ContractLibrary>>,
+}
+
+impl std::convert::From<FlattenedSource> for CompilerInput {
+    fn from(source: FlattenedSource) -> Self {
+        let mut settings = Settings::default();
+        settings.optimizer.enabled = source.optimization_runs.map(|_| true);
+        settings.optimizer.runs = source.optimization_runs;
+        if let Some(source_libraries) = source.contract_libraries {
+            let libraries = BTreeMap::from_iter(
+                source_libraries
+                    .into_iter()
+                    .map(|l| (l.lib_name, l.lib_address)),
+            );
+            settings.libraries = Libraries {
+                libs: BTreeMap::from([(PathBuf::from("source.sol"), libraries)]),
+            };
+        }
+        CompilerInput {
+            language: "Solidity".to_string(),
+            sources: BTreeMap::from([(
+                PathBuf::from("source.sol"),
+                ethers_solc::artifacts::Source {
+                    content: source.source_code,
+                },
+            )]),
+            settings,
+        }
+    }
 }
 
 #[cfg(test)]
