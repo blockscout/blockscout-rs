@@ -54,7 +54,7 @@ mod tests {
     async fn fetch(cache: &CompilerCache, ver: &Version) {
         let now = std::time::Instant::now();
         cache.get(&ver).await.unwrap();
-        println!("{} {:?}", ver, now.elapsed());
+        log::debug!("{} {:?}", ver, now.elapsed());
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 3)]

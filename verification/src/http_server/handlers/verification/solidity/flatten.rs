@@ -35,3 +35,9 @@ pub async fn verify(
 
     Ok(Json(VerificationResponse { verified: true }))
 }
+
+#[cfg(test)]
+mod tests {
+    #[tokio::test]
+    async fn compile() {}
+}
