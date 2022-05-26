@@ -50,15 +50,16 @@ impl CompilerCache {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
 
-    async fn fetch(cache: &CompilerCache, ver: &Version) {
+    async fn fetch(cache: &CompilerCache, ver: &Version) -> Duration {
         let now = std::time::Instant::now();
         cache.get(&ver).await.unwrap();
-        log::debug!("{} {:?}", ver, now.elapsed());
+        now.elapsed()
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
-    async fn it_works() {
+    async fn downloading_and_caching() {
         env_logger::init();
 
         let cache = Arc::<CompilerCache>::default();
@@ -74,12 +75,14 @@ mod tests {
             for j in 0..i + 1 {
                 let c = Arc::clone(&cache);
                 let v = versions[j].clone();
-                tasks.push(tokio::spawn(async move {
-                    fetch(&c, &v).await;
-                }));
+                tasks.push(tokio::spawn(async move { fetch(&c, &v).await }));
             }
             let r: Result<Vec<_>, _> = futures::future::join_all(tasks).await.into_iter().collect();
-            r.unwrap();
+            let r = r.unwrap();
+            // these compilers must be cached
+            for j in 0..i {
+                assert!(r[j] < Duration::from_millis(1));
+            }
         }
     }
 }

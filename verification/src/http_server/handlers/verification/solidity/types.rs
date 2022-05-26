@@ -18,7 +18,6 @@ pub struct VerificationRequest<T> {
 }
 
 #[derive(Debug, Serialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
 pub struct VerificationResponse {
     pub verified: bool,
 }
