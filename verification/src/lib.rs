@@ -1,5 +1,6 @@
 mod cli;
 mod config;
+mod download_cache;
 mod http_server;
 mod solidity;
 
