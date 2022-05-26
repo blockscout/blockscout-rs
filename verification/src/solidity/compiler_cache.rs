@@ -31,7 +31,7 @@ impl CompilerCache {
         match entry.as_ref() {
             Some(solc) => Ok(solc.clone()),
             None => {
-                log::info!("installing solc version {}", ver);
+                log::info!(target: "compiler_cache", "installing solc version {}", ver);
                 let solc = Solc::install(ver).await?;
                 *entry = Some(solc.clone());
                 Ok(solc)
