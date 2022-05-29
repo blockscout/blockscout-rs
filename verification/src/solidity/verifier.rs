@@ -75,9 +75,9 @@ impl Verifier {
         creation_tx_input: &str,
         deployed_bytecode: &str,
     ) -> Result<Self, InitializationError> {
-        let deployed_bytecode = DeployedBytecode::from_str(&deployed_bytecode)?;
+        let deployed_bytecode = DeployedBytecode::from_str(deployed_bytecode)?;
         let bytecode =
-            BytecodeWithConstructorArgs::from_str(&creation_tx_input, &deployed_bytecode)?;
+            BytecodeWithConstructorArgs::from_str(creation_tx_input, &deployed_bytecode)?;
 
         Ok(Self {
             contract_name,
