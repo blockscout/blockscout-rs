@@ -66,7 +66,7 @@ pub(crate) struct Verifier {
 impl Verifier {
     /// Instantiates a new verifier instance with input data provided by the requester.
     ///
-    /// Returns [`Err`] if either `deployed_bytecode` or `creation_tx_input` are invalid.
+    /// Returns [`InitializationError`] inside [`Err`] if either `deployed_bytecode` or `creation_tx_input` are invalid.
     pub fn new(
         contract_name: String,
         file_path: String,
@@ -89,7 +89,7 @@ impl Verifier {
     /// with compiler output received when compiling source data locally.
     ///
     /// If verification succeeds return [`Ok`], otherwise when verification
-    /// fails return an [`Error`] inside [`Err`].
+    /// fails return an [`VerificationError`] inside [`Err`].
     pub fn verify(&self, output: CompilerOutput) -> Result<(), VerificationError> {
         todo!()
     }
