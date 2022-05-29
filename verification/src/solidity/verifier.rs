@@ -52,8 +52,6 @@ pub(crate) struct Verifier {
     contract_name: String,
     /// File path contract to be verified is located at
     file_path: String,
-    /// Solc version contract was compiled with
-    compiler_version: String,
     /// Bytecode used on the contract creation transaction
     bc_creation_tx_input: BytecodeWithConstructorArgs,
     /// Bytecode stored in the chain and being used by EVM
@@ -67,9 +65,8 @@ impl Verifier {
     pub fn new(
         contract_name: String,
         file_path: String,
-        compiler_version: String,
-        creation_tx_input: String,
-        deployed_bytecode: String,
+        creation_tx_input: &str,
+        deployed_bytecode: &str,
     ) -> Result<Self, Error> {
         let deployed_bytecode = DeployedBytecode::from_str(&deployed_bytecode)?;
         let bytecode =
@@ -78,7 +75,6 @@ impl Verifier {
         Ok(Self {
             contract_name,
             file_path,
-            compiler_version,
             bc_deployed_bytecode: deployed_bytecode,
             bc_creation_tx_input: bytecode,
         })
