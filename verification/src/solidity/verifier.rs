@@ -1,3 +1,5 @@
+#![allow(dead_code, unused)]
+
 use ethers_solc::CompilerOutput;
 use std::str::FromStr;
 use thiserror::Error;
