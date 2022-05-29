@@ -2,12 +2,14 @@ use ethers_solc::CompilerOutput;
 use std::str::FromStr;
 use thiserror::Error;
 
-/// Errors that may occur during verification.
-/// Includes both errors that may occur during initial verifier setup
-/// with input data provided by the requester
-/// and errors that may occur at the bytecode comparison step.
+/// Errors that may occur during initial [`Verifier`] setup
+/// with input data provided by the requester.
 #[derive(Clone, Debug, Error)]
-pub(crate) enum Error {}
+pub(crate) enum InitializationError {}
+
+/// Errors that may occur during bytecode comparison step.
+#[derive(Clone, Debug, Error)]
+pub(crate) enum VerificationError {}
 
 /// Wrapper under `evm.deployedBytecode` from the standard output JSON
 /// (https://docs.soliditylang.org/en/latest/using-the-compiler.html#output-description).
@@ -18,7 +20,7 @@ pub(crate) enum Error {}
 struct DeployedBytecode {}
 
 impl FromStr for DeployedBytecode {
-    type Err = Error;
+    type Err = InitializationError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         todo!()
@@ -37,7 +39,10 @@ impl BytecodeWithConstructorArgs {
     /// constructor arguments used on a contract creation if possible.
     ///
     /// Deployed bytecode is required to extract metadata hash from the string.
-    pub fn from_str(s: &str, deployed_bytecode: &DeployedBytecode) -> Result<Self, Error> {
+    pub fn from_str(
+        s: &str,
+        deployed_bytecode: &DeployedBytecode,
+    ) -> Result<Self, InitializationError> {
         todo!()
     }
 }
@@ -67,7 +72,7 @@ impl Verifier {
         file_path: String,
         creation_tx_input: &str,
         deployed_bytecode: &str,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, InitializationError> {
         let deployed_bytecode = DeployedBytecode::from_str(&deployed_bytecode)?;
         let bytecode =
             BytecodeWithConstructorArgs::from_str(&creation_tx_input, &deployed_bytecode)?;
@@ -85,7 +90,7 @@ impl Verifier {
     ///
     /// If verification succeeds return [`Ok`], otherwise when verification
     /// fails return an [`Error`] inside [`Err`].
-    pub fn verify(&self, output: CompilerOutput) -> Result<(), Error> {
+    pub fn verify(&self, output: CompilerOutput) -> Result<(), VerificationError> {
         todo!()
     }
 }
