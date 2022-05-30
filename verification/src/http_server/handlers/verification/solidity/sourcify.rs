@@ -1,11 +1,12 @@
 use actix_web::{error, error::Error, web::Json};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::Configuration;
 
 use super::types::{SourcifyRequest, VerificationResponse};
 use actix_web::web;
 
+// Definition of sourcify.dev API response
 // https://docs.sourcify.dev/docs/api/server/v1/verify/
 #[derive(Deserialize)]
 #[serde(untagged)]
@@ -18,7 +19,7 @@ enum SourifyApiResponse {
     },
     ValidationErrors {
         message: String,
-        errors: Vec<ValidationError>,
+        errors: Vec<FieldError>,
     },
 }
 
@@ -26,11 +27,10 @@ enum SourifyApiResponse {
 struct SourcifyResultItem {
     address: String,
     status: String,
-    storageTimestamp: Option<String>,
 }
 
-#[derive(Deserialize)]
-struct ValidationError {
+#[derive(Deserialize, Debug)]
+struct FieldError {
     field: String,
     message: String,
 }
@@ -40,7 +40,7 @@ async fn sourcify_verification_request(
     params: &SourcifyRequest,
 ) -> Result<Json<VerificationResponse>, Error> {
     let resp = reqwest::Client::new()
-        .post(&config.urls.sourcify_api)
+        .post(&config.sourcify.api_url)
         .json(&params)
         .send()
         .await
@@ -55,9 +55,10 @@ async fn sourcify_verification_request(
             let _ = result;
             Ok(Json(VerificationResponse { verified: true }))
         }
-        SourifyApiResponse::Error { error } => Err(error::ErrorUnprocessableEntity(error)),
+        SourifyApiResponse::Error { error } => Err(error::ErrorBadRequest(error)),
         SourifyApiResponse::ValidationErrors { message, errors } => {
-            Err(error::ErrorUnprocessableEntity(message))
+            let error_message = format!("{}: {:?}", message, errors);
+            Err(error::ErrorBadRequest(error_message))
         }
     }
 }
@@ -66,5 +67,5 @@ pub async fn verify(
     config: web::Data<Configuration>,
     params: Json<SourcifyRequest>,
 ) -> Result<Json<VerificationResponse>, Error> {
-    sourcify_verification_request(config.as_ref(), &params.0).await
+    sourcify_verification_request(config.as_ref(), &params.into_inner()).await
 }

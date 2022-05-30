@@ -5,7 +5,7 @@ use std::net::SocketAddr;
 #[derive(Deserialize, Clone)]
 pub struct Configuration {
     pub server: ServerConfiguration,
-    pub urls: UrlsConfiguration,
+    pub sourcify: SourcifyConfiguration,
 }
 
 #[derive(Deserialize, Clone)]
@@ -14,8 +14,8 @@ pub struct ServerConfiguration {
 }
 
 #[derive(Deserialize, Clone)]
-pub struct UrlsConfiguration {
-    pub sourcify_api: String,
+pub struct SourcifyConfiguration {
+    pub api_url: String,
 }
 
 impl Configuration {
