@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, PartialEq)]
@@ -44,6 +46,13 @@ pub struct FlattenedSource {
     evm_version: EvmVersion,
     optimization_runs: Option<u32>,
     contract_libraries: Option<Vec<ContractLibrary>>,
+}
+
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
+pub struct SourcifyRequest {
+    pub address: String,
+    pub chain: String,
+    pub files: HashMap<String, String>,
 }
 
 #[cfg(test)]
