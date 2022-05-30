@@ -58,7 +58,8 @@ pub(crate) struct Verifier {
     /// Name of the contract to be verified
     contract_name: String,
     /// File path contract to be verified is located at
-    file_path: String,
+    /// (useful if multiple files contain contract with `contract_name`)
+    file_path: Option<String>,
     /// Bytecode used on the contract creation transaction
     bc_creation_tx_input: BytecodeWithConstructorArgs,
     /// Bytecode stored in the chain and being used by EVM
@@ -71,7 +72,7 @@ impl Verifier {
     /// Returns [`InitializationError`] inside [`Err`] if either `deployed_bytecode` or `creation_tx_input` are invalid.
     pub fn new(
         contract_name: String,
-        file_path: String,
+        file_path: Option<String>,
         creation_tx_input: &str,
         deployed_bytecode: &str,
     ) -> Result<Self, InitializationError> {
