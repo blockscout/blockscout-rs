@@ -1,5 +1,5 @@
 use super::types::{FlattenedSource, VerificationRequest, VerificationResponse};
-use crate::{download_cache::DownloadCache, solidity::downloader::SolcDownloader};
+use crate::{download_cache::DownloadCache, solidity::fetcher::SvmFetcher};
 use actix_web::{
     error,
     web::{self, Json},
@@ -9,7 +9,7 @@ use ethers_solc::{CompilerInput, CompilerOutput, Solc};
 use semver::Version;
 
 pub async fn compile(
-    cache: &DownloadCache<SolcDownloader>,
+    cache: &DownloadCache<SvmFetcher>,
     compiler_version: &str,
     input: &CompilerInput,
 ) -> Result<CompilerOutput, Error> {
@@ -24,7 +24,7 @@ pub async fn compile(
 }
 
 pub async fn verify(
-    cache: web::Data<DownloadCache<SolcDownloader>>,
+    cache: web::Data<DownloadCache<SvmFetcher>>,
     params: Json<VerificationRequest<FlattenedSource>>,
 ) -> Result<Json<VerificationResponse>, Error> {
     let params = params.into_inner();

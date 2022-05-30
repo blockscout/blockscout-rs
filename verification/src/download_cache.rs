@@ -1,23 +1,23 @@
-use anyhow::Result;
 use async_trait::async_trait;
 use semver::Version;
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 #[async_trait]
 pub trait Fetcher {
-    async fn fetch(&self, ver: &Version) -> Result<PathBuf>;
+    type Error: std::error::Error;
+    async fn fetch(&self, ver: &Version) -> Result<PathBuf, Self::Error>;
 }
 
 pub struct DownloadCache<D> {
     cache: parking_lot::Mutex<HashMap<Version, Arc<tokio::sync::RwLock<Option<PathBuf>>>>>,
-    downloader: D,
+    fetcher: D,
 }
 
 impl<D> DownloadCache<D> {
-    pub fn new(downloader: D) -> Self {
+    pub fn new(fetcher: D) -> Self {
         DownloadCache {
             cache: Default::default(),
-            downloader,
+            fetcher,
         }
     }
 
@@ -28,8 +28,8 @@ impl<D> DownloadCache<D> {
         };
         match entry {
             Some(lock) => {
-                let solc = lock.read().await;
-                solc.as_ref().cloned()
+                let file = lock.read().await;
+                file.as_ref().cloned()
             }
             None => None,
         }
@@ -37,26 +37,26 @@ impl<D> DownloadCache<D> {
 }
 
 impl<D: Fetcher> DownloadCache<D> {
-    pub async fn get(&self, ver: &Version) -> Result<PathBuf> {
+    pub async fn get(&self, ver: &Version) -> Result<PathBuf, D::Error> {
         match self.try_get(ver).await {
-            Some(solc) => Ok(solc),
+            Some(file) => Ok(file),
             None => self.fetch(ver).await,
         }
     }
 
-    async fn fetch(&self, ver: &Version) -> Result<PathBuf> {
+    async fn fetch(&self, ver: &Version) -> Result<PathBuf, D::Error> {
         let lock = {
             let mut cache = self.cache.lock();
             Arc::clone(cache.entry(ver.clone()).or_default())
         };
         let mut entry = lock.write().await;
         match entry.as_ref() {
-            Some(solc) => Ok(solc.clone()),
+            Some(file) => Ok(file.clone()),
             None => {
-                log::info!(target: "compiler_cache", "installing solc version {}", ver);
-                let solc = self.downloader.fetch(ver).await?;
-                *entry = Some(solc.clone());
-                Ok(solc)
+                log::info!(target: "compiler_cache", "installing file version {}", ver);
+                let file = self.fetcher.fetch(ver).await?;
+                *entry = Some(file.clone());
+                Ok(file)
             }
         }
     }
@@ -70,101 +70,84 @@ impl<D: Default> Default for DownloadCache<D> {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
     use super::*;
-    use anyhow::anyhow;
     use futures::{executor::block_on, join, pin_mut};
+    use std::time::Duration;
+    use thiserror::Error;
     use tokio::{spawn, task::yield_now, time::timeout};
 
+    #[derive(Error, Debug)]
+    enum MockError {}
+
+    /// Tests, that caching works, meaning that cache downloads each version only once
     #[test]
-    fn caching() {
+    fn caches() {
+        #[derive(Default)]
         struct MockFetcher {
-            pub vals: HashMap<Version, PathBuf>,
+            counter: parking_lot::Mutex<HashMap<Version, u32>>,
         }
 
         #[async_trait]
         impl Fetcher for MockFetcher {
-            async fn fetch(&self, ver: &Version) -> Result<PathBuf> {
-                self.vals
-                    .get(ver)
-                    .cloned()
-                    .ok_or(anyhow!("no mock result for this version: {}", ver))
+            type Error = MockError;
+            async fn fetch(&self, ver: &Version) -> Result<PathBuf, Self::Error> {
+                *self.counter.lock().entry(ver.clone()).or_default() += 1;
+                Ok(PathBuf::from(ver.to_string()))
             }
         }
+
+        let fetcher = MockFetcher::default();
+        let cache = DownloadCache::new(fetcher);
 
         let vers: Vec<_> = vec![(0, 1, 2), (1, 2, 3), (3, 3, 3)]
             .into_iter()
             .map(|ver| Version::new(ver.0, ver.1, ver.2))
             .collect();
-        let new_ver = Version::new(9, 9, 9);
-        let fetcher = MockFetcher {
-            vals: vers
-                .iter()
-                .map(|ver| (ver.clone(), PathBuf::from(ver.to_string())))
-                .collect(),
-        };
-        let mut cache = DownloadCache::new(fetcher);
 
-        for ver in &vers {
-            assert_eq!(
-                block_on(cache.get(ver)).expect("expected to find value but got error"),
-                PathBuf::from(ver.to_string()),
-                "wrong value"
-            );
+        block_on(cache.get(&vers[0])).unwrap();
+        block_on(cache.get(&vers[1])).unwrap();
+        block_on(cache.get(&vers[0])).unwrap();
+        block_on(cache.get(&vers[0])).unwrap();
+        block_on(cache.get(&vers[1])).unwrap();
+        block_on(cache.get(&vers[1])).unwrap();
+        block_on(cache.get(&vers[2])).unwrap();
+        block_on(cache.get(&vers[2])).unwrap();
+        block_on(cache.get(&vers[1])).unwrap();
+        block_on(cache.get(&vers[0])).unwrap();
+
+        let counter = cache.fetcher.counter.lock();
+        assert_eq!(counter.len(), 3);
+        for (_, count) in counter.iter() {
+            assert_eq!(*count, 1);
         }
-        block_on(cache.get(&new_ver)).expect_err("expected err but got value");
-
-        cache.downloader.vals = cache
-            .downloader
-            .vals
-            .into_iter()
-            .map(|(ver, _)| (ver, PathBuf::from("downloaded again")))
-            .collect();
-
-        for ver in &vers {
-            assert_eq!(
-                block_on(cache.get(ver)).expect("expected to find value but got error"),
-                PathBuf::from(ver.to_string()),
-                "value not cached"
-            );
-        }
-        block_on(cache.get(&Version::new(9, 9, 9))).expect_err("expected err but got value");
-
-        cache
-            .downloader
-            .vals
-            .insert(new_ver.clone(), PathBuf::from("9.9.9"));
-        assert_eq!(
-            block_on(cache.get(&new_ver)).expect("expected to find value but got error"),
-            PathBuf::from(new_ver.to_string()),
-            "wrong value"
-        );
     }
 
+    /// Tests, that cache will not block requests for already downloaded values,
+    /// while it downloads others
     #[tokio::test]
     async fn not_blocking() {
         const TIMEOUT: Duration = Duration::from_secs(10);
 
-        struct MockFetcher {
+        struct MockBlockingFetcher {
             sync: Arc<tokio::sync::Mutex<()>>,
         }
 
         #[async_trait]
-        impl Fetcher for MockFetcher {
-            async fn fetch(&self, _: &Version) -> Result<PathBuf> {
+        impl Fetcher for MockBlockingFetcher {
+            type Error = MockError;
+            async fn fetch(&self, ver: &Version) -> Result<PathBuf, Self::Error> {
                 self.sync.lock().await;
-                Ok(PathBuf::from("path"))
+                Ok(PathBuf::from(ver.to_string()))
             }
         }
 
         let sync = Arc::<tokio::sync::Mutex<()>>::default();
-        let fetcher = MockFetcher { sync: sync.clone() };
+        let fetcher = MockBlockingFetcher { sync: sync.clone() };
         let cache = Arc::new(DownloadCache::new(fetcher));
 
         let vers: Vec<_> = (0..3).map(|x| Version::new(x, 0, 0)).collect();
 
-        // fill cache
+        // fill the cache
         cache.get(&vers[1]).await.unwrap();
 
         // lock the fetcher

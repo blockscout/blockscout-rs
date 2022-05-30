@@ -2707,6 +2707,8 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
+ "svm-rs",
+ "thiserror",
  "tokio",
 ]
 
