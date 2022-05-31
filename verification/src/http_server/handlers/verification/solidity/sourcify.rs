@@ -1,5 +1,5 @@
 use actix_web::{error, error::Error, web::Json};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::Configuration;
 
@@ -23,12 +23,14 @@ enum SourifyApiResponse {
     },
 }
 
+#[allow(unused)]
 #[derive(Deserialize)]
 struct SourcifyResultItem {
     address: String,
     status: String,
 }
 
+#[allow(unused)]
 #[derive(Deserialize, Debug)]
 struct FieldError {
     field: String,
@@ -51,7 +53,7 @@ async fn sourcify_verification_request(
 
     match response_body {
         SourifyApiResponse::Verified { result } => {
-            // TODO: return abi, constructor arguments, ...
+            // TODO: parse metadata.json, return abi, constructor arguments, ...
             let _ = result;
             Ok(Json(VerificationResponse { verified: true }))
         }

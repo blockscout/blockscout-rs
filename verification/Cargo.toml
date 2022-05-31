@@ -17,3 +17,5 @@ semver = "1.0"
 config = "0.13"
 reqwest = { version = "0.11", features = ["json"] }
 
+[dev-dependencies]
+actix-rt = "2.7.0"
