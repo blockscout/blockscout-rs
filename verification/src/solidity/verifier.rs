@@ -3,6 +3,10 @@
 use crate::types::Mismatch;
 use ethers_core::types::{Bytes, ParseBytesError};
 use ethers_solc::CompilerOutput;
+use minicbor::{
+    data::{Tag, Type},
+    Decode, Decoder,
+};
 use std::str::FromStr;
 use thiserror::Error;
 
@@ -23,6 +27,88 @@ pub(crate) enum InitializationError {
 /// Errors that may occur during bytecode comparison step.
 #[derive(Clone, Debug, Error)]
 pub(crate) enum VerificationError {}
+
+/// Parsed metadata hash
+/// (https://docs.soliditylang.org/en/v0.8.14/metadata.html#encoding-of-the-metadata-hash-in-the-bytecode).
+///
+/// Currently we are interested only in `solc` value.
+#[derive(Clone, Debug, PartialEq)]
+struct MetadataHash {
+    solc: Option<bytes::Bytes>,
+}
+
+impl MetadataHash {
+    fn from_cbor(encoded: bytes::Bytes) -> Option<Self> {
+        minicbor::decode(encoded.as_ref()).ok()
+    }
+}
+
+#[derive(Debug, Error)]
+enum ParseMetadataHashError {
+    #[error("buffer was not exhausted after all map elements had been processed")]
+    NonExhausted,
+    #[error("invalid solc type. Expected \"string\" or \"bytes\", found \"{0}\"")]
+    InvalidSolcType(Type),
+    #[error("\"solc\" key met more than once")]
+    DuplicateKeys,
+}
+
+impl<'b, C> Decode<'b, C> for MetadataHash {
+    fn decode(d: &mut Decoder<'b>, _ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
+        use minicbor::decode::Error;
+
+        let number_of_elements = d.map()?.unwrap_or(u64::MAX);
+
+        let mut solc = None;
+        for num in 0..number_of_elements {
+            // try to parse the key
+            match d.str() {
+                Ok(s) if s == "solc" => {
+                    if solc.is_some() {
+                        // duplicate keys are not allowed in CBOR (RFC 8949)
+                        return Err(Error::custom(ParseMetadataHashError::DuplicateKeys));
+                    }
+                    solc = match d.datatype()? {
+                        Type::Bytes => Some(d.bytes()?),
+                        Type::String => {
+                            let s = d.str()?;
+                            Some(s.as_bytes())
+                        }
+                        type_ => {
+                            // value of "solc" key must be either String or Bytes
+                            return Err(Error::custom(ParseMetadataHashError::InvalidSolcType(
+                                type_,
+                            )));
+                        }
+                    }
+                }
+                Ok(_) => {
+                    // if key is not "solc" str we may skip the corresponding value
+                    d.skip()?;
+                }
+                Err(err) if err.is_type_mismatch() => {
+                    // if key is not `str` we may skip the corresponding value
+                    d.skip()?;
+                }
+                Err(err) => return Err(err),
+            }
+        }
+
+        // We require that no elements left in the decoder when
+        // the whole map has been processed. That adds another layer
+        // of assurance that encoded bytes are actually metadata hash.
+        if let Ok(_) = d.datatype() {
+            return Err(Error::custom(ParseMetadataHashError::NonExhausted));
+        }
+
+        let solc = solc.map(|v| bytes::Bytes::copy_from_slice(v));
+        Ok(MetadataHash { solc })
+    }
+
+    fn nil() -> Option<Self> {
+        Some(Self { solc: None })
+    }
+}
 
 /// Wrapper under `evm.deployedBytecode` from the standard output JSON
 /// (https://docs.soliditylang.org/en/latest/using-the-compiler.html#output-description).
@@ -243,5 +329,152 @@ mod verifier_initialization_tests {
                 Bytes::from_str(DEFAULT_ENCODED_METADATA_HASH).unwrap()
             ))
         );
+    }
+}
+
+#[cfg(test)]
+mod metadata_hash_deserialization_tests {
+    use super::*;
+
+    #[test]
+    fn test_deserialization_metadata_hash_without_solc_tag() {
+        // given
+        // { "bzzr0": b"d4fba422541feba2d648f6657d9354ec14ea9f5919b520abe0feb60981d7b17c" }
+        let hex =
+            "a165627a7a72305820d4fba422541feba2d648f6657d9354ec14ea9f5919b520abe0feb60981d7b17c";
+        let encoded = Bytes::from_str(hex).unwrap().0;
+        let expected = MetadataHash { solc: None };
+
+        // when
+        let decoded =
+            MetadataHash::from_cbor(encoded).expect("Error when decoding valid metadata hash");
+
+        // then
+        assert_eq!(expected, decoded, "Incorrectly decoded");
+    }
+
+    #[test]
+    fn test_deserialization_metadata_hash_with_solc_as_version() {
+        // given
+        // { "ipfs": b"1220BCC988B1311237F2C00CCD0BFBD8B01D24DC18F720603B0DE93FE6327DF53625", "solc": b'00080e' }
+        let hex = "a2646970667358221220bcc988b1311237f2c00ccd0bfbd8b01d24dc18f720603b0de93fe6327df5362564736f6c634300080e";
+        let encoded = Bytes::from_str(hex).unwrap().0;
+        let expected = MetadataHash {
+            solc: Some("\u{0}\u{8}\u{e}".as_bytes().into()),
+        };
+
+        // when
+        let decoded =
+            MetadataHash::from_cbor(encoded).expect("Error when decoding valid metadata hash");
+
+        // then
+        assert_eq!(expected, decoded, "Incorrectly decoded")
+    }
+
+    #[test]
+    fn test_deserialization_metadata_hash_with_solc_as_string() {
+        // given
+        // {"ipfs": b'1220BA5AF27FE13BC83E671BD6981216D35DF49AB3AC923741B8948B277F93FBF732', "solc": "0.8.15-ci.2022.5.23+commit.21591531"}
+        let hex = "a2646970667358221220ba5af27fe13bc83e671bd6981216d35df49ab3ac923741b8948b277f93fbf73264736f6c637823302e382e31352d63692e323032322e352e32332b636f6d6d69742e3231353931353331";
+        let encoded = Bytes::from_str(hex).unwrap().0;
+        let expected = MetadataHash {
+            solc: Some("0.8.15-ci.2022.5.23+commit.21591531".as_bytes().into()),
+        };
+
+        // when
+        let decoded =
+            MetadataHash::from_cbor(encoded).expect("Error when decoding valid metadata hash");
+
+        // then
+        assert_eq!(expected, decoded, "Incorrectly decoded")
+    }
+
+    #[test]
+    fn test_deserialization_of_non_cbor_hex_should_fail() {
+        // given
+        let hex = "1234567890";
+        let encoded = Bytes::from_str(hex).unwrap().0;
+
+        // when
+        let decoded = MetadataHash::from_cbor(encoded);
+
+        // then
+        assert_eq!(None, decoded, "Should not be decoded")
+    }
+
+    #[test]
+    fn test_deserialization_of_non_map_should_fail() {
+        // given
+        // "solc"
+        let hex = "64736f6c63";
+        let encoded = Bytes::from_str(hex).unwrap().0;
+
+        // when
+        let decoded = MetadataHash::from_cbor(encoded);
+
+        // then
+        assert_eq!(None, decoded, "Should not be decoded")
+    }
+
+    #[test]
+    fn test_deserialization_with_duplicated_solc_should_fail() {
+        // given
+        // { "solc": b'000400', "ipfs": b"1220BCC988B1311237F2C00CCD0BFBD8B01D24DC18F720603B0DE93FE6327DF53625", "solc": b'00080e' }
+        let hex = "a364736f6c6343000400646970667358221220bcc988b1311237f2c00ccd0bfbd8b01d24dc18f720603b0de93fe6327df5362564736f6c634300080e";
+        let encoded = Bytes::from_str(hex).unwrap().0;
+
+        // when
+        let decoded = MetadataHash::from_cbor(encoded);
+
+        // then
+        assert_eq!(None, decoded, "Should not be decoded")
+    }
+
+    #[test]
+    fn test_deserialization_not_exhausted_should_fail() {
+        // given
+        // { "ipfs": b"1220BCC988B1311237F2C00CCD0BFBD8B01D24DC18F720603B0DE93FE6327DF53625", "solc": b'00080e' } \
+        // { "bzzr0": b"d4fba422541feba2d648f6657d9354ec14ea9f5919b520abe0feb60981d7b17c" }
+        let hex = format!(
+            "{}{}",
+            "a2646970667358221220bcc988b1311237f2c00ccd0bfbd8b01d24dc18f720603b0de93fe6327df5362564736f6c634300080e",
+            "a165627a7a72305820d4fba422541feba2d648f6657d9354ec14ea9f5919b520abe0feb60981d7b17c"
+        );
+        let encoded = Bytes::from_str(&hex).unwrap().0;
+
+        // when
+        let decoded = MetadataHash::from_cbor(encoded);
+
+        // then
+        assert_eq!(None, decoded, "Should not be decoded")
+    }
+
+    #[test]
+    fn test_deserialization_with_not_enough_elements_should_fail() {
+        // given
+        // 3 elements expected in the map but got only 2:
+        // { "ipfs": b"1220BCC988B1311237F2C00CCD0BFBD8B01D24DC18F720603B0DE93FE6327DF53625", "solc": b'00080e' }
+        let hex = "a3646970667358221220bcc988b1311237f2c00ccd0bfbd8b01d24dc18f720603b0de93fe6327df5362564736f6c634300080e";
+        let encoded = Bytes::from_str(&hex).unwrap().0;
+
+        // when
+        let decoded = MetadataHash::from_cbor(encoded);
+
+        // then
+        assert_eq!(None, decoded, "Should not be decoded")
+    }
+
+    #[test]
+    fn test_deserialization_with_solc_neither_bytes_nor_string_should_fail() {
+        // given
+        // { "ipfs": b"1220BCC988B1311237F2C00CCD0BFBD8B01D24DC18F720603B0DE93FE6327DF53625", "solc": 123 } \
+        let hex= "a2646970667358221220bcc988b1311237f2c00ccd0bfbd8b01d24dc18f720603b0de93fe6327df5362564736f6c63187B";
+        let encoded = Bytes::from_str(&hex).unwrap().0;
+
+        // when
+        let decoded = MetadataHash::from_cbor(encoded);
+
+        // then
+        assert_eq!(None, decoded, "Should not be decoded")
     }
 }

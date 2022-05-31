@@ -1491,6 +1491,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a60c7ce501c71e03a9c9c0d35b861413ae925bd979cc7a4e30d060069aaac8d"
 
 [[package]]
+name = "minicbor"
+version = "0.16.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fbd8e31644139f4b7d5c315197657b8853d8e63f08556f2d10cb95a0917cacb3"
+
+[[package]]
 name = "miniz_oxide"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2698,12 +2704,14 @@ name = "verification"
 version = "0.1.0"
 dependencies = [
  "actix-web",
+ "bytes 1.1.0",
  "clap",
  "const_format",
  "env_logger",
  "ethers-core",
  "ethers-solc",
  "log",
+ "minicbor",
  "serde",
  "serde_json",
  "thiserror",
