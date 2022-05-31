@@ -1,25 +1,26 @@
 #![allow(dead_code, unused)]
 
 use crate::types::Mismatch;
+use bytes::Buf;
 use ethers_core::types::{Bytes, ParseBytesError};
 use ethers_solc::CompilerOutput;
 use minicbor::{
     data::{Tag, Type},
     Decode, Decoder,
 };
-use std::str::FromStr;
+use std::{error::Error, str::FromStr};
 use thiserror::Error;
 
 /// Errors that may occur during initial [`Verifier`] setup
 /// with input data provided by the requester.
 #[derive(Clone, Debug, PartialEq, Error)]
 pub(crate) enum InitializationError {
-    #[error(
-        "creation transaction input is invalid (either is empty or is not a valid hex string): {0}"
-    )]
-    InvalidCreationTxInput(String),
-    #[error("deployed bytecode is invalid (either is empty or is not a valid hex string): {0}")]
-    InvalidDeployedBytecode(String),
+    #[error("creation transaction input is not a valid hex string")]
+    InvalidCreationTxInput,
+    #[error("deployed bytecode is not a valid hex string")]
+    InvalidDeployedBytecode,
+    #[error("cannot parse metadata hash from deployed bytecode: {0}")]
+    MetadataHashParseError(String),
     #[error("creation transaction input has different metadata hash to deployed bytecode. {0}")]
     MetadataHashMismatch(Mismatch<Bytes>),
 }
@@ -114,15 +115,102 @@ impl<'b, C> Decode<'b, C> for MetadataHash {
 /// (https://docs.soliditylang.org/en/latest/using-the-compiler.html#output-description).
 ///
 /// Provides an interface to retrieve parts the deployed bytecode consists of:
-/// actual bytecode participating in EVM transaction execution and optionally metadata hash.
+/// actual bytecode participating in EVM transaction execution and metadata hash.
 #[derive(Clone, Debug, PartialEq)]
-struct DeployedBytecode {}
+struct DeployedBytecode {
+    /// Bytecode without metadata hash
+    bytecode: bytes::Bytes,
+    /// Metadata hash encoded into bytecode
+    metadata_hash: MetadataHash,
+    /// Raw deployed bytecode bytes
+    bytes: bytes::Bytes,
+}
+
+impl DeployedBytecode {
+    /// Returns deployed bytecode without metadata hash
+    pub fn bytecode(&self) -> Bytes {
+        self.bytecode.clone().into()
+    }
+
+    /// Returns a metadata hash
+    pub fn metadata_hash(&self) -> &MetadataHash {
+        &self.metadata_hash
+    }
+
+    /// Returns metadata hash encoded as bytes and concatenated with 2 bytes representing its length
+    pub fn encoded_metadata_hash_with_length(&self) -> Bytes {
+        let start = self.bytecode.len();
+        let end = self.bytes.len();
+        self.bytes.slice(start..end).into()
+    }
+}
 
 impl FromStr for DeployedBytecode {
     type Err = InitializationError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        todo!()
+        let bytes = Bytes::from_str(s)
+            .map_err(|_| InitializationError::InvalidDeployedBytecode)?
+            .0;
+
+        DeployedBytecode::try_from(bytes)
+    }
+}
+
+impl TryFrom<bytes::Bytes> for DeployedBytecode {
+    type Error = InitializationError;
+
+    fn try_from(encoded: bytes::Bytes) -> Result<Self, Self::Error> {
+        // If metadata is present, last two bytes encode its length in a two-byte big-endian encoding
+        if encoded.len() < 2 {
+            return Err(InitializationError::MetadataHashParseError(
+                "length is not encoded".to_string(),
+            ));
+        }
+
+        // Further we will cut bytes from encoded representation, but original raw
+        // bytes are still required for `DeployedBytecode.bytes`
+        // (cloning takes O(1) due to internal `bytes::Bytes` implementation)
+        let mut b = encoded.clone();
+
+        // Decode length of metadata hash representation
+        let metadata_hash_length = {
+            let b_len = b.len();
+            let mut length_bytes = b.split_off(b_len - 2);
+            length_bytes.get_u16() as usize
+        };
+
+        if b.len() < metadata_hash_length {
+            return Err(InitializationError::MetadataHashParseError(
+                "not enough bytes".to_string(),
+            ));
+        }
+
+        // Now decode the metadata hash itself
+        let metadata_hash = {
+            let b_len = b.len();
+            let encoded_metadata_hash = b.split_off(b_len - metadata_hash_length);
+            MetadataHash::from_cbor(encoded_metadata_hash)
+        };
+
+        if let Err(err) = metadata_hash {
+            let message = if err.is_custom() {
+                format!(
+                    "{}",
+                    err.source()
+                        .expect("`minicbor::decode::Error::Custom` always contains the source")
+                )
+            } else {
+                format!("{}", err)
+            };
+            return Err(InitializationError::MetadataHashParseError(message));
+        }
+
+        Ok(Self {
+            bytecode: b,
+            metadata_hash: metadata_hash.unwrap(),
+            bytes: encoded,
+        })
     }
 }
 
@@ -254,7 +342,7 @@ mod verifier_initialization_tests {
         assert!(verifier.is_err(), "Verifier initialization should fail");
         assert_eq!(
             verifier.unwrap_err(),
-            InitializationError::InvalidCreationTxInput("".to_string())
+            InitializationError::InvalidCreationTxInput
         )
     }
 
@@ -271,7 +359,7 @@ mod verifier_initialization_tests {
         assert!(verifier.is_err(), "Verifier initialization should fail");
         assert_eq!(
             verifier.unwrap_err(),
-            InitializationError::InvalidCreationTxInput(invalid_input.to_string())
+            InitializationError::InvalidCreationTxInput
         )
     }
 
@@ -287,7 +375,7 @@ mod verifier_initialization_tests {
         assert!(verifier.is_err(), "Verifier initialization should fail");
         assert_eq!(
             verifier.unwrap_err(),
-            InitializationError::InvalidDeployedBytecode("".to_string())
+            InitializationError::InvalidDeployedBytecode
         )
     }
 
@@ -304,7 +392,7 @@ mod verifier_initialization_tests {
         assert!(verifier.is_err(), "Verifier initialization should fail");
         assert_eq!(
             verifier.unwrap_err(),
-            InitializationError::InvalidDeployedBytecode(invalid_input.to_string())
+            InitializationError::InvalidDeployedBytecode
         )
     }
 
