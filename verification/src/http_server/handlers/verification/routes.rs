@@ -1,7 +1,10 @@
+use super::solidity::flatten;
+use crate::{download_cache::DownloadCache, solidity::fetcher::SvmFetcher};
 use actix_web::web;
 
-use super::solidity::flatten;
-
 pub fn config(service_config: &mut web::ServiceConfig) {
-    service_config.route("/flatten", web::get().to(flatten::verify));
+    let cache = DownloadCache::<SvmFetcher>::default();
+    service_config
+        .app_data(web::Data::new(cache))
+        .route("/flatten", web::get().to(flatten::verify));
 }
