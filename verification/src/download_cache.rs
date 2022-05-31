@@ -4,7 +4,7 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 #[async_trait]
 pub trait Fetcher {
-    type Error: std::error::Error;
+    type Error;
     async fn fetch(&self, ver: &Version) -> Result<PathBuf, Self::Error>;
 }
 
@@ -73,15 +73,11 @@ mod tests {
     use super::*;
     use futures::{executor::block_on, join, pin_mut};
     use std::time::Duration;
-    use thiserror::Error;
     use tokio::{spawn, task::yield_now, time::timeout};
-
-    #[derive(Error, Debug)]
-    enum MockError {}
 
     /// Tests, that caching works, meaning that cache downloads each version only once
     #[test]
-    fn caches() {
+    fn value_is_cached() {
         #[derive(Default)]
         struct MockFetcher {
             counter: parking_lot::Mutex<HashMap<Version, u32>>,
@@ -89,7 +85,7 @@ mod tests {
 
         #[async_trait]
         impl Fetcher for MockFetcher {
-            type Error = MockError;
+            type Error = ();
             async fn fetch(&self, ver: &Version) -> Result<PathBuf, Self::Error> {
                 *self.counter.lock().entry(ver.clone()).or_default() += 1;
                 Ok(PathBuf::from(ver.to_string()))
@@ -104,28 +100,31 @@ mod tests {
             .map(|ver| Version::new(ver.0, ver.1, ver.2))
             .collect();
 
-        block_on(cache.get(&vers[0])).unwrap();
-        block_on(cache.get(&vers[1])).unwrap();
-        block_on(cache.get(&vers[0])).unwrap();
-        block_on(cache.get(&vers[0])).unwrap();
-        block_on(cache.get(&vers[1])).unwrap();
-        block_on(cache.get(&vers[1])).unwrap();
-        block_on(cache.get(&vers[2])).unwrap();
-        block_on(cache.get(&vers[2])).unwrap();
-        block_on(cache.get(&vers[1])).unwrap();
-        block_on(cache.get(&vers[0])).unwrap();
+        let get_and_check = |ver: &Version| {
+            let value = block_on(cache.get(ver)).unwrap();
+            assert_eq!(value, PathBuf::from(ver.to_string()));
+        };
+
+        get_and_check(&vers[0]);
+        get_and_check(&vers[1]);
+        get_and_check(&vers[0]);
+        get_and_check(&vers[0]);
+        get_and_check(&vers[1]);
+        get_and_check(&vers[1]);
+        get_and_check(&vers[2]);
+        get_and_check(&vers[2]);
+        get_and_check(&vers[1]);
+        get_and_check(&vers[0]);
 
         let counter = cache.fetcher.counter.lock();
         assert_eq!(counter.len(), 3);
-        for (_, count) in counter.iter() {
-            assert_eq!(*count, 1);
-        }
+        assert!(counter.values().all(|&count| count == 1));
     }
 
     /// Tests, that cache will not block requests for already downloaded values,
     /// while it downloads others
     #[tokio::test]
-    async fn not_blocking() {
+    async fn downloading_not_blocks() {
         const TIMEOUT: Duration = Duration::from_secs(10);
 
         struct MockBlockingFetcher {
@@ -134,7 +133,7 @@ mod tests {
 
         #[async_trait]
         impl Fetcher for MockBlockingFetcher {
-            type Error = MockError;
+            type Error = ();
             async fn fetch(&self, ver: &Version) -> Result<PathBuf, Self::Error> {
                 self.sync.lock().await;
                 Ok(PathBuf::from(ver.to_string()))
