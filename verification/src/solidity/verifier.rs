@@ -38,8 +38,8 @@ struct MetadataHash {
 }
 
 impl MetadataHash {
-    fn from_cbor(encoded: bytes::Bytes) -> Option<Self> {
-        minicbor::decode(encoded.as_ref()).ok()
+    fn from_cbor(encoded: bytes::Bytes) -> Result<Self, minicbor::decode::Error> {
+        minicbor::decode(encoded.as_ref())
     }
 }
 
@@ -159,7 +159,7 @@ pub(crate) struct Verifier {
     file_path: Option<String>,
     /// Bytecode used on the contract creation transaction
     bc_creation_tx_input: BytecodeWithConstructorArgs,
-    /// Bytecode stored in the chain and being used by EVM
+    /// Bytecode stored in the chain and being used by EVMrap_err()
     bc_deployed_bytecode: DeployedBytecode,
 }
 
@@ -336,6 +336,25 @@ mod verifier_initialization_tests {
 mod metadata_hash_deserialization_tests {
     use super::*;
 
+    fn is_valid_custom_error(
+        error: minicbor::decode::Error,
+        expected: ParseMetadataHashError,
+    ) -> bool {
+        if !error.is_custom() {
+            return false;
+        }
+
+        // Unfortunately, current `minicbor::decode::Error` implementation
+        // does not allow to retrieve insides out of custom error,
+        // so the only way to ensure the valid error occurred is by string comparison.
+        let parse_metadata_hash_error_to_string = |err: ParseMetadataHashError| match err {
+            ParseMetadataHashError::NonExhausted => "NonExhausted",
+            ParseMetadataHashError::InvalidSolcType(_) => "InvalidSolcType",
+            ParseMetadataHashError::DuplicateKeys => "DuplicateKeys",
+        };
+        format!("{:?}", error).contains(parse_metadata_hash_error_to_string(expected))
+    }
+
     #[test]
     fn test_deserialization_metadata_hash_without_solc_tag() {
         // given
@@ -399,7 +418,11 @@ mod metadata_hash_deserialization_tests {
         let decoded = MetadataHash::from_cbor(encoded);
 
         // then
-        assert_eq!(None, decoded, "Should not be decoded")
+        assert!(decoded.is_err(), "Deserialization should fail");
+        assert!(
+            decoded.unwrap_err().is_type_mismatch(),
+            "Should fail with type mismatch"
+        )
     }
 
     #[test]
@@ -413,7 +436,11 @@ mod metadata_hash_deserialization_tests {
         let decoded = MetadataHash::from_cbor(encoded);
 
         // then
-        assert_eq!(None, decoded, "Should not be decoded")
+        assert!(decoded.is_err(), "Deserialization should fail");
+        assert!(
+            decoded.unwrap_err().is_type_mismatch(),
+            "Should fail with type mismatch"
+        )
     }
 
     #[test]
@@ -427,7 +454,11 @@ mod metadata_hash_deserialization_tests {
         let decoded = MetadataHash::from_cbor(encoded);
 
         // then
-        assert_eq!(None, decoded, "Should not be decoded")
+        assert!(decoded.is_err(), "Deserialization should fail");
+        assert!(
+            is_valid_custom_error(decoded.unwrap_err(), ParseMetadataHashError::DuplicateKeys),
+            "Should fail with custom (DuplicateKey) error"
+        );
     }
 
     #[test]
@@ -446,7 +477,11 @@ mod metadata_hash_deserialization_tests {
         let decoded = MetadataHash::from_cbor(encoded);
 
         // then
-        assert_eq!(None, decoded, "Should not be decoded")
+        assert!(decoded.is_err(), "Deserialization should fail");
+        assert!(
+            is_valid_custom_error(decoded.unwrap_err(), ParseMetadataHashError::NonExhausted),
+            "Should fail with custom (NonExhausted) error"
+        );
     }
 
     #[test]
@@ -461,7 +496,11 @@ mod metadata_hash_deserialization_tests {
         let decoded = MetadataHash::from_cbor(encoded);
 
         // then
-        assert_eq!(None, decoded, "Should not be decoded")
+        assert!(decoded.is_err(), "Deserialization should fail");
+        assert!(
+            decoded.unwrap_err().is_end_of_input(),
+            "Should fail with end of input error"
+        );
     }
 
     #[test]
@@ -475,6 +514,13 @@ mod metadata_hash_deserialization_tests {
         let decoded = MetadataHash::from_cbor(encoded);
 
         // then
-        assert_eq!(None, decoded, "Should not be decoded")
+        assert!(decoded.is_err(), "Deserialization should fail");
+        assert!(
+            is_valid_custom_error(
+                decoded.unwrap_err(),
+                ParseMetadataHashError::InvalidSolcType(minicbor::data::Type::Int)
+            ),
+            "Should fail with custom (InvalidSolcType) error"
+        );
     }
 }
