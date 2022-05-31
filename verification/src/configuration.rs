@@ -1,9 +1,9 @@
-use config::{Config, File, FileFormat};
+use config::{Config as LibConfig, File, FileFormat};
 use serde::Deserialize;
 use std::net::SocketAddr;
 
 #[derive(Deserialize, Clone)]
-pub struct Configuration {
+pub struct Config {
     pub server: ServerConfiguration,
     pub sourcify: SourcifyConfiguration,
 }
@@ -18,9 +18,9 @@ pub struct SourcifyConfiguration {
     pub api_url: String,
 }
 
-impl Configuration {
+impl Config {
     pub fn parse() -> Result<Self, config::ConfigError> {
-        let builder = Config::builder()
+        let builder = LibConfig::builder()
             .add_source(File::new("configuration", FileFormat::Toml))
             .add_source(config::Environment::with_prefix("VERIFICATION"))
             .build()

@@ -1,7 +1,7 @@
 use actix_web::{error, error::Error, web::Json};
 use serde::Deserialize;
 
-use crate::Configuration;
+use crate::Config;
 
 use super::types::{SourcifyRequest, VerificationResponse};
 use actix_web::web;
@@ -38,7 +38,7 @@ struct FieldError {
 }
 
 async fn sourcify_verification_request(
-    config: &Configuration,
+    config: &Config,
     params: &SourcifyRequest,
 ) -> Result<Json<VerificationResponse>, Error> {
     let resp = reqwest::Client::new()
@@ -66,7 +66,7 @@ async fn sourcify_verification_request(
 }
 
 pub async fn verify(
-    config: web::Data<Configuration>,
+    config: web::Data<Config>,
     params: Json<SourcifyRequest>,
 ) -> Result<Json<VerificationResponse>, Error> {
     sourcify_verification_request(config.as_ref(), &params.into_inner()).await

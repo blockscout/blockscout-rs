@@ -5,11 +5,11 @@ mod tests {
         App,
     };
     use serde_json::json;
-    use verification::{routes, Configuration};
+    use verification::{routes, Config};
 
     #[actix_rt::test]
     async fn should_return_200() {
-        let config = Configuration::parse().expect("Failed to parse config");
+        let config = Config::parse().expect("Failed to parse config");
         let mut app = test::init_service(
             App::new().configure(|service_config| routes::config(service_config, config)),
         )
