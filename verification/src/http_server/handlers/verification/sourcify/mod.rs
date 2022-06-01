@@ -1,9 +1,11 @@
 mod types;
 
 use self::types::{SourcifyRequest, SourcifyVerifyResponse};
-use crate::{http_server::handlers::VerificationResponse, Config};
+use crate::Config;
 use actix_web::web;
 use actix_web::{error, error::Error, web::Json};
+
+use super::VerificationResponse;
 
 async fn sourcify_verification_request(
     config: &Config,

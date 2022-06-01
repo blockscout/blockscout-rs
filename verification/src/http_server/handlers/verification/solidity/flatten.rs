@@ -1,6 +1,6 @@
 use super::types::{FlattenedSource, VerificationRequest};
 use crate::{
-    download_cache::DownloadCache, http_server::handlers::VerificationResponse,
+    download_cache::DownloadCache, http_server::handlers::verification::VerificationResponse,
     solidity::fetcher::SvmFetcher,
 };
 use actix_web::{
