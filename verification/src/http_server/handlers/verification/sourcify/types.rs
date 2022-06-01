@@ -14,7 +14,7 @@ pub struct SourcifyRequest {
 // https://docs.sourcify.dev/docs/api/server/v1/verify/
 #[derive(Deserialize)]
 #[serde(untagged)]
-pub enum SourcifyVerifyResponse {
+pub(super) enum SourcifyVerifyResponse {
     Verified {
         result: Vec<ResultItem>,
     },
@@ -29,14 +29,14 @@ pub enum SourcifyVerifyResponse {
 
 #[allow(unused)]
 #[derive(Deserialize)]
-pub struct ResultItem {
+pub(super) struct ResultItem {
     address: String,
     status: String,
 }
 
 #[allow(unused)]
 #[derive(Deserialize, Debug)]
-pub struct FieldError {
+pub(super) struct FieldError {
     field: String,
     message: String,
 }
