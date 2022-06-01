@@ -1,4 +1,5 @@
-use super::solidity::{flatten, sourcify};
+use super::solidity::flatten;
+use super::sourcify;
 use crate::{download_cache::DownloadCache, solidity::fetcher::SvmFetcher};
 use actix_web::web;
 

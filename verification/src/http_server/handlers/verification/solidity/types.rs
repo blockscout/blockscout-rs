@@ -1,10 +1,8 @@
-use std::collections::HashMap;
-
 use ethers_solc::{
     artifacts::{Libraries, Settings},
     CompilerInput, EvmVersion,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::{collections::BTreeMap, path::PathBuf, str::FromStr};
 
 #[derive(Debug, Deserialize, PartialEq)]
@@ -19,11 +17,6 @@ pub struct VerificationRequest<T> {
     pub content: T,
 }
 
-#[derive(Debug, Serialize, PartialEq)]
-pub struct VerificationResponse {
-    pub verified: bool,
-}
-
 #[derive(Debug, Deserialize, PartialEq)]
 struct ContractLibrary {
     lib_name: String,
@@ -36,13 +29,6 @@ pub struct FlattenedSource {
     evm_version: String,
     optimization_runs: Option<usize>,
     contract_libraries: Option<Vec<ContractLibrary>>,
-}
-
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
-pub struct SourcifyRequest {
-    pub address: String,
-    pub chain: String,
-    pub files: HashMap<String, String>,
 }
 
 impl TryFrom<FlattenedSource> for CompilerInput {
