@@ -4,7 +4,7 @@ use std::collections::HashMap;
 // This struct is used as input for our endpoint and as
 // input for sourcify endpoint at the same time
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
-pub struct SourcifyRequest {
+pub struct ApiRequest {
     pub address: String,
     pub chain: String,
     pub files: HashMap<String, String>,
@@ -14,7 +14,7 @@ pub struct SourcifyRequest {
 // https://docs.sourcify.dev/docs/api/server/v1/verify/
 #[derive(Deserialize)]
 #[serde(untagged)]
-pub(super) enum SourcifyVerifyResponse {
+pub(super) enum ApiVerificationResponse {
     Verified {
         result: Vec<ResultItem>,
     },

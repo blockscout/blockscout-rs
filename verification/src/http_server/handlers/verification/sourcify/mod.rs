@@ -1,15 +1,15 @@
 mod types;
 
-use self::types::{SourcifyRequest, SourcifyVerifyResponse};
+use self::types::{ApiRequest, ApiVerificationResponse};
 use crate::Config;
 use actix_web::web;
 use actix_web::{error, error::Error, web::Json};
 
 use super::VerificationResponse;
 
-async fn sourcify_verification_request(
+async fn verification_request(
     config: &Config,
-    params: &SourcifyRequest,
+    params: &ApiRequest,
 ) -> Result<Json<VerificationResponse>, Error> {
     let resp = reqwest::Client::new()
         .post(&config.sourcify.api_url)
@@ -18,17 +18,17 @@ async fn sourcify_verification_request(
         .await
         .map_err(error::ErrorInternalServerError)?;
 
-    let response_body: SourcifyVerifyResponse =
+    let response_body: ApiVerificationResponse =
         resp.json().await.map_err(error::ErrorInternalServerError)?;
 
     match response_body {
-        SourcifyVerifyResponse::Verified { result } => {
+        ApiVerificationResponse::Verified { result } => {
             // TODO: parse metadata.json, return abi, constructor arguments, ...
             let _ = result;
             Ok(Json(VerificationResponse { verified: true }))
         }
-        SourcifyVerifyResponse::Error { error } => Err(error::ErrorBadRequest(error)),
-        SourcifyVerifyResponse::ValidationErrors { message, errors } => {
+        ApiVerificationResponse::Error { error } => Err(error::ErrorBadRequest(error)),
+        ApiVerificationResponse::ValidationErrors { message, errors } => {
             let error_message = format!("{}: {:?}", message, errors);
             Err(error::ErrorBadRequest(error_message))
         }
@@ -37,7 +37,7 @@ async fn sourcify_verification_request(
 
 pub async fn verify(
     config: web::Data<Config>,
-    params: Json<SourcifyRequest>,
+    params: Json<ApiRequest>,
 ) -> Result<Json<VerificationResponse>, Error> {
-    sourcify_verification_request(config.as_ref(), &params.into_inner()).await
+    verification_request(config.as_ref(), &params.into_inner()).await
 }
