@@ -385,7 +385,9 @@ mod verifier_initialization_tests {
         assert!(verifier.is_err(), "Verifier initialization should fail");
         assert_eq!(
             verifier.unwrap_err(),
-            InitializationError::InvalidCreationTxInput
+            InitializationError::MetadataHashMismatch(Mismatch::expected(
+                Bytes::from_str(DEFAULT_ENCODED_METADATA_HASH).unwrap()
+            ))
         )
     }
 
@@ -416,7 +418,7 @@ mod verifier_initialization_tests {
         assert!(verifier.is_err(), "Verifier initialization should fail");
         assert_eq!(
             verifier.unwrap_err(),
-            InitializationError::InvalidDeployedBytecode
+            InitializationError::MetadataHashParseError("length is not encoded".to_string())
         )
     }
 
