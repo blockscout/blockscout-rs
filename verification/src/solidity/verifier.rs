@@ -2,7 +2,7 @@
 
 use crate::types::Mismatch;
 use bytes::Buf;
-use ethers_core::types::Bytes;
+use ethers_core::types::Bytes as DisplayBytes;
 use ethers_solc::CompilerOutput;
 use minicbor::{data::Type, Decode, Decoder};
 use std::{error::Error, str::FromStr};
@@ -19,7 +19,7 @@ pub(crate) enum InitializationError {
     #[error("cannot parse metadata hash from deployed bytecode: {0}")]
     MetadataHashParseError(String),
     #[error("creation transaction input has different metadata hash to deployed bytecode. {0}")]
-    MetadataHashMismatch(Mismatch<Bytes>),
+    MetadataHashMismatch(Mismatch<DisplayBytes>),
 }
 
 /// Errors that may occur during bytecode comparison step.
@@ -125,7 +125,7 @@ struct DeployedBytecode {
 
 impl DeployedBytecode {
     /// Returns deployed bytecode without metadata hash
-    pub fn bytecode(&self) -> Bytes {
+    pub fn bytecode(&self) -> bytes::Bytes {
         self.bytecode.clone().into()
     }
 
@@ -135,7 +135,7 @@ impl DeployedBytecode {
     }
 
     /// Returns metadata hash encoded as bytes and concatenated with 2 bytes representing its length
-    pub fn encoded_metadata_hash_with_length(&self) -> Bytes {
+    pub fn encoded_metadata_hash_with_length(&self) -> bytes::Bytes {
         let start = self.bytecode.len();
         let end = self.bytes.len();
         self.bytes.slice(start..end).into()
@@ -146,7 +146,7 @@ impl FromStr for DeployedBytecode {
     type Err = InitializationError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let bytes = Bytes::from_str(s)
+        let bytes = DisplayBytes::from_str(s)
             .map_err(|_| InitializationError::InvalidDeployedBytecode)?
             .0;
 
@@ -235,7 +235,7 @@ impl BytecodeWithConstructorArgs {
         s: &str,
         deployed_bytecode: &DeployedBytecode,
     ) -> Result<Self, InitializationError> {
-        let bytes = Bytes::from_str(s)
+        let bytes = DisplayBytes::from_str(s)
             .map_err(|_| InitializationError::InvalidCreationTxInput)?
             .0;
 
@@ -251,7 +251,7 @@ impl BytecodeWithConstructorArgs {
         bytes: bytes::Bytes,
         deployed_bytecode: &DeployedBytecode,
     ) -> Result<Self, InitializationError> {
-        let expected_metadata_hash = deployed_bytecode.encoded_metadata_hash_with_length().0;
+        let expected_metadata_hash = deployed_bytecode.encoded_metadata_hash_with_length();
         let metadata_hash_size = expected_metadata_hash.len();
         let metadata_hash_start_index = bytes
             .windows(metadata_hash_size)
@@ -386,7 +386,7 @@ mod verifier_initialization_tests {
         assert_eq!(
             verifier.unwrap_err(),
             InitializationError::MetadataHashMismatch(Mismatch::expected(
-                Bytes::from_str(DEFAULT_ENCODED_METADATA_HASH).unwrap()
+                DisplayBytes::from_str(DEFAULT_ENCODED_METADATA_HASH).unwrap()
             ))
         )
     }
@@ -455,7 +455,7 @@ mod verifier_initialization_tests {
         assert_eq!(
             verifier.unwrap_err(),
             InitializationError::MetadataHashMismatch(Mismatch::expected(
-                Bytes::from_str(DEFAULT_ENCODED_METADATA_HASH).unwrap()
+                DisplayBytes::from_str(DEFAULT_ENCODED_METADATA_HASH).unwrap()
             ))
         );
     }
@@ -490,7 +490,7 @@ mod metadata_hash_deserialization_tests {
         // { "bzzr0": b"d4fba422541feba2d648f6657d9354ec14ea9f5919b520abe0feb60981d7b17c" }
         let hex =
             "a165627a7a72305820d4fba422541feba2d648f6657d9354ec14ea9f5919b520abe0feb60981d7b17c";
-        let encoded = Bytes::from_str(hex).unwrap().0;
+        let encoded = DisplayBytes::from_str(hex).unwrap().0;
         let expected = MetadataHash { solc: None };
 
         // when
@@ -506,7 +506,7 @@ mod metadata_hash_deserialization_tests {
         // given
         // { "ipfs": b"1220BCC988B1311237F2C00CCD0BFBD8B01D24DC18F720603B0DE93FE6327DF53625", "solc": b'00080e' }
         let hex = "a2646970667358221220bcc988b1311237f2c00ccd0bfbd8b01d24dc18f720603b0de93fe6327df5362564736f6c634300080e";
-        let encoded = Bytes::from_str(hex).unwrap().0;
+        let encoded = DisplayBytes::from_str(hex).unwrap().0;
         let expected = MetadataHash {
             solc: Some("\u{0}\u{8}\u{e}".as_bytes().into()),
         };
@@ -524,7 +524,7 @@ mod metadata_hash_deserialization_tests {
         // given
         // {"ipfs": b'1220BA5AF27FE13BC83E671BD6981216D35DF49AB3AC923741B8948B277F93FBF732', "solc": "0.8.15-ci.2022.5.23+commit.21591531"}
         let hex = "a2646970667358221220ba5af27fe13bc83e671bd6981216d35df49ab3ac923741b8948b277f93fbf73264736f6c637823302e382e31352d63692e323032322e352e32332b636f6d6d69742e3231353931353331";
-        let encoded = Bytes::from_str(hex).unwrap().0;
+        let encoded = DisplayBytes::from_str(hex).unwrap().0;
         let expected = MetadataHash {
             solc: Some("0.8.15-ci.2022.5.23+commit.21591531".as_bytes().into()),
         };
@@ -541,7 +541,7 @@ mod metadata_hash_deserialization_tests {
     fn test_deserialization_of_non_cbor_hex_should_fail() {
         // given
         let hex = "1234567890";
-        let encoded = Bytes::from_str(hex).unwrap().0;
+        let encoded = DisplayBytes::from_str(hex).unwrap().0;
 
         // when
         let decoded = MetadataHash::from_cbor(encoded);
@@ -559,7 +559,7 @@ mod metadata_hash_deserialization_tests {
         // given
         // "solc"
         let hex = "64736f6c63";
-        let encoded = Bytes::from_str(hex).unwrap().0;
+        let encoded = DisplayBytes::from_str(hex).unwrap().0;
 
         // when
         let decoded = MetadataHash::from_cbor(encoded);
@@ -577,7 +577,7 @@ mod metadata_hash_deserialization_tests {
         // given
         // { "solc": b'000400', "ipfs": b"1220BCC988B1311237F2C00CCD0BFBD8B01D24DC18F720603B0DE93FE6327DF53625", "solc": b'00080e' }
         let hex = "a364736f6c6343000400646970667358221220bcc988b1311237f2c00ccd0bfbd8b01d24dc18f720603b0de93fe6327df5362564736f6c634300080e";
-        let encoded = Bytes::from_str(hex).unwrap().0;
+        let encoded = DisplayBytes::from_str(hex).unwrap().0;
 
         // when
         let decoded = MetadataHash::from_cbor(encoded);
@@ -600,7 +600,7 @@ mod metadata_hash_deserialization_tests {
             "a2646970667358221220bcc988b1311237f2c00ccd0bfbd8b01d24dc18f720603b0de93fe6327df5362564736f6c634300080e",
             "a165627a7a72305820d4fba422541feba2d648f6657d9354ec14ea9f5919b520abe0feb60981d7b17c"
         );
-        let encoded = Bytes::from_str(&hex).unwrap().0;
+        let encoded = DisplayBytes::from_str(&hex).unwrap().0;
 
         // when
         let decoded = MetadataHash::from_cbor(encoded);
@@ -619,7 +619,7 @@ mod metadata_hash_deserialization_tests {
         // 3 elements expected in the map but got only 2:
         // { "ipfs": b"1220BCC988B1311237F2C00CCD0BFBD8B01D24DC18F720603B0DE93FE6327DF53625", "solc": b'00080e' }
         let hex = "a3646970667358221220bcc988b1311237f2c00ccd0bfbd8b01d24dc18f720603b0de93fe6327df5362564736f6c634300080e";
-        let encoded = Bytes::from_str(&hex).unwrap().0;
+        let encoded = DisplayBytes::from_str(&hex).unwrap().0;
 
         // when
         let decoded = MetadataHash::from_cbor(encoded);
@@ -637,7 +637,7 @@ mod metadata_hash_deserialization_tests {
         // given
         // { "ipfs": b"1220BCC988B1311237F2C00CCD0BFBD8B01D24DC18F720603B0DE93FE6327DF53625", "solc": 123 } \
         let hex= "a2646970667358221220bcc988b1311237f2c00ccd0bfbd8b01d24dc18f720603b0de93fe6327df5362564736f6c63187B";
-        let encoded = Bytes::from_str(&hex).unwrap().0;
+        let encoded = DisplayBytes::from_str(&hex).unwrap().0;
 
         // when
         let decoded = MetadataHash::from_cbor(encoded);
