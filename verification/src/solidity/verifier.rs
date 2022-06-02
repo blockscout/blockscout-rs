@@ -292,7 +292,7 @@ pub(crate) struct Verifier {
     file_path: Option<String>,
     /// Bytecode used on the contract creation transaction
     bc_creation_tx_input: BytecodeWithConstructorArgs,
-    /// Bytecode stored in the chain and being used by EVMrap_err()
+    /// Bytecode stored in the chain and being used by EVM
     bc_deployed_bytecode: DeployedBytecode,
 }
 
