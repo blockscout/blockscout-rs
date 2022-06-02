@@ -2,7 +2,7 @@ use ethers_solc::{
     artifacts::{Libraries, Settings},
     CompilerInput, EvmVersion,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::{collections::BTreeMap, path::PathBuf, str::FromStr};
 
 #[derive(Debug, Deserialize, PartialEq)]
@@ -15,11 +15,6 @@ pub struct VerificationRequest<T> {
 
     #[serde(flatten)]
     pub content: T,
-}
-
-#[derive(Debug, Serialize, PartialEq)]
-pub struct VerificationResponse {
-    pub verified: bool,
 }
 
 #[derive(Debug, Deserialize, PartialEq)]
