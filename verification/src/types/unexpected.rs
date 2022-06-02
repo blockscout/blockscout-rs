@@ -13,7 +13,7 @@ pub struct Mismatch<T> {
 
 impl<T> Mismatch<T> {
     /// Creates an error with both `expected` and `found` values.
-    pub fn new(expected: T, found: T) -> Self {
+    pub fn _new(expected: T, found: T) -> Self {
         Self {
             expected,
             found: Some(found),
@@ -48,7 +48,7 @@ mod test {
         // given
         let expected = 1;
         let found = 2;
-        let mismatch = Mismatch::new(expected, found);
+        let mismatch = Mismatch::_new(expected, found);
 
         // when
         let actual = format!("{}", mismatch);

@@ -95,11 +95,11 @@ impl<'b, C> Decode<'b, C> for MetadataHash {
         // We require that no elements left in the decoder when
         // the whole map has been processed. That adds another layer
         // of assurance that encoded bytes are actually metadata hash.
-        if let Ok(_) = d.datatype() {
+        if d.datatype().is_ok() {
             return Err(Error::custom(ParseMetadataHashError::NonExhausted));
         }
 
-        let solc = solc.map(|v| bytes::Bytes::copy_from_slice(v));
+        let solc = solc.map(bytes::Bytes::copy_from_slice);
         Ok(MetadataHash { solc })
     }
 
@@ -126,7 +126,7 @@ struct DeployedBytecode {
 impl DeployedBytecode {
     /// Returns deployed bytecode without metadata hash
     pub fn bytecode(&self) -> bytes::Bytes {
-        self.bytecode.clone().into()
+        self.bytecode.clone()
     }
 
     /// Returns a metadata hash
@@ -138,7 +138,7 @@ impl DeployedBytecode {
     pub fn encoded_metadata_hash_with_length(&self) -> bytes::Bytes {
         let start = self.bytecode.len();
         let end = self.bytes.len();
-        self.bytes.slice(start..end).into()
+        self.bytes.slice(start..end)
     }
 }
 
