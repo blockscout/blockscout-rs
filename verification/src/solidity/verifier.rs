@@ -2,12 +2,9 @@
 
 use crate::types::Mismatch;
 use bytes::Buf;
-use ethers_core::types::{Bytes, ParseBytesError};
+use ethers_core::types::Bytes;
 use ethers_solc::CompilerOutput;
-use minicbor::{
-    data::{Tag, Type},
-    Decode, Decoder,
-};
+use minicbor::{data::Type, Decode, Decoder};
 use std::{error::Error, str::FromStr};
 use thiserror::Error;
 
@@ -218,19 +215,67 @@ impl TryFrom<bytes::Bytes> for DeployedBytecode {
 /// (https://docs.soliditylang.org/en/latest/using-the-compiler.html#output-description)
 /// excluding metadata hash and optionally including constructor arguments used on a contract creation.
 #[derive(Clone, Debug, PartialEq)]
-struct BytecodeWithConstructorArgs {}
+struct BytecodeWithConstructorArgs {
+    /// Bytecode used in contract creation transaction excluding
+    /// encoded metadata hash and following data
+    bytecode: bytes::Bytes,
+    /// Bytes used in contract creation transaction after
+    /// encoded metadata hash
+    /// (may include some hex data concatenated with constructor arguments)
+    bytes_after_metadata_hash: bytes::Bytes,
+}
 
 impl BytecodeWithConstructorArgs {
     /// Initializes the structure from string and parsed deployed bytecode.
-    /// It extracts metadata hash from the provided string and extracts
-    /// constructor arguments used on a contract creation if possible.
+    /// It removes metadata hash from the provided string and extracts
+    /// bytecode and arguments passed after metadata.
     ///
     /// Deployed bytecode is required to extract metadata hash from the string.
     pub fn from_str(
         s: &str,
         deployed_bytecode: &DeployedBytecode,
     ) -> Result<Self, InitializationError> {
-        todo!()
+        let bytes = Bytes::from_str(s)
+            .map_err(|_| InitializationError::InvalidCreationTxInput)?
+            .0;
+
+        BytecodeWithConstructorArgs::try_from_bytes(bytes, deployed_bytecode)
+    }
+
+    /// Initializes the structure from bytes string and parsed deployed bytecode.
+    /// It removes metadata hash from the provided string and extracts
+    /// bytecode and arguments passed after metadata.
+    ///
+    /// Deployed bytecode is required to extract metadata hash from the string.
+    pub fn try_from_bytes(
+        bytes: bytes::Bytes,
+        deployed_bytecode: &DeployedBytecode,
+    ) -> Result<Self, InitializationError> {
+        let expected_metadata_hash = deployed_bytecode.encoded_metadata_hash_with_length().0;
+        let metadata_hash_size = expected_metadata_hash.len();
+        let metadata_hash_start_index = bytes
+            .windows(metadata_hash_size)
+            .enumerate()
+            .rev()
+            .find(|&(_, w)| w == expected_metadata_hash)
+            .map(|(i, _)| i);
+
+        if metadata_hash_start_index.is_none() {
+            return Err(InitializationError::MetadataHashMismatch(
+                Mismatch::expected(expected_metadata_hash.into()),
+            ));
+        }
+
+        let start = metadata_hash_start_index.unwrap();
+        let size = metadata_hash_size;
+
+        let bytecode = bytes.slice(0..start);
+        let bytes_after_metadata_hash = bytes.slice(start + size..bytes.len());
+
+        Ok(Self {
+            bytecode,
+            bytes_after_metadata_hash,
+        })
     }
 }
 
@@ -308,7 +353,6 @@ mod verifier_initialization_tests {
     );
 
     #[test]
-    #[should_panic] // TODO: remove when implemented
     fn test_initialization_with_valid_data() {
         let verifier = Verifier::new(
             DEFAULT_CONTRACT_NAME.to_string(),
@@ -331,7 +375,6 @@ mod verifier_initialization_tests {
     }
 
     #[test]
-    #[should_panic] // TODO: remove when implemented
     fn test_initialization_with_empty_creation_tx_input_should_fail() {
         let verifier = Verifier::new(
             DEFAULT_CONTRACT_NAME.to_string(),
@@ -347,7 +390,6 @@ mod verifier_initialization_tests {
     }
 
     #[test]
-    #[should_panic] // TODO: remove when implemented
     fn test_initialization_with_creation_tx_input_as_invalid_hex_should_fail() {
         let invalid_input = "0xabcdefghij";
         let verifier = Verifier::new(
@@ -364,7 +406,6 @@ mod verifier_initialization_tests {
     }
 
     #[test]
-    #[should_panic] // TODO: remove when implemented
     fn test_initialization_with_empty_deployed_bytecode_should_fail() {
         let verifier = Verifier::new(
             DEFAULT_CONTRACT_NAME.to_string(),
@@ -380,7 +421,6 @@ mod verifier_initialization_tests {
     }
 
     #[test]
-    #[should_panic] // TODO: remove when implemented
     fn test_initialization_with_deployed_bytecode_as_invalid_hex_should_fail() {
         let invalid_input = "0xabcdefghij";
         let verifier = Verifier::new(
@@ -397,7 +437,6 @@ mod verifier_initialization_tests {
     }
 
     #[test]
-    #[should_panic] // TODO: remove when implemented
     fn test_initialization_with_metadata_hash_mismatch_should_fail() {
         // {"ipfs": h'1220EB23CE2C13EA8739368F952F6C6A4B1F0623D147D2A19B6D4D26A61AB03FCD3E', "solc": 0.8.0}
         let another_metadata_hash = "a2646970667358221220eb23ce2c13ea8739368f952f6c6a4b1f0623d147d2a19b6d4d26a61ab03fcd3e64736f6c63430008000033";
