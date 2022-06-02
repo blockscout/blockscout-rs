@@ -18,8 +18,8 @@ semver = "1.0"
 anyhow = "1.0"
 async-trait = "0.1"
 thiserror = { version = "1.0" }
-bytes = "1.1"
 minicbor =  { version = "0.16", features = ["std"] }
+bytes = "1.1"
 
 ethers-solc = { git = "https://github.com/gakonst/ethers-rs", version = "0.3", features = ["svm-solc"] }
 ethers-core = { git = "https://github.com/gakonst/ethers-rs", version = "0.6" }
@@ -29,4 +29,3 @@ svm = { package = "svm-rs", version = "0.2.9", git = "https://github.com/roynaln
 [dev-dependencies]
 futures = "0.3"
 const_format = "0.2"
-
