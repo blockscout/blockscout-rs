@@ -1,11 +1,12 @@
 mod types;
 
 use self::types::{ApiRequest, ApiVerificationResponse};
-use crate::Config;
+use crate::{Config, VerificationResult};
 use actix_web::web;
 use actix_web::{error, error::Error, web::Json};
+use std::collections::HashMap;
 
-use super::VerificationResponse;
+use super::{VerificationResponse, VerificationStatus};
 
 async fn verification_request(
     config: &Config,
@@ -25,12 +26,27 @@ async fn verification_request(
         ApiVerificationResponse::Verified { result } => {
             // TODO: parse metadata.json, return abi, constructor arguments, ...
             let _ = result;
-            Ok(Json(VerificationResponse { verified: true }))
+            let verification_result = VerificationResult {
+                contract_name: "".into(),
+                compiler_version: "".into(),
+                evm_version: "".into(),
+                constructor_arguments: None,
+                contract_libraries: None,
+                abi: "".into(),
+                sources: HashMap::new(),
+            };
+            Ok(Json(VerificationResponse::ok(verification_result)))
         }
-        ApiVerificationResponse::Error { error } => Err(error::ErrorBadRequest(error)),
+        ApiVerificationResponse::Error { error } => Ok(Json(VerificationResponse::err(
+            VerificationStatus::UnknowError,
+            Some(error),
+        ))),
         ApiVerificationResponse::ValidationErrors { message, errors } => {
             let error_message = format!("{}: {:?}", message, errors);
-            Err(error::ErrorBadRequest(error_message))
+            Ok(Json(VerificationResponse::err(
+                VerificationStatus::UnknowError,
+                Some(error_message),
+            )))
         }
     }
 }

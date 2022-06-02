@@ -37,7 +37,7 @@ pub async fn verify(
     // TODO: verify output
     let _ = output;
 
-    Ok(Json(VerificationResponse { verified: true }))
+    todo!()
 }
 
 #[cfg(test)]

@@ -5,6 +5,8 @@ use ethers_solc::{
 use serde::Deserialize;
 use std::{collections::BTreeMap, path::PathBuf, str::FromStr};
 
+use crate::http_server::handlers::verification::ContractLibrary;
+
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct VerificationRequest<T> {
     pub contract_name: String,
@@ -15,12 +17,6 @@ pub struct VerificationRequest<T> {
 
     #[serde(flatten)]
     pub content: T,
-}
-
-#[derive(Debug, Deserialize, PartialEq)]
-struct ContractLibrary {
-    lib_name: String,
-    lib_address: String,
 }
 
 #[derive(Debug, Deserialize, PartialEq)]

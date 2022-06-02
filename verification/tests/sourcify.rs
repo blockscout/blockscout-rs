@@ -3,7 +3,7 @@ use actix_web::{
     App,
 };
 use serde_json::json;
-use verification::{routes, Config};
+use verification::{routes, Config, VerificationResponse, VerificationStatus};
 
 #[actix_rt::test]
 async fn should_return_200() {
@@ -34,9 +34,16 @@ async fn should_return_200() {
 
     assert!(
         resp.status().is_success(),
-        "Failed to verify contract, status is {}",
+        "failed to verify contract, status is {}",
         resp.status()
     );
+
+    let body: VerificationResponse = test::read_body_json(resp).await;
+    assert_eq!(
+        body.status,
+        VerificationStatus::Ok,
+        "invalid verification status",
+    )
 
     // TODO: check response body and consider negative cases
 }
