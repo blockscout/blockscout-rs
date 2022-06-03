@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
 use serde::{Deserialize, Serialize};
 
@@ -39,7 +39,7 @@ pub enum VerificationStatus {
     #[serde(rename = "1")]
     BytecodeDismatch,
     #[serde(rename = "99")]
-    UnknowError,
+    UnknownError,
 }
 
 impl VerificationStatus {
@@ -47,7 +47,7 @@ impl VerificationStatus {
         match self {
             Self::Ok => "OK",
             Self::BytecodeDismatch => "Bytecode doesn't match, please try again",
-            Self::UnknowError => "Unknow error",
+            Self::UnknownError => "Unknow error",
         }
     }
 }
@@ -61,9 +61,14 @@ impl VerificationResponse {
         }
     }
 
-    pub fn err(status: VerificationStatus, message: Option<String>) -> Self {
+    pub fn err(status: VerificationStatus) -> Self {
+        let message = status.default_message();
+        Self::err_with_message(status, message)
+    }
+
+    pub fn err_with_message(status: VerificationStatus, message: impl Display) -> Self {
         Self {
-            message: message.unwrap_or_else(|| status.default_message().into()),
+            message: format!("{}", message),
             result: None,
             status,
         }

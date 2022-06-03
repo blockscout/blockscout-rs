@@ -37,15 +37,14 @@ async fn verification_request(
             };
             Ok(Json(VerificationResponse::ok(verification_result)))
         }
-        ApiVerificationResponse::Error { error } => Ok(Json(VerificationResponse::err(
-            VerificationStatus::UnknowError,
-            Some(error),
-        ))),
+        ApiVerificationResponse::Error { error } => Ok(Json(
+            VerificationResponse::err_with_message(VerificationStatus::UnknownError, error),
+        )),
         ApiVerificationResponse::ValidationErrors { message, errors } => {
             let error_message = format!("{}: {:?}", message, errors);
-            Ok(Json(VerificationResponse::err(
-                VerificationStatus::UnknowError,
-                Some(error_message),
+            Ok(Json(VerificationResponse::err_with_message(
+                VerificationStatus::UnknownError,
+                error_message,
             )))
         }
     }
