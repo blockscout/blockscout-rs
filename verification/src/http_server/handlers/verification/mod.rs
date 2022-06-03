@@ -51,7 +51,7 @@ impl VerificationResponse {
 
     pub fn err(message: impl Display) -> Self {
         Self {
-            message: format!("{}", message),
+            message: message.to_string(),
             result: None,
             status: VerificationStatus::Failed,
         }
