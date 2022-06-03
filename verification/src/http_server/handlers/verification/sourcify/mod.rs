@@ -6,7 +6,7 @@ use actix_web::web;
 use actix_web::{error, error::Error, web::Json};
 use std::collections::HashMap;
 
-use super::{VerificationResponse, VerificationStatus};
+use super::VerificationResponse;
 
 async fn verification_request(
     config: &Config,
@@ -37,15 +37,10 @@ async fn verification_request(
             };
             Ok(Json(VerificationResponse::ok(verification_result)))
         }
-        ApiVerificationResponse::Error { error } => Ok(Json(
-            VerificationResponse::err_with_message(VerificationStatus::UnknownError, error),
-        )),
+        ApiVerificationResponse::Error { error } => Ok(Json(VerificationResponse::err(error))),
         ApiVerificationResponse::ValidationErrors { message, errors } => {
             let error_message = format!("{}: {:?}", message, errors);
-            Ok(Json(VerificationResponse::err_with_message(
-                VerificationStatus::UnknownError,
-                error_message,
-            )))
+            Ok(Json(VerificationResponse::err(error_message)))
         }
     }
 }

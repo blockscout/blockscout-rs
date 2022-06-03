@@ -37,40 +37,23 @@ pub enum VerificationStatus {
     #[serde(rename = "0")]
     Ok,
     #[serde(rename = "1")]
-    BytecodeDismatch,
-    #[serde(rename = "99")]
-    UnknownError,
-}
-
-impl VerificationStatus {
-    fn default_message(&self) -> &'static str {
-        match self {
-            Self::Ok => "OK",
-            Self::BytecodeDismatch => "Bytecode doesn't match, please try again",
-            Self::UnknownError => "Unknow error",
-        }
-    }
+    Failed,
 }
 
 impl VerificationResponse {
     pub fn ok(result: VerificationResult) -> Self {
         Self {
-            message: VerificationStatus::Ok.default_message().into(),
+            message: "OK".to_string(),
             result: Some(result),
             status: VerificationStatus::Ok,
         }
     }
 
-    pub fn err(status: VerificationStatus) -> Self {
-        let message = status.default_message();
-        Self::err_with_message(status, message)
-    }
-
-    pub fn err_with_message(status: VerificationStatus, message: impl Display) -> Self {
+    pub fn err(message: impl Display) -> Self {
         Self {
             message: format!("{}", message),
             result: None,
-            status,
+            status: VerificationStatus::Failed,
         }
     }
 }
