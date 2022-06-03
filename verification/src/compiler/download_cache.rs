@@ -1,15 +1,8 @@
-use async_trait::async_trait;
-use semver::Version;
+use super::{fetcher::Fetcher, version::CompilerVersion};
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
-#[async_trait]
-pub trait Fetcher {
-    type Error;
-    async fn fetch(&self, ver: &Version) -> Result<PathBuf, Self::Error>;
-}
-
 pub struct DownloadCache<D> {
-    cache: parking_lot::Mutex<HashMap<Version, Arc<tokio::sync::RwLock<Option<PathBuf>>>>>,
+    cache: parking_lot::Mutex<HashMap<CompilerVersion, Arc<tokio::sync::RwLock<Option<PathBuf>>>>>,
     fetcher: D,
 }
 
@@ -21,7 +14,7 @@ impl<D> DownloadCache<D> {
         }
     }
 
-    async fn try_get(&self, ver: &Version) -> Option<PathBuf> {
+    async fn try_get(&self, ver: &CompilerVersion) -> Option<PathBuf> {
         let entry = {
             let cache = self.cache.lock();
             cache.get(ver).cloned()
@@ -37,14 +30,14 @@ impl<D> DownloadCache<D> {
 }
 
 impl<D: Fetcher> DownloadCache<D> {
-    pub async fn get(&self, ver: &Version) -> Result<PathBuf, D::Error> {
+    pub async fn get(&self, ver: &CompilerVersion) -> Result<PathBuf, D::Error> {
         match self.try_get(ver).await {
             Some(file) => Ok(file),
             None => self.fetch(ver).await,
         }
     }
 
-    async fn fetch(&self, ver: &Version) -> Result<PathBuf, D::Error> {
+    async fn fetch(&self, ver: &CompilerVersion) -> Result<PathBuf, D::Error> {
         let lock = {
             let mut cache = self.cache.lock();
             Arc::clone(cache.entry(ver.clone()).or_default())
@@ -70,23 +63,33 @@ impl<D: Default> Default for DownloadCache<D> {
 
 #[cfg(test)]
 mod tests {
+    use crate::compiler::version::ReleaseVersion;
+
     use super::*;
+    use async_trait::async_trait;
     use futures::{executor::block_on, join, pin_mut};
     use std::time::Duration;
     use tokio::{spawn, task::yield_now, time::timeout};
+
+    fn new_version(major: u64) -> CompilerVersion {
+        CompilerVersion::Release(ReleaseVersion::new(
+            semver::Version::new(major, 0, 0),
+            "deadbeef".into(),
+        ))
+    }
 
     /// Tests, that caching works, meaning that cache downloads each version only once
     #[test]
     fn value_is_cached() {
         #[derive(Default)]
         struct MockFetcher {
-            counter: parking_lot::Mutex<HashMap<Version, u32>>,
+            counter: parking_lot::Mutex<HashMap<CompilerVersion, u32>>,
         }
 
         #[async_trait]
         impl Fetcher for MockFetcher {
             type Error = ();
-            async fn fetch(&self, ver: &Version) -> Result<PathBuf, Self::Error> {
+            async fn fetch(&self, ver: &CompilerVersion) -> Result<PathBuf, Self::Error> {
                 *self.counter.lock().entry(ver.clone()).or_default() += 1;
                 Ok(PathBuf::from(ver.to_string()))
             }
@@ -95,12 +98,9 @@ mod tests {
         let fetcher = MockFetcher::default();
         let cache = DownloadCache::new(fetcher);
 
-        let vers: Vec<_> = vec![(0, 1, 2), (1, 2, 3), (3, 3, 3)]
-            .into_iter()
-            .map(|ver| Version::new(ver.0, ver.1, ver.2))
-            .collect();
+        let vers: Vec<_> = (0..3).map(new_version).collect();
 
-        let get_and_check = |ver: &Version| {
+        let get_and_check = |ver: &CompilerVersion| {
             let value = block_on(cache.get(ver)).unwrap();
             assert_eq!(value, PathBuf::from(ver.to_string()));
         };
@@ -134,7 +134,7 @@ mod tests {
         #[async_trait]
         impl Fetcher for MockBlockingFetcher {
             type Error = ();
-            async fn fetch(&self, ver: &Version) -> Result<PathBuf, Self::Error> {
+            async fn fetch(&self, ver: &CompilerVersion) -> Result<PathBuf, Self::Error> {
                 self.sync.lock().await;
                 Ok(PathBuf::from(ver.to_string()))
             }
@@ -144,7 +144,7 @@ mod tests {
         let fetcher = MockBlockingFetcher { sync: sync.clone() };
         let cache = Arc::new(DownloadCache::new(fetcher));
 
-        let vers: Vec<_> = (0..3).map(|x| Version::new(x, 0, 0)).collect();
+        let vers: Vec<_> = (0..3).map(new_version).collect();
 
         // fill the cache
         cache.get(&vers[1]).await.unwrap();
