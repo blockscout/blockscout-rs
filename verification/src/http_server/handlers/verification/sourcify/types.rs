@@ -16,6 +16,7 @@ pub struct ApiRequest {
 #[serde(untagged)]
 pub(super) enum ApiVerificationResponse {
     Verified {
+        #[allow(unused)]
         result: Vec<ResultItem>,
     },
     Error {

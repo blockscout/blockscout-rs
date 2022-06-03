@@ -1,5 +1,7 @@
+mod metadata;
 mod types;
 
+use self::metadata::MetadataContent;
 use self::types::{ApiRequest, ApiVerificationResponse};
 use crate::Config;
 use actix_web::web;
@@ -22,9 +24,14 @@ async fn verification_request(
         resp.json().await.map_err(error::ErrorInternalServerError)?;
 
     match response_body {
-        ApiVerificationResponse::Verified { result } => {
-            // TODO: parse metadata.json, return abi, constructor arguments, ...
-            let _ = result;
+        ApiVerificationResponse::Verified { result: _ } => {
+            // TODO: if metadata.json not found, make request to sourcify to get these files
+            let metadata_content = params
+                .files
+                .get("metadata.json")
+                .ok_or_else(|| error::ErrorBadRequest("metadata.json file not found"))?;
+            let _response =
+                VerificationResponse::try_from(MetadataContent(metadata_content)).unwrap();
             Ok(Json(VerificationResponse { verified: true }))
         }
         ApiVerificationResponse::Error { error } => Err(error::ErrorBadRequest(error)),
