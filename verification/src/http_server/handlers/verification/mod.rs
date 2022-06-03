@@ -57,3 +57,62 @@ impl VerificationResponse {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests::parse::test_serialize_json_ok;
+    use serde_json::json;
+
+    #[test]
+    fn parse_response() {
+        test_serialize_json_ok(vec![
+            (
+                VerificationResponse::ok(VerificationResult {
+                    contract_name: "contract_name".to_string(),
+                    compiler_version: "compiler_version".to_string(),
+                    evm_version: "evm_version".to_string(),
+                    constructor_arguments: Some("constructor_arguments".to_string()),
+                    contract_libraries: Some(vec![ContractLibrary {
+                        lib_name: "lib_name".to_string(),
+                        lib_address: "lib_address".to_string(),
+                    }]),
+                    abi: "abi".to_string(),
+                    sources: serde_json::from_str(
+                        r#"{
+                            "source.sol": "content"
+                        }"#,
+                    )
+                    .unwrap(),
+                }),
+                json!({
+                    "message": "OK",
+                    "status": "0",
+                    "result": {
+                        "contract_name": "contract_name",
+                        "compiler_version": "compiler_version",
+                        "evm_version": "evm_version",
+                        "constructor_arguments": "constructor_arguments",
+                        "contract_libraries": [{
+                            "lib_name": "lib_name",
+                            "lib_address": "lib_address",
+                        }],
+                        "abi": "abi",
+                        "sources": {
+                            "source.sol": "content",
+                        },
+                    },
+
+                }),
+            ),
+            (
+                VerificationResponse::err("Parse error"),
+                json!({
+                    "message": "Parse error",
+                    "status": "1",
+                    "result": null,
+                }),
+            ),
+        ])
+    }
+}

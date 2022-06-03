@@ -3,6 +3,7 @@ mod config;
 mod download_cache;
 mod http_server;
 mod solidity;
+mod tests;
 
 pub use crate::config::Config;
 pub use http_server::handlers::verification::{
