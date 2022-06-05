@@ -41,3 +41,14 @@ pub(super) struct FieldError {
     field: String,
     message: String,
 }
+
+#[derive(Deserialize, Debug)]
+pub(super) struct ApiFilesResponse {
+    pub files: Vec<FileItem>,
+}
+
+#[derive(Deserialize, Debug)]
+pub(super) struct FileItem {
+    pub name: String,
+    pub content: String,
+}
