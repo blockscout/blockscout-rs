@@ -3,6 +3,8 @@ mod config;
 mod download_cache;
 mod http_server;
 mod solidity;
+
+#[cfg(test)]
 mod tests;
 
 pub use crate::config::Config;
