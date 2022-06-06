@@ -1,27 +1,41 @@
-use crate::http_server::handlers::verification::sourcify;
+use super::types::{ApiFilesResponse, ApiRequest, ApiVerificationResponse};
 
-pub(super) async fn verification_request(
-    params: &sourcify::types::ApiRequest,
-    sourcify_api_url: &str,
-) -> Result<sourcify::types::ApiVerificationResponse, reqwest::Error> {
-    let resp = reqwest::Client::new()
-        .post(sourcify_api_url)
-        .json(&params)
-        .send()
-        .await?;
-
-    resp.json().await
+pub(super) struct SoucifyApiClient {
+    host: String,
 }
 
-pub(super) async fn verification_files(
-    params: &sourcify::types::ApiRequest,
-    sourcify_api_url: &str,
-) -> Result<sourcify::types::ApiFilesResponse, reqwest::Error> {
-    let url = format!(
-        "{}/files/any/{}/{}",
-        sourcify_api_url, params.chain, params.address
-    );
-    let resp = reqwest::Client::new().get(url).send().await?;
+impl SoucifyApiClient {
+    pub(super) fn new(host: &str) -> Self {
+        Self {
+            host: host.to_string(),
+        }
+    }
 
-    resp.json().await
+    pub(super) async fn verification(
+        &self,
+        params: &ApiRequest,
+    ) -> Result<ApiVerificationResponse, reqwest::Error> {
+        let resp = reqwest::Client::new()
+            .post(&self.host)
+            .json(&params)
+            .send()
+            .await?;
+
+        resp.json().await
+    }
+
+    pub(super) async fn source_files(
+        &self,
+        params: &ApiRequest,
+    ) -> Result<ApiFilesResponse, reqwest::Error> {
+        let url = format!(
+            "{host}/files/any/{chain}/{address}",
+            host = self.host,
+            chain = params.chain,
+            address = params.address,
+        );
+        let resp = reqwest::get(url).await?;
+
+        resp.json().await
+    }
 }
