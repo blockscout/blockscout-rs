@@ -360,7 +360,10 @@ mod verifier_initialization_tests {
             DEFAULT_CREATION_TX_INPUT,
             DEFAULT_DEPLOYED_BYTECODE,
         );
-        assert!(verifier.is_ok(), "Initialization with \"0x\" prefix failed");
+        assert!(
+            verifier.is_ok(),
+            "Initialization without \"0x\" prefix failed"
+        );
 
         let verifier = Verifier::new(
             DEFAULT_CONTRACT_NAME.to_string(),
@@ -368,10 +371,7 @@ mod verifier_initialization_tests {
             &concatcp!("0x", DEFAULT_CREATION_TX_INPUT),
             &concatcp!("0x", DEFAULT_DEPLOYED_BYTECODE),
         );
-        assert!(
-            verifier.is_ok(),
-            "Initialization without \"0x\" prefix failed"
-        );
+        assert!(verifier.is_ok(), "Initialization with \"0x\" prefix failed");
     }
 
     #[test]
