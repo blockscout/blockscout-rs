@@ -1,3 +1,4 @@
+use crate::http_server::handlers::verification::ContractLibrary;
 use ethers_solc::{
     artifacts::{Libraries, Settings},
     CompilerInput, EvmVersion,
@@ -15,12 +16,6 @@ pub struct VerificationRequest<T> {
 
     #[serde(flatten)]
     pub content: T,
-}
-
-#[derive(Debug, Deserialize, PartialEq)]
-struct ContractLibrary {
-    lib_name: String,
-    lib_address: String,
 }
 
 #[derive(Debug, Deserialize, PartialEq)]
@@ -68,22 +63,11 @@ impl TryFrom<FlattenedSource> for CompilerInput {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde::de::DeserializeOwned;
-    use std::fmt::Debug;
-
-    fn test_parse_ok<T>(tests: Vec<(&str, T)>)
-    where
-        T: Debug + PartialEq + DeserializeOwned,
-    {
-        for (s, value) in tests {
-            let v: T = serde_json::from_str(s).unwrap();
-            assert_eq!(v, value);
-        }
-    }
+    use crate::tests::parse::test_deserialize_ok;
 
     #[test]
     fn parse_flattened() {
-        test_parse_ok(vec![(
+        test_deserialize_ok(vec![(
             r#"{
                     "contract_name": "test",
                     "deployed_bytecode": "0x6001",

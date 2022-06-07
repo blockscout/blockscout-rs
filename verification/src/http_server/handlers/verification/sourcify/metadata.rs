@@ -30,7 +30,7 @@ impl TryFrom<Files> for VerificationResponse {
 
         log::info!("{:?}", _abi);
 
-        Ok(Self { verified: true })
+        todo!()
     }
 }
 

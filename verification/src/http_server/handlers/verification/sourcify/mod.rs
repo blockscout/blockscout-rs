@@ -44,10 +44,10 @@ pub async fn verify(
             let response = VerificationResponse::try_from(files).map_err(error::ErrorBadRequest)?;
             Ok(Json(response))
         }
-        ApiVerificationResponse::Error { error } => Err(error::ErrorBadRequest(error)),
+        ApiVerificationResponse::Error { error } => Ok(Json(VerificationResponse::err(error))),
         ApiVerificationResponse::ValidationErrors { message, errors } => {
             let error_message = format!("{}: {:?}", message, errors);
-            Err(error::ErrorBadRequest(error_message))
+            Ok(Json(VerificationResponse::err(error_message)))
         }
     }
 }
