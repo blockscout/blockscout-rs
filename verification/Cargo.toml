@@ -7,6 +7,8 @@ repository = "https://github.com/blockscout/blockscout-rs/verification"
 
 [dependencies]
 actix-web = "4"
+actix-rt = "2.7.0"
+reqwest = { version = "0.11", features = ["json"] }
 clap = { version = "3", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 tokio = { version = "1", features = ["macros"] }
@@ -20,6 +22,7 @@ async-trait = "0.1"
 thiserror = { version = "1.0" }
 minicbor =  { version = "0.16", features = ["std"] }
 bytes = "1.1"
+config = "0.13"
 
 ethers-solc = { git = "https://github.com/gakonst/ethers-rs", version = "0.3", features = ["svm-solc"] }
 ethers-core = { git = "https://github.com/gakonst/ethers-rs", version = "0.6" }

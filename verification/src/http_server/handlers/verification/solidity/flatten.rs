@@ -1,5 +1,8 @@
-use super::types::{FlattenedSource, VerificationRequest, VerificationResponse};
-use crate::{download_cache::DownloadCache, solidity::fetcher::SvmFetcher};
+use super::types::{FlattenedSource, VerificationRequest};
+use crate::{
+    download_cache::DownloadCache, http_server::handlers::verification::VerificationResponse,
+    solidity::fetcher::SvmFetcher,
+};
 use actix_web::{
     error,
     web::{self, Json},
@@ -34,7 +37,7 @@ pub async fn verify(
     // TODO: verify output
     let _ = output;
 
-    Ok(Json(VerificationResponse { verified: true }))
+    todo!()
 }
 
 #[cfg(test)]
