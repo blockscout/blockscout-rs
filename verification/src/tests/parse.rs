@@ -15,7 +15,7 @@ where
 
 pub fn test_serialize_json_ok<T>(tests: Vec<(T, Value)>)
 where
-    T: Debug + PartialEq + Serialize,
+    T: Serialize,
 {
     for (object, expected_json) in tests {
         let object_string = serde_json::to_string(&object).unwrap();
