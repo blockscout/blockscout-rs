@@ -19,7 +19,6 @@ pub struct Files(pub BTreeMap<String, String>);
 #[serde(untagged)]
 pub(super) enum ApiVerificationResponse {
     Verified {
-        #[allow(unused)]
         result: Vec<ResultItem>,
     },
     Error {
@@ -31,7 +30,6 @@ pub(super) enum ApiVerificationResponse {
     },
 }
 
-#[allow(unused)]
 #[derive(Deserialize)]
 pub(super) struct ResultItem {
     pub address: String,
@@ -40,7 +38,6 @@ pub(super) struct ResultItem {
     pub storage_timestamp: Option<String>,
 }
 
-#[allow(unused)]
 #[derive(Deserialize, Debug)]
 pub(super) struct FieldError {
     field: String,
