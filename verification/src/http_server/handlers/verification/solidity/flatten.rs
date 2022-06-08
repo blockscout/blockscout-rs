@@ -2,7 +2,7 @@ use super::types::{FlattenedSource, VerificationRequest};
 use crate::{
     compiler::{download_cache::DownloadCache, version::CompilerVersion},
     http_server::handlers::verification::VerificationResponse,
-    solidity::svm_fetcher::SvmFetcher,
+    solidity::github_fetcher::GithubFetcher,
 };
 use actix_web::{
     error,
@@ -13,7 +13,7 @@ use ethers_solc::{CompilerInput, CompilerOutput, Solc};
 use std::str::FromStr;
 
 pub async fn compile(
-    cache: &DownloadCache<SvmFetcher>,
+    cache: &DownloadCache<GithubFetcher>,
     compiler_version: &str,
     input: &CompilerInput,
 ) -> Result<CompilerOutput, Error> {
@@ -28,7 +28,7 @@ pub async fn compile(
 }
 
 pub async fn verify(
-    cache: web::Data<DownloadCache<SvmFetcher>>,
+    cache: web::Data<DownloadCache<GithubFetcher>>,
     params: Json<VerificationRequest<FlattenedSource>>,
 ) -> Result<Json<VerificationResponse>, Error> {
     let params = params.into_inner();

@@ -1,5 +1,16 @@
 use semver::Version;
 use std::{fmt::Display, str::FromStr};
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum ParseError {
+    #[error("error parsing the string: {0}")]
+    Parse(String),
+    #[error("could not parse the semver: {0}")]
+    SemVer(semver::Error),
+    #[error("expected commit hash of length 8, got ")]
+    CommitHash(String),
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ReleaseVersion {
@@ -17,14 +28,14 @@ impl ReleaseVersion {
 /// `solc-v*VERSION*+commit.*COMMITHASH*`, example
 /// `solc-v0.8.9+commit.e5eed63a`
 impl FromStr for ReleaseVersion {
-    type Err = anyhow::Error;
+    type Err = ParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let parsed = sscanf::scanf!(s, "solc-v{String}+commit.{String}")
-            .map_err(|e| anyhow::anyhow!("{:?}", e))?;
-        let version = Version::from_str(&parsed.0)?;
+            .map_err(|e| ParseError::Parse(format!("{:?}", e)))?;
+        let version = Version::from_str(&parsed.0).map_err(ParseError::SemVer)?;
         let commit = parsed.1;
         if commit.len() != 8 {
-            anyhow::bail!("expected commit hash of length 8, got {}", commit);
+            return Err(ParseError::CommitHash(commit));
         }
         Ok(Self { version, commit })
     }
@@ -57,15 +68,15 @@ impl NightlyVersion {
 /// `solc-v*VERSION*-nightly.*DATE*+commit.*COMMITHASH*`, example
 /// `solc-v0.8.8-nightly.2021.9.9+commit.dea1b9ec`
 impl FromStr for NightlyVersion {
-    type Err = anyhow::Error;
+    type Err = ParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let parsed = sscanf::scanf!(s, "solc-v{String}-nightly.{String}+commit.{String}")
-            .map_err(|e| anyhow::anyhow!("{:?}", e))?;
-        let version = Version::from_str(&parsed.0)?;
+            .map_err(|e| ParseError::Parse(format!("{:?}", e)))?;
+        let version = Version::from_str(&parsed.0).map_err(ParseError::SemVer)?;
         let date = parsed.1;
         let commit = parsed.2;
         if commit.len() != 8 {
-            anyhow::bail!("expected commit hash of length 8, got {}", commit);
+            return Err(ParseError::CommitHash(commit));
         }
         Ok(Self {
             version,
@@ -95,7 +106,7 @@ pub enum CompilerVersion {
 /// If version contains "nightly", tries to parse it as a nightly version
 /// Else tries to parse it as a release version
 impl FromStr for CompilerVersion {
-    type Err = anyhow::Error;
+    type Err = ParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.contains("nightly") {
             Ok(Self::Nightly(NightlyVersion::from_str(s)?))
