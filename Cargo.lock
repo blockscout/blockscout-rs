@@ -2728,6 +2728,7 @@ dependencies = [
  "clap",
  "const_format",
  "env_logger",
+ "ethabi",
  "ethers-core",
  "ethers-solc",
  "futures",

@@ -1,11 +1,16 @@
 #![allow(dead_code, unused)]
 
 use crate::types::Mismatch;
-use bytes::Buf;
+use bytes::{Buf, Bytes};
+use ethabi::{Constructor, Token};
 use ethers_core::types::Bytes as DisplayBytes;
-use ethers_solc::CompilerOutput;
-use minicbor::{data::Type, Decode, Decoder};
-use std::{error::Error, str::FromStr};
+use ethers_solc::{artifacts::Contract, Artifact, CompilerOutput};
+use minicbor::{data::Type, encode, Decode, Decoder};
+use std::{
+    error::Error,
+    fmt::{Debug, Formatter},
+    str::FromStr,
+};
 use thiserror::Error;
 
 /// Errors that may occur during initial [`Verifier`] setup
@@ -24,7 +29,24 @@ pub(crate) enum InitializationError {
 
 /// Errors that may occur during bytecode comparison step.
 #[derive(Clone, Debug, Error)]
-pub(crate) enum VerificationError {}
+pub(crate) enum VerificationError {
+    #[error("compiler versions included into metadata hash does not match. {0:?}")]
+    CompilerVersionMismatch(Mismatch<Option<String>>),
+    #[error("bytecode does not match compilation output. {0}")]
+    BytecodeMismatch(Mismatch<DisplayBytes>),
+    #[error("extra data after metadata hash but before constructor args does not match compilation output. {0}")]
+    ExtraDataMismatch(Mismatch<DisplayBytes>),
+    #[error("invalid constructor arguments")]
+    InvalidConstructorArguments,
+}
+
+/// The structure returned as a result when verification successes.
+/// Contains data needed to be sent back as a verification response.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct VerificationSuccess {
+    abi: ethabi::Contract,
+    constructor_args: Option<Bytes>,
+}
 
 /// Parsed metadata hash
 /// (https://docs.soliditylang.org/en/v0.8.14/metadata.html#encoding-of-the-metadata-hash-in-the-bytecode).
@@ -211,11 +233,16 @@ impl TryFrom<bytes::Bytes> for DeployedBytecode {
     }
 }
 
+/// Marker type under [`Bytecode`] indicating that the struct was obtained from creation transaction input.
+struct CreationTxInput;
+/// Marker type under [`Bytecode`] indicating that the struct was obtained from the result of local compilation.
+struct CompilationResult;
+
 /// Wrapper under `evm.bytecode.object` from the standard output JSON
 /// (https://docs.soliditylang.org/en/latest/using-the-compiler.html#output-description)
 /// excluding metadata hash and optionally including constructor arguments used on a contract creation.
-#[derive(Clone, Debug, PartialEq)]
-struct BytecodeWithConstructorArgs {
+#[derive(PartialEq)]
+struct Bytecode<Source> {
     /// Bytecode used in contract creation transaction excluding
     /// encoded metadata hash and following data
     bytecode: bytes::Bytes,
@@ -223,9 +250,31 @@ struct BytecodeWithConstructorArgs {
     /// encoded metadata hash
     /// (may include some hex data concatenated with constructor arguments)
     bytes_after_metadata_hash: bytes::Bytes,
+    /// The marker indicating what type of data a struct is "tied" to
+    source: std::marker::PhantomData<Source>,
 }
 
-impl BytecodeWithConstructorArgs {
+impl<Source> Clone for Bytecode<Source> {
+    fn clone(&self) -> Self {
+        Self {
+            bytecode: self.bytecode.clone(),
+            bytes_after_metadata_hash: self.bytes_after_metadata_hash.clone(),
+            source: self.source.clone(),
+        }
+    }
+}
+
+impl<Source> Debug for Bytecode<Source> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Bytecode")
+            .field("bytecode", &self.bytecode)
+            .field("bytes_after_metadata_Hash", &self.bytes_after_metadata_hash)
+            .field("source", &self.source)
+            .finish()
+    }
+}
+
+impl<Source> Bytecode<Source> {
     /// Initializes the structure from string and parsed deployed bytecode.
     /// It removes metadata hash from the provided string and extracts
     /// bytecode and arguments passed after metadata.
@@ -239,7 +288,7 @@ impl BytecodeWithConstructorArgs {
             .map_err(|_| InitializationError::InvalidCreationTxInput)?
             .0;
 
-        BytecodeWithConstructorArgs::try_from_bytes(bytes, deployed_bytecode)
+        Bytecode::try_from_bytes(bytes, deployed_bytecode)
     }
 
     /// Initializes the structure from bytes string and parsed deployed bytecode.
@@ -275,7 +324,62 @@ impl BytecodeWithConstructorArgs {
         Ok(Self {
             bytecode,
             bytes_after_metadata_hash,
+            source: std::marker::PhantomData,
         })
+    }
+}
+
+impl Bytecode<CreationTxInput> {
+    /// Extract constructor arguments using the bytecode obtained as a result of local compilation.
+    /// If there are no constructor arguments, returns `Ok(None)`, otherwise returns `Ok`
+    /// with encoded constructor arguments. If the extraction fails, returns `Err`.
+    pub fn constructor_args(
+        &self,
+        compiled_bytecode: &Bytecode<CompilationResult>,
+    ) -> Result<Option<bytes::Bytes>, VerificationError> {
+        if let Some(constructor_args) = self
+            .bytes_after_metadata_hash
+            .strip_prefix(compiled_bytecode.bytes_after_metadata_hash.as_ref())
+        {
+            return if constructor_args.is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(
+                    self.bytes_after_metadata_hash.slice_ref(constructor_args),
+                ))
+            };
+        } else {
+            Err(VerificationError::ExtraDataMismatch(Mismatch::new(
+                compiled_bytecode.bytes_after_metadata_hash.clone().into(),
+                self.bytes_after_metadata_hash.clone().into(),
+            )))
+        }
+    }
+
+    /// Verifies that bytecode and extra data obtained from creation transaction input
+    /// corresponds to the bytecode and extra data obtained from local compilation result.
+    pub fn verify_bytecode_with_extra_data(
+        &self,
+        compiled_bytecode: &Bytecode<CompilationResult>,
+    ) -> Result<(), VerificationError> {
+        if self.bytecode != compiled_bytecode.bytecode {
+            return Err(VerificationError::BytecodeMismatch(Mismatch::new(
+                compiled_bytecode.bytecode.clone().into(),
+                self.bytecode.clone().into(),
+            )));
+        }
+
+        if !self
+            .bytes_after_metadata_hash
+            .starts_with(compiled_bytecode.bytes_after_metadata_hash.as_ref())
+        {
+            return Err(VerificationError::ExtraDataMismatch(Mismatch::new(
+                compiled_bytecode.bytes_after_metadata_hash.clone().into(),
+                self.bytes_after_metadata_hash.clone().into(),
+            )));
+        }
+
+        Ok(())
     }
 }
 
@@ -291,7 +395,7 @@ pub(crate) struct Verifier {
     /// (useful if multiple files contain contract with `contract_name`)
     file_path: Option<String>,
     /// Bytecode used on the contract creation transaction
-    bc_creation_tx_input: BytecodeWithConstructorArgs,
+    bc_creation_tx_input: Bytecode<CreationTxInput>,
     /// Bytecode stored in the chain and being used by EVMrap_err()
     bc_deployed_bytecode: DeployedBytecode,
 }
@@ -307,8 +411,7 @@ impl Verifier {
         deployed_bytecode: &str,
     ) -> Result<Self, InitializationError> {
         let deployed_bytecode = DeployedBytecode::from_str(deployed_bytecode)?;
-        let bytecode =
-            BytecodeWithConstructorArgs::from_str(creation_tx_input, &deployed_bytecode)?;
+        let bytecode = Bytecode::from_str(creation_tx_input, &deployed_bytecode)?;
 
         Ok(Self {
             contract_name,
@@ -321,10 +424,137 @@ impl Verifier {
     /// Verifies input data provided on initialization by comparing it
     /// with compiler output received when compiling source data locally.
     ///
-    /// If verification succeeds return [`Ok`], otherwise when verification
-    /// fails return an [`VerificationError`] inside [`Err`].
-    pub fn verify(&self, output: CompilerOutput) -> Result<(), VerificationError> {
-        todo!()
+    /// Returns a vector with results of verification for contracts with
+    /// `file_path` and `contract_name` specified on the [`Verifier`] initialization.
+    pub fn verify(
+        &self,
+        output: CompilerOutput,
+    ) -> Vec<Result<VerificationSuccess, VerificationError>> {
+        let mut results = Vec::new();
+        for (path, contracts) in output.contracts {
+            if let Some(expected) = &self.file_path {
+                if &path != expected {
+                    continue;
+                }
+            }
+
+            for (name, contract) in contracts {
+                if name == self.contract_name {
+                    results.push(self.compare(&contract))
+                }
+            }
+        }
+
+        let expected = match &self.file_path {
+            None => format!("{}", self.contract_name),
+            Some(file_path) => format!("{}:{}", file_path, self.contract_name),
+        };
+        results
+    }
+
+    /// Compares the result of local contract compilation with data specified on initialization.
+    fn compare(&self, contract: &Contract) -> Result<VerificationSuccess, VerificationError> {
+        let deployed_bytecode = {
+            let bytes = contract
+                .get_deployed_bytecode_bytes()
+                .expect("contract compiled locally: deployed bytecode must exist");
+            DeployedBytecode::try_from(bytes.0.clone())
+                .expect("contract compiled locally: deployed bytecode must be valid")
+        };
+        let bytecode = {
+            let bytes = contract
+                .get_bytecode_bytes()
+                .expect("contract compiled locally: bytecode must exist");
+            Bytecode::<CompilationResult>::try_from_bytes(bytes.0.clone(), &deployed_bytecode)
+                .expect("contract compiled locally: bytecode must be valid")
+        };
+        let abi = contract
+            .get_abi()
+            .expect("contract was compiled locally: abi must exist");
+
+        self.check_metadata_hash_solc_versions(&deployed_bytecode)?;
+
+        self.bc_creation_tx_input
+            .verify_bytecode_with_extra_data(&bytecode)?;
+
+        let constructor_args = self.extract_constructor_args(abi.constructor(), &bytecode)?;
+        Ok(VerificationSuccess {
+            abi: abi.into_owned(),
+            constructor_args,
+        })
+    }
+
+    /// Checks that solc versions obtained from metadata hash correspond
+    /// for provided deployed bytecode and deployed bytecode obtained
+    /// as a result of local compilation.
+    fn check_metadata_hash_solc_versions(
+        &self,
+        deployed_bytecode: &DeployedBytecode,
+    ) -> Result<(), VerificationError> {
+        let compiled_solc = &deployed_bytecode.metadata_hash().solc;
+        let bc_solc = &self.bc_deployed_bytecode.metadata_hash().solc;
+        if bc_solc != compiled_solc {
+            let compiled_solc = compiled_solc
+                .as_ref()
+                .map(|b| DisplayBytes::from(b.clone()).to_string());
+            let bc_solc = bc_solc
+                .as_ref()
+                .map(|b| DisplayBytes::from(b.clone()).to_string());
+            return Err(VerificationError::CompilerVersionMismatch(Mismatch::new(
+                compiled_solc,
+                bc_solc,
+            )));
+        }
+        Ok(())
+    }
+
+    /// Extracts constructor arguments from the creation transaction input specified on
+    /// [`Verifier`] initialization.
+    ///
+    /// Returns `Err` if constructor arguments cannot be extracted (should not be the case
+    /// if `Bytecode.verify_bytecode_with_extra_data` was called before).
+    fn extract_constructor_args(
+        &self,
+        abi_constructor: Option<&Constructor>,
+        bytecode: &Bytecode<CompilationResult>,
+    ) -> Result<Option<Bytes>, VerificationError> {
+        let encoded_constructor_args = self.bc_creation_tx_input.constructor_args(bytecode)?;
+
+        let expects_constructor_args =
+            abi_constructor.map(|input| input.inputs.len()).unwrap_or(0) > 0;
+
+        match encoded_constructor_args {
+            None if expects_constructor_args => Err(VerificationError::InvalidConstructorArguments),
+            Some(_) if !expects_constructor_args => {
+                Err(VerificationError::InvalidConstructorArguments)
+            }
+            None => Ok(None),
+            Some(encoded_constructor_args) => {
+                let _constructor_args = self.parse_constructor_args(
+                    encoded_constructor_args.clone(),
+                    &abi_constructor.expect(""),
+                )?;
+                Ok(Some(encoded_constructor_args))
+            }
+        }
+    }
+
+    /// Parses encoded arguments via constructor types specified into abi.
+    ///
+    /// Returns `Err` if bytes do not correspond to the constructor arguments representation.
+    fn parse_constructor_args(
+        &self,
+        encoded_args: Bytes,
+        abi_constructor: &Constructor,
+    ) -> Result<Vec<Token>, VerificationError> {
+        let param_types = |inputs: &Vec<ethabi::Param>| -> Vec<ethabi::ParamType> {
+            inputs.iter().map(|p| p.kind.clone()).collect()
+        };
+        let param_types = param_types(&abi_constructor.inputs);
+        let tokens = ethabi::decode(&param_types, encoded_args.as_ref())
+            .map_err(|_err| VerificationError::InvalidConstructorArguments)?;
+
+        Ok(tokens)
     }
 }
 

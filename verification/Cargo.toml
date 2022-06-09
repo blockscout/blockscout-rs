@@ -25,6 +25,7 @@ ethers-solc = { git = "https://github.com/gakonst/ethers-rs", version = "0.3", f
 ethers-core = { git = "https://github.com/gakonst/ethers-rs", version = "0.6" }
 # compability with ethers-solc
 svm = { package = "svm-rs", version = "0.2.9", git = "https://github.com/roynalnaruto/svm-rs" }
+ethabi = "17.0.0"
 
 [dev-dependencies]
 futures = "0.3"
