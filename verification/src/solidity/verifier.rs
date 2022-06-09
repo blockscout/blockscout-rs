@@ -5,7 +5,7 @@ use bytes::{Buf, Bytes};
 use ethabi::{Constructor, Token};
 use ethers_core::types::Bytes as DisplayBytes;
 use ethers_solc::{artifacts::Contract, Artifact, CompilerOutput};
-use minicbor::{data::Type, encode, Decode, Decoder};
+use minicbor::{data::Type, Decode, Decoder};
 use std::{
     error::Error,
     fmt::{Debug, Formatter},
@@ -80,7 +80,7 @@ impl<'b, C> Decode<'b, C> for MetadataHash {
         let number_of_elements = d.map()?.unwrap_or(u64::MAX);
 
         let mut solc = None;
-        for num in 0..number_of_elements {
+        for _ in 0..number_of_elements {
             // try to parse the key
             match d.str() {
                 Ok(s) if s == "solc" => {
@@ -259,7 +259,7 @@ impl<Source> Clone for Bytecode<Source> {
         Self {
             bytecode: self.bytecode.clone(),
             bytes_after_metadata_hash: self.bytes_after_metadata_hash.clone(),
-            source: self.source.clone(),
+            source: self.source,
         }
     }
 }
@@ -341,13 +341,13 @@ impl Bytecode<CreationTxInput> {
             .bytes_after_metadata_hash
             .strip_prefix(compiled_bytecode.bytes_after_metadata_hash.as_ref())
         {
-            return if constructor_args.is_empty() {
+            if constructor_args.is_empty() {
                 Ok(None)
             } else {
                 Ok(Some(
                     self.bytes_after_metadata_hash.slice_ref(constructor_args),
                 ))
-            };
+            }
         } else {
             Err(VerificationError::ExtraDataMismatch(Mismatch::new(
                 compiled_bytecode.bytes_after_metadata_hash.clone().into(),
@@ -445,10 +445,6 @@ impl Verifier {
             }
         }
 
-        let expected = match &self.file_path {
-            None => format!("{}", self.contract_name),
-            Some(file_path) => format!("{}:{}", file_path, self.contract_name),
-        };
         results
     }
 
@@ -532,7 +528,7 @@ impl Verifier {
             Some(encoded_constructor_args) => {
                 let _constructor_args = self.parse_constructor_args(
                     encoded_constructor_args.clone(),
-                    &abi_constructor.expect(""),
+                    abi_constructor.expect("Is not None as `expects_constructor_args`"),
                 )?;
                 Ok(Some(encoded_constructor_args))
             }
