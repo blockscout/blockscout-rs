@@ -107,8 +107,8 @@ impl Fetcher for GithubFetcher {
     async fn fetch(&self, ver: &CompilerVersion) -> Result<PathBuf, Self::Error> {
         let url = self
             .releases
-            .get(&ver)
-            .ok_or(FetchError::NotFound(ver.clone()))?;
+            .get(ver)
+            .ok_or_else(|| FetchError::NotFound(ver.clone()))?;
 
         let response = reqwest::get(url.clone()).await.map_err(FetchError::Fetch)?;
         let folder = self.folder.join(ver.to_string());

@@ -72,10 +72,10 @@ mod tests {
     use tokio::{spawn, task::yield_now, time::timeout};
 
     fn new_version(major: u64) -> CompilerVersion {
-        CompilerVersion::Release(ReleaseVersion::new(
-            semver::Version::new(major, 0, 0),
-            "deadbeef".into(),
-        ))
+        CompilerVersion::Release(ReleaseVersion {
+            version: semver::Version::new(major, 0, 0),
+            commit: [0, 1, 2, 3],
+        })
     }
 
     /// Tests, that caching works, meaning that cache downloads each version only once

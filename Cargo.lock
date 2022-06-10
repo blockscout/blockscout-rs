@@ -3348,6 +3348,7 @@ dependencies = [
  "env_logger",
  "ethers-solc",
  "futures",
+ "hex",
  "log",
  "octocrab",
  "parking_lot",
