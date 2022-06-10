@@ -28,12 +28,16 @@ impl Default for ServerConfiguration {
 #[derive(Deserialize, Clone)]
 pub struct SourcifyConfiguration {
     pub api_url: url::Url,
+    pub verification_attempts: u64,
+    pub request_timeout: u64,
 }
 
 impl Default for SourcifyConfiguration {
     fn default() -> Self {
         Self {
             api_url: Url::try_from("https://sourcify.dev/server/").unwrap(),
+            verification_attempts: 3,
+            request_timeout: 10,
         }
     }
 }

@@ -6,7 +6,11 @@ use super::handlers::{status::status, verification};
 use super::handlers::verification::SourcifyApiClient;
 
 pub fn config(service_config: &mut web::ServiceConfig, app_config: Config) {
-    let sourcify_client = SourcifyApiClient::new(app_config.sourcify.api_url.clone());
+    let sourcify_client = SourcifyApiClient::new(
+        app_config.sourcify.api_url.clone(),
+        app_config.sourcify.request_timeout,
+        app_config.sourcify.verification_attempts,
+    );
     service_config
         .app_data(web::Data::new(app_config))
         .app_data(web::Data::new(sourcify_client))

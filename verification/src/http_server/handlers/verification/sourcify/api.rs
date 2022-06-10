@@ -20,16 +20,16 @@ pub(super) trait SourcifyApi {
 
 pub struct SourcifyApiClient {
     host: Url,
-    timeout: u64,
+    request_timeout: u64,
     verification_attempts: u64,
 }
 
 impl SourcifyApiClient {
-    pub fn new(host: Url) -> Self {
+    pub fn new(host: Url, request_timeout: u64, verification_attempts: u64) -> Self {
         Self {
             host,
-            timeout: 10,
-            verification_attempts: 3,
+            request_timeout,
+            verification_attempts,
         }
     }
 
@@ -38,7 +38,7 @@ impl SourcifyApiClient {
         params: &ApiRequest,
     ) -> Result<ApiVerificationResponse, reqwest::Error> {
         let resp = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(self.timeout))
+            .timeout(std::time::Duration::from_secs(self.request_timeout))
             .build()?
             .post(self.host.as_str())
             .json(&params)
