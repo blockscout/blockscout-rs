@@ -30,7 +30,7 @@ impl TryFrom<FlattenedSource> for CompilerInput {
 
     fn try_from(source: FlattenedSource) -> Result<Self, Self::Error> {
         let mut settings = Settings::default();
-        settings.optimizer.enabled = source.optimization_runs.map(|_| true);
+        settings.optimizer.enabled = Some(source.optimization_runs.is_some());
         settings.optimizer.runs = source.optimization_runs;
         if let Some(source_libraries) = source.contract_libraries {
             settings.libraries = Libraries {
@@ -113,7 +113,7 @@ mod tests {
             optimization_runs: None,
             contract_libraries: None,
         };
-        let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":""}},"settings":{"optimizer":{},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"spuriousDragon"}}"#;
+        let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":""}},"settings":{"optimizer":{"enabled":false},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"spuriousDragon"}}"#;
         test_to_input(flatten, expected);
     }
 }

@@ -106,10 +106,3 @@ pub(super) async fn verify_using_sourcify_client(
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn foo() {}
-}
