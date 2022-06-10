@@ -24,6 +24,8 @@ actix-rt = "2.7.0"
 anyhow = "1.0"
 async-trait = "0.1"
 thiserror = "1.0"
+url = { version = "2", features = ["serde"]} 
+mockall = "0.11"
 
 [dev-dependencies]
 futures = "0.3"

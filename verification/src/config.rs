@@ -1,9 +1,9 @@
+use crate::cli;
 use clap::Parser;
 use config::{Config as LibConfig, File};
 use serde::Deserialize;
 use std::{net::SocketAddr, str::FromStr};
-
-use crate::cli;
+use url::Url;
 
 #[derive(Deserialize, Clone, Default)]
 #[serde(default)]
@@ -27,13 +27,13 @@ impl Default for ServerConfiguration {
 
 #[derive(Deserialize, Clone)]
 pub struct SourcifyConfiguration {
-    pub api_url: String,
+    pub api_url: url::Url,
 }
 
 impl Default for SourcifyConfiguration {
     fn default() -> Self {
         Self {
-            api_url: "https://sourcify.dev/server/".to_string(),
+            api_url: Url::try_from("https://sourcify.dev/server/").unwrap(),
         }
     }
 }

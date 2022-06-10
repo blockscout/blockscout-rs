@@ -48,7 +48,8 @@ async fn should_return_200() {
                 "compiler_version": "0.8.7+commit.e28d00a7",
                 "evm_version": "london",
                 "constructor_arguments": null,
-                "optimization_runs": null,
+                "optimization": false,
+                "optimization_runs": 200,
                 "contract_libraries": {},
                 "abi": "[{\"inputs\":[],\"name\":\"retrieve\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"num\",\"type\":\"uint256\"}],\"name\":\"store\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
                 "sources": {
@@ -111,6 +112,11 @@ async fn invalid_contracts() {
 
         assert!(body.result.is_none());
         assert_eq!(body.status, VerificationStatus::Failed);
-        assert!(body.message.contains(error_message));
+        assert!(
+            body.message.contains(error_message),
+            "body message: {}, expected message: {}",
+            body.message,
+            error_message
+        );
     }
 }

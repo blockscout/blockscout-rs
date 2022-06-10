@@ -9,8 +9,10 @@ use super::types::Files;
 
 const METADATA_FILE_NAME: &str = "metadata.json";
 
+// There is struct for metadata in ethers_solc::artifacts::Metadata
+// however it
+//
 #[derive(Debug, PartialEq, Deserialize)]
-
 pub struct Metadata {
     pub settings: MetadataSettings,
     pub compiler: Compiler,
@@ -43,16 +45,21 @@ pub struct Output {
     pub abi: serde_json::Value,
 }
 
-impl TryFrom<&Files> for Metadata {
-    type Error = anyhow::Error;
-
-    fn try_from(files: &Files) -> Result<Self, Self::Error> {
-        let metadata_content = files
+impl Files {
+    fn try_extract_metadata(self) -> Result<(Metadata, BTreeMap<String, String>), anyhow::Error> {
+        let metadata_content = self
             .0
             .get(METADATA_FILE_NAME)
             .ok_or_else(|| anyhow::Error::msg(format!("file {} not found", METADATA_FILE_NAME)))?;
+        let metadata: Metadata =
+            serde_json::from_str(metadata_content).map_err(anyhow::Error::msg)?;
+        let source_files: BTreeMap<String, String> = self
+            .0
+            .into_iter()
+            .filter(|(name, _)| !name.ends_with(METADATA_FILE_NAME))
+            .collect();
 
-        serde_json::from_str(metadata_content.as_str()).map_err(anyhow::Error::msg)
+        Ok((metadata, source_files))
     }
 }
 
@@ -60,7 +67,9 @@ impl TryFrom<Files> for VerificationResult {
     type Error = anyhow::Error;
 
     fn try_from(files: Files) -> Result<Self, Self::Error> {
-        let metadata = Metadata::try_from(&files)?;
+        let (metadata, source_files) = files.try_extract_metadata()?;
+
+        let compiler_version = metadata.compiler.version;
         let contract_name = metadata
             .settings
             .compilation_target
@@ -69,26 +78,15 @@ impl TryFrom<Files> for VerificationResult {
             .ok_or_else(|| anyhow::Error::msg("compilation target not found"))?
             .1
             .to_string();
-        let compiler_version = metadata.compiler.version;
         let evm_version = metadata
             .settings
             .evm_version
             .unwrap_or_default()
             .to_string();
-        let optimization_runs = metadata.settings.optimizer.enabled.and_then(|enabled| {
-            if enabled {
-                metadata.settings.optimizer.runs
-            } else {
-                None
-            }
-        });
-        let contract_libraries = metadata.settings.libraries;
+        let optimization = metadata.settings.optimizer.enabled;
+        let optimization_runs = metadata.settings.optimizer.runs;
+        let contract_libraries: BTreeMap<String, String> = metadata.settings.libraries;
         let abi = serde_json::to_string(&metadata.output.abi)?;
-        let sources = files
-            .0
-            .into_iter()
-            .filter(|(name, _)| !name.ends_with(METADATA_FILE_NAME))
-            .collect();
 
         Ok(VerificationResult {
             contract_name,
@@ -97,9 +95,10 @@ impl TryFrom<Files> for VerificationResult {
             // TODO: extract args
             constructor_arguments: None,
             contract_libraries,
+            optimization,
             optimization_runs,
             abi,
-            sources,
+            sources: source_files,
         })
     }
 }
@@ -132,21 +131,22 @@ mod tests {
 
     #[test]
     fn parse_metadata_from_files() {
-        let mut files = Files(BTreeMap::from([
+        let files = Files(BTreeMap::from([
             ("source.sol".into(), "content".into()),
             (METADATA_FILE_NAME.into(), DEFAULT_METADATA.into()),
         ]));
+        let result = files.try_extract_metadata();
 
-        let meta = Metadata::try_from(&files);
-        assert!(
-            meta.is_ok(),
-            "Parse metadata from files failed: {}",
-            meta.unwrap_err()
+        let (_, files) = result.expect("parse metadata from files failed");
+        assert_eq!(
+            files,
+            BTreeMap::from([("source.sol".into(), "content".into())]),
         );
 
-        files.0.remove(METADATA_FILE_NAME.into());
-        let meta = Metadata::try_from(&files);
-        assert!(meta.is_err(), "Parsing files without metadata should fail",);
+        let files = Files(BTreeMap::from([("source.sol".into(), "content".into())]));
+        files
+            .try_extract_metadata()
+            .expect_err("Parsing files without metadata should fail");
     }
 
     #[test]
@@ -156,32 +156,25 @@ mod tests {
             (METADATA_FILE_NAME.into(), DEFAULT_METADATA.into()),
         ]));
 
-        let verification_result = VerificationResult::try_from(files);
-        assert!(
-            verification_result.is_ok(),
-            "Parse response from files failed: {}",
-            verification_result.unwrap_err()
-        );
+        let verification_result =
+            VerificationResult::try_from(files).expect("parse response from files failed");
         assert_eq!(
-            verification_result.unwrap(),
+            verification_result,
             VerificationResult {
                 contract_name: "Example".into(),
                 compiler_version: "0.8.14+commit.80d49f37".into(),
                 evm_version: "london".into(),
                 constructor_arguments: None,
                 contract_libraries: BTreeMap::from([("SafeMath".into(), "0xFBe36e5cAD207d5fDee40E6568bb276a351f6713".into())]),
-                optimization_runs: None,
+                optimization: Some(false),
+                optimization_runs: Some(200),
                 abi: r#"[{"inputs":[],"name":"retrieve","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}]"#.into(),
                 sources: BTreeMap::from([("source.sol".into(), "content".into())]),
             }
         );
 
         let files = Files(BTreeMap::from([("source.sol".into(), "content".into())]));
-
-        let verification_result = VerificationResult::try_from(files);
-        assert!(
-            verification_result.is_err(),
-            "Parsing files without metadata should fail",
-        );
+        VerificationResult::try_from(files)
+            .expect_err("Parsing files without metadata should fail");
     }
 }

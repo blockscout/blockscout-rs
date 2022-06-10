@@ -1,52 +1,78 @@
 use crate::{VerificationResponse, VerificationResult};
 use actix_web::{error, error::Error};
+use reqwest::Url;
+use std::sync::Arc;
 
 use super::types::{ApiFilesResponse, ApiRequest, ApiVerificationResponse, Files};
 
 #[async_trait::async_trait]
 pub(super) trait SourcifyApi {
-    async fn verification(
+    async fn verification_request(
         &self,
         params: &ApiRequest,
     ) -> Result<ApiVerificationResponse, reqwest::Error>;
 
-    async fn source_files(&self, params: &ApiRequest) -> Result<ApiFilesResponse, reqwest::Error>;
+    async fn source_files_request(
+        &self,
+        params: &ApiRequest,
+    ) -> Result<ApiFilesResponse, reqwest::Error>;
 }
 
-pub(super) struct SoucifyApiClient {
-    host: String,
+pub struct SourcifyApiClient {
+    host: Url,
+    timeout: u64,
+    verification_attempts: u64,
 }
 
-impl SoucifyApiClient {
-    pub fn new(host: &str) -> Self {
+impl SourcifyApiClient {
+    pub fn new(host: Url) -> Self {
         Self {
-            host: host.to_string(),
+            host,
+            timeout: 10,
+            verification_attempts: 3,
         }
     }
-}
 
-#[async_trait::async_trait]
-impl SourcifyApi for SoucifyApiClient {
-    async fn verification(
+    async fn _verification_request(
         &self,
         params: &ApiRequest,
     ) -> Result<ApiVerificationResponse, reqwest::Error> {
-        let resp = reqwest::Client::new()
-            .post(&self.host)
+        let resp = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(self.timeout))
+            .build()?
+            .post(self.host.as_str())
             .json(&params)
             .send()
             .await?;
 
         resp.json().await
     }
+}
 
-    async fn source_files(&self, params: &ApiRequest) -> Result<ApiFilesResponse, reqwest::Error> {
-        let url = format!(
-            "{host}/files/any/{chain}/{address}",
-            host = self.host,
-            chain = params.chain,
-            address = params.address,
-        );
+#[async_trait::async_trait]
+impl SourcifyApi for SourcifyApiClient {
+    async fn verification_request(
+        &self,
+        params: &ApiRequest,
+    ) -> Result<ApiVerificationResponse, reqwest::Error> {
+        let mut resp = self._verification_request(params).await;
+        for _ in 1..self.verification_attempts {
+            if resp.is_ok() {
+                return resp;
+            }
+            resp = self._verification_request(params).await;
+        }
+        resp
+    }
+
+    async fn source_files_request(
+        &self,
+        params: &ApiRequest,
+    ) -> Result<ApiFilesResponse, reqwest::Error> {
+        let url = self
+            .host
+            .join(format!("files/any/{}/{}", &params.chain, &params.address).as_str())
+            .expect("should be valid url");
         let resp = reqwest::get(url).await?;
 
         resp.json().await
@@ -54,32 +80,22 @@ impl SourcifyApi for SoucifyApiClient {
 }
 
 pub(super) async fn verify_using_sourcify_client(
-    sourcify_client: impl SourcifyApi,
+    sourcify_client: Arc<impl SourcifyApi>,
     params: ApiRequest,
 ) -> Result<VerificationResponse, Error> {
     let response = sourcify_client
-        .verification(&params)
+        .verification_request(&params)
         .await
         .map_err(error::ErrorInternalServerError)?;
 
     match response {
-        ApiVerificationResponse::Verified { result: api_result } => {
-            let files = {
-                let contract_was_already_verified = api_result
-                    .first()
-                    .ok_or_else(|| error::ErrorInternalServerError("sourcify empty response"))?
-                    .storage_timestamp
-                    .is_some();
-                if contract_was_already_verified {
-                    let api_files_response = sourcify_client
-                        .source_files(&params)
-                        .await
-                        .map_err(error::ErrorInternalServerError)?;
-                    Files::try_from(api_files_response).map_err(error::ErrorInternalServerError)?
-                } else {
-                    params.files
-                }
-            };
+        ApiVerificationResponse::Verified { result: _ } => {
+            let api_files_response = sourcify_client
+                .source_files_request(&params)
+                .await
+                .map_err(error::ErrorInternalServerError)?;
+            let files =
+                Files::try_from(api_files_response).map_err(error::ErrorInternalServerError)?;
             let result = VerificationResult::try_from(files).map_err(error::ErrorBadRequest)?;
             Ok(VerificationResponse::ok(result))
         }
@@ -93,5 +109,7 @@ pub(super) async fn verify_using_sourcify_client(
 
 #[cfg(test)]
 mod tests {
-    // TODO: add tests in this PR, using mocked SourcifyApi
+    use super::*;
+    #[test]
+    fn foo() {}
 }

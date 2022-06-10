@@ -8,6 +8,8 @@ pub mod routes;
 pub mod solidity;
 pub mod sourcify;
 
+pub use sourcify::api::SourcifyApiClient;
+
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub struct VerificationResponse {
     pub message: String,
@@ -21,6 +23,7 @@ pub struct VerificationResult {
     pub compiler_version: String,
     pub evm_version: String,
     pub constructor_arguments: Option<String>,
+    pub optimization: Option<bool>,
     pub optimization_runs: Option<usize>,
     pub contract_libraries: BTreeMap<String, String>,
     pub abi: String,
@@ -68,6 +71,7 @@ mod tests {
                     compiler_version: "compiler_version".to_string(),
                     evm_version: "evm_version".to_string(),
                     constructor_arguments: Some("constructor_arguments".to_string()),
+                    optimization: Some(false),
                     optimization_runs: Some(200),
                     contract_libraries: BTreeMap::from([(
                         "some_library".into(),
@@ -92,6 +96,7 @@ mod tests {
                         "contract_libraries": {
                             "some_library": "some_address",
                         },
+                        "optimization": false,
                         "optimization_runs": 200,
                         "abi": "abi",
                         "sources": {
