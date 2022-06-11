@@ -172,8 +172,7 @@ impl TryFrom<bytes::Bytes> for DeployedBytecode {
 
         // Decode length of metadata hash representation
         let metadata_hash_length = {
-            let b_len = b.len();
-            let mut length_bytes = b.split_off(b_len - 2);
+            let mut length_bytes = b.split_off(b.len() - 2);
             length_bytes.get_u16() as usize
         };
 
