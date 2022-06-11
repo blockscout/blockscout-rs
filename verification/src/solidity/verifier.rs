@@ -13,11 +13,11 @@ use thiserror::Error;
 #[derive(Clone, Debug, PartialEq, Error)]
 pub(crate) enum InitializationError {
     #[error("creation transaction input is not a valid hex string")]
-    InvalidCreationTxInput,
-    #[error("deployed bytecode is not a valid hex string")]
-    InvalidDeployedBytecode,
+    InvalidCreationTxInput(String),
+    #[error("deployed bytecode is not a valid hex string: {0}")]
+    InvalidDeployedBytecode(String),
     #[error("cannot parse metadata hash from deployed bytecode: {0}")]
-    MetadataHashParseError(String),
+    MetadataHashParse(String),
     #[error("creation transaction input has different metadata hash to deployed bytecode. {0}")]
     MetadataHashMismatch(Mismatch<DisplayBytes>),
 }
@@ -147,7 +147,7 @@ impl FromStr for DeployedBytecode {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let bytes = DisplayBytes::from_str(s)
-            .map_err(|_| InitializationError::InvalidDeployedBytecode)?
+            .map_err(|_| InitializationError::InvalidDeployedBytecode(s.to_string()))?
             .0;
 
         DeployedBytecode::try_from(bytes)
@@ -160,7 +160,7 @@ impl TryFrom<bytes::Bytes> for DeployedBytecode {
     fn try_from(encoded: bytes::Bytes) -> Result<Self, Self::Error> {
         // If metadata is present, last two bytes encode its length in a two-byte big-endian encoding
         if encoded.len() < 2 {
-            return Err(InitializationError::MetadataHashParseError(
+            return Err(InitializationError::MetadataHashParse(
                 "length is not encoded".to_string(),
             ));
         }
@@ -177,8 +177,8 @@ impl TryFrom<bytes::Bytes> for DeployedBytecode {
         };
 
         if b.len() < metadata_hash_length {
-            return Err(InitializationError::MetadataHashParseError(
-                "not enough bytes".to_string(),
+            return Err(InitializationError::MetadataHashParse(
+                "specified metadata hash length is greater than bytecode total size".to_string(),
             ));
         }
 
@@ -199,7 +199,7 @@ impl TryFrom<bytes::Bytes> for DeployedBytecode {
             } else {
                 format!("{}", err)
             };
-            return Err(InitializationError::MetadataHashParseError(message));
+            return Err(InitializationError::MetadataHashParse(message));
         }
 
         Ok(Self {
@@ -235,7 +235,7 @@ impl BytecodeWithConstructorArgs {
         deployed_bytecode: &DeployedBytecode,
     ) -> Result<Self, InitializationError> {
         let bytes = DisplayBytes::from_str(s)
-            .map_err(|_| InitializationError::InvalidCreationTxInput)?
+            .map_err(|_| InitializationError::InvalidCreationTxInput(s.to_string()))?
             .0;
 
         BytecodeWithConstructorArgs::try_from_bytes(bytes, deployed_bytecode)
@@ -402,7 +402,7 @@ mod verifier_initialization_tests {
         assert!(verifier.is_err(), "Verifier initialization should fail");
         assert_eq!(
             verifier.unwrap_err(),
-            InitializationError::InvalidCreationTxInput
+            InitializationError::InvalidCreationTxInput(invalid_input.to_string())
         )
     }
 
@@ -417,7 +417,7 @@ mod verifier_initialization_tests {
         assert!(verifier.is_err(), "Verifier initialization should fail");
         assert_eq!(
             verifier.unwrap_err(),
-            InitializationError::MetadataHashParseError("length is not encoded".to_string())
+            InitializationError::MetadataHashParse("length is not encoded".to_string())
         )
     }
 
@@ -433,7 +433,7 @@ mod verifier_initialization_tests {
         assert!(verifier.is_err(), "Verifier initialization should fail");
         assert_eq!(
             verifier.unwrap_err(),
-            InitializationError::InvalidDeployedBytecode
+            InitializationError::InvalidDeployedBytecode(invalid_input.to_string())
         )
     }
 
