@@ -1,4 +1,4 @@
-//! Error utils
+//! Supporting type used in error structures
 
 use std::fmt;
 
