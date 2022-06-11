@@ -352,7 +352,7 @@ mod verifier_initialization_tests {
     );
 
     #[test]
-    fn test_initialization_with_valid_data() {
+    fn initialization_with_valid_data() {
         let verifier = Verifier::new(
             DEFAULT_CONTRACT_NAME.to_string(),
             None,
@@ -374,7 +374,7 @@ mod verifier_initialization_tests {
     }
 
     #[test]
-    fn test_initialization_with_empty_creation_tx_input_should_fail() {
+    fn initialization_with_empty_creation_tx_input_should_fail() {
         let verifier = Verifier::new(
             DEFAULT_CONTRACT_NAME.to_string(),
             None,
@@ -391,7 +391,7 @@ mod verifier_initialization_tests {
     }
 
     #[test]
-    fn test_initialization_with_creation_tx_input_as_invalid_hex_should_fail() {
+    fn initialization_with_invalid_hex_as_creation_tx_input_should_fail() {
         let invalid_input = "0xabcdefghij";
         let verifier = Verifier::new(
             DEFAULT_CONTRACT_NAME.to_string(),
@@ -407,7 +407,7 @@ mod verifier_initialization_tests {
     }
 
     #[test]
-    fn test_initialization_with_empty_deployed_bytecode_should_fail() {
+    fn initialization_with_empty_deployed_bytecode_should_fail() {
         let verifier = Verifier::new(
             DEFAULT_CONTRACT_NAME.to_string(),
             None,
@@ -422,7 +422,7 @@ mod verifier_initialization_tests {
     }
 
     #[test]
-    fn test_initialization_with_deployed_bytecode_as_invalid_hex_should_fail() {
+    fn initialization_with_invalid_hex_as_deployed_bytecode_should_fail() {
         let invalid_input = "0xabcdefghij";
         let verifier = Verifier::new(
             DEFAULT_CONTRACT_NAME.to_string(),
@@ -438,7 +438,7 @@ mod verifier_initialization_tests {
     }
 
     #[test]
-    fn test_initialization_with_metadata_hash_mismatch_should_fail() {
+    fn initialization_with_metadata_hash_mismatch_should_fail() {
         // {"ipfs": h'1220EB23CE2C13EA8739368F952F6C6A4B1F0623D147D2A19B6D4D26A61AB03FCD3E', "solc": 0.8.0}
         let another_metadata_hash = "a2646970667358221220eb23ce2c13ea8739368f952f6c6a4b1f0623d147d2a19b6d4d26a61ab03fcd3e64736f6c63430008000033";
         let verifier = Verifier::new(
@@ -484,7 +484,7 @@ mod metadata_hash_deserialization_tests {
     }
 
     #[test]
-    fn test_deserialization_metadata_hash_without_solc_tag() {
+    fn deserialization_metadata_hash_without_solc_tag() {
         // given
         // { "bzzr0": b"d4fba422541feba2d648f6657d9354ec14ea9f5919b520abe0feb60981d7b17c" }
         let hex =
@@ -501,7 +501,7 @@ mod metadata_hash_deserialization_tests {
     }
 
     #[test]
-    fn test_deserialization_metadata_hash_with_solc_as_version() {
+    fn deserialization_metadata_hash_with_solc_as_version() {
         // given
         // { "ipfs": b"1220BCC988B1311237F2C00CCD0BFBD8B01D24DC18F720603B0DE93FE6327DF53625", "solc": b'00080e' }
         let hex = "a2646970667358221220bcc988b1311237f2c00ccd0bfbd8b01d24dc18f720603b0de93fe6327df5362564736f6c634300080e";
@@ -519,7 +519,7 @@ mod metadata_hash_deserialization_tests {
     }
 
     #[test]
-    fn test_deserialization_metadata_hash_with_solc_as_string() {
+    fn deserialization_metadata_hash_with_solc_as_string() {
         // given
         // {"ipfs": b'1220BA5AF27FE13BC83E671BD6981216D35DF49AB3AC923741B8948B277F93FBF732', "solc": "0.8.15-ci.2022.5.23+commit.21591531"}
         let hex = "a2646970667358221220ba5af27fe13bc83e671bd6981216d35df49ab3ac923741b8948b277f93fbf73264736f6c637823302e382e31352d63692e323032322e352e32332b636f6d6d69742e3231353931353331";
@@ -537,7 +537,7 @@ mod metadata_hash_deserialization_tests {
     }
 
     #[test]
-    fn test_deserialization_of_non_cbor_hex_should_fail() {
+    fn deserialization_of_non_cbor_hex_should_fail() {
         // given
         let hex = "1234567890";
         let encoded = DisplayBytes::from_str(hex).unwrap().0;
@@ -554,7 +554,7 @@ mod metadata_hash_deserialization_tests {
     }
 
     #[test]
-    fn test_deserialization_of_non_map_should_fail() {
+    fn deserialization_of_non_map_should_fail() {
         // given
         // "solc"
         let hex = "64736f6c63";
@@ -572,7 +572,7 @@ mod metadata_hash_deserialization_tests {
     }
 
     #[test]
-    fn test_deserialization_with_duplicated_solc_should_fail() {
+    fn deserialization_with_duplicated_solc_should_fail() {
         // given
         // { "solc": b'000400', "ipfs": b"1220BCC988B1311237F2C00CCD0BFBD8B01D24DC18F720603B0DE93FE6327DF53625", "solc": b'00080e' }
         let hex = "a364736f6c6343000400646970667358221220bcc988b1311237f2c00ccd0bfbd8b01d24dc18f720603b0de93fe6327df5362564736f6c634300080e";
@@ -590,7 +590,7 @@ mod metadata_hash_deserialization_tests {
     }
 
     #[test]
-    fn test_deserialization_not_exhausted_should_fail() {
+    fn deserialization_not_exhausted_should_fail() {
         // given
         // { "ipfs": b"1220BCC988B1311237F2C00CCD0BFBD8B01D24DC18F720603B0DE93FE6327DF53625", "solc": b'00080e' } \
         // { "bzzr0": b"d4fba422541feba2d648f6657d9354ec14ea9f5919b520abe0feb60981d7b17c" }
@@ -613,7 +613,7 @@ mod metadata_hash_deserialization_tests {
     }
 
     #[test]
-    fn test_deserialization_with_not_enough_elements_should_fail() {
+    fn deserialization_with_not_enough_elements_should_fail() {
         // given
         // 3 elements expected in the map but got only 2:
         // { "ipfs": b"1220BCC988B1311237F2C00CCD0BFBD8B01D24DC18F720603B0DE93FE6327DF53625", "solc": b'00080e' }
@@ -632,7 +632,7 @@ mod metadata_hash_deserialization_tests {
     }
 
     #[test]
-    fn test_deserialization_with_solc_neither_bytes_nor_string_should_fail() {
+    fn deserialization_with_solc_neither_bytes_nor_string_should_fail() {
         // given
         // { "ipfs": b"1220BCC988B1311237F2C00CCD0BFBD8B01D24DC18F720603B0DE93FE6327DF53625", "solc": 123 } \
         let hex= "a2646970667358221220bcc988b1311237f2c00ccd0bfbd8b01d24dc18f720603b0de93fe6327df5362564736f6c63187B";
