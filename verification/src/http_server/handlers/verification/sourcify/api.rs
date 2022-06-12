@@ -1,5 +1,6 @@
 use crate::{VerificationResponse, VerificationResult};
 use actix_web::{error, error::Error};
+use futures::Future;
 use reqwest::Url;
 use std::sync::Arc;
 
@@ -33,19 +34,22 @@ impl SourcifyApiClient {
         }
     }
 
-    async fn _verification_request(
+    async fn make_retrying_request<F, Fut, Response>(
         &self,
-        params: &ApiRequest,
-    ) -> Result<ApiVerificationResponse, reqwest::Error> {
-        let resp = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(self.request_timeout))
-            .build()?
-            .post(self.host.as_str())
-            .json(&params)
-            .send()
-            .await?;
-
-        resp.json().await
+        request: F,
+    ) -> Result<Response, reqwest::Error>
+    where
+        F: Fn() -> Fut,
+        Fut: Future<Output = Result<Response, reqwest::Error>>,
+    {
+        let mut resp = request().await;
+        for _ in 1..self.verification_attempts {
+            if resp.is_ok() {
+                return resp;
+            }
+            resp = request().await;
+        }
+        resp
     }
 }
 
@@ -55,27 +59,34 @@ impl SourcifyApi for SourcifyApiClient {
         &self,
         params: &ApiRequest,
     ) -> Result<ApiVerificationResponse, reqwest::Error> {
-        let mut resp = self._verification_request(params).await;
-        for _ in 1..self.verification_attempts {
-            if resp.is_ok() {
-                return resp;
-            }
-            resp = self._verification_request(params).await;
-        }
-        resp
+        let request = || async {
+            let resp = reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(self.request_timeout))
+                .build()?
+                .post(self.host.as_str())
+                .json(&params)
+                .send()
+                .await?;
+
+            resp.json().await
+        };
+        self.make_retrying_request(request).await
     }
 
     async fn source_files_request(
         &self,
         params: &ApiRequest,
     ) -> Result<ApiFilesResponse, reqwest::Error> {
-        let url = self
-            .host
-            .join(format!("files/any/{}/{}", &params.chain, &params.address).as_str())
-            .expect("should be valid url");
-        let resp = reqwest::get(url).await?;
+        let request = || async {
+            let url = self
+                .host
+                .join(format!("files/any/{}/{}", &params.chain, &params.address).as_str())
+                .expect("should be valid url");
+            let resp = reqwest::get(url).await?;
 
-        resp.json().await
+            resp.json().await
+        };
+        self.make_retrying_request(request).await
     }
 }
 
