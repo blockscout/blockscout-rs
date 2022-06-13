@@ -10,8 +10,8 @@ use super::types::Files;
 const METADATA_FILE_NAME: &str = "metadata.json";
 
 // There is struct for metadata in ethers_solc::artifacts::Metadata
-// however it
-//
+// however it is for standard json input of compiler and
+// has different `libraries` field structure
 #[derive(Debug, PartialEq, Deserialize)]
 pub struct Metadata {
     pub settings: MetadataSettings,
