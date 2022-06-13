@@ -6,7 +6,7 @@ use actix_web::web;
 pub fn config(service_config: &mut web::ServiceConfig) {
     let fetcher = tokio::task::block_in_place(move || {
         futures::executor::block_on(GithubFetcher::new(
-            "blockscout-rs",
+            "blockscout",
             "solc-bin",
             "compilers/".into(),
         ))
