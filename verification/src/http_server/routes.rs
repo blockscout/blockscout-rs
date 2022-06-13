@@ -4,12 +4,28 @@ use crate::Config;
 
 use super::handlers::{status::status, verification};
 
-pub fn config(service_config: &mut web::ServiceConfig, app_config: Config) {
-    service_config
-        .app_data(web::Data::new(app_config))
-        .route("/health", web::get().to(status))
-        .service(
-            web::scope("/api/v1")
-                .service(web::scope("/verification").configure(verification::routes::config)),
-        );
+pub struct AppConfig {
+    config: web::Data<Config>,
+    verification: verification::routes::AppConfig,
+}
+
+impl AppConfig {
+    pub fn new(config: Config) -> anyhow::Result<Self> {
+        Ok(Self {
+            config: web::Data::new(config),
+            verification: verification::routes::AppConfig::new()?,
+        })
+    }
+
+    pub fn config(&self, service_config: &mut web::ServiceConfig) {
+        service_config
+            .app_data(self.config.clone())
+            .route("/health", web::get().to(status))
+            .service(
+                web::scope("/api/v1").service(
+                    web::scope("/verification")
+                        .configure(|service_config| self.verification.config(service_config)),
+                ),
+            );
+    }
 }
