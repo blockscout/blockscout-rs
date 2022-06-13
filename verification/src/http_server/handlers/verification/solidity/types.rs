@@ -1,4 +1,3 @@
-use crate::http_server::handlers::verification::ContractLibrary;
 use ethers_solc::{
     artifacts::{Libraries, Settings},
     CompilerInput, EvmVersion,
@@ -23,7 +22,7 @@ pub struct FlattenedSource {
     source_code: String,
     evm_version: String,
     optimization_runs: Option<usize>,
-    contract_libraries: Option<Vec<ContractLibrary>>,
+    contract_libraries: Option<BTreeMap<String, String>>,
 }
 
 impl TryFrom<FlattenedSource> for CompilerInput {
@@ -34,13 +33,8 @@ impl TryFrom<FlattenedSource> for CompilerInput {
         settings.optimizer.enabled = Some(source.optimization_runs.is_some());
         settings.optimizer.runs = source.optimization_runs;
         if let Some(source_libraries) = source.contract_libraries {
-            let libraries = BTreeMap::from_iter(
-                source_libraries
-                    .into_iter()
-                    .map(|l| (l.lib_name, l.lib_address)),
-            );
             settings.libraries = Libraries {
-                libs: BTreeMap::from([(PathBuf::from("source.sol"), libraries)]),
+                libs: BTreeMap::from([(PathBuf::from("source.sol"), source_libraries)]),
             };
         }
         if source.evm_version != "default" {
@@ -106,10 +100,10 @@ mod tests {
             source_code: "pragma".into(),
             evm_version: format!("{}", ethers_solc::EvmVersion::London),
             optimization_runs: Some(200),
-            contract_libraries: Some(vec![ContractLibrary {
-                lib_name: "some_library".into(),
-                lib_address: "some_address".into(),
-            }]),
+            contract_libraries: Some(BTreeMap::from([(
+                "some_library".into(),
+                "some_address".into(),
+            )])),
         };
         let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":"pragma"}},"settings":{"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"london","libraries":{"source.sol":{"some_library":"some_address"}}}}"#;
         test_to_input(flatten, expected);
