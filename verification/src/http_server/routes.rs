@@ -10,10 +10,10 @@ pub struct AppConfig {
 }
 
 impl AppConfig {
-    pub fn new(config: Config) -> anyhow::Result<Self> {
+    pub async fn new(config: Config) -> anyhow::Result<Self> {
         Ok(Self {
             config: web::Data::new(config),
-            verification: verification::routes::AppConfig::new()?,
+            verification: verification::routes::AppConfig::new().await?,
         })
     }
 

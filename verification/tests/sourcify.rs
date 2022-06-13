@@ -10,7 +10,11 @@ use verification::{routes::AppConfig, Config, VerificationResponse, Verification
 #[actix_rt::test]
 async fn should_return_200() {
     let config = Config::parse().expect("Failed to parse config");
-    let app_config = Arc::new(AppConfig::new(config).expect("couldn't initialize the app"));
+    let app_config = Arc::new(
+        AppConfig::new(config)
+            .await
+            .expect("couldn't initialize the app"),
+    );
     let mut app = test::init_service(
         App::new().configure(|service_config| app_config.config(service_config)),
     )
