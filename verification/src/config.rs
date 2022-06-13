@@ -20,7 +20,7 @@ pub struct ServerConfiguration {
 impl Default for ServerConfiguration {
     fn default() -> Self {
         Self {
-            addr: SocketAddr::from_str("0.0.0.0:8043").unwrap(),
+            addr: SocketAddr::from_str("0.0.0.0:8043").expect("should be valid url"),
         }
     }
 }

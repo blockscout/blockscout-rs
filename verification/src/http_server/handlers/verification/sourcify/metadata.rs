@@ -46,7 +46,9 @@ pub struct Output {
 }
 
 impl Files {
-    fn try_extract_metadata(self) -> Result<(Metadata, BTreeMap<String, String>), anyhow::Error> {
+    fn extract_metadata_and_source_files(
+        self,
+    ) -> Result<(Metadata, BTreeMap<String, String>), anyhow::Error> {
         let metadata_content = self
             .0
             .get(METADATA_FILE_NAME)
@@ -67,7 +69,7 @@ impl TryFrom<Files> for VerificationResult {
     type Error = anyhow::Error;
 
     fn try_from(files: Files) -> Result<Self, Self::Error> {
-        let (metadata, source_files) = files.try_extract_metadata()?;
+        let (metadata, source_files) = files.extract_metadata_and_source_files()?;
 
         let compiler_version = metadata.compiler.version;
         let contract_name = metadata
@@ -135,7 +137,7 @@ mod tests {
             ("source.sol".into(), "content".into()),
             (METADATA_FILE_NAME.into(), DEFAULT_METADATA.into()),
         ]));
-        let result = files.try_extract_metadata();
+        let result = files.extract_metadata_and_source_files();
 
         let (_, files) = result.expect("parse metadata from files failed");
         assert_eq!(
@@ -145,7 +147,7 @@ mod tests {
 
         let files = Files(BTreeMap::from([("source.sol".into(), "content".into())]));
         files
-            .try_extract_metadata()
+            .extract_metadata_and_source_files()
             .expect_err("Parsing files without metadata should fail");
     }
 
