@@ -1,15 +1,18 @@
+use std::sync::Arc;
+
 use actix_web::{
     test::{self, TestRequest},
     App,
 };
 use serde_json::json;
-use verification::{routes, Config, VerificationResponse, VerificationStatus};
+use verification::{routes::AppConfig, Config, VerificationResponse, VerificationStatus};
 
 #[actix_rt::test]
 async fn should_return_200() {
     let config = Config::parse().expect("Failed to parse config");
+    let app_config = Arc::new(AppConfig::new(config).expect("couldn't initialize the app"));
     let mut app = test::init_service(
-        App::new().configure(|service_config| routes::config(service_config, config)),
+        App::new().configure(|service_config| app_config.config(service_config)),
     )
     .await;
 
