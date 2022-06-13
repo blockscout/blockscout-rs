@@ -1,3 +1,4 @@
+use crate::http_server::handlers::verification::ContractLibrary;
 use ethers_solc::{
     artifacts::{Libraries, Settings},
     CompilerInput, EvmVersion,
@@ -18,12 +19,6 @@ pub struct VerificationRequest<T> {
 }
 
 #[derive(Debug, Deserialize, PartialEq)]
-struct ContractLibrary {
-    lib_name: String,
-    lib_address: String,
-}
-
-#[derive(Debug, Deserialize, PartialEq)]
 pub struct FlattenedSource {
     source_code: String,
     evm_version: String,
@@ -36,7 +31,7 @@ impl TryFrom<FlattenedSource> for CompilerInput {
 
     fn try_from(source: FlattenedSource) -> Result<Self, Self::Error> {
         let mut settings = Settings::default();
-        settings.optimizer.enabled = source.optimization_runs.map(|_| true);
+        settings.optimizer.enabled = Some(source.optimization_runs.is_some());
         settings.optimizer.runs = source.optimization_runs;
         if let Some(source_libraries) = source.contract_libraries {
             let libraries = BTreeMap::from_iter(
@@ -68,22 +63,11 @@ impl TryFrom<FlattenedSource> for CompilerInput {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde::de::DeserializeOwned;
-    use std::fmt::Debug;
-
-    fn test_parse_ok<T>(tests: Vec<(&str, T)>)
-    where
-        T: Debug + PartialEq + DeserializeOwned,
-    {
-        for (s, value) in tests {
-            let v: T = serde_json::from_str(s).unwrap();
-            assert_eq!(v, value);
-        }
-    }
+    use crate::tests::parse::test_deserialize_ok;
 
     #[test]
     fn parse_flattened() {
-        test_parse_ok(vec![(
+        test_deserialize_ok(vec![(
             r#"{
                     "contract_name": "test",
                     "deployed_bytecode": "0x6001",
@@ -135,7 +119,7 @@ mod tests {
             optimization_runs: None,
             contract_libraries: None,
         };
-        let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":""}},"settings":{"optimizer":{},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"spuriousDragon"}}"#;
+        let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":""}},"settings":{"optimizer":{"enabled":false},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"spuriousDragon"}}"#;
         test_to_input(flatten, expected);
     }
 }
