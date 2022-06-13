@@ -23,6 +23,11 @@ thiserror = "1.0"
 minicbor =  { version = "0.16", features = ["std"] }
 bytes = "1.1"
 config = "0.13"
+sscanf = "0.2"
+url = "2.2"
+octocrab = "0.16"
+hex = "0.4"
+futures = "0.3"
 
 ethers-solc = { git = "https://github.com/gakonst/ethers-rs", version = "0.3", features = ["svm-solc"] }
 ethers-core = { git = "https://github.com/gakonst/ethers-rs", version = "0.6" }
@@ -30,5 +35,4 @@ ethers-core = { git = "https://github.com/gakonst/ethers-rs", version = "0.6" }
 svm = { package = "svm-rs", version = "0.2.9", git = "https://github.com/roynalnaruto/svm-rs" }
 
 [dev-dependencies]
-futures = "0.3"
 const_format = "0.2"
