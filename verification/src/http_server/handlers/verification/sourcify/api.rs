@@ -33,24 +33,23 @@ impl SourcifyApiClient {
             verification_attempts,
         }
     }
+}
 
-    async fn make_retrying_request<F, Fut, Response>(
-        &self,
-        request: F,
-    ) -> Result<Response, reqwest::Error>
-    where
-        F: Fn() -> Fut,
-        Fut: Future<Output = Result<Response, reqwest::Error>>,
-    {
-        let mut resp = request().await;
-        for _ in 1..self.verification_attempts {
-            if resp.is_ok() {
-                return resp;
-            }
-            resp = request().await;
+pub async fn make_retrying_request<F, Fut, Response, Error>(
+    verification_attempts: u64,
+    request: F,
+) -> Result<Response, Error>
+where
+    F: Fn() -> Fut,
+    Fut: Future<Output = Result<Response, Error>>,
+{
+    for _ in 1..verification_attempts - 1 {
+        let resp = request().await;
+        if resp.is_ok() {
+            return resp;
         }
-        resp
     }
+    request().await
 }
 
 #[async_trait::async_trait]
@@ -59,7 +58,7 @@ impl SourcifyApi for SourcifyApiClient {
         &self,
         params: &ApiRequest,
     ) -> Result<ApiVerificationResponse, reqwest::Error> {
-        let request = || async {
+        make_retrying_request(self.verification_attempts, || async {
             let resp = reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(self.request_timeout))
                 .build()?
@@ -67,17 +66,16 @@ impl SourcifyApi for SourcifyApiClient {
                 .json(&params)
                 .send()
                 .await?;
-
             resp.json().await
-        };
-        self.make_retrying_request(request).await
+        })
+        .await
     }
 
     async fn source_files_request(
         &self,
         params: &ApiRequest,
     ) -> Result<ApiFilesResponse, reqwest::Error> {
-        let request = || async {
+        make_retrying_request(self.verification_attempts, || async {
             let url = self
                 .host
                 .join(format!("files/any/{}/{}", &params.chain, &params.address).as_str())
@@ -85,8 +83,8 @@ impl SourcifyApi for SourcifyApiClient {
             let resp = reqwest::get(url).await?;
 
             resp.json().await
-        };
-        self.make_retrying_request(request).await
+        })
+        .await
     }
 }
 
