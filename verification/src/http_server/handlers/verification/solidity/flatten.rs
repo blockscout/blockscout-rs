@@ -1,4 +1,7 @@
-use super::types::{FlattenedSource, VerificationRequest};
+use super::{
+    compile::compile,
+    types::{FlattenedSource, VerificationRequest},
+};
 use crate::{
     compiler::download_cache::DownloadCache,
     http_server::handlers::verification::VerificationResponse,
@@ -18,7 +21,7 @@ pub async fn verify(
     let params = params.into_inner();
 
     let input = CompilerInput::try_from(params.content).map_err(error::ErrorBadRequest)?;
-    let output = super::compile::compile(&cache, &params.compiler_version, &input).await?;
+    let output = compile(&cache, &params.compiler_version, &input).await?;
     let _ = output;
 
     todo!("verify output")

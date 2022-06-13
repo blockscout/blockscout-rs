@@ -1,4 +1,4 @@
-use super::types::VerificationRequest;
+use super::{compile::compile, types::VerificationRequest};
 use crate::{
     compiler::download_cache::DownloadCache,
     http_server::handlers::verification::VerificationResponse,
@@ -15,7 +15,7 @@ pub async fn verify(
     params: Json<VerificationRequest<CompilerInput>>,
 ) -> Result<Json<VerificationResponse>, Error> {
     let params = params.into_inner();
-    let output = super::compile::compile(&cache, &params.compiler_version, &params.content).await?;
+    let output = compile(&cache, &params.compiler_version, &params.content).await?;
     let _ = output;
 
     todo!("verify output")
