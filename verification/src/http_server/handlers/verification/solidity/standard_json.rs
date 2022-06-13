@@ -1,7 +1,8 @@
 use super::types::VerificationRequest;
 use crate::{
-    download_cache::DownloadCache, http_server::handlers::verification::VerificationResponse,
-    solidity::fetcher::SvmFetcher,
+    compiler::download_cache::DownloadCache,
+    http_server::handlers::verification::VerificationResponse,
+    solidity::github_fetcher::GithubFetcher,
 };
 use actix_web::{
     web::{self, Json},
@@ -10,7 +11,7 @@ use actix_web::{
 use ethers_solc::CompilerInput;
 
 pub async fn verify(
-    cache: web::Data<DownloadCache<SvmFetcher>>,
+    cache: web::Data<DownloadCache<GithubFetcher>>,
     params: Json<VerificationRequest<CompilerInput>>,
 ) -> Result<Json<VerificationResponse>, Error> {
     let params = params.into_inner();

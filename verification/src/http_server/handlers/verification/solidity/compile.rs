@@ -1,14 +1,18 @@
-use crate::{download_cache::DownloadCache, solidity::fetcher::SvmFetcher};
+use std::str::FromStr;
+
+use crate::compiler::{download_cache::DownloadCache, fetcher::Fetcher, version::CompilerVersion};
 use actix_web::{error, Error};
 use ethers_solc::{CompilerInput, CompilerOutput, Solc};
-use semver::Version;
 
-pub async fn compile(
-    cache: &DownloadCache<SvmFetcher>,
+pub async fn compile<T: Fetcher>(
+    cache: &DownloadCache<T>,
     compiler_version: &str,
     input: &CompilerInput,
-) -> Result<CompilerOutput, Error> {
-    let ver = Version::parse(compiler_version).map_err(error::ErrorBadRequest)?;
+) -> Result<CompilerOutput, Error>
+where
+    <T as Fetcher>::Error: 'static + std::fmt::Debug + std::fmt::Display,
+{
+    let ver = CompilerVersion::from_str(compiler_version).map_err(error::ErrorBadRequest)?;
     let solc_path = cache
         .get(&ver)
         .await
