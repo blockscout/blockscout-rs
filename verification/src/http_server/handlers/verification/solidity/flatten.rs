@@ -19,8 +19,7 @@ pub async fn verify(
 
     let input = CompilerInput::try_from(params.content).map_err(error::ErrorBadRequest)?;
     let output = super::compile::compile(&cache, &params.compiler_version, &input).await?;
-    // TODO: verify output
     let _ = output;
 
-    todo!()
+    todo!("verify output")
 }

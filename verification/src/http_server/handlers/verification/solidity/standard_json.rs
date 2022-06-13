@@ -16,8 +16,7 @@ pub async fn verify(
 ) -> Result<Json<VerificationResponse>, Error> {
     let params = params.into_inner();
     let output = super::compile::compile(&cache, &params.compiler_version, &params.content).await?;
-    // TODO: verify output
     let _ = output;
 
-    todo!()
+    todo!("verify output")
 }
