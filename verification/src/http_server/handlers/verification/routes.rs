@@ -1,10 +1,18 @@
 use super::solidity::flatten;
 use super::sourcify;
-use crate::{download_cache::DownloadCache, solidity::fetcher::SvmFetcher};
+use crate::{compiler::download_cache::DownloadCache, solidity::github_fetcher::GithubFetcher};
 use actix_web::web;
 
 pub fn config(service_config: &mut web::ServiceConfig) {
-    let cache = DownloadCache::<SvmFetcher>::default();
+    let fetcher = tokio::task::block_in_place(move || {
+        futures::executor::block_on(GithubFetcher::new(
+            "blockscout-rs",
+            "solc-bin",
+            "compilers/".into(),
+        ))
+    })
+    .expect("couldn't initialize github fetcher");
+    let cache = DownloadCache::new(fetcher);
     service_config
         .app_data(web::Data::new(cache))
         .route("/flatten", web::get().to(flatten::verify))
