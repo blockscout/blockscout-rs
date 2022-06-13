@@ -7,25 +7,32 @@ repository = "https://github.com/blockscout/blockscout-rs/verification"
 
 [dependencies]
 actix-web = "4"
+actix-rt = "2.7.0"
+reqwest = { version = "0.11", features = ["json"] }
 clap = { version = "3", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 tokio = { version = "1", features = ["macros"] }
 parking_lot = "0.12"
-ethers-solc = { git = "https://github.com/gakonst/ethers-rs", version = "0.3", features = ["svm-solc"] }
-# compability with ethers-solc
-svm = { package = "svm-rs", version = "0.2.9", git = "https://github.com/roynalnaruto/svm-rs" }
 serde_json = "1"
 log = "0.4"
 env_logger = "0.9"
 semver = "1.0"
-config = "0.13"
-reqwest = { version = "0.11", features = ["json"] }
-actix-rt = "2.7.0"
 anyhow = "1.0"
 async-trait = "0.1"
 thiserror = "1.0"
+minicbor =  { version = "0.16", features = ["std"] }
+bytes = "1.1"
+config = "0.13"
 sscanf = "0.2"
 url = "2.2"
 octocrab = "0.16"
-futures = "0.3"
 hex = "0.4"
+futures = "0.3"
+
+ethers-solc = { git = "https://github.com/gakonst/ethers-rs", version = "0.3", features = ["svm-solc"] }
+ethers-core = { git = "https://github.com/gakonst/ethers-rs", version = "0.6" }
+# compability with ethers-solc
+svm = { package = "svm-rs", version = "0.2.9", git = "https://github.com/roynalnaruto/svm-rs" }
+
+[dev-dependencies]
+const_format = "0.2"
