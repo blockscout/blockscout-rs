@@ -36,14 +36,14 @@ impl SourcifyApiClient {
 }
 
 pub async fn make_retrying_request<F, Fut, Response, Error>(
-    verification_attempts: u64,
+    attempts: u64,
     request: F,
 ) -> Result<Response, Error>
 where
     F: Fn() -> Fut,
     Fut: Future<Output = Result<Response, Error>>,
 {
-    for _ in 1..verification_attempts - 1 {
+    for _ in 1..attempts - 1 {
         let resp = request().await;
         if resp.is_ok() {
             return resp;
