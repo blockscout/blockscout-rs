@@ -24,6 +24,8 @@ actix-rt = "2.7.0"
 anyhow = "1.0"
 async-trait = "0.1"
 thiserror = "1.0"
-
-[dev-dependencies]
+sscanf = "0.2"
+url = "2.2"
+octocrab = "0.16"
 futures = "0.3"
+hex = "0.4"
