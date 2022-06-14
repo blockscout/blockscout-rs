@@ -1,4 +1,4 @@
-use super::{SolidityRouter, SourcifyRouter};
+use super::{configure_router, Router, SolidityRouter, SourcifyRouter};
 use crate::{config::Config, http_server::handlers::status};
 use actix_web::web;
 
@@ -19,23 +19,17 @@ impl AppRouter {
             sourcify,
         })
     }
+}
 
-    pub fn register_routes(&self, service_config: &mut web::ServiceConfig) {
+impl Router for AppRouter {
+    fn register_routes(&self, service_config: &mut web::ServiceConfig) {
         service_config
             .route("/health", web::get().to(status::status))
             .service(
                 web::scope("/api/v1").service(
                     web::scope("/verification")
-                        .configure(|service_config| {
-                            if let Some(client) = self.verification.as_ref() {
-                                client.register_routes(service_config)
-                            }
-                        })
-                        .configure(|service_config| {
-                            if let Some(client) = self.sourcify.as_ref() {
-                                client.register_routes(service_config)
-                            }
-                        }),
+                        .configure(configure_router(&self.verification))
+                        .configure(configure_router(&self.sourcify)),
                 ),
             );
     }

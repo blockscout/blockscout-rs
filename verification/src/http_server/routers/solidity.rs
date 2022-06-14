@@ -1,5 +1,6 @@
 use actix_web::web;
 
+use super::Router;
 use crate::http_server::handlers::{flatten, standard_json};
 use crate::{compiler::download_cache::DownloadCache, solidity::github_fetcher::GithubFetcher};
 
@@ -16,8 +17,10 @@ impl SolidityRouter {
             cache: web::Data::new(DownloadCache::new(fetcher)),
         })
     }
+}
 
-    pub fn register_routes(&self, service_config: &mut web::ServiceConfig) {
+impl Router for SolidityRouter {
+    fn register_routes(&self, service_config: &mut web::ServiceConfig) {
         service_config
             .app_data(self.cache.clone())
             .route("/flatten", web::get().to(flatten::verify))

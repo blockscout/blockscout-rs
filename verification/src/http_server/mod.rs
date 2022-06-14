@@ -1,7 +1,7 @@
 pub mod handlers;
 mod routers;
 
-pub use self::routers::AppRouter;
+pub use self::routers::{configure_router, AppRouter, Router};
 
 use crate::config::Config;
 use actix_web::{App, HttpServer};

@@ -5,7 +5,9 @@ use actix_web::{
     App,
 };
 use serde_json::json;
-use verification::{AppRouter, Config, VerificationResponse, VerificationStatus};
+use verification::{
+    configure_router, AppRouter, Config, VerificationResponse, VerificationStatus,
+};
 
 #[actix_rt::test]
 async fn should_return_200() {
@@ -16,10 +18,7 @@ async fn should_return_200() {
             .await
             .expect("couldn't initialize the app"),
     );
-    let mut app = test::init_service(
-        App::new().configure(|service_config| app_router.register_routes(service_config)),
-    )
-    .await;
+    let mut app = test::init_service(App::new().configure(configure_router(&*app_router))).await;
 
     let metadata = include_str!("contracts/storage/metadata.json");
     let source = include_str!("contracts/storage/source.sol");
@@ -78,10 +77,7 @@ async fn invalid_contracts() {
             .await
             .expect("couldn't initialize the app"),
     );
-    let mut app = test::init_service(
-        App::new().configure(|service_config| app_router.register_routes(service_config)),
-    )
-    .await;
+    let mut app = test::init_service(App::new().configure(configure_router(&*app_router))).await;
 
     let metadata_content = include_str!("contracts/storage/metadata.json");
     for (request_body, error_message) in [
