@@ -1,11 +1,10 @@
 use crate::{VerificationResponse, VerificationResult};
-use actix_web::{error, error::Error, web};
+use actix_web::{error, error::Error};
 use futures::Future;
 use reqwest::Url;
 use std::sync::Arc;
 
 use super::types::{ApiFilesResponse, ApiRequest, ApiVerificationResponse, Files};
-use super::verify;
 
 #[async_trait::async_trait]
 pub(super) trait SourcifyApi {
@@ -33,10 +32,6 @@ impl SourcifyApiClient {
             request_timeout,
             verification_attempts,
         }
-    }
-
-    pub fn config(&self, service_config: &mut web::ServiceConfig) {
-        service_config.route("/sourcify", web::get().to(verify));
     }
 }
 

@@ -1,13 +1,13 @@
 use actix_web::web;
 
-use crate::http_server::handlers::verification::SourcifyApiClient;
+use crate::http_server::handlers::verification::SourcifyClient;
 use crate::Config;
 
-use super::handlers::{status::status, verification::VerificationClient};
+use super::handlers::{status, verification::VerificationClient};
 
 pub struct AppConfig {
     verification: Option<VerificationClient>,
-    sourcify: Option<SourcifyApiClient>,
+    sourcify: Option<SourcifyClient>,
 }
 
 impl AppConfig {
@@ -18,11 +18,7 @@ impl AppConfig {
         };
         let sourcify = match config.sourcify.disabled {
             true => None,
-            false => Some(SourcifyApiClient::new(
-                config.sourcify.api_url,
-                config.sourcify.request_timeout,
-                config.sourcify.verification_attempts,
-            )),
+            false => Some(SourcifyClient::new(config.sourcify)),
         };
         Ok(Self {
             verification,
@@ -32,7 +28,7 @@ impl AppConfig {
 
     pub fn config(&self, service_config: &mut web::ServiceConfig) {
         service_config
-            .route("/health", web::get().to(status))
+            .route("/health", web::get().to(status::status))
             .service(
                 web::scope("/api/v1").service(
                     web::scope("/verification")

@@ -9,7 +9,7 @@ mod solidity;
 mod sourcify;
 
 pub use solidity::VerificationClient;
-pub use sourcify::api::SourcifyApiClient;
+pub use sourcify::SourcifyClient;
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub struct VerificationResponse {
