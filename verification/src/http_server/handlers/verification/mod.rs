@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::{collections::HashMap, fmt::Display};
+use std::{collections::BTreeMap, fmt::Display};
 
 use serde::{Deserialize, Serialize};
 
@@ -8,11 +8,7 @@ pub mod routes;
 pub mod solidity;
 pub mod sourcify;
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
-pub struct ContractLibrary {
-    pub lib_name: String,
-    pub lib_address: String,
-}
+pub use sourcify::api::SourcifyApiClient;
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub struct VerificationResponse {
@@ -27,9 +23,11 @@ pub struct VerificationResult {
     pub compiler_version: String,
     pub evm_version: String,
     pub constructor_arguments: Option<String>,
-    pub contract_libraries: Option<Vec<ContractLibrary>>,
+    pub optimization: Option<bool>,
+    pub optimization_runs: Option<usize>,
+    pub contract_libraries: BTreeMap<String, String>,
     pub abi: String,
-    pub sources: HashMap<String, String>,
+    pub sources: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
@@ -73,10 +71,12 @@ mod tests {
                     compiler_version: "compiler_version".to_string(),
                     evm_version: "evm_version".to_string(),
                     constructor_arguments: Some("constructor_arguments".to_string()),
-                    contract_libraries: Some(vec![ContractLibrary {
-                        lib_name: "lib_name".to_string(),
-                        lib_address: "lib_address".to_string(),
-                    }]),
+                    optimization: Some(false),
+                    optimization_runs: Some(200),
+                    contract_libraries: BTreeMap::from([(
+                        "some_library".into(),
+                        "some_address".into(),
+                    )]),
                     abi: "abi".to_string(),
                     sources: serde_json::from_str(
                         r#"{
@@ -93,10 +93,11 @@ mod tests {
                         "compiler_version": "compiler_version",
                         "evm_version": "evm_version",
                         "constructor_arguments": "constructor_arguments",
-                        "contract_libraries": [{
-                            "lib_name": "lib_name",
-                            "lib_address": "lib_address",
-                        }],
+                        "contract_libraries": {
+                            "some_library": "some_address",
+                        },
+                        "optimization": false,
+                        "optimization_runs": 200,
                         "abi": "abi",
                         "sources": {
                             "source.sol": "content",
