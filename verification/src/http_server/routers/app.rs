@@ -1,9 +1,9 @@
-use super::{SourcifyRouter, VerificationRouter};
+use super::{SolidityRouter, SourcifyRouter};
 use crate::{config::Config, http_server::handlers::status};
 use actix_web::web;
 
 pub struct AppRouter {
-    verification: Option<VerificationRouter>,
+    verification: Option<SolidityRouter>,
     sourcify: Option<SourcifyRouter>,
 }
 
@@ -11,7 +11,7 @@ impl AppRouter {
     pub async fn new(config: Config) -> anyhow::Result<Self> {
         let verification = match config.verifier.disabled {
             true => None,
-            false => Some(VerificationRouter::new().await?),
+            false => Some(SolidityRouter::new().await?),
         };
         let sourcify = match config.sourcify.disabled {
             true => None,

@@ -3,11 +3,11 @@ use actix_web::web;
 use crate::http_server::handlers::{flatten, standard_json};
 use crate::{compiler::download_cache::DownloadCache, solidity::github_fetcher::GithubFetcher};
 
-pub struct VerificationRouter {
+pub struct SolidityRouter {
     cache: web::Data<DownloadCache<GithubFetcher>>,
 }
 
-impl VerificationRouter {
+impl SolidityRouter {
     pub async fn new() -> anyhow::Result<Self> {
         let fetcher = GithubFetcher::new("blockscout", "solc-bin", "compilers/".into())
             .await

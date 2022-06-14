@@ -1,8 +1,8 @@
 mod app;
+mod solidity;
 mod sourcify;
-mod verification;
 
 pub use self::app::AppRouter;
 
+use self::solidity::SolidityRouter;
 use self::sourcify::SourcifyRouter;
-use self::verification::VerificationRouter;
