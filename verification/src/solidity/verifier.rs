@@ -18,11 +18,11 @@ use thiserror::Error;
 #[derive(Clone, Debug, PartialEq, Error)]
 pub(crate) enum InitializationError {
     #[error("creation transaction input is not a valid hex string")]
-    InvalidCreationTxInput,
-    #[error("deployed bytecode is not a valid hex string")]
-    InvalidDeployedBytecode,
+    InvalidCreationTxInput(String),
+    #[error("deployed bytecode is not a valid hex string: {0}")]
+    InvalidDeployedBytecode(String),
     #[error("cannot parse metadata hash from deployed bytecode: {0}")]
-    MetadataHashParseError(String),
+    MetadataHashParse(String),
     #[error("creation transaction input has different metadata hash to deployed bytecode. {0}")]
     MetadataHashMismatch(Mismatch<DisplayBytes>),
 }
@@ -169,7 +169,7 @@ impl FromStr for DeployedBytecode {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let bytes = DisplayBytes::from_str(s)
-            .map_err(|_| InitializationError::InvalidDeployedBytecode)?
+            .map_err(|_| InitializationError::InvalidDeployedBytecode(s.to_string()))?
             .0;
 
         DeployedBytecode::try_from(bytes)
@@ -182,7 +182,7 @@ impl TryFrom<bytes::Bytes> for DeployedBytecode {
     fn try_from(encoded: bytes::Bytes) -> Result<Self, Self::Error> {
         // If metadata is present, last two bytes encode its length in a two-byte big-endian encoding
         if encoded.len() < 2 {
-            return Err(InitializationError::MetadataHashParseError(
+            return Err(InitializationError::MetadataHashParse(
                 "length is not encoded".to_string(),
             ));
         }
@@ -194,14 +194,13 @@ impl TryFrom<bytes::Bytes> for DeployedBytecode {
 
         // Decode length of metadata hash representation
         let metadata_hash_length = {
-            let b_len = b.len();
-            let mut length_bytes = b.split_off(b_len - 2);
+            let mut length_bytes = b.split_off(b.len() - 2);
             length_bytes.get_u16() as usize
         };
 
         if b.len() < metadata_hash_length {
-            return Err(InitializationError::MetadataHashParseError(
-                "not enough bytes".to_string(),
+            return Err(InitializationError::MetadataHashParse(
+                "specified metadata hash length is greater than bytecode total size".to_string(),
             ));
         }
 
@@ -222,7 +221,7 @@ impl TryFrom<bytes::Bytes> for DeployedBytecode {
             } else {
                 format!("{}", err)
             };
-            return Err(InitializationError::MetadataHashParseError(message));
+            return Err(InitializationError::MetadataHashParse(message));
         }
 
         Ok(Self {
@@ -285,7 +284,7 @@ impl<Source> Bytecode<Source> {
         deployed_bytecode: &DeployedBytecode,
     ) -> Result<Self, InitializationError> {
         let bytes = DisplayBytes::from_str(s)
-            .map_err(|_| InitializationError::InvalidCreationTxInput)?
+            .map_err(|_| InitializationError::InvalidCreationTxInput(s.to_string()))?
             .0;
 
         Bytecode::try_from_bytes(bytes, deployed_bytecode)
@@ -389,14 +388,9 @@ impl Bytecode<CreationTxInput> {
 /// further be used in verification process.
 #[derive(Clone, Debug)]
 pub(crate) struct Verifier {
-    /// Name of the contract to be verified
-    contract_name: String,
-    /// File path contract to be verified is located at
-    /// (useful if multiple files contain contract with `contract_name`)
-    file_path: Option<String>,
     /// Bytecode used on the contract creation transaction
     bc_creation_tx_input: Bytecode<CreationTxInput>,
-    /// Bytecode stored in the chain and being used by EVMrap_err()
+    /// Bytecode stored in the chain and being used by EVM
     bc_deployed_bytecode: DeployedBytecode,
 }
 
@@ -405,8 +399,6 @@ impl Verifier {
     ///
     /// Returns [`InitializationError`] inside [`Err`] if either `deployed_bytecode` or `creation_tx_input` are invalid.
     pub fn new(
-        contract_name: String,
-        file_path: Option<String>,
         creation_tx_input: &str,
         deployed_bytecode: &str,
     ) -> Result<Self, InitializationError> {
@@ -414,8 +406,6 @@ impl Verifier {
         let bytecode = Bytecode::from_str(creation_tx_input, &deployed_bytecode)?;
 
         Ok(Self {
-            contract_name,
-            file_path,
             bc_deployed_bytecode: deployed_bytecode,
             bc_creation_tx_input: bytecode,
         })
@@ -432,16 +422,8 @@ impl Verifier {
     ) -> Vec<Result<VerificationSuccess, VerificationError>> {
         let mut results = Vec::new();
         for (path, contracts) in output.contracts {
-            if let Some(expected) = &self.file_path {
-                if &path != expected {
-                    continue;
-                }
-            }
-
             for (name, contract) in contracts {
-                if name == self.contract_name {
-                    results.push(self.compare(&contract))
-                }
+                results.push(self.compare(&contract))
             }
         }
 
@@ -559,8 +541,6 @@ mod verifier_initialization_tests {
     use super::*;
     use const_format::concatcp;
 
-    const DEFAULT_CONTRACT_NAME: &'static str = "Contract";
-
     const DEFAULT_CONSTRUCTOR_ARGS: &'static str =
         "0000000000000000000000000000000000000000000000000000000000000fff";
     // {"ipfs": h'1220EB23CE2C13EA8739368F952F6C6A4B1F0623D147D2A19B6D4D26A61AB03FCD3E', "solc": 0.8.14}
@@ -579,35 +559,23 @@ mod verifier_initialization_tests {
     );
 
     #[test]
-    fn test_initialization_with_valid_data() {
-        let verifier = Verifier::new(
-            DEFAULT_CONTRACT_NAME.to_string(),
-            None,
-            DEFAULT_CREATION_TX_INPUT,
-            DEFAULT_DEPLOYED_BYTECODE,
-        );
-        assert!(verifier.is_ok(), "Initialization with \"0x\" prefix failed");
-
-        let verifier = Verifier::new(
-            DEFAULT_CONTRACT_NAME.to_string(),
-            None,
-            &concatcp!("0x", DEFAULT_CREATION_TX_INPUT),
-            &concatcp!("0x", DEFAULT_DEPLOYED_BYTECODE),
-        );
+    fn initialization_with_valid_data() {
+        let verifier = Verifier::new(DEFAULT_CREATION_TX_INPUT, DEFAULT_DEPLOYED_BYTECODE);
         assert!(
             verifier.is_ok(),
             "Initialization without \"0x\" prefix failed"
         );
+
+        let verifier = Verifier::new(
+            &concatcp!("0x", DEFAULT_CREATION_TX_INPUT),
+            &concatcp!("0x", DEFAULT_DEPLOYED_BYTECODE),
+        );
+        assert!(verifier.is_ok(), "Initialization with \"0x\" prefix failed");
     }
 
     #[test]
-    fn test_initialization_with_empty_creation_tx_input_should_fail() {
-        let verifier = Verifier::new(
-            DEFAULT_CONTRACT_NAME.to_string(),
-            None,
-            "",
-            DEFAULT_DEPLOYED_BYTECODE,
-        );
+    fn initialization_with_empty_creation_tx_input_should_fail() {
+        let verifier = Verifier::new("", DEFAULT_DEPLOYED_BYTECODE);
         assert!(verifier.is_err(), "Verifier initialization should fail");
         assert_eq!(
             verifier.unwrap_err(),
@@ -618,59 +586,42 @@ mod verifier_initialization_tests {
     }
 
     #[test]
-    fn test_initialization_with_creation_tx_input_as_invalid_hex_should_fail() {
+    fn initialization_with_invalid_hex_as_creation_tx_input_should_fail() {
         let invalid_input = "0xabcdefghij";
-        let verifier = Verifier::new(
-            DEFAULT_CONTRACT_NAME.to_string(),
-            None,
-            invalid_input,
-            DEFAULT_DEPLOYED_BYTECODE,
-        );
+        let verifier = Verifier::new(invalid_input, DEFAULT_DEPLOYED_BYTECODE);
         assert!(verifier.is_err(), "Verifier initialization should fail");
         assert_eq!(
             verifier.unwrap_err(),
-            InitializationError::InvalidCreationTxInput
+            InitializationError::InvalidCreationTxInput(invalid_input.to_string())
         )
     }
 
     #[test]
-    fn test_initialization_with_empty_deployed_bytecode_should_fail() {
-        let verifier = Verifier::new(
-            DEFAULT_CONTRACT_NAME.to_string(),
-            None,
-            DEFAULT_CREATION_TX_INPUT,
-            "",
-        );
+    fn initialization_with_empty_deployed_bytecode_should_fail() {
+        let verifier = Verifier::new(DEFAULT_CREATION_TX_INPUT, "");
         assert!(verifier.is_err(), "Verifier initialization should fail");
         assert_eq!(
             verifier.unwrap_err(),
-            InitializationError::MetadataHashParseError("length is not encoded".to_string())
+            InitializationError::MetadataHashParse("length is not encoded".to_string())
         )
     }
 
     #[test]
-    fn test_initialization_with_deployed_bytecode_as_invalid_hex_should_fail() {
+    fn initialization_with_invalid_hex_as_deployed_bytecode_should_fail() {
         let invalid_input = "0xabcdefghij";
-        let verifier = Verifier::new(
-            DEFAULT_CONTRACT_NAME.to_string(),
-            None,
-            DEFAULT_CREATION_TX_INPUT,
-            invalid_input,
-        );
+        let verifier = Verifier::new(DEFAULT_CREATION_TX_INPUT, invalid_input);
         assert!(verifier.is_err(), "Verifier initialization should fail");
         assert_eq!(
             verifier.unwrap_err(),
-            InitializationError::InvalidDeployedBytecode
+            InitializationError::InvalidDeployedBytecode(invalid_input.to_string())
         )
     }
 
     #[test]
-    fn test_initialization_with_metadata_hash_mismatch_should_fail() {
+    fn initialization_with_metadata_hash_mismatch_should_fail() {
         // {"ipfs": h'1220EB23CE2C13EA8739368F952F6C6A4B1F0623D147D2A19B6D4D26A61AB03FCD3E', "solc": 0.8.0}
         let another_metadata_hash = "a2646970667358221220eb23ce2c13ea8739368f952f6c6a4b1f0623d147d2a19b6d4d26a61ab03fcd3e64736f6c63430008000033";
         let verifier = Verifier::new(
-            DEFAULT_CONTRACT_NAME.to_string(),
-            None,
             &format!(
                 "{}{}",
                 DEFAULT_BYTECODE_WITHOUT_METADATA_HASH, another_metadata_hash
@@ -711,7 +662,7 @@ mod metadata_hash_deserialization_tests {
     }
 
     #[test]
-    fn test_deserialization_metadata_hash_without_solc_tag() {
+    fn deserialization_metadata_hash_without_solc_tag() {
         // given
         // { "bzzr0": b"d4fba422541feba2d648f6657d9354ec14ea9f5919b520abe0feb60981d7b17c" }
         let hex =
@@ -728,7 +679,7 @@ mod metadata_hash_deserialization_tests {
     }
 
     #[test]
-    fn test_deserialization_metadata_hash_with_solc_as_version() {
+    fn deserialization_metadata_hash_with_solc_as_version() {
         // given
         // { "ipfs": b"1220BCC988B1311237F2C00CCD0BFBD8B01D24DC18F720603B0DE93FE6327DF53625", "solc": b'00080e' }
         let hex = "a2646970667358221220bcc988b1311237f2c00ccd0bfbd8b01d24dc18f720603b0de93fe6327df5362564736f6c634300080e";
@@ -746,7 +697,7 @@ mod metadata_hash_deserialization_tests {
     }
 
     #[test]
-    fn test_deserialization_metadata_hash_with_solc_as_string() {
+    fn deserialization_metadata_hash_with_solc_as_string() {
         // given
         // {"ipfs": b'1220BA5AF27FE13BC83E671BD6981216D35DF49AB3AC923741B8948B277F93FBF732', "solc": "0.8.15-ci.2022.5.23+commit.21591531"}
         let hex = "a2646970667358221220ba5af27fe13bc83e671bd6981216d35df49ab3ac923741b8948b277f93fbf73264736f6c637823302e382e31352d63692e323032322e352e32332b636f6d6d69742e3231353931353331";
@@ -764,7 +715,7 @@ mod metadata_hash_deserialization_tests {
     }
 
     #[test]
-    fn test_deserialization_of_non_cbor_hex_should_fail() {
+    fn deserialization_of_non_cbor_hex_should_fail() {
         // given
         let hex = "1234567890";
         let encoded = DisplayBytes::from_str(hex).unwrap().0;
@@ -781,7 +732,7 @@ mod metadata_hash_deserialization_tests {
     }
 
     #[test]
-    fn test_deserialization_of_non_map_should_fail() {
+    fn deserialization_of_non_map_should_fail() {
         // given
         // "solc"
         let hex = "64736f6c63";
@@ -799,7 +750,7 @@ mod metadata_hash_deserialization_tests {
     }
 
     #[test]
-    fn test_deserialization_with_duplicated_solc_should_fail() {
+    fn deserialization_with_duplicated_solc_should_fail() {
         // given
         // { "solc": b'000400', "ipfs": b"1220BCC988B1311237F2C00CCD0BFBD8B01D24DC18F720603B0DE93FE6327DF53625", "solc": b'00080e' }
         let hex = "a364736f6c6343000400646970667358221220bcc988b1311237f2c00ccd0bfbd8b01d24dc18f720603b0de93fe6327df5362564736f6c634300080e";
@@ -817,7 +768,7 @@ mod metadata_hash_deserialization_tests {
     }
 
     #[test]
-    fn test_deserialization_not_exhausted_should_fail() {
+    fn deserialization_not_exhausted_should_fail() {
         // given
         // { "ipfs": b"1220BCC988B1311237F2C00CCD0BFBD8B01D24DC18F720603B0DE93FE6327DF53625", "solc": b'00080e' } \
         // { "bzzr0": b"d4fba422541feba2d648f6657d9354ec14ea9f5919b520abe0feb60981d7b17c" }
@@ -840,7 +791,7 @@ mod metadata_hash_deserialization_tests {
     }
 
     #[test]
-    fn test_deserialization_with_not_enough_elements_should_fail() {
+    fn deserialization_with_not_enough_elements_should_fail() {
         // given
         // 3 elements expected in the map but got only 2:
         // { "ipfs": b"1220BCC988B1311237F2C00CCD0BFBD8B01D24DC18F720603B0DE93FE6327DF53625", "solc": b'00080e' }
@@ -859,7 +810,7 @@ mod metadata_hash_deserialization_tests {
     }
 
     #[test]
-    fn test_deserialization_with_solc_neither_bytes_nor_string_should_fail() {
+    fn deserialization_with_solc_neither_bytes_nor_string_should_fail() {
         // given
         // { "ipfs": b"1220BCC988B1311237F2C00CCD0BFBD8B01D24DC18F720603B0DE93FE6327DF53625", "solc": 123 } \
         let hex= "a2646970667358221220bcc988b1311237f2c00ccd0bfbd8b01d24dc18f720603b0de93fe6327df5362564736f6c63187B";

@@ -1,3 +1,3 @@
-pub(crate) use self::unexpected::Mismatch;
+pub(crate) use self::mismatch::Mismatch;
 
-mod unexpected;
+mod mismatch;

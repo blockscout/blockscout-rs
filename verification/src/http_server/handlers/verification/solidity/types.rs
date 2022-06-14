@@ -2,7 +2,7 @@ use ethers_solc::{
     artifacts::{Libraries, Settings},
     CompilerInput, EvmVersion,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::{collections::BTreeMap, path::PathBuf, str::FromStr};
 
 #[derive(Debug, Deserialize, PartialEq)]
@@ -17,23 +17,12 @@ pub struct VerificationRequest<T> {
     pub content: T,
 }
 
-#[derive(Debug, Serialize, PartialEq)]
-pub struct VerificationResponse {
-    pub verified: bool,
-}
-
-#[derive(Debug, Deserialize, PartialEq)]
-struct ContractLibrary {
-    lib_name: String,
-    lib_address: String,
-}
-
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct FlattenedSource {
     source_code: String,
     evm_version: String,
     optimization_runs: Option<usize>,
-    contract_libraries: Option<Vec<ContractLibrary>>,
+    contract_libraries: Option<BTreeMap<String, String>>,
 }
 
 impl TryFrom<FlattenedSource> for CompilerInput {
@@ -41,16 +30,11 @@ impl TryFrom<FlattenedSource> for CompilerInput {
 
     fn try_from(source: FlattenedSource) -> Result<Self, Self::Error> {
         let mut settings = Settings::default();
-        settings.optimizer.enabled = source.optimization_runs.map(|_| true);
+        settings.optimizer.enabled = Some(source.optimization_runs.is_some());
         settings.optimizer.runs = source.optimization_runs;
         if let Some(source_libraries) = source.contract_libraries {
-            let libraries = BTreeMap::from_iter(
-                source_libraries
-                    .into_iter()
-                    .map(|l| (l.lib_name, l.lib_address)),
-            );
             settings.libraries = Libraries {
-                libs: BTreeMap::from([(PathBuf::from("source.sol"), libraries)]),
+                libs: BTreeMap::from([(PathBuf::from("source.sol"), source_libraries)]),
             };
         }
         if source.evm_version != "default" {
@@ -73,22 +57,11 @@ impl TryFrom<FlattenedSource> for CompilerInput {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde::de::DeserializeOwned;
-    use std::fmt::Debug;
-
-    fn test_parse_ok<T>(tests: Vec<(&str, T)>)
-    where
-        T: Debug + PartialEq + DeserializeOwned,
-    {
-        for (s, value) in tests {
-            let v: T = serde_json::from_str(s).unwrap();
-            assert_eq!(v, value);
-        }
-    }
+    use crate::tests::parse::test_deserialize_ok;
 
     #[test]
     fn parse_flattened() {
-        test_parse_ok(vec![(
+        test_deserialize_ok(vec![(
             r#"{
                     "contract_name": "test",
                     "deployed_bytecode": "0x6001",
@@ -127,10 +100,10 @@ mod tests {
             source_code: "pragma".into(),
             evm_version: format!("{}", ethers_solc::EvmVersion::London),
             optimization_runs: Some(200),
-            contract_libraries: Some(vec![ContractLibrary {
-                lib_name: "some_library".into(),
-                lib_address: "some_address".into(),
-            }]),
+            contract_libraries: Some(BTreeMap::from([(
+                "some_library".into(),
+                "some_address".into(),
+            )])),
         };
         let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":"pragma"}},"settings":{"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"london","libraries":{"source.sol":{"some_library":"some_address"}}}}"#;
         test_to_input(flatten, expected);
@@ -140,7 +113,7 @@ mod tests {
             optimization_runs: None,
             contract_libraries: None,
         };
-        let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":""}},"settings":{"optimizer":{},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"spuriousDragon"}}"#;
+        let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":""}},"settings":{"optimizer":{"enabled":false},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"spuriousDragon"}}"#;
         test_to_input(flatten, expected);
     }
 }

@@ -1,4 +1,4 @@
-//! Error utils
+//! Supporting type used in error structures
 
 use std::fmt;
 
@@ -44,7 +44,7 @@ mod test {
     use crate::types::Mismatch;
 
     #[test]
-    fn test_display_mismatch_with_found() {
+    fn display_mismatch_with_found() {
         // given
         let expected = 1;
         let found = 2;
@@ -58,7 +58,7 @@ mod test {
     }
 
     #[test]
-    fn test_display_mismatch_without_found() {
+    fn display_mismatch_without_found() {
         // given
         let expected = 1;
         let mismatch = Mismatch::expected(expected);

@@ -1,0 +1,8 @@
+[server]
+addr = "0.0.0.0:8043"
+
+
+[sourcify]
+api_url = "https://sourcify.dev/server/"
+verification_attempts = 3
+request_timeout = 10
