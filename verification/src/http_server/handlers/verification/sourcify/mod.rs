@@ -1,4 +1,4 @@
-pub mod api;
+mod api;
 mod client;
 mod metadata;
 mod types;
