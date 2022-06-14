@@ -1,10 +1,11 @@
 use crate::{VerificationResponse, VerificationResult};
-use actix_web::{error, error::Error};
+use actix_web::{error, error::Error, web};
 use futures::Future;
 use reqwest::Url;
 use std::sync::Arc;
 
 use super::types::{ApiFilesResponse, ApiRequest, ApiVerificationResponse, Files};
+use super::verify;
 
 #[async_trait::async_trait]
 pub(super) trait SourcifyApi {
@@ -33,6 +34,10 @@ impl SourcifyApiClient {
             verification_attempts,
         }
     }
+
+    pub fn config(&self, service_config: &mut web::ServiceConfig) {
+        service_config.route("/sourcify", web::get().to(verify));
+    }
 }
 
 pub async fn make_retrying_request<F, Fut, Response, Error>(
@@ -44,6 +49,7 @@ where
     Fut: Future<Output = Result<Response, Error>>,
 {
     for _ in 1..attempts - 1 {
+        // TODO: what if attempts == 0?
         let resp = request().await;
         if resp.is_ok() {
             return resp;

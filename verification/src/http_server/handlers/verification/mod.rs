@@ -4,11 +4,11 @@ use std::{collections::BTreeMap, fmt::Display};
 
 use serde::{Deserialize, Serialize};
 
-mod routes;
+// mod routes;
 mod solidity;
 mod sourcify;
 
-pub use routes::AppConfig;
+pub use solidity::VerificationClient;
 pub use sourcify::api::SourcifyApiClient;
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
