@@ -1,24 +1,21 @@
+use super::{SourcifyRouter, VerificationRouter};
+use crate::{config::Config, http_server::handlers::status};
 use actix_web::web;
 
-use crate::http_server::handlers::verification::SourcifyClient;
-use crate::Config;
-
-use super::handlers::{status, verification::VerificationClient};
-
-pub struct AppConfig {
-    verification: Option<VerificationClient>,
-    sourcify: Option<SourcifyClient>,
+pub struct AppRouter {
+    verification: Option<VerificationRouter>,
+    sourcify: Option<SourcifyRouter>,
 }
 
-impl AppConfig {
+impl AppRouter {
     pub async fn new(config: Config) -> anyhow::Result<Self> {
         let verification = match config.verifier.disabled {
             true => None,
-            false => Some(VerificationClient::new().await?),
+            false => Some(VerificationRouter::new().await?),
         };
         let sourcify = match config.sourcify.disabled {
             true => None,
-            false => Some(SourcifyClient::new(config.sourcify)),
+            false => Some(SourcifyRouter::new(config.sourcify)),
         };
         Ok(Self {
             verification,
@@ -26,7 +23,7 @@ impl AppConfig {
         })
     }
 
-    pub fn config(&self, service_config: &mut web::ServiceConfig) {
+    pub fn register_routes(&self, service_config: &mut web::ServiceConfig) {
         service_config
             .route("/health", web::get().to(status::status))
             .service(
@@ -34,12 +31,12 @@ impl AppConfig {
                     web::scope("/verification")
                         .configure(|service_config| {
                             if let Some(client) = self.verification.as_ref() {
-                                client.config(service_config)
+                                client.register_routes(service_config)
                             }
                         })
                         .configure(|service_config| {
                             if let Some(client) = self.sourcify.as_ref() {
-                                client.config(service_config)
+                                client.register_routes(service_config)
                             }
                         }),
                 ),

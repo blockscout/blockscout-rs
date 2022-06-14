@@ -1,16 +1,14 @@
 mod api;
-mod client;
 mod metadata;
 mod types;
 
-use self::api::SourcifyApiClient;
+pub use self::api::SourcifyApiClient;
+
 use self::types::ApiRequest;
 use actix_web::web;
 use actix_web::{error::Error, web::Json};
 
 use super::VerificationResponse;
-
-pub use client::SourcifyClient;
 
 pub async fn verify(
     sourcify_client: web::Data<SourcifyApiClient>,

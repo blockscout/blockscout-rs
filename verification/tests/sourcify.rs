@@ -5,19 +5,19 @@ use actix_web::{
     App,
 };
 use serde_json::json;
-use verification::{routes::AppConfig, Config, VerificationResponse, VerificationStatus};
+use verification::{AppRouter, Config, VerificationResponse, VerificationStatus};
 
 #[actix_rt::test]
 async fn should_return_200() {
     let mut config = Config::default();
     config.verifier.disabled = true;
-    let app_config = Arc::new(
-        AppConfig::new(config)
+    let app_router = Arc::new(
+        AppRouter::new(config)
             .await
             .expect("couldn't initialize the app"),
     );
     let mut app = test::init_service(
-        App::new().configure(|service_config| app_config.config(service_config)),
+        App::new().configure(|service_config| app_router.register_routes(service_config)),
     )
     .await;
 
@@ -73,13 +73,13 @@ async fn should_return_200() {
 async fn invalid_contracts() {
     let mut config = Config::default();
     config.verifier.disabled = true;
-    let app_config = Arc::new(
-        AppConfig::new(config)
+    let app_router = Arc::new(
+        AppRouter::new(config)
             .await
             .expect("couldn't initialize the app"),
     );
     let mut app = test::init_service(
-        App::new().configure(|service_config| app_config.config(service_config)),
+        App::new().configure(|service_config| app_router.register_routes(service_config)),
     )
     .await;
 

@@ -1,13 +1,13 @@
 use actix_web::web;
 
-use super::{flatten, standard_json};
+use crate::http_server::handlers::{flatten, standard_json};
 use crate::{compiler::download_cache::DownloadCache, solidity::github_fetcher::GithubFetcher};
 
-pub struct VerificationClient {
+pub struct VerificationRouter {
     cache: web::Data<DownloadCache<GithubFetcher>>,
 }
 
-impl VerificationClient {
+impl VerificationRouter {
     pub async fn new() -> anyhow::Result<Self> {
         let fetcher = GithubFetcher::new("blockscout", "solc-bin", "compilers/".into())
             .await
@@ -17,7 +17,7 @@ impl VerificationClient {
         })
     }
 
-    pub fn config(&self, service_config: &mut web::ServiceConfig) {
+    pub fn register_routes(&self, service_config: &mut web::ServiceConfig) {
         service_config
             .app_data(self.cache.clone())
             .route("/flatten", web::get().to(flatten::verify))
