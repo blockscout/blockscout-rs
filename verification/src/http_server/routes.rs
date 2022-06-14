@@ -6,14 +6,14 @@ use super::handlers::{status::status, verification};
 
 pub struct AppConfig {
     config: web::Data<Config>,
-    verification: verification::routes::AppConfig,
+    verification: verification::AppConfig,
 }
 
 impl AppConfig {
     pub async fn new(config: Config) -> anyhow::Result<Self> {
         Ok(Self {
             config: web::Data::new(config),
-            verification: verification::routes::AppConfig::new().await?,
+            verification: verification::AppConfig::new().await?,
         })
     }
 
