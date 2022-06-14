@@ -5,9 +5,7 @@ use actix_web::{
     App,
 };
 use serde_json::json;
-use verification::{
-    configure_router, AppRouter, Config, VerificationResponse, VerificationStatus,
-};
+use verification::{configure_router, AppRouter, Config, VerificationResponse, VerificationStatus};
 
 #[actix_rt::test]
 async fn should_return_200() {
