@@ -9,7 +9,8 @@ use verification::{routes::AppConfig, Config, VerificationResponse, Verification
 
 #[actix_rt::test]
 async fn should_return_200() {
-    let config = Config::parse().expect("Failed to parse config");
+    let mut config = Config::default();
+    config.verifier.disabled = true;
     let app_config = Arc::new(
         AppConfig::new(config)
             .await
@@ -70,9 +71,15 @@ async fn should_return_200() {
 
 #[actix_rt::test]
 async fn invalid_contracts() {
-    let config = Config::parse().expect("Failed to parse config");
+    let mut config = Config::default();
+    config.verifier.disabled = true;
+    let app_config = Arc::new(
+        AppConfig::new(config)
+            .await
+            .expect("couldn't initialize the app"),
+    );
     let mut app = test::init_service(
-        App::new().configure(|service_config| routes::config(service_config, config)),
+        App::new().configure(|service_config| app_config.config(service_config)),
     )
     .await;
 
