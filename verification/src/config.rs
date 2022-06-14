@@ -9,6 +9,7 @@ use url::Url;
 #[serde(default)]
 pub struct Config {
     pub server: ServerConfiguration,
+    pub verifier: VerifierConfiguration,
     pub sourcify: SourcifyConfiguration,
 }
 
@@ -25,9 +26,15 @@ impl Default for ServerConfiguration {
     }
 }
 
+#[derive(Default, Deserialize, Clone)]
+pub struct VerifierConfiguration {
+    pub disabled: bool,
+}
+
 #[derive(Deserialize, Clone)]
 pub struct SourcifyConfiguration {
-    pub api_url: url::Url,
+    pub disabled: bool,
+    pub api_url: Url,
     pub verification_attempts: u64,
     pub request_timeout: u64,
 }
@@ -35,6 +42,7 @@ pub struct SourcifyConfiguration {
 impl Default for SourcifyConfiguration {
     fn default() -> Self {
         Self {
+            disabled: false,
             api_url: Url::try_from("https://sourcify.dev/server/").unwrap(),
             verification_attempts: 3,
             request_timeout: 10,
