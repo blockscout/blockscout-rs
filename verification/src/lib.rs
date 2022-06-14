@@ -3,6 +3,7 @@ mod compiler;
 mod config;
 mod http_server;
 mod solidity;
+mod types;
 
 #[cfg(test)]
 mod tests;
