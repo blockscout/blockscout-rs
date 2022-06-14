@@ -13,10 +13,7 @@ impl AppRouter {
             true => None,
             false => Some(SolidityRouter::new().await?),
         };
-        let sourcify = match config.sourcify.disabled {
-            true => None,
-            false => Some(SourcifyRouter::new(config.sourcify)),
-        };
+        let sourcify = (!config.sourcify.disabled).then(|| SourcifyRouter::new(config.sourcify));
         Ok(Self {
             verification,
             sourcify,
