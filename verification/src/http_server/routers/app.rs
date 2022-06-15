@@ -9,11 +9,14 @@ pub struct AppRouter {
 
 impl AppRouter {
     pub async fn new(config: Config) -> anyhow::Result<Self> {
-        let verification = match config.verifier.disabled {
-            true => None,
-            false => Some(SolidityRouter::new().await?),
+        let verification = match config.verifier.enabled {
+            false => None,
+            true => Some(SolidityRouter::new().await?),
         };
-        let sourcify = (!config.sourcify.disabled).then(|| SourcifyRouter::new(config.sourcify));
+        let sourcify = config
+            .sourcify
+            .enabled
+            .then(|| SourcifyRouter::new(config.sourcify));
         Ok(Self {
             verification,
             sourcify,

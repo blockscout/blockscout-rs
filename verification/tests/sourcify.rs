@@ -10,7 +10,7 @@ use verification::{configure_router, AppRouter, Config, VerificationResponse, Ve
 #[actix_rt::test]
 async fn should_return_200() {
     let mut config = Config::default();
-    config.verifier.disabled = true;
+    config.verifier.enabled = false;
     let app_router = Arc::new(
         AppRouter::new(config)
             .await
@@ -69,7 +69,7 @@ async fn should_return_200() {
 #[actix_rt::test]
 async fn invalid_contracts() {
     let mut config = Config::default();
-    config.verifier.disabled = true;
+    config.verifier.enabled = false;
     let app_router = Arc::new(
         AppRouter::new(config)
             .await

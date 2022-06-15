@@ -28,16 +28,22 @@ impl Default for ServerConfiguration {
     }
 }
 
-#[derive(Default, Deserialize, Clone)]
+#[derive(Deserialize, Clone)]
 #[serde(default)]
 pub struct VerifierConfiguration {
-    pub disabled: bool,
+    pub enabled: bool,
+}
+
+impl Default for VerifierConfiguration {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
 }
 
 #[derive(Deserialize, Clone)]
 #[serde(default)]
 pub struct SourcifyConfiguration {
-    pub disabled: bool,
+    pub enabled: bool,
     pub api_url: Url,
     /// Number of attempts the server makes to Sourcify API.
     /// Should be at least one. Set to `3` by default.
@@ -48,7 +54,7 @@ pub struct SourcifyConfiguration {
 impl Default for SourcifyConfiguration {
     fn default() -> Self {
         Self {
-            disabled: false,
+            enabled: true,
             api_url: Url::try_from("https://sourcify.dev/server/").unwrap(),
             verification_attempts: NonZeroUsize::new(3).expect("Is not zero"),
             request_timeout: 10,
