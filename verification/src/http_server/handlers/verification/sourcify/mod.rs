@@ -1,8 +1,9 @@
-pub mod api;
+mod api;
 mod metadata;
 mod types;
 
-use self::api::{verify_using_sourcify_client, SourcifyApiClient};
+pub use self::api::SourcifyApiClient;
+
 use self::types::ApiRequest;
 use actix_web::web;
 use actix_web::{error::Error, web::Json};
@@ -14,6 +15,7 @@ pub async fn verify(
     params: Json<ApiRequest>,
 ) -> Result<Json<VerificationResponse>, Error> {
     let response =
-        verify_using_sourcify_client(sourcify_client.into_inner(), params.into_inner()).await?;
+        api::verify_using_sourcify_client(sourcify_client.into_inner(), params.into_inner())
+            .await?;
     Ok(Json(response))
 }

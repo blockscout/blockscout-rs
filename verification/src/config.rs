@@ -2,6 +2,7 @@ use crate::cli;
 use clap::Parser;
 use config::{Config as LibConfig, File};
 use serde::Deserialize;
+use std::num::NonZeroUsize;
 use std::{net::SocketAddr, str::FromStr};
 use url::Url;
 
@@ -9,10 +10,12 @@ use url::Url;
 #[serde(default)]
 pub struct Config {
     pub server: ServerConfiguration,
+    pub verifier: VerifierConfiguration,
     pub sourcify: SourcifyConfiguration,
 }
 
 #[derive(Deserialize, Clone)]
+#[serde(default)]
 pub struct ServerConfiguration {
     pub addr: SocketAddr,
 }
@@ -26,17 +29,34 @@ impl Default for ServerConfiguration {
 }
 
 #[derive(Deserialize, Clone)]
+#[serde(default)]
+pub struct VerifierConfiguration {
+    pub enabled: bool,
+}
+
+impl Default for VerifierConfiguration {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(default)]
 pub struct SourcifyConfiguration {
-    pub api_url: url::Url,
-    pub verification_attempts: u64,
+    pub enabled: bool,
+    pub api_url: Url,
+    /// Number of attempts the server makes to Sourcify API.
+    /// Should be at least one. Set to `3` by default.
+    pub verification_attempts: NonZeroUsize,
     pub request_timeout: u64,
 }
 
 impl Default for SourcifyConfiguration {
     fn default() -> Self {
         Self {
+            enabled: true,
             api_url: Url::try_from("https://sourcify.dev/server/").unwrap(),
-            verification_attempts: 3,
+            verification_attempts: NonZeroUsize::new(3).expect("Is not zero"),
             request_timeout: 10,
         }
     }
