@@ -1,6 +1,7 @@
 pub mod status;
 pub mod verification;
 
-pub use self::verification::solidity::flatten;
-pub use self::verification::solidity::standard_json;
-pub use self::verification::sourcify;
+pub use self::verification::{
+    solidity::{flatten, standard_json},
+    sourcify,
+};

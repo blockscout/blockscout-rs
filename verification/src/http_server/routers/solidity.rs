@@ -1,8 +1,11 @@
 use actix_web::web;
 
 use super::Router;
-use crate::http_server::handlers::{flatten, standard_json};
-use crate::{compiler::download_cache::DownloadCache, solidity::github_fetcher::GithubFetcher};
+use crate::{
+    compiler::download_cache::DownloadCache,
+    http_server::handlers::{flatten, standard_json},
+    solidity::github_fetcher::GithubFetcher,
+};
 
 pub struct SolidityRouter {
     cache: web::Data<DownloadCache<GithubFetcher>>,
