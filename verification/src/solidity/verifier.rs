@@ -284,11 +284,6 @@ impl BytecodeWithConstructorArgs {
 /// further be used in verification process.
 #[derive(Clone, Debug)]
 pub(crate) struct Verifier {
-    /// Name of the contract to be verified
-    contract_name: String,
-    /// File path contract to be verified is located at
-    /// (useful if multiple files contain contract with `contract_name`)
-    file_path: Option<String>,
     /// Bytecode used on the contract creation transaction
     bc_creation_tx_input: BytecodeWithConstructorArgs,
     /// Bytecode stored in the chain and being used by EVM
@@ -300,8 +295,6 @@ impl Verifier {
     ///
     /// Returns [`InitializationError`] inside [`Err`] if either `deployed_bytecode` or `creation_tx_input` are invalid.
     pub fn new(
-        contract_name: String,
-        file_path: Option<String>,
         creation_tx_input: &str,
         deployed_bytecode: &str,
     ) -> Result<Self, InitializationError> {
@@ -310,8 +303,6 @@ impl Verifier {
             BytecodeWithConstructorArgs::from_str(creation_tx_input, &deployed_bytecode)?;
 
         Ok(Self {
-            contract_name,
-            file_path,
             bc_deployed_bytecode: deployed_bytecode,
             bc_creation_tx_input: bytecode,
         })
@@ -332,8 +323,6 @@ mod verifier_initialization_tests {
     use super::*;
     use const_format::concatcp;
 
-    const DEFAULT_CONTRACT_NAME: &'static str = "Contract";
-
     const DEFAULT_CONSTRUCTOR_ARGS: &'static str =
         "0000000000000000000000000000000000000000000000000000000000000fff";
     // {"ipfs": h'1220EB23CE2C13EA8739368F952F6C6A4B1F0623D147D2A19B6D4D26A61AB03FCD3E', "solc": 0.8.14}
@@ -353,20 +342,13 @@ mod verifier_initialization_tests {
 
     #[test]
     fn initialization_with_valid_data() {
-        let verifier = Verifier::new(
-            DEFAULT_CONTRACT_NAME.to_string(),
-            None,
-            DEFAULT_CREATION_TX_INPUT,
-            DEFAULT_DEPLOYED_BYTECODE,
-        );
+        let verifier = Verifier::new(DEFAULT_CREATION_TX_INPUT, DEFAULT_DEPLOYED_BYTECODE);
         assert!(
             verifier.is_ok(),
             "Initialization without \"0x\" prefix failed"
         );
 
         let verifier = Verifier::new(
-            DEFAULT_CONTRACT_NAME.to_string(),
-            None,
             &concatcp!("0x", DEFAULT_CREATION_TX_INPUT),
             &concatcp!("0x", DEFAULT_DEPLOYED_BYTECODE),
         );
@@ -375,12 +357,7 @@ mod verifier_initialization_tests {
 
     #[test]
     fn initialization_with_empty_creation_tx_input_should_fail() {
-        let verifier = Verifier::new(
-            DEFAULT_CONTRACT_NAME.to_string(),
-            None,
-            "",
-            DEFAULT_DEPLOYED_BYTECODE,
-        );
+        let verifier = Verifier::new("", DEFAULT_DEPLOYED_BYTECODE);
         assert!(verifier.is_err(), "Verifier initialization should fail");
         assert_eq!(
             verifier.unwrap_err(),
@@ -393,12 +370,7 @@ mod verifier_initialization_tests {
     #[test]
     fn initialization_with_invalid_hex_as_creation_tx_input_should_fail() {
         let invalid_input = "0xabcdefghij";
-        let verifier = Verifier::new(
-            DEFAULT_CONTRACT_NAME.to_string(),
-            None,
-            invalid_input,
-            DEFAULT_DEPLOYED_BYTECODE,
-        );
+        let verifier = Verifier::new(invalid_input, DEFAULT_DEPLOYED_BYTECODE);
         assert!(verifier.is_err(), "Verifier initialization should fail");
         assert_eq!(
             verifier.unwrap_err(),
@@ -408,12 +380,7 @@ mod verifier_initialization_tests {
 
     #[test]
     fn initialization_with_empty_deployed_bytecode_should_fail() {
-        let verifier = Verifier::new(
-            DEFAULT_CONTRACT_NAME.to_string(),
-            None,
-            DEFAULT_CREATION_TX_INPUT,
-            "",
-        );
+        let verifier = Verifier::new(DEFAULT_CREATION_TX_INPUT, "");
         assert!(verifier.is_err(), "Verifier initialization should fail");
         assert_eq!(
             verifier.unwrap_err(),
@@ -424,12 +391,7 @@ mod verifier_initialization_tests {
     #[test]
     fn initialization_with_invalid_hex_as_deployed_bytecode_should_fail() {
         let invalid_input = "0xabcdefghij";
-        let verifier = Verifier::new(
-            DEFAULT_CONTRACT_NAME.to_string(),
-            None,
-            DEFAULT_CREATION_TX_INPUT,
-            invalid_input,
-        );
+        let verifier = Verifier::new(DEFAULT_CREATION_TX_INPUT, invalid_input);
         assert!(verifier.is_err(), "Verifier initialization should fail");
         assert_eq!(
             verifier.unwrap_err(),
@@ -442,8 +404,6 @@ mod verifier_initialization_tests {
         // {"ipfs": h'1220EB23CE2C13EA8739368F952F6C6A4B1F0623D147D2A19B6D4D26A61AB03FCD3E', "solc": 0.8.0}
         let another_metadata_hash = "a2646970667358221220eb23ce2c13ea8739368f952f6c6a4b1f0623d147d2a19b6d4d26a61ab03fcd3e64736f6c63430008000033";
         let verifier = Verifier::new(
-            DEFAULT_CONTRACT_NAME.to_string(),
-            None,
             &format!(
                 "{}{}",
                 DEFAULT_BYTECODE_WITHOUT_METADATA_HASH, another_metadata_hash
