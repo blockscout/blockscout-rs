@@ -44,7 +44,7 @@ where
     F: Fn() -> Fut,
     Fut: Future<Output = Result<Response, Error>>,
 {
-    for _ in 0..(attempts.get() - 1) {
+    for _ in 0..attempts.get() - 1 {
         let resp = request().await;
         if resp.is_ok() {
             return resp;
