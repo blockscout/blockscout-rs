@@ -2,6 +2,7 @@ use crate::{VerificationResponse, VerificationResult};
 use actix_web::{error, error::Error};
 use futures::Future;
 use reqwest::Url;
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 
 use super::types::{ApiFilesResponse, ApiRequest, ApiVerificationResponse, Files};
@@ -22,11 +23,11 @@ pub(super) trait SourcifyApi {
 pub struct SourcifyApiClient {
     host: Url,
     request_timeout: u64,
-    verification_attempts: u64,
+    verification_attempts: NonZeroUsize,
 }
 
 impl SourcifyApiClient {
-    pub fn new(host: Url, request_timeout: u64, verification_attempts: u64) -> Self {
+    pub fn new(host: Url, request_timeout: u64, verification_attempts: NonZeroUsize) -> Self {
         Self {
             host,
             request_timeout,
@@ -36,15 +37,14 @@ impl SourcifyApiClient {
 }
 
 pub async fn make_retrying_request<F, Fut, Response, Error>(
-    attempts: u64,
+    attempts: NonZeroUsize,
     request: F,
 ) -> Result<Response, Error>
 where
     F: Fn() -> Fut,
     Fut: Future<Output = Result<Response, Error>>,
 {
-    for _ in 1..attempts - 1 {
-        // TODO: what if attempts == 0?
+    for _ in 0..(attempts.get() - 1) {
         let resp = request().await;
         if resp.is_ok() {
             return resp;

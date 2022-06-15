@@ -2,6 +2,7 @@ use crate::cli;
 use clap::Parser;
 use config::{Config as LibConfig, File};
 use serde::Deserialize;
+use std::num::NonZeroUsize;
 use std::{net::SocketAddr, str::FromStr};
 use url::Url;
 
@@ -14,6 +15,7 @@ pub struct Config {
 }
 
 #[derive(Deserialize, Clone)]
+#[serde(default)]
 pub struct ServerConfiguration {
     pub addr: SocketAddr,
 }
@@ -27,15 +29,19 @@ impl Default for ServerConfiguration {
 }
 
 #[derive(Default, Deserialize, Clone)]
+#[serde(default)]
 pub struct VerifierConfiguration {
     pub disabled: bool,
 }
 
 #[derive(Deserialize, Clone)]
+#[serde(default)]
 pub struct SourcifyConfiguration {
     pub disabled: bool,
     pub api_url: Url,
-    pub verification_attempts: u64,
+    /// Number of attempts the server makes to Sourcify API.
+    /// Should be at least one. Set to `3` by default.
+    pub verification_attempts: NonZeroUsize,
     pub request_timeout: u64,
 }
 
@@ -44,7 +50,7 @@ impl Default for SourcifyConfiguration {
         Self {
             disabled: false,
             api_url: Url::try_from("https://sourcify.dev/server/").unwrap(),
-            verification_attempts: 3,
+            verification_attempts: NonZeroUsize::new(3).expect("Is not zero"),
             request_timeout: 10,
         }
     }
