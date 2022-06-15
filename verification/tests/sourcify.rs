@@ -1,17 +1,22 @@
+use std::sync::Arc;
+
 use actix_web::{
     test::{self, TestRequest},
     App,
 };
 use serde_json::json;
-use verification::{routes, Config, VerificationResponse, VerificationStatus};
+use verification::{configure_router, AppRouter, Config, VerificationResponse, VerificationStatus};
 
 #[actix_rt::test]
 async fn should_return_200() {
-    let config = Config::parse().expect("Failed to parse config");
-    let mut app = test::init_service(
-        App::new().configure(|service_config| routes::config(service_config, config)),
-    )
-    .await;
+    let mut config = Config::default();
+    config.verifier.enabled = false;
+    let app_router = Arc::new(
+        AppRouter::new(config)
+            .await
+            .expect("couldn't initialize the app"),
+    );
+    let mut app = test::init_service(App::new().configure(configure_router(&*app_router))).await;
 
     let metadata = include_str!("contracts/storage/metadata.json");
     let source = include_str!("contracts/storage/source.sol");
@@ -63,11 +68,14 @@ async fn should_return_200() {
 
 #[actix_rt::test]
 async fn invalid_contracts() {
-    let config = Config::parse().expect("Failed to parse config");
-    let mut app = test::init_service(
-        App::new().configure(|service_config| routes::config(service_config, config)),
-    )
-    .await;
+    let mut config = Config::default();
+    config.verifier.enabled = false;
+    let app_router = Arc::new(
+        AppRouter::new(config)
+            .await
+            .expect("couldn't initialize the app"),
+    );
+    let mut app = test::init_service(App::new().configure(configure_router(&*app_router))).await;
 
     let metadata_content = include_str!("contracts/storage/metadata.json");
     for (request_body, error_message) in [

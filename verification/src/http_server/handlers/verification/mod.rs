@@ -4,11 +4,8 @@ use std::{collections::BTreeMap, fmt::Display};
 
 use serde::{Deserialize, Serialize};
 
-pub mod routes;
 pub mod solidity;
 pub mod sourcify;
-
-pub use sourcify::api::SourcifyApiClient;
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub struct VerificationResponse {
