@@ -23,20 +23,20 @@ pub(crate) enum InitializationError {
     InvalidDeployedBytecode(String),
     #[error("cannot parse metadata hash from deployed bytecode: {0}")]
     MetadataHashParse(String),
-    #[error("creation transaction input has different metadata hash to deployed bytecode. {0}")]
+    #[error("creation transaction input has different metadata hash to deployed bytecode: {0}")]
     MetadataHashMismatch(Mismatch<DisplayBytes>),
 }
 
 /// Errors that may occur during bytecode comparison step.
 #[derive(Clone, Debug, Error)]
 pub(crate) enum VerificationError {
-    #[error("compiler versions included into metadata hash does not match. {0:?}")]
+    #[error("compiler versions included into metadata hash does not match: {0:?}")]
     CompilerVersionMismatch(Mismatch<Option<String>>),
-    #[error("bytecode does not match compilation output. {0}")]
+    #[error("bytecode does not match compilation output: {0}")]
     BytecodeMismatch(Mismatch<DisplayBytes>),
-    #[error("extra data after metadata hash but before constructor args does not match compilation output. {0}")]
+    #[error("extra data after metadata hash but before constructor args does not match compilation output: {0}")]
     ExtraDataMismatch(Mismatch<DisplayBytes>),
-    #[error("invalid constructor arguments")]
+    #[error("invalid constructor arguments: {0}")]
     InvalidConstructorArguments,
 }
 
