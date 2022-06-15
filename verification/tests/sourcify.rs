@@ -26,7 +26,7 @@ async fn should_return_200() {
         }
     });
 
-    let resp = TestRequest::get()
+    let resp = TestRequest::post()
         .uri("/api/v1/verification/sourcify")
         .set_json(&request_body)
         .send_request(&mut app)
@@ -102,7 +102,7 @@ async fn invalid_contracts() {
             "deployed and recompiled bytecode don't match",
         ),
     ] {
-        let resp = TestRequest::get()
+        let resp = TestRequest::post()
             .uri("/api/v1/verification/sourcify")
             .set_json(&request_body)
             .send_request(&mut app)

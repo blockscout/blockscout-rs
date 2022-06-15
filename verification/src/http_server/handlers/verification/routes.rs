@@ -13,7 +13,7 @@ pub fn config(service_config: &mut web::ServiceConfig) {
     let cache = DownloadCache::new(fetcher);
     service_config
         .app_data(web::Data::new(cache))
-        .route("/flatten", web::get().to(flatten::verify))
-        .route("/standard_json", web::get().to(standard_json::verify))
-        .route("/sourcify", web::get().to(sourcify::verify));
+        .route("/flatten", web::post().to(flatten::verify))
+        .route("/standard_json", web::post().to(standard_json::verify))
+        .route("/sourcify", web::post().to(sourcify::verify));
 }
