@@ -44,6 +44,8 @@ pub(crate) enum VerificationError {
 /// Contains data needed to be sent back as a verification response.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct VerificationSuccess {
+    file_path: String,
+    contract_name: String,
     abi: ethabi::Contract,
     constructor_args: Option<Bytes>,
 }
@@ -414,20 +416,21 @@ impl Verifier {
     /// Verifies input data provided on initialization by comparing it
     /// with compiler output received when compiling source data locally.
     ///
-    /// Returns a vector with results of verification for contracts with
-    /// `file_path` and `contract_name` specified on the [`Verifier`] initialization.
-    pub fn verify(
-        &self,
-        output: CompilerOutput,
-    ) -> Vec<Result<VerificationSuccess, VerificationError>> {
-        let mut results = Vec::new();
+    /// Iterates through all contracts received from local compilation and
+    /// returns [`VerificationSuccess`] with corresponding file path and contract name
+    /// if any contract  the contract that succeeds the verification. Otherwise, returns [`None`].
+    pub fn verify(&self, output: CompilerOutput) -> Option<VerificationSuccess> {
         for (path, contracts) in output.contracts {
             for (name, contract) in contracts {
-                results.push(self.compare(&contract))
+                if let Ok(mut success) = self.compare(&contract) {
+                    success.file_path = path;
+                    success.contract_name = name;
+                    return Some(success);
+                }
             }
         }
 
-        results
+        None
     }
 
     /// Compares the result of local contract compilation with data specified on initialization.
@@ -456,7 +459,14 @@ impl Verifier {
             .verify_bytecode_with_extra_data(&bytecode)?;
 
         let constructor_args = self.extract_constructor_args(abi.constructor(), &bytecode)?;
+
+        // We do not know file path and contract name yet. We may create private structure
+        // to be returned from `compare` function which do not include those fields,
+        // but it would make the code less clear. At the same time the overhead of setting
+        // empty strings here is really small (it is done only once per verification).
         Ok(VerificationSuccess {
+            file_path: "".to_string(),
+            contract_name: "".to_string(),
             abi: abi.into_owned(),
             constructor_args,
         })
