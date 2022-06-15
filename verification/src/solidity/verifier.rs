@@ -29,7 +29,7 @@ pub(crate) enum InitializationError {
 
 /// Errors that may occur during bytecode comparison step.
 #[derive(Clone, Debug, Error)]
-pub(crate) enum VerificationError {
+enum VerificationError {
     #[error("compiler versions included into metadata hash does not match: {0:?}")]
     CompilerVersionMismatch(Mismatch<Option<String>>),
     #[error("bytecode does not match compilation output: {0}")]
@@ -37,7 +37,7 @@ pub(crate) enum VerificationError {
     #[error("extra data after metadata hash but before constructor args does not match compilation output: {0}")]
     ExtraDataMismatch(Mismatch<DisplayBytes>),
     #[error("invalid constructor arguments: {0}")]
-    InvalidConstructorArguments,
+    InvalidConstructorArguments(DisplayBytes),
 }
 
 /// The structure returned as a result when verification successes.
@@ -512,10 +512,12 @@ impl Verifier {
             abi_constructor.map(|input| input.inputs.len()).unwrap_or(0) > 0;
 
         match encoded_constructor_args {
-            None if expects_constructor_args => Err(VerificationError::InvalidConstructorArguments),
-            Some(_) if !expects_constructor_args => {
-                Err(VerificationError::InvalidConstructorArguments)
-            }
+            None if expects_constructor_args => Err(
+                VerificationError::InvalidConstructorArguments(DisplayBytes::from([])),
+            ),
+            Some(encoded) if !expects_constructor_args => Err(
+                VerificationError::InvalidConstructorArguments(encoded.into()),
+            ),
             None => Ok(None),
             Some(encoded_constructor_args) => {
                 let _constructor_args = self.parse_constructor_args(
@@ -540,7 +542,7 @@ impl Verifier {
         };
         let param_types = param_types(&abi_constructor.inputs);
         let tokens = ethabi::decode(&param_types, encoded_args.as_ref())
-            .map_err(|_err| VerificationError::InvalidConstructorArguments)?;
+            .map_err(|_err| VerificationError::InvalidConstructorArguments(encoded_args.into()))?;
 
         Ok(tokens)
     }
