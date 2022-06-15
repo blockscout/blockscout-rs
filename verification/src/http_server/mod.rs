@@ -15,10 +15,8 @@ pub async fn run(config: Config) -> std::io::Result<()> {
             .await
             .expect("couldn't initialize the app"),
     );
-    HttpServer::new(move || {
-        App::new().configure(configure_router(&*app_router))
-    })
-    .bind(socket_addr)?
-    .run()
-    .await
+    HttpServer::new(move || App::new().configure(configure_router(&*app_router)))
+        .bind(socket_addr)?
+        .run()
+        .await
 }
