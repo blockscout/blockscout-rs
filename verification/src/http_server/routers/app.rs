@@ -3,13 +3,13 @@ use crate::{config::Config, http_server::handlers::status};
 use actix_web::web;
 
 pub struct AppRouter {
-    verification: Option<SolidityRouter>,
+    solidity: Option<SolidityRouter>,
     sourcify: Option<SourcifyRouter>,
 }
 
 impl AppRouter {
     pub async fn new(config: Config) -> anyhow::Result<Self> {
-        let verification = match config.verifier.enabled {
+        let solidity = match config.verifier.enabled {
             false => None,
             true => Some(SolidityRouter::new().await?),
         };
@@ -17,10 +17,7 @@ impl AppRouter {
             .sourcify
             .enabled
             .then(|| SourcifyRouter::new(config.sourcify));
-        Ok(Self {
-            verification,
-            sourcify,
-        })
+        Ok(Self { solidity, sourcify })
     }
 }
 
@@ -29,11 +26,9 @@ impl Router for AppRouter {
         service_config
             .route("/health", web::get().to(status::status))
             .service(
-                web::scope("/api/v1").service(
-                    web::scope("/verification")
-                        .configure(configure_router(&self.verification))
-                        .configure(configure_router(&self.sourcify)),
-                ),
+                web::scope("/api/v1")
+                    .service(web::scope("/solidity").configure(configure_router(&self.solidity)))
+                    .service(web::scope("/sourcify").configure(configure_router(&self.sourcify))),
             );
     }
 }
