@@ -8,9 +8,10 @@ mod types;
 #[cfg(test)]
 mod tests;
 
-pub use crate::config::Config;
-pub use http_server::handlers::verification::{
-    VerificationResponse, VerificationResult, VerificationStatus,
+pub use self::config::Config;
+pub use http_server::run as run_http_server;
+pub use http_server::{
+    configure_router,
+    handlers::verification::{VerificationResponse, VerificationResult, VerificationStatus},
+    AppRouter, Router,
 };
-pub use http_server::routes;
-pub use http_server::server::run_server as run_http_server;
