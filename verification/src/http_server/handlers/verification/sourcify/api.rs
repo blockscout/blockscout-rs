@@ -2,8 +2,7 @@ use crate::{VerificationResponse, VerificationResult};
 use actix_web::{error, error::Error};
 use futures::Future;
 use reqwest::Url;
-use std::num::NonZeroUsize;
-use std::sync::Arc;
+use std::{num::NonZeroUsize, sync::Arc};
 
 use super::types::{ApiFilesResponse, ApiRequest, ApiVerificationResponse, Files};
 
