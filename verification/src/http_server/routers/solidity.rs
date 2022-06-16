@@ -21,9 +21,10 @@ impl SolidityRouter {
 
 impl Router for SolidityRouter {
     fn register_routes(&self, service_config: &mut web::ServiceConfig) {
-        service_config
-            .app_data(self.cache.clone())
-            .route("/flatten", web::get().to(flatten::verify))
-            .route("/standard_json", web::get().to(standard_json::verify));
+        service_config.app_data(self.cache.clone()).service(
+            web::scope("/verify")
+                .route("/flatten", web::post().to(flatten::verify))
+                .route("/standard_json", web::post().to(standard_json::verify)),
+        );
     }
 }
