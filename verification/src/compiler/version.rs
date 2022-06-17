@@ -1,6 +1,9 @@
+use chrono::NaiveDate;
 use semver::Version;
-use std::{fmt::Display, str::FromStr};
+use std::{cmp::Ordering, fmt::Display, str::FromStr};
 use thiserror::Error;
+
+const DATE_FORMAT: &str = "%Y.%-m.%-d";
 
 #[derive(Error, Debug)]
 pub enum ParseError {
@@ -53,7 +56,7 @@ impl Display for ReleaseVersion {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct NightlyVersion {
     pub version: Version,
-    pub date: String,
+    pub date: NaiveDate,
     pub commit: [u8; 4],
 }
 
@@ -71,6 +74,8 @@ impl FromStr for NightlyVersion {
         if !version.pre.is_empty() || !version.build.is_empty() {
             return Err(ParseError::VersionFormat(version_str));
         }
+        let date = NaiveDate::parse_from_str(&date, DATE_FORMAT)
+            .map_err(|e| ParseError::Parse(e.to_string()))?;
         let mut commit = [0; 4];
         hex::decode_to_slice(&commit_hash, &mut commit).map_err(ParseError::CommitHash)?;
         Ok(Self {
@@ -87,7 +92,7 @@ impl Display for NightlyVersion {
             f,
             "solc-v{}-nightly.{}+commit.{}",
             self.version,
-            self.date,
+            self.date.format(DATE_FORMAT),
             hex::encode(self.commit)
         )
     }
@@ -97,6 +102,29 @@ impl Display for NightlyVersion {
 pub enum CompilerVersion {
     Release(ReleaseVersion),
     Nightly(NightlyVersion),
+}
+
+impl CompilerVersion {
+    fn version(&self) -> &Version {
+        match self {
+            CompilerVersion::Nightly(v) => &v.version,
+            CompilerVersion::Release(v) => &v.version,
+        }
+    }
+
+    fn date(&self) -> Option<NaiveDate> {
+        match self {
+            CompilerVersion::Nightly(v) => Some(v.date.clone()),
+            CompilerVersion::Release(_) => None,
+        }
+    }
+
+    fn commit(&self) -> [u8; 4] {
+        match self {
+            CompilerVersion::Nightly(v) => v.commit,
+            CompilerVersion::Release(v) => v.commit,
+        }
+    }
 }
 
 impl FromStr for CompilerVersion {
@@ -120,6 +148,22 @@ impl Display for CompilerVersion {
             CompilerVersion::Release(v) => v.fmt(f),
             CompilerVersion::Nightly(v) => v.fmt(f),
         }
+    }
+}
+
+impl Ord for CompilerVersion {
+    fn cmp(&self, other: &Self) -> Ordering {
+        (self.version(), self.date(), self.commit()).cmp(&(
+            other.version(),
+            other.date(),
+            other.commit(),
+        ))
+    }
+}
+
+impl PartialOrd for CompilerVersion {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -169,7 +213,7 @@ mod tests {
     fn parse_nightly() {
         let ver = check_parsing::<NightlyVersion>("solc-v0.8.9-nightly.2021.9.11+commit.e5eed63a");
         assert_eq!(ver.version, Version::new(0, 8, 9));
-        assert_eq!(ver.date, "2021.9.11");
+        assert_eq!(ver.date, NaiveDate::from_ymd(2021, 9, 11));
         assert_eq!(ver.commit, [229, 238, 214, 58]);
         check_parsing::<NightlyVersion>("solc-v0.0.0-nightly.1990.1.1+commit.00000000");
         check_parsing::<NightlyVersion>(
@@ -208,5 +252,94 @@ mod tests {
                 NightlyVersion::from_str("solc-v0.8.9-nightly.2021.9.11+commit.e5eed63a").unwrap()
             )
         );
+    }
+
+    #[test]
+    fn order_versions() {
+        let versions = vec![
+            "solc-v0.5.2-nightly.2018.12.7+commit.52ff3c94",
+            "solc-v0.5.2-nightly.2018.12.6+commit.5a08ae5e",
+            "solc-v0.5.2-nightly.2018.12.5+commit.6efe2a52",
+            "solc-v0.5.2-nightly.2018.12.4+commit.e49f37be",
+            "solc-v0.5.2-nightly.2018.12.3+commit.e6a01d26",
+            "solc-v0.5.2-nightly.2018.12.19+commit.88750920",
+            "solc-v0.5.2-nightly.2018.12.18+commit.4b43aeca",
+            "solc-v0.5.2-nightly.2018.12.17+commit.12874029",
+            "solc-v0.5.2-nightly.2018.12.13+commit.b3e2ba15",
+            "solc-v0.5.2-nightly.2018.12.12+commit.85291bcb",
+            "solc-v0.5.2-nightly.2018.12.11+commit.599760b6",
+            "solc-v0.5.2-nightly.2018.12.10+commit.6240d9e7",
+            "solc-v0.5.2+commit.1df8f40c",
+            "solc-v0.5.17+commit.d19bba13",
+            "solc-v0.5.16+commit.9c3226ce",
+            "solc-v0.5.15+commit.6a57276f",
+            "solc-v0.5.14-nightly.2019.12.9+commit.d6667560",
+            "solc-v0.6.3-nightly.2020.1.31+commit.b6190e06",
+            "solc-v0.6.3-nightly.2020.1.30+commit.ad98bf0f",
+            "solc-v0.6.3-nightly.2020.1.29+commit.01eb9a5b",
+            "solc-v0.6.3-nightly.2020.1.28+commit.2d3bd91d",
+            "solc-v0.6.3-nightly.2020.1.27+commit.8809d4bb",
+            "solc-v0.6.3+commit.8dda9521",
+            "solc-v0.6.2+commit.bacdbe57",
+            "solc-v0.6.12+commit.27d51765",
+            "solc-v0.6.2-nightly.2020.1.9+commit.17158995",
+            "solc-v0.6.2-nightly.2020.1.8+commit.12b52ae6",
+            "solc-v0.6.2-nightly.2020.1.27+commit.1bdb409b",
+            "solc-v0.6.2-nightly.2020.1.23+commit.3add37a2",
+            "solc-v0.6.2-nightly.2020.1.22+commit.641bb815",
+            "solc-v0.6.2-nightly.2020.1.20+commit.470c19eb",
+            "solc-v0.6.2-nightly.2020.1.17+commit.92908f52",
+            "solc-v0.6.2-nightly.2020.1.16+commit.3d4a2219",
+            "solc-v0.6.2-nightly.2020.1.15+commit.9d9a7ebe",
+            "solc-v0.6.2-nightly.2020.1.14+commit.6dbadf69",
+            "solc-v0.6.2-nightly.2020.1.13+commit.408458b7",
+        ];
+        let mut versions: Vec<CompilerVersion> = versions
+            .iter()
+            .map(|s| CompilerVersion::from_str(s).expect("invalid version"))
+            .collect();
+        versions.sort();
+        let versions: Vec<String> = versions.iter().map(|v| v.to_string()).collect();
+        assert_eq!(
+            versions,
+            vec![
+                "solc-v0.5.2+commit.1df8f40c",
+                "solc-v0.5.2-nightly.2018.12.3+commit.e6a01d26",
+                "solc-v0.5.2-nightly.2018.12.4+commit.e49f37be",
+                "solc-v0.5.2-nightly.2018.12.5+commit.6efe2a52",
+                "solc-v0.5.2-nightly.2018.12.6+commit.5a08ae5e",
+                "solc-v0.5.2-nightly.2018.12.7+commit.52ff3c94",
+                "solc-v0.5.2-nightly.2018.12.10+commit.6240d9e7",
+                "solc-v0.5.2-nightly.2018.12.11+commit.599760b6",
+                "solc-v0.5.2-nightly.2018.12.12+commit.85291bcb",
+                "solc-v0.5.2-nightly.2018.12.13+commit.b3e2ba15",
+                "solc-v0.5.2-nightly.2018.12.17+commit.12874029",
+                "solc-v0.5.2-nightly.2018.12.18+commit.4b43aeca",
+                "solc-v0.5.2-nightly.2018.12.19+commit.88750920",
+                "solc-v0.5.14-nightly.2019.12.9+commit.d6667560",
+                "solc-v0.5.15+commit.6a57276f",
+                "solc-v0.5.16+commit.9c3226ce",
+                "solc-v0.5.17+commit.d19bba13",
+                "solc-v0.6.2+commit.bacdbe57",
+                "solc-v0.6.2-nightly.2020.1.8+commit.12b52ae6",
+                "solc-v0.6.2-nightly.2020.1.9+commit.17158995",
+                "solc-v0.6.2-nightly.2020.1.13+commit.408458b7",
+                "solc-v0.6.2-nightly.2020.1.14+commit.6dbadf69",
+                "solc-v0.6.2-nightly.2020.1.15+commit.9d9a7ebe",
+                "solc-v0.6.2-nightly.2020.1.16+commit.3d4a2219",
+                "solc-v0.6.2-nightly.2020.1.17+commit.92908f52",
+                "solc-v0.6.2-nightly.2020.1.20+commit.470c19eb",
+                "solc-v0.6.2-nightly.2020.1.22+commit.641bb815",
+                "solc-v0.6.2-nightly.2020.1.23+commit.3add37a2",
+                "solc-v0.6.2-nightly.2020.1.27+commit.1bdb409b",
+                "solc-v0.6.3+commit.8dda9521",
+                "solc-v0.6.3-nightly.2020.1.27+commit.8809d4bb",
+                "solc-v0.6.3-nightly.2020.1.28+commit.2d3bd91d",
+                "solc-v0.6.3-nightly.2020.1.29+commit.01eb9a5b",
+                "solc-v0.6.3-nightly.2020.1.30+commit.ad98bf0f",
+                "solc-v0.6.3-nightly.2020.1.31+commit.b6190e06",
+                "solc-v0.6.12+commit.27d51765",
+            ]
+        )
     }
 }
