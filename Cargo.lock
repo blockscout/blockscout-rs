@@ -3365,6 +3365,7 @@ dependencies = [
  "minicbor",
  "octocrab",
  "parking_lot",
+ "rand",
  "reqwest",
  "semver",
  "serde",
