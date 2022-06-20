@@ -266,6 +266,53 @@ mod tests {
         );
     }
 
+    #[test]
+    fn order_versions() {
+        let ver = check_parsing::<CompilerVersion>;
+
+        // Release only
+        assert!(ver("solc-v0.8.10+commit.fc410830") > ver("solc-v0.8.9+commit.e5eed63a"));
+        // note: version with different hashes shouldn't be equal to implement sorting
+        assert!(ver("solc-v0.8.9+commit.fc410830") > ver("solc-v0.8.9+commit.e5eed63a"));
+        assert!(ver("solc-v0.8.9+commit.e5eed63a") == ver("solc-v0.8.9+commit.e5eed63a"));
+
+        // Nighly only
+        assert!(
+            ver("solc-v0.8.15-nightly.2022.4.4+commit.fd763fa6")
+                > ver("solc-v0.8.2-nightly.2022.3.16+commit.10b581b8")
+        );
+        assert!(
+            ver("solc-v0.8.15-nightly.2022.4.4+commit.fd763fa6")
+                > ver("solc-v0.8.14-nightly.2022.3.16+commit.10b581b8")
+        );
+        assert!(
+            ver("solc-v0.8.14-nightly.2022.4.4+commit.fd763fa6")
+                > ver("solc-v0.8.14-nightly.2022.3.16+commit.10b581b8")
+        );
+        assert!(
+            ver("solc-v0.8.14-nightly.2022.4.4+commit.fd763fa6")
+                > ver("solc-v0.8.14-nightly.2022.4.4+commit.10b581b8")
+        );
+        assert!(
+            ver("solc-v0.8.14-nightly.2022.4.4+commit.fd763fa6")
+                == ver("solc-v0.8.14-nightly.2022.4.4+commit.fd763fa6")
+        );
+
+        // All
+        assert!(
+            ver("solc-v0.5.2+commit.1df8f40c")
+                > ver("solc-v0.5.2-nightly.2018.12.19+commit.88750920")
+        );
+        assert!(
+            ver("solc-v0.5.14+commit.1df8f40c")
+                > ver("solc-v0.5.2-nightly.2018.12.19+commit.88750920")
+        );
+        assert!(
+            ver("solc-v0.5.14-nightly.2019.12.9+commit.d6667560")
+                > ver("solc-v0.5.2+commit.1df8f40c")
+        );
+    }
+
     fn test_shuffle_and_sort(sorted: Vec<&str>, times: usize) {
         let sorted_versions: Vec<CompilerVersion> = sorted
             .clone()
@@ -286,7 +333,7 @@ mod tests {
     }
 
     #[test]
-    fn order_release_versions() {
+    fn sort_release_versions() {
         test_shuffle_and_sort(
             vec![
                 "solc-v0.8.9+commit.e5eed63a",
@@ -302,15 +349,7 @@ mod tests {
     }
 
     #[test]
-    fn order_similar_release_versions() {
-        test_shuffle_and_sort(
-            vec!["solc-v0.8.9+commit.e5eed63a", "solc-v0.8.9+commit.fc410830"],
-            1,
-        );
-    }
-
-    #[test]
-    fn order_nightly_versions() {
+    fn sort_nightly_versions() {
         test_shuffle_and_sort(
             vec![
                 "solc-v0.8.14-nightly.2022.3.16+commit.10b581b8",
@@ -363,18 +402,7 @@ mod tests {
     }
 
     #[test]
-    fn order_similar_nightly_versions() {
-        test_shuffle_and_sort(
-            vec![
-                "solc-v0.8.14-nightly.2022.3.16+commit.10b581b8",
-                "solc-v0.8.14-nightly.2022.3.16+commit.430ecb6e",
-            ],
-            1,
-        )
-    }
-
-    #[test]
-    fn order_all_versions() {
+    fn sort_all_versions() {
         test_shuffle_and_sort(
             vec![
                 "solc-v0.5.2-nightly.2018.12.3+commit.e6a01d26",
