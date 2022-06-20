@@ -318,6 +318,8 @@ mod tests {
             .iter()
             .map(|s| CompilerVersion::from_str(s).expect("invalid version"))
             .collect();
+        // check, that array is indeed sorted
+        assert!(sorted_versions.windows(2).all(|vals| vals[0] <= vals[1]));
         let seed = thread_rng().gen();
         let mut r = StdRng::seed_from_u64(seed);
         let mut shuffled_versions = sorted_versions.clone();
