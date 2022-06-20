@@ -422,10 +422,13 @@ impl Verifier {
     pub fn verify(&self, output: CompilerOutput) -> Option<VerificationSuccess> {
         for (path, contracts) in output.contracts {
             for (name, contract) in contracts {
-                if let Ok(mut success) = self.compare(&contract) {
-                    success.file_path = path;
-                    success.contract_name = name;
-                    return Some(success);
+                if let Ok((abi, constructor_args)) = self.compare(&contract) {
+                    return Some(VerificationSuccess {
+                        file_path: path,
+                        contract_name: name,
+                        abi,
+                        constructor_args,
+                    });
                 }
             }
         }
@@ -434,7 +437,13 @@ impl Verifier {
     }
 
     /// Compares the result of local contract compilation with data specified on initialization.
-    fn compare(&self, contract: &Contract) -> Result<VerificationSuccess, VerificationError> {
+    ///
+    /// On success returns a tuple where first argument is a contract ABI, and the second
+    /// is constructor arguments passed on actual contract initialization.
+    fn compare(
+        &self,
+        contract: &Contract,
+    ) -> Result<(ethabi::Contract, Option<Bytes>), VerificationError> {
         let deployed_bytecode = {
             let bytes = contract
                 .get_deployed_bytecode_bytes()
@@ -460,16 +469,7 @@ impl Verifier {
 
         let constructor_args = self.extract_constructor_args(abi.constructor(), &bytecode)?;
 
-        // We do not know file path and contract name yet. We may create private structure
-        // to be returned from `compare` function which do not include those fields,
-        // but it would make the code less clear. At the same time the overhead of setting
-        // empty strings here is really small (it is done only once per verification).
-        Ok(VerificationSuccess {
-            file_path: "".to_string(),
-            contract_name: "".to_string(),
-            abi: abi.into_owned(),
-            constructor_args,
-        })
+        Ok((abi.into_owned(), constructor_args))
     }
 
     /// Checks that solc versions obtained from metadata hash correspond

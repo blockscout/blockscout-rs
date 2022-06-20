@@ -5,8 +5,7 @@ mod types;
 pub use self::api::SourcifyApiClient;
 
 use self::types::ApiRequest;
-use actix_web::web;
-use actix_web::{error::Error, web::Json};
+use actix_web::{error::Error, web, web::Json};
 
 use super::VerificationResponse;
 
