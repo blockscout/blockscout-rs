@@ -315,7 +315,6 @@ mod tests {
 
     fn test_shuffle_and_sort(sorted: Vec<&str>, times: usize) {
         let sorted_versions: Vec<CompilerVersion> = sorted
-            .clone()
             .iter()
             .map(|s| CompilerVersion::from_str(s).expect("invalid version"))
             .collect();
