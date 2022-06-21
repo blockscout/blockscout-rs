@@ -1,8 +1,10 @@
 use actix_web::web;
 
 use super::Router;
-use crate::config::SourcifyConfiguration;
-use crate::http_server::handlers::sourcify::{self, SourcifyApiClient};
+use crate::{
+    config::SourcifyConfiguration,
+    http_server::handlers::sourcify::{self, SourcifyApiClient},
+};
 
 pub struct SourcifyRouter {
     api_client: web::Data<SourcifyApiClient>,
@@ -25,6 +27,6 @@ impl Router for SourcifyRouter {
     fn register_routes(&self, service_config: &mut web::ServiceConfig) {
         service_config
             .app_data(self.api_client.clone())
-            .route("/sourcify", web::get().to(sourcify::verify));
+            .route("/verify", web::post().to(sourcify::verify));
     }
 }

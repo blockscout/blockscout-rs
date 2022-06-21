@@ -1,21 +1,25 @@
-use super::{compile::compile, types::VerificationRequest};
+use super::types::VerificationRequest;
 use crate::{
-    compiler::download_cache::DownloadCache,
+    compiler::{version::CompilerVersion, Compilers},
     http_server::handlers::verification::VerificationResponse,
     solidity::github_fetcher::GithubFetcher,
 };
 use actix_web::{
+    error,
     web::{self, Json},
     Error,
 };
 use ethers_solc::CompilerInput;
+use std::str::FromStr;
 
 pub async fn verify(
-    cache: web::Data<DownloadCache<GithubFetcher>>,
+    compilers: web::Data<Compilers<GithubFetcher>>,
     params: Json<VerificationRequest<CompilerInput>>,
 ) -> Result<Json<VerificationResponse>, Error> {
     let params = params.into_inner();
-    let output = compile(&cache, &params.compiler_version, &params.content).await?;
+    let compiler_version =
+        CompilerVersion::from_str(&params.compiler_version).map_err(error::ErrorBadRequest)?;
+    let output = compilers.compile(&compiler_version, &params.content).await;
     let _ = output;
 
     todo!("verify output")

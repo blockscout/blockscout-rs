@@ -1,4 +1,3 @@
-mod compile;
 mod types;
 
 pub mod flatten;

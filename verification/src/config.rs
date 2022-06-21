@@ -2,8 +2,7 @@ use crate::cli;
 use clap::Parser;
 use config::{Config as LibConfig, File};
 use serde::Deserialize;
-use std::num::NonZeroUsize;
-use std::{net::SocketAddr, str::FromStr};
+use std::{net::SocketAddr, num::NonZeroUsize, str::FromStr};
 use url::Url;
 
 #[derive(Deserialize, Clone, Default)]

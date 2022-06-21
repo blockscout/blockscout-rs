@@ -1,16 +1,15 @@
 use super::{fetcher::Fetcher, version::CompilerVersion};
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
-pub struct DownloadCache<D> {
+#[derive(Default)]
+pub struct DownloadCache {
     cache: parking_lot::Mutex<HashMap<CompilerVersion, Arc<tokio::sync::RwLock<Option<PathBuf>>>>>,
-    fetcher: D,
 }
 
-impl<D> DownloadCache<D> {
-    pub fn new(fetcher: D) -> Self {
+impl DownloadCache {
+    pub fn new() -> Self {
         DownloadCache {
             cache: Default::default(),
-            fetcher,
         }
     }
 
@@ -29,15 +28,23 @@ impl<D> DownloadCache<D> {
     }
 }
 
-impl<D: Fetcher> DownloadCache<D> {
-    pub async fn get(&self, ver: &CompilerVersion) -> Result<PathBuf, D::Error> {
+impl DownloadCache {
+    pub async fn get<D: Fetcher>(
+        &self,
+        fetcher: &D,
+        ver: &CompilerVersion,
+    ) -> Result<PathBuf, D::Error> {
         match self.try_get(ver).await {
             Some(file) => Ok(file),
-            None => self.fetch(ver).await,
+            None => self.fetch(fetcher, ver).await,
         }
     }
 
-    async fn fetch(&self, ver: &CompilerVersion) -> Result<PathBuf, D::Error> {
+    async fn fetch<D: Fetcher>(
+        &self,
+        fetcher: &D,
+        ver: &CompilerVersion,
+    ) -> Result<PathBuf, D::Error> {
         let lock = {
             let mut cache = self.cache.lock();
             Arc::clone(cache.entry(ver.clone()).or_default())
@@ -47,17 +54,11 @@ impl<D: Fetcher> DownloadCache<D> {
             Some(file) => Ok(file.clone()),
             None => {
                 log::info!(target: "compiler_cache", "installing file version {}", ver);
-                let file = self.fetcher.fetch(ver).await?;
+                let file = fetcher.fetch(ver).await?;
                 *entry = Some(file.clone());
                 Ok(file)
             }
         }
-    }
-}
-
-impl<D: Default> Default for DownloadCache<D> {
-    fn default() -> Self {
-        DownloadCache::new(D::default())
     }
 }
 
@@ -96,12 +97,12 @@ mod tests {
         }
 
         let fetcher = MockFetcher::default();
-        let cache = DownloadCache::new(fetcher);
+        let cache = DownloadCache::new();
 
         let vers: Vec<_> = (0..3).map(new_version).collect();
 
         let get_and_check = |ver: &CompilerVersion| {
-            let value = block_on(cache.get(ver)).unwrap();
+            let value = block_on(cache.get(&fetcher, ver)).unwrap();
             assert_eq!(value, PathBuf::from(ver.to_string()));
         };
 
@@ -116,7 +117,7 @@ mod tests {
         get_and_check(&vers[1]);
         get_and_check(&vers[0]);
 
-        let counter = cache.fetcher.counter.lock();
+        let counter = fetcher.counter.lock();
         assert_eq!(counter.len(), 3);
         assert!(counter.values().all(|&count| count == 1));
     }
@@ -127,6 +128,7 @@ mod tests {
     async fn downloading_not_blocks() {
         const TIMEOUT: Duration = Duration::from_secs(10);
 
+        #[derive(Clone)]
         struct MockBlockingFetcher {
             sync: Arc<tokio::sync::Mutex<()>>,
         }
@@ -142,12 +144,12 @@ mod tests {
 
         let sync = Arc::<tokio::sync::Mutex<()>>::default();
         let fetcher = MockBlockingFetcher { sync: sync.clone() };
-        let cache = Arc::new(DownloadCache::new(fetcher));
+        let cache = Arc::new(DownloadCache::new());
 
         let vers: Vec<_> = (0..3).map(new_version).collect();
 
         // fill the cache
-        cache.get(&vers[1]).await.unwrap();
+        cache.get(&fetcher, &vers[1]).await.unwrap();
 
         // lock the fetcher
         let guard = sync.lock().await;
@@ -156,7 +158,10 @@ mod tests {
         let handle = {
             let cache = cache.clone();
             let vers = vers.clone();
-            spawn(async move { join!(cache.get(&vers[0]), cache.get(&vers[2])) })
+            let fetcher = fetcher.clone();
+            spawn(
+                async move { join!(cache.get(&fetcher, &vers[0]), cache.get(&fetcher, &vers[2])) },
+            )
         };
         // so we could rerun future after timeout
         pin_mut!(handle);
@@ -164,7 +169,7 @@ mod tests {
         yield_now().await;
 
         // check, that while we're downloading we don't block the cache
-        timeout(TIMEOUT, cache.get(&vers[1]))
+        timeout(TIMEOUT, cache.get(&fetcher, &vers[1]))
             .await
             .expect("should not block")
             .expect("expected value not error");
