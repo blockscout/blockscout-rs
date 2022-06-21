@@ -27,8 +27,9 @@ impl FromStr for ReleaseVersion {
     type Err = ParseError;
 
     /// Parses release version from string formated as
-    /// `*PREFIX**VERSION*+commit.*COMMITHASH*`, example
+    /// `*PREFIX**VERSION*+commit.*COMMITHASH*`, examples:
     /// `solc-v0.8.9+commit.e5eed63a`
+    /// `0.8.4+commit.dea1b9ec`
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (_, version_str, commit_hash) =
             sscanf::scanf!(s, "{:/[^\\d\\.]*/}{}+commit.{}", String, String, String)
@@ -65,8 +66,9 @@ impl FromStr for NightlyVersion {
     type Err = ParseError;
 
     /// Parses nigthly version from string formated as
-    /// `*PREFIX**VERSION*-nightly.*DATE*+commit.*COMMITHASH*`, example
+    /// `*PREFIX**VERSION*-nightly.*DATE*+commit.*COMMITHASH*`, examples:
     /// `solc-v0.8.8-nightly.2021.9.9+commit.dea1b9ec`
+    /// `0.8.4-nightly.2021.9.9+commit.e5eed63a`
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (_, version_str, date, commit_hash) = sscanf::scanf!(
             s,
