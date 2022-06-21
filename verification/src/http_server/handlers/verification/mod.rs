@@ -44,8 +44,8 @@ impl From<(CompilerInput, CompilerVersion, VerificationSuccess)> for Verificatio
             evm_version: compiler_input
                 .settings
                 .evm_version
-                .unwrap_or_default()
-                .to_string(),
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "default".to_string()),
             constructor_arguments: verification_success
                 .constructor_args
                 .map(|b| DisplayBytes::from(b).to_string()),
