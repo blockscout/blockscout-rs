@@ -3,17 +3,18 @@ use actix_web::web;
 use super::Router;
 use crate::{
     compiler::Compilers,
+    config::CompilerConfiguration,
     http_server::handlers::{flatten, standard_json},
-    solidity::github_fetcher::GithubFetcher,
+    solidity::compiler_fetcher::CompilerFetcher,
 };
 
 pub struct SolidityRouter {
-    cache: web::Data<Compilers<GithubFetcher>>,
+    cache: web::Data<Compilers<CompilerFetcher>>,
 }
 
 impl SolidityRouter {
-    pub async fn new() -> anyhow::Result<Self> {
-        let fetcher = GithubFetcher::new("blockscout", "solc-bin", "compilers/".into())
+    pub async fn new(config: CompilerConfiguration) -> anyhow::Result<Self> {
+        let fetcher = CompilerFetcher::new(config.compilers_list_url.clone(), "compilers/".into())
             .await
             .map_err(anyhow::Error::msg)?;
         let compilers = Compilers::new(fetcher);

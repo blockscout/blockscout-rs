@@ -11,6 +11,7 @@ pub struct Config {
     pub server: ServerConfiguration,
     pub verifier: VerifierConfiguration,
     pub sourcify: SourcifyConfiguration,
+    pub compiler: CompilerConfiguration,
 }
 
 #[derive(Deserialize, Clone)]
@@ -54,9 +55,24 @@ impl Default for SourcifyConfiguration {
     fn default() -> Self {
         Self {
             enabled: true,
-            api_url: Url::try_from("https://sourcify.dev/server/").unwrap(),
+            api_url: Url::try_from("https://sourcify.dev/server/").expect("valid url"),
             verification_attempts: NonZeroUsize::new(3).expect("Is not zero"),
             request_timeout: 10,
+        }
+    }
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(default)]
+pub struct CompilerConfiguration {
+    pub compilers_list_url: Url,
+}
+
+impl Default for CompilerConfiguration {
+    fn default() -> Self {
+        Self {
+            compilers_list_url: Url::try_from("https://binaries.soliditylang.org/linux-amd64/")
+                .expect("valid url"),
         }
     }
 }

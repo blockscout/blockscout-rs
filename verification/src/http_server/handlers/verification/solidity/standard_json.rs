@@ -2,7 +2,7 @@ use super::types::VerificationRequest;
 use crate::{
     compiler::{version::CompilerVersion, Compilers},
     http_server::handlers::verification::VerificationResponse,
-    solidity::github_fetcher::GithubFetcher,
+    solidity::compiler_fetcher::CompilerFetcher,
 };
 use actix_web::{
     error,
@@ -13,7 +13,7 @@ use ethers_solc::CompilerInput;
 use std::str::FromStr;
 
 pub async fn verify(
-    compilers: web::Data<Compilers<GithubFetcher>>,
+    compilers: web::Data<Compilers<CompilerFetcher>>,
     params: Json<VerificationRequest<CompilerInput>>,
 ) -> Result<Json<VerificationResponse>, Error> {
     let params = params.into_inner();

@@ -11,7 +11,7 @@ impl AppRouter {
     pub async fn new(config: Config) -> anyhow::Result<Self> {
         let solidity = match config.verifier.enabled {
             false => None,
-            true => Some(SolidityRouter::new().await?),
+            true => Some(SolidityRouter::new(config.compiler).await?),
         };
         let sourcify = config
             .sourcify
