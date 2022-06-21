@@ -27,11 +27,12 @@ impl FromStr for ReleaseVersion {
     type Err = ParseError;
 
     /// Parses release version from string formated as
-    /// `solc-v*VERSION*+commit.*COMMITHASH*`, example
+    /// `*PREFIX**VERSION*+commit.*COMMITHASH*`, example
     /// `solc-v0.8.9+commit.e5eed63a`
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (version_str, commit_hash) = sscanf::scanf!(s, "solc-v{}+commit.{}", String, String)
-            .map_err(|e| ParseError::Parse(format!("{:?}", e)))?;
+        let (_, version_str, commit_hash) =
+            sscanf::scanf!(s, "{:/[^\\d\\.]*/}{}+commit.{}", String, String, String)
+                .map_err(|e| ParseError::Parse(format!("{:?}", e)))?;
         let version = Version::from_str(&version_str).map_err(ParseError::SemVer)?;
         if !version.pre.is_empty() || !version.build.is_empty() {
             return Err(ParseError::VersionFormat(version_str));
@@ -64,12 +65,18 @@ impl FromStr for NightlyVersion {
     type Err = ParseError;
 
     /// Parses nigthly version from string formated as
-    /// `solc-v*VERSION*-nightly.*DATE*+commit.*COMMITHASH*`, example
+    /// `*PREFIX**VERSION*-nightly.*DATE*+commit.*COMMITHASH*`, example
     /// `solc-v0.8.8-nightly.2021.9.9+commit.dea1b9ec`
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (version_str, date, commit_hash) =
-            sscanf::scanf!(s, "solc-v{}-nightly.{}+commit.{}", String, String, String)
-                .map_err(|e| ParseError::Parse(format!("{:?}", e)))?;
+        let (_, version_str, date, commit_hash) = sscanf::scanf!(
+            s,
+            "{:/[^\\d\\.]*/}{}-nightly.{}+commit.{}",
+            String,
+            String,
+            String,
+            String
+        )
+        .map_err(|e| ParseError::Parse(format!("{:?}", e)))?;
         let version = Version::from_str(&version_str).map_err(ParseError::SemVer)?;
         if !version.pre.is_empty() || !version.build.is_empty() {
             return Err(ParseError::VersionFormat(version_str));
@@ -188,7 +195,6 @@ mod tests {
         <T as std::str::FromStr>::Err: std::fmt::Debug,
     {
         let ver = T::from_str(ver_str).unwrap();
-        assert_eq!(ver_str, ver.to_string());
         ver
     }
 
@@ -201,20 +207,19 @@ mod tests {
         check_parsing::<ReleaseVersion>("solc-v123456789.987654321.0+commit.ffffffff");
         check_parsing::<ReleaseVersion>("solc-v1.2.3+commit.01234567");
         check_parsing::<ReleaseVersion>("solc-v3.2.1+commit.89abcdef");
+        check_parsing::<ReleaseVersion>("0.0.0+commit.00000000");
+        check_parsing::<ReleaseVersion>("any_prefix_you_can_imagine::0.0.0+commit.00000000");
     }
 
     #[test]
     fn parse_invalid_release() {
         ReleaseVersion::from_str("").unwrap_err();
         ReleaseVersion::from_str("sometext").unwrap_err();
-        ReleaseVersion::from_str("solc-0.8.9+commit.deadbeef").unwrap_err();
         ReleaseVersion::from_str("solc-v0.8+commit.deadbeef").unwrap_err();
         ReleaseVersion::from_str("solc-v0.8.9commit.deadbeef").unwrap_err();
-        ReleaseVersion::from_str("solcv0.8.9+commit.deadbeef").unwrap_err();
         ReleaseVersion::from_str("solc-v0.8.9+commitdeadbeef").unwrap_err();
         ReleaseVersion::from_str("solc-v+commit.deadbeef").unwrap_err();
         ReleaseVersion::from_str("solc-v0.8.9+commit.").unwrap_err();
-        ReleaseVersion::from_str("-v0.8.9+commit.deadbeef").unwrap_err();
         ReleaseVersion::from_str("solc-v0.8.9+commit.deadbe").unwrap_err();
         ReleaseVersion::from_str("solc-v0.8.9+commit.alivebee").unwrap_err();
         ReleaseVersion::from_str("solc-v0.8.9-pre+commit.deadbeef").unwrap_err();
@@ -231,13 +236,16 @@ mod tests {
         check_parsing::<NightlyVersion>(
             "solc-v123456789.987654321.0-nightly.2100.12.30+commit.ffffffff",
         );
+        check_parsing::<NightlyVersion>("0.0.0-nightly.1990.1.1+commit.00000000");
+        check_parsing::<NightlyVersion>(
+            "any_prefix_you_can_imagine::0.0.0-nightly.1990.1.1+commit.00000000",
+        );
     }
 
     #[test]
     fn parse_invalid_nightly() {
         NightlyVersion::from_str("").unwrap_err();
         NightlyVersion::from_str("sometext").unwrap_err();
-        NightlyVersion::from_str("solc-0.8.9-nightly.2021.9.11+commit.e5eed63a").unwrap_err();
         NightlyVersion::from_str("solc-v0.8-nightly.2021.9.11+commit.e5eed63a").unwrap_err();
         NightlyVersion::from_str("solc-v0.8.9.2021.9.11+commit.e5eed63a").unwrap_err();
         NightlyVersion::from_str("solc-v0.8.9-nightly.+commit.e5eed63a").unwrap_err();
@@ -245,7 +253,6 @@ mod tests {
         NightlyVersion::from_str("solc-v0.8.9-nightly.2021.9.11+commit.").unwrap_err();
         NightlyVersion::from_str("solc-v0.8.9-nightly.2021.9.11+commit.alivebee").unwrap_err();
         NightlyVersion::from_str("solc-v0.8.9-nighly.2021.9.11+commit.e5eed63a").unwrap_err();
-        NightlyVersion::from_str("-v0.8.9-nightly.2021.9.11+commit.e5eed63a").unwrap_err();
         NightlyVersion::from_str("solc-v0.8.9+commit.deadbeef").unwrap_err();
         NightlyVersion::from_str("solc-v0.8.9-pre-nightly.2021.9.11+commit.e5eed63a").unwrap_err();
     }
