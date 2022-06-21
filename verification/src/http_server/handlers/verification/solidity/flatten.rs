@@ -3,12 +3,11 @@ use super::{
     types::{FlattenedSource, VerificationRequest},
 };
 use crate::{
-    compiler::{version::CompilerVersion, Compilers},
+    compiler::{fetcher::Fetcher, version::CompilerVersion, Compilers},
     http_server::handlers::verification::{
         solidity::handlers::{CompileAndVerifyError, CompileAndVerifyInput},
         VerificationResponse,
     },
-    solidity::github_fetcher::GithubFetcher,
     VerificationResult,
 };
 use actix_web::{
@@ -17,12 +16,18 @@ use actix_web::{
     Error,
 };
 use ethers_solc::CompilerInput;
-use std::str::FromStr;
+use std::{
+    fmt::{Debug, Display},
+    str::FromStr,
+};
 
-pub async fn verify(
-    compilers: web::Data<Compilers<GithubFetcher>>,
+pub async fn verify<T: Fetcher>(
+    compilers: web::Data<Compilers<T>>,
     params: Json<VerificationRequest<FlattenedSource>>,
-) -> Result<Json<VerificationResponse>, Error> {
+) -> Result<Json<VerificationResponse>, Error>
+where
+    <T as Fetcher>::Error: Debug + Display,
+{
     let params = params.into_inner();
 
     let compiler_input = CompilerInput::try_from(params.content).map_err(error::ErrorBadRequest)?;
