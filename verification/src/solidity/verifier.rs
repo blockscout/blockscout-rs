@@ -49,7 +49,7 @@ pub(crate) struct VerificationSuccess {
     file_path: String,
     contract_name: String,
     abi: ethabi::Contract,
-    constructor_args: Option<Bytes>,
+    constructor_args: Option<DisplayBytes>,
 }
 
 /// Parsed metadata hash
@@ -429,7 +429,7 @@ impl Verifier {
                         file_path: path,
                         contract_name: name,
                         abi,
-                        constructor_args,
+                        constructor_args: constructor_args.map(DisplayBytes::from),
                     });
                 }
             }
