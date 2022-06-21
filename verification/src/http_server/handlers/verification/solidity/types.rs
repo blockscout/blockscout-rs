@@ -17,12 +17,12 @@ pub struct VerificationRequest<T> {
     pub content: T,
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct FlattenedSource {
-    source_code: String,
-    evm_version: String,
-    optimization_runs: Option<usize>,
-    contract_libraries: Option<BTreeMap<String, String>>,
+    pub source_code: String,
+    pub evm_version: String,
+    pub optimization_runs: Option<usize>,
+    pub contract_libraries: Option<BTreeMap<String, String>>,
 }
 
 impl TryFrom<FlattenedSource> for CompilerInput {

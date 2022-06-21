@@ -1,3 +1,4 @@
+mod handlers;
 mod types;
 
 pub mod flatten;

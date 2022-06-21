@@ -8,7 +8,7 @@ use crate::{
 };
 
 pub struct SolidityRouter {
-    cache: web::Data<Compilers<GithubFetcher>>,
+    compilers: web::Data<Compilers<GithubFetcher>>,
 }
 
 impl SolidityRouter {
@@ -18,14 +18,14 @@ impl SolidityRouter {
             .map_err(anyhow::Error::msg)?;
         let compilers = Compilers::new(fetcher);
         Ok(Self {
-            cache: web::Data::new(compilers),
+            compilers: web::Data::new(compilers),
         })
     }
 }
 
 impl Router for SolidityRouter {
     fn register_routes(&self, service_config: &mut web::ServiceConfig) {
-        service_config.app_data(self.cache.clone()).service(
+        service_config.app_data(self.compilers.clone()).service(
             web::scope("/verify")
                 .route("/flatten", web::post().to(flatten::verify))
                 .route("/standard_json", web::post().to(standard_json::verify)),

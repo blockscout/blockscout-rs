@@ -44,10 +44,10 @@ enum VerificationError {
 /// Contains data needed to be sent back as a verification response.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct VerificationSuccess {
-    file_path: String,
-    contract_name: String,
-    abi: ethabi::Contract,
-    constructor_args: Option<Bytes>,
+    pub file_path: String,
+    pub contract_name: String,
+    pub abi: ethabi::Contract,
+    pub constructor_args: Option<Bytes>,
 }
 
 /// Parsed metadata hash
