@@ -4,6 +4,6 @@ use std::path::PathBuf;
 
 #[async_trait]
 pub trait Fetcher {
-    type Error;
+    type Error: Send + Sync + 'static;
     async fn fetch(&self, ver: &CompilerVersion) -> Result<PathBuf, Self::Error>;
 }
