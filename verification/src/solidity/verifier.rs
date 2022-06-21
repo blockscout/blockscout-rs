@@ -30,6 +30,8 @@ pub(crate) enum InitializationError {
 /// Errors that may occur during bytecode comparison step.
 #[derive(Clone, Debug, Error)]
 enum VerificationError {
+    #[error("deployed bytecode is invalid (most probably the contract is abstract and has no deployed bytecode): {0}")]
+    InvalidDeployedBytecode(String),
     #[error("compiler versions included into metadata hash does not match: {0:?}")]
     CompilerVersionMismatch(Mismatch<Option<String>>),
     #[error("bytecode does not match compilation output: {0}")]
@@ -449,14 +451,16 @@ impl Verifier {
                 .get_deployed_bytecode_bytes()
                 .expect("contract compiled locally: deployed bytecode must exist");
             DeployedBytecode::try_from(bytes.0.clone())
-                .expect("contract compiled locally: deployed bytecode must be valid")
+                .map_err(|err| VerificationError::InvalidDeployedBytecode(err.to_string()))?
         };
         let bytecode = {
             let bytes = contract
                 .get_bytecode_bytes()
                 .expect("contract compiled locally: bytecode must exist");
             Bytecode::<CompilationResult>::try_from_bytes(bytes.0.clone(), &deployed_bytecode)
-                .expect("contract compiled locally: bytecode must be valid")
+                .expect(
+                "contract compiled locally and has valid deployed bytecode: bytecode must be valid",
+            )
         };
         let abi = contract
             .get_abi()
