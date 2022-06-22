@@ -33,7 +33,7 @@ pub struct ListJson {
 }
 
 impl ListJson {
-    fn extract_releases(
+    fn into_releases(
         self,
         download_prefix: &Url,
     ) -> Result<HashMap<CompilerVersion, Url>, ListError> {
@@ -77,13 +77,13 @@ impl DownloadPath {
 
 #[derive(Default)]
 pub struct CompilerFetcher {
-    releases: HashMap<CompilerVersion, url::Url>,
+    releases: HashMap<CompilerVersion, Url>,
     folder: PathBuf,
 }
 
 impl CompilerFetcher {
     async fn list_releases(
-        download_prefix: Url,
+        download_prefix: &Url,
     ) -> Result<HashMap<CompilerVersion, Url>, ListError> {
         let list_json_url = download_prefix.join("list.json").expect("valid url");
         let list_json_file: ListJson = reqwest::get(list_json_url)
@@ -93,12 +93,12 @@ impl CompilerFetcher {
             .await
             .map_err(ListError::ParseListJson)?;
 
-        list_json_file.extract_releases(&download_prefix)
+        list_json_file.into_releases(download_prefix)
     }
 
-    pub async fn new(compilers_list_url: Url, folder: PathBuf) -> Result<Self, ListError> {
+    pub async fn new(compilers_list_url: &Url, folder: PathBuf) -> Result<Self, ListError> {
         Ok(Self {
-            releases: Self::list_releases(compilers_list_url).await?,
+            releases: Self::list_releases(&compilers_list_url).await?,
             folder,
         })
     }
@@ -166,7 +166,7 @@ impl Fetcher for CompilerFetcher {
 
 #[cfg(test)]
 mod tests {
-    use crate::tests::parse::test_deserialize_ok;
+    use crate::{tests::parse::test_deserialize_ok, Config};
 
     use super::*;
     use ethers_solc::Solc;
@@ -249,7 +249,7 @@ mod tests {
     fn parse_releases() {
         let list_json_file: ListJson = serde_json::from_str(DEFAULT_LIST_JSON).unwrap();
         let download_url = Url::from_str(DEFAULT_DOWNLOAD_PREFIX).expect("valid url");
-        let releases = list_json_file.extract_releases(&download_url).unwrap();
+        let releases = list_json_file.into_releases(&download_url).unwrap();
         assert_has_version(
             &releases,
             "0.4.13+commit.0fb4cb1a",
@@ -265,17 +265,35 @@ mod tests {
         );
     }
 
+    async fn test_fetched_ok(fetcher: &CompilerFetcher, compiler_version: &CompilerVersion) {
+        let file = fetcher.fetch(&compiler_version).await.unwrap();
+        let solc = Solc::new(file);
+        let ver = solc.version().unwrap();
+        assert_eq!(ver, compiler_version.version().to_owned());
+    }
+
     #[tokio::test]
     async fn download_release() {
         let version = CompilerVersion::from_str("0.5.0+commit.1d4f565a").unwrap();
         let url = Url::from_str("https://github.com/blockscout/solc-bin/releases/download/solc-v0.5.0%2Bcommit.1d4f565a/solc").unwrap();
         let fetcher = CompilerFetcher {
             releases: HashMap::from([(version.clone(), url)]),
-            folder: std::env::temp_dir().join("blockscout/verification/github_fetcher/test/"),
+            folder: std::env::temp_dir().join("blockscout/verification/compiler_fetcher/test/"),
         };
-        let file = fetcher.fetch(&version).await.unwrap();
-        let solc = Solc::new(file);
-        let ver = solc.version().unwrap();
-        assert_eq!((ver.major, ver.minor, ver.patch), (0, 5, 0));
+        test_fetched_ok(&fetcher, &version).await;
+    }
+
+    #[tokio::test]
+    async fn list_releases() {
+        let config = Config::default();
+        let fetcher = CompilerFetcher::new(
+            &config.compiler.compilers_list_url,
+            std::env::temp_dir().join("blockscout/verification/compiler_fetcher/test/"),
+        )
+        .await
+        .expect("default list.json file should be valid");
+
+        let version = CompilerVersion::from_str("0.7.0+commit.9e61f92b").unwrap();
+        test_fetched_ok(&fetcher, &version).await;
     }
 }
