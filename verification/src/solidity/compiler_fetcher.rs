@@ -85,7 +85,7 @@ impl CompilerFetcher {
     async fn list_releases(
         download_prefix: &Url,
     ) -> Result<HashMap<CompilerVersion, Url>, ListError> {
-        let list_json_url = download_prefix.join("list.json.js").expect("valid url");
+        let list_json_url = download_prefix.join("list.json").expect("valid url");
         let list_json_file: ListJson = reqwest::get(list_json_url)
             .await
             .map_err(ListError::ListJsonFetch)?
