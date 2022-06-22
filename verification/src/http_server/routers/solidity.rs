@@ -14,7 +14,7 @@ pub struct SolidityRouter {
 
 impl SolidityRouter {
     pub async fn new(config: CompilerConfiguration) -> anyhow::Result<Self> {
-        let fetcher = CompilerFetcher::new(&config.compilers_list_url.clone(), "compilers/".into())
+        let fetcher = CompilerFetcher::new(&config.compilers_list_url, "compilers/".into())
             .await
             .map_err(anyhow::Error::msg)?;
         let compilers = Compilers::new(fetcher);
