@@ -43,7 +43,7 @@ impl ListJson {
                 CompilerVersion::from_str(&build.long_version).map_err(ListError::TagName)?;
             let download_url = build
                 .path
-                .try_into_url(&download_prefix)
+                .try_into_url(download_prefix)
                 .map_err(ListError::Path)?;
             releases.insert(version, download_url);
         }
@@ -98,7 +98,7 @@ impl CompilerFetcher {
 
     pub async fn new(compilers_list_url: &Url, folder: PathBuf) -> Result<Self, ListError> {
         Ok(Self {
-            releases: Self::list_releases(&compilers_list_url).await?,
+            releases: Self::list_releases(compilers_list_url).await?,
             folder,
         })
     }
@@ -269,7 +269,12 @@ mod tests {
         let file = fetcher.fetch(&compiler_version).await.unwrap();
         let solc = Solc::new(file);
         let ver = solc.version().unwrap();
-        assert_eq!(ver, compiler_version.version().to_owned());
+        let (x, y, z) = (
+            compiler_version.version().major,
+            compiler_version.version().minor,
+            compiler_version.version().patch,
+        );
+        assert_eq!((ver.major, ver.minor, ver.patch), (x, y, z));
     }
 
     #[tokio::test]
