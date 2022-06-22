@@ -284,7 +284,7 @@ mod tests {
     async fn list_download_releases() {
         let config = Config::test().unwrap();
         let fetcher = CompilerFetcher::new(
-            &config.compiler.compilers_list_url,
+            &config.solidity.compilers_list_url,
             std::env::temp_dir().join("blockscout/verification/compiler_fetcher/test/"),
         )
         .await

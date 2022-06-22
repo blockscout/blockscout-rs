@@ -3,7 +3,7 @@ use actix_web::web;
 use super::Router;
 use crate::{
     compiler::Compilers,
-    config::CompilerConfiguration,
+    config::SolidityConfiguration,
     http_server::handlers::{flatten, standard_json},
     solidity::compiler_fetcher::CompilerFetcher,
 };
@@ -13,7 +13,7 @@ pub struct SolidityRouter {
 }
 
 impl SolidityRouter {
-    pub async fn new(config: CompilerConfiguration) -> anyhow::Result<Self> {
+    pub async fn new(config: SolidityConfiguration) -> anyhow::Result<Self> {
         let fetcher = CompilerFetcher::new(&config.compilers_list_url, "compilers/".into())
             .await
             .map_err(anyhow::Error::msg)?;

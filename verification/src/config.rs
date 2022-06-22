@@ -9,9 +9,8 @@ use url::Url;
 #[serde(default)]
 pub struct Config {
     pub server: ServerConfiguration,
-    pub verifier: VerifierConfiguration,
+    pub solidity: SolidityConfiguration,
     pub sourcify: SourcifyConfiguration,
-    pub compiler: CompilerConfiguration,
 }
 
 #[derive(Deserialize, Clone)]
@@ -30,13 +29,20 @@ impl Default for ServerConfiguration {
 
 #[derive(Deserialize, Clone)]
 #[serde(default)]
-pub struct VerifierConfiguration {
+pub struct SolidityConfiguration {
     pub enabled: bool,
+    pub compilers_list_url: Url,
 }
 
-impl Default for VerifierConfiguration {
+impl Default for SolidityConfiguration {
     fn default() -> Self {
-        Self { enabled: true }
+        Self {
+            compilers_list_url: Url::try_from(
+                "https://raw.githubusercontent.com/blockscout/solc-bin/main/",
+            )
+            .expect("valid url"),
+            enabled: true,
+        }
     }
 }
 
@@ -58,23 +64,6 @@ impl Default for SourcifyConfiguration {
             api_url: Url::try_from("https://sourcify.dev/server/").expect("valid url"),
             verification_attempts: NonZeroUsize::new(3).expect("Is not zero"),
             request_timeout: 10,
-        }
-    }
-}
-
-#[derive(Deserialize, Clone)]
-#[serde(default)]
-pub struct CompilerConfiguration {
-    pub compilers_list_url: Url,
-}
-
-impl Default for CompilerConfiguration {
-    fn default() -> Self {
-        Self {
-            compilers_list_url: Url::try_from(
-                "https://raw.githubusercontent.com/blockscout/solc-bin/main/",
-            )
-            .expect("valid url"),
         }
     }
 }

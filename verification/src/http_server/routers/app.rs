@@ -9,9 +9,9 @@ pub struct AppRouter {
 
 impl AppRouter {
     pub async fn new(config: Config) -> anyhow::Result<Self> {
-        let solidity = match config.verifier.enabled {
+        let solidity = match config.solidity.enabled {
             false => None,
-            true => Some(SolidityRouter::new(config.compiler).await?),
+            true => Some(SolidityRouter::new(config.solidity).await?),
         };
         let sourcify = config
             .sourcify
