@@ -19,3 +19,4 @@ Session.vim
 
 .pre-commit-config.yaml
 config.toml
+test_config.toml

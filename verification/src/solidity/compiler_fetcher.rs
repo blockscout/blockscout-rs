@@ -85,7 +85,7 @@ impl CompilerFetcher {
     async fn list_releases(
         download_prefix: &Url,
     ) -> Result<HashMap<CompilerVersion, Url>, ListError> {
-        let list_json_url = download_prefix.join("list.json").expect("valid url");
+        let list_json_url = download_prefix.join("list.json.js").expect("valid url");
         let list_json_file: ListJson = reqwest::get(list_json_url)
             .await
             .map_err(ListError::ListJsonFetch)?
@@ -265,40 +265,29 @@ mod tests {
         );
     }
 
-    async fn test_fetched_ok(fetcher: &CompilerFetcher, compiler_version: &CompilerVersion) {
-        let file = fetcher.fetch(&compiler_version).await.unwrap();
-        let solc = Solc::new(file);
-        let ver = solc.version().unwrap();
-        let (x, y, z) = (
-            compiler_version.version().major,
-            compiler_version.version().minor,
-            compiler_version.version().patch,
-        );
-        assert_eq!((ver.major, ver.minor, ver.patch), (x, y, z));
-    }
-
     #[tokio::test]
-    async fn download_release() {
-        let version = CompilerVersion::from_str("0.5.0+commit.1d4f565a").unwrap();
-        let url = Url::from_str("https://github.com/blockscout/solc-bin/releases/download/solc-v0.5.0%2Bcommit.1d4f565a/solc").unwrap();
-        let fetcher = CompilerFetcher {
-            releases: HashMap::from([(version.clone(), url)]),
-            folder: std::env::temp_dir().join("blockscout/verification/compiler_fetcher/test/"),
-        };
-        test_fetched_ok(&fetcher, &version).await;
-    }
-
-    #[tokio::test]
-    async fn list_releases() {
-        let config = Config::default();
+    async fn list_download_releases() {
+        let config = Config::test().unwrap();
         let fetcher = CompilerFetcher::new(
             &config.compiler.compilers_list_url,
             std::env::temp_dir().join("blockscout/verification/compiler_fetcher/test/"),
         )
         .await
-        .expect("default list.json file should be valid");
+        .expect("list.json file should be valid");
 
-        let version = CompilerVersion::from_str("0.7.0+commit.9e61f92b").unwrap();
-        test_fetched_ok(&fetcher, &version).await;
+        for compiler_version in vec![
+            CompilerVersion::from_str("0.7.0+commit.9e61f92b").unwrap(),
+            CompilerVersion::from_str("0.8.9+commit.e5eed63a").unwrap(),
+        ] {
+            let file = fetcher.fetch(&compiler_version).await.unwrap();
+            let solc = Solc::new(file);
+            let ver = solc.version().unwrap();
+            let (x, y, z) = (
+                compiler_version.version().major,
+                compiler_version.version().minor,
+                compiler_version.version().patch,
+            );
+            assert_eq!((ver.major, ver.minor, ver.patch), (x, y, z));
+        }
     }
 }

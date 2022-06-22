@@ -2,7 +2,7 @@ use crate::cli;
 use clap::Parser;
 use config::{Config as LibConfig, File};
 use serde::Deserialize;
-use std::{net::SocketAddr, num::NonZeroUsize, str::FromStr};
+use std::{net::SocketAddr, num::NonZeroUsize, path::PathBuf, str::FromStr};
 use url::Url;
 
 #[derive(Deserialize, Clone, Default)]
@@ -80,10 +80,18 @@ impl Default for CompilerConfiguration {
 impl Config {
     pub fn parse() -> Result<Self, config::ConfigError> {
         let args = cli::Args::parse();
+        Self::from_file(args.config_path)
+    }
+
+    pub fn test() -> Result<Self, config::ConfigError> {
+        Self::from_file(PathBuf::from_str("test_config.toml").unwrap())
+    }
+
+    fn from_file(file: PathBuf) -> Result<Self, config::ConfigError> {
         let mut builder =
             LibConfig::builder().add_source(config::Environment::with_prefix("VERIFICATION"));
-        if args.config_path.exists() {
-            builder = builder.add_source(File::from(args.config_path));
+        if file.exists() {
+            builder = builder.add_source(File::from(file));
         }
         builder
             .build()
