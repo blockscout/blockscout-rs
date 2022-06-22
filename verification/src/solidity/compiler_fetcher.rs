@@ -282,12 +282,14 @@ mod tests {
             let file = fetcher.fetch(&compiler_version).await.unwrap();
             let solc = Solc::new(file);
             let ver = solc.version().unwrap();
-            let (x, y, z) = (
-                compiler_version.version().major,
-                compiler_version.version().minor,
-                compiler_version.version().patch,
+            assert_eq!(
+                (ver.major, ver.minor, ver.patch),
+                (
+                    compiler_version.version().major,
+                    compiler_version.version().minor,
+                    compiler_version.version().patch,
+                )
             );
-            assert_eq!((ver.major, ver.minor, ver.patch), (x, y, z));
         }
     }
 }
