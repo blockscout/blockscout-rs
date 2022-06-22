@@ -174,6 +174,11 @@ mod tests {
     const DEFAULT_LIST_JSON: &str = r#"{
         "builds": [
             {
+                "path": "https://github.com/blockscout/solc-bin/releases/download/solc-v0.8.15-nightly.2022.5.27%2Bcommit.095cc647/solc",
+                "longVersion": "0.8.15-nightly.2022.5.27+commit.095cc647",
+                "sha256": "0x35708c1593f3daddae734065e361a839ee39d400825972fb3f50718495be82b1"
+            },
+            {
                 "path": "https://binaries.soliditylang.org/linux-amd64/solc-linux-amd64-v0.4.13+commit.0fb4cb1a",
                 "longVersion": "0.4.13+commit.0fb4cb1a",
                 "sha256": "0x791ee3a20adf6c5ab76cc889f13cca102f76eb0b7cf0da4a0b5b11dc46edf349"
@@ -209,12 +214,17 @@ mod tests {
             ListJson{
                 builds: vec![
                     CompilerInfo {
-                        path: DownloadPath::Url(Url::from_str("https://binaries.soliditylang.org/linux-amd64/solc-linux-amd64-v0.4.13+commit.0fb4cb1a").expect("valid url")),
+                        path: DownloadPath::Url(Url::from_str("https://github.com/blockscout/solc-bin/releases/download/solc-v0.8.15-nightly.2022.5.27%2Bcommit.095cc647/solc").unwrap()),
+                        long_version: "0.8.15-nightly.2022.5.27+commit.095cc647".to_string(),
+                        sha256: "0x35708c1593f3daddae734065e361a839ee39d400825972fb3f50718495be82b1".to_string()
+                    },
+                    CompilerInfo {
+                        path: DownloadPath::Url(Url::from_str("https://binaries.soliditylang.org/linux-amd64/solc-linux-amd64-v0.4.13+commit.0fb4cb1a").unwrap()),
                         long_version: "0.4.13+commit.0fb4cb1a".to_string(),
                         sha256: "0x791ee3a20adf6c5ab76cc889f13cca102f76eb0b7cf0da4a0b5b11dc46edf349".to_string()
                     },
                     CompilerInfo {
-                        path: DownloadPath::Url(Url::from_str("https://binaries.soliditylang.org/linux-amd64/solc-linux-amd64-v0.4.14+commit.c2215d46").expect("valid url")),
+                        path: DownloadPath::Url(Url::from_str("https://binaries.soliditylang.org/linux-amd64/solc-linux-amd64-v0.4.14+commit.c2215d46").unwrap()),
                         long_version: "0.4.14+commit.c2215d46".to_string(),
                         sha256: "0x28ce35a0941d9ecd59a2b1a377c019110e79a6b38bdbf5a3bffea811f9c2a13b".to_string()
                     },
@@ -250,6 +260,11 @@ mod tests {
         let list_json_file: ListJson = serde_json::from_str(DEFAULT_LIST_JSON).unwrap();
         let download_url = Url::from_str(DEFAULT_DOWNLOAD_PREFIX).expect("valid url");
         let releases = list_json_file.into_releases(&download_url).unwrap();
+        assert_has_version(
+            &releases,
+            "0.8.15-nightly.2022.5.27+commit.095cc647",
+            "https://github.com/blockscout/solc-bin/releases/download/solc-v0.8.15-nightly.2022.5.27%2Bcommit.095cc647/solc",
+        );
         assert_has_version(
             &releases,
             "0.4.13+commit.0fb4cb1a",

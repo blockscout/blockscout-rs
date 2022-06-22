@@ -71,8 +71,10 @@ pub struct CompilerConfiguration {
 impl Default for CompilerConfiguration {
     fn default() -> Self {
         Self {
-            compilers_list_url: Url::try_from("https://binaries.soliditylang.org/linux-amd64/")
-                .expect("valid url"),
+            compilers_list_url: Url::try_from(
+                "https://raw.githubusercontent.com/blockscout/solc-bin/main/",
+            )
+            .expect("valid url"),
         }
     }
 }

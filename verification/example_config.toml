@@ -8,4 +8,4 @@ verification_attempts = 3
 request_timeout = 10
 
 [compiler]
-compilers_list_url = "https://binaries.soliditylang.org/linux-amd64/"
+compilers_list_url = "https://raw.githubusercontent.com/blockscout/solc-bin/main/"
