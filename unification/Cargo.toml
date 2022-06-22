@@ -1,0 +1,17 @@
+[package]
+name = "unification"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+actix-web = "4"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1.0"
+futures = "0.3"
+reqwest = { version = "0.11", features = ["json"] }
+url = { version = "2", features = ["serde"] }
+toml = "0.5.9"
