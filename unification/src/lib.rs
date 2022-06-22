@@ -2,7 +2,6 @@ use std::net::TcpListener;
 use std::str;
 
 use actix_web::dev::Server;
-use actix_web::web::Bytes;
 use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer};
 use futures::{stream, StreamExt};
 use reqwest::Client;
@@ -13,7 +12,11 @@ use crate::config::{BlockScoutSettings, Instance, Settings};
 
 pub mod config;
 
-async fn build_urls(path: &str, query: &str, settings: &BlockScoutSettings) -> Vec<Url> {
+async fn build_urls(
+    path: &str,
+    query: &str,
+    settings: &BlockScoutSettings,
+) -> Vec<(Instance, Url)> {
     settings
         .instances
         .iter()
@@ -21,46 +24,49 @@ async fn build_urls(path: &str, query: &str, settings: &BlockScoutSettings) -> V
             let mut url = settings.base_url.clone();
             url.set_path(&format!("{}/{}{}", net, subnet, path));
             url.set_query(Some(query));
-            url
+            (Instance(net.clone(), subnet.clone()), url)
         })
         .collect::<Vec<_>>()
 }
 
-async fn make_get_requests(
-    path: &str,
-    query: &str,
-    settings: &BlockScoutSettings,
-) -> serde_json::Map<String, Value> {
+async fn make_requests(
+    urls: Vec<(Instance, Url)>,
+    concurrent_requests: usize,
+) -> Vec<(Instance, String)> {
     let client = Client::new();
 
-    let urls = build_urls(path, query, settings).await;
-
-    let responses: Vec<Result<Bytes, reqwest::Error>> = stream::iter(urls)
-        .map(|url| {
+    stream::iter(urls)
+        .map(|(instance, url)| {
             let client = &client;
             async move {
-                let resp = client.get(url).send().await?;
-                resp.bytes().await
+                let resp = client.get(url).send().await.unwrap();
+                (instance.clone(), resp.bytes().await)
             }
         })
-        .buffered(settings.concurrent_requests)
+        .buffer_unordered(concurrent_requests)
+        .collect::<Vec<_>>()
+        .await
+        .iter()
+        .map(|(instance, response)| match response {
+            Ok(bytes) => (
+                instance.clone(),
+                str::from_utf8(bytes.as_ref()).unwrap().to_string(),
+            ),
+            Err(e) => (instance.clone(), e.to_string()),
+        })
         .collect()
-        .await;
+}
 
+async fn merge_responses(responses: Vec<(Instance, String)>) -> serde_json::Map<String, Value> {
     let mut result: serde_json::Map<String, Value> = serde_json::Map::new();
 
     responses
         .iter()
-        .map(|response| match response {
-            Ok(bytes) => str::from_utf8(bytes.as_ref()).unwrap().to_string(),
-            Err(e) => e.to_string(),
+        .map(|(instance, str)| match serde_json::from_str(str.as_str()) {
+            Ok(value) => (instance.clone(), value),
+            Err(e) => (instance.clone(), Value::String(e.to_string())),
         })
-        .map(|str| match serde_json::from_str(str.as_str()) {
-            Ok(value) => value,
-            Err(e) => Value::String(e.to_string()),
-        })
-        .zip(settings.instances.iter())
-        .for_each(|(value, Instance(net, subnet))| {
+        .for_each(|(Instance(net, subnet), value)| {
             let kv_subnets = result
                 .entry(net)
                 .or_insert(Value::from(serde_json::Map::new()))
@@ -72,9 +78,25 @@ async fn make_get_requests(
     result
 }
 
-async fn unification(request: HttpRequest, settings: BlockScoutSettings) -> HttpResponse {
-    let s = make_get_requests(request.path(), request.query_string(), &settings).await;
-    HttpResponse::Ok().json(s)
+async fn handle_default_request(
+    path: &str,
+    query: &str,
+    settings: &BlockScoutSettings,
+) -> serde_json::Map<String, Value> {
+    let urls = build_urls(path, query, settings).await;
+    let responses = make_requests(urls, settings.concurrent_requests).await;
+    merge_responses(responses).await
+}
+
+async fn router_get(request: HttpRequest, settings: BlockScoutSettings) -> HttpResponse {
+    // TODO: parse and pass custom request to appropriate handler
+    let json = handle_default_request(request.path(), request.query_string(), &settings).await;
+    HttpResponse::Ok().json(json)
+}
+
+#[allow(dead_code)]
+async fn router_post() -> HttpResponse {
+    todo!()
 }
 
 pub fn run(settings: Settings) -> Result<Server, std::io::Error> {
@@ -86,7 +108,7 @@ pub fn run(settings: Settings) -> Result<Server, std::io::Error> {
             "/{_}",
             web::get().to(move |request| {
                 let s2 = s.clone();
-                unification(request, s2)
+                router_get(request, s2)
             }),
         )
     })
