@@ -27,9 +27,16 @@ impl FromStr for ReleaseVersion {
     /// `v0.8.9+commit.e5eed63a`
     /// `0.8.4+commit.dea1b9ec`
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (_prefix, major, minor, patch, commit_hash) =
-            sscanf::scanf!(s, "{:/v?/}{}.{}.{}+commit.{}", String, u64, u64, u64, String)
-                .map_err(|e| ParseError::Parse(format!("{:?}", e)))?;
+        let (_prefix, major, minor, patch, commit_hash) = sscanf::scanf!(
+            s,
+            "{:/v?/}{}.{}.{}+commit.{}",
+            String,
+            u64,
+            u64,
+            u64,
+            String
+        )
+        .map_err(|e| ParseError::Parse(format!("{:?}", e)))?;
         let version = Version::new(major, minor, patch);
         let mut commit = [0; 4];
         hex::decode_to_slice(&commit_hash, &mut commit).map_err(ParseError::CommitHash)?;
