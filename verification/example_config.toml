@@ -8,4 +8,4 @@ verification_attempts = 3
 request_timeout = 10
 
 [solidity]
-compilers_list_url = "https://raw.githubusercontent.com/blockscout/solc-bin/main/"
+compilers_list_url = "https://raw.githubusercontent.com/blockscout/solc-bin/main/list.json"

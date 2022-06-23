@@ -31,6 +31,8 @@ hex = "0.4"
 futures = "0.3"
 ethers-solc = { git = "https://github.com/gakonst/ethers-rs", version = "0.3", features = ["svm-solc"] }
 ethers-core = { git = "https://github.com/gakonst/ethers-rs", version = "0.6" }
+primitive-types = "0.11"
+serde_with = "1.14"
 # compability with ethers-solc
 svm = { package = "svm-rs", version = "0.2.9", git = "https://github.com/roynalnaruto/svm-rs" }
 

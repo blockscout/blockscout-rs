@@ -38,7 +38,7 @@ impl Default for SolidityConfiguration {
     fn default() -> Self {
         Self {
             compilers_list_url: Url::try_from(
-                "https://raw.githubusercontent.com/blockscout/solc-bin/main/",
+                "https://raw.githubusercontent.com/blockscout/solc-bin/main/list.json",
             )
             .expect("valid url"),
             enabled: true,
