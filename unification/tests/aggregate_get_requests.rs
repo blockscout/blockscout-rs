@@ -1,8 +1,8 @@
 use std::str;
+
 use url::Url;
 
-use unification::config;
-use unification::run;
+use unification::{config, run};
 
 fn spawn_app(settings: config::Settings) {
     let server = run(settings).expect("Failed to bind address");

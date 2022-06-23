@@ -1,8 +1,6 @@
-use std::net::TcpListener;
-use std::str;
+use std::{net::TcpListener, str};
 
-use actix_web::dev::Server;
-use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer};
+use actix_web::{dev::Server, web, App, HttpRequest, HttpResponse, HttpServer};
 use futures::{stream, StreamExt};
 use reqwest::Client;
 use serde_json::Value;

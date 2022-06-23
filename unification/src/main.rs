@@ -1,5 +1,4 @@
-use unification::config;
-use unification::run;
+use unification::{config, run};
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
