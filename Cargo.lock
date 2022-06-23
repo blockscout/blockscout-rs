@@ -1799,6 +1799,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "multichain-api-gateway"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "futures",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "toml",
+ "url",
+]
+
+[[package]]
 name = "native-tls"
 version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3317,20 +3331,6 @@ name = "unicode-xid"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "957e51f3646910546462e67d5f7599b9e4fb8acdd304b087a6494730f9eebf04"
-
-[[package]]
-name = "unification"
-version = "0.1.0"
-dependencies = [
- "actix-web",
- "futures",
- "reqwest",
- "serde",
- "serde_json",
- "tokio",
- "toml",
- "url",
-]
 
 [[package]]
 name = "untrusted"

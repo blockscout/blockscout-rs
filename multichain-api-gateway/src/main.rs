@@ -1,4 +1,4 @@
-use unification::{config, run};
+use multichain_api_gateway::{config, run};
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
