@@ -1,5 +1,5 @@
 use ethers_solc::{
-    artifacts::{Libraries, Settings},
+    artifacts::{Libraries, Settings, Sources},
     CompilerInput, EvmVersion,
 };
 use serde::Deserialize;
@@ -52,6 +52,48 @@ impl TryFrom<FlattenedSource> for CompilerInput {
                     content: source.source_code,
                 },
             )]),
+            settings,
+        })
+    }
+}
+
+#[derive(Debug, Deserialize, PartialEq)]
+pub struct MultiSource {
+    sources: BTreeMap<String, String>,
+    evm_version: String,
+    optimization_runs: Option<usize>,
+    contract_libraries: Option<BTreeMap<String, BTreeMap<String, String>>>,
+}
+
+impl TryFrom<MultiSource> for CompilerInput {
+    type Error = anyhow::Error;
+
+    fn try_from(multi_source: MultiSource) -> Result<Self, Self::Error> {
+        let mut settings = Settings::default();
+        settings.optimizer.enabled = Some(multi_source.optimization_runs.is_some());
+        settings.optimizer.runs = multi_source.optimization_runs;
+        if let Some(contract_libraries) = multi_source.contract_libraries {
+            settings.libraries = Libraries {
+                libs: contract_libraries
+                    .into_iter()
+                    .map(|(filename, libs)| (PathBuf::from(filename), libs))
+                    .collect(),
+            };
+        }
+
+        let sources: Sources = multi_source
+            .sources
+            .into_iter()
+            .map(|(name, content)| {
+                (
+                    PathBuf::from(name),
+                    ethers_solc::artifacts::Source { content },
+                )
+            })
+            .collect();
+        Ok(CompilerInput {
+            language: "Solidity".to_string(),
+            sources,
             settings,
         })
     }
