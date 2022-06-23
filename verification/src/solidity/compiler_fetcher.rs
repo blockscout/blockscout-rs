@@ -1,3 +1,4 @@
+use self::deserialized_types::{DeserializedCompilerInfo, DownloadPath, ListJson};
 use crate::compiler::{fetcher::Fetcher, version::CompilerVersion};
 use async_trait::async_trait;
 use primitive_types::H256;
@@ -12,8 +13,6 @@ use std::{
 use thiserror::Error;
 use url::Url;
 
-use self::types::{CompilerInfo, ListJson};
-
 #[derive(Error, Debug)]
 pub enum ListError {
     #[error("fetching list json returned error: {0}")]
@@ -22,6 +21,30 @@ pub enum ListError {
     ParseListJson(reqwest::Error),
     #[error("error parsing 'path' field: {0}")]
     Path(url::ParseError),
+}
+
+#[derive(Debug)]
+pub struct CompilerInfo {
+    pub url: Url,
+    pub sha256: H256,
+}
+
+impl TryFrom<(DeserializedCompilerInfo, &Url)> for CompilerInfo {
+    type Error = url::ParseError;
+
+    fn try_from(
+        (compiler_info, download_url): (DeserializedCompilerInfo, &Url),
+    ) -> Result<Self, Self::Error> {
+        let url = match compiler_info.path {
+            DownloadPath::Url(url) => url,
+            // download_url ends with `.../list.json` but join() will replace this with `filename`
+            DownloadPath::Filename(filename) => download_url.join(&filename)?,
+        };
+        Ok(Self {
+            url,
+            sha256: compiler_info.sha256,
+        })
+    }
 }
 
 #[derive(Default)]
@@ -116,7 +139,7 @@ impl Fetcher for CompilerFetcher {
     }
 }
 
-mod types {
+mod deserialized_types {
     use super::*;
 
     #[derive(Debug, Deserialize, PartialEq)]
@@ -140,12 +163,6 @@ mod types {
         Filename(String),
     }
 
-    #[derive(Debug)]
-    pub struct CompilerInfo {
-        pub url: Url,
-        pub sha256: H256,
-    }
-
     impl ListJson {
         pub fn into_releases(
             self,
@@ -160,31 +177,13 @@ mod types {
             Ok(releases)
         }
     }
-
-    impl TryFrom<(DeserializedCompilerInfo, &Url)> for CompilerInfo {
-        type Error = url::ParseError;
-
-        fn try_from(
-            (compiler_info, download_url): (DeserializedCompilerInfo, &Url),
-        ) -> Result<Self, Self::Error> {
-            let url = match compiler_info.path {
-                DownloadPath::Url(url) => url,
-                // download_url ends with `.../list.json` but join() will replace this with `filename`
-                DownloadPath::Filename(filename) => download_url.join(&filename)?,
-            };
-            Ok(Self {
-                url,
-                sha256: compiler_info.sha256,
-            })
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{tests::parse::test_deserialize_ok, Config};
 
-    use super::{types::*, *};
+    use super::{deserialized_types::*, *};
     use ethers_solc::Solc;
     use std::str::FromStr;
 
