@@ -304,7 +304,7 @@ mod tests {
 
     #[tokio::test]
     async fn list_download_releases() {
-        let config = Config::test().unwrap();
+        let config = Config::from_file(PathBuf::from_str("test_config.toml").unwrap()).unwrap();
         let fetcher = CompilerFetcher::new(
             &config.solidity.compilers_list_url,
             std::env::temp_dir().join("blockscout/verification/compiler_fetcher/test/"),
