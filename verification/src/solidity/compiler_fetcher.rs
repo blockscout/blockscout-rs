@@ -1,4 +1,3 @@
-use self::deserialized_types::{DeserializedCompilerInfo, DownloadPath, ListJson};
 use crate::compiler::{fetcher::Fetcher, version::CompilerVersion};
 use async_trait::async_trait;
 use primitive_types::H256;
@@ -29,16 +28,46 @@ pub struct CompilerInfo {
     pub sha256: H256,
 }
 
-impl TryFrom<(DeserializedCompilerInfo, &Url)> for CompilerInfo {
+pub async fn fetch_compiler_list(
+    compilers_list_url: &Url,
+) -> Result<HashMap<CompilerVersion, CompilerInfo>, ListError> {
+    let list_json_file: json::List = reqwest::get(compilers_list_url.to_string())
+        .await
+        .map_err(ListError::ListJsonFetch)?
+        .json()
+        .await
+        .map_err(ListError::ParseListJson)?;
+
+    list_json_file
+        .into_releases(compilers_list_url)
+        .map_err(ListError::Path)
+}
+
+impl json::List {
+    pub fn into_releases(
+        self,
+        download_url: &Url,
+    ) -> Result<HashMap<CompilerVersion, CompilerInfo>, url::ParseError> {
+        let mut releases = HashMap::default();
+        for json_compiler_info in self.builds {
+            let version = json_compiler_info.long_version.clone();
+            let compiler_info = CompilerInfo::try_from((json_compiler_info, download_url))?;
+            releases.insert(version, compiler_info);
+        }
+        Ok(releases)
+    }
+}
+
+impl TryFrom<(json::CompilerInfo, &Url)> for CompilerInfo {
     type Error = url::ParseError;
 
     fn try_from(
-        (compiler_info, download_url): (DeserializedCompilerInfo, &Url),
+        (compiler_info, download_url): (json::CompilerInfo, &Url),
     ) -> Result<Self, Self::Error> {
         let url = match compiler_info.path {
-            DownloadPath::Url(url) => url,
+            json::DownloadPath::Url(url) => url,
             // download_url ends with `.../list.json` but join() will replace this with `filename`
-            DownloadPath::Filename(filename) => download_url.join(&filename)?,
+            json::DownloadPath::Filename(filename) => download_url.join(&filename)?,
         };
         Ok(Self {
             url,
@@ -54,26 +83,8 @@ pub struct CompilerFetcher {
 }
 
 impl CompilerFetcher {
-    pub async fn new(compilers_list_url: &Url, folder: PathBuf) -> Result<Self, ListError> {
-        Ok(Self {
-            releases: Self::list_releases(compilers_list_url).await?,
-            folder,
-        })
-    }
-
-    async fn list_releases(
-        compilers_list_url: &Url,
-    ) -> Result<HashMap<CompilerVersion, CompilerInfo>, ListError> {
-        let list_json_file: ListJson = reqwest::get(compilers_list_url.to_string())
-            .await
-            .map_err(ListError::ListJsonFetch)?
-            .json()
-            .await
-            .map_err(ListError::ParseListJson)?;
-
-        list_json_file
-            .into_releases(compilers_list_url)
-            .map_err(ListError::Path)
+    pub async fn new(releases: HashMap<CompilerVersion, CompilerInfo>, folder: PathBuf) -> Self {
+        Self { releases, folder }
     }
 }
 
@@ -139,17 +150,17 @@ impl Fetcher for CompilerFetcher {
     }
 }
 
-mod deserialized_types {
+mod json {
     use super::*;
 
     #[derive(Debug, Deserialize, PartialEq)]
-    pub struct ListJson {
-        pub builds: Vec<DeserializedCompilerInfo>,
+    pub struct List {
+        pub builds: Vec<CompilerInfo>,
     }
 
     #[derive(Debug, Deserialize, PartialEq)]
     #[serde(rename_all = "camelCase")]
-    pub struct DeserializedCompilerInfo {
+    pub struct CompilerInfo {
         pub path: DownloadPath,
         #[serde(with = "serde_with::rust::display_fromstr")]
         pub long_version: CompilerVersion,
@@ -162,28 +173,13 @@ mod deserialized_types {
         Url(Url),
         Filename(String),
     }
-
-    impl ListJson {
-        pub fn into_releases(
-            self,
-            download_url: &Url,
-        ) -> Result<HashMap<CompilerVersion, CompilerInfo>, url::ParseError> {
-            let mut releases = HashMap::default();
-            for deserialized_info in self.builds {
-                let version = deserialized_info.long_version.clone();
-                let compiler_info = CompilerInfo::try_from((deserialized_info, download_url))?;
-                releases.insert(version, compiler_info);
-            }
-            Ok(releases)
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{tests::parse::test_deserialize_ok, Config};
 
-    use super::{deserialized_types::*, *};
+    use super::*;
     use ethers_solc::Solc;
     use std::str::FromStr;
 
@@ -228,35 +224,35 @@ mod tests {
         let ver = |s| CompilerVersion::from_str(s).unwrap();
         test_deserialize_ok(vec![
             (DEFAULT_LIST_JSON,
-            ListJson{
+            json::List {
                 builds: vec![
-                    DeserializedCompilerInfo {
-                        path: DownloadPath::Url(Url::from_str("https://github.com/blockscout/solc-bin/releases/download/solc-v0.8.15-nightly.2022.5.27%2Bcommit.095cc647/solc").unwrap()),
+                    json::CompilerInfo {
+                        path: json::DownloadPath::Url(Url::from_str("https://github.com/blockscout/solc-bin/releases/download/solc-v0.8.15-nightly.2022.5.27%2Bcommit.095cc647/solc").unwrap()),
                         long_version: ver("0.8.15-nightly.2022.5.27+commit.095cc647"),
                         sha256: H256::from_str("35708c1593f3daddae734065e361a839ee39d400825972fb3f50718495be82b1").unwrap(),
                     },
-                    DeserializedCompilerInfo {
-                        path: DownloadPath::Url(Url::from_str("https://binaries.soliditylang.org/linux-amd64/solc-linux-amd64-v0.4.13+commit.0fb4cb1a").unwrap()),
+                    json::CompilerInfo {
+                        path: json::DownloadPath::Url(Url::from_str("https://binaries.soliditylang.org/linux-amd64/solc-linux-amd64-v0.4.13+commit.0fb4cb1a").unwrap()),
                         long_version: ver("0.4.13+commit.0fb4cb1a"),
                         sha256: H256::from_str("0x791ee3a20adf6c5ab76cc889f13cca102f76eb0b7cf0da4a0b5b11dc46edf349").unwrap(),
                     },
-                    DeserializedCompilerInfo {
-                        path: DownloadPath::Url(Url::from_str("https://binaries.soliditylang.org/linux-amd64/solc-linux-amd64-v0.4.14+commit.c2215d46").unwrap()),
+                    json::CompilerInfo {
+                        path: json::DownloadPath::Url(Url::from_str("https://binaries.soliditylang.org/linux-amd64/solc-linux-amd64-v0.4.14+commit.c2215d46").unwrap()),
                         long_version: ver("0.4.14+commit.c2215d46"),
                         sha256: H256::from_str("0x28ce35a0941d9ecd59a2b1a377c019110e79a6b38bdbf5a3bffea811f9c2a13b").unwrap(),
                     },
-                    DeserializedCompilerInfo {
-                        path: DownloadPath::Filename("solc-linux-amd64-v0.4.15+commit.8b45bddb".to_string()),
+                    json::CompilerInfo {
+                        path: json::DownloadPath::Filename("solc-linux-amd64-v0.4.15+commit.8b45bddb".to_string()),
                         long_version: ver("0.4.15+commit.8b45bddb"),
                         sha256: H256::from_str("0xc71ac6c28bf3b1a425e77e97f5df67a80da3e4c047261875206561c0a110c0cb").unwrap(),
                     },
-                    DeserializedCompilerInfo {
-                        path: DownloadPath::Filename("download/files/solc-linux-amd64-v0.4.16+commit.d7661dd9".to_string()),
+                    json::CompilerInfo {
+                        path: json::DownloadPath::Filename("download/files/solc-linux-amd64-v0.4.16+commit.d7661dd9".to_string()),
                         long_version: ver("0.4.16+commit.d7661dd9"),
                         sha256: H256::from_str("0x78e0da6cad24ab145a8d17420c4f094c8314418ca23cff4b050bb2bfd36f3af2").unwrap(),
                     },
-                    DeserializedCompilerInfo {
-                        path: DownloadPath::Filename("solc-linux-amd64-v10.8.9-nightly.2021.9.11+commit.e5eed63a".to_string()),
+                    json::CompilerInfo {
+                        path: json::DownloadPath::Filename("solc-linux-amd64-v10.8.9-nightly.2021.9.11+commit.e5eed63a".to_string()),
                         long_version: ver("10.8.9-nightly.2021.9.11+commit.e5eed63a"),
                         sha256: H256::from_str("0x791ee3a20adf6c5ab76cc889f13cca102f76eb0b7cf0da4a0b5b11dc46edf349").unwrap(),
                     },
@@ -278,7 +274,7 @@ mod tests {
 
     #[test]
     fn parse_releases() {
-        let list_json_file: ListJson = serde_json::from_str(DEFAULT_LIST_JSON).unwrap();
+        let list_json_file: json::List = serde_json::from_str(DEFAULT_LIST_JSON).unwrap();
         let download_url = Url::from_str(DEFAULT_DOWNLOAD_PREFIX).expect("valid url");
         let releases = list_json_file.into_releases(&download_url).unwrap();
         assert_has_version(
@@ -304,12 +300,15 @@ mod tests {
     #[tokio::test]
     async fn list_download_releases() {
         let config = Config::default();
+        let compiler_list = fetch_compiler_list(&config.solidity.compilers_list_url)
+            .await
+            .expect("list.json file should be valid");
         let fetcher = CompilerFetcher::new(
-            &config.solidity.compilers_list_url,
+            compiler_list,
             std::env::temp_dir().join("blockscout/verification/compiler_fetcher/test/"),
         )
-        .await
-        .expect("list.json file should be valid");
+        .await;
+
         for compiler_version in vec![
             CompilerVersion::from_str("0.7.0+commit.9e61f92b").unwrap(),
             CompilerVersion::from_str("0.8.9+commit.e5eed63a").unwrap(),
