@@ -122,20 +122,20 @@ mod tests {
         let settings = BlockScoutSettings {
             base_url: Url::parse("https://blockscout.com/").unwrap(),
             instances: vec![
-                Instance("mainnet".to_string(), "eth".to_string()),
-                Instance("mainnet".to_string(), "etc".to_string()),
+                Instance("eth".to_string(), "mainnet".to_string()),
+                Instance("etc".to_string(), "mainnet".to_string()),
             ],
             concurrent_requests: 1,
         };
 
         let expected = vec![
             (
-                Instance("mainnet".to_string(), "eth".to_string()),
-                Url::parse("https://blockscout.com/mainnet/eth/api?hello=world?foo=bar").unwrap(),
+                Instance("eth".to_string(), "mainnet".to_string()),
+                Url::parse("https://blockscout.com/eth/mainnet/api?hello=world?foo=bar").unwrap(),
             ),
             (
-                Instance("mainnet".to_string(), "etc".to_string()),
-                Url::parse("https://blockscout.com/mainnet/etc/api?hello=world?foo=bar").unwrap(),
+                Instance("etc".to_string(), "mainnet".to_string()),
+                Url::parse("https://blockscout.com/etc/mainnet/api?hello=world?foo=bar").unwrap(),
             ),
         ];
 
