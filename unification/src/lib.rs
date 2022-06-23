@@ -12,11 +12,7 @@ use crate::config::{BlockScoutSettings, Instance, Settings};
 
 pub mod config;
 
-async fn build_urls(
-    path: &str,
-    query: &str,
-    settings: &BlockScoutSettings,
-) -> Vec<(Instance, Url)> {
+fn build_urls(path: &str, query: &str, settings: &BlockScoutSettings) -> Vec<(Instance, Url)> {
     settings
         .instances
         .iter()
@@ -57,7 +53,7 @@ async fn make_requests(
         .collect()
 }
 
-async fn merge_responses(responses: Vec<(Instance, String)>) -> serde_json::Map<String, Value> {
+fn merge_responses(responses: Vec<(Instance, String)>) -> serde_json::Map<String, Value> {
     let mut result: serde_json::Map<String, Value> = serde_json::Map::new();
 
     responses
@@ -83,9 +79,9 @@ async fn handle_default_request(
     query: &str,
     settings: &BlockScoutSettings,
 ) -> serde_json::Map<String, Value> {
-    let urls = build_urls(path, query, settings).await;
+    let urls = build_urls(path, query, settings);
     let responses = make_requests(urls, settings.concurrent_requests).await;
-    merge_responses(responses).await
+    merge_responses(responses)
 }
 
 async fn router_get(request: HttpRequest, settings: BlockScoutSettings) -> HttpResponse {
@@ -115,4 +111,92 @@ pub fn run(settings: Settings) -> Result<Server, std::io::Error> {
     .listen(listener)?
     .run();
     Ok(server)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn check_build_urls() {
+        let path = "/api";
+        let query = "hello=world?foo=bar";
+        let settings = BlockScoutSettings {
+            base_url: Url::parse("https://blockscout.com/").unwrap(),
+            instances: vec![
+                Instance("mainnet".to_string(), "eth".to_string()),
+                Instance("mainnet".to_string(), "etc".to_string()),
+            ],
+            concurrent_requests: 1,
+        };
+
+        let expected = vec![
+            (
+                Instance("mainnet".to_string(), "eth".to_string()),
+                Url::parse("https://blockscout.com/mainnet/eth/api?hello=world?foo=bar").unwrap(),
+            ),
+            (
+                Instance("mainnet".to_string(), "etc".to_string()),
+                Url::parse("https://blockscout.com/mainnet/etc/api?hello=world?foo=bar").unwrap(),
+            ),
+        ];
+
+        let actual = build_urls(path, query, &settings);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn check_merge_responses() {
+        let responses = vec![
+            (
+                Instance("eth".to_string(), "mainnet".to_string()),
+                "{\"hello\":\"world\"}".to_string(),
+            ),
+            (
+                Instance("xdai".to_string(), "mainnet".to_string()),
+                "{\"foo\":\"bar\"}".to_string(),
+            ),
+            (
+                Instance("xdai".to_string(), "testnet".to_string()),
+                "{\"baz\":\"qux\"}".to_string(),
+            ),
+        ];
+
+        let actual = merge_responses(responses);
+
+        let expected = serde_json::Map::from_iter(vec![
+            (
+                "eth".to_string(),
+                Value::Object(serde_json::Map::from_iter(vec![(
+                    "mainnet".to_string(),
+                    Value::Object(serde_json::Map::from_iter(vec![(
+                        "hello".to_string(),
+                        Value::String("world".to_string()),
+                    )])),
+                )])),
+            ),
+            (
+                "xdai".to_string(),
+                Value::Object(serde_json::Map::from_iter(vec![
+                    (
+                        "mainnet".to_string(),
+                        Value::Object(serde_json::Map::from_iter(vec![(
+                            "foo".to_string(),
+                            Value::String("bar".to_string()),
+                        )])),
+                    ),
+                    (
+                        "testnet".to_string(),
+                        Value::Object(serde_json::Map::from_iter(vec![(
+                            "baz".to_string(),
+                            Value::String("qux".to_string()),
+                        )])),
+                    ),
+                ])),
+            ),
+        ]);
+
+        assert_eq!(actual, expected);
+    }
 }

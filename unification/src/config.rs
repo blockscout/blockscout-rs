@@ -13,7 +13,7 @@ pub struct ServerSettings {
     pub addr: SocketAddr,
 }
 
-#[derive(serde::Deserialize, Clone)]
+#[derive(serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct Instance(pub String, pub String);
 
 #[derive(serde::Deserialize, Clone)]
