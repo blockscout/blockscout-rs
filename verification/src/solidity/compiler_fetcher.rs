@@ -304,7 +304,6 @@ mod tests {
 
     #[tokio::test]
     async fn list_download_releases() {
-        env_logger::init();
         let config = Config::test().unwrap();
         let fetcher = CompilerFetcher::new(
             &config.solidity.compilers_list_url,
@@ -312,7 +311,6 @@ mod tests {
         )
         .await
         .expect("list.json file should be valid");
-        log::info!("{:?}", fetcher.releases);
         for compiler_version in vec![
             CompilerVersion::from_str("0.7.0+commit.9e61f92b").unwrap(),
             CompilerVersion::from_str("0.8.9+commit.e5eed63a").unwrap(),
