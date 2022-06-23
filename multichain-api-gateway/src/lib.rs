@@ -97,11 +97,12 @@ pub fn run(settings: Settings) -> Result<Server, std::io::Error> {
     let listener = TcpListener::bind(settings.server.addr)?;
 
     let server = HttpServer::new(move || {
-        let s = settings.blockscout.clone();
+        // We want to pass the settings to the handler function, so we create clones: s1, s2
+        let s1 = settings.blockscout.clone();
         App::new().route(
-            "/{_}",
+            "/{_}", // We want to match every GET-request regardless of URL
             web::get().to(move |request| {
-                let s2 = s.clone();
+                let s2 = s1.clone();
                 router_get(request, s2)
             }),
         )

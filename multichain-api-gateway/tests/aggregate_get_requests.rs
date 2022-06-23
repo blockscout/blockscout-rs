@@ -10,9 +10,12 @@ fn spawn_app(settings: config::Settings) {
 }
 
 #[tokio::test]
+/// In the test we check that valid responses are returned from the API.
+/// Especially we call to the same network (xdai), but to different chains (mainnet, testnet).
 async fn expect_result_from_two() {
     let settings = config::Settings {
         server: config::ServerSettings {
+            // TODO: randomized port in order to have tests running in parallel
             addr: "0.0.0.0:8080".parse().unwrap(),
         },
         blockscout: config::BlockScoutSettings {

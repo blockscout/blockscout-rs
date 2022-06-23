@@ -2,10 +2,23 @@ use std::net::SocketAddr;
 
 use url::Url;
 
+/// An instance of the maintained networks in Blockscout.
+/// Semantic: (network, chain)
+/// e.g."blockscout.com/eth/mainnet" -> ("eth", "mainnet")
+#[derive(serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct Instance(pub String, pub String);
+
+/// Settings for the Blockscout API
 #[derive(serde::Deserialize, Clone)]
-pub struct Settings {
-    pub server: ServerSettings,
-    pub blockscout: BlockScoutSettings,
+pub struct BlockScoutSettings {
+    /// The base URL of the Blockscout API.
+    /// At the moment, should be equal to "https://blockscout.com"
+    pub base_url: Url,
+
+    pub instances: Vec<Instance>,
+
+    /// The number of concurrent requests to be made to the Blockscout API from a server thread worker.
+    pub concurrent_requests: usize,
 }
 
 #[derive(serde::Deserialize, Clone)]
@@ -13,14 +26,10 @@ pub struct ServerSettings {
     pub addr: SocketAddr,
 }
 
-#[derive(serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct Instance(pub String, pub String);
-
 #[derive(serde::Deserialize, Clone)]
-pub struct BlockScoutSettings {
-    pub base_url: Url,
-    pub instances: Vec<Instance>,
-    pub concurrent_requests: usize,
+pub struct Settings {
+    pub server: ServerSettings,
+    pub blockscout: BlockScoutSettings,
 }
 
 pub fn get_config() -> std::io::Result<Settings> {
