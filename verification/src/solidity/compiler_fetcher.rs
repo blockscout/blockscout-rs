@@ -22,39 +22,39 @@ pub enum ListError {
     Path(url::ParseError),
 }
 
+#[derive(Default)]
+pub struct Releases(HashMap<CompilerVersion, CompilerInfo>);
+
 #[derive(Debug)]
 pub struct CompilerInfo {
     pub url: Url,
     pub sha256: H256,
 }
 
-pub async fn fetch_compiler_list(
-    compilers_list_url: &Url,
-) -> Result<HashMap<CompilerVersion, CompilerInfo>, ListError> {
-    let list_json_file: json::List = reqwest::get(compilers_list_url.to_string())
-        .await
-        .map_err(ListError::ListJsonFetch)?
-        .json()
-        .await
-        .map_err(ListError::ParseListJson)?;
+impl Releases {
+    pub async fn fetch_from_url(compilers_list_url: &Url) -> Result<Self, ListError> {
+        let list_json_file: json::List = reqwest::get(compilers_list_url.to_string())
+            .await
+            .map_err(ListError::ListJsonFetch)?
+            .json()
+            .await
+            .map_err(ListError::ParseListJson)?;
 
-    list_json_file
-        .into_releases(compilers_list_url)
-        .map_err(ListError::Path)
+        Releases::try_from((list_json_file, compilers_list_url)).map_err(ListError::Path)
+    }
 }
 
-impl json::List {
-    pub fn into_releases(
-        self,
-        download_url: &Url,
-    ) -> Result<HashMap<CompilerVersion, CompilerInfo>, url::ParseError> {
+impl TryFrom<(json::List, &Url)> for Releases {
+    type Error = url::ParseError;
+
+    fn try_from((list, download_url): (json::List, &Url)) -> Result<Self, Self::Error> {
         let mut releases = HashMap::default();
-        for json_compiler_info in self.builds {
+        for json_compiler_info in list.builds {
             let version = json_compiler_info.long_version.clone();
             let compiler_info = CompilerInfo::try_from((json_compiler_info, download_url))?;
             releases.insert(version, compiler_info);
         }
-        Ok(releases)
+        Ok(Self(releases))
     }
 }
 
@@ -78,12 +78,12 @@ impl TryFrom<(json::CompilerInfo, &Url)> for CompilerInfo {
 
 #[derive(Default)]
 pub struct CompilerFetcher {
-    releases: HashMap<CompilerVersion, CompilerInfo>,
+    releases: Releases,
     folder: PathBuf,
 }
 
 impl CompilerFetcher {
-    pub async fn new(releases: HashMap<CompilerVersion, CompilerInfo>, folder: PathBuf) -> Self {
+    pub async fn new(releases: Releases, folder: PathBuf) -> Self {
         Self { releases, folder }
     }
 }
@@ -116,6 +116,7 @@ impl Fetcher for CompilerFetcher {
     async fn fetch(&self, ver: &CompilerVersion) -> Result<PathBuf, Self::Error> {
         let compiler_info = self
             .releases
+            .0
             .get(ver)
             .ok_or_else(|| FetchError::NotFound(ver.clone()))?;
 
@@ -261,13 +262,9 @@ mod tests {
         ]);
     }
 
-    fn assert_has_version(
-        releases: &HashMap<CompilerVersion, CompilerInfo>,
-        ver: &str,
-        expect: &str,
-    ) {
+    fn assert_has_version(releases: &Releases, ver: &str, expect: &str) {
         let ver = CompilerVersion::from_str(ver).unwrap();
-        let info = releases.get(&ver).unwrap();
+        let info = releases.0.get(&ver).unwrap();
         let url = info.url.to_string();
         assert_eq!(url, expect, "urls don't match");
     }
@@ -276,7 +273,7 @@ mod tests {
     fn parse_releases() {
         let list_json_file: json::List = serde_json::from_str(DEFAULT_LIST_JSON).unwrap();
         let download_url = Url::from_str(DEFAULT_DOWNLOAD_PREFIX).expect("valid url");
-        let releases = list_json_file.into_releases(&download_url).unwrap();
+        let releases = Releases::try_from((list_json_file, &download_url)).unwrap();
         assert_has_version(
             &releases,
             "0.8.15-nightly.2022.5.27+commit.095cc647",
@@ -300,11 +297,11 @@ mod tests {
     #[tokio::test]
     async fn list_download_releases() {
         let config = Config::default();
-        let compiler_list = fetch_compiler_list(&config.solidity.compilers_list_url)
+        let releases = Releases::fetch_from_url(&config.solidity.compilers_list_url)
             .await
             .expect("list.json file should be valid");
         let fetcher = CompilerFetcher::new(
-            compiler_list,
+            releases,
             std::env::temp_dir().join("blockscout/verification/compiler_fetcher/test/"),
         )
         .await;
