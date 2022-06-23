@@ -68,7 +68,7 @@ fn merge_responses(responses: Vec<(Instance, String)>) -> serde_json::Map<String
                 .or_insert(Value::from(serde_json::Map::new()))
                 .as_object_mut()
                 .unwrap();
-            kv_subnets.insert(subnet.to_string(), value);
+            kv_subnets.insert(subnet, value);
         });
 
     result

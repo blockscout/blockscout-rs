@@ -24,6 +24,6 @@ pub struct BlockScoutSettings {
 }
 
 pub fn get_config() -> std::io::Result<Settings> {
-    let content = std::fs::read_to_string("unification/config.toml")?;
+    let content = std::fs::read_to_string("../example_config.toml")?;
     Ok(toml::from_str(&content)?)
 }
