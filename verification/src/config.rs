@@ -3,6 +3,14 @@ use serde::Deserialize;
 use std::{net::SocketAddr, num::NonZeroUsize, path::PathBuf, str::FromStr};
 use url::Url;
 
+#[cfg(target_os = "linux")]
+const DEFAULT_COMPILER_LIST: &str =
+    "https://raw.githubusercontent.com/blockscout/solc-bin/main/list.json";
+#[cfg(target_os = "macos")]
+const DEFAULT_COMPILER_LIST: &str = "https://solc-bin.ethereum.org/macosx-amd64/list.json";
+#[cfg(target_os = "windows")]
+const DEFAULT_COMPILER_LIST: &str = "https://solc-bin.ethereum.org/windows-amd64/list.json";
+
 #[derive(Deserialize, Clone, Default)]
 #[serde(default)]
 pub struct Config {
@@ -35,10 +43,7 @@ pub struct SolidityConfiguration {
 impl Default for SolidityConfiguration {
     fn default() -> Self {
         Self {
-            compilers_list_url: Url::try_from(
-                "https://raw.githubusercontent.com/blockscout/solc-bin/main/list.json",
-            )
-            .expect("valid url"),
+            compilers_list_url: Url::try_from(DEFAULT_COMPILER_LIST).expect("valid url"),
             enabled: true,
         }
     }
