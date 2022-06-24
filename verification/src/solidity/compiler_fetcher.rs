@@ -1,7 +1,6 @@
 use crate::compiler::{fetcher::Fetcher, version::CompilerVersion};
 use async_trait::async_trait;
 use primitive_types::H256;
-use serde::Deserialize;
 use std::{
     collections::HashMap,
     fs::{File, OpenOptions},
@@ -11,6 +10,35 @@ use std::{
 };
 use thiserror::Error;
 use url::Url;
+
+mod json {
+    use primitive_types::H256;
+    use serde::Deserialize;
+    use url::Url;
+
+    use crate::compiler::version::CompilerVersion;
+
+    #[derive(Debug, Deserialize, PartialEq)]
+    pub struct List {
+        pub builds: Vec<CompilerInfo>,
+    }
+
+    #[derive(Debug, Deserialize, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    pub struct CompilerInfo {
+        pub path: DownloadPath,
+        #[serde(with = "serde_with::rust::display_fromstr")]
+        pub long_version: CompilerVersion,
+        pub sha256: H256,
+    }
+
+    #[derive(Debug, Deserialize, PartialEq)]
+    #[serde(untagged)]
+    pub enum DownloadPath {
+        Url(Url),
+        Filename(String),
+    }
+}
 
 #[derive(Error, Debug)]
 pub enum ListError {
@@ -148,31 +176,6 @@ impl Fetcher for CompilerFetcher {
         }
 
         Ok(file)
-    }
-}
-
-mod json {
-    use super::*;
-
-    #[derive(Debug, Deserialize, PartialEq)]
-    pub struct List {
-        pub builds: Vec<CompilerInfo>,
-    }
-
-    #[derive(Debug, Deserialize, PartialEq)]
-    #[serde(rename_all = "camelCase")]
-    pub struct CompilerInfo {
-        pub path: DownloadPath,
-        #[serde(with = "serde_with::rust::display_fromstr")]
-        pub long_version: CompilerVersion,
-        pub sha256: H256,
-    }
-
-    #[derive(Debug, Deserialize, PartialEq)]
-    #[serde(untagged)]
-    pub enum DownloadPath {
-        Url(Url),
-        Filename(String),
     }
 }
 
