@@ -29,8 +29,8 @@ sscanf = "0.2"
 octocrab = "0.16"
 hex = "0.4"
 futures = "0.3"
-ethers-solc = { git = "https://github.com/gakonst/ethers-rs", version = "0.3", features = ["svm-solc"] }
-ethers-core = { git = "https://github.com/gakonst/ethers-rs", version = "0.6" }
+ethers-solc = { version = "0.13", features = ["svm-solc"] }
+ethers-core = "0.13.0"
 primitive-types = "0.11"
 serde_with = "1.14"
 # compability with ethers-solc
