@@ -1113,7 +1113,7 @@ dependencies = [
  "serde_json",
  "sha2 0.9.9",
  "solang-parser",
- "svm-rs 0.2.13",
+ "svm-rs",
  "svm-rs-builds",
  "thiserror",
  "tiny-keccak",
@@ -3133,35 +3133,6 @@ checksum = "6bdef32e8150c2a081110b42772ffe7d7c9032b606bc226c8260fd97e0976601"
 
 [[package]]
 name = "svm-rs"
-version = "0.2.10"
-source = "git+https://github.com/roynalnaruto/svm-rs#70fe9d9c43689e311753ce7a94f4618dd219bfda"
-dependencies = [
- "anyhow",
- "cfg-if",
- "clap",
- "console 0.14.1",
- "dialoguer",
- "fs2",
- "hex",
- "home",
- "indicatif",
- "itertools",
- "once_cell",
- "rand",
- "reqwest",
- "semver",
- "serde",
- "serde_json",
- "sha2 0.9.9",
- "tempfile",
- "thiserror",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "svm-rs"
 version = "0.2.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a55e00b6f95abd889ce398bd7eab2a9c62cd27281cf1bfba70847340557434cf"
@@ -3201,7 +3172,7 @@ dependencies = [
  "hex",
  "semver",
  "serde_json",
- "svm-rs 0.2.13",
+ "svm-rs",
 ]
 
 [[package]]
@@ -3585,7 +3556,6 @@ dependencies = [
  "serde_json",
  "serde_with",
  "sscanf",
- "svm-rs 0.2.10",
  "thiserror",
  "tokio",
  "url",
