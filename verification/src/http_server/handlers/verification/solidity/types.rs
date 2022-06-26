@@ -121,7 +121,8 @@ mod tests {
     }
 
     #[test]
-    fn default_evm_version_should_result_in_none_in_compiler_input() {
+    // 'default' should result in None in CompilerInput
+    fn default_evm_version() {
         let flatten = FlattenedSource {
             source_code: "pragma solidity 0.8.10;\ncontract Address {}".into(),
             evm_version: "default".to_string(),
