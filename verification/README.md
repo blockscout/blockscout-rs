@@ -1,0 +1,210 @@
+# <h1 align="center"> Verification </h1>
+
+---
+
+A contract verification service. Runs as an HTTP server and allows
+making verification requests through REST API. It is stateless
+and answers requests based on provided information only.
+
+## Building from source
+Install rustup from rustup.rs.
+```
+git clone git@github.com:blockscout/blockscout-rs.git
+
+cd blockscout-rs
+
+cargo build --all --release
+```
+You can find the built binary in `target/release` folder.
+
+## Installing through cargo
+Another way to install the binary without cloning the repository is to use cargo straightway:
+```
+cargo install --git https://github.com/blockscout/blockscout-rs --bin verification
+```
+In that case, you can run the binary using just `verification`.
+
+## Configuration
+Currently, the service uses a configuration file the path to which is specified via CLI flag `--config-path=[path]`.
+The configuration file may contain the following options:
+```toml
+[server]
+# IP address and port number the server should listen to
+addr = "0.0.0.0:8043"
+
+[solidity]
+# if false solidity verification is not supported
+enabled = true
+# list of all available compilers and information about them
+compilers_list_url = "https://raw.githubusercontent.com/blockscout/solc-bin/main/list.json"
+
+[sourcify]
+# if false sourcify verification is not supported
+enabled = true
+# Sourcify API endpoint
+api_url = "https://sourcify.dev/server/"
+# number of failing attempts the server makes to Sourcify API 
+verification_attempts = 3
+# the maximum period the service is waiting for the Sourcify response
+request_timeout = 10
+```
+For all keys omitted from the configuration file default values from the example above are used.
+
+# Api
+## Input
+Currently, the service supports 4 types of verification:
+
+### Single file
+**Note**: Is deprecated and going to be replaced by Multi-Part files verification
+
+```json
+{
+  // Creation transaction input
+  "creation_bytecode": "0x608060...0033000b0c",
+  // Bytecode stored in the blockchain
+  "deployed_bytecode": "0x608060...0033",
+  // Compiler version used to compile the contract
+  "compiler_version": "v0.8.14+commit.80d49f37",
+  // Source code
+  "source_code": "pragma solidity ^0.8.14; ...",
+  // Version of the EVM to compile for
+  "evm_version": "default",
+  // If present, optimizations are enabled with specified number of runs, 
+  // otherwise optmimizations are disabled
+  "optimization_runs": "200",
+  // If present, specify addresses of the libraries.
+  "contract_libraries": {
+    "MyLib": "0x123123..."
+  }
+}
+```
+
+### Multi-Part files
+**Note**: currently WIP and is not available right now
+
+The only difference with Single file input is that the `source_code` field was replaced by `sources` allowing to submit several files for verification.
+```json
+{
+  // Creation transaction input
+  "creation_bytecode": "0x608060...0033000b0c",
+  // Bytecode stored in the blockchain
+  "deployed_bytecode": "0x608060...0033",
+  // Compiler version used to compile the contract
+  "compiler_version": "v0.8.14+commit.80d49f37",
+  // Contains a map from a source file name to the actual source code
+  "sources": {
+    "A.sol": "pragma solidity ^0.8.14; contract A {}",
+    "B.sol": "pragma solidity ^0.8.14; contract B {}"
+  },
+  // Version of the EVM to compile for
+  "evm_version": "default",
+  // If present, optimizations are enabled with specified number of runs, 
+  // otherwise optmimizations are disabled
+  "optimization_runs": "200",
+  // If present, specify addresses of the libraries.
+  "contract_libraries": {
+    "MyLib": "0x123123..."
+  }
+}
+```
+
+### Standard-JSON input
+
+```json
+{
+  // Creation transaction input
+  "creation_bytecode": "0x608060...0033000b0c",
+  // Bytecode stored in the blockchain
+  "deployed_bytecode": "0x608060...0033",
+  // Compiler version used to compile the contract
+  "compiler_version": "v0.8.14+commit.80d49f37",
+  // https://docs.soliditylang.org/en/latest/using-the-compiler.html#input-description
+  "input": {
+    "language": "Solidity",
+    "sources": { ... },
+    "settings": { ... }
+  }
+}
+```
+
+### Sourcify
+Proxies verification requests to Sourcify service and returns responses (https://docs.sourcify.dev/docs/api/server/v1/verify/).
+```json
+{
+  // Address of the contract to be verified 
+  "address": "0xcafecafecafecafecafecafecafecafecafecafe",
+  // The chain (network) the contract was deployed to 
+  // (https://docs.sourcify.dev/docs/api/chains/)
+  "chain": "100",
+  // 
+  "files": {
+    "A.sol": "pragma solidity ^0.8.14; contract A {}",
+    "B.sol": "pragma solidity ^0.8.14; contract B {}",
+    // https://docs.soliditylang.org/en/v0.8.14/metadata.html
+    "metadata.json": { ... }
+    }, 
+    "chosenContract": 1
+}
+```
+
+## Outputs
+Currently, all verification requests have the same response format.
+
+### Success
+If verification succeeds, the service returns 200 with a success status:
+```json
+{
+  "message": "OK",
+  "result": {
+    // The name of the file verified contract was located at 
+    "file_name": "A.sol",
+    // The name of the contract which was verified
+    "contract_name": "A",
+    // Compiler version used to compile the contract
+    "compiler_version": "v0.8.14+commit.80d49f37",
+    // Source files given for verification
+    "sources": {
+      "A.sol": "pragma solidity ^0.8.14; contract A {}",
+      "B.sol": "pragma solidity ^0.8.14; contract B {}"
+    },
+    // Version of the EVM contract was compile for
+    "evm_version": "default",
+    // (optional) WARNING: Before version 0.8.6 omitting the 'enabled' key was not equivalent to setting
+    // it to false and would actually disable all the optimizations.
+    "optimization": true,
+    // (optional) Specify number of optimizer runs, if optimizations are enabled
+    "optimization_runs" 200,
+    // Addresses of the libraries
+    "contract_libraries": {
+      "MyLib": "0x123123..."
+    },
+    // (optional) automatically extracted from creation transaction input
+    // constructor arguments used for deploying verified contract
+    "constructor_arguments": "0xcafecafecafe",
+    // (https://docs.soliditylang.org/en/latest/abi-spec.html?highlight=abi#json)
+    "abi": [ { ... } ],
+  },
+  // Status of 0 indicates successful verification
+  "status": 0
+}
+```
+
+### Verification Failure
+If verification fails because of invalid verification data provided to it from outside,
+the service returns 200 with the failure status:
+```json
+{
+  // Message indicating the reason for failure
+  "message": "Compilation error: contracts/3_Ballot.sol:4:1: ParserError: Expected pragma, import directive or contract/interface/library/struct/enum/constant/function definition.\n12312313vddfvfdvfd\n^------^",
+  // Status of 1 indicates verification failure
+  "status": 1
+}
+```
+
+### Bad Request
+However, there are data that the requester is responsible for ensuring their validity.
+Currently, it is related only to the creation of transaction input and deployed bytecode
+stored in the chain for the contract to be verified, and the compiler version used in verification.
+
+In case any of that arguments are invalid, the service return 400 BadRequest error,
+indicating that something is wrong with the caller.
