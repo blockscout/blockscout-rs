@@ -1,15 +1,21 @@
-use crate::cli;
-use clap::Parser;
 use config::{Config as LibConfig, File};
 use serde::Deserialize;
-use std::{net::SocketAddr, num::NonZeroUsize, str::FromStr};
+use std::{net::SocketAddr, num::NonZeroUsize, path::PathBuf, str::FromStr};
 use url::Url;
+
+#[cfg(target_os = "linux")]
+const DEFAULT_COMPILER_LIST: &str =
+    "https://raw.githubusercontent.com/blockscout/solc-bin/main/list.json";
+#[cfg(target_os = "macos")]
+const DEFAULT_COMPILER_LIST: &str = "https://solc-bin.ethereum.org/macosx-amd64/list.json";
+#[cfg(target_os = "windows")]
+const DEFAULT_COMPILER_LIST: &str = "https://solc-bin.ethereum.org/windows-amd64/list.json";
 
 #[derive(Deserialize, Clone, Default)]
 #[serde(default)]
 pub struct Config {
     pub server: ServerConfiguration,
-    pub verifier: VerifierConfiguration,
+    pub solidity: SolidityConfiguration,
     pub sourcify: SourcifyConfiguration,
 }
 
@@ -29,13 +35,17 @@ impl Default for ServerConfiguration {
 
 #[derive(Deserialize, Clone)]
 #[serde(default)]
-pub struct VerifierConfiguration {
+pub struct SolidityConfiguration {
     pub enabled: bool,
+    pub compilers_list_url: Url,
 }
 
-impl Default for VerifierConfiguration {
+impl Default for SolidityConfiguration {
     fn default() -> Self {
-        Self { enabled: true }
+        Self {
+            compilers_list_url: Url::try_from(DEFAULT_COMPILER_LIST).expect("valid url"),
+            enabled: true,
+        }
     }
 }
 
@@ -54,7 +64,7 @@ impl Default for SourcifyConfiguration {
     fn default() -> Self {
         Self {
             enabled: true,
-            api_url: Url::try_from("https://sourcify.dev/server/").unwrap(),
+            api_url: Url::try_from("https://sourcify.dev/server/").expect("valid url"),
             verification_attempts: NonZeroUsize::new(3).expect("Is not zero"),
             request_timeout: 10,
         }
@@ -62,12 +72,11 @@ impl Default for SourcifyConfiguration {
 }
 
 impl Config {
-    pub fn parse() -> Result<Self, config::ConfigError> {
-        let args = cli::Args::parse();
+    pub fn from_file(file: PathBuf) -> Result<Self, config::ConfigError> {
         let mut builder =
             LibConfig::builder().add_source(config::Environment::with_prefix("VERIFICATION"));
-        if args.config_path.exists() {
-            builder = builder.add_source(File::from(args.config_path));
+        if file.exists() {
+            builder = builder.add_source(File::from(file));
         }
         builder
             .build()
