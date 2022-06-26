@@ -10,7 +10,7 @@ use verification::{configure_router, AppRouter, Config, VerificationResponse, Ve
 #[actix_rt::test]
 async fn should_return_200() {
     let mut config = Config::default();
-    config.verifier.enabled = false;
+    config.solidity.enabled = false;
     let app_router = Arc::new(
         AppRouter::new(config)
             .await
@@ -69,7 +69,7 @@ async fn should_return_200() {
 #[actix_rt::test]
 async fn invalid_contracts() {
     let mut config = Config::default();
-    config.verifier.enabled = false;
+    config.solidity.enabled = false;
     let app_router = Arc::new(
         AppRouter::new(config)
             .await
@@ -78,13 +78,17 @@ async fn invalid_contracts() {
     let mut app = test::init_service(App::new().configure(configure_router(&*app_router))).await;
 
     let metadata_content = include_str!("contracts/storage/metadata.json");
+    let source = include_str!("contracts/storage/source.sol");
     for (request_body, error_message) in [
         (
             json!({
                 // relies on fact that the kovan HASN'T any contract with this address
                 "address": "0x1234567890123456789012345678901234567890",
                 "chain": "42",
-                "files": {"metadata.json": metadata_content},
+                "files": {
+                    "metadata.json": metadata_content,
+                    "contracts/1_Storage.sol": source,
+                },
             }),
             "Kovan does not have a contract",
         ),
@@ -99,12 +103,12 @@ async fn invalid_contracts() {
         (
             json!({
                 // relies on fact that kovan has some contract, but it is not verified in
-                // sourcify and `files` contains invalid source code
+                // sourcify and `source` contains wrong source code
                 "address": "0x14132d1e8f4AaFCef230f5900bf8A3fFA4CCCC22",
                 "chain": "42",
                 "files": {
                     "metadata.json": metadata_content,
-                    "source.sol": "",
+                    "contracts/1_Storage.sol": source,
                 },
             }),
             "deployed and recompiled bytecode don't match",

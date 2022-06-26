@@ -3,19 +3,21 @@ use actix_web::web;
 use super::Router;
 use crate::{
     compiler::Compilers,
+    config::SolidityConfiguration,
     http_server::handlers::{flatten, standard_json},
-    solidity::github_fetcher::GithubFetcher,
+    solidity::compiler_fetcher::{CompilerFetcher, Releases},
 };
 
 pub struct SolidityRouter {
-    compilers: web::Data<Compilers<GithubFetcher>>,
+    compilers: web::Data<Compilers<CompilerFetcher>>,
 }
 
 impl SolidityRouter {
-    pub async fn new() -> anyhow::Result<Self> {
-        let fetcher = GithubFetcher::new("blockscout", "solc-bin", "compilers/".into())
+    pub async fn new(config: SolidityConfiguration) -> anyhow::Result<Self> {
+        let releases = Releases::fetch_from_url(&config.compilers_list_url)
             .await
             .map_err(anyhow::Error::msg)?;
+        let fetcher = CompilerFetcher::new(releases, "compilers/".into()).await;
         let compilers = Compilers::new(fetcher);
         Ok(Self {
             compilers: web::Data::new(compilers),
@@ -27,11 +29,8 @@ impl Router for SolidityRouter {
     fn register_routes(&self, service_config: &mut web::ServiceConfig) {
         service_config.app_data(self.compilers.clone()).service(
             web::scope("/verify")
-                .route("/flatten", web::post().to(flatten::verify::<GithubFetcher>))
-                .route(
-                    "/standard_json",
-                    web::post().to(standard_json::verify::<GithubFetcher>),
-                ),
+                .route("/flatten", web::post().to(flatten::verify))
+                .route("/standard_json", web::post().to(standard_json::verify)),
         );
     }
 }

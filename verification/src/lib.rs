@@ -8,7 +8,7 @@ mod types;
 #[cfg(test)]
 mod tests;
 
-pub use self::config::Config;
+pub use self::{cli::Args, config::Config};
 pub use http_server::{
     configure_router,
     handlers::verification::{VerificationResponse, VerificationResult, VerificationStatus},
