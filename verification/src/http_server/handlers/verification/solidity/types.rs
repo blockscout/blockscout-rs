@@ -40,6 +40,9 @@ impl TryFrom<FlattenedSource> for CompilerInput {
         if source.evm_version != "default" {
             settings.evm_version =
                 Some(EvmVersion::from_str(&source.evm_version).map_err(anyhow::Error::msg)?);
+        } else {
+            // `Settings::default()` sets the value to the latest available evm version (`Some(London)` for now)
+            settings.evm_version = None
         }
         Ok(CompilerInput {
             language: "Solidity".to_string(),
@@ -115,5 +118,21 @@ mod tests {
         };
         let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":""}},"settings":{"optimizer":{"enabled":false},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"spuriousDragon","libraries":{}}}"#;
         test_to_input(flatten, expected);
+    }
+
+    #[test]
+    // 'default' should result in None in CompilerInput
+    fn default_evm_version() {
+        let flatten = FlattenedSource {
+            source_code: "pragma solidity 0.8.10;\ncontract Address {}".into(),
+            evm_version: "default".to_string(),
+            optimization_runs: None,
+            contract_libraries: None,
+        };
+        let compiler_input = CompilerInput::try_from(flatten).expect("Structure is valid");
+        assert_eq!(
+            None, compiler_input.settings.evm_version,
+            "'default' should result in `None`"
+        )
     }
 }
