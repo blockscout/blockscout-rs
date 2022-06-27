@@ -34,9 +34,6 @@ impl Router for SolidityRouter {
                     .route("/flatten", web::post().to(flatten::verify))
                     .route("/standard_json", web::post().to(standard_json::verify)),
             )
-            .route(
-                "/version_list",
-                web::get().to(version_list::get_version_list),
-            );
+            .route("/versions", web::get().to(version_list::get_version_list));
     }
 }
