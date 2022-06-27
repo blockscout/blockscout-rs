@@ -2,6 +2,6 @@ pub mod status;
 pub mod verification;
 
 pub use self::verification::{
-    solidity::{flatten, multi, standard_json},
+    solidity::{files_input, standard_json},
     sourcify,
 };

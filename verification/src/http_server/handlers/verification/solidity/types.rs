@@ -1,5 +1,5 @@
 use ethers_solc::{
-    artifacts::{Libraries, Settings, Sources},
+    artifacts::{Libraries, Settings, Source, Sources},
     CompilerInput, EvmVersion,
 };
 use serde::Deserialize;
@@ -18,78 +18,43 @@ pub struct VerificationRequest<T> {
 }
 
 #[derive(Debug, Deserialize, PartialEq)]
-pub struct FlattenedSource {
-    source_code: String,
+pub struct SourcesInput {
+    sources: BTreeMap<PathBuf, String>,
     evm_version: String,
     optimization_runs: Option<usize>,
     contract_libraries: Option<BTreeMap<String, String>>,
 }
 
-impl TryFrom<FlattenedSource> for CompilerInput {
+impl TryFrom<SourcesInput> for CompilerInput {
     type Error = anyhow::Error;
 
-    fn try_from(source: FlattenedSource) -> Result<Self, Self::Error> {
+    fn try_from(input: SourcesInput) -> Result<Self, Self::Error> {
         let mut settings = Settings::default();
-        settings.optimizer.enabled = Some(source.optimization_runs.is_some());
-        settings.optimizer.runs = source.optimization_runs;
-        if let Some(source_libraries) = source.contract_libraries {
-            settings.libraries = Libraries {
-                libs: BTreeMap::from([(PathBuf::from("source.sol"), source_libraries)]),
-            };
+        settings.optimizer.enabled = Some(input.optimization_runs.is_some());
+        settings.optimizer.runs = input.optimization_runs;
+        if let Some(libs) = input.contract_libraries {
+            // we have to know filename for library, we don't know,
+            // so we assume that every file MAY contains all libraries
+            let libs = input
+                .sources
+                .iter()
+                .map(|(filename, _)| (PathBuf::from(filename), libs.clone()))
+                .collect();
+            settings.libraries = Libraries { libs };
         }
-        if source.evm_version != "default" {
+
+        if input.evm_version != "default" {
             settings.evm_version =
-                Some(EvmVersion::from_str(&source.evm_version).map_err(anyhow::Error::msg)?);
+                Some(EvmVersion::from_str(&input.evm_version).map_err(anyhow::Error::msg)?);
         } else {
             // `Settings::default()` sets the value to the latest available evm version (`Some(London)` for now)
             settings.evm_version = None
         }
-        Ok(CompilerInput {
-            language: "Solidity".to_string(),
-            sources: BTreeMap::from([(
-                PathBuf::from("source.sol"),
-                ethers_solc::artifacts::Source {
-                    content: source.source_code,
-                },
-            )]),
-            settings,
-        })
-    }
-}
 
-#[derive(Debug, Deserialize, PartialEq)]
-pub struct MultiSource {
-    sources: BTreeMap<String, String>,
-    evm_version: String,
-    optimization_runs: Option<usize>,
-    contract_libraries: Option<BTreeMap<String, BTreeMap<String, String>>>,
-}
-
-impl TryFrom<MultiSource> for CompilerInput {
-    type Error = anyhow::Error;
-
-    fn try_from(multi_source: MultiSource) -> Result<Self, Self::Error> {
-        let mut settings = Settings::default();
-        settings.optimizer.enabled = Some(multi_source.optimization_runs.is_some());
-        settings.optimizer.runs = multi_source.optimization_runs;
-        if let Some(contract_libraries) = multi_source.contract_libraries {
-            settings.libraries = Libraries {
-                libs: contract_libraries
-                    .into_iter()
-                    .map(|(filename, libs)| (PathBuf::from(filename), libs))
-                    .collect(),
-            };
-        }
-
-        let sources: Sources = multi_source
+        let sources: Sources = input
             .sources
             .into_iter()
-            .map(|(name, content)| {
-                (
-                    PathBuf::from(name),
-                    ethers_solc::artifacts::Source { content },
-                )
-            })
+            .map(|(name, content)| (name, Source { content }))
             .collect();
         Ok(CompilerInput {
             language: "Solidity".to_string(),
@@ -104,26 +69,32 @@ mod tests {
     use super::*;
     use crate::tests::parse::test_deserialize_ok;
 
+    fn one_source(name: &str, content: &str) -> BTreeMap<PathBuf, String> {
+        BTreeMap::from([(PathBuf::from(name), content.into())])
+    }
+
     #[test]
-    fn parse_flattened() {
+    fn parse_files_input() {
         test_deserialize_ok(vec![(
             r#"{
                     "contract_name": "test",
                     "deployed_bytecode": "0x6001",
                     "creation_bytecode": "0x6001",
                     "compiler_version": "0.8.3",
-                    "source_code": "pragma",
+                    "sources": {
+                        "source.sol": "pragma"
+                    },
                     "evm_version": "london",
                     "optimization_runs": 200
                 }"#,
-            VerificationRequest::<FlattenedSource> {
+            VerificationRequest::<SourcesInput> {
                 contract_name: "test".into(),
                 deployed_bytecode: "0x6001".into(),
                 creation_bytecode: "0x6001".into(),
                 compiler_version: "0.8.3".into(),
                 constructor_arguments: None,
-                content: FlattenedSource {
-                    source_code: "pragma".into(),
+                content: SourcesInput {
+                    sources: one_source("source.sol", "pragma"),
                     evm_version: format!("{}", ethers_solc::EvmVersion::London),
                     optimization_runs: Some(200),
                     contract_libraries: None,
@@ -132,7 +103,7 @@ mod tests {
         )])
     }
 
-    fn test_to_input(flatten: FlattenedSource, expected: &str) {
+    fn test_to_input(flatten: SourcesInput, expected: &str) {
         let input: CompilerInput = flatten.try_into().unwrap();
         let input_json = serde_json::to_string(&input).unwrap();
         println!("{}", input_json);
@@ -140,9 +111,9 @@ mod tests {
     }
 
     #[test]
-    fn flattened_to_input() {
-        let flatten = FlattenedSource {
-            source_code: "pragma".into(),
+    fn files_source_to_input() {
+        let source = SourcesInput {
+            sources: one_source("source.sol", "pragma"),
             evm_version: format!("{}", ethers_solc::EvmVersion::London),
             optimization_runs: Some(200),
             contract_libraries: Some(BTreeMap::from([(
@@ -151,22 +122,22 @@ mod tests {
             )])),
         };
         let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":"pragma"}},"settings":{"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"london","libraries":{"source.sol":{"some_library":"some_address"}}}}"#;
-        test_to_input(flatten, expected);
-        let flatten = FlattenedSource {
-            source_code: "".into(),
+        test_to_input(source, expected);
+        let multi = SourcesInput {
+            sources: one_source("source.sol", ""),
             evm_version: format!("{}", ethers_solc::EvmVersion::SpuriousDragon),
             optimization_runs: None,
             contract_libraries: None,
         };
         let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":""}},"settings":{"optimizer":{"enabled":false},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"spuriousDragon"}}"#;
-        test_to_input(flatten, expected);
+        test_to_input(multi, expected);
     }
 
     #[test]
     // 'default' should result in None in CompilerInput
     fn default_evm_version() {
-        let flatten = FlattenedSource {
-            source_code: "pragma solidity 0.8.10;\ncontract Address {}".into(),
+        let flatten = SourcesInput {
+            sources: BTreeMap::new(),
             evm_version: "default".to_string(),
             optimization_runs: None,
             contract_libraries: None,

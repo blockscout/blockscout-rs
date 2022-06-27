@@ -1,5 +1,4 @@
 mod types;
 
-pub mod flatten;
-pub mod multi;
+pub mod files_input;
 pub mod standard_json;

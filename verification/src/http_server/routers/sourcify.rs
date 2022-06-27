@@ -27,6 +27,6 @@ impl Router for SourcifyRouter {
     fn register_routes(&self, service_config: &mut web::ServiceConfig) {
         service_config
             .app_data(self.api_client.clone())
-            .route("/verify", web::post().to(sourcify::verify));
+            .route("/verify/", web::post().to(sourcify::verify));
     }
 }
