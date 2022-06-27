@@ -16,6 +16,7 @@ pub struct VerificationResponse {
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub struct VerificationResult {
+    pub file_name: String,
     pub contract_name: String,
     pub compiler_version: String,
     pub evm_version: String,
@@ -64,6 +65,7 @@ mod tests {
         test_serialize_json_ok(vec![
             (
                 VerificationResponse::ok(VerificationResult {
+                    file_name: "File.sol".to_string(),
                     contract_name: "contract_name".to_string(),
                     compiler_version: "compiler_version".to_string(),
                     evm_version: "evm_version".to_string(),
@@ -86,6 +88,7 @@ mod tests {
                     "message": "OK",
                     "status": "0",
                     "result": {
+                        "file_name": "File.sol",
                         "contract_name": "contract_name",
                         "compiler_version": "compiler_version",
                         "evm_version": "evm_version",

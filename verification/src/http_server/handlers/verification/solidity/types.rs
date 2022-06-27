@@ -7,11 +7,9 @@ use std::{collections::BTreeMap, path::PathBuf, str::FromStr};
 
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct VerificationRequest<T> {
-    pub contract_name: String,
     pub deployed_bytecode: String,
     pub creation_bytecode: String,
     pub compiler_version: String,
-    pub constructor_arguments: Option<String>,
 
     #[serde(flatten)]
     pub content: T,
@@ -57,6 +55,17 @@ impl TryFrom<FlattenedSource> for CompilerInput {
     }
 }
 
+#[derive(Clone, Debug, Deserialize)]
+pub struct StandardJson {
+    input: CompilerInput,
+}
+
+impl From<StandardJson> for CompilerInput {
+    fn from(input: StandardJson) -> Self {
+        input.input
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -66,7 +75,6 @@ mod tests {
     fn parse_flattened() {
         test_deserialize_ok(vec![(
             r#"{
-                    "contract_name": "test",
                     "deployed_bytecode": "0x6001",
                     "creation_bytecode": "0x6001",
                     "compiler_version": "0.8.3",
@@ -75,11 +83,9 @@ mod tests {
                     "optimization_runs": 200
                 }"#,
             VerificationRequest::<FlattenedSource> {
-                contract_name: "test".into(),
                 deployed_bytecode: "0x6001".into(),
                 creation_bytecode: "0x6001".into(),
                 compiler_version: "0.8.3".into(),
-                constructor_arguments: None,
                 content: FlattenedSource {
                     source_code: "pragma".into(),
                     evm_version: format!("{}", ethers_solc::EvmVersion::London),
@@ -134,5 +140,36 @@ mod tests {
             None, compiler_input.settings.evm_version,
             "'default' should result in `None`"
         )
+    }
+
+    #[test]
+    fn parse_standard_json() {
+        let input = r#"{
+            "deployed_bytecode": "0x6001",
+            "creation_bytecode": "0x6001",
+            "compiler_version": "v0.8.2+commit.661d1103",
+            "input":{"language":"Solidity","sources":{"./src/contracts/Foo.sol":{"content":"pragma solidity ^0.8.2;\n\ncontract Foo {\n    function bar() external pure returns (uint256) {\n        return 42;\n    }\n}\n"}},"settings":{"metadata":{"useLiteralContent":true},"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"],"":["id","ast"]}}}}
+        }"#;
+
+        let deserialized: VerificationRequest<StandardJson> =
+            serde_json::from_str(&input).expect("Valid json");
+        assert_eq!(
+            deserialized.deployed_bytecode, "0x6001",
+            "Invalid deployed bytecode"
+        );
+        assert_eq!(
+            deserialized.creation_bytecode, "0x6001",
+            "Invalid creation bytecode"
+        );
+        assert_eq!(
+            deserialized.compiler_version, "v0.8.2+commit.661d1103",
+            "Invalid compiler version"
+        );
+
+        let expected_compiler_input = r#"{"language":"Solidity","sources":{"./src/contracts/Foo.sol":{"content":"pragma solidity ^0.8.2;\n\ncontract Foo {\n    function bar() external pure returns (uint256) {\n        return 42;\n    }\n}\n"}},"settings":{"optimizer":{"enabled":true,"runs":200},"metadata":{"useLiteralContent":true},"outputSelection":{"*":{"":["id","ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}}}}"#;
+
+        let actual_compiler_input =
+            serde_json::to_string(&deserialized.content.input).expect("Actual deserialization");
+        assert_eq!(actual_compiler_input, expected_compiler_input);
     }
 }
