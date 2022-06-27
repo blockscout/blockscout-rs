@@ -1,5 +1,8 @@
 use super::types::VersionsResponse;
-use crate::{compiler::Compilers, solidity::CompilerFetcher};
+use crate::{
+    compiler::{Compilers, VersionList},
+    solidity::CompilerFetcher,
+};
 
 use actix_web::{
     web::{self, Json},

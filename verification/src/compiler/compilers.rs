@@ -1,10 +1,8 @@
-use crate::compiler::{CompilerVersion, DownloadCache, Fetcher};
+use crate::compiler::{CompilerVersion, DownloadCache, Fetcher, VersionList};
 use anyhow::anyhow;
 use ethers_solc::{error::SolcError, CompilerInput, CompilerOutput, Solc};
 use std::fmt::{Debug, Display};
 use thiserror::Error;
-
-use super::fetcher::VersionList;
 
 #[derive(Debug, Error)]
 pub enum CompilersError {
@@ -47,8 +45,8 @@ impl<T: Fetcher> Compilers<T> {
     }
 }
 
-impl<T: VersionList> Compilers<T> {
-    pub fn all_versions(&self) -> Vec<&CompilerVersion> {
+impl<T: VersionList> VersionList for Compilers<T> {
+    fn all_versions(&self) -> Vec<&CompilerVersion> {
         self.fetcher.all_versions()
     }
 }
