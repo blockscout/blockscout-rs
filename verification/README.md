@@ -63,7 +63,7 @@ Currently, the service supports 4 types of verification:
 
 ### Input
 
-```json
+```json5
 {
   // Creation transaction input
   "creation_bytecode": "0x608060...0033000b0c",
@@ -94,7 +94,7 @@ Currently, the service supports 4 types of verification:
 ### Input
 The only difference with Single file input is that the `source_code` field was replaced by `sources` allowing to submit several files for verification.
 
-```json
+```json5
 {
   // Creation transaction input
   "creation_bytecode": "0x608060...0033000b0c",
@@ -125,7 +125,7 @@ The only difference with Single file input is that the `source_code` field was r
 `/api/v1/solidity/verify/standard-json`
 
 ### Input
-```json
+```json5
 {
   // Creation transaction input
   "creation_bytecode": "0x608060...0033000b0c",
@@ -149,7 +149,7 @@ Proxies verification requests to Sourcify service and returns responses (https:/
 `/api/v1/sourcify/verify`
 
 ### Input
-```json
+```json5
 {
   // Address of the contract to be verified 
   "address": "0xcafecafecafecafecafecafecafecafecafecafe",
@@ -173,7 +173,7 @@ Currently, all verification requests have the same response format.
 
 ### Success
 If verification succeeds, the service returns 200 with a success status:
-```json
+```json5
 {
   "message": "OK",
   "result": {
@@ -194,7 +194,7 @@ If verification succeeds, the service returns 200 with a success status:
     // it to false and would actually disable all the optimizations.
     "optimization": true,
     // (optional) Specify number of optimizer runs, if optimizations are enabled
-    "optimization_runs" 200,
+    "optimization_runs": 200,
     // Addresses of the libraries
     "contract_libraries": {
       "MyLib": "0x123123..."
@@ -213,7 +213,7 @@ If verification succeeds, the service returns 200 with a success status:
 ### Verification Failure
 If verification fails because of invalid verification data provided to it from outside,
 the service returns 200 with the failure status:
-```json
+```json5
 {
   // Message indicating the reason for failure
   "message": "Compilation error: contracts/3_Ballot.sol:4:1: ParserError: Expected pragma, import directive or contract/interface/library/struct/enum/constant/function definition.\n12312313vddfvfdvfd\n^------^",
@@ -240,7 +240,7 @@ No input required
 
 ### Output
 
-```json
+```json5
 {
   // List of all available versions in descending order
   "builds": ["0.8.15-nightly.2022.5.27+commit.095cc647","0.8.15-nightly.2022.5.25+commit.fdc3c8ee",..]
