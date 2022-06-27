@@ -1,7 +1,5 @@
 # <h1 align="center"> Verification </h1>
 
----
-
 A contract verification service. Runs as an HTTP server and allows
 making verification requests through REST API. It is stateless
 and answers requests based on provided information only.
@@ -25,7 +23,7 @@ cargo install --git https://github.com/blockscout/blockscout-rs --bin verificati
 In that case, you can run the binary using just `verification`.
 
 ## Configuration
-Currently, the service uses a configuration file the path to which is specified via CLI flag `--config-path=[path]`.
+Service uses a configuration file the path to which is specified via CLI flag `--config-path=[path]`.
 The configuration file may contain the following options:
 ```toml
 [server]
@@ -33,28 +31,26 @@ The configuration file may contain the following options:
 addr = "0.0.0.0:8043"
 
 [solidity]
-# if false solidity verification is not supported
+# when disabled, solidity related handlers are not available
 enabled = true
 # list of all available compilers and information about them
 compilers_list_url = "https://raw.githubusercontent.com/blockscout/solc-bin/main/list.json"
 
 [sourcify]
-# if false sourcify verification is not supported
+# when disabled, sourcify related handlers are not available 
 enabled = true
 # Sourcify API endpoint
 api_url = "https://sourcify.dev/server/"
 # number of failing attempts the server makes to Sourcify API 
 verification_attempts = 3
-# the maximum period the service is waiting for the Sourcify response
+# the maximum period (in seconds) the service is waiting for the Sourcify response
 request_timeout = 10
 ```
 For all keys omitted from the configuration file default values from the example above are used.
 
 # Api
 
----
-
-Currently, the service supports 4 types of verification:
+Service supports 4 types of verification:
 ## Single file
 **Note**: Is deprecated and going to be replaced by Multi-Part files verification
 
@@ -169,7 +165,7 @@ Proxies verification requests to Sourcify service and returns responses (https:/
 ```
 
 ## Outputs
-Currently, all verification requests have the same response format.
+All verification requests have the same response format.
 
 ### Success
 If verification succeeds, the service returns 200 with a success status:
@@ -217,7 +213,7 @@ the service returns 200 with the failure status:
 {
   // Message indicating the reason for failure
   "message": "Compilation error: contracts/3_Ballot.sol:4:1: ParserError: Expected pragma, import directive or contract/interface/library/struct/enum/constant/function definition.\n12312313vddfvfdvfd\n^------^",
-  // Status of 1 indicates verification failure
+  // Non-zero status indicates an error code (currently only error code of `1` is possible)
   "status": 1
 }
 ```
