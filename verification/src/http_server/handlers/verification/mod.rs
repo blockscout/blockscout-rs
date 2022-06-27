@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 
-use ethers_core::types::Bytes as DisplayBytes;
 use ethers_solc::CompilerInput;
 use std::{collections::BTreeMap, fmt::Display};
 
@@ -46,9 +45,7 @@ impl From<(CompilerInput, CompilerVersion, VerificationSuccess)> for Verificatio
                 .evm_version
                 .map(|v| v.to_string())
                 .unwrap_or_else(|| "default".to_string()),
-            constructor_arguments: verification_success
-                .constructor_args
-                .map(|b| DisplayBytes::from(b).to_string()),
+            constructor_arguments: verification_success.constructor_args.map(|b| b.to_string()),
             optimization: compiler_input.settings.optimizer.enabled,
             optimization_runs: compiler_input.settings.optimizer.runs,
             contract_libraries: compiler_input
