@@ -51,11 +51,17 @@ request_timeout = 10
 For all keys omitted from the configuration file default values from the example above are used.
 
 # Api
-## Input
-Currently, the service supports 4 types of verification:
 
-### Single file
+---
+
+Currently, the service supports 4 types of verification:
+## Single file
 **Note**: Is deprecated and going to be replaced by Multi-Part files verification
+
+### Route
+`/api/v1/solidity/verify/flatten`
+
+### Input
 
 ```json
 {
@@ -71,7 +77,7 @@ Currently, the service supports 4 types of verification:
   "evm_version": "default",
   // If present, optimizations are enabled with specified number of runs, 
   // otherwise optmimizations are disabled
-  "optimization_runs": "200",
+  "optimization_runs": 200,
   // If present, specify addresses of the libraries.
   "contract_libraries": {
     "MyLib": "0x123123..."
@@ -79,10 +85,15 @@ Currently, the service supports 4 types of verification:
 }
 ```
 
-### Multi-Part files
+## Multi-Part files
 **Note**: currently WIP and is not available right now
 
+### Route
+`/api/v1/solidity/verify/multi-files`
+
+### Input
 The only difference with Single file input is that the `source_code` field was replaced by `sources` allowing to submit several files for verification.
+
 ```json
 {
   // Creation transaction input
@@ -100,7 +111,7 @@ The only difference with Single file input is that the `source_code` field was r
   "evm_version": "default",
   // If present, optimizations are enabled with specified number of runs, 
   // otherwise optmimizations are disabled
-  "optimization_runs": "200",
+  "optimization_runs": 200,
   // If present, specify addresses of the libraries.
   "contract_libraries": {
     "MyLib": "0x123123..."
@@ -108,8 +119,12 @@ The only difference with Single file input is that the `source_code` field was r
 }
 ```
 
-### Standard-JSON input
+## Standard-JSON input
 
+### Route
+`/api/v1/solidity/verify/standard-json`
+
+### Input
 ```json
 {
   // Creation transaction input
@@ -127,8 +142,13 @@ The only difference with Single file input is that the `source_code` field was r
 }
 ```
 
-### Sourcify
+## Sourcify
 Proxies verification requests to Sourcify service and returns responses (https://docs.sourcify.dev/docs/api/server/v1/verify/).
+
+### Route
+`/api/v1/sourcify/verify`
+
+### Input
 ```json
 {
   // Address of the contract to be verified 
@@ -136,14 +156,15 @@ Proxies verification requests to Sourcify service and returns responses (https:/
   // The chain (network) the contract was deployed to 
   // (https://docs.sourcify.dev/docs/api/chains/)
   "chain": "100",
-  // 
+  // Files required for verification (see Sourcify Api)
   "files": {
     "A.sol": "pragma solidity ^0.8.14; contract A {}",
     "B.sol": "pragma solidity ^0.8.14; contract B {}",
     // https://docs.soliditylang.org/en/v0.8.14/metadata.html
-    "metadata.json": { ... }
-    }, 
-    "chosenContract": 1
+    "metadata.json": "{ ... }"
+  },
+  // (optional) see Sourcify Api
+  "chosenContract": 1
 }
 ```
 
@@ -182,7 +203,7 @@ If verification succeeds, the service returns 200 with a success status:
     // constructor arguments used for deploying verified contract
     "constructor_arguments": "0xcafecafecafe",
     // (https://docs.soliditylang.org/en/latest/abi-spec.html?highlight=abi#json)
-    "abi": [ { ... } ],
+    "abi": "[ { ... } ]"
   },
   // Status of 0 indicates successful verification
   "status": 0
@@ -208,3 +229,20 @@ stored in the chain for the contract to be verified, and the compiler version us
 
 In case any of that arguments are invalid, the service return 400 BadRequest error,
 indicating that something is wrong with the caller.
+
+## Version List
+
+### Route
+`/api/v1/solidity/versions`
+
+### Input
+No input required
+
+### Output
+
+```json
+{
+  // List of all available versions in descending order
+  "builds": ["0.8.15-nightly.2022.5.27+commit.095cc647","0.8.15-nightly.2022.5.25+commit.fdc3c8ee",..]
+}
+```
