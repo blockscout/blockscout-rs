@@ -40,6 +40,8 @@ enum VerificationError {
     ExtraDataMismatch(Mismatch<DisplayBytes>),
     #[error("invalid constructor arguments: {0}")]
     InvalidConstructorArguments(DisplayBytes),
+    #[error("library missed")]
+    MissedLibrary,
 }
 
 /// The structure returned as a result when verification successes.
@@ -449,14 +451,14 @@ impl Verifier {
         let deployed_bytecode = {
             let bytes = contract
                 .get_deployed_bytecode_bytes()
-                .expect("contract compiled locally: deployed bytecode must exist");
+                .ok_or(VerificationError::MissedLibrary)?;
             DeployedBytecode::try_from(bytes.0.clone())
                 .map_err(|err| VerificationError::InvalidDeployedBytecode(err.to_string()))?
         };
         let bytecode = {
-            let bytes = contract
-                .get_bytecode_bytes()
-                .expect("contract compiled locally: bytecode must exist");
+            let bytes = contract.get_bytecode_bytes().expect(
+                "contract compiled locally and has valid deployed bytecode: bytecode must be valid",
+            );
             Bytecode::<CompilationResult>::try_from_bytes(bytes.0.clone(), &deployed_bytecode)
                 .expect(
                 "contract compiled locally and has valid deployed bytecode: bytecode must be valid",
