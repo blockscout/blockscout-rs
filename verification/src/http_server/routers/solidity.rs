@@ -4,7 +4,7 @@ use super::Router;
 use crate::{
     compiler::Compilers,
     config::SolidityConfiguration,
-    http_server::handlers::{files_input, standard_json, version_list},
+    http_server::handlers::{multi_part, standard_json, version_list},
     solidity::{CompilerFetcher, Releases},
 };
 
@@ -31,7 +31,7 @@ impl Router for SolidityRouter {
             .app_data(self.cache.clone())
             .service(
                 web::scope("/verify")
-                    .route("/", web::post().to(files_input::verify))
+                    .route("/multi_part/", web::post().to(multi_part::verify))
                     .route("/standard_json/", web::post().to(standard_json::verify)),
             )
             .route("/versions", web::get().to(version_list::get_version_list));

@@ -18,24 +18,24 @@ pub struct VerificationRequest<T> {
 }
 
 #[derive(Debug, Deserialize, PartialEq)]
-pub struct SourcesInput {
+pub struct MultiPartFiles {
     sources: BTreeMap<PathBuf, String>,
     evm_version: String,
     optimization_runs: Option<usize>,
     contract_libraries: Option<BTreeMap<String, String>>,
 }
 
-impl TryFrom<SourcesInput> for CompilerInput {
+impl TryFrom<MultiPartFiles> for CompilerInput {
     type Error = anyhow::Error;
 
-    fn try_from(input: SourcesInput) -> Result<Self, Self::Error> {
+    fn try_from(multi_part: MultiPartFiles) -> Result<Self, Self::Error> {
         let mut settings = Settings::default();
-        settings.optimizer.enabled = Some(input.optimization_runs.is_some());
-        settings.optimizer.runs = input.optimization_runs;
-        if let Some(libs) = input.contract_libraries {
+        settings.optimizer.enabled = Some(multi_part.optimization_runs.is_some());
+        settings.optimizer.runs = multi_part.optimization_runs;
+        if let Some(libs) = multi_part.contract_libraries {
             // we have to know filename for library, but we don't know,
             // so we assume that every file MAY contains all libraries
-            let libs = input
+            let libs = multi_part
                 .sources
                 .iter()
                 .map(|(filename, _)| (PathBuf::from(filename), libs.clone()))
@@ -43,15 +43,15 @@ impl TryFrom<SourcesInput> for CompilerInput {
             settings.libraries = Libraries { libs };
         }
 
-        if input.evm_version != "default" {
+        if multi_part.evm_version != "default" {
             settings.evm_version =
-                Some(EvmVersion::from_str(&input.evm_version).map_err(anyhow::Error::msg)?);
+                Some(EvmVersion::from_str(&multi_part.evm_version).map_err(anyhow::Error::msg)?);
         } else {
             // `Settings::default()` sets the value to the latest available evm version (`Some(London)` for now)
             settings.evm_version = None
         }
 
-        let sources: Sources = input
+        let sources: Sources = multi_part
             .sources
             .into_iter()
             .map(|(name, content)| (name, Source { content }))
@@ -82,7 +82,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_files_input() {
+    fn parse_multi_part() {
         test_deserialize_ok(vec![
             (
                 r#"{
@@ -96,13 +96,13 @@ mod tests {
                         "evm_version": "london",
                         "optimization_runs": 200
                     }"#,
-                VerificationRequest::<SourcesInput> {
+                VerificationRequest::<MultiPartFiles> {
                     contract_name: "test".into(),
                     deployed_bytecode: "0x6001".into(),
                     creation_bytecode: "0x6001".into(),
                     compiler_version: "0.8.3".into(),
                     constructor_arguments: None,
-                    content: SourcesInput {
+                    content: MultiPartFiles {
                         sources: sources(&[("source.sol", "pragma")]),
                         evm_version: format!("{}", ethers_solc::EvmVersion::London),
                         optimization_runs: Some(200),
@@ -127,13 +127,13 @@ mod tests {
                         "Lib.sol": "0x1234567890123456789012345678901234567890"
                     }
                 }"#,
-                VerificationRequest::<SourcesInput> {
+                VerificationRequest::<MultiPartFiles> {
                     contract_name: "test".into(),
                     deployed_bytecode: "0x6001".into(),
                     creation_bytecode: "0x6001".into(),
                     compiler_version: "0.8.3".into(),
                     constructor_arguments: None,
-                    content: SourcesInput {
+                    content: MultiPartFiles {
                         sources: sources(&[
                             ("source.sol", "source"),
                             ("A.sol", "A"),
@@ -152,16 +152,16 @@ mod tests {
         ])
     }
 
-    fn test_to_input(flatten: SourcesInput, expected: &str) {
-        let input: CompilerInput = flatten.try_into().unwrap();
+    fn test_to_input(multi_part: MultiPartFiles, expected: &str) {
+        let input: CompilerInput = multi_part.try_into().unwrap();
         let input_json = serde_json::to_string(&input).unwrap();
         println!("{}", input_json);
         assert_eq!(input_json, expected);
     }
 
     #[test]
-    fn files_source_to_input() {
-        let source = SourcesInput {
+    fn multi_part_to_input() {
+        let mutli_part = MultiPartFiles {
             sources: sources(&[("source.sol", "pragma")]),
             evm_version: format!("{}", ethers_solc::EvmVersion::London),
             optimization_runs: Some(200),
@@ -171,27 +171,27 @@ mod tests {
             )])),
         };
         let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":"pragma"}},"settings":{"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"london","libraries":{"source.sol":{"some_library":"some_address"}}}}"#;
-        test_to_input(source, expected);
-        let multi = SourcesInput {
+        test_to_input(mutli_part, expected);
+        let multi_part = MultiPartFiles {
             sources: sources(&[("source.sol", "")]),
             evm_version: format!("{}", ethers_solc::EvmVersion::SpuriousDragon),
             optimization_runs: None,
             contract_libraries: None,
         };
         let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":""}},"settings":{"optimizer":{"enabled":false},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"spuriousDragon"}}"#;
-        test_to_input(multi, expected);
+        test_to_input(multi_part, expected);
     }
 
     #[test]
     // 'default' should result in None in CompilerInput
     fn default_evm_version() {
-        let flatten = SourcesInput {
+        let multi_part = MultiPartFiles {
             sources: BTreeMap::new(),
             evm_version: "default".to_string(),
             optimization_runs: None,
             contract_libraries: None,
         };
-        let compiler_input = CompilerInput::try_from(flatten).expect("Structure is valid");
+        let compiler_input = CompilerInput::try_from(multi_part).expect("Structure is valid");
         assert_eq!(
             None, compiler_input.settings.evm_version,
             "'default' should result in `None`"
