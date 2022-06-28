@@ -1,24 +1,17 @@
+use multichain_api_gateway::config;
 use std::str;
 
-use url::Url;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use actix_web::web::Data;
+    use actix_web::{test, App};
 
-use multichain_api_gateway::{config, run};
-
-fn spawn_app(settings: config::Settings) {
-    let server = run(settings).expect("Failed to bind address");
-    let _ = tokio::spawn(server);
-}
-
-#[tokio::test]
-/// In the test we check that valid responses are returned from the API.
-/// Especially we call to the same network (xdai), but to different chains (mainnet, testnet).
-async fn expect_result_from_two() {
-    let settings = config::Settings {
-        server: config::ServerSettings {
-            // TODO: randomized port in order to have tests running in parallel
-            addr: "0.0.0.0:8080".parse().unwrap(),
-        },
-        block_scout: config::BlockScoutSettings {
+    /// In the test we check that valid responses are returned from the API.
+    /// Especially we call to the same network (xdai), but to different chains (mainnet, testnet).
+    #[actix_web::test]
+    async fn expect_result_from_two() {
+        let settings = config::BlockScoutSettings {
             base_url: "https://blockscout.com".parse().unwrap(),
             instances: vec![
                 config::Instance("eth".to_string(), "mainnet".to_string()),
@@ -26,33 +19,28 @@ async fn expect_result_from_two() {
                 config::Instance("xdai".to_string(), "testnet".to_string()),
             ],
             concurrent_requests: 1,
-        },
-    };
+        };
 
-    spawn_app(settings.clone());
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(settings.clone()))
+                .configure(config),
+        )
+        .await;
 
-    let client = reqwest::Client::new();
+        let uri = "/api?module=block&action=getblockreward&blockno=0";
 
-    let mut url = Url::parse("http://localhost:8080/").unwrap();
-    url.set_path("/api");
-    url.set_query(Option::from("module=block&action=getblockreward&blockno=0"));
+        let req = test::TestRequest::get().uri(uri).to_request();
 
-    let response = client
-        .get(url)
-        .send()
-        .await
-        .expect("Failed to execute request.");
+        let bytes = test::call_and_read_body(&app, req).await;
+        let str = str::from_utf8(bytes.as_ref()).unwrap().to_string();
+        let actual_raw: serde_json::Value = serde_json::from_str(str.as_str()).unwrap();
+        let actual = serde_json::to_string_pretty(&actual_raw).unwrap();
 
-    assert!(response.status().is_success());
+        let mut expected = std::fs::read_to_string("tests/res/result_from_two.json").unwrap();
+        // Remove trailing newline that comes from "read_to_string"
+        expected.pop();
 
-    let mut expected = std::fs::read_to_string("tests/res/result_from_two.json").unwrap();
-    // Remove trailing newline that comes from "read_to_string"
-    expected.pop();
-
-    let bytes = response.bytes().await.unwrap();
-    let str = str::from_utf8(bytes.as_ref()).unwrap().to_string();
-    let actual_raw: serde_json::Value = serde_json::from_str(str.as_str()).unwrap();
-    let actual = serde_json::to_string_pretty(&actual_raw).unwrap();
-
-    assert_eq!(expected, actual);
+        assert_eq!(expected, actual);
+    }
 }
