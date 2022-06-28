@@ -18,7 +18,7 @@ async fn expect_result_from_two() {
             // TODO: randomized port in order to have tests running in parallel
             addr: "0.0.0.0:8080".parse().unwrap(),
         },
-        blockscout: config::BlockScoutSettings {
+        block_scout: config::BlockScoutSettings {
             base_url: "https://blockscout.com".parse().unwrap(),
             instances: vec![
                 config::Instance("eth".to_string(), "mainnet".to_string()),

@@ -95,7 +95,7 @@ pub fn run(settings: Settings) -> Result<Server, std::io::Error> {
 
     let server = HttpServer::new(move || {
         // We want to pass the settings to the handler function, so we create clones: s1, s2
-        let s1 = settings.blockscout.clone();
+        let s1 = settings.block_scout.clone();
         App::new().route(
             "/{_}", // We want to match every GET-request regardless of URL
             web::get().to(move |request| {
