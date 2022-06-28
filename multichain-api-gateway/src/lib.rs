@@ -55,10 +55,12 @@ fn merge_responses(responses: Vec<(Instance, String)>) -> serde_json::Map<String
     let mut result: serde_json::Map<String, Value> = serde_json::Map::new();
 
     responses
-        .iter()
-        .map(|(instance, str)| match serde_json::from_str(str.as_str()) {
-            Ok(value) => (instance.clone(), value),
-            Err(e) => (instance.clone(), Value::String(e.to_string())),
+        .into_iter()
+        .map(|(instance, str)| {
+            (
+                instance,
+                serde_json::from_str(str.as_str()).unwrap_or_else(|e| Value::String(e.to_string())),
+            )
         })
         .for_each(|(Instance(net, subnet), value)| {
             let kv_subnets = result
