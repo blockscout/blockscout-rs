@@ -30,25 +30,20 @@ async fn make_requests(
     let client = Client::new();
 
     stream::iter(urls)
-        .map(|(instance, url)| {
-            let client = &client;
-            async move {
-                let resp = client.get(url).send().await.unwrap();
-                (instance.clone(), resp.bytes().await)
-            }
+        .map(|(instance, url)| async {
+            let resp = client.get(url).send().await.unwrap();
+            (instance, resp.bytes().await)
         })
         .buffer_unordered(concurrent_requests)
-        .collect::<Vec<_>>()
-        .await
-        .iter()
         .map(|(instance, response)| match response {
             Ok(bytes) => (
-                instance.clone(),
+                instance,
                 str::from_utf8(bytes.as_ref()).unwrap().to_string(),
             ),
-            Err(e) => (instance.clone(), e.to_string()),
+            Err(e) => (instance, e.to_string()),
         })
         .collect()
+        .await
 }
 
 fn merge_responses(responses: Vec<(Instance, String)>) -> serde_json::Map<String, Value> {
