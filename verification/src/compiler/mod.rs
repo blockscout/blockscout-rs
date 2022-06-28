@@ -1,6 +1,9 @@
 mod compilers;
-pub mod download_cache;
-pub mod fetcher;
-pub mod version;
+mod download_cache;
+mod fetcher;
+mod version;
 
 pub use compilers::{Compilers, CompilersError};
+pub use download_cache::DownloadCache;
+pub use fetcher::{Fetcher, VersionList};
+pub use version::CompilerVersion;

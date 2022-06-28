@@ -1,4 +1,4 @@
-use crate::compiler::{download_cache::DownloadCache, fetcher::Fetcher, version::CompilerVersion};
+use crate::compiler::{CompilerVersion, DownloadCache, Fetcher, VersionList};
 use anyhow::anyhow;
 use ethers_solc::{error::SolcError, CompilerInput, CompilerOutput, Solc};
 use std::fmt::{Debug, Display};
@@ -42,5 +42,11 @@ impl<T: Fetcher> Compilers<T> {
         let output = solc.compile(&input)?;
 
         Ok(output)
+    }
+}
+
+impl<T: VersionList> VersionList for Compilers<T> {
+    fn all_versions(&self) -> Vec<&CompilerVersion> {
+        self.fetcher.all_versions()
     }
 }

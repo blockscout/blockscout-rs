@@ -5,7 +5,8 @@ use url::Url;
 
 #[cfg(target_os = "linux")]
 const DEFAULT_COMPILER_LIST: &str =
-    "https://raw.githubusercontent.com/blockscout/solc-bin/main/list.json";
+    //"https://raw.githubusercontent.com/blockscout/solc-bin/main/list.json";
+    "https://solc-bin.ethereum.org/linux-amd64/list.json";
 #[cfg(target_os = "macos")]
 const DEFAULT_COMPILER_LIST: &str = "https://solc-bin.ethereum.org/macosx-amd64/list.json";
 #[cfg(target_os = "windows")]
