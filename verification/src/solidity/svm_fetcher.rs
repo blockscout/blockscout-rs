@@ -1,4 +1,4 @@
-use crate::compiler::{fetcher::Fetcher, version::CompilerVersion};
+use crate::compiler::{CompilerVersion, Fetcher};
 use async_trait::async_trait;
 use ethers_solc::Solc;
 use std::path::PathBuf;
