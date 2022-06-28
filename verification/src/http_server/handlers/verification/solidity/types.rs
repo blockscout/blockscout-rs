@@ -33,7 +33,7 @@ impl TryFrom<SourcesInput> for CompilerInput {
         settings.optimizer.enabled = Some(input.optimization_runs.is_some());
         settings.optimizer.runs = input.optimization_runs;
         if let Some(libs) = input.contract_libraries {
-            // we have to know filename for library, we don't know,
+            // we have to know filename for library, but we don't know,
             // so we assume that every file MAY contains all libraries
             let libs = input
                 .sources
