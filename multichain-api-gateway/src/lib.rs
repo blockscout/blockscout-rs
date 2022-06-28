@@ -1,5 +1,6 @@
 use std::{net::TcpListener, str};
 
+use actix_web::web::Data;
 use actix_web::{dev::Server, web, App, HttpRequest, HttpResponse, HttpServer};
 use futures::{stream, StreamExt};
 use reqwest::Client;
@@ -79,8 +80,9 @@ async fn handle_default_request(
     merge_responses(responses)
 }
 
-async fn router_get(request: HttpRequest, settings: BlockScoutSettings) -> HttpResponse {
+async fn router_get(request: HttpRequest) -> HttpResponse {
     // TODO: parse and pass custom request to appropriate handler
+    let settings = request.app_data::<Data<BlockScoutSettings>>().unwrap();
     let json = handle_default_request(request.path(), request.query_string(), &settings).await;
     HttpResponse::Ok().json(json)
 }
@@ -94,15 +96,12 @@ pub fn run(settings: Settings) -> Result<Server, std::io::Error> {
     let listener = TcpListener::bind(settings.server.addr)?;
 
     let server = HttpServer::new(move || {
-        // We want to pass the settings to the handler function, so we create clones: s1, s2
-        let s1 = settings.block_scout.clone();
-        App::new().route(
-            "/{_}", // We want to match every GET-request regardless of URL
-            web::get().to(move |request| {
-                let s2 = s1.clone();
-                router_get(request, s2)
-            }),
-        )
+        App::new()
+            .app_data(Data::new(settings.block_scout.clone()))
+            .route(
+                "/{_}", // We want to match every GET-request regardless of URL
+                web::get().to(router_get),
+            )
     })
     .listen(listener)?
     .run();
