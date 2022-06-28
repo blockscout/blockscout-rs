@@ -1,3 +1,5 @@
+extern crate core;
+
 mod cli;
 mod compiler;
 mod config;
