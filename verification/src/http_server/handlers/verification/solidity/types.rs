@@ -74,38 +74,82 @@ mod tests {
     use super::*;
     use crate::tests::parse::test_deserialize_ok;
 
-    fn one_source(name: &str, content: &str) -> BTreeMap<PathBuf, String> {
-        BTreeMap::from([(PathBuf::from(name), content.into())])
+    fn sources(sources: &[(&str, &str)]) -> BTreeMap<PathBuf, String> {
+        sources
+            .iter()
+            .map(|(name, content)| (PathBuf::from(name), content.to_string()))
+            .collect()
     }
 
     #[test]
     fn parse_files_input() {
-        test_deserialize_ok(vec![(
-            r#"{
+        test_deserialize_ok(vec![
+            (
+                r#"{
+                        "contract_name": "test",
+                        "deployed_bytecode": "0x6001",
+                        "creation_bytecode": "0x6001",
+                        "compiler_version": "0.8.3",
+                        "sources": {
+                            "source.sol": "pragma"
+                        },
+                        "evm_version": "london",
+                        "optimization_runs": 200
+                    }"#,
+                VerificationRequest::<SourcesInput> {
+                    contract_name: "test".into(),
+                    deployed_bytecode: "0x6001".into(),
+                    creation_bytecode: "0x6001".into(),
+                    compiler_version: "0.8.3".into(),
+                    constructor_arguments: None,
+                    content: SourcesInput {
+                        sources: sources(&[("source.sol", "pragma")]),
+                        evm_version: format!("{}", ethers_solc::EvmVersion::London),
+                        optimization_runs: Some(200),
+                        contract_libraries: None,
+                    },
+                },
+            ),
+            (
+                r#"{
                     "contract_name": "test",
                     "deployed_bytecode": "0x6001",
                     "creation_bytecode": "0x6001",
                     "compiler_version": "0.8.3",
                     "sources": {
-                        "source.sol": "pragma"
+                        "source.sol": "source",
+                        "A.sol": "A",
+                        "B": "B",
+                        "metadata.json": "metadata"
                     },
-                    "evm_version": "london",
-                    "optimization_runs": 200
+                    "evm_version": "spuriousDragon",
+                    "contract_libraries": {
+                        "Lib.sol": "0x1234567890123456789012345678901234567890"
+                    }
                 }"#,
-            VerificationRequest::<SourcesInput> {
-                contract_name: "test".into(),
-                deployed_bytecode: "0x6001".into(),
-                creation_bytecode: "0x6001".into(),
-                compiler_version: "0.8.3".into(),
-                constructor_arguments: None,
-                content: SourcesInput {
-                    sources: one_source("source.sol", "pragma"),
-                    evm_version: format!("{}", ethers_solc::EvmVersion::London),
-                    optimization_runs: Some(200),
-                    contract_libraries: None,
+                VerificationRequest::<SourcesInput> {
+                    contract_name: "test".into(),
+                    deployed_bytecode: "0x6001".into(),
+                    creation_bytecode: "0x6001".into(),
+                    compiler_version: "0.8.3".into(),
+                    constructor_arguments: None,
+                    content: SourcesInput {
+                        sources: sources(&[
+                            ("source.sol", "source"),
+                            ("A.sol", "A"),
+                            ("B", "B"),
+                            ("metadata.json", "metadata"),
+                        ]),
+                        evm_version: format!("{}", ethers_solc::EvmVersion::SpuriousDragon),
+                        optimization_runs: None,
+                        contract_libraries: Some(BTreeMap::from([(
+                            "Lib.sol".into(),
+                            "0x1234567890123456789012345678901234567890".into(),
+                        )])),
+                    },
                 },
-            },
-        )])
+            ),
+        ])
     }
 
     fn test_to_input(flatten: SourcesInput, expected: &str) {
@@ -118,7 +162,7 @@ mod tests {
     #[test]
     fn files_source_to_input() {
         let source = SourcesInput {
-            sources: one_source("source.sol", "pragma"),
+            sources: sources(&[("source.sol", "pragma")]),
             evm_version: format!("{}", ethers_solc::EvmVersion::London),
             optimization_runs: Some(200),
             contract_libraries: Some(BTreeMap::from([(
@@ -129,7 +173,7 @@ mod tests {
         let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":"pragma"}},"settings":{"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"london","libraries":{"source.sol":{"some_library":"some_address"}}}}"#;
         test_to_input(source, expected);
         let multi = SourcesInput {
-            sources: one_source("source.sol", ""),
+            sources: sources(&[("source.sol", "")]),
             evm_version: format!("{}", ethers_solc::EvmVersion::SpuriousDragon),
             optimization_runs: None,
             contract_libraries: None,
