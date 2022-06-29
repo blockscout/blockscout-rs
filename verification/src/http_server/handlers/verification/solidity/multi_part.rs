@@ -1,4 +1,4 @@
-use super::types::{FlattenedSource, VerificationRequest};
+use super::types::{MultiPartFiles, VerificationRequest};
 use crate::{
     compiler::{CompilerVersion, Compilers},
     http_server::handlers::verification::{
@@ -17,7 +17,7 @@ use std::str::FromStr;
 
 pub async fn verify(
     compilers: web::Data<Compilers<CompilerFetcher>>,
-    params: Json<VerificationRequest<FlattenedSource>>,
+    params: Json<VerificationRequest<MultiPartFiles>>,
 ) -> Result<Json<VerificationResponse>, Error> {
     let params = params.into_inner();
 

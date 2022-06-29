@@ -3,7 +3,7 @@
 use ethers_solc::CompilerInput;
 use std::{collections::BTreeMap, fmt::Display};
 
-use crate::{compiler::version::CompilerVersion, solidity::VerificationSuccess};
+use crate::{compiler::CompilerVersion, solidity::VerificationSuccess};
 use serde::{Deserialize, Serialize};
 
 pub mod solidity;

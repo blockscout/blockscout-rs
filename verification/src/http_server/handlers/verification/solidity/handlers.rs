@@ -1,5 +1,5 @@
 use crate::{
-    compiler::{fetcher::Fetcher, version::CompilerVersion, Compilers, CompilersError},
+    compiler::{Fetcher, CompilerVersion, Compilers, CompilersError},
     solidity::{VerificationSuccess, Verifier, VerifierInitializationError},
     VerificationResponse, VerificationResult,
 };
