@@ -1,6 +1,7 @@
+use std::collections::HashMap;
 use std::{net::TcpListener, str};
 
-use actix_web::web::Data;
+use actix_web::web::{Data, Json};
 use actix_web::{dev::Server, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
 use futures::{stream, StreamExt};
 use reqwest::Client;
@@ -61,24 +62,19 @@ async fn make_requests(apis_endpoints: APIsEndpoints) -> Vec<(Instance, String)>
         .await
 }
 
-fn merge_responses(responses: Vec<(Instance, String)>) -> serde_json::Map<String, Value> {
-    let mut result: serde_json::Map<String, Value> = serde_json::Map::new();
+type Responses = HashMap<String, HashMap<String, Value>>;
 
-    responses
+fn merge_responses(json_resonses: Vec<(Instance, String)>) -> Responses {
+    let mut result: Responses = HashMap::new();
+
+    json_resonses
         .into_iter()
-        .map(|(instance, str)| {
-            (
-                instance,
-                serde_json::from_str(str.as_str()).unwrap_or_else(|e| Value::String(e.to_string())),
-            )
-        })
         .for_each(|(Instance(net, subnet), value)| {
-            let kv_subnets = result
-                .entry(net)
-                .or_insert(Value::from(serde_json::Map::new()))
-                .as_object_mut()
-                .unwrap();
-            kv_subnets.insert(subnet, value);
+            let kv_subnet = result.entry(net).or_insert(HashMap::new());
+            kv_subnet.insert(
+                subnet,
+                serde_json::from_str(&value).unwrap_or_else(|e| Value::String(e.to_string())),
+            );
         });
 
     result
@@ -91,13 +87,10 @@ fn enrich_apis(query: &str, apis_endpoints: &mut APIsEndpoints) {
         .for_each(|(_, url)| url.set_query(Some(query)))
 }
 
-async fn handle_default_request(
-    query: &str,
-    mut apis_endpoints: APIsEndpoints,
-) -> serde_json::Map<String, Value> {
+async fn handle_default_request(query: &str, mut apis_endpoints: APIsEndpoints) -> Json<Responses> {
     enrich_apis(query, &mut apis_endpoints);
     let responses = make_requests(apis_endpoints).await;
-    merge_responses(responses)
+    Json(merge_responses(responses))
 }
 
 pub async fn router_get(
@@ -177,20 +170,20 @@ mod tests {
 
         let actual = merge_responses(responses);
 
-        let expected = serde_json::Map::from_iter(vec![
+        let expected = HashMap::from_iter(vec![
             (
                 "eth".to_string(),
-                Value::Object(serde_json::Map::from_iter(vec![(
+                HashMap::from_iter(vec![(
                     "mainnet".to_string(),
                     Value::Object(serde_json::Map::from_iter(vec![(
                         "hello".to_string(),
                         Value::String("world".to_string()),
                     )])),
-                )])),
+                )]),
             ),
             (
                 "xdai".to_string(),
-                Value::Object(serde_json::Map::from_iter(vec![
+                HashMap::from_iter(vec![
                     (
                         "mainnet".to_string(),
                         Value::Object(serde_json::Map::from_iter(vec![(
@@ -205,7 +198,7 @@ mod tests {
                             Value::String("qux".to_string()),
                         )])),
                     ),
-                ])),
+                ]),
             ),
         ]);
 
