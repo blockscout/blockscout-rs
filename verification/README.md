@@ -50,45 +50,14 @@ For all keys omitted from the configuration file default values from the example
 
 # Api
 
-Service supports 4 types of verification:
-## Single file
-**Note**: Is deprecated and going to be replaced by Multi-Part files verification
-
-### Route
-`/api/v1/solidity/verify/flatten`
-
-### Input
-
-```json5
-{
-  // Creation transaction input
-  "creation_bytecode": "0x608060...0033000b0c",
-  // Bytecode stored in the blockchain
-  "deployed_bytecode": "0x608060...0033",
-  // Compiler version used to compile the contract
-  "compiler_version": "v0.8.14+commit.80d49f37",
-  // Source code
-  "source_code": "pragma solidity ^0.8.14; ...",
-  // Version of the EVM to compile for
-  "evm_version": "default",
-  // If present, optimizations are enabled with specified number of runs, 
-  // otherwise optmimizations are disabled
-  "optimization_runs": 200,
-  // If present, specify addresses of the libraries.
-  "contract_libraries": {
-    "MyLib": "0x123123..."
-  }
-}
-```
+Service supports 3 types of verification:
 
 ## Multi-Part files
-**Note**: currently WIP and is not available right now
 
 ### Route
 `/api/v1/solidity/verify/multi-files`
 
 ### Input
-The only difference with Single file input is that the `source_code` field was replaced by `sources` allowing to submit several files for verification.
 
 ```json5
 {
@@ -239,6 +208,6 @@ No input required
 ```json5
 {
   // List of all available versions in descending order
-  "builds": ["0.8.15-nightly.2022.5.27+commit.095cc647","0.8.15-nightly.2022.5.25+commit.fdc3c8ee",..]
+  "versions": ["0.8.15-nightly.2022.5.27+commit.095cc647","0.8.15-nightly.2022.5.25+commit.fdc3c8ee",..]
 }
 ```
