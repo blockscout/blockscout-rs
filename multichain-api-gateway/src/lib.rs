@@ -11,31 +11,45 @@ use crate::config::{BlockScoutSettings, Instance, Settings};
 
 pub mod config;
 
-fn build_urls(path: &str, query: &str, settings: &BlockScoutSettings) -> Vec<(Instance, Url)> {
-    settings
-        .instances
-        .iter()
-        .map(|Instance(net, subnet)| {
-            let mut url = settings.base_url.clone();
-            url.set_path(&format!("{}/{}{}", net, subnet, path));
-            url.set_query(Some(query));
-            (Instance(net.clone(), subnet.clone()), url)
-        })
-        .collect::<Vec<_>>()
+#[derive(Clone)]
+pub struct APIsEndpoints {
+    apis: Vec<(Instance, Url)>,
+    concurrent_requests: usize,
 }
 
-async fn make_requests(
-    urls: Vec<(Instance, Url)>,
-    concurrent_requests: usize,
-) -> Vec<(Instance, String)> {
+/// Assumptions:
+/// 1. All api calls expected to have trailing path "/api"
+///     e.g. "<base_url>/<...>/<...>/api?<query>"
+/// 2. First two segments of path of api call expected to be (network, chain)
+///     e.g. "<base_url>/<network>/<chain>/<...>/<...>"
+/// Taking it to account, we expect the following api call urls:
+///     e.g. <base_url>/<network>/<chain>/api?<query>   
+impl TryFrom<BlockScoutSettings> for APIsEndpoints {
+    type Error = &'static str;
+
+    fn try_from(settings: BlockScoutSettings) -> Result<Self, Self::Error> {
+        let mut apis = Vec::new();
+        for Instance(net, subnet) in settings.instances {
+            let mut url = settings.base_url.clone();
+            url.set_path(&format!("{}/{}/api", net, subnet));
+            apis.push((Instance(net, subnet), url));
+        }
+        Ok(Self {
+            apis,
+            concurrent_requests: settings.concurrent_requests,
+        })
+    }
+}
+
+async fn make_requests(apis_endpoints: APIsEndpoints) -> Vec<(Instance, String)> {
     let client = Client::new();
 
-    stream::iter(urls)
+    stream::iter(apis_endpoints.apis)
         .map(|(instance, url)| async {
             let resp = client.get(url).send().await.unwrap();
             (instance, resp.bytes().await)
         })
-        .buffer_unordered(concurrent_requests)
+        .buffer_unordered(apis_endpoints.concurrent_requests)
         .map(|(instance, response)| match response {
             Ok(bytes) => (
                 instance,
@@ -70,30 +84,39 @@ fn merge_responses(responses: Vec<(Instance, String)>) -> serde_json::Map<String
     result
 }
 
+fn enrich_apis(query: &str, apis_endpoints: &mut APIsEndpoints) {
+    apis_endpoints
+        .apis
+        .iter_mut()
+        .for_each(|(_, url)| url.set_query(Some(query)))
+}
+
 async fn handle_default_request(
-    path: &str,
     query: &str,
-    settings: &BlockScoutSettings,
+    mut apis_endpoints: APIsEndpoints,
 ) -> serde_json::Map<String, Value> {
-    let urls = build_urls(path, query, settings);
-    let responses = make_requests(urls, settings.concurrent_requests).await;
+    enrich_apis(query, &mut apis_endpoints);
+    let responses = make_requests(apis_endpoints).await;
     merge_responses(responses)
 }
 
 pub async fn router_get(
     request: HttpRequest,
-    settings: Data<BlockScoutSettings>,
+    apis_endpoints: Data<APIsEndpoints>,
 ) -> impl Responder {
-    let json = handle_default_request(request.path(), request.query_string(), &settings).await;
+    let json =
+        handle_default_request(request.query_string(), apis_endpoints.get_ref().clone()).await;
     HttpResponse::Ok().json(json)
 }
 
 pub fn run(settings: Settings) -> Result<Server, std::io::Error> {
     let listener = TcpListener::bind(settings.server.addr)?;
 
+    let apis_endpoints: APIsEndpoints = settings.block_scout.try_into().unwrap();
+
     let server = HttpServer::new(move || {
         App::new()
-            .app_data(Data::new(settings.block_scout.clone()))
+            .app_data(Data::new(apis_endpoints.clone()))
             .default_service(web::route().to(router_get))
     })
     .listen(listener)?
@@ -107,7 +130,6 @@ mod tests {
 
     #[test]
     fn check_build_urls() {
-        let path = "/api";
         let query = "hello=world?foo=bar";
         let settings = BlockScoutSettings {
             base_url: Url::parse("https://blockscout.com/").unwrap(),
@@ -129,9 +151,11 @@ mod tests {
             ),
         ];
 
-        let actual = build_urls(path, query, &settings);
+        // let actual = build_urls(path, query, &settings);
+        let mut actual = APIsEndpoints::try_from(settings).unwrap();
+        enrich_apis(query, &mut actual);
 
-        assert_eq!(actual, expected);
+        assert_eq!(actual.apis, expected);
     }
 
     #[test]

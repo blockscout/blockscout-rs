@@ -6,6 +6,7 @@ mod tests {
     use super::*;
     use actix_web::web::Data;
     use actix_web::{test, web, App};
+    use multichain_api_gateway::APIsEndpoints;
 
     /// In the test we check that valid responses are returned from the API.
     /// Especially we call to the same network (xdai), but to different chains (mainnet, testnet).
@@ -21,9 +22,11 @@ mod tests {
             concurrent_requests: 1,
         };
 
+        let apis_endpoints: APIsEndpoints = settings.try_into().unwrap();
+
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(settings.clone()))
+                .app_data(Data::new(apis_endpoints.clone()))
                 .default_service(web::route().to(router_get)),
         )
         .await;
@@ -34,6 +37,7 @@ mod tests {
 
         let bytes = test::call_and_read_body(&app, req).await;
         let str = str::from_utf8(bytes.as_ref()).unwrap().to_string();
+        println!("{}", str);
         let actual_raw: serde_json::Value = serde_json::from_str(str.as_str()).unwrap();
         let actual = serde_json::to_string_pretty(&actual_raw).unwrap();
 
