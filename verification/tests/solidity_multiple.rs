@@ -10,7 +10,7 @@ use verification::{
 };
 
 const CONTRACTS_DIR: &'static str = "tests/contracts";
-const ROUTE: &'static str = "/api/v1/solidity/verify/multiple";
+const ROUTE: &'static str = "/api/v1/solidity/verify/multiple-files";
 
 async fn global_app_router() -> &'static AppRouter {
     static APP_ROUTER: OnceCell<AppRouter> = OnceCell::new();
