@@ -55,7 +55,7 @@ Service supports 3 types of verification:
 ## Multi-Part files
 
 ### Route
-`/api/v1/solidity/verify/multi`
+`/api/v1/solidity/verify/multiple`
 
 ### Input
 
