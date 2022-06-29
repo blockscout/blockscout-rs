@@ -94,10 +94,15 @@ pub fn get_config() -> Settings {
         }
     };
 
-    args.base_url.map(|url| config.block_scout.base_url = url);
-    args.concurrent_requests
-        .map(|concurrent_requests| config.block_scout.concurrent_requests = concurrent_requests);
-    args.address.map(|address| config.server.addr = address);
+    if let Some(base_url) = args.base_url {
+        config.block_scout.base_url = base_url;
+    }
+    if let Some(concurrent_requests) = args.concurrent_requests {
+        config.block_scout.concurrent_requests = concurrent_requests;
+    }
+    if let Some(address) = args.address {
+        config.server.addr = address;
+    }
 
     config
 }
