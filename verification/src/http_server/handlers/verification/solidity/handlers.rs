@@ -42,6 +42,12 @@ where
             Ok(VerificationResponse::ok(verification_result))
         }
         Err(CompileAndVerifyError::VerifierInitialization(err)) => Err(error::ErrorBadRequest(err)),
+        Err(CompileAndVerifyError::Compilation(CompilersError::Fetch(err))) => {
+            Err(error::ErrorInternalServerError(err))
+        }
+        Err(CompileAndVerifyError::Compilation(CompilersError::Internal(err))) => {
+            Err(error::ErrorInternalServerError(err))
+        }
         Err(err) => Ok(VerificationResponse::err(err)),
     }
 }
