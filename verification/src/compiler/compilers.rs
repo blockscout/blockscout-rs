@@ -74,6 +74,7 @@ mod tests {
     use crate::solidity::{CompilerFetcher, Releases};
     use std::{env::temp_dir, str::FromStr};
 
+    use crate::consts::DEFAULT_COMPILER_LIST;
     use async_once_cell::OnceCell;
     use ethers_solc::artifacts::{Source, Sources};
     use std::default::Default;
@@ -82,9 +83,7 @@ mod tests {
         static COMPILERS: OnceCell<Compilers<CompilerFetcher>> = OnceCell::new();
         COMPILERS
             .get_or_init(async {
-                let url = "https://solc-bin.ethereum.org/linux-amd64/list.json"
-                    .try_into()
-                    .expect("Getting url");
+                let url = DEFAULT_COMPILER_LIST.try_into().expect("Getting url");
                 let releases = Releases::fetch_from_url(&url)
                     .await
                     .expect("Fetch releases");

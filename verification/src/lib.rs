@@ -3,6 +3,7 @@ extern crate core;
 mod cli;
 mod compiler;
 mod config;
+mod consts;
 mod http_server;
 mod solidity;
 mod types;
