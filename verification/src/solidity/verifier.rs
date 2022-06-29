@@ -1,6 +1,6 @@
 #![allow(dead_code, unused)]
 
-use crate::types::Mismatch;
+use crate::{solidity::verifier::VerificationError::InternalError, types::Mismatch};
 use bytes::{Buf, Bytes};
 use ethabi::{Constructor, Token};
 use ethers_core::types::Bytes as DisplayBytes;
@@ -42,6 +42,8 @@ enum VerificationError {
     InvalidConstructorArguments(DisplayBytes),
     #[error("library missed")]
     MissedLibrary,
+    #[error("internal error: {0}")]
+    InternalError(String),
 }
 
 /// The structure returned as a result when verification successes.
@@ -426,6 +428,7 @@ impl Verifier {
     pub fn verify(&self, output: CompilerOutput) -> Option<VerificationSuccess> {
         for (path, contracts) in output.contracts {
             for (name, contract) in contracts {
+                // TODO: add logging in case if error is `VerificationError::InternalError`
                 if let Ok((abi, constructor_args)) = self.compare(&contract) {
                     return Some(VerificationSuccess {
                         file_path: path,
@@ -456,17 +459,17 @@ impl Verifier {
                 .map_err(|err| VerificationError::InvalidDeployedBytecode(err.to_string()))?
         };
         let bytecode = {
-            let bytes = contract.get_bytecode_bytes().expect(
-                "contract compiled locally and has valid deployed bytecode: bytecode must be valid",
-            );
+            let bytes = contract
+                .get_bytecode_bytes()
+                .ok_or_else(|| VerificationError::InternalError("Missing bytecode bytes".into()))?;
             Bytecode::<CompilationResult>::try_from_bytes(bytes.0.clone(), &deployed_bytecode)
-                .expect(
-                "contract compiled locally and has valid deployed bytecode: bytecode must be valid",
-            )
+                .map_err(|err| {
+                    VerificationError::InternalError(format!("Invalid bytecode bytes: {:?}", err))
+                })?
         };
         let abi = contract
             .get_abi()
-            .expect("contract was compiled locally: abi must exist");
+            .ok_or_else(|| InternalError("Missing abi".into()))?;
 
         self.check_metadata_hash_solc_versions(&deployed_bytecode)?;
 
