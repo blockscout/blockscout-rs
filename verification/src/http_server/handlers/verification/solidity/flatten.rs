@@ -1,11 +1,11 @@
 use super::types::{FlattenedSource, VerificationRequest};
 use crate::{
-    compiler::{version::CompilerVersion, Compilers},
+    compiler::{CompilerVersion, Compilers},
     http_server::handlers::verification::{
         solidity::handlers::{compile_and_verify_handler, CompileAndVerifyInput},
         VerificationResponse,
     },
-    solidity::compiler_fetcher::CompilerFetcher,
+    solidity::CompilerFetcher,
 };
 use actix_web::{
     error,

@@ -2,7 +2,7 @@ use ethers_solc::{
     artifacts::{Libraries, Settings},
     CompilerInput, EvmVersion,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::PathBuf, str::FromStr};
 
 #[derive(Debug, Deserialize, PartialEq)]
@@ -55,6 +55,11 @@ impl TryFrom<FlattenedSource> for CompilerInput {
             settings,
         })
     }
+}
+
+#[derive(Debug, Serialize)]
+pub struct VersionsResponse {
+    pub versions: Vec<String>,
 }
 
 #[cfg(test)]
@@ -116,7 +121,7 @@ mod tests {
             optimization_runs: None,
             contract_libraries: None,
         };
-        let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":""}},"settings":{"optimizer":{"enabled":false},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"spuriousDragon"}}"#;
+        let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":""}},"settings":{"optimizer":{"enabled":false},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"spuriousDragon","libraries":{}}}"#;
         test_to_input(flatten, expected);
     }
 
