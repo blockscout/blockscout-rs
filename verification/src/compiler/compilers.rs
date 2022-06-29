@@ -1,4 +1,4 @@
-use crate::compiler::{download_cache::DownloadCache, fetcher::Fetcher, version::CompilerVersion};
+use crate::compiler::{CompilerVersion, DownloadCache, Fetcher, VersionList};
 use anyhow::anyhow;
 use ethers_solc::{
     artifacts::{self, Severity},
@@ -50,7 +50,9 @@ impl<T: Fetcher> Compilers<T> {
         // Compilations errors, warnings and info messages are returned in `CompilerOutput.error`
         let mut errors = Vec::new();
         for err in &output.errors {
-            if err.severity == Severity::Error { errors.push(err.clone()) }
+            if err.severity == Severity::Error {
+                errors.push(err.clone())
+            }
         }
         if !errors.is_empty() {
             return Err(CompilersError::Compilation(errors));
@@ -60,16 +62,20 @@ impl<T: Fetcher> Compilers<T> {
     }
 }
 
+impl<T: VersionList> VersionList for Compilers<T> {
+    fn all_versions(&self) -> Vec<&CompilerVersion> {
+        self.fetcher.all_versions()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::solidity::compiler_fetcher::{CompilerFetcher, Releases};
+    use crate::solidity::{CompilerFetcher, Releases};
     use std::{env::temp_dir, str::FromStr};
 
     use async_once_cell::OnceCell;
-    use ethers_solc::{
-        artifacts::{Source, Sources},
-    };
+    use ethers_solc::artifacts::{Source, Sources};
     use std::default::Default;
 
     async fn global_compilers() -> &'static Compilers<CompilerFetcher> {
