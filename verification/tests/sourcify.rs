@@ -49,6 +49,7 @@ async fn should_return_200() {
         serde_json::json!({
             "message": "OK",
             "result": {
+                "file_name": "contracts/1_Storage.sol",
                 "contract_name": "Storage",
                 "compiler_version": "0.8.7+commit.e28d00a7",
                 "evm_version": "london",

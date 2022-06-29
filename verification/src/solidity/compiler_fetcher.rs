@@ -1,4 +1,4 @@
-use crate::compiler::{fetcher::Fetcher, version::CompilerVersion};
+use crate::compiler::{CompilerVersion, Fetcher, VersionList};
 use async_trait::async_trait;
 use primitive_types::H256;
 use std::{
@@ -16,7 +16,7 @@ mod json {
     use serde::Deserialize;
     use url::Url;
 
-    use crate::compiler::version::CompilerVersion;
+    use crate::compiler::CompilerVersion;
 
     #[derive(Debug, Deserialize, PartialEq)]
     pub struct List {
@@ -176,6 +176,12 @@ impl Fetcher for CompilerFetcher {
         }
 
         Ok(file)
+    }
+}
+
+impl VersionList for CompilerFetcher {
+    fn all_versions(&self) -> Vec<&CompilerVersion> {
+        self.releases.0.iter().map(|(ver, _)| ver).collect()
     }
 }
 

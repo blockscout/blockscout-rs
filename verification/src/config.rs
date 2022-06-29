@@ -1,15 +1,8 @@
+use crate::consts::DEFAULT_COMPILER_LIST;
 use config::{Config as LibConfig, File};
 use serde::Deserialize;
 use std::{net::SocketAddr, num::NonZeroUsize, path::PathBuf, str::FromStr};
 use url::Url;
-
-#[cfg(target_os = "linux")]
-const DEFAULT_COMPILER_LIST: &str =
-    "https://raw.githubusercontent.com/blockscout/solc-bin/main/list.json";
-#[cfg(target_os = "macos")]
-const DEFAULT_COMPILER_LIST: &str = "https://solc-bin.ethereum.org/macosx-amd64/list.json";
-#[cfg(target_os = "windows")]
-const DEFAULT_COMPILER_LIST: &str = "https://solc-bin.ethereum.org/windows-amd64/list.json";
 
 #[derive(Deserialize, Clone, Default)]
 #[serde(default)]

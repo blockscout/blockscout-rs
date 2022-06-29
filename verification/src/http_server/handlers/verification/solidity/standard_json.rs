@@ -1,8 +1,8 @@
 use super::types::VerificationRequest;
 use crate::{
-    compiler::{version::CompilerVersion, Compilers},
+    compiler::{CompilerVersion, Compilers},
     http_server::handlers::verification::{solidity::types::StandardJson, VerificationResponse},
-    solidity::compiler_fetcher::CompilerFetcher,
+    solidity::CompilerFetcher,
 };
 use actix_web::{
     error,

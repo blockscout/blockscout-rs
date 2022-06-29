@@ -4,8 +4,8 @@ use super::Router;
 use crate::{
     compiler::Compilers,
     config::SolidityConfiguration,
-    http_server::handlers::{flatten, standard_json},
-    solidity::compiler_fetcher::{CompilerFetcher, Releases},
+    http_server::handlers::{multi_part, standard_json, version_list},
+    solidity::{CompilerFetcher, Releases},
 };
 
 pub struct SolidityRouter {
@@ -27,10 +27,13 @@ impl SolidityRouter {
 
 impl Router for SolidityRouter {
     fn register_routes(&self, service_config: &mut web::ServiceConfig) {
-        service_config.app_data(self.cache.clone()).service(
-            web::scope("/verify")
-                .route("/flatten", web::post().to(flatten::verify))
-                .route("/standard_json", web::post().to(standard_json::verify)),
-        );
+        service_config
+            .app_data(self.cache.clone())
+            .service(
+                web::scope("/verify")
+                    .route("/multi-part", web::post().to(multi_part::verify))
+                    .route("/standard_json", web::post().to(standard_json::verify)),
+            )
+            .route("/versions", web::get().to(version_list::get_version_list));
     }
 }

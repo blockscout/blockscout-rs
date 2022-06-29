@@ -1,8 +1,8 @@
-use super::types::{FlattenedSource, VerificationRequest};
+use super::types::{MultiPartFiles, VerificationRequest};
 use crate::{
-    compiler::{version::CompilerVersion, Compilers},
+    compiler::{CompilerVersion, Compilers},
     http_server::handlers::verification::VerificationResponse,
-    solidity::compiler_fetcher::CompilerFetcher,
+    solidity::CompilerFetcher,
 };
 use actix_web::{
     error,
@@ -14,15 +14,17 @@ use std::str::FromStr;
 
 pub async fn verify(
     compilers: web::Data<Compilers<CompilerFetcher>>,
-    params: Json<VerificationRequest<FlattenedSource>>,
+    params: Json<VerificationRequest<MultiPartFiles>>,
 ) -> Result<Json<VerificationResponse>, Error> {
     let params = params.into_inner();
 
     let input = CompilerInput::try_from(params.content).map_err(error::ErrorBadRequest)?;
     let compiler_version =
         CompilerVersion::from_str(&params.compiler_version).map_err(error::ErrorBadRequest)?;
-    let output = compilers.compile(&compiler_version, &input).await;
-    let _ = output;
+    let _output = compilers
+        .compile(&compiler_version, &input)
+        .await
+        .map_err(error::ErrorInternalServerError)?;
 
     todo!("verify output")
 }
