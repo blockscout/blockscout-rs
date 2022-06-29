@@ -108,25 +108,25 @@ pub enum CompilerVersion {
 }
 
 impl CompilerVersion {
-    fn version(&self) -> &Version {
+    pub fn version(&self) -> &Version {
         match self {
             CompilerVersion::Nightly(v) => &v.version,
             CompilerVersion::Release(v) => &v.version,
         }
     }
 
-    fn is_release(&self) -> bool {
+    pub fn is_release(&self) -> bool {
         matches!(self, CompilerVersion::Release(_))
     }
 
-    fn date(&self) -> Option<&NaiveDate> {
+    pub fn date(&self) -> Option<&NaiveDate> {
         match self {
             CompilerVersion::Nightly(v) => Some(&v.date),
             CompilerVersion::Release(_) => None,
         }
     }
 
-    fn commit(&self) -> &[u8; 4] {
+    pub fn commit(&self) -> &[u8; 4] {
         match self {
             CompilerVersion::Nightly(v) => &v.commit,
             CompilerVersion::Release(v) => &v.commit,
