@@ -32,7 +32,7 @@ impl Router for SolidityRouter {
             .service(
                 web::scope("/verify")
                     .route("/multi-part", web::post().to(multi_part::verify))
-                    .route("/standard_json", web::post().to(standard_json::verify)),
+                    .route("/standard-json", web::post().to(standard_json::verify)),
             )
             .route("/versions", web::get().to(version_list::get_version_list));
     }
