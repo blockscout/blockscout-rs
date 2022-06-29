@@ -32,7 +32,7 @@ async fn should_return_200() {
     });
 
     let resp = TestRequest::post()
-        .uri("/api/v1/sourcify/verify/")
+        .uri("/api/v1/sourcify/verify")
         .set_json(&request_body)
         .send_request(&mut app)
         .await;
@@ -115,7 +115,7 @@ async fn invalid_contracts() {
         ),
     ] {
         let resp = TestRequest::post()
-            .uri("/api/v1/sourcify/verify/")
+            .uri("/api/v1/sourcify/verify")
             .set_json(&request_body)
             .send_request(&mut app)
             .await;
