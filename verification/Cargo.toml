@@ -38,3 +38,4 @@ ethabi = "17.0.0"
 [dev-dependencies]
 const_format = "0.2"
 rand = "0.8"
+async-once-cell = "0.4.2"
