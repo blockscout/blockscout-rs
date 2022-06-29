@@ -1,9 +1,8 @@
 #![allow(dead_code, unused)]
 
-use crate::{solidity::verifier::VerificationError::InternalError, types::Mismatch};
+use crate::{solidity::verifier::VerificationError::InternalError, types::Mismatch, DisplayBytes};
 use bytes::{Buf, Bytes};
 use ethabi::{Constructor, Token};
-use ethers_core::types::Bytes as DisplayBytes;
 use ethers_solc::{artifacts::Contract, Artifact, CompilerOutput};
 use minicbor::{data::Type, Decode, Decoder};
 use std::{
