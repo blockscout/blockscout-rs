@@ -29,7 +29,7 @@ pub async fn verify(
         creation_tx_input: &params.creation_bytecode,
         deployed_bytecode: &params.deployed_bytecode,
     };
-    compile_and_verify_handler(&compilers, input)
+    compile_and_verify_handler(&compilers, input, true)
         .await
         .map(Json)
 }
