@@ -1,11 +1,11 @@
-use multichain_api_gateway::config;
+use multichain_api_gateway::{config, router_get};
 use std::str;
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use actix_web::web::Data;
-    use actix_web::{test, App};
+    use actix_web::{test, web, App};
 
     /// In the test we check that valid responses are returned from the API.
     /// Especially we call to the same network (xdai), but to different chains (mainnet, testnet).
@@ -24,7 +24,7 @@ mod tests {
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(settings.clone()))
-                .configure(config),
+                .default_service(web::route().to(router_get)),
         )
         .await;
 

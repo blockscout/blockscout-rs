@@ -80,22 +80,12 @@ async fn handle_default_request(
     merge_responses(responses)
 }
 
-async fn router_get(request: HttpRequest, settings: Data<BlockScoutSettings>) -> impl Responder {
-    // TODO: parse and pass custom request to appropriate handler
+pub async fn router_get(
+    request: HttpRequest,
+    settings: Data<BlockScoutSettings>,
+) -> impl Responder {
     let json = handle_default_request(request.path(), request.query_string(), &settings).await;
     HttpResponse::Ok().json(json)
-}
-
-#[allow(dead_code)]
-async fn router_post() -> HttpResponse {
-    todo!()
-}
-
-pub fn config(cfg: &mut web::ServiceConfig) {
-    cfg.route(
-        "/{_}", // We want to match every GET-request regardless of URL
-        web::get().to(router_get),
-    );
 }
 
 pub fn run(settings: Settings) -> Result<Server, std::io::Error> {
@@ -104,7 +94,7 @@ pub fn run(settings: Settings) -> Result<Server, std::io::Error> {
     let server = HttpServer::new(move || {
         App::new()
             .app_data(Data::new(settings.block_scout.clone()))
-            .configure(config)
+            .default_service(web::route().to(router_get))
     })
     .listen(listener)?
     .run();
