@@ -4,8 +4,7 @@ use std::str;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use actix_web::web::Data;
-    use actix_web::{test, web, App};
+    use actix_web::{test, web, web::Data, App};
     use multichain_api_gateway::APIsEndpoints;
 
     /// In the test we check that valid responses are returned from the API.

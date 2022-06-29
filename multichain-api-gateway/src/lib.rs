@@ -1,8 +1,11 @@
-use std::collections::HashMap;
-use std::{net::TcpListener, str};
+use std::{collections::HashMap, net::TcpListener, str};
 
-use actix_web::web::{Data, Json};
-use actix_web::{dev::Server, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
+use actix_web::{
+    dev::Server,
+    web,
+    web::{Data, Json},
+    App, HttpRequest, HttpResponse, HttpServer, Responder,
+};
 use futures::{stream, StreamExt};
 use reqwest::Client;
 use serde_json::Value;
@@ -71,7 +74,7 @@ fn merge_responses(json_resonses: Vec<(Instance, String)>) -> Responses {
     json_resonses
         .into_iter()
         .for_each(|(Instance(net, subnet), value)| {
-            let kv_subnet = result.entry(net).or_insert(HashMap::new());
+            let kv_subnet = result.entry(net).or_insert_with(HashMap::new);
             kv_subnet.insert(
                 subnet,
                 serde_json::from_str(&value).unwrap_or_else(|e| Value::String(e.to_string())),

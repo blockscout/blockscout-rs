@@ -3,8 +3,7 @@ use clap::Parser;
 
 use crate::cli::Args;
 use serde::Deserialize;
-use std::net::SocketAddr;
-use std::str::FromStr;
+use std::{net::SocketAddr, str::FromStr};
 use url::Url;
 
 /// An instance of the maintained networks in Blockscout.
@@ -60,20 +59,10 @@ impl Default for ServerSettings {
     }
 }
 
-#[derive(Deserialize, Clone)]
-#[serde(default)]
+#[derive(Deserialize, Clone, Default)]
 pub struct Settings {
     pub server: ServerSettings,
     pub block_scout: BlockScoutSettings,
-}
-
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            server: ServerSettings::default(),
-            block_scout: BlockScoutSettings::default(),
-        }
-    }
 }
 
 pub fn get_config() -> Settings {
