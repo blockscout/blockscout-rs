@@ -12,7 +12,7 @@ use actix_web::{
 pub async fn get_version_list(
     compilers: web::Data<Compilers<CompilerFetcher>>,
 ) -> Result<Json<VersionsResponse>, Error> {
-    let mut versions = compilers.all_versions();
+    let mut versions = compilers.all_versions().await;
     // sort in descending order
     versions.sort_by(|x, y| x.cmp(y).reverse());
     let versions = versions.into_iter().map(|v| v.to_string()).collect();

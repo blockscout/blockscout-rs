@@ -1,5 +1,6 @@
 use crate::compiler::{CompilerVersion, DownloadCache, Fetcher, VersionList};
 use anyhow::anyhow;
+use async_trait::async_trait;
 use ethers_solc::{
     artifacts::{self, Severity},
     error::SolcError,
@@ -62,16 +63,17 @@ impl<T: Fetcher> Compilers<T> {
     }
 }
 
-impl<T: VersionList> VersionList for Compilers<T> {
-    fn all_versions(&self) -> Vec<&CompilerVersion> {
-        self.fetcher.all_versions()
+#[async_trait]
+impl<T: VersionList + Send + Sync> VersionList for Compilers<T> {
+    async fn all_versions(&self) -> Vec<CompilerVersion> {
+        self.fetcher.all_versions().await
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::solidity::{CompilerFetcher, Releases};
+    use crate::solidity::CompilerFetcher;
     use std::{env::temp_dir, str::FromStr};
 
     use crate::consts::DEFAULT_COMPILER_LIST;
@@ -84,10 +86,9 @@ mod tests {
         COMPILERS
             .get_or_init(async {
                 let url = DEFAULT_COMPILER_LIST.try_into().expect("Getting url");
-                let releases = Releases::fetch_from_url(&url)
+                let fetcher = CompilerFetcher::new(url, None, temp_dir())
                     .await
                     .expect("Fetch releases");
-                let fetcher = CompilerFetcher::new(releases, temp_dir()).await;
                 let compilers = Compilers::new(fetcher);
                 compilers
             })

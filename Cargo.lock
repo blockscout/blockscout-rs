@@ -726,6 +726,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "cron"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ee7e5cc3c6b73959cef3412d3a185225eefd926286b4ea55be8bea0bd27d10f"
+dependencies = [
+ "chrono",
+ "nom",
+ "once_cell",
+]
+
+[[package]]
 name = "crossbeam-channel"
 version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1964,6 +1975,17 @@ dependencies = [
  "autocfg",
  "num-integer",
  "num-traits",
+]
+
+[[package]]
+name = "num-derive"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "876a53fff98e03a936a674b29568b0e605f06b29372c2489ff4de23f1949743d"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -3357,6 +3379,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-cron-scheduler"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "348ee1c60522c8f4aa6d9e73210e786c468aa93c988f3394e5c68de0095f2cff"
+dependencies = [
+ "chrono",
+ "cron",
+ "num-derive",
+ "num-traits",
+ "time 0.1.44",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "tokio-macros"
 version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3542,6 +3580,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "uuid"
+version = "1.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd6469f4314d5f1ffec476e05f17cc9a78bc7a27a6a857842170bdf8d6f98d2f"
+dependencies = [
+ "getrandom",
+]
+
+[[package]]
 name = "vcpkg"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3581,6 +3628,7 @@ dependencies = [
  "sscanf",
  "thiserror",
  "tokio",
+ "tokio-cron-scheduler",
  "url",
 ]
 
