@@ -421,8 +421,8 @@ impl Verifier {
     /// with compiler output received when compiling source data locally.
     ///
     /// Iterates through all contracts received from local compilation and
-    /// returns [`VerificationSuccess`] with corresponding file path and contract name
-    /// if any contract  the contract that succeeds the verification. Otherwise, returns [`None`].
+    /// returns [`VerificationSuccess`] with file path and contract name
+    /// of succeeded contract, if any. Otherwise, returns [`None`].
     pub fn verify(&self, output: CompilerOutput) -> Option<VerificationSuccess> {
         for (path, contracts) in output.contracts {
             for (name, contract) in contracts {
