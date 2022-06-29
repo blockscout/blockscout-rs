@@ -10,6 +10,7 @@ use url::Url;
 
 use crate::config::{BlockScoutSettings, Instance, Settings};
 
+mod cli;
 pub mod config;
 
 #[derive(Clone)]

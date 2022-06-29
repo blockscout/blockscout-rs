@@ -37,7 +37,6 @@ mod tests {
 
         let bytes = test::call_and_read_body(&app, req).await;
         let str = str::from_utf8(bytes.as_ref()).unwrap().to_string();
-        println!("{}", str);
         let actual_raw: serde_json::Value = serde_json::from_str(str.as_str()).unwrap();
         let actual = serde_json::to_string_pretty(&actual_raw).unwrap();
 

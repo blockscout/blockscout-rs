@@ -1803,6 +1803,7 @@ name = "multichain-api-gateway"
 version = "0.1.0"
 dependencies = [
  "actix-web",
+ "clap",
  "futures",
  "reqwest",
  "serde",
