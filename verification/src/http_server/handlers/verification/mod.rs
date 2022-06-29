@@ -2,6 +2,7 @@
 
 use std::{collections::BTreeMap, fmt::Display};
 
+use crate::DisplayBytes;
 use serde::{Deserialize, Serialize};
 
 pub mod solidity;
@@ -20,7 +21,7 @@ pub struct VerificationResult {
     pub contract_name: String,
     pub compiler_version: String,
     pub evm_version: String,
-    pub constructor_arguments: Option<String>,
+    pub constructor_arguments: Option<DisplayBytes>,
     pub optimization: Option<bool>,
     pub optimization_runs: Option<usize>,
     pub contract_libraries: BTreeMap<String, String>,
@@ -69,7 +70,7 @@ mod tests {
                     contract_name: "contract_name".to_string(),
                     compiler_version: "compiler_version".to_string(),
                     evm_version: "evm_version".to_string(),
-                    constructor_arguments: Some("constructor_arguments".to_string()),
+                    constructor_arguments: Some(DisplayBytes::from([0xca, 0xfe])),
                     optimization: Some(false),
                     optimization_runs: Some(200),
                     contract_libraries: BTreeMap::from([(
@@ -92,7 +93,7 @@ mod tests {
                         "contract_name": "contract_name",
                         "compiler_version": "compiler_version",
                         "evm_version": "evm_version",
-                        "constructor_arguments": "constructor_arguments",
+                        "constructor_arguments": "0xcafe",
                         "contract_libraries": {
                             "some_library": "some_address",
                         },

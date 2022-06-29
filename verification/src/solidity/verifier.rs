@@ -1,8 +1,7 @@
 #![allow(dead_code, unused)]
 
-use crate::types::Mismatch;
+use crate::{types::Mismatch, DisplayBytes};
 use bytes::Buf;
-use ethers_core::types::Bytes as DisplayBytes;
 use ethers_solc::CompilerOutput;
 use minicbor::{data::Type, Decode, Decoder};
 use std::{error::Error, str::FromStr};
