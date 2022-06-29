@@ -1,9 +1,8 @@
 #![allow(dead_code, unused)]
 
-use crate::types::Mismatch;
+use crate::{types::Mismatch, DisplayBytes};
 use bytes::{Buf, Bytes};
 use ethabi::{Constructor, Token};
-use ethers_core::types::Bytes as DisplayBytes;
 use ethers_solc::{artifacts::Contract, Artifact, CompilerOutput};
 use minicbor::{data::Type, Decode, Decoder};
 use std::{
