@@ -12,7 +12,6 @@ use actix_web::{
     web::{self, Json},
     Error,
 };
-use ethers_solc::CompilerInput;
 use std::str::FromStr;
 
 pub async fn verify(
@@ -21,7 +20,7 @@ pub async fn verify(
 ) -> Result<Json<VerificationResponse>, Error> {
     let params = params.into_inner();
 
-    let compiler_input = CompilerInput::try_from(params.content).map_err(error::ErrorBadRequest)?;
+    let compiler_input = params.content.try_into().map_err(error::ErrorBadRequest)?;
     let compiler_version =
         CompilerVersion::from_str(&params.compiler_version).map_err(error::ErrorBadRequest)?;
     let input = CompileAndVerifyInput {
