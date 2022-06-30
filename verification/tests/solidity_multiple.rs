@@ -37,7 +37,7 @@ async fn test_setup(
     let app = test::init_service(App::new().configure(configure_router(app_router))).await;
 
     let prefix = format!("{}/{}", CONTRACTS_DIR, dir);
-    let contract_path = format!("{}/{}.sol", prefix, dir);
+    let contract_path = format!("{}/source.sol", prefix);
     input.source_code = Some(input.source_code.clone().unwrap_or_else(|| {
         fs::read_to_string(&contract_path).expect("Error while reading source")
     }));
