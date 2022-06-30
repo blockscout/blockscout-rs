@@ -10,6 +10,7 @@ pub struct TestInput {
     pub contract_libraries: BTreeMap<String, String>,
     pub has_constructor_args: bool,
 
+    /// If None, the input would be read from the corresponding file
     pub source_code: Option<String>,
     /// If None, the input would be read from the corresponding file
     pub creation_tx_input: Option<String>,
