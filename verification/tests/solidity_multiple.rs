@@ -2,13 +2,17 @@ mod solidity_multiple_types;
 
 use actix_web::{
     dev::ServiceResponse,
-    test::{self, read_body_json, TestRequest},
+    test::{self, read_body, read_body_json, TestRequest},
     App,
 };
 use async_once_cell::OnceCell;
 use serde_json::json;
 use solidity_multiple_types::TestInput;
-use std::{collections::BTreeMap, fs, str::FromStr};
+use std::{
+    collections::BTreeMap,
+    fs,
+    str::{from_utf8, FromStr},
+};
 use verification::{
     configure_router, AppRouter, Config, DisplayBytes, VerificationResponse, VerificationStatus,
 };
@@ -90,11 +94,16 @@ async fn test_setup(
 async fn test_success(dir: &'static str, mut input: TestInput) {
     let (response, expected_constructor_argument) = test_setup(dir, &mut input).await;
 
-    assert!(
-        response.status().is_success(),
-        "Invalid status code (success expected): {}",
-        response.status()
-    );
+    // Assert that status code is success
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = read_body(response).await;
+        let message = from_utf8(&body).expect("Read body as UTF-8");
+        panic!(
+            "Invalid status code (success expected). Status: {}. Messsage: {}",
+            status, message
+        )
+    }
 
     let verification_response: VerificationResponse = read_body_json(response).await;
 
