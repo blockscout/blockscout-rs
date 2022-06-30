@@ -266,7 +266,7 @@ mod basic_tests {
     }
 }
 
-mod basic_tests_error {
+mod basic_error_tests {
     use super::*;
 
     #[actix_rt::test]
@@ -274,7 +274,12 @@ mod basic_tests_error {
         let contract_dir = "simple_storage";
         let test_input = TestInput::new("SimpleStorage", "v0.4.24+commit.e67f0147")
             .with_source_code("pragma solidity ^0.4.24; contract SimpleStorage {}".to_string());
-        test_failure(contract_dir, test_input, "No contract could be verified with provided data").await;
+        test_failure(
+            contract_dir,
+            test_input,
+            "No contract could be verified with provided data",
+        )
+        .await;
     }
 
     #[actix_rt::test]
