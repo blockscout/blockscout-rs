@@ -1,10 +1,6 @@
 use crate::compiler::{CompilerVersion, DownloadCache, Fetcher, VersionList};
 use anyhow::anyhow;
-use ethers_solc::{
-    artifacts::{self, Severity},
-    error::SolcError,
-    CompilerInput, CompilerOutput, Solc,
-};
+use ethers_solc::{artifacts::Severity, error::SolcError, CompilerInput, CompilerOutput, Solc};
 use std::fmt::{Debug, Display};
 use thiserror::Error;
 
@@ -15,7 +11,7 @@ pub enum CompilersError {
     #[error("Internal error while compiling: {0}")]
     Internal(#[from] SolcError),
     #[error("Compilation error: {0:?}")]
-    Compilation(Vec<artifacts::Error>),
+    Compilation(Vec<String>),
 }
 
 pub struct Compilers<T> {
@@ -51,7 +47,12 @@ impl<T: Fetcher> Compilers<T> {
         let mut errors = Vec::new();
         for err in &output.errors {
             if err.severity == Severity::Error {
-                errors.push(err.clone())
+                errors.push(
+                    err.formatted_message
+                        .as_ref()
+                        .unwrap_or(&err.message)
+                        .clone(),
+                )
             }
         }
         if !errors.is_empty() {
@@ -188,7 +189,7 @@ mod tests {
             .expect_err("Compilation should fail");
         match result {
             CompilersError::Compilation(errors) => {
-                assert!(errors.into_iter().any(|err| err.r#type == "ParserError"))
+                assert!(errors.into_iter().any(|err| err.contains("ParserError")))
             }
             _ => panic!("Invalid compilation error: {:?}", result),
         }
