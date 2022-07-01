@@ -16,7 +16,7 @@ use crate::config::{BlockScoutSettings, Instance, Settings};
 mod cli;
 pub mod config;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct APIsEndpoints {
     apis: Vec<(Instance, Url)>,
     concurrent_requests: usize,

@@ -13,7 +13,7 @@ use url::Url;
 pub struct Instance(pub String, pub String);
 
 /// Settings for the Blockscout API
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug)]
 #[serde(default)]
 pub struct BlockScoutSettings {
     /// The base URL of the Blockscout API.
@@ -45,7 +45,7 @@ fn default_concurrent_requests() -> usize {
     10
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug)]
 #[serde(default)]
 pub struct ServerSettings {
     pub addr: SocketAddr,
@@ -59,7 +59,7 @@ impl Default for ServerSettings {
     }
 }
 
-#[derive(Deserialize, Clone, Default)]
+#[derive(Deserialize, Clone, Default, Debug)]
 pub struct Settings {
     pub server: ServerSettings,
     pub block_scout: BlockScoutSettings,
