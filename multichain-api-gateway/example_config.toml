@@ -1,0 +1,11 @@
+[server]
+addr = "0.0.0.0:8044"
+
+[blockscout]
+base_url = "https://blockscout.com"
+concurrent_requests = 2
+instances = [
+    ["eth", "mainnet"],
+    ["xdai", "testnet"],
+    ["xdai", "mainnet"],
+]
