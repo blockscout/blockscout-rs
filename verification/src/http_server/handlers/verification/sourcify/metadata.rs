@@ -72,14 +72,12 @@ impl TryFrom<Files> for VerificationResult {
         let (metadata, source_files) = files.extract_metadata_and_source_files()?;
 
         let compiler_version = metadata.compiler.version;
-        let contract_name = metadata
+        let (file_name, contract_name) = metadata
             .settings
             .compilation_target
-            .iter()
+            .into_iter()
             .next()
-            .ok_or_else(|| anyhow::Error::msg("compilation target not found"))?
-            .1
-            .to_string();
+            .ok_or_else(|| anyhow::Error::msg("compilation target not found"))?;
         let evm_version = metadata
             .settings
             .evm_version
@@ -91,6 +89,7 @@ impl TryFrom<Files> for VerificationResult {
         let abi = serde_json::to_string(&metadata.output.abi)?;
 
         Ok(VerificationResult {
+            file_name,
             contract_name,
             compiler_version,
             evm_version,
@@ -163,6 +162,7 @@ mod tests {
         assert_eq!(
             verification_result,
             VerificationResult {
+                file_name: "example.sol".into(),
                 contract_name: "Example".into(),
                 compiler_version: "0.8.14+commit.80d49f37".into(),
                 evm_version: "london".into(),
