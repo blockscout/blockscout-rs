@@ -29,20 +29,18 @@ pub struct APIsEndpoints {
 ///     e.g. "<base_url>/<network>/<chain>/<...>/<...>"
 /// Taking it to account, we expect the following api call urls:
 ///     e.g. <base_url>/<network>/<chain>/api?<query>   
-impl TryFrom<BlockscoutSettings> for APIsEndpoints {
-    type Error = &'static str;
-
-    fn try_from(settings: BlockscoutSettings) -> Result<Self, Self::Error> {
+impl From<BlockscoutSettings> for APIsEndpoints {
+    fn from(settings: BlockscoutSettings) -> Self {
         let mut apis = Vec::new();
         for Instance(net, subnet) in settings.instances {
             let mut url = settings.base_url.clone();
             url.set_path(&format!("{}/{}/api", net, subnet));
             apis.push((Instance(net, subnet), url));
         }
-        Ok(Self {
+        Self {
             apis,
             concurrent_requests: settings.concurrent_requests,
-        })
+        }
     }
 }
 
@@ -148,8 +146,7 @@ mod tests {
             ),
         ];
 
-        // let actual = build_urls(path, query, &settings);
-        let mut actual = APIsEndpoints::try_from(settings).unwrap();
+        let mut actual = APIsEndpoints::from(settings);
         enrich_apis(query, &mut actual);
 
         assert_eq!(actual.apis, expected);
