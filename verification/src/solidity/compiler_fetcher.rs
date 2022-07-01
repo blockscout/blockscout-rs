@@ -108,43 +108,11 @@ impl TryFrom<(json::CompilerInfo, &Url)> for CompilerInfo {
 }
 
 #[derive(Default)]
-struct RefreshableCompilerVersions {
-    versions: Arc<parking_lot::RwLock<CompilerVersions>>,
-}
+struct RefreshableCompilerVersions(Arc<parking_lot::RwLock<CompilerVersions>>);
 
 impl From<CompilerVersions> for RefreshableCompilerVersions {
     fn from(versions: CompilerVersions) -> Self {
-        Self {
-            versions: Arc::new(parking_lot::RwLock::new(versions)),
-        }
-    }
-}
-
-#[derive(Default)]
-pub struct CompilerFetcher {
-    compiler_versions: RefreshableCompilerVersions,
-    folder: PathBuf,
-}
-
-impl CompilerFetcher {
-    pub async fn new(
-        versions_list_url: Url,
-        refresh_cron_schedule: Option<&str>,
-        folder: PathBuf,
-    ) -> anyhow::Result<Self> {
-        let compiler_versions = CompilerVersions::fetch_from_url(&versions_list_url)
-            .await
-            .map_err(anyhow::Error::msg)?;
-        let compiler_versions = RefreshableCompilerVersions::from(compiler_versions);
-        if let Some(cron_schedule) = refresh_cron_schedule {
-            compiler_versions
-                .spawn_refresh_job(versions_list_url, cron_schedule)
-                .map_err(anyhow::Error::msg)?;
-        }
-        Ok(Self {
-            compiler_versions,
-            folder,
-        })
+        Self(Arc::new(parking_lot::RwLock::new(versions)))
     }
 }
 
@@ -155,7 +123,7 @@ impl RefreshableCompilerVersions {
         cron_schedule: &str,
     ) -> Result<(), JobSchedulerError> {
         log::info!("spawn version refresh job with schedule {}", cron_schedule);
-        let versions = Arc::clone(&self.versions);
+        let versions = Arc::clone(&self.0);
 
         let job = Job::new_async(cron_schedule, move |_, _| {
             let versions_list_url = versions_list_url.clone();
@@ -207,6 +175,34 @@ impl RefreshableCompilerVersions {
     }
 }
 
+#[derive(Default)]
+pub struct CompilerFetcher {
+    compiler_versions: RefreshableCompilerVersions,
+    folder: PathBuf,
+}
+
+impl CompilerFetcher {
+    pub async fn new(
+        versions_list_url: Url,
+        refresh_cron_schedule: Option<&str>,
+        folder: PathBuf,
+    ) -> anyhow::Result<Self> {
+        let compiler_versions = CompilerVersions::fetch_from_url(&versions_list_url)
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let compiler_versions = RefreshableCompilerVersions::from(compiler_versions);
+        if let Some(cron_schedule) = refresh_cron_schedule {
+            compiler_versions
+                .spawn_refresh_job(versions_list_url, cron_schedule)
+                .map_err(anyhow::Error::msg)?;
+        }
+        Ok(Self {
+            compiler_versions,
+            folder,
+        })
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum FetchError {
     #[error("version {0} not found")]
@@ -234,7 +230,7 @@ impl Fetcher for CompilerFetcher {
     type Error = FetchError;
     async fn fetch(&self, ver: &CompilerVersion) -> Result<PathBuf, Self::Error> {
         let compiler_download_url = {
-            let compiler_versions = self.compiler_versions.versions.read();
+            let compiler_versions = self.compiler_versions.0.read();
             let compiler_info = compiler_versions
                 .0
                 .get(ver)
@@ -275,7 +271,7 @@ impl Fetcher for CompilerFetcher {
 
 impl VersionList for CompilerFetcher {
     fn all_versions(&self) -> Vec<CompilerVersion> {
-        let lock = self.compiler_versions.versions.read();
+        let lock = self.compiler_versions.0.read();
         lock.0.iter().map(|(ver, _)| ver.clone()).collect()
     }
 }
