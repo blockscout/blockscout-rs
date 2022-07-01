@@ -101,7 +101,7 @@ pub async fn router_get(
 ) -> impl Responder {
     let json =
         handle_default_request(request.query_string(), apis_endpoints.get_ref().clone()).await;
-    HttpResponse::Ok().json(json)
+    json
 }
 
 pub fn run(settings: Settings) -> Result<Server, std::io::Error> {
