@@ -5,7 +5,7 @@ use std::str;
 mod tests {
     use super::*;
     use actix_web::{test, web, web::Data, App};
-    use multichain_api_gateway::APIsEndpoints;
+    use multichain_api_gateway::ApiEndpoints;
 
     /// In the test we check that valid responses are returned from the API.
     /// Especially we call to the same network (xdai), but to different chains (mainnet, testnet).
@@ -21,7 +21,7 @@ mod tests {
             concurrent_requests: 1,
         };
 
-        let apis_endpoints: APIsEndpoints = settings.try_into().unwrap();
+        let apis_endpoints: ApiEndpoints = settings.try_into().unwrap();
 
         let app = test::init_service(
             App::new()

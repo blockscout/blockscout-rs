@@ -4,7 +4,7 @@ use actix_web::{
     dev::Server,
     web,
     web::{Data, Json},
-    App, HttpRequest, HttpResponse, HttpServer, Responder,
+    App, HttpRequest, HttpServer, Responder,
 };
 use futures::{stream, StreamExt};
 use reqwest::Client;
@@ -17,7 +17,7 @@ mod cli;
 pub mod config;
 
 #[derive(Clone, Debug)]
-pub struct APIsEndpoints {
+pub struct ApiEndpoints {
     apis: Vec<(Instance, Url)>,
     concurrent_requests: usize,
 }
@@ -29,7 +29,7 @@ pub struct APIsEndpoints {
 ///     e.g. "<base_url>/<network>/<chain>/<...>/<...>"
 /// Taking it to account, we expect the following api call urls:
 ///     e.g. <base_url>/<network>/<chain>/api?<query>   
-impl From<BlockscoutSettings> for APIsEndpoints {
+impl From<BlockscoutSettings> for ApiEndpoints {
     fn from(settings: BlockscoutSettings) -> Self {
         let mut apis = Vec::new();
         for Instance(net, subnet) in settings.instances {
@@ -44,24 +44,27 @@ impl From<BlockscoutSettings> for APIsEndpoints {
     }
 }
 
-async fn make_requests(apis_endpoints: APIsEndpoints) -> Vec<(Instance, String)> {
-    let client = Client::new();
+impl ApiEndpoints {
+    async fn make_requests(self, query: &str) -> Vec<(Instance, String)> {
+        let client = Client::new();
 
-    stream::iter(apis_endpoints.apis)
-        .map(|(instance, url)| async {
-            let resp = client.get(url).send().await.unwrap();
-            (instance, resp.bytes().await)
-        })
-        .buffer_unordered(apis_endpoints.concurrent_requests)
-        .map(|(instance, response)| match response {
-            Ok(bytes) => (
-                instance,
-                str::from_utf8(bytes.as_ref()).unwrap().to_string(),
-            ),
-            Err(e) => (instance, e.to_string()),
-        })
-        .collect()
-        .await
+        stream::iter(self.apis)
+            .map(|(instance, mut url)| async {
+                url.set_query(Some(query));
+                let resp = client.get(url).send().await.unwrap();
+                (instance, resp.bytes().await)
+            })
+            .buffer_unordered(self.concurrent_requests)
+            .map(|(instance, response)| match response {
+                Ok(bytes) => (
+                    instance,
+                    str::from_utf8(bytes.as_ref()).unwrap().to_string(),
+                ),
+                Err(e) => (instance, e.to_string()),
+            })
+            .collect()
+            .await
+    }
 }
 
 type Responses = HashMap<String, HashMap<String, Value>>;
@@ -82,22 +85,14 @@ fn merge_responses(json_resonses: Vec<(Instance, String)>) -> Responses {
     result
 }
 
-fn enrich_apis(query: &str, apis_endpoints: &mut APIsEndpoints) {
-    apis_endpoints
-        .apis
-        .iter_mut()
-        .for_each(|(_, url)| url.set_query(Some(query)))
-}
-
-async fn handle_default_request(query: &str, mut apis_endpoints: APIsEndpoints) -> Json<Responses> {
-    enrich_apis(query, &mut apis_endpoints);
-    let responses = make_requests(apis_endpoints).await;
+async fn handle_default_request(query: &str, apis_endpoints: ApiEndpoints) -> Json<Responses> {
+    let responses = apis_endpoints.make_requests(query).await;
     Json(merge_responses(responses))
 }
 
 pub async fn router_get(
     request: HttpRequest,
-    apis_endpoints: Data<APIsEndpoints>,
+    apis_endpoints: Data<ApiEndpoints>,
 ) -> impl Responder {
     let json =
         handle_default_request(request.query_string(), apis_endpoints.get_ref().clone()).await;
@@ -107,7 +102,7 @@ pub async fn router_get(
 pub fn run(settings: Settings) -> Result<Server, std::io::Error> {
     let listener = TcpListener::bind(settings.server.addr)?;
 
-    let apis_endpoints: Data<APIsEndpoints> = Data::new(settings.blockscout.try_into().unwrap());
+    let apis_endpoints: Data<ApiEndpoints> = Data::new(settings.blockscout.try_into().unwrap());
 
     let server = HttpServer::new(move || {
         App::new()
@@ -122,35 +117,6 @@ pub fn run(settings: Settings) -> Result<Server, std::io::Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn check_build_urls() {
-        let query = "hello=world?foo=bar";
-        let settings = BlockscoutSettings {
-            base_url: Url::parse("https://blockscout.com/").unwrap(),
-            instances: vec![
-                Instance("eth".to_string(), "mainnet".to_string()),
-                Instance("etc".to_string(), "mainnet".to_string()),
-            ],
-            concurrent_requests: 1,
-        };
-
-        let expected = vec![
-            (
-                Instance("eth".to_string(), "mainnet".to_string()),
-                Url::parse("https://blockscout.com/eth/mainnet/api?hello=world?foo=bar").unwrap(),
-            ),
-            (
-                Instance("etc".to_string(), "mainnet".to_string()),
-                Url::parse("https://blockscout.com/etc/mainnet/api?hello=world?foo=bar").unwrap(),
-            ),
-        ];
-
-        let mut actual = APIsEndpoints::from(settings);
-        enrich_apis(query, &mut actual);
-
-        assert_eq!(actual.apis, expected);
-    }
 
     #[test]
     fn check_merge_responses() {
