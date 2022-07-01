@@ -11,7 +11,7 @@ mod tests {
     /// Especially we call to the same network (xdai), but to different chains (mainnet, testnet).
     #[actix_web::test]
     async fn expect_result_from_two() {
-        let settings = config::BlockScoutSettings {
+        let settings = config::BlockscoutSettings {
             base_url: "https://blockscout.com".parse().unwrap(),
             instances: vec![
                 config::Instance("eth".to_string(), "mainnet".to_string()),

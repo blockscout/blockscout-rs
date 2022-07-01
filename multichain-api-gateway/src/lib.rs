@@ -11,7 +11,7 @@ use reqwest::Client;
 use serde_json::Value;
 use url::Url;
 
-use crate::config::{BlockScoutSettings, Instance, Settings};
+use crate::config::{BlockscoutSettings, Instance, Settings};
 
 mod cli;
 pub mod config;
@@ -29,10 +29,10 @@ pub struct APIsEndpoints {
 ///     e.g. "<base_url>/<network>/<chain>/<...>/<...>"
 /// Taking it to account, we expect the following api call urls:
 ///     e.g. <base_url>/<network>/<chain>/api?<query>   
-impl TryFrom<BlockScoutSettings> for APIsEndpoints {
+impl TryFrom<BlockscoutSettings> for APIsEndpoints {
     type Error = &'static str;
 
-    fn try_from(settings: BlockScoutSettings) -> Result<Self, Self::Error> {
+    fn try_from(settings: BlockscoutSettings) -> Result<Self, Self::Error> {
         let mut apis = Vec::new();
         for Instance(net, subnet) in settings.instances {
             let mut url = settings.base_url.clone();
@@ -109,7 +109,7 @@ pub async fn router_get(
 pub fn run(settings: Settings) -> Result<Server, std::io::Error> {
     let listener = TcpListener::bind(settings.server.addr)?;
 
-    let apis_endpoints: APIsEndpoints = settings.block_scout.try_into().unwrap();
+    let apis_endpoints: APIsEndpoints = settings.blockscout.try_into().unwrap();
 
     let server = HttpServer::new(move || {
         App::new()
@@ -128,7 +128,7 @@ mod tests {
     #[test]
     fn check_build_urls() {
         let query = "hello=world?foo=bar";
-        let settings = BlockScoutSettings {
+        let settings = BlockscoutSettings {
             base_url: Url::parse("https://blockscout.com/").unwrap(),
             instances: vec![
                 Instance("eth".to_string(), "mainnet".to_string()),

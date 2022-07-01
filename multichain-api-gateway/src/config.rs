@@ -15,7 +15,7 @@ pub struct Instance(pub String, pub String);
 /// Settings for the Blockscout API
 #[derive(Deserialize, Clone, Debug)]
 #[serde(default)]
-pub struct BlockScoutSettings {
+pub struct BlockscoutSettings {
     /// The base URL of the Blockscout API.
     #[serde(default = "default_base_url")]
     pub base_url: Url,
@@ -27,7 +27,7 @@ pub struct BlockScoutSettings {
     pub concurrent_requests: usize,
 }
 
-impl Default for BlockScoutSettings {
+impl Default for BlockscoutSettings {
     fn default() -> Self {
         Self {
             base_url: default_base_url(),
@@ -62,7 +62,7 @@ impl Default for ServerSettings {
 #[derive(Deserialize, Clone, Default, Debug)]
 pub struct Settings {
     pub server: ServerSettings,
-    pub block_scout: BlockScoutSettings,
+    pub blockscout: BlockscoutSettings,
 }
 
 pub fn get_config() -> Settings {
@@ -95,10 +95,10 @@ pub fn get_config() -> Settings {
     };
 
     if let Some(base_url) = args.base_url {
-        config.block_scout.base_url = base_url;
+        config.blockscout.base_url = base_url;
     }
     if let Some(concurrent_requests) = args.concurrent_requests {
-        config.block_scout.concurrent_requests = concurrent_requests;
+        config.blockscout.concurrent_requests = concurrent_requests;
     }
     if let Some(address) = args.address {
         config.server.addr = address;
