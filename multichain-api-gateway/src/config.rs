@@ -17,32 +17,22 @@ pub struct Instance(pub String, pub String);
 #[serde(default)]
 pub struct BlockscoutSettings {
     /// The base URL of the Blockscout API.
-    #[serde(default = "default_base_url")]
     pub base_url: Url,
 
     pub instances: Vec<Instance>,
 
     /// The number of concurrent requests to be made to the Blockscout API from a server's thread worker.
-    #[serde(default = "default_concurrent_requests")]
     pub concurrent_requests: usize,
 }
 
 impl Default for BlockscoutSettings {
     fn default() -> Self {
         Self {
-            base_url: default_base_url(),
+            base_url: Url::parse("https://blockscout.com/").unwrap(),
             instances: vec![],
-            concurrent_requests: default_concurrent_requests(),
+            concurrent_requests: 10,
         }
     }
-}
-
-fn default_base_url() -> Url {
-    Url::parse("https://blockscout.com/").unwrap()
-}
-
-fn default_concurrent_requests() -> usize {
-    10
 }
 
 #[derive(Deserialize, Clone, Debug)]
