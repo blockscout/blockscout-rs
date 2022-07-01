@@ -50,6 +50,7 @@ impl Default for ServerSettings {
 }
 
 #[derive(Deserialize, Clone, Default, Debug)]
+#[serde(default)]
 pub struct Settings {
     pub server: ServerSettings,
     pub blockscout: BlockscoutSettings,
