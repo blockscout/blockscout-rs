@@ -8,7 +8,6 @@ pub trait Fetcher {
     async fn fetch(&self, ver: &CompilerVersion) -> Result<PathBuf, Self::Error>;
 }
 
-#[async_trait]
 pub trait VersionList {
-    async fn all_versions(&self) -> Vec<CompilerVersion>;
+    fn all_versions(&self) -> Vec<CompilerVersion>;
 }

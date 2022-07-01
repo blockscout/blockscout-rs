@@ -1,6 +1,5 @@
 use crate::compiler::{CompilerVersion, DownloadCache, Fetcher, VersionList};
 use anyhow::anyhow;
-use async_trait::async_trait;
 use ethers_solc::{
     artifacts::{self, Severity},
     error::SolcError,
@@ -63,10 +62,9 @@ impl<T: Fetcher> Compilers<T> {
     }
 }
 
-#[async_trait]
-impl<T: VersionList + Send + Sync> VersionList for Compilers<T> {
-    async fn all_versions(&self) -> Vec<CompilerVersion> {
-        self.fetcher.all_versions().await
+impl<T: VersionList> VersionList for Compilers<T> {
+    fn all_versions(&self) -> Vec<CompilerVersion> {
+        self.fetcher.all_versions()
     }
 }
 

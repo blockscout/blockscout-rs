@@ -10,7 +10,6 @@ use std::{
     sync::Arc,
 };
 use thiserror::Error;
-use tokio::sync::RwLock;
 use tokio_cron_scheduler::{Job, JobScheduler, JobSchedulerError};
 
 use url::Url;
@@ -110,13 +109,13 @@ impl TryFrom<(json::CompilerInfo, &Url)> for CompilerInfo {
 
 #[derive(Default)]
 struct RefreshableCompilerVersions {
-    versions: Arc<RwLock<CompilerVersions>>,
+    versions: Arc<parking_lot::RwLock<CompilerVersions>>,
 }
 
 impl From<CompilerVersions> for RefreshableCompilerVersions {
     fn from(versions: CompilerVersions) -> Self {
         Self {
-            versions: Arc::new(RwLock::new(versions)),
+            versions: Arc::new(parking_lot::RwLock::new(versions)),
         }
     }
 }
@@ -177,26 +176,32 @@ impl RefreshableCompilerVersions {
     }
 
     async fn refresh_versions(
-        versions: Arc<RwLock<CompilerVersions>>,
+        versions: Arc<parking_lot::RwLock<CompilerVersions>>,
         versions_list_url: &Url,
     ) -> anyhow::Result<()> {
+        log::info!("looking for new compilers versions");
         let fetched_versions = CompilerVersions::fetch_from_url(versions_list_url)
             .await
             .map_err(anyhow::Error::msg)?;
         let need_to_update = {
-            let versions_lock = versions.read().await;
-            fetched_versions.0 != versions_lock.0
+            let versions = versions.read();
+            fetched_versions.0 != versions.0
         };
         if need_to_update {
-            let mut versions_lock = versions.write().await;
-            log::debug!(
+            let (old_len, new_len) = {
+                let mut versions = versions.write();
+                let old_len = versions.0.len();
+                *versions = fetched_versions;
+                let new_len = versions.0.len();
+                (old_len, new_len)
+            };
+            log::info!(
                 "found new compiler versions. old length: {}, new length: {}",
-                versions_lock.0.len(),
-                fetched_versions.0.len()
+                old_len,
+                new_len,
             );
-            *versions_lock = fetched_versions
         } else {
-            log::debug!("no new versions found")
+            log::info!("no new versions found")
         }
         Ok(())
     }
@@ -228,13 +233,16 @@ fn create_executable(path: &Path) -> Result<File, std::io::Error> {
 impl Fetcher for CompilerFetcher {
     type Error = FetchError;
     async fn fetch(&self, ver: &CompilerVersion) -> Result<PathBuf, Self::Error> {
-        let compiler_versions = self.compiler_versions.versions.read().await;
-        let compiler_info = compiler_versions
-            .0
-            .get(ver)
-            .ok_or_else(|| FetchError::NotFound(ver.clone()))?;
+        let compiler_download_url = {
+            let compiler_versions = self.compiler_versions.versions.read();
+            let compiler_info = compiler_versions
+                .0
+                .get(ver)
+                .ok_or_else(|| FetchError::NotFound(ver.clone()))?;
+            compiler_info.url.clone()
+        };
 
-        let response = reqwest::get(compiler_info.url.clone())
+        let response = reqwest::get(compiler_download_url)
             .await
             .map_err(FetchError::Fetch)?;
         let folder = self.folder.join(ver.to_string());
@@ -265,10 +273,9 @@ impl Fetcher for CompilerFetcher {
     }
 }
 
-#[async_trait]
 impl VersionList for CompilerFetcher {
-    async fn all_versions(&self) -> Vec<CompilerVersion> {
-        let lock = self.compiler_versions.versions.read().await;
+    fn all_versions(&self) -> Vec<CompilerVersion> {
+        let lock = self.compiler_versions.versions.read();
         lock.0.iter().map(|(ver, _)| ver.clone()).collect()
     }
 }
