@@ -107,11 +107,11 @@ pub async fn router_get(
 pub fn run(settings: Settings) -> Result<Server, std::io::Error> {
     let listener = TcpListener::bind(settings.server.addr)?;
 
-    let apis_endpoints: APIsEndpoints = settings.blockscout.try_into().unwrap();
+    let apis_endpoints: Data<APIsEndpoints> = Data::new(settings.blockscout.try_into().unwrap());
 
     let server = HttpServer::new(move || {
         App::new()
-            .app_data(Data::new(apis_endpoints.clone()))
+            .app_data(apis_endpoints.clone())
             .default_service(web::route().to(router_get))
     })
     .listen(listener)?
