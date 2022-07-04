@@ -4,6 +4,4 @@ mod verifier;
 
 pub use compiler_fetcher::{CompilerFetcher, Releases};
 
-pub(crate) use verifier::{
-    InitializationError as VerifierInitializationError, VerificationSuccess, Verifier,
-};
+pub(crate) use verifier::{VerificationSuccess, Verifier};

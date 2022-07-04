@@ -1,6 +1,6 @@
 use crate::{
     compiler::{CompilerVersion, Compilers, CompilersError, Fetcher},
-    solidity::{VerificationSuccess, Verifier, VerifierInitializationError},
+    solidity::{VerificationSuccess, Verifier},
     VerificationResponse, VerificationResult,
 };
 use actix_web::error;
@@ -25,8 +25,6 @@ pub struct CompileAndVerifyInput<'a> {
 #[derive(Error, Debug)]
 enum CompileAndVerifyError {
     #[error("{0:#}")]
-    VerifierInitialization(#[from] VerifierInitializationError),
-    #[error("{0:#}")]
     Compilation(#[from] CompilersError),
     #[error("No contract could be verified with provided data")]
     NoMatchingContracts,
@@ -40,6 +38,9 @@ pub(crate) async fn compile_and_verify_handler<T: Fetcher>(
 where
     <T as Fetcher>::Error: Debug + Display,
 {
+    let verifier = Verifier::new(input.creation_tx_input, input.deployed_bytecode)
+        .map_err(error::ErrorBadRequest)?;
+
     let bruteforce_metadata = if !bruteforce_bytecode_hashes {
         Vec::from([input.compiler_input.settings.metadata.clone()])
     } else if VersionReq::parse("<0.6.0")
@@ -53,7 +54,7 @@ where
 
     for metadata in bruteforce_metadata {
         input.compiler_input.settings.metadata = metadata;
-        match compile_and_verify(compilers, &input).await {
+        match compile_and_verify(compilers, &verifier, &input).await {
             Ok(verification_success) => {
                 let verification_result = VerificationResult::from((
                     input.compiler_input,
@@ -61,9 +62,6 @@ where
                     verification_success,
                 ));
                 return Ok(VerificationResponse::ok(verification_result));
-            }
-            Err(CompileAndVerifyError::VerifierInitialization(err)) => {
-                return Err(error::ErrorBadRequest(err))
             }
             Err(CompileAndVerifyError::Compilation(CompilersError::Fetch(err))) => {
                 return Err(error::ErrorInternalServerError(err))
@@ -86,12 +84,12 @@ where
 
 async fn compile_and_verify<T: Fetcher>(
     compilers: &Compilers<T>,
+    verifier: &Verifier,
     input: &CompileAndVerifyInput<'_>,
 ) -> Result<VerificationSuccess, CompileAndVerifyError>
 where
     <T as Fetcher>::Error: Debug + Display,
 {
-    let verifier = Verifier::new(input.creation_tx_input, input.deployed_bytecode)?;
     let compiler_output = compilers
         .compile(&input.compiler_version, &input.compiler_input)
         .await?;
