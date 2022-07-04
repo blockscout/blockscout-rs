@@ -8,10 +8,8 @@ use ethers_solc::{
     artifacts::{BytecodeHash, SettingsMetadata},
     CompilerInput,
 };
-use std::{
-    fmt::{Debug, Display},
-    str::FromStr,
-};
+use semver::VersionReq;
+use std::fmt::{Debug, Display};
 use thiserror::Error;
 
 const BYTECODE_HASHES: [BytecodeHash; 3] =
@@ -44,7 +42,10 @@ where
 {
     let bruteforce_metadata = if !bruteforce_bytecode_hashes {
         Vec::from([input.compiler_input.settings.metadata.clone()])
-    } else if pre_v0_6_0(&input.compiler_version) {
+    } else if VersionReq::parse("<0.6.0")
+        .unwrap()
+        .matches(input.compiler_version.version())
+    {
         Vec::from([None])
     } else {
         Vec::from(BYTECODE_HASHES.map(|hash| Some(SettingsMetadata::from(hash))))
@@ -71,7 +72,7 @@ where
                 return Err(error::ErrorInternalServerError(err))
             }
             err @ Err(CompileAndVerifyError::Compilation(CompilersError::Compilation(_))) => {
-                return Ok(VerificationResponse::err(err.expect_err("Matched to Err")))
+                return Ok(VerificationResponse::err(err.unwrap_err()))
             }
             // Try other bytecode hashes if there is no matching contracts
             Err(CompileAndVerifyError::NoMatchingContracts) => {}
@@ -97,10 +98,4 @@ where
     verifier
         .verify(compiler_output)
         .ok_or(CompileAndVerifyError::NoMatchingContracts)
-}
-
-fn pre_v0_6_0(compiler_version: &CompilerVersion) -> bool {
-    let last_non_0_6_0_version =
-        CompilerVersion::from_str("v0.5.17+commit.d19bba13").expect("Valid compiler version");
-    compiler_version <= &last_non_0_6_0_version
 }
