@@ -10,7 +10,7 @@ mod tests {
     /// In the test we check that valid responses are returned from the API.
     /// Especially we call to the same network (xdai), but to different chains (mainnet, testnet).
     #[actix_web::test]
-    async fn expect_result_from_two() {
+    async fn check_get_requests() {
         let settings = config::BlockscoutSettings {
             base_url: "https://blockscout.com".parse().unwrap(),
             instances: vec![
@@ -39,7 +39,7 @@ mod tests {
         let actual_raw: serde_json::Value = serde_json::from_str(str.as_str()).unwrap();
         let actual = serde_json::to_string_pretty(&actual_raw).unwrap();
 
-        let mut expected = std::fs::read_to_string("tests/res/result_from_two.json").unwrap();
+        let mut expected = std::fs::read_to_string("tests/res/get_requests.json").unwrap();
         // Remove trailing newline that comes from "read_to_string"
         expected.pop();
 
