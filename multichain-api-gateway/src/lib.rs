@@ -2,8 +2,9 @@ use std::{collections::HashMap, net::TcpListener, str};
 
 use actix_web::{
     dev::Server,
+    http::Method,
     web,
-    web::{Data, Json},
+    web::{Bytes, Data, Json},
     App, HttpRequest, HttpServer, Responder,
 };
 use futures::{stream, StreamExt};
@@ -45,13 +46,25 @@ impl From<BlockscoutSettings> for ApiEndpoints {
 }
 
 impl ApiEndpoints {
-    async fn make_requests(self, query: &str) -> Vec<(Instance, String)> {
+    async fn make_requests(
+        self,
+        query: &str,
+        method: &Method,
+        body: Bytes,
+    ) -> Vec<(Instance, String)> {
+        let json = serde_json::from_slice::<Value>(body.as_ref()).unwrap_or(Value::Null);
         let client = Client::new();
 
         stream::iter(self.apis)
             .map(|(instance, mut url)| async {
                 url.set_query(Some(query));
-                let resp = client.get(url).send().await.unwrap();
+                let resp = client
+                    .request(method.clone(), url)
+                    // Simple passing body into the `.body()` method is not enough because of escaped quotes in json-body.
+                    .json(&json)
+                    .send()
+                    .await
+                    .unwrap();
                 (instance, resp.bytes().await)
             })
             .buffer_unordered(self.concurrent_requests)
@@ -85,18 +98,17 @@ fn merge_responses(json_resonses: Vec<(Instance, String)>) -> Responses {
     result
 }
 
-async fn handle_default_request(query: &str, apis_endpoints: ApiEndpoints) -> Json<Responses> {
-    let responses = apis_endpoints.make_requests(query).await;
-    Json(merge_responses(responses))
-}
-
 pub async fn router_get(
     request: HttpRequest,
     apis_endpoints: Data<ApiEndpoints>,
+    body: Bytes,
 ) -> impl Responder {
-    let json =
-        handle_default_request(request.query_string(), apis_endpoints.get_ref().clone()).await;
-    json
+    let responses = apis_endpoints
+        .get_ref()
+        .clone()
+        .make_requests(request.query_string(), request.method(), body)
+        .await;
+    Json(merge_responses(responses))
 }
 
 pub fn run(settings: Settings) -> Result<Server, std::io::Error> {
