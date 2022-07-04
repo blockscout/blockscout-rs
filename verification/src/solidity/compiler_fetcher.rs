@@ -53,8 +53,16 @@ pub enum ListError {
     Path(url::ParseError),
 }
 
-#[derive(Default)]
-pub struct CompilerVersions(HashMap<CompilerVersion, CompilerInfo>);
+type CompilerVersionsMap = HashMap<CompilerVersion, CompilerInfo>;
+
+#[derive(Default, Clone)]
+pub struct CompilerVersions(Arc<parking_lot::RwLock<CompilerVersionsMap>>);
+
+impl From<CompilerVersionsMap> for CompilerVersions {
+    fn from(map: CompilerVersionsMap) -> Self {
+        Self(Arc::new(parking_lot::RwLock::new(map)))
+    }
+}
 
 #[derive(Debug, PartialEq)]
 pub struct CompilerInfo {
@@ -62,31 +70,28 @@ pub struct CompilerInfo {
     pub sha256: H256,
 }
 
-impl CompilerVersions {
-    pub async fn fetch_from_url(versions_list_url: &Url) -> Result<Self, ListError> {
-        let list_json_file: json::List = reqwest::get(versions_list_url.to_string())
-            .await
-            .map_err(ListError::ListJsonFetch)?
-            .json()
-            .await
-            .map_err(ListError::ParseListJson)?;
-
-        CompilerVersions::try_from((list_json_file, versions_list_url)).map_err(ListError::Path)
-    }
+pub async fn try_fetch_versions(versions_list_url: &Url) -> Result<CompilerVersionsMap, ListError> {
+    let list_json_file: json::List = reqwest::get(versions_list_url.to_string())
+        .await
+        .map_err(ListError::ListJsonFetch)?
+        .json()
+        .await
+        .map_err(ListError::ParseListJson)?;
+    try_parse_json_file(list_json_file, versions_list_url)
 }
 
-impl TryFrom<(json::List, &Url)> for CompilerVersions {
-    type Error = url::ParseError;
-
-    fn try_from((list, download_url): (json::List, &Url)) -> Result<Self, Self::Error> {
-        let mut releases = HashMap::default();
-        for json_compiler_info in list.builds {
-            let version = json_compiler_info.long_version.clone();
-            let compiler_info = CompilerInfo::try_from((json_compiler_info, download_url))?;
-            releases.insert(version, compiler_info);
-        }
-        Ok(Self(releases))
+fn try_parse_json_file(
+    list_json_file: json::List,
+    versions_list_url: &Url,
+) -> Result<CompilerVersionsMap, ListError> {
+    let mut compiler_versions = HashMap::default();
+    for json_compiler_info in list_json_file.builds {
+        let version = json_compiler_info.long_version.clone();
+        let compiler_info = CompilerInfo::try_from((json_compiler_info, versions_list_url))
+            .map_err(ListError::Path)?;
+        compiler_versions.insert(version, compiler_info);
     }
+    Ok(compiler_versions)
 }
 
 impl TryFrom<(json::CompilerInfo, &Url)> for CompilerInfo {
@@ -107,32 +112,19 @@ impl TryFrom<(json::CompilerInfo, &Url)> for CompilerInfo {
     }
 }
 
-#[derive(Default)]
-struct RefreshableCompilerVersions(Arc<parking_lot::RwLock<CompilerVersions>>);
-
-impl From<CompilerVersions> for RefreshableCompilerVersions {
-    fn from(versions: CompilerVersions) -> Self {
-        Self(Arc::new(parking_lot::RwLock::new(versions)))
-    }
-}
-
-impl RefreshableCompilerVersions {
+impl CompilerVersions {
     fn spawn_refresh_job(
-        &self,
+        self,
         versions_list_url: Url,
         cron_schedule: &str,
     ) -> Result<(), JobSchedulerError> {
         log::info!("spawn version refresh job with schedule {}", cron_schedule);
-        let versions = Arc::clone(&self.0);
-
         let job = Job::new_async(cron_schedule, move |_, _| {
             let versions_list_url = versions_list_url.clone();
-            let versions = Arc::clone(&versions);
+            let versions = self.clone();
 
             Box::pin(async move {
-                let refresh_result =
-                    RefreshableCompilerVersions::refresh_versions(versions, &versions_list_url)
-                        .await;
+                let refresh_result = versions.refresh_versions(&versions_list_url).await;
                 if let Err(err) = refresh_result {
                     log::error!("error during version refresh: {}", err);
                 };
@@ -143,24 +135,21 @@ impl RefreshableCompilerVersions {
         scheduler.start()
     }
 
-    async fn refresh_versions(
-        versions: Arc<parking_lot::RwLock<CompilerVersions>>,
-        versions_list_url: &Url,
-    ) -> anyhow::Result<()> {
+    async fn refresh_versions(&self, versions_list_url: &Url) -> anyhow::Result<()> {
         log::info!("looking for new compilers versions");
-        let fetched_versions = CompilerVersions::fetch_from_url(versions_list_url)
+        let fetched_versions = try_fetch_versions(versions_list_url)
             .await
             .map_err(anyhow::Error::msg)?;
         let need_to_update = {
-            let versions = versions.read();
-            fetched_versions.0 != versions.0
+            let versions = self.0.read();
+            fetched_versions != *versions
         };
         if need_to_update {
             let (old_len, new_len) = {
-                let mut versions = versions.write();
-                let old_len = versions.0.len();
+                let mut versions = self.0.write();
+                let old_len = versions.len();
                 *versions = fetched_versions;
-                let new_len = versions.0.len();
+                let new_len = versions.len();
                 (old_len, new_len)
             };
             log::info!(
@@ -177,22 +166,23 @@ impl RefreshableCompilerVersions {
 
 #[derive(Default)]
 pub struct CompilerFetcher {
-    compiler_versions: RefreshableCompilerVersions,
+    compiler_versions: CompilerVersions,
     folder: PathBuf,
 }
 
 impl CompilerFetcher {
     pub async fn new(
         versions_list_url: Url,
-        refresh_cron_schedule: Option<&str>,
+        refresh_versions_schedule: Option<&str>,
         folder: PathBuf,
     ) -> anyhow::Result<Self> {
-        let compiler_versions = CompilerVersions::fetch_from_url(&versions_list_url)
+        let compiler_versions = try_fetch_versions(&versions_list_url)
             .await
             .map_err(anyhow::Error::msg)?;
-        let compiler_versions = RefreshableCompilerVersions::from(compiler_versions);
-        if let Some(cron_schedule) = refresh_cron_schedule {
+        let compiler_versions = CompilerVersions::from(compiler_versions);
+        if let Some(cron_schedule) = refresh_versions_schedule {
             compiler_versions
+                .clone()
                 .spawn_refresh_job(versions_list_url, cron_schedule)
                 .map_err(anyhow::Error::msg)?;
         }
@@ -232,7 +222,6 @@ impl Fetcher for CompilerFetcher {
         let compiler_download_url = {
             let compiler_versions = self.compiler_versions.0.read();
             let compiler_info = compiler_versions
-                .0
                 .get(ver)
                 .ok_or_else(|| FetchError::NotFound(ver.clone()))?;
             compiler_info.url.clone()
@@ -271,8 +260,11 @@ impl Fetcher for CompilerFetcher {
 
 impl VersionList for CompilerFetcher {
     fn all_versions(&self) -> Vec<CompilerVersion> {
-        let lock = self.compiler_versions.0.read();
-        lock.0.iter().map(|(ver, _)| ver.clone()).collect()
+        let compiler_versions = self.compiler_versions.0.read();
+        compiler_versions
+            .iter()
+            .map(|(ver, _)| ver.clone())
+            .collect()
     }
 }
 
@@ -362,9 +354,9 @@ mod tests {
         ]);
     }
 
-    fn assert_has_version(versions: &CompilerVersions, ver: &str, expect: &str) {
+    fn assert_has_version(versions: &CompilerVersionsMap, ver: &str, expect: &str) {
         let ver = CompilerVersion::from_str(ver).unwrap();
-        let info = versions.0.get(&ver).unwrap();
+        let info = versions.get(&ver).unwrap();
         let url = info.url.to_string();
         assert_eq!(url, expect, "urls don't match");
     }
@@ -373,7 +365,7 @@ mod tests {
     fn parse_versions() {
         let list_json_file: json::List = serde_json::from_str(DEFAULT_LIST_JSON).unwrap();
         let download_url = Url::from_str(DEFAULT_DOWNLOAD_PREFIX).expect("valid url");
-        let verions = CompilerVersions::try_from((list_json_file, &download_url)).unwrap();
+        let verions = try_parse_json_file(list_json_file, &download_url).unwrap();
         assert_has_version(
             &verions,
             "0.8.15-nightly.2022.5.27+commit.095cc647",

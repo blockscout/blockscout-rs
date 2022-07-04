@@ -31,7 +31,7 @@ impl Default for ServerConfiguration {
 pub struct SolidityConfiguration {
     pub enabled: bool,
     pub compilers_list_url: Url,
-    pub cron_schedule: String,
+    pub refresh_versions_schedule: String,
 }
 
 impl Default for SolidityConfiguration {
@@ -39,7 +39,7 @@ impl Default for SolidityConfiguration {
         Self {
             compilers_list_url: Url::try_from(DEFAULT_COMPILER_LIST).expect("valid url"),
             enabled: true,
-            cron_schedule: "0 0 * * * * *".to_string(), // every hour
+            refresh_versions_schedule: "0 0 * * * * *".to_string(), // every hour
         }
     }
 }
