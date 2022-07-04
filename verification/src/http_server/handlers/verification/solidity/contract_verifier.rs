@@ -15,7 +15,7 @@ use thiserror::Error;
 const BYTECODE_HASHES: [BytecodeHash; 3] =
     [BytecodeHash::Ipfs, BytecodeHash::None, BytecodeHash::Bzzr1];
 
-pub struct CompileAndVerifyInput<'a> {
+pub struct Input<'a> {
     pub compiler_version: CompilerVersion,
     pub compiler_input: CompilerInput,
     pub creation_tx_input: &'a str,
@@ -30,9 +30,9 @@ enum CompileAndVerifyError {
     NoMatchingContracts,
 }
 
-pub(crate) async fn compile_and_verify_handler<T: Fetcher>(
+pub(crate) async fn compile_and_verify<T: Fetcher>(
     compilers: &Compilers<T>,
-    mut input: CompileAndVerifyInput<'_>,
+    mut input: Input<'_>,
     bruteforce_bytecode_hashes: bool,
 ) -> Result<VerificationResponse, actix_web::Error>
 where
@@ -54,7 +54,7 @@ where
 
     for metadata in bruteforce_metadata {
         input.compiler_input.settings.metadata = metadata;
-        match compile_and_verify(compilers, &verifier, &input).await {
+        match compile_and_verify_internal(compilers, &verifier, &input).await {
             Ok(verification_success) => {
                 let verification_result = VerificationResult::from((
                     input.compiler_input,
@@ -79,10 +79,10 @@ where
     ))
 }
 
-async fn compile_and_verify<T: Fetcher>(
+async fn compile_and_verify_internal<T: Fetcher>(
     compilers: &Compilers<T>,
     verifier: &Verifier,
-    input: &CompileAndVerifyInput<'_>,
+    input: &Input<'_>,
 ) -> Result<VerificationSuccess, CompileAndVerifyError>
 where
     <T as Fetcher>::Error: Debug + Display,

@@ -1,4 +1,4 @@
-mod handlers;
+mod contract_verifier;
 mod types;
 
 pub mod multi_part;
