@@ -63,14 +63,11 @@ where
                 ));
                 return Ok(VerificationResponse::ok(verification_result));
             }
-            Err(CompileAndVerifyError::Compilation(CompilersError::Fetch(err))) => {
-                return Err(error::ErrorInternalServerError(err))
-            }
-            Err(CompileAndVerifyError::Compilation(CompilersError::Internal(err))) => {
-                return Err(error::ErrorInternalServerError(err))
-            }
             err @ Err(CompileAndVerifyError::Compilation(CompilersError::Compilation(_))) => {
                 return Ok(VerificationResponse::err(err.unwrap_err()))
+            }
+            Err(CompileAndVerifyError::Compilation(err)) => {
+                return Err(error::ErrorInternalServerError(err))
             }
             // Try other bytecode hashes if there is no matching contracts
             Err(CompileAndVerifyError::NoMatchingContracts) => {}
