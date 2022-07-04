@@ -7,8 +7,7 @@ mod tests {
     use actix_web::{test, web, web::Data, App};
     use multichain_api_gateway::ApiEndpoints;
 
-    /// In the test we check that valid responses are returned from the API.
-    /// Especially we call to the same network (xdai), but to different chains (mainnet, testnet).
+    /// Check that valid responses are returned from the API via POST request.
     #[actix_web::test]
     async fn make_post_requests() {
         let settings = config::BlockscoutSettings {
