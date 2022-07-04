@@ -200,7 +200,7 @@ async fn test_failure<'a>(dir: &'static str, mut input: TestInput, expected_mess
     );
 }
 
-mod basic_tests {
+mod success_tests {
     use super::*;
 
     #[actix_rt::test]
@@ -275,7 +275,7 @@ mod basic_tests {
     }
 }
 
-mod basic_error_tests {
+mod error_tests {
     use super::*;
 
     #[actix_rt::test]
@@ -303,6 +303,7 @@ mod basic_error_tests {
 mod regression_tests {
     use super::*;
 
+    // https://github.com/blockscout/blockscout/issues/5114
     #[actix_rt::test]
     async fn issue_5114() {
         let contract_dir = "issue_5114";
@@ -312,6 +313,7 @@ mod regression_tests {
         test_success(contract_dir, test_input).await;
     }
 
+    // https://github.com/blockscout/blockscout/issues/5127
     #[actix_rt::test]
     async fn issue_5127() {
         let contract_dir = "issue_5127";
@@ -321,6 +323,7 @@ mod regression_tests {
         test_success(contract_dir, test_input).await;
     }
 
+    // https://github.com/blockscout/blockscout/issues/3082
     #[actix_rt::test]
     async fn issue_3082() {
         let contract_dir = "issue_3082";
@@ -339,6 +342,7 @@ mod regression_tests {
         test_success(contract_dir, test_input).await;
     }
 
+    // https://github.com/blockscout/blockscout/issues/4758
     #[actix_rt::test]
     async fn issue_4758() {
         let contract_dir = "issue_4758";
@@ -350,6 +354,8 @@ mod regression_tests {
 
     // runs only for linux, as other compiler lists do not have nightly builds
     #[cfg(target_os = "linux")]
+    // https://github.com/blockscout/blockscout/issues/5430
+    // https://github.com/blockscout/blockscout/issues/5434
     #[actix_rt::test]
     #[ignore] // remove when list with nightly builds would be ready for linux
     async fn issue_5430_5434() {
@@ -358,6 +364,7 @@ mod regression_tests {
         test_success(contract_dir, test_input).await;
     }
 
+    // https://github.com/blockscout/blockscout/issues/5431
     #[actix_rt::test]
     // (smart contract was compiled with bytecodeHash=none; constructor with arguments)
     async fn issue_5431() {
@@ -366,6 +373,7 @@ mod regression_tests {
         test_success(contract_dir, test_input).await;
     }
 
+    // https://github.com/blockscout/blockscout/issues/5636
     // #[actix_rt::test]
     // // type(A).creationCode in the constructor
     // async fn issue_5636() {
