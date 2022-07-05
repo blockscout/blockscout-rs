@@ -21,10 +21,10 @@ async fn should_return_200() {
     let metadata = include_str!("contracts/storage/metadata.json");
     let source = include_str!("contracts/storage/source.sol");
     let request_body = json!({
-        // relies on the fact that the kovan testnet has this contract
-        // https://kovan.etherscan.io/address/0xfbe36e5cad207d5fdee40e6568bb276a351f6713
-        "address": "0xFBe36e5cAD207d5fDee40E6568bb276a351f6713",
-        "chain": "42",
+        // relies on the fact that the sokol testnet has this contract
+        // https://blockscout.com/poa/sokol/address/0x1277E7D253e0c073418B986b8228BF282554cA5e
+        "address": "0x1277E7D253e0c073418B986b8228BF282554cA5e",
+        "chain": "77",
         "files": {
             "source.sol": source,
             "metadata.json": metadata,
@@ -83,30 +83,30 @@ async fn invalid_contracts() {
     for (request_body, error_message) in [
         (
             json!({
-                // relies on fact that the kovan HASN'T any contract with this address
+                // relies on fact that the sokol HASN'T any contract with this address
                 "address": "0x1234567890123456789012345678901234567890",
-                "chain": "42",
+                "chain": "77",
                 "files": {
                     "metadata.json": metadata_content,
                     "contracts/1_Storage.sol": source,
                 },
             }),
-            "Kovan does not have a contract",
+            "Sokol does not have a contract",
         ),
         (
             json!({
                 "address": "0x1234567890123456789012345678901234567890",
-                "chain": "42",
+                "chain": "77",
                 "files": {},
             }),
             "Metadata file not found",
         ),
         (
             json!({
-                // relies on fact that kovan has some contract, but it is not verified in
+                // relies on fact that sokol has some contract, but it is not verified in
                 // sourcify and `source` contains wrong source code
-                "address": "0x14132d1e8f4AaFCef230f5900bf8A3fFA4CCCC22",
-                "chain": "42",
+                "address": "0xDD00Fe656dC893863Ae537430Dd13631aA2F55F0",
+                "chain": "77",
                 "files": {
                     "metadata.json": metadata_content,
                     "contracts/1_Storage.sol": source,
