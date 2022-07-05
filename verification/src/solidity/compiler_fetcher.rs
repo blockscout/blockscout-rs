@@ -1,6 +1,6 @@
 use crate::{
     compiler::{CompilerVersion, Fetcher, VersionList},
-    scheduler::spawn_job_with_schedule,
+    scheduler,
 };
 use async_trait::async_trait;
 use cron::Schedule;
@@ -62,12 +62,6 @@ type CompilerVersionsMap = HashMap<CompilerVersion, CompilerInfo>;
 #[derive(Default, Clone)]
 pub struct CompilerVersions(Arc<parking_lot::RwLock<CompilerVersionsMap>>);
 
-impl From<CompilerVersionsMap> for CompilerVersions {
-    fn from(map: CompilerVersionsMap) -> Self {
-        Self(Arc::new(parking_lot::RwLock::new(map)))
-    }
-}
-
 #[derive(Debug, PartialEq)]
 pub struct CompilerInfo {
     pub url: Url,
@@ -119,7 +113,7 @@ impl TryFrom<(json::CompilerInfo, &Url)> for CompilerInfo {
 impl CompilerVersions {
     fn spawn_refresh_job(self, versions_list_url: Url, cron_schedule: Schedule) {
         log::info!("spawn version refresh job");
-        spawn_job_with_schedule(cron_schedule, move || {
+        scheduler::spawn_job(cron_schedule, "refresh compiler versions", move || {
             let versions_list_url = versions_list_url.clone();
             let versions = self.clone();
             async move {
@@ -142,6 +136,8 @@ impl CompilerVersions {
         };
         if need_to_update {
             let (old_len, new_len) = {
+                // we don't need to check condition again,
+                // we can just override the value
                 let mut versions = self.0.write();
                 let old_len = versions.len();
                 *versions = fetched_versions;
@@ -175,11 +171,12 @@ impl CompilerFetcher {
         let compiler_versions = try_fetch_versions(&versions_list_url)
             .await
             .map_err(anyhow::Error::msg)?;
-        let compiler_versions = CompilerVersions::from(compiler_versions);
+        let compiler_versions =
+            CompilerVersions(Arc::new(parking_lot::RwLock::new(compiler_versions)));
         if let Some(cron_schedule) = refresh_versions_schedule {
             compiler_versions
                 .clone()
-                .spawn_refresh_job(versions_list_url, cron_schedule)
+                .spawn_refresh_job(versions_list_url.clone(), cron_schedule)
         }
         Ok(Self {
             compiler_versions,
@@ -389,7 +386,7 @@ mod tests {
     async fn list_download_versions() {
         let config = Config::default();
         let fetcher = CompilerFetcher::new(
-            config.solidity.compilers_list_url.clone(),
+            config.solidity.compilers_list_url,
             None,
             std::env::temp_dir().join("blockscout/verification/compiler_fetcher/test/"),
         )

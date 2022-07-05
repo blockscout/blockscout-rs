@@ -3,8 +3,9 @@ use futures::Future;
 
 use chrono::Utc;
 
-pub fn spawn_job_with_schedule<F, Fut>(
+pub fn spawn_job<F, Fut>(
     schedule: Schedule,
+    job_name: &'static str,
     mut run: F,
 ) -> tokio::task::JoinHandle<()>
 where
@@ -15,7 +16,11 @@ where
     tokio::spawn(async move {
         loop {
             let sleep_duration = time_till_next_call(&schedule);
-            log::debug!("sleep for {:?}", sleep_duration);
+            log::debug!(
+                "scheduled next run of '{}' in {:?}",
+                job_name,
+                sleep_duration
+            );
             tokio::time::sleep(sleep_duration).await;
             run().await;
         }
