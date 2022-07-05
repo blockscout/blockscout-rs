@@ -1,29 +1,36 @@
-use crate::compiler::{CompilerVersion, Fetcher, VersionList};
+use crate::{
+    compiler::{CompilerVersion, Fetcher, VersionList},
+    scheduler,
+};
 use async_trait::async_trait;
+use cron::Schedule;
 use primitive_types::H256;
 use std::{
     collections::HashMap,
+    fmt::Debug,
     fs::{File, OpenOptions},
     io::ErrorKind,
     os::unix::prelude::OpenOptionsExt,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 use thiserror::Error;
+
 use url::Url;
 
 mod json {
     use primitive_types::H256;
-    use serde::Deserialize;
+    use serde::{Deserialize, Serialize};
     use url::Url;
 
     use crate::compiler::CompilerVersion;
 
-    #[derive(Debug, Deserialize, PartialEq)]
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
     pub struct List {
         pub builds: Vec<CompilerInfo>,
     }
 
-    #[derive(Debug, Deserialize, PartialEq)]
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
     #[serde(rename_all = "camelCase")]
     pub struct CompilerInfo {
         pub path: DownloadPath,
@@ -32,7 +39,7 @@ mod json {
         pub sha256: H256,
     }
 
-    #[derive(Debug, Deserialize, PartialEq)]
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
     #[serde(untagged)]
     pub enum DownloadPath {
         Url(Url),
@@ -50,40 +57,39 @@ pub enum ListError {
     Path(url::ParseError),
 }
 
-#[derive(Default)]
-pub struct Releases(HashMap<CompilerVersion, CompilerInfo>);
+type CompilerVersionsMap = HashMap<CompilerVersion, CompilerInfo>;
 
-#[derive(Debug)]
+#[derive(Default, Clone)]
+pub struct CompilerVersions(Arc<parking_lot::RwLock<CompilerVersionsMap>>);
+
+#[derive(Debug, PartialEq)]
 pub struct CompilerInfo {
     pub url: Url,
     pub sha256: H256,
 }
 
-impl Releases {
-    pub async fn fetch_from_url(compilers_list_url: &Url) -> Result<Self, ListError> {
-        let list_json_file: json::List = reqwest::get(compilers_list_url.to_string())
-            .await
-            .map_err(ListError::ListJsonFetch)?
-            .json()
-            .await
-            .map_err(ListError::ParseListJson)?;
-
-        Releases::try_from((list_json_file, compilers_list_url)).map_err(ListError::Path)
-    }
+pub async fn try_fetch_versions(versions_list_url: &Url) -> Result<CompilerVersionsMap, ListError> {
+    let list_json_file: json::List = reqwest::get(versions_list_url.as_str())
+        .await
+        .map_err(ListError::ListJsonFetch)?
+        .json()
+        .await
+        .map_err(ListError::ParseListJson)?;
+    try_parse_json_file(list_json_file, versions_list_url)
 }
 
-impl TryFrom<(json::List, &Url)> for Releases {
-    type Error = url::ParseError;
-
-    fn try_from((list, download_url): (json::List, &Url)) -> Result<Self, Self::Error> {
-        let mut releases = HashMap::default();
-        for json_compiler_info in list.builds {
-            let version = json_compiler_info.long_version.clone();
-            let compiler_info = CompilerInfo::try_from((json_compiler_info, download_url))?;
-            releases.insert(version, compiler_info);
-        }
-        Ok(Self(releases))
+fn try_parse_json_file(
+    list_json_file: json::List,
+    versions_list_url: &Url,
+) -> Result<CompilerVersionsMap, ListError> {
+    let mut compiler_versions = HashMap::default();
+    for json_compiler_info in list_json_file.builds {
+        let version = json_compiler_info.long_version.clone();
+        let compiler_info = CompilerInfo::try_from((json_compiler_info, versions_list_url))
+            .map_err(ListError::Path)?;
+        compiler_versions.insert(version, compiler_info);
     }
+    Ok(compiler_versions)
 }
 
 impl TryFrom<(json::CompilerInfo, &Url)> for CompilerInfo {
@@ -104,15 +110,78 @@ impl TryFrom<(json::CompilerInfo, &Url)> for CompilerInfo {
     }
 }
 
+impl CompilerVersions {
+    fn spawn_refresh_job(self, versions_list_url: Url, cron_schedule: Schedule) {
+        log::info!("spawn version refresh job");
+        scheduler::spawn_job(cron_schedule, "refresh compiler versions", move || {
+            let versions_list_url = versions_list_url.clone();
+            let versions = self.clone();
+            async move {
+                let refresh_result = versions.refresh_versions(&versions_list_url).await;
+                if let Err(err) = refresh_result {
+                    log::error!("error during version refresh: {}", err);
+                };
+            }
+        });
+    }
+
+    async fn refresh_versions(&self, versions_list_url: &Url) -> anyhow::Result<()> {
+        log::info!("looking for new compilers versions");
+        let fetched_versions = try_fetch_versions(versions_list_url)
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let need_to_update = {
+            let versions = self.0.read();
+            fetched_versions != *versions
+        };
+        if need_to_update {
+            let (old_len, new_len) = {
+                // we don't need to check condition again,
+                // we can just override the value
+                let mut versions = self.0.write();
+                let old_len = versions.len();
+                *versions = fetched_versions;
+                let new_len = versions.len();
+                (old_len, new_len)
+            };
+            log::info!(
+                "found new compiler versions. old length: {}, new length: {}",
+                old_len,
+                new_len,
+            );
+        } else {
+            log::info!("no new versions found")
+        }
+        Ok(())
+    }
+}
+
 #[derive(Default)]
 pub struct CompilerFetcher {
-    releases: Releases,
+    compiler_versions: CompilerVersions,
     folder: PathBuf,
 }
 
 impl CompilerFetcher {
-    pub async fn new(releases: Releases, folder: PathBuf) -> Self {
-        Self { releases, folder }
+    pub async fn new(
+        versions_list_url: Url,
+        refresh_versions_schedule: Option<Schedule>,
+        folder: PathBuf,
+    ) -> anyhow::Result<Self> {
+        let compiler_versions = try_fetch_versions(&versions_list_url)
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let compiler_versions =
+            CompilerVersions(Arc::new(parking_lot::RwLock::new(compiler_versions)));
+        if let Some(cron_schedule) = refresh_versions_schedule {
+            compiler_versions
+                .clone()
+                .spawn_refresh_job(versions_list_url.clone(), cron_schedule)
+        }
+        Ok(Self {
+            compiler_versions,
+            folder,
+        })
     }
 }
 
@@ -142,13 +211,15 @@ fn create_executable(path: &Path) -> Result<File, std::io::Error> {
 impl Fetcher for CompilerFetcher {
     type Error = FetchError;
     async fn fetch(&self, ver: &CompilerVersion) -> Result<PathBuf, Self::Error> {
-        let compiler_info = self
-            .releases
-            .0
-            .get(ver)
-            .ok_or_else(|| FetchError::NotFound(ver.clone()))?;
+        let compiler_download_url = {
+            let compiler_versions = self.compiler_versions.0.read();
+            let compiler_info = compiler_versions
+                .get(ver)
+                .ok_or_else(|| FetchError::NotFound(ver.clone()))?;
+            compiler_info.url.clone()
+        };
 
-        let response = reqwest::get(compiler_info.url.clone())
+        let response = reqwest::get(compiler_download_url)
             .await
             .map_err(FetchError::Fetch)?;
         let folder = self.folder.join(ver.to_string());
@@ -180,8 +251,12 @@ impl Fetcher for CompilerFetcher {
 }
 
 impl VersionList for CompilerFetcher {
-    fn all_versions(&self) -> Vec<&CompilerVersion> {
-        self.releases.0.iter().map(|(ver, _)| ver).collect()
+    fn all_versions(&self) -> Vec<CompilerVersion> {
+        let compiler_versions = self.compiler_versions.0.read();
+        compiler_versions
+            .iter()
+            .map(|(ver, _)| ver.clone())
+            .collect()
     }
 }
 
@@ -191,7 +266,11 @@ mod tests {
 
     use super::*;
     use ethers_solc::Solc;
-    use std::str::FromStr;
+    use std::{env::temp_dir, str::FromStr};
+    use wiremock::{
+        matchers::{method, path},
+        Mock, MockServer, ResponseTemplate,
+    };
 
     const DEFAULT_LIST_JSON: &str = r#"{
         "builds": [
@@ -271,49 +350,48 @@ mod tests {
         ]);
     }
 
-    fn assert_has_version(releases: &Releases, ver: &str, expect: &str) {
+    fn assert_has_version(versions: &CompilerVersionsMap, ver: &str, expect: &str) {
         let ver = CompilerVersion::from_str(ver).unwrap();
-        let info = releases.0.get(&ver).unwrap();
+        let info = versions.get(&ver).unwrap();
         let url = info.url.to_string();
         assert_eq!(url, expect, "urls don't match");
     }
 
     #[test]
-    fn parse_releases() {
+    fn parse_versions() {
         let list_json_file: json::List = serde_json::from_str(DEFAULT_LIST_JSON).unwrap();
         let download_url = Url::from_str(DEFAULT_DOWNLOAD_PREFIX).expect("valid url");
-        let releases = Releases::try_from((list_json_file, &download_url)).unwrap();
+        let verions = try_parse_json_file(list_json_file, &download_url).unwrap();
         assert_has_version(
-            &releases,
+            &verions,
             "0.8.15-nightly.2022.5.27+commit.095cc647",
             "https://github.com/blockscout/solc-bin/releases/download/solc-v0.8.15-nightly.2022.5.27%2Bcommit.095cc647/solc",
         );
         assert_has_version(
-            &releases,
+            &verions,
             "0.4.13+commit.0fb4cb1a",
             "https://binaries.soliditylang.org/linux-amd64/solc-linux-amd64-v0.4.13+commit.0fb4cb1a",
         );
-        assert_has_version(&releases,
+        assert_has_version(&verions,
             "10.8.9-nightly.2021.9.11+commit.e5eed63a",
             "https://binaries.soliditylang.org/linux-amd64/solc-linux-amd64-v10.8.9-nightly.2021.9.11+commit.e5eed63a"
         );
-        assert_has_version(&releases,
+        assert_has_version(&verions,
             "0.4.16+commit.d7661dd9",
             "https://binaries.soliditylang.org/linux-amd64/download/files/solc-linux-amd64-v0.4.16+commit.d7661dd9"
         );
     }
 
     #[tokio::test]
-    async fn list_download_releases() {
+    async fn list_download_versions() {
         let config = Config::default();
-        let releases = Releases::fetch_from_url(&config.solidity.compilers_list_url)
-            .await
-            .expect("list.json file should be valid");
         let fetcher = CompilerFetcher::new(
-            releases,
+            config.solidity.compilers_list_url,
+            None,
             std::env::temp_dir().join("blockscout/verification/compiler_fetcher/test/"),
         )
-        .await;
+        .await
+        .expect("list.json file should be valid");
 
         for compiler_version in vec![
             CompilerVersion::from_str("0.7.0+commit.9e61f92b").unwrap(),
@@ -331,5 +409,41 @@ mod tests {
                 )
             );
         }
+    }
+
+    #[tokio::test]
+    async fn check_refresh_versions() {
+        env_logger::init();
+        let mock_server = MockServer::start().await;
+
+        // mock list.json server response with empty list
+        Mock::given(method("GET"))
+            .and(path("/"))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes("{\"builds\": []}"))
+            .mount(&mock_server)
+            .await;
+        let fetcher = CompilerFetcher::new(
+            Url::parse(&mock_server.uri()).unwrap(),
+            Some(Schedule::from_str("* * * * * * *").unwrap()),
+            temp_dir(),
+        )
+        .await
+        .expect("cannot initialize fetcher");
+        assert!(fetcher.all_versions().is_empty());
+
+        // mock list.json server response with `DEFAULT_LIST_JSON`
+        mock_server.reset().await;
+        Mock::given(method("GET"))
+            .and(path("/"))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(DEFAULT_LIST_JSON))
+            .mount(&mock_server)
+            .await;
+        // wait for refresher to do its job
+        tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
+        let versions = fetcher.all_versions();
+        assert!(
+            versions.contains(&CompilerVersion::from_str("0.4.13+commit.0fb4cb1a").unwrap()),
+            "versions list doesn't have 0.4.13: {versions:?}",
+        );
     }
 }

@@ -3,6 +3,7 @@ mod compiler;
 mod config;
 mod consts;
 mod http_server;
+mod scheduler;
 mod solidity;
 mod types;
 
