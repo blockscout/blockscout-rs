@@ -47,8 +47,6 @@ mod tests {
             (String::from("optimization"), serde_json::Value::from(false)),
         ]);
 
-        println!("{:?}", data);
-
         let req = test::TestRequest::post()
             .uri(uri)
             .set_json(data)

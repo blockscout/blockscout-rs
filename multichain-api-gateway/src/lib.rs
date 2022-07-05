@@ -52,16 +52,16 @@ impl ApiEndpoints {
         method: &Method,
         body: Bytes,
     ) -> Vec<(Instance, String)> {
-        let json = serde_json::from_slice::<Value>(body.as_ref()).unwrap_or(Value::Null);
         let client = Client::new();
 
         stream::iter(self.apis)
             .map(|(instance, mut url)| async {
                 url.set_query(Some(query));
+
                 let resp = client
                     .request(method.clone(), url)
-                    // Simple passing body into the `.body()` method is not enough because of escaped quotes in json-body.
-                    .json(&json)
+                    .header("Content-Type", "application/json")
+                    .body(body.clone())
                     .send()
                     .await
                     .unwrap();
