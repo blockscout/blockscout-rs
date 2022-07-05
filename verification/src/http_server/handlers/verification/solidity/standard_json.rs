@@ -3,7 +3,7 @@ use crate::{
     compiler::{CompilerVersion, Compilers},
     http_server::handlers::verification::{
         solidity::{
-            contract_verifier::{compile_and_verify, Input},
+            contract_verifier::{compile_and_verify_handler, Input},
             types::StandardJson,
         },
         VerificationResponse,
@@ -32,5 +32,7 @@ pub async fn verify(
         creation_tx_input: &params.creation_bytecode,
         deployed_bytecode: &params.deployed_bytecode,
     };
-    compile_and_verify(&compilers, input, false).await.map(Json)
+    compile_and_verify_handler(&compilers, input, false)
+        .await
+        .map(Json)
 }

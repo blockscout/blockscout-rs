@@ -2,7 +2,7 @@ use super::types::{MultiPartFiles, VerificationRequest};
 use crate::{
     compiler::{CompilerVersion, Compilers},
     http_server::handlers::verification::{
-        solidity::contract_verifier::{compile_and_verify, Input},
+        solidity::contract_verifier::{compile_and_verify_handler, Input},
         VerificationResponse,
     },
     solidity::CompilerFetcher,
@@ -29,5 +29,7 @@ pub async fn verify(
         creation_tx_input: &params.creation_bytecode,
         deployed_bytecode: &params.deployed_bytecode,
     };
-    compile_and_verify(&compilers, input, true).await.map(Json)
+    compile_and_verify_handler(&compilers, input, true)
+        .await
+        .map(Json)
 }

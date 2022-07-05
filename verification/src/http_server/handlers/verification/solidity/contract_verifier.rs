@@ -30,7 +30,7 @@ enum CompileAndVerifyError {
     NoMatchingContracts,
 }
 
-pub(crate) async fn compile_and_verify<T: Fetcher>(
+pub(crate) async fn compile_and_verify_handler<T: Fetcher>(
     compilers: &Compilers<T>,
     mut input: Input<'_>,
     bruteforce_bytecode_hashes: bool,
@@ -41,20 +41,11 @@ where
     let verifier = Verifier::new(input.creation_tx_input, input.deployed_bytecode)
         .map_err(error::ErrorBadRequest)?;
 
-    let bruteforce_metadata = if !bruteforce_bytecode_hashes {
-        Vec::from([input.compiler_input.settings.metadata.clone()])
-    } else if VersionReq::parse("<0.6.0")
-        .unwrap()
-        .matches(input.compiler_version.version())
-    {
-        Vec::from([None])
-    } else {
-        Vec::from(BYTECODE_HASHES.map(|hash| Some(SettingsMetadata::from(hash))))
-    };
+    let bruteforce_metadata = settings_metadata(&input, bruteforce_bytecode_hashes);
 
     for metadata in bruteforce_metadata {
         input.compiler_input.settings.metadata = metadata;
-        match compile_and_verify_internal(compilers, &verifier, &input).await {
+        match compile_and_verify(compilers, &verifier, &input).await {
             Ok(verification_success) => {
                 let verification_result = VerificationResult::from((
                     input.compiler_input,
@@ -79,7 +70,7 @@ where
     ))
 }
 
-async fn compile_and_verify_internal<T: Fetcher>(
+async fn compile_and_verify<T: Fetcher>(
     compilers: &Compilers<T>,
     verifier: &Verifier,
     input: &Input<'_>,
@@ -93,4 +84,22 @@ where
     verifier
         .verify(compiler_output)
         .ok_or(CompileAndVerifyError::NoMatchingContracts)
+}
+
+fn settings_metadata(
+    input: &Input<'_>,
+    bruteforce_bytecode_hashes: bool,
+) -> Vec<Option<SettingsMetadata>> {
+    if !bruteforce_bytecode_hashes {
+        [input.compiler_input.settings.metadata.clone()].into()
+    } else if VersionReq::parse("<0.6.0")
+        .unwrap()
+        .matches(input.compiler_version.version())
+    {
+        [None].into()
+    } else {
+        BYTECODE_HASHES
+            .map(|hash| Some(SettingsMetadata::from(hash)))
+            .into()
+    }
 }
