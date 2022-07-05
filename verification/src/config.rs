@@ -1,5 +1,6 @@
 use crate::consts::DEFAULT_COMPILER_LIST;
 use config::{Config as LibConfig, File};
+use cron::Schedule;
 use serde::Deserialize;
 use std::{net::SocketAddr, num::NonZeroUsize, path::PathBuf, str::FromStr};
 use url::Url;
@@ -31,7 +32,8 @@ impl Default for ServerConfiguration {
 pub struct SolidityConfiguration {
     pub enabled: bool,
     pub compilers_list_url: Url,
-    pub refresh_versions_schedule: String,
+    #[serde(with = "serde_with::rust::display_fromstr")]
+    pub refresh_versions_schedule: Schedule,
 }
 
 impl Default for SolidityConfiguration {
@@ -39,7 +41,7 @@ impl Default for SolidityConfiguration {
         Self {
             compilers_list_url: Url::try_from(DEFAULT_COMPILER_LIST).expect("valid url"),
             enabled: true,
-            refresh_versions_schedule: "0 0 * * * * *".to_string(), // every hour
+            refresh_versions_schedule: Schedule::from_str("0 0 * * * * *").unwrap(), // every hour
         }
     }
 }

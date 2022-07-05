@@ -1,8 +1,13 @@
-use crate::compiler::{CompilerVersion, Fetcher, VersionList};
+use crate::{
+    compiler::{CompilerVersion, Fetcher, VersionList},
+    scheduler::spawn_job_with_schedule,
+};
 use async_trait::async_trait;
+use cron::Schedule;
 use primitive_types::H256;
 use std::{
     collections::HashMap,
+    fmt::Debug,
     fs::{File, OpenOptions},
     io::ErrorKind,
     os::unix::prelude::OpenOptionsExt,
@@ -10,23 +15,22 @@ use std::{
     sync::Arc,
 };
 use thiserror::Error;
-use tokio_cron_scheduler::{Job, JobScheduler, JobSchedulerError};
 
 use url::Url;
 
 mod json {
     use primitive_types::H256;
-    use serde::Deserialize;
+    use serde::{Deserialize, Serialize};
     use url::Url;
 
     use crate::compiler::CompilerVersion;
 
-    #[derive(Debug, Deserialize, PartialEq)]
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
     pub struct List {
         pub builds: Vec<CompilerInfo>,
     }
 
-    #[derive(Debug, Deserialize, PartialEq)]
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
     #[serde(rename_all = "camelCase")]
     pub struct CompilerInfo {
         pub path: DownloadPath,
@@ -35,7 +39,7 @@ mod json {
         pub sha256: H256,
     }
 
-    #[derive(Debug, Deserialize, PartialEq)]
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
     #[serde(untagged)]
     pub enum DownloadPath {
         Url(Url),
@@ -71,7 +75,7 @@ pub struct CompilerInfo {
 }
 
 pub async fn try_fetch_versions(versions_list_url: &Url) -> Result<CompilerVersionsMap, ListError> {
-    let list_json_file: json::List = reqwest::get(versions_list_url.to_string())
+    let list_json_file: json::List = reqwest::get(versions_list_url.as_str())
         .await
         .map_err(ListError::ListJsonFetch)?
         .json()
@@ -113,26 +117,18 @@ impl TryFrom<(json::CompilerInfo, &Url)> for CompilerInfo {
 }
 
 impl CompilerVersions {
-    fn spawn_refresh_job(
-        self,
-        versions_list_url: Url,
-        cron_schedule: &str,
-    ) -> Result<(), JobSchedulerError> {
-        log::info!("spawn version refresh job with schedule {}", cron_schedule);
-        let job = Job::new_async(cron_schedule, move |_, _| {
+    fn spawn_refresh_job(self, versions_list_url: Url, cron_schedule: Schedule) {
+        log::info!("spawn version refresh job");
+        spawn_job_with_schedule(cron_schedule, move || {
             let versions_list_url = versions_list_url.clone();
             let versions = self.clone();
-
-            Box::pin(async move {
+            async move {
                 let refresh_result = versions.refresh_versions(&versions_list_url).await;
                 if let Err(err) = refresh_result {
                     log::error!("error during version refresh: {}", err);
                 };
-            })
-        })?;
-        let scheduler = JobScheduler::new()?;
-        scheduler.add(job)?;
-        scheduler.start()
+            }
+        });
     }
 
     async fn refresh_versions(&self, versions_list_url: &Url) -> anyhow::Result<()> {
@@ -173,7 +169,7 @@ pub struct CompilerFetcher {
 impl CompilerFetcher {
     pub async fn new(
         versions_list_url: Url,
-        refresh_versions_schedule: Option<&str>,
+        refresh_versions_schedule: Option<Schedule>,
         folder: PathBuf,
     ) -> anyhow::Result<Self> {
         let compiler_versions = try_fetch_versions(&versions_list_url)
@@ -184,7 +180,6 @@ impl CompilerFetcher {
             compiler_versions
                 .clone()
                 .spawn_refresh_job(versions_list_url, cron_schedule)
-                .map_err(anyhow::Error::msg)?;
         }
         Ok(Self {
             compiler_versions,
@@ -274,7 +269,11 @@ mod tests {
 
     use super::*;
     use ethers_solc::Solc;
-    use std::str::FromStr;
+    use std::{env::temp_dir, str::FromStr};
+    use wiremock::{
+        matchers::{method, path},
+        Mock, MockServer, ResponseTemplate,
+    };
 
     const DEFAULT_LIST_JSON: &str = r#"{
         "builds": [
@@ -413,5 +412,41 @@ mod tests {
                 )
             );
         }
+    }
+
+    #[tokio::test]
+    async fn check_refresh_versions() {
+        env_logger::init();
+        let mock_server = MockServer::start().await;
+
+        // mock list.json server response with empty list
+        Mock::given(method("GET"))
+            .and(path("/"))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes("{\"builds\": []}"))
+            .mount(&mock_server)
+            .await;
+        let fetcher = CompilerFetcher::new(
+            Url::parse(&mock_server.uri()).unwrap(),
+            Some(Schedule::from_str("* * * * * * *").unwrap()),
+            temp_dir(),
+        )
+        .await
+        .expect("cannot initialize fetcher");
+        assert!(fetcher.all_versions().is_empty());
+
+        // mock list.json server response with `DEFAULT_LIST_JSON`
+        mock_server.reset().await;
+        Mock::given(method("GET"))
+            .and(path("/"))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(DEFAULT_LIST_JSON))
+            .mount(&mock_server)
+            .await;
+        // wait for refresher to do its job
+        tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
+        let versions = fetcher.all_versions();
+        assert!(
+            versions.contains(&CompilerVersion::from_str("0.4.13+commit.0fb4cb1a").unwrap()),
+            "versions list doesn't have 0.4.13: {versions:?}",
+        );
     }
 }

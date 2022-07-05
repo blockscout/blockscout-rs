@@ -16,7 +16,7 @@ impl SolidityRouter {
     pub async fn new(config: SolidityConfiguration) -> anyhow::Result<Self> {
         let fetcher = CompilerFetcher::new(
             config.compilers_list_url.clone(),
-            Some(&config.refresh_versions_schedule),
+            Some(config.refresh_versions_schedule),
             "compilers/".into(),
         )
         .await?;
