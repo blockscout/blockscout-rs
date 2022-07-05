@@ -27,8 +27,7 @@ fn time_till_next_call(schedule: &Schedule) -> std::time::Duration {
     let now = Utc::now();
 
     schedule
-        .upcoming(chrono::Utc)
-        .take(1)
+        .upcoming(Utc)
         .next()
         .map_or(default, |t| (t - now).to_std().unwrap_or(default))
 }
