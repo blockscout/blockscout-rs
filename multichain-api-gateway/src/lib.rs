@@ -1,5 +1,6 @@
 use std::{collections::HashMap, net::TcpListener, str};
 
+use actix_web::http::header::HeaderMap;
 use actix_web::{
     dev::Server,
     http::Method,
@@ -51,6 +52,7 @@ impl ApiEndpoints {
         query: &str,
         method: &Method,
         body: Bytes,
+        headers: &HeaderMap,
     ) -> Vec<(Instance, String)> {
         let client = Client::new();
 
@@ -60,7 +62,12 @@ impl ApiEndpoints {
 
                 let resp = client
                     .request(method.clone(), url)
-                    .header("Content-Type", "application/json")
+                    .header(
+                        "Content-Type",
+                        headers
+                            .get("Content-Type")
+                            .unwrap_or(&"application/json".parse().unwrap()),
+                    )
                     .body(body.clone())
                     .send()
                     .await
@@ -106,7 +113,12 @@ pub async fn router_get(
     let responses = apis_endpoints
         .get_ref()
         .clone()
-        .make_requests(request.query_string(), request.method(), body)
+        .make_requests(
+            request.query_string(),
+            request.method(),
+            body,
+            request.headers(),
+        )
         .await;
     Json(merge_responses(responses))
 }
