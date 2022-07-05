@@ -1,9 +1,8 @@
 use std::{collections::HashMap, net::TcpListener, str};
 
-use actix_web::http::header::HeaderMap;
 use actix_web::{
     dev::Server,
-    http::Method,
+    http::{header::HeaderMap, Method},
     web,
     web::{Bytes, Data, Json},
     App, HttpRequest, HttpServer, Responder,
