@@ -9,7 +9,7 @@ use crate::{
 };
 
 pub struct SolidityRouter {
-    cache: web::Data<Compilers<CompilerFetcher>>,
+    compilers: web::Data<Compilers<CompilerFetcher>>,
 }
 
 impl SolidityRouter {
@@ -22,7 +22,7 @@ impl SolidityRouter {
         .await?;
         let compilers = Compilers::new(fetcher);
         Ok(Self {
-            cache: web::Data::new(compilers),
+            compilers: web::Data::new(compilers),
         })
     }
 }
@@ -30,7 +30,7 @@ impl SolidityRouter {
 impl Router for SolidityRouter {
     fn register_routes(&self, service_config: &mut web::ServiceConfig) {
         service_config
-            .app_data(self.cache.clone())
+            .app_data(self.compilers.clone())
             .service(
                 web::scope("/verify")
                     .route("/multiple-files", web::post().to(multi_part::verify))
