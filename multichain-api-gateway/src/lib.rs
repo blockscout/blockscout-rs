@@ -88,10 +88,10 @@ impl ApiEndpoints {
 
 type Responses = HashMap<String, HashMap<String, Value>>;
 
-fn merge_responses(json_resonses: Vec<(Instance, String)>) -> Responses {
+fn merge_responses(json_responses: Vec<(Instance, String)>) -> Responses {
     let mut result: Responses = HashMap::new();
 
-    json_resonses
+    json_responses
         .into_iter()
         .for_each(|(Instance(net, subnet), value)| {
             let kv_subnet = result.entry(net).or_insert_with(HashMap::new);
@@ -104,7 +104,7 @@ fn merge_responses(json_resonses: Vec<(Instance, String)>) -> Responses {
     result
 }
 
-pub async fn router_get(
+pub async fn handle_request(
     request: HttpRequest,
     apis_endpoints: Data<ApiEndpoints>,
     body: Bytes,
@@ -130,7 +130,7 @@ pub fn run(settings: Settings) -> Result<Server, std::io::Error> {
     let server = HttpServer::new(move || {
         App::new()
             .app_data(apis_endpoints.clone())
-            .default_service(web::route().to(router_get))
+            .default_service(web::route().to(handle_request))
     })
     .listen(listener)?
     .run();

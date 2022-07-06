@@ -1,4 +1,4 @@
-use multichain_api_gateway::{config, router_get};
+use multichain_api_gateway::{config, handle_request};
 use std::str;
 
 use actix_web::{test, web, web::Data, App};
@@ -23,7 +23,7 @@ async fn check_get_requests() {
     let app = test::init_service(
         App::new()
             .app_data(Data::new(apis_endpoints.clone()))
-            .default_service(web::route().to(router_get)),
+            .default_service(web::route().to(handle_request)),
     )
     .await;
 
