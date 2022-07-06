@@ -1,0 +1,39 @@
+[package]
+name = "sol-to-uml"
+version = "0.1.0"
+edition = "2021"
+repository = "https://github.com/blockscout/blockscout-rs/sol_to_uml"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+actix-web = "4"
+actix-multipart = "0.4.0"
+actix-files = "0.6.1"
+actix-rt = "2.7.0"
+reqwest = { version = "0.11", features = ["json"] }
+clap = { version = "3", features = ["derive"] }
+chrono = "0.4"
+serde = { version = "1", features = ["derive"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+parking_lot = "0.12"
+serde_json = "1"
+log = "0.4"
+env_logger = "0.9"
+semver = "1.0"
+anyhow = "1.0"
+async-trait = "0.1"
+thiserror = "1.0"
+url = { version = "2.2", features = ["serde"]}
+minicbor =  { version = "0.16", features = ["std"] }
+bytes = "1.1"
+config = "0.13"
+sscanf = "0.2"
+octocrab = "0.16"
+hex = "0.4"
+futures = "0.3"
+futures-util = "0.3.21"
+uuid = { version = "1.1.2", features = ["v4"] }
+regex = "1.5.6"
+derive_more = "0.99.17"
