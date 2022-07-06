@@ -86,6 +86,15 @@ where
         .ok_or(CompileAndVerifyError::NoMatchingContracts)
 }
 
+/// Iterates through possible bytecode if required and creates
+/// a corresponding variants of settings metadata for each of them.
+///
+/// `bruteforce_bytecode_hashes` would be false for standard json input
+/// as it contains the correct bytecode hash already. All other input
+/// types do not specify it explicitly, thus, we have to iterate through
+/// all possible options.
+///
+/// See "settings_metadata" (https://docs.soliditylang.org/en/v0.8.15/using-the-compiler.html?highlight=compiler%20input#input-description)
 fn settings_metadata(
     input: &Input<'_>,
     bruteforce_bytecode_hashes: bool,
