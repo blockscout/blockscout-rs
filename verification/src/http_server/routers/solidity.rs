@@ -5,7 +5,7 @@ use crate::{
     compiler::Compilers,
     config::SolidityConfiguration,
     http_server::handlers::{multi_part, standard_json, version_list},
-    solidity::{CompilerFetcher, Releases},
+    solidity::CompilerFetcher,
 };
 
 pub struct SolidityRouter {
@@ -14,10 +14,12 @@ pub struct SolidityRouter {
 
 impl SolidityRouter {
     pub async fn new(config: SolidityConfiguration) -> anyhow::Result<Self> {
-        let releases = Releases::fetch_from_url(&config.compilers_list_url)
-            .await
-            .map_err(anyhow::Error::msg)?;
-        let fetcher = CompilerFetcher::new(releases, "compilers/".into()).await;
+        let fetcher = CompilerFetcher::new(
+            config.compilers_list_url,
+            Some(config.refresh_versions_schedule),
+            "compilers/".into(),
+        )
+        .await?;
         let compilers = Compilers::new(fetcher);
         Ok(Self {
             compilers: web::Data::new(compilers),
