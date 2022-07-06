@@ -7,8 +7,8 @@ use actix_web::{
     web::{Bytes, Data, Json},
     App, HttpRequest, HttpServer, Responder,
 };
+use awc::Client;
 use futures::{stream, StreamExt};
-use reqwest::Client;
 use serde_json::Value;
 use url::Url;
 
@@ -53,25 +53,21 @@ impl ApiEndpoints {
         body: Bytes,
         headers: &HeaderMap,
     ) -> Vec<(Instance, String)> {
-        let client = Client::new();
+        let client = Client::default();
 
         stream::iter(self.apis)
-            .map(|(instance, mut url)| async {
+            .map(|(instance, mut url)| {
                 url.set_query(Some(query));
-
-                let resp = client
-                    .request(method.clone(), url)
-                    .header(
-                        "Content-Type",
-                        headers
-                            .get("Content-Type")
-                            .unwrap_or(&"application/json".parse().unwrap()),
-                    )
-                    .body(body.clone())
-                    .send()
-                    .await
-                    .unwrap();
-                (instance, resp.bytes().await)
+                (instance, url.to_string())
+            })
+            .map(|(instance, url)| async {
+                let mut request = client.request(method.clone(), url);
+                let request_headers = request.headers_mut();
+                for (key, value) in headers {
+                    request_headers.insert(key.clone(), value.clone());
+                }
+                let mut response = request.send_body(body.clone()).await.unwrap();
+                (instance, response.body().await)
             })
             .buffer_unordered(self.concurrent_requests)
             .map(|(instance, response)| match response {
