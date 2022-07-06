@@ -53,7 +53,9 @@ impl ApiEndpoints {
         body: Bytes,
         headers: &HeaderMap,
     ) -> Vec<(Instance, String)> {
-        let client = Client::default();
+        let client = Client::builder()
+            .timeout(std::time::Duration::from_secs(60))
+            .finish();
 
         stream::iter(self.apis)
             .map(|(instance, mut url)| {
@@ -66,17 +68,20 @@ impl ApiEndpoints {
                 for (key, value) in headers {
                     request_headers.insert(key.clone(), value.clone());
                 }
-                let mut response = request.send_body(body.clone()).await.unwrap();
-                (instance, response.body().await)
+                let response = request.send_body(body.clone()).await;
+                let str_response = match response {
+                    Ok(mut response) => match response.body().await {
+                        Ok(bytes) => match str::from_utf8(bytes.as_ref()) {
+                            Ok(str) => str.to_string(),
+                            Err(utf8_error) => utf8_error.to_string(),
+                        },
+                        Err(payload_error) => payload_error.to_string(),
+                    },
+                    Err(send_request_error) => send_request_error.to_string(),
+                };
+                (instance, str_response)
             })
             .buffer_unordered(self.concurrent_requests)
-            .map(|(instance, response)| match response {
-                Ok(bytes) => (
-                    instance,
-                    str::from_utf8(bytes.as_ref()).unwrap().to_string(),
-                ),
-                Err(e) => (instance, e.to_string()),
-            })
             .collect()
             .await
     }
@@ -93,7 +98,8 @@ fn merge_responses(json_responses: Vec<(Instance, String)>) -> Responses {
             let kv_subnet = result.entry(net).or_insert_with(HashMap::new);
             kv_subnet.insert(
                 subnet,
-                serde_json::from_str(&value).unwrap_or_else(|e| Value::String(e.to_string())),
+                serde_json::from_str(&value)
+                    .unwrap_or_else(|e| Value::String(format!("{}: {}\n", e, value))),
             );
         });
 
