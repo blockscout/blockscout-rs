@@ -398,7 +398,7 @@ mod tests_from_constructor_arguments_test_exs {
     #[actix_rt::test]
     async fn verifies_with_string_in_keccak256() {
         let contract_dir = "ERC677";
-        let test_input = TestInput::new("ERC677MultiBridgeToken", "v0.5.10+commit.5a6ea5b1")
+        let mut test_input = TestInput::new("ERC677MultiBridgeToken", "v0.5.10+commit.5a6ea5b1")
             .with_optimization_runs(200)
             .has_constructor_args();
         test_success(contract_dir, test_input).await;
