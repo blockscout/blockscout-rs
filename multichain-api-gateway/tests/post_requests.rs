@@ -1,8 +1,8 @@
-use multichain_api_gateway::{config, handle_request};
 use std::str;
 
 use actix_web::{test, web, web::Data, App};
-use multichain_api_gateway::ApiEndpoints;
+
+use multichain_api_gateway::{config, handle_request, ApiEndpoints};
 
 /// Check that valid responses are returned from the API via POST request.
 #[actix_web::test]
@@ -14,6 +14,7 @@ async fn make_post_requests() {
             config::Instance("poa".to_string(), "sokol".to_string()),
         ],
         concurrent_requests: 1,
+        request_timeout: std::time::Duration::from_secs(60),
     };
 
     let apis_endpoints: ApiEndpoints = settings.try_into().unwrap();

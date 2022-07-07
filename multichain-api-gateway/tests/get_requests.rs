@@ -1,8 +1,8 @@
-use multichain_api_gateway::{config, handle_request};
 use std::str;
 
 use actix_web::{test, web, web::Data, App};
-use multichain_api_gateway::ApiEndpoints;
+
+use multichain_api_gateway::{config, handle_request, ApiEndpoints};
 
 /// In the test we check that valid responses are returned from the API.
 /// Especially we call to the same network (xdai), but to different chains (mainnet, testnet).
@@ -16,6 +16,7 @@ async fn check_get_requests() {
             config::Instance("xdai".to_string(), "testnet".to_string()),
         ],
         concurrent_requests: 1,
+        request_timeout: std::time::Duration::from_secs(60),
     };
 
     let apis_endpoints: ApiEndpoints = settings.try_into().unwrap();

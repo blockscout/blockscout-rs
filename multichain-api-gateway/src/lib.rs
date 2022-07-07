@@ -20,6 +20,7 @@ pub mod config;
 pub struct ApiEndpoints {
     apis: Vec<(Instance, Url)>,
     concurrent_requests: usize,
+    request_timeout: std::time::Duration,
 }
 
 /// Assumptions:
@@ -40,6 +41,7 @@ impl From<BlockscoutSettings> for ApiEndpoints {
         Self {
             apis,
             concurrent_requests: settings.concurrent_requests,
+            request_timeout: settings.request_timeout,
         }
     }
 }
@@ -58,9 +60,7 @@ impl ApiEndpoints {
         body: Bytes,
         request_head: &RequestHead,
     ) -> Vec<(Instance, String)> {
-        let client = Client::builder()
-            .timeout(std::time::Duration::from_secs(60))
-            .finish();
+        let client = Client::builder().timeout(self.request_timeout).finish();
 
         stream::iter(self.apis)
             .map(|(instance, mut url)| {
