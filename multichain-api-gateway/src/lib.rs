@@ -1,13 +1,12 @@
-use std::{collections::HashMap, net::TcpListener, str};
+use std::{collections::HashMap, error::Error, net::TcpListener, str};
 
-use actix_web::dev::RequestHead;
 use actix_web::{
-    dev::Server,
+    dev::{RequestHead, Server},
     web,
     web::{Bytes, Data, Json},
     App, HttpRequest, HttpServer, Responder,
 };
-use awc::Client;
+use awc::{Client, ClientRequest};
 use futures::{stream, StreamExt};
 use serde_json::Value;
 use url::Url;
@@ -46,6 +45,13 @@ impl From<BlockscoutSettings> for ApiEndpoints {
 }
 
 impl ApiEndpoints {
+    async fn make_request(request: ClientRequest, body: Bytes) -> Result<String, Box<dyn Error>> {
+        let mut response = request.send_body(body.clone()).await?;
+        let bytes = response.body().await?;
+        let str = str::from_utf8(bytes.as_ref())?.to_string();
+        Ok(str)
+    }
+
     async fn make_requests(
         self,
         query: &str,
@@ -63,18 +69,12 @@ impl ApiEndpoints {
             })
             .map(|(instance, url)| async {
                 let request = client.request_from(url, request_head);
-                let response = request.send_body(body.clone()).await;
-                let str_response = match response {
-                    Ok(mut response) => match response.body().await {
-                        Ok(bytes) => match str::from_utf8(bytes.as_ref()) {
-                            Ok(str) => str.to_string(),
-                            Err(utf8_error) => utf8_error.to_string(),
-                        },
-                        Err(payload_error) => payload_error.to_string(),
-                    },
-                    Err(send_request_error) => send_request_error.to_string(),
-                };
-                (instance, str_response)
+                (
+                    instance,
+                    ApiEndpoints::make_request(request, body.clone())
+                        .await
+                        .unwrap_or_else(|e| e.to_string()),
+                )
             })
             .buffer_unordered(self.concurrent_requests)
             .collect()
