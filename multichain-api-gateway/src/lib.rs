@@ -1,8 +1,8 @@
 use std::{collections::HashMap, net::TcpListener, str};
 
+use actix_web::dev::RequestHead;
 use actix_web::{
     dev::Server,
-    http::{header::HeaderMap, Method},
     web,
     web::{Bytes, Data, Json},
     App, HttpRequest, HttpServer, Responder,
@@ -49,9 +49,8 @@ impl ApiEndpoints {
     async fn make_requests(
         self,
         query: &str,
-        method: &Method,
         body: Bytes,
-        headers: &HeaderMap,
+        request_head: &RequestHead,
     ) -> Vec<(Instance, String)> {
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(60))
@@ -63,11 +62,7 @@ impl ApiEndpoints {
                 (instance, url.to_string())
             })
             .map(|(instance, url)| async {
-                let mut request = client.request(method.clone(), url);
-                let request_headers = request.headers_mut();
-                for (key, value) in headers {
-                    request_headers.insert(key.clone(), value.clone());
-                }
+                let request = client.request_from(url, request_head);
                 let response = request.send_body(body.clone()).await;
                 let str_response = match response {
                     Ok(mut response) => match response.body().await {
@@ -114,12 +109,7 @@ pub async fn handle_request(
     let responses = apis_endpoints
         .get_ref()
         .clone()
-        .make_requests(
-            request.query_string(),
-            request.method(),
-            body,
-            request.headers(),
-        )
+        .make_requests(request.query_string(), body, request.head())
         .await;
     Json(merge_responses(responses))
 }
