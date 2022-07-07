@@ -1,8 +1,9 @@
 #![allow(dead_code)]
 
+use ethers_solc::CompilerInput;
 use std::{collections::BTreeMap, fmt::Display};
 
-use crate::DisplayBytes;
+use crate::{compiler::CompilerVersion, solidity::VerificationSuccess, DisplayBytes};
 use serde::{Deserialize, Serialize};
 
 pub mod solidity;
@@ -27,6 +28,44 @@ pub struct VerificationResult {
     pub contract_libraries: BTreeMap<String, String>,
     pub abi: String,
     pub sources: BTreeMap<String, String>,
+}
+
+impl From<(CompilerInput, CompilerVersion, VerificationSuccess)> for VerificationResult {
+    fn from(
+        (compiler_input, compiler_version, verification_success): (
+            CompilerInput,
+            CompilerVersion,
+            VerificationSuccess,
+        ),
+    ) -> Self {
+        VerificationResult {
+            file_name: verification_success.file_path,
+            contract_name: verification_success.contract_name,
+            compiler_version: compiler_version.to_string(),
+            evm_version: compiler_input
+                .settings
+                .evm_version
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "default".to_string()),
+            constructor_arguments: verification_success.constructor_args,
+            optimization: compiler_input.settings.optimizer.enabled,
+            optimization_runs: compiler_input.settings.optimizer.runs,
+            contract_libraries: compiler_input
+                .settings
+                .libraries
+                .libs
+                .into_iter()
+                .flat_map(|(_path, libs)| libs)
+                .collect(),
+            abi: serde_json::to_string(&verification_success.abi)
+                .expect("Is result of local compilation and, thus, should be always valid"),
+            sources: compiler_input
+                .sources
+                .into_iter()
+                .map(|(path, source)| (path.to_string_lossy().to_string(), source.content))
+                .collect(),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]

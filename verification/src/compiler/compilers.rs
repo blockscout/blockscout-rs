@@ -1,10 +1,6 @@
 use crate::compiler::{CompilerVersion, DownloadCache, Fetcher, VersionList};
 use anyhow::anyhow;
-use ethers_solc::{
-    artifacts::{self, Severity},
-    error::SolcError,
-    CompilerInput, CompilerOutput, Solc,
-};
+use ethers_solc::{artifacts::Severity, error::SolcError, CompilerInput, CompilerOutput, Solc};
 use std::fmt::{Debug, Display};
 use thiserror::Error;
 
@@ -15,7 +11,7 @@ pub enum CompilersError {
     #[error("Internal error while compiling: {0}")]
     Internal(#[from] SolcError),
     #[error("Compilation error: {0:?}")]
-    Compilation(Vec<artifacts::Error>),
+    Compilation(Vec<String>),
 }
 
 pub struct Compilers<T> {
@@ -51,7 +47,12 @@ impl<T: Fetcher> Compilers<T> {
         let mut errors = Vec::new();
         for err in &output.errors {
             if err.severity == Severity::Error {
-                errors.push(err.clone())
+                errors.push(
+                    err.formatted_message
+                        .as_ref()
+                        .unwrap_or(&err.message)
+                        .clone(),
+                )
             }
         }
         if !errors.is_empty() {
@@ -63,7 +64,7 @@ impl<T: Fetcher> Compilers<T> {
 }
 
 impl<T: VersionList> VersionList for Compilers<T> {
-    fn all_versions(&self) -> Vec<&CompilerVersion> {
+    fn all_versions(&self) -> Vec<CompilerVersion> {
         self.fetcher.all_versions()
     }
 }
@@ -71,7 +72,7 @@ impl<T: VersionList> VersionList for Compilers<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::solidity::{CompilerFetcher, Releases};
+    use crate::solidity::CompilerFetcher;
     use std::{env::temp_dir, str::FromStr};
 
     use crate::consts::DEFAULT_COMPILER_LIST;
@@ -84,10 +85,9 @@ mod tests {
         COMPILERS
             .get_or_init(async {
                 let url = DEFAULT_COMPILER_LIST.try_into().expect("Getting url");
-                let releases = Releases::fetch_from_url(&url)
+                let fetcher = CompilerFetcher::new(url, None, temp_dir())
                     .await
                     .expect("Fetch releases");
-                let fetcher = CompilerFetcher::new(releases, temp_dir()).await;
                 let compilers = Compilers::new(fetcher);
                 compilers
             })
@@ -188,7 +188,7 @@ mod tests {
             .expect_err("Compilation should fail");
         match result {
             CompilersError::Compilation(errors) => {
-                assert!(errors.into_iter().any(|err| err.r#type == "ParserError"))
+                assert!(errors.into_iter().any(|err| err.contains("ParserError")))
             }
             _ => panic!("Invalid compilation error: {:?}", result),
         }

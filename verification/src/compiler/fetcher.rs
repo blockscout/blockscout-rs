@@ -9,5 +9,5 @@ pub trait Fetcher {
 }
 
 pub trait VersionList {
-    fn all_versions(&self) -> Vec<&CompilerVersion>;
+    fn all_versions(&self) -> Vec<CompilerVersion>;
 }

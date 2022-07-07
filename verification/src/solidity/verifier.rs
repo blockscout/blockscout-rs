@@ -1,6 +1,6 @@
 #![allow(dead_code, unused)]
 
-use crate::{solidity::verifier::VerificationError::InternalError, types::Mismatch, DisplayBytes};
+use crate::{types::Mismatch, DisplayBytes};
 use bytes::{Buf, Bytes};
 use ethabi::{Constructor, Token};
 use ethers_solc::{artifacts::Contract, Artifact, CompilerOutput};
@@ -468,7 +468,7 @@ impl Verifier {
         };
         let abi = contract
             .get_abi()
-            .ok_or_else(|| InternalError("Missing abi".into()))?;
+            .ok_or_else(|| VerificationError::InternalError("Missing abi".into()))?;
 
         self.check_metadata_hash_solc_versions(&deployed_bytecode)?;
 

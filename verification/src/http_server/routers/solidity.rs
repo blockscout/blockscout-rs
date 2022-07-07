@@ -5,22 +5,24 @@ use crate::{
     compiler::Compilers,
     config::SolidityConfiguration,
     http_server::handlers::{multi_part, standard_json, version_list},
-    solidity::{CompilerFetcher, Releases},
+    solidity::CompilerFetcher,
 };
 
 pub struct SolidityRouter {
-    cache: web::Data<Compilers<CompilerFetcher>>,
+    compilers: web::Data<Compilers<CompilerFetcher>>,
 }
 
 impl SolidityRouter {
     pub async fn new(config: SolidityConfiguration) -> anyhow::Result<Self> {
-        let releases = Releases::fetch_from_url(&config.compilers_list_url)
-            .await
-            .map_err(anyhow::Error::msg)?;
-        let fetcher = CompilerFetcher::new(releases, "compilers/".into()).await;
+        let fetcher = CompilerFetcher::new(
+            config.compilers_list_url,
+            Some(config.refresh_versions_schedule),
+            "compilers/".into(),
+        )
+        .await?;
         let compilers = Compilers::new(fetcher);
         Ok(Self {
-            cache: web::Data::new(compilers),
+            compilers: web::Data::new(compilers),
         })
     }
 }
@@ -28,7 +30,7 @@ impl SolidityRouter {
 impl Router for SolidityRouter {
     fn register_routes(&self, service_config: &mut web::ServiceConfig) {
         service_config
-            .app_data(self.cache.clone())
+            .app_data(self.compilers.clone())
             .service(
                 web::scope("/verify")
                     .route("/multiple-files", web::post().to(multi_part::verify))

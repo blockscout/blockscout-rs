@@ -1,7 +1,13 @@
 use super::types::VerificationRequest;
 use crate::{
     compiler::{CompilerVersion, Compilers},
-    http_server::handlers::verification::{solidity::types::StandardJson, VerificationResponse},
+    http_server::handlers::verification::{
+        solidity::{
+            contract_verifier::{compile_and_verify_handler, Input},
+            types::StandardJson,
+        },
+        VerificationResponse,
+    },
     solidity::CompilerFetcher,
 };
 use actix_web::{
@@ -16,12 +22,17 @@ pub async fn verify(
     params: Json<VerificationRequest<StandardJson>>,
 ) -> Result<Json<VerificationResponse>, Error> {
     let params = params.into_inner();
+
+    let compiler_input = params.content.into();
     let compiler_version =
         CompilerVersion::from_str(&params.compiler_version).map_err(error::ErrorBadRequest)?;
-    let output = compilers
-        .compile(&compiler_version, &params.content.into())
-        .await;
-    let _ = output;
-
-    todo!("verify output")
+    let input = Input {
+        compiler_version,
+        compiler_input,
+        creation_tx_input: &params.creation_bytecode,
+        deployed_bytecode: &params.deployed_bytecode,
+    };
+    compile_and_verify_handler(&compilers, input, false)
+        .await
+        .map(Json)
 }

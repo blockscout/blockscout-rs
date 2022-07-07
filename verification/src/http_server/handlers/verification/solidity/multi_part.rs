@@ -1,7 +1,10 @@
 use super::types::{MultiPartFiles, VerificationRequest};
 use crate::{
     compiler::{CompilerVersion, Compilers},
-    http_server::handlers::verification::VerificationResponse,
+    http_server::handlers::verification::{
+        solidity::contract_verifier::{compile_and_verify_handler, Input},
+        VerificationResponse,
+    },
     solidity::CompilerFetcher,
 };
 use actix_web::{
@@ -9,7 +12,6 @@ use actix_web::{
     web::{self, Json},
     Error,
 };
-use ethers_solc::CompilerInput;
 use std::str::FromStr;
 
 pub async fn verify(
@@ -18,13 +20,16 @@ pub async fn verify(
 ) -> Result<Json<VerificationResponse>, Error> {
     let params = params.into_inner();
 
-    let input = CompilerInput::try_from(params.content).map_err(error::ErrorBadRequest)?;
+    let compiler_input = params.content.try_into().map_err(error::ErrorBadRequest)?;
     let compiler_version =
         CompilerVersion::from_str(&params.compiler_version).map_err(error::ErrorBadRequest)?;
-    let _output = compilers
-        .compile(&compiler_version, &input)
+    let input = Input {
+        compiler_version,
+        compiler_input,
+        creation_tx_input: &params.creation_bytecode,
+        deployed_bytecode: &params.deployed_bytecode,
+    };
+    compile_and_verify_handler(&compilers, input, true)
         .await
-        .map_err(error::ErrorInternalServerError)?;
-
-    todo!("verify output")
+        .map(Json)
 }
