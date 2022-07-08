@@ -1,10 +1,10 @@
-use crate::cli;
-use clap::Parser;
-
-use crate::cli::Args;
-use serde::Deserialize;
 use std::{net::SocketAddr, str::FromStr};
+
+use clap::Parser;
+use serde::Deserialize;
 use url::Url;
+
+use crate::{cli, cli::Args};
 
 /// An instance of the maintained networks in Blockscout.
 /// Semantic: (network, chain)
@@ -23,6 +23,9 @@ pub struct BlockscoutSettings {
 
     /// The number of concurrent requests to be made to the Blockscout API from a server's thread worker.
     pub concurrent_requests: usize,
+
+    /// The timeout of waiting for response from the Blockscout API.
+    pub request_timeout: std::time::Duration,
 }
 
 impl Default for BlockscoutSettings {
@@ -31,6 +34,7 @@ impl Default for BlockscoutSettings {
             base_url: Url::parse("https://blockscout.com/").unwrap(),
             instances: vec![],
             concurrent_requests: 10,
+            request_timeout: std::time::Duration::from_secs(60),
         }
     }
 }

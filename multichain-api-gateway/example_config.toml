@@ -9,3 +9,4 @@ instances = [
     ["xdai", "testnet"],
     ["xdai", "mainnet"],
 ]
+request_timeout = 60

@@ -1,5 +1,6 @@
-use clap::Parser;
 use std::net::SocketAddr;
+
+use clap::Parser;
 use url::Url;
 
 #[derive(Parser)]

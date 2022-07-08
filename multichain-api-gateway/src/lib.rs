@@ -1,13 +1,13 @@
-use std::{collections::HashMap, net::TcpListener, str};
+use std::{collections::HashMap, error::Error, net::TcpListener, str};
 
 use actix_web::{
-    dev::Server,
+    dev::{RequestHead, Server},
     web,
-    web::{Data, Json},
+    web::{Bytes, Data, Json},
     App, HttpRequest, HttpServer, Responder,
 };
+use awc::{Client, ClientRequest};
 use futures::{stream, StreamExt};
-use reqwest::Client;
 use serde_json::Value;
 use url::Url;
 
@@ -20,6 +20,7 @@ pub mod config;
 pub struct ApiEndpoints {
     apis: Vec<(Instance, Url)>,
     concurrent_requests: usize,
+    request_timeout: std::time::Duration,
 }
 
 /// Assumptions:
@@ -40,28 +41,42 @@ impl From<BlockscoutSettings> for ApiEndpoints {
         Self {
             apis,
             concurrent_requests: settings.concurrent_requests,
+            request_timeout: settings.request_timeout,
         }
     }
 }
 
 impl ApiEndpoints {
-    async fn make_requests(self, query: &str) -> Vec<(Instance, String)> {
-        let client = Client::new();
+    async fn make_request(request: ClientRequest, body: Bytes) -> Result<String, Box<dyn Error>> {
+        let mut response = request.send_body(body.clone()).await?;
+        let bytes = response.body().await?;
+        let str = str::from_utf8(bytes.as_ref())?.to_string();
+        Ok(str)
+    }
+
+    async fn make_requests(
+        self,
+        query: &str,
+        body: Bytes,
+        request_head: &RequestHead,
+    ) -> Vec<(Instance, String)> {
+        let client = Client::builder().timeout(self.request_timeout).finish();
 
         stream::iter(self.apis)
-            .map(|(instance, mut url)| async {
+            .map(|(instance, mut url)| {
                 url.set_query(Some(query));
-                let resp = client.get(url).send().await.unwrap();
-                (instance, resp.bytes().await)
+                (instance, url.to_string())
+            })
+            .map(|(instance, url)| async {
+                let request = client.request_from(url, request_head);
+                (
+                    instance,
+                    ApiEndpoints::make_request(request, body.clone())
+                        .await
+                        .unwrap_or_else(|e| e.to_string()),
+                )
             })
             .buffer_unordered(self.concurrent_requests)
-            .map(|(instance, response)| match response {
-                Ok(bytes) => (
-                    instance,
-                    str::from_utf8(bytes.as_ref()).unwrap().to_string(),
-                ),
-                Err(e) => (instance, e.to_string()),
-            })
             .collect()
             .await
     }
@@ -69,34 +84,34 @@ impl ApiEndpoints {
 
 type Responses = HashMap<String, HashMap<String, Value>>;
 
-fn merge_responses(json_resonses: Vec<(Instance, String)>) -> Responses {
+fn merge_responses(json_responses: Vec<(Instance, String)>) -> Responses {
     let mut result: Responses = HashMap::new();
 
-    json_resonses
+    json_responses
         .into_iter()
         .for_each(|(Instance(net, subnet), value)| {
             let kv_subnet = result.entry(net).or_insert_with(HashMap::new);
             kv_subnet.insert(
                 subnet,
-                serde_json::from_str(&value).unwrap_or_else(|e| Value::String(e.to_string())),
+                serde_json::from_str(&value)
+                    .unwrap_or_else(|e| Value::String(format!("{}: {}\n", e, value))),
             );
         });
 
     result
 }
 
-async fn handle_default_request(query: &str, apis_endpoints: ApiEndpoints) -> Json<Responses> {
-    let responses = apis_endpoints.make_requests(query).await;
-    Json(merge_responses(responses))
-}
-
-pub async fn router_get(
+pub async fn handle_request(
     request: HttpRequest,
     apis_endpoints: Data<ApiEndpoints>,
+    body: Bytes,
 ) -> impl Responder {
-    let json =
-        handle_default_request(request.query_string(), apis_endpoints.get_ref().clone()).await;
-    json
+    let responses = apis_endpoints
+        .get_ref()
+        .clone()
+        .make_requests(request.query_string(), body, request.head())
+        .await;
+    Json(merge_responses(responses))
 }
 
 pub fn run(settings: Settings) -> Result<Server, std::io::Error> {
@@ -107,7 +122,7 @@ pub fn run(settings: Settings) -> Result<Server, std::io::Error> {
     let server = HttpServer::new(move || {
         App::new()
             .app_data(apis_endpoints.clone())
-            .default_service(web::route().to(router_get))
+            .default_service(web::route().to(handle_request))
     })
     .listen(listener)?
     .run();
