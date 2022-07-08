@@ -19,4 +19,3 @@ Session.vim
 
 .pre-commit-config.yaml
 config.toml
-/sol_to_uml/src/npm/

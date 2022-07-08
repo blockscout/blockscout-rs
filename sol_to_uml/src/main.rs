@@ -1,6 +1,4 @@
 use sol_to_uml::{config::Config, run};
-use std::process::Command;
-use regex::Regex;
 
 #[derive(PartialEq, Default, Clone, Debug)]
 struct Commit {

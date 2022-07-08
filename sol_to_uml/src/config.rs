@@ -21,7 +21,7 @@ pub struct ServerConfiguration {
 impl Default for ServerConfiguration {
     fn default() -> Self {
         Self {
-            addr: ("127.0.0.1:80").parse().expect("should be valid url"),
+            addr: ("0.0.0.0:8043").parse().expect("should be valid url"),
         }
     }
 }
