@@ -16,6 +16,7 @@ use std::{
 };
 use thiserror::Error;
 
+use crate::compiler::fetcher_home;
 use url::Url;
 
 mod json {
@@ -159,14 +160,14 @@ impl CompilerVersions {
 #[derive(Default)]
 pub struct CompilerFetcher {
     compiler_versions: CompilerVersions,
-    folder: PathBuf,
+    dir: PathBuf,
 }
 
 impl CompilerFetcher {
     pub async fn new(
         versions_list_url: Url,
         refresh_versions_schedule: Option<Schedule>,
-        folder: PathBuf,
+        dir: Option<PathBuf>,
     ) -> anyhow::Result<Self> {
         let compiler_versions = try_fetch_versions(&versions_list_url)
             .await
@@ -180,7 +181,7 @@ impl CompilerFetcher {
         }
         Ok(Self {
             compiler_versions,
-            folder,
+            dir: dir.unwrap_or_else(fetcher_home),
         })
     }
 }
@@ -222,7 +223,7 @@ impl Fetcher for CompilerFetcher {
         let response = reqwest::get(compiler_download_url)
             .await
             .map_err(FetchError::Fetch)?;
-        let folder = self.folder.join(ver.to_string());
+        let folder = self.dir.join(ver.to_string());
         let file = folder.join("solc");
         let bytes = response.bytes().await.map_err(FetchError::Fetch)?;
         {
@@ -266,7 +267,7 @@ mod tests {
 
     use super::*;
     use ethers_solc::Solc;
-    use std::{env::temp_dir, str::FromStr};
+    use std::str::FromStr;
     use wiremock::{
         matchers::{method, path},
         Mock, MockServer, ResponseTemplate,
@@ -385,13 +386,9 @@ mod tests {
     #[tokio::test]
     async fn list_download_versions() {
         let config = Config::default();
-        let fetcher = CompilerFetcher::new(
-            config.solidity.compilers_list_url,
-            None,
-            std::env::temp_dir().join("blockscout/verification/compiler_fetcher/test/"),
-        )
-        .await
-        .expect("list.json file should be valid");
+        let fetcher = CompilerFetcher::new(config.solidity.compilers_list_url, None, None)
+            .await
+            .expect("list.json file should be valid");
 
         for compiler_version in vec![
             CompilerVersion::from_str("0.7.0+commit.9e61f92b").unwrap(),
@@ -425,7 +422,7 @@ mod tests {
         let fetcher = CompilerFetcher::new(
             Url::parse(&mock_server.uri()).unwrap(),
             Some(Schedule::from_str("* * * * * * *").unwrap()),
-            temp_dir(),
+            None,
         )
         .await
         .expect("cannot initialize fetcher");

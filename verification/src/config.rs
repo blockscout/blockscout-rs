@@ -34,6 +34,7 @@ pub struct SolidityConfiguration {
     pub compilers_list_url: Url,
     #[serde(with = "serde_with::rust::display_fromstr")]
     pub refresh_versions_schedule: Schedule,
+    pub compilers_path: Option<PathBuf>,
 }
 
 impl Default for SolidityConfiguration {
@@ -42,6 +43,7 @@ impl Default for SolidityConfiguration {
             compilers_list_url: Url::try_from(DEFAULT_COMPILER_LIST).expect("valid url"),
             enabled: true,
             refresh_versions_schedule: Schedule::from_str("0 0 * * * * *").unwrap(), // every hour
+            compilers_path: None,
         }
     }
 }
