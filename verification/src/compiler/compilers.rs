@@ -1,7 +1,7 @@
-use crate::compiler::{CompilerVersion, DownloadCache, Fetcher, VersionList};
+use crate::compiler::{DownloadCache, Fetcher, Version};
 use anyhow::anyhow;
 use ethers_solc::{artifacts::Severity, error::SolcError, CompilerInput, CompilerOutput, Solc};
-use std::fmt::{Debug, Display};
+use std::{fmt::Debug, sync::Arc};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -14,13 +14,13 @@ pub enum CompilersError {
     Compilation(Vec<String>),
 }
 
-pub struct Compilers<T> {
+pub struct Compilers<T: ?Sized> {
     cache: DownloadCache,
-    fetcher: T,
+    fetcher: Arc<T>,
 }
 
-impl<T: Fetcher> Compilers<T> {
-    pub fn new(fetcher: T) -> Self {
+impl<T: ?Sized + Fetcher> Compilers<T> {
+    pub fn new(fetcher: Arc<T>) -> Self {
         Self {
             cache: DownloadCache::new(),
             fetcher,
@@ -29,15 +29,12 @@ impl<T: Fetcher> Compilers<T> {
 
     pub async fn compile(
         &self,
-        compiler_version: &CompilerVersion,
+        compiler_version: &Version,
         input: &CompilerInput,
-    ) -> Result<CompilerOutput, CompilersError>
-    where
-        <T as Fetcher>::Error: Debug + Display,
-    {
+    ) -> Result<CompilerOutput, CompilersError> {
         let solc_path = self
             .cache
-            .get(&self.fetcher, compiler_version)
+            .get(&*self.fetcher, compiler_version)
             .await
             .map_err(|err| CompilersError::Fetch(anyhow!(err)))?;
         let solc = Solc::from(solc_path);
@@ -61,10 +58,8 @@ impl<T: Fetcher> Compilers<T> {
 
         Ok(output)
     }
-}
 
-impl<T: VersionList> VersionList for Compilers<T> {
-    fn all_versions(&self) -> Vec<CompilerVersion> {
+    pub fn all_versions(&self) -> Vec<Version> {
         self.fetcher.all_versions()
     }
 }
@@ -72,7 +67,7 @@ impl<T: VersionList> VersionList for Compilers<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::solidity::CompilerFetcher;
+    use crate::compiler::ListFetcher;
     use std::{env::temp_dir, str::FromStr};
 
     use crate::consts::DEFAULT_COMPILER_LIST;
@@ -80,15 +75,15 @@ mod tests {
     use ethers_solc::artifacts::{Source, Sources};
     use std::default::Default;
 
-    async fn global_compilers() -> &'static Compilers<CompilerFetcher> {
-        static COMPILERS: OnceCell<Compilers<CompilerFetcher>> = OnceCell::new();
+    async fn global_compilers() -> &'static Compilers<ListFetcher> {
+        static COMPILERS: OnceCell<Compilers<ListFetcher>> = OnceCell::new();
         COMPILERS
             .get_or_init(async {
                 let url = DEFAULT_COMPILER_LIST.try_into().expect("Getting url");
-                let fetcher = CompilerFetcher::new(url, None, temp_dir())
+                let fetcher = ListFetcher::new(url, None, temp_dir())
                     .await
                     .expect("Fetch releases");
-                let compilers = Compilers::new(fetcher);
+                let compilers = Compilers::new(Arc::new(fetcher));
                 compilers
             })
             .await
@@ -141,8 +136,7 @@ mod tests {
 
         let compilers = global_compilers().await;
         let input: CompilerInput = Input::with_source_code(source_code.into()).into();
-        let version =
-            CompilerVersion::from_str("v0.8.10+commit.fc410830").expect("Compiler version");
+        let version = Version::from_str("v0.8.10+commit.fc410830").expect("Compiler version");
 
         let result = compilers
             .compile(&version, &input)
@@ -160,8 +154,7 @@ mod tests {
 
         let compilers = global_compilers().await;
         let input: CompilerInput = Input::with_source_code(source_code.into()).into();
-        let version =
-            CompilerVersion::from_str("v0.5.9+commit.c68bc34e").expect("Compiler version");
+        let version = Version::from_str("v0.5.9+commit.c68bc34e").expect("Compiler version");
 
         let result = compilers
             .compile(&version, &input)
@@ -179,8 +172,7 @@ mod tests {
 
         let compilers = global_compilers().await;
         let input: CompilerInput = Input::with_source_code(source_code.into()).into();
-        let version =
-            CompilerVersion::from_str("v0.8.10+commit.fc410830").expect("Compiler version");
+        let version = Version::from_str("v0.8.10+commit.fc410830").expect("Compiler version");
 
         let result = compilers
             .compile(&version, &input)

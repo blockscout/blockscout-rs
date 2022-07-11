@@ -1,9 +1,12 @@
-use super::{fetcher::Fetcher, version::CompilerVersion};
+use super::{
+    fetcher::{FetchError, Fetcher},
+    version::Version,
+};
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 #[derive(Default)]
 pub struct DownloadCache {
-    cache: parking_lot::Mutex<HashMap<CompilerVersion, Arc<tokio::sync::RwLock<Option<PathBuf>>>>>,
+    cache: parking_lot::Mutex<HashMap<Version, Arc<tokio::sync::RwLock<Option<PathBuf>>>>>,
 }
 
 impl DownloadCache {
@@ -13,7 +16,7 @@ impl DownloadCache {
         }
     }
 
-    async fn try_get(&self, ver: &CompilerVersion) -> Option<PathBuf> {
+    async fn try_get(&self, ver: &Version) -> Option<PathBuf> {
         let entry = {
             let cache = self.cache.lock();
             cache.get(ver).cloned()
@@ -29,22 +32,22 @@ impl DownloadCache {
 }
 
 impl DownloadCache {
-    pub async fn get<D: Fetcher>(
+    pub async fn get<D: Fetcher + ?Sized>(
         &self,
         fetcher: &D,
-        ver: &CompilerVersion,
-    ) -> Result<PathBuf, D::Error> {
+        ver: &Version,
+    ) -> Result<PathBuf, FetchError> {
         match self.try_get(ver).await {
             Some(file) => Ok(file),
             None => self.fetch(fetcher, ver).await,
         }
     }
 
-    async fn fetch<D: Fetcher>(
+    async fn fetch<D: Fetcher + ?Sized>(
         &self,
         fetcher: &D,
-        ver: &CompilerVersion,
-    ) -> Result<PathBuf, D::Error> {
+        ver: &Version,
+    ) -> Result<PathBuf, FetchError> {
         let lock = {
             let mut cache = self.cache.lock();
             Arc::clone(cache.entry(ver.clone()).or_default())
@@ -72,8 +75,8 @@ mod tests {
     use std::time::Duration;
     use tokio::{spawn, task::yield_now, time::timeout};
 
-    fn new_version(major: u64) -> CompilerVersion {
-        CompilerVersion::Release(ReleaseVersion {
+    fn new_version(major: u64) -> Version {
+        Version::Release(ReleaseVersion {
             version: semver::Version::new(major, 0, 0),
             commit: [0, 1, 2, 3],
         })
@@ -84,15 +87,18 @@ mod tests {
     fn value_is_cached() {
         #[derive(Default)]
         struct MockFetcher {
-            counter: parking_lot::Mutex<HashMap<CompilerVersion, u32>>,
+            counter: parking_lot::Mutex<HashMap<Version, u32>>,
         }
 
         #[async_trait]
         impl Fetcher for MockFetcher {
-            type Error = ();
-            async fn fetch(&self, ver: &CompilerVersion) -> Result<PathBuf, Self::Error> {
+            async fn fetch(&self, ver: &Version) -> Result<PathBuf, FetchError> {
                 *self.counter.lock().entry(ver.clone()).or_default() += 1;
                 Ok(PathBuf::from(ver.to_string()))
+            }
+
+            fn all_versions(&self) -> Vec<Version> {
+                vec![]
             }
         }
 
@@ -101,7 +107,7 @@ mod tests {
 
         let vers: Vec<_> = (0..3).map(new_version).collect();
 
-        let get_and_check = |ver: &CompilerVersion| {
+        let get_and_check = |ver: &Version| {
             let value = block_on(cache.get(&fetcher, ver)).unwrap();
             assert_eq!(value, PathBuf::from(ver.to_string()));
         };
@@ -135,10 +141,13 @@ mod tests {
 
         #[async_trait]
         impl Fetcher for MockBlockingFetcher {
-            type Error = ();
-            async fn fetch(&self, ver: &CompilerVersion) -> Result<PathBuf, Self::Error> {
+            async fn fetch(&self, ver: &Version) -> Result<PathBuf, FetchError> {
                 self.sync.lock().await;
                 Ok(PathBuf::from(ver.to_string()))
+            }
+
+            fn all_versions(&self) -> Vec<Version> {
+                vec![]
             }
         }
 
