@@ -3,7 +3,7 @@
 use ethers_solc::CompilerInput;
 use std::{collections::BTreeMap, fmt::Display};
 
-use crate::{compiler::CompilerVersion, solidity::VerificationSuccess, DisplayBytes};
+use crate::{compiler::Version, solidity::VerificationSuccess, DisplayBytes};
 use serde::{Deserialize, Serialize};
 
 pub mod solidity;
@@ -30,11 +30,11 @@ pub struct VerificationResult {
     pub sources: BTreeMap<String, String>,
 }
 
-impl From<(CompilerInput, CompilerVersion, VerificationSuccess)> for VerificationResult {
+impl From<(CompilerInput, Version, VerificationSuccess)> for VerificationResult {
     fn from(
         (compiler_input, compiler_version, verification_success): (
             CompilerInput,
-            CompilerVersion,
+            Version,
             VerificationSuccess,
         ),
     ) -> Self {
