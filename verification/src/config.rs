@@ -2,9 +2,8 @@ use crate::consts::DEFAULT_COMPILER_LIST;
 use config::{Config as LibConfig, File};
 use cron::Schedule;
 use serde::Deserialize;
-use std::{net::SocketAddr, num::NonZeroUsize, path::PathBuf, str::FromStr};
+use std::{net::SocketAddr, num::NonZeroUsize, path::PathBuf, str::FromStr, sync::Mutex};
 use url::Url;
-use std::sync::Mutex;
 
 #[derive(Deserialize, Clone, Default)]
 #[serde(default)]
