@@ -2,7 +2,7 @@ use crate::consts::DEFAULT_COMPILER_LIST;
 use config::{Config as LibConfig, File};
 use cron::Schedule;
 use serde::Deserialize;
-use std::{net::SocketAddr, num::NonZeroUsize, path::PathBuf, str::FromStr, sync::Mutex};
+use std::{net::SocketAddr, num::NonZeroUsize, path::PathBuf, str::FromStr};
 use url::Url;
 
 #[derive(Deserialize, Clone, Default)]
