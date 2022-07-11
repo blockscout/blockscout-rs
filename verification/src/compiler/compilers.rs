@@ -73,7 +73,7 @@ impl<T: VersionList> VersionList for Compilers<T> {
 mod tests {
     use super::*;
     use crate::solidity::CompilerFetcher;
-    use std::{env::temp_dir, str::FromStr};
+    use std::str::FromStr;
 
     use crate::consts::DEFAULT_COMPILER_LIST;
     use async_once_cell::OnceCell;
@@ -85,7 +85,7 @@ mod tests {
         COMPILERS
             .get_or_init(async {
                 let url = DEFAULT_COMPILER_LIST.try_into().expect("Getting url");
-                let fetcher = CompilerFetcher::new(url, None, temp_dir())
+                let fetcher = CompilerFetcher::new(url, None, None)
                     .await
                     .expect("Fetch releases");
                 let compilers = Compilers::new(fetcher);

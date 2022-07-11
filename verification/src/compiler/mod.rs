@@ -5,5 +5,5 @@ mod version;
 
 pub use compilers::{Compilers, CompilersError};
 pub use download_cache::DownloadCache;
-pub use fetcher::{Fetcher, VersionList};
+pub use fetcher::{fetcher_home, Fetcher, VersionList};
 pub use version::CompilerVersion;
