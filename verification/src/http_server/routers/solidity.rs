@@ -1,7 +1,7 @@
 use super::Router;
 use crate::{
     compiler::Compilers,
-    compiler::{Fetcher, ListFetcher},
+    compiler::ListFetcher,
     config::SolidityConfiguration,
     http_server::handlers::{multi_part, standard_json, version_list},
 };
@@ -9,7 +9,7 @@ use actix_web::web;
 use std::sync::Arc;
 
 pub struct SolidityRouter {
-    compilers: web::Data<Compilers<dyn Fetcher>>,
+    compilers: web::Data<Compilers>,
 }
 
 impl SolidityRouter {
@@ -22,7 +22,7 @@ impl SolidityRouter {
             )
             .await?,
         );
-        let compilers: Compilers<dyn Fetcher> = Compilers::new(fetcher);
+        let compilers = Compilers::new(fetcher);
         Ok(Self {
             compilers: web::Data::new(compilers),
         })

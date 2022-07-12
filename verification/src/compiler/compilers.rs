@@ -14,13 +14,13 @@ pub enum CompilersError {
     Compilation(Vec<String>),
 }
 
-pub struct Compilers<T: ?Sized> {
+pub struct Compilers {
     cache: DownloadCache,
-    fetcher: Arc<T>,
+    fetcher: Arc<dyn Fetcher>,
 }
 
-impl<T: ?Sized + Fetcher> Compilers<T> {
-    pub fn new(fetcher: Arc<T>) -> Self {
+impl Compilers {
+    pub fn new(fetcher: Arc<dyn Fetcher>) -> Self {
         Self {
             cache: DownloadCache::new(),
             fetcher,
@@ -75,8 +75,8 @@ mod tests {
     use ethers_solc::artifacts::{Source, Sources};
     use std::default::Default;
 
-    async fn global_compilers() -> &'static Compilers<ListFetcher> {
-        static COMPILERS: OnceCell<Compilers<ListFetcher>> = OnceCell::new();
+    async fn global_compilers() -> &'static Compilers {
+        static COMPILERS: OnceCell<Compilers> = OnceCell::new();
         COMPILERS
             .get_or_init(async {
                 let url = DEFAULT_COMPILER_LIST.try_into().expect("Getting url");
