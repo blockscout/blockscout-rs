@@ -67,9 +67,8 @@ impl DownloadCache {
 
 #[cfg(test)]
 mod tests {
-    use crate::compiler::version::ReleaseVersion;
-
     use super::*;
+    use crate::compiler::version::ReleaseVersion;
     use async_trait::async_trait;
     use futures::{executor::block_on, join, pin_mut};
     use std::time::Duration;

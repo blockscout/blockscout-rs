@@ -1,13 +1,13 @@
-use crate::compiler::{DownloadCache, Fetcher, Version};
-use anyhow::anyhow;
+use super::fetcher::FetchError;
+use crate::compiler::{self, DownloadCache, Fetcher};
 use ethers_solc::{artifacts::Severity, error::SolcError, CompilerInput, CompilerOutput, Solc};
 use std::{fmt::Debug, sync::Arc};
-use thiserror::Error;
+use thiserror::Error as DeriveError;
 
-#[derive(Debug, Error)]
-pub enum CompilersError {
+#[derive(Debug, DeriveError)]
+pub enum Error {
     #[error("Error while fetching compiler: {0:#}")]
-    Fetch(anyhow::Error),
+    Fetch(FetchError),
     #[error("Internal error while compiling: {0}")]
     Internal(#[from] SolcError),
     #[error("Compilation error: {0:?}")]
@@ -29,14 +29,14 @@ impl Compilers {
 
     pub async fn compile(
         &self,
-        compiler_version: &Version,
+        compiler_version: &compiler::Version,
         input: &CompilerInput,
-    ) -> Result<CompilerOutput, CompilersError> {
+    ) -> Result<CompilerOutput, Error> {
         let solc_path = self
             .cache
             .get(&*self.fetcher, compiler_version)
             .await
-            .map_err(|err| CompilersError::Fetch(anyhow!(err)))?;
+            .map_err(Error::Fetch)?;
         let solc = Solc::from(solc_path);
         let output = solc.compile(&input)?;
 
@@ -53,13 +53,13 @@ impl Compilers {
             }
         }
         if !errors.is_empty() {
-            return Err(CompilersError::Compilation(errors));
+            return Err(Error::Compilation(errors));
         }
 
         Ok(output)
     }
 
-    pub fn all_versions(&self) -> Vec<Version> {
+    pub fn all_versions(&self) -> Vec<compiler::Version> {
         self.fetcher.all_versions()
     }
 }
@@ -136,7 +136,8 @@ mod tests {
 
         let compilers = global_compilers().await;
         let input: CompilerInput = Input::with_source_code(source_code.into()).into();
-        let version = Version::from_str("v0.8.10+commit.fc410830").expect("Compiler version");
+        let version =
+            compiler::Version::from_str("v0.8.10+commit.fc410830").expect("Compiler version");
 
         let result = compilers
             .compile(&version, &input)
@@ -154,7 +155,8 @@ mod tests {
 
         let compilers = global_compilers().await;
         let input: CompilerInput = Input::with_source_code(source_code.into()).into();
-        let version = Version::from_str("v0.5.9+commit.c68bc34e").expect("Compiler version");
+        let version =
+            compiler::Version::from_str("v0.5.9+commit.c68bc34e").expect("Compiler version");
 
         let result = compilers
             .compile(&version, &input)
@@ -172,14 +174,15 @@ mod tests {
 
         let compilers = global_compilers().await;
         let input: CompilerInput = Input::with_source_code(source_code.into()).into();
-        let version = Version::from_str("v0.8.10+commit.fc410830").expect("Compiler version");
+        let version =
+            compiler::Version::from_str("v0.8.10+commit.fc410830").expect("Compiler version");
 
         let result = compilers
             .compile(&version, &input)
             .await
             .expect_err("Compilation should fail");
         match result {
-            CompilersError::Compilation(errors) => {
+            Error::Compilation(errors) => {
                 assert!(errors.into_iter().any(|err| err.contains("ParserError")))
             }
             _ => panic!("Invalid compilation error: {:?}", result),

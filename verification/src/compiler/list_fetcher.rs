@@ -19,7 +19,7 @@ use thiserror::Error;
 use url::Url;
 
 mod json {
-    use crate::compiler::Version;
+    use crate::compiler;
     use primitive_types::H256;
     use serde::{Deserialize, Serialize};
     use url::Url;
@@ -34,7 +34,7 @@ mod json {
     pub struct CompilerInfo {
         pub path: DownloadPath,
         #[serde(with = "serde_with::rust::display_fromstr")]
-        pub long_version: Version,
+        pub long_version: compiler::Version,
         pub sha256: H256,
     }
 
