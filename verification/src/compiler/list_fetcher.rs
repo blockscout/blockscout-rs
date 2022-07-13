@@ -49,7 +49,7 @@ mod json {
 type VersionsMap = HashMap<Version, CompilerInfo>;
 
 #[derive(Debug, PartialEq)]
-pub struct CompilerInfo {
+struct CompilerInfo {
     pub url: Url,
     pub sha256: H256,
 }
@@ -64,7 +64,7 @@ pub enum ListError {
     Path(url::ParseError),
 }
 
-pub async fn try_fetch_versions(versions_list_url: &Url) -> Result<VersionsMap, ListError> {
+async fn try_fetch_versions(versions_list_url: &Url) -> Result<VersionsMap, ListError> {
     let list_json_file: json::List = reqwest::get(versions_list_url.as_str())
         .await
         .map_err(ListError::ListJsonFetch)?
@@ -107,7 +107,7 @@ impl TryFrom<(json::CompilerInfo, &Url)> for CompilerInfo {
 }
 
 #[derive(Default, Clone)]
-pub struct Versions(Arc<parking_lot::RwLock<VersionsMap>>);
+struct Versions(Arc<parking_lot::RwLock<VersionsMap>>);
 
 impl Versions {
     fn spawn_refresh_job(self, versions_list_url: Url, cron_schedule: Schedule) {
@@ -233,7 +233,7 @@ impl Fetcher for ListFetcher {
                 Ok(())
             })
             .await
-            .map_err(FetchError::Shedule)??;
+            .map_err(FetchError::Schedule)??;
         }
 
         Ok(file)

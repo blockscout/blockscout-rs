@@ -7,7 +7,7 @@ use thiserror::Error as DeriveError;
 #[derive(Debug, DeriveError)]
 pub enum Error {
     #[error("Error while fetching compiler: {0:#}")]
-    Fetch(FetchError),
+    Fetch(#[from] FetchError),
     #[error("Internal error while compiling: {0}")]
     Internal(#[from] SolcError),
     #[error("Compilation error: {0:?}")]
@@ -32,11 +32,7 @@ impl Compilers {
         compiler_version: &compiler::Version,
         input: &CompilerInput,
     ) -> Result<CompilerOutput, Error> {
-        let solc_path = self
-            .cache
-            .get(&*self.fetcher, compiler_version)
-            .await
-            .map_err(Error::Fetch)?;
+        let solc_path = self.cache.get(&*self.fetcher, compiler_version).await?;
         let solc = Solc::from(solc_path);
         let output = solc.compile(&input)?;
 

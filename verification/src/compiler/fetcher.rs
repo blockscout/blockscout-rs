@@ -16,7 +16,7 @@ pub enum FetchError {
 }
 
 #[async_trait]
-pub trait Fetcher: Send + Sync + 'static {
+pub trait Fetcher: Send + Sync {
     async fn fetch(&self, ver: &Version) -> Result<PathBuf, FetchError>;
     fn all_versions(&self) -> Vec<Version>;
 }
