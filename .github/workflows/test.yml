@@ -25,7 +25,7 @@ jobs:
           cache-on-failure: true
 
       - name: cargo test
-        run: cargo test --locked --workspace --all-features --lib --bins
+        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture
 
   doc:
     name: Doc tests
@@ -65,7 +65,7 @@ jobs:
           cache-on-failure: true
 
       - name: cargo test
-        run: cargo test --locked --workspace --test '*'
+        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --test '*' -- --nocapture
 
   lint:
     name: Linting
