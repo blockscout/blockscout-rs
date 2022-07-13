@@ -12,7 +12,7 @@ pub enum FetchError {
     #[error("couldn't create file: {0}")]
     File(std::io::Error),
     #[error("tokio sheduling error: {0}")]
-    Shedule(tokio::task::JoinError),
+    Schedule(tokio::task::JoinError),
 }
 
 #[async_trait]
