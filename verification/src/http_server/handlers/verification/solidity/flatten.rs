@@ -14,6 +14,21 @@ use actix_web::{
 };
 use ethers_solc::CompilerInput;
 
+pub type FlattenRequest = VerificationRequest<FlattenedSource>;
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/verification/flatten",
+    request_body = FlattenRequest,
+    responses(
+        (
+            status = 200,
+            description = "Flatten contract verification",
+            body = VerificationResponse,
+        )
+    ),
+    tag = "solidity"
+)]
 pub async fn verify(
     cache: web::Data<DownloadCache<GithubFetcher>>,
     params: Json<VerificationRequest<FlattenedSource>>,

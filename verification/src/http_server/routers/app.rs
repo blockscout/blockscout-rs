@@ -1,6 +1,23 @@
 use super::{SolidityRouter, SourcifyRouter};
+use crate::http_server::handlers;
+use crate::http_server::handlers::flatten::FlattenRequest;
 use crate::{config::Config, http_server::handlers::status};
+use crate::{VerificationResponse, VerificationResult, VerificationStatus};
 use actix_web::web;
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
+
+#[derive(OpenApi)]
+#[openapi(
+    handlers(handlers::flatten::verify,),
+    components(
+        VerificationResponse,
+        VerificationStatus,
+        VerificationResult,
+        FlattenRequest,
+    )
+)]
+pub struct ApiDoc;
 
 pub struct AppRouter {
     verification: Option<SolidityRouter>,
@@ -26,6 +43,7 @@ impl AppRouter {
     pub fn register_routes(&self, service_config: &mut web::ServiceConfig) {
         service_config
             .route("/health", web::get().to(status::status))
+            .service(SwaggerUi::new("/docs/{_:.*}").url("/docs/schema.json", ApiDoc::openapi()))
             .service(
                 web::scope("/api/v1").service(
                     web::scope("/verification")

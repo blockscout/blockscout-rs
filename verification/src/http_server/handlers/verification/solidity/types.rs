@@ -4,8 +4,9 @@ use ethers_solc::{
 };
 use serde::Deserialize;
 use std::{collections::BTreeMap, path::PathBuf, str::FromStr};
+use utoipa::Component;
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, PartialEq, Component)]
 pub struct VerificationRequest<T> {
     pub contract_name: String,
     pub deployed_bytecode: String,
@@ -17,7 +18,7 @@ pub struct VerificationRequest<T> {
     pub content: T,
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, PartialEq, Component)]
 pub struct FlattenedSource {
     source_code: String,
     evm_version: String,

@@ -2,6 +2,7 @@ mod cli;
 mod compiler;
 mod config;
 mod http_server;
+mod openapi;
 mod solidity;
 mod types;
 

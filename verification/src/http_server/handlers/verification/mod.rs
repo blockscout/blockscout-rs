@@ -3,18 +3,19 @@
 use std::{collections::BTreeMap, fmt::Display};
 
 use serde::{Deserialize, Serialize};
+use utoipa::Component;
 
 pub mod solidity;
 pub mod sourcify;
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Component)]
 pub struct VerificationResponse {
     pub message: String,
     pub result: Option<VerificationResult>,
     pub status: VerificationStatus,
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Component)]
 pub struct VerificationResult {
     pub contract_name: String,
     pub compiler_version: String,
@@ -27,7 +28,7 @@ pub struct VerificationResult {
     pub sources: BTreeMap<String, String>,
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Component)]
 pub enum VerificationStatus {
     #[serde(rename = "0")]
     Ok,

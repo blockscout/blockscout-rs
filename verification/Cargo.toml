@@ -32,6 +32,8 @@ ethers-solc = { git = "https://github.com/gakonst/ethers-rs", version = "0.3", f
 ethers-core = { git = "https://github.com/gakonst/ethers-rs", version = "0.6" }
 # compability with ethers-solc
 svm = { package = "svm-rs", version = "0.2.9", git = "https://github.com/roynalnaruto/svm-rs" }
+utoipa = { version = "1.0.2", features = ["actix_extras"] }
+utoipa-swagger-ui = { version = "1.0.0", features = ["actix-web"] }
 
 [dev-dependencies]
 const_format = "0.2"
