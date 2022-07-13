@@ -1,0 +1,3 @@
+[submodule "verification"]
+    path = verification
+    url = git@github.com:blockscout/verification.git
