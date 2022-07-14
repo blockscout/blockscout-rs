@@ -21,10 +21,8 @@ pub struct Compilers {
 
 impl Compilers {
     pub fn new(fetcher: Arc<dyn Fetcher>) -> Self {
-        Self {
-            cache: DownloadCache::new(),
-            fetcher,
-        }
+        let cache = DownloadCache::new();
+        Self { cache, fetcher }
     }
 
     pub async fn compile(
@@ -57,6 +55,15 @@ impl Compilers {
 
     pub fn all_versions(&self) -> Vec<compiler::Version> {
         self.fetcher.all_versions()
+    }
+
+    pub async fn load_from_dir(&self) {
+        match self.cache.load_from_dir(self.fetcher.as_ref()).await {
+            Ok(_) => {}
+            Err(e) => {
+                log::error!("error during local compilers loading: {}", e)
+            }
+        };
     }
 }
 
@@ -147,6 +154,7 @@ mod tests {
 
     #[tokio::test]
     async fn can_compile_large_file() {
+        env_logger::init();
         let source_code = include_str!("test_data/large_smart_contract.sol");
 
         let compilers = global_compilers().await;

@@ -5,7 +5,7 @@ use crate::{
     http_server::handlers::{multi_part, standard_json, version_list},
 };
 use actix_web::web;
-use std::sync::Arc;
+use std::{path::PathBuf, str::FromStr, sync::Arc};
 
 pub struct SolidityRouter {
     compilers: web::Data<Compilers>,
@@ -22,6 +22,7 @@ impl SolidityRouter {
             .await?,
         );
         let compilers = Compilers::new(fetcher);
+        compilers.load_from_dir().await;
         Ok(Self {
             compilers: web::Data::new(compilers),
         })

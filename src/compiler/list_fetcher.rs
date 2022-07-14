@@ -2,8 +2,10 @@ use super::fetcher::FetchError;
 use crate::{
     compiler::{Fetcher, Version},
     scheduler,
+    types::Mismatch,
 };
 use async_trait::async_trait;
+use bytes::Bytes;
 use cron::Schedule;
 use primitive_types::H256;
 use std::{
@@ -48,7 +50,7 @@ mod json {
 
 type VersionsMap = HashMap<Version, CompilerInfo>;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 struct CompilerInfo {
     pub url: Url,
     pub sha256: H256,
@@ -193,18 +195,35 @@ fn create_executable(path: &Path) -> Result<File, std::io::Error> {
         .open(path)
 }
 
+pub fn check_hashsum(bytes: &Bytes, expected: H256) -> Result<(), Mismatch<String>> {
+    let expected = hex::encode(expected);
+    let start = std::time::Instant::now();
+    let found = sha256::digest_bytes(bytes);
+    let takes = (std::time::Instant::now() - start).as_millis();
+    log::debug!(
+        "check hashsum of {} bytes takes {:?} millis",
+        bytes.len(),
+        takes
+    );
+    if expected != found {
+        Err(Mismatch::new(expected, found))
+    } else {
+        Ok(())
+    }
+}
+
 #[async_trait]
 impl Fetcher for ListFetcher {
     async fn fetch(&self, ver: &Version) -> Result<PathBuf, FetchError> {
-        let compiler_download_url = {
+        let compiler_info = {
             let compiler_versions = self.compiler_versions.0.read();
             let compiler_info = compiler_versions
                 .get(ver)
                 .ok_or_else(|| FetchError::NotFound(ver.clone()))?;
-            compiler_info.url.clone()
+            (*compiler_info).clone()
         };
 
-        let response = reqwest::get(compiler_download_url)
+        let response = reqwest::get(compiler_info.url.to_string())
             .await
             .map_err(anyhow::Error::msg)
             .map_err(FetchError::Fetch)?;
@@ -215,6 +234,7 @@ impl Fetcher for ListFetcher {
             .await
             .map_err(anyhow::Error::msg)
             .map_err(FetchError::Fetch)?;
+        check_hashsum(&bytes, compiler_info.sha256).map_err(FetchError::HashMismatch)?;
         {
             let file = file.clone();
             tokio::task::spawn_blocking(move || -> Result<(), FetchError> {
@@ -245,6 +265,18 @@ impl Fetcher for ListFetcher {
             .iter()
             .map(|(ver, _)| ver.clone())
             .collect()
+    }
+
+    fn get_hash(&self, ver: &Version) -> Option<H256> {
+        self.compiler_versions
+            .0
+            .read()
+            .get(ver)
+            .map(|info| info.sha256)
+    }
+
+    fn folder(&self) -> &PathBuf {
+        &self.folder
     }
 }
 
