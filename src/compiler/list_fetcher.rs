@@ -225,36 +225,34 @@ impl Fetcher for ListFetcher {
 
         let response = reqwest::get(compiler_info.url.to_string())
             .await
-            .map_err(anyhow::Error::msg)
-            .map_err(FetchError::Fetch)?;
+            .map_err(anyhow::Error::msg)?;
         let folder = self.folder.join(ver.to_string());
         let file = folder.join("solc");
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(anyhow::Error::msg)
-            .map_err(FetchError::Fetch)?;
-        check_hashsum(&bytes, compiler_info.sha256)?;
-        {
+        let bytes = response.bytes().await.map_err(anyhow::Error::msg)?;
+
+        let save_result = {
             let file = file.clone();
+            let bytes = bytes.clone();
             tokio::task::spawn_blocking(move || -> Result<(), FetchError> {
-                std::fs::create_dir_all(&folder).map_err(FetchError::File)?;
-                std::fs::remove_file(file.as_path())
-                    .or_else(|e| {
-                        if e.kind() == ErrorKind::NotFound {
-                            Ok(())
-                        } else {
-                            Err(e)
-                        }
-                    })
-                    .map_err(FetchError::File)?;
-                let mut file = create_executable(file.as_path()).map_err(FetchError::File)?;
-                std::io::copy(&mut bytes.as_ref(), &mut file).map_err(FetchError::File)?;
+                std::fs::create_dir_all(&folder)?;
+                std::fs::remove_file(file.as_path()).or_else(|e| {
+                    if e.kind() == ErrorKind::NotFound {
+                        Ok(())
+                    } else {
+                        Err(e)
+                    }
+                })?;
+                let mut file = create_executable(file.as_path())?;
+                std::io::copy(&mut bytes.as_ref(), &mut file)?;
                 Ok(())
             })
-            .await
-            .map_err(FetchError::Schedule)??;
-        }
+        };
+
+        let check_result =
+            tokio::task::spawn_blocking(move || check_hashsum(&bytes, compiler_info.sha256));
+
+        check_result.await??;
+        save_result.await??;
 
         Ok(file)
     }
