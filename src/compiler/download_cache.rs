@@ -240,13 +240,18 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn load_empty_file() {
-        let ver = new_version(3);
+    async fn load_empty_files() {
         let dir = temp_dir();
-        let solc_dir = dir.join(ver.to_string());
-        let solc_path = solc_dir.join("solc");
-        std::fs::create_dir_all(&solc_dir).unwrap();
-        std::fs::File::create(&solc_path).unwrap();
+        let versions: Vec<Version> = vec![1, 2, 3, 4, 5]
+            .into_iter()
+            .map(|i| new_version(i))
+            .collect();
+        for ver in versions.iter() {
+            let solc_dir = dir.join(ver.to_string());
+            let solc_path = solc_dir.join("solc");
+            std::fs::create_dir_all(&solc_dir).unwrap();
+            std::fs::File::create(&solc_path).unwrap();
+        }
 
         let cache = DownloadCache::new();
         cache
@@ -254,15 +259,16 @@ mod tests {
             .await
             .expect("cannot load compilers");
 
-        let loaded_solc_path = cache
-            .try_get(&ver)
-            .await
-            .expect("version should appear in cache");
-        assert_eq!(loaded_solc_path, solc_path)
+        for ver in versions.iter() {
+            cache
+                .try_get(&ver)
+                .await
+                .expect(&format!("version {} should appear in cache", ver));
+        }
     }
 
     #[tokio::test]
-    async fn load_donwloaded_compiler() {
+    async fn load_downloaded_compiler() {
         let ver = Version::from_str("0.7.0+commit.9e61f92b").unwrap();
         let dir = temp_dir();
 
