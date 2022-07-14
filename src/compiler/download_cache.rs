@@ -72,12 +72,14 @@ impl DownloadCache {
         self.add_versions(versions).await;
         Ok(())
     }
-    fn read_dir_paths(dir: &PathBuf) -> std::io::Result<Box<dyn Iterator<Item = PathBuf>>> {
-        let a = std::fs::read_dir(dir)?
+
+    fn read_dir_paths(dir: &PathBuf) -> std::io::Result<impl Iterator<Item = PathBuf>> {
+        let paths = std::fs::read_dir(dir)?
             .into_iter()
             .filter_map(|r| r.ok().map(|e| e.path()));
-        Ok(Box::new(a))
+        Ok(paths)
     }
+
     fn filter_versions(dirs: impl Iterator<Item = PathBuf>) -> HashMap<Version, PathBuf> {
         dirs.filter_map(|path| {
             path.file_name()
@@ -88,6 +90,7 @@ impl DownloadCache {
         })
         .collect()
     }
+
     async fn add_versions(&self, versions: HashMap<Version, PathBuf>) {
         for (version, path) in versions {
             let solc_path = path.join("solc");
