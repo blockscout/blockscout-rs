@@ -1,6 +1,5 @@
 use super::{
     fetcher::{FetchError, Fetcher},
-    list_fetcher::check_hashsum,
     version::Version,
 };
 use std::{collections::HashMap, path::PathBuf, str::FromStr, sync::Arc};
@@ -67,36 +66,24 @@ impl DownloadCache {
 }
 
 impl DownloadCache {
-    pub async fn load_from_dir<D: Fetcher + ?Sized>(&self, fetcher: &D) -> std::io::Result<()> {
-        let entries = std::fs::read_dir(fetcher.folder())?;
+    pub async fn load_from_dir(&self, dir: &PathBuf) -> std::io::Result<()> {
+        let entries = std::fs::read_dir(dir)?;
         let versions = DownloadCache::find_versions_in_dir(entries);
         for (version, solc_path) in versions {
-            if let Some(expected_hash) = fetcher.get_hash(&version) {
-                let solc_bytes = std::fs::read(&solc_path)?.into();
-                match check_hashsum(&solc_bytes, expected_hash) {
-                    Ok(_) => {
-                        log::info!("found local compiler version {}", version);
-                        let lock = {
-                            let mut cache = self.cache.lock();
-                            Arc::clone(cache.entry(version.clone()).or_default())
-                        };
-                        *lock.write().await = Some(solc_path);
-                    }
-                    Err(mismatch) => {
-                        log::warn!(
-                            "found file {:?}, but hashsum is different: {}",
-                            solc_path,
-                            mismatch
-                        );
-                    }
-                }
+            if solc_path.exists() {
+                log::info!("found local compiler version {}", version);
+                let lock = {
+                    let mut cache = self.cache.lock();
+                    Arc::clone(cache.entry(version.clone()).or_default())
+                };
+                *lock.write().await = Some(solc_path);
             } else {
                 log::warn!(
-                    "found file {:?}, but there is no version {:?} in version list",
-                    solc_path,
-                    version
+                    "found verions {} but file {:?} doesn't exists",
+                    version,
+                    solc_path
                 );
-            };
+            }
         }
         Ok(())
     }
@@ -150,10 +137,6 @@ mod tests {
             fn all_versions(&self) -> Vec<Version> {
                 vec![]
             }
-
-            fn folder(&self) -> &PathBuf {
-                todo!()
-            }
         }
 
         let fetcher = MockFetcher::default();
@@ -202,10 +185,6 @@ mod tests {
 
             fn all_versions(&self) -> Vec<Version> {
                 vec![]
-            }
-
-            fn folder(&self) -> &PathBuf {
-                todo!()
             }
         }
 

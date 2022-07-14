@@ -266,18 +266,6 @@ impl Fetcher for ListFetcher {
             .map(|(ver, _)| ver.clone())
             .collect()
     }
-
-    fn get_hash(&self, ver: &Version) -> Option<H256> {
-        self.compiler_versions
-            .0
-            .read()
-            .get(ver)
-            .map(|info| info.sha256)
-    }
-
-    fn folder(&self) -> &PathBuf {
-        &self.folder
-    }
 }
 
 #[cfg(test)]
@@ -433,7 +421,6 @@ mod tests {
 
     #[tokio::test]
     async fn check_refresh_versions() {
-        env_logger::init();
         let mock_server = MockServer::start().await;
 
         // mock list.json server response with empty list

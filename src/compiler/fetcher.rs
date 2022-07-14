@@ -2,7 +2,6 @@ use crate::types::Mismatch;
 
 use super::version::Version;
 use async_trait::async_trait;
-use primitive_types::H256;
 use std::path::PathBuf;
 use thiserror::Error;
 
@@ -23,9 +22,5 @@ pub enum FetchError {
 #[async_trait]
 pub trait Fetcher: Send + Sync {
     async fn fetch(&self, ver: &Version) -> Result<PathBuf, FetchError>;
-    fn get_hash(&self, _ver: &Version) -> Option<H256> {
-        None
-    }
-    fn folder(&self) -> &PathBuf;
     fn all_versions(&self) -> Vec<Version>;
 }

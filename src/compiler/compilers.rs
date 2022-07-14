@@ -1,7 +1,7 @@
 use super::fetcher::FetchError;
 use crate::compiler::{self, DownloadCache, Fetcher};
 use ethers_solc::{artifacts::Severity, error::SolcError, CompilerInput, CompilerOutput, Solc};
-use std::{fmt::Debug, sync::Arc};
+use std::{fmt::Debug, path::PathBuf, sync::Arc};
 use thiserror::Error as DeriveError;
 
 #[derive(Debug, DeriveError)]
@@ -21,8 +21,10 @@ pub struct Compilers {
 
 impl Compilers {
     pub fn new(fetcher: Arc<dyn Fetcher>) -> Self {
-        let cache = DownloadCache::new();
-        Self { cache, fetcher }
+        Self {
+            cache: DownloadCache::new(),
+            fetcher,
+        }
     }
 
     pub async fn compile(
@@ -57,8 +59,8 @@ impl Compilers {
         self.fetcher.all_versions()
     }
 
-    pub async fn load_from_dir(&self) {
-        match self.cache.load_from_dir(self.fetcher.as_ref()).await {
+    pub async fn load_from_dir(&self, dir: &PathBuf) {
+        match self.cache.load_from_dir(dir).await {
             Ok(_) => {}
             Err(e) => {
                 log::error!("error during local compilers loading: {}", e)
@@ -154,7 +156,6 @@ mod tests {
 
     #[tokio::test]
     async fn can_compile_large_file() {
-        env_logger::init();
         let source_code = include_str!("test_data/large_smart_contract.sol");
 
         let compilers = global_compilers().await;
