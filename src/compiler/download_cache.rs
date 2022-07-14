@@ -2,7 +2,7 @@ use super::{
     fetcher::{FetchError, Fetcher},
     version::Version,
 };
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, str::FromStr, sync::Arc};
 
 #[derive(Default)]
 pub struct DownloadCache {
@@ -65,13 +65,63 @@ impl DownloadCache {
     }
 }
 
+impl DownloadCache {
+    pub async fn load_from_dir(&self, dir: &PathBuf) -> std::io::Result<()> {
+        let paths = DownloadCache::read_dir_paths(dir)?;
+        let versions = DownloadCache::filter_versions(paths);
+        self.add_versions(versions).await;
+        Ok(())
+    }
+
+    fn read_dir_paths(dir: &PathBuf) -> std::io::Result<impl Iterator<Item = PathBuf>> {
+        let paths = std::fs::read_dir(dir)?
+            .into_iter()
+            .filter_map(|r| r.ok().map(|e| e.path()));
+        Ok(paths)
+    }
+
+    fn filter_versions(dirs: impl Iterator<Item = PathBuf>) -> HashMap<Version, PathBuf> {
+        dirs.filter_map(|path| {
+            path.file_name()
+                .and_then(|n| n.to_str())
+                .map(String::from)
+                .and_then(|n| Version::from_str(&n).ok())
+                .map(|v| (v, path))
+        })
+        .collect()
+    }
+
+    async fn add_versions(&self, versions: HashMap<Version, PathBuf>) {
+        for (version, path) in versions {
+            let solc_path = path.join("solc");
+            if solc_path.exists() {
+                log::info!("found local compiler version {}", version);
+                let lock = {
+                    let mut cache = self.cache.lock();
+                    Arc::clone(cache.entry(version.clone()).or_default())
+                };
+                *lock.write().await = Some(solc_path);
+            } else {
+                log::warn!(
+                    "found verions {} but file {:?} doesn't exists",
+                    version,
+                    solc_path
+                );
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::compiler::version::ReleaseVersion;
+    use crate::{
+        compiler::{version::ReleaseVersion, ListFetcher},
+        consts::DEFAULT_COMPILER_LIST,
+    };
     use async_trait::async_trait;
     use futures::{executor::block_on, join, pin_mut};
-    use std::time::Duration;
+    use std::{collections::HashSet, env::temp_dir, time::Duration};
     use tokio::{spawn, task::yield_now, time::timeout};
 
     fn new_version(major: u64) -> Version {
@@ -197,5 +247,48 @@ mod tests {
             .unwrap();
         vals.0.expect("expected value got error");
         vals.1.expect("expected value got error");
+    }
+
+    #[tokio::test]
+    async fn filter_versions() {
+        let versions: HashSet<Version> = vec![1, 2, 3, 4, 5]
+            .into_iter()
+            .map(|i| new_version(i))
+            .collect();
+
+        let paths = versions.iter().map(|v| v.to_string().into()).chain(vec![
+            "some_random_dir".into(),
+            ".".into(),
+            "..".into(),
+            "�0.7.0+commit.9e61f92b".into(),
+        ]);
+
+        let versions_map = DownloadCache::filter_versions(paths);
+        let filtered_versions = HashSet::from_iter(versions_map.into_keys());
+        assert_eq!(versions, filtered_versions,);
+    }
+
+    #[tokio::test]
+    async fn load_downloaded_compiler() {
+        let ver = Version::from_str("0.7.0+commit.9e61f92b").unwrap();
+        let dir = temp_dir();
+
+        let url = DEFAULT_COMPILER_LIST.try_into().expect("Getting url");
+        let fetcher = ListFetcher::new(url, None, temp_dir())
+            .await
+            .expect("Fetch releases");
+        fetcher.fetch(&ver).await.expect("download should complete");
+
+        let cache = DownloadCache::new();
+        cache
+            .load_from_dir(&dir)
+            .await
+            .expect("cannot load compilers");
+
+        let path = cache
+            .try_get(&ver)
+            .await
+            .expect("version should appear in cache");
+        assert!(path.exists(), "solc compiler file should exists");
     }
 }
