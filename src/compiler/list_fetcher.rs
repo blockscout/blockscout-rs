@@ -8,6 +8,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use cron::Schedule;
 use primitive_types::H256;
+use sha2::{Digest, Sha256};
 use std::{
     collections::HashMap,
     fmt::Debug,
@@ -195,10 +196,13 @@ fn create_executable(path: &Path) -> Result<File, std::io::Error> {
         .open(path)
 }
 
-pub fn check_hashsum(bytes: &Bytes, expected: H256) -> Result<(), Mismatch<String>> {
-    let expected = hex::encode(expected);
+pub fn check_hashsum(bytes: &Bytes, expected: H256) -> Result<(), Mismatch<H256>> {
     let start = std::time::Instant::now();
-    let found = sha256::digest_bytes(bytes);
+
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    let found = H256::from_slice(&hasher.finalize());
+
     let takes = (std::time::Instant::now() - start).as_millis();
     log::debug!(
         "check hashsum of {} bytes takes {:?} millis",
@@ -234,7 +238,7 @@ impl Fetcher for ListFetcher {
             .await
             .map_err(anyhow::Error::msg)
             .map_err(FetchError::Fetch)?;
-        check_hashsum(&bytes, compiler_info.sha256).map_err(FetchError::HashMismatch)?;
+        check_hashsum(&bytes, compiler_info.sha256)?;
         {
             let file = file.clone();
             tokio::task::spawn_blocking(move || -> Result<(), FetchError> {

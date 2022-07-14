@@ -69,7 +69,8 @@ impl DownloadCache {
     pub async fn load_from_dir(&self, dir: &PathBuf) -> std::io::Result<()> {
         let entries = std::fs::read_dir(dir)?;
         let versions = DownloadCache::find_versions_in_dir(entries);
-        for (version, solc_path) in versions {
+        for (version, path) in versions {
+            let solc_path = path.join("solc");
             if solc_path.exists() {
                 log::info!("found local compiler version {}", version);
                 let lock = {
@@ -92,11 +93,9 @@ impl DownloadCache {
         dir.filter_map(|entry| {
             entry.ok().and_then(|e| {
                 let path = e.path();
-                let mut solc_path = path.clone();
-                solc_path.push("solc");
                 path.file_name()
                     .and_then(|n| n.to_str().map(String::from))
-                    .and_then(|n| Version::from_str(&n).ok().map(|v| (v, solc_path)))
+                    .and_then(|n| Version::from_str(&n).ok().map(|v| (v, path)))
             })
         })
         .collect()
@@ -106,10 +105,13 @@ impl DownloadCache {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::compiler::version::ReleaseVersion;
+    use crate::{
+        compiler::{version::ReleaseVersion, ListFetcher},
+        consts::DEFAULT_COMPILER_LIST,
+    };
     use async_trait::async_trait;
     use futures::{executor::block_on, join, pin_mut};
-    use std::time::Duration;
+    use std::{env::temp_dir, time::Duration};
     use tokio::{spawn, task::yield_now, time::timeout};
 
     fn new_version(major: u64) -> Version {
@@ -235,5 +237,50 @@ mod tests {
             .unwrap();
         vals.0.expect("expected value got error");
         vals.1.expect("expected value got error");
+    }
+
+    #[tokio::test]
+    async fn load_empty_file() {
+        let ver = new_version(3);
+        let dir = temp_dir();
+        let solc_dir = dir.join(ver.to_string());
+        let solc_path = solc_dir.join("solc");
+        std::fs::create_dir_all(&solc_dir).unwrap();
+        std::fs::File::create(&solc_path).unwrap();
+
+        let cache = DownloadCache::new();
+        cache
+            .load_from_dir(&dir)
+            .await
+            .expect("cannot load compilers");
+
+        let loaded_solc_path = cache
+            .try_get(&ver)
+            .await
+            .expect("version should appear in cache");
+        assert_eq!(loaded_solc_path, solc_path)
+    }
+
+    #[tokio::test]
+    async fn load_donwloaded_compiler() {
+        let ver = Version::from_str("0.7.0+commit.9e61f92b").unwrap();
+        let dir = temp_dir();
+
+        let url = DEFAULT_COMPILER_LIST.try_into().expect("Getting url");
+        let fetcher = ListFetcher::new(url, None, temp_dir())
+            .await
+            .expect("Fetch releases");
+        fetcher.fetch(&ver).await.expect("download should complete");
+
+        let cache = DownloadCache::new();
+        cache
+            .load_from_dir(&dir)
+            .await
+            .expect("cannot load compilers");
+
+        cache
+            .try_get(&ver)
+            .await
+            .expect("version should appear in cache");
     }
 }

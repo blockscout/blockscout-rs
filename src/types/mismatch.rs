@@ -1,8 +1,9 @@
 //! Supporting type used in error structures
 
 use std::fmt;
+use thiserror::Error;
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Error)]
 /// Error indicating an expected value was not found.
 pub struct Mismatch<T> {
     /// Value expected.
