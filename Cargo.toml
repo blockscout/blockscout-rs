@@ -34,7 +34,9 @@ ethers-solc = { version = "0.13", features = ["svm-solc"] }
 ethers-core = "0.13.0"
 primitive-types = "0.11"
 serde_with = "1.14"
-ethabi = "17.0.0"
+ethabi = "17.0"
+sha2 = "0.10"
+
 
 [dev-dependencies]
 const_format = "0.2"

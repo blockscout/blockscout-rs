@@ -2,10 +2,13 @@ use super::fetcher::FetchError;
 use crate::{
     compiler::{Fetcher, Version},
     scheduler,
+    types::Mismatch,
 };
 use async_trait::async_trait;
+use bytes::Bytes;
 use cron::Schedule;
 use primitive_types::H256;
+use sha2::{Digest, Sha256};
 use std::{
     collections::HashMap,
     fmt::Debug,
@@ -48,7 +51,7 @@ mod json {
 
 type VersionsMap = HashMap<Version, CompilerInfo>;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 struct CompilerInfo {
     pub url: Url,
     pub sha256: H256,
@@ -193,48 +196,63 @@ fn create_executable(path: &Path) -> Result<File, std::io::Error> {
         .open(path)
 }
 
+pub fn check_hashsum(bytes: &Bytes, expected: H256) -> Result<(), Mismatch<H256>> {
+    let start = std::time::Instant::now();
+
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    let found = H256::from_slice(&hasher.finalize());
+
+    let took = std::time::Instant::now() - start;
+    log::debug!("check hashsum of {} bytes took {:?}", bytes.len(), took,);
+    if expected != found {
+        Err(Mismatch::new(expected, found))
+    } else {
+        Ok(())
+    }
+}
+
 #[async_trait]
 impl Fetcher for ListFetcher {
     async fn fetch(&self, ver: &Version) -> Result<PathBuf, FetchError> {
-        let compiler_download_url = {
+        let compiler_info = {
             let compiler_versions = self.compiler_versions.0.read();
             let compiler_info = compiler_versions
                 .get(ver)
                 .ok_or_else(|| FetchError::NotFound(ver.clone()))?;
-            compiler_info.url.clone()
+            (*compiler_info).clone()
         };
 
-        let response = reqwest::get(compiler_download_url)
+        let response = reqwest::get(compiler_info.url.to_string())
             .await
-            .map_err(anyhow::Error::msg)
-            .map_err(FetchError::Fetch)?;
+            .map_err(anyhow::Error::msg)?;
         let folder = self.folder.join(ver.to_string());
         let file = folder.join("solc");
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(anyhow::Error::msg)
-            .map_err(FetchError::Fetch)?;
-        {
+        let bytes = response.bytes().await.map_err(anyhow::Error::msg)?;
+
+        let save_result = {
             let file = file.clone();
+            let bytes = bytes.clone();
             tokio::task::spawn_blocking(move || -> Result<(), FetchError> {
-                std::fs::create_dir_all(&folder).map_err(FetchError::File)?;
-                std::fs::remove_file(file.as_path())
-                    .or_else(|e| {
-                        if e.kind() == ErrorKind::NotFound {
-                            Ok(())
-                        } else {
-                            Err(e)
-                        }
-                    })
-                    .map_err(FetchError::File)?;
-                let mut file = create_executable(file.as_path()).map_err(FetchError::File)?;
-                std::io::copy(&mut bytes.as_ref(), &mut file).map_err(FetchError::File)?;
+                std::fs::create_dir_all(&folder)?;
+                std::fs::remove_file(file.as_path()).or_else(|e| {
+                    if e.kind() == ErrorKind::NotFound {
+                        Ok(())
+                    } else {
+                        Err(e)
+                    }
+                })?;
+                let mut file = create_executable(file.as_path())?;
+                std::io::copy(&mut bytes.as_ref(), &mut file)?;
                 Ok(())
             })
-            .await
-            .map_err(FetchError::Schedule)??;
-        }
+        };
+
+        let check_result =
+            tokio::task::spawn_blocking(move || check_hashsum(&bytes, compiler_info.sha256));
+
+        check_result.await??;
+        save_result.await??;
 
         Ok(file)
     }
@@ -401,7 +419,6 @@ mod tests {
 
     #[tokio::test]
     async fn check_refresh_versions() {
-        env_logger::init();
         let mock_server = MockServer::start().await;
 
         // mock list.json server response with empty list

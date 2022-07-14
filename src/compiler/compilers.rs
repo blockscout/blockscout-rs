@@ -1,7 +1,7 @@
 use super::fetcher::FetchError;
 use crate::compiler::{self, DownloadCache, Fetcher};
 use ethers_solc::{artifacts::Severity, error::SolcError, CompilerInput, CompilerOutput, Solc};
-use std::{fmt::Debug, sync::Arc};
+use std::{fmt::Debug, path::PathBuf, sync::Arc};
 use thiserror::Error as DeriveError;
 
 #[derive(Debug, DeriveError)]
@@ -57,6 +57,15 @@ impl Compilers {
 
     pub fn all_versions(&self) -> Vec<compiler::Version> {
         self.fetcher.all_versions()
+    }
+
+    pub async fn load_from_dir(&self, dir: &PathBuf) {
+        match self.cache.load_from_dir(dir).await {
+            Ok(_) => {}
+            Err(e) => {
+                log::error!("error during local compilers loading: {}", e)
+            }
+        };
     }
 }
 
