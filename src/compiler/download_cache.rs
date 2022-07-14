@@ -67,8 +67,28 @@ impl DownloadCache {
 
 impl DownloadCache {
     pub async fn load_from_dir(&self, dir: &PathBuf) -> std::io::Result<()> {
-        let entries = std::fs::read_dir(dir)?;
-        let versions = DownloadCache::find_versions_in_dir(entries);
+        let paths = DownloadCache::read_dir_paths(dir)?;
+        let versions = DownloadCache::filter_versions(paths);
+        self.add_versions(versions).await;
+        Ok(())
+    }
+    fn read_dir_paths(dir: &PathBuf) -> std::io::Result<Box<dyn Iterator<Item = PathBuf>>> {
+        let a = std::fs::read_dir(dir)?
+            .into_iter()
+            .filter_map(|r| r.ok().map(|e| e.path()));
+        Ok(Box::new(a))
+    }
+    fn filter_versions(dirs: impl Iterator<Item = PathBuf>) -> HashMap<Version, PathBuf> {
+        dirs.filter_map(|path| {
+            path.file_name()
+                .and_then(|n| n.to_str())
+                .map(String::from)
+                .and_then(|n| Version::from_str(&n).ok())
+                .map(|v| (v, path))
+        })
+        .collect()
+    }
+    async fn add_versions(&self, versions: HashMap<Version, PathBuf>) {
         for (version, path) in versions {
             let solc_path = path.join("solc");
             if solc_path.exists() {
@@ -86,19 +106,6 @@ impl DownloadCache {
                 );
             }
         }
-        Ok(())
-    }
-
-    fn find_versions_in_dir(dir: std::fs::ReadDir) -> HashMap<Version, PathBuf> {
-        dir.filter_map(|entry| {
-            entry.ok().and_then(|e| {
-                let path = e.path();
-                path.file_name()
-                    .and_then(|n| n.to_str().map(String::from))
-                    .and_then(|n| Version::from_str(&n).ok().map(|v| (v, path)))
-            })
-        })
-        .collect()
     }
 }
 
@@ -111,7 +118,7 @@ mod tests {
     };
     use async_trait::async_trait;
     use futures::{executor::block_on, join, pin_mut};
-    use std::{env::temp_dir, time::Duration};
+    use std::{collections::HashSet, env::temp_dir, time::Duration};
     use tokio::{spawn, task::yield_now, time::timeout};
 
     fn new_version(major: u64) -> Version {
@@ -240,31 +247,22 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn load_empty_files() {
-        let dir = temp_dir();
-        let versions: Vec<Version> = vec![1, 2, 3, 4, 5]
+    async fn filter_versions() {
+        let versions: HashSet<Version> = vec![1, 2, 3, 4, 5]
             .into_iter()
             .map(|i| new_version(i))
             .collect();
-        for ver in versions.iter() {
-            let solc_dir = dir.join(ver.to_string());
-            let solc_path = solc_dir.join("solc");
-            std::fs::create_dir_all(&solc_dir).unwrap();
-            std::fs::File::create(&solc_path).unwrap();
-        }
 
-        let cache = DownloadCache::new();
-        cache
-            .load_from_dir(&dir)
-            .await
-            .expect("cannot load compilers");
+        let paths = versions.iter().map(|v| v.to_string().into()).chain(vec![
+            "some_random_dir".into(),
+            ".".into(),
+            "..".into(),
+            "�0.7.0+commit.9e61f92b".into(),
+        ]);
 
-        for ver in versions.iter() {
-            cache
-                .try_get(&ver)
-                .await
-                .expect(&format!("version {} should appear in cache", ver));
-        }
+        let versions_map = DownloadCache::filter_versions(paths);
+        let filtered_versions = HashSet::from_iter(versions_map.into_keys());
+        assert_eq!(versions, filtered_versions,);
     }
 
     #[tokio::test]
@@ -284,9 +282,10 @@ mod tests {
             .await
             .expect("cannot load compilers");
 
-        cache
+        let path = cache
             .try_get(&ver)
             .await
             .expect("version should appear in cache");
+        assert!(path.exists(), "solc compiler file should exists");
     }
 }

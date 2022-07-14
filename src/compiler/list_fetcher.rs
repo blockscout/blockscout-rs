@@ -203,12 +203,8 @@ pub fn check_hashsum(bytes: &Bytes, expected: H256) -> Result<(), Mismatch<H256>
     hasher.update(bytes);
     let found = H256::from_slice(&hasher.finalize());
 
-    let takes = (std::time::Instant::now() - start).as_millis();
-    log::debug!(
-        "check hashsum of {} bytes takes {:?} millis",
-        bytes.len(),
-        takes
-    );
+    let took = std::time::Instant::now() - start;
+    log::debug!("check hashsum of {} bytes took {:?}", bytes.len(), took,);
     if expected != found {
         Err(Mismatch::new(expected, found))
     } else {
