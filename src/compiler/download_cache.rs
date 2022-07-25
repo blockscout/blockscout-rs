@@ -121,6 +121,7 @@ mod tests {
     };
     use async_trait::async_trait;
     use futures::{executor::block_on, join, pin_mut};
+    use pretty_assertions::assert_eq;
     use std::{collections::HashSet, env::temp_dir, time::Duration};
     use tokio::{spawn, task::yield_now, time::timeout};
 

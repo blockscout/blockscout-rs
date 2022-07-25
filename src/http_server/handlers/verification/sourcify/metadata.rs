@@ -107,6 +107,7 @@ impl TryFrom<Files> for VerificationResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
 
     const DEFAULT_METADATA: &str = r#"{
         "compiler": {

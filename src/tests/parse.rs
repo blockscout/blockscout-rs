@@ -1,7 +1,7 @@
-use std::fmt::Debug;
-
+use pretty_assertions::assert_eq;
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Value;
+use std::fmt::Debug;
 
 pub fn test_deserialize_ok<T>(tests: Vec<(&str, T)>)
 where
