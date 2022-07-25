@@ -37,9 +37,9 @@ serde_with = "1.14"
 ethabi = "17.0"
 sha2 = "0.10"
 
-
 [dev-dependencies]
 const_format = "0.2"
 rand = "0.8"
 async-once-cell = "0.4.2"
 wiremock = "0.5"
+pretty_assertions = "1.2"

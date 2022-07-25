@@ -82,6 +82,7 @@ pub struct VersionsResponse {
 mod tests {
     use super::*;
     use crate::tests::parse::test_deserialize_ok;
+    use pretty_assertions::assert_eq;
 
     fn sources(sources: &[(&str, &str)]) -> BTreeMap<PathBuf, String> {
         sources

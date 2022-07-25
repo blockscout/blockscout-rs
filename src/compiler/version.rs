@@ -183,6 +183,7 @@ impl PartialOrd for Version {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
     use rand::{rngs::StdRng, seq::SliceRandom, thread_rng, Rng, SeedableRng};
 
     fn check_parsing<T: FromStr + ToString>(ver_str: &str) -> T
