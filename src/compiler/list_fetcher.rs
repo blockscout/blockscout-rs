@@ -268,10 +268,10 @@ impl Fetcher for ListFetcher {
 
 #[cfg(test)]
 mod tests {
-    use crate::{tests::parse::test_deserialize_ok, Config};
-
     use super::*;
+    use crate::{tests::parse::test_deserialize_ok, Config};
     use ethers_solc::Solc;
+    use pretty_assertions::assert_eq;
     use std::{env::temp_dir, str::FromStr};
     use wiremock::{
         matchers::{method, path},

@@ -43,6 +43,7 @@ impl<T: fmt::Display> fmt::Display for Mismatch<T> {
 #[cfg(test)]
 mod test {
     use crate::types::Mismatch;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn display_mismatch_with_found() {

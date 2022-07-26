@@ -6,6 +6,7 @@ use actix_web::{
     App,
 };
 use async_once_cell::OnceCell;
+use pretty_assertions::assert_eq;
 use serde_json::json;
 use solidity_multiple_types::TestInput;
 use std::{
