@@ -1,7 +1,6 @@
 use super::Router;
 use crate::{
-    compiler::Compilers,
-    compiler::ListFetcher,
+    compiler::{Compilers, ListFetcher},
     config::SolidityConfiguration,
     http_server::handlers::{multi_part, standard_json, version_list},
 };
