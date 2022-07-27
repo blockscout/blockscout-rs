@@ -1,10 +1,14 @@
+use super::fetcher::FetchError;
 use crate::{
-    compiler::{CompilerVersion, Fetcher, VersionList},
+    compiler::{Fetcher, Version},
     scheduler,
+    types::Mismatch,
 };
 use async_trait::async_trait;
+use bytes::Bytes;
 use cron::Schedule;
 use primitive_types::H256;
+use sha2::{Digest, Sha256};
 use std::{
     collections::HashMap,
     fmt::Debug,
@@ -15,15 +19,13 @@ use std::{
     sync::Arc,
 };
 use thiserror::Error;
-
 use url::Url;
 
 mod json {
+    use crate::compiler;
     use primitive_types::H256;
     use serde::{Deserialize, Serialize};
     use url::Url;
-
-    use crate::compiler::CompilerVersion;
 
     #[derive(Debug, Deserialize, Serialize, PartialEq)]
     pub struct List {
@@ -35,7 +37,7 @@ mod json {
     pub struct CompilerInfo {
         pub path: DownloadPath,
         #[serde(with = "serde_with::rust::display_fromstr")]
-        pub long_version: CompilerVersion,
+        pub long_version: compiler::Version,
         pub sha256: H256,
     }
 
@@ -45,6 +47,14 @@ mod json {
         Url(Url),
         Filename(String),
     }
+}
+
+type VersionsMap = HashMap<Version, CompilerInfo>;
+
+#[derive(Debug, PartialEq, Clone)]
+struct CompilerInfo {
+    pub url: Url,
+    pub sha256: H256,
 }
 
 #[derive(Error, Debug)]
@@ -57,18 +67,7 @@ pub enum ListError {
     Path(url::ParseError),
 }
 
-type CompilerVersionsMap = HashMap<CompilerVersion, CompilerInfo>;
-
-#[derive(Default, Clone)]
-pub struct CompilerVersions(Arc<parking_lot::RwLock<CompilerVersionsMap>>);
-
-#[derive(Debug, PartialEq)]
-pub struct CompilerInfo {
-    pub url: Url,
-    pub sha256: H256,
-}
-
-pub async fn try_fetch_versions(versions_list_url: &Url) -> Result<CompilerVersionsMap, ListError> {
+async fn try_fetch_versions(versions_list_url: &Url) -> Result<VersionsMap, ListError> {
     let list_json_file: json::List = reqwest::get(versions_list_url.as_str())
         .await
         .map_err(ListError::ListJsonFetch)?
@@ -81,7 +80,7 @@ pub async fn try_fetch_versions(versions_list_url: &Url) -> Result<CompilerVersi
 fn try_parse_json_file(
     list_json_file: json::List,
     versions_list_url: &Url,
-) -> Result<CompilerVersionsMap, ListError> {
+) -> Result<VersionsMap, ListError> {
     let mut compiler_versions = HashMap::default();
     for json_compiler_info in list_json_file.builds {
         let version = json_compiler_info.long_version.clone();
@@ -110,7 +109,10 @@ impl TryFrom<(json::CompilerInfo, &Url)> for CompilerInfo {
     }
 }
 
-impl CompilerVersions {
+#[derive(Default, Clone)]
+struct Versions(Arc<parking_lot::RwLock<VersionsMap>>);
+
+impl Versions {
     fn spawn_refresh_job(self, versions_list_url: Url, cron_schedule: Schedule) {
         log::info!("spawn version refresh job");
         scheduler::spawn_job(cron_schedule, "refresh compiler versions", move || {
@@ -157,12 +159,12 @@ impl CompilerVersions {
 }
 
 #[derive(Default)]
-pub struct CompilerFetcher {
-    compiler_versions: CompilerVersions,
+pub struct ListFetcher {
+    compiler_versions: Versions,
     folder: PathBuf,
 }
 
-impl CompilerFetcher {
+impl ListFetcher {
     pub async fn new(
         versions_list_url: Url,
         refresh_versions_schedule: Option<Schedule>,
@@ -171,8 +173,7 @@ impl CompilerFetcher {
         let compiler_versions = try_fetch_versions(&versions_list_url)
             .await
             .map_err(anyhow::Error::msg)?;
-        let compiler_versions =
-            CompilerVersions(Arc::new(parking_lot::RwLock::new(compiler_versions)));
+        let compiler_versions = Versions(Arc::new(parking_lot::RwLock::new(compiler_versions)));
         if let Some(cron_schedule) = refresh_versions_schedule {
             compiler_versions
                 .clone()
@@ -185,18 +186,6 @@ impl CompilerFetcher {
     }
 }
 
-#[derive(Error, Debug)]
-pub enum FetchError {
-    #[error("version {0} not found")]
-    NotFound(CompilerVersion),
-    #[error("couldn't fetch the file: {0}")]
-    Fetch(reqwest::Error),
-    #[error("couldn't create file: {0}")]
-    File(std::io::Error),
-    #[error("tokio sheduling error: {0}")]
-    Shedule(tokio::task::JoinError),
-}
-
 #[cfg(target_family = "unix")]
 fn create_executable(path: &Path) -> Result<File, std::io::Error> {
     OpenOptions::new()
@@ -207,51 +196,68 @@ fn create_executable(path: &Path) -> Result<File, std::io::Error> {
         .open(path)
 }
 
+pub fn check_hashsum(bytes: &Bytes, expected: H256) -> Result<(), Mismatch<H256>> {
+    let start = std::time::Instant::now();
+
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    let found = H256::from_slice(&hasher.finalize());
+
+    let took = std::time::Instant::now() - start;
+    log::debug!("check hashsum of {} bytes took {:?}", bytes.len(), took,);
+    if expected != found {
+        Err(Mismatch::new(expected, found))
+    } else {
+        Ok(())
+    }
+}
+
 #[async_trait]
-impl Fetcher for CompilerFetcher {
-    type Error = FetchError;
-    async fn fetch(&self, ver: &CompilerVersion) -> Result<PathBuf, Self::Error> {
-        let compiler_download_url = {
+impl Fetcher for ListFetcher {
+    async fn fetch(&self, ver: &Version) -> Result<PathBuf, FetchError> {
+        let compiler_info = {
             let compiler_versions = self.compiler_versions.0.read();
             let compiler_info = compiler_versions
                 .get(ver)
                 .ok_or_else(|| FetchError::NotFound(ver.clone()))?;
-            compiler_info.url.clone()
+            (*compiler_info).clone()
         };
 
-        let response = reqwest::get(compiler_download_url)
+        let response = reqwest::get(compiler_info.url.to_string())
             .await
-            .map_err(FetchError::Fetch)?;
+            .map_err(anyhow::Error::msg)?;
         let folder = self.folder.join(ver.to_string());
         let file = folder.join("solc");
-        let bytes = response.bytes().await.map_err(FetchError::Fetch)?;
-        {
+        let bytes = response.bytes().await.map_err(anyhow::Error::msg)?;
+
+        let save_result = {
             let file = file.clone();
-            tokio::task::spawn_blocking(move || -> Result<(), Self::Error> {
-                std::fs::create_dir_all(&folder).map_err(FetchError::File)?;
-                std::fs::remove_file(file.as_path())
-                    .or_else(|e| {
-                        if e.kind() == ErrorKind::NotFound {
-                            Ok(())
-                        } else {
-                            Err(e)
-                        }
-                    })
-                    .map_err(FetchError::File)?;
-                let mut file = create_executable(file.as_path()).map_err(FetchError::File)?;
-                std::io::copy(&mut bytes.as_ref(), &mut file).map_err(FetchError::File)?;
+            let bytes = bytes.clone();
+            tokio::task::spawn_blocking(move || -> Result<(), FetchError> {
+                std::fs::create_dir_all(&folder)?;
+                std::fs::remove_file(file.as_path()).or_else(|e| {
+                    if e.kind() == ErrorKind::NotFound {
+                        Ok(())
+                    } else {
+                        Err(e)
+                    }
+                })?;
+                let mut file = create_executable(file.as_path())?;
+                std::io::copy(&mut bytes.as_ref(), &mut file)?;
                 Ok(())
             })
-            .await
-            .map_err(FetchError::Shedule)??;
-        }
+        };
+
+        let check_result =
+            tokio::task::spawn_blocking(move || check_hashsum(&bytes, compiler_info.sha256));
+
+        check_result.await??;
+        save_result.await??;
 
         Ok(file)
     }
-}
 
-impl VersionList for CompilerFetcher {
-    fn all_versions(&self) -> Vec<CompilerVersion> {
+    fn all_versions(&self) -> Vec<Version> {
         let compiler_versions = self.compiler_versions.0.read();
         compiler_versions
             .iter()
@@ -262,10 +268,10 @@ impl VersionList for CompilerFetcher {
 
 #[cfg(test)]
 mod tests {
-    use crate::{tests::parse::test_deserialize_ok, Config};
-
     use super::*;
+    use crate::{tests::parse::test_deserialize_ok, Config};
     use ethers_solc::Solc;
+    use pretty_assertions::assert_eq;
     use std::{env::temp_dir, str::FromStr};
     use wiremock::{
         matchers::{method, path},
@@ -310,7 +316,7 @@ mod tests {
 
     #[test]
     fn parse_list_json() {
-        let ver = |s| CompilerVersion::from_str(s).unwrap();
+        let ver = |s| Version::from_str(s).unwrap();
         test_deserialize_ok(vec![
             (DEFAULT_LIST_JSON,
             json::List {
@@ -350,8 +356,8 @@ mod tests {
         ]);
     }
 
-    fn assert_has_version(versions: &CompilerVersionsMap, ver: &str, expect: &str) {
-        let ver = CompilerVersion::from_str(ver).unwrap();
+    fn assert_has_version(versions: &VersionsMap, ver: &str, expect: &str) {
+        let ver = Version::from_str(ver).unwrap();
         let info = versions.get(&ver).unwrap();
         let url = info.url.to_string();
         assert_eq!(url, expect, "urls don't match");
@@ -385,7 +391,7 @@ mod tests {
     #[tokio::test]
     async fn list_download_versions() {
         let config = Config::default();
-        let fetcher = CompilerFetcher::new(
+        let fetcher = ListFetcher::new(
             config.solidity.compilers_list_url,
             None,
             std::env::temp_dir().join("blockscout/verification/compiler_fetcher/test/"),
@@ -394,8 +400,8 @@ mod tests {
         .expect("list.json file should be valid");
 
         for compiler_version in vec![
-            CompilerVersion::from_str("0.7.0+commit.9e61f92b").unwrap(),
-            CompilerVersion::from_str("0.8.9+commit.e5eed63a").unwrap(),
+            Version::from_str("0.7.0+commit.9e61f92b").unwrap(),
+            Version::from_str("0.8.9+commit.e5eed63a").unwrap(),
         ] {
             let file = fetcher.fetch(&compiler_version).await.unwrap();
             let solc = Solc::new(file);
@@ -413,7 +419,6 @@ mod tests {
 
     #[tokio::test]
     async fn check_refresh_versions() {
-        env_logger::init();
         let mock_server = MockServer::start().await;
 
         // mock list.json server response with empty list
@@ -422,7 +427,7 @@ mod tests {
             .respond_with(ResponseTemplate::new(200).set_body_bytes("{\"builds\": []}"))
             .mount(&mock_server)
             .await;
-        let fetcher = CompilerFetcher::new(
+        let fetcher = ListFetcher::new(
             Url::parse(&mock_server.uri()).unwrap(),
             Some(Schedule::from_str("* * * * * * *").unwrap()),
             temp_dir(),
@@ -442,7 +447,7 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
         let versions = fetcher.all_versions();
         assert!(
-            versions.contains(&CompilerVersion::from_str("0.4.13+commit.0fb4cb1a").unwrap()),
+            versions.contains(&Version::from_str("0.4.13+commit.0fb4cb1a").unwrap()),
             "versions list doesn't have 0.4.13: {versions:?}",
         );
     }

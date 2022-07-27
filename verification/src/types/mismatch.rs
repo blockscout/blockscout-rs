@@ -1,8 +1,9 @@
 //! Supporting type used in error structures
 
 use std::fmt;
+use thiserror::Error;
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Error)]
 /// Error indicating an expected value was not found.
 pub struct Mismatch<T> {
     /// Value expected.
@@ -42,6 +43,7 @@ impl<T: fmt::Display> fmt::Display for Mismatch<T> {
 #[cfg(test)]
 mod test {
     use crate::types::Mismatch;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn display_mismatch_with_found() {

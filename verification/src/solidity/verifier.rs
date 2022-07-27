@@ -560,6 +560,7 @@ impl Verifier {
 mod verifier_initialization_tests {
     use super::*;
     use const_format::concatcp;
+    use pretty_assertions::assert_eq;
 
     const DEFAULT_CONSTRUCTOR_ARGS: &'static str =
         "0000000000000000000000000000000000000000000000000000000000000fff";

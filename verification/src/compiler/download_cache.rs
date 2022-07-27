@@ -1,9 +1,12 @@
-use super::{fetcher::Fetcher, version::CompilerVersion};
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use super::{
+    fetcher::{FetchError, Fetcher},
+    version::Version,
+};
+use std::{collections::HashMap, path::PathBuf, str::FromStr, sync::Arc};
 
 #[derive(Default)]
 pub struct DownloadCache {
-    cache: parking_lot::Mutex<HashMap<CompilerVersion, Arc<tokio::sync::RwLock<Option<PathBuf>>>>>,
+    cache: parking_lot::Mutex<HashMap<Version, Arc<tokio::sync::RwLock<Option<PathBuf>>>>>,
 }
 
 impl DownloadCache {
@@ -13,7 +16,7 @@ impl DownloadCache {
         }
     }
 
-    async fn try_get(&self, ver: &CompilerVersion) -> Option<PathBuf> {
+    async fn try_get(&self, ver: &Version) -> Option<PathBuf> {
         let entry = {
             let cache = self.cache.lock();
             cache.get(ver).cloned()
@@ -29,22 +32,22 @@ impl DownloadCache {
 }
 
 impl DownloadCache {
-    pub async fn get<D: Fetcher>(
+    pub async fn get<D: Fetcher + ?Sized>(
         &self,
         fetcher: &D,
-        ver: &CompilerVersion,
-    ) -> Result<PathBuf, D::Error> {
+        ver: &Version,
+    ) -> Result<PathBuf, FetchError> {
         match self.try_get(ver).await {
             Some(file) => Ok(file),
             None => self.fetch(fetcher, ver).await,
         }
     }
 
-    async fn fetch<D: Fetcher>(
+    async fn fetch<D: Fetcher + ?Sized>(
         &self,
         fetcher: &D,
-        ver: &CompilerVersion,
-    ) -> Result<PathBuf, D::Error> {
+        ver: &Version,
+    ) -> Result<PathBuf, FetchError> {
         let lock = {
             let mut cache = self.cache.lock();
             Arc::clone(cache.entry(ver.clone()).or_default())
@@ -62,18 +65,68 @@ impl DownloadCache {
     }
 }
 
+impl DownloadCache {
+    pub async fn load_from_dir(&self, dir: &PathBuf) -> std::io::Result<()> {
+        let paths = DownloadCache::read_dir_paths(dir)?;
+        let versions = DownloadCache::filter_versions(paths);
+        self.add_versions(versions).await;
+        Ok(())
+    }
+
+    fn read_dir_paths(dir: &PathBuf) -> std::io::Result<impl Iterator<Item = PathBuf>> {
+        let paths = std::fs::read_dir(dir)?
+            .into_iter()
+            .filter_map(|r| r.ok().map(|e| e.path()));
+        Ok(paths)
+    }
+
+    fn filter_versions(dirs: impl Iterator<Item = PathBuf>) -> HashMap<Version, PathBuf> {
+        dirs.filter_map(|path| {
+            path.file_name()
+                .and_then(|n| n.to_str())
+                .map(String::from)
+                .and_then(|n| Version::from_str(&n).ok())
+                .map(|v| (v, path))
+        })
+        .collect()
+    }
+
+    async fn add_versions(&self, versions: HashMap<Version, PathBuf>) {
+        for (version, path) in versions {
+            let solc_path = path.join("solc");
+            if solc_path.exists() {
+                log::info!("found local compiler version {}", version);
+                let lock = {
+                    let mut cache = self.cache.lock();
+                    Arc::clone(cache.entry(version.clone()).or_default())
+                };
+                *lock.write().await = Some(solc_path);
+            } else {
+                log::warn!(
+                    "found verions {} but file {:?} doesn't exists",
+                    version,
+                    solc_path
+                );
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::compiler::version::ReleaseVersion;
-
     use super::*;
+    use crate::{
+        compiler::{version::ReleaseVersion, ListFetcher},
+        consts::DEFAULT_COMPILER_LIST,
+    };
     use async_trait::async_trait;
     use futures::{executor::block_on, join, pin_mut};
-    use std::time::Duration;
+    use pretty_assertions::assert_eq;
+    use std::{collections::HashSet, env::temp_dir, time::Duration};
     use tokio::{spawn, task::yield_now, time::timeout};
 
-    fn new_version(major: u64) -> CompilerVersion {
-        CompilerVersion::Release(ReleaseVersion {
+    fn new_version(major: u64) -> Version {
+        Version::Release(ReleaseVersion {
             version: semver::Version::new(major, 0, 0),
             commit: [0, 1, 2, 3],
         })
@@ -84,15 +137,18 @@ mod tests {
     fn value_is_cached() {
         #[derive(Default)]
         struct MockFetcher {
-            counter: parking_lot::Mutex<HashMap<CompilerVersion, u32>>,
+            counter: parking_lot::Mutex<HashMap<Version, u32>>,
         }
 
         #[async_trait]
         impl Fetcher for MockFetcher {
-            type Error = ();
-            async fn fetch(&self, ver: &CompilerVersion) -> Result<PathBuf, Self::Error> {
+            async fn fetch(&self, ver: &Version) -> Result<PathBuf, FetchError> {
                 *self.counter.lock().entry(ver.clone()).or_default() += 1;
                 Ok(PathBuf::from(ver.to_string()))
+            }
+
+            fn all_versions(&self) -> Vec<Version> {
+                vec![]
             }
         }
 
@@ -101,7 +157,7 @@ mod tests {
 
         let vers: Vec<_> = (0..3).map(new_version).collect();
 
-        let get_and_check = |ver: &CompilerVersion| {
+        let get_and_check = |ver: &Version| {
             let value = block_on(cache.get(&fetcher, ver)).unwrap();
             assert_eq!(value, PathBuf::from(ver.to_string()));
         };
@@ -135,10 +191,13 @@ mod tests {
 
         #[async_trait]
         impl Fetcher for MockBlockingFetcher {
-            type Error = ();
-            async fn fetch(&self, ver: &CompilerVersion) -> Result<PathBuf, Self::Error> {
+            async fn fetch(&self, ver: &Version) -> Result<PathBuf, FetchError> {
                 self.sync.lock().await;
                 Ok(PathBuf::from(ver.to_string()))
+            }
+
+            fn all_versions(&self) -> Vec<Version> {
+                vec![]
             }
         }
 
@@ -189,5 +248,48 @@ mod tests {
             .unwrap();
         vals.0.expect("expected value got error");
         vals.1.expect("expected value got error");
+    }
+
+    #[tokio::test]
+    async fn filter_versions() {
+        let versions: HashSet<Version> = vec![1, 2, 3, 4, 5]
+            .into_iter()
+            .map(|i| new_version(i))
+            .collect();
+
+        let paths = versions.iter().map(|v| v.to_string().into()).chain(vec![
+            "some_random_dir".into(),
+            ".".into(),
+            "..".into(),
+            "�0.7.0+commit.9e61f92b".into(),
+        ]);
+
+        let versions_map = DownloadCache::filter_versions(paths);
+        let filtered_versions = HashSet::from_iter(versions_map.into_keys());
+        assert_eq!(versions, filtered_versions,);
+    }
+
+    #[tokio::test]
+    async fn load_downloaded_compiler() {
+        let ver = Version::from_str("0.7.0+commit.9e61f92b").unwrap();
+        let dir = temp_dir();
+
+        let url = DEFAULT_COMPILER_LIST.try_into().expect("Getting url");
+        let fetcher = ListFetcher::new(url, None, temp_dir())
+            .await
+            .expect("Fetch releases");
+        fetcher.fetch(&ver).await.expect("download should complete");
+
+        let cache = DownloadCache::new();
+        cache
+            .load_from_dir(&dir)
+            .await
+            .expect("cannot load compilers");
+
+        let path = cache
+            .try_get(&ver)
+            .await
+            .expect("version should appear in cache");
+        assert!(path.exists(), "solc compiler file should exists");
     }
 }

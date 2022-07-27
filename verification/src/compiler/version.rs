@@ -1,5 +1,4 @@
 use chrono::NaiveDate;
-use semver::Version;
 use std::{cmp::Ordering, fmt::Display, str::FromStr};
 use thiserror::Error;
 
@@ -15,7 +14,7 @@ pub enum ParseError {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ReleaseVersion {
-    pub version: Version,
+    pub version: semver::Version,
     pub commit: [u8; 4],
 }
 
@@ -37,7 +36,7 @@ impl FromStr for ReleaseVersion {
             String
         )
         .map_err(|e| ParseError::Parse(format!("{:?}", e)))?;
-        let version = Version::new(major, minor, patch);
+        let version = semver::Version::new(major, minor, patch);
         let mut commit = [0; 4];
         hex::decode_to_slice(&commit_hash, &mut commit).map_err(ParseError::CommitHash)?;
         Ok(Self { version, commit })
@@ -52,7 +51,7 @@ impl Display for ReleaseVersion {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct NightlyVersion {
-    pub version: Version,
+    pub version: semver::Version,
     pub date: NaiveDate,
     pub commit: [u8; 4],
 }
@@ -76,7 +75,7 @@ impl FromStr for NightlyVersion {
             String,
         )
         .map_err(|e| ParseError::Parse(format!("{:?}", e)))?;
-        let version = Version::new(major, minor, patch);
+        let version = semver::Version::new(major, minor, patch);
         let date = NaiveDate::parse_from_str(&date, DATE_FORMAT)
             .map_err(|e| ParseError::Parse(e.to_string()))?;
         let mut commit = [0; 4];
@@ -102,39 +101,39 @@ impl Display for NightlyVersion {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum CompilerVersion {
+pub enum Version {
     Release(ReleaseVersion),
     Nightly(NightlyVersion),
 }
 
-impl CompilerVersion {
-    pub fn version(&self) -> &Version {
+impl Version {
+    pub fn version(&self) -> &semver::Version {
         match self {
-            CompilerVersion::Nightly(v) => &v.version,
-            CompilerVersion::Release(v) => &v.version,
+            Version::Nightly(v) => &v.version,
+            Version::Release(v) => &v.version,
         }
     }
 
     pub fn is_release(&self) -> bool {
-        matches!(self, CompilerVersion::Release(_))
+        matches!(self, Version::Release(_))
     }
 
     pub fn date(&self) -> Option<&NaiveDate> {
         match self {
-            CompilerVersion::Nightly(v) => Some(&v.date),
-            CompilerVersion::Release(_) => None,
+            Version::Nightly(v) => Some(&v.date),
+            Version::Release(_) => None,
         }
     }
 
     pub fn commit(&self) -> &[u8; 4] {
         match self {
-            CompilerVersion::Nightly(v) => &v.commit,
-            CompilerVersion::Release(v) => &v.commit,
+            Version::Nightly(v) => &v.commit,
+            Version::Release(v) => &v.commit,
         }
     }
 }
 
-impl FromStr for CompilerVersion {
+impl FromStr for Version {
     type Err = ParseError;
 
     /// Parses compiler version
@@ -149,16 +148,16 @@ impl FromStr for CompilerVersion {
     }
 }
 
-impl Display for CompilerVersion {
+impl Display for Version {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CompilerVersion::Release(v) => v.fmt(f),
-            CompilerVersion::Nightly(v) => v.fmt(f),
+            Version::Release(v) => v.fmt(f),
+            Version::Nightly(v) => v.fmt(f),
         }
     }
 }
 
-impl Ord for CompilerVersion {
+impl Ord for Version {
     fn cmp(&self, other: &Self) -> Ordering {
         (
             self.version(),
@@ -175,7 +174,7 @@ impl Ord for CompilerVersion {
     }
 }
 
-impl PartialOrd for CompilerVersion {
+impl PartialOrd for Version {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
@@ -184,6 +183,7 @@ impl PartialOrd for CompilerVersion {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
     use rand::{rngs::StdRng, seq::SliceRandom, thread_rng, Rng, SeedableRng};
 
     fn check_parsing<T: FromStr + ToString>(ver_str: &str) -> T
@@ -197,7 +197,7 @@ mod tests {
     #[test]
     fn parse_release() {
         let ver = check_parsing::<ReleaseVersion>("v0.8.9+commit.e5eed63a");
-        assert_eq!(ver.version, Version::new(0, 8, 9));
+        assert_eq!(ver.version, semver::Version::new(0, 8, 9));
         assert_eq!(ver.commit, [229, 238, 214, 58]);
         check_parsing::<ReleaseVersion>("0.8.9+commit.00000000");
         check_parsing::<ReleaseVersion>("v0.0.0+commit.00000000");
@@ -228,7 +228,7 @@ mod tests {
     #[test]
     fn parse_nightly() {
         let ver = check_parsing::<NightlyVersion>("v10.8.9-nightly.2021.9.11+commit.e5eed63a");
-        assert_eq!(ver.version, Version::new(10, 8, 9));
+        assert_eq!(ver.version, semver::Version::new(10, 8, 9));
         assert_eq!(ver.date, NaiveDate::from_ymd(2021, 9, 11));
         assert_eq!(ver.commit, [229, 238, 214, 58]);
         check_parsing::<NightlyVersion>("v0.0.0-nightly.1990.1.1+commit.00000000");
@@ -236,7 +236,7 @@ mod tests {
             "v123456789.987654321.0-nightly.2100.12.30+commit.ffffffff",
         );
         let ver = check_parsing::<NightlyVersion>("0.0.0-nightly.1990.1.1+commit.00000000");
-        assert_eq!(ver.version, Version::new(0, 0, 0));
+        assert_eq!(ver.version, semver::Version::new(0, 0, 0));
     }
 
     #[test]
@@ -260,12 +260,12 @@ mod tests {
     #[test]
     fn parse_version() {
         assert_eq!(
-            check_parsing::<CompilerVersion>("v0.8.9+commit.e5eed63a"),
-            CompilerVersion::Release(ReleaseVersion::from_str("v0.8.9+commit.e5eed63a").unwrap())
+            check_parsing::<Version>("v0.8.9+commit.e5eed63a"),
+            Version::Release(ReleaseVersion::from_str("v0.8.9+commit.e5eed63a").unwrap())
         );
         assert_eq!(
-            check_parsing::<CompilerVersion>("v0.8.9-nightly.2021.9.11+commit.e5eed63a"),
-            CompilerVersion::Nightly(
+            check_parsing::<Version>("v0.8.9-nightly.2021.9.11+commit.e5eed63a"),
+            Version::Nightly(
                 NightlyVersion::from_str("v0.8.9-nightly.2021.9.11+commit.e5eed63a").unwrap()
             )
         );
@@ -273,7 +273,7 @@ mod tests {
 
     #[test]
     fn order_versions() {
-        let ver = check_parsing::<CompilerVersion>;
+        let ver = check_parsing::<Version>;
 
         // Release only
         assert!(ver("v0.8.10+commit.fc410830") > ver("v0.8.9+commit.e5eed63a"));
@@ -310,9 +310,9 @@ mod tests {
     }
 
     fn test_shuffle_and_sort(sorted: Vec<&str>, times: usize) {
-        let sorted_versions: Vec<CompilerVersion> = sorted
+        let sorted_versions: Vec<Version> = sorted
             .iter()
-            .map(|s| CompilerVersion::from_str(s).expect("invalid version"))
+            .map(|s| Version::from_str(s).expect("invalid version"))
             .collect();
         // check, that array is indeed sorted
         assert!(sorted_versions.windows(2).all(|vals| vals[0] <= vals[1]));

@@ -1,11 +1,10 @@
 use super::types::{MultiPartFiles, VerificationRequest};
 use crate::{
-    compiler::{CompilerVersion, Compilers},
+    compiler::{Compilers, Version},
     http_server::handlers::verification::{
         solidity::contract_verifier::{compile_and_verify_handler, Input},
         VerificationResponse,
     },
-    solidity::CompilerFetcher,
 };
 use actix_web::{
     error,
@@ -15,14 +14,14 @@ use actix_web::{
 use std::str::FromStr;
 
 pub async fn verify(
-    compilers: web::Data<Compilers<CompilerFetcher>>,
+    compilers: web::Data<Compilers>,
     params: Json<VerificationRequest<MultiPartFiles>>,
 ) -> Result<Json<VerificationResponse>, Error> {
     let params = params.into_inner();
 
     let compiler_input = params.content.try_into().map_err(error::ErrorBadRequest)?;
     let compiler_version =
-        CompilerVersion::from_str(&params.compiler_version).map_err(error::ErrorBadRequest)?;
+        Version::from_str(&params.compiler_version).map_err(error::ErrorBadRequest)?;
     let input = Input {
         compiler_version,
         compiler_input,

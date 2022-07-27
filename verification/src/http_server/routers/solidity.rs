@@ -1,26 +1,29 @@
-use actix_web::web;
-
 use super::Router;
 use crate::{
-    compiler::Compilers,
+    compiler::{Compilers, ListFetcher},
     config::SolidityConfiguration,
     http_server::handlers::{multi_part, standard_json, version_list},
-    solidity::CompilerFetcher,
 };
+use actix_web::web;
+use std::{path::PathBuf, sync::Arc};
 
 pub struct SolidityRouter {
-    compilers: web::Data<Compilers<CompilerFetcher>>,
+    compilers: web::Data<Compilers>,
 }
 
 impl SolidityRouter {
     pub async fn new(config: SolidityConfiguration) -> anyhow::Result<Self> {
-        let fetcher = CompilerFetcher::new(
-            config.compilers_list_url,
-            Some(config.refresh_versions_schedule),
-            "compilers/".into(),
-        )
-        .await?;
+        let dir: PathBuf = "compilers/".into();
+        let fetcher = Arc::new(
+            ListFetcher::new(
+                config.compilers_list_url,
+                Some(config.refresh_versions_schedule),
+                dir.clone(),
+            )
+            .await?,
+        );
         let compilers = Compilers::new(fetcher);
+        compilers.load_from_dir(&dir).await;
         Ok(Self {
             compilers: web::Data::new(compilers),
         })

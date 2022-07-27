@@ -1,8 +1,5 @@
 use super::types::VersionsResponse;
-use crate::{
-    compiler::{Compilers, VersionList},
-    solidity::CompilerFetcher,
-};
+use crate::compiler::Compilers;
 
 use actix_web::{
     web::{self, Json},
@@ -10,7 +7,7 @@ use actix_web::{
 };
 
 pub async fn get_version_list(
-    compilers: web::Data<Compilers<CompilerFetcher>>,
+    compilers: web::Data<Compilers>,
 ) -> Result<Json<VersionsResponse>, Error> {
     let mut versions = compilers.all_versions();
     // sort in descending order
