@@ -1,12 +1,15 @@
 use super::types::VerificationRequest;
 use crate::{
     compiler::{Compilers, Version},
-    http_server::handlers::verification::{
-        solidity::{
-            contract_verifier::{compile_and_verify_handler, Input},
-            types::StandardJson,
+    http_server::{
+        handlers::verification::{
+            solidity::{
+                contract_verifier::{compile_and_verify_handler, Input},
+                types::StandardJson,
+            },
+            VerificationResponse,
         },
-        VerificationResponse,
+        metrics,
     },
 };
 use actix_web::{
@@ -31,7 +34,7 @@ pub async fn verify(
         creation_tx_input: &params.creation_bytecode,
         deployed_bytecode: &params.deployed_bytecode,
     };
-    compile_and_verify_handler(&compilers, input, false)
-        .await
-        .map(Json)
+    let response = compile_and_verify_handler(&compilers, input, true).await?;
+    metrics::count_verify_contract(&response, "json");
+    Ok(Json(response))
 }

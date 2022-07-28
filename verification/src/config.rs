@@ -11,6 +11,7 @@ pub struct Config {
     pub server: ServerConfiguration,
     pub solidity: SolidityConfiguration,
     pub sourcify: SourcifyConfiguration,
+    pub metrics: MetricsConfiguration,
 }
 
 #[derive(Deserialize, Clone)]
@@ -64,6 +65,22 @@ impl Default for SourcifyConfiguration {
             api_url: Url::try_from("https://sourcify.dev/server/").expect("valid url"),
             verification_attempts: NonZeroUsize::new(3).expect("Is not zero"),
             request_timeout: 10,
+        }
+    }
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(default)]
+pub struct MetricsConfiguration {
+    pub endpoint: String,
+    pub addr: SocketAddr,
+}
+
+impl Default for MetricsConfiguration {
+    fn default() -> Self {
+        Self {
+            endpoint: "/metrics".to_string(),
+            addr: SocketAddr::from_str("0.0.0.0:6060").expect("should be valid url"),
         }
     }
 }

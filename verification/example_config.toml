@@ -9,3 +9,7 @@ request_timeout = 10
 [solidity]
 compilers_list_url = "https://raw.githubusercontent.com/blockscout/solc-bin/main/list.json"
 refresh_versions_schedule = "0 0 * * * * *"
+
+[metrics]
+endpoint = "/metrics"
+addr = "0.0.0.0:6060"
