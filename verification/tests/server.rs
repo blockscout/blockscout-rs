@@ -3,7 +3,9 @@ use verification::{run_http_server, Config};
 
 #[actix_rt::test]
 async fn server_start() {
-    let config = Config::default();
+    let mut config = Config::default();
+    config.solidity.enabled = false;
+    config.sourcify.enabled = false;
     let base = format!("http://{}", config.server.addr);
     let metrics_base = format!("http://{}", config.metrics.addr);
 
@@ -11,7 +13,7 @@ async fn server_start() {
         let config = config.clone();
         tokio::spawn(async move { run_http_server(config).await })
     };
-    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+    tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
 
     let resp = reqwest::get(format!("{base}/health"))
         .await
