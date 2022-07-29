@@ -1,4 +1,3 @@
-mod cli;
 mod compiler;
 mod config;
 mod consts;
@@ -10,7 +9,7 @@ mod types;
 #[cfg(test)]
 mod tests;
 
-pub use self::{cli::Args, config::Settings};
+pub use self::config::Settings;
 pub use ethers_core::types::Bytes as DisplayBytes;
 pub use http_server::{
     configure_router,

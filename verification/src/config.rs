@@ -2,7 +2,7 @@ use crate::consts::DEFAULT_COMPILER_LIST;
 use config::{Config, File};
 use cron::Schedule;
 use serde::Deserialize;
-use std::{net::SocketAddr, num::NonZeroUsize, path::PathBuf, str::FromStr};
+use std::{net::SocketAddr, num::NonZeroUsize, str::FromStr};
 use url::Url;
 
 #[derive(Deserialize, Clone, Default)]
@@ -86,12 +86,15 @@ impl Default for MetricsSettings {
 }
 
 impl Settings {
-    pub fn from_file(file: PathBuf) -> Result<Self, config::ConfigError> {
-        let mut builder =
-            Config::builder().add_source(config::Environment::with_prefix("VERIFICATION"));
-        if file.exists() {
-            builder = builder.add_source(File::from(file));
-        }
+    pub fn new() -> Result<Self, config::ConfigError> {
+        let config_path = std::env::var("VERIFICATION_CONFIG");
+
+        let mut builder = Config::builder();
+        if let Ok(config_path) = config_path {
+            builder = builder.add_source(File::with_name(&config_path));
+        };
+        builder = builder.add_source(config::Environment::with_prefix("VERIFICATION"));
+
         builder
             .build()
             .expect("Failed to build config")

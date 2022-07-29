@@ -1,0 +1,20 @@
+[server]
+addr = "0.0.0.0:8043"
+
+[solidity]
+enabled = true
+# It depends on the OS you are running the service on
+compilers_list_url = "https://solc-bin.ethereum.org/linux-amd64/list.json"
+# compilers_list_url = "https://solc-bin.ethereum.org/macosx-amd64/list.json"
+# compilers_list_url = "https://solc-bin.ethereum.org/windows-amd64/list.json"
+refresh_versions_schedule = "0 0 * * * * *"
+
+[sourcify]
+enabled = true
+api_url = "https://sourcify.dev/server/"
+verification_attempts = 3
+request_timeout = 10
+
+[metrics]
+addr = "0.0.0.0:6060"
+endpoint = "/metrics"
