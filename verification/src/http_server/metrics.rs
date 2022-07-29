@@ -10,35 +10,35 @@ use std::net::SocketAddr;
 use crate::VerificationStatus;
 
 lazy_static! {
-    pub static ref REGISTERY: Registry = Registry::new();
+    pub static ref REGISTRY: Registry = Registry::new();
     pub static ref VERIFICATION: IntCounterVec = register_int_counter_vec_with_registry!(
         "verify_contract",
         "number of contract verifications",
         &["language", "endpoint", "status"],
-        REGISTERY,
+        REGISTRY,
     )
     .unwrap();
     pub static ref DOWNLOAD_CACHE_TOTAL: IntCounter = register_int_counter_with_registry!(
         "download_cache_total",
         "total number of get calls in DownloadCache",
-        REGISTERY,
+        REGISTRY,
     )
     .unwrap();
     pub static ref DOWNLOAD_CACHE_HITS: IntCounter = register_int_counter_with_registry!(
         "download_cache_hits",
         "number of cache hits in DownloadCache",
-        REGISTERY,
+        REGISTRY,
     )
     .unwrap();
     pub static ref COMPILER_FETCH_TIME: Histogram = register_histogram_with_registry!(
         "compiler_fetch_time",
         "download time for compilers",
         vec![0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0, 20.0],
-        REGISTERY,
+        REGISTRY,
     )
     .unwrap();
     pub static ref COMPILE_TIME: Histogram =
-        register_histogram_with_registry!("compile_time", "contract compilation time", REGISTERY,)
+        register_histogram_with_registry!("compile_time", "contract compilation time", REGISTRY,)
             .unwrap();
 }
 
@@ -61,13 +61,13 @@ pub struct Metrics {
 impl Metrics {
     pub fn new(endpoint: String) -> Self {
         let metrics_middleware = PrometheusMetricsBuilder::new("verification_metrics")
-            .registry(REGISTERY.clone())
+            .registry(REGISTRY.clone())
             .endpoint(&endpoint)
             .build()
             .unwrap();
         // note: verification middleware has no endpoint
         let verification_middleware = PrometheusMetricsBuilder::new("verification")
-            .registry(REGISTERY.clone())
+            .registry(REGISTRY.clone())
             .build()
             .unwrap();
 
