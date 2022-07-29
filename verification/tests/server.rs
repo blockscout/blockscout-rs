@@ -1,9 +1,9 @@
 use pretty_assertions::assert_eq;
-use verification::{run_http_server, Config};
+use verification::{run_http_server, Settings};
 
 #[actix_rt::test]
 async fn server_start() {
-    let mut config = Config::default();
+    let mut config = Settings::default();
     config.solidity.enabled = false;
     config.sourcify.enabled = false;
     let base = format!("http://{}", config.server.addr);

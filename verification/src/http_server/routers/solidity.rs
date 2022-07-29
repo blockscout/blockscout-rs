@@ -1,7 +1,7 @@
 use super::Router;
 use crate::{
     compiler::{Compilers, ListFetcher},
-    config::SolidityConfiguration,
+    config::SoliditySettings,
     http_server::handlers::{multi_part, standard_json, version_list},
 };
 use actix_web::web;
@@ -12,7 +12,7 @@ pub struct SolidityRouter {
 }
 
 impl SolidityRouter {
-    pub async fn new(config: SolidityConfiguration) -> anyhow::Result<Self> {
+    pub async fn new(config: SoliditySettings) -> anyhow::Result<Self> {
         let dir: PathBuf = "compilers/".into();
         let fetcher = Arc::new(
             ListFetcher::new(

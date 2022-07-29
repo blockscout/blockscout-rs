@@ -269,7 +269,7 @@ impl Fetcher for ListFetcher {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{tests::parse::test_deserialize_ok, Config};
+    use crate::{tests::parse::test_deserialize_ok, Settings};
     use ethers_solc::Solc;
     use pretty_assertions::assert_eq;
     use std::{env::temp_dir, str::FromStr};
@@ -390,7 +390,7 @@ mod tests {
 
     #[tokio::test]
     async fn list_download_versions() {
-        let config = Config::default();
+        let config = Settings::default();
         let fetcher = ListFetcher::new(
             config.solidity.compilers_list_url,
             None,

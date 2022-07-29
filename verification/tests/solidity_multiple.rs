@@ -15,7 +15,7 @@ use std::{
     str::{from_utf8, FromStr},
 };
 use verification::{
-    configure_router, AppRouter, Config, DisplayBytes, VerificationResponse, VerificationStatus,
+    configure_router, AppRouter, DisplayBytes, Settings, VerificationResponse, VerificationStatus,
 };
 
 const CONTRACTS_DIR: &'static str = "tests/contracts";
@@ -25,7 +25,7 @@ async fn global_app_router() -> &'static AppRouter {
     static APP_ROUTER: OnceCell<AppRouter> = OnceCell::new();
     APP_ROUTER
         .get_or_init(async {
-            let mut config = Config::default();
+            let mut config = Settings::default();
             config.sourcify.enabled = false;
             AppRouter::new(config)
                 .await

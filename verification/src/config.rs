@@ -1,5 +1,5 @@
 use crate::consts::DEFAULT_COMPILER_LIST;
-use config::{Config as LibConfig, File};
+use config::{Config, File};
 use cron::Schedule;
 use serde::Deserialize;
 use std::{net::SocketAddr, num::NonZeroUsize, path::PathBuf, str::FromStr};
@@ -7,20 +7,20 @@ use url::Url;
 
 #[derive(Deserialize, Clone, Default)]
 #[serde(default)]
-pub struct Config {
-    pub server: ServerConfiguration,
-    pub solidity: SolidityConfiguration,
-    pub sourcify: SourcifyConfiguration,
-    pub metrics: MetricsConfiguration,
+pub struct Settings {
+    pub server: ServerSettings,
+    pub solidity: SoliditySettings,
+    pub sourcify: SourcifySettings,
+    pub metrics: MetricsSettings,
 }
 
 #[derive(Deserialize, Clone)]
 #[serde(default)]
-pub struct ServerConfiguration {
+pub struct ServerSettings {
     pub addr: SocketAddr,
 }
 
-impl Default for ServerConfiguration {
+impl Default for ServerSettings {
     fn default() -> Self {
         Self {
             addr: SocketAddr::from_str("0.0.0.0:8043").expect("should be valid url"),
@@ -30,14 +30,14 @@ impl Default for ServerConfiguration {
 
 #[derive(Deserialize, Clone)]
 #[serde(default)]
-pub struct SolidityConfiguration {
+pub struct SoliditySettings {
     pub enabled: bool,
     pub compilers_list_url: Url,
     #[serde(with = "serde_with::rust::display_fromstr")]
     pub refresh_versions_schedule: Schedule,
 }
 
-impl Default for SolidityConfiguration {
+impl Default for SoliditySettings {
     fn default() -> Self {
         Self {
             compilers_list_url: Url::try_from(DEFAULT_COMPILER_LIST).expect("valid url"),
@@ -49,7 +49,7 @@ impl Default for SolidityConfiguration {
 
 #[derive(Deserialize, Clone)]
 #[serde(default)]
-pub struct SourcifyConfiguration {
+pub struct SourcifySettings {
     pub enabled: bool,
     pub api_url: Url,
     /// Number of attempts the server makes to Sourcify API.
@@ -58,7 +58,7 @@ pub struct SourcifyConfiguration {
     pub request_timeout: u64,
 }
 
-impl Default for SourcifyConfiguration {
+impl Default for SourcifySettings {
     fn default() -> Self {
         Self {
             enabled: true,
@@ -71,12 +71,12 @@ impl Default for SourcifyConfiguration {
 
 #[derive(Deserialize, Clone)]
 #[serde(default)]
-pub struct MetricsConfiguration {
+pub struct MetricsSettings {
     pub endpoint: String,
     pub addr: SocketAddr,
 }
 
-impl Default for MetricsConfiguration {
+impl Default for MetricsSettings {
     fn default() -> Self {
         Self {
             endpoint: "/metrics".to_string(),
@@ -85,10 +85,10 @@ impl Default for MetricsConfiguration {
     }
 }
 
-impl Config {
+impl Settings {
     pub fn from_file(file: PathBuf) -> Result<Self, config::ConfigError> {
         let mut builder =
-            LibConfig::builder().add_source(config::Environment::with_prefix("VERIFICATION"));
+            Config::builder().add_source(config::Environment::with_prefix("VERIFICATION"));
         if file.exists() {
             builder = builder.add_source(File::from(file));
         }

@@ -2,7 +2,7 @@ use actix_web::web;
 
 use super::Router;
 use crate::{
-    config::SourcifyConfiguration,
+    config::SourcifySettings,
     http_server::handlers::sourcify::{self, SourcifyApiClient},
 };
 
@@ -11,7 +11,7 @@ pub struct SourcifyRouter {
 }
 
 impl SourcifyRouter {
-    pub fn new(config: SourcifyConfiguration) -> Self {
+    pub fn new(config: SourcifySettings) -> Self {
         let api_client = SourcifyApiClient::new(
             config.api_url,
             config.request_timeout,

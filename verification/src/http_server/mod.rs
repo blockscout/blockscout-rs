@@ -4,14 +4,14 @@ mod routers;
 
 pub use self::routers::{configure_router, AppRouter, Router};
 
-use crate::config::Config;
+use crate::config::Settings;
 use actix_web::{App, HttpServer};
 
 use futures::future;
 use metrics::Metrics;
 use std::sync::Arc;
 
-pub async fn run(config: Config) -> std::io::Result<()> {
+pub async fn run(config: Settings) -> std::io::Result<()> {
     let socket_addr = config.server.addr;
     let metrics_addr = config.metrics.addr;
     let metrics_endpoint = config.metrics.endpoint.clone();

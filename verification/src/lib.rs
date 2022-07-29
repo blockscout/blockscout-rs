@@ -10,7 +10,7 @@ mod types;
 #[cfg(test)]
 mod tests;
 
-pub use self::{cli::Args, config::Config};
+pub use self::{cli::Args, config::Settings};
 pub use ethers_core::types::Bytes as DisplayBytes;
 pub use http_server::{
     configure_router,

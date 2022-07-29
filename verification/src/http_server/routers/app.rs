@@ -1,5 +1,5 @@
 use super::{configure_router, Router, SolidityRouter, SourcifyRouter};
-use crate::{config::Config, http_server::handlers::status};
+use crate::{config::Settings, http_server::handlers::status};
 use actix_web::web;
 
 pub struct AppRouter {
@@ -8,7 +8,7 @@ pub struct AppRouter {
 }
 
 impl AppRouter {
-    pub async fn new(config: Config) -> anyhow::Result<Self> {
+    pub async fn new(config: Settings) -> anyhow::Result<Self> {
         let solidity = match config.solidity.enabled {
             false => None,
             true => Some(SolidityRouter::new(config.solidity).await?),
