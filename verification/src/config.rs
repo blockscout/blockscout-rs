@@ -72,6 +72,7 @@ impl Default for SourcifyConfiguration {
 #[derive(Deserialize, Clone)]
 #[serde(default)]
 pub struct MetricsConfiguration {
+    pub enabled: bool,
     pub endpoint: String,
     pub addr: SocketAddr,
 }
@@ -79,6 +80,7 @@ pub struct MetricsConfiguration {
 impl Default for MetricsConfiguration {
     fn default() -> Self {
         Self {
+            enabled: false,
             endpoint: "/metrics".to_string(),
             addr: SocketAddr::from_str("0.0.0.0:6060").expect("should be valid url"),
         }

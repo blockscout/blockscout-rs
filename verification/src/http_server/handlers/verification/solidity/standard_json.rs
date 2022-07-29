@@ -35,6 +35,6 @@ pub async fn verify(
         deployed_bytecode: &params.deployed_bytecode,
     };
     let response = compile_and_verify_handler(&compilers, input, true).await?;
-    metrics::count_verify_contract(&response, "json");
+    metrics::count_verify_contract(&response.status, "json");
     Ok(Json(response))
 }

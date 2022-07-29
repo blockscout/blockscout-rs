@@ -13,6 +13,7 @@ use std::sync::Arc;
 
 pub async fn run(config: Config) -> std::io::Result<()> {
     let socket_addr = config.server.addr;
+    let metrics_enabled = config.metrics.enabled;
     let metrics_addr = config.metrics.addr;
     let metrics_endpoint = config.metrics.endpoint.clone();
 
@@ -34,8 +35,13 @@ pub async fn run(config: Config) -> std::io::Result<()> {
         .run()
     };
     let server_future = tokio::spawn(async move { server_future.await });
-    let metrics_future = tokio::spawn(async move { metrics.run_server(metrics_addr).await });
-
+    let metrics_future = tokio::spawn(async move {
+        if metrics_enabled {
+            metrics.run_server(metrics_addr).await
+        } else {
+            Ok(())
+        }
+    });
     let (server_future, metrics_future) = future::try_join(server_future, metrics_future).await?;
 
     server_future?;

@@ -6,6 +6,7 @@ async fn server_start() {
     let mut config = Config::default();
     config.solidity.enabled = false;
     config.sourcify.enabled = false;
+    config.metrics.enabled = true;
     let base = format!("http://{}", config.server.addr);
     let metrics_base = format!("http://{}", config.metrics.addr);
 
