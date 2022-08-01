@@ -86,7 +86,7 @@ impl Default for MetricsSettings {
 }
 
 impl Settings {
-    pub fn new() -> Result<Self, config::ConfigError> {
+    pub fn new() -> Self {
         let config_path = std::env::var("VERIFICATION_CONFIG");
 
         let mut builder = Config::builder();
@@ -99,5 +99,6 @@ impl Settings {
             .build()
             .expect("Failed to build config")
             .try_deserialize()
+            .expect("Failed to parse config")
     }
 }
