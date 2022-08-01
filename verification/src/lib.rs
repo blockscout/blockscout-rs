@@ -3,6 +3,7 @@ mod compiler;
 mod config;
 mod consts;
 mod http_server;
+mod network;
 mod scheduler;
 mod solidity;
 mod types;
@@ -17,3 +18,4 @@ pub use http_server::{
     handlers::verification::{VerificationResponse, VerificationResult, VerificationStatus},
     run as run_http_server, AppRouter, Router,
 };
+pub use network::make_retrying_request;
