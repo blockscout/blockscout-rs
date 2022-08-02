@@ -1,21 +1,24 @@
 use crate::consts::DEFAULT_COMPILER_LIST;
+use anyhow::anyhow;
 use config::{Config, File};
 use cron::Schedule;
-use serde::Deserialize;
+use serde::{de::IgnoredAny, Deserialize};
 use std::{net::SocketAddr, num::NonZeroUsize, str::FromStr};
 use url::Url;
 
-#[derive(Deserialize, Clone, Default)]
-#[serde(default)]
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct Settings {
     pub server: ServerSettings,
     pub solidity: SoliditySettings,
     pub sourcify: SourcifySettings,
     pub metrics: MetricsSettings,
+
+    pub config: IgnoredAny,
 }
 
-#[derive(Deserialize, Clone)]
-#[serde(default)]
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct ServerSettings {
     pub addr: SocketAddr,
 }
@@ -28,8 +31,8 @@ impl Default for ServerSettings {
     }
 }
 
-#[derive(Deserialize, Clone)]
-#[serde(default)]
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct SoliditySettings {
     pub enabled: bool,
     pub compilers_list_url: Url,
@@ -47,8 +50,8 @@ impl Default for SoliditySettings {
     }
 }
 
-#[derive(Deserialize, Clone)]
-#[serde(default)]
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct SourcifySettings {
     pub enabled: bool,
     pub api_url: Url,
@@ -69,8 +72,8 @@ impl Default for SourcifySettings {
     }
 }
 
-#[derive(Deserialize, Clone)]
-#[serde(default)]
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct MetricsSettings {
     pub endpoint: String,
     pub addr: SocketAddr,
@@ -86,7 +89,7 @@ impl Default for MetricsSettings {
 }
 
 impl Settings {
-    pub fn new() -> Self {
+    pub fn new() -> anyhow::Result<Self> {
         let config_path = std::env::var("VERIFICATION_CONFIG");
 
         let mut builder = Config::builder();
@@ -96,9 +99,8 @@ impl Settings {
         builder = builder.add_source(config::Environment::with_prefix("VERIFICATION"));
 
         builder
-            .build()
-            .expect("Failed to build config")
+            .build()?
             .try_deserialize()
-            .expect("Failed to parse config")
+            .map_err(|err| anyhow!(err))
     }
 }
