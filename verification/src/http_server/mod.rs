@@ -40,8 +40,9 @@ pub async fn run(config: Config) -> std::io::Result<()> {
             metrics.run_server(metrics_addr).await
         }))
     }
-    for future in future::join_all(futures).await.into_iter() {
-        future??
+    let (res, _, others) = future::select_all(futures).await;
+    for future in others.into_iter() {
+        future.abort()
     }
-    Ok(())
+    res?
 }
