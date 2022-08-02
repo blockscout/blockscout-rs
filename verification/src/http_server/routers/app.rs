@@ -1,5 +1,5 @@
 use super::{configure_router, Router, SolidityRouter, SourcifyRouter};
-use crate::{config::Settings, http_server::handlers::status};
+use crate::{http_server::handlers::status, settings::Settings};
 use actix_web::web;
 
 pub struct AppRouter {

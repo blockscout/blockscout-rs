@@ -2,8 +2,8 @@ use actix_web::web;
 
 use super::Router;
 use crate::{
-    config::SourcifySettings,
     http_server::handlers::sourcify::{self, SourcifyApiClient},
+    settings::SourcifySettings,
 };
 
 pub struct SourcifyRouter {

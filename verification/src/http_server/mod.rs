@@ -4,7 +4,7 @@ mod routers;
 
 pub use self::routers::{configure_router, AppRouter, Router};
 
-use crate::config::Settings;
+use crate::settings::Settings;
 use actix_web::{App, HttpServer};
 
 use futures::future;

@@ -1,8 +1,8 @@
 use super::Router;
 use crate::{
     compiler::{Compilers, ListFetcher},
-    config::SoliditySettings,
     http_server::handlers::{multi_part, standard_json, version_list},
+    settings::SoliditySettings,
 };
 use actix_web::web;
 use std::{path::PathBuf, sync::Arc};
