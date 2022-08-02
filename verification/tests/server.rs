@@ -17,7 +17,7 @@ async fn server_start() {
     };
 
     let sleep_between = Some(tokio::time::Duration::from_millis(100));
-    let attempts = NonZeroUsize::new(20).unwrap();
+    let attempts = NonZeroUsize::new(100).unwrap();
 
     let resp = make_retrying_request(attempts, sleep_between, || {
         reqwest::get(format!("{base}/health"))
