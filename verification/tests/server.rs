@@ -3,15 +3,15 @@ use verification::{run_http_server, Settings};
 
 #[actix_rt::test]
 async fn server_start() {
-    let mut config = Settings::default();
-    config.solidity.enabled = false;
-    config.sourcify.enabled = false;
-    let base = format!("http://{}", config.server.addr);
-    let metrics_base = format!("http://{}", config.metrics.addr);
+    let mut settings = Settings::default();
+    settings.solidity.enabled = false;
+    settings.sourcify.enabled = false;
+    let base = format!("http://{}", settings.server.addr);
+    let metrics_base = format!("http://{}", settings.metrics.addr);
 
     let _server_handle = {
-        let config = config.clone();
-        tokio::spawn(async move { run_http_server(config).await })
+        let settings = settings.clone();
+        tokio::spawn(async move { run_http_server(settings).await })
     };
     tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
 

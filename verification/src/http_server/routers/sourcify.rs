@@ -11,11 +11,11 @@ pub struct SourcifyRouter {
 }
 
 impl SourcifyRouter {
-    pub fn new(config: SourcifySettings) -> Self {
+    pub fn new(settings: SourcifySettings) -> Self {
         let api_client = SourcifyApiClient::new(
-            config.api_url,
-            config.request_timeout,
-            config.verification_attempts,
+            settings.api_url,
+            settings.request_timeout,
+            settings.verification_attempts,
         );
         Self {
             api_client: web::Data::new(api_client),

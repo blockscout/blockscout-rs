@@ -8,15 +8,15 @@ pub struct AppRouter {
 }
 
 impl AppRouter {
-    pub async fn new(config: Settings) -> anyhow::Result<Self> {
-        let solidity = match config.solidity.enabled {
+    pub async fn new(settings: Settings) -> anyhow::Result<Self> {
+        let solidity = match settings.solidity.enabled {
             false => None,
-            true => Some(SolidityRouter::new(config.solidity).await?),
+            true => Some(SolidityRouter::new(settings.solidity).await?),
         };
-        let sourcify = config
+        let sourcify = settings
             .sourcify
             .enabled
-            .then(|| SourcifyRouter::new(config.sourcify));
+            .then(|| SourcifyRouter::new(settings.sourcify));
         Ok(Self { solidity, sourcify })
     }
 }

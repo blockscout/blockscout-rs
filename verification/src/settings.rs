@@ -45,65 +45,27 @@ impl Default for ServerSettings {
 #[serde(default, deny_unknown_fields)]
 pub struct SoliditySettings {
     pub enabled: bool,
+    pub compilers_dir: PathBuf,
+    #[serde(with = "serde_with::rust::display_fromstr")]
+    pub refresh_versions_schedule: Schedule,
     pub fetcher: FetcherSettings,
-    pub compiler_folder: PathBuf,
 }
 
 impl Default for SoliditySettings {
     fn default() -> Self {
+        let mut default_dir = std::env::temp_dir();
+        default_dir.push("compilers");
         Self {
             enabled: true,
-            fetcher: Default::default(),
-            compiler_folder: "compilers/".into(),
-        }
-    }
-}
-
-#[derive(Deserialize, Clone, PartialEq, Debug)]
-#[serde(deny_unknown_fields)]
-pub struct ListFetcherSettings {
-    pub compilers_list_url: Url,
-    #[serde(with = "serde_with::rust::display_fromstr")]
-    pub refresh_versions_schedule: Schedule,
-}
-
-impl Default for ListFetcherSettings {
-    fn default() -> Self {
-        Self {
-            compilers_list_url: Url::try_from(DEFAULT_COMPILER_LIST).expect("valid url"),
+            compilers_dir: default_dir,
             refresh_versions_schedule: Schedule::from_str("0 0 * * * * *").unwrap(), // every hour
+            fetcher: Default::default(),
         }
     }
 }
 
 #[derive(Deserialize, Clone, PartialEq, Debug)]
-#[serde(deny_unknown_fields)]
-pub struct S3FetcherSettings {
-    pub access_key: Option<String>,
-    pub secret_key: Option<String>,
-    pub region: Option<String>,
-    pub endpoint: Option<String>,
-    pub bucket: String,
-    #[serde(with = "serde_with::rust::display_fromstr")]
-    pub refresh_versions_schedule: Schedule,
-}
-
-impl Default for S3FetcherSettings {
-    fn default() -> Self {
-        Self {
-            access_key: Default::default(),
-            secret_key: Default::default(),
-            region: Default::default(),
-            endpoint: Default::default(),
-            bucket: Default::default(),
-            refresh_versions_schedule: Schedule::from_str("0 0 * * * * *").unwrap(),
-        }
-    }
-}
-
-#[derive(Deserialize, Clone, PartialEq, Debug)]
-#[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub enum FetcherSettings {
     List(ListFetcherSettings),
     S3(S3FetcherSettings),
@@ -113,6 +75,30 @@ impl Default for FetcherSettings {
     fn default() -> Self {
         Self::List(Default::default())
     }
+}
+
+#[derive(Deserialize, Clone, PartialEq, Debug)]
+#[serde(default, deny_unknown_fields)]
+pub struct ListFetcherSettings {
+    pub list_url: Url,
+}
+
+impl Default for ListFetcherSettings {
+    fn default() -> Self {
+        Self {
+            list_url: Url::try_from(DEFAULT_COMPILER_LIST).expect("valid url"),
+        }
+    }
+}
+
+#[derive(Deserialize, Default, Clone, PartialEq, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct S3FetcherSettings {
+    pub access_key: Option<String>,
+    pub secret_key: Option<String>,
+    pub region: Option<String>,
+    pub endpoint: Option<String>,
+    pub bucket: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -155,17 +141,31 @@ impl Default for MetricsSettings {
 
 impl Settings {
     pub fn new() -> anyhow::Result<Self> {
-        let config_path = std::env::var("VERIFICATION_CONFIG");
+        let config_path = std::env::var("VERIFICATION__CONFIG");
 
         let mut builder = Config::builder();
         if let Ok(config_path) = config_path {
             builder = builder.add_source(File::with_name(&config_path));
         };
-        builder = builder.add_source(config::Environment::with_prefix("VERIFICATION"));
+        // Use `__` so that it would be possible to address keys with underscores in names (e.g. `access_key`)
+        builder =
+            builder.add_source(config::Environment::with_prefix("VERIFICATION").separator("__"));
 
-        builder
-            .build()?
-            .try_deserialize()
-            .map_err(|err| anyhow!(err))
+        let settings: Settings = builder.build()?.try_deserialize()?;
+
+        settings.validate()?;
+
+        Ok(settings)
+    }
+
+    fn validate(&self) -> anyhow::Result<()> {
+        // Validate s3 fetcher
+        if let FetcherSettings::S3(settings) = &self.solidity.fetcher {
+            if settings.region.is_none() && settings.endpoint.is_none() {
+                return Err(anyhow!("for s3 fetcher settings at least one of `region` or `endpoint` should be defined"));
+            }
+        };
+
+        Ok(())
     }
 }

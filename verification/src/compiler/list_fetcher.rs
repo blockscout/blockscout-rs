@@ -293,9 +293,9 @@ mod tests {
 
     #[tokio::test]
     async fn list_download_versions() {
-        let config = ListFetcherSettings::default();
+        let settings = ListFetcherSettings::default();
         let fetcher = ListFetcher::new(
-            config.compilers_list_url,
+            settings.list_url,
             std::env::temp_dir().join("blockscout/verification/compiler_fetcher/test/"),
             None,
         )

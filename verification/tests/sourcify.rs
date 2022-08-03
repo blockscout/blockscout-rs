@@ -11,10 +11,10 @@ use verification::{
 
 #[actix_rt::test]
 async fn should_return_200() {
-    let mut config = Settings::default();
-    config.solidity.enabled = false;
+    let mut settings = Settings::default();
+    settings.solidity.enabled = false;
     let app_router = Arc::new(
-        AppRouter::new(config)
+        AppRouter::new(settings)
             .await
             .expect("couldn't initialize the app"),
     );
@@ -71,10 +71,10 @@ async fn should_return_200() {
 
 #[actix_rt::test]
 async fn invalid_contracts() {
-    let mut config = Settings::default();
-    config.solidity.enabled = false;
+    let mut settings = Settings::default();
+    settings.solidity.enabled = false;
     let app_router = Arc::new(
-        AppRouter::new(config)
+        AppRouter::new(settings)
             .await
             .expect("couldn't initialize the app"),
     );

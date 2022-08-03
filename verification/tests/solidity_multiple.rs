@@ -25,9 +25,9 @@ async fn global_app_router() -> &'static AppRouter {
     static APP_ROUTER: OnceCell<AppRouter> = OnceCell::new();
     APP_ROUTER
         .get_or_init(async {
-            let mut config = Settings::default();
-            config.sourcify.enabled = false;
-            AppRouter::new(config)
+            let mut settings = Settings::default();
+            settings.sourcify.enabled = false;
+            AppRouter::new(settings)
                 .await
                 .expect("couldn't initialize the app")
         })

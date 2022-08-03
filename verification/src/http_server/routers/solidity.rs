@@ -29,15 +29,15 @@ fn new_region(region: Option<String>, endpoint: Option<String>) -> Option<Region
     }
 }
 
-fn new_bucket(config: &S3FetcherSettings) -> anyhow::Result<Arc<Bucket>> {
-    let region = new_region(config.region.clone(), config.endpoint.clone())
-        .ok_or_else(|| anyhow::anyhow!("got invalid region/endpoint config"))?;
+fn new_bucket(settings: &S3FetcherSettings) -> anyhow::Result<Arc<Bucket>> {
+    let region = new_region(settings.region.clone(), settings.endpoint.clone())
+        .ok_or_else(|| anyhow::anyhow!("got invalid region/endpoint settings"))?;
     let bucket = Arc::new(Bucket::new(
-        &config.bucket,
+        &settings.bucket,
         region,
         Credentials::new(
-            config.access_key.as_deref(),
-            config.secret_key.as_deref(),
+            settings.access_key.as_deref(),
+            settings.secret_key.as_deref(),
             None,
             None,
             None,
@@ -47,22 +47,23 @@ fn new_bucket(config: &S3FetcherSettings) -> anyhow::Result<Arc<Bucket>> {
 }
 
 impl SolidityRouter {
-    pub async fn new(config: SoliditySettings) -> anyhow::Result<Self> {
-        let dir = config.compiler_folder.clone();
-        let fetcher: Arc<dyn Fetcher> = match config.fetcher {
-            FetcherSettings::List(fetcher_config) => Arc::new(
+    pub async fn new(settings: SoliditySettings) -> anyhow::Result<Self> {
+        let dir = settings.compilers_dir.clone();
+        let schedule = settings.refresh_versions_schedule;
+        let fetcher: Arc<dyn Fetcher> = match settings.fetcher {
+            FetcherSettings::List(list_settings) => Arc::new(
                 ListFetcher::new(
-                    fetcher_config.compilers_list_url,
-                    config.compiler_folder,
-                    Some(fetcher_config.refresh_versions_schedule),
+                    list_settings.list_url,
+                    settings.compilers_dir,
+                    Some(schedule),
                 )
                 .await?,
             ),
-            FetcherSettings::S3(s3_config) => Arc::new(
+            FetcherSettings::S3(s3_settings) => Arc::new(
                 S3Fetcher::new(
-                    new_bucket(&s3_config)?,
-                    config.compiler_folder,
-                    Some(s3_config.refresh_versions_schedule),
+                    new_bucket(&s3_settings)?,
+                    settings.compilers_dir,
+                    Some(schedule),
                 )
                 .await?,
             ),
