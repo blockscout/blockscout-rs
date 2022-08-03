@@ -91,7 +91,7 @@ mod tests {
         COMPILERS
             .get_or_init(async {
                 let url = DEFAULT_COMPILER_LIST.try_into().expect("Getting url");
-                let fetcher = ListFetcher::new(url, None, temp_dir())
+                let fetcher = ListFetcher::new(url, temp_dir(), None)
                     .await
                     .expect("Fetch releases");
                 let compilers = Compilers::new(Arc::new(fetcher));

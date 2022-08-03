@@ -7,8 +7,10 @@ verification_attempts = 3
 request_timeout = 10
 
 [solidity]
-compilers_list_url = "https://raw.githubusercontent.com/blockscout/solc-bin/main/list.json"
+
+[solidity.fetcher.list]
 refresh_versions_schedule = "0 0 * * * * *"
+compilers_list_url = "https://solc-bin.ethereum.org/linux-amd64/list.json"
 
 [metrics]
 endpoint = "/metrics"
