@@ -1,9 +1,10 @@
-version: "3.9"
+version: "3"
 services:
   verification:
     build: .
     ports:
       - "8043:8043"
-    command: -c /app/config.toml
+    environment:
+      - VERIFICATION__CONFIG=/app/config.toml
     volumes:
-      - ./example_config.toml:/app/config.toml
+      - ./config/base.toml:/app/config.toml
