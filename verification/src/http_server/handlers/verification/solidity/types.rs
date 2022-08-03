@@ -64,12 +64,15 @@ impl TryFrom<MultiPartFiles> for CompilerInput {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct StandardJson {
-    input: CompilerInput,
+    input: String,
 }
 
-impl From<StandardJson> for CompilerInput {
-    fn from(input: StandardJson) -> Self {
-        input.input
+impl TryFrom<StandardJson> for CompilerInput {
+    type Error = anyhow::Error;
+
+    fn try_from(input: StandardJson) -> Result<Self, Self::Error> {
+        serde_json::from_str(&input.input)
+            .map_err(|e| anyhow::Error::msg(format!("cannot parse input: {}", e)))
     }
 }
 
@@ -208,7 +211,7 @@ mod tests {
             "deployed_bytecode": "0x6001",
             "creation_bytecode": "0x6001",
             "compiler_version": "v0.8.2+commit.661d1103",
-            "input":{"language":"Solidity","sources":{"./src/contracts/Foo.sol":{"content":"pragma solidity ^0.8.2;\n\ncontract Foo {\n    function bar() external pure returns (uint256) {\n        return 42;\n    }\n}\n"}},"settings":{"metadata":{"useLiteralContent":true},"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"],"":["id","ast"]}}}}
+            "input": "{}"
         }"#;
 
         let deserialized: VerificationRequest<StandardJson> =
@@ -225,11 +228,6 @@ mod tests {
             deserialized.compiler_version, "v0.8.2+commit.661d1103",
             "Invalid compiler version"
         );
-
-        let expected_compiler_input = r#"{"language":"Solidity","sources":{"./src/contracts/Foo.sol":{"content":"pragma solidity ^0.8.2;\n\ncontract Foo {\n    function bar() external pure returns (uint256) {\n        return 42;\n    }\n}\n"}},"settings":{"optimizer":{"enabled":true,"runs":200},"metadata":{"useLiteralContent":true},"outputSelection":{"*":{"":["id","ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"libraries":{}}}"#;
-
-        let actual_compiler_input =
-            serde_json::to_string(&deserialized.content.input).expect("Actual deserialization");
-        assert_eq!(actual_compiler_input, expected_compiler_input);
+        assert_eq!(deserialized.content.input, "{}", "Invalid json input");
     }
 }
