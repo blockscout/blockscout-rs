@@ -1,6 +1,5 @@
-use crate::{VerificationResponse, VerificationResult};
+use crate::{make_retrying_request, VerificationResponse, VerificationResult};
 use actix_web::{error, error::Error};
-use futures::Future;
 use reqwest::Url;
 use std::{num::NonZeroUsize, sync::Arc};
 
@@ -35,30 +34,13 @@ impl SourcifyApiClient {
     }
 }
 
-pub async fn make_retrying_request<F, Fut, Response, Error>(
-    attempts: NonZeroUsize,
-    request: F,
-) -> Result<Response, Error>
-where
-    F: Fn() -> Fut,
-    Fut: Future<Output = Result<Response, Error>>,
-{
-    for _ in 0..attempts.get() - 1 {
-        let resp = request().await;
-        if resp.is_ok() {
-            return resp;
-        }
-    }
-    request().await
-}
-
 #[async_trait::async_trait]
 impl SourcifyApi for SourcifyApiClient {
     async fn verification_request(
         &self,
         params: &ApiRequest,
     ) -> Result<ApiVerificationResponse, reqwest::Error> {
-        make_retrying_request(self.verification_attempts, || async {
+        make_retrying_request(self.verification_attempts, None, || async {
             let resp = reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(self.request_timeout))
                 .build()?
@@ -75,7 +57,7 @@ impl SourcifyApi for SourcifyApiClient {
         &self,
         params: &ApiRequest,
     ) -> Result<ApiFilesResponse, reqwest::Error> {
-        make_retrying_request(self.verification_attempts, || async {
+        make_retrying_request(self.verification_attempts, None, || async {
             let url = self
                 .host
                 .join(format!("files/any/{}/{}", &params.chain, &params.address).as_str())

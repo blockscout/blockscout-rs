@@ -4,7 +4,7 @@ mod routers;
 
 pub use self::routers::{configure_router, AppRouter, Router};
 
-use crate::settings::Settings;
+use crate::Settings;
 use actix_web::{App, HttpServer};
 
 use futures::future;
@@ -13,6 +13,7 @@ use std::sync::Arc;
 
 pub async fn run(settings: Settings) -> std::io::Result<()> {
     let socket_addr = settings.server.addr;
+    let metrics_enabled = settings.metrics.enabled;
     let metrics_addr = settings.metrics.addr;
     let metrics_endpoint = settings.metrics.endpoint.clone();
 
@@ -33,12 +34,15 @@ pub async fn run(settings: Settings) -> std::io::Result<()> {
         .bind(socket_addr)?
         .run()
     };
-    let server_future = tokio::spawn(async move { server_future.await });
-    let metrics_future = tokio::spawn(async move { metrics.run_server(metrics_addr).await });
-
-    let (server_future, metrics_future) = future::try_join(server_future, metrics_future).await?;
-
-    server_future?;
-    metrics_future?;
-    Ok(())
+    let mut futures = vec![tokio::spawn(async move { server_future.await })];
+    if metrics_enabled {
+        futures.push(tokio::spawn(async move {
+            metrics.run_server(metrics_addr).await
+        }))
+    }
+    let (res, _, others) = future::select_all(futures).await;
+    for future in others.into_iter() {
+        future.abort()
+    }
+    res?
 }

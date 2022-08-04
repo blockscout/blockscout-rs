@@ -126,15 +126,17 @@ impl Default for SourcifySettings {
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct MetricsSettings {
-    pub endpoint: String,
+    pub enabled: bool,
     pub addr: SocketAddr,
+    pub endpoint: String,
 }
 
 impl Default for MetricsSettings {
     fn default() -> Self {
         Self {
-            endpoint: "/metrics".to_string(),
+            enabled: false,
             addr: SocketAddr::from_str("0.0.0.0:6060").expect("should be valid url"),
+            endpoint: "/metrics".to_string(),
         }
     }
 }
