@@ -1,5 +1,5 @@
 [server]
-addr = "0.0.0.0:8040"
+addr = "0.0.0.0:8043"
 
 [solidity]
 enabled = true
