@@ -1,9 +1,12 @@
 use super::types::{MultiPartFiles, VerificationRequest};
 use crate::{
     compiler::{Compilers, Version},
-    http_server::handlers::verification::{
-        solidity::contract_verifier::{compile_and_verify_handler, Input},
-        VerificationResponse,
+    http_server::{
+        handlers::verification::{
+            solidity::contract_verifier::{compile_and_verify_handler, Input},
+            VerificationResponse,
+        },
+        metrics,
     },
 };
 use actix_web::{
@@ -28,7 +31,8 @@ pub async fn verify(
         creation_tx_input: &params.creation_bytecode,
         deployed_bytecode: &params.deployed_bytecode,
     };
-    compile_and_verify_handler(&compilers, input, true)
-        .await
-        .map(Json)
+
+    let response = compile_and_verify_handler(&compilers, input, true).await?;
+    metrics::count_verify_contract(&response.status, "multi-part");
+    Ok(Json(response))
 }

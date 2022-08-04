@@ -11,3 +11,7 @@ request_timeout = 10
 [solidity.fetcher.list]
 refresh_versions_schedule = "0 0 * * * * *"
 compilers_list_url = "https://solc-bin.ethereum.org/linux-amd64/list.json"
+
+[metrics]
+endpoint = "/metrics"
+addr = "0.0.0.0:6060"

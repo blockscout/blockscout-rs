@@ -1,5 +1,8 @@
 use super::fetcher::FetchError;
-use crate::compiler::{self, DownloadCache, Fetcher};
+use crate::{
+    compiler::{self, DownloadCache, Fetcher},
+    http_server::metrics,
+};
 use ethers_solc::{artifacts::Severity, error::SolcError, CompilerInput, CompilerOutput, Solc};
 use std::{fmt::Debug, path::PathBuf, sync::Arc};
 use thiserror::Error as DeriveError;
@@ -34,7 +37,10 @@ impl Compilers {
     ) -> Result<CompilerOutput, Error> {
         let solc_path = self.cache.get(&*self.fetcher, compiler_version).await?;
         let solc = Solc::from(solc_path);
-        let output = solc.compile(&input)?;
+        let output = {
+            let _timer = metrics::COMPILE_TIME.start_timer();
+            solc.compile(&input)?
+        };
 
         // Compilations errors, warnings and info messages are returned in `CompilerOutput.error`
         let mut errors = Vec::new();

@@ -4,6 +4,8 @@ use super::{
 };
 use std::{collections::HashMap, path::PathBuf, str::FromStr, sync::Arc};
 
+use crate::http_server::metrics;
+
 #[derive(Default)]
 pub struct DownloadCache {
     cache: parking_lot::Mutex<HashMap<Version, Arc<tokio::sync::RwLock<Option<PathBuf>>>>>,
@@ -37,9 +39,16 @@ impl DownloadCache {
         fetcher: &D,
         ver: &Version,
     ) -> Result<PathBuf, FetchError> {
+        metrics::DOWNLOAD_CACHE_TOTAL.inc();
         match self.try_get(ver).await {
-            Some(file) => Ok(file),
-            None => self.fetch(fetcher, ver).await,
+            Some(file) => {
+                metrics::DOWNLOAD_CACHE_HITS.inc();
+                Ok(file)
+            }
+            None => {
+                let _timer = metrics::COMPILER_FETCH_TIME.start_timer();
+                self.fetch(fetcher, ver).await
+            }
         }
     }
 
@@ -63,9 +72,7 @@ impl DownloadCache {
             }
         }
     }
-}
 
-impl DownloadCache {
     pub async fn load_from_dir(&self, dir: &PathBuf) -> std::io::Result<()> {
         let paths = DownloadCache::read_dir_paths(dir)?;
         let versions = DownloadCache::filter_versions(paths);
