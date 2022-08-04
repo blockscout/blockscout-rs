@@ -1,9 +1,12 @@
 version: "3"
 services:
   verification:
-    build: .
+    ## you can build image from source if you want
+    # build: .
+    image: ghcr.io/blockscout/verification:latest
     ports:
       - "8043:8043"
     command: -c /app/config.toml
     volumes:
       - ./example_config.toml:/app/config.toml
+      - ./compilers:/app/compilers
