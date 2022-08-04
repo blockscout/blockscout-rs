@@ -1,6 +1,6 @@
 use super::fetcher::FetchError;
 use crate::{
-    compiler::{self, DownloadCache, Fetcher},
+    compiler::{self, DownloadCache, Fetcher, Version},
     http_server::metrics,
 };
 use ethers_solc::{artifacts::Severity, error::SolcError, CompilerInput, CompilerOutput, Solc};
@@ -9,6 +9,8 @@ use thiserror::Error as DeriveError;
 
 #[derive(Debug, DeriveError)]
 pub enum Error {
+    #[error("Compiler version not found: {0}")]
+    VersionNotFound(Version),
     #[error("Error while fetching compiler: {0:#}")]
     Fetch(#[from] FetchError),
     #[error("Internal error while compiling: {0}")]
@@ -35,7 +37,10 @@ impl Compilers {
         compiler_version: &compiler::Version,
         input: &CompilerInput,
     ) -> Result<CompilerOutput, Error> {
-        let solc_path = self.cache.get(&*self.fetcher, compiler_version).await?;
+        let solc_path = match self.cache.get(&*self.fetcher, compiler_version).await {
+            Err(FetchError::NotFound(version)) => return Err(Error::VersionNotFound(version)),
+            res => res?,
+        };
         let solc = Solc::from(solc_path);
         let output = {
             let _timer = metrics::COMPILE_TIME.start_timer();
