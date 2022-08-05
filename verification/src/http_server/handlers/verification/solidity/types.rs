@@ -72,7 +72,7 @@ impl TryFrom<StandardJson> for CompilerInput {
 
     fn try_from(input: StandardJson) -> Result<Self, Self::Error> {
         serde_json::from_str(&input.input)
-            .map_err(|e| anyhow::Error::msg(format!("cannot parse input: {}", e)))
+            .map_err(|e| anyhow::anyhow!("content is not valid standard json: {}", e))
     }
 }
 
@@ -211,7 +211,7 @@ mod tests {
             "deployed_bytecode": "0x6001",
             "creation_bytecode": "0x6001",
             "compiler_version": "v0.8.2+commit.661d1103",
-            "input": "{}"
+            "input": "{\"language\": \"Solidity\", \"sources\": {\"./src/contracts/Foo.sol\": {\"content\": \"pragma solidity ^0.8.2;\\n\\ncontract Foo {\\n    function bar() external pure returns (uint256) {\\n        return 42;\\n    }\\n}\\n\"}}, \"settings\": {\"metadata\": {\"useLiteralContent\": true}, \"optimizer\": {\"enabled\": true, \"runs\": 200}, \"outputSelection\": {\"*\": {\"*\": [\"abi\", \"evm.bytecode\", \"evm.deployedBytecode\", \"evm.methodIdentifiers\"], \"\": [\"id\", \"ast\"]}}}}"
         }"#;
 
         let deserialized: VerificationRequest<StandardJson> =
@@ -228,6 +228,9 @@ mod tests {
             deserialized.compiler_version, "v0.8.2+commit.661d1103",
             "Invalid compiler version"
         );
-        assert_eq!(deserialized.content.input, "{}", "Invalid json input");
+        let _compiler_input: CompilerInput = deserialized
+            .content
+            .try_into()
+            .expect("failed to convert to standard json");
     }
 }
