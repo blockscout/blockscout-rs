@@ -227,7 +227,7 @@ mod tests {
 
         mock_get_object(
             "/solc-releases/v0.4.10%2Bcommit.f0d539ae/sha256.hash",
-            &expected_hash,
+            hex::encode(expected_hash).as_bytes(),
         )
         .mount(&mock_server)
         .await;
