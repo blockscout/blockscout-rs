@@ -17,7 +17,7 @@ pub async fn run(config: Config) -> std::io::Result<()> {
     let metrics_addr = config.metrics.addr;
     let metrics_endpoint = config.metrics.endpoint.clone();
 
-    log::info!("Verification server is starting at {}", socket_addr);
+    tracing::info!("Verification server is starting at {}", socket_addr);
     let app_router = Arc::new(
         AppRouter::new(config)
             .await

@@ -15,3 +15,6 @@ compilers_list_url = "https://solc-bin.ethereum.org/linux-amd64/list.json"
 [metrics]
 endpoint = "/metrics"
 addr = "0.0.0.0:6060"
+
+[tracing]
+jaeger_agents = ["127.0.0.1:6831"]

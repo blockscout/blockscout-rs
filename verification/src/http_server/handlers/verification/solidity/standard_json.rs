@@ -19,6 +19,7 @@ use actix_web::{
 };
 use std::str::FromStr;
 
+#[tracing::instrument(skip(compilers), level = "debug", name = "verify-json")]
 pub async fn verify(
     compilers: web::Data<Compilers>,
     params: Json<VerificationRequest<StandardJson>>,

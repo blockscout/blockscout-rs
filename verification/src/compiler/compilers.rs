@@ -44,6 +44,8 @@ impl Compilers {
         let solc = Solc::from(solc_path);
         let output = {
             let _timer = metrics::COMPILE_TIME.start_timer();
+            let _span =
+                tracing::debug_span!("compile contract", ver = compiler_version.to_string());
             solc.compile(&input)?
         };
 
@@ -74,7 +76,7 @@ impl Compilers {
         match self.cache.load_from_dir(dir).await {
             Ok(_) => {}
             Err(e) => {
-                log::error!("error during local compilers loading: {}", e)
+                tracing::error!("error during local compilers loading: {}", e)
             }
         };
     }

@@ -12,6 +12,7 @@ pub struct Config {
     pub solidity: SolidityConfiguration,
     pub sourcify: SourcifyConfiguration,
     pub metrics: MetricsConfiguration,
+    pub tracing: TracingConfiguration,
 }
 
 #[derive(Deserialize, Clone, PartialEq, Debug)]
@@ -135,6 +136,22 @@ impl Default for MetricsConfiguration {
             enabled: false,
             endpoint: "/metrics".to_string(),
             addr: SocketAddr::from_str("0.0.0.0:6060").expect("should be valid url"),
+        }
+    }
+}
+
+#[derive(Deserialize, Clone, PartialEq, Debug)]
+#[serde(default)]
+pub struct TracingConfiguration {
+    pub enable_jaeger: bool,
+    pub jaeger_agents: Vec<SocketAddr>,
+}
+
+impl Default for TracingConfiguration {
+    fn default() -> Self {
+        Self {
+            enable_jaeger: true,
+            jaeger_agents: vec![SocketAddr::from_str("127.0.0.1:6831").expect("valid url")],
         }
     }
 }

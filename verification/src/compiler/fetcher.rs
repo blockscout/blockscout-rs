@@ -45,14 +45,11 @@ fn create_executable(path: &Path) -> Result<File, std::io::Error> {
 }
 
 pub fn validate_checksum(bytes: &Bytes, expected: H256) -> Result<(), Mismatch<H256>> {
-    let start = std::time::Instant::now();
-
-    let found = Sha256::digest(bytes);
-    let found = H256::from_slice(&found);
-
-    let took = std::time::Instant::now() - start;
-    // TODO: change to tracing
-    log::debug!("check hashsum of {} bytes took {:?}", bytes.len(), took,);
+    let found = {
+        let _span = tracing::debug_span!("check hashsum", len = bytes.len());
+        let found = Sha256::digest(bytes);
+        H256::from_slice(&found)
+    };
     if expected != found {
         Err(Mismatch::new(expected, found))
     } else {
