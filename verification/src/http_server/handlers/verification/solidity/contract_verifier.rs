@@ -15,6 +15,7 @@ use thiserror::Error;
 const BYTECODE_HASHES: [BytecodeHash; 3] =
     [BytecodeHash::Ipfs, BytecodeHash::None, BytecodeHash::Bzzr1];
 
+#[derive(Debug)]
 pub struct Input<'a> {
     pub compiler_version: compiler::Version,
     pub compiler_input: CompilerInput,
@@ -68,6 +69,7 @@ pub(crate) async fn compile_and_verify_handler(
     ))
 }
 
+#[tracing::instrument(skip(compilers, verifier), level = "debug")]
 async fn compile_and_verify(
     compilers: &Compilers,
     verifier: &Verifier,

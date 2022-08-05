@@ -9,8 +9,9 @@ use actix_web::{error::Error, web, web::Json};
 
 use super::VerificationResponse;
 use crate::http_server::metrics;
+use tracing::instrument;
 
-#[tracing::instrument(skip(sourcify_client), level = "debug", name = "verify-sourcify")]
+#[instrument(skip(sourcify_client), level = "debug")]
 pub async fn verify(
     sourcify_client: web::Data<SourcifyApiClient>,
     params: Json<ApiRequest>,

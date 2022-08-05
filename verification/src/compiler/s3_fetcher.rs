@@ -11,6 +11,7 @@ use s3::Bucket;
 use std::{collections::HashSet, path::PathBuf, str::FromStr, sync::Arc};
 use thiserror::Error;
 use tokio::task::JoinHandle;
+use tracing::instrument;
 
 #[derive(Error, Debug)]
 enum ListError {
@@ -97,6 +98,7 @@ impl S3Fetcher {
         })
     }
 
+    #[instrument(skip(self) level = "debug")]
     async fn fetch_file(&self, ver: &Version) -> Result<(Bytes, H256), FetchError> {
         {
             let versions = self.versions.read();

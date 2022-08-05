@@ -9,6 +9,7 @@ use cron::Schedule;
 use primitive_types::H256;
 use std::{collections::HashMap, fmt::Debug, path::PathBuf, sync::Arc};
 use thiserror::Error;
+use tracing::instrument;
 use url::Url;
 
 type VersionsMap = HashMap<Version, FileInfo>;
@@ -105,6 +106,7 @@ impl ListFetcher {
         Ok(Self { versions, folder })
     }
 
+    #[instrument(skip(self) level = "debug")]
     async fn fetch_file(&self, ver: &Version) -> Result<(Bytes, H256), FetchError> {
         let file_info = {
             let versions = self.versions.read();

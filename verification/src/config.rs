@@ -144,14 +144,14 @@ impl Default for MetricsConfiguration {
 #[serde(default)]
 pub struct TracingConfiguration {
     pub enable_jaeger: bool,
-    pub jaeger_agents: Vec<SocketAddr>,
+    pub jaeger_agent: String,
 }
 
 impl Default for TracingConfiguration {
     fn default() -> Self {
         Self {
-            enable_jaeger: true,
-            jaeger_agents: vec![SocketAddr::from_str("127.0.0.1:6831").expect("valid url")],
+            enable_jaeger: false,
+            jaeger_agent: "localhost:6831".to_string(),
         }
     }
 }

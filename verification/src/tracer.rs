@@ -1,9 +1,6 @@
-use std::net::SocketAddr;
-
+use crate::config::TracingConfiguration;
 use opentelemetry::{sdk::trace::Tracer, trace::TraceError};
 use tracing_subscriber::{filter::LevelFilter, layer::SubscriberExt, prelude::*};
-
-use crate::config::TracingConfiguration;
 
 pub fn init_logs(config: TracingConfiguration) {
     let stdout = tracing_subscriber::fmt::layer().with_filter(
@@ -15,7 +12,7 @@ pub fn init_logs(config: TracingConfiguration) {
         // output logs (tracing) to stdout with log level taken from env (default is INFO)
         .with(stdout);
     if config.enable_jaeger {
-        let tracer = init_jaeger_tracer(config.jaeger_agents).expect("failed to init tracer");
+        let tracer = init_jaeger_tracer(&config.jaeger_agent).expect("failed to init tracer");
         registry
             // output traces to jaeger with default log level (default is DEBUG)
             .with(
@@ -30,9 +27,9 @@ pub fn init_logs(config: TracingConfiguration) {
     .expect("failed to register tracer with registry");
 }
 
-fn init_jaeger_tracer(agent_endpoints: Vec<SocketAddr>) -> Result<Tracer, TraceError> {
+fn init_jaeger_tracer(agent_endpoint: &str) -> Result<Tracer, TraceError> {
     opentelemetry_jaeger::new_pipeline()
-        .with_agent_endpoint(agent_endpoints.as_slice())
+        .with_agent_endpoint(agent_endpoint)
         .with_service_name("verification")
         .with_auto_split_batch(true)
         .install_batch(opentelemetry::runtime::Tokio)

@@ -1,3 +1,5 @@
+use tracing::Instrument;
+
 use super::{
     fetcher::{FetchError, Fetcher},
     version::Version,
@@ -47,8 +49,8 @@ impl DownloadCache {
             }
             None => {
                 let _timer = metrics::COMPILER_FETCH_TIME.start_timer();
-                let _span = tracing::debug_span!("fetch compiler", ver = ver.to_string());
-                self.fetch(fetcher, ver).await
+                let span = tracing::debug_span!("fetch compiler", ver = ver.to_string());
+                self.fetch(fetcher, ver).instrument(span).await
             }
         }
     }

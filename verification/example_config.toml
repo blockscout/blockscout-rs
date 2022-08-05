@@ -13,8 +13,10 @@ refresh_versions_schedule = "0 0 * * * * *"
 compilers_list_url = "https://solc-bin.ethereum.org/linux-amd64/list.json"
 
 [metrics]
+enabled = false
 endpoint = "/metrics"
 addr = "0.0.0.0:6060"
 
 [tracing]
-jaeger_agents = ["127.0.0.1:6831"]
+enable_jaeger = false
+jaeger_agent = "127.0.0.1:6831"

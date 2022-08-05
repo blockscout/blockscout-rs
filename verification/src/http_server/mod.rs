@@ -3,6 +3,7 @@ pub mod metrics;
 mod routers;
 
 pub use self::routers::{configure_router, AppRouter, Router};
+use tracing_actix_web::TracingLogger;
 
 use crate::config::Config;
 use actix_web::{App, HttpServer};
@@ -29,6 +30,7 @@ pub async fn run(config: Config) -> std::io::Result<()> {
         HttpServer::new(move || {
             App::new()
                 .wrap(middleware.clone())
+                .wrap(TracingLogger::default())
                 .configure(configure_router(&*app_router))
         })
         .bind(socket_addr)?

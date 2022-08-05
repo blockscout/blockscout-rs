@@ -6,6 +6,7 @@ use crate::{
 use ethers_solc::{artifacts::Severity, error::SolcError, CompilerInput, CompilerOutput, Solc};
 use std::{fmt::Debug, path::PathBuf, sync::Arc};
 use thiserror::Error as DeriveError;
+use tracing::{instrument, Instrument};
 
 #[derive(Debug, DeriveError)]
 pub enum Error {
@@ -31,21 +32,31 @@ impl Compilers {
             fetcher,
         }
     }
-
+    #[instrument(name = "download_and_compile", skip(self), level = "debug")]
     pub async fn compile(
         &self,
         compiler_version: &compiler::Version,
         input: &CompilerInput,
     ) -> Result<CompilerOutput, Error> {
-        let solc_path = match self.cache.get(&*self.fetcher, compiler_version).await {
+        let solc_path_result = {
+            let span = tracing::debug_span!("get solc_path from cache");
+            self.cache
+                .get(self.fetcher.as_ref(), compiler_version)
+                .instrument(span)
+                .await
+        };
+        let solc_path = match solc_path_result {
             Err(FetchError::NotFound(version)) => return Err(Error::VersionNotFound(version)),
             res => res?,
         };
         let solc = Solc::from(solc_path);
         let output = {
             let _timer = metrics::COMPILE_TIME.start_timer();
-            let _span =
-                tracing::debug_span!("compile contract", ver = compiler_version.to_string());
+            let span = tracing::debug_span!(
+                "compile contract with ethers-solc",
+                ver = compiler_version.to_string()
+            );
+            let _guard = span.enter();
             solc.compile(&input)?
         };
 
