@@ -117,7 +117,13 @@ impl S3Fetcher {
         if status_code != 200 {
             return Err(status_code_error("executable file", status_code));
         }
-        Ok((data.into(), H256::from_slice(&hash)))
+        let hash = std::str::from_utf8(&hash)
+            .map_err(anyhow::Error::msg)
+            .map_err(FetchError::HashParse)?;
+        let hash = H256::from_str(hash)
+            .map_err(anyhow::Error::msg)
+            .map_err(FetchError::HashParse)?;
+        Ok((data.into(), hash))
     }
 }
 

@@ -20,6 +20,8 @@ pub enum FetchError {
     Fetch(#[from] anyhow::Error),
     #[error("hashsum of fetched file mismatch: {0}")]
     HashMismatch(#[from] Mismatch<H256>),
+    #[error("can't parse hashsum: {0}")]
+    HashParse(anyhow::Error),
     #[error("couldn't create file: {0}")]
     File(#[from] std::io::Error),
     #[error("tokio sheduling error: {0}")]
