@@ -476,9 +476,13 @@ mod tests {
             .respond_with(ResponseTemplate::new(200).set_body_bytes(VYPER_LIST_JSON))
             .mount(&mock_server)
             .await;
-        let fetcher = ListFetcher::new(Url::parse(&mock_server.uri()).unwrap(), None, temp_dir())
-            .await
-            .expect("cannot initialize fetcher");
+        let fetcher = ListFetcher::new(
+            Url::parse(&mock_server.uri()).unwrap(),
+            Some(Schedule::from_str("* * * * * * *").unwrap()),
+            temp_dir(),
+        )
+        .await
+        .expect("cannot initialize fetcher");
 
         let versions = fetcher.all_versions();
         assert!(
@@ -486,14 +490,8 @@ mod tests {
             "versions list doesn't have 0.3.2: {versions:?}",
         );
 
-        for compiler_version in versions {
-            fetcher.fetch(&compiler_version).await.expect(
-                format!(
-                    "fetcher: can't download vyper compiler {}",
-                    compiler_version
-                )
-                .as_str(),
-            );
+        for compiler_version in vec![Version::from_str("0.3.2+commit.3b6a4117").unwrap()] {
+            fetcher.fetch(&compiler_version).await.unwrap();
         }
     }
 }
