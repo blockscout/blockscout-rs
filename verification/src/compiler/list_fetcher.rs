@@ -379,7 +379,7 @@ mod tests {
             .respond_with(ResponseTemplate::new(200).set_body_bytes(VYPER_LIST_JSON))
             .mount(&mock_server)
             .await;
-        let fetcher = ListFetcher::new(Url::parse(&mock_server.uri()).unwrap(), None, temp_dir())
+        let fetcher = ListFetcher::new(Url::parse(&mock_server.uri()).unwrap(), temp_dir(), None)
             .await
             .expect("cannot initialize fetcher");
 
