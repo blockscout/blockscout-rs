@@ -6,7 +6,7 @@
 A set of services used by [Blockscout](https://blockscout.com/) blockhain explorer, written in Rust.
 
 ## Services
-1. [verification](verification/README.md) - provides API for ethereum contract verification written in Solidity and Viper
+1. [verification](verification/README.md) - provides API for ethereum contract verification written in Solidity and Vyper
 
 
 ## Contributing
