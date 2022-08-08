@@ -3,7 +3,7 @@
 [![tests](https://github.com/blockscout/blockscout-rs/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/blockscout/blockscout-rs/actions)
 
 
-A set of services used by [Blockscout](https://blockscout.com/) blockhain explorer, written in Rust.
+A set of services used by [Blockscout](https://blockscout.com/) blockchain explorer, written in Rust.
 
 ## Services
 1. [verification](verification/README.md) - provides API for ethereum contract verification written in Solidity and Vyper
