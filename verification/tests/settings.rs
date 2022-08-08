@@ -2,6 +2,7 @@ use pretty_assertions::assert_eq;
 use verification::Settings;
 
 #[test]
+#[cfg(target_os = "linux")]
 fn test_example_settings() {
     std::env::set_var("VERIFICATION__CONFIG", "config/base.toml");
     let example_settings = Settings::new().expect("Failed to parse config");
