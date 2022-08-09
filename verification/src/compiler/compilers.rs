@@ -32,7 +32,7 @@ impl Compilers {
             fetcher,
         }
     }
-    #[instrument(name = "download_and_compile", skip(self), level = "debug")]
+    #[instrument(name = "download_and_compile", skip(self, input), level = "debug")]
     pub async fn compile(
         &self,
         compiler_version: &compiler::Version,

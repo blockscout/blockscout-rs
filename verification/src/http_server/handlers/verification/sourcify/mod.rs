@@ -11,7 +11,7 @@ use super::VerificationResponse;
 use crate::http_server::metrics;
 use tracing::instrument;
 
-#[instrument(skip(sourcify_client), level = "debug")]
+#[instrument(skip(sourcify_client, params), level = "debug")]
 pub async fn verify(
     sourcify_client: web::Data<SourcifyApiClient>,
     params: Json<ApiRequest>,

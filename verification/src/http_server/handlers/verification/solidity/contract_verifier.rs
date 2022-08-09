@@ -11,6 +11,7 @@ use ethers_solc::{
 use semver::VersionReq;
 use std::fmt::Debug;
 use thiserror::Error;
+use tracing::{instrument, Instrument};
 
 const BYTECODE_HASHES: [BytecodeHash; 3] =
     [BytecodeHash::Ipfs, BytecodeHash::None, BytecodeHash::Bzzr1];
@@ -69,7 +70,7 @@ pub(crate) async fn compile_and_verify_handler(
     ))
 }
 
-#[tracing::instrument(skip(compilers, verifier), level = "debug")]
+#[instrument(skip(compilers, verifier, input), level = "debug")]
 async fn compile_and_verify(
     compilers: &Compilers,
     verifier: &Verifier,
@@ -77,6 +78,7 @@ async fn compile_and_verify(
 ) -> Result<VerificationSuccess, CompileAndVerifyError> {
     let compiler_output = compilers
         .compile(&input.compiler_version, &input.compiler_input)
+        .in_current_span()
         .await?;
     verifier
         .verify(compiler_output)

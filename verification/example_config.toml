@@ -19,4 +19,4 @@ addr = "0.0.0.0:6060"
 
 [tracing]
 enable_jaeger = false
-jaeger_agent = "127.0.0.1:6831"
+jaeger_agent = "localhost:6831"
