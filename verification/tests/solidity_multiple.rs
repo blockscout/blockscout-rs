@@ -2,6 +2,7 @@ mod solidity_multiple_types;
 
 use actix_web::{
     dev::ServiceResponse,
+    http::StatusCode,
     test::{self, read_body, read_body_json, TestRequest},
     App,
 };
@@ -34,10 +35,7 @@ async fn global_app_router() -> &'static AppRouter {
         .await
 }
 
-async fn test_setup(
-    dir: &'static str,
-    input: &mut TestInput,
-) -> (ServiceResponse, Option<DisplayBytes>) {
+async fn test_setup(dir: &str, input: &mut TestInput) -> (ServiceResponse, Option<DisplayBytes>) {
     let app_router = global_app_router().await;
     let app = test::init_service(App::new().configure(configure_router(app_router))).await;
 
@@ -171,7 +169,7 @@ async fn test_success(dir: &'static str, mut input: TestInput) {
 }
 
 /// Test verification failures (note: do not handle 400 BadRequest responses)
-async fn test_failure<'a>(dir: &'static str, mut input: TestInput, expected_message: &'a str) {
+async fn test_failure(dir: &str, mut input: TestInput, expected_message: &str) {
     let (response, _expected_constructor_argument) = test_setup(dir, &mut input).await;
 
     assert!(
@@ -199,6 +197,30 @@ async fn test_failure<'a>(dir: &'static str, mut input: TestInput, expected_mess
         "Invalid message: {}",
         verification_response.message
     );
+}
+
+/// Test errors codes (handle 400 BadRequest, 500 InternalServerError and similar responses)
+async fn test_error(
+    dir: &str,
+    mut input: TestInput,
+    expected_status: StatusCode,
+    expected_message: Option<&str>,
+) {
+    let (response, _expected_constructor_argument) = test_setup(dir, &mut input).await;
+
+    let status = response.status();
+    let body = read_body(response).await;
+    let message = from_utf8(&body).expect("Read body as UTF-8");
+
+    assert_eq!(
+        status, expected_status,
+        "Invalid status code. Message: {}",
+        message
+    );
+
+    if let Some(expected_message) = expected_message {
+        assert_eq!(message, expected_message, "Invalid message")
+    }
 }
 
 mod success_tests {
@@ -276,7 +298,7 @@ mod success_tests {
     }
 }
 
-mod error_tests {
+mod failure_tests {
     use super::*;
 
     #[actix_rt::test]
@@ -298,6 +320,23 @@ mod error_tests {
         let test_input = TestInput::new("SimpleStorage", "v0.4.24+commit.e67f0147")
             .with_source_code("pragma solidity ^0.4.24; contract SimpleStorage { ".to_string());
         test_failure(contract_dir, test_input, "ParserError").await;
+    }
+}
+
+mod bad_request_error_tests {
+    use super::*;
+
+    #[actix_rt::test]
+    async fn returns_failure_with_version_not_found() {
+        let contract_dir = "simple_storage";
+        let test_input = TestInput::new("SimpleStorage", "v0.4.40+commit.e67f0147");
+        test_error(
+            contract_dir,
+            test_input,
+            StatusCode::BAD_REQUEST,
+            Some("Compiler version not found: v0.4.40+commit.e67f0147"),
+        )
+        .await;
     }
 }
 
