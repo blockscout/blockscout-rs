@@ -55,7 +55,7 @@ Service supports 3 types of verification:
 ## Multi-Part files
 
 ### Route
-`/api/v1/solidity/verify/multiple-files`
+`POST /api/v1/solidity/verify/multiple-files`
 
 ### Input
 
@@ -87,7 +87,7 @@ Service supports 3 types of verification:
 ## Standard-JSON input
 
 ### Route
-`/api/v1/solidity/verify/standard-json`
+`POST /api/v1/solidity/verify/standard-json`
 
 ### Input
 ```json5
@@ -99,11 +99,7 @@ Service supports 3 types of verification:
   // Compiler version used to compile the contract
   "compiler_version": "v0.8.14+commit.80d49f37",
   // https://docs.soliditylang.org/en/latest/using-the-compiler.html#input-description
-  "input": {
-    "language": "Solidity",
-    "sources": { ... },
-    "settings": { ... }
-  }
+  "input": "{\"language\": \"Solidity\",\"sources\": { ... }, \"settings\": { ... }}"
 }
 ```
 
@@ -111,7 +107,7 @@ Service supports 3 types of verification:
 Proxies verification requests to Sourcify service and returns responses (https://docs.sourcify.dev/docs/api/server/v1/verify/).
 
 ### Route
-`/api/v1/sourcify/verify`
+`POST /api/v1/sourcify/verify`
 
 ### Input
 ```json5
@@ -198,7 +194,7 @@ indicating that something is wrong with the caller.
 ## Version List
 
 ### Route
-`/api/v1/solidity/versions`
+`GET /api/v1/solidity/versions`
 
 ### Input
 No input required
