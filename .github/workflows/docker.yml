@@ -27,4 +27,4 @@ jobs:
         with:
           context: "{{defaultContext}}:verification"
           push: true
-          tags: ghcr.io/blockscout/blockscout-rs:${{github.ref_name}}
+          tags: ghcr.io/blockscout/blockscout-rs/verification:${{github.ref_name}}
