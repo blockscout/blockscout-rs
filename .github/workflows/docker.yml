@@ -21,15 +21,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
           
-      - name: Format ref
-        run: |
-          echo ${{github.ref_name}}
-          docker_tag=$(echo ${{github.ref_name}} | awk -F "/" '{print $3}')
-          echo "DOCKER_TAG=${docker_tag}" >> $GITHUB_ENV
-          
       - name: Build and push
         uses: docker/build-push-action@v3
         with:
           context: "verification"
           push: true
-          tags: ghcr.io/blockscout/verification:${{env.DOCKER_TAG}}
+          tags: ghcr.io/blockscout/verification:${{github.ref_name}}
