@@ -1,3 +1,4 @@
+use ethers_solc::artifacts::output_selection::OutputSelection;
 use ethers_solc::{
     artifacts::{Libraries, Settings, Source, Sources},
     CompilerInput, EvmVersion,
@@ -71,8 +72,15 @@ impl TryFrom<StandardJson> for CompilerInput {
     type Error = anyhow::Error;
 
     fn try_from(input: StandardJson) -> Result<Self, Self::Error> {
-        serde_json::from_str(&input.input)
-            .map_err(|e| anyhow::anyhow!("content is not valid standard json: {}", e))
+        let mut input: CompilerInput = serde_json::from_str(&input.input)
+            .map_err(|e| anyhow::anyhow!("content is not valid standard json: {}", e))?;
+
+        // always overwrite output selection as it customizes what compiler outputs and
+        // is not what is returned to the user, but only used internally by our service
+        let output_selection = OutputSelection::default_output_selection();
+        input.settings.output_selection = output_selection;
+
+        Ok(input)
     }
 }
 
