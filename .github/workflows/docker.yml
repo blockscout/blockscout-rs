@@ -24,6 +24,6 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v3
         with:
-          context: "verification"
+          context: "{{defaultContext}}:verification"
           push: true
           tags: ghcr.io/blockscout/verification:${{github.ref_name}}
