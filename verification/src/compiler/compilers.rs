@@ -6,7 +6,7 @@ use crate::{
 use ethers_solc::{artifacts::Severity, error::SolcError, CompilerInput, CompilerOutput, Solc};
 use std::{fmt::Debug, path::PathBuf, sync::Arc};
 use thiserror::Error as DeriveError;
-use tracing::{instrument, Instrument};
+use tracing::instrument;
 
 #[derive(Debug, DeriveError)]
 pub enum Error {
@@ -39,10 +39,8 @@ impl Compilers {
         input: &CompilerInput,
     ) -> Result<CompilerOutput, Error> {
         let solc_path_result = {
-            let span = tracing::debug_span!("get solc_path from cache");
             self.cache
                 .get(self.fetcher.as_ref(), compiler_version)
-                .instrument(span)
                 .await
         };
         let solc_path = match solc_path_result {

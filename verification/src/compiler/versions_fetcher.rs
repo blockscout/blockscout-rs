@@ -2,6 +2,7 @@ use crate::scheduler;
 use async_trait::async_trait;
 use cron::Schedule;
 use std::sync::Arc;
+use tracing::instrument;
 
 #[async_trait]
 pub trait VersionsFetcher {
@@ -31,6 +32,7 @@ impl<T> VersionsRefresher<T> {
 }
 
 impl<T: PartialEq> VersionsRefresher<T> {
+    #[instrument(skip(self, fetcher), level = "debug")]
     pub async fn refresh<F: VersionsFetcher<Versions = T>>(&self, fetcher: &F) {
         tracing::info!("looking for new compilers versions");
         let refresh_result = fetcher.fetch_versions().await;

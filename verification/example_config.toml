@@ -17,6 +17,7 @@ enabled = false
 endpoint = "/metrics"
 addr = "0.0.0.0:6060"
 
-[tracing]
-enable_jaeger = false
-jaeger_agent = "localhost:6831"
+[jaeger]
+enabled = false
+agent_endpoint = "localhost:6831"
+

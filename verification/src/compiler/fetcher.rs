@@ -47,10 +47,8 @@ fn create_executable(path: &Path) -> Result<File, std::io::Error> {
 
 #[instrument(skip(bytes), level = "debug")]
 pub fn validate_checksum(bytes: &Bytes, expected: H256) -> Result<(), Mismatch<H256>> {
-    let found = {
-        let found = Sha256::digest(bytes);
-        H256::from_slice(&found)
-    };
+    let found = Sha256::digest(bytes);
+    let found = H256::from_slice(&found);
     if expected != found {
         Err(Mismatch::new(expected, found))
     } else {
@@ -72,23 +70,25 @@ pub async fn write_executable(
         let data = data.clone();
         let span = tracing::debug_span!("save executable");
         tokio::task::spawn_blocking(move || {
-            span.in_scope(|| {
-                std::fs::create_dir_all(&folder)?;
-                std::fs::remove_file(file.as_path()).or_else(|e| {
-                    if e.kind() == ErrorKind::NotFound {
-                        Ok(())
-                    } else {
-                        Err(e)
-                    }
-                })?;
-                let mut file = create_executable(file.as_path())?;
-                std::io::copy(&mut data.as_ref(), &mut file)
-            })
+            let _guard = span.enter();
+            std::fs::create_dir_all(&folder)?;
+            std::fs::remove_file(file.as_path()).or_else(|e| {
+                if e.kind() == ErrorKind::NotFound {
+                    Ok(())
+                } else {
+                    Err(e)
+                }
+            })?;
+            let mut file = create_executable(file.as_path())?;
+            std::io::copy(&mut data.as_ref(), &mut file)
         })
     };
     let check_result = {
         let span = tracing::debug_span!("check hash result");
-        tokio::task::spawn_blocking(move || span.in_scope(|| validate_checksum(&data, sha)))
+        tokio::task::spawn_blocking(move || {
+            let _guard = span.enter();
+            validate_checksum(&data, sha)
+        })
     };
 
     let (check_result, save_result) = futures::join!(check_result, save_result);

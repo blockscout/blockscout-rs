@@ -12,7 +12,7 @@ pub struct Config {
     pub solidity: SolidityConfiguration,
     pub sourcify: SourcifyConfiguration,
     pub metrics: MetricsConfiguration,
-    pub tracing: TracingConfiguration,
+    pub jaeger: JaegerConfiguration,
 }
 
 #[derive(Deserialize, Clone, PartialEq, Debug)]
@@ -142,16 +142,16 @@ impl Default for MetricsConfiguration {
 
 #[derive(Deserialize, Clone, PartialEq, Debug)]
 #[serde(default)]
-pub struct TracingConfiguration {
-    pub enable_jaeger: bool,
-    pub jaeger_agent: String,
+pub struct JaegerConfiguration {
+    pub enabled: bool,
+    pub agent_endpoint: String,
 }
 
-impl Default for TracingConfiguration {
+impl Default for JaegerConfiguration {
     fn default() -> Self {
         Self {
-            enable_jaeger: false,
-            jaeger_agent: "localhost:6831".to_string(),
+            enabled: false,
+            agent_endpoint: "localhost:6831".to_string(),
         }
     }
 }

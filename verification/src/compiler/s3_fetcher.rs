@@ -11,7 +11,7 @@ use s3::Bucket;
 use std::{collections::HashSet, path::PathBuf, str::FromStr, sync::Arc};
 use thiserror::Error;
 use tokio::task::JoinHandle;
-use tracing::instrument;
+use tracing::{debug, instrument};
 
 #[derive(Error, Debug)]
 enum ListError {
@@ -38,6 +38,7 @@ impl VersionsFetcher for S3VersionFetcher {
         vers.len()
     }
 
+    #[instrument(skip(self), level = "debug")]
     async fn fetch_versions(&self) -> Result<Self::Versions, Self::Error> {
         let folders = self
             .bucket
@@ -51,7 +52,10 @@ impl VersionsFetcher for S3VersionFetcher {
             .flatten()
             .filter_map(|v| Version::from_str(v.prefix.trim_end_matches('/')).ok())
             .collect();
-
+        debug!(
+            "found version on bucket of len = {}",
+            fetched_versions.len()
+        );
         Ok(fetched_versions)
     }
 }
@@ -98,7 +102,7 @@ impl S3Fetcher {
         })
     }
 
-    #[instrument(skip(self) level = "debug")]
+    #[instrument(skip(self), level = "debug")]
     async fn fetch_file(&self, ver: &Version) -> Result<(Bytes, H256), FetchError> {
         {
             let versions = self.versions.read();
