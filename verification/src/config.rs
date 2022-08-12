@@ -12,6 +12,7 @@ pub struct Config {
     pub solidity: SolidityConfiguration,
     pub sourcify: SourcifyConfiguration,
     pub metrics: MetricsConfiguration,
+    pub jaeger: JaegerConfiguration,
 }
 
 #[derive(Deserialize, Clone, PartialEq, Debug)]
@@ -135,6 +136,22 @@ impl Default for MetricsConfiguration {
             enabled: false,
             endpoint: "/metrics".to_string(),
             addr: SocketAddr::from_str("0.0.0.0:6060").expect("should be valid url"),
+        }
+    }
+}
+
+#[derive(Deserialize, Clone, PartialEq, Debug)]
+#[serde(default)]
+pub struct JaegerConfiguration {
+    pub enabled: bool,
+    pub agent_endpoint: String,
+}
+
+impl Default for JaegerConfiguration {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            agent_endpoint: "localhost:6831".to_string(),
         }
     }
 }

@@ -9,6 +9,7 @@ use cron::Schedule;
 use primitive_types::H256;
 use std::{collections::HashMap, fmt::Debug, path::PathBuf, sync::Arc};
 use thiserror::Error;
+use tracing::{debug, instrument};
 use url::Url;
 
 type VersionsMap = HashMap<Version, FileInfo>;
@@ -84,8 +85,11 @@ impl VersionsFetcher for ListVersionFetcher {
         vers.len()
     }
 
+    #[instrument(skip(self), level = "debug")]
     async fn fetch_versions(&self) -> Result<Self::Versions, Self::Error> {
-        self.parse_json_versions(self.fetch_json_versions().await?)
+        let list_json = self.fetch_json_versions().await?;
+        debug!("found list json file of len = {}", list_json.builds.len());
+        self.parse_json_versions(list_json)
     }
 }
 
@@ -105,6 +109,7 @@ impl ListFetcher {
         Ok(Self { versions, folder })
     }
 
+    #[instrument(skip(self), level = "debug")]
     async fn fetch_file(&self, ver: &Version) -> Result<(Bytes, H256), FetchError> {
         let file_info = {
             let versions = self.versions.read();
