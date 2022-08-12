@@ -13,6 +13,7 @@ pub struct Settings {
     pub solidity: SoliditySettings,
     pub sourcify: SourcifySettings,
     pub metrics: MetricsSettings,
+    pub jaeger: JaegerSettings,
 
     // Is required as we deny unknown fields, but allow users provide
     // path to config through PREFIX__CONFIG env variable. If removed,
@@ -140,6 +141,22 @@ impl Default for MetricsSettings {
             enabled: false,
             addr: SocketAddr::from_str("0.0.0.0:6060").expect("should be valid url"),
             endpoint: "/metrics".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct JaegerSettings {
+    pub enabled: bool,
+    pub agent_endpoint: String,
+}
+
+impl Default for JaegerSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            agent_endpoint: "localhost:6831".to_string(),
         }
     }
 }

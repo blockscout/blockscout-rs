@@ -15,7 +15,9 @@ use actix_web::{
     Error,
 };
 use std::str::FromStr;
+use tracing::instrument;
 
+#[instrument(skip(compilers, params), level = "debug")]
 pub async fn verify(
     compilers: web::Data<Compilers>,
     params: Json<VerificationRequest<MultiPartFiles>>,

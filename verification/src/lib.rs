@@ -5,6 +5,7 @@ mod network;
 mod scheduler;
 mod settings;
 mod solidity;
+mod tracer;
 mod types;
 
 #[cfg(test)]
@@ -18,3 +19,4 @@ pub use http_server::{
     run as run_http_server, AppRouter, Router,
 };
 pub use network::make_retrying_request;
+pub use tracer::init_logs;

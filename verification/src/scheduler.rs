@@ -16,7 +16,7 @@ where
     tokio::spawn(async move {
         loop {
             let sleep_duration = time_till_next_call(&schedule);
-            log::debug!(
+            tracing::debug!(
                 "scheduled next run of '{}' in {:?}",
                 job_name,
                 sleep_duration

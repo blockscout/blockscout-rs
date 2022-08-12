@@ -11,10 +11,12 @@ use ethers_solc::{
 use semver::VersionReq;
 use std::fmt::Debug;
 use thiserror::Error;
+use tracing::instrument;
 
 const BYTECODE_HASHES: [BytecodeHash; 3] =
     [BytecodeHash::Ipfs, BytecodeHash::None, BytecodeHash::Bzzr1];
 
+#[derive(Debug)]
 pub struct Input<'a> {
     pub compiler_version: compiler::Version,
     pub compiler_input: CompilerInput,
@@ -68,6 +70,7 @@ pub(crate) async fn compile_and_verify_handler(
     ))
 }
 
+#[instrument(skip(compilers, verifier, input), level = "debug")]
 async fn compile_and_verify(
     compilers: &Compilers,
     verifier: &Verifier,
