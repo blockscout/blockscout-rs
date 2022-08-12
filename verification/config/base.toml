@@ -1,0 +1,36 @@
+[server]
+addr = "0.0.0.0:8043"
+
+[solidity]
+enabled = true
+compilers_dir = "/tmp/compilers"
+refresh_versions_schedule = "0 0 * * * * *"
+
+[solidity.fetcher.list]
+# It depends on the OS you are running the service on
+list_url = "https://solc-bin.ethereum.org/linux-amd64/list.json"
+# list_url = "https://solc-bin.ethereum.org/macosx-amd64/list.json"
+# list_url = "https://solc-bin.ethereum.org/windows-amd64/list.json"
+
+#[solidity.fetcher.s3]
+#access_key = "access_key"
+#secret_key = "secret_key"
+#region = "region"
+#endpoint = "endpoint"
+## The only required field for the s3 fetcher
+#bucket = "bucket"
+
+[sourcify]
+enabled = true
+api_url = "https://sourcify.dev/server/"
+verification_attempts = 3
+request_timeout = 10
+
+[metrics]
+enabled = false
+addr = "0.0.0.0:6060"
+route = "/metrics"
+
+[jaeger]
+enabled = false
+agent_endpoint = "localhost:6831"
