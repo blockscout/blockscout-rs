@@ -1,6 +1,7 @@
 replicaCount: 1
 image:
-  repository: ghcr.io/blockscout/verification
+  repository: ghcr.io/blockscout/smart-contract-verifier
+  tag: main
   pullPolicy: IfNotPresent
 containerPort: 8043
 

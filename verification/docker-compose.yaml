@@ -3,7 +3,7 @@ services:
   verification:
     ## you can build image locally, or use prebuilt images from registry
     # build: .
-    image: ghcr.io/blockscout/verification:latest
+    image: ghcr.io/blockscout/smart-contract-verifier:main
     ports:
       - "8043:8043"
     command: -c /app/config.toml
