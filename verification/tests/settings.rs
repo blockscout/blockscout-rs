@@ -4,11 +4,18 @@ use verification::Settings;
 // For linux systems we assume that all os specific values
 // are filled with defaults, so no need to rewrite them.
 #[cfg(target_os = "linux")]
-fn rewrite_os_specific_example_settings(_example_settings: &mut Settings, _default_settings: &Settings) {}
+fn rewrite_os_specific_example_settings(
+    _example_settings: &mut Settings,
+    _default_settings: &Settings,
+) {
+}
 
 // For other systems we just use the values from default settings.
 #[cfg(not(target_os = "linux"))]
-fn rewrite_os_specific_example_settings(example_settings: &mut Settings, default_settings: &Settings) {
+fn rewrite_os_specific_example_settings(
+    example_settings: &mut Settings,
+    default_settings: &Settings,
+) {
     // For now, only server address is os system dependant
     example_settings.server.addr = default_settings.server.addr;
 }

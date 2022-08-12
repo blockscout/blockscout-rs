@@ -2,7 +2,7 @@ use crate::settings::JaegerSettings;
 use opentelemetry::{sdk::trace::Tracer, trace::TraceError};
 use tracing_subscriber::{filter::LevelFilter, layer::SubscriberExt, prelude::*};
 
-pub fn init_logs(jaeger_config: JaegerSettings) {
+pub fn init_logs(jaeger_settings: JaegerSettings) {
     let stdout = tracing_subscriber::fmt::layer().with_filter(
         tracing_subscriber::EnvFilter::builder()
             .with_default_directive(LevelFilter::INFO.into())
@@ -11,9 +11,9 @@ pub fn init_logs(jaeger_config: JaegerSettings) {
     let registry = tracing_subscriber::registry()
         // output logs (tracing) to stdout with log level taken from env (default is INFO)
         .with(stdout);
-    if jaeger_config.enabled {
+    if jaeger_settings.enabled {
         let tracer =
-            init_jaeger_tracer(&jaeger_config.agent_endpoint).expect("failed to init tracer");
+            init_jaeger_tracer(&jaeger_settings.agent_endpoint).expect("failed to init tracer");
         registry
             // output traces to jaeger with default log level (default is DEBUG)
             .with(
