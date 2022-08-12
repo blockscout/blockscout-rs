@@ -31,7 +31,7 @@ impl PartialEq for Settings {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ServerSettings {
     pub addr: SocketAddr,
@@ -45,7 +45,7 @@ impl Default for ServerSettings {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct SoliditySettings {
     pub enabled: bool,
@@ -68,7 +68,7 @@ impl Default for SoliditySettings {
     }
 }
 
-#[derive(Deserialize, Clone, PartialEq, Debug)]
+#[derive(Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub enum FetcherSettings {
     List(ListFetcherSettings),
@@ -81,7 +81,7 @@ impl Default for FetcherSettings {
     }
 }
 
-#[derive(Deserialize, Clone, PartialEq, Debug)]
+#[derive(Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(default, deny_unknown_fields)]
 pub struct ListFetcherSettings {
     pub list_url: Url,
@@ -95,7 +95,7 @@ impl Default for ListFetcherSettings {
     }
 }
 
-#[derive(Deserialize, Default, Clone, PartialEq, Debug)]
+#[derive(Deserialize, Default, Clone, PartialEq, Eq, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct S3FetcherSettings {
     pub access_key: Option<String>,
@@ -105,7 +105,7 @@ pub struct S3FetcherSettings {
     pub bucket: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct SourcifySettings {
     pub enabled: bool,
@@ -127,7 +127,7 @@ impl Default for SourcifySettings {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct MetricsSettings {
     pub enabled: bool,
@@ -145,7 +145,7 @@ impl Default for MetricsSettings {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct JaegerSettings {
     pub enabled: bool,

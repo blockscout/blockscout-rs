@@ -151,12 +151,12 @@ mod json {
     use serde::{Deserialize, Serialize};
     use url::Url;
 
-    #[derive(Debug, Deserialize, Serialize, PartialEq)]
+    #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
     pub struct List {
         pub builds: Vec<FileInfo>,
     }
 
-    #[derive(Debug, Deserialize, Serialize, PartialEq)]
+    #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
     #[serde(rename_all = "camelCase")]
     pub struct FileInfo {
         pub path: DownloadPath,
@@ -165,7 +165,7 @@ mod json {
         pub sha256: H256,
     }
 
-    #[derive(Debug, Deserialize, Serialize, PartialEq)]
+    #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
     #[serde(untagged)]
     pub enum DownloadPath {
         Url(Url),
