@@ -42,23 +42,24 @@ pub(crate) async fn compile_and_verify_handler(
 
     for metadata in bruteforce_metadata {
         input.compiler_input.settings.metadata = metadata;
-        match compile_and_verify(compilers, &verifier, &input).await {
-            Ok(verification_success) => {
-                let verification_result = VerificationResult::from((
-                    input.compiler_input,
-                    input.compiler_version,
-                    verification_success,
-                ));
-                return Ok(VerificationResponse::ok(verification_result));
-            }
-            err @ Err(CompileAndVerifyError::Compilation(compiler::Error::Compilation(_))) => {
-                return Ok(VerificationResponse::err(err.unwrap_err()))
-            }
-            Err(CompileAndVerifyError::Compilation(err)) => {
-                return Err(error::ErrorInternalServerError(err))
-            }
-            // Try other bytecode hashes if there is no matching contracts
-            Err(CompileAndVerifyError::NoMatchingContracts) => {}
+        let result = compile_and_verify(compilers, &verifier, &input).await;
+        if let Ok(verification_success) = result {
+            let verification_result = VerificationResult::from((
+                input.compiler_input,
+                input.compiler_version,
+                verification_success,
+            ));
+            return Ok(VerificationResponse::ok(verification_result));
+        }
+        if let Err(CompileAndVerifyError::Compilation(compiler::Error::Compilation(_))) = result {
+            return Ok(VerificationResponse::err(result.unwrap_err()));
+        }
+        if let Err(CompileAndVerifyError::Compilation(compiler::Error::VersionNotFound(_))) = result
+        {
+            return Err(error::ErrorBadRequest(result.unwrap_err()));
+        }
+        if let Err(CompileAndVerifyError::Compilation(err)) = result {
+            return Err(error::ErrorInternalServerError(err));
         }
     }
     // In case of any other error the execution will not get to this point

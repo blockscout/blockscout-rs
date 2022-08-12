@@ -117,7 +117,13 @@ impl S3Fetcher {
         if status_code != 200 {
             return Err(status_code_error("executable file", status_code));
         }
-        Ok((data.into(), H256::from_slice(&hash)))
+        let hash = std::str::from_utf8(&hash)
+            .map_err(anyhow::Error::msg)
+            .map_err(FetchError::HashParse)?;
+        let hash = H256::from_str(hash)
+            .map_err(anyhow::Error::msg)
+            .map_err(FetchError::HashParse)?;
+        Ok((data.into(), hash))
     }
 }
 
@@ -208,10 +214,9 @@ mod tests {
         let expected_file = "this is 100% a valid compiler trust me";
         let expected_hash = Sha256::digest(&expected_file);
 
-        let version = Version::from_str("v0.4.10+commit.f0d539ae").unwrap();
-
         let mock_server = MockServer::start().await;
 
+        // Without "0x" prefix at checksum
         mock_get_object(
             "/solc-releases/v0.4.10%2Bcommit.f0d539ae/solc",
             expected_file.as_bytes(),
@@ -221,20 +226,54 @@ mod tests {
 
         mock_get_object(
             "/solc-releases/v0.4.10%2Bcommit.f0d539ae/sha256.hash",
-            &expected_hash,
+            hex::encode(expected_hash).as_bytes(),
         )
         .mount(&mock_server)
         .await;
+
+        // With "0x" prefix at checksum
+        mock_get_object(
+            "/solc-releases/v0.4.11%2Bcommit.68ef5810/solc",
+            expected_file.as_bytes(),
+        )
+        .mount(&mock_server)
+        .await;
+
+        mock_get_object(
+            "/solc-releases/v0.4.11%2Bcommit.68ef5810/sha256.hash",
+            format!("0x{}", hex::encode(expected_hash)).as_bytes(),
+        )
+        .mount(&mock_server)
+        .await;
+
+        let versions = vec![
+            Version::from_str("v0.4.10+commit.f0d539ae").unwrap(),
+            Version::from_str("v0.4.11+commit.68ef5810").unwrap(),
+        ];
 
         // create type directly to avoid extra work in constructor
         let fetcher = S3Fetcher {
             bucket: test_bucket(mock_server.uri()),
             folder: Default::default(),
-            versions: VersionsRefresher::new_static(HashSet::from([version.clone()])),
+            versions: VersionsRefresher::new_static(HashSet::from_iter(
+                versions.clone().into_iter(),
+            )),
         };
-        let (compiler, hash) = fetcher.fetch_file(&version).await.unwrap();
-        assert_eq!(expected_file, compiler);
-        assert_eq!(expected_hash.as_slice(), hash.as_ref());
+
+        for version in versions {
+            let (compiler, hash) = fetcher.fetch_file(&version).await.unwrap();
+            assert_eq!(
+                expected_file, compiler,
+                "Invalid file for version: {}",
+                version
+            );
+            assert_eq!(
+                expected_hash.as_slice(),
+                hash.as_ref(),
+                "Invalid hash for version: {}",
+                version
+            );
+        }
     }
 
     #[tokio::test]

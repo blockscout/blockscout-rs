@@ -17,9 +17,11 @@ pub enum FetchError {
     #[error("version {0} not found")]
     NotFound(Version),
     #[error("couldn't fetch the file: {0}")]
-    Fetch(#[from] anyhow::Error),
+    Fetch(anyhow::Error),
     #[error("hashsum of fetched file mismatch: {0}")]
     HashMismatch(#[from] Mismatch<H256>),
+    #[error("can't parse hashsum: {0}")]
+    HashParse(anyhow::Error),
     #[error("couldn't create file: {0}")]
     File(#[from] std::io::Error),
     #[error("tokio sheduling error: {0}")]

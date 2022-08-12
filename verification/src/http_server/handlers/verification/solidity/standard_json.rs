@@ -25,7 +25,10 @@ pub async fn verify(
 ) -> Result<Json<VerificationResponse>, Error> {
     let params = params.into_inner();
 
-    let compiler_input = params.content.into();
+    let compiler_input = match params.content.try_into() {
+        Ok(compiler_input) => compiler_input,
+        Err(err) => return Ok(Json(VerificationResponse::err(err))),
+    };
     let compiler_version =
         Version::from_str(&params.compiler_version).map_err(error::ErrorBadRequest)?;
     let input = Input {
