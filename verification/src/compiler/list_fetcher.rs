@@ -176,7 +176,7 @@ mod json {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{config::ListFetcherConfig, tests::parse::test_deserialize_ok};
+    use crate::{settings::ListFetcherSettings, tests::parse::test_deserialize_ok};
     use ethers_solc::Solc;
     use pretty_assertions::assert_eq;
     use std::{env::temp_dir, str::FromStr};
@@ -298,9 +298,9 @@ mod tests {
 
     #[tokio::test]
     async fn list_download_versions() {
-        let config = ListFetcherConfig::default();
+        let settings = ListFetcherSettings::default();
         let fetcher = ListFetcher::new(
-            config.compilers_list_url,
+            settings.list_url,
             std::env::temp_dir().join("blockscout/verification/compiler_fetcher/test/"),
             None,
         )

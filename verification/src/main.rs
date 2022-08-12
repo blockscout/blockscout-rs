@@ -1,9 +1,12 @@
-use verification::{init_logs, run_http_server, Args, Config};
+use anyhow::Context;
+use std::error::Error;
+use verification::{init_logs, run_http_server, Settings};
 
 #[tokio::main]
-async fn main() -> std::io::Result<()> {
-    let args = Args::default();
-    let config = Config::from_file(args.config_path).expect("Failed to parse config");
-    init_logs(config.jaeger.clone());
-    run_http_server(config).await
+async fn main() -> Result<(), Box<dyn Error>> {
+    let settings = Settings::new().context("failed to parse config")?;
+    init_logs(settings.jaeger.clone());
+    run_http_server(settings).await?;
+
+    Ok(())
 }

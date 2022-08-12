@@ -23,30 +23,68 @@ cargo install --git https://github.com/blockscout/blockscout-rs --bin verificati
 In that case, you can run the binary using just `verification`.
 
 ## Configuration
-Service uses a configuration file the path to which is specified via CLI flag `--config-path=[path]`.
-The configuration file may contain the following options:
+Service supports configuration via configuration file and environment variables. 
+The latter overwrites the former in case if both are provided. For all missing fields
+default values are used (if possible).
+
+### Configuration file
+Service uses a configuration file the path to which is specified via `VERIFICATION__CONFIG=[path]` environment variable.
+The base configuration file with all available options could be found at [config/base.toml](`./config/base.toml`).
+
+Below is an example of a simple configuration file which is filled with default values.
 ```toml
 [server]
 # IP address and port number the server should listen to
 addr = "0.0.0.0:8043"
 
 [solidity]
-# when disabled, solidity related handlers are not available
+# When disabled, solidity related handlers are not available
 enabled = true
-# list of all available compilers and information about them
-compilers_list_url = "https://raw.githubusercontent.com/blockscout/solc-bin/main/list.json"
+# A directory where compilers would be downloaded to
+compilers_dir = "/tmp/compilers"
+# List of avaialble versions updates cron formatted schedule 
+refresh_versions_schedule = "0 0 * * * * *"
+
+[solidity.fetcher.list]
+# List of all available compilers and information about them.
+list_url = "https://solc-bin.ethereum.org/linux-amd64/list.json"
 
 [sourcify]
-# when disabled, sourcify related handlers are not available 
+# When disabled, sourcify related handlers are not available
 enabled = true
 # Sourcify API endpoint
 api_url = "https://sourcify.dev/server/"
-# number of failing attempts the server makes to Sourcify API 
+# Number of failing attempts the server makes to Sourcify API
 verification_attempts = 3
-# the maximum period (in seconds) the service is waiting for the Sourcify response
+# The maximum period (in seconds) the service is waiting for the Sourcify response
 request_timeout = 10
+
+[metrics]
+# When disabled, metrics are not available
+enabled = false
+# IP address and port number metrics related endpoint should listen to
+addr = "0.0.0.0:6060"
+# A route at which metrics related endpoint is avaialable
+route = "/metrics"
+
+[jaeger]
+# When disabled, jaeger tracing is not available
+enabled = false
+# An endpoint where jaeger collects all traces
+agent_endpoint = "localhost:6831"
 ```
-For all keys omitted from the configuration file default values from the example above are used.
+
+### Environment variables
+Besides configuration file, one could use environment variables
+to configure the service. If case of overlapping, those values 
+overwrites values from configuration file. 
+Variables have a hierarchical nature which
+corresponds to the hierarchy in configuration file. 
+Double underscore (`__`) is used as a separator. All variables should use
+`VERIFICATION` as a prefix.
+
+All available options for configuration through environment variables could be found at
+[config/base.env](./config/base.env)
 
 # Api
 
