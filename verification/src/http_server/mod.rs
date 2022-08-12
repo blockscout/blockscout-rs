@@ -16,7 +16,7 @@ pub async fn run(settings: Settings) -> std::io::Result<()> {
     let socket_addr = settings.server.addr;
     let metrics_enabled = settings.metrics.enabled;
     let metrics_addr = settings.metrics.addr;
-    let metrics_endpoint = settings.metrics.endpoint.clone();
+    let metrics_endpoint = settings.metrics.route.clone();
 
     tracing::info!("Verification server is starting at {}", socket_addr);
     let app_router = Arc::new(

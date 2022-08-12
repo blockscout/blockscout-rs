@@ -132,7 +132,7 @@ impl Default for SourcifySettings {
 pub struct MetricsSettings {
     pub enabled: bool,
     pub addr: SocketAddr,
-    pub endpoint: String,
+    pub route: String,
 }
 
 impl Default for MetricsSettings {
@@ -140,7 +140,7 @@ impl Default for MetricsSettings {
         Self {
             enabled: false,
             addr: SocketAddr::from_str("0.0.0.0:6060").expect("should be valid url"),
-            endpoint: "/metrics".to_string(),
+            route: "/metrics".to_string(),
         }
     }
 }

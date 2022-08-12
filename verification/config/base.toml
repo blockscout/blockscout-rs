@@ -29,7 +29,7 @@ request_timeout = 10
 [metrics]
 enabled = false
 addr = "0.0.0.0:6060"
-endpoint = "/metrics"
+route = "/metrics"
 
 [jaeger]
 enabled = false
