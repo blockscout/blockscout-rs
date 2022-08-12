@@ -5,7 +5,6 @@ WORKDIR /build_app
 # cache dependencies
 RUN cargo init
 COPY ./Cargo.toml ./
-# COPY ./Cargo.lock ./
 RUN cargo build --release
 RUN rm -rf ./src
 

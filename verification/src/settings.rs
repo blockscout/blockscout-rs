@@ -14,6 +14,9 @@ pub struct Settings {
     pub sourcify: SourcifySettings,
     pub metrics: MetricsSettings,
 
+    // Is required as we deny unknown fields, but allow users provide
+    // path to config through PREFIX__CONFIG env variable. If removed,
+    // the setup would fail with `unknown field `config`, expected one of...`
     #[serde(rename = "config")]
     pub config_path: IgnoredAny,
 }
