@@ -9,14 +9,14 @@ use serde::{Deserialize, Serialize};
 pub mod solidity;
 pub mod sourcify;
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct VerificationResponse {
     pub message: String,
     pub result: Option<VerificationResult>,
     pub status: VerificationStatus,
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct VerificationResult {
     pub file_name: String,
     pub contract_name: String,
@@ -68,7 +68,7 @@ impl From<(CompilerInput, Version, VerificationSuccess)> for VerificationResult 
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub enum VerificationStatus {
     #[serde(rename = "0")]
     Ok,

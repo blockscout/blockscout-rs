@@ -9,7 +9,7 @@ use crate::{cli, cli::Args};
 /// An instance of the maintained networks in Blockscout.
 /// Semantic: (network, chain)
 /// e.g."blockscout.com/eth/mainnet" -> ("eth", "mainnet")
-#[derive(Deserialize, Clone, Debug, PartialEq)]
+#[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Instance(pub String, pub String);
 
 /// Settings for the Blockscout API
