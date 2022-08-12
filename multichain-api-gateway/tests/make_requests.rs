@@ -45,7 +45,7 @@ async fn check_make_requests() {
         expected.as_str(),
     );
 
-    let post_request = test::TestRequest::get().uri(uri).to_request();
+    let post_request = test::TestRequest::post().uri(uri).to_request();
     check_response(
         test::call_and_read_body(&app, post_request).await,
         expected.as_str(),
