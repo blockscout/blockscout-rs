@@ -12,14 +12,14 @@ const METADATA_FILE_NAME: &str = "metadata.json";
 // There is struct for metadata in ethers_solc::artifacts::Metadata
 // however it is for standard json input of compiler and
 // has different `libraries` field structure
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Deserialize)]
 pub struct Metadata {
     pub settings: MetadataSettings,
     pub compiler: Compiler,
     pub output: Output,
 }
 
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MetadataSettings {
     pub compilation_target: BTreeMap<String, String>,
@@ -29,18 +29,18 @@ pub struct MetadataSettings {
     pub evm_version: Option<EvmVersion>,
 }
 
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Deserialize)]
 pub struct Optimizer {
     pub enabled: Option<bool>,
     pub runs: Option<usize>,
 }
 
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Deserialize)]
 pub struct Compiler {
     pub version: String,
 }
 
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Deserialize)]
 pub struct Output {
     pub abi: serde_json::Value,
 }
