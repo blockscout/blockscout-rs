@@ -16,7 +16,7 @@ use std::{
     str::{from_utf8, FromStr},
 };
 use verification::{
-    configure_router, AppRouter, Settings, DisplayBytes, VerificationResponse, VerificationStatus,
+    configure_router, AppRouter, DisplayBytes, Settings, VerificationResponse, VerificationStatus,
 };
 
 const CONTRACTS_DIR: &'static str = "tests/contracts";
