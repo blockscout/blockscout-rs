@@ -10,8 +10,8 @@ use ethers_solc::artifacts::StandardJsonCompilerInput;
 use pretty_assertions::assert_eq;
 use serde_json::json;
 use standard_json_types::TestInput;
-use std::collections::BTreeMap;
 use std::{
+    collections::BTreeMap,
     fs,
     str::{from_utf8, FromStr},
 };
@@ -163,9 +163,10 @@ async fn test_success(dir: &'static str, mut input: TestInput) {
             .libraries
             .libs
             .into_iter()
-            .for_each(|(path, libs)| {
-                libs.into_iter()
-                    .for_each(|(contract, address)| { formatted_libs.insert(format!("{}:{}", path.to_str().unwrap(), contract), address); })
+            .for_each(|(_path, libs)| {
+                libs.into_iter().for_each(|(contract, address)| {
+                    formatted_libs.insert(contract, address);
+                })
             });
         formatted_libs
     };
@@ -186,12 +187,12 @@ async fn test_success(dir: &'static str, mut input: TestInput) {
         standard_input.sources.len(),
         "Invalid number of sources"
     );
-    // let a = standard_input.sources.into_iter().map(|(path, source)| path.as_str)
-    // assert_eq!(
-    //     verification_result.sources.into_iter().values().next().unwrap(),
-    //     &standard_input.sources.expect("Set `Some` on test_setup"),
-    //     "Invalid source"
-    // );
+    let sources: BTreeMap<_, _> = standard_input
+        .sources
+        .into_iter()
+        .map(|(path, source)| (path.to_str().unwrap().to_string(), source.content))
+        .collect();
+    assert_eq!(verification_result.sources, sources, "Invalid source");
 }
 
 mod regression_tests {

@@ -1,6 +1,5 @@
-use ethers_solc::artifacts::output_selection::OutputSelection;
 use ethers_solc::{
-    artifacts::{Libraries, Settings, Source, Sources},
+    artifacts::{output_selection::OutputSelection, Libraries, Settings, Source, Sources},
     CompilerInput, EvmVersion,
 };
 use serde::{Deserialize, Serialize};
