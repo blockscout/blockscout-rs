@@ -1,3 +1,5 @@
+use tracing::Instrument;
+
 use super::{
     fetcher::{FetchError, Fetcher},
     version::Version,
@@ -47,7 +49,8 @@ impl DownloadCache {
             }
             None => {
                 let _timer = metrics::COMPILER_FETCH_TIME.start_timer();
-                self.fetch(fetcher, ver).await
+                let span = tracing::debug_span!("fetch compiler", ver = ver.to_string());
+                self.fetch(fetcher, ver).instrument(span).await
             }
         }
     }
@@ -65,7 +68,7 @@ impl DownloadCache {
         match entry.as_ref() {
             Some(file) => Ok(file.clone()),
             None => {
-                log::info!(target: "compiler_cache", "installing file version {}", ver);
+                tracing::info!(target: "compiler_cache", "installing file version {}", ver);
                 let file = fetcher.fetch(ver).await?;
                 *entry = Some(file.clone());
                 Ok(file)
@@ -102,14 +105,14 @@ impl DownloadCache {
         for (version, path) in versions {
             let solc_path = path.join("solc");
             if solc_path.exists() {
-                log::info!("found local compiler version {}", version);
+                tracing::info!("found local compiler version {}", version);
                 let lock = {
                     let mut cache = self.cache.lock();
                     Arc::clone(cache.entry(version.clone()).or_default())
                 };
                 *lock.write().await = Some(solc_path);
             } else {
-                log::warn!(
+                tracing::warn!(
                     "found verions {} but file {:?} doesn't exists",
                     version,
                     solc_path

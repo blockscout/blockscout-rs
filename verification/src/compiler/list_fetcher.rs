@@ -9,6 +9,7 @@ use cron::Schedule;
 use primitive_types::H256;
 use std::{collections::HashMap, fmt::Debug, path::PathBuf, sync::Arc};
 use thiserror::Error;
+use tracing::{debug, instrument};
 use url::Url;
 
 type VersionsMap = HashMap<Version, FileInfo>;
@@ -84,8 +85,11 @@ impl VersionsFetcher for ListVersionFetcher {
         vers.len()
     }
 
+    #[instrument(skip(self), level = "debug")]
     async fn fetch_versions(&self) -> Result<Self::Versions, Self::Error> {
-        self.parse_json_versions(self.fetch_json_versions().await?)
+        let list_json = self.fetch_json_versions().await?;
+        debug!("found list json file of len = {}", list_json.builds.len());
+        self.parse_json_versions(list_json)
     }
 }
 
@@ -105,6 +109,7 @@ impl ListFetcher {
         Ok(Self { versions, folder })
     }
 
+    #[instrument(skip(self), level = "debug")]
     async fn fetch_file(&self, ver: &Version) -> Result<(Bytes, H256), FetchError> {
         let file_info = {
             let versions = self.versions.read();
@@ -146,12 +151,12 @@ mod json {
     use serde::{Deserialize, Serialize};
     use url::Url;
 
-    #[derive(Debug, Deserialize, Serialize, PartialEq)]
+    #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
     pub struct List {
         pub builds: Vec<FileInfo>,
     }
 
-    #[derive(Debug, Deserialize, Serialize, PartialEq)]
+    #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
     #[serde(rename_all = "camelCase")]
     pub struct FileInfo {
         pub path: DownloadPath,
@@ -160,7 +165,7 @@ mod json {
         pub sha256: H256,
     }
 
-    #[derive(Debug, Deserialize, Serialize, PartialEq)]
+    #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
     #[serde(untagged)]
     pub enum DownloadPath {
         Url(Url),
@@ -171,7 +176,7 @@ mod json {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{config::ListFetcherConfig, tests::parse::test_deserialize_ok};
+    use crate::{settings::ListFetcherSettings, tests::parse::test_deserialize_ok};
     use ethers_solc::Solc;
     use pretty_assertions::assert_eq;
     use std::{env::temp_dir, str::FromStr};
@@ -293,9 +298,9 @@ mod tests {
 
     #[tokio::test]
     async fn list_download_versions() {
-        let config = ListFetcherConfig::default();
+        let settings = ListFetcherSettings::default();
         let fetcher = ListFetcher::new(
-            config.compilers_list_url,
+            settings.list_url,
             std::env::temp_dir().join("blockscout/verification/compiler_fetcher/test/"),
             None,
         )

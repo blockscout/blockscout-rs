@@ -427,14 +427,19 @@ impl Verifier {
     pub fn verify(&self, output: CompilerOutput) -> Option<VerificationSuccess> {
         for (path, contracts) in output.contracts {
             for (name, contract) in contracts {
-                // TODO: add logging in case if error is `VerificationError::InternalError`
-                if let Ok((abi, constructor_args)) = self.compare(&contract) {
-                    return Some(VerificationSuccess {
-                        file_path: path,
-                        contract_name: name,
-                        abi,
-                        constructor_args: constructor_args.map(DisplayBytes::from),
-                    });
+                match self.compare(&contract) {
+                    Ok((abi, constructor_args)) => {
+                        return Some(VerificationSuccess {
+                            file_path: path,
+                            contract_name: name,
+                            abi,
+                            constructor_args: constructor_args.map(DisplayBytes::from),
+                        })
+                    }
+                    Err(VerificationError::InternalError(e)) => {
+                        tracing::error!("internal verification error: {}", e);
+                    }
+                    Err(_) => {}
                 }
             }
         }

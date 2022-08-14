@@ -11,6 +11,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use thiserror::Error;
+use tracing::instrument;
 
 #[derive(Error, Debug)]
 pub enum FetchError {
@@ -44,15 +45,10 @@ fn create_executable(path: &Path) -> Result<File, std::io::Error> {
         .open(path)
 }
 
+#[instrument(skip(bytes), level = "debug")]
 pub fn validate_checksum(bytes: &Bytes, expected: H256) -> Result<(), Mismatch<H256>> {
-    let start = std::time::Instant::now();
-
     let found = Sha256::digest(bytes);
     let found = H256::from_slice(&found);
-
-    let took = std::time::Instant::now() - start;
-    // TODO: change to tracing
-    log::debug!("check hashsum of {} bytes took {:?}", bytes.len(), took,);
     if expected != found {
         Err(Mismatch::new(expected, found))
     } else {
@@ -72,7 +68,9 @@ pub async fn write_executable(
     let save_result = {
         let file = file.clone();
         let data = data.clone();
-        tokio::task::spawn_blocking(move || -> Result<(), FetchError> {
+        let span = tracing::debug_span!("save executable");
+        tokio::task::spawn_blocking(move || {
+            let _guard = span.enter();
             std::fs::create_dir_all(&folder)?;
             std::fs::remove_file(file.as_path()).or_else(|e| {
                 if e.kind() == ErrorKind::NotFound {
@@ -82,11 +80,16 @@ pub async fn write_executable(
                 }
             })?;
             let mut file = create_executable(file.as_path())?;
-            std::io::copy(&mut data.as_ref(), &mut file)?;
-            Ok(())
+            std::io::copy(&mut data.as_ref(), &mut file)
         })
     };
-    let check_result = tokio::task::spawn_blocking(move || validate_checksum(&data, sha));
+    let check_result = {
+        let span = tracing::debug_span!("check hash result");
+        tokio::task::spawn_blocking(move || {
+            let _guard = span.enter();
+            validate_checksum(&data, sha)
+        })
+    };
 
     let (check_result, save_result) = futures::join!(check_result, save_result);
     check_result??;

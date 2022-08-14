@@ -2,6 +2,7 @@ use crate::scheduler;
 use async_trait::async_trait;
 use cron::Schedule;
 use std::sync::Arc;
+use tracing::instrument;
 
 #[async_trait]
 pub trait VersionsFetcher {
@@ -31,8 +32,9 @@ impl<T> VersionsRefresher<T> {
 }
 
 impl<T: PartialEq> VersionsRefresher<T> {
+    #[instrument(skip(self, fetcher), level = "debug")]
     pub async fn refresh<F: VersionsFetcher<Versions = T>>(&self, fetcher: &F) {
-        log::info!("looking for new compilers versions");
+        tracing::info!("looking for new compilers versions");
         let refresh_result = fetcher.fetch_versions().await;
         match refresh_result {
             Ok(fetched_versions) => {
@@ -50,17 +52,17 @@ impl<T: PartialEq> VersionsRefresher<T> {
                         *old = fetched_versions;
                         (old_len, new_len)
                     };
-                    log::info!(
+                    tracing::info!(
                         "found new compiler versions. old length: {}, new length: {}",
                         old_len,
                         new_len,
                     );
                 } else {
-                    log::info!("no new versions found")
+                    tracing::info!("no new versions found")
                 }
             }
             Err(err) => {
-                log::error!("error during version refresh: {}", err);
+                tracing::error!("error during version refresh: {}", err);
             }
         }
     }
@@ -84,7 +86,7 @@ impl<T: PartialEq + Send + Sync + 'static> VersionsRefresher<T> {
         fetcher: Arc<F>,
         cron_schedule: Schedule,
     ) {
-        log::info!("spawn version refresh job");
+        tracing::info!("spawn version refresh job");
         scheduler::spawn_job(cron_schedule, "refresh compiler versions", move || {
             let fetcher = fetcher.clone();
             let versions = self.clone();
