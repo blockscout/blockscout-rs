@@ -1,0 +1,28 @@
+version: "3"
+services:
+  verification:
+#    build: .
+    image: ghcr.io/blockscout/smart-contract-verifier:main
+    ports:
+      - "8043:8043"
+    environment:
+      ## optional: next variables are related to jaeger configuration and could be omitted
+      - VERIFICATION__JAEGER__ENABLED=true
+      - VERIFICATION__JAEGER__AGENT_ENDPOINT=jaeger:6831
+      ## optional: provide volume or folder to store compilers between launches
+      - /tmp/compilers:/tmp/compilers
+    networks:
+      - blockscout-network
+    depends_on:
+      - jaeger
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "6831:6831/udp"
+      - "16686:16686"
+    networks:
+      - blockscout-network
+
+networks:
+  blockscout-network:
