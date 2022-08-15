@@ -301,7 +301,7 @@ mod tests {
         let settings = ListFetcherSettings::default();
         let fetcher = ListFetcher::new(
             settings.list_url,
-            std::env::temp_dir().join("blockscout/verification/compiler_fetcher/test/"),
+            std::env::temp_dir().join("blockscout/smart_contract_verifier/compiler_fetcher/test/"),
             None,
         )
         .await

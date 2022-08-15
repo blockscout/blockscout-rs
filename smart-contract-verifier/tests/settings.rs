@@ -22,7 +22,7 @@ fn rewrite_os_specific_example_settings(
 
 #[test]
 fn test_example_settings() {
-    std::env::set_var("VERIFICATION__CONFIG", "config/base.toml");
+    std::env::set_var("SMART_CONTRACT_VERIFIER__CONFIG", "config/base.toml");
     let (example_settings, default_settings) = {
         let mut example_settings = Settings::new().expect("Failed to parse config");
         let default_settings = Settings::default();

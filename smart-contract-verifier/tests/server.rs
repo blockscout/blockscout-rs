@@ -35,8 +35,8 @@ async fn server_start() {
 
     let body = resp.text().await.unwrap();
     for s in vec![
-        "# TYPE verification_http_requests_duration_seconds histogram",
-        "verification_http_requests_duration_seconds_bucket{endpoint=\"/health\",method=\"GET\",status=\"200\"",
+        "# TYPE smart_contract_verifier_http_requests_duration_seconds histogram",
+        "smart_contract_verifier_http_requests_duration_seconds_bucket{endpoint=\"/health\",method=\"GET\",status=\"200\"",
     ] {
         assert!(body.contains(s), "body doesn't have string {s}:\n{body}");
     }

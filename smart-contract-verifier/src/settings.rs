@@ -163,7 +163,7 @@ impl Default for JaegerSettings {
 
 impl Settings {
     pub fn new() -> anyhow::Result<Self> {
-        let config_path = std::env::var("VERIFICATION__CONFIG");
+        let config_path = std::env::var("SMART_CONTRACT_VERIFIER__CONFIG");
 
         let mut builder = Config::builder();
         if let Ok(config_path) = config_path {
@@ -171,7 +171,7 @@ impl Settings {
         };
         // Use `__` so that it would be possible to address keys with underscores in names (e.g. `access_key`)
         builder =
-            builder.add_source(config::Environment::with_prefix("VERIFICATION").separator("__"));
+            builder.add_source(config::Environment::with_prefix("SMART_CONTRACT_VERIFIER").separator("__"));
 
         let settings: Settings = builder.build()?.try_deserialize()?;
 
