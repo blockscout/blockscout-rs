@@ -8,7 +8,7 @@ services:
       - "8043:8043"
     environment:
       ## optional: if provided, would be used as a configuration file
-      - VERIFICATION__CONFIG=/app/config.toml
+      - SMART_CONTRACT_VERIFIER__CONFIG=/app/config.toml
     env_file:
       ## optional: if provided, would overwrite values from configuration file
       - config/base.env
