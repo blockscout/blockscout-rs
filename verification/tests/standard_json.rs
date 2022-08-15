@@ -67,27 +67,6 @@ async fn test_setup(dir: &str, input: &mut TestInput) -> (ServiceResponse, Optio
         "input": input.standard_input
     });
 
-    // let request = if let Some(optimization_runs) = input.optimization_runs {
-    //     json!({
-    //         "deployed_bytecode": input.deployed_bytecode.as_ref().unwrap(),
-    //         "creation_bytecode": input.creation_tx_input.as_ref().unwrap(),
-    //         "compiler_version": input.compiler_version,
-    //         "sources": BTreeMap::from([(contract_path, input.source_code.as_ref().unwrap())]),
-    //         "evm_version": input.evm_version,
-    //         "contract_libraries": input.contract_libraries,
-    //         "optimization_runs": optimization_runs
-    //     })
-    // } else {
-    //     json!({
-    //         "deployed_bytecode": input.deployed_bytecode.as_ref().unwrap(),
-    //         "creation_bytecode": input.creation_tx_input.as_ref().unwrap(),
-    //         "compiler_version": input.compiler_version,
-    //         "sources": BTreeMap::from([(contract_path, input.source_code.as_ref().unwrap())]),
-    //         "evm_version": input.evm_version,
-    //         "contract_libraries": input.contract_libraries
-    //     })
-    // };
-
     let response = TestRequest::post()
         .uri(ROUTE)
         .set_json(&request)
