@@ -8,7 +8,7 @@ on:
       - 'v*'
 
 jobs:
-  verification:
+  smart-contract-verifier:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Docker Buildx
@@ -31,7 +31,7 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v3
         with:
-          context: "{{defaultContext}}:verification"
+          context: "{{defaultContext}}:smart-contract-verifier"
           push: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
