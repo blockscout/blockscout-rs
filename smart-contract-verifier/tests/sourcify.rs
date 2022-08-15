@@ -4,10 +4,10 @@ use actix_web::{
 };
 use pretty_assertions::assert_eq;
 use serde_json::json;
-use std::sync::Arc;
-use verification::{
+use smart_contract_verifier::{
     configure_router, AppRouter, Settings, VerificationResponse, VerificationStatus,
 };
+use std::sync::Arc;
 
 #[actix_rt::test]
 async fn should_return_200() {
