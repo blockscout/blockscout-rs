@@ -31,7 +31,7 @@ pub fn init_logs(jaeger_settings: JaegerSettings) {
 fn init_jaeger_tracer(agent_endpoint: &str) -> Result<Tracer, TraceError> {
     opentelemetry_jaeger::new_pipeline()
         .with_agent_endpoint(agent_endpoint)
-        .with_service_name("verification")
+        .with_service_name("smart_contract_verifier")
         .with_auto_split_batch(true)
         .install_batch(opentelemetry::runtime::Tokio)
 }

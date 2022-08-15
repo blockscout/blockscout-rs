@@ -9,14 +9,14 @@ use async_once_cell::OnceCell;
 use ethers_solc::artifacts::StandardJsonCompilerInput;
 use pretty_assertions::assert_eq;
 use serde_json::json;
+use smart_contract_verifier::{
+    configure_router, AppRouter, DisplayBytes, Settings, VerificationResponse, VerificationStatus,
+};
 use standard_json_types::TestInput;
 use std::{
     collections::BTreeMap,
     fs,
     str::{from_utf8, FromStr},
-};
-use verification::{
-    configure_router, AppRouter, DisplayBytes, Settings, VerificationResponse, VerificationStatus,
 };
 
 const CONTRACTS_DIR: &'static str = "tests/contracts";

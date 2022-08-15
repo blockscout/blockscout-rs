@@ -1,9 +1,10 @@
 [package]
-name = "verification"
-version = "0.1.0"
+name = "smart-contract-verifier"
+version = "0.2.0"
 # authors = [""]
 edition = "2021"
-repository = "https://github.com/blockscout/blockscout-rs/verification"
+repository = "https://github.com/blockscout/blockscout-rs"
+keywords = ["ethereum", "web3", "solidity"]
 
 [dependencies]
 actix-web = "4"

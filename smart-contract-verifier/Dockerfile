@@ -17,6 +17,6 @@ FROM ubuntu:20.04 as run
 RUN apt-get update && apt-get install -y libssl1.1 libssl-dev ca-certificates
 
 WORKDIR /app
-COPY --from=build /build_app/target/release/verification /app/verification
+COPY --from=build /build_app/target/release/smart-contract-verifier /app/smart-contract-verifier
 
-ENTRYPOINT ["/app/verification"]
+ENTRYPOINT ["/app/smart-contract-verifier"]

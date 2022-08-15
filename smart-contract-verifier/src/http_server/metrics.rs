@@ -60,13 +60,13 @@ pub struct Metrics {
 
 impl Metrics {
     pub fn new(endpoint: String) -> Self {
-        let metrics_middleware = PrometheusMetricsBuilder::new("verification_metrics")
+        let metrics_middleware = PrometheusMetricsBuilder::new("smart_contract_verifier_metrics")
             .registry(REGISTRY.clone())
             .endpoint(&endpoint)
             .build()
             .unwrap();
         // note: verification middleware has no endpoint
-        let verification_middleware = PrometheusMetricsBuilder::new("verification")
+        let verification_middleware = PrometheusMetricsBuilder::new("smart_contract_verifier")
             .registry(REGISTRY.clone())
             .build()
             .unwrap();

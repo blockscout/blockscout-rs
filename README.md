@@ -6,7 +6,7 @@
 A set of services used by [Blockscout](https://blockscout.com/) blockchain explorer, written in Rust.
 
 ## Services
-1. [verification](verification/README.md) - provides API for ethereum contract verification written in Solidity and Vyper
+1. [smart-contract-verifier](smart-contract-verifier/README.md) - provides API for ethereum contract verification written in Solidity and Vyper
 
 
 ## Contributing

@@ -3518,6 +3518,59 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2fd0db749597d91ff862fd1d55ea87f7855a744a8425a64695b6fca237d1dad1"
 
 [[package]]
+name = "smart-contract-verifier"
+version = "0.2.0"
+dependencies = [
+ "actix-rt",
+ "actix-web",
+ "actix-web-prom",
+ "anyhow",
+ "async-once-cell",
+ "async-trait",
+ "bytes",
+ "chrono",
+ "clap",
+ "config",
+ "const_format",
+ "cron",
+ "env_logger",
+ "ethabi",
+ "ethers-core",
+ "ethers-solc",
+ "futures",
+ "hex",
+ "lazy_static",
+ "log",
+ "minicbor",
+ "octocrab",
+ "opentelemetry",
+ "opentelemetry-jaeger",
+ "parking_lot",
+ "pretty_assertions",
+ "primitive-types",
+ "prometheus",
+ "quick-xml 0.23.0",
+ "rand 0.8.5",
+ "reqwest",
+ "rust-s3",
+ "semver",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "sha2 0.10.2",
+ "sscanf",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-actix-web",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+ "url",
+ "wiremock",
+]
+
+[[package]]
 name = "snafu"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4188,59 +4241,6 @@ name = "vcpkg"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
-
-[[package]]
-name = "verification"
-version = "0.1.0"
-dependencies = [
- "actix-rt",
- "actix-web",
- "actix-web-prom",
- "anyhow",
- "async-once-cell",
- "async-trait",
- "bytes",
- "chrono",
- "clap",
- "config",
- "const_format",
- "cron",
- "env_logger",
- "ethabi",
- "ethers-core",
- "ethers-solc",
- "futures",
- "hex",
- "lazy_static",
- "log",
- "minicbor",
- "octocrab",
- "opentelemetry",
- "opentelemetry-jaeger",
- "parking_lot",
- "pretty_assertions",
- "primitive-types",
- "prometheus",
- "quick-xml 0.23.0",
- "rand 0.8.5",
- "reqwest",
- "rust-s3",
- "semver",
- "serde",
- "serde_json",
- "serde_with",
- "sha2 0.10.2",
- "sscanf",
- "tempfile",
- "thiserror",
- "tokio",
- "tracing",
- "tracing-actix-web",
- "tracing-opentelemetry",
- "tracing-subscriber",
- "url",
- "wiremock",
-]
 
 [[package]]
 name = "version_check"

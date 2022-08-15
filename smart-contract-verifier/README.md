@@ -1,6 +1,6 @@
-# <h1 align="center"> Verification </h1>
+# <h1 align="center"> Smart-contract Verifier </h1>
 
-A contract verification service. Runs as an HTTP server and allows
+Smart-contract verification service. Runs as an HTTP server and allows
 making verification requests through REST API. It is stateless
 and answers requests based on provided information only.
 
@@ -18,9 +18,9 @@ You can find the built binary in `target/release` folder.
 ## Installing through cargo
 Another way to install the binary without cloning the repository is to use cargo straightway:
 ```
-cargo install --git https://github.com/blockscout/blockscout-rs --bin verification
+cargo install --git https://github.com/blockscout/blockscout-rs --bin smart-contract-verifier
 ```
-In that case, you can run the binary using just `verification`.
+In that case, you can run the binary using just `smart-contract-verifier`.
 
 ## Configuration
 Service supports configuration via configuration file and environment variables. 
@@ -28,7 +28,7 @@ The latter overwrites the former in case if both are provided. For all missing f
 default values are used (if possible).
 
 ### Configuration file
-Service uses a configuration file the path to which is specified via `VERIFICATION__CONFIG=[path]` environment variable.
+Service uses a configuration file the path to which is specified via `SMART_CONTRACT_VERIFIER__CONFIG=[path]` environment variable.
 The base configuration file with all available options could be found at [config/base.toml](`./config/base.toml`).
 
 Below is an example of a simple configuration file which is filled with default values.
@@ -81,7 +81,7 @@ overwrites values from configuration file.
 Variables have a hierarchical nature which
 corresponds to the hierarchy in configuration file. 
 Double underscore (`__`) is used as a separator. All variables should use
-`VERIFICATION` as a prefix.
+`SMART_CONTRACT_VERIFIER` as a prefix.
 
 All available options for configuration through environment variables could be found at
 [config/base.env](./config/base.env)
