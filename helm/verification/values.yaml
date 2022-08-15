@@ -9,8 +9,8 @@ containerPort: 8043
 config: "config.toml"
 
 service:
-  type: ClusterIP
-  port: 80
+  type: NodePort
+  port: 8043
 
 # Optional
 ingress:
