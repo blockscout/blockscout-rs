@@ -1,5 +1,5 @@
 use pretty_assertions::assert_eq;
-use verification::Settings;
+use smart_contract_verifier::Settings;
 
 // For linux systems we assume that all os specific values
 // are filled with defaults, so no need to rewrite them.
