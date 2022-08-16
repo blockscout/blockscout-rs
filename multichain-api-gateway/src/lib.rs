@@ -11,16 +11,16 @@ use futures::{stream, StreamExt};
 use serde_json::Value;
 use url::Url;
 
-use crate::config::{BlockscoutSettings, Instance, Settings};
+pub use crate::settings::{BlockscoutSettings, Instance, Settings};
 
 mod cli;
-pub mod config;
+pub mod settings;
 
 #[derive(Clone, Debug)]
 pub struct ApiEndpoints {
     apis: Vec<(Instance, Url)>,
     concurrent_requests: usize,
-    request_timeout: std::time::Duration,
+    request_timeout: chrono::Duration,
 }
 
 /// Assumptions:
@@ -60,7 +60,13 @@ impl ApiEndpoints {
         body: Bytes,
         request_head: &RequestHead,
     ) -> Vec<(Instance, String)> {
-        let client = Client::builder().timeout(self.request_timeout).finish();
+        let client = Client::builder()
+            .timeout(
+                self.request_timeout
+                    .to_std()
+                    .expect("bad conversion to std::time::Duration"),
+            )
+            .finish();
 
         stream::iter(self.apis)
             .map(|(instance, mut url)| {
