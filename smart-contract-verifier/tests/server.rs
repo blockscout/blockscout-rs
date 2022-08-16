@@ -1,7 +1,7 @@
 use std::num::NonZeroUsize;
 
 use pretty_assertions::assert_eq;
-use verification::{make_retrying_request, run_http_server, Settings};
+use smart_contract_verifier::{make_retrying_request, run_http_server, Settings};
 
 #[actix_rt::test]
 async fn server_start() {
