@@ -359,4 +359,49 @@ mod tests {
             "versions list doesn't have 0.4.13: {versions:?}",
         );
     }
+
+    const VYPER_LIST_JSON: &str = r#"{
+        "builds": [
+            {
+                "path": "https://github.com/vyperlang/vyper/releases/download/v0.3.2/vyper.0.3.2%2Bcommit.3b6a4117.linux",
+                "longVersion": "0.3.2+commit.3b6a4117",
+                "sha256": "7101527cc0976468a07087e98438e88e372c02002a5b8c8c6c411517176c2592"
+            }
+        ]
+    }"#;
+
+    /// That's will try to download the Vyper compiler from the list.json file.
+    /// It check's:
+    /// 1) an access to a download link
+    /// 2) Hash (mis)matching
+    #[tokio::test]
+    async fn download_vyper_versions() {
+        let mock_server = MockServer::start().await;
+
+        // mock list.json server response with empty list
+        Mock::given(method("GET"))
+            .and(path("/"))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(VYPER_LIST_JSON))
+            .mount(&mock_server)
+            .await;
+        let fetcher = ListFetcher::new(Url::parse(&mock_server.uri()).unwrap(), temp_dir(), None)
+            .await
+            .expect("cannot initialize fetcher");
+
+        let versions = fetcher.all_versions();
+        assert!(
+            versions.contains(&Version::from_str("0.3.2+commit.3b6a4117").unwrap()),
+            "versions list doesn't have 0.3.2: {versions:?}",
+        );
+
+        for compiler_version in versions {
+            fetcher.fetch(&compiler_version).await.expect(
+                format!(
+                    "fetcher: can't download vyper compiler {}",
+                    compiler_version
+                )
+                .as_str(),
+            );
+        }
+    }
 }
