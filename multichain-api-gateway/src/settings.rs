@@ -24,6 +24,8 @@ pub struct BlockscoutSettings {
     pub concurrent_requests: usize,
 
     /// The timeout of waiting for response from the Blockscout API.
+    // Using chrono::Duration here instead of std::time::Duration,
+    // because there is no "Display" trait for std::time::Duration, hence trouble when calling "try_deserialize"
     #[serde_as(as = "serde_with::DurationSeconds<i64>")]
     pub request_timeout: chrono::Duration,
 }
