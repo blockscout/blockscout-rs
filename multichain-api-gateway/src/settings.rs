@@ -5,11 +5,23 @@ use serde::{de::IgnoredAny, Deserialize};
 use std::time;
 use url::Url;
 
+use serde_with::{As, DisplayFromStr};
+
 /// An instance of the maintained networks in Blockscout.
 /// Semantic: (network, chain)
 /// e.g."blockscout.com/eth/mainnet" -> ("eth", "mainnet")
 #[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Instance(pub String, pub String);
+
+impl FromStr for Instance {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut parts = s.split(',');
+        let network = parts.next().ok_or("missing network")?;
+        let chain = parts.next().ok_or("missing chain")?;
+        Ok(Instance(network.to_string(), chain.to_string()))
+    }
+}
 
 /// Settings for the Blockscout API
 #[serde_with::serde_as]
@@ -19,6 +31,7 @@ pub struct BlockscoutSettings {
     /// The base URL of the Blockscout API.
     pub base_url: Url,
 
+    #[serde(with = "As::<Vec<DisplayFromStr>>")]
     pub instances: Vec<Instance>,
 
     /// The number of concurrent requests to be made to the Blockscout API from a server's thread worker.
@@ -78,12 +91,12 @@ impl Settings {
         if let Ok(config_path) = config_path {
             builder = builder.add_source(File::with_name(&config_path));
         };
-        builder = builder
-            .add_source(config::Environment::with_prefix("MULTICHAIN_API_GATEWAY").separator("__"));
-
-        println!("{:?}", builder);
-
-        println!("{:?}", builder.build_cloned().unwrap());
+        let environment = config::Environment::with_prefix("MULTICHAIN_API_GATEWAY")
+            .try_parsing(true)
+            .separator("__")
+            .list_separator(";")
+            .with_list_parse_key("blockscout.instances");
+        builder = builder.add_source(environment);
 
         let settings: Settings = builder.build()?.try_deserialize()?;
 
