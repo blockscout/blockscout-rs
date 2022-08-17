@@ -13,7 +13,6 @@ use url::Url;
 
 pub use crate::settings::{BlockscoutSettings, Instance, Settings};
 
-mod cli;
 pub mod settings;
 
 #[derive(Clone, Debug)]
