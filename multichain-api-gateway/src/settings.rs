@@ -34,7 +34,10 @@ impl Default for BlockscoutSettings {
     fn default() -> Self {
         Self {
             base_url: Url::parse("https://blockscout.com/").expect("should be correct base"),
-            instances: vec![],
+            instances: vec![
+                Instance("eth".into(), "mainnet".into()),
+                Instance("xdai".into(), "mainnet".into()),
+            ],
             concurrent_requests: 10,
             request_timeout: chrono::Duration::seconds(60),
         }
