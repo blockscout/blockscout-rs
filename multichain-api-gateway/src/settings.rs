@@ -2,6 +2,7 @@ use std::{net::SocketAddr, str::FromStr};
 
 use config::{Config, File};
 use serde::{de::IgnoredAny, Deserialize};
+use std::time;
 use url::Url;
 
 /// An instance of the maintained networks in Blockscout.
@@ -24,10 +25,8 @@ pub struct BlockscoutSettings {
     pub concurrent_requests: usize,
 
     /// The timeout of waiting for response from the Blockscout API.
-    // Using chrono::Duration here instead of std::time::Duration,
-    // because there is no "Display" trait for std::time::Duration, hence trouble when calling "try_deserialize"
-    #[serde_as(as = "serde_with::DurationSeconds<i64>")]
-    pub request_timeout: chrono::Duration,
+    #[serde_as(as = "serde_with::DurationSeconds<u64>")]
+    pub request_timeout: time::Duration,
 }
 
 impl Default for BlockscoutSettings {
@@ -39,7 +38,7 @@ impl Default for BlockscoutSettings {
                 Instance("xdai".into(), "mainnet".into()),
             ],
             concurrent_requests: 10,
-            request_timeout: chrono::Duration::seconds(60),
+            request_timeout: time::Duration::from_secs(60),
         }
     }
 }

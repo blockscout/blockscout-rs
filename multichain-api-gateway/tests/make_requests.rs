@@ -21,7 +21,7 @@ async fn check_make_requests() {
             settings::Instance("xdai".to_string(), "testnet".to_string()),
         ],
         concurrent_requests: 1,
-        request_timeout: chrono::Duration::seconds(60),
+        request_timeout: std::time::Duration::from_secs(60),
     };
 
     let apis_endpoints: ApiEndpoints = settings.try_into().unwrap();

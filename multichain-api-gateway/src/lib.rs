@@ -1,4 +1,4 @@
-use std::{collections::HashMap, error::Error, net::TcpListener, str};
+use std::{collections::HashMap, error::Error, net::TcpListener, str, time};
 
 use actix_web::{
     dev::{RequestHead, Server},
@@ -19,7 +19,7 @@ pub mod settings;
 pub struct ApiEndpoints {
     apis: Vec<(Instance, Url)>,
     concurrent_requests: usize,
-    request_timeout: chrono::Duration,
+    request_timeout: time::Duration,
 }
 
 /// Assumptions:
@@ -59,13 +59,7 @@ impl ApiEndpoints {
         body: Bytes,
         request_head: &RequestHead,
     ) -> Vec<(Instance, String)> {
-        let client = Client::builder()
-            .timeout(
-                self.request_timeout
-                    .to_std()
-                    .expect("bad conversion to std::time::Duration"),
-            )
-            .finish();
+        let client = Client::builder().timeout(self.request_timeout).finish();
 
         stream::iter(self.apis)
             .map(|(instance, mut url)| {
