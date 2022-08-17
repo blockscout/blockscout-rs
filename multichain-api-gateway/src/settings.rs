@@ -78,9 +78,12 @@ impl Settings {
         if let Ok(config_path) = config_path {
             builder = builder.add_source(File::with_name(&config_path));
         };
-        // Use `__` so that it would be possible to address keys with underscores in names (e.g. `access_key`)
         builder = builder
             .add_source(config::Environment::with_prefix("MULTICHAIN_API_GATEWAY").separator("__"));
+
+        println!("{:?}", builder);
+
+        println!("{:?}", builder.build_cloned().unwrap());
 
         let settings: Settings = builder.build()?.try_deserialize()?;
 
