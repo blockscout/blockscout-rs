@@ -109,7 +109,7 @@ pub async fn write_executable(
 
     if let Some(validator) = validator {
         validator
-            .validate(ver, file.as_path())
+            .validate(ver, file_tmp.as_path())
             .await
             .map_err(FetchError::Validation)?;
     }
