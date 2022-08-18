@@ -9,6 +9,7 @@ use std::{
     io::ErrorKind,
     os::unix::prelude::OpenOptionsExt,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 use thiserror::Error;
 use tracing::instrument;
@@ -27,11 +28,19 @@ pub enum FetchError {
     File(#[from] std::io::Error),
     #[error("tokio sheduling error: {0}")]
     Schedule(#[from] tokio::task::JoinError),
+    #[error("validation failed: {0}")]
+    Validation(anyhow::Error),
+}
+
+#[async_trait]
+pub trait FileValidator: Send + Sync {
+    async fn validate(&self, ver: &Version, path: &Path) -> Result<(), anyhow::Error>;
 }
 
 #[async_trait]
 pub trait Fetcher: Send + Sync {
     async fn fetch(&self, ver: &Version) -> Result<PathBuf, FetchError>;
+    fn with_validator(&mut self, validator: Arc<dyn FileValidator>);
     fn all_versions(&self) -> Vec<Version>;
 }
 
@@ -61,6 +70,7 @@ pub async fn write_executable(
     sha: H256,
     path: &Path,
     ver: &Version,
+    validator: Option<&dyn FileValidator>,
 ) -> Result<PathBuf, FetchError> {
     let folder = path.join(ver.to_string());
     let file = folder.join("solc");
@@ -95,6 +105,13 @@ pub async fn write_executable(
     check_result??;
     save_result??;
 
+    if let Some(validator) = validator {
+        validator
+            .validate(ver, file.as_path())
+            .await
+            .map_err(FetchError::Validation)?;
+    }
+
     Ok(file)
 }
 
@@ -110,9 +127,15 @@ mod tests {
         let bytes = Bytes::from_static(data.as_bytes());
         let sha = Sha256::digest(data.as_bytes());
         let version = Version::from_str("v0.4.10+commit.f0d539ae").unwrap();
-        let file = write_executable(bytes, H256::from_slice(&sha), tmp_dir.path(), &version)
-            .await
-            .unwrap();
+        let file = write_executable(
+            bytes,
+            H256::from_slice(&sha),
+            tmp_dir.path(),
+            &version,
+            None,
+        )
+        .await
+        .unwrap();
         let content = tokio::fs::read_to_string(file).await.unwrap();
         assert_eq!(data, content);
     }

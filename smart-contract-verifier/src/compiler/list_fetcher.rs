@@ -1,5 +1,5 @@
 use super::{
-    fetcher::FetchError,
+    fetcher::{FetchError, FileValidator},
     versions_fetcher::{VersionsFetcher, VersionsRefresher},
 };
 use crate::compiler::{Fetcher, Version};
@@ -96,6 +96,7 @@ impl VersionsFetcher for ListVersionFetcher {
 pub struct ListFetcher {
     versions: VersionsRefresher<VersionsMap>,
     folder: PathBuf,
+    validator: Option<Arc<dyn FileValidator>>,
 }
 
 impl ListFetcher {
@@ -106,7 +107,11 @@ impl ListFetcher {
     ) -> anyhow::Result<Self> {
         let fetcher = Arc::new(ListVersionFetcher::new(list_url));
         let versions = VersionsRefresher::new(fetcher, refresh_schedule).await?;
-        Ok(Self { versions, folder })
+        Ok(Self {
+            versions,
+            folder,
+            validator: None,
+        })
     }
 
     #[instrument(skip(self), level = "debug")]
@@ -136,7 +141,12 @@ impl ListFetcher {
 impl Fetcher for ListFetcher {
     async fn fetch(&self, ver: &Version) -> Result<PathBuf, FetchError> {
         let (data, hash) = self.fetch_file(ver).await?;
-        super::fetcher::write_executable(data, hash, &self.folder, ver).await
+        super::fetcher::write_executable(data, hash, &self.folder, ver, self.validator.as_deref())
+            .await
+    }
+
+    fn with_validator(&mut self, validator: Arc<dyn FileValidator>) {
+        self.validator = Some(validator);
     }
 
     fn all_versions(&self) -> Vec<Version> {

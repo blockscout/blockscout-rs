@@ -52,7 +52,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 [dev-dependencies]
 const_format = "0.2"
 rand = "0.8"
-async-once-cell = "0.4.2"
 wiremock = "0.5"
 quick-xml = { version = "0.23", features = ["serialize"] }
 pretty_assertions = "1.2"

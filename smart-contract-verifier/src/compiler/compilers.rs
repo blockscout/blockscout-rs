@@ -98,14 +98,14 @@ mod tests {
     use std::{env::temp_dir, str::FromStr};
 
     use crate::consts::DEFAULT_COMPILER_LIST;
-    use async_once_cell::OnceCell;
     use ethers_solc::artifacts::{Source, Sources};
     use std::default::Default;
+    use tokio::sync::OnceCell;
 
     async fn global_compilers() -> &'static Compilers {
-        static COMPILERS: OnceCell<Compilers> = OnceCell::new();
+        static COMPILERS: OnceCell<Compilers> = OnceCell::const_new();
         COMPILERS
-            .get_or_init(async {
+            .get_or_init(move || async {
                 let url = DEFAULT_COMPILER_LIST.try_into().expect("Getting url");
                 let fetcher = ListFetcher::new(url, temp_dir(), None)
                     .await

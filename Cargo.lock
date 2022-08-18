@@ -333,12 +333,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-once-cell"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f61305cacf1d0c5c9d3ee283d22f8f1f8c743a18ceb44a1b102bd53476c141de"
-
-[[package]]
 name = "async-trait"
 version = "0.1.57"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3525,7 +3519,6 @@ dependencies = [
  "actix-web",
  "actix-web-prom",
  "anyhow",
- "async-once-cell",
  "async-trait",
  "bytes",
  "chrono",

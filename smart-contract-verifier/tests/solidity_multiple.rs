@@ -6,7 +6,6 @@ use actix_web::{
     test::{self, read_body, read_body_json, TestRequest},
     App,
 };
-use async_once_cell::OnceCell;
 use pretty_assertions::assert_eq;
 use serde_json::json;
 use smart_contract_verifier::{
@@ -18,14 +17,15 @@ use std::{
     fs,
     str::{from_utf8, FromStr},
 };
+use tokio::sync::OnceCell;
 
 const CONTRACTS_DIR: &'static str = "tests/contracts";
 const ROUTE: &'static str = "/api/v1/solidity/verify/multiple-files";
 
 async fn global_app_router() -> &'static AppRouter {
-    static APP_ROUTER: OnceCell<AppRouter> = OnceCell::new();
+    static APP_ROUTER: OnceCell<AppRouter> = OnceCell::const_new();
     APP_ROUTER
-        .get_or_init(async {
+        .get_or_init(move || async {
             let mut settings = Settings::default();
             settings.sourcify.enabled = false;
             AppRouter::new(settings)

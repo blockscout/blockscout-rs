@@ -3,6 +3,7 @@ use crate::{
     compiler::{Compilers, Fetcher, ListFetcher, S3Fetcher},
     http_server::handlers::{multi_part, standard_json, version_list},
     settings::{FetcherSettings, S3FetcherSettings, SoliditySettings},
+    solidity::SolcValidator,
 };
 use actix_web::web;
 use s3::{creds::Credentials, Bucket, Region};
@@ -50,7 +51,7 @@ impl SolidityRouter {
     pub async fn new(settings: SoliditySettings) -> anyhow::Result<Self> {
         let dir = settings.compilers_dir.clone();
         let schedule = settings.refresh_versions_schedule;
-        let fetcher: Arc<dyn Fetcher> = match settings.fetcher {
+        let mut fetcher: Arc<dyn Fetcher> = match settings.fetcher {
             FetcherSettings::List(list_settings) => Arc::new(
                 ListFetcher::new(
                     list_settings.list_url,
@@ -68,6 +69,11 @@ impl SolidityRouter {
                 .await?,
             ),
         };
+
+        Arc::get_mut(&mut fetcher)
+            .unwrap()
+            .with_validator(Arc::new(SolcValidator::default()));
+
         let compilers = Compilers::new(fetcher);
         compilers.load_from_dir(&dir).await;
         Ok(Self {
