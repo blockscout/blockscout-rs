@@ -4,9 +4,11 @@ addr = "0.0.0.0:8044"
 [blockscout]
 base_url = "https://blockscout.com"
 concurrent_requests = 10
+
 instances = [
-    ["eth", "mainnet"],
-    ["xdai", "testnet"],
-    ["xdai", "mainnet"],
+    "eth/mainnet",
+    "xdai/testnet",
+    "xdai/mainnet",
 ]
+
 request_timeout = 60

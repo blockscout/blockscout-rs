@@ -15,8 +15,9 @@ pub struct Instance(pub String, pub String);
 
 impl FromStr for Instance {
     type Err = String;
+    /// "eth/mainnet" -> Instance("eth", "mainnet")
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut parts = s.split(',');
+        let mut parts = s.split('/');
         let network = parts.next().ok_or("missing network")?;
         let chain = parts.next().ok_or("missing chain")?;
         Ok(Instance(network.to_string(), chain.to_string()))
