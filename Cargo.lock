@@ -3530,6 +3530,7 @@ dependencies = [
  "bytes",
  "chrono",
  "clap",
+ "colored",
  "config",
  "const_format",
  "cron",
