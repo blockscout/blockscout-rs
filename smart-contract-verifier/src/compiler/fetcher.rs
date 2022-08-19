@@ -64,23 +64,25 @@ pub async fn write_executable(
 ) -> Result<PathBuf, FetchError> {
     let folder = path.join(ver.to_string());
     let file = folder.join("solc");
+    let mut file_tmp = file.clone();
+    file_tmp.set_extension("tmp");
 
     let save_result = {
-        let file = file.clone();
+        let file_tmp = file_tmp.clone();
         let data = data.clone();
         let span = tracing::debug_span!("save executable");
         tokio::task::spawn_blocking(move || {
             let _guard = span.enter();
             std::fs::create_dir_all(&folder)?;
-            std::fs::remove_file(file.as_path()).or_else(|e| {
+            std::fs::remove_file(file_tmp.as_path()).or_else(|e| {
                 if e.kind() == ErrorKind::NotFound {
                     Ok(())
                 } else {
                     Err(e)
                 }
             })?;
-            let mut file = create_executable(file.as_path())?;
-            std::io::copy(&mut data.as_ref(), &mut file)
+            let mut file_tmp = create_executable(file_tmp.as_path())?;
+            std::io::copy(&mut data.as_ref(), &mut file_tmp)
         })
     };
     let check_result = {
@@ -95,6 +97,8 @@ pub async fn write_executable(
     check_result??;
     save_result??;
 
+    tokio::fs::rename(&file_tmp, &file).await?;
+
     Ok(file)
 }
 
@@ -106,14 +110,39 @@ mod tests {
     #[tokio::test]
     async fn write_text_executable() {
         let tmp_dir = tempfile::tempdir().unwrap();
+
         let data = "this is a compiler binary";
         let bytes = Bytes::from_static(data.as_bytes());
         let sha = Sha256::digest(data.as_bytes());
+
         let version = Version::from_str("v0.4.10+commit.f0d539ae").unwrap();
         let file = write_executable(bytes, H256::from_slice(&sha), tmp_dir.path(), &version)
             .await
             .unwrap();
+
         let content = tokio::fs::read_to_string(file).await.unwrap();
         assert_eq!(data, content);
+    }
+
+    #[tokio::test]
+    async fn wrong_file_checksum() {
+        let tmp_dir = tempfile::tempdir().unwrap();
+
+        let data = "this is a compiler binary";
+        let bytes = Bytes::from_static(data.as_bytes());
+        let sha = H256::default();
+        let version = Version::from_str("v0.4.10+commit.f0d539ae").unwrap();
+
+        let err = write_executable(bytes, sha, tmp_dir.path(), &version)
+            .await
+            .expect_err("expected to fail with wrong checksum");
+        assert!(matches!(err, FetchError::HashMismatch(_)));
+
+        let dir = tmp_dir.path().join(version.to_string());
+        let file = dir.join("solc");
+        let mut tmp_file = file.clone();
+        tmp_file.set_extension("tmp");
+        assert!(!file.exists());
+        assert!(tmp_file.exists());
     }
 }
