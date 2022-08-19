@@ -14,3 +14,7 @@ reqwest = { version = "0.11", features = ["json"] }
 url = { version = "2", features = ["serde"] }
 toml = "0.5.9"
 clap = { version = "3", features = ["derive"] }
+config = "0.13"
+anyhow = "1.0"
+chrono = { version = "0.4.22", features = ["serde"] }
+serde_with = { version = "2.0.0", features = ["chrono_0_4"] }

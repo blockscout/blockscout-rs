@@ -6,19 +6,19 @@ use actix_web::{
     App,
 };
 
-use multichain_api_gateway::{config, handle_request, ApiEndpoints};
+use multichain_api_gateway::{handle_request, settings, ApiEndpoints};
 
 /// In the test we check that valid responses are returned from the API.
 /// Especially we call to the same network (xdai), but to different chains (mainnet, testnet).
 /// Also check correctness of POST/GET propagation
 #[actix_web::test]
 async fn check_make_requests() {
-    let settings = config::BlockscoutSettings {
+    let settings = settings::BlockscoutSettings {
         base_url: "https://blockscout.com".parse().unwrap(),
         instances: vec![
-            config::Instance("eth".to_string(), "mainnet".to_string()),
-            config::Instance("xdai".to_string(), "mainnet".to_string()),
-            config::Instance("xdai".to_string(), "testnet".to_string()),
+            settings::Instance("eth".to_string(), "mainnet".to_string()),
+            settings::Instance("xdai".to_string(), "mainnet".to_string()),
+            settings::Instance("xdai".to_string(), "testnet".to_string()),
         ],
         concurrent_requests: 1,
         request_timeout: std::time::Duration::from_secs(60),

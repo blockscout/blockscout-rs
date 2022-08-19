@@ -1,4 +1,4 @@
-use std::{collections::HashMap, error::Error, net::TcpListener, str};
+use std::{collections::HashMap, error::Error, net::TcpListener, str, time};
 
 use actix_web::{
     dev::{RequestHead, Server},
@@ -11,16 +11,15 @@ use futures::{stream, StreamExt};
 use serde_json::Value;
 use url::Url;
 
-use crate::config::{BlockscoutSettings, Instance, Settings};
+pub use crate::settings::{BlockscoutSettings, Instance, Settings};
 
-mod cli;
-pub mod config;
+pub mod settings;
 
 #[derive(Clone, Debug)]
 pub struct ApiEndpoints {
     apis: Vec<(Instance, Url)>,
     concurrent_requests: usize,
-    request_timeout: std::time::Duration,
+    request_timeout: time::Duration,
 }
 
 /// Assumptions:
