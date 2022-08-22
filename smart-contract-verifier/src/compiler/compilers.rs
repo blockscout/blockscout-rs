@@ -2,6 +2,7 @@ use super::fetcher::FetchError;
 use crate::{
     compiler::{self, DownloadCache, Fetcher, Version},
     http_server::metrics,
+    solidity::compile_using_cli,
 };
 use ethers_solc::{artifacts::Severity, error::SolcError, CompilerInput, CompilerOutput, Solc};
 use std::{fmt::Debug, path::PathBuf, sync::Arc};
@@ -55,8 +56,11 @@ impl Compilers {
                 ver = compiler_version.to_string()
             );
             let _guard = span.enter();
-            solc.compile(&input)?
+            compile(&solc, compiler_version, input)?
         };
+
+        //println!("{:?}", output.contracts);
+        //println!("{:?}", output.contracts.iter().next().unwrap().1.iter().next().unwrap().1.get_deployed_bytecode_bytes().unwrap());
 
         // Compilations errors, warnings and info messages are returned in `CompilerOutput.error`
         let mut errors = Vec::new();
@@ -88,6 +92,19 @@ impl Compilers {
                 tracing::error!("error during local compilers loading: {}", e)
             }
         };
+    }
+}
+
+fn compile(
+    solc: &Solc,
+    compiler_version: &compiler::Version,
+    input: &CompilerInput,
+) -> Result<CompilerOutput, SolcError> {
+    // <0.4.11 versions doesn't support --standard-json
+    if compiler_version.version() < &semver::Version::new(0, 4, 11) {
+        compile_using_cli(&solc.solc, input)
+    } else {
+        solc.compile(input)
     }
 }
 
