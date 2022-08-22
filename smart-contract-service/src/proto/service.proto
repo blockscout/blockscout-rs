@@ -24,7 +24,7 @@ syntax = "proto3";
 
 message GetAbiRequest {
   bytes contract_address = 1;
-  string chain_id = 2;
+  uint64 chain_id = 2;
 }
 
 message GetAbiResponse { /* todo!() */
@@ -32,7 +32,7 @@ message GetAbiResponse { /* todo!() */
 
 message GetSourcesRequest {
   bytes contract_address = 1;
-  string chain_id = 2;
+  uint64 chain_id = 2;
 };
 
 message GetSourcesResponse { /* todo!() */
@@ -44,7 +44,7 @@ message VerifySingleRequest {
   bytes deployed_bytecode = 3;
 
   // as one instance of the service could be used for multiple chains
-  string chain_id = 4;
+  uint64 chain_id = 4;
 
   string compiler_version = 5;
   // if None, `evm_version` is set to "default"
@@ -68,12 +68,9 @@ message VerifySingleResponse {
     string source_code = 7;
 
     string abi = 9;
-    string constructor_arguments = 10;
+    bytes constructor_arguments = 10;
   }
 
-  // `uint32` is used for compatibility purposes, as it transcodes to numeric
-  // value in JSON representation, while `uint64` transcodes to String
-  // (https://developers.google.com/protocol-buffers/docs/proto3#json)
   uint32 status = 1;
   string message = 2;
   optional Result result = 3;
@@ -85,7 +82,7 @@ message VerifyMultiRequest {
   bytes deployed_bytecode = 3;
 
   // as one instance of the service could be used for multiple chains
-  string chain_id = 4;
+  uint64 chain_id = 4;
 
   string compiler_version = 5;
   // if None, `evm_version` is set to "default"
@@ -111,12 +108,9 @@ message VerifyMultiResponse {
     map<string, string> sources = 8;
 
     string abi = 9;
-    string constructor_arguments = 10;
+    bytes constructor_arguments = 10;
   }
 
-  // `uint32` is used for compatibility purposes, as it transcodes to numeric
-  // value in JSON representation, while `uint64` transcodes to String
-  // (https://developers.google.com/protocol-buffers/docs/proto3#json)
   uint32 status = 1;
   string message = 2;
   optional Result result = 3;
@@ -128,7 +122,7 @@ message VerifyStandardJsonRequest {
   bytes deployed_bytecode = 3;
 
   // as one instance of the service could be used for multiple chains
-  string chain_id = 4;
+  uint64 chain_id = 4;
 
   // should be valid input standard JSON
   string input = 5;
@@ -147,12 +141,9 @@ message VerifyStandardJsonResponse {
     map<string, string> sources = 8;
 
     string abi = 9;
-    string constructor_arguments = 10;
+    bytes constructor_arguments = 10;
   }
 
-  // `uint32` is used for compatibility purposes, as it transcodes to numeric
-  // value in JSON representation, while `uint64` transcodes to String
-  // (https://developers.google.com/protocol-buffers/docs/proto3#json)
   uint32 status = 1;
   string message = 2;
   optional Result result = 3;
@@ -160,7 +151,7 @@ message VerifyStandardJsonResponse {
 
 message VerifyViaSourcifyRequest {
   bytes contract_address = 1;
-  string chain_id = 2;
+  uint64 chain_id = 2;
   map<string, string> files = 3;
   optional uint64 chosen_contract = 4; // should be `uint32`?
 };
@@ -180,9 +171,6 @@ message VerifyViaSourcifyResponse {
     string abi = 9;
   }
 
-  // `uint32` is used for compatibility purposes, as it transcodes to numeric
-  // value in JSON representation, while `uint64` transcodes to String
-  // (https://developers.google.com/protocol-buffers/docs/proto3#json)
   uint32 status = 1;
   string message = 2;
   optional Result result = 3;
@@ -194,7 +182,7 @@ message VerifyVyperRequest {
   bytes deployed_bytecode = 3;
 
   // as one instance of the service could be used for multiple chains
-  string chain_id = 4;
+  uint64 chain_id = 4;
 
   string compiler_version = 5;
 
@@ -214,29 +202,26 @@ message VerifyVyperResponse {
     string abi = 6;
   }
 
-  // `uint32` is used for compatibility purposes, as it transcodes to numeric
-  // value in JSON representation, while `uint64` transcodes to String
-  // (https://developers.google.com/protocol-buffers/docs/proto3#json)
   uint32 status = 1;
   string message = 2;
   optional Result result = 3;
 };
 
-// Is returned as a response for all types of async verification
+// Returned as a response for all types of async verification
 message VerifyAsyncResponse {
-  bytes verification_id = 1; // guid
+  bytes verification_id = 1; // uuid
 };
 
 message GetVerificationStatusRequest {
-  bytes verification_id = 1; // guid
+  bytes verification_id = 1; // uuid
 };
 
 message GetVerificationStatusResponse {
   enum Status {
-    PENDING = 0;
-    PASS = 1;
-    FAIL = 2;
-    UNKNOWN_ID = 3;
+    UNKNOWN_ID = 0;
+    PENDING = 1;
+    PASS = 2;
+    FAIL = 3;
   }
 
   Status status = 1;
@@ -250,7 +235,7 @@ message GetVerificationStatusResponse {
   };
 };
 
-service SmartContractsService {
+service SmartContractService {
   // `GET /abi` - retrieves abi from SCDB and sends it back to the caller
   rpc GetAbi(GetAbiRequest) returns (GetAbiResponse);
 
@@ -275,9 +260,10 @@ service SmartContractsService {
 
   // `POST /verify-vyper` - verifies vyper contracts
   rpc VerifyVyper(VerifyVyperRequest) returns (VerifyVyperResponse);
+}
 
-  // Async verification related endpoints
-
+// Async verification related endpoints
+service AsyncSmartContractService {
   // `POST /verify-single-async` - async version of `VerifySingle`
   rpc VerifySingleAsync(VerifySingleRequest) returns (VerifyAsyncResponse);
 
