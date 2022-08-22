@@ -1,0 +1,302 @@
+// `public_api_analog` - `method route` - description
+//
+// `getabi` - `GET /abi` - retrieves abi from SCDB and sends it back to the
+// caller
+//
+// `getsourcecode` - `GET /sources` - retrieves all info from SCDB and sends it
+// back to the caller (including metadata or standard json input used for
+// verification)
+//
+// `verify` - `POST /verify-single` - verifier a single-file contract
+//
+// `verify_via_sourcify` - `POST /verify-via-sourcify` - verifies a contract via
+// metadata
+//
+// `verify_vyper_contract` - `POST /verify-vyper` -
+//
+// `verifysourcecode` - `POST /verify-standard-json` - returns verification id
+// to get the status later in case of async, or the verification result if sync
+//
+// `checkverifystatus` - `GET /verification-status` - accepts verification id
+// and returns status with info
+
+syntax = "proto3";
+
+message GetAbiRequest {
+  bytes contract_address = 1;
+  string chain_id = 2;
+}
+
+message GetAbiResponse { /* todo!() */
+}
+
+message GetSourcesRequest {
+  bytes contract_address = 1;
+  string chain_id = 2;
+};
+
+message GetSourcesResponse { /* todo!() */
+};
+
+message VerifySingleRequest {
+  bytes contract_address = 1;
+  bytes creation_tx_input = 2;
+  bytes deployed_bytecode = 3;
+
+  // as one instance of the service could be used for multiple chains
+  string chain_id = 4;
+
+  string compiler_version = 5;
+  // if None, `evm_version` is set to "default"
+  optional string evm_version = 6;
+  // if None, `optimizer.enabled` is set to be false
+  optional uint32 optimization_runs = 7;
+  // library_name -> library_address;
+  map<string, string> libraries = 8;
+
+  string source_code = 9;
+};
+message VerifySingleResponse {
+  message Result {
+    string name = 1;
+
+    string compiler_version = 2;
+    string evm_version = 3;
+    optional bool optimization = 4;
+    optional uint32 optimization_runs = 5;
+    map<string, string> libraries = 6;
+    string source_code = 7;
+
+    string abi = 9;
+    string constructor_arguments = 10;
+  }
+
+  // `uint32` is used for compatibility purposes, as it transcodes to numeric
+  // value in JSON representation, while `uint64` transcodes to String
+  // (https://developers.google.com/protocol-buffers/docs/proto3#json)
+  uint32 status = 1;
+  string message = 2;
+  optional Result result = 3;
+};
+
+message VerifyMultiRequest {
+  bytes contract_address = 1;
+  bytes creation_tx_input = 2;
+  bytes deployed_bytecode = 3;
+
+  // as one instance of the service could be used for multiple chains
+  string chain_id = 4;
+
+  string compiler_version = 5;
+  // if None, `evm_version` is set to "default"
+  optional string evm_version = 6;
+  // if None, `optimizer.enabled` is set to be false
+  optional uint32 optimization_runs = 7;
+  // library_name -> library_address;
+  map<string, string> libraries = 8;
+
+  map<string, string> sources = 9;
+};
+
+message VerifyMultiResponse {
+  message Result {
+    string file_path = 1;
+    string name = 2;
+
+    string compiler_version = 3;
+    string evm_version = 4;
+    optional bool optimization = 5;
+    optional uint32 optimization_runs = 6;
+    map<string, string> libraries = 7;
+    map<string, string> sources = 8;
+
+    string abi = 9;
+    string constructor_arguments = 10;
+  }
+
+  // `uint32` is used for compatibility purposes, as it transcodes to numeric
+  // value in JSON representation, while `uint64` transcodes to String
+  // (https://developers.google.com/protocol-buffers/docs/proto3#json)
+  uint32 status = 1;
+  string message = 2;
+  optional Result result = 3;
+};
+
+message VerifyStandardJsonRequest {
+  bytes contract_address = 1;
+  bytes creation_tx_input = 2;
+  bytes deployed_bytecode = 3;
+
+  // as one instance of the service could be used for multiple chains
+  string chain_id = 4;
+
+  // should be valid input standard JSON
+  string input = 5;
+};
+
+message VerifyStandardJsonResponse {
+  message Result {
+    string file_path = 1;
+    string name = 2;
+
+    string compiler_version = 3;
+    string evm_version = 4;
+    optional bool optimization = 5;
+    optional uint32 optimization_runs = 6;
+    map<string, string> libraries = 7;
+    map<string, string> sources = 8;
+
+    string abi = 9;
+    string constructor_arguments = 10;
+  }
+
+  // `uint32` is used for compatibility purposes, as it transcodes to numeric
+  // value in JSON representation, while `uint64` transcodes to String
+  // (https://developers.google.com/protocol-buffers/docs/proto3#json)
+  uint32 status = 1;
+  string message = 2;
+  optional Result result = 3;
+};
+
+message VerifyViaSourcifyRequest {
+  bytes contract_address = 1;
+  string chain_id = 2;
+  map<string, string> files = 3;
+  optional uint64 chosen_contract = 4; // should be `uint32`?
+};
+
+message VerifyViaSourcifyResponse {
+  message Result {
+    string file_path = 1;
+    string name = 2;
+
+    string compiler_version = 3;
+    string evm_version = 4;
+    optional bool optimization = 5;
+    optional uint32 optimization_runs = 6;
+    map<string, string> libraries = 7;
+    map<string, string> sources = 8;
+
+    string abi = 9;
+  }
+
+  // `uint32` is used for compatibility purposes, as it transcodes to numeric
+  // value in JSON representation, while `uint64` transcodes to String
+  // (https://developers.google.com/protocol-buffers/docs/proto3#json)
+  uint32 status = 1;
+  string message = 2;
+  optional Result result = 3;
+};
+
+message VerifyVyperRequest {
+  bytes contract_address = 1;
+  bytes creation_tx_input = 2;
+  bytes deployed_bytecode = 3;
+
+  // as one instance of the service could be used for multiple chains
+  string chain_id = 4;
+
+  string compiler_version = 5;
+
+  string source_code = 6;
+};
+
+message VerifyVyperResponse {
+  message Result {
+    string name = 1;
+
+    string compiler_version = 2;
+    string evm_version = 3;
+    // there are no optimization runs concept for Vyper
+    bool optimization = 4;
+    string source_code = 5;
+
+    string abi = 6;
+  }
+
+  // `uint32` is used for compatibility purposes, as it transcodes to numeric
+  // value in JSON representation, while `uint64` transcodes to String
+  // (https://developers.google.com/protocol-buffers/docs/proto3#json)
+  uint32 status = 1;
+  string message = 2;
+  optional Result result = 3;
+};
+
+// Is returned as a response for all types of async verification
+message VerifyAsyncResponse {
+  bytes verification_id = 1; // guid
+};
+
+message GetVerificationStatusRequest {
+  bytes verification_id = 1; // guid
+};
+
+message GetVerificationStatusResponse {
+  enum Status {
+    PENDING = 0;
+    PASS = 1;
+    FAIL = 2;
+    UNKNOWN_ID = 3;
+  }
+
+  Status status = 1;
+  string message = 2;
+  oneof result {
+    VerifySingleResponse.Result single_result = 3;
+    VerifyMultiResponse.Result multi_result = 4;
+    VerifyStandardJsonResponse.Result standard_json_result = 5;
+    VerifyViaSourcifyResponse.Result via_sourcify_result = 6;
+    VerifyVyperResponse.Result vyper_result = 7;
+  };
+};
+
+service SmartContractsService {
+  // `GET /abi` - retrieves abi from SCDB and sends it back to the caller
+  rpc GetAbi(GetAbiRequest) returns (GetAbiResponse);
+
+  // `GET /sources` - retrieves all info from SCDB and sends it back to the
+  // caller
+  rpc GetSources(GetSourcesRequest) returns (GetSourcesResponse);
+
+  // `POST /verify-single` - verifies a single-file contract
+  rpc VerifySingle(VerifySingleRequest) returns (VerifySingleResponse);
+
+  // `POST /verify-multi` - verifies a single-file contract
+  rpc VerifyMulti(VerifyMultiRequest) returns (VerifyMultiResponse);
+
+  // `POST /verify-standard-json` - returns verification id to get the status
+  // later in case of async, or the verification result if sync
+  rpc VerifyStandardJson(VerifyStandardJsonRequest)
+      returns (VerifyStandardJsonResponse);
+
+  // `POST /verify-via-sourcify` - verifies a contract via sourcify metadata
+  rpc VerifyViaSourcify(VerifyViaSourcifyRequest)
+      returns (VerifyViaSourcifyResponse);
+
+  // `POST /verify-vyper` - verifies vyper contracts
+  rpc VerifyVyper(VerifyVyperRequest) returns (VerifyVyperResponse);
+
+  // Async verification related endpoints
+
+  // `POST /verify-single-async` - async version of `VerifySingle`
+  rpc VerifySingleAsync(VerifySingleRequest) returns (VerifyAsyncResponse);
+
+  // `POST /verify-multi-async` - async version of `VerifySingle`
+  rpc VerifyMultiAsync(VerifyMultiRequest) returns (VerifyAsyncResponse);
+
+  // `POST /verify-standard-json-async` - async version of `VerifyStandardJson`
+  rpc VerifyStandardJsonAsync(VerifyStandardJsonRequest)
+      returns (VerifyAsyncResponse);
+
+  // `POST /verify-via-sourcify-async` - async version of `VerifyViaSourcify`
+  rpc VerifyViaSourcifyAsync(VerifyViaSourcifyRequest)
+      returns (VerifyAsyncResponse);
+
+  // `POST /verify-vyper-async` - async version of `VerifyStandardJson`
+  rpc VerifyVyperAsync(VerifyVyperRequest) returns (VerifyAsyncResponse);
+
+  // `GET /verification-status` - accepts verification id and returns status
+  // with info
+  rpc GetVerificationStatus(GetVerificationStatusRequest)
+      returns (GetVerificationStatusResponse);
+}

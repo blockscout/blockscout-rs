@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "smart-contract-service",
     "smart-contract-verifier",
-    "multichain-api-gateway"
+    "multichain-api-gateway",
 ]
