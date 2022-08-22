@@ -1,26 +1,7 @@
-// `public_api_analog` - `method route` - description
-//
-// `getabi` - `GET /abi` - retrieves abi from SCDB and sends it back to the
-// caller
-//
-// `getsourcecode` - `GET /sources` - retrieves all info from SCDB and sends it
-// back to the caller (including metadata or standard json input used for
-// verification)
-//
-// `verify` - `POST /verify-single` - verifier a single-file contract
-//
-// `verify_via_sourcify` - `POST /verify-via-sourcify` - verifies a contract via
-// metadata
-//
-// `verify_vyper_contract` - `POST /verify-vyper` -
-//
-// `verifysourcecode` - `POST /verify-standard-json` - returns verification id
-// to get the status later in case of async, or the verification result if sync
-//
-// `checkverifystatus` - `GET /verification-status` - accepts verification id
-// and returns status with info
-
 syntax = "proto3";
+package smart_contract_service;
+
+import "google/api/annotations.proto";
 
 message GetAbiRequest {
   bytes contract_address = 1;
@@ -217,11 +198,12 @@ message GetVerificationStatusRequest {
 };
 
 message GetVerificationStatusResponse {
+  // Backward compatible with current elixir impl
   enum Status {
-    UNKNOWN_ID = 0;
-    PENDING = 1;
-    PASS = 2;
-    FAIL = 3;
+    PENDING = 0;
+    PASS = 1;
+    FAIL = 2;
+    UNKNOWN_ID = 3;
   }
 
   Status status = 1;
@@ -236,53 +218,103 @@ message GetVerificationStatusResponse {
 };
 
 service SmartContractService {
-  // `GET /abi` - retrieves abi from SCDB and sends it back to the caller
-  rpc GetAbi(GetAbiRequest) returns (GetAbiResponse);
+  // Retrieves abi from SCDB and sends it back to the caller
+  rpc GetAbi(GetAbiRequest) returns (GetAbiResponse) {
+    option (google.api.http) = {
+      get : "/abi"
+    };
+  }
 
-  // `GET /sources` - retrieves all info from SCDB and sends it back to the
-  // caller
-  rpc GetSources(GetSourcesRequest) returns (GetSourcesResponse);
+  // Retrieves all info from SCDB and sends it back to the caller
+  rpc GetSources(GetSourcesRequest) returns (GetSourcesResponse) {
+    option (google.api.http) = {
+      get : "/sources"
+    };
+  }
 
-  // `POST /verify-single` - verifies a single-file contract
-  rpc VerifySingle(VerifySingleRequest) returns (VerifySingleResponse);
+  // Verifies a single-file contract
+  rpc VerifySingle(VerifySingleRequest) returns (VerifySingleResponse) {
+    option (google.api.http) = {
+      post : "/verify-single"
+    };
+  }
 
-  // `POST /verify-multi` - verifies a single-file contract
-  rpc VerifyMulti(VerifyMultiRequest) returns (VerifyMultiResponse);
+  // Verifies a single-file contract
+  rpc VerifyMulti(VerifyMultiRequest) returns (VerifyMultiResponse) {
+    option (google.api.http) = {
+      post : "/verify-multi"
+    };
+  }
 
-  // `POST /verify-standard-json` - returns verification id to get the status
-  // later in case of async, or the verification result if sync
+  // Returns verification id to get the status later in case of async, or the
+  // verification result if sync
   rpc VerifyStandardJson(VerifyStandardJsonRequest)
-      returns (VerifyStandardJsonResponse);
+      returns (VerifyStandardJsonResponse) {
+    option (google.api.http) = {
+      post : "/verify-standard-json"
+    };
+  }
 
-  // `POST /verify-via-sourcify` - verifies a contract via sourcify metadata
+  // Verifies a contract via sourcify metadata
   rpc VerifyViaSourcify(VerifyViaSourcifyRequest)
-      returns (VerifyViaSourcifyResponse);
+      returns (VerifyViaSourcifyResponse) {
+    option (google.api.http) = {
+      post : "/verify-via-sourcify"
+    };
+  }
 
-  // `POST /verify-vyper` - verifies vyper contracts
-  rpc VerifyVyper(VerifyVyperRequest) returns (VerifyVyperResponse);
+  // Verifies vyper contracts
+  rpc VerifyVyper(VerifyVyperRequest) returns (VerifyVyperResponse) {
+    option (google.api.http) = {
+      post : "/verify-vyper"
+    };
+  }
 }
 
 // Async verification related endpoints
-service AsyncSmartContractService {
-  // `POST /verify-single-async` - async version of `VerifySingle`
-  rpc VerifySingleAsync(VerifySingleRequest) returns (VerifyAsyncResponse);
+service SmartContractAsyncService {
+  // Async version of `VerifySingle`
+  rpc VerifySingleAsync(VerifySingleRequest) returns (VerifyAsyncResponse) {
+    option (google.api.http) = {
+      post : "/async/verify-single"
+    };
+  }
 
-  // `POST /verify-multi-async` - async version of `VerifySingle`
-  rpc VerifyMultiAsync(VerifyMultiRequest) returns (VerifyAsyncResponse);
+  // Async version of `VerifySingle`
+  rpc VerifyMultiAsync(VerifyMultiRequest) returns (VerifyAsyncResponse) {
+    option (google.api.http) = {
+      post : "/async/verify-multi"
+    };
+  }
 
-  // `POST /verify-standard-json-async` - async version of `VerifyStandardJson`
+  // Async version of `VerifyStandardJson`
   rpc VerifyStandardJsonAsync(VerifyStandardJsonRequest)
-      returns (VerifyAsyncResponse);
+      returns (VerifyAsyncResponse) {
+    option (google.api.http) = {
+      post : "/async/verify-standard-json"
+    };
+  }
 
-  // `POST /verify-via-sourcify-async` - async version of `VerifyViaSourcify`
+  // Async version of `VerifyViaSourcify`
   rpc VerifyViaSourcifyAsync(VerifyViaSourcifyRequest)
-      returns (VerifyAsyncResponse);
+      returns (VerifyAsyncResponse) {
+    option (google.api.http) = {
+      post : "/async/verify-via-sourcify"
+    };
+  }
 
-  // `POST /verify-vyper-async` - async version of `VerifyStandardJson`
-  rpc VerifyVyperAsync(VerifyVyperRequest) returns (VerifyAsyncResponse);
+  // Async version of `VerifyStandardJson`
+  rpc VerifyVyperAsync(VerifyVyperRequest) returns (VerifyAsyncResponse) {
+    option (google.api.http) = {
+      post : "/async/verify-vyper"
+    };
+  }
 
-  // `GET /verification-status` - accepts verification id and returns status
-  // with info
+  // Accepts verification id and returns status with info
   rpc GetVerificationStatus(GetVerificationStatusRequest)
-      returns (GetVerificationStatusResponse);
+      returns (GetVerificationStatusResponse) {
+    option (google.api.http) = {
+      post : "/async/verification-status"
+    };
+  }
 }

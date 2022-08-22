@@ -1,0 +1,3 @@
+[submodule "smart-contract-service/proto/googleapis"]
+	path = smart-contract-service/proto/googleapis
+	url = git@github.com:googleapis/googleapis.git
