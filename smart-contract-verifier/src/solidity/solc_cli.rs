@@ -45,9 +45,9 @@ mod types {
 
     #[derive(Debug, PartialEq)]
     pub struct InputArgs {
-        optimize: bool,
-        optimize_runs: Option<usize>,
-        libs: BTreeMap<String, String>,
+        pub optimize: bool,
+        pub optimize_runs: Option<usize>,
+        pub libs: BTreeMap<String, String>,
     }
 
     fn merge_libs(libraries: Libraries) -> BTreeMap<String, String> {
@@ -100,8 +100,8 @@ mod types {
 
     #[derive(Debug)]
     pub struct InputFiles {
-        files_dir: TempDir,
-        file_names: Vec<String>,
+        pub files_dir: TempDir,
+        pub file_names: Vec<String>,
     }
 
     impl TryFrom<&CompilerInput> for InputFiles {
@@ -138,12 +138,12 @@ mod types {
     }
 
     #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
-    struct OutputContract {
+    pub struct OutputContract {
         #[serde(deserialize_with = "serde_helpers::deserialize_abi_string")]
-        abi: Vec<serde_json::Value>,
-        bin: String,
+        pub abi: Vec<serde_json::Value>,
+        pub bin: String,
         #[serde(rename = "bin-runtime")]
-        bin_runtime: String,
+        pub bin_runtime: String,
     }
 
     impl OutputContract {
@@ -178,7 +178,7 @@ mod types {
 
     #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
     pub struct OutputJson {
-        contracts: HashMap<String, OutputContract>,
+        pub contracts: HashMap<String, OutputContract>,
     }
 
     impl TryFrom<OutputJson> for CompilerOutput {
@@ -201,162 +201,6 @@ mod types {
             );
             let compiler_output = serde_json::from_value(compiler_output)?;
             Ok(compiler_output)
-        }
-    }
-
-    #[cfg(test)]
-    mod tests {
-        use super::*;
-        use ethers_solc::Artifact;
-        use hex::ToHex;
-        use pretty_assertions::assert_eq;
-
-        const DEFAULT_COMPILER_INPUT: &'static str = r#"
-        {
-            "language": "Solidity",
-            "sources": {
-              "a.sol": {
-                "content": "pragma solidity >=0.4.5;\n\n\ncontract A {\n   function get_a() public returns (uint256) {\n        return 88888888888;\n    }\n}"
-              },
-              "b.sol": {
-                "content": "pragma solidity >=0.4.5;\n\n\ncontract B {\n   function get_b() public returns (uint256) {\n        return 7777777777777;\n    }\n}"
-              },
-              "main.sol": {
-                "content": "pragma solidity >=0.4.5;\n\nimport \"./a.sol\";\n\nimport \"./b.sol\";\n\ncontract Main is A, B {\n   function get() public returns (uint256) {\n        return get_a() + get_b();\n    }\n}\n\n"
-              }
-            },
-            "settings": {
-                "optimizer": {
-                    "enabled": false,
-                    "runs": 200
-                },
-                "libraries": {
-                    "main.sol": {
-                        "MyLib": "0x1234",
-                        "OurLib": "0x4321"
-                    }
-                },
-                "outputSelection": {
-                  "*": {
-                    "*": ["*"]
-                  }
-                }
-              }
-        }
-        "#;
-
-        const DEFAULT_COMPILER_OUTPUT: &'static str = r#"
-        {
-            "contracts": {
-                "A": {
-                    "abi": "[{\"constant\":false,\"inputs\":[],\"name\":\"get_a\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"type\":\"function\"}]",
-                    "bin": "6060604052346000575b6096806100176000396000f30060606040526000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff1680634815918114603c575b6000565b346000576046605c565b6040518082815260200191505060405180910390f35b60006414b230ce3890505b905600a165627a7a7230582062ac15c74e3af0aec92b47f64d9c8909939b731732d5ee4163c6ed3af70806550029",
-                    "bin-runtime": "60606040526000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff1680634815918114603c575b6000565b346000576046605c565b6040518082815260200191505060405180910390f35b60006414b230ce3890505b905600a165627a7a7230582062ac15c74e3af0aec92b47f64d9c8909939b731732d5ee4163c6ed3af70806550029"
-                },
-                "B": {
-                    "abi": "[{\"constant\":false,\"inputs\":[],\"name\":\"get_b\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"type\":\"function\"}]",
-                    "bin": "6060604052346000575b6097806100176000396000f30060606040526000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063f3d33cf414603c575b6000565b346000576046605c565b6040518082815260200191505060405180910390f35b6000650712e7ae7c7190505b905600a165627a7a723058201d98c5b92f01dbead603c6c3b4c7f04520fa048e1eacf0ce2dad63a406019c710029",
-                    "bin-runtime": "60606040526000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063f3d33cf414603c575b6000565b346000576046605c565b6040518082815260200191505060405180910390f35b6000650712e7ae7c7190505b905600a165627a7a723058201d98c5b92f01dbead603c6c3b4c7f04520fa048e1eacf0ce2dad63a406019c710029"
-                },
-                "Main": {
-                    "abi": "[{\"constant\":false,\"inputs\":[],\"name\":\"get_a\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"type\":\"function\"},{\"constant\":false,\"inputs\":[],\"name\":\"get\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"type\":\"function\"},{\"constant\":false,\"inputs\":[],\"name\":\"get_b\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"type\":\"function\"}]",
-                    "bin": "606060405234610000575b61010e806100196000396000f30060606040526000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063481591811460505780636d4ce63c146070578063f3d33cf4146090575b6000565b34600057605a60b0565b6040518082815260200191505060405180910390f35b34600057607a60be565b6040518082815260200191505060405180910390f35b34600057609a60d3565b6040518082815260200191505060405180910390f35b60006414b230ce3890505b90565b600060c660d3565b60cc60b0565b0190505b90565b6000650712e7ae7c7190505b905600a165627a7a72305820a80a9599b36625e94a3eadfd5c31475a2c507be6d1a9fa9a35e9cd4c54bce1390029",
-                    "bin-runtime": "60606040526000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063481591811460505780636d4ce63c146070578063f3d33cf4146090575b6000565b34600057605a60b0565b6040518082815260200191505060405180910390f35b34600057607a60be565b6040518082815260200191505060405180910390f35b34600057609a60d3565b6040518082815260200191505060405180910390f35b60006414b230ce3890505b90565b600060c660d3565b60cc60b0565b0190505b90565b6000650712e7ae7c7190505b905600a165627a7a72305820a80a9599b36625e94a3eadfd5c31475a2c507be6d1a9fa9a35e9cd4c54bce1390029"
-                }
-            },
-            "version": "0.4.8+commit.60cc1668"
-        }
-        "#;
-
-        #[test]
-        fn correct_input_args() {
-            let input: CompilerInput = serde_json::from_str(DEFAULT_COMPILER_INPUT).unwrap();
-
-            let input_args = InputArgs::try_from(&input).expect("failed to convert args");
-            let expected_args = InputArgs {
-                optimize: false,
-                optimize_runs: Some(200),
-                libs: BTreeMap::from_iter(vec![
-                    ("MyLib".to_string(), "0x1234".to_string()),
-                    ("OurLib".to_string(), "0x4321".to_string()),
-                ]),
-            };
-            assert_eq!(input_args, expected_args);
-            assert_eq!(
-                input_args.build_string_args(),
-                vec![
-                    "--combined-json",
-                    "abi,bin,bin-runtime",
-                    "--optimize-runs",
-                    "200",
-                    "--libraries",
-                    "MyLib:0x1234,OurLib:0x4321"
-                ]
-            );
-        }
-
-        #[test]
-        fn correct_input_files() {
-            let input: CompilerInput = serde_json::from_str(DEFAULT_COMPILER_INPUT).unwrap();
-
-            let input_files = InputFiles::try_from(&input).expect("failed to convert files");
-            assert!(input_files.files_dir.path().exists());
-
-            let expected_files: Vec<String> = vec!["a.sol", "b.sol", "main.sol"]
-                .into_iter()
-                .map(|name| {
-                    input_files
-                        .files_dir
-                        .path()
-                        .join(name)
-                        .to_string_lossy()
-                        .to_string()
-                })
-                .collect();
-            assert_eq!(input_files.file_names, expected_files);
-            let string_args = input_files
-                .build_string_args()
-                .expect("failed to build string args");
-            assert_eq!(string_args, &expected_files);
-        }
-
-        #[test]
-        fn correct_output() {
-            let output_json: OutputJson = serde_json::from_str(DEFAULT_COMPILER_OUTPUT).unwrap();
-            let compiler_output = CompilerOutput::try_from(output_json.clone())
-                .expect("failed to convert output json");
-
-            assert_eq!(compiler_output.contracts.len(), 1);
-            let filename = compiler_output.contracts.iter().next().unwrap().0;
-            assert_eq!(filename, "");
-
-            for (name, contract) in compiler_output.contracts_into_iter() {
-                let initial_contract = output_json
-                    .contracts
-                    .get(&name)
-                    .expect("invalid contract name");
-                let abi = serde_json::to_value(&contract.abi).unwrap();
-                let expected_abi = serde_json::to_value(&initial_contract.abi).unwrap();
-                assert_eq!(abi, expected_abi);
-
-                for (name, actual_bytecode, expected_bytecode) in vec![
-                    (
-                        "creation bytecode",
-                        contract.get_bytecode_bytes(),
-                        &initial_contract.bin,
-                    ),
-                    (
-                        "deployed bytecode",
-                        contract.get_deployed_bytecode_bytes(),
-                        &initial_contract.bin_runtime,
-                    ),
-                ] {
-                    let bytecode: String = actual_bytecode
-                        .expect(&format!("unlinked {}", name))
-                        .encode_hex();
-                    assert_eq!(&bytecode, expected_bytecode, "wrong {}", name);
-                }
-            }
         }
     }
 }
@@ -402,4 +246,248 @@ pub fn compile_using_cli(
         }
     };
     Ok(compiler_output)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::compiler::{Fetcher, ListFetcher, Version};
+    use ethers_solc::{
+        artifacts::{Settings, Source},
+        Artifact,
+    };
+    use hex::ToHex;
+    use pretty_assertions::assert_eq;
+    use std::{collections::HashSet, env::temp_dir, path::PathBuf, str::FromStr};
+    use url::Url;
+    use wiremock::{
+        matchers::{method, path},
+        Mock, MockServer, ResponseTemplate,
+    };
+
+    const DEFAULT_COMPILER_INPUT: &'static str = r#"
+    {
+        "language": "Solidity",
+        "sources": {
+            "a.sol": {
+            "content": "pragma solidity >=0.4.5;\n\n\ncontract A {\n   function get_a() public returns (uint256) {\n        return 88888888888;\n    }\n}"
+            },
+            "b.sol": {
+            "content": "pragma solidity >=0.4.5;\n\n\ncontract B {\n   function get_b() public returns (uint256) {\n        return 7777777777777;\n    }\n}"
+            },
+            "main.sol": {
+            "content": "pragma solidity >=0.4.5;\n\nimport \"./a.sol\";\n\nimport \"./b.sol\";\n\ncontract Main is A, B {\n   function get() public returns (uint256) {\n        return get_a() + get_b();\n    }\n}\n\n"
+            }
+        },
+        "settings": {
+            "optimizer": {
+                "enabled": false,
+                "runs": 200
+            },
+            "libraries": {
+                "main.sol": {
+                    "MyLib": "0x1234",
+                    "OurLib": "0x4321"
+                }
+            },
+            "outputSelection": {
+                "*": {
+                "*": ["*"]
+                }
+            }
+            }
+    }
+    "#;
+
+    const DEFAULT_COMPILER_OUTPUT: &'static str = r#"
+    {
+        "contracts": {
+            "A": {
+                "abi": "[{\"constant\":false,\"inputs\":[],\"name\":\"get_a\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"type\":\"function\"}]",
+                "bin": "6060604052346000575b6096806100176000396000f30060606040526000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff1680634815918114603c575b6000565b346000576046605c565b6040518082815260200191505060405180910390f35b60006414b230ce3890505b905600a165627a7a7230582062ac15c74e3af0aec92b47f64d9c8909939b731732d5ee4163c6ed3af70806550029",
+                "bin-runtime": "60606040526000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff1680634815918114603c575b6000565b346000576046605c565b6040518082815260200191505060405180910390f35b60006414b230ce3890505b905600a165627a7a7230582062ac15c74e3af0aec92b47f64d9c8909939b731732d5ee4163c6ed3af70806550029"
+            },
+            "B": {
+                "abi": "[{\"constant\":false,\"inputs\":[],\"name\":\"get_b\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"type\":\"function\"}]",
+                "bin": "6060604052346000575b6097806100176000396000f30060606040526000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063f3d33cf414603c575b6000565b346000576046605c565b6040518082815260200191505060405180910390f35b6000650712e7ae7c7190505b905600a165627a7a723058201d98c5b92f01dbead603c6c3b4c7f04520fa048e1eacf0ce2dad63a406019c710029",
+                "bin-runtime": "60606040526000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063f3d33cf414603c575b6000565b346000576046605c565b6040518082815260200191505060405180910390f35b6000650712e7ae7c7190505b905600a165627a7a723058201d98c5b92f01dbead603c6c3b4c7f04520fa048e1eacf0ce2dad63a406019c710029"
+            },
+            "Main": {
+                "abi": "[{\"constant\":false,\"inputs\":[],\"name\":\"get_a\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"type\":\"function\"},{\"constant\":false,\"inputs\":[],\"name\":\"get\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"type\":\"function\"},{\"constant\":false,\"inputs\":[],\"name\":\"get_b\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"type\":\"function\"}]",
+                "bin": "606060405234610000575b61010e806100196000396000f30060606040526000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063481591811460505780636d4ce63c146070578063f3d33cf4146090575b6000565b34600057605a60b0565b6040518082815260200191505060405180910390f35b34600057607a60be565b6040518082815260200191505060405180910390f35b34600057609a60d3565b6040518082815260200191505060405180910390f35b60006414b230ce3890505b90565b600060c660d3565b60cc60b0565b0190505b90565b6000650712e7ae7c7190505b905600a165627a7a72305820a80a9599b36625e94a3eadfd5c31475a2c507be6d1a9fa9a35e9cd4c54bce1390029",
+                "bin-runtime": "60606040526000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063481591811460505780636d4ce63c146070578063f3d33cf4146090575b6000565b34600057605a60b0565b6040518082815260200191505060405180910390f35b34600057607a60be565b6040518082815260200191505060405180910390f35b34600057609a60d3565b6040518082815260200191505060405180910390f35b60006414b230ce3890505b90565b600060c660d3565b60cc60b0565b0190505b90565b6000650712e7ae7c7190505b905600a165627a7a72305820a80a9599b36625e94a3eadfd5c31475a2c507be6d1a9fa9a35e9cd4c54bce1390029"
+            }
+        },
+        "version": "0.4.8+commit.60cc1668"
+    }
+    "#;
+
+    #[cfg(target_os = "linux")]
+    pub const LIST_JSON: &str = r#"
+    {
+        "builds": [
+            {
+                "path": "https://github.com/blockscout/solc-bin/releases/download/v0.4.8%2Bcommit.60cc1668/solc",
+                "longVersion": "v0.4.8+commit.60cc1668",
+                "sha256": "9c64d0ea8373346342f462d0ee5a5a50f1946e209e971f8339af5722c5d65144"
+            }
+        ]
+    }
+    "#;
+    #[cfg(target_os = "macos")]
+    pub const LIST_JSON: &str = r#"
+        {
+            "builds": [
+                {
+                    "path": "https://solc-bin.ethereum.org/macosx-amd64/solc-macosx-amd64-v0.4.8+commit.60cc1668",
+                    "longVersion": "v0.4.8+commit.60cc1668",
+                    "sha256": "ebb64b8b8dd465bd53a52fa7063569115df176c7561ac4feb47004513e1df74b"
+                }
+            ]
+        }
+    "#;
+
+    #[test]
+    fn correct_input_args() {
+        let input: CompilerInput = serde_json::from_str(DEFAULT_COMPILER_INPUT).unwrap();
+
+        let input_args = types::InputArgs::try_from(&input).expect("failed to convert args");
+        let expected_args = types::InputArgs {
+            optimize: false,
+            optimize_runs: Some(200),
+            libs: BTreeMap::from_iter(vec![
+                ("MyLib".to_string(), "0x1234".to_string()),
+                ("OurLib".to_string(), "0x4321".to_string()),
+            ]),
+        };
+        assert_eq!(input_args, expected_args);
+        assert_eq!(
+            input_args.build_string_args(),
+            vec![
+                "--combined-json",
+                "abi,bin,bin-runtime",
+                "--optimize-runs",
+                "200",
+                "--libraries",
+                "MyLib:0x1234,OurLib:0x4321"
+            ]
+        );
+    }
+
+    #[test]
+    fn correct_input_files() {
+        let input: CompilerInput = serde_json::from_str(DEFAULT_COMPILER_INPUT).unwrap();
+
+        let input_files = types::InputFiles::try_from(&input).expect("failed to convert files");
+        assert!(input_files.files_dir.path().exists());
+
+        let expected_files: Vec<String> = vec!["a.sol", "b.sol", "main.sol"]
+            .into_iter()
+            .map(|name| {
+                input_files
+                    .files_dir
+                    .path()
+                    .join(name)
+                    .to_string_lossy()
+                    .to_string()
+            })
+            .collect();
+        assert_eq!(input_files.file_names, expected_files);
+        let string_args = input_files
+            .build_string_args()
+            .expect("failed to build string args");
+        assert_eq!(string_args, &expected_files);
+    }
+
+    #[test]
+    fn correct_output() {
+        let output_json: types::OutputJson = serde_json::from_str(DEFAULT_COMPILER_OUTPUT).unwrap();
+        let compiler_output =
+            CompilerOutput::try_from(output_json.clone()).expect("failed to convert output json");
+        assert_eq!(compiler_output.contracts.len(), 1);
+        let filename = compiler_output.contracts.iter().next().unwrap().0;
+        assert_eq!(filename, "");
+
+        for (name, contract) in compiler_output.contracts_iter() {
+            let initial_contract = output_json
+                .contracts
+                .get(name)
+                .expect("invalid contract name");
+            let abi = serde_json::to_value(&contract.abi).unwrap();
+            let expected_abi = serde_json::to_value(&initial_contract.abi).unwrap();
+            assert_eq!(abi, expected_abi);
+
+            for (name, actual_bytecode, expected_bytecode) in vec![
+                (
+                    "creation bytecode",
+                    contract.get_bytecode_bytes(),
+                    &initial_contract.bin,
+                ),
+                (
+                    "deployed bytecode",
+                    contract.get_deployed_bytecode_bytes(),
+                    &initial_contract.bin_runtime,
+                ),
+            ] {
+                let bytecode: String = actual_bytecode
+                    .expect(&format!("unlinked {}", name))
+                    .encode_hex();
+                assert_eq!(&bytecode, expected_bytecode, "wrong {}", name);
+            }
+        }
+    }
+
+    async fn get_solc(ver: &Version) -> PathBuf {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/"))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(LIST_JSON))
+            .mount(&mock_server)
+            .await;
+        let fetcher = ListFetcher::new(Url::parse(&mock_server.uri()).unwrap(), temp_dir(), None)
+            .await
+            .expect("failed to build fetcher");
+        fetcher
+            .fetch(ver)
+            .await
+            .expect("cannot fetch 0.4.8 version")
+    }
+
+    fn source(file: &str, content: &str) -> (PathBuf, Source) {
+        (
+            file.into(),
+            Source {
+                content: content.to_string(),
+            },
+        )
+    }
+
+    #[tokio::test]
+    async fn compile_0_4_8() {
+        let ver = Version::from_str("v0.4.8+commit.60cc1668").expect("valid version");
+        let solc = get_solc(&ver).await;
+
+        let input: CompilerInput = serde_json::from_str(DEFAULT_COMPILER_INPUT).unwrap();
+        let output: CompilerOutput =
+            compile_using_cli(&solc, &input).expect("failed to compile contracts with 0.4.8");
+        assert!(!output.has_error());
+        let names: HashSet<String> = output.contracts_into_iter().map(|(name, _)| name).collect();
+        let expected_names = HashSet::from_iter(vec!["Main".into(), "A".into(), "B".into()]);
+        assert_eq!(names, expected_names);
+
+        for sources in vec![
+            BTreeMap::new(),
+            BTreeMap::from_iter(vec![source("main.sol", "")]),
+            BTreeMap::from_iter(vec![source("main.sol", "some string")]),
+        ] {
+            let input = CompilerInput {
+                language: "Solidity".into(),
+                sources,
+                settings: Settings::default(),
+            };
+            let output: CompilerOutput = compile_using_cli(&solc, &input)
+                .expect("shouldn't return Err, but Ok with errors field");
+            assert!(output.has_error());
+        }
+    }
 }

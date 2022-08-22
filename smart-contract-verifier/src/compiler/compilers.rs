@@ -59,9 +59,6 @@ impl Compilers {
             compile(&solc, compiler_version, input)?
         };
 
-        //println!("{:?}", output.contracts);
-        //println!("{:?}", output.contracts.iter().next().unwrap().1.iter().next().unwrap().1.get_deployed_bytecode_bytes().unwrap());
-
         // Compilations errors, warnings and info messages are returned in `CompilerOutput.error`
         let mut errors = Vec::new();
         for err in &output.errors {
