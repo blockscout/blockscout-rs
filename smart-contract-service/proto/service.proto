@@ -1,7 +1,30 @@
 syntax = "proto3";
 package smart_contract_service;
 
+// This option is needed for generating openapi
+option go_package = "github.com/blockscout/blockscout-rs/smart-contract-service";
+
 import "google/api/annotations.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+
+// For more options see
+// https://github.com/grpc-ecosystem/grpc-gateway/blob/master/examples/internal/proto/examplepb/a_bit_of_everything.proto
+option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
+  info : {
+    title : "Smart-contract Service"
+    version : "0.1.0"
+    license : {
+      name : "MIT License"
+      url : "https://github.com/blockscout/blockscout-rs/blob/main/LICENSE-MIT"
+    }
+  }
+
+  external_docs : {
+    url : "https://github.com/blockscout/blockscout-rs/blob/main/"
+          "smart-contract-service"
+    description : "More about smart-contract service"
+  }
+};
 
 message GetAbiRequest {
   bytes contract_address = 1;

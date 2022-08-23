@@ -1,3 +1,6 @@
 [submodule "smart-contract-service/proto/googleapis"]
 	path = smart-contract-service/proto/googleapis
 	url = git@github.com:googleapis/googleapis.git
+[submodule "smart-contract-service/proto/grpc-gateway"]
+	path = smart-contract-service/proto/grpc-gateway
+	url = git@github.com:grpc-ecosystem/grpc-gateway.git

@@ -1,0 +1,1142 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "Smart-contract Service",
+    "version": "0.1.0",
+    "license": {
+      "name": "MIT License",
+      "url": "https://github.com/blockscout/blockscout-rs/blob/main/LICENSE-MIT"
+    }
+  },
+  "tags": [
+    {
+      "name": "SmartContractService"
+    },
+    {
+      "name": "SmartContractAsyncService"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/abi": {
+      "get": {
+        "summary": "Retrieves abi from SCDB and sends it back to the caller",
+        "operationId": "SmartContractService_GetAbi",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/smart_contract_serviceGetAbiResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googlerpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "contractAddress",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          },
+          {
+            "name": "chainId",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          }
+        ],
+        "tags": [
+          "SmartContractService"
+        ]
+      }
+    },
+    "/async/verification-status": {
+      "post": {
+        "summary": "Accepts verification id and returns status with info",
+        "operationId": "SmartContractAsyncService_GetVerificationStatus",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/smart_contract_serviceGetVerificationStatusResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googlerpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "verificationId",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          }
+        ],
+        "tags": [
+          "SmartContractAsyncService"
+        ]
+      }
+    },
+    "/async/verify-multi": {
+      "post": {
+        "summary": "Async version of `VerifySingle`",
+        "operationId": "SmartContractAsyncService_VerifyMultiAsync",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/smart_contract_serviceVerifyAsyncResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googlerpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "contractAddress",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          },
+          {
+            "name": "creationTxInput",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          },
+          {
+            "name": "deployedBytecode",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          },
+          {
+            "name": "chainId",
+            "description": "as one instance of the service could be used for multiple chains",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "compilerVersion",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "evmVersion",
+            "description": "if None, `evm_version` is set to \"default\"",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "optimizationRuns",
+            "description": "if None, `optimizer.enabled` is set to be false",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "SmartContractAsyncService"
+        ]
+      }
+    },
+    "/async/verify-single": {
+      "post": {
+        "summary": "Async version of `VerifySingle`",
+        "operationId": "SmartContractAsyncService_VerifySingleAsync",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/smart_contract_serviceVerifyAsyncResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googlerpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "contractAddress",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          },
+          {
+            "name": "creationTxInput",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          },
+          {
+            "name": "deployedBytecode",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          },
+          {
+            "name": "chainId",
+            "description": "as one instance of the service could be used for multiple chains",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "compilerVersion",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "evmVersion",
+            "description": "if None, `evm_version` is set to \"default\"",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "optimizationRuns",
+            "description": "if None, `optimizer.enabled` is set to be false",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int64"
+          },
+          {
+            "name": "sourceCode",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SmartContractAsyncService"
+        ]
+      }
+    },
+    "/async/verify-standard-json": {
+      "post": {
+        "summary": "Async version of `VerifyStandardJson`",
+        "operationId": "SmartContractAsyncService_VerifyStandardJsonAsync",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/smart_contract_serviceVerifyAsyncResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googlerpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "contractAddress",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          },
+          {
+            "name": "creationTxInput",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          },
+          {
+            "name": "deployedBytecode",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          },
+          {
+            "name": "chainId",
+            "description": "as one instance of the service could be used for multiple chains",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "input",
+            "description": "should be valid input standard JSON",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SmartContractAsyncService"
+        ]
+      }
+    },
+    "/async/verify-via-sourcify": {
+      "post": {
+        "summary": "Async version of `VerifyViaSourcify`",
+        "operationId": "SmartContractAsyncService_VerifyViaSourcifyAsync",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/smart_contract_serviceVerifyAsyncResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googlerpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "contractAddress",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          },
+          {
+            "name": "chainId",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "chosenContract",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          }
+        ],
+        "tags": [
+          "SmartContractAsyncService"
+        ]
+      }
+    },
+    "/async/verify-vyper": {
+      "post": {
+        "summary": "Async version of `VerifyStandardJson`",
+        "operationId": "SmartContractAsyncService_VerifyVyperAsync",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/smart_contract_serviceVerifyAsyncResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googlerpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "contractAddress",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          },
+          {
+            "name": "creationTxInput",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          },
+          {
+            "name": "deployedBytecode",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          },
+          {
+            "name": "chainId",
+            "description": "as one instance of the service could be used for multiple chains",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "compilerVersion",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "sourceCode",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SmartContractAsyncService"
+        ]
+      }
+    },
+    "/sources": {
+      "get": {
+        "summary": "Retrieves all info from SCDB and sends it back to the caller",
+        "operationId": "SmartContractService_GetSources",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/smart_contract_serviceGetSourcesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googlerpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "contractAddress",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          },
+          {
+            "name": "chainId",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          }
+        ],
+        "tags": [
+          "SmartContractService"
+        ]
+      }
+    },
+    "/verify-multi": {
+      "post": {
+        "summary": "Verifies a single-file contract",
+        "operationId": "SmartContractService_VerifyMulti",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/smart_contract_serviceVerifyMultiResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googlerpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "contractAddress",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          },
+          {
+            "name": "creationTxInput",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          },
+          {
+            "name": "deployedBytecode",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          },
+          {
+            "name": "chainId",
+            "description": "as one instance of the service could be used for multiple chains",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "compilerVersion",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "evmVersion",
+            "description": "if None, `evm_version` is set to \"default\"",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "optimizationRuns",
+            "description": "if None, `optimizer.enabled` is set to be false",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "SmartContractService"
+        ]
+      }
+    },
+    "/verify-single": {
+      "post": {
+        "summary": "Verifies a single-file contract",
+        "operationId": "SmartContractService_VerifySingle",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/smart_contract_serviceVerifySingleResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googlerpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "contractAddress",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          },
+          {
+            "name": "creationTxInput",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          },
+          {
+            "name": "deployedBytecode",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          },
+          {
+            "name": "chainId",
+            "description": "as one instance of the service could be used for multiple chains",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "compilerVersion",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "evmVersion",
+            "description": "if None, `evm_version` is set to \"default\"",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "optimizationRuns",
+            "description": "if None, `optimizer.enabled` is set to be false",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int64"
+          },
+          {
+            "name": "sourceCode",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SmartContractService"
+        ]
+      }
+    },
+    "/verify-standard-json": {
+      "post": {
+        "summary": "Returns verification id to get the status later in case of async, or the\nverification result if sync",
+        "operationId": "SmartContractService_VerifyStandardJson",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/smart_contract_serviceVerifyStandardJsonResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googlerpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "contractAddress",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          },
+          {
+            "name": "creationTxInput",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          },
+          {
+            "name": "deployedBytecode",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          },
+          {
+            "name": "chainId",
+            "description": "as one instance of the service could be used for multiple chains",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "input",
+            "description": "should be valid input standard JSON",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SmartContractService"
+        ]
+      }
+    },
+    "/verify-via-sourcify": {
+      "post": {
+        "summary": "Verifies a contract via sourcify metadata",
+        "operationId": "SmartContractService_VerifyViaSourcify",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/smart_contract_serviceVerifyViaSourcifyResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googlerpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "contractAddress",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          },
+          {
+            "name": "chainId",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "chosenContract",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          }
+        ],
+        "tags": [
+          "SmartContractService"
+        ]
+      }
+    },
+    "/verify-vyper": {
+      "post": {
+        "summary": "Verifies vyper contracts",
+        "operationId": "SmartContractService_VerifyVyper",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/smart_contract_serviceVerifyVyperResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googlerpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "contractAddress",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          },
+          {
+            "name": "creationTxInput",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          },
+          {
+            "name": "deployedBytecode",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          },
+          {
+            "name": "chainId",
+            "description": "as one instance of the service could be used for multiple chains",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "compilerVersion",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "sourceCode",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SmartContractService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "googlerpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "smart_contract_serviceGetAbiResponse": {
+      "type": "object"
+    },
+    "smart_contract_serviceGetSourcesResponse": {
+      "type": "object"
+    },
+    "smart_contract_serviceGetVerificationStatusResponse": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "$ref": "#/definitions/smart_contract_serviceGetVerificationStatusResponseStatus"
+        },
+        "message": {
+          "type": "string"
+        },
+        "singleResult": {
+          "$ref": "#/definitions/smart_contract_serviceVerifySingleResponseResult"
+        },
+        "multiResult": {
+          "$ref": "#/definitions/smart_contract_serviceVerifyMultiResponseResult"
+        },
+        "standardJsonResult": {
+          "$ref": "#/definitions/smart_contract_serviceVerifyStandardJsonResponseResult"
+        },
+        "viaSourcifyResult": {
+          "$ref": "#/definitions/smart_contract_serviceVerifyViaSourcifyResponseResult"
+        },
+        "vyperResult": {
+          "$ref": "#/definitions/smart_contract_serviceVerifyVyperResponseResult"
+        }
+      }
+    },
+    "smart_contract_serviceGetVerificationStatusResponseStatus": {
+      "type": "string",
+      "enum": [
+        "PENDING",
+        "PASS",
+        "FAIL",
+        "UNKNOWN_ID"
+      ],
+      "default": "PENDING",
+      "title": "Backward compatible with current elixir impl"
+    },
+    "smart_contract_serviceVerifyAsyncResponse": {
+      "type": "object",
+      "properties": {
+        "verificationId": {
+          "type": "string",
+          "format": "byte"
+        }
+      },
+      "title": "Returned as a response for all types of async verification"
+    },
+    "smart_contract_serviceVerifyMultiResponse": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "message": {
+          "type": "string"
+        },
+        "result": {
+          "$ref": "#/definitions/smart_contract_serviceVerifyMultiResponseResult"
+        }
+      }
+    },
+    "smart_contract_serviceVerifyMultiResponseResult": {
+      "type": "object",
+      "properties": {
+        "filePath": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "compilerVersion": {
+          "type": "string"
+        },
+        "evmVersion": {
+          "type": "string"
+        },
+        "optimization": {
+          "type": "boolean"
+        },
+        "optimizationRuns": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "libraries": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "sources": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "abi": {
+          "type": "string"
+        },
+        "constructorArguments": {
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "smart_contract_serviceVerifySingleResponse": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "message": {
+          "type": "string"
+        },
+        "result": {
+          "$ref": "#/definitions/smart_contract_serviceVerifySingleResponseResult"
+        }
+      }
+    },
+    "smart_contract_serviceVerifySingleResponseResult": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "compilerVersion": {
+          "type": "string"
+        },
+        "evmVersion": {
+          "type": "string"
+        },
+        "optimization": {
+          "type": "boolean"
+        },
+        "optimizationRuns": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "libraries": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "sourceCode": {
+          "type": "string"
+        },
+        "abi": {
+          "type": "string"
+        },
+        "constructorArguments": {
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "smart_contract_serviceVerifyStandardJsonResponse": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "message": {
+          "type": "string"
+        },
+        "result": {
+          "$ref": "#/definitions/smart_contract_serviceVerifyStandardJsonResponseResult"
+        }
+      }
+    },
+    "smart_contract_serviceVerifyStandardJsonResponseResult": {
+      "type": "object",
+      "properties": {
+        "filePath": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "compilerVersion": {
+          "type": "string"
+        },
+        "evmVersion": {
+          "type": "string"
+        },
+        "optimization": {
+          "type": "boolean"
+        },
+        "optimizationRuns": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "libraries": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "sources": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "abi": {
+          "type": "string"
+        },
+        "constructorArguments": {
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "smart_contract_serviceVerifyViaSourcifyResponse": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "message": {
+          "type": "string"
+        },
+        "result": {
+          "$ref": "#/definitions/smart_contract_serviceVerifyViaSourcifyResponseResult"
+        }
+      }
+    },
+    "smart_contract_serviceVerifyViaSourcifyResponseResult": {
+      "type": "object",
+      "properties": {
+        "filePath": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "compilerVersion": {
+          "type": "string"
+        },
+        "evmVersion": {
+          "type": "string"
+        },
+        "optimization": {
+          "type": "boolean"
+        },
+        "optimizationRuns": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "libraries": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "sources": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "abi": {
+          "type": "string"
+        }
+      }
+    },
+    "smart_contract_serviceVerifyVyperResponse": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "message": {
+          "type": "string"
+        },
+        "result": {
+          "$ref": "#/definitions/smart_contract_serviceVerifyVyperResponseResult"
+        }
+      }
+    },
+    "smart_contract_serviceVerifyVyperResponseResult": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "compilerVersion": {
+          "type": "string"
+        },
+        "evmVersion": {
+          "type": "string"
+        },
+        "optimization": {
+          "type": "boolean",
+          "title": "there are no optimization runs concept for Vyper"
+        },
+        "sourceCode": {
+          "type": "string"
+        },
+        "abi": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "externalDocs": {
+    "description": "More about smart-contract service",
+    "url": "https://github.com/blockscout/blockscout-rs/blob/main/smart-contract-service"
+  }
+}
