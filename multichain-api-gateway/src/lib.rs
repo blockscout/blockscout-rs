@@ -2,6 +2,7 @@ use std::{collections::HashMap, error::Error, net::TcpListener, str, time};
 
 use actix_web::{
     dev::{RequestHead, Server},
+    middleware::Logger,
     web,
     web::{Bytes, Data, Json},
     App, HttpRequest, HttpServer, Responder,
@@ -47,9 +48,12 @@ impl From<BlockscoutSettings> for ApiEndpoints {
 
 impl ApiEndpoints {
     async fn make_request(request: ClientRequest, body: Bytes) -> Result<String, Box<dyn Error>> {
+        log::debug!("Making request to {:?} with body {:?}", request, body);
         let mut response = request.send_body(body.clone()).await?;
         let bytes = response.body().await?;
+        log::debug!("Got response body: {:?}", bytes);
         let str = str::from_utf8(bytes.as_ref())?.to_string();
+        log::debug!("Decoded bytes into utf8: {:?}", str);
         Ok(str)
     }
 
@@ -59,6 +63,7 @@ impl ApiEndpoints {
         body: Bytes,
         request_head: &RequestHead,
     ) -> Vec<(Instance, String)> {
+        log::debug!("Building awc client");
         let client = Client::builder().timeout(self.request_timeout).finish();
 
         stream::iter(self.apis)
@@ -72,7 +77,10 @@ impl ApiEndpoints {
                     instance,
                     ApiEndpoints::make_request(request, body.clone())
                         .await
-                        .unwrap_or_else(|e| e.to_string()),
+                        .unwrap_or_else(|e| {
+                            log::error!("Bad request: {:?}", e);
+                            e.to_string()
+                        }),
                 )
             })
             .buffer_unordered(self.concurrent_requests)
@@ -92,8 +100,10 @@ fn merge_responses(json_responses: Vec<(Instance, String)>) -> Responses {
             let kv_subnet = result.entry(net).or_insert_with(HashMap::new);
             kv_subnet.insert(
                 subnet,
-                serde_json::from_str(&value)
-                    .unwrap_or_else(|e| Value::String(format!("{}: {}\n", e, value))),
+                serde_json::from_str(&value).unwrap_or_else(|e| {
+                    log::error!("Error during parsing {:?}: {:?}", value, e);
+                    Value::String(format!("{}: {}\n", e, value))
+                }),
             );
         });
 
@@ -114,12 +124,15 @@ pub async fn handle_request(
 }
 
 pub fn run(settings: Settings) -> Result<Server, std::io::Error> {
+    log::info!("Creating listener on {:?}", settings.server.addr);
     let listener = TcpListener::bind(settings.server.addr)?;
 
+    log::info!("Initializing apis_endpoint with {:?}", settings.blockscout);
     let apis_endpoints: Data<ApiEndpoints> = Data::new(settings.blockscout.try_into().unwrap());
 
     let server = HttpServer::new(move || {
         App::new()
+            .wrap(Logger::default())
             .app_data(apis_endpoints.clone())
             .default_service(web::route().to(handle_request))
     })

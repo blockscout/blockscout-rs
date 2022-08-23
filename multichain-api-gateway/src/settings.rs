@@ -101,6 +101,8 @@ impl Settings {
 
         let settings: Settings = builder.build()?.try_deserialize()?;
 
+        log::info!("Initilized with settings: {:?}", settings);
+
         Ok(settings)
     }
 }
