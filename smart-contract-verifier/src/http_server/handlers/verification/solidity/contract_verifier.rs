@@ -9,7 +9,7 @@ use ethers_solc::{
     CompilerInput,
 };
 use semver::VersionReq;
-use std::fmt::Debug;
+use std::{fmt::Debug, path::PathBuf};
 use thiserror::Error;
 use tracing::instrument;
 
@@ -79,8 +79,18 @@ async fn compile_and_verify(
     let compiler_output = compilers
         .compile(&input.compiler_version, &input.compiler_input)
         .await?;
+    let compiler_output_modified = {
+        let mut compiler_input = input.compiler_input.clone();
+        compiler_input.settings.libraries.libs.insert(
+            PathBuf::from("SOME_TEXT_USED_AS_FILE_NAME"),
+            Default::default(),
+        );
+        compilers
+            .compile(&input.compiler_version, &compiler_input)
+            .await?
+    };
     verifier
-        .verify(compiler_output)
+        .verify(compiler_output, compiler_output_modified)
         .ok_or(CompileAndVerifyError::NoMatchingContracts)
 }
 
