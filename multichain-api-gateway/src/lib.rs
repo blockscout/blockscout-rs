@@ -78,7 +78,7 @@ impl ApiEndpoints {
                     ApiEndpoints::make_request(request, body.clone())
                         .await
                         .unwrap_or_else(|e| {
-                            log::error!("Bad request: {:?}", e);
+                            log::error!("Error while making request: {:?}", e);
                             e.to_string()
                         }),
                 )
