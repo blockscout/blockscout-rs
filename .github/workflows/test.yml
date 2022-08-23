@@ -11,21 +11,13 @@ jobs:
     name: Unit tests
     runs-on: ubuntu-latest
     steps:
-      - name: Install protoc and protoc-gen-openapi
-        run: |
-          apt update && apt install -y protobuf-compiler curl
-          
-          # install go
-          LATEST_GO_VERSION="$(curl --silent https://go.dev/VERSION?m=text)";
-          curl -OJ -L --progress-bar https://golang.org/dl/${LATEST_GO_VERSION}.linux-amd64.tar.gz
-          tar -C /usr/local -xzf ${LATEST_GO_VERSION}.linux-amd64.tar.gz
-          export PATH=$PATH:/usr/local/go/bin
-          
-          # install protoc-gen-openapi
-          go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2@latest
-
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
+        with:
+          submodules: 'recursive'
+
+      - name: Install deps
+        uses: ./.github/actions/deps
 
       - name: Install toolchain
         uses: actions-rs/toolchain@v1
@@ -44,20 +36,14 @@ jobs:
   doc:
     name: Doc tests
     runs-on: ubuntu-latest
-    steps:      
-      # - name: Install protoc and protoc-gen-openapi
-      #   run: |
-      #     apt update && apt install -y protobuf-compiler curl
-      #     # install go
-      #     LATEST_GO_VERSION="$(curl --silent https://go.dev/VERSION?m=text)";
-      #     curl -OJ -L --progress-bar https://golang.org/dl/${LATEST_GO_VERSION}.linux-amd64.tar.gz
-      #     tar -C /usr/local -xzf ${LATEST_GO_VERSION}.linux-amd64.tar.gz
-      #     export PATH=$PATH:/usr/local/go/bin
-      #     # install protoc-gen-openapi
-      #     go install github.com/google/gnostic/cmd/protoc-gen-openapi@latest
-
+    steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
+        with:
+          submodules: 'recursive'
+
+      - name: Install deps
+        uses: ./.github/actions/deps
 
       - name: Install toolchain
         uses: actions-rs/toolchain@v1
@@ -76,19 +62,14 @@ jobs:
   integration:
     name: Integration tests
     runs-on: ubuntu-latest
-    steps:      
-      - name: Install protoc and protoc-gen-openapi
-        run: |
-          apt update && apt install -y protobuf-compiler curl
-          
-          # install go
-          LATEST_GO_VERSION="$(curl --silent https://go.dev/VERSION?m=text)";
-          curl -OJ -L --progress-bar https://golang.org/dl/${LATEST_GO_VERSION}.linux-amd64.tar.gz
-          tar -C /usr/local -xzf ${LATEST_GO_VERSION}.linux-amd64.tar.gz
-          export PATH=$PATH:/usr/local/go/bin
-          
-          # install protoc-gen-openapi
-          go install github.com/google/gnostic/cmd/protoc-gen-openapi@latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v3
+        with:
+          submodules: 'recursive'
+
+      - name: Install deps
+        uses: ./.github/actions/deps
 
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -111,20 +92,14 @@ jobs:
   lint:
     name: Linting
     runs-on: ubuntu-latest
-    steps:      
-      # - name: Install protoc and protoc-gen-openapi
-      #   run: |
-      #     apt update && apt install -y protobuf-compiler curl
-      #     # install go
-      #     LATEST_GO_VERSION="$(curl --silent https://go.dev/VERSION?m=text)";
-      #     curl -OJ -L --progress-bar https://golang.org/dl/${LATEST_GO_VERSION}.linux-amd64.tar.gz
-      #     tar -C /usr/local -xzf ${LATEST_GO_VERSION}.linux-amd64.tar.gz
-      #     export PATH=$PATH:/usr/local/go/bin
-      #     # install protoc-gen-openapi
-      #     go install github.com/google/gnostic/cmd/protoc-gen-openapi@latest
-
+    steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
+        with:
+          submodules: 'recursive'
+
+      - name: Install deps
+        uses: ./.github/actions/deps
 
       - name: Install toolchain
         uses: actions-rs/toolchain@v1
