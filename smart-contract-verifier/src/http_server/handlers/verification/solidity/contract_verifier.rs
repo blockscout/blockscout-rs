@@ -91,7 +91,7 @@ async fn compile_and_verify(
     };
     verifier
         .verify(compiler_output, compiler_output_modified)
-        .ok_or(CompileAndVerifyError::NoMatchingContracts)
+        .map_err(|_errors| CompileAndVerifyError::NoMatchingContracts)
 }
 
 /// Iterates through possible bytecode if required and creates

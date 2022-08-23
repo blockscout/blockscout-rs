@@ -1,22 +1,11 @@
 #![allow(dead_code, unused)]
 
+use super::errors::{BytecodeInitializationError, VerificationError};
 use crate::{types::Mismatch, DisplayBytes};
 use bytes::Bytes;
 use ethers_solc::CompilerOutput;
 use std::str::FromStr;
 use thiserror::Error;
-
-/// Errors that may occur during deployed bytecode and
-/// creation transaction input parsing.
-#[derive(Error, Clone, Debug, PartialEq, Eq)]
-pub enum BytecodeInitializationError {
-    #[error("creation transaction input is not a valid hex string: {0}")]
-    InvalidCreationTxInput(String),
-    #[error("deployed bytecode is not a valid hex string: {0}")]
-    InvalidDeployedBytecode(String),
-    #[error("deployed bytecode does not correspond to creation tx input: {0}")]
-    BytecodeMismatch(Mismatch<DisplayBytes>),
-}
 
 /// Combine creation_tx_input and deployed_bytecode.
 /// Guarantees that `deployed_bytecode` was actually deployed
@@ -123,7 +112,7 @@ impl Verifier {
         &self,
         output: CompilerOutput,
         output_modified: CompilerOutput,
-    ) -> Option<VerificationSuccess> {
+    ) -> Result<VerificationSuccess, Vec<VerificationError>> {
         todo!()
     }
 }
