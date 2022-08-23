@@ -43,7 +43,7 @@ mod types {
     use serde::{Deserialize, Serialize};
     use tempfile::TempDir;
 
-    #[derive(Debug, PartialEq)]
+    #[derive(Debug, PartialEq, Eq)]
     pub struct InputArgs {
         pub optimize: bool,
         pub optimize_runs: Option<usize>,
@@ -137,7 +137,7 @@ mod types {
         }
     }
 
-    #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+    #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
     pub struct OutputContract {
         #[serde(deserialize_with = "serde_helpers::deserialize_abi_string")]
         pub abi: Vec<serde_json::Value>,
@@ -176,7 +176,7 @@ mod types {
         }
     }
 
-    #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+    #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
     pub struct OutputJson {
         pub contracts: HashMap<String, OutputContract>,
     }
