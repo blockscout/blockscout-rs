@@ -3769,7 +3769,9 @@ checksum = "2fd0db749597d91ff862fd1d55ea87f7855a744a8425a64695b6fca237d1dad1"
 name = "smart-contract-service"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "prost",
+ "tokio",
  "tonic",
  "tonic-build",
 ]
