@@ -417,10 +417,6 @@ impl Verifier {
             .ok_or_else(|| VerificationErrorKind::InternalError("missing abi".into()))?;
 
         let bytecode = Bytecode::try_from(contract).map_err(|err| match err {
-            // BytecodeMismatch for compiled bytecode indicates some critical error in the verification logic
-            BytecodeInitializationError::BytecodeMismatch(_) => {
-                VerificationErrorKind::InternalError(err.to_string())
-            }
             BytecodeInitializationError::EmptyCreationTxInput
             | BytecodeInitializationError::EmptyDeployedBytecode => {
                 VerificationErrorKind::AbstractContract
