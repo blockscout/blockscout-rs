@@ -18,5 +18,9 @@ config = "0.13"
 anyhow = "1.0"
 chrono = { version = "0.4.22", features = ["serde"] }
 serde_with = { version = "2.0.0", features = ["chrono_0_4"] }
-env_logger = "0.9.0"
 tracing = { version = "0.1", features = ["log"] }
+tracing-actix-web = "0.6.0"
+tracing-log = "0.1.3"
+env_logger = "0.9.0"
+tracing-subscriber = { version = "0.3", features = ["registry", "env-filter"] }
+tracing-bunyan-formatter = "0.3.3"

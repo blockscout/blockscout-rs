@@ -6,6 +6,7 @@ use std::time;
 use url::Url;
 
 use serde_with::{As, DisplayFromStr};
+use tracing::{event, Level};
 
 /// An instance of the maintained networks in Blockscout.
 /// Semantic: (network, chain)
@@ -101,7 +102,7 @@ impl Settings {
 
         let settings: Settings = builder.build()?.try_deserialize()?;
 
-        tracing::info!("Initilized with settings: {:?}", settings);
+        event!(Level::INFO, settings = ?settings, "Initilized with settings");
 
         Ok(settings)
     }
