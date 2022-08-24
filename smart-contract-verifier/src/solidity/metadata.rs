@@ -5,17 +5,15 @@ use thiserror::Error;
 /// (https://docs.soliditylang.org/en/v0.8.14/metadata.html#encoding-of-the-metadata-hash-in-the-bytecode).
 ///
 /// Currently we are interested only in `solc` value.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct MetadataHash {
     pub(super) solc: Option<bytes::Bytes>,
 }
 
 impl MetadataHash {
-    pub(super) fn from_cbor(
-        encoded: bytes::Bytes,
-    ) -> Result<(Self, usize), minicbor::decode::Error> {
+    pub(super) fn from_cbor(encoded: &[u8]) -> Result<(Self, usize), minicbor::decode::Error> {
         let mut context = DecodeContext::default();
-        let result = minicbor::decode_with(encoded.as_ref(), &mut context)?;
+        let result = minicbor::decode_with(encoded, &mut context)?;
 
         Ok((result, context.used_size))
     }
@@ -127,8 +125,8 @@ mod metadata_hash_deserialization_tests {
         let expected_size = encoded.len();
 
         // when
-        let (decoded, decoded_size) =
-            MetadataHash::from_cbor(encoded).expect("Error when decoding valid metadata hash");
+        let (decoded, decoded_size) = MetadataHash::from_cbor(encoded.as_ref())
+            .expect("Error when decoding valid metadata hash");
 
         // then
         assert_eq!(expected, decoded, "Incorrectly decoded");
@@ -147,8 +145,8 @@ mod metadata_hash_deserialization_tests {
         let expected_size = encoded.len();
 
         // when
-        let (decoded, decoded_size) =
-            MetadataHash::from_cbor(encoded).expect("Error when decoding valid metadata hash");
+        let (decoded, decoded_size) = MetadataHash::from_cbor(encoded.as_ref())
+            .expect("Error when decoding valid metadata hash");
 
         // then
         assert_eq!(expected, decoded, "Incorrectly decoded");
@@ -167,8 +165,8 @@ mod metadata_hash_deserialization_tests {
         let expected_size = encoded.len();
 
         // when
-        let (decoded, decoded_size) =
-            MetadataHash::from_cbor(encoded).expect("Error when decoding valid metadata hash");
+        let (decoded, decoded_size) = MetadataHash::from_cbor(encoded.as_ref())
+            .expect("Error when decoding valid metadata hash");
 
         // then
         assert_eq!(expected, decoded, "Incorrectly decoded");
@@ -191,8 +189,8 @@ mod metadata_hash_deserialization_tests {
         let expected_size = DisplayBytes::from_str(first).unwrap().0.len();
 
         // when
-        let (decoded, decoded_size) =
-            MetadataHash::from_cbor(encoded).expect("Error when decoding valid metadata hash");
+        let (decoded, decoded_size) = MetadataHash::from_cbor(encoded.as_ref())
+            .expect("Error when decoding valid metadata hash");
 
         // then
         assert_eq!(expected, decoded, "Incorrectly decoded");
@@ -206,7 +204,7 @@ mod metadata_hash_deserialization_tests {
         let encoded = DisplayBytes::from_str(hex).unwrap().0;
 
         // when
-        let decoded = MetadataHash::from_cbor(encoded);
+        let decoded = MetadataHash::from_cbor(encoded.as_ref());
 
         // then
         assert!(decoded.is_err(), "Deserialization should fail");
@@ -224,7 +222,7 @@ mod metadata_hash_deserialization_tests {
         let encoded = DisplayBytes::from_str(hex).unwrap().0;
 
         // when
-        let decoded = MetadataHash::from_cbor(encoded);
+        let decoded = MetadataHash::from_cbor(encoded.as_ref());
 
         // then
         assert!(decoded.is_err(), "Deserialization should fail");
@@ -242,7 +240,7 @@ mod metadata_hash_deserialization_tests {
         let encoded = DisplayBytes::from_str(hex).unwrap().0;
 
         // when
-        let decoded = MetadataHash::from_cbor(encoded);
+        let decoded = MetadataHash::from_cbor(encoded.as_ref());
 
         // then
         assert!(decoded.is_err(), "Deserialization should fail");
@@ -261,7 +259,7 @@ mod metadata_hash_deserialization_tests {
         let encoded = DisplayBytes::from_str(&hex).unwrap().0;
 
         // when
-        let decoded = MetadataHash::from_cbor(encoded);
+        let decoded = MetadataHash::from_cbor(encoded.as_ref());
 
         // then
         assert!(decoded.is_err(), "Deserialization should fail");
@@ -279,7 +277,7 @@ mod metadata_hash_deserialization_tests {
         let encoded = DisplayBytes::from_str(&hex).unwrap().0;
 
         // when
-        let decoded = MetadataHash::from_cbor(encoded);
+        let decoded = MetadataHash::from_cbor(encoded.as_ref());
 
         // then
         assert!(decoded.is_err(), "Deserialization should fail");

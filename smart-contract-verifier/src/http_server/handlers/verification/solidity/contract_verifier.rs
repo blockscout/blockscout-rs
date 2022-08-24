@@ -81,10 +81,16 @@ async fn compile_and_verify(
         .await?;
     let compiler_output_modified = {
         let mut compiler_input = input.compiler_input.clone();
-        compiler_input.settings.libraries.libs.insert(
-            PathBuf::from("SOME_TEXT_USED_AS_FILE_NAME"),
-            Default::default(),
-        );
+        compiler_input
+            .settings
+            .libraries
+            .libs
+            .entry(PathBuf::from("SOME_TEXT_USED_AS_FILE_NAME"))
+            .or_default()
+            .insert(
+                "SOME_TEXT_USED_AS_A_CONTRACT_NAME".into(),
+                "0xcafecafecafecafecafecafecafecafecafecafe".into(),
+            );
         compilers
             .compile(&input.compiler_version, &compiler_input)
             .await?
