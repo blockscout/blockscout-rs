@@ -16,6 +16,7 @@ use url::Url;
 pub use crate::settings::{BlockscoutSettings, Instance, Settings};
 
 pub mod settings;
+pub mod tracer;
 
 #[derive(Clone, Debug)]
 pub struct ApiEndpoints {
