@@ -1,17 +1,13 @@
-#![allow(dead_code, unused)]
-
 use super::errors::{BytecodeInitializationError, VerificationError};
 use crate::{
     solidity::{errors::VerificationErrorKind, metadata::MetadataHash},
     types::Mismatch,
     DisplayBytes,
 };
-use actix_web::web::to;
 use bytes::{Buf, Bytes};
 use ethabi::{Constructor, Token};
 use ethers_solc::{artifacts::Contract, Artifact, CompilerOutput};
 use std::str::FromStr;
-use thiserror::Error;
 
 /// Combine creation_tx_input and deployed_bytecode.
 /// Guarantees that `deployed_bytecode` was actually deployed
@@ -89,7 +85,7 @@ impl TryFrom<&Contract> for Bytecode {
 
     fn try_from(contract: &Contract) -> Result<Self, Self::Error> {
         let deployed_bytecode = {
-            let bytes = contract.get_deployed_bytecode_bytes().ok_or_else(|| {
+            contract.get_deployed_bytecode_bytes().ok_or_else(|| {
                 let bytecode = contract
                     .get_deployed_bytecode_object()
                     .unwrap_or_default()
@@ -97,11 +93,10 @@ impl TryFrom<&Contract> for Bytecode {
                     .unwrap_or_default()
                     .to_string();
                 BytecodeInitializationError::InvalidDeployedBytecode(bytecode)
-            })?;
-            bytes
+            })?
         };
         let creation_tx_input = {
-            let bytes = contract.get_bytecode_bytes().ok_or_else(|| {
+            contract.get_bytecode_bytes().ok_or_else(|| {
                 let bytecode = contract
                     .get_bytecode_object()
                     .unwrap_or_default()
@@ -109,8 +104,7 @@ impl TryFrom<&Contract> for Bytecode {
                     .unwrap_or_default()
                     .to_string();
                 BytecodeInitializationError::InvalidCreationTxInput(bytecode)
-            })?;
-            bytes
+            })?
         };
         Bytecode::from_bytes(creation_tx_input.0.clone(), deployed_bytecode.0.clone())
     }
@@ -154,10 +148,6 @@ impl RemoteBytecode {
     pub fn creation_tx_input(&self) -> &Bytes {
         &self.bytecode.creation_tx_input
     }
-
-    pub fn deployed_bytecode(&self) -> &Bytes {
-        &self.bytecode.deployed_bytecode
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -197,10 +187,6 @@ impl LocalBytecode {
         &self.bytecode.creation_tx_input
     }
 
-    pub fn deployed_bytecode(&self) -> &Bytes {
-        &self.bytecode.deployed_bytecode
-    }
-
     fn split(
         mut raw: Bytes,
         raw_modified: &Bytes,
@@ -213,13 +199,13 @@ impl LocalBytecode {
         }
 
         let parts_total_size = |parts: &Vec<BytecodePart>| -> usize {
-            parts.into_iter().fold(0, |size, el| size + el.size())
+            parts.iter().fold(0, |size, el| size + el.size())
         };
 
         let mut result = Vec::new();
 
         let mut i = 0usize;
-        while raw.len() > 0 {
+        while !raw.is_empty() {
             let decoded = Self::parse_bytecode_parts(&raw, &raw_modified[i..])?;
             let decoded_size = parts_total_size(&decoded);
             result.extend(decoded);
@@ -251,7 +237,7 @@ impl LocalBytecode {
             // Next steps are trying to find that beginning.
 
             let mut result = MetadataHash::from_cbor(&raw[i..]);
-            while let Err(_) = result {
+            while result.is_err() {
                 // It is the beginning of the bytecode segment but no metadata hash has been parsed
                 if i == 0 {
                     return Err(VerificationErrorKind::InternalError(
@@ -385,7 +371,7 @@ impl Verifier {
                     }
                 };
 
-                match self.compare(&contract, &contract_modified) {
+                match self.compare(&contract, contract_modified) {
                     Ok((abi, constructor_args)) => {
                         return Ok(VerificationSuccess {
                             file_path: path,
@@ -434,8 +420,6 @@ impl Verifier {
 
         let local_bytecode = LocalBytecode::new(bytecode, bytecode_modified)?;
 
-        // Self::compare_deployed_bytecodes(&self.remote_bytecode, &local_bytecode)?;
-
         Self::compare_creation_tx_inputs(&self.remote_bytecode, &local_bytecode)?;
 
         let constructor_args = Self::extract_constructor_args(
@@ -445,29 +429,6 @@ impl Verifier {
         )?;
 
         Ok((abi.into_owned(), constructor_args))
-    }
-
-    fn compare_deployed_bytecodes(
-        remote_bytecode: &RemoteBytecode,
-        local_bytecode: &LocalBytecode,
-    ) -> Result<(), VerificationErrorKind> {
-        let remote_deployed_bytecode = remote_bytecode.deployed_bytecode();
-        let local_deployed_bytecode = local_bytecode.deployed_bytecode();
-
-        if remote_deployed_bytecode.len() != local_deployed_bytecode.len() {
-            return Err(VerificationErrorKind::BytecodeMismatch(Mismatch::new(
-                local_deployed_bytecode.clone().into(),
-                remote_deployed_bytecode.clone().into(),
-            )));
-        }
-
-        Self::compare_bytecode_parts(
-            &remote_deployed_bytecode,
-            &local_deployed_bytecode,
-            &local_bytecode.deployed_bytecode_parts,
-        )?;
-
-        Ok(())
     }
 
     fn compare_creation_tx_inputs(
@@ -485,8 +446,8 @@ impl Verifier {
         }
 
         Self::compare_bytecode_parts(
-            &remote_creation_tx_input,
-            &local_creation_tx_input,
+            remote_creation_tx_input,
+            local_creation_tx_input,
             &local_bytecode.creation_tx_input_parts,
         )?;
 
@@ -519,7 +480,7 @@ impl Verifier {
                 BytecodePart::Metadata {
                     metadata,
                     metadata_length_raw,
-                    metadata_raw,
+                    ..
                 } => {
                     let (remote_metadata, remote_metadata_size) =
                         MetadataHash::from_cbor(&remote_raw[i..])
