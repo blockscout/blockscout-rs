@@ -6,6 +6,7 @@ use std::time;
 use url::Url;
 
 use serde_with::{As, DisplayFromStr};
+use tracing::{event, Level};
 
 /// An instance of the maintained networks in Blockscout.
 /// Semantic: (network, chain)
@@ -71,11 +72,28 @@ impl Default for ServerSettings {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct JaegerSettings {
+    pub enabled: bool,
+    pub agent_endpoint: String,
+}
+
+impl Default for JaegerSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            agent_endpoint: "localhost:6831".to_string(),
+        }
+    }
+}
+
 #[derive(Deserialize, Clone, Default, Debug)]
 #[serde(default, deny_unknown_fields)]
 pub struct Settings {
     pub server: ServerSettings,
     pub blockscout: BlockscoutSettings,
+    pub jaeger: JaegerSettings,
 
     // Is required as we deny unknown fields, but allow users provide
     // path to config through PREFIX__CONFIG env variable. If removed,
@@ -100,6 +118,8 @@ impl Settings {
         builder = builder.add_source(environment);
 
         let settings: Settings = builder.build()?.try_deserialize()?;
+
+        event!(Level::INFO, settings = ?settings, "Initilized with settings");
 
         Ok(settings)
     }
