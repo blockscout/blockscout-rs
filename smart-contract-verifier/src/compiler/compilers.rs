@@ -56,7 +56,7 @@ impl Compilers {
                 ver = compiler_version.to_string()
             );
             let _guard = span.enter();
-            compile(&solc, compiler_version, input)?
+            compile(&solc, compiler_version, input).await?
         };
 
         // Compilations errors, warnings and info messages are returned in `CompilerOutput.error`
@@ -92,14 +92,14 @@ impl Compilers {
     }
 }
 
-fn compile(
+async fn compile(
     solc: &Solc,
     compiler_version: &compiler::Version,
     input: &CompilerInput,
 ) -> Result<CompilerOutput, SolcError> {
     // <0.4.11 versions doesn't support --standard-json
     if compiler_version.version() < &semver::Version::new(0, 4, 11) {
-        compile_using_cli(&solc.solc, input)
+        compile_using_cli(&solc.solc, input).await
     } else {
         solc.compile(input)
     }

@@ -4,17 +4,14 @@
 //! was added only since 0.4.10 version. So, to compile older versions
 //! we need convert functions for CompilerInput and CompilerOutput.
 
-use std::{
-    collections::BTreeMap,
-    path::PathBuf,
-    process::{Command, Stdio},
-};
+use std::{collections::BTreeMap, path::PathBuf, process::Stdio};
 
 use ethers_solc::{
     artifacts::Severity,
     error::{SolcError, SolcIoError},
     CompilerInput, CompilerOutput,
 };
+use tokio::process::Command;
 
 mod serde_helpers {
     use serde::de;
@@ -39,9 +36,9 @@ mod types {
         error::SolcError,
         CompilerInput, CompilerOutput,
     };
-    use minicbor::encode::Write;
     use serde::{Deserialize, Serialize};
     use tempfile::TempDir;
+    use tokio::io::AsyncWriteExt;
 
     #[derive(Debug, PartialEq, Eq)]
     pub struct InputArgs {
@@ -51,12 +48,12 @@ mod types {
     }
 
     fn merge_libs(libraries: Libraries) -> BTreeMap<String, String> {
+        let mut result = BTreeMap::new();
         libraries
             .libs
             .into_iter()
-            .map(|(_, libs)| libs)
-            .reduce(|accum, item| accum.into_iter().chain(item).collect())
-            .unwrap_or_default()
+            .for_each(|(_, libs)| result.extend(libs));
+        result
     }
 
     impl TryFrom<&CompilerInput> for InputArgs {
@@ -72,7 +69,7 @@ mod types {
     }
 
     impl InputArgs {
-        pub fn build_string_args(&self) -> Vec<String> {
+        pub fn build(&self) -> Vec<String> {
             let mut vec: Vec<String> = vec![
                 "--combined-json".to_string(),
                 OutputContract::keys().join(","),
@@ -104,17 +101,18 @@ mod types {
         pub file_names: Vec<String>,
     }
 
-    impl TryFrom<&CompilerInput> for InputFiles {
-        type Error = SolcError;
-        fn try_from(input: &CompilerInput) -> Result<Self, Self::Error> {
+    impl InputFiles {
+        pub async fn try_from_compiler_input(input: &CompilerInput) -> Result<Self, SolcError> {
             let files_dir = tempfile::tempdir().map_err(|e| SolcError::Message(e.to_string()))?;
             let mut file_names = Vec::new();
             for (name, source) in input.sources.iter() {
                 let file_path = files_dir.path().join(name);
-                let mut file = std::fs::File::create(&file_path)
+                let mut file = tokio::fs::File::create(&file_path)
+                    .await
                     .map_err(|e| SolcError::Message(e.to_string()))?;
                 file_names.push(file_path.to_string_lossy().to_string());
-                file.write_all(source.content.as_bytes())
+                file.write(source.content.as_bytes())
+                    .await
                     .map_err(|e| SolcError::Message(e.to_string()))?;
             }
 
@@ -126,7 +124,7 @@ mod types {
     }
 
     impl InputFiles {
-        pub fn build_string_args(&self) -> Result<&Vec<String>, SolcError> {
+        pub fn build(&self) -> Result<&Vec<String>, SolcError> {
             self.files_dir
                 .path()
                 .exists()
@@ -218,19 +216,20 @@ fn compiler_error(message: String) -> ethers_solc::artifacts::Error {
     }
 }
 
-pub fn compile_using_cli(
+pub async fn compile_using_cli(
     solc: &PathBuf,
     input: &CompilerInput,
 ) -> Result<CompilerOutput, SolcError> {
     let output = {
         let input_args = types::InputArgs::try_from(input)?;
-        let input_files = types::InputFiles::try_from(input)?;
+        let input_files = types::InputFiles::try_from_compiler_input(input).await?;
         Command::new(solc)
-            .args(input_args.build_string_args())
-            .args(input_files.build_string_args()?)
+            .args(input_args.build())
+            .args(input_files.build()?)
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .output()
+            .await
             .map_err(|err| SolcError::Io(SolcIoError::new(err, solc)))?
     };
 
@@ -362,7 +361,7 @@ mod tests {
         };
         assert_eq!(input_args, expected_args);
         assert_eq!(
-            input_args.build_string_args(),
+            input_args.build(),
             vec![
                 "--combined-json",
                 "abi,bin,bin-runtime",
@@ -374,11 +373,13 @@ mod tests {
         );
     }
 
-    #[test]
-    fn correct_input_files() {
+    #[tokio::test]
+    async fn correct_input_files() {
         let input: CompilerInput = serde_json::from_str(DEFAULT_COMPILER_INPUT).unwrap();
 
-        let input_files = types::InputFiles::try_from(&input).expect("failed to convert files");
+        let input_files = types::InputFiles::try_from_compiler_input(&input)
+            .await
+            .expect("failed to convert files");
         assert!(input_files.files_dir.path().exists());
 
         let expected_files: Vec<String> = vec!["a.sol", "b.sol", "main.sol"]
@@ -393,9 +394,7 @@ mod tests {
             })
             .collect();
         assert_eq!(input_files.file_names, expected_files);
-        let string_args = input_files
-            .build_string_args()
-            .expect("failed to build string args");
+        let string_args = input_files.build().expect("failed to build string args");
         assert_eq!(string_args, &expected_files);
     }
 
@@ -468,8 +467,9 @@ mod tests {
         let solc = get_solc(&ver).await;
 
         let input: CompilerInput = serde_json::from_str(DEFAULT_COMPILER_INPUT).unwrap();
-        let output: CompilerOutput =
-            compile_using_cli(&solc, &input).expect("failed to compile contracts with 0.4.8");
+        let output: CompilerOutput = compile_using_cli(&solc, &input)
+            .await
+            .expect("failed to compile contracts with 0.4.8");
         assert!(!output.has_error());
         let names: HashSet<String> = output.contracts_into_iter().map(|(name, _)| name).collect();
         let expected_names = HashSet::from_iter(vec!["Main".into(), "A".into(), "B".into()]);
@@ -486,6 +486,7 @@ mod tests {
                 settings: Settings::default(),
             };
             let output: CompilerOutput = compile_using_cli(&solc, &input)
+                .await
                 .expect("shouldn't return Err, but Ok with errors field");
             assert!(output.has_error());
         }
