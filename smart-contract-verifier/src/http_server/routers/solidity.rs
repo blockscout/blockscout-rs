@@ -1,15 +1,16 @@
 use super::Router;
 use crate::{
     compiler::{Compilers, Fetcher, ListFetcher, S3Fetcher},
-    http_server::handlers::{multi_part, standard_json, version_list},
+    http_server::handlers::solidity,
     settings::{FetcherSettings, S3FetcherSettings, SoliditySettings},
+    solidity::SolidityCompilerAgent,
 };
 use actix_web::web;
 use s3::{creds::Credentials, Bucket, Region};
 use std::{str::FromStr, sync::Arc};
 
 pub struct SolidityRouter {
-    compilers: web::Data<Compilers>,
+    compilers: web::Data<Compilers<SolidityCompilerAgent>>,
 }
 
 fn new_region(region: Option<String>, endpoint: Option<String>) -> Option<Region> {
@@ -68,7 +69,7 @@ impl SolidityRouter {
                 .await?,
             ),
         };
-        let compilers = Compilers::new(fetcher);
+        let compilers = Compilers::new(fetcher, SolidityCompilerAgent::new());
         compilers.load_from_dir(&dir).await;
         Ok(Self {
             compilers: web::Data::new(compilers),
@@ -82,9 +83,18 @@ impl Router for SolidityRouter {
             .app_data(self.compilers.clone())
             .service(
                 web::scope("/verify")
-                    .route("/multiple-files", web::post().to(multi_part::verify))
-                    .route("/standard-json", web::post().to(standard_json::verify)),
+                    .route(
+                        "/multiple-files",
+                        web::post().to(solidity::multi_part::verify),
+                    )
+                    .route(
+                        "/standard-json",
+                        web::post().to(solidity::standard_json::verify),
+                    ),
             )
-            .route("/versions", web::get().to(version_list::get_version_list));
+            .route(
+                "/versions",
+                web::get().to(solidity::version_list::get_version_list),
+            );
     }
 }

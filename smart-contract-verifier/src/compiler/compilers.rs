@@ -3,8 +3,12 @@ use crate::{
     compiler::{self, DownloadCache, Fetcher, Version},
     http_server::metrics,
 };
-use ethers_solc::{artifacts::Severity, error::SolcError, CompilerInput, CompilerOutput, Solc};
-use std::{fmt::Debug, path::PathBuf, sync::Arc};
+use ethers_solc::{artifacts::Severity, error::SolcError, CompilerInput, CompilerOutput};
+use std::{
+    fmt::Debug,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 use thiserror::Error as DeriveError;
 use tracing::instrument;
 
@@ -20,16 +24,33 @@ pub enum Error {
     Compilation(Vec<String>),
 }
 
-pub struct Compilers {
-    cache: DownloadCache,
-    fetcher: Arc<dyn Fetcher>,
+pub trait EvmCompilerAgent {
+    fn compile(
+        &self,
+        path: &Path,
+        ver: &compiler::Version,
+        input: &CompilerInput,
+    ) -> Result<CompilerOutput, SolcError>;
 }
 
-impl Compilers {
-    pub fn new(fetcher: Arc<dyn Fetcher>) -> Self {
+pub struct Compilers<C>
+where
+    C: EvmCompilerAgent,
+{
+    cache: DownloadCache,
+    fetcher: Arc<dyn Fetcher>,
+    evm_compiler: C,
+}
+
+impl<C> Compilers<C>
+where
+    C: EvmCompilerAgent,
+{
+    pub fn new(fetcher: Arc<dyn Fetcher>, evm_compiler: C) -> Self {
         Self {
             cache: DownloadCache::new(),
             fetcher,
+            evm_compiler,
         }
     }
     #[instrument(name = "download_and_compile", skip(self, input), level = "debug")]
@@ -38,16 +59,15 @@ impl Compilers {
         compiler_version: &compiler::Version,
         input: &CompilerInput,
     ) -> Result<CompilerOutput, Error> {
-        let solc_path_result = {
+        let path_result = {
             self.cache
                 .get(self.fetcher.as_ref(), compiler_version)
                 .await
         };
-        let solc_path = match solc_path_result {
+        let path = match path_result {
             Err(FetchError::NotFound(version)) => return Err(Error::VersionNotFound(version)),
             res => res?,
         };
-        let solc = Solc::from(solc_path);
         let output = {
             let _timer = metrics::COMPILE_TIME.start_timer();
             let span = tracing::debug_span!(
@@ -55,7 +75,7 @@ impl Compilers {
                 ver = compiler_version.to_string()
             );
             let _guard = span.enter();
-            solc.compile(&input)?
+            self.evm_compiler.compile(&path, compiler_version, input)?
         };
 
         // Compilations errors, warnings and info messages are returned in `CompilerOutput.error`
@@ -81,6 +101,13 @@ impl Compilers {
         self.fetcher.all_versions()
     }
 
+    pub fn all_versions_sorted_str(&self) -> Vec<String> {
+        let mut versions = self.all_versions();
+        // sort in descending order
+        versions.sort_by(|x, y| x.cmp(y).reverse());
+        versions.into_iter().map(|v| v.to_string()).collect()
+    }
+
     pub async fn load_from_dir(&self, dir: &PathBuf) {
         match self.cache.load_from_dir(dir).await {
             Ok(_) => {}
@@ -94,23 +121,25 @@ impl Compilers {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::compiler::ListFetcher;
+    use crate::{compiler::ListFetcher, solidity::SolidityCompilerAgent};
     use std::{env::temp_dir, str::FromStr};
 
-    use crate::consts::DEFAULT_COMPILER_LIST;
+    use crate::consts::DEFAULT_SOLIDITY_COMPILER_LIST;
     use async_once_cell::OnceCell;
     use ethers_solc::artifacts::{Source, Sources};
     use std::default::Default;
 
-    async fn global_compilers() -> &'static Compilers {
-        static COMPILERS: OnceCell<Compilers> = OnceCell::new();
+    async fn global_compilers() -> &'static Compilers<SolidityCompilerAgent> {
+        static COMPILERS: OnceCell<Compilers<SolidityCompilerAgent>> = OnceCell::new();
         COMPILERS
             .get_or_init(async {
-                let url = DEFAULT_COMPILER_LIST.try_into().expect("Getting url");
+                let url = DEFAULT_SOLIDITY_COMPILER_LIST
+                    .try_into()
+                    .expect("Getting url");
                 let fetcher = ListFetcher::new(url, temp_dir(), None)
                     .await
                     .expect("Fetch releases");
-                let compilers = Compilers::new(Arc::new(fetcher));
+                let compilers = Compilers::new(Arc::new(fetcher), SolidityCompilerAgent::new());
                 compilers
             })
             .await

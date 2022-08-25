@@ -127,7 +127,7 @@ mod tests {
     use super::*;
     use crate::{
         compiler::{version::ReleaseVersion, ListFetcher},
-        consts::DEFAULT_COMPILER_LIST,
+        consts::DEFAULT_SOLIDITY_COMPILER_LIST,
     };
     use async_trait::async_trait;
     use futures::{executor::block_on, join, pin_mut};
@@ -138,7 +138,7 @@ mod tests {
     fn new_version(major: u64) -> Version {
         Version::Release(ReleaseVersion {
             version: semver::Version::new(major, 0, 0),
-            commit: [0, 1, 2, 3],
+            commit: "00010203".to_string(),
         })
     }
 
@@ -284,7 +284,9 @@ mod tests {
         let ver = Version::from_str("0.7.0+commit.9e61f92b").unwrap();
         let dir = temp_dir();
 
-        let url = DEFAULT_COMPILER_LIST.try_into().expect("Getting url");
+        let url = DEFAULT_SOLIDITY_COMPILER_LIST
+            .try_into()
+            .expect("Getting url");
         let fetcher = ListFetcher::new(url, temp_dir(), None)
             .await
             .expect("Fetch releases");

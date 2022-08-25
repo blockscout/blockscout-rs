@@ -1,6 +1,6 @@
 use crate::{
     compiler::{self, Compilers},
-    solidity::{VerificationSuccess, Verifier},
+    solidity::{SolidityCompilerAgent, VerificationSuccess, Verifier},
     VerificationResponse, VerificationResult,
 };
 use actix_web::error;
@@ -33,7 +33,7 @@ enum CompileAndVerifyError {
 }
 
 pub(crate) async fn compile_and_verify_handler(
-    compilers: &Compilers,
+    compilers: &Compilers<SolidityCompilerAgent>,
     mut input: Input<'_>,
     bruteforce_bytecode_hashes: bool,
 ) -> Result<VerificationResponse, actix_web::Error> {
@@ -72,7 +72,7 @@ pub(crate) async fn compile_and_verify_handler(
 
 #[instrument(skip(compilers, verifier, input), level = "debug")]
 async fn compile_and_verify(
-    compilers: &Compilers,
+    compilers: &Compilers<SolidityCompilerAgent>,
     verifier: &Verifier,
     input: &Input<'_>,
 ) -> Result<VerificationSuccess, CompileAndVerifyError> {

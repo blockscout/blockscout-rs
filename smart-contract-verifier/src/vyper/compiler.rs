@@ -1,0 +1,177 @@
+use std::path::Path;
+
+use ethers_solc::{error::SolcError, CompilerInput, CompilerOutput, Solc};
+
+use crate::compiler::{self, EvmCompilerAgent};
+
+pub struct VyperCompilerAgent {}
+
+impl VyperCompilerAgent {
+    pub fn new() -> Self {
+        VyperCompilerAgent {}
+    }
+}
+
+impl EvmCompilerAgent for VyperCompilerAgent {
+    fn compile(
+        &self,
+        path: &Path,
+        ver: &compiler::Version,
+        input: &CompilerInput,
+    ) -> Result<CompilerOutput, SolcError> {
+        let _ = ver;
+        let vyper_output: types::VyperCompilerOutput = Solc::from(path).compile_as(input)?;
+        Ok(CompilerOutput::from(vyper_output))
+    }
+}
+
+mod types {
+    use std::collections::BTreeMap;
+
+    use ethers_solc::{
+        artifacts::{Contract, Severity},
+        CompilerOutput,
+    };
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+    pub struct SourceLocation {
+        pub file: String,
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    pub struct VyperError {
+        pub r#type: String,
+        pub component: String,
+        pub severity: Severity,
+        pub message: String,
+        pub formatted_message: Option<String>,
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
+    pub struct VyperCompilerOutput {
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        pub errors: Vec<VyperError>,
+        #[serde(default)]
+        pub contracts: BTreeMap<String, BTreeMap<String, Contract>>,
+    }
+
+    impl From<VyperCompilerOutput> for CompilerOutput {
+        fn from(vyper: VyperCompilerOutput) -> Self {
+            let errors = vyper
+                .errors
+                .into_iter()
+                .map(|e| ethers_solc::artifacts::Error {
+                    r#type: e.r#type,
+                    component: e.component,
+                    severity: e.severity,
+                    message: e.message,
+                    formatted_message: e.formatted_message,
+                    source_location: None,
+                    secondary_source_locations: vec![],
+                    error_code: None,
+                })
+                .collect();
+            CompilerOutput {
+                errors,
+                sources: BTreeMap::new(),
+                contracts: vyper.contracts,
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::HashSet, path::PathBuf, str::FromStr, sync::Arc};
+
+    use async_once_cell::OnceCell;
+    use ethers_solc::{
+        artifacts::{Source, Sources},
+        CompilerInput,
+    };
+
+    use crate::{
+        compiler::{self, Compilers, ListFetcher},
+        consts::DEFAULT_VYPER_COMPILER_LIST,
+    };
+
+    use super::*;
+
+    async fn global_compilers() -> &'static Compilers<VyperCompilerAgent> {
+        static COMPILERS: OnceCell<Compilers<VyperCompilerAgent>> = OnceCell::new();
+        COMPILERS
+            .get_or_init(async {
+                let url = DEFAULT_VYPER_COMPILER_LIST.try_into().expect("Getting url");
+                let fetcher = ListFetcher::new(url, PathBuf::from("compilers"), None)
+                    .await
+                    .expect("Fetch releases");
+                let compilers = Compilers::new(Arc::new(fetcher), VyperCompilerAgent::new());
+                compilers
+            })
+            .await
+    }
+
+    struct Input {
+        source_code: String,
+    }
+
+    impl Input {
+        pub fn with_source_code(source_code: String) -> Self {
+            Self { source_code }
+        }
+    }
+
+    impl From<Input> for CompilerInput {
+        fn from(input: Input) -> Self {
+            let mut compiler_input = CompilerInput {
+                language: "Vyper".to_string(),
+                sources: Sources::from([(
+                    "source.vy".into(),
+                    Source {
+                        content: input.source_code,
+                    },
+                )]),
+                settings: Default::default(),
+            };
+            compiler_input.settings.evm_version = None;
+            compiler_input
+        }
+    }
+
+    #[tokio::test]
+    async fn successful_compilation() {
+        let source_code = r#"
+# @version ^0.3.1
+
+userName: public(String[100])
+
+@external
+def __init__(name: String[100]):
+    self.userName = name
+
+@view
+@external
+def getUserName() -> String[100]:
+    return self.userName
+"#;
+
+        let compilers = global_compilers().await;
+        let input: CompilerInput = Input::with_source_code(source_code.into()).into();
+        let version =
+            compiler::Version::from_str("0.3.6+commit.4a2124d0").expect("Compiler version");
+
+        let result = compilers
+            .compile(&version, &input)
+            .await
+            .expect("Compilation failed");
+        let contracts: HashSet<String> =
+            result.contracts_into_iter().map(|(name, _)| name).collect();
+        assert_eq!(
+            contracts,
+            HashSet::from_iter(vec!["source".into()]),
+            "compilation output should contain 1 contracts",
+        )
+    }
+}

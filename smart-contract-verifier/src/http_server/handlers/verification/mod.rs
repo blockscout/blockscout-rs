@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod solidity;
 pub mod sourcify;
+pub mod vyper;
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct VerificationResponse {
