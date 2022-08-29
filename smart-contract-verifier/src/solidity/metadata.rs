@@ -68,10 +68,6 @@ impl<'b> Decode<'b, DecodeContext> for MetadataHash {
                     // if key is not "solc" str we may skip the corresponding value
                     d.skip()?;
                 }
-                Err(err) if err.is_type_mismatch() => {
-                    // if key is not `str` we may skip the corresponding value
-                    d.skip()?;
-                }
                 Err(err) => return Err(err),
             }
         }
