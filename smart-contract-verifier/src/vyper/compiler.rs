@@ -84,13 +84,15 @@ mod types {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashSet, path::PathBuf, str::FromStr, sync::Arc};
+    use std::{
+        collections::{BTreeMap, HashSet},
+        path::PathBuf,
+        str::FromStr,
+        sync::Arc,
+    };
 
     use async_once_cell::OnceCell;
-    use ethers_solc::{
-        artifacts::{Source, Sources},
-        CompilerInput,
-    };
+    use ethers_solc::{artifacts::Source, CompilerInput};
 
     use crate::{
         compiler::{self, Compilers, ListFetcher},
@@ -113,35 +115,25 @@ mod tests {
             .await
     }
 
-    struct Input {
-        source_code: String,
+    fn input_with_sources(sources: BTreeMap<PathBuf, String>) -> CompilerInput {
+        let mut compiler_input = CompilerInput {
+            language: "Vyper".to_string(),
+            sources: sources
+                .into_iter()
+                .map(|(name, content)| (name, Source { content }))
+                .collect(),
+            settings: Default::default(),
+        };
+        compiler_input.settings.evm_version = None;
+        compiler_input
     }
 
-    impl Input {
-        pub fn with_source_code(source_code: String) -> Self {
-            Self { source_code }
-        }
-    }
-
-    impl From<Input> for CompilerInput {
-        fn from(input: Input) -> Self {
-            let mut compiler_input = CompilerInput {
-                language: "Vyper".to_string(),
-                sources: Sources::from([(
-                    "source.vy".into(),
-                    Source {
-                        content: input.source_code,
-                    },
-                )]),
-                settings: Default::default(),
-            };
-            compiler_input.settings.evm_version = None;
-            compiler_input
-        }
+    fn input_with_source(source_code: String) -> CompilerInput {
+        input_with_sources(BTreeMap::from([("source.vy".into(), source_code)]))
     }
 
     #[tokio::test]
-    async fn successful_compilation() {
+    async fn compile_success() {
         let source_code = r#"
 # @version ^0.3.1
 
@@ -158,7 +150,7 @@ def getUserName() -> String[100]:
 "#;
 
         let compilers = global_compilers().await;
-        let input: CompilerInput = Input::with_source_code(source_code.into()).into();
+        let input: CompilerInput = input_with_source(source_code.into());
         let version =
             compiler::Version::from_str("0.3.6+commit.4a2124d0").expect("Compiler version");
 
@@ -171,7 +163,28 @@ def getUserName() -> String[100]:
         assert_eq!(
             contracts,
             HashSet::from_iter(vec!["source".into()]),
-            "compilation output should contain 1 contracts",
+            "compilation output should contain 1 contract",
         )
+    }
+
+    #[tokio::test]
+    async fn compile_failed() {
+        let compilers = global_compilers().await;
+        let version =
+            compiler::Version::from_str("v0.2.11+commit.5db35ef").expect("Compiler version");
+
+        for sources in vec![
+            BTreeMap::from_iter(vec![("source.vy".into(), "some wrong vyper code".into())]),
+            BTreeMap::from_iter(vec![(
+                "source.vy".into(),
+                "\n\n# @version =0.3.1\n\n# wrong vyper version".into(),
+            )]),
+        ] {
+            let input = input_with_sources(sources);
+            let _ = compilers
+                .compile(&version, &input)
+                .await
+                .expect_err("Compilation should fail");
+        }
     }
 }

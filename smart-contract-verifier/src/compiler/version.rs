@@ -25,13 +25,14 @@ impl FromStr for ReleaseVersion {
     type Err = ParseError;
 
     /// Parses release version from string formated as
-    /// `(v)*VERSION*+commit.*COMMITHASH*`, examples:
+    /// `(v)*VERSION*(-*PRERELEASE*)+commit.*COMMITHASH*`, examples:
     /// `v0.8.9+commit.e5eed63a`
     /// `0.8.4+commit.dea1b9ec`
+    /// `0.8.4-beta.16+commit.dea1d`
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (_prefix, major, minor, patch, pre, commit) = sscanf::scanf!(
             s,
-            "{:/v?/}{}.{}.{}{:/.*/}+commit.{}",
+            "{:/v?/}{}.{}.{}{:/.*/}+commit.{:/[A-Fa-f0-9]+/}",
             String,
             u64,
             u64,
@@ -70,11 +71,11 @@ impl FromStr for NightlyVersion {
     /// Parses nigthly version from string formated as
     /// `(v)*VERSION*-nightly.*DATE*+commit.*COMMITHASH*`, examples:
     /// `v0.8.8-nightly.2021.9.9+commit.dea1b9ec`
-    /// `0.8.4-nightly.2021.9.9+commit.e5eed63a`
+    /// `0.8.4-nightly.2021.9.9+commit.e5eed63a10`
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (_prefix, major, minor, patch, date, commit) = sscanf::scanf!(
             s,
-            "{:/v?/}{}.{}.{}-nightly.{}+commit.{}",
+            "{:/v?/}{}.{}.{}-nightly.{}+commit.{:/[A-Fa-f0-9]+/}",
             String,
             u64,
             u64,

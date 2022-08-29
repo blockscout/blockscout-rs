@@ -58,11 +58,13 @@ async fn compile_and_verify_handler(
         Ok(output) => output,
         Err(e) => return Ok(VerificationResponse::err(e)),
     };
-    // let bytecodes: Vec<Option<String>> = output
+
+    // use ethers_solc::Artifact;
+    // let bytecodes: Vec<_> = _output
     //     .contracts_iter()
     //     .map(|(_, c)| {
-    //         c.get_bytecode_bytes()
-    //             .and_then(|b| Some(hex::encode(b.to_vec())))
+    //         (c.get_abi(), c.get_bytecode_bytes()
+    //             .and_then(|b| Some(hex::encode(b.to_vec()))))
     //     })
     //     .collect();
     // println!("{:?}", bytecodes);
