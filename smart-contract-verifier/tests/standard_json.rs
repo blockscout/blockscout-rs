@@ -188,7 +188,8 @@ mod regression_tests {
     #[actix_rt::test]
     async fn issue_with_creation_code() {
         let contract_dir = "issue_with_creation_code";
-        let test_input = TestInput::new("PancakeFactory", "v0.5.16+commit.9c3226ce").has_constructor_args();
+        let test_input =
+            TestInput::new("PancakeFactory", "v0.5.16+commit.9c3226ce").has_constructor_args();
         test_success(contract_dir, test_input).await;
     }
 }
