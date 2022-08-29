@@ -8,19 +8,12 @@ use ethers_solc::{artifacts::Contract, Artifact};
 use std::str::FromStr;
 
 /// Combine creation_tx_input and deployed_bytecode.
-/// Guarantees that `deployed_bytecode` was actually deployed
-/// by `creation_tx_input`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Bytecode {
     /// Raw bytecode bytes used in contract creation transaction
     creation_tx_input: Bytes,
     /// Raw deployed bytecode bytes
     deployed_bytecode: Bytes,
-
-    /// Hex representation of creation tx input without "0x" prefix
-    creation_tx_input_str: String,
-    /// Hex representation of deployed bytecode without "0x" prefix
-    deployed_bytecode_str: String,
 }
 
 impl Bytecode {
@@ -33,21 +26,13 @@ impl Bytecode {
                 BytecodeInitializationError::InvalidCreationTxInput(creation_tx_input.to_string())
             })?
             .0;
-        if creation_tx_input.is_empty() {
-            return Err(BytecodeInitializationError::EmptyCreationTxInput);
-        }
 
         let deployed_bytecode = DisplayBytes::from_str(deployed_bytecode)
             .map_err(|_| {
                 BytecodeInitializationError::InvalidDeployedBytecode(deployed_bytecode.to_string())
             })?
             .0;
-        if deployed_bytecode.is_empty() {
-            return Err(BytecodeInitializationError::EmptyDeployedBytecode);
-        }
 
-        // We transform `&str` into `Bytes` initially, so that we can ensure that initial input is a valid hex string
-        // and enforce internal `Bytecode` representation not to have `0x` prefix in it.
         Self::from_bytes(creation_tx_input, deployed_bytecode)
     }
 
@@ -55,16 +40,17 @@ impl Bytecode {
         creation_tx_input: Bytes,
         deployed_bytecode: Bytes,
     ) -> Result<Self, BytecodeInitializationError> {
-        // `hex::encode` encodes bytes as hex string without "0x" prefix
-        let creation_tx_input_str = hex::encode(&creation_tx_input);
-        let deployed_bytecode_str = hex::encode(&deployed_bytecode);
+        if creation_tx_input.is_empty() {
+            return Err(BytecodeInitializationError::EmptyCreationTxInput);
+        }
+
+        if deployed_bytecode.is_empty() {
+            return Err(BytecodeInitializationError::EmptyDeployedBytecode);
+        }
 
         Ok(Self {
             creation_tx_input,
             deployed_bytecode,
-
-            creation_tx_input_str,
-            deployed_bytecode_str,
         })
     }
 
