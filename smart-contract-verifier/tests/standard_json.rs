@@ -184,4 +184,11 @@ mod regression_tests {
         let test_input = TestInput::new("ExternalTestJson", "v0.6.8+commit.0bbfe453");
         test_success(contract_dir, test_input).await;
     }
+
+    #[actix_rt::test]
+    async fn issue_with_creation_code() {
+        let contract_dir = "issue_with_creation_code";
+        let test_input = TestInput::new("PancakeFactory", "v0.5.16+commit.9c3226ce").has_constructor_args();
+        test_success(contract_dir, test_input).await;
+    }
 }

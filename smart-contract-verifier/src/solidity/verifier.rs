@@ -170,11 +170,11 @@ impl LocalBytecode {
             bytecode.deployed_bytecode.clone(),
             &bytecode_modified.deployed_bytecode,
         )?;
-        if deployed_bytecode_parts.len() > 2 {
-            return Err(VerificationErrorKind::InternalError(
-                "deployed bytecode part contains more than two parts".into(),
-            ));
-        }
+        // if deployed_bytecode_parts.len() > 2 {
+        //     return Err(VerificationErrorKind::InternalError(
+        //         "deployed bytecode part contains more than two parts".into(),
+        //     ));
+        // }
 
         Ok(Self {
             bytecode,
