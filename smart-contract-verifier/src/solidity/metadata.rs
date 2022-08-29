@@ -6,8 +6,8 @@ use thiserror::Error;
 ///
 /// Currently we are interested only in `solc` value.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct MetadataHash {
-    pub(super) solc: Option<bytes::Bytes>,
+pub struct MetadataHash {
+    pub solc: Option<bytes::Bytes>,
 }
 
 impl MetadataHash {

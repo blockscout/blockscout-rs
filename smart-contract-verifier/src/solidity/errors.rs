@@ -25,8 +25,16 @@ pub enum VerificationErrorKind {
     LibraryMissed,
     #[error("contract is abstract")]
     AbstractContract,
-    #[error("bytecode does not match compilation output: {0}")]
-    BytecodeMismatch(Mismatch<DisplayBytes>),
+    #[error("bytecode length is less than expected: {part}; bytecodes: {raw}")]
+    BytecodeLengthMismatch {
+        part: Mismatch<usize>,
+        raw: Mismatch<DisplayBytes>,
+    },
+    #[error("bytecode does not match compilation output: {part}; bytecodes: {raw}")]
+    BytecodeMismatch {
+        part: Mismatch<DisplayBytes>,
+        raw: Mismatch<DisplayBytes>,
+    },
     #[error("cannot parse metadata")]
     MetadataParse(String),
     #[error("compiler versions included into metadata hash does not match: {0:?}")]
