@@ -11,7 +11,8 @@ refresh_versions_schedule = "0 0 * * * * *"
 enabled = true
 compilers_dir = "/tmp/vyper-compilers"
 refresh_versions_schedule = "0 0 * * * * *"
-list_url = "https://raw.githubusercontent.com/blockscout/solc-bin/lymarenkolev/vyper-macos/vyper.macos.list.json"
+list_url = "https://raw.githubusercontent.com/blockscout/solc-bin/main/vyper.list.json"
+# list_url = "https://raw.githubusercontent.com/blockscout/solc-bin/main/vyper.macos.list.json"
 
 [solidity.fetcher.list]
 # It depends on the OS you are running the service on
