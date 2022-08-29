@@ -9,11 +9,14 @@ use actix_web::{
 use awc::{Client, ClientRequest};
 use futures::{stream, StreamExt};
 use serde_json::Value;
+use tracing::{event, Level};
+use tracing_actix_web::TracingLogger;
 use url::Url;
 
 pub use crate::settings::{BlockscoutSettings, Instance, Settings};
 
 pub mod settings;
+pub mod tracer;
 
 #[derive(Clone, Debug)]
 pub struct ApiEndpoints {
@@ -46,19 +49,24 @@ impl From<BlockscoutSettings> for ApiEndpoints {
 }
 
 impl ApiEndpoints {
+    #[tracing::instrument(skip(request), level = "debug")]
     async fn make_request(request: ClientRequest, body: Bytes) -> Result<String, Box<dyn Error>> {
         let mut response = request.send_body(body.clone()).await?;
         let bytes = response.body().await?;
+        event!(Level::DEBUG, body = ?bytes, "Got response body");
         let str = str::from_utf8(bytes.as_ref())?.to_string();
+        event!(Level::DEBUG, string = ?str, "Decoded bytes into utf8");
         Ok(str)
     }
 
+    #[tracing::instrument(level = "debug")]
     async fn make_requests(
         self,
         query: &str,
         body: Bytes,
         request_head: &RequestHead,
     ) -> Vec<(Instance, String)> {
+        event!(Level::DEBUG, "Building awc client");
         let client = Client::builder().timeout(self.request_timeout).finish();
 
         stream::iter(self.apis)
@@ -72,7 +80,10 @@ impl ApiEndpoints {
                     instance,
                     ApiEndpoints::make_request(request, body.clone())
                         .await
-                        .unwrap_or_else(|e| e.to_string()),
+                        .unwrap_or_else(|e| {
+                            event!(Level::ERROR, error = ?e, "Error while making request");
+                            e.to_string()
+                        }),
                 )
             })
             .buffer_unordered(self.concurrent_requests)
@@ -92,14 +103,17 @@ fn merge_responses(json_responses: Vec<(Instance, String)>) -> Responses {
             let kv_subnet = result.entry(net).or_insert_with(HashMap::new);
             kv_subnet.insert(
                 subnet,
-                serde_json::from_str(&value)
-                    .unwrap_or_else(|e| Value::String(format!("{}: {}\n", e, value))),
+                serde_json::from_str(&value).unwrap_or_else(|e| {
+                    event!(Level::ERROR, value = ?value, error = ?e, "Error during parsing");
+                    Value::String(format!("{}: {}\n", e, value))
+                }),
             );
         });
 
     result
 }
 
+#[tracing::instrument(skip(apis_endpoints))]
 pub async fn handle_request(
     request: HttpRequest,
     apis_endpoints: Data<ApiEndpoints>,
@@ -114,12 +128,15 @@ pub async fn handle_request(
 }
 
 pub fn run(settings: Settings) -> Result<Server, std::io::Error> {
+    event!(Level::INFO, server.addr = ?settings.server.addr, "Creating listener");
     let listener = TcpListener::bind(settings.server.addr)?;
 
+    event!(Level::INFO, settings.blockscout = ?settings.blockscout, "Initializing apis_endpoint");
     let apis_endpoints: Data<ApiEndpoints> = Data::new(settings.blockscout.try_into().unwrap());
 
     let server = HttpServer::new(move || {
         App::new()
+            .wrap(TracingLogger::default())
             .app_data(apis_endpoints.clone())
             .default_service(web::route().to(handle_request))
     })
