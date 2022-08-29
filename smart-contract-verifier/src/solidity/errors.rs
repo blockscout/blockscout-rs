@@ -23,7 +23,7 @@ pub enum VerificationErrorKind {
     InternalError(String),
     #[error("library missed")]
     LibraryMissed,
-    #[error("constract is abstract")]
+    #[error("contract is abstract")]
     AbstractContract,
     #[error("bytecode does not match compilation output: {0}")]
     BytecodeMismatch(Mismatch<DisplayBytes>),
