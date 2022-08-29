@@ -61,15 +61,6 @@ impl Bytecode {
         let creation_tx_input_str = hex::encode(&creation_tx_input);
         let deployed_bytecode_str = hex::encode(&deployed_bytecode);
 
-        // if !creation_tx_input_str.contains(&deployed_bytecode_str) {
-        //     return Err(BytecodeInitializationError::BytecodeMismatch(
-        //         Mismatch::new(
-        //             DisplayBytes::from(creation_tx_input),
-        //             DisplayBytes::from(deployed_bytecode),
-        //         ),
-        //     ));
-        // }
-
         Ok(Self {
             creation_tx_input,
             deployed_bytecode,
@@ -150,36 +141,33 @@ impl RemoteBytecode {
     }
 }
 
+/// Encapsulates result of local source code compilation.
+/// Splits compiled creation transaction input.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct LocalBytecode {
     bytecode: Bytecode,
     creation_tx_input_parts: Vec<BytecodePart>,
-    deployed_bytecode_parts: Vec<BytecodePart>,
 }
 
 impl LocalBytecode {
+    /// Initializes a new [`LocalBytecode`] struct.
+    ///
+    /// `bytecode` and `bytecode_modified` must differ only in metadata hashes.
+    ///
+    /// Any error here is [`VerificationErrorKind::InternalError`], as both original
+    /// and modified bytecodes are obtained as a result of local compilation.
     pub fn new(
         bytecode: Bytecode,
         bytecode_modified: Bytecode,
     ) -> Result<Self, VerificationErrorKind> {
         let creation_tx_input_parts = Self::split(
-            bytecode.creation_tx_input.clone(),
+            &bytecode.creation_tx_input,
             &bytecode_modified.creation_tx_input,
         )?;
-        let deployed_bytecode_parts = Self::split(
-            bytecode.deployed_bytecode.clone(),
-            &bytecode_modified.deployed_bytecode,
-        )?;
-        // if deployed_bytecode_parts.len() > 2 {
-        //     return Err(VerificationErrorKind::InternalError(
-        //         "deployed bytecode part contains more than two parts".into(),
-        //     ));
-        // }
 
         Ok(Self {
             bytecode,
             creation_tx_input_parts,
-            deployed_bytecode_parts,
         })
     }
 
@@ -187,8 +175,12 @@ impl LocalBytecode {
         &self.bytecode.creation_tx_input
     }
 
+    /// Splits bytecode onto [`BytecodePart`]s using bytecode with modified metadata hashes.
+    ///
+    /// Any error here is [`VerificationErrorKind::InternalError`], as both original
+    /// and modified bytecodes are obtained as a result of local compilation.
     fn split(
-        mut raw: Bytes,
+        raw: &Bytes,
         raw_modified: &Bytes,
     ) -> Result<Vec<BytecodePart>, VerificationErrorKind> {
         if raw.len() != raw_modified.len() {
@@ -205,18 +197,20 @@ impl LocalBytecode {
         let mut result = Vec::new();
 
         let mut i = 0usize;
-        while !raw.is_empty() {
-            let decoded = Self::parse_bytecode_parts(&raw, &raw_modified[i..])?;
+        while i < raw.len() {
+            let decoded = Self::parse_bytecode_parts(&raw.slice(i..raw.len()), &raw_modified[i..])?;
             let decoded_size = parts_total_size(&decoded);
             result.extend(decoded);
 
-            raw.advance(decoded_size);
             i += decoded_size;
         }
 
         Ok(result)
     }
 
+    /// Finds the next [`BytecodePart`]s into a series of bytes.
+    ///
+    /// Parses at most one [`BytecodePart::Main`] and one [`BytecodePart::Metadata`].
     fn parse_bytecode_parts(
         raw: &Bytes,
         raw_modified: &[u8],
@@ -260,9 +254,10 @@ impl LocalBytecode {
             let metadata_length_raw = raw.slice((i + metadata_length)..(i + metadata_length + 2));
             let encoded_metadata_length = metadata_length_raw.clone().get_u16() as usize;
             if encoded_metadata_length != metadata_length {
-                return Err(VerificationErrorKind::InternalError(
-                    "encoded metadata length does not correspond to actual metadata length".into(),
-                ));
+                return Err(VerificationErrorKind::InternalError(format!(
+                    "encoded metadata length does not correspond to actual metadata length: {}",
+                    Mismatch::new(metadata_length, encoded_metadata_length)
+                )));
             }
 
             parts.push(BytecodePart::Metadata {
@@ -331,18 +326,30 @@ impl Verifier {
         output: CompilerOutput,
         output_modified: CompilerOutput,
     ) -> Result<VerificationSuccess, Vec<VerificationError>> {
+        let not_found_in_modified_compiler_output_error =
+            |file_path: String, contract_name: Option<String>| match contract_name {
+                None => VerificationError::new(
+                    file_path,
+                    VerificationErrorKind::InternalError(
+                        "not found in modified compiler output".into(),
+                    ),
+                ),
+                Some(contract_name) => VerificationError::with_contract(
+                    file_path,
+                    contract_name,
+                    VerificationErrorKind::InternalError(
+                        "not found in modified compiler output".into(),
+                    ),
+                ),
+            };
+
         let mut errors = Vec::new();
         for (path, contracts) in output.contracts {
             let contracts_modified = {
                 if let Some(contracts_modified) = output_modified.contracts.get(&path) {
                     contracts_modified
                 } else {
-                    let error = VerificationError::new(
-                        path,
-                        VerificationErrorKind::InternalError(
-                            "not found in modified compiler output".into(),
-                        ),
-                    );
+                    let error = not_found_in_modified_compiler_output_error(path, None);
 
                     tracing::error!("{}", error);
                     errors.push(error);
@@ -356,13 +363,8 @@ impl Verifier {
                     if let Some(contract) = contracts_modified.get(&name) {
                         contract
                     } else {
-                        let error = VerificationError::with_contract(
-                            path.clone(),
-                            name,
-                            VerificationErrorKind::InternalError(
-                                "not found in modified compiler output".into(),
-                            ),
-                        );
+                        let error =
+                            not_found_in_modified_compiler_output_error(path.clone(), Some(name));
 
                         tracing::error!("{}", error);
                         errors.push(error);
