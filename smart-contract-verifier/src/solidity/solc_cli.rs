@@ -106,23 +106,28 @@ mod types {
 
     impl InputFiles {
         pub async fn try_from_compiler_input(input: &CompilerInput) -> Result<Self, SolcError> {
-            let files_dir = tempfile::tempdir().map_err(|e| SolcError::Message(e.to_string()))?;
-            let mut file_names = Vec::new();
-            for (name, source) in input.sources.iter() {
-                let file_path = files_dir.path().join(name);
-                let mut file = tokio::fs::File::create(&file_path)
-                    .await
-                    .map_err(|e| SolcError::Message(e.to_string()))?;
-                file_names.push(file_path);
-                file.write(source.content.as_bytes())
-                    .await
-                    .map_err(|e| SolcError::Message(e.to_string()))?;
-            }
+            if !input.sources.is_empty() {
+                let files_dir =
+                    tempfile::tempdir().map_err(|e| SolcError::Message(e.to_string()))?;
+                let mut file_names = Vec::new();
+                for (name, source) in input.sources.iter() {
+                    let file_path = files_dir.path().join(name);
+                    let mut file = tokio::fs::File::create(&file_path)
+                        .await
+                        .map_err(|e| SolcError::Message(e.to_string()))?;
+                    file_names.push(file_path);
+                    file.write(source.content.as_bytes())
+                        .await
+                        .map_err(|e| SolcError::Message(e.to_string()))?;
+                }
 
-            Ok(InputFiles {
-                files_dir,
-                file_names,
-            })
+                Ok(InputFiles {
+                    files_dir,
+                    file_names,
+                })
+            } else {
+                Err(SolcError::Message("no files were provided".to_string()))
+            }
         }
 
         pub fn build(&self) -> Result<&Vec<PathBuf>, SolcError> {
@@ -470,7 +475,6 @@ mod tests {
         assert_eq!(names, expected_names);
 
         for sources in vec![
-            BTreeMap::new(),
             BTreeMap::from_iter(vec![source("main.sol", "")]),
             BTreeMap::from_iter(vec![source("main.sol", "some string")]),
         ] {
@@ -484,5 +488,14 @@ mod tests {
                 .expect("shouldn't return Err, but Ok with errors field");
             assert!(output.has_error());
         }
+
+        let input = CompilerInput {
+            language: "Solidity".into(),
+            sources: BTreeMap::new(),
+            settings: Settings::default(),
+        };
+        compile_using_cli(&solc, &input)
+            .await
+            .expect_err("should not compile empty files");
     }
 }
