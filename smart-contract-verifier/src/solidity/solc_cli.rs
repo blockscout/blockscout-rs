@@ -29,7 +29,10 @@ mod serde_helpers {
 
 mod types {
     use super::serde_helpers;
-    use std::collections::{BTreeMap, HashMap};
+    use std::{
+        collections::{BTreeMap, HashMap},
+        path::PathBuf,
+    };
 
     use ethers_solc::{
         artifacts::{Contract, Libraries},
@@ -98,7 +101,7 @@ mod types {
     #[derive(Debug)]
     pub struct InputFiles {
         pub files_dir: TempDir,
-        pub file_names: Vec<String>,
+        pub file_names: Vec<PathBuf>,
     }
 
     impl InputFiles {
@@ -110,7 +113,7 @@ mod types {
                 let mut file = tokio::fs::File::create(&file_path)
                     .await
                     .map_err(|e| SolcError::Message(e.to_string()))?;
-                file_names.push(file_path.to_string_lossy().to_string());
+                file_names.push(file_path);
                 file.write(source.content.as_bytes())
                     .await
                     .map_err(|e| SolcError::Message(e.to_string()))?;
@@ -121,16 +124,14 @@ mod types {
                 file_names,
             })
         }
-    }
 
-    impl InputFiles {
-        pub fn build(&self) -> Result<&Vec<String>, SolcError> {
+        pub fn build(&self) -> Result<&Vec<PathBuf>, SolcError> {
             self.files_dir
                 .path()
                 .exists()
                 .then(|| &self.file_names)
                 .ok_or_else(|| {
-                    SolcError::Message("temp dir with contracts doesn't exists".to_string())
+                    SolcError::Message("temp dir with contracts doesn't exist".to_string())
                 })
         }
     }
@@ -382,16 +383,9 @@ mod tests {
             .expect("failed to convert files");
         assert!(input_files.files_dir.path().exists());
 
-        let expected_files: Vec<String> = vec!["a.sol", "b.sol", "main.sol"]
+        let expected_files: Vec<PathBuf> = vec!["a.sol", "b.sol", "main.sol"]
             .into_iter()
-            .map(|name| {
-                input_files
-                    .files_dir
-                    .path()
-                    .join(name)
-                    .to_string_lossy()
-                    .to_string()
-            })
+            .map(|name| input_files.files_dir.path().join(name))
             .collect();
         assert_eq!(input_files.file_names, expected_files);
         let string_args = input_files.build().expect("failed to build string args");
