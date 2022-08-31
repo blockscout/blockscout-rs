@@ -29,7 +29,7 @@ mod types {
     use std::collections::BTreeMap;
 
     use ethers_solc::{
-        artifacts::{Contract, Severity},
+        artifacts::{Contract, Error, Severity},
         CompilerOutput,
     };
     use serde::{Deserialize, Serialize};
@@ -41,7 +41,7 @@ mod types {
 
     #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
     #[serde(rename_all = "camelCase")]
-    pub struct Error {
+    pub struct VyperError {
         pub r#type: String,
         pub component: String,
         pub severity: Severity,
