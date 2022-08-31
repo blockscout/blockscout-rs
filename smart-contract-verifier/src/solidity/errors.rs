@@ -5,7 +5,7 @@ use thiserror::Error;
 /// Errors that may occur during deployed bytecode and
 /// creation transaction input parsing.
 #[derive(Error, Clone, Debug, PartialEq, Eq)]
-pub enum BytecodeInitializationError {
+pub enum BytecodeInitError {
     #[error("creation transaction input is not valid: {0}")]
     InvalidCreationTxInput(String),
     #[error("deployed bytecode is not valid: {0}")]

@@ -1,5 +1,5 @@
 use super::{
-    errors::{BytecodeInitializationError, VerificationErrorKind},
+    errors::{BytecodeInitError, VerificationErrorKind},
     metadata::MetadataHash,
 };
 use crate::{types::Mismatch, DisplayBytes};
@@ -20,16 +20,16 @@ impl Bytecode {
     pub fn new(
         creation_tx_input: &str,
         deployed_bytecode: &str,
-    ) -> Result<Self, BytecodeInitializationError> {
+    ) -> Result<Self, BytecodeInitError> {
         let creation_tx_input = DisplayBytes::from_str(creation_tx_input)
             .map_err(|_| {
-                BytecodeInitializationError::InvalidCreationTxInput(creation_tx_input.to_string())
+                BytecodeInitError::InvalidCreationTxInput(creation_tx_input.to_string())
             })?
             .0;
 
         let deployed_bytecode = DisplayBytes::from_str(deployed_bytecode)
             .map_err(|_| {
-                BytecodeInitializationError::InvalidDeployedBytecode(deployed_bytecode.to_string())
+                BytecodeInitError::InvalidDeployedBytecode(deployed_bytecode.to_string())
             })?
             .0;
 
@@ -39,13 +39,13 @@ impl Bytecode {
     pub fn from_bytes(
         creation_tx_input: Bytes,
         deployed_bytecode: Bytes,
-    ) -> Result<Self, BytecodeInitializationError> {
+    ) -> Result<Self, BytecodeInitError> {
         if creation_tx_input.is_empty() {
-            return Err(BytecodeInitializationError::EmptyCreationTxInput);
+            return Err(BytecodeInitError::EmptyCreationTxInput);
         }
 
         if deployed_bytecode.is_empty() {
-            return Err(BytecodeInitializationError::EmptyDeployedBytecode);
+            return Err(BytecodeInitError::EmptyDeployedBytecode);
         }
 
         Ok(Self {
@@ -60,7 +60,7 @@ impl Bytecode {
 }
 
 impl TryFrom<&Contract> for Bytecode {
-    type Error = BytecodeInitializationError;
+    type Error = BytecodeInitError;
 
     fn try_from(contract: &Contract) -> Result<Self, Self::Error> {
         let deployed_bytecode = {
@@ -71,7 +71,7 @@ impl TryFrom<&Contract> for Bytecode {
                     .as_str()
                     .unwrap_or_default()
                     .to_string();
-                BytecodeInitializationError::InvalidDeployedBytecode(bytecode)
+                BytecodeInitError::InvalidDeployedBytecode(bytecode)
             })?
         };
         let creation_tx_input = {
@@ -82,7 +82,7 @@ impl TryFrom<&Contract> for Bytecode {
                     .as_str()
                     .unwrap_or_default()
                     .to_string();
-                BytecodeInitializationError::InvalidCreationTxInput(bytecode)
+                BytecodeInitError::InvalidCreationTxInput(bytecode)
             })?
         };
         Bytecode::from_bytes(creation_tx_input.0.clone(), deployed_bytecode.0.clone())
@@ -196,14 +196,12 @@ impl LocalBytecode {
 
         let len = raw.len();
 
-        let mut i = 0usize;
-        while i < len {
-            if raw[i] == raw_modified[i] {
-                i += 1;
-                continue;
-            }
+        // search for the first non-matching byte
+        let mut index = raw.iter().zip(raw_modified.iter()).position(|(a, b)| a != b);
 
-            // The first different byte. The metadata hash itself started somewhere earlier
+        // There is some non-matching byte - part of the metadata part byte.
+        if let Some(mut i) = index {
+            // `i` is the first different byte. The metadata hash itself started somewhere earlier
             // (at least for "a1"/"a2" indicating number of elements in cbor mapping).
             // Next steps are trying to find that beginning.
 
@@ -242,9 +240,14 @@ impl LocalBytecode {
                 metadata,
                 metadata_length_raw,
             });
-            break;
+
+            // Update index to point where metadata part begins
+            index = Some(i);
         }
 
+        // If there is something before metadata part (if any)
+        // belongs to main part
+        let i = index.unwrap_or(len);
         if i > 0 {
             parts.insert(
                 0,

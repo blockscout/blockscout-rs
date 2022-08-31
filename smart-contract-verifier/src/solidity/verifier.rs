@@ -1,6 +1,6 @@
 use super::{
     bytecode::{Bytecode, BytecodePart, LocalBytecode},
-    errors::{BytecodeInitializationError, VerificationError},
+    errors::{BytecodeInitError, VerificationError},
 };
 use crate::{
     solidity::{errors::VerificationErrorKind, metadata::MetadataHash},
@@ -38,7 +38,7 @@ impl Verifier {
     pub fn new(
         creation_tx_input: &str,
         deployed_bytecode: &str,
-    ) -> Result<Self, BytecodeInitializationError> {
+    ) -> Result<Self, BytecodeInitError> {
         let bytecode = Bytecode::new(creation_tx_input, deployed_bytecode)?;
         Ok(Self {
             remote_bytecode: bytecode,
@@ -136,13 +136,13 @@ impl Verifier {
             .ok_or_else(|| VerificationErrorKind::InternalError("missing abi".into()))?;
 
         let bytecode = Bytecode::try_from(contract).map_err(|err| match err {
-            BytecodeInitializationError::EmptyCreationTxInput
-            | BytecodeInitializationError::EmptyDeployedBytecode => {
+            BytecodeInitError::EmptyCreationTxInput
+            | BytecodeInitError::EmptyDeployedBytecode => {
                 VerificationErrorKind::AbstractContract
             }
             // Corresponding bytecode was not linked properly
-            BytecodeInitializationError::InvalidCreationTxInput(_)
-            | BytecodeInitializationError::InvalidDeployedBytecode(_) => {
+            BytecodeInitError::InvalidCreationTxInput(_)
+            | BytecodeInitError::InvalidDeployedBytecode(_) => {
                 VerificationErrorKind::LibraryMissed
             }
         })?;
@@ -204,6 +204,9 @@ impl Verifier {
         local_raw: &Bytes,
         local_parts: &Vec<BytecodePart>,
     ) -> Result<(), VerificationErrorKind> {
+        // A caller should ensure that this precondition holds.
+        // Currently only `compare_creation_tx_inputs` calls current function,
+        // and it guarantees that `remote_creation_tx_input.len() < local_creation_tx_input.len()`
         assert!(
             // if that fails, we would be out of range further anyway
             remote_raw.len() >= local_raw.len(),
@@ -361,7 +364,7 @@ mod verifier_initialization_tests {
         assert!(verifier.is_err(), "Verifier initialization should fail");
         assert_eq!(
             verifier.unwrap_err(),
-            BytecodeInitializationError::EmptyCreationTxInput,
+            BytecodeInitError::EmptyCreationTxInput,
         )
     }
 
@@ -372,7 +375,7 @@ mod verifier_initialization_tests {
         assert!(verifier.is_err(), "Verifier initialization should fail");
         assert_eq!(
             verifier.unwrap_err(),
-            BytecodeInitializationError::InvalidCreationTxInput(invalid_input.into()),
+            BytecodeInitError::InvalidCreationTxInput(invalid_input.into()),
         )
     }
 
@@ -382,7 +385,7 @@ mod verifier_initialization_tests {
         assert!(verifier.is_err(), "Verifier initialization should fail");
         assert_eq!(
             verifier.unwrap_err(),
-            BytecodeInitializationError::EmptyDeployedBytecode
+            BytecodeInitError::EmptyDeployedBytecode
         )
     }
 
@@ -393,7 +396,7 @@ mod verifier_initialization_tests {
         assert!(verifier.is_err(), "Verifier initialization should fail");
         assert_eq!(
             verifier.unwrap_err(),
-            BytecodeInitializationError::InvalidDeployedBytecode(invalid_input.into())
+            BytecodeInitError::InvalidDeployedBytecode(invalid_input.into())
         )
     }
 }
