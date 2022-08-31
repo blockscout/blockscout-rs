@@ -5,27 +5,33 @@ use actix_web::web;
 use crate::{
     compiler::{Compilers, ListFetcher},
     http_server::handlers::vyper,
-    settings::VyperSettings,
-    vyper::VyperCompilerAgent,
+    settings::{FetcherSettings, VyperSettings},
+    vyper::VyperCompiler,
     Router,
 };
 
 pub struct VyperRouter {
-    compilers: web::Data<Compilers<VyperCompilerAgent>>,
+    compilers: web::Data<Compilers<VyperCompiler>>,
 }
 
 impl VyperRouter {
     pub async fn new(settings: VyperSettings) -> anyhow::Result<Self> {
         let dir = settings.compilers_dir.clone();
+        let list_url = match settings.fetcher {
+            FetcherSettings::List(s) => s.list_url,
+            FetcherSettings::S3(_) => {
+                return Err(anyhow::anyhow!("S3 fetcher for vyper not supported"))
+            }
+        };
         let fetcher = Arc::new(
             ListFetcher::new(
-                settings.list_url,
+                list_url,
                 settings.compilers_dir,
                 Some(settings.refresh_versions_schedule),
             )
             .await?,
         );
-        let compilers = Compilers::new(fetcher, VyperCompilerAgent::new());
+        let compilers = Compilers::new(fetcher, VyperCompiler::new());
         compilers.load_from_dir(&dir).await;
         Ok(Self {
             compilers: web::Data::new(compilers),

@@ -24,8 +24,9 @@ pub enum Error {
     Compilation(Vec<String>),
 }
 
-pub trait EvmCompilerAgent {
-    fn compile(
+#[async_trait::async_trait]
+pub trait EvmCompiler {
+    async fn compile(
         &self,
         path: &Path,
         ver: &compiler::Version,
@@ -33,10 +34,7 @@ pub trait EvmCompilerAgent {
     ) -> Result<CompilerOutput, SolcError>;
 }
 
-pub struct Compilers<C>
-where
-    C: EvmCompilerAgent,
-{
+pub struct Compilers<C> {
     cache: DownloadCache,
     fetcher: Arc<dyn Fetcher>,
     evm_compiler: C,
@@ -44,7 +42,7 @@ where
 
 impl<C> Compilers<C>
 where
-    C: EvmCompilerAgent,
+    C: EvmCompiler,
 {
     pub fn new(fetcher: Arc<dyn Fetcher>, evm_compiler: C) -> Self {
         Self {
@@ -75,7 +73,9 @@ where
                 ver = compiler_version.to_string()
             );
             let _guard = span.enter();
-            self.evm_compiler.compile(&path, compiler_version, input)?
+            self.evm_compiler
+                .compile(&path, compiler_version, input)
+                .await?
         };
 
         // Compilations errors, warnings and info messages are returned in `CompilerOutput.error`
@@ -121,7 +121,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{compiler::ListFetcher, solidity::SolidityCompilerAgent};
+    use crate::{compiler::ListFetcher, solidity::SolidityCompiler};
     use std::{env::temp_dir, str::FromStr};
 
     use crate::consts::DEFAULT_SOLIDITY_COMPILER_LIST;
@@ -129,8 +129,8 @@ mod tests {
     use ethers_solc::artifacts::{Source, Sources};
     use std::default::Default;
 
-    async fn global_compilers() -> &'static Compilers<SolidityCompilerAgent> {
-        static COMPILERS: OnceCell<Compilers<SolidityCompilerAgent>> = OnceCell::new();
+    async fn global_compilers() -> &'static Compilers<SolidityCompiler> {
+        static COMPILERS: OnceCell<Compilers<SolidityCompiler>> = OnceCell::new();
         COMPILERS
             .get_or_init(async {
                 let url = DEFAULT_SOLIDITY_COMPILER_LIST
@@ -139,7 +139,7 @@ mod tests {
                 let fetcher = ListFetcher::new(url, temp_dir(), None)
                     .await
                     .expect("Fetch releases");
-                let compilers = Compilers::new(Arc::new(fetcher), SolidityCompilerAgent::new());
+                let compilers = Compilers::new(Arc::new(fetcher), SolidityCompiler::new());
                 compilers
             })
             .await

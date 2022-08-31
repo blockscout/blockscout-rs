@@ -1,4 +1,4 @@
 mod compiler;
 mod verifier;
 
-pub(crate) use compiler::VyperCompilerAgent;
+pub(crate) use compiler::VyperCompiler;

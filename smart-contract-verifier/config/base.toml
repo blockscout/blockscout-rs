@@ -5,15 +5,6 @@ addr = "0.0.0.0:8043"
 enabled = true
 compilers_dir = "/tmp/solidity-compilers"
 refresh_versions_schedule = "0 0 * * * * *"
-
-
-[vyper]
-enabled = true
-compilers_dir = "/tmp/vyper-compilers"
-refresh_versions_schedule = "0 0 * * * * *"
-list_url = "https://raw.githubusercontent.com/blockscout/solc-bin/main/vyper.list.json"
-# list_url = "https://raw.githubusercontent.com/blockscout/solc-bin/main/vyper.macos.list.json"
-
 [solidity.fetcher.list]
 # It depends on the OS you are running the service on
 list_url = "https://solc-bin.ethereum.org/linux-amd64/list.json"
@@ -27,6 +18,14 @@ list_url = "https://solc-bin.ethereum.org/linux-amd64/list.json"
 #endpoint = "endpoint"
 ## The only required field for the s3 fetcher
 #bucket = "bucket"
+
+[vyper]
+enabled = true
+compilers_dir = "/tmp/vyper-compilers"
+refresh_versions_schedule = "0 0 * * * * *"
+[vyper.fetcher.list]
+list_url = "https://raw.githubusercontent.com/blockscout/solc-bin/main/vyper.list.json"
+# list_url = "https://raw.githubusercontent.com/blockscout/solc-bin/main/vyper.macos.list.json"
 
 [sourcify]
 enabled = true

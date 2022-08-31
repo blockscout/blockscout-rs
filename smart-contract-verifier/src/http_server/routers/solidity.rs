@@ -3,14 +3,14 @@ use crate::{
     compiler::{Compilers, Fetcher, ListFetcher, S3Fetcher},
     http_server::handlers::solidity,
     settings::{FetcherSettings, S3FetcherSettings, SoliditySettings},
-    solidity::SolidityCompilerAgent,
+    solidity::SolidityCompiler,
 };
 use actix_web::web;
 use s3::{creds::Credentials, Bucket, Region};
 use std::{str::FromStr, sync::Arc};
 
 pub struct SolidityRouter {
-    compilers: web::Data<Compilers<SolidityCompilerAgent>>,
+    compilers: web::Data<Compilers<SolidityCompiler>>,
 }
 
 fn new_region(region: Option<String>, endpoint: Option<String>) -> Option<Region> {
@@ -69,7 +69,7 @@ impl SolidityRouter {
                 .await?,
             ),
         };
-        let compilers = Compilers::new(fetcher, SolidityCompilerAgent::new());
+        let compilers = Compilers::new(fetcher, SolidityCompiler::new());
         compilers.load_from_dir(&dir).await;
         Ok(Self {
             compilers: web::Data::new(compilers),

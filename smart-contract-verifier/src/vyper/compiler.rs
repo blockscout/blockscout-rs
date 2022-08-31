@@ -2,24 +2,24 @@ use std::path::Path;
 
 use ethers_solc::{error::SolcError, CompilerInput, CompilerOutput, Solc};
 
-use crate::compiler::{self, EvmCompilerAgent};
+use crate::compiler::{self, EvmCompiler};
 
-pub struct VyperCompilerAgent {}
+pub struct VyperCompiler {}
 
-impl VyperCompilerAgent {
+impl VyperCompiler {
     pub fn new() -> Self {
-        VyperCompilerAgent {}
+        VyperCompiler {}
     }
 }
 
-impl EvmCompilerAgent for VyperCompilerAgent {
-    fn compile(
+#[async_trait::async_trait]
+impl EvmCompiler for VyperCompiler {
+    async fn compile(
         &self,
         path: &Path,
-        ver: &compiler::Version,
+        _ver: &compiler::Version,
         input: &CompilerInput,
     ) -> Result<CompilerOutput, SolcError> {
-        let _ = ver;
         let vyper_output: types::VyperCompilerOutput = Solc::from(path).compile_as(input)?;
         Ok(CompilerOutput::from(vyper_output))
     }
@@ -41,7 +41,7 @@ mod types {
 
     #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
     #[serde(rename_all = "camelCase")]
-    pub struct VyperError {
+    pub struct Error {
         pub r#type: String,
         pub component: String,
         pub severity: Severity,
@@ -52,7 +52,7 @@ mod types {
     #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
     pub struct VyperCompilerOutput {
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
-        pub errors: Vec<VyperError>,
+        pub errors: Vec<Error>,
         #[serde(default)]
         pub contracts: BTreeMap<String, BTreeMap<String, Contract>>,
     }
@@ -101,15 +101,15 @@ mod tests {
 
     use super::*;
 
-    async fn global_compilers() -> &'static Compilers<VyperCompilerAgent> {
-        static COMPILERS: OnceCell<Compilers<VyperCompilerAgent>> = OnceCell::new();
+    async fn global_compilers() -> &'static Compilers<VyperCompiler> {
+        static COMPILERS: OnceCell<Compilers<VyperCompiler>> = OnceCell::new();
         COMPILERS
             .get_or_init(async {
                 let url = DEFAULT_VYPER_COMPILER_LIST.try_into().expect("Getting url");
                 let fetcher = ListFetcher::new(url, PathBuf::from("compilers"), None)
                     .await
                     .expect("Fetch releases");
-                let compilers = Compilers::new(Arc::new(fetcher), VyperCompilerAgent::new());
+                let compilers = Compilers::new(Arc::new(fetcher), VyperCompiler::new());
                 compilers
             })
             .await

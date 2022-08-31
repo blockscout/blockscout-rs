@@ -32,7 +32,7 @@ impl FromStr for ReleaseVersion {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (_prefix, major, minor, patch, pre, commit) = sscanf::scanf!(
             s,
-            "{:/v?/}{}.{}.{}{:/.*/}+commit.{:/[A-Fa-f0-9]+/}",
+            "{:/v?/}{}.{}.{}{:/(-.*)?/}+commit.{:/[A-Fa-f0-9]+/}",
             String,
             u64,
             u64,
@@ -229,6 +229,7 @@ mod tests {
         ReleaseVersion::from_str("vv0.8.9+commit.deadbeef").unwrap_err();
         ReleaseVersion::from_str("-v0.8.9+commit.deadbeef").unwrap_err();
         ReleaseVersion::from_str("v0.8.9+commit.alivebee").unwrap_err();
+        ReleaseVersion::from_str("0.1.0beta.17+commit.0671b7b").unwrap_err();
     }
 
     #[test]

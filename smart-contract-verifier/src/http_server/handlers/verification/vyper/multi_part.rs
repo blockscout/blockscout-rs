@@ -1,7 +1,7 @@
 use crate::{
     compiler::{self, Compilers, Version},
     http_server::{handlers::verification::VerificationResponse, metrics},
-    vyper::VyperCompilerAgent,
+    vyper::VyperCompiler,
     VerificationResult,
 };
 use actix_web::{
@@ -17,7 +17,7 @@ use super::types::VyperVerificationRequest;
 
 #[instrument(skip(compilers, params), level = "debug")]
 pub async fn verify(
-    compilers: web::Data<Compilers<VyperCompilerAgent>>,
+    compilers: web::Data<Compilers<VyperCompiler>>,
     params: Json<VyperVerificationRequest>,
 ) -> Result<Json<VerificationResponse>, Error> {
     let request = params.into_inner();
@@ -48,7 +48,7 @@ pub struct Input<'a> {
 }
 
 async fn compile_and_verify_handler(
-    compilers: &Compilers<VyperCompilerAgent>,
+    compilers: &Compilers<VyperCompiler>,
     input: Input<'_>,
 ) -> Result<VerificationResponse, actix_web::Error> {
     let result = compilers

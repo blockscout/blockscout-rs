@@ -2,22 +2,27 @@ use std::path::Path;
 
 use ethers_solc::{error::SolcError, CompilerOutput, Solc};
 
-use crate::compiler::EvmCompilerAgent;
+use crate::compiler::EvmCompiler;
 
-pub struct SolidityCompilerAgent {}
-impl SolidityCompilerAgent {
+pub struct SolidityCompiler {}
+impl SolidityCompiler {
     pub fn new() -> Self {
-        SolidityCompilerAgent {}
+        SolidityCompiler {}
     }
 }
-impl EvmCompilerAgent for SolidityCompilerAgent {
-    fn compile(
+
+#[async_trait::async_trait]
+impl EvmCompiler for SolidityCompiler {
+    async fn compile(
         &self,
         path: &Path,
         ver: &crate::compiler::Version,
         input: &ethers_solc::CompilerInput,
     ) -> Result<CompilerOutput, SolcError> {
-        let _ = ver;
-        Solc::from(path).compile(input)
+        if ver.version() < &semver::Version::new(0, 4, 11) {
+            todo!()
+        } else {
+            Solc::from(path).compile(input)
+        }
     }
 }

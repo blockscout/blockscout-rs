@@ -176,7 +176,10 @@ mod json {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{settings::ListFetcherSettings, tests::parse::test_deserialize_ok};
+    use crate::{
+        consts::DEFAULT_SOLIDITY_COMPILER_LIST, settings::ListFetcherSettings,
+        tests::parse::test_deserialize_ok,
+    };
     use ethers_solc::Solc;
     use pretty_assertions::assert_eq;
     use std::{env::temp_dir, str::FromStr};
@@ -298,7 +301,9 @@ mod tests {
 
     #[tokio::test]
     async fn list_download_versions() {
-        let settings = ListFetcherSettings::default();
+        let settings = ListFetcherSettings {
+            list_url: Url::try_from(DEFAULT_SOLIDITY_COMPILER_LIST).expect("valid url"),
+        };
         let fetcher = ListFetcher::new(
             settings.list_url,
             std::env::temp_dir().join("blockscout/smart_contract_verifier/compiler_fetcher/test/"),

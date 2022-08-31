@@ -76,18 +76,21 @@ pub struct VyperSettings {
     pub compilers_dir: PathBuf,
     #[serde(with = "serde_with::rust::display_fromstr")]
     pub refresh_versions_schedule: Schedule,
-    pub list_url: Url,
+    pub fetcher: FetcherSettings,
 }
 
 impl Default for VyperSettings {
     fn default() -> Self {
         let mut default_dir = std::env::temp_dir();
         default_dir.push("vyper-compilers");
+        let fetcher = FetcherSettings::List(ListFetcherSettings {
+            list_url: Url::try_from(DEFAULT_VYPER_COMPILER_LIST).expect("valid url"),
+        });
         Self {
             enabled: true,
             compilers_dir: default_dir,
             refresh_versions_schedule: Schedule::from_str("0 0 * * * * *").unwrap(), // every hour
-            list_url: Url::try_from(DEFAULT_VYPER_COMPILER_LIST).expect("valid url"),
+            fetcher,
         }
     }
 }

@@ -6,7 +6,7 @@ mod s3_fetcher;
 mod version;
 mod versions_fetcher;
 
-pub use compilers::{Compilers, Error, EvmCompilerAgent};
+pub use compilers::{Compilers, Error, EvmCompiler};
 pub use download_cache::DownloadCache;
 pub use fetcher::Fetcher;
 pub use list_fetcher::ListFetcher;
