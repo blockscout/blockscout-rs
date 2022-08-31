@@ -4,6 +4,8 @@ use ethers_solc::{error::SolcError, CompilerOutput, Solc};
 
 use crate::compiler::EvmCompiler;
 
+use super::compile_using_cli;
+
 pub struct SolidityCompiler {}
 impl SolidityCompiler {
     pub fn new() -> Self {
@@ -20,7 +22,7 @@ impl EvmCompiler for SolidityCompiler {
         input: &ethers_solc::CompilerInput,
     ) -> Result<CompilerOutput, SolcError> {
         if ver.version() < &semver::Version::new(0, 4, 11) {
-            todo!()
+            compile_using_cli(path, input).await
         } else {
             Solc::from(path).compile(input)
         }

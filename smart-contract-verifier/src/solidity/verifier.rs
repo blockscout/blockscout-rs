@@ -439,7 +439,10 @@ impl Verifier {
                     Err(VerificationError::InternalError(e)) => {
                         tracing::error!("internal verification error: {}", e);
                     }
-                    Err(_) => {}
+                    Err(VerificationError::BytecodeMismatch(_)) => {}
+                    Err(e) => {
+                        tracing::debug!("verification error during comparing bytecodes: {}", e)
+                    }
                 }
             }
         }
