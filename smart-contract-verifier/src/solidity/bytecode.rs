@@ -22,15 +22,11 @@ impl Bytecode {
         deployed_bytecode: &str,
     ) -> Result<Self, BytecodeInitError> {
         let creation_tx_input = DisplayBytes::from_str(creation_tx_input)
-            .map_err(|_| {
-                BytecodeInitError::InvalidCreationTxInput(creation_tx_input.to_string())
-            })?
+            .map_err(|_| BytecodeInitError::InvalidCreationTxInput(creation_tx_input.to_string()))?
             .0;
 
         let deployed_bytecode = DisplayBytes::from_str(deployed_bytecode)
-            .map_err(|_| {
-                BytecodeInitError::InvalidDeployedBytecode(deployed_bytecode.to_string())
-            })?
+            .map_err(|_| BytecodeInitError::InvalidDeployedBytecode(deployed_bytecode.to_string()))?
             .0;
 
         Self::from_bytes(creation_tx_input, deployed_bytecode)
@@ -197,7 +193,10 @@ impl LocalBytecode {
         let len = raw.len();
 
         // search for the first non-matching byte
-        let mut index = raw.iter().zip(raw_modified.iter()).position(|(a, b)| a != b);
+        let mut index = raw
+            .iter()
+            .zip(raw_modified.iter())
+            .position(|(a, b)| a != b);
 
         // There is some non-matching byte - part of the metadata part byte.
         if let Some(mut i) = index {

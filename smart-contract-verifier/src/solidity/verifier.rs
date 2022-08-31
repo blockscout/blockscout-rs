@@ -136,15 +136,12 @@ impl Verifier {
             .ok_or_else(|| VerificationErrorKind::InternalError("missing abi".into()))?;
 
         let bytecode = Bytecode::try_from(contract).map_err(|err| match err {
-            BytecodeInitError::EmptyCreationTxInput
-            | BytecodeInitError::EmptyDeployedBytecode => {
+            BytecodeInitError::EmptyCreationTxInput | BytecodeInitError::EmptyDeployedBytecode => {
                 VerificationErrorKind::AbstractContract
             }
             // Corresponding bytecode was not linked properly
             BytecodeInitError::InvalidCreationTxInput(_)
-            | BytecodeInitError::InvalidDeployedBytecode(_) => {
-                VerificationErrorKind::LibraryMissed
-            }
+            | BytecodeInitError::InvalidDeployedBytecode(_) => VerificationErrorKind::LibraryMissed,
         })?;
         // If libraries were linked for main contract, they must be linked for modified contract as well
         let bytecode_modified = Bytecode::try_from(contract_modified).map_err(|err| {
