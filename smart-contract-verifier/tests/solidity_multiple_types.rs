@@ -9,6 +9,7 @@ pub struct TestInput {
     pub optimization_runs: Option<usize>,
     pub contract_libraries: BTreeMap<String, String>,
     pub has_constructor_args: bool,
+    pub is_yul: bool,
 
     /// If None, the input would be read from the corresponding file
     pub source_code: Option<String>,
@@ -27,6 +28,7 @@ impl TestInput {
             optimization_runs: None,
             contract_libraries: Default::default(),
             has_constructor_args: false,
+            is_yul: false,
 
             source_code: None,
             creation_tx_input: None,
@@ -51,6 +53,11 @@ impl TestInput {
 
     pub fn has_constructor_args(mut self) -> Self {
         self.has_constructor_args = true;
+        self
+    }
+
+    pub fn is_yul(mut self) -> Self {
+        self.is_yul = true;
         self
     }
 

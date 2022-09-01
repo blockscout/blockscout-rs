@@ -1,5 +1,7 @@
 //! Supporting type used in error structures
 
+#![allow(dead_code, unused)]
+
 use std::fmt;
 use thiserror::Error;
 
