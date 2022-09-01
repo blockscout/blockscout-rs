@@ -1,5 +1,5 @@
 use super::{
-    fetcher::FetchError,
+    fetcher::{FetchError, FileValidator},
     versions_fetcher::{VersionsFetcher, VersionsRefresher},
 };
 use crate::compiler::{Fetcher, Version};
@@ -96,6 +96,7 @@ impl VersionsFetcher for ListVersionFetcher {
 pub struct ListFetcher {
     versions: VersionsRefresher<VersionsMap>,
     folder: PathBuf,
+    validator: Option<Arc<dyn FileValidator>>,
 }
 
 impl ListFetcher {
@@ -103,10 +104,15 @@ impl ListFetcher {
         list_url: Url,
         folder: PathBuf,
         refresh_schedule: Option<Schedule>,
+        validator: Option<Arc<dyn FileValidator>>,
     ) -> anyhow::Result<Self> {
         let fetcher = Arc::new(ListVersionFetcher::new(list_url));
         let versions = VersionsRefresher::new(fetcher, refresh_schedule).await?;
-        Ok(Self { versions, folder })
+        Ok(Self {
+            versions,
+            folder,
+            validator,
+        })
     }
 
     #[instrument(skip(self), level = "debug")]
@@ -136,7 +142,8 @@ impl ListFetcher {
 impl Fetcher for ListFetcher {
     async fn fetch(&self, ver: &Version) -> Result<PathBuf, FetchError> {
         let (data, hash) = self.fetch_file(ver).await?;
-        super::fetcher::write_executable(data, hash, &self.folder, ver).await
+        super::fetcher::write_executable(data, hash, &self.folder, ver, self.validator.as_deref())
+            .await
     }
 
     fn all_versions(&self) -> Vec<Version> {
@@ -308,6 +315,7 @@ mod tests {
             settings.list_url,
             std::env::temp_dir().join("blockscout/smart_contract_verifier/compiler_fetcher/test/"),
             None,
+            None,
         )
         .await
         .expect("list.json file should be valid");
@@ -344,6 +352,7 @@ mod tests {
             Url::parse(&mock_server.uri()).unwrap(),
             temp_dir(),
             Some(Schedule::from_str("* * * * * * *").unwrap()),
+            None,
         )
         .await
         .expect("cannot initialize fetcher");
@@ -389,9 +398,14 @@ mod tests {
             .respond_with(ResponseTemplate::new(200).set_body_bytes(VYPER_LIST_JSON))
             .mount(&mock_server)
             .await;
-        let fetcher = ListFetcher::new(Url::parse(&mock_server.uri()).unwrap(), temp_dir(), None)
-            .await
-            .expect("cannot initialize fetcher");
+        let fetcher = ListFetcher::new(
+            Url::parse(&mock_server.uri()).unwrap(),
+            temp_dir(),
+            None,
+            None,
+        )
+        .await
+        .expect("cannot initialize fetcher");
 
         let versions = fetcher.all_versions();
         assert!(

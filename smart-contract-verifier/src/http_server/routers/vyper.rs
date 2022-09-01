@@ -28,6 +28,7 @@ impl VyperRouter {
                 list_url,
                 settings.compilers_dir,
                 Some(settings.refresh_versions_schedule),
+                None,
             )
             .await?,
         );

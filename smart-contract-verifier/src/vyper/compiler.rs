@@ -91,22 +91,22 @@ mod tests {
         sync::Arc,
     };
 
-    use async_once_cell::OnceCell;
     use ethers_solc::{artifacts::Source, CompilerInput};
 
     use crate::{
         compiler::{self, Compilers, ListFetcher},
         consts::DEFAULT_VYPER_COMPILER_LIST,
     };
+    use tokio::sync::OnceCell;
 
     use super::*;
 
     async fn global_compilers() -> &'static Compilers<VyperCompiler> {
-        static COMPILERS: OnceCell<Compilers<VyperCompiler>> = OnceCell::new();
+        static COMPILERS: OnceCell<Compilers<VyperCompiler>> = OnceCell::const_new();
         COMPILERS
-            .get_or_init(async {
+            .get_or_init(|| async {
                 let url = DEFAULT_VYPER_COMPILER_LIST.try_into().expect("Getting url");
-                let fetcher = ListFetcher::new(url, PathBuf::from("compilers"), None)
+                let fetcher = ListFetcher::new(url, PathBuf::from("compilers"), None, None)
                     .await
                     .expect("Fetch releases");
                 let compilers = Compilers::new(Arc::new(fetcher), VyperCompiler::new());

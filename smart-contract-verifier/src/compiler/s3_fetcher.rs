@@ -1,5 +1,5 @@
 use super::{
-    fetcher::FetchError,
+    fetcher::{FetchError, FileValidator},
     versions_fetcher::{VersionsFetcher, VersionsRefresher},
     Fetcher, Version,
 };
@@ -64,6 +64,7 @@ pub struct S3Fetcher {
     bucket: Arc<Bucket>,
     folder: PathBuf,
     versions: VersionsRefresher<HashSet<Version>>,
+    validator: Option<Arc<dyn FileValidator>>,
 }
 
 fn spawn_fetch_s3(
@@ -92,6 +93,7 @@ impl S3Fetcher {
         bucket: Arc<Bucket>,
         folder: PathBuf,
         refresh_schedule: Option<Schedule>,
+        validator: Option<Arc<dyn FileValidator>>,
     ) -> anyhow::Result<S3Fetcher> {
         let fetcher = Arc::new(S3VersionFetcher::new(bucket.clone()));
         let versions = VersionsRefresher::new(fetcher, refresh_schedule).await?;
@@ -99,6 +101,7 @@ impl S3Fetcher {
             bucket,
             folder,
             versions,
+            validator,
         })
     }
 
@@ -137,7 +140,8 @@ impl S3Fetcher {
 impl Fetcher for S3Fetcher {
     async fn fetch(&self, ver: &Version) -> Result<PathBuf, FetchError> {
         let (data, hash) = self.fetch_file(ver).await?;
-        super::fetcher::write_executable(data, hash, &self.folder, ver).await
+        super::fetcher::write_executable(data, hash, &self.folder, ver, self.validator.as_deref())
+            .await
     }
 
     fn all_versions(&self) -> Vec<Version> {
@@ -264,6 +268,7 @@ mod tests {
             versions: VersionsRefresher::new_static(HashSet::from_iter(
                 versions.clone().into_iter(),
             )),
+            validator: None,
         };
 
         for version in versions {
@@ -329,6 +334,7 @@ mod tests {
             test_bucket(mock_server.uri()),
             Default::default(),
             Some(Schedule::from_str("* * * * * * *").unwrap()),
+            None,
         )
         .await
         .unwrap();

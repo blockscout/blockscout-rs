@@ -442,9 +442,14 @@ mod tests {
             .respond_with(ResponseTemplate::new(200).set_body_bytes(LIST_JSON))
             .mount(&mock_server)
             .await;
-        let fetcher = ListFetcher::new(Url::parse(&mock_server.uri()).unwrap(), temp_dir(), None)
-            .await
-            .expect("failed to build fetcher");
+        let fetcher = ListFetcher::new(
+            Url::parse(&mock_server.uri()).unwrap(),
+            temp_dir(),
+            None,
+            None,
+        )
+        .await
+        .expect("failed to build fetcher");
         fetcher
             .fetch(ver)
             .await

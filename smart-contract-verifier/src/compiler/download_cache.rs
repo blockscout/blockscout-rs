@@ -287,7 +287,7 @@ mod tests {
         let url = DEFAULT_SOLIDITY_COMPILER_LIST
             .try_into()
             .expect("Getting url");
-        let fetcher = ListFetcher::new(url, temp_dir(), None)
+        let fetcher = ListFetcher::new(url, temp_dir(), None, None)
             .await
             .expect("Fetch releases");
         fetcher.fetch(&ver).await.expect("download should complete");
