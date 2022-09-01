@@ -1,6 +1,7 @@
 use crate::{
     compiler::{self, Compilers, Version},
     http_server::{handlers::verification::VerificationResponse, metrics},
+    solidity::Verifier,
     vyper::VyperCompiler,
     VerificationResult,
 };
@@ -10,7 +11,7 @@ use actix_web::{
     Error,
 };
 use ethers_solc::CompilerInput;
-use std::{collections::BTreeMap, str::FromStr};
+use std::str::FromStr;
 use tracing::instrument;
 
 use super::types::VyperVerificationRequest;
@@ -54,32 +55,29 @@ async fn compile_and_verify_handler(
     let result = compilers
         .compile(&input.compiler_version, &input.compiler_input)
         .await;
-    let _output = match result {
+    let output = match result {
         Ok(output) => output,
         Err(e) => return Ok(VerificationResponse::err(e)),
     };
 
-    // use ethers_solc::Artifact;
-    // let bytecodes: Vec<_> = _output
-    //     .contracts_iter()
-    //     .map(|(_, c)| {
-    //         (c.get_abi(), c.get_bytecode_bytes()
-    //             .and_then(|b| Some(hex::encode(b.to_vec()))))
-    //     })
-    //     .collect();
-    // println!("{:?}", bytecodes);
-
-    // TODO: actual verification
-    Ok(VerificationResponse::ok(VerificationResult {
-        file_name: "".into(),
-        contract_name: "".into(),
-        compiler_version: "".into(),
-        evm_version: "".into(),
-        constructor_arguments: None,
-        optimization: None,
-        optimization_runs: None,
-        contract_libraries: BTreeMap::new(),
-        abi: "".into(),
-        sources: BTreeMap::new(),
-    }))
+    let verifier = Verifier::new(input.creation_tx_input, input.deployed_bytecode)
+        .map_err(error::ErrorBadRequest)?;
+    let response = match verifier.verify(output.clone(), output) {
+        Ok(verification_success) => {
+            let verification_result = VerificationResult::from((
+                input.compiler_input,
+                input.compiler_version,
+                verification_success,
+            ));
+            VerificationResponse::ok(verification_result)
+        }
+        Err(errors) => VerificationResponse::err(
+            errors
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<String>>()
+                .join("\n"),
+        ),
+    };
+    Ok(response)
 }
