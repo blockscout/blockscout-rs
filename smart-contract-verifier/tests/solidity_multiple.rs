@@ -40,7 +40,8 @@ async fn test_setup(dir: &str, input: &mut TestInput) -> (ServiceResponse, Optio
     let app = test::init_service(App::new().configure(configure_router(app_router))).await;
 
     let prefix = format!("{}/{}", CONTRACTS_DIR, dir);
-    let contract_path = format!("{}/source.sol", prefix);
+    let suffix = if input.is_yul { "yul" } else { "sol" };
+    let contract_path = format!("{}/source.{}", prefix, suffix);
     input.source_code = Some(input.source_code.clone().unwrap_or_else(|| {
         fs::read_to_string(&contract_path).expect("Error while reading source")
     }));
@@ -296,6 +297,13 @@ mod success_tests {
             .has_constructor_args();
         test_success(contract_dir, test_input).await;
     }
+
+    // #[actix_rt::test]
+    // async fn yul_contract() {
+    //     let contract_dir = "yul";
+    //     let test_input = TestInput::new("ContractFromFactory", "v0.8.7+commit.e28d00a7").is_yul();
+    //     test_success(contract_dir, test_input).await;
+    // }
 }
 
 mod failure_tests {
@@ -414,13 +422,13 @@ mod regression_tests {
     }
 
     // https://github.com/blockscout/blockscout/issues/5636
-    // #[actix_rt::test]
-    // // type(A).creationCode in the constructor
-    // async fn issue_5636() {
-    //     let contract_dir = "issue_5636";
-    //     let test_input = TestInput::new("B", "v0.8.14+commit.80d49f37").with_optimization_runs(200);
-    //     test(contract_dir, test_input).await;
-    // }
+    #[actix_rt::test]
+    // type(A).creationCode in the constructor
+    async fn issue_5636() {
+        let contract_dir = "issue_5636";
+        let test_input = TestInput::new("B", "v0.8.14+commit.80d49f37").with_optimization_runs(200);
+        test_success(contract_dir, test_input).await;
+    }
 }
 
 mod tests_from_constructor_arguments_test_exs {

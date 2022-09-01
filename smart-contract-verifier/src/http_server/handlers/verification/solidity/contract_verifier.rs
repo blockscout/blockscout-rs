@@ -9,7 +9,7 @@ use ethers_solc::{
     CompilerInput,
 };
 use semver::VersionReq;
-use std::fmt::Debug;
+use std::{fmt::Debug, ops::Add, path::PathBuf};
 use thiserror::Error;
 use tracing::instrument;
 
@@ -79,9 +79,31 @@ async fn compile_and_verify(
     let compiler_output = compilers
         .compile(&input.compiler_version, &input.compiler_input)
         .await?;
+    let compiler_output_modified = {
+        let mut compiler_input = input.compiler_input.clone();
+        let entry = compiler_input
+            .settings
+            .libraries
+            .libs
+            .entry(PathBuf::from("SOME_TEXT_USED_AS_FILE_NAME"))
+            .or_default();
+        let non_used_contract_name = entry
+            .keys()
+            .map(|key| key.chars().next().unwrap_or_default().to_string())
+            .collect::<Vec<_>>()
+            .join("_")
+            .add("_");
+        entry.insert(
+            non_used_contract_name,
+            "0xcafecafecafecafecafecafecafecafecafecafe".into(),
+        );
+        compilers
+            .compile(&input.compiler_version, &compiler_input)
+            .await?
+    };
     verifier
-        .verify(compiler_output)
-        .ok_or(CompileAndVerifyError::NoMatchingContracts)
+        .verify(compiler_output, compiler_output_modified)
+        .map_err(|_errors| CompileAndVerifyError::NoMatchingContracts)
 }
 
 /// Iterates through possible bytecode if required and creates
