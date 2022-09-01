@@ -27,6 +27,13 @@ pub enum FetchError {
     File(#[from] std::io::Error),
     #[error("tokio sheduling error: {0}")]
     Schedule(#[from] tokio::task::JoinError),
+    #[error("validation failed: {0}")]
+    Validation(anyhow::Error),
+}
+
+#[async_trait]
+pub trait FileValidator: Send + Sync {
+    async fn validate(&self, ver: &Version, path: &Path) -> Result<(), anyhow::Error>;
 }
 
 #[async_trait]
@@ -61,6 +68,7 @@ pub async fn write_executable(
     sha: H256,
     path: &Path,
     ver: &Version,
+    validator: Option<&dyn FileValidator>,
 ) -> Result<PathBuf, FetchError> {
     let folder = path.join(ver.to_string());
     let file = folder.join("solc");
@@ -97,6 +105,13 @@ pub async fn write_executable(
     check_result??;
     save_result??;
 
+    if let Some(validator) = validator {
+        validator
+            .validate(ver, file_tmp.as_path())
+            .await
+            .map_err(FetchError::Validation)?;
+    }
+
     tokio::fs::rename(&file_tmp, &file).await?;
 
     Ok(file)
@@ -116,9 +131,15 @@ mod tests {
         let sha = Sha256::digest(data.as_bytes());
 
         let version = Version::from_str("v0.4.10+commit.f0d539ae").unwrap();
-        let file = write_executable(bytes, H256::from_slice(&sha), tmp_dir.path(), &version)
-            .await
-            .unwrap();
+        let file = write_executable(
+            bytes,
+            H256::from_slice(&sha),
+            tmp_dir.path(),
+            &version,
+            None,
+        )
+        .await
+        .unwrap();
 
         let content = tokio::fs::read_to_string(file).await.unwrap();
         assert_eq!(data, content);
@@ -133,7 +154,7 @@ mod tests {
         let sha = H256::default();
         let version = Version::from_str("v0.4.10+commit.f0d539ae").unwrap();
 
-        let err = write_executable(bytes, sha, tmp_dir.path(), &version)
+        let err = write_executable(bytes, sha, tmp_dir.path(), &version, None)
             .await
             .expect_err("expected to fail with wrong checksum");
         assert!(matches!(err, FetchError::HashMismatch(_)));

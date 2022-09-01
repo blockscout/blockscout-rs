@@ -8,7 +8,7 @@ mod versions_fetcher;
 
 pub use compilers::{Compilers, Error};
 pub use download_cache::DownloadCache;
-pub use fetcher::Fetcher;
+pub use fetcher::{FetchError, Fetcher, FileValidator};
 pub use list_fetcher::ListFetcher;
 pub use s3_fetcher::S3Fetcher;
 pub use version::Version;
