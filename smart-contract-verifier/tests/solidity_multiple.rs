@@ -25,7 +25,7 @@ const ROUTE: &'static str = "/api/v1/solidity/verify/multiple-files";
 async fn global_app_router() -> &'static AppRouter {
     static APP_ROUTER: OnceCell<AppRouter> = OnceCell::const_new();
     APP_ROUTER
-        .get_or_init(move || async {
+        .get_or_init(|| async {
             let mut settings = Settings::default();
             settings.sourcify.enabled = false;
             AppRouter::new(settings)

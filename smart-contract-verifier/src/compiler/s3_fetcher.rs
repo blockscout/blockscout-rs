@@ -93,6 +93,7 @@ impl S3Fetcher {
         bucket: Arc<Bucket>,
         folder: PathBuf,
         refresh_schedule: Option<Schedule>,
+        validator: Option<Arc<dyn FileValidator>>,
     ) -> anyhow::Result<S3Fetcher> {
         let fetcher = Arc::new(S3VersionFetcher::new(bucket.clone()));
         let versions = VersionsRefresher::new(fetcher, refresh_schedule).await?;
@@ -100,7 +101,7 @@ impl S3Fetcher {
             bucket,
             folder,
             versions,
-            validator: None,
+            validator,
         })
     }
 
@@ -141,10 +142,6 @@ impl Fetcher for S3Fetcher {
         let (data, hash) = self.fetch_file(ver).await?;
         super::fetcher::write_executable(data, hash, &self.folder, ver, self.validator.as_deref())
             .await
-    }
-
-    fn with_validator(&mut self, validator: Arc<dyn FileValidator>) {
-        self.validator = Some(validator);
     }
 
     fn all_versions(&self) -> Vec<Version> {
@@ -337,6 +334,7 @@ mod tests {
             test_bucket(mock_server.uri()),
             Default::default(),
             Some(Schedule::from_str("* * * * * * *").unwrap()),
+            None,
         )
         .await
         .unwrap();

@@ -9,7 +9,6 @@ use std::{
     io::ErrorKind,
     os::unix::prelude::OpenOptionsExt,
     path::{Path, PathBuf},
-    sync::Arc,
 };
 use thiserror::Error;
 use tracing::instrument;
@@ -40,7 +39,6 @@ pub trait FileValidator: Send + Sync {
 #[async_trait]
 pub trait Fetcher: Send + Sync {
     async fn fetch(&self, ver: &Version) -> Result<PathBuf, FetchError>;
-    fn with_validator(&mut self, validator: Arc<dyn FileValidator>);
     fn all_versions(&self) -> Vec<Version>;
 }
 

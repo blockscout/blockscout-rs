@@ -51,12 +51,14 @@ impl SolidityRouter {
     pub async fn new(settings: SoliditySettings) -> anyhow::Result<Self> {
         let dir = settings.compilers_dir.clone();
         let schedule = settings.refresh_versions_schedule;
-        let mut fetcher: Arc<dyn Fetcher> = match settings.fetcher {
+        let validator = Arc::new(SolcValidator::default());
+        let fetcher: Arc<dyn Fetcher> = match settings.fetcher {
             FetcherSettings::List(list_settings) => Arc::new(
                 ListFetcher::new(
                     list_settings.list_url,
                     settings.compilers_dir,
                     Some(schedule),
+                    Some(validator),
                 )
                 .await?,
             ),
@@ -65,14 +67,11 @@ impl SolidityRouter {
                     new_bucket(&s3_settings)?,
                     settings.compilers_dir,
                     Some(schedule),
+                    Some(validator),
                 )
                 .await?,
             ),
         };
-
-        Arc::get_mut(&mut fetcher)
-            .unwrap()
-            .with_validator(Arc::new(SolcValidator::default()));
 
         let compilers = Compilers::new(fetcher);
         compilers.load_from_dir(&dir).await;

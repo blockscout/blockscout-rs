@@ -46,10 +46,10 @@ mod tests {
     async fn fetch_compiler() -> PathBuf {
         static COMPILERS: OnceCell<PathBuf> = OnceCell::const_new();
         COMPILERS
-            .get_or_init(move || async {
+            .get_or_init(|| async {
                 let tmp_dir = tempfile::tempdir().unwrap();
                 let url = DEFAULT_COMPILER_LIST.try_into().unwrap();
-                let fetcher = ListFetcher::new(url, tmp_dir.into_path(), None)
+                let fetcher = ListFetcher::new(url, tmp_dir.into_path(), None, None)
                     .await
                     .expect("Fetch releases");
                 fetcher.fetch(&default_version()).await.unwrap()

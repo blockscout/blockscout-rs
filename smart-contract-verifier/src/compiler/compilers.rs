@@ -119,9 +119,9 @@ mod tests {
     async fn global_compilers() -> &'static Compilers {
         static COMPILERS: OnceCell<Compilers> = OnceCell::const_new();
         COMPILERS
-            .get_or_init(move || async {
+            .get_or_init(|| async {
                 let url = DEFAULT_COMPILER_LIST.try_into().expect("Getting url");
-                let fetcher = ListFetcher::new(url, temp_dir(), None)
+                let fetcher = ListFetcher::new(url, temp_dir(), None, None)
                     .await
                     .expect("Fetch releases");
                 let compilers = Compilers::new(Arc::new(fetcher));

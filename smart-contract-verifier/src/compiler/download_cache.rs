@@ -126,7 +126,7 @@ impl DownloadCache {
 mod tests {
     use super::*;
     use crate::{
-        compiler::{fetcher::FileValidator, version::ReleaseVersion, ListFetcher},
+        compiler::{version::ReleaseVersion, ListFetcher},
         consts::DEFAULT_COMPILER_LIST,
     };
     use async_trait::async_trait;
@@ -160,8 +160,6 @@ mod tests {
             fn all_versions(&self) -> Vec<Version> {
                 vec![]
             }
-
-            fn with_validator(&mut self, _: Arc<dyn FileValidator>) {}
         }
 
         let fetcher = MockFetcher::default();
@@ -211,8 +209,6 @@ mod tests {
             fn all_versions(&self) -> Vec<Version> {
                 vec![]
             }
-
-            fn with_validator(&mut self, _: Arc<dyn FileValidator>) {}
         }
 
         let sync = Arc::<tokio::sync::Mutex<()>>::default();
@@ -289,7 +285,7 @@ mod tests {
         let dir = temp_dir();
 
         let url = DEFAULT_COMPILER_LIST.try_into().expect("Getting url");
-        let fetcher = ListFetcher::new(url, temp_dir(), None)
+        let fetcher = ListFetcher::new(url, temp_dir(), None, None)
             .await
             .expect("Fetch releases");
         fetcher.fetch(&ver).await.expect("download should complete");
