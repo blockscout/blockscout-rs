@@ -1,4 +1,4 @@
-use crate::consts::DEFAULT_COMPILER_LIST;
+use crate::consts::{DEFAULT_SOLIDITY_COMPILER_LIST, DEFAULT_VYPER_COMPILER_LIST};
 use anyhow::anyhow;
 use config::{Config, File};
 use cron::Schedule;
@@ -11,6 +11,7 @@ use url::Url;
 pub struct Settings {
     pub server: ServerSettings,
     pub solidity: SoliditySettings,
+    pub vyper: VyperSettings,
     pub sourcify: SourcifySettings,
     pub metrics: MetricsSettings,
     pub jaeger: JaegerSettings,
@@ -58,12 +59,38 @@ pub struct SoliditySettings {
 impl Default for SoliditySettings {
     fn default() -> Self {
         let mut default_dir = std::env::temp_dir();
-        default_dir.push("compilers");
+        default_dir.push("solidity-compilers");
         Self {
             enabled: true,
             compilers_dir: default_dir,
             refresh_versions_schedule: Schedule::from_str("0 0 * * * * *").unwrap(), // every hour
             fetcher: Default::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct VyperSettings {
+    pub enabled: bool,
+    pub compilers_dir: PathBuf,
+    #[serde(with = "serde_with::rust::display_fromstr")]
+    pub refresh_versions_schedule: Schedule,
+    pub fetcher: FetcherSettings,
+}
+
+impl Default for VyperSettings {
+    fn default() -> Self {
+        let mut default_dir = std::env::temp_dir();
+        default_dir.push("vyper-compilers");
+        let fetcher = FetcherSettings::List(ListFetcherSettings {
+            list_url: Url::try_from(DEFAULT_VYPER_COMPILER_LIST).expect("valid url"),
+        });
+        Self {
+            enabled: true,
+            compilers_dir: default_dir,
+            refresh_versions_schedule: Schedule::from_str("0 0 * * * * *").unwrap(), // every hour
+            fetcher,
         }
     }
 }
@@ -90,7 +117,7 @@ pub struct ListFetcherSettings {
 impl Default for ListFetcherSettings {
     fn default() -> Self {
         Self {
-            list_url: Url::try_from(DEFAULT_COMPILER_LIST).expect("valid url"),
+            list_url: Url::try_from(DEFAULT_SOLIDITY_COMPILER_LIST).expect("valid url"),
         }
     }
 }

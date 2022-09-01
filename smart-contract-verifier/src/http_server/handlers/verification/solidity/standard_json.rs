@@ -11,6 +11,7 @@ use crate::{
         },
         metrics,
     },
+    solidity::SolidityCompiler,
 };
 use actix_web::{
     error,
@@ -22,7 +23,7 @@ use tracing::instrument;
 
 #[instrument(skip(compilers, params), level = "debug")]
 pub async fn verify(
-    compilers: web::Data<Compilers>,
+    compilers: web::Data<Compilers<SolidityCompiler>>,
     params: Json<VerificationRequest<StandardJson>>,
 ) -> Result<Json<VerificationResponse>, Error> {
     let params = params.into_inner();

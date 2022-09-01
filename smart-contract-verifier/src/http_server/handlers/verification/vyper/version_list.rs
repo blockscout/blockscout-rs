@@ -1,5 +1,7 @@
-use super::types::VersionsResponse;
-use crate::{compiler::Compilers, solidity::SolidityCompiler};
+use crate::{
+    compiler::Compilers, http_server::handlers::verification::solidity::types::VersionsResponse,
+    vyper::VyperCompiler,
+};
 
 use actix_web::{
     web::{self, Json},
@@ -7,7 +9,7 @@ use actix_web::{
 };
 
 pub async fn get_version_list(
-    compilers: web::Data<Compilers<SolidityCompiler>>,
+    compilers: web::Data<Compilers<VyperCompiler>>,
 ) -> Result<Json<VersionsResponse>, Error> {
     let versions = compilers.all_versions_sorted_str();
     Ok(Json(VersionsResponse { versions }))

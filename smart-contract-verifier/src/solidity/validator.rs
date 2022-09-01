@@ -32,7 +32,7 @@ mod tests {
     use super::*;
     use crate::{
         compiler::{Fetcher, ListFetcher},
-        consts::DEFAULT_COMPILER_LIST,
+        consts::DEFAULT_SOLIDITY_COMPILER_LIST,
     };
     use std::{
         fs::OpenOptions, io::Write, os::unix::prelude::OpenOptionsExt, path::PathBuf, str::FromStr,
@@ -48,7 +48,7 @@ mod tests {
         COMPILERS
             .get_or_init(|| async {
                 let tmp_dir = tempfile::tempdir().unwrap();
-                let url = DEFAULT_COMPILER_LIST.try_into().unwrap();
+                let url = DEFAULT_SOLIDITY_COMPILER_LIST.try_into().unwrap();
                 let fetcher = ListFetcher::new(url, tmp_dir.into_path(), None, None)
                     .await
                     .expect("Fetch releases");

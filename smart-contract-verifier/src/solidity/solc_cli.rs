@@ -4,7 +4,7 @@
 //! was added only since 0.4.10 version. So, to compile older versions
 //! we need convert functions for CompilerInput and CompilerOutput.
 
-use std::{collections::BTreeMap, path::PathBuf, process::Stdio};
+use std::{collections::BTreeMap, path::Path, process::Stdio};
 
 use ethers_solc::{
     artifacts::Severity,
@@ -223,7 +223,7 @@ fn compiler_error(message: String) -> ethers_solc::artifacts::Error {
 }
 
 pub async fn compile_using_cli(
-    solc: &PathBuf,
+    solc: &Path,
     input: &CompilerInput,
 ) -> Result<CompilerOutput, SolcError> {
     let output = {

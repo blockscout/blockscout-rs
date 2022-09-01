@@ -7,6 +7,7 @@ mod settings;
 mod solidity;
 mod tracer;
 mod types;
+mod vyper;
 
 #[cfg(test)]
 mod tests;

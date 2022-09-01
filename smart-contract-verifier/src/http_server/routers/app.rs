@@ -1,9 +1,10 @@
-use super::{configure_router, Router, SolidityRouter, SourcifyRouter};
+use super::{configure_router, vyper::VyperRouter, Router, SolidityRouter, SourcifyRouter};
 use crate::{http_server::handlers::status, settings::Settings};
 use actix_web::web;
 
 pub struct AppRouter {
     solidity: Option<SolidityRouter>,
+    vyper: Option<VyperRouter>,
     sourcify: Option<SourcifyRouter>,
 }
 
@@ -13,11 +14,19 @@ impl AppRouter {
             false => None,
             true => Some(SolidityRouter::new(settings.solidity).await?),
         };
+        let vyper = match settings.vyper.enabled {
+            false => None,
+            true => Some(VyperRouter::new(settings.vyper).await?),
+        };
         let sourcify = settings
             .sourcify
             .enabled
             .then(|| SourcifyRouter::new(settings.sourcify));
-        Ok(Self { solidity, sourcify })
+        Ok(Self {
+            solidity,
+            vyper,
+            sourcify,
+        })
     }
 }
 
@@ -28,6 +37,7 @@ impl Router for AppRouter {
             .service(
                 web::scope("/api/v1")
                     .service(web::scope("/solidity").configure(configure_router(&self.solidity)))
+                    .service(web::scope("/vyper").configure(configure_router(&self.vyper)))
                     .service(web::scope("/sourcify").configure(configure_router(&self.sourcify))),
             );
     }

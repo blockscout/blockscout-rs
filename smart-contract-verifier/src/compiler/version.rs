@@ -1,4 +1,5 @@
 use chrono::NaiveDate;
+use semver::{BuildMetadata, Prerelease};
 use std::{cmp::Ordering, fmt::Display, str::FromStr};
 use thiserror::Error;
 
@@ -10,42 +11,50 @@ pub enum ParseError {
     Parse(String),
     #[error("couldn't parse commit hash")]
     CommitHash(hex::FromHexError),
+    #[error("cannot parse semver: {0}")]
+    Semver(#[from] semver::Error),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ReleaseVersion {
     pub version: semver::Version,
-    pub commit: [u8; 4],
+    pub commit: String,
 }
 
 impl FromStr for ReleaseVersion {
     type Err = ParseError;
 
     /// Parses release version from string formated as
-    /// `(v)*VERSION*+commit.*COMMITHASH*`, examples:
+    /// `(v)*VERSION*(-*PRERELEASE*)+commit.*COMMITHASH*`, examples:
     /// `v0.8.9+commit.e5eed63a`
     /// `0.8.4+commit.dea1b9ec`
+    /// `0.8.4-beta.16+commit.dea1d`
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (_prefix, major, minor, patch, commit_hash) = sscanf::scanf!(
+        let (_prefix, major, minor, patch, pre, commit) = sscanf::scanf!(
             s,
-            "{:/v?/}{}.{}.{}+commit.{}",
+            "{:/v?/}{}.{}.{}{:/(-.*)?/}+commit.{:/[A-Fa-f0-9]+/}",
             String,
             u64,
             u64,
             u64,
-            String
+            String,
+            String,
         )
         .map_err(|e| ParseError::Parse(format!("{:?}", e)))?;
-        let version = semver::Version::new(major, minor, patch);
-        let mut commit = [0; 4];
-        hex::decode_to_slice(&commit_hash, &mut commit).map_err(ParseError::CommitHash)?;
+        let version = semver::Version {
+            major,
+            minor,
+            patch,
+            pre: Prerelease::new(pre.trim_start_matches('-'))?,
+            build: BuildMetadata::EMPTY,
+        };
         Ok(Self { version, commit })
     }
 }
 
 impl Display for ReleaseVersion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "v{}+commit.{}", self.version, hex::encode(self.commit))
+        write!(f, "v{}+commit.{}", self.version, self.commit)
     }
 }
 
@@ -53,7 +62,7 @@ impl Display for ReleaseVersion {
 pub struct NightlyVersion {
     pub version: semver::Version,
     pub date: NaiveDate,
-    pub commit: [u8; 4],
+    pub commit: String,
 }
 
 impl FromStr for NightlyVersion {
@@ -62,11 +71,11 @@ impl FromStr for NightlyVersion {
     /// Parses nigthly version from string formated as
     /// `(v)*VERSION*-nightly.*DATE*+commit.*COMMITHASH*`, examples:
     /// `v0.8.8-nightly.2021.9.9+commit.dea1b9ec`
-    /// `0.8.4-nightly.2021.9.9+commit.e5eed63a`
+    /// `0.8.4-nightly.2021.9.9+commit.e5eed63a10`
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (_prefix, major, minor, patch, date, commit_hash) = sscanf::scanf!(
+        let (_prefix, major, minor, patch, date, commit) = sscanf::scanf!(
             s,
-            "{:/v?/}{}.{}.{}-nightly.{}+commit.{}",
+            "{:/v?/}{}.{}.{}-nightly.{}+commit.{:/[A-Fa-f0-9]+/}",
             String,
             u64,
             u64,
@@ -78,8 +87,6 @@ impl FromStr for NightlyVersion {
         let version = semver::Version::new(major, minor, patch);
         let date = NaiveDate::parse_from_str(&date, DATE_FORMAT)
             .map_err(|e| ParseError::Parse(e.to_string()))?;
-        let mut commit = [0; 4];
-        hex::decode_to_slice(&commit_hash, &mut commit).map_err(ParseError::CommitHash)?;
         Ok(Self {
             version,
             date,
@@ -95,7 +102,7 @@ impl Display for NightlyVersion {
             "v{}-nightly.{}+commit.{}",
             self.version,
             self.date.format(DATE_FORMAT),
-            hex::encode(self.commit)
+            self.commit
         )
     }
 }
@@ -125,7 +132,7 @@ impl Version {
         }
     }
 
-    pub fn commit(&self) -> &[u8; 4] {
+    pub fn commit(&self) -> &str {
         match self {
             Version::Nightly(v) => &v.commit,
             Version::Release(v) => &v.commit,
@@ -198,12 +205,14 @@ mod tests {
     fn parse_release() {
         let ver = check_parsing::<ReleaseVersion>("v0.8.9+commit.e5eed63a");
         assert_eq!(ver.version, semver::Version::new(0, 8, 9));
-        assert_eq!(ver.commit, [229, 238, 214, 58]);
+        assert_eq!(ver.commit, "e5eed63a");
         check_parsing::<ReleaseVersion>("0.8.9+commit.00000000");
         check_parsing::<ReleaseVersion>("v0.0.0+commit.00000000");
         check_parsing::<ReleaseVersion>("v123456789.987654321.0+commit.ffffffff");
         check_parsing::<ReleaseVersion>("v1.2.3+commit.01234567");
         check_parsing::<ReleaseVersion>("v3.2.1+commit.89abcdef");
+        check_parsing::<ReleaseVersion>("0.1.0-beta.16+commit.5e4a94a");
+        check_parsing::<ReleaseVersion>("0.1.0-beta.17+commit.0671b7b");
     }
 
     #[test]
@@ -216,13 +225,11 @@ mod tests {
         ReleaseVersion::from_str("v0.8.9+commitdeadbeef").unwrap_err();
         ReleaseVersion::from_str("v+commit.deadbeef").unwrap_err();
         ReleaseVersion::from_str("v0.8.9+commit.").unwrap_err();
-        ReleaseVersion::from_str("v0.8.9+commit.deadbe").unwrap_err();
+        ReleaseVersion::from_str("v0.8.9+commit.deadbev").unwrap_err();
         ReleaseVersion::from_str("vv0.8.9+commit.deadbeef").unwrap_err();
         ReleaseVersion::from_str("-v0.8.9+commit.deadbeef").unwrap_err();
         ReleaseVersion::from_str("v0.8.9+commit.alivebee").unwrap_err();
-        ReleaseVersion::from_str("v0.8.9-pre+commit.deadbeef").unwrap_err();
-        ReleaseVersion::from_str("v0.8.9-pre+commit.deadbeef").unwrap_err();
-        ReleaseVersion::from_str("v0.8.9-nightly.2021.9.11+commit.e5eed63a").unwrap_err();
+        ReleaseVersion::from_str("0.1.0beta.17+commit.0671b7b").unwrap_err();
     }
 
     #[test]
@@ -230,7 +237,7 @@ mod tests {
         let ver = check_parsing::<NightlyVersion>("v10.8.9-nightly.2021.9.11+commit.e5eed63a");
         assert_eq!(ver.version, semver::Version::new(10, 8, 9));
         assert_eq!(ver.date, NaiveDate::from_ymd(2021, 9, 11));
-        assert_eq!(ver.commit, [229, 238, 214, 58]);
+        assert_eq!(ver.commit, "e5eed63a");
         check_parsing::<NightlyVersion>("v0.0.0-nightly.1990.1.1+commit.00000000");
         check_parsing::<NightlyVersion>(
             "v123456789.987654321.0-nightly.2100.12.30+commit.ffffffff",
@@ -254,7 +261,6 @@ mod tests {
         NightlyVersion::from_str("solc-v0.8.9-nighly.2021.9.11+commit.e5eed63a").unwrap_err();
         NightlyVersion::from_str("v0.8.9-nighly.2021.9.11+commit.e5eed63a").unwrap_err();
         NightlyVersion::from_str("v0.8.9+commit.deadbeef").unwrap_err();
-        NightlyVersion::from_str("v0.8.9-pre-nightly.2021.9.11+commit.e5eed63a").unwrap_err();
     }
 
     #[test]
@@ -269,6 +275,28 @@ mod tests {
                 NightlyVersion::from_str("v0.8.9-nightly.2021.9.11+commit.e5eed63a").unwrap()
             )
         );
+        assert_eq!(
+            check_parsing::<Version>("0.1.0-beta.16+commit.5e4a94a"),
+            Version::Release(ReleaseVersion::from_str("0.1.0-beta.16+commit.5e4a94a").unwrap())
+        );
+    }
+
+    #[test]
+    fn display_version() {
+        for (initial, expected) in vec![
+            ("v0.8.9+commit.e5eed63a", "v0.8.9+commit.e5eed63a"),
+            (
+                "0.8.9-nightly.2021.09.11+commit.e5ee",
+                "v0.8.9-nightly.2021.9.11+commit.e5ee",
+            ),
+            (
+                "0.1.0-beta.16+commit.5e4a94a",
+                "v0.1.0-beta.16+commit.5e4a94a",
+            ),
+        ] {
+            let version = check_parsing::<Version>(initial);
+            assert_eq!(version.to_string(), expected,);
+        }
     }
 
     #[test]
