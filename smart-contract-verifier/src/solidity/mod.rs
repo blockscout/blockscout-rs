@@ -1,4 +1,7 @@
+mod bytecode;
 mod compiler;
+mod errors;
+mod metadata;
 mod solc_cli;
 mod verifier;
 
