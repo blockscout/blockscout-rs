@@ -45,13 +45,13 @@ lazy_static! {
     .unwrap();
 }
 
-pub fn count_verify_contract(status: &VerificationStatus, method: &str) {
+pub fn count_verify_contract(languange: &str, status: &VerificationStatus, method: &str) {
     let status = match status {
         VerificationStatus::Ok => "ok",
         VerificationStatus::Failed => "fail",
     };
     VERIFICATION
-        .with_label_values(&["solidity", method, status])
+        .with_label_values(&[languange, method, status])
         .inc();
 }
 

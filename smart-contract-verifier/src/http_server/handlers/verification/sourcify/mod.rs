@@ -19,6 +19,6 @@ pub async fn verify(
     let response =
         api::verify_using_sourcify_client(sourcify_client.into_inner(), params.into_inner())
             .await?;
-    metrics::count_verify_contract(&response.status, "sourcify");
+    metrics::count_verify_contract("solidity", &response.status, "sourcify");
     Ok(Json(response))
 }

@@ -35,7 +35,7 @@ pub async fn verify(
         &request.deployed_bytecode,
     )
     .await?;
-    metrics::count_verify_contract(&response.status, "multi-part");
+    metrics::count_verify_contract("vyper", &response.status, "multi-part");
     Ok(Json(response))
 }
 
