@@ -22,62 +22,49 @@ pub async fn verify(
     params: Json<VyperVerificationRequest>,
 ) -> Result<Json<VerificationResponse>, Error> {
     let request = params.into_inner();
-
     let compiler_input =
         CompilerInput::try_from(request.clone()).map_err(error::ErrorBadRequest)?;
     let compiler_version =
         Version::from_str(&request.compiler_version).map_err(error::ErrorBadRequest)?;
 
-    let input = Input {
+    let response = compile_and_verify_handler(
+        &compilers,
         compiler_version,
         compiler_input,
-        creation_tx_input: &request.creation_bytecode,
-        deployed_bytecode: &request.deployed_bytecode,
-    };
-
-    let response = compile_and_verify_handler(&compilers, input).await?;
+        &request.creation_bytecode,
+        &request.deployed_bytecode,
+    )
+    .await?;
     metrics::count_verify_contract(&response.status, "multi-part");
     Ok(Json(response))
 }
 
-#[derive(Debug)]
-pub struct Input<'a> {
-    pub compiler_version: compiler::Version,
-    pub compiler_input: CompilerInput,
-    pub creation_tx_input: &'a str,
-    pub deployed_bytecode: &'a str,
-}
-
 async fn compile_and_verify_handler(
     compilers: &Compilers<VyperCompiler>,
-    input: Input<'_>,
+    compiler_version: compiler::Version,
+    compiler_input: CompilerInput,
+    creation_tx_input: &str,
+    deployed_bytecode: &str,
 ) -> Result<VerificationResponse, actix_web::Error> {
-    let result = compilers
-        .compile(&input.compiler_version, &input.compiler_input)
-        .await;
+    let result = compilers.compile(&compiler_version, &compiler_input).await;
     let output = match result {
         Ok(output) => output,
-        Err(e) => return Ok(VerificationResponse::err(e)),
+        Err(err @ compiler::Error::VersionNotFound(_)) => return Err(error::ErrorBadRequest(err)),
+        Err(err) => return Ok(VerificationResponse::err(err)),
     };
-
-    let verifier = Verifier::new(input.creation_tx_input, input.deployed_bytecode)
-        .map_err(error::ErrorBadRequest)?;
-    let response = match verifier.verify(output.clone(), output) {
+    // vyper contracts doesn't have metadata hash,
+    // so modified compilation will produce the same output.
+    // we can omit this step and just copy the output
+    let output_modified = output.clone();
+    let verifier =
+        Verifier::new(creation_tx_input, deployed_bytecode).map_err(error::ErrorBadRequest)?;
+    let response = match verifier.verify(output, output_modified) {
         Ok(verification_success) => {
-            let verification_result = VerificationResult::from((
-                input.compiler_input,
-                input.compiler_version,
-                verification_success,
-            ));
+            let verification_result =
+                VerificationResult::from((compiler_input, compiler_version, verification_success));
             VerificationResponse::ok(verification_result)
         }
-        Err(errors) => VerificationResponse::err(
-            errors
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<String>>()
-                .join("\n"),
-        ),
+        Err(_) => VerificationResponse::err("No contract could be verified with provided data"),
     };
     Ok(response)
 }
