@@ -1,0 +1,18 @@
+version: "3"
+services:
+  multichain-api-gateway:
+    ## you can build an image locally, or use pre-built images from registry
+    build: .
+    ports:
+      - "8044:8044"
+    environment:
+      ## optional: if provided, would be used as a configuration file
+      - MULTICHAIN_API_GATEWAY__CONFIG=/app/config.toml
+    env_file:
+      ## optional: if provided, would overwrite values from configuration file
+      - config/base.env
+    volumes:
+      ## optional: you can use default config or provide custom via file
+      - ./config/base.toml:/app/config.toml
+      ## optional: provide volume or folder to store compilers between launches
+      - /tmp/compilers:/tmp/compilers
