@@ -14,5 +14,3 @@ services:
     volumes:
       ## optional: you can use default config or provide custom via file
       - ./config/base.toml:/app/config.toml
-      ## optional: provide volume or folder to store compilers between launches
-      - /tmp/compilers:/tmp/compilers
