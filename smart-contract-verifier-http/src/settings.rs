@@ -4,7 +4,7 @@ use cron::Schedule;
 use serde::{de, Deserialize};
 use serde_with::{serde_as, DisplayFromStr};
 use smart_contract_verifier::{DEFAULT_SOLIDITY_COMPILER_LIST, DEFAULT_VYPER_COMPILER_LIST};
-use std::{net::SocketAddr, num::NonZeroUsize, path::PathBuf, str::FromStr};
+use std::{net::SocketAddr, num::{NonZeroU32}, path::PathBuf, str::FromStr};
 use url::Url;
 
 /// Wrapper under [`serde::de::IgnoredAny`] which implements
@@ -147,7 +147,7 @@ pub struct SourcifySettings {
     pub api_url: Url,
     /// Number of attempts the server makes to Sourcify API.
     /// Should be at least one. Set to `3` by default.
-    pub verification_attempts: NonZeroUsize,
+    pub verification_attempts: NonZeroU32,
     pub request_timeout: u64,
 }
 
@@ -156,7 +156,7 @@ impl Default for SourcifySettings {
         Self {
             enabled: true,
             api_url: Url::try_from("https://sourcify.dev/server/").expect("valid url"),
-            verification_attempts: NonZeroUsize::new(3).expect("Is not zero"),
+            verification_attempts: NonZeroU32::new(3).expect("Is not zero"),
             request_timeout: 10,
         }
     }
