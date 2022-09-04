@@ -1,10 +1,10 @@
 mod app;
 mod solidity;
 // mod sourcify;
-// mod vyper;
-//
+mod vyper;
+
 pub use app::AppRouter;
-//
+
 // use self::{solidity::SolidityRouter, sourcify::SourcifyRouter};
 
 pub trait Router {

@@ -1,5 +1,33 @@
-// use std::sync::Arc;
-//
+use super::api_client::SourcifyApiClient;
+use std::{collections::BTreeMap, sync::Arc};
+
+pub struct VerificationRequest {
+    pub address: String,
+    pub chain: String,
+    pub files: BTreeMap<String, String>,
+    pub chosen_contract: Option<usize>,
+}
+
+pub struct Error;
+
+/// The public structure returned as a result when verification succeeds.
+#[derive(Clone, Debug)]
+pub struct Success {
+    // pub compiler_input: CompilerInput,
+    // pub compiler_version: Version,
+    // pub file_path: String,
+    // pub contract_name: String,
+    // pub abi: ethabi::Contract,
+    // pub constructor_args: Option<DisplayBytes>,
+}
+
+pub async fn verify(
+    sourcify_client: Arc<SourcifyApiClient>,
+    request: VerificationRequest,
+) -> Result<Success, Error> {
+    todo!()
+}
+
 // pub async fn verify(
 //     sourcify_client: Arc<impl SourcifyApi>,
 //     params: ApiRequest,

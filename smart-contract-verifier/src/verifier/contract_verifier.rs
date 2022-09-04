@@ -1,7 +1,6 @@
-use super::{compiler::SolidityCompiler, verifier::Verifier};
+use super::{errors::BytecodeInitError, base_verifier::Verifier};
 use crate::{
-    compiler::{self, Compilers, Version},
-    solidity::errors::BytecodeInitError,
+    compiler::{self, Compilers, EvmCompiler, Version},
     DisplayBytes,
 };
 use anyhow::anyhow;
@@ -52,15 +51,15 @@ pub struct Success {
     pub constructor_args: Option<DisplayBytes>,
 }
 
-pub struct ContractVerifier<'a> {
-    compilers: Arc<Compilers<SolidityCompiler>>,
+pub struct ContractVerifier<'a, T> {
+    compilers: Arc<Compilers<T>>,
     compiler_version: &'a Version,
     verifier: Verifier,
 }
 
-impl<'a> ContractVerifier<'a> {
+impl<'a, T: EvmCompiler> ContractVerifier<'a, T> {
     pub fn new(
-        compilers: Arc<Compilers<SolidityCompiler>>,
+        compilers: Arc<Compilers<T>>,
         compiler_version: &'a Version,
         creation_tx_input: Bytes,
         deployed_bytecode: Bytes,

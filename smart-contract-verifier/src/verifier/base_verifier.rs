@@ -1,12 +1,9 @@
 use super::{
     bytecode::{Bytecode, BytecodePart, LocalBytecode},
-    errors::{BytecodeInitError, VerificationError},
+    errors::{BytecodeInitError, VerificationError, VerificationErrorKind},
+    metadata::MetadataHash,
 };
-use crate::{
-    mismatch::Mismatch,
-    solidity::{errors::VerificationErrorKind, metadata::MetadataHash},
-    DisplayBytes,
-};
+use crate::{mismatch::Mismatch, DisplayBytes};
 use bytes::Bytes;
 use ethabi::{Constructor, Token};
 use ethers_solc::{artifacts::Contract, Artifact, CompilerOutput};

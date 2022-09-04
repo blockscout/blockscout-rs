@@ -2,13 +2,12 @@ use std::sync::Arc;
 
 use actix_web::web;
 
+use super::Router;
 use crate::{
-    compiler::{Compilers, ListFetcher},
-    http_server::handlers::vyper,
+    handlers::{vyper_multi_part, vyper_version_list},
     settings::{FetcherSettings, VyperSettings},
-    vyper::VyperCompiler,
-    Router,
 };
+use smart_contract_verifier::{Compilers, ListFetcher, VyperCompiler};
 
 pub struct VyperRouter {
     compilers: web::Data<Compilers<VyperCompiler>>,
@@ -46,11 +45,11 @@ impl Router for VyperRouter {
             .app_data(self.compilers.clone())
             .service(
                 web::scope("/verify")
-                    .route("/multiple-files", web::post().to(vyper::multi_part::verify)),
+                    .route("/multiple-files", web::post().to(vyper_multi_part::verify)),
             )
             .route(
                 "/versions",
-                web::get().to(vyper::version_list::get_version_list),
+                web::get().to(vyper_version_list::get_version_list),
             );
     }
 }

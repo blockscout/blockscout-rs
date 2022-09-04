@@ -4,6 +4,7 @@ mod routers;
 mod run;
 mod settings;
 mod tracer;
+mod verification_response;
 
 #[cfg(test)]
 mod tests;

@@ -1,9 +1,9 @@
-use crate::{handlers::verification_response::VerificationResponse, DisplayBytes};
+use crate::{verification_response::VerificationResponse, DisplayBytes};
 use actix_web::{error, web, web::Json};
 use anyhow::anyhow;
 use ethers_solc::CompilerInput;
 use serde::Deserialize;
-use smart_contract_verifier::{solidity, Compilers, SolidityCompiler, Version};
+use smart_contract_verifier::{solidity, Compilers, SolidityCompiler, VerificationError, Version};
 use std::str::FromStr;
 use thiserror::Error;
 use tracing::instrument;
@@ -86,12 +86,12 @@ pub async fn verify(
 
     let err = result.unwrap_err();
     match err {
-        solidity::Error::Compilation(_) | solidity::Error::NoMatchingContracts => {
+        VerificationError::Compilation(_) | VerificationError::NoMatchingContracts => {
             Ok(Json(VerificationResponse::err(err)))
         }
-        solidity::Error::Initialization(_) | solidity::Error::VersionNotFound(_) => {
+        VerificationError::Initialization(_) | VerificationError::VersionNotFound(_) => {
             Err(error::ErrorBadRequest(err))
         }
-        solidity::Error::Internal(_) => Err(error::ErrorInternalServerError(err)),
+        VerificationError::Internal(_) => Err(error::ErrorInternalServerError(err)),
     }
 }

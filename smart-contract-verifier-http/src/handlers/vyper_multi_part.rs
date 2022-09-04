@@ -2,29 +2,25 @@ use crate::{verification_response::VerificationResponse, DisplayBytes};
 use actix_web::{error, web, web::Json};
 use ethers_solc::EvmVersion;
 use serde::Deserialize;
-use smart_contract_verifier::{solidity, Compilers, SolidityCompiler, VerificationError, Version};
+use smart_contract_verifier::{vyper, Compilers, VerificationError, Version, VyperCompiler};
 use std::{collections::BTreeMap, path::PathBuf, str::FromStr};
 use tracing::instrument;
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Deserialize, PartialEq, Eq, Clone)]
 pub struct VerificationRequest {
     pub deployed_bytecode: String,
     pub creation_bytecode: String,
     pub compiler_version: String,
-
-    #[serde(flatten)]
     pub content: MultiPartFiles,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Deserialize, PartialEq, Eq, Clone)]
 pub struct MultiPartFiles {
     pub sources: BTreeMap<PathBuf, String>,
-    pub evm_version: String,
-    pub optimization_runs: Option<usize>,
-    pub contract_libraries: Option<BTreeMap<String, String>>,
+    pub evm_version: Option<String>,
 }
 
-impl TryFrom<VerificationRequest> for solidity::multi_part::VerificationRequest {
+impl TryFrom<VerificationRequest> for vyper::multi_part::VerificationRequest {
     type Error = actix_web::Error;
 
     fn try_from(value: VerificationRequest) -> Result<Self, Self::Error> {
@@ -45,7 +41,7 @@ impl TryFrom<VerificationRequest> for solidity::multi_part::VerificationRequest 
     }
 }
 
-impl TryFrom<MultiPartFiles> for solidity::multi_part::MultiFileContent {
+impl TryFrom<MultiPartFiles> for vyper::multi_part::MultiFileContent {
     type Error = actix_web::Error;
 
     fn try_from(value: MultiPartFiles) -> Result<Self, Self::Error> {
@@ -55,29 +51,28 @@ impl TryFrom<MultiPartFiles> for solidity::multi_part::MultiFileContent {
             .map(|(name, content)| (name, content))
             .collect();
 
-        let evm_version = if value.evm_version != "default" {
-            Some(EvmVersion::from_str(&value.evm_version).map_err(error::ErrorBadRequest)?)
+        let evm_version = if let Some(version) = value.evm_version {
+            Some(EvmVersion::from_str(&version).map_err(error::ErrorBadRequest)?)
         } else {
-            None
+            // default evm version for vyper
+            Some(EvmVersion::Istanbul)
         };
 
         Ok(Self {
             sources,
             evm_version,
-            optimization_runs: value.optimization_runs,
-            contract_libraries: value.contract_libraries,
         })
     }
 }
 
 #[instrument(skip(compilers, params), level = "debug")]
 pub async fn verify(
-    compilers: web::Data<Compilers<SolidityCompiler>>,
+    compilers: web::Data<Compilers<VyperCompiler>>,
     params: Json<VerificationRequest>,
 ) -> Result<Json<VerificationResponse>, actix_web::Error> {
     let request = params.into_inner().try_into()?;
 
-    let result = solidity::multi_part::verify(compilers.into_inner(), request).await;
+    let result = vyper::multi_part::verify(compilers.into_inner(), request).await;
 
     if let Ok(verification_success) = result {
         return Ok(Json(VerificationResponse::ok(verification_success.into())));

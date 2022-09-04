@@ -1,8 +1,8 @@
-use super::{
-    compiler::SolidityCompiler,
-    contract_verifier::{ContractVerifier, Error, Success},
+use super::compiler::SolidityCompiler;
+use crate::{
+    compiler::{Compilers, Version},
+    verifier::{ContractVerifier, Error, Success},
 };
-use crate::compiler::{Compilers, Version};
 use bytes::Bytes;
 use ethers_solc::{
     artifacts::{BytecodeHash, Libraries, Settings, SettingsMetadata, Source, Sources},
