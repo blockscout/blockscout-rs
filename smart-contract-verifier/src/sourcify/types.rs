@@ -43,7 +43,7 @@ pub enum Error {
 
 // Definition of sourcify.dev API response
 // https://docs.sourcify.dev/docs/api/server/v1/verify/
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(untagged)]
 pub(super) enum ApiVerificationResponse {
     Verified {
@@ -58,7 +58,7 @@ pub(super) enum ApiVerificationResponse {
     },
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub(super) struct ResultItem {
     pub address: String,
     pub status: String,
@@ -66,7 +66,7 @@ pub(super) struct ResultItem {
     pub storage_timestamp: Option<String>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Serialize)]
 pub(super) struct FieldError {
     field: String,
     message: String,
