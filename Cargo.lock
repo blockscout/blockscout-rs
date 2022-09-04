@@ -3663,11 +3663,13 @@ dependencies = [
 name = "smart-contract-verifier-http"
 version = "0.2.0"
 dependencies = [
+ "actix-rt",
  "actix-web",
  "actix-web-prom",
  "anyhow",
  "config",
  "cron",
+ "ethabi",
  "ethers-core",
  "ethers-solc",
  "futures",
@@ -3676,6 +3678,7 @@ dependencies = [
  "opentelemetry-jaeger",
  "pretty_assertions",
  "prometheus",
+ "reqwest",
  "rust-s3",
  "serde",
  "serde_json",
