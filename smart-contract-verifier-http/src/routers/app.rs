@@ -1,6 +1,8 @@
 use super::{
-    configure_router, solidity::SolidityRouter, sourcify::SourcifyRouter, vyper::VyperRouter,
-    Router,
+    router::{configure_router, Router},
+    solidity::SolidityRouter,
+    sourcify::SourcifyRouter,
+    vyper::VyperRouter,
 };
 use crate::{handlers::status, settings::Settings};
 use actix_web::web;

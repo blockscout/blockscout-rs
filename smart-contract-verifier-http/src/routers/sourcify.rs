@@ -1,8 +1,7 @@
-use super::Router;
+use super::router::Router;
 use crate::{handlers::sourcify, settings::SourcifySettings};
-use smart_contract_verifier::SourcifyApiClient;
-
 use actix_web::web;
+use smart_contract_verifier::SourcifyApiClient;
 
 pub struct SourcifyRouter {
     api_client: web::Data<SourcifyApiClient>,

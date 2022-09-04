@@ -3,7 +3,6 @@ use crate::{
     routers::{configure_router, AppRouter},
     settings::Settings,
 };
-
 use actix_web::{App, HttpServer};
 use futures::future;
 use std::sync::Arc;

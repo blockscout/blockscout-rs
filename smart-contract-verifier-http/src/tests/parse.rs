@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(dead_code, unused)]
 
 use pretty_assertions::assert_eq;
 use serde::{de::DeserializeOwned, Serialize};

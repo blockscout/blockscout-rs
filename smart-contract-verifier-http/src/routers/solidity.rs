@@ -1,4 +1,4 @@
-use super::Router;
+use super::router::Router;
 use crate::{
     handlers::{solidity_multi_part, solidity_standard_json, solidity_version_list},
     settings::{FetcherSettings, S3FetcherSettings, SoliditySettings},

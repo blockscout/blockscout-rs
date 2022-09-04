@@ -1,8 +1,6 @@
-use std::path::Path;
-
-use ethers_solc::{error::SolcError, CompilerInput, CompilerOutput, Solc};
-
 use crate::compiler::{EvmCompiler, Version};
+use ethers_solc::{error::SolcError, CompilerInput, CompilerOutput, Solc};
+use std::path::Path;
 
 #[derive(Default)]
 pub struct VyperCompiler {}
@@ -85,22 +83,19 @@ mod types {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::{
+        compiler::{self, Compilers, ListFetcher},
+        consts::DEFAULT_VYPER_COMPILER_LIST,
+    };
+    use ethers_solc::{artifacts::Source, CompilerInput};
     use std::{
         collections::{BTreeMap, HashSet},
         path::PathBuf,
         str::FromStr,
         sync::Arc,
     };
-
-    use ethers_solc::{artifacts::Source, CompilerInput};
-
-    use crate::{
-        compiler::{self, Compilers, ListFetcher},
-        consts::DEFAULT_VYPER_COMPILER_LIST,
-    };
     use tokio::sync::OnceCell;
-
-    use super::*;
 
     async fn global_compilers() -> &'static Compilers<VyperCompiler> {
         static COMPILERS: OnceCell<Compilers<VyperCompiler>> = OnceCell::const_new();

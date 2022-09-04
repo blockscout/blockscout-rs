@@ -4,13 +4,12 @@
 //! was added only since 0.4.10 version. So, to compile older versions
 //! we need convert functions for CompilerInput and CompilerOutput.
 
-use std::{collections::BTreeMap, path::Path, process::Stdio};
-
 use ethers_solc::{
     artifacts::Severity,
     error::{SolcError, SolcIoError},
     CompilerInput, CompilerOutput,
 };
+use std::{collections::BTreeMap, path::Path, process::Stdio};
 use tokio::process::Command;
 
 mod serde_helpers {
@@ -29,17 +28,16 @@ mod serde_helpers {
 
 mod types {
     use super::serde_helpers;
-    use std::{
-        collections::{BTreeMap, HashMap},
-        path::PathBuf,
-    };
-
     use ethers_solc::{
         artifacts::{Contract, Libraries},
         error::SolcError,
         CompilerInput, CompilerOutput,
     };
     use serde::{Deserialize, Serialize};
+    use std::{
+        collections::{BTreeMap, HashMap},
+        path::PathBuf,
+    };
     use tempfile::TempDir;
     use tokio::io::AsyncWriteExt;
 

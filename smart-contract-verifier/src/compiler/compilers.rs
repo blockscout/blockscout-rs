@@ -3,7 +3,6 @@ use super::{
     fetcher::{FetchError, Fetcher},
     version::Version,
 };
-
 // use crate::http_server::metrics;
 
 use ethers_solc::{artifacts::Severity, error::SolcError, CompilerInput, CompilerOutput};

@@ -1,13 +1,11 @@
-use std::sync::Arc;
-
-use actix_web::web;
-
-use super::Router;
+use super::router::Router;
 use crate::{
     handlers::{vyper_multi_part, vyper_version_list},
     settings::{FetcherSettings, VyperSettings},
 };
+use actix_web::web;
 use smart_contract_verifier::{Compilers, ListFetcher, VyperCompiler};
+use std::sync::Arc;
 
 pub struct VyperRouter {
     compilers: web::Data<Compilers<VyperCompiler>>,

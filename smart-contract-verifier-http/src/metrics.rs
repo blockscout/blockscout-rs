@@ -6,7 +6,6 @@ use prometheus::{
     register_int_counter_with_registry, Histogram, IntCounter, IntCounterVec, Registry,
 };
 use std::net::SocketAddr;
-
 // use crate::VerificationStatus;
 
 lazy_static! {
