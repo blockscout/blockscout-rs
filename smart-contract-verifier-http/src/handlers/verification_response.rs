@@ -1,9 +1,7 @@
 use crate::DisplayBytes;
-use ethers_solc::CompilerInput;
 use serde::{Deserialize, Serialize};
-use smart_contract_verifier::{VerificationSuccess, Version};
+use smart_contract_verifier::VerificationSuccess;
 use std::{collections::BTreeMap, fmt::Display};
-use tracing::instrument;
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct VerificationResponse {

@@ -1,7 +1,7 @@
 pub mod solidity;
 // pub mod sourcify;
 
-mod compilers;
+mod compiler;
 mod consts;
 
 // TODO: to be extracted in a separate crate
@@ -15,5 +15,5 @@ pub(crate) use ethers_core::types::Bytes as DisplayBytes;
 
 pub use consts::{DEFAULT_SOLIDITY_COMPILER_LIST, DEFAULT_VYPER_COMPILER_LIST};
 
-pub use compilers::{Compilers, Fetcher, ListFetcher, S3Fetcher, Version};
+pub use compiler::{Compilers, Fetcher, ListFetcher, S3Fetcher, Version};
 pub use solidity::{SolcValidator, SolidityCompiler, Success as VerificationSuccess};

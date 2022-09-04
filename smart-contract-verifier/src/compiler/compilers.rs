@@ -195,8 +195,7 @@ mod tests {
 
         let compilers = global_compilers().await;
         let input: CompilerInput = Input::with_source_code(source_code.into()).into();
-        let version =
-            Version::from_str("v0.8.10+commit.fc410830").expect("Compiler version");
+        let version = Version::from_str("v0.8.10+commit.fc410830").expect("Compiler version");
 
         let result = compilers
             .compile(&version, &input)
@@ -214,8 +213,7 @@ mod tests {
 
         let compilers = global_compilers().await;
         let input: CompilerInput = Input::with_source_code(source_code.into()).into();
-        let version =
-            Version::from_str("v0.5.9+commit.c68bc34e").expect("Compiler version");
+        let version = Version::from_str("v0.5.9+commit.c68bc34e").expect("Compiler version");
 
         let result = compilers
             .compile(&version, &input)
@@ -233,8 +231,7 @@ mod tests {
 
         let compilers = global_compilers().await;
         let input: CompilerInput = Input::with_source_code(source_code.into()).into();
-        let version =
-            Version::from_str("v0.8.10+commit.fc410830").expect("Compiler version");
+        let version = Version::from_str("v0.8.10+commit.fc410830").expect("Compiler version");
 
         let result = compilers
             .compile(&version, &input)

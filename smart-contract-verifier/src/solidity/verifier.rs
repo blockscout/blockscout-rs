@@ -31,25 +31,11 @@ pub struct VerificationSuccess {
 }
 
 impl Verifier {
-    /// Instantiates a new verifier instance with input data provided by the requester.
-    ///
-    /// Returns [`InitializationError`] inside [`Err`] if either
-    /// `deployed_bytecode` or `creation_tx_input` are invalid or incompatible.
     pub fn new(
-        creation_tx_input: &str,
-        deployed_bytecode: &str,
-    ) -> Result<Self, BytecodeInitError> {
-        let bytecode = Bytecode::new(creation_tx_input, deployed_bytecode)?;
-        Ok(Self {
-            remote_bytecode: bytecode,
-        })
-    }
-
-    pub fn from_bytes(
         creation_tx_input: Bytes,
         deployed_bytecode: Bytes,
     ) -> Result<Self, BytecodeInitError> {
-        let bytecode = Bytecode::from_bytes(creation_tx_input, deployed_bytecode)?;
+        let bytecode = Bytecode::new(creation_tx_input, deployed_bytecode)?;
         Ok(Self {
             remote_bytecode: bytecode,
         })

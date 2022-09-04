@@ -1,9 +1,6 @@
-use super::{
-    compiler::SolidityCompiler,
-    verifier::{VerificationSuccess, Verifier},
-};
+use super::{compiler::SolidityCompiler, verifier::Verifier};
 use crate::{
-    compilers::{self, Compilers, Version},
+    compiler::{self, Compilers, Version},
     solidity::errors::BytecodeInitError,
     DisplayBytes,
 };
@@ -34,11 +31,11 @@ impl From<BytecodeInitError> for Error {
     }
 }
 
-impl From<compilers::Error> for Error {
-    fn from(error: compilers::Error) -> Self {
+impl From<compiler::Error> for Error {
+    fn from(error: compiler::Error) -> Self {
         match error {
-            compilers::Error::VersionNotFound(version) => Error::VersionNotFound(version),
-            compilers::Error::Compilation(details) => Error::Compilation(details),
+            compiler::Error::VersionNotFound(version) => Error::VersionNotFound(version),
+            compiler::Error::Compilation(details) => Error::Compilation(details),
             err => Error::Internal(anyhow!(err)),
         }
     }
@@ -68,7 +65,7 @@ impl<'a> ContractVerifier<'a> {
         creation_tx_input: Bytes,
         deployed_bytecode: Bytes,
     ) -> Result<Self, Error> {
-        let verifier = Verifier::from_bytes(creation_tx_input, deployed_bytecode)?;
+        let verifier = Verifier::new(creation_tx_input, deployed_bytecode)?;
         Ok(Self {
             compilers,
             compiler_version,
@@ -80,7 +77,7 @@ impl<'a> ContractVerifier<'a> {
     pub async fn verify(&self, compiler_input: &CompilerInput) -> Result<Success, Error> {
         let compiler_output = self
             .compilers
-            .compile(self.compiler_version, &compiler_input)
+            .compile(self.compiler_version, compiler_input)
             .await?;
         let compiler_output_modified = {
             let mut compiler_input = compiler_input.clone();
@@ -101,7 +98,7 @@ impl<'a> ContractVerifier<'a> {
                 "0xcafecafecafecafecafecafecafecafecafecafe".into(),
             );
             self.compilers
-                .compile(&self.compiler_version, &compiler_input)
+                .compile(self.compiler_version, &compiler_input)
                 .await?
         };
 

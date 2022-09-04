@@ -2,7 +2,7 @@ use super::{
     compiler::SolidityCompiler,
     contract_verifier::{ContractVerifier, Error, Success},
 };
-use crate::compilers::{Compilers, Version};
+use crate::compiler::{Compilers, Version};
 use bytes::Bytes;
 use ethers_solc::{artifacts::output_selection::OutputSelection, CompilerInput};
 use std::sync::Arc;

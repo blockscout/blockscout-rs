@@ -1,6 +1,6 @@
 mod app;
 mod solidity;
-mod sourcify;
+// mod sourcify;
 // mod vyper;
 //
 pub use app::AppRouter;

@@ -4,10 +4,7 @@ use anyhow::anyhow;
 use ethers_solc::CompilerInput;
 use serde::Deserialize;
 use smart_contract_verifier::{solidity, Compilers, SolidityCompiler, Version};
-use std::{
-    fmt::{Display, Formatter},
-    str::FromStr,
-};
+use std::str::FromStr;
 use thiserror::Error;
 use tracing::instrument;
 
@@ -59,7 +56,7 @@ impl TryFrom<StandardJson> for solidity::standard_json::StandardJsonContent {
     type Error = ParseError;
 
     fn try_from(value: StandardJson) -> Result<Self, Self::Error> {
-        let mut input: CompilerInput = serde_json::from_str(&value.input)?;
+        let input: CompilerInput = serde_json::from_str(&value.input)?;
 
         Ok(Self { input })
     }
@@ -88,7 +85,7 @@ pub async fn verify(
     }
 
     let err = result.unwrap_err();
-    return match err {
+    match err {
         solidity::Error::Compilation(_) | solidity::Error::NoMatchingContracts => {
             Ok(Json(VerificationResponse::err(err)))
         }
@@ -96,5 +93,5 @@ pub async fn verify(
             Err(error::ErrorBadRequest(err))
         }
         solidity::Error::Internal(_) => Err(error::ErrorInternalServerError(err)),
-    };
+    }
 }

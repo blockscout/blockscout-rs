@@ -1,4 +1,4 @@
-use crate::compilers::{FileValidator, Version};
+use crate::compiler::{FileValidator, Version};
 use anyhow::Context;
 use async_trait::async_trait;
 use ethers_solc::Solc;

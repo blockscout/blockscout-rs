@@ -1,7 +1,4 @@
-use crate::{
-    handlers::verification_response::{VerificationResponse, VerificationResult},
-    DisplayBytes,
-};
+use crate::{handlers::verification_response::VerificationResponse, DisplayBytes};
 use actix_web::{error, web, web::Json};
 use ethers_solc::EvmVersion;
 use serde::Deserialize;
@@ -87,7 +84,7 @@ pub async fn verify(
     }
 
     let err = result.unwrap_err();
-    return match err {
+    match err {
         solidity::Error::Compilation(_) | solidity::Error::NoMatchingContracts => {
             Ok(Json(VerificationResponse::err(err)))
         }
@@ -95,5 +92,5 @@ pub async fn verify(
             Err(error::ErrorBadRequest(err))
         }
         solidity::Error::Internal(_) => Err(error::ErrorInternalServerError(err)),
-    };
+    }
 }

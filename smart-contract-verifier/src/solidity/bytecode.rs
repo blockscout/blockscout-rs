@@ -2,10 +2,9 @@ use super::{
     errors::{BytecodeInitError, VerificationErrorKind},
     metadata::MetadataHash,
 };
-use crate::{mismatch::Mismatch, DisplayBytes};
+use crate::mismatch::Mismatch;
 use bytes::{Buf, Bytes};
 use ethers_solc::{artifacts::Contract, Artifact};
-use std::str::FromStr;
 
 /// Combine creation_tx_input and deployed_bytecode.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -18,21 +17,6 @@ pub struct Bytecode {
 
 impl Bytecode {
     pub fn new(
-        creation_tx_input: &str,
-        deployed_bytecode: &str,
-    ) -> Result<Self, BytecodeInitError> {
-        let creation_tx_input = DisplayBytes::from_str(creation_tx_input)
-            .map_err(|_| BytecodeInitError::InvalidCreationTxInput(creation_tx_input.to_string()))?
-            .0;
-
-        let deployed_bytecode = DisplayBytes::from_str(deployed_bytecode)
-            .map_err(|_| BytecodeInitError::InvalidDeployedBytecode(deployed_bytecode.to_string()))?
-            .0;
-
-        Self::from_bytes(creation_tx_input, deployed_bytecode)
-    }
-
-    pub fn from_bytes(
         creation_tx_input: Bytes,
         deployed_bytecode: Bytes,
     ) -> Result<Self, BytecodeInitError> {
@@ -81,7 +65,7 @@ impl TryFrom<&Contract> for Bytecode {
                 BytecodeInitError::InvalidCreationTxInput(bytecode)
             })?
         };
-        Bytecode::from_bytes(creation_tx_input.0.clone(), deployed_bytecode.0.clone())
+        Bytecode::new(creation_tx_input.0.clone(), deployed_bytecode.0.clone())
     }
 }
 

@@ -1,10 +1,12 @@
-use crate::settings::Settings;
-use crate::routers::{AppRouter, configure_router};
-use crate::metrics::Metrics;
+use crate::{
+    metrics::Metrics,
+    routers::{configure_router, AppRouter},
+    settings::Settings,
+};
 
+use actix_web::{App, HttpServer};
 use futures::future;
 use std::sync::Arc;
-use actix_web::{App, HttpServer};
 use tracing_actix_web::TracingLogger;
 
 pub async fn run(settings: Settings) -> std::io::Result<()> {
@@ -28,8 +30,8 @@ pub async fn run(settings: Settings) -> std::io::Result<()> {
                 .wrap(TracingLogger::default())
                 .configure(configure_router(&*app_router))
         })
-            .bind(socket_addr)?
-            .run()
+        .bind(socket_addr)?
+        .run()
     };
     let mut futures = vec![tokio::spawn(async move { server_future.await })];
     if metrics_enabled {
