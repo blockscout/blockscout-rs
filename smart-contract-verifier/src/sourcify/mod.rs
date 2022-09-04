@@ -5,4 +5,4 @@ mod types;
 pub mod api;
 
 pub use api_client::SourcifyApiClient;
-pub use types::{Success, Error};
+pub use types::{Error, Success};

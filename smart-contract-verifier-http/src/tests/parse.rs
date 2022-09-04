@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use pretty_assertions::assert_eq;
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Value;

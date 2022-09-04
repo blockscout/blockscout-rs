@@ -1,11 +1,9 @@
 mod app;
 mod solidity;
-// mod sourcify;
+mod sourcify;
 mod vyper;
 
 pub use app::AppRouter;
-
-// use self::{solidity::SolidityRouter, sourcify::SourcifyRouter};
 
 pub trait Router {
     fn register_routes(&self, service_config: &mut actix_web::web::ServiceConfig);

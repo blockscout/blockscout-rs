@@ -1,8 +1,9 @@
-use super::api_client::SourcifyApiClient;
-use super::types::{ApiRequest, ApiVerificationResponse, Files, Success, Error};
+use super::{
+    api_client::SourcifyApiClient,
+    types::{ApiRequest, ApiVerificationResponse, Error, Files, Success},
+};
 use anyhow::anyhow;
-use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 pub struct VerificationRequest {
     pub address: String,
@@ -53,7 +54,8 @@ pub async fn verify(
             let files = Files::try_from(api_files_response)
                 .map_err(|err| anyhow!("error while parsing Sourcify files response: {}", err))
                 .map_err(Error::Internal)?;
-            let success = Success::try_from(files).map_err(|err| Error::Validation(err.to_string()))?;
+            let success =
+                Success::try_from(files).map_err(|err| Error::Validation(err.to_string()))?;
             Ok(success)
         }
         ApiVerificationResponse::Error { error } => Err(Error::Verification(error)),

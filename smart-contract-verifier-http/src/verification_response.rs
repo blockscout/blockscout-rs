@@ -1,6 +1,6 @@
 use crate::DisplayBytes;
 use serde::{Deserialize, Serialize};
-use smart_contract_verifier::{VerificationSuccess, SourcifySuccess};
+use smart_contract_verifier::{SourcifySuccess, VerificationSuccess};
 use std::{collections::BTreeMap, fmt::Display};
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -64,7 +64,9 @@ impl From<SourcifySuccess> for VerificationResult {
             contract_name: sourcify_success.contract_name,
             compiler_version: sourcify_success.compiler_version,
             evm_version: sourcify_success.evm_version,
-            constructor_arguments: sourcify_success.constructor_arguments.map(DisplayBytes::from),
+            constructor_arguments: sourcify_success
+                .constructor_arguments
+                .map(DisplayBytes::from),
             optimization: sourcify_success.optimization,
             optimization_runs: sourcify_success.optimization_runs,
             contract_libraries: sourcify_success.contract_libraries,

@@ -1,10 +1,12 @@
 use crate::verification_response::VerificationResponse;
 use actix_web::{error, web, web::Json};
 use serde::{Deserialize, Serialize};
-use smart_contract_verifier::{SourcifyApiClient, sourcify::api};
+use smart_contract_verifier::{
+    sourcify::{api, Error},
+    SourcifyApiClient,
+};
 use std::collections::BTreeMap;
 use tracing::instrument;
-use smart_contract_verifier::sourcify::Error;
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -21,7 +23,7 @@ impl From<ApiRequest> for api::VerificationRequest {
             address: value.address,
             chain: value.chain,
             files: value.files,
-            chosen_contract: value.chosen_contract
+            chosen_contract: value.chosen_contract,
         }
     }
 }
@@ -33,20 +35,14 @@ pub async fn verify(
 ) -> Result<Json<VerificationResponse>, actix_web::Error> {
     let request = params.into_inner().try_into()?;
 
-    let response =
-        api::verify(sourcify_client.into_inner(), request)
-            .await;
+    let response = api::verify(sourcify_client.into_inner(), request).await;
     let response = match response {
-        Ok(success) => {
-            Ok(VerificationResponse::ok(success.into()))
-        }
-        Err(err) => {
-            match err {
-                Error::Internal(err) => {Err(error::ErrorInternalServerError(err))}
-                Error::Verification(err) => {Ok(VerificationResponse::err(err))}
-                Error::Validation(err) => {Err(error::ErrorBadRequest(err))}
-            }
-        }
+        Ok(success) => Ok(VerificationResponse::ok(success.into())),
+        Err(err) => match err {
+            Error::Internal(err) => Err(error::ErrorInternalServerError(err)),
+            Error::Verification(err) => Ok(VerificationResponse::err(err)),
+            Error::Validation(err) => Err(error::ErrorBadRequest(err)),
+        },
     }?;
     // metrics::count_verify_contract(&response.status, "sourcify");
     Ok(Json(response))

@@ -1,6 +1,6 @@
+use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use bytes::Bytes;
 use thiserror::Error;
 
 // This struct is used as input for our endpoint and as
