@@ -1,4 +1,4 @@
-use crate::verification_response::VerificationResponse;
+use crate::{metrics, verification_response::VerificationResponse};
 use actix_web::{error, web, web::Json};
 use serde::{Deserialize, Serialize};
 use smart_contract_verifier::{
@@ -44,6 +44,6 @@ pub async fn verify(
             Error::Validation(err) => Err(error::ErrorBadRequest(err)),
         },
     }?;
-    // metrics::count_verify_contract(&response.status, "sourcify");
+    metrics::count_verify_contract(&response.status, "sourcify");
     Ok(Json(response))
 }

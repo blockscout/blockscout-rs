@@ -4,6 +4,7 @@ pub mod vyper;
 
 mod compiler;
 mod consts;
+mod metrics;
 mod verifier;
 
 // TODO: to be extracted in a separate crate

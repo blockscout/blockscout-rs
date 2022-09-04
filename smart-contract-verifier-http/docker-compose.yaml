@@ -2,8 +2,8 @@ version: "3"
 services:
   smart-contract-verifier:
     ## you can build an image locally, or use pre-built images from registry
-#    build: .
     image: ghcr.io/blockscout/smart-contract-verifier:main
+    build: .
     ports:
       - "8043:8043"
     environment:

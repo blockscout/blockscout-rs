@@ -3,8 +3,7 @@ use super::{
     fetcher::{FetchError, Fetcher},
     version::Version,
 };
-// use crate::http_server::metrics;
-
+use crate::metrics;
 use ethers_solc::{artifacts::Severity, error::SolcError, CompilerInput, CompilerOutput};
 use std::{
     fmt::Debug,
@@ -69,7 +68,7 @@ where
             res => res?,
         };
         let output = {
-            // let _timer = metrics::COMPILE_TIME.start_timer();
+            let _timer = metrics::COMPILE_TIME.start_timer();
             let span = tracing::debug_span!(
                 "compile contract with ethers-solc",
                 ver = compiler_version.to_string()

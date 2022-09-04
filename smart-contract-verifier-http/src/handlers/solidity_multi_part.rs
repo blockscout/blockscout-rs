@@ -1,4 +1,4 @@
-use crate::{verification_response::VerificationResponse, DisplayBytes};
+use crate::{metrics, verification_response::VerificationResponse, DisplayBytes};
 use actix_web::{error, web, web::Json};
 use ethers_solc::EvmVersion;
 use serde::Deserialize;
@@ -80,7 +80,9 @@ pub async fn verify(
     let result = solidity::multi_part::verify(compilers.into_inner(), request).await;
 
     if let Ok(verification_success) = result {
-        return Ok(Json(VerificationResponse::ok(verification_success.into())));
+        let response = VerificationResponse::ok(verification_success.into());
+        metrics::count_verify_contract(&response.status, "multi-part");
+        return Ok(Json(response));
     }
 
     let err = result.unwrap_err();

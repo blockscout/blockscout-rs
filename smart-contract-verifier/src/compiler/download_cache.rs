@@ -2,9 +2,9 @@ use super::{
     fetcher::{FetchError, Fetcher},
     version::Version,
 };
+use crate::metrics;
 use std::{collections::HashMap, path::PathBuf, str::FromStr, sync::Arc};
 use tracing::Instrument;
-// use crate::http_server::metrics;
 
 #[derive(Default)]
 pub struct DownloadCache {
@@ -39,14 +39,14 @@ impl DownloadCache {
         fetcher: &D,
         ver: &Version,
     ) -> Result<PathBuf, FetchError> {
-        // metrics::DOWNLOAD_CACHE_TOTAL.inc();
+        metrics::DOWNLOAD_CACHE_TOTAL.inc();
         match self.try_get(ver).await {
             Some(file) => {
-                // metrics::DOWNLOAD_CACHE_HITS.inc();
+                metrics::DOWNLOAD_CACHE_HITS.inc();
                 Ok(file)
             }
             None => {
-                // let _timer = metrics::COMPILER_FETCH_TIME.start_timer();
+                let _timer = metrics::COMPILER_FETCH_TIME.start_timer();
                 let span = tracing::debug_span!("fetch compiler", ver = ver.to_string());
                 self.fetch(fetcher, ver).instrument(span).await
             }
