@@ -1,5 +1,4 @@
 pub mod solidity;
-// pub mod sourcify;
 
 mod compiler;
 mod consts;
