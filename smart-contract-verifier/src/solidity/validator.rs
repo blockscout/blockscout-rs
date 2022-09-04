@@ -30,10 +30,7 @@ impl FileValidator for SolcValidator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        compiler::{Fetcher, ListFetcher},
-        consts::DEFAULT_SOLIDITY_COMPILER_LIST,
-    };
+    use crate::{Fetcher, ListFetcher, DEFAULT_SOLIDITY_COMPILER_LIST};
     use std::{
         fs::OpenOptions, io::Write, os::unix::prelude::OpenOptionsExt, path::PathBuf, str::FromStr,
     };

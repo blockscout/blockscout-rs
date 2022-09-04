@@ -3674,6 +3674,7 @@ dependencies = [
  "lazy_static",
  "opentelemetry",
  "opentelemetry-jaeger",
+ "pretty_assertions",
  "prometheus",
  "rust-s3",
  "serde",
