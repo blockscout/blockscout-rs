@@ -3660,6 +3660,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "smart-contract-verifier-http"
+version = "0.2.0"
+dependencies = [
+ "actix-web",
+ "actix-web-prom",
+ "anyhow",
+ "config",
+ "cron",
+ "ethers-core",
+ "ethers-solc",
+ "futures",
+ "lazy_static",
+ "opentelemetry",
+ "opentelemetry-jaeger",
+ "prometheus",
+ "rust-s3",
+ "serde",
+ "serde_json",
+ "serde_with 1.14.0",
+ "smart-contract-verifier",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-actix-web",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+ "url",
+]
+
+[[package]]
 name = "snafu"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

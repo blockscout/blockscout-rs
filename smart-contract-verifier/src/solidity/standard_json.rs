@@ -1,13 +1,11 @@
-use crate::{
-    compilers::{Compilers, Version},
-    solidity::{
-        compiler::SolidityCompiler,
-        contract_verifier::{ContractVerifier, Error},
-        verifier::VerificationSuccess,
-    },
+use super::{
+    compiler::SolidityCompiler,
+    contract_verifier::{ContractVerifier, Error, Success},
 };
+use crate::compilers::{Compilers, Version};
 use bytes::Bytes;
 use ethers_solc::{artifacts::output_selection::OutputSelection, CompilerInput};
+use std::sync::Arc;
 
 pub struct VerificationRequest {
     pub deployed_bytecode: Bytes,
@@ -18,7 +16,7 @@ pub struct VerificationRequest {
 }
 
 pub struct StandardJsonContent {
-    input: CompilerInput,
+    pub input: CompilerInput,
 }
 
 impl From<StandardJsonContent> for CompilerInput {
@@ -35,9 +33,9 @@ impl From<StandardJsonContent> for CompilerInput {
 }
 
 pub async fn verify(
-    compilers: Compilers<SolidityCompiler>,
+    compilers: Arc<Compilers<SolidityCompiler>>,
     request: VerificationRequest,
-) -> Result<VerificationSuccess, Error> {
+) -> Result<Success, Error> {
     let compiler_input = CompilerInput::from(request.content);
     let verifier = ContractVerifier::new(
         compilers,

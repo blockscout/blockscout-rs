@@ -1,0 +1,67 @@
+[package]
+name = "smart-contract-verifier-http"
+version = "0.2.0"
+# authors = [""]
+edition = "2021"
+repository = "https://github.com/blockscout/blockscout-rs"
+keywords = ["ethereum", "web3", "solidity"]
+
+[dependencies]
+smart-contract-verifier = { path = "../smart-contract-verifier" }
+
+actix-web = "4"
+actix-web-prom = "0.6"
+anyhow = "1.0"
+config = "0.13"
+cron = "0.11"
+ethers-core = "0.13"
+ethers-solc = { version = "0.13", features = ["svm-solc"] }
+futures = "0.3"
+lazy_static = "1"
+opentelemetry = { version = "0.17", features = ["rt-tokio"] }
+opentelemetry-jaeger = { version = "0.16", features = ["rt-tokio"] }
+prometheus = "0.13"
+rust-s3 = "0.31"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_with = "1.14"
+thiserror = "1.0"
+tokio = { version = "1", features = ["macros"] }
+tracing = "0.1"
+tracing-actix-web = "0.6"
+tracing-opentelemetry = "0.17"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+url = { version = "2.2", features = ["serde"] }
+
+
+#actix-rt = "2.7"
+#reqwest = { version = "0.11", features = ["json"] }
+#clap = { version = "3", features = ["derive"] }
+#chrono = "0.4"
+
+#cron = "0.11"
+#parking_lot = "0.12"
+#log = "0.4"
+#env_logger = "0.9"
+#semver = "1.0"
+#anyhow = "1.0"
+#async-trait = "0.1"
+#minicbor = { version = "0.16", features = ["std"] }
+#bytes = "1.1"
+
+#sscanf = "0.2"
+#octocrab = "0.16"
+#hex = "0.4"
+#primitive-types = "0.11"
+#ethabi = "17.0"
+#sha2 = "0.10"
+
+#tempfile = "3.3"
+#
+#
+#[dev-dependencies]
+#const_format = "0.2"
+#rand = "0.8"
+#wiremock = "0.5"
+#quick-xml = { version = "0.23", features = ["serialize"] }
+#pretty_assertions = "1.2"

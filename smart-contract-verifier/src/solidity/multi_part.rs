@@ -1,18 +1,15 @@
-use crate::{
-    compilers::{Compilers, Version},
-    solidity::{
-        compiler::SolidityCompiler,
-        contract_verifier::{ContractVerifier, Error},
-        verifier::VerificationSuccess,
-    },
+use super::{
+    compiler::SolidityCompiler,
+    contract_verifier::{ContractVerifier, Error, Success},
 };
+use crate::compilers::{Compilers, Version};
 use bytes::Bytes;
 use ethers_solc::{
     artifacts::{BytecodeHash, Libraries, Settings, SettingsMetadata, Source, Sources},
     CompilerInput, EvmVersion,
 };
 use semver::VersionReq;
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
 pub struct VerificationRequest {
     pub deployed_bytecode: Bytes,
@@ -60,9 +57,9 @@ impl From<MultiFileContent> for CompilerInput {
 }
 
 pub async fn verify(
-    compilers: Compilers<SolidityCompiler>,
+    compilers: Arc<Compilers<SolidityCompiler>>,
     request: VerificationRequest,
-) -> Result<VerificationSuccess, Error> {
+) -> Result<Success, Error> {
     let compiler_version = request.compiler_version;
 
     let verifier = ContractVerifier::new(

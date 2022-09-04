@@ -5,32 +5,65 @@ use super::{
 use crate::{
     compilers::{self, Compilers, Version},
     solidity::errors::BytecodeInitError,
+    DisplayBytes,
 };
+use anyhow::anyhow;
 use bytes::Bytes;
 use ethers_solc::CompilerInput;
-use std::{ops::Add, path::PathBuf};
+use std::{ops::Add, path::PathBuf, sync::Arc};
 use thiserror::Error;
 use tracing::instrument;
 
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("{0}")]
-    Initialization(#[from] BytecodeInitError),
+    Initialization(anyhow::Error),
+    #[error("Compiler version not found: {0}")]
+    VersionNotFound(Version),
+    #[error("Compilation error: {0:?}")]
+    Compilation(Vec<String>),
     #[error("{0}")]
-    Compilation(#[from] compilers::Error),
+    Internal(anyhow::Error),
     #[error("No contract could be verified with provided data")]
     NoMatchingContracts,
 }
 
+impl From<BytecodeInitError> for Error {
+    fn from(error: BytecodeInitError) -> Self {
+        Error::Initialization(anyhow!(error))
+    }
+}
+
+impl From<compilers::Error> for Error {
+    fn from(error: compilers::Error) -> Self {
+        match error {
+            compilers::Error::VersionNotFound(version) => Error::VersionNotFound(version),
+            compilers::Error::Compilation(details) => Error::Compilation(details),
+            err => Error::Internal(anyhow!(err)),
+        }
+    }
+}
+
+/// The public structure returned as a result when verification succeeds.
+#[derive(Clone, Debug)]
+pub struct Success {
+    pub compiler_input: CompilerInput,
+    pub compiler_version: Version,
+    pub file_path: String,
+    pub contract_name: String,
+    pub abi: ethabi::Contract,
+    pub constructor_args: Option<DisplayBytes>,
+}
+
 pub struct ContractVerifier<'a> {
-    compilers: Compilers<SolidityCompiler>,
+    compilers: Arc<Compilers<SolidityCompiler>>,
     compiler_version: &'a Version,
     verifier: Verifier,
 }
 
 impl<'a> ContractVerifier<'a> {
     pub fn new(
-        compilers: Compilers<SolidityCompiler>,
+        compilers: Arc<Compilers<SolidityCompiler>>,
         compiler_version: &'a Version,
         creation_tx_input: Bytes,
         deployed_bytecode: Bytes,
@@ -44,10 +77,7 @@ impl<'a> ContractVerifier<'a> {
     }
 
     #[instrument(skip(self, compiler_input), level = "debug")]
-    pub async fn verify(
-        &self,
-        compiler_input: &CompilerInput,
-    ) -> Result<VerificationSuccess, Error> {
+    pub async fn verify(&self, compiler_input: &CompilerInput) -> Result<Success, Error> {
         let compiler_output = self
             .compilers
             .compile(self.compiler_version, &compiler_input)
@@ -74,8 +104,22 @@ impl<'a> ContractVerifier<'a> {
                 .compile(&self.compiler_version, &compiler_input)
                 .await?
         };
-        self.verifier
+
+        let verification_success = self
+            .verifier
             .verify(compiler_output, compiler_output_modified)
-            .map_err(|_err| Error::NoMatchingContracts)
+            .map_err(|_err| Error::NoMatchingContracts)?;
+
+        // We accept compiler input and compiler version by reference, so that we
+        // avoid their cloning if verification fails.
+        // In case of success, they will be cloned exactly once.
+        Ok(Success {
+            compiler_input: compiler_input.clone(),
+            compiler_version: self.compiler_version.clone(),
+            file_path: verification_success.file_path,
+            contract_name: verification_success.contract_name,
+            abi: verification_success.abi,
+            constructor_args: verification_success.constructor_args,
+        })
     }
 }
