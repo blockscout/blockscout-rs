@@ -57,11 +57,12 @@ url = { version = "2.2", features = ["serde"] }
 #sha2 = "0.10"
 
 #tempfile = "3.3"
-#
-#
-#[dev-dependencies]
+
+
+[dev-dependencies]
+pretty_assertions = "1.2"
+
 #const_format = "0.2"
 #rand = "0.8"
 #wiremock = "0.5"
 #quick-xml = { version = "0.23", features = ["serialize"] }
-#pretty_assertions = "1.2"
