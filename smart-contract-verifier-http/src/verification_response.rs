@@ -1,6 +1,6 @@
 use crate::DisplayBytes;
 use serde::{Deserialize, Serialize};
-use smart_contract_verifier::VerificationSuccess;
+use smart_contract_verifier::{VerificationSuccess, SourcifySuccess};
 use std::{collections::BTreeMap, fmt::Display};
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -53,6 +53,23 @@ impl From<VerificationSuccess> for VerificationResult {
                 .into_iter()
                 .map(|(path, source)| (path.to_string_lossy().to_string(), source.content))
                 .collect(),
+        }
+    }
+}
+
+impl From<SourcifySuccess> for VerificationResult {
+    fn from(sourcify_success: SourcifySuccess) -> Self {
+        Self {
+            file_name: sourcify_success.file_name,
+            contract_name: sourcify_success.contract_name,
+            compiler_version: sourcify_success.compiler_version,
+            evm_version: sourcify_success.evm_version,
+            constructor_arguments: sourcify_success.constructor_arguments.map(DisplayBytes::from),
+            optimization: sourcify_success.optimization,
+            optimization_runs: sourcify_success.optimization_runs,
+            contract_libraries: sourcify_success.contract_libraries,
+            abi: sourcify_success.abi,
+            sources: sourcify_success.sources,
         }
     }
 }

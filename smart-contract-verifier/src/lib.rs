@@ -1,5 +1,5 @@
 pub mod solidity;
-// pub mod sourcify;
+pub mod sourcify;
 pub mod vyper;
 
 mod compiler;
@@ -8,6 +8,7 @@ mod verifier;
 
 // TODO: to be extracted in a separate crate
 mod mismatch;
+mod network_helpers;
 mod scheduler;
 
 #[cfg(test)]
@@ -19,7 +20,8 @@ pub use consts::{DEFAULT_SOLIDITY_COMPILER_LIST, DEFAULT_VYPER_COMPILER_LIST};
 
 pub use compiler::{Compilers, Fetcher, ListFetcher, S3Fetcher, Version};
 pub use verifier::{Error as VerificationError, Success as VerificationSuccess};
+pub use sourcify::{Error as SourcifyError, Success as SourcifySuccess};
 
 pub use solidity::{SolcValidator, SolidityCompiler};
-// pub use sourcify::SourcifyApiClient;
+pub use sourcify::SourcifyApiClient;
 pub use vyper::VyperCompiler;

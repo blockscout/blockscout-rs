@@ -1,8 +1,45 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use bytes::Bytes;
+use thiserror::Error;
+
+// This struct is used as input for our endpoint and as
+// input for sourcify endpoint at the same time
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiRequest {
+    pub address: String,
+    pub chain: String,
+    pub files: Files,
+    pub chosen_contract: Option<usize>,
+}
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct Files(pub BTreeMap<String, String>);
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Success {
+    pub file_name: String,
+    pub contract_name: String,
+    pub compiler_version: String,
+    pub evm_version: String,
+    pub optimization: Option<bool>,
+    pub optimization_runs: Option<usize>,
+    pub constructor_arguments: Option<Bytes>,
+    pub contract_libraries: BTreeMap<String, String>,
+    pub abi: String,
+    pub sources: BTreeMap<String, String>,
+}
+
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("{0:#}")]
+    Internal(anyhow::Error),
+    #[error("verification error: {0}")]
+    Verification(String),
+    #[error("validation error: {0}")]
+    Validation(String),
+}
 
 // Definition of sourcify.dev API response
 // https://docs.sourcify.dev/docs/api/server/v1/verify/
@@ -58,7 +95,7 @@ impl TryFrom<ApiFilesResponse> for Files {
 
 #[cfg(test)]
 mod tests {
-    use super::{ApiRequest, Files};
+    use super::*;
     use crate::tests::parse::test_deserialize_ok;
     use std::collections::BTreeMap;
 

@@ -7,4 +7,4 @@ pub mod solidity_version_list;
 pub mod vyper_multi_part;
 pub mod vyper_version_list;
 
-// pub mod sourcify;
+pub mod sourcify;
