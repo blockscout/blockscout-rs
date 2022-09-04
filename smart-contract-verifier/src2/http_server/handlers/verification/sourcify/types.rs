@@ -1,6 +1,20 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+// This struct is used as input for our endpoint and as
+// input for sourcify endpoint at the same time
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiRequest {
+    pub address: String,
+    pub chain: String,
+    pub files: Files,
+    pub chosen_contract: Option<usize>,
+}
+
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct Files(pub BTreeMap<String, String>);
+
 // Definition of sourcify.dev API response
 // https://docs.sourcify.dev/docs/api/server/v1/verify/
 #[derive(Deserialize)]

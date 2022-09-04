@@ -11,6 +11,7 @@ use ethers_solc::{
 use semver::VersionReq;
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerificationRequest {
     pub deployed_bytecode: Bytes,
     pub creation_bytecode: Bytes,
@@ -19,6 +20,7 @@ pub struct VerificationRequest {
     pub content: MultiFileContent,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MultiFileContent {
     pub sources: BTreeMap<PathBuf, String>,
     pub evm_version: Option<EvmVersion>,
@@ -108,5 +110,48 @@ fn settings_metadata(compiler_version: &Version) -> Vec<Option<SettingsMetadata>
         BYTECODE_HASHES
             .map(|hash| Some(SettingsMetadata::from(hash)))
             .into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    fn sources(sources: &[(&str, &str)]) -> BTreeMap<PathBuf, String> {
+        sources
+            .iter()
+            .map(|(name, content)| (PathBuf::from(name), content.to_string()))
+            .collect()
+    }
+
+    fn test_to_input(multi_part: MultiFileContent, expected: &str) {
+        let input: CompilerInput = multi_part.try_into().unwrap();
+        let input_json = serde_json::to_string(&input).unwrap();
+        println!("{}", input_json);
+        assert_eq!(input_json, expected);
+    }
+
+    #[test]
+    fn multi_part_to_input() {
+        let multi_part = MultiFileContent {
+            sources: sources(&[("source.sol", "pragma")]),
+            evm_version: Some(EvmVersion::London),
+            optimization_runs: Some(200),
+            contract_libraries: Some(BTreeMap::from([(
+                "some_library".into(),
+                "some_address".into(),
+            )])),
+        };
+        let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":"pragma"}},"settings":{"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"london","libraries":{"source.sol":{"some_library":"some_address"}}}}"#;
+        test_to_input(multi_part, expected);
+        let multi_part = MultiFileContent {
+            sources: sources(&[("source.sol", "")]),
+            evm_version: Some(EvmVersion::SpuriousDragon),
+            optimization_runs: None,
+            contract_libraries: None,
+        };
+        let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":""}},"settings":{"optimizer":{"enabled":false},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"spuriousDragon","libraries":{}}}"#;
+        test_to_input(multi_part, expected);
     }
 }

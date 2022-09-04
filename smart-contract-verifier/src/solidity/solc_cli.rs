@@ -256,7 +256,7 @@ pub async fn compile_using_cli(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Fetcher, ListFetcher, Version};
+    use crate::compiler::{Fetcher, ListFetcher, Version};
     use ethers_solc::{
         artifacts::{Settings, Source},
         Artifact,

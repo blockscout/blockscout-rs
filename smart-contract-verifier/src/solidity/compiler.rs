@@ -1,10 +1,7 @@
-use std::path::Path;
-
-use ethers_solc::{error::SolcError, CompilerOutput, Solc};
-
-use crate::compiler::{EvmCompiler, Version};
-
 use super::solc_cli;
+use crate::compiler::{EvmCompiler, Version};
+use ethers_solc::{error::SolcError, CompilerOutput, Solc};
+use std::path::Path;
 
 #[derive(Default)]
 pub struct SolidityCompiler {}

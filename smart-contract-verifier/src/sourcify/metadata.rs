@@ -1,9 +1,7 @@
-use std::collections::BTreeMap;
-
+use super::types::{Files, Success};
 use ethers_solc::EvmVersion;
 use serde::Deserialize;
-
-use super::types::{Files, Success};
+use std::collections::BTreeMap;
 
 const METADATA_FILE_NAME: &str = "metadata.json";
 

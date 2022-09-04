@@ -1,10 +1,9 @@
-use tracing::Instrument;
-
 use super::{
     fetcher::{FetchError, Fetcher},
     version::Version,
 };
 use std::{collections::HashMap, path::PathBuf, str::FromStr, sync::Arc};
+use tracing::Instrument;
 
 // use crate::http_server::metrics;
 

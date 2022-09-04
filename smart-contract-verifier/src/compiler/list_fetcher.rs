@@ -3,6 +3,7 @@ use super::{
     version::Version,
     versions_fetcher::{VersionsFetcher, VersionsRefresher},
 };
+
 use async_trait::async_trait;
 use bytes::Bytes;
 use cron::Schedule;

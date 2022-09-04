@@ -94,3 +94,99 @@ pub async fn verify(
         VerificationError::Internal(_) => Err(error::ErrorInternalServerError(err)),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests::parse::test_deserialize_ok;
+    use pretty_assertions::assert_eq;
+
+    fn sources(sources: &[(&str, &str)]) -> BTreeMap<PathBuf, String> {
+        sources
+            .iter()
+            .map(|(name, content)| (PathBuf::from(name), content.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn parse_multi_part() {
+        test_deserialize_ok(vec![
+            (
+                r#"{
+                        "deployed_bytecode": "0x6001",
+                        "creation_bytecode": "0x6001",
+                        "compiler_version": "0.8.3",
+                        "sources": {
+                            "source.sol": "pragma"
+                        },
+                        "evm_version": "london",
+                        "optimization_runs": 200
+                    }"#,
+                VerificationRequest {
+                    deployed_bytecode: "0x6001".into(),
+                    creation_bytecode: "0x6001".into(),
+                    compiler_version: "0.8.3".into(),
+                    content: MultiPartFiles {
+                        sources: sources(&[("source.sol", "pragma")]),
+                        evm_version: format!("{}", EvmVersion::London),
+                        optimization_runs: Some(200),
+                        contract_libraries: None,
+                    },
+                },
+            ),
+            (
+                r#"{
+                    "deployed_bytecode": "0x6001",
+                    "creation_bytecode": "0x6001",
+                    "compiler_version": "0.8.3",
+                    "sources": {
+                        "source.sol": "source",
+                        "A.sol": "A",
+                        "B": "B",
+                        "metadata.json": "metadata"
+                    },
+                    "evm_version": "spuriousDragon",
+                    "contract_libraries": {
+                        "Lib.sol": "0x1234567890123456789012345678901234567890"
+                    }
+                }"#,
+                VerificationRequest {
+                    deployed_bytecode: "0x6001".into(),
+                    creation_bytecode: "0x6001".into(),
+                    compiler_version: "0.8.3".into(),
+                    content: MultiPartFiles {
+                        sources: sources(&[
+                            ("source.sol", "source"),
+                            ("A.sol", "A"),
+                            ("B", "B"),
+                            ("metadata.json", "metadata"),
+                        ]),
+                        evm_version: format!("{}", ethers_solc::EvmVersion::SpuriousDragon),
+                        optimization_runs: None,
+                        contract_libraries: Some(BTreeMap::from([(
+                            "Lib.sol".into(),
+                            "0x1234567890123456789012345678901234567890".into(),
+                        )])),
+                    },
+                },
+            ),
+        ])
+    }
+
+    #[test]
+    // 'default' should result in None in MultiFileContent
+    fn default_evm_version() {
+        let multi_part = MultiPartFiles {
+            sources: BTreeMap::new(),
+            evm_version: "default".to_string(),
+            optimization_runs: None,
+            contract_libraries: None,
+        };
+        let content = solidity::multi_part::MultiFileContent::try_from(multi_part)
+            .expect("Structure is valid");
+        assert_eq!(
+            None, content.evm_version,
+            "'default' should result in `None`"
+        )
+    }
+}

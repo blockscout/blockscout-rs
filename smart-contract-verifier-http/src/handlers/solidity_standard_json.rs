@@ -95,3 +95,37 @@ pub async fn verify(
         VerificationError::Internal(_) => Err(error::ErrorInternalServerError(err)),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn parse_standard_json() {
+        let input = r#"{
+            "deployed_bytecode": "0x6001",
+            "creation_bytecode": "0x6001",
+            "compiler_version": "v0.8.2+commit.661d1103",
+            "input": "{\"language\": \"Solidity\", \"sources\": {\"./src/contracts/Foo.sol\": {\"content\": \"pragma solidity ^0.8.2;\\n\\ncontract Foo {\\n    function bar() external pure returns (uint256) {\\n        return 42;\\n    }\\n}\\n\"}}, \"settings\": {\"metadata\": {\"useLiteralContent\": true}, \"optimizer\": {\"enabled\": true, \"runs\": 200}, \"outputSelection\": {\"*\": {\"*\": [\"abi\", \"evm.bytecode\", \"evm.deployedBytecode\", \"evm.methodIdentifiers\"], \"\": [\"id\", \"ast\"]}}}}"
+        }"#;
+
+        let deserialized: VerificationRequest = serde_json::from_str(&input).expect("Valid json");
+        assert_eq!(
+            deserialized.deployed_bytecode, "0x6001",
+            "Invalid deployed bytecode"
+        );
+        assert_eq!(
+            deserialized.creation_bytecode, "0x6001",
+            "Invalid creation bytecode"
+        );
+        assert_eq!(
+            deserialized.compiler_version, "v0.8.2+commit.661d1103",
+            "Invalid compiler version"
+        );
+        let _compiler_input: solidity::standard_json::StandardJsonContent = deserialized
+            .content
+            .try_into()
+            .expect("failed to convert to standard json");
+    }
+}

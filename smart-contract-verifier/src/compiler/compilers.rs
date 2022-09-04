@@ -124,12 +124,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::{super::list_fetcher::ListFetcher, *};
-    use crate::solidity::SolidityCompiler;
-    use std::{env::temp_dir, str::FromStr};
-
-    use crate::consts::DEFAULT_SOLIDITY_COMPILER_LIST;
+    use crate::{consts::DEFAULT_SOLIDITY_COMPILER_LIST, solidity::SolidityCompiler};
     use ethers_solc::artifacts::{Source, Sources};
-    use std::default::Default;
+    use std::{default::Default, env::temp_dir, str::FromStr};
     use tokio::sync::OnceCell;
 
     async fn global_compilers() -> &'static Compilers<SolidityCompiler> {
