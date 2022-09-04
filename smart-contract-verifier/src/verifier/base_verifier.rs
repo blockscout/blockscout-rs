@@ -315,6 +315,7 @@ mod verifier_initialization_tests {
     use super::*;
     use const_format::concatcp;
     use pretty_assertions::assert_eq;
+    use std::str::FromStr;
 
     const DEFAULT_CONSTRUCTOR_ARGS: &'static str =
         "0000000000000000000000000000000000000000000000000000000000000fff";
@@ -333,15 +334,28 @@ mod verifier_initialization_tests {
         DEFAULT_ENCODED_METADATA_HASH
     );
 
+    fn new_verifier(
+        creation_tx_input: &str,
+        deployed_bytecode: &str,
+    ) -> Result<Verifier, BytecodeInitError> {
+        let creation_tx_input = DisplayBytes::from_str(creation_tx_input)
+            .expect("Invalid creation tx input")
+            .0;
+        let deployed_bytecode = DisplayBytes::from_str(deployed_bytecode)
+            .expect("Invalid creation tx input")
+            .0;
+        Verifier::new(creation_tx_input, deployed_bytecode)
+    }
+
     #[test]
     fn initialization_with_valid_data() {
-        let verifier = Verifier::new(DEFAULT_CREATION_TX_INPUT, DEFAULT_DEPLOYED_BYTECODE);
+        let verifier = new_verifier(DEFAULT_CREATION_TX_INPUT, DEFAULT_DEPLOYED_BYTECODE);
         assert!(
             verifier.is_ok(),
             "Initialization without \"0x\" prefix failed"
         );
 
-        let verifier = Verifier::new(
+        let verifier = new_verifier(
             &concatcp!("0x", DEFAULT_CREATION_TX_INPUT),
             &concatcp!("0x", DEFAULT_DEPLOYED_BYTECODE),
         );
@@ -350,7 +364,7 @@ mod verifier_initialization_tests {
 
     #[test]
     fn initialization_with_empty_creation_tx_input_should_fail() {
-        let verifier = Verifier::new("", DEFAULT_DEPLOYED_BYTECODE);
+        let verifier = new_verifier("", DEFAULT_DEPLOYED_BYTECODE);
         assert!(verifier.is_err(), "Verifier initialization should fail");
         assert_eq!(
             verifier.unwrap_err(),
@@ -359,34 +373,12 @@ mod verifier_initialization_tests {
     }
 
     #[test]
-    fn initialization_with_invalid_hex_as_creation_tx_input_should_fail() {
-        let invalid_input = "0xabcdefghij";
-        let verifier = Verifier::new(invalid_input, DEFAULT_DEPLOYED_BYTECODE);
-        assert!(verifier.is_err(), "Verifier initialization should fail");
-        assert_eq!(
-            verifier.unwrap_err(),
-            BytecodeInitError::InvalidCreationTxInput(invalid_input.into()),
-        )
-    }
-
-    #[test]
     fn initialization_with_empty_deployed_bytecode_should_fail() {
-        let verifier = Verifier::new(DEFAULT_CREATION_TX_INPUT, "");
+        let verifier = new_verifier(DEFAULT_CREATION_TX_INPUT, "");
         assert!(verifier.is_err(), "Verifier initialization should fail");
         assert_eq!(
             verifier.unwrap_err(),
             BytecodeInitError::EmptyDeployedBytecode
-        )
-    }
-
-    #[test]
-    fn initialization_with_invalid_hex_as_deployed_bytecode_should_fail() {
-        let invalid_input = "0xabcdefghij";
-        let verifier = Verifier::new(DEFAULT_CREATION_TX_INPUT, invalid_input);
-        assert!(verifier.is_err(), "Verifier initialization should fail");
-        assert_eq!(
-            verifier.unwrap_err(),
-            BytecodeInitError::InvalidDeployedBytecode(invalid_input.into())
         )
     }
 }

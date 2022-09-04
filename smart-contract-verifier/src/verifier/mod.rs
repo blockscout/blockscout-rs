@@ -1,8 +1,8 @@
 // base verifiers
+mod base_verifier;
 mod bytecode;
 mod errors;
 mod metadata;
-mod base_verifier;
 
 mod contract_verifier;
 

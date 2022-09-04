@@ -1,4 +1,4 @@
-use super::{errors::BytecodeInitError, base_verifier::Verifier};
+use super::{base_verifier::Verifier, errors::BytecodeInitError};
 use crate::{
     compiler::{self, Compilers, EvmCompiler, Version},
     DisplayBytes,
