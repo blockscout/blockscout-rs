@@ -32,7 +32,7 @@ impl FromStr for ReleaseVersion {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (_prefix, major, minor, patch, pre, commit) = sscanf::scanf!(
             s,
-            "{:/v?/}{}.{}.{}{:/(-.*)?/}+commit.{:/[A-Fa-f0-9]+/}",
+            "{:/v?/}{}.{}.{}{:/(?:-.*)?/}+commit.{:/[A-Fa-f0-9]+/}",
             String,
             u64,
             u64,
