@@ -52,7 +52,7 @@ mod types {
     #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
     pub struct VyperCompilerOutput {
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
-        pub errors: Vec<Error>,
+        pub errors: Vec<VyperError>,
         #[serde(default)]
         pub contracts: BTreeMap<String, BTreeMap<String, Contract>>,
     }
@@ -62,7 +62,7 @@ mod types {
             let errors = vyper
                 .errors
                 .into_iter()
-                .map(|e| ethers_solc::artifacts::Error {
+                .map(|e| Error {
                     r#type: e.r#type,
                     component: e.component,
                     severity: e.severity,

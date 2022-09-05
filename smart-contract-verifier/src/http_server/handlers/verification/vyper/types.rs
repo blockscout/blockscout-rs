@@ -20,6 +20,8 @@ impl TryFrom<VyperVerificationRequest> for CompilerInput {
 
     fn try_from(request: VyperVerificationRequest) -> Result<Self, Self::Error> {
         let mut settings = Settings::default();
+        settings.optimizer.enabled = None;
+        settings.optimizer.runs = None;
         if let Some(version) = request.evm_version {
             settings.evm_version =
                 Some(EvmVersion::from_str(&version).map_err(anyhow::Error::msg)?);

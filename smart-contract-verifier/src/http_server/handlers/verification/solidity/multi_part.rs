@@ -36,6 +36,6 @@ pub async fn verify(
     };
 
     let response = compile_and_verify_handler(&compilers, input, true).await?;
-    metrics::count_verify_contract(&response.status, "multi-part");
+    metrics::count_verify_contract("solidity", &response.status, "multi-part");
     Ok(Json(response))
 }
