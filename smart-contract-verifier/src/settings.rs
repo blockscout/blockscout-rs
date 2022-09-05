@@ -3,6 +3,7 @@ use anyhow::anyhow;
 use config::{Config, File};
 use cron::Schedule;
 use serde::{de::IgnoredAny, Deserialize};
+use serde_with::{serde_as, DisplayFromStr};
 use std::{net::SocketAddr, num::NonZeroUsize, path::PathBuf, str::FromStr};
 use url::Url;
 
@@ -46,12 +47,13 @@ impl Default for ServerSettings {
     }
 }
 
+#[serde_as]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct SoliditySettings {
     pub enabled: bool,
     pub compilers_dir: PathBuf,
-    #[serde(with = "serde_with::rust::display_fromstr")]
+    #[serde_as(as = "DisplayFromStr")]
     pub refresh_versions_schedule: Schedule,
     pub fetcher: FetcherSettings,
 }
@@ -69,12 +71,13 @@ impl Default for SoliditySettings {
     }
 }
 
+#[serde_as]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct VyperSettings {
     pub enabled: bool,
     pub compilers_dir: PathBuf,
-    #[serde(with = "serde_with::rust::display_fromstr")]
+    #[serde_as(as = "DisplayFromStr")]
     pub refresh_versions_schedule: Schedule,
     pub fetcher: FetcherSettings,
 }

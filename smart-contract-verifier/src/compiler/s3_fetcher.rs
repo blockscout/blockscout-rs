@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use cron::Schedule;
 use primitive_types::H256;
-use s3::Bucket;
+use s3::{request_trait::ResponseData, Bucket};
 use std::{collections::HashSet, path::PathBuf, str::FromStr, sync::Arc};
 use thiserror::Error;
 use tokio::task::JoinHandle;
@@ -70,7 +70,7 @@ pub struct S3Fetcher {
 fn spawn_fetch_s3(
     bucket: Arc<Bucket>,
     path: PathBuf,
-) -> JoinHandle<Result<(Vec<u8>, u16), FetchError>> {
+) -> JoinHandle<Result<ResponseData, FetchError>> {
     tokio::spawn(async move {
         bucket
             .get_object(path.to_str().unwrap())
@@ -118,15 +118,16 @@ impl S3Fetcher {
         let data = spawn_fetch_s3(self.bucket.clone(), folder.join("solc"));
         let hash = spawn_fetch_s3(self.bucket.clone(), folder.join("sha256.hash"));
         let (data, hash) = futures::join!(data, hash);
-        let (hash, status_code) = hash??;
+        let (data, hash) = (data??, hash??);
+        let (status_code, hash) = (hash.status_code(), hash.bytes());
         if status_code != 200 {
             return Err(status_code_error("hash data", status_code));
         }
-        let (data, status_code) = data??;
+        let (status_code, data) = (data.status_code(), data.bytes().to_vec());
         if status_code != 200 {
             return Err(status_code_error("executable file", status_code));
         }
-        let hash = std::str::from_utf8(&hash)
+        let hash = std::str::from_utf8(hash)
             .map_err(anyhow::Error::msg)
             .map_err(FetchError::HashParse)?;
         let hash = H256::from_str(hash)
