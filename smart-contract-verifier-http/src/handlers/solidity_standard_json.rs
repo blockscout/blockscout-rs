@@ -82,7 +82,7 @@ pub async fn verify(
 
     if let Ok(verification_success) = result {
         let response = VerificationResponse::ok(verification_success.into());
-        metrics::count_verify_contract(&response.status, "json");
+        metrics::count_verify_contract("solidity", &response.status, "json");
         return Ok(Json(response));
     }
 

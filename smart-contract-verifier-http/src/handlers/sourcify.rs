@@ -44,6 +44,6 @@ pub async fn verify(
             Error::Validation(err) => Err(error::ErrorBadRequest(err)),
         },
     }?;
-    metrics::count_verify_contract(&response.status, "sourcify");
+    metrics::count_verify_contract("solidity",  &response.status, "sourcify");
     Ok(Json(response))
 }

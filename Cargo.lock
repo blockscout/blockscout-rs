@@ -3446,6 +3446,7 @@ dependencies = [
  "lazy_static",
  "minicbor",
  "parking_lot",
+ "pretty_assertions",
  "primitive-types",
  "prometheus",
  "quick-xml 0.23.0",

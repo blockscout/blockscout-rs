@@ -11,6 +11,8 @@ pub struct VerificationRequest {
     pub deployed_bytecode: String,
     pub creation_bytecode: String,
     pub compiler_version: String,
+
+    #[serde(flatten)]
     pub content: MultiPartFiles,
 }
 
@@ -25,10 +27,10 @@ impl TryFrom<VerificationRequest> for vyper::multi_part::VerificationRequest {
 
     fn try_from(value: VerificationRequest) -> Result<Self, Self::Error> {
         let deployed_bytecode = DisplayBytes::from_str(&value.deployed_bytecode)
-            .map_err(|err| error::ErrorBadRequest(format!("Invalid deployed bytecode: {:?}", err)))?
+            .map_err(|err| error::ErrorBadRequest(format!("Invalid deployed bytecode: {}", err)))?
             .0;
         let creation_bytecode = DisplayBytes::from_str(&value.creation_bytecode)
-            .map_err(|err| error::ErrorBadRequest(format!("Invalid creation bytecode: {:?}", err)))?
+            .map_err(|err| error::ErrorBadRequest(format!("Invalid creation bytecode: {}", err)))?
             .0;
         let compiler_version = Version::from_str(&value.compiler_version)
             .map_err(|err| error::ErrorBadRequest(format!("Invalid compiler version: {}", err)))?;
@@ -76,7 +78,7 @@ pub async fn verify(
 
     if let Ok(verification_success) = result {
         let response = VerificationResponse::ok(verification_success.into());
-        metrics::count_verify_contract(&response.status, "multi-part");
+        metrics::count_verify_contract("vyper", &response.status, "multi-part");
         return Ok(Json(response));
     }
 

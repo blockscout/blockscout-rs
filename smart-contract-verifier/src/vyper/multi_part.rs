@@ -26,6 +26,8 @@ pub struct MultiFileContent {
 impl From<MultiFileContent> for CompilerInput {
     fn from(content: MultiFileContent) -> Self {
         let mut settings = Settings::default();
+        settings.optimizer.enabled = None;
+        settings.optimizer.runs = None;
         if let Some(version) = content.evm_version {
             settings.evm_version = Some(version);
         } else {
