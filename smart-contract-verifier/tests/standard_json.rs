@@ -206,9 +206,4 @@ mod regression_tests {
             TestInput::new("PancakeFactory", "v0.5.16+commit.9c3226ce").has_constructor_args();
         test_success(contract_dir, test_input).await;
     }
-
-    #[actix_rt::test]
-    async fn issue_with_libs_before_0_4_18() {
-        
-    }
 }
