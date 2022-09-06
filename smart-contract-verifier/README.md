@@ -41,13 +41,25 @@ addr = "0.0.0.0:8043"
 # When disabled, solidity related handlers are not available
 enabled = true
 # A directory where compilers would be downloaded to
-compilers_dir = "/tmp/compilers"
-# List of avaialble versions updates cron formatted schedule 
+compilers_dir = "/tmp/solidity-compilers"
+# List of avaialble solidity versions updates cron formatted schedule 
 refresh_versions_schedule = "0 0 * * * * *"
 
 [solidity.fetcher.list]
-# List of all available compilers and information about them.
+# List of all available solidity compilers and information about them.
 list_url = "https://solc-bin.ethereum.org/linux-amd64/list.json"
+
+[vyper]
+# When disabled, vyper related handlers are not available
+enabled = true
+# A directory where vyper compilers would be downloaded to
+compilers_dir = "/tmp/vyper-compilers"
+# List of available versions updates cron formatted schedule
+refresh_versions_schedule = "0 0 * * * * *"
+
+[vyper.fetcher.list]
+# List of all availaable vyper compilers and information about them
+list_url = "https://raw.githubusercontent.com/blockscout/solc-bin/main/vyper.list.json"
 
 [sourcify]
 # When disabled, sourcify related handlers are not available
