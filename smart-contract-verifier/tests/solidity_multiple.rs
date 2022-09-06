@@ -304,6 +304,21 @@ mod success_tests {
     //     let test_input = TestInput::new("ContractFromFactory", "v0.8.7+commit.e28d00a7").is_yul();
     //     test_success(contract_dir, test_input).await;
     // }
+
+    #[actix_rt::test]
+    async fn solidity_0_4_10() {
+        let contract_dir = "solidity_0.4.10";
+
+        // For some reason v0.4.10 in default solc list for linux
+        // has different commit hash from macos and js versions
+        #[cfg(target_os = "linux")]
+        let compiler_version = "v0.4.10+commit.9e8cc01b";
+        #[cfg(not(target_os = "linux"))]
+        let compiler_version = "v0.4.10+commit.f0d539ae";
+
+        let test_input = TestInput::new("Main", compiler_version).has_constructor_args();
+        test_success(contract_dir, test_input).await;
+    }
 }
 
 mod failure_tests {
