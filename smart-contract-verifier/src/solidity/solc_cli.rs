@@ -112,11 +112,18 @@ mod types {
                 let mut file_names = Vec::new();
                 for (name, source) in input.sources.iter() {
                     let file_path = files_dir.path().join(name);
+                    // name itself may contain some paths inside
+                    let prefix = file_path.parent();
+                    if let Some(prefix) = prefix {
+                        tokio::fs::create_dir_all(prefix)
+                            .await
+                            .map_err(|e| SolcError::Message(e.to_string()))?;
+                    }
                     let mut file = tokio::fs::File::create(&file_path)
                         .await
                         .map_err(|e| SolcError::Message(e.to_string()))?;
                     file_names.push(file_path);
-                    file.write(source.content.as_bytes())
+                    file.write_all(source.content.as_bytes())
                         .await
                         .map_err(|e| SolcError::Message(e.to_string()))?;
                 }
