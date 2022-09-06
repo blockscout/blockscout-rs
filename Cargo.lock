@@ -1238,40 +1238,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "ethers-core"
-version = "0.17.0"
-source = "git+https://github.com/gakonst/ethers-rs?rev=13a0144a#13a0144abae32c45c01b1639929f612527994dd1"
-dependencies = [
- "arrayvec",
- "bytes",
- "chrono",
- "elliptic-curve",
- "ethabi",
- "fastrlp",
- "generic-array",
- "hex",
- "k256",
- "rand 0.8.5",
- "rlp",
- "rlp-derive",
- "rust_decimal",
- "serde",
- "serde_json",
- "strum",
- "thiserror",
- "tiny-keccak",
- "unicode-xid",
-]
-
-[[package]]
 name = "ethers-solc"
 version = "0.17.0"
-source = "git+https://github.com/gakonst/ethers-rs?rev=13a0144a#13a0144abae32c45c01b1639929f612527994dd1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ebe5db405d0e584aa8dae154ffebb90f2305cae588fd11d9f6b857ebe3a79294"
 dependencies = [
  "cfg-if",
  "colored",
  "dunce",
- "ethers-core 0.17.0 (git+https://github.com/gakonst/ethers-rs?rev=13a0144a)",
+ "ethers-core",
  "getrandom 0.2.7",
  "glob",
  "hex",
@@ -3457,7 +3432,7 @@ dependencies = [
  "cron",
  "env_logger",
  "ethabi",
- "ethers-core 0.17.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ethers-core",
  "ethers-solc",
  "futures",
  "hex",
@@ -3512,9 +3487,9 @@ dependencies = [
 
 [[package]]
 name = "solang-parser"
-version = "0.1.17"
+version = "0.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7fd659de36c2a8ce8cba4627e2304121acbf57d00589779a5ec3ab24569dc684"
+checksum = "a1f68b8280e3f354d5646218319bcee4febe42833cef5ebf653cfc49d0a94409"
 dependencies = [
  "itertools",
  "lalrpop",

@@ -48,6 +48,9 @@ tracing-opentelemetry = "0.17"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tempfile = "3.3"
 
+[patch.crates-io]
+ethers-solc = { git = "https://github.com/gakonst/ethers-rs", package = "ethers-solc", rev = "13a0144a" }
+
 [dev-dependencies]
 const_format = "0.2"
 rand = "0.8"
