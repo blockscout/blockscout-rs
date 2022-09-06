@@ -34,7 +34,7 @@ ethers-solc = { version = "0.17", features = ["svm-solc"] }
 ethers-core = "0.17"
 primitive-types = "0.11"
 serde_with = "2"
-ethabi = "17"
+ethabi = "17.2"
 rust-s3 = "0.32"
 sha2 = "0.10"
 actix-web-prom = "0.6"
@@ -47,7 +47,6 @@ opentelemetry-jaeger = { version = "0.16", features = ["rt-tokio"] }
 tracing-opentelemetry = "0.17"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tempfile = "3.3"
-
 
 [dev-dependencies]
 const_format = "0.2"

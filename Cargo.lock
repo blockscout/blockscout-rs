@@ -1168,9 +1168,9 @@ dependencies = [
 
 [[package]]
 name = "ethabi"
-version = "17.1.0"
+version = "17.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f186de076b3e77b8e6d73c99d1b52edc2a229e604f4b5eb6992c06c11d79d537"
+checksum = "e4966fba78396ff92db3b817ee71143eccd98acf0f876b8d600e585a670c5d1b"
 dependencies = [
  "ethereum-types",
  "hex",
@@ -1238,15 +1238,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "ethers-core"
+version = "0.17.0"
+source = "git+https://github.com/gakonst/ethers-rs?rev=13a0144a#13a0144abae32c45c01b1639929f612527994dd1"
+dependencies = [
+ "arrayvec",
+ "bytes",
+ "chrono",
+ "elliptic-curve",
+ "ethabi",
+ "fastrlp",
+ "generic-array",
+ "hex",
+ "k256",
+ "rand 0.8.5",
+ "rlp",
+ "rlp-derive",
+ "rust_decimal",
+ "serde",
+ "serde_json",
+ "strum",
+ "thiserror",
+ "tiny-keccak",
+ "unicode-xid",
+]
+
+[[package]]
 name = "ethers-solc"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ebe5db405d0e584aa8dae154ffebb90f2305cae588fd11d9f6b857ebe3a79294"
+source = "git+https://github.com/gakonst/ethers-rs?rev=13a0144a#13a0144abae32c45c01b1639929f612527994dd1"
 dependencies = [
  "cfg-if",
  "colored",
  "dunce",
- "ethers-core",
+ "ethers-core 0.17.0 (git+https://github.com/gakonst/ethers-rs?rev=13a0144a)",
  "getrandom 0.2.7",
  "glob",
  "hex",
@@ -2238,9 +2263,9 @@ checksum = "830b246a0e5f20af87141b25c173cd1b609bd7779a4617d6ec582abaf90870f3"
 
 [[package]]
 name = "once_cell"
-version = "1.13.0"
+version = "1.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18a6dbe30758c9f83eb00cbea4ac95966305f5a7772f3f42ebfc7fc7eddbd8e1"
+checksum = "2f7254b99e31cad77da24b08ebf628882739a608578bb1bcdfc1f9c21260d7c0"
 
 [[package]]
 name = "opaque-debug"
@@ -3059,9 +3084,9 @@ dependencies = [
 
 [[package]]
 name = "rust_decimal"
-version = "1.26.0"
+version = "1.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fc129ab6000ab4037e7718703cdeab82a12c4ee23a238658f55372d80ef2b05"
+checksum = "ee9164faf726e4f3ece4978b25ca877ddc6802fa77f38cdccb32c7f805ecd70c"
 dependencies = [
  "arrayvec",
  "num-traits",
@@ -3432,7 +3457,7 @@ dependencies = [
  "cron",
  "env_logger",
  "ethabi",
- "ethers-core",
+ "ethers-core 0.17.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ethers-solc",
  "futures",
  "hex",
@@ -3487,9 +3512,9 @@ dependencies = [
 
 [[package]]
 name = "solang-parser"
-version = "0.1.16"
+version = "0.1.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1f68b8280e3f354d5646218319bcee4febe42833cef5ebf653cfc49d0a94409"
+checksum = "7fd659de36c2a8ce8cba4627e2304121acbf57d00589779a5ec3ab24569dc684"
 dependencies = [
  "itertools",
  "lalrpop",
@@ -3593,9 +3618,9 @@ checksum = "6bdef32e8150c2a081110b42772ffe7d7c9032b606bc226c8260fd97e0976601"
 
 [[package]]
 name = "svm-rs"
-version = "0.2.13"
+version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a55e00b6f95abd889ce398bd7eab2a9c62cd27281cf1bfba70847340557434cf"
+checksum = "a9da7be4aa3d6b944579b66af0cfdca48f2682de7d5b85cf40449805e2e93db9"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -3624,9 +3649,9 @@ dependencies = [
 
 [[package]]
 name = "svm-rs-builds"
-version = "0.1.5"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4039d2eb453284189513e1c4b87bc45439ba86a09721e916b9b8eeda6a2d73b8"
+checksum = "a8d68b31f727e62896d9c1d375f169ca3b4e3ba4c8fa5ab23eaf4de244bb43d3"
 dependencies = [
  "build_const",
  "hex",

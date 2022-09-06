@@ -174,6 +174,20 @@ async fn test_success(dir: &'static str, mut input: TestInput) {
     assert_eq!(verification_result.sources, sources, "Invalid source");
 }
 
+mod success_tests {
+    use super::*;
+
+    // Compilers from 0.4.11 to 0.4.18 have output everything regardless of
+    // what was specified in outputSelection. That test checks that even in that
+    // case resultant output could be parsed successfully.
+    #[actix_rt::test]
+    async fn solidity_0_4_11_to_0_4_18() {
+        let contract_dir = "solidity_0.4.18";
+        let test_input = TestInput::new("Main", "v0.4.18+commit.9cf6e910");
+        test_success(contract_dir, test_input).await;
+    }
+}
+
 mod regression_tests {
     use super::*;
 
@@ -191,5 +205,10 @@ mod regression_tests {
         let test_input =
             TestInput::new("PancakeFactory", "v0.5.16+commit.9c3226ce").has_constructor_args();
         test_success(contract_dir, test_input).await;
+    }
+
+    #[actix_rt::test]
+    async fn issue_with_libs_before_0_4_18() {
+        
     }
 }
