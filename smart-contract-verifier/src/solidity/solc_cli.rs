@@ -110,11 +110,18 @@ mod types {
                 let mut file_names = Vec::new();
                 for (name, source) in input.sources.iter() {
                     let file_path = files_dir.path().join(name);
+                    // name itself may contain some paths inside
+                    let prefix = file_path.parent();
+                    if let Some(prefix) = prefix {
+                        tokio::fs::create_dir_all(prefix)
+                            .await
+                            .map_err(|e| SolcError::Message(e.to_string()))?;
+                    }
                     let mut file = tokio::fs::File::create(&file_path)
                         .await
                         .map_err(|e| SolcError::Message(e.to_string()))?;
                     file_names.push(file_path);
-                    file.write(source.content.as_bytes())
+                    file.write_all(source.content.as_bytes())
                         .await
                         .map_err(|e| SolcError::Message(e.to_string()))?;
                 }
@@ -183,6 +190,12 @@ mod types {
         pub contracts: HashMap<String, OutputContract>,
     }
 
+    fn remove_path_from_contract_name(name: String) -> String {
+        name.rsplit_once(':')
+            .map(|(_, name_cleared)| name_cleared.to_string())
+            .unwrap_or(name)
+    }
+
     impl TryFrom<OutputJson> for CompilerOutput {
         type Error = SolcError;
 
@@ -190,7 +203,10 @@ mod types {
             let contracts = output_json
                 .contracts
                 .into_iter()
-                .map(|(name, output)| output.try_into().map(|contract| (name, contract)))
+                .map(|(name, output)| {
+                    let name = remove_path_from_contract_name(name);
+                    output.try_into().map(|contract| (name, contract))
+                })
                 .collect::<Result<HashMap<String, Contract>, _>>()?;
             let contracts_raw = serde_json::to_value(&contracts)?;
             let compiler_output = serde_json::json!(
@@ -289,8 +305,8 @@ mod tests {
             },
             "libraries": {
                 "main.sol": {
-                    "MyLib": "0x1234",
-                    "OurLib": "0x4321"
+                    "MyLib": "0x1234567890123456789012345678901234567890",
+                    "OurLib": "0x0987654321098765432109876543210987654321"
                 }
             },
             "outputSelection": {
@@ -333,6 +349,11 @@ mod tests {
                 "path": "https://github.com/blockscout/solc-bin/releases/download/v0.4.8%2Bcommit.60cc1668/solc",
                 "longVersion": "v0.4.8+commit.60cc1668",
                 "sha256": "9c64d0ea8373346342f462d0ee5a5a50f1946e209e971f8339af5722c5d65144"
+            },
+            {
+                "path": "https://github.com/blockscout/solc-bin/releases/download/v0.4.10%2Bcommit.f0d539ae/solc",
+                "longVersion": "v0.4.10+commit.f0d539ae",
+                "sha256": "e1897b1985e5091555d97178bf4bd48e85b56d617561d0d5928414e4f007195b"
             }
         ]
     }
@@ -345,6 +366,11 @@ mod tests {
                     "path": "https://solc-bin.ethereum.org/macosx-amd64/solc-macosx-amd64-v0.4.8+commit.60cc1668",
                     "longVersion": "v0.4.8+commit.60cc1668",
                     "sha256": "ebb64b8b8dd465bd53a52fa7063569115df176c7561ac4feb47004513e1df74b"
+                },
+                {
+                    "path": "https://solc-bin.ethereum.org/macosx-amd64/solc-macosx-amd64-v0.4.10+commit.f0d539ae",
+                    "longVersion": "v0.4.10+commit.f0d539ae",
+                    "sha256": "0x40f179e4d27201ab726669dd26d594cfe10bf4dd6117495ee49d26f0dda9ef42"
                 }
             ]
         }
@@ -359,8 +385,14 @@ mod tests {
             optimize: false,
             optimize_runs: Some(200),
             libs: BTreeMap::from_iter(vec![
-                ("MyLib".to_string(), "0x1234".to_string()),
-                ("OurLib".to_string(), "0x4321".to_string()),
+                (
+                    "MyLib".to_string(),
+                    "0x1234567890123456789012345678901234567890".to_string(),
+                ),
+                (
+                    "OurLib".to_string(),
+                    "0x0987654321098765432109876543210987654321".to_string(),
+                ),
             ]),
         };
         assert_eq!(input_args, expected_args);
@@ -372,7 +404,7 @@ mod tests {
                 "--optimize-runs",
                 "200",
                 "--libraries",
-                "MyLib:0x1234,OurLib:0x4321"
+                "MyLib:0x1234567890123456789012345678901234567890,OurLib:0x0987654321098765432109876543210987654321"
             ]
         );
     }
@@ -464,41 +496,48 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn compile_0_4_8() {
-        let ver = Version::from_str("v0.4.8+commit.60cc1668").expect("valid version");
-        let solc = get_solc(&ver).await;
+    async fn compile() {
+        for ver in vec!["v0.4.8+commit.60cc1668", "v0.4.10+commit.f0d539ae"] {
+            let version = Version::from_str(ver).expect("valid version");
+            let solc = get_solc(&version).await;
 
-        let input: CompilerInput = serde_json::from_str(DEFAULT_COMPILER_INPUT).unwrap();
-        let output: CompilerOutput = compile_using_cli(&solc, &input)
-            .await
-            .expect("failed to compile contracts with 0.4.8");
-        assert!(!output.has_error());
-        let names: HashSet<String> = output.contracts_into_iter().map(|(name, _)| name).collect();
-        let expected_names = HashSet::from_iter(vec!["Main".into(), "A".into(), "B".into()]);
-        assert_eq!(names, expected_names);
-
-        for sources in vec![
-            BTreeMap::from_iter(vec![source("main.sol", "")]),
-            BTreeMap::from_iter(vec![source("main.sol", "some string")]),
-        ] {
-            let input = CompilerInput {
-                language: "Solidity".into(),
-                sources,
-                settings: Settings::default(),
-            };
+            let input: CompilerInput = serde_json::from_str(DEFAULT_COMPILER_INPUT).unwrap();
             let output: CompilerOutput = compile_using_cli(&solc, &input)
                 .await
-                .expect("shouldn't return Err, but Ok with errors field");
-            assert!(output.has_error());
-        }
+                .expect(&format!("failed to compile contracts with {}", ver));
+            assert!(
+                !output.has_error(),
+                "errors during compilation: {:?}",
+                output.errors
+            );
+            let names: HashSet<String> =
+                output.contracts_into_iter().map(|(name, _)| name).collect();
+            let expected_names = HashSet::from_iter(vec!["Main".into(), "A".into(), "B".into()]);
+            assert_eq!(names, expected_names);
 
-        let input = CompilerInput {
-            language: "Solidity".into(),
-            sources: BTreeMap::new(),
-            settings: Settings::default(),
-        };
-        compile_using_cli(&solc, &input)
-            .await
-            .expect_err("should not compile empty files");
+            for sources in vec![
+                BTreeMap::from_iter(vec![source("main.sol", "")]),
+                BTreeMap::from_iter(vec![source("main.sol", "some string")]),
+            ] {
+                let input = CompilerInput {
+                    language: "Solidity".into(),
+                    sources,
+                    settings: Settings::default(),
+                };
+                let output: CompilerOutput = compile_using_cli(&solc, &input)
+                    .await
+                    .expect("shouldn't return Err, but Ok with errors field");
+                assert!(output.has_error());
+            }
+
+            let input = CompilerInput {
+                language: "Solidity".into(),
+                sources: BTreeMap::new(),
+                settings: Settings::default(),
+            };
+            compile_using_cli(&solc, &input)
+                .await
+                .expect_err("should not compile empty files");
+        }
     }
 }

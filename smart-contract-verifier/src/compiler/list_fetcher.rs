@@ -156,6 +156,7 @@ mod json {
     use super::Version;
     use primitive_types::H256;
     use serde::{Deserialize, Serialize};
+    use serde_with::{serde_as, DisplayFromStr};
     use url::Url;
 
     #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -163,11 +164,12 @@ mod json {
         pub builds: Vec<FileInfo>,
     }
 
+    #[serde_as]
     #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
     #[serde(rename_all = "camelCase")]
     pub struct FileInfo {
         pub path: DownloadPath,
-        #[serde(with = "serde_with::rust::display_fromstr")]
+        #[serde_as(as = "DisplayFromStr")]
         pub long_version: Version,
         pub sha256: H256,
     }
