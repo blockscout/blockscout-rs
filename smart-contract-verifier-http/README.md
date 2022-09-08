@@ -4,6 +4,9 @@ Smart-contract verification service. Runs as an HTTP server and allows
 making verification requests through REST API. It is stateless
 and answers requests based on provided information only.
 
+## Using docker compose
+You can build the provided sources using [docker-compose](./docker-compose.yaml) file presented in that directory.
+
 ## Building from source
 Install rustup from rustup.rs.
 ```
@@ -18,18 +21,18 @@ You can find the built binary in `target/release` folder.
 ## Installing through cargo
 Another way to install the binary without cloning the repository is to use cargo straightway:
 ```
-cargo install --git https://github.com/blockscout/blockscout-rs --bin smart-contract-verifier
+cargo install --git https://github.com/blockscout/blockscout-rs smart-contract-verifier-http
 ```
-In that case, you can run the binary using just `smart-contract-verifier`.
+In that case, you can run the binary using just `smart-contract-verifier-http`.
 
 ## Configuration
-Service supports configuration via configuration file and environment variables. 
+Service supports configuration via configuration file and environment variables.
 The latter overwrites the former in case if both are provided. For all missing fields
 default values are used (if possible).
 
 ### Configuration file
 Service uses a configuration file the path to which is specified via `SMART_CONTRACT_VERIFIER__CONFIG=[path]` environment variable.
-The base configuration file with all available options could be found at [config/base.toml](`./config/base.toml`).
+The base configuration file with all available options could be found at [config/base.toml](./config/base.toml).
 
 Below is an example of a simple configuration file which is filled with default values.
 ```toml
@@ -41,13 +44,25 @@ addr = "0.0.0.0:8043"
 # When disabled, solidity related handlers are not available
 enabled = true
 # A directory where compilers would be downloaded to
-compilers_dir = "/tmp/compilers"
-# List of avaialble versions updates cron formatted schedule 
+compilers_dir = "/tmp/solidity-compilers"
+# List of avaialble solidity versions updates cron formatted schedule 
 refresh_versions_schedule = "0 0 * * * * *"
 
 [solidity.fetcher.list]
-# List of all available compilers and information about them.
+# List of all available solidity compilers and information about them.
 list_url = "https://solc-bin.ethereum.org/linux-amd64/list.json"
+
+[vyper]
+# When disabled, vyper related handlers are not available
+enabled = true
+# A directory where vyper compilers would be downloaded to
+compilers_dir = "/tmp/vyper-compilers"
+# List of available versions updates cron formatted schedule
+refresh_versions_schedule = "0 0 * * * * *"
+
+[vyper.fetcher.list]
+# List of all availaable vyper compilers and information about them
+list_url = "https://raw.githubusercontent.com/blockscout/solc-bin/main/vyper.list.json"
 
 [sourcify]
 # When disabled, sourcify related handlers are not available
@@ -76,10 +91,10 @@ agent_endpoint = "localhost:6831"
 
 ### Environment variables
 Besides configuration file, one could use environment variables
-to configure the service. If case of overlapping, those values 
-overwrites values from configuration file. 
+to configure the service. If case of overlapping, those values
+overwrites values from configuration file.
 Variables have a hierarchical nature which
-corresponds to the hierarchy in configuration file. 
+corresponds to the hierarchy in configuration file.
 Double underscore (`__`) is used as a separator. All variables should use
 `SMART_CONTRACT_VERIFIER` as a prefix.
 
@@ -88,9 +103,9 @@ All available options for configuration through environment variables could be f
 
 # Api
 
-Service supports 3 types of verification:
+Service supports 4 types of verification:
 
-## Multi-Part files
+## Solidity Multi-Part files
 
 ### Route
 `POST /api/v1/solidity/verify/multiple-files`
@@ -122,7 +137,7 @@ Service supports 3 types of verification:
 }
 ```
 
-## Standard-JSON input
+## Solidity Standard-JSON input
 
 ### Route
 `POST /api/v1/solidity/verify/standard-json`
@@ -164,6 +179,29 @@ Proxies verification requests to Sourcify service and returns responses (https:/
   },
   // (optional) see Sourcify Api
   "chosenContract": 1
+}
+```
+
+## Vyper Multi-Part files
+
+### Route
+`POST /api/v1/vyper/verify/standard-json`
+
+### Input
+```json5
+{
+  // Creation transaction input
+  "creation_bytecode": "0x608060...0033000b0c",
+  // Bytecode stored in the blockchain
+  "deployed_bytecode": "0x608060...0033",
+  // Compiler version used to compile the contract
+  "compiler_version": "0.3.6+commit.4a2124d0",
+  // Contains a map from a source file name to the actual source code
+  "sources": {
+    "A.vy": "# @version ^0.3.6\r\n\r\nuserName: public(String[100])\r\n\r\n@external\r\ndef __init__(name: String[100]):\r\n    self.userName = name\r\n\r\n@view\r\n@external\r\ndef getUserName() -> String[100]:\r\n    return self.userName\r\n"
+  },
+  // Version of the EVM to compile for
+  "evm_version": "istanbul"
 }
 ```
 
@@ -243,5 +281,20 @@ No input required
 {
   // List of all available versions in descending order
   "versions": ["0.8.15-nightly.2022.5.27+commit.095cc647","0.8.15-nightly.2022.5.25+commit.fdc3c8ee",..]
+}
+```
+
+### Route
+`GET /api/v1/vyper/versions`
+
+### Input
+No input required
+
+### Output
+
+```json5
+{
+  // List of all available versions in descending order
+  "versions": ["v0.3.6+commit.4a2124d0","v0.3.4+commit.f31f0ec4",..]
 }
 ```
