@@ -113,7 +113,11 @@ where
         match self.cache.load_from_dir(dir).await {
             Ok(_) => {}
             Err(e) => {
-                tracing::error!("error during local compilers loading: {}", e)
+                tracing::warn!(
+                    "cannot load local compilers from `{}` dir: {}",
+                    dir.to_string_lossy(),
+                    e
+                )
             }
         };
     }
