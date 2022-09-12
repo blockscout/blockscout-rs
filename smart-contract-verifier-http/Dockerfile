@@ -8,6 +8,7 @@ RUN cargo new smart-contract-verifier-http
 
 COPY ./smart-contract-verifier/Cargo.toml ./smart-contract-verifier/
 COPY ./smart-contract-verifier-http/Cargo.toml ./smart-contract-verifier-http/
+COPY ./Cargo.lock ./smart-contract-verifier-http/
 
 WORKDIR /build_app/smart-contract-verifier-http
 RUN cargo build --release

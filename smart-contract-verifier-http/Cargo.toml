@@ -9,7 +9,7 @@ keywords = ["ethereum", "web3", "solidity"]
 [dependencies]
 smart-contract-verifier = { path = "../smart-contract-verifier" }
 
-actix-web = "4"
+actix-web = "=4.1"
 actix-web-prom = "0.6"
 anyhow = "1.0"
 config = "0.13"

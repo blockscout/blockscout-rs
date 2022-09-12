@@ -31,7 +31,8 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v3
         with:
-          context: "{{defaultContext}}:smart-contract-verifier-http"
+          context: "{{defaultContext}}"
+          file: "./smart-contract-verifier-http/Dockerfile"
           push: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
