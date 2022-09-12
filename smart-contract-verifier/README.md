@@ -5,4 +5,4 @@ and exposes interface through which verification function could be called.
 Should be wrapped into binary providing protocol implementations for communication.
 
 Currently only Rest API over HTTP implementation is available and can be found at 
-[smart-contract-verifier](../smart-contract-verifier-http)
+[smart-contract-verifier-http](../smart-contract-verifier-http)
