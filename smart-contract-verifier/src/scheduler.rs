@@ -1,7 +1,6 @@
+use chrono::Utc;
 use cron::Schedule;
 use futures::Future;
-
-use chrono::Utc;
 
 pub fn spawn_job<F, Fut>(
     schedule: Schedule,

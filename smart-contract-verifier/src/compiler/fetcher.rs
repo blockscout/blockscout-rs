@@ -1,5 +1,5 @@
 use super::version::Version;
-use crate::types::Mismatch;
+use crate::mismatch::Mismatch;
 use async_trait::async_trait;
 use bytes::Bytes;
 use primitive_types::H256;

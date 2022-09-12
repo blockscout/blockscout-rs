@@ -1,12 +1,10 @@
-use tracing::Instrument;
-
 use super::{
     fetcher::{FetchError, Fetcher},
     version::Version,
 };
+use crate::metrics;
 use std::{collections::HashMap, path::PathBuf, str::FromStr, sync::Arc};
-
-use crate::http_server::metrics;
+use tracing::Instrument;
 
 #[derive(Default)]
 pub struct DownloadCache {
@@ -124,11 +122,11 @@ impl DownloadCache {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{
-        compiler::{version::ReleaseVersion, ListFetcher},
-        consts::DEFAULT_SOLIDITY_COMPILER_LIST,
+    use super::{
+        super::{list_fetcher::ListFetcher, version::ReleaseVersion},
+        *,
     };
+    use crate::consts::DEFAULT_SOLIDITY_COMPILER_LIST;
     use async_trait::async_trait;
     use futures::{executor::block_on, join, pin_mut};
     use pretty_assertions::assert_eq;

@@ -1,12 +1,11 @@
+use super::solc_cli;
+use crate::compiler::{EvmCompiler, Version};
+use ethers_solc::{error::SolcError, CompilerOutput, Solc};
 use std::path::Path;
 
-use ethers_solc::{error::SolcError, CompilerOutput, Solc};
-
-use crate::compiler::EvmCompiler;
-
-use super::compile_using_cli;
-
+#[derive(Default)]
 pub struct SolidityCompiler {}
+
 impl SolidityCompiler {
     pub fn new() -> Self {
         SolidityCompiler {}
@@ -18,11 +17,11 @@ impl EvmCompiler for SolidityCompiler {
     async fn compile(
         &self,
         path: &Path,
-        ver: &crate::compiler::Version,
+        ver: &Version,
         input: &ethers_solc::CompilerInput,
     ) -> Result<CompilerOutput, SolcError> {
         if ver.version() < &semver::Version::new(0, 4, 11) {
-            compile_using_cli(path, input).await
+            solc_cli::compile_using_cli(path, input).await
         } else {
             Solc::from(path).compile(input)
         }

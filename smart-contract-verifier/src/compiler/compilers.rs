@@ -1,18 +1,19 @@
-use super::fetcher::FetchError;
-use crate::{
-    compiler::{self, DownloadCache, Fetcher, Version},
-    http_server::metrics,
+use super::{
+    download_cache::DownloadCache,
+    fetcher::{FetchError, Fetcher},
+    version::Version,
 };
+use crate::metrics;
 use ethers_solc::{artifacts::Severity, error::SolcError, CompilerInput, CompilerOutput};
 use std::{
     fmt::Debug,
     path::{Path, PathBuf},
     sync::Arc,
 };
-use thiserror::Error as DeriveError;
+use thiserror::Error;
 use tracing::instrument;
 
-#[derive(Debug, DeriveError)]
+#[derive(Debug, Error)]
 pub enum Error {
     #[error("Compiler version not found: {0}")]
     VersionNotFound(Version),
@@ -29,7 +30,7 @@ pub trait EvmCompiler {
     async fn compile(
         &self,
         path: &Path,
-        ver: &compiler::Version,
+        ver: &Version,
         input: &CompilerInput,
     ) -> Result<CompilerOutput, SolcError>;
 }
@@ -54,7 +55,7 @@ where
     #[instrument(name = "download_and_compile", skip(self, input), level = "debug")]
     pub async fn compile(
         &self,
-        compiler_version: &compiler::Version,
+        compiler_version: &Version,
         input: &CompilerInput,
     ) -> Result<CompilerOutput, Error> {
         let path_result = {
@@ -97,7 +98,7 @@ where
         Ok(output)
     }
 
-    pub fn all_versions(&self) -> Vec<compiler::Version> {
+    pub fn all_versions(&self) -> Vec<Version> {
         self.fetcher.all_versions()
     }
 
@@ -112,7 +113,11 @@ where
         match self.cache.load_from_dir(dir).await {
             Ok(_) => {}
             Err(e) => {
-                tracing::error!("error during local compilers loading: {}", e)
+                tracing::warn!(
+                    "cannot load local compilers from `{}` dir: {}",
+                    dir.to_string_lossy(),
+                    e
+                )
             }
         };
     }
@@ -120,13 +125,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{compiler::ListFetcher, solidity::SolidityCompiler};
-    use std::{env::temp_dir, str::FromStr};
-
-    use crate::consts::DEFAULT_SOLIDITY_COMPILER_LIST;
+    use super::{super::list_fetcher::ListFetcher, *};
+    use crate::{consts::DEFAULT_SOLIDITY_COMPILER_LIST, solidity::SolidityCompiler};
     use ethers_solc::artifacts::{Source, Sources};
-    use std::default::Default;
+    use std::{default::Default, env::temp_dir, str::FromStr};
     use tokio::sync::OnceCell;
 
     async fn global_compilers() -> &'static Compilers<SolidityCompiler> {
@@ -192,8 +194,7 @@ mod tests {
 
         let compilers = global_compilers().await;
         let input: CompilerInput = Input::with_source_code(source_code.into()).into();
-        let version =
-            compiler::Version::from_str("v0.8.10+commit.fc410830").expect("Compiler version");
+        let version = Version::from_str("v0.8.10+commit.fc410830").expect("Compiler version");
 
         let result = compilers
             .compile(&version, &input)
@@ -211,8 +212,7 @@ mod tests {
 
         let compilers = global_compilers().await;
         let input: CompilerInput = Input::with_source_code(source_code.into()).into();
-        let version =
-            compiler::Version::from_str("v0.5.9+commit.c68bc34e").expect("Compiler version");
+        let version = Version::from_str("v0.5.9+commit.c68bc34e").expect("Compiler version");
 
         let result = compilers
             .compile(&version, &input)
@@ -230,8 +230,7 @@ mod tests {
 
         let compilers = global_compilers().await;
         let input: CompilerInput = Input::with_source_code(source_code.into()).into();
-        let version =
-            compiler::Version::from_str("v0.8.10+commit.fc410830").expect("Compiler version");
+        let version = Version::from_str("v0.8.10+commit.fc410830").expect("Compiler version");
 
         let result = compilers
             .compile(&version, &input)

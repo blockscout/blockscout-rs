@@ -1,3 +1,5 @@
 mod compiler;
 
-pub(crate) use compiler::VyperCompiler;
+pub mod multi_part;
+
+pub use compiler::VyperCompiler;

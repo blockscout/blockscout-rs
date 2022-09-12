@@ -1,7 +1,7 @@
 use super::{
-    fetcher::{FetchError, FileValidator},
+    fetcher::{FetchError, Fetcher, FileValidator},
+    version::Version,
     versions_fetcher::{VersionsFetcher, VersionsRefresher},
-    Fetcher, Version,
 };
 use async_trait::async_trait;
 use bytes::Bytes;

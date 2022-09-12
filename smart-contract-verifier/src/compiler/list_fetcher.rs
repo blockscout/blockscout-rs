@@ -1,8 +1,8 @@
 use super::{
-    fetcher::{FetchError, FileValidator},
+    fetcher::{FetchError, Fetcher, FileValidator},
+    version::Version,
     versions_fetcher::{VersionsFetcher, VersionsRefresher},
 };
-use crate::compiler::{Fetcher, Version};
 use async_trait::async_trait;
 use bytes::Bytes;
 use cron::Schedule;
@@ -153,7 +153,7 @@ impl Fetcher for ListFetcher {
 }
 
 mod json {
-    use crate::compiler;
+    use super::Version;
     use primitive_types::H256;
     use serde::{Deserialize, Serialize};
     use serde_with::{serde_as, DisplayFromStr};
@@ -170,7 +170,7 @@ mod json {
     pub struct FileInfo {
         pub path: DownloadPath,
         #[serde_as(as = "DisplayFromStr")]
-        pub long_version: compiler::Version,
+        pub long_version: Version,
         pub sha256: H256,
     }
 
@@ -185,10 +185,7 @@ mod json {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        consts::DEFAULT_SOLIDITY_COMPILER_LIST, settings::ListFetcherSettings,
-        tests::parse::test_deserialize_ok,
-    };
+    use crate::{consts::DEFAULT_SOLIDITY_COMPILER_LIST, tests::parse::test_deserialize_ok};
     use ethers_solc::Solc;
     use pretty_assertions::assert_eq;
     use std::{env::temp_dir, str::FromStr};
@@ -310,11 +307,9 @@ mod tests {
 
     #[tokio::test]
     async fn list_download_versions() {
-        let settings = ListFetcherSettings {
-            list_url: Url::try_from(DEFAULT_SOLIDITY_COMPILER_LIST).expect("valid url"),
-        };
+        let list_url = Url::try_from(DEFAULT_SOLIDITY_COMPILER_LIST).expect("valid url");
         let fetcher = ListFetcher::new(
-            settings.list_url,
+            list_url,
             std::env::temp_dir().join("blockscout/smart_contract_verifier/compiler_fetcher/test/"),
             None,
             None,
