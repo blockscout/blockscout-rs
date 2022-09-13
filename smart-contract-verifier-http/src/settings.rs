@@ -21,7 +21,7 @@ impl PartialEq for IgnoredAny {
 
 impl Eq for IgnoredAny {}
 
-#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct Settings {
     pub server: ServerSettings,
