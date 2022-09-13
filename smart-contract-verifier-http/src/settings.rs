@@ -204,8 +204,10 @@ pub struct CompilersSettings {
 
 impl Default for CompilersSettings {
     fn default() -> Self {
-        let max_threads =
-            std::thread::available_parallelism().expect("failed to extract max threads");
+        let max_threads = std::thread::available_parallelism().unwrap_or_else(|e| {
+            tracing::warn!("cannot get number of CPU cores: {}", e);
+            NonZeroUsize::new(8).unwrap()
+        });
         Self { max_threads }
     }
 }

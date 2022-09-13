@@ -25,7 +25,7 @@ pub enum Error {
     #[error("Compilation error: {0:?}")]
     Compilation(Vec<String>),
     #[error("failed to acquire lock: {0}")]
-    AcquireError(#[from] AcquireError),
+    Acquire(#[from] AcquireError),
 }
 
 #[async_trait::async_trait]
@@ -85,11 +85,11 @@ where
             let _span_guard = span.enter();
             let _permit = {
                 let _wait_timer_guard = metrics::COMPILATION_QUEUE_TIME.start_timer();
-                let _wait_gauge_guard = metrics::COMPILES_IN_QUEUE.guarded_inc();
+                let _wait_gauge_guard = metrics::COMPILATIONS_IN_QUEUE.guarded_inc();
                 self.threads_semaphore.acquire().await?
             };
             let _compile_timer_guard = metrics::COMPILE_TIME.start_timer();
-            let _compile_gauge_guard = metrics::COMPILES_IN_FLIGHT.guarded_inc();
+            let _compile_gauge_guard = metrics::COMPILATIONS_IN_FLIGHT.guarded_inc();
             self.evm_compiler
                 .compile(&path, compiler_version, input)
                 .await?

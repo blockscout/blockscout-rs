@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use super::{
     router::{configure_router, Router},
     solidity::SolidityRouter,
@@ -8,6 +6,7 @@ use super::{
 };
 use crate::{handlers::status, settings::Settings};
 use actix_web::web;
+use std::sync::Arc;
 use tokio::sync::Semaphore;
 
 pub struct AppRouter {

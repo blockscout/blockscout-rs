@@ -1,7 +1,7 @@
 use pretty_assertions::assert_eq;
 use smart_contract_verifier_http::Settings;
 
-fn rewrite_os_specific_example_settings(
+fn rewrite_system_specific_example_settings(
     example_settings: &mut Settings,
     default_settings: &Settings,
 ) {
@@ -32,7 +32,7 @@ fn test_example_settings() {
         let mut example_settings = Settings::new().expect("Failed to parse config");
         let default_settings = Settings::default();
 
-        rewrite_os_specific_example_settings(&mut example_settings, &default_settings);
+        rewrite_system_specific_example_settings(&mut example_settings, &default_settings);
 
         (example_settings, default_settings)
     };

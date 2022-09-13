@@ -25,7 +25,7 @@ lazy_static! {
         "contract compilation time in seconds",
     )
     .unwrap();
-    pub static ref COMPILES_IN_FLIGHT: Gauge = register_gauge!(
+    pub static ref COMPILATIONS_IN_FLIGHT: Gauge = register_gauge!(
         "smart_contract_verifier_compiles_in_flight",
         "number of compilations currently running",
     )
@@ -35,7 +35,7 @@ lazy_static! {
         "waiting for the compilation queue in seconds",
     )
     .unwrap();
-    pub static ref COMPILES_IN_QUEUE: Gauge = register_gauge!(
+    pub static ref COMPILATIONS_IN_QUEUE: Gauge = register_gauge!(
         "smart_contract_verifier_compiles_in_queue",
         "number of compilations in queue",
     )
