@@ -42,19 +42,23 @@ pub struct Compilers<C> {
     cache: DownloadCache,
     fetcher: Arc<dyn Fetcher>,
     evm_compiler: C,
-    lock: Arc<Semaphore>,
+    threads_semaphore: Arc<Semaphore>,
 }
 
 impl<C> Compilers<C>
 where
     C: EvmCompiler,
 {
-    pub fn new(fetcher: Arc<dyn Fetcher>, evm_compiler: C, lock: Arc<Semaphore>) -> Self {
+    pub fn new(
+        fetcher: Arc<dyn Fetcher>,
+        evm_compiler: C,
+        threads_semaphore: Arc<Semaphore>,
+    ) -> Self {
         Self {
             cache: DownloadCache::new(),
             fetcher,
             evm_compiler,
-            lock,
+            threads_semaphore,
         }
     }
     #[instrument(name = "download_and_compile", skip(self, input), level = "debug")]
@@ -79,9 +83,13 @@ where
                 ver = compiler_version.to_string()
             );
             let _span_guard = span.enter();
-            let _permit = self.lock.acquire().await?;
-            let _timer = metrics::COMPILE_TIME.start_timer();
-            let _gauge_guard = metrics::COMPILE_THREADS_NUMBER.guarded_inc();
+            let _permit = {
+                let _wait_timer_guard = metrics::COMPILATION_QUEUE_TIME.start_timer();
+                let _wait_gauge_guard = metrics::COMPILES_IN_QUEUE.guarded_inc();
+                self.threads_semaphore.acquire().await?
+            };
+            let _compile_timer_guard = metrics::COMPILE_TIME.start_timer();
+            let _compile_gauge_guard = metrics::COMPILES_IN_FLIGHT.guarded_inc();
             self.evm_compiler
                 .compile(&path, compiler_version, input)
                 .await?
@@ -149,8 +157,12 @@ mod tests {
                 let fetcher = ListFetcher::new(url, temp_dir(), None, None)
                     .await
                     .expect("Fetch releases");
-                let lock = Arc::new(Semaphore::new(1));
-                let compilers = Compilers::new(Arc::new(fetcher), SolidityCompiler::new(), lock);
+                let threads_semaphore = Arc::new(Semaphore::new(4));
+                let compilers = Compilers::new(
+                    Arc::new(fetcher),
+                    SolidityCompiler::new(),
+                    threads_semaphore,
+                );
                 compilers
             })
             .await

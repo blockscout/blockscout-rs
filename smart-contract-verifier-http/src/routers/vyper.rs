@@ -15,7 +15,7 @@ pub struct VyperRouter {
 impl VyperRouter {
     pub async fn new(
         settings: VyperSettings,
-        compilers_lock: Arc<Semaphore>,
+        compilers_threads_semaphore: Arc<Semaphore>,
     ) -> anyhow::Result<Self> {
         let dir = settings.compilers_dir.clone();
         let list_url = match settings.fetcher {
@@ -33,7 +33,7 @@ impl VyperRouter {
             )
             .await?,
         );
-        let compilers = Compilers::new(fetcher, VyperCompiler::new(), compilers_lock);
+        let compilers = Compilers::new(fetcher, VyperCompiler::new(), compilers_threads_semaphore);
         compilers.load_from_dir(&dir).await;
         Ok(Self {
             compilers: web::Data::new(compilers),

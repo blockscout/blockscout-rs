@@ -105,8 +105,9 @@ mod tests {
                 let fetcher = ListFetcher::new(url, PathBuf::from("compilers"), None, None)
                     .await
                     .expect("Fetch releases");
-                let lock = Arc::new(Semaphore::new(1));
-                let compilers = Compilers::new(Arc::new(fetcher), VyperCompiler::new(), lock);
+                let threads_semaphore = Arc::new(Semaphore::new(4));
+                let compilers =
+                    Compilers::new(Arc::new(fetcher), VyperCompiler::new(), threads_semaphore);
                 compilers
             })
             .await

@@ -25,9 +25,19 @@ lazy_static! {
         "contract compilation time in seconds",
     )
     .unwrap();
-    pub static ref COMPILE_THREADS_NUMBER: Gauge = register_gauge!(
-        "smart_contract_verifier_compile_threads_number",
-        "number of threads used for compilation",
+    pub static ref COMPILES_IN_FLIGHT: Gauge = register_gauge!(
+        "smart_contract_verifier_compiles_in_flight",
+        "number of compilations currently running",
+    )
+    .unwrap();
+    pub static ref COMPILATION_QUEUE_TIME: Histogram = register_histogram!(
+        "smart_contract_verifier_compilation_queue_time_seconds",
+        "waiting for the compilation queue in seconds",
+    )
+    .unwrap();
+    pub static ref COMPILES_IN_QUEUE: Gauge = register_gauge!(
+        "smart_contract_verifier_compiles_in_queue",
+        "number of compilations in queue in seconds",
     )
     .unwrap();
 }
