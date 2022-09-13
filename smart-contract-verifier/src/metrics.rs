@@ -37,7 +37,7 @@ lazy_static! {
     .unwrap();
     pub static ref COMPILES_IN_QUEUE: Gauge = register_gauge!(
         "smart_contract_verifier_compiles_in_queue",
-        "number of compilations in queue in seconds",
+        "number of compilations in queue",
     )
     .unwrap();
 }
