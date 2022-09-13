@@ -1,5 +1,7 @@
 use lazy_static::lazy_static;
-use prometheus::{register_histogram, register_int_counter, Histogram, IntCounter};
+use prometheus::{
+    register_gauge, register_histogram, register_int_counter, Gauge, Histogram, IntCounter,
+};
 
 lazy_static! {
     pub static ref DOWNLOAD_CACHE_TOTAL: IntCounter = register_int_counter!(
@@ -23,4 +25,28 @@ lazy_static! {
         "contract compilation time in seconds",
     )
     .unwrap();
+    pub static ref COMPILE_THREADS_NUMBER: Gauge = register_gauge!(
+        "smart_contract_verifier_compile_threads_number",
+        "number of threads used for compilation",
+    )
+    .unwrap();
+}
+
+pub struct GaugeGuard(&'static Gauge);
+
+impl Drop for GaugeGuard {
+    fn drop(&mut self) {
+        self.0.dec();
+    }
+}
+
+pub trait GuardedGauge {
+    fn guarded_inc(&'static self) -> GaugeGuard;
+}
+
+impl GuardedGauge for Gauge {
+    fn guarded_inc(&'static self) -> GaugeGuard {
+        self.inc();
+        GaugeGuard(self)
+    }
 }

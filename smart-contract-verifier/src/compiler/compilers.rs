@@ -3,7 +3,7 @@ use super::{
     fetcher::{FetchError, Fetcher},
     version::Version,
 };
-use crate::metrics;
+use crate::metrics::{self, GuardedGauge};
 use ethers_solc::{artifacts::Severity, error::SolcError, CompilerInput, CompilerOutput};
 use std::{
     fmt::Debug,
@@ -11,6 +11,7 @@ use std::{
     sync::Arc,
 };
 use thiserror::Error;
+use tokio::sync::{AcquireError, Semaphore};
 use tracing::instrument;
 
 #[derive(Debug, Error)]
@@ -23,6 +24,8 @@ pub enum Error {
     Internal(#[from] SolcError),
     #[error("Compilation error: {0:?}")]
     Compilation(Vec<String>),
+    #[error("failed to acquire lock: {0}")]
+    AcquireError(#[from] AcquireError),
 }
 
 #[async_trait::async_trait]
@@ -39,17 +42,19 @@ pub struct Compilers<C> {
     cache: DownloadCache,
     fetcher: Arc<dyn Fetcher>,
     evm_compiler: C,
+    lock: Arc<Semaphore>,
 }
 
 impl<C> Compilers<C>
 where
     C: EvmCompiler,
 {
-    pub fn new(fetcher: Arc<dyn Fetcher>, evm_compiler: C) -> Self {
+    pub fn new(fetcher: Arc<dyn Fetcher>, evm_compiler: C, lock: Arc<Semaphore>) -> Self {
         Self {
             cache: DownloadCache::new(),
             fetcher,
             evm_compiler,
+            lock,
         }
     }
     #[instrument(name = "download_and_compile", skip(self, input), level = "debug")]
@@ -67,13 +72,16 @@ where
             Err(FetchError::NotFound(version)) => return Err(Error::VersionNotFound(version)),
             res => res?,
         };
+
         let output = {
-            let _timer = metrics::COMPILE_TIME.start_timer();
             let span = tracing::debug_span!(
                 "compile contract with ethers-solc",
                 ver = compiler_version.to_string()
             );
-            let _guard = span.enter();
+            let _span_guard = span.enter();
+            let _permit = self.lock.acquire().await?;
+            let _timer = metrics::COMPILE_TIME.start_timer();
+            let _gauge_guard = metrics::COMPILE_THREADS_NUMBER.guarded_inc();
             self.evm_compiler
                 .compile(&path, compiler_version, input)
                 .await?
@@ -129,7 +137,7 @@ mod tests {
     use crate::{consts::DEFAULT_SOLIDITY_COMPILER_LIST, solidity::SolidityCompiler};
     use ethers_solc::artifacts::{Source, Sources};
     use std::{default::Default, env::temp_dir, str::FromStr};
-    use tokio::sync::OnceCell;
+    use tokio::sync::{OnceCell, Semaphore};
 
     async fn global_compilers() -> &'static Compilers<SolidityCompiler> {
         static COMPILERS: OnceCell<Compilers<SolidityCompiler>> = OnceCell::const_new();
@@ -141,7 +149,8 @@ mod tests {
                 let fetcher = ListFetcher::new(url, temp_dir(), None, None)
                     .await
                     .expect("Fetch releases");
-                let compilers = Compilers::new(Arc::new(fetcher), SolidityCompiler::new());
+                let lock = Arc::new(Semaphore::new(1));
+                let compilers = Compilers::new(Arc::new(fetcher), SolidityCompiler::new(), lock);
                 compilers
             })
             .await

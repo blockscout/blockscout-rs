@@ -8,6 +8,7 @@ fn rewrite_os_specific_example_settings(
     _example_settings: &mut Settings,
     _default_settings: &Settings,
 ) {
+    example_settings.compilers.max_threads = default_settings.compilers.max_threads;
 }
 
 // For other systems we just use the values from default settings.
@@ -16,8 +17,23 @@ fn rewrite_os_specific_example_settings(
     example_settings: &mut Settings,
     default_settings: &Settings,
 ) {
-    // For now, only server address is os system dependant
-    example_settings.server.addr = default_settings.server.addr;
+    use std::mem::discriminant;
+
+    example_settings.solidity.compilers_dir = default_settings.solidity.compilers_dir.clone();
+    if discriminant(&example_settings.solidity.fetcher)
+        == discriminant(&default_settings.solidity.fetcher)
+    {
+        example_settings.solidity.fetcher = default_settings.solidity.fetcher.clone();
+    }
+
+    example_settings.vyper.compilers_dir = default_settings.vyper.compilers_dir.clone();
+    if discriminant(&example_settings.vyper.fetcher)
+        == discriminant(&default_settings.vyper.fetcher)
+    {
+        example_settings.vyper.fetcher = default_settings.vyper.fetcher.clone();
+    }
+
+    example_settings.compilers.max_threads = default_settings.compilers.max_threads;
 }
 
 #[test]

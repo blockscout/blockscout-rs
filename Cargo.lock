@@ -1259,6 +1259,7 @@ dependencies = [
  "colored",
  "dunce",
  "ethers-core 0.17.0 (git+https://github.com/gakonst/ethers-rs?rev=13a0144a)",
+ "futures-util",
  "getrandom 0.2.7",
  "glob",
  "hex",

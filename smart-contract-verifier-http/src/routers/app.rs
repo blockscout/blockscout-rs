@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::{
     router::{configure_router, Router},
     solidity::SolidityRouter,
@@ -6,6 +8,7 @@ use super::{
 };
 use crate::{handlers::status, settings::Settings};
 use actix_web::web;
+use tokio::sync::Semaphore;
 
 pub struct AppRouter {
     solidity: Option<SolidityRouter>,
@@ -15,13 +18,14 @@ pub struct AppRouter {
 
 impl AppRouter {
     pub async fn new(settings: Settings) -> anyhow::Result<Self> {
+        let compilers_lock = Arc::new(Semaphore::new(settings.compilers.max_threads.get()));
         let solidity = match settings.solidity.enabled {
             false => None,
-            true => Some(SolidityRouter::new(settings.solidity).await?),
+            true => Some(SolidityRouter::new(settings.solidity, compilers_lock.clone()).await?),
         };
         let vyper = match settings.vyper.enabled {
             false => None,
-            true => Some(VyperRouter::new(settings.vyper).await?),
+            true => Some(VyperRouter::new(settings.vyper, compilers_lock).await?),
         };
         let sourcify = settings
             .sourcify
