@@ -5,6 +5,7 @@ use actix_web::{
     web::{Bytes, Data},
     App,
 };
+use pretty_assertions::assert_eq;
 
 use multichain_api_gateway::{handle_request, settings, ApiEndpoints};
 
@@ -18,7 +19,7 @@ async fn check_make_requests() {
         instances: vec![
             settings::Instance("eth".to_string(), "mainnet".to_string()),
             settings::Instance("xdai".to_string(), "mainnet".to_string()),
-            settings::Instance("xdai".to_string(), "testnet".to_string()),
+            settings::Instance("poa".to_string(), "sokol".to_string()),
         ],
         concurrent_requests: 1,
         request_timeout: std::time::Duration::from_secs(60),
@@ -35,9 +36,7 @@ async fn check_make_requests() {
 
     let uri = "/api?module=block&action=getblockreward&blockno=0";
 
-    let mut expected = std::fs::read_to_string("tests/res/request_result.json").unwrap();
-    // Remove trailing newline that comes from "read_to_string"
-    expected.pop();
+    let expected = std::fs::read_to_string("tests/res/request_result.json").unwrap();
 
     let get_request = test::TestRequest::get().uri(uri).to_request();
     check_response(
@@ -53,8 +52,10 @@ async fn check_make_requests() {
 }
 
 fn check_response(actual: Bytes, expected: &str) {
-    let str = str::from_utf8(actual.as_ref()).unwrap().to_string();
-    let actual_raw: serde_json::Value = serde_json::from_str(str.as_str()).unwrap();
-    let actual = serde_json::to_string_pretty(&actual_raw).unwrap();
-    assert_eq!(expected, actual.as_str());
+    let actual: serde_json::Value =
+        serde_json::from_slice(&actual).expect("failed to convert response to json");
+    let expected: serde_json::Value =
+        serde_json::from_str(expected).expect("invalid expected string");
+    // check responses in json form to simplify reading error in case of inequality
+    assert_eq!(actual, expected)
 }
