@@ -35,6 +35,8 @@ thiserror = "1.0"
 tokio = { version = "1", features = ["macros"] }
 tracing = "0.1"
 url = { version = "2.2", features = ["serde"] }
+reqwest-retry = "0.1"
+reqwest-middleware = "0.1"
 
 [patch.crates-io]
 ethers-solc = { git = "https://github.com/gakonst/ethers-rs", package = "ethers-solc", rev = "13a0144a" }

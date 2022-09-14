@@ -21,6 +21,8 @@ lazy_static = "1"
 opentelemetry = { version = "0.17", features = ["rt-tokio"] }
 opentelemetry-jaeger = { version = "0.16", features = ["rt-tokio"] }
 prometheus = "0.13"
+reqwest-middleware = "0.1"
+reqwest-retry = "0.1"
 rust-s3 = "0.32"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

@@ -1,53 +1,65 @@
+use reqwest::Url;
+use std::time::Duration;
+
 use super::types::{ApiFilesResponse, ApiRequest, ApiVerificationResponse};
-use crate::network_helpers;
-use std::num::NonZeroUsize;
-use url::Url;
+use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
+use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
+use std::num::NonZeroU32;
 
 pub struct SourcifyApiClient {
     host: Url,
-    request_timeout: u64,
-    verification_attempts: NonZeroUsize,
+    reqwest_client: ClientWithMiddleware,
 }
 
 impl SourcifyApiClient {
-    pub fn new(host: Url, request_timeout: u64, verification_attempts: NonZeroUsize) -> Self {
-        Self {
+    pub fn new(
+        host: Url,
+        request_timeout: u64,
+        verification_attempts: NonZeroU32,
+    ) -> Result<Self, reqwest::Error> {
+        let retry_policy =
+            ExponentialBackoff::builder().build_with_max_retries(verification_attempts.get());
+        let reqwest_client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(request_timeout))
+            .build()?;
+        let reqwest_client = ClientBuilder::new(reqwest_client)
+            .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+            .build();
+
+        Ok(Self {
             host,
-            request_timeout,
-            verification_attempts,
-        }
+            reqwest_client,
+        })
     }
 
     pub(super) async fn verification_request(
         &self,
         params: &ApiRequest,
-    ) -> Result<ApiVerificationResponse, reqwest::Error> {
-        network_helpers::make_retrying_request(self.verification_attempts, None, || async {
-            let resp = reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(self.request_timeout))
-                .build()?
-                .post(self.host.as_str())
-                .json(&params)
-                .send()
-                .await?;
-            resp.json().await
-        })
-        .await
+    ) -> Result<ApiVerificationResponse, anyhow::Error> {
+        self.reqwest_client
+            .post(self.host.as_str())
+            .json(&params)
+            .send()
+            .await?
+            .json()
+            .await
+            .map_err(anyhow::Error::msg)
     }
 
     pub(super) async fn source_files_request(
         &self,
         params: &ApiRequest,
-    ) -> Result<ApiFilesResponse, reqwest::Error> {
-        network_helpers::make_retrying_request(self.verification_attempts, None, || async {
-            let url = self
-                .host
-                .join(format!("files/any/{}/{}", &params.chain, &params.address).as_str())
-                .expect("should be valid url");
-            let resp = reqwest::get(url).await?;
-
-            resp.json().await
-        })
-        .await
+    ) -> Result<ApiFilesResponse, anyhow::Error> {
+        let url = self
+            .host
+            .join(format!("files/any/{}/{}", &params.chain, &params.address).as_str())
+            .expect("should be valid url");
+        self.reqwest_client
+            .get(url)
+            .send()
+            .await?
+            .json()
+            .await
+            .map_err(anyhow::Error::msg)
     }
 }

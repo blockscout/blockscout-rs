@@ -1,9 +1,7 @@
-mod network_helpers;
-
-use network_helpers::make_retrying_request;
 use pretty_assertions::assert_eq;
+use reqwest_middleware::ClientBuilder;
+use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use smart_contract_verifier_http::{run as run_http_server, Settings};
-use std::num::NonZeroUsize;
 
 #[actix_rt::test]
 async fn server_start() {
@@ -18,21 +16,24 @@ async fn server_start() {
         tokio::spawn(async move { run_http_server(settings).await })
     };
 
-    let sleep_between = Some(tokio::time::Duration::from_millis(100));
-    let attempts = NonZeroUsize::new(100).unwrap();
+    let retry_policy = ExponentialBackoff::builder()
+        .build_with_total_retry_duration(std::time::Duration::from_secs(10));
+    let client = ClientBuilder::new(reqwest::Client::new())
+        .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+        .build();
 
-    let resp = make_retrying_request(attempts, sleep_between, || {
-        reqwest::get(format!("{}/health", base))
-    })
-    .await
-    .expect("failed to connect to server");
+    let resp = client
+        .get(format!("{base}/health"))
+        .send()
+        .await
+        .expect("failed to connect to server");
     assert_eq!(resp.status(), 200);
 
-    let resp = make_retrying_request(attempts, sleep_between, || {
-        reqwest::get(format!("{}/metrics", metrics_base))
-    })
-    .await
-    .expect("failed to connect to server");
+    let resp = client
+        .get(format!("{metrics_base}/metrics"))
+        .send()
+        .await
+        .expect("failed to connect to server");
     assert_eq!(resp.status(), 200);
 
     let body = resp.text().await.unwrap();

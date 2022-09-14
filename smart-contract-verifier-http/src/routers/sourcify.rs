@@ -13,7 +13,8 @@ impl SourcifyRouter {
             settings.api_url,
             settings.request_timeout,
             settings.verification_attempts,
-        );
+        )
+        .expect("failed to build sourcify client");
         Self {
             api_client: web::Data::new(api_client),
         }
