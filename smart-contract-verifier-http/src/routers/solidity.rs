@@ -9,6 +9,7 @@ use smart_contract_verifier::{
     Compilers, Fetcher, ListFetcher, S3Fetcher, SolcValidator, SolidityCompiler,
 };
 use std::{str::FromStr, sync::Arc};
+use tokio::sync::Semaphore;
 
 pub struct SolidityRouter {
     compilers: web::Data<Compilers<SolidityCompiler>>,
@@ -49,7 +50,10 @@ fn new_bucket(settings: &S3FetcherSettings) -> anyhow::Result<Arc<Bucket>> {
 }
 
 impl SolidityRouter {
-    pub async fn new(settings: SoliditySettings) -> anyhow::Result<Self> {
+    pub async fn new(
+        settings: SoliditySettings,
+        compilers_threads_semaphore: Arc<Semaphore>,
+    ) -> anyhow::Result<Self> {
         let dir = settings.compilers_dir.clone();
         let schedule = settings.refresh_versions_schedule;
         let validator = Arc::new(SolcValidator::default());
@@ -73,7 +77,11 @@ impl SolidityRouter {
                 .await?,
             ),
         };
-        let compilers = Compilers::new(fetcher, SolidityCompiler::new());
+        let compilers = Compilers::new(
+            fetcher,
+            SolidityCompiler::new(),
+            compilers_threads_semaphore,
+        );
         compilers.load_from_dir(&dir).await;
         Ok(Self {
             compilers: web::Data::new(compilers),

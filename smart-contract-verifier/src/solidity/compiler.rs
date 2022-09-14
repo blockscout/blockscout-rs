@@ -23,7 +23,7 @@ impl EvmCompiler for SolidityCompiler {
         if ver.version() < &semver::Version::new(0, 4, 11) {
             solc_cli::compile_using_cli(path, input).await
         } else {
-            Solc::from(path).compile(input)
+            Solc::from(path).async_compile(input).await
         }
     }
 }

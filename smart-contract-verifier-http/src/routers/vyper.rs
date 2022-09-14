@@ -6,13 +6,17 @@ use crate::{
 use actix_web::web;
 use smart_contract_verifier::{Compilers, ListFetcher, VyperCompiler};
 use std::sync::Arc;
+use tokio::sync::Semaphore;
 
 pub struct VyperRouter {
     compilers: web::Data<Compilers<VyperCompiler>>,
 }
 
 impl VyperRouter {
-    pub async fn new(settings: VyperSettings) -> anyhow::Result<Self> {
+    pub async fn new(
+        settings: VyperSettings,
+        compilers_threads_semaphore: Arc<Semaphore>,
+    ) -> anyhow::Result<Self> {
         let dir = settings.compilers_dir.clone();
         let list_url = match settings.fetcher {
             FetcherSettings::List(s) => s.list_url,
@@ -29,7 +33,7 @@ impl VyperRouter {
             )
             .await?,
         );
-        let compilers = Compilers::new(fetcher, VyperCompiler::new());
+        let compilers = Compilers::new(fetcher, VyperCompiler::new(), compilers_threads_semaphore);
         compilers.load_from_dir(&dir).await;
         Ok(Self {
             compilers: web::Data::new(compilers),

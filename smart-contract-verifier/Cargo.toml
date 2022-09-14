@@ -14,7 +14,7 @@ chrono = "0.4"
 cron = "0.11"
 ethabi = "17.2"
 ethers-core = "0.17"
-ethers-solc = { version = "0.17", features = ["svm-solc"] }
+ethers-solc = { version = "0.17", features = ["async"] }
 futures = "0.3"
 hex = "0.4"
 lazy_static = "1"

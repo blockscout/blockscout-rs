@@ -1,13 +1,27 @@
 use anyhow::anyhow;
 use config::{Config, File};
 use cron::Schedule;
-use serde::{de::IgnoredAny, Deserialize};
+use serde::{de, Deserialize};
 use serde_with::{serde_as, DisplayFromStr};
 use smart_contract_verifier::{DEFAULT_SOLIDITY_COMPILER_LIST, DEFAULT_VYPER_COMPILER_LIST};
 use std::{net::SocketAddr, num::NonZeroUsize, path::PathBuf, str::FromStr};
 use url::Url;
 
-#[derive(Debug, Clone, Default, Deserialize)]
+/// Wrapper under [`serde::de::IgnoredAny`] which implements
+/// [`PartialEq`] and [`Eq`] for fields to be ignored.
+#[derive(Copy, Clone, Debug, Default, Deserialize)]
+struct IgnoredAny(de::IgnoredAny);
+
+impl PartialEq for IgnoredAny {
+    fn eq(&self, _other: &Self) -> bool {
+        // We ignore that values, so they should not impact the equality
+        true
+    }
+}
+
+impl Eq for IgnoredAny {}
+
+#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct Settings {
     pub server: ServerSettings,
@@ -16,23 +30,14 @@ pub struct Settings {
     pub sourcify: SourcifySettings,
     pub metrics: MetricsSettings,
     pub jaeger: JaegerSettings,
+    pub compilers: CompilersSettings,
 
     // Is required as we deny unknown fields, but allow users provide
     // path to config through PREFIX__CONFIG env variable. If removed,
     // the setup would fail with `unknown field `config`, expected one of...`
     #[serde(rename = "config")]
-    pub config_path: IgnoredAny,
+    config_path: IgnoredAny,
 }
-
-impl PartialEq for Settings {
-    fn eq(&self, other: &Self) -> bool {
-        self.server == other.server
-            && self.solidity == other.solidity
-            && self.sourcify == other.sourcify
-            && self.metrics == other.metrics
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ServerSettings {
@@ -188,6 +193,22 @@ impl Default for JaegerSettings {
             enabled: false,
             agent_endpoint: "localhost:6831".to_string(),
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct CompilersSettings {
+    pub max_threads: NonZeroUsize,
+}
+
+impl Default for CompilersSettings {
+    fn default() -> Self {
+        let max_threads = std::thread::available_parallelism().unwrap_or_else(|e| {
+            tracing::warn!("cannot get number of CPU cores: {}", e);
+            NonZeroUsize::new(8).unwrap()
+        });
+        Self { max_threads }
     }
 }
 

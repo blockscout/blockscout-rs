@@ -95,7 +95,7 @@ mod tests {
         str::FromStr,
         sync::Arc,
     };
-    use tokio::sync::OnceCell;
+    use tokio::sync::{OnceCell, Semaphore};
 
     async fn global_compilers() -> &'static Compilers<VyperCompiler> {
         static COMPILERS: OnceCell<Compilers<VyperCompiler>> = OnceCell::const_new();
@@ -105,7 +105,9 @@ mod tests {
                 let fetcher = ListFetcher::new(url, PathBuf::from("compilers"), None, None)
                     .await
                     .expect("Fetch releases");
-                let compilers = Compilers::new(Arc::new(fetcher), VyperCompiler::new());
+                let threads_semaphore = Arc::new(Semaphore::new(4));
+                let compilers =
+                    Compilers::new(Arc::new(fetcher), VyperCompiler::new(), threads_semaphore);
                 compilers
             })
             .await
