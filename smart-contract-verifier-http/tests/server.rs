@@ -1,7 +1,7 @@
 use pretty_assertions::assert_eq;
-use smart_contract_verifier_http::{run as run_http_server, Settings};
-use reqwest_middleware::{ClientBuilder};
+use reqwest_middleware::ClientBuilder;
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
+use smart_contract_verifier_http::{run as run_http_server, Settings};
 
 #[actix_rt::test]
 async fn server_start() {

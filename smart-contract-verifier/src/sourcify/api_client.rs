@@ -1,11 +1,10 @@
 use reqwest::Url;
-use std::{time::Duration};
+use std::time::Duration;
 
 use super::types::{ApiFilesResponse, ApiRequest, ApiVerificationResponse};
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use std::num::NonZeroU32;
-
 
 pub struct SourcifyApiClient {
     host: Url,

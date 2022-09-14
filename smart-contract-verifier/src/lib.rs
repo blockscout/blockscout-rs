@@ -9,7 +9,6 @@ mod verifier;
 
 // TODO: to be extracted in a separate crate
 mod mismatch;
-mod network_helpers;
 mod scheduler;
 
 #[cfg(test)]
