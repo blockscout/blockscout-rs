@@ -23,3 +23,6 @@ tracing-subscriber = { version = "0.3", features = ["registry", "env-filter"] }
 opentelemetry = { version = "0.17", features = ["rt-tokio"] }
 opentelemetry-jaeger = { version = "0.16", features = ["rt-tokio"] }
 tracing-opentelemetry = "0.17"
+
+[dev-dependencies]
+pretty_assertions = "1.3"

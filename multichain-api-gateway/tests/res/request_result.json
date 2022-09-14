@@ -1,35 +1,44 @@
 {
   "eth": {
-    "mainnet": {
-      "message": "OK",
-      "result": {
-        "blockMiner": "0x0000000000000000000000000000000000000000",
-        "blockNumber": "0",
-        "blockReward": "5000000000000000000",
-        "timeStamp": 0,
-        "uncleInclusionReward": null,
-        "uncles": null
-      },
-      "status": "1"
-    }
+      "mainnet": {
+          "message": "OK",
+          "result": {
+              "blockMiner": "0x0000000000000000000000000000000000000000",
+              "blockNumber": "0",
+              "blockReward": "5000000000000000000",
+              "timeStamp": 0,
+              "uncleInclusionReward": null,
+              "uncles": null
+          },
+          "status": "1"
+      }
+  },
+  "poa": {
+      "sokol": {
+          "message": "OK",
+          "result": {
+              "blockMiner": "0x0000000000000000000000000000000000000000",
+              "blockNumber": "0",
+              "blockReward": "1000000000000000000",
+              "timeStamp": 1513371805,
+              "uncleInclusionReward": null,
+              "uncles": null
+          },
+          "status": "1"
+      }
   },
   "xdai": {
-    "mainnet": {
-      "message": "OK",
-      "result": {
-        "blockMiner": "0x0000000000000000000000000000000000000000",
-        "blockNumber": "0",
-        "blockReward": "0",
-        "timeStamp": 1538980980,
-        "uncleInclusionReward": null,
-        "uncles": null
-      },
-      "status": "1"
-    },
-    "testnet": {
-      "message": "Something went wrong.",
-      "result": null,
-      "status": "0"
-    }
+      "mainnet": {
+          "message": "OK",
+          "result": {
+              "blockMiner": "0x0000000000000000000000000000000000000000",
+              "blockNumber": "0",
+              "blockReward": "0",
+              "timeStamp": 1538980980,
+              "uncleInclusionReward": null,
+              "uncles": null
+          },
+          "status": "1"
+      }
   }
 }
