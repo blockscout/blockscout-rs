@@ -108,7 +108,17 @@ impl Verifier {
                     Err(err) => {
                         let error = VerificationError::with_contract(path.clone(), name, err);
 
-                        tracing::error!("{}", error);
+                        match error {
+                            VerificationError {
+                                kind: VerificationErrorKind::InternalError(_),
+                                ..
+                            } => {
+                                tracing::error!("{}", error);
+                            }
+                            _ => {
+                                tracing::debug!("{}", error);
+                            }
+                        }
                         errors.push(error)
                     }
                 }
@@ -235,14 +245,8 @@ impl Verifier {
                     }
 
                     if metadata.solc != remote_metadata.solc {
-                        let expected_solc = metadata
-                            .solc
-                            .as_ref()
-                            .map(|b| DisplayBytes::from(b.clone()).to_string());
-                        let remote_solc = remote_metadata
-                            .solc
-                            .as_ref()
-                            .map(|b| DisplayBytes::from(b.clone()).to_string());
+                        let expected_solc = metadata.solc.clone();
+                        let remote_solc = remote_metadata.solc.clone();
                         return Err(VerificationErrorKind::CompilerVersionMismatch(
                             Mismatch::new(expected_solc, remote_solc),
                         ));

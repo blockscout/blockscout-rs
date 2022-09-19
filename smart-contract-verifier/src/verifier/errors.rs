@@ -38,7 +38,7 @@ pub enum VerificationErrorKind {
     #[error("cannot parse metadata")]
     MetadataParse(String),
     #[error("compiler versions included into metadata hash does not match: {0:?}")]
-    CompilerVersionMismatch(Mismatch<Option<String>>),
+    CompilerVersionMismatch(Mismatch<Option<semver::Version>>),
     #[error("invalid constructor arguments: {0}")]
     InvalidConstructorArguments(DisplayBytes),
 }
