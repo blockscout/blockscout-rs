@@ -344,6 +344,19 @@ mod failure_tests {
             .with_source_code("pragma solidity ^0.4.24; contract SimpleStorage { ".to_string());
         test_failure(contract_dir, test_input, "ParserError").await;
     }
+
+    #[actix_rt::test]
+    async fn returns_compiler_version_mismatch() {
+        let contract_dir = "solidity_0.5.14";
+
+        // Another version
+        let test_input = TestInput::new("A", "v0.5.15+commit.6a57276f");
+        test_failure(contract_dir, test_input, "Invalid compiler version").await;
+
+        // // Another nightly version
+        // let test_input = TestInput::new("A", "v0.5.14-nightly.2019.11.18+commit.79af19db");
+        // test_failure(contract_dir, test_input, "Invalid compiler versioa").await;
+    }
 }
 
 mod bad_request_error_tests {

@@ -87,9 +87,9 @@ pub async fn verify(
 
     let err = result.unwrap_err();
     match err {
-        VerificationError::Compilation(_) | VerificationError::NoMatchingContracts => {
-            Ok(Json(VerificationResponse::err(err)))
-        }
+        VerificationError::Compilation(_)
+        | VerificationError::NoMatchingContracts
+        | VerificationError::CompilerVersionMismatch(_) => Ok(Json(VerificationResponse::err(err))),
         VerificationError::Initialization(_) | VerificationError::VersionNotFound(_) => {
             Err(error::ErrorBadRequest(err))
         }

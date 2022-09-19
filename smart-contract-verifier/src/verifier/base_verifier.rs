@@ -246,7 +246,7 @@ impl Verifier {
 
                     if metadata.solc != remote_metadata.solc {
                         let expected_solc = metadata.solc.clone();
-                        let remote_solc = remote_metadata.solc.clone();
+                        let remote_solc = remote_metadata.solc;
                         return Err(VerificationErrorKind::CompilerVersionMismatch(
                             Mismatch::new(expected_solc, remote_solc),
                         ));

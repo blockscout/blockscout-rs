@@ -182,7 +182,10 @@ mod metadata_hash_deserialization_tests {
         let hex = "a2646970667358221220ba5af27fe13bc83e671bd6981216d35df49ab3ac923741b8948b277f93fbf73264736f6c637823302e382e31352d63692e323032322e352e32332b636f6d6d69742e3231353931353331";
         let encoded = DisplayBytes::from_str(hex).unwrap().0;
         let expected = MetadataHash {
-            solc: Some(Version::from_str("0.8.15-ci.2022.5.23+commit.21591531").expect("solc version parsing")),
+            solc: Some(
+                Version::from_str("0.8.15-ci.2022.5.23+commit.21591531")
+                    .expect("solc version parsing"),
+            ),
         };
         let expected_size = encoded.len();
 
