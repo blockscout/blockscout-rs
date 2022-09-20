@@ -351,7 +351,12 @@ mod failure_tests {
 
         // Another version
         let test_input = TestInput::new("A", "v0.5.15+commit.6a57276f");
-        test_failure(contract_dir, test_input, "Invalid compiler version").await;
+        test_failure(
+            contract_dir,
+            test_input,
+            "Invalid compiler version: Expected 0.5.14, found 0.5.15",
+        )
+        .await;
 
         // // Another nightly version
         // let test_input = TestInput::new("A", "v0.5.14-nightly.2019.11.18+commit.79af19db");

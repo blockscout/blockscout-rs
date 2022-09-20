@@ -244,12 +244,18 @@ impl Verifier {
                         ));
                     }
 
-                    if metadata.solc != remote_metadata.solc {
-                        let expected_solc = metadata.solc.clone();
-                        let remote_solc = remote_metadata.solc;
-                        return Err(VerificationErrorKind::CompilerVersionMismatch(
-                            Mismatch::new(expected_solc, remote_solc),
-                        ));
+                    // We may say the compiler versions does not correspond to each other only in case if both compiler versions are present.
+                    // Otherwise, we cannot say for sure if compiler version is invalid.
+                    if let (Some(metadata_solc), Some(remote_metadata_solc)) =
+                        (&metadata.solc, &remote_metadata.solc)
+                    {
+                        if metadata_solc != remote_metadata_solc {
+                            let expected_solc = metadata_solc.clone();
+                            let remote_solc = remote_metadata_solc.clone();
+                            return Err(VerificationErrorKind::CompilerVersionMismatch(
+                                Mismatch::new(expected_solc, remote_solc),
+                            ));
+                        }
                     }
                 }
             }

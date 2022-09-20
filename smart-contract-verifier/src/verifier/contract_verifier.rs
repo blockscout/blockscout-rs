@@ -126,7 +126,7 @@ impl<'a, T: EvmCompiler> ContractVerifier<'a, T> {
                             kind:
                                 VerificationErrorKind::CompilerVersionMismatch(Mismatch {
                                     // 'found' contains solc version of the remote bytecode.
-                                    found: Some(Some(version)),
+                                    found: Some(version),
                                     ..
                                 }),
                             ..
