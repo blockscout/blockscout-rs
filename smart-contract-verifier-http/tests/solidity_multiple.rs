@@ -35,9 +35,28 @@ async fn global_app_router() -> &'static AppRouter {
         .await
 }
 
+async fn local_app_router(mut settings: Settings) -> AppRouter {
+    settings.sourcify.enabled = false;
+    settings.metrics.enabled = false;
+    settings.vyper.enabled = false;
+    settings.jaeger.enabled = false;
+    AppRouter::new(settings)
+        .await
+        .expect("couldn't initialize the app")
+}
+
 async fn test_setup(dir: &str, input: &mut TestInput) -> (ServiceResponse, Option<DisplayBytes>) {
-    let app_router = global_app_router().await;
-    let app = test::init_service(App::new().configure(configure_router(app_router))).await;
+    let app = {
+        match &input.app_router {
+            None => {
+                let app_router = global_app_router().await;
+                test::init_service(App::new().configure(configure_router(app_router))).await
+            }
+            Some(app_router) => {
+                test::init_service(App::new().configure(configure_router(app_router))).await
+            }
+        }
+    };
 
     let prefix = format!("{}/{}", CONTRACTS_DIR, dir);
     let suffix = if input.is_yul { "yul" } else { "sol" };
@@ -358,9 +377,18 @@ mod failure_tests {
         )
         .await;
 
+        // Currently due to the nature of bytecodes comparing (see `base_verifier::compare_creation_tx_inputs`)
+        // if on chain creation transaction input length is less than the local creation transaction input,
+        // the verifier returns `NoMatchingContracts` error. Thus, the test case below would not work.
+        //
+        // TODO: see how difficult it would be to fix that
+
         // // Another nightly version
-        // let test_input = TestInput::new("A", "v0.5.14-nightly.2019.11.18+commit.79af19db");
-        // test_failure(contract_dir, test_input, "Invalid compiler versioa").await;
+        // let settings_json = "{ \"solidity\": { \"fetcher\": { \"list\": { \"list_url\": \"https://raw.githubusercontent.com/blockscout/solc-bin/main/list.json\" } } } }";
+        // let settings = serde_json::from_str(settings_json).expect("Settings is valid json");
+        // let local_app_router = local_app_router(settings).await;
+        // let test_input = TestInput::new("A", "v0.5.14-nightly.2019.12.10+commit.45aa7a88").with_app_router(local_app_router);
+        // test_failure(contract_dir, test_input, "Invalid compiler version").await;
     }
 }
 

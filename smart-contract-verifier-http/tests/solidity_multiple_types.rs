@@ -1,5 +1,6 @@
 #![allow(dead_code, unused)]
 
+use smart_contract_verifier_http::AppRouter;
 use std::collections::BTreeMap;
 
 pub struct TestInput {
@@ -17,6 +18,9 @@ pub struct TestInput {
     pub creation_tx_input: Option<String>,
     /// If None, the bytecode would be read from the corresponding file
     pub deployed_bytecode: Option<String>,
+
+    // If None, global app router would be used
+    pub app_router: Option<AppRouter>,
 }
 
 impl TestInput {
@@ -33,6 +37,8 @@ impl TestInput {
             source_code: None,
             creation_tx_input: None,
             deployed_bytecode: None,
+
+            app_router: None,
         }
     }
 
@@ -73,6 +79,11 @@ impl TestInput {
 
     pub fn with_creation_tx_input(mut self, creation_tx_input: String) -> Self {
         self.creation_tx_input = Some(creation_tx_input);
+        self
+    }
+
+    pub fn with_app_router(mut self, app_router: AppRouter) -> Self {
+        self.app_router = Some(app_router);
         self
     }
 }
