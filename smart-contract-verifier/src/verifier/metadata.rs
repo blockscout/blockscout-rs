@@ -1,4 +1,6 @@
 use minicbor::{data::Type, Decode, Decoder};
+use semver::Version;
+use std::str::FromStr;
 use thiserror::Error;
 
 /// Parsed metadata hash
@@ -7,7 +9,7 @@ use thiserror::Error;
 /// Currently we are interested only in `solc` value.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MetadataHash {
-    pub solc: Option<bytes::Bytes>,
+    pub solc: Option<Version>,
 }
 
 impl MetadataHash {
@@ -23,6 +25,8 @@ impl MetadataHash {
 enum ParseMetadataHashError {
     #[error("invalid solc type. Expected \"string\" or \"bytes\", found \"{0}\"")]
     InvalidSolcType(Type),
+    #[error("solc is not a valid version: {0}")]
+    InvalidSolcVersion(String),
     #[error("\"solc\" key met more than once")]
     DuplicateKeys,
 }
@@ -51,10 +55,32 @@ impl<'b> Decode<'b, DecodeContext> for MetadataHash {
                         return Err(Error::custom(ParseMetadataHashError::DuplicateKeys));
                     }
                     solc = match d.datatype()? {
-                        Type::Bytes => Some(d.bytes()?),
+                        // Appeared in 0.5.9.
+                        // https://docs.soliditylang.org/en/v0.8.17/metadata.html#encoding-of-the-metadata-hash-in-the-bytecode
+                        Type::Bytes => {
+                            // Release builds of solc use a 3 byte encoding of the version
+                            // (one byte each for major, minor and patch version number)
+                            let bytes = d.bytes()?;
+                            if bytes.len() != 3 {
+                                // Something went wrong
+                                return Err(Error::custom(
+                                    ParseMetadataHashError::InvalidSolcVersion(
+                                        "release build should be encoded as exactly 3 bytes".into(),
+                                    ),
+                                ));
+                            }
+                            let (major, minor, patch) = (bytes[0], bytes[1], bytes[2]);
+                            Some(Version::new(major as u64, minor as u64, patch as u64))
+                        }
                         Type::String => {
+                            // Prerelease builds use a complete version string including commit hash and build date
                             let s = d.str()?;
-                            Some(s.as_bytes())
+                            let version = Version::from_str(s).map_err(|err| {
+                                Error::custom(ParseMetadataHashError::InvalidSolcVersion(
+                                    err.to_string(),
+                                ))
+                            })?;
+                            Some(version)
                         }
                         type_ => {
                             // value of "solc" key must be either String or Bytes
@@ -77,7 +103,6 @@ impl<'b> Decode<'b, DecodeContext> for MetadataHash {
         // function.
         ctx.used_size = d.position();
 
-        let solc = solc.map(bytes::Bytes::copy_from_slice);
         Ok(MetadataHash { solc })
     }
 
@@ -105,6 +130,7 @@ mod metadata_hash_deserialization_tests {
         // so the only way to ensure the valid error occurred is by string comparison.
         let parse_metadata_hash_error_to_string = |err: ParseMetadataHashError| match err {
             ParseMetadataHashError::InvalidSolcType(_) => "InvalidSolcType",
+            ParseMetadataHashError::InvalidSolcVersion(_) => "InvalidSolcVersion",
             ParseMetadataHashError::DuplicateKeys => "DuplicateKeys",
         };
         format!("{:?}", error).contains(parse_metadata_hash_error_to_string(expected))
@@ -136,7 +162,7 @@ mod metadata_hash_deserialization_tests {
         let hex = "a2646970667358221220bcc988b1311237f2c00ccd0bfbd8b01d24dc18f720603b0de93fe6327df5362564736f6c634300080e";
         let encoded = DisplayBytes::from_str(hex).unwrap().0;
         let expected = MetadataHash {
-            solc: Some("\u{0}\u{8}\u{e}".as_bytes().into()),
+            solc: Some(Version::new(0, 8, 14)),
         };
         let expected_size = encoded.len();
 
@@ -156,7 +182,10 @@ mod metadata_hash_deserialization_tests {
         let hex = "a2646970667358221220ba5af27fe13bc83e671bd6981216d35df49ab3ac923741b8948b277f93fbf73264736f6c637823302e382e31352d63692e323032322e352e32332b636f6d6d69742e3231353931353331";
         let encoded = DisplayBytes::from_str(hex).unwrap().0;
         let expected = MetadataHash {
-            solc: Some("0.8.15-ci.2022.5.23+commit.21591531".as_bytes().into()),
+            solc: Some(
+                Version::from_str("0.8.15-ci.2022.5.23+commit.21591531")
+                    .expect("solc version parsing"),
+            ),
         };
         let expected_size = encoded.len();
 
@@ -180,7 +209,7 @@ mod metadata_hash_deserialization_tests {
         let hex = format!("{}{}", first, second);
         let encoded = DisplayBytes::from_str(&hex).unwrap().0;
         let expected = MetadataHash {
-            solc: Some("\u{0}\u{8}\u{e}".as_bytes().into()),
+            solc: Some(Version::new(0, 8, 14)),
         };
         let expected_size = DisplayBytes::from_str(first).unwrap().0.len();
 

@@ -1,6 +1,10 @@
-use super::{base_verifier::Verifier, errors::BytecodeInitError};
+use super::{
+    base_verifier::Verifier,
+    errors::{BytecodeInitError, VerificationError, VerificationErrorKind},
+};
 use crate::{
-    compiler::{self, Compilers, EvmCompiler, Version},
+    compiler::{self, Compilers, EvmCompiler},
+    mismatch::Mismatch,
     DisplayBytes,
 };
 use anyhow::anyhow;
@@ -15,13 +19,15 @@ pub enum Error {
     #[error("{0}")]
     Initialization(anyhow::Error),
     #[error("Compiler version not found: {0}")]
-    VersionNotFound(Version),
+    VersionNotFound(compiler::Version),
     #[error("Compilation error: {0:?}")]
     Compilation(Vec<String>),
     #[error("{0}")]
     Internal(anyhow::Error),
     #[error("No contract could be verified with provided data")]
     NoMatchingContracts,
+    #[error("Invalid compiler version: {0}")]
+    CompilerVersionMismatch(Mismatch<semver::Version>),
 }
 
 impl From<BytecodeInitError> for Error {
@@ -44,7 +50,7 @@ impl From<compiler::Error> for Error {
 #[derive(Clone, Debug)]
 pub struct Success {
     pub compiler_input: CompilerInput,
-    pub compiler_version: Version,
+    pub compiler_version: compiler::Version,
     pub file_path: String,
     pub contract_name: String,
     pub abi: ethabi::Contract,
@@ -53,14 +59,14 @@ pub struct Success {
 
 pub struct ContractVerifier<'a, T> {
     compilers: Arc<Compilers<T>>,
-    compiler_version: &'a Version,
+    compiler_version: &'a compiler::Version,
     verifier: Verifier,
 }
 
 impl<'a, T: EvmCompiler> ContractVerifier<'a, T> {
     pub fn new(
         compilers: Arc<Compilers<T>>,
-        compiler_version: &'a Version,
+        compiler_version: &'a compiler::Version,
         creation_tx_input: Bytes,
         deployed_bytecode: Bytes,
     ) -> Result<Self, Error> {
@@ -104,7 +110,34 @@ impl<'a, T: EvmCompiler> ContractVerifier<'a, T> {
         let verification_success = self
             .verifier
             .verify(compiler_output, compiler_output_modified)
-            .map_err(|_err| Error::NoMatchingContracts)?;
+            .map_err(|errs| {
+                errs.into_iter()
+                    .find_map(|err| match err {
+                        // Even one CompilerVersionMismatch error indicates that provided
+                        // compiler version does not correspond to on chain bytecode.
+                        // We want to notify a user explicitly.
+                        //
+                        // Notice, that from `VerificationErrorKind` point of view, we compare result of
+                        // locally compiled bytecode with the remote bytecode, thus, expected local version
+                        // and found the remote. But from `Error::CompilerVersionMismatch` point of view, the remote
+                        // version is the actual version we compare with, thus expected the remote version and found
+                        // the compiler version provided by the user.
+                        VerificationError {
+                            kind:
+                                VerificationErrorKind::CompilerVersionMismatch(Mismatch {
+                                    // 'found' contains solc version of the remote bytecode.
+                                    found: Some(version),
+                                    ..
+                                }),
+                            ..
+                        } => Some(Error::CompilerVersionMismatch(Mismatch::new(
+                            version,
+                            self.compiler_version.version().clone(),
+                        ))),
+                        _ => None,
+                    })
+                    .unwrap_or(Error::NoMatchingContracts)
+            })?;
 
         // We accept compiler input and compiler version by reference, so that we
         // avoid their cloning if verification fails.
