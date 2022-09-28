@@ -139,7 +139,7 @@ mod types {
             self.files_dir
                 .path()
                 .exists()
-                .then(|| &self.file_names)
+                .then_some(&self.file_names)
                 .ok_or_else(|| {
                     SolcError::Message("temp dir with contracts doesn't exist".to_string())
                 })
