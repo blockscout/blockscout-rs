@@ -14,7 +14,7 @@ use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerificationRequest {
     pub deployed_bytecode: Bytes,
-    pub creation_bytecode: Bytes,
+    pub creation_bytecode: Option<Bytes>,
     pub compiler_version: Version,
 
     pub content: MultiFileContent,

@@ -3,6 +3,7 @@ mod base_verifier;
 mod bytecode;
 mod errors;
 mod metadata;
+mod generic_verifier;
 
 mod contract_verifier;
 

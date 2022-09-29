@@ -1,7 +1,8 @@
 use super::{
-    bytecode::{Bytecode, BytecodePart, LocalBytecode},
+    bytecode::{Source, Bytecode, BytecodePart, LocalBytecode},
     errors::{BytecodeInitError, VerificationError, VerificationErrorKind},
     metadata::MetadataHash,
+    generic_verifier::{self, VerificationSuccess}
 };
 use crate::{mismatch::Mismatch, DisplayBytes};
 use bytes::Bytes;
@@ -13,26 +14,23 @@ use ethers_solc::{artifacts::Contract, Artifact, CompilerOutput};
 /// Contains input data provided by the requester that will
 /// further be used in verification process.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Verifier {
-    remote_bytecode: Bytecode,
+pub struct Verifier<T> {
+    remote_bytecode: Bytecode<T>,
 }
 
-/// The structure returned as a result when verification successes.
-/// Contains data needed to be sent back as a verification response.
-#[derive(Clone, Debug, PartialEq)]
-pub struct VerificationSuccess {
-    pub file_path: String,
-    pub contract_name: String,
-    pub abi: ethabi::Contract,
-    pub constructor_args: Option<DisplayBytes>,
+impl<T: Source> generic_verifier::Verifier for Verifier<T> {
+    type Input = (CompilerOutput, CompilerOutput);
+
+    fn verify(&self, input: Self::Input) -> Result<VerificationSuccess, Vec<VerificationError>> {
+        self.verify(input.0, input.1)
+    }
 }
 
-impl Verifier {
+impl<T: Source> Verifier<T> {
     pub fn new(
-        creation_tx_input: Bytes,
-        deployed_bytecode: Bytes,
+        input: Bytes,
     ) -> Result<Self, BytecodeInitError> {
-        let bytecode = Bytecode::new(creation_tx_input, deployed_bytecode)?;
+        let bytecode = Bytecode::new(input)?;
         Ok(Self {
             remote_bytecode: bytecode,
         })
@@ -139,7 +137,7 @@ impl Verifier {
             .ok_or_else(|| VerificationErrorKind::InternalError("missing abi".into()))?;
 
         let bytecode = Bytecode::try_from(contract).map_err(|err| match err {
-            BytecodeInitError::EmptyCreationTxInput | BytecodeInitError::EmptyDeployedBytecode => {
+            BytecodeInitError::Empty  => {
                 VerificationErrorKind::AbstractContract
             }
             // Corresponding bytecode was not linked properly
@@ -156,8 +154,8 @@ impl Verifier {
         Self::compare_creation_tx_inputs(&self.remote_bytecode, &local_bytecode)?;
 
         let constructor_args = Self::extract_constructor_args(
-            self.remote_bytecode.creation_tx_input(),
-            local_bytecode.creation_tx_input(),
+            self.remote_bytecode.bytecode(),
+            local_bytecode.bytecode(),
             abi.constructor(),
         )?;
 
@@ -165,11 +163,11 @@ impl Verifier {
     }
 
     fn compare_creation_tx_inputs(
-        remote_bytecode: &Bytecode,
-        local_bytecode: &LocalBytecode,
+        remote_bytecode: &Bytecode<T>,
+        local_bytecode: &LocalBytecode<T>,
     ) -> Result<(), VerificationErrorKind> {
-        let remote_creation_tx_input = remote_bytecode.creation_tx_input();
-        let local_creation_tx_input = local_bytecode.creation_tx_input();
+        let remote_creation_tx_input = remote_bytecode.bytecode();
+        let local_creation_tx_input = local_bytecode.bytecode();
 
         if remote_creation_tx_input.len() < local_creation_tx_input.len() {
             return Err(VerificationErrorKind::BytecodeLengthMismatch {
@@ -187,7 +185,7 @@ impl Verifier {
         Self::compare_bytecode_parts(
             remote_creation_tx_input,
             local_creation_tx_input,
-            local_bytecode.creation_tx_input_parts(),
+            local_bytecode.bytecode_parts(),
         )?;
 
         Ok(())
@@ -322,7 +320,7 @@ impl Verifier {
 
 #[cfg(test)]
 mod verifier_initialization_tests {
-    use super::*;
+    use super::{*, super::bytecode::{CreationTxInput, DeployedBytecode}};
     use const_format::concatcp;
     use pretty_assertions::assert_eq;
     use std::str::FromStr;
@@ -344,29 +342,38 @@ mod verifier_initialization_tests {
         DEFAULT_ENCODED_METADATA_HASH
     );
 
-    fn new_verifier(
-        creation_tx_input: &str,
-        deployed_bytecode: &str,
-    ) -> Result<Verifier, BytecodeInitError> {
-        let creation_tx_input = DisplayBytes::from_str(creation_tx_input)
-            .expect("Invalid creation tx input")
+    fn new_verifier<T: Source>(
+        bytecode: &str,
+    ) -> Result<Verifier<T>, BytecodeInitError> {
+        let bytecode = DisplayBytes::from_str(bytecode)
+            .expect("Invalid bytecode")
             .0;
-        let deployed_bytecode = DisplayBytes::from_str(deployed_bytecode)
-            .expect("Invalid creation tx input")
-            .0;
-        Verifier::new(creation_tx_input, deployed_bytecode)
+        Verifier::new(bytecode)
     }
 
     #[test]
-    fn initialization_with_valid_data() {
-        let verifier = new_verifier(DEFAULT_CREATION_TX_INPUT, DEFAULT_DEPLOYED_BYTECODE);
+    fn initialization_with_valid_creation_tx_input() {
+        let verifier = new_verifier::<CreationTxInput>(DEFAULT_CREATION_TX_INPUT);
         assert!(
             verifier.is_ok(),
             "Initialization without \"0x\" prefix failed"
         );
 
-        let verifier = new_verifier(
+        let verifier = new_verifier::<CreationTxInput>(
             &concatcp!("0x", DEFAULT_CREATION_TX_INPUT),
+        );
+        assert!(verifier.is_ok(), "Initialization with \"0x\" prefix failed");
+    }
+
+    #[test]
+    fn initialization_with_valid_deployed_bytecode() {
+        let verifier = new_verifier::<DeployedBytecode>(DEFAULT_DEPLOYED_BYTECODE);
+        assert!(
+            verifier.is_ok(),
+            "Initialization without \"0x\" prefix failed"
+        );
+
+        let verifier = new_verifier::<DeployedBytecode>(
             &concatcp!("0x", DEFAULT_DEPLOYED_BYTECODE),
         );
         assert!(verifier.is_ok(), "Initialization with \"0x\" prefix failed");
@@ -374,21 +381,21 @@ mod verifier_initialization_tests {
 
     #[test]
     fn initialization_with_empty_creation_tx_input_should_fail() {
-        let verifier = new_verifier("", DEFAULT_DEPLOYED_BYTECODE);
+        let verifier = new_verifier::<CreationTxInput>("");
         assert!(verifier.is_err(), "Verifier initialization should fail");
         assert_eq!(
             verifier.unwrap_err(),
-            BytecodeInitError::EmptyCreationTxInput,
+            BytecodeInitError::Empty,
         )
     }
 
     #[test]
     fn initialization_with_empty_deployed_bytecode_should_fail() {
-        let verifier = new_verifier(DEFAULT_CREATION_TX_INPUT, "");
+        let verifier = new_verifier::<DeployedBytecode>("");
         assert!(verifier.is_err(), "Verifier initialization should fail");
         assert_eq!(
             verifier.unwrap_err(),
-            BytecodeInitError::EmptyDeployedBytecode
+            BytecodeInitError::Empty
         )
     }
 }

@@ -10,10 +10,8 @@ pub enum BytecodeInitError {
     InvalidCreationTxInput(String),
     #[error("deployed bytecode is not valid: {0}")]
     InvalidDeployedBytecode(String),
-    #[error("creation transaction input is empty")]
-    EmptyCreationTxInput,
-    #[error("deployed bytecode is empty")]
-    EmptyDeployedBytecode,
+    #[error("bytecode is empty")]
+    Empty,
 }
 
 /// Enumerates errors that may occur during a single contract verification.
