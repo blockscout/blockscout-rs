@@ -1,4 +1,3 @@
-use std::marker::PhantomData;
 use super::{
     errors::{BytecodeInitError, VerificationErrorKind},
     metadata::MetadataHash,
@@ -6,6 +5,7 @@ use super::{
 use crate::mismatch::Mismatch;
 use bytes::{Buf, Bytes};
 use ethers_solc::{artifacts::Contract, Artifact};
+use std::marker::PhantomData;
 
 /// Types that can be used as Bytecode source indicator
 pub trait Source {
@@ -20,15 +20,19 @@ pub struct DeployedBytecode;
 
 impl Source for DeployedBytecode {
     fn try_bytes_from_contract(contract: &Contract) -> Result<Bytes, BytecodeInitError> {
-        let bytes = contract.get_deployed_bytecode_bytes().ok_or_else(|| {
-            let bytecode = contract
-                .get_deployed_bytecode_object()
-                .unwrap_or_default()
-                .as_str()
-                .unwrap_or_default()
-                .to_string();
-            BytecodeInitError::InvalidDeployedBytecode(bytecode)
-        })?.0.clone();
+        let bytes = contract
+            .get_deployed_bytecode_bytes()
+            .ok_or_else(|| {
+                let bytecode = contract
+                    .get_deployed_bytecode_object()
+                    .unwrap_or_default()
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_string();
+                BytecodeInitError::InvalidDeployedBytecode(bytecode)
+            })?
+            .0
+            .clone();
 
         Ok(bytes)
     }
@@ -41,15 +45,19 @@ pub struct CreationTxInput;
 
 impl Source for CreationTxInput {
     fn try_bytes_from_contract(contract: &Contract) -> Result<Bytes, BytecodeInitError> {
-        let bytes = contract.get_bytecode_bytes().ok_or_else(|| {
-            let bytecode = contract
-                .get_bytecode_object()
-                .unwrap_or_default()
-                .as_str()
-                .unwrap_or_default()
-                .to_string();
-            BytecodeInitError::InvalidCreationTxInput(bytecode)
-        })?.0.clone();
+        let bytes = contract
+            .get_bytecode_bytes()
+            .ok_or_else(|| {
+                let bytecode = contract
+                    .get_bytecode_object()
+                    .unwrap_or_default()
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_string();
+                BytecodeInitError::InvalidCreationTxInput(bytecode)
+            })?
+            .0
+            .clone();
 
         Ok(bytes)
     }
@@ -61,13 +69,11 @@ pub struct Bytecode<T> {
     /// Raw bytecode bytes used in corresponding source
     bytecode: Bytes,
     /// Indicates the source of bytecode (DeployedBytecode, CreationTxInput)
-    source: PhantomData<T>
+    source: PhantomData<T>,
 }
 
 impl<T> Bytecode<T> {
-    pub fn new(
-        bytecode: Bytes,
-    ) -> Result<Self, BytecodeInitError> {
+    pub fn new(bytecode: Bytes) -> Result<Self, BytecodeInitError> {
         if bytecode.is_empty() {
             return Err(BytecodeInitError::Empty);
         }
@@ -136,10 +142,7 @@ impl<T> LocalBytecode<T> {
         bytecode: Bytecode<T>,
         bytecode_modified: Bytecode<T>,
     ) -> Result<Self, VerificationErrorKind> {
-        let bytecode_parts = Self::split(
-            bytecode.bytecode(),
-            bytecode_modified.bytecode(),
-        )?;
+        let bytecode_parts = Self::split(bytecode.bytecode(), bytecode_modified.bytecode())?;
 
         Ok(Self {
             bytecode,
@@ -292,9 +295,7 @@ mod local_bytecode_initialization_tests {
     // const DEFAULT_DEPLOYED_BYTECODE_MODIFIED: &'static str =
     //     concatcp!(DEPLOYED_BYTECODE_MAIN_PART_1, METADATA_PART1_MODIFIED);
 
-    fn new_bytecode<T: Source>(
-        bytecode: &str,
-    ) -> Result<Bytecode<T>, BytecodeInitError> {
+    fn new_bytecode<T: Source>(bytecode: &str) -> Result<Bytecode<T>, BytecodeInitError> {
         let bytecode = DisplayBytes::from_str(bytecode)
             .expect("Invalid bytecode")
             .0;
@@ -330,11 +331,10 @@ mod local_bytecode_initialization_tests {
         let creation_tx_input = format!("{}", CREATION_TX_INPUT_MAIN_PART_1);
         let creation_tx_input_modified = format!("{}", CREATION_TX_INPUT_MAIN_PART_1);
 
-        let bytecode: Bytecode<CreationTxInput> = new_bytecode(&creation_tx_input)
-            .expect("Bytecode initialization failed");
-        let bytecode_modified =
-            new_bytecode(&creation_tx_input_modified)
-                .expect("Modified bytecode initialization failed");
+        let bytecode: Bytecode<CreationTxInput> =
+            new_bytecode(&creation_tx_input).expect("Bytecode initialization failed");
+        let bytecode_modified = new_bytecode(&creation_tx_input_modified)
+            .expect("Modified bytecode initialization failed");
 
         let local_bytecode = LocalBytecode::new(bytecode.clone(), bytecode_modified);
 
@@ -355,11 +355,10 @@ mod local_bytecode_initialization_tests {
             CREATION_TX_INPUT_MAIN_PART_1, METADATA_PART1_MODIFIED
         );
 
-        let bytecode: Bytecode<CreationTxInput> = new_bytecode(&creation_tx_input)
-            .expect("Bytecode initialization failed");
-        let bytecode_modified =
-            new_bytecode(&creation_tx_input_modified)
-                .expect("Modified bytecode initialization failed");
+        let bytecode: Bytecode<CreationTxInput> =
+            new_bytecode(&creation_tx_input).expect("Bytecode initialization failed");
+        let bytecode_modified = new_bytecode(&creation_tx_input_modified)
+            .expect("Modified bytecode initialization failed");
 
         let local_bytecode = LocalBytecode::new(bytecode.clone(), bytecode_modified);
 
@@ -392,11 +391,10 @@ mod local_bytecode_initialization_tests {
             METADATA_PART2_MODIFIED
         );
 
-        let bytecode: Bytecode<CreationTxInput> = new_bytecode(&creation_tx_input)
-            .expect("Bytecode initialization failed");
-        let bytecode_modified =
-            new_bytecode(&creation_tx_input_modified)
-                .expect("Modified bytecode initialization failed");
+        let bytecode: Bytecode<CreationTxInput> =
+            new_bytecode(&creation_tx_input).expect("Bytecode initialization failed");
+        let bytecode_modified = new_bytecode(&creation_tx_input_modified)
+            .expect("Modified bytecode initialization failed");
 
         let local_bytecode = LocalBytecode::new(bytecode.clone(), bytecode_modified);
 
@@ -425,11 +423,10 @@ mod local_bytecode_initialization_tests {
             CREATION_TX_INPUT_MAIN_PART_1, METADATA_PART1_MODIFIED, METADATA_PART2_MODIFIED
         );
 
-        let bytecode: Bytecode<CreationTxInput> = new_bytecode(&creation_tx_input)
-            .expect("Bytecode initialization failed");
-        let bytecode_modified =
-            new_bytecode(&creation_tx_input_modified)
-                .expect("Modified bytecode initialization failed");
+        let bytecode: Bytecode<CreationTxInput> =
+            new_bytecode(&creation_tx_input).expect("Bytecode initialization failed");
+        let bytecode_modified = new_bytecode(&creation_tx_input_modified)
+            .expect("Modified bytecode initialization failed");
 
         let local_bytecode = LocalBytecode::new(bytecode.clone(), bytecode_modified);
 
@@ -455,12 +452,10 @@ mod local_bytecode_initialization_tests {
             CREATION_TX_INPUT_MAIN_PART_1, METADATA_PART1_MODIFIED
         );
 
-        let bytecode: Bytecode<CreationTxInput> = new_bytecode(&creation_tx_input)
-            .expect("Bytecode initialization failed");
-        let bytecode_modified = new_bytecode(
-            &creation_tx_input_modified,
-        )
-        .expect("Modified bytecode initialization failed");
+        let bytecode: Bytecode<CreationTxInput> =
+            new_bytecode(&creation_tx_input).expect("Bytecode initialization failed");
+        let bytecode_modified = new_bytecode(&creation_tx_input_modified)
+            .expect("Modified bytecode initialization failed");
 
         let local_bytecode = LocalBytecode::new(bytecode.clone(), bytecode_modified);
 
@@ -489,12 +484,10 @@ mod local_bytecode_initialization_tests {
             CREATION_TX_INPUT_MAIN_PART_1, METADATA_PART1_MODIFIED
         );
 
-        let bytecode: Bytecode<CreationTxInput> = new_bytecode(&creation_tx_input)
-            .expect("Bytecode initialization failed");
-        let bytecode_modified = new_bytecode(
-            &creation_tx_input_modified,
-        )
-        .expect("Modified bytecode initialization failed");
+        let bytecode: Bytecode<CreationTxInput> =
+            new_bytecode(&creation_tx_input).expect("Bytecode initialization failed");
+        let bytecode_modified = new_bytecode(&creation_tx_input_modified)
+            .expect("Modified bytecode initialization failed");
 
         let local_bytecode = LocalBytecode::new(bytecode.clone(), bytecode_modified);
 
@@ -528,12 +521,10 @@ mod local_bytecode_initialization_tests {
             &METADATA_PART1_MODIFIED[..METADATA_PART1_MODIFIED.len() - 2]
         );
 
-        let bytecode: Bytecode<CreationTxInput> = new_bytecode(&creation_tx_input)
-            .expect("Bytecode initialization failed");
-        let bytecode_modified = new_bytecode(
-            &creation_tx_input_modified,
-        )
-        .expect("Modified bytecode initialization failed");
+        let bytecode: Bytecode<CreationTxInput> =
+            new_bytecode(&creation_tx_input).expect("Bytecode initialization failed");
+        let bytecode_modified = new_bytecode(&creation_tx_input_modified)
+            .expect("Modified bytecode initialization failed");
 
         let local_bytecode = LocalBytecode::new(bytecode.clone(), bytecode_modified);
 
@@ -565,12 +556,10 @@ mod local_bytecode_initialization_tests {
             "0031"
         );
 
-        let bytecode: Bytecode<CreationTxInput> = new_bytecode(&creation_tx_input)
-            .expect("Bytecode initialization failed");
-        let bytecode_modified = new_bytecode(
-            &creation_tx_input_modified,
-        )
-        .expect("Modified bytecode initialization failed");
+        let bytecode: Bytecode<CreationTxInput> =
+            new_bytecode(&creation_tx_input).expect("Bytecode initialization failed");
+        let bytecode_modified = new_bytecode(&creation_tx_input_modified)
+            .expect("Modified bytecode initialization failed");
 
         let local_bytecode = LocalBytecode::new(bytecode.clone(), bytecode_modified);
 

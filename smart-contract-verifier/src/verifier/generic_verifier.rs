@@ -1,7 +1,6 @@
 use super::errors::VerificationError;
 use crate::DisplayBytes;
 
-
 /// The structure returned as a result when verification successes.
 /// Contains data needed to be sent back as a verification response.
 #[derive(Clone, Debug, PartialEq)]
