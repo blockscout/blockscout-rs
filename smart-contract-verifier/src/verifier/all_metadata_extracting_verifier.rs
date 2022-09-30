@@ -1,7 +1,7 @@
 use super::{
+    base::{self, VerificationSuccess},
     bytecode::{Bytecode, BytecodePart, LocalBytecode, Source},
     errors::{BytecodeInitError, VerificationError, VerificationErrorKind},
-    generic_verifier::{self, VerificationSuccess},
     metadata::MetadataHash,
 };
 use crate::{mismatch::Mismatch, DisplayBytes};
@@ -18,7 +18,7 @@ pub struct Verifier<T> {
     remote_bytecode: Bytecode<T>,
 }
 
-impl<T: Source> generic_verifier::Verifier for Verifier<T> {
+impl<T: Source> base::Verifier for Verifier<T> {
     type Input = (CompilerOutput, CompilerOutput);
 
     fn verify(&self, input: Self::Input) -> Result<VerificationSuccess, Vec<VerificationError>> {

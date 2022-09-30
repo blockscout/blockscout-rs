@@ -1,8 +1,7 @@
 use super::{
-    base_verifier,
+    all_metadata_extracting_verifier, base,
     bytecode::{CreationTxInput, DeployedBytecode},
     errors::{BytecodeInitError, VerificationError, VerificationErrorKind},
-    generic_verifier,
 };
 use crate::{
     compiler::{self, Compilers, EvmCompiler},
@@ -62,7 +61,7 @@ pub struct Success {
 pub struct ContractVerifier<'a, T> {
     compilers: Arc<Compilers<T>>,
     compiler_version: &'a compiler::Version,
-    verifier: Box<dyn generic_verifier::Verifier<Input = (CompilerOutput, CompilerOutput)>>,
+    verifier: Box<dyn base::Verifier<Input = (CompilerOutput, CompilerOutput)>>,
 }
 
 impl<'a, T: EvmCompiler> ContractVerifier<'a, T> {
@@ -72,16 +71,15 @@ impl<'a, T: EvmCompiler> ContractVerifier<'a, T> {
         creation_tx_input: Option<Bytes>,
         deployed_bytecode: Bytes,
     ) -> Result<Self, Error> {
-        let verifier: Box<
-            dyn generic_verifier::Verifier<Input = (CompilerOutput, CompilerOutput)>,
-        > = match creation_tx_input {
-            None => Box::new(base_verifier::Verifier::<DeployedBytecode>::new(
-                deployed_bytecode,
-            )?),
-            Some(creation_tx_input) => Box::new(base_verifier::Verifier::<CreationTxInput>::new(
-                creation_tx_input,
-            )?),
-        };
+        let verifier: Box<dyn base::Verifier<Input = (CompilerOutput, CompilerOutput)>> =
+            match creation_tx_input {
+                None => Box::new(all_metadata_extracting_verifier::Verifier::<
+                    DeployedBytecode,
+                >::new(deployed_bytecode)?),
+                Some(creation_tx_input) => Box::new(all_metadata_extracting_verifier::Verifier::<
+                    CreationTxInput,
+                >::new(creation_tx_input)?),
+            };
         Ok(Self {
             compilers,
             compiler_version,

@@ -13,7 +13,9 @@ pub struct VerificationSuccess {
 
 /// Combine different verifiers
 pub trait Verifier {
+    /// Verification input (in most cases consists the output returned by compiler)
     type Input;
 
+    /// Verifies provided input data
     fn verify(&self, input: Self::Input) -> Result<VerificationSuccess, Vec<VerificationError>>;
 }
