@@ -5,46 +5,24 @@ use super::{
 use crate::mismatch::Mismatch;
 use bytes::{Buf, Bytes};
 use ethers_solc::{artifacts::Contract, Artifact};
+use std::marker::PhantomData;
 
-/// Combine creation_tx_input and deployed_bytecode.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Bytecode {
-    /// Raw bytecode bytes used in contract creation transaction
-    creation_tx_input: Bytes,
-    /// Raw deployed bytecode bytes
-    deployed_bytecode: Bytes,
+/// Types that can be used as Bytecode source indicator
+pub trait Source {
+    /// Performs conversion from [`Contract`] into valid bytecode
+    fn try_bytes_from_contract(contract: &Contract) -> Result<Bytes, BytecodeInitError>;
 }
 
-impl Bytecode {
-    pub fn new(
-        creation_tx_input: Bytes,
-        deployed_bytecode: Bytes,
-    ) -> Result<Self, BytecodeInitError> {
-        if creation_tx_input.is_empty() {
-            return Err(BytecodeInitError::EmptyCreationTxInput);
-        }
+/// An indicator used in [`Bytecode`] showing that underlying bytecode
+/// was obtained from on chain creation transaction input
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct DeployedBytecode;
 
-        if deployed_bytecode.is_empty() {
-            return Err(BytecodeInitError::EmptyDeployedBytecode);
-        }
-
-        Ok(Self {
-            creation_tx_input,
-            deployed_bytecode,
-        })
-    }
-
-    pub fn creation_tx_input(&self) -> &Bytes {
-        &self.creation_tx_input
-    }
-}
-
-impl TryFrom<&Contract> for Bytecode {
-    type Error = BytecodeInitError;
-
-    fn try_from(contract: &Contract) -> Result<Self, Self::Error> {
-        let deployed_bytecode = {
-            contract.get_deployed_bytecode_bytes().ok_or_else(|| {
+impl Source for DeployedBytecode {
+    fn try_bytes_from_contract(contract: &Contract) -> Result<Bytes, BytecodeInitError> {
+        let bytes = contract
+            .get_deployed_bytecode_bytes()
+            .ok_or_else(|| {
                 let bytecode = contract
                     .get_deployed_bytecode_object()
                     .unwrap_or_default()
@@ -53,9 +31,23 @@ impl TryFrom<&Contract> for Bytecode {
                     .to_string();
                 BytecodeInitError::InvalidDeployedBytecode(bytecode)
             })?
-        };
-        let creation_tx_input = {
-            contract.get_bytecode_bytes().ok_or_else(|| {
+            .0
+            .clone();
+
+        Ok(bytes)
+    }
+}
+
+/// An indicator used in [`Bytecode`] showing that underlying bytecode
+/// was obtained from on chain deployed bytecode.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CreationTxInput;
+
+impl Source for CreationTxInput {
+    fn try_bytes_from_contract(contract: &Contract) -> Result<Bytes, BytecodeInitError> {
+        let bytes = contract
+            .get_bytecode_bytes()
+            .ok_or_else(|| {
                 let bytecode = contract
                     .get_bytecode_object()
                     .unwrap_or_default()
@@ -64,8 +56,45 @@ impl TryFrom<&Contract> for Bytecode {
                     .to_string();
                 BytecodeInitError::InvalidCreationTxInput(bytecode)
             })?
-        };
-        Bytecode::new(creation_tx_input.0.clone(), deployed_bytecode.0.clone())
+            .0
+            .clone();
+
+        Ok(bytes)
+    }
+}
+
+/// Encapsulate bytecode from specified source
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Bytecode<T> {
+    /// Raw bytecode bytes used in corresponding source
+    bytecode: Bytes,
+    /// Indicates the source of bytecode (DeployedBytecode, CreationTxInput)
+    source: PhantomData<T>,
+}
+
+impl<T> Bytecode<T> {
+    pub fn new(bytecode: Bytes) -> Result<Self, BytecodeInitError> {
+        if bytecode.is_empty() {
+            return Err(BytecodeInitError::Empty);
+        }
+
+        Ok(Self {
+            bytecode,
+            source: PhantomData::default(),
+        })
+    }
+
+    pub fn bytecode(&self) -> &Bytes {
+        &self.bytecode
+    }
+}
+
+impl<T: Source> TryFrom<&Contract> for Bytecode<T> {
+    type Error = BytecodeInitError;
+
+    fn try_from(contract: &Contract) -> Result<Self, Self::Error> {
+        let bytes = T::try_bytes_from_contract(contract)?;
+        Bytecode::new(bytes)
     }
 }
 
@@ -97,12 +126,12 @@ impl BytecodePart {
 /// Encapsulates result of local source code compilation.
 /// Splits compiled creation transaction input.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct LocalBytecode {
-    bytecode: Bytecode,
-    creation_tx_input_parts: Vec<BytecodePart>,
+pub struct LocalBytecode<T> {
+    bytecode: Bytecode<T>,
+    bytecode_parts: Vec<BytecodePart>,
 }
 
-impl LocalBytecode {
+impl<T> LocalBytecode<T> {
     /// Initializes a new [`LocalBytecode`] struct.
     ///
     /// `bytecode` and `bytecode_modified` must differ only in metadata hashes.
@@ -110,26 +139,23 @@ impl LocalBytecode {
     /// Any error here is [`VerificationErrorKind::InternalError`], as both original
     /// and modified bytecodes are obtained as a result of local compilation.
     pub fn new(
-        bytecode: Bytecode,
-        bytecode_modified: Bytecode,
+        bytecode: Bytecode<T>,
+        bytecode_modified: Bytecode<T>,
     ) -> Result<Self, VerificationErrorKind> {
-        let creation_tx_input_parts = Self::split(
-            &bytecode.creation_tx_input,
-            &bytecode_modified.creation_tx_input,
-        )?;
+        let bytecode_parts = Self::split(bytecode.bytecode(), bytecode_modified.bytecode())?;
 
         Ok(Self {
             bytecode,
-            creation_tx_input_parts,
+            bytecode_parts,
         })
     }
 
-    pub fn creation_tx_input(&self) -> &Bytes {
-        &self.bytecode.creation_tx_input
+    pub fn bytecode(&self) -> &Bytes {
+        self.bytecode.bytecode()
     }
 
-    pub fn creation_tx_input_parts(&self) -> &Vec<BytecodePart> {
-        &self.creation_tx_input_parts
+    pub fn bytecode_parts(&self) -> &Vec<BytecodePart> {
+        &self.bytecode_parts
     }
 
     /// Splits bytecode onto [`BytecodePart`]s using bytecode with modified metadata hashes.
@@ -248,7 +274,6 @@ impl LocalBytecode {
 mod local_bytecode_initialization_tests {
     use super::*;
     use crate::DisplayBytes;
-    use const_format::concatcp;
     use pretty_assertions::assert_eq;
     use std::str::FromStr;
 
@@ -256,8 +281,8 @@ mod local_bytecode_initialization_tests {
     const CREATION_TX_INPUT_MAIN_PART_2: &'static str =
         "6080604052348015600f57600080fd5b50603f80601d6000396000f3fe6080604052600080fdfe";
 
-    const DEPLOYED_BYTECODE_MAIN_PART_1: &'static str = "6080604052600080fdfe";
-    const DEPLOYED_BYTECODE_MAIN_PART_2: &'static str = "6080604052600080cafe";
+    // const DEPLOYED_BYTECODE_MAIN_PART_1: &'static str = "6080604052600080fdfe";
+    // const DEPLOYED_BYTECODE_MAIN_PART_2: &'static str = "6080604052600080cafe";
 
     const METADATA_PART_1: &'static str = "a26469706673582212202e82fb6222f966f0e56dc49cd1fb8a6b5eac9bdf74f62b8a5e9d8812901095d664736f6c634300080e0033";
     const METADATA_PART_2: &'static str = "a2646970667358221220bd9f7fd5fb164e10dd86ccc9880d27a177e74ba873e6a9b97b6c4d7062b26ff064736f6c634300080e0033";
@@ -265,22 +290,16 @@ mod local_bytecode_initialization_tests {
     const METADATA_PART1_MODIFIED: &'static str = "a264697066735822122028c67e368422bc9c0b12226a099aa62a1facd39b08a84427d7f3efe1e37029b864736f6c634300080e0033";
     const METADATA_PART2_MODIFIED: &'static str = "a26469706673582212206b331720b143820ca2e65d7db53a1b005672433fcb7f2da3ab539851bddc226a64736f6c634300080e0033";
 
-    const DEFAULT_DEPLOYED_BYTECODE: &'static str =
-        concatcp!(DEPLOYED_BYTECODE_MAIN_PART_1, METADATA_PART_1);
-    const DEFAULT_DEPLOYED_BYTECODE_MODIFIED: &'static str =
-        concatcp!(DEPLOYED_BYTECODE_MAIN_PART_1, METADATA_PART1_MODIFIED);
+    // const DEFAULT_DEPLOYED_BYTECODE: &'static str =
+    //     concatcp!(DEPLOYED_BYTECODE_MAIN_PART_1, METADATA_PART_1);
+    // const DEFAULT_DEPLOYED_BYTECODE_MODIFIED: &'static str =
+    //     concatcp!(DEPLOYED_BYTECODE_MAIN_PART_1, METADATA_PART1_MODIFIED);
 
-    fn new_bytecode(
-        creation_tx_input: &str,
-        deployed_bytecode: &str,
-    ) -> Result<Bytecode, BytecodeInitError> {
-        let creation_tx_input = DisplayBytes::from_str(creation_tx_input)
-            .expect("Invalid creation tx input")
+    fn new_bytecode<T: Source>(bytecode: &str) -> Result<Bytecode<T>, BytecodeInitError> {
+        let bytecode = DisplayBytes::from_str(bytecode)
+            .expect("Invalid bytecode")
             .0;
-        let deployed_bytecode = DisplayBytes::from_str(deployed_bytecode)
-            .expect("Invalid creation tx input")
-            .0;
-        Bytecode::new(creation_tx_input, deployed_bytecode)
+        Bytecode::new(bytecode)
     }
 
     fn main_bytecode_part(raw: &str) -> BytecodePart {
@@ -310,16 +329,12 @@ mod local_bytecode_initialization_tests {
     #[test]
     fn without_metadata() {
         let creation_tx_input = format!("{}", CREATION_TX_INPUT_MAIN_PART_1);
-        let deployed_bytecode = format!("{}", DEPLOYED_BYTECODE_MAIN_PART_1);
-
         let creation_tx_input_modified = format!("{}", CREATION_TX_INPUT_MAIN_PART_1);
-        let deployed_bytecode_modified = format!("{}", DEPLOYED_BYTECODE_MAIN_PART_1);
 
-        let bytecode = new_bytecode(&creation_tx_input, &deployed_bytecode)
-            .expect("Bytecode initialization failed");
-        let bytecode_modified =
-            new_bytecode(&creation_tx_input_modified, &deployed_bytecode_modified)
-                .expect("Modified bytecode initialization failed");
+        let bytecode: Bytecode<CreationTxInput> =
+            new_bytecode(&creation_tx_input).expect("Bytecode initialization failed");
+        let bytecode_modified = new_bytecode(&creation_tx_input_modified)
+            .expect("Modified bytecode initialization failed");
 
         let local_bytecode = LocalBytecode::new(bytecode.clone(), bytecode_modified);
 
@@ -327,7 +342,7 @@ mod local_bytecode_initialization_tests {
         assert_eq!(bytecode, local_bytecode.bytecode, "Invalid bytecode");
         assert_eq!(
             vec![main_bytecode_part(CREATION_TX_INPUT_MAIN_PART_1)],
-            local_bytecode.creation_tx_input_parts,
+            local_bytecode.bytecode_parts,
             "Invalid bytecode parts"
         );
     }
@@ -335,22 +350,15 @@ mod local_bytecode_initialization_tests {
     #[test]
     fn with_one_metadata() {
         let creation_tx_input = format!("{}{}", CREATION_TX_INPUT_MAIN_PART_1, METADATA_PART_1);
-        let deployed_bytecode = format!("{}{}", DEPLOYED_BYTECODE_MAIN_PART_1, METADATA_PART_1);
-
         let creation_tx_input_modified = format!(
             "{}{}",
             CREATION_TX_INPUT_MAIN_PART_1, METADATA_PART1_MODIFIED
         );
-        let deployed_bytecode_modified = format!(
-            "{}{}",
-            DEPLOYED_BYTECODE_MAIN_PART_1, METADATA_PART1_MODIFIED
-        );
 
-        let bytecode = new_bytecode(&creation_tx_input, &deployed_bytecode)
-            .expect("Bytecode initialization failed");
-        let bytecode_modified =
-            new_bytecode(&creation_tx_input_modified, &deployed_bytecode_modified)
-                .expect("Modified bytecode initialization failed");
+        let bytecode: Bytecode<CreationTxInput> =
+            new_bytecode(&creation_tx_input).expect("Bytecode initialization failed");
+        let bytecode_modified = new_bytecode(&creation_tx_input_modified)
+            .expect("Modified bytecode initialization failed");
 
         let local_bytecode = LocalBytecode::new(bytecode.clone(), bytecode_modified);
 
@@ -361,7 +369,7 @@ mod local_bytecode_initialization_tests {
                 main_bytecode_part(CREATION_TX_INPUT_MAIN_PART_1),
                 metadata_bytecode_part(METADATA_PART_1)
             ],
-            local_bytecode.creation_tx_input_parts,
+            local_bytecode.bytecode_parts,
             "Invalid bytecode parts"
         );
     }
@@ -375,14 +383,6 @@ mod local_bytecode_initialization_tests {
             CREATION_TX_INPUT_MAIN_PART_2,
             METADATA_PART_2
         );
-        let deployed_bytecode = format!(
-            "{}{}{}{}",
-            DEPLOYED_BYTECODE_MAIN_PART_1,
-            METADATA_PART_1,
-            DEPLOYED_BYTECODE_MAIN_PART_2,
-            METADATA_PART_2
-        );
-
         let creation_tx_input_modified = format!(
             "{}{}{}{}",
             CREATION_TX_INPUT_MAIN_PART_1,
@@ -390,19 +390,11 @@ mod local_bytecode_initialization_tests {
             CREATION_TX_INPUT_MAIN_PART_2,
             METADATA_PART2_MODIFIED
         );
-        let deployed_bytecode_modified = format!(
-            "{}{}{}{}",
-            DEPLOYED_BYTECODE_MAIN_PART_1,
-            METADATA_PART1_MODIFIED,
-            DEPLOYED_BYTECODE_MAIN_PART_2,
-            METADATA_PART2_MODIFIED
-        );
 
-        let bytecode = new_bytecode(&creation_tx_input, &deployed_bytecode)
-            .expect("Bytecode initialization failed");
-        let bytecode_modified =
-            new_bytecode(&creation_tx_input_modified, &deployed_bytecode_modified)
-                .expect("Modified bytecode initialization failed");
+        let bytecode: Bytecode<CreationTxInput> =
+            new_bytecode(&creation_tx_input).expect("Bytecode initialization failed");
+        let bytecode_modified = new_bytecode(&creation_tx_input_modified)
+            .expect("Modified bytecode initialization failed");
 
         let local_bytecode = LocalBytecode::new(bytecode.clone(), bytecode_modified);
 
@@ -415,7 +407,7 @@ mod local_bytecode_initialization_tests {
                 main_bytecode_part(CREATION_TX_INPUT_MAIN_PART_2),
                 metadata_bytecode_part(METADATA_PART_2),
             ],
-            local_bytecode.creation_tx_input_parts,
+            local_bytecode.bytecode_parts,
             "Invalid bytecode parts"
         );
     }
@@ -426,25 +418,15 @@ mod local_bytecode_initialization_tests {
             "{}{}{}",
             CREATION_TX_INPUT_MAIN_PART_1, METADATA_PART_1, METADATA_PART_2
         );
-        let deployed_bytecode = format!(
-            "{}{}{}",
-            DEPLOYED_BYTECODE_MAIN_PART_1, METADATA_PART_1, METADATA_PART_2
-        );
-
         let creation_tx_input_modified = format!(
             "{}{}{}",
             CREATION_TX_INPUT_MAIN_PART_1, METADATA_PART1_MODIFIED, METADATA_PART2_MODIFIED
         );
-        let deployed_bytecode_modified = format!(
-            "{}{}{}",
-            DEPLOYED_BYTECODE_MAIN_PART_1, METADATA_PART1_MODIFIED, METADATA_PART2_MODIFIED
-        );
 
-        let bytecode = new_bytecode(&creation_tx_input, &deployed_bytecode)
-            .expect("Bytecode initialization failed");
-        let bytecode_modified =
-            new_bytecode(&creation_tx_input_modified, &deployed_bytecode_modified)
-                .expect("Modified bytecode initialization failed");
+        let bytecode: Bytecode<CreationTxInput> =
+            new_bytecode(&creation_tx_input).expect("Bytecode initialization failed");
+        let bytecode_modified = new_bytecode(&creation_tx_input_modified)
+            .expect("Modified bytecode initialization failed");
 
         let local_bytecode = LocalBytecode::new(bytecode.clone(), bytecode_modified);
 
@@ -456,7 +438,7 @@ mod local_bytecode_initialization_tests {
                 metadata_bytecode_part(METADATA_PART_1),
                 metadata_bytecode_part(METADATA_PART_2),
             ],
-            local_bytecode.creation_tx_input_parts,
+            local_bytecode.bytecode_parts,
             "Invalid bytecode parts"
         );
     }
@@ -464,20 +446,16 @@ mod local_bytecode_initialization_tests {
     #[test]
     fn with_different_lengths_should_fail() {
         let creation_tx_input = format!("{}{}", CREATION_TX_INPUT_MAIN_PART_1, METADATA_PART_1);
-
         // additional byte
         let creation_tx_input_modified = format!(
             "{}{}12",
             CREATION_TX_INPUT_MAIN_PART_1, METADATA_PART1_MODIFIED
         );
 
-        let bytecode = new_bytecode(&creation_tx_input, DEFAULT_DEPLOYED_BYTECODE)
-            .expect("Bytecode initialization failed");
-        let bytecode_modified = new_bytecode(
-            &creation_tx_input_modified,
-            DEFAULT_DEPLOYED_BYTECODE_MODIFIED,
-        )
-        .expect("Modified bytecode initialization failed");
+        let bytecode: Bytecode<CreationTxInput> =
+            new_bytecode(&creation_tx_input).expect("Bytecode initialization failed");
+        let bytecode_modified = new_bytecode(&creation_tx_input_modified)
+            .expect("Modified bytecode initialization failed");
 
         let local_bytecode = LocalBytecode::new(bytecode.clone(), bytecode_modified);
 
@@ -501,19 +479,15 @@ mod local_bytecode_initialization_tests {
     #[test]
     fn with_invalid_metadata_should_fail() {
         let creation_tx_input = format!("{}cafe{}", CREATION_TX_INPUT_MAIN_PART_1, METADATA_PART_1);
-
         let creation_tx_input_modified = format!(
             "{}abcd{}",
             CREATION_TX_INPUT_MAIN_PART_1, METADATA_PART1_MODIFIED
         );
 
-        let bytecode = new_bytecode(&creation_tx_input, DEFAULT_DEPLOYED_BYTECODE)
-            .expect("Bytecode initialization failed");
-        let bytecode_modified = new_bytecode(
-            &creation_tx_input_modified,
-            DEFAULT_DEPLOYED_BYTECODE_MODIFIED,
-        )
-        .expect("Modified bytecode initialization failed");
+        let bytecode: Bytecode<CreationTxInput> =
+            new_bytecode(&creation_tx_input).expect("Bytecode initialization failed");
+        let bytecode_modified = new_bytecode(&creation_tx_input_modified)
+            .expect("Modified bytecode initialization failed");
 
         let local_bytecode = LocalBytecode::new(bytecode.clone(), bytecode_modified);
 
@@ -541,20 +515,16 @@ mod local_bytecode_initialization_tests {
             CREATION_TX_INPUT_MAIN_PART_1,
             &METADATA_PART_1[..METADATA_PART_1.len() - 2]
         );
-
         let creation_tx_input_modified = format!(
             "{}{}",
             CREATION_TX_INPUT_MAIN_PART_1,
             &METADATA_PART1_MODIFIED[..METADATA_PART1_MODIFIED.len() - 2]
         );
 
-        let bytecode = new_bytecode(&creation_tx_input, DEFAULT_DEPLOYED_BYTECODE)
-            .expect("Bytecode initialization failed");
-        let bytecode_modified = new_bytecode(
-            &creation_tx_input_modified,
-            DEFAULT_DEPLOYED_BYTECODE_MODIFIED,
-        )
-        .expect("Modified bytecode initialization failed");
+        let bytecode: Bytecode<CreationTxInput> =
+            new_bytecode(&creation_tx_input).expect("Bytecode initialization failed");
+        let bytecode_modified = new_bytecode(&creation_tx_input_modified)
+            .expect("Modified bytecode initialization failed");
 
         let local_bytecode = LocalBytecode::new(bytecode.clone(), bytecode_modified);
 
@@ -579,7 +549,6 @@ mod local_bytecode_initialization_tests {
             &METADATA_PART_1[..METADATA_PART_1.len() - 4],
             "0031"
         );
-
         let creation_tx_input_modified = format!(
             "{}{}{}",
             CREATION_TX_INPUT_MAIN_PART_1,
@@ -587,13 +556,10 @@ mod local_bytecode_initialization_tests {
             "0031"
         );
 
-        let bytecode = new_bytecode(&creation_tx_input, DEFAULT_DEPLOYED_BYTECODE)
-            .expect("Bytecode initialization failed");
-        let bytecode_modified = new_bytecode(
-            &creation_tx_input_modified,
-            DEFAULT_DEPLOYED_BYTECODE_MODIFIED,
-        )
-        .expect("Modified bytecode initialization failed");
+        let bytecode: Bytecode<CreationTxInput> =
+            new_bytecode(&creation_tx_input).expect("Bytecode initialization failed");
+        let bytecode_modified = new_bytecode(&creation_tx_input_modified)
+            .expect("Modified bytecode initialization failed");
 
         let local_bytecode = LocalBytecode::new(bytecode.clone(), bytecode_modified);
 

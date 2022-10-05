@@ -1,5 +1,6 @@
 use super::{
-    base_verifier::Verifier,
+    all_metadata_extracting_verifier, base,
+    bytecode::{CreationTxInput, DeployedBytecode},
     errors::{BytecodeInitError, VerificationError, VerificationErrorKind},
 };
 use crate::{
@@ -9,7 +10,7 @@ use crate::{
 };
 use anyhow::anyhow;
 use bytes::Bytes;
-use ethers_solc::CompilerInput;
+use ethers_solc::{CompilerInput, CompilerOutput};
 use std::{ops::Add, path::PathBuf, sync::Arc};
 use thiserror::Error;
 use tracing::instrument;
@@ -60,17 +61,25 @@ pub struct Success {
 pub struct ContractVerifier<'a, T> {
     compilers: Arc<Compilers<T>>,
     compiler_version: &'a compiler::Version,
-    verifier: Verifier,
+    verifier: Box<dyn base::Verifier<Input = (CompilerOutput, CompilerOutput)>>,
 }
 
 impl<'a, T: EvmCompiler> ContractVerifier<'a, T> {
     pub fn new(
         compilers: Arc<Compilers<T>>,
         compiler_version: &'a compiler::Version,
-        creation_tx_input: Bytes,
+        creation_tx_input: Option<Bytes>,
         deployed_bytecode: Bytes,
     ) -> Result<Self, Error> {
-        let verifier = Verifier::new(creation_tx_input, deployed_bytecode)?;
+        let verifier: Box<dyn base::Verifier<Input = (CompilerOutput, CompilerOutput)>> =
+            match creation_tx_input {
+                None => Box::new(all_metadata_extracting_verifier::Verifier::<
+                    DeployedBytecode,
+                >::new(deployed_bytecode)?),
+                Some(creation_tx_input) => Box::new(all_metadata_extracting_verifier::Verifier::<
+                    CreationTxInput,
+                >::new(creation_tx_input)?),
+            };
         Ok(Self {
             compilers,
             compiler_version,
@@ -109,7 +118,7 @@ impl<'a, T: EvmCompiler> ContractVerifier<'a, T> {
 
         let verification_success = self
             .verifier
-            .verify(compiler_output, compiler_output_modified)
+            .verify((compiler_output, compiler_output_modified))
             .map_err(|errs| {
                 errs.into_iter()
                     .find_map(|err| match err {

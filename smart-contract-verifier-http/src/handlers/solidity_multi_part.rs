@@ -9,7 +9,7 @@ use tracing::instrument;
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 pub struct VerificationRequest {
     pub deployed_bytecode: String,
-    pub creation_bytecode: String,
+    pub creation_bytecode: Option<String>,
     pub compiler_version: String,
 
     #[serde(flatten)]
@@ -31,9 +31,16 @@ impl TryFrom<VerificationRequest> for solidity::multi_part::VerificationRequest 
         let deployed_bytecode = DisplayBytes::from_str(&value.deployed_bytecode)
             .map_err(|err| error::ErrorBadRequest(format!("Invalid deployed bytecode: {:?}", err)))?
             .0;
-        let creation_bytecode = DisplayBytes::from_str(&value.creation_bytecode)
-            .map_err(|err| error::ErrorBadRequest(format!("Invalid creation bytecode: {:?}", err)))?
-            .0;
+        let creation_bytecode = match value.creation_bytecode {
+            None => None,
+            Some(creation_bytecode) => Some(
+                DisplayBytes::from_str(&creation_bytecode)
+                    .map_err(|err| {
+                        error::ErrorBadRequest(format!("Invalid creation bytecode: {:?}", err))
+                    })?
+                    .0,
+            ),
+        };
         let compiler_version = Version::from_str(&value.compiler_version)
             .map_err(|err| error::ErrorBadRequest(format!("Invalid compiler version: {}", err)))?;
         Ok(Self {
@@ -126,7 +133,7 @@ mod tests {
                     }"#,
                 VerificationRequest {
                     deployed_bytecode: "0x6001".into(),
-                    creation_bytecode: "0x6001".into(),
+                    creation_bytecode: Some("0x6001".into()),
                     compiler_version: "0.8.3".into(),
                     content: MultiPartFiles {
                         sources: sources(&[("source.sol", "pragma")]),
@@ -154,7 +161,7 @@ mod tests {
                 }"#,
                 VerificationRequest {
                     deployed_bytecode: "0x6001".into(),
-                    creation_bytecode: "0x6001".into(),
+                    creation_bytecode: Some("0x6001".into()),
                     compiler_version: "0.8.3".into(),
                     content: MultiPartFiles {
                         sources: sources(&[

@@ -64,10 +64,14 @@ async fn test_setup(dir: &str, input: &mut TestInput) -> (ServiceResponse, Optio
     input.source_code = Some(input.source_code.clone().unwrap_or_else(|| {
         fs::read_to_string(&contract_path).expect("Error while reading source")
     }));
-    input.creation_tx_input = Some(input.creation_tx_input.clone().unwrap_or_else(|| {
-        fs::read_to_string(format!("{}/creation_tx_input", prefix))
-            .expect("Error while reading creation_tx_input")
-    }));
+    input.creation_tx_input = if !input.ignore_creation_tx_input {
+        Some(input.creation_tx_input.clone().unwrap_or_else(|| {
+            fs::read_to_string(format!("{}/creation_tx_input", prefix))
+                .expect("Error while reading creation_tx_input")
+        }))
+    } else {
+        None
+    };
     input.deployed_bytecode = Some(input.deployed_bytecode.clone().unwrap_or_else(|| {
         fs::read_to_string(format!("{}/deployed_bytecode", prefix))
             .expect("Error while reading deployed_bytecode")
@@ -83,7 +87,7 @@ async fn test_setup(dir: &str, input: &mut TestInput) -> (ServiceResponse, Optio
     let request = if let Some(optimization_runs) = input.optimization_runs {
         json!({
             "deployed_bytecode": input.deployed_bytecode.as_ref().unwrap(),
-            "creation_bytecode": input.creation_tx_input.as_ref().unwrap(),
+            "creation_bytecode": input.creation_tx_input.as_ref(),
             "compiler_version": input.compiler_version,
             "sources": BTreeMap::from([(contract_path, input.source_code.as_ref().unwrap())]),
             "evm_version": input.evm_version,
@@ -93,7 +97,7 @@ async fn test_setup(dir: &str, input: &mut TestInput) -> (ServiceResponse, Optio
     } else {
         json!({
             "deployed_bytecode": input.deployed_bytecode.as_ref().unwrap(),
-            "creation_bytecode": input.creation_tx_input.as_ref().unwrap(),
+            "creation_bytecode": input.creation_tx_input.as_ref(),
             "compiler_version": input.compiler_version,
             "sources": BTreeMap::from([(contract_path, input.source_code.as_ref().unwrap())]),
             "evm_version": input.evm_version,
@@ -511,5 +515,41 @@ mod tests_from_constructor_arguments_test_exs {
             .with_optimization_runs(200)
             .has_constructor_args();
         test_success(contract_dir, test_input).await;
+    }
+}
+
+mod tests_without_creation_tx_input {
+    use super::*;
+
+    #[actix_rt::test]
+    async fn verifies_contract_via_deployed_bytecode() {
+        let contract_dir = "solidity_0.5.14";
+        let test_input = TestInput::new("A", "v0.5.14+commit.01f1aaa4").ignore_creation_tx_input();
+        test_success(contract_dir, test_input).await;
+    }
+
+    // // Fails as deployed bytecode for both "A" and "B" contracts is the same (
+    // // the only difference is constructor which does not make sense for deployed bytecode)
+    // #[actix_rt::test]
+    // async fn verifies_contract_with_several_metadata_hashes() {
+    //     let contract_dir = "issue_5636";
+    //     let test_input = TestInput::new("B", "v0.8.14+commit.80d49f37").with_optimization_runs(200).ignore_creation_tx_input();
+    //     test_success(contract_dir, test_input).await;
+    // }
+
+    // Libraries have the address they are deployed at in the beginning of deployed bytecode,
+    // while compiler fills those bytes with zeros. Thus, we cannot verify libraries via deployed bytecode only.
+    #[actix_rt::test]
+    async fn library_verification_fails() {
+        let contract_dir = "library";
+        let test_input = TestInput::new("Foo", "v0.5.11+commit.22be8592")
+            .with_optimization_runs(200)
+            .ignore_creation_tx_input();
+        test_failure(
+            contract_dir,
+            test_input,
+            "No contract could be verified with provided data",
+        )
+        .await;
     }
 }

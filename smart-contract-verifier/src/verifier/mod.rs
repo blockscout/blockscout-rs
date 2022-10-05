@@ -1,5 +1,6 @@
 // base verifiers
-mod base_verifier;
+mod all_metadata_extracting_verifier;
+mod base;
 mod bytecode;
 mod errors;
 mod metadata;
