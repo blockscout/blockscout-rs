@@ -1,5 +1,5 @@
 [package]
-name = "multichain-api-gateway"
+name = "multichain-search"
 version = "0.1.0"
 edition = "2021"
 

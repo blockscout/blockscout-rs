@@ -1,4 +1,4 @@
 [workspace]
 members = [
-    "multichain-api-gateway",
+    "multichain-search/backend"
 ]
