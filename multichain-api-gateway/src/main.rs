@@ -1,13 +1,12 @@
 use anyhow::Context;
-use multichain_api_gateway::{run, tracer::init_logs, Settings};
+use multichain_api_gateway::{init_logs, server::run, Settings};
 use std::error::Error;
-use tracing::event;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let settings = Settings::new().context("failed to parse config")?;
-    event!(tracing::Level::INFO, settings = ?settings, "Got settings");
     init_logs(settings.jaeger.clone());
+    tracing::info!(instances = ?settings.blockscout.instances, addr = ?settings.server.addr, "Start server");
     run(settings)?.await?;
     Ok(())
 }

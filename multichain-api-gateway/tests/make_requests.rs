@@ -1,61 +1,63 @@
-use std::str;
-
-use actix_web::{
-    test, web,
-    web::{Bytes, Data},
-    App,
-};
+use actix_web::{http::StatusCode, test, web, web::Data, App};
+use multichain_api_gateway::{proxy, server, Settings};
 use pretty_assertions::assert_eq;
+use serde_json::json;
+use wiremock::{
+    matchers::{method, path},
+    Mock, MockServer, ResponseTemplate,
+};
 
-use multichain_api_gateway::{handle_request, settings, ApiEndpoints};
-
-/// In the test we check that valid responses are returned from the API.
-/// Especially we call to the same network (xdai), but to different chains (mainnet, testnet).
-/// Also check correctness of POST/GET propagation
 #[actix_web::test]
 async fn check_make_requests() {
-    let settings = settings::BlockscoutSettings {
-        base_url: "https://blockscout.com".parse().unwrap(),
-        instances: vec![
-            settings::Instance("eth".to_string(), "mainnet".to_string()),
-            settings::Instance("xdai".to_string(), "mainnet".to_string()),
-            settings::Instance("poa".to_string(), "sokol".to_string()),
-        ],
-        concurrent_requests: 1,
-        request_timeout: std::time::Duration::from_secs(60),
-    };
+    let mock_server = MockServer::start().await;
+    let names = vec!["blockscout-1", "blockscout-2", "blockscout-3"];
 
-    let apis_endpoints: ApiEndpoints = settings.try_into().unwrap();
+    for name in names.iter() {
+        Mock::given(method("GET"))
+            .and(path(format!("poa/{}/api/v1/my_name", name)))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "name": name })))
+            .mount(&mock_server)
+            .await;
+    }
+    let server_host = mock_server.uri();
+    let mut settings = Settings::default();
+    settings.blockscout.instances = serde_json::from_value(serde_json::json!([
+        {"title": "Mocked blockscout 1", "url": format!("{}/poa/blockscout-1", server_host), "id": "blockscout-1"},
+        {"title": "Mocked blockscout 2", "url": format!("{}/poa/blockscout-2", server_host), "id": "blockscout-2"},
+        {"title": "Mocked blockscout 3", "url": format!("{}/poa/blockscout-3", server_host), "id": "blockscout-3"},
+    ])).unwrap();
+
+    let proxy = proxy::BlockscoutProxy::new(
+        settings.blockscout.instances,
+        settings.blockscout.concurrent_requests,
+        settings.blockscout.request_timeout,
+    );
 
     let app = test::init_service(
         App::new()
-            .app_data(Data::new(apis_endpoints.clone()))
-            .default_service(web::route().to(handle_request)),
+            .app_data(Data::new(proxy.clone()))
+            .default_service(web::route().to(server::handle_request)),
     )
     .await;
 
-    let uri = "/api?module=block&action=getblockreward&blockno=0";
+    let path = "/api/v1/my_name";
 
-    let expected = std::fs::read_to_string("tests/res/request_result.json").unwrap();
-
-    let get_request = test::TestRequest::get().uri(uri).to_request();
-    check_response(
-        test::call_and_read_body(&app, get_request).await,
-        expected.as_str(),
-    );
-
-    let post_request = test::TestRequest::post().uri(uri).to_request();
-    check_response(
-        test::call_and_read_body(&app, post_request).await,
-        expected.as_str(),
-    );
-}
-
-fn check_response(actual: Bytes, expected: &str) {
-    let actual: serde_json::Value =
-        serde_json::from_slice(&actual).expect("failed to convert response to json");
-    let expected: serde_json::Value =
-        serde_json::from_str(expected).expect("invalid expected string");
-    // check responses in json form to simplify reading error in case of inequality
-    assert_eq!(actual, expected)
+    let get_request = test::TestRequest::get().uri(path).to_request();
+    let actual_response: proxy::Response = test::call_and_read_body_json(&app, get_request).await;
+    for name in names {
+        let instance_response = actual_response
+            .0
+            .get(name)
+            .expect(&format!("response for {} not found", name));
+        assert_eq!(instance_response.status, StatusCode::OK);
+        assert_eq!(
+            instance_response.uri.to_string(),
+            format!("{}/poa/{}/api/v1/my_name", server_host, name)
+        );
+        assert_eq!(instance_response.instance.id, name);
+        assert_eq!(
+            instance_response.content,
+            json!({ "name": name }).to_string()
+        );
+    }
 }
