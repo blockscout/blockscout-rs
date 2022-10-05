@@ -1,0 +1,15 @@
+[blockscout]
+instances = [
+    '{"title": "POA", "url": "https://blockscout.com/poa/core", "id": "poa/core"}',
+    '{"title": "Sokol", "url": "https://blockscout.com/poa/sokol", "id": "poa/sokol"}',
+    '{"title": "Gnosis Chain", "url": "https://blockscout.com/xdai/mainnet", "id": "xdai/mainnet"}',
+    '{"title": "RSK", "url": "https://blockscout.com/rsk/mainnet", "id": "rsk/mainnet"}',
+    '{"title": "LUKSO L14", "url": "https://blockscout.com/lukso/l14", "id": "lukso/l14"}',
+    '{"title": "Ethereum", "url": "https://blockscout.com/eth/mainnet/", "id": "eth/mainnet"}',
+    '{"title": "Optimism on Gnosis Chain", "url": "https://blockscout.com/xdai/optimism", "id": "xdai/optimism"}',
+    '{"title": "Shiden (EVM)", "url": "https://blockscout.com/shiden", "id": "shiden/mainnet"}',
+    '{"title": "Astar (EVM)", "url": "https://blockscout.com/astar", "id": "astar/mainnet"}',
+    '{"title": "Shibuya (EVM)", "url": "https://blockscout.com/shibuya", "id": "shibuya/mainnet"}',
+    '{"title": "Optimism Goerli", "url": "https://blockscout.com/optimism/goerli", "id": "optimism/goerli"}',
+    '{"title": "Optimism Bedrock Alpha", "url": "https://blockscout.com/optimism/bedrock-alpha", "id": "optimism/bedrock-alpha"}',
+]

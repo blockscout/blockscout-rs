@@ -2,26 +2,15 @@ use std::{net::SocketAddr, str::FromStr};
 
 use config::{Config, File};
 use serde::{de::IgnoredAny, Deserialize};
-use std::time;
-use url::Url;
-
 use serde_with::{As, DisplayFromStr};
-use tracing::{event, Level};
+use std::time;
 
-/// An instance of the maintained networks in Blockscout.
-/// Semantic: (network, chain)
-/// e.g."blockscout.com/eth/mainnet" -> ("eth", "mainnet")
-#[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct Instance(pub String, pub String);
+use crate::proxy::Instance;
 
 impl FromStr for Instance {
-    type Err = String;
-    /// "eth/mainnet" -> Instance("eth", "mainnet")
+    type Err = serde_json::Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut parts = s.split('/');
-        let network = parts.next().ok_or("missing network")?;
-        let chain = parts.next().ok_or("missing chain")?;
-        Ok(Instance(network.to_string(), chain.to_string()))
+        serde_json::from_str(s)
     }
 }
 
@@ -30,9 +19,6 @@ impl FromStr for Instance {
 #[derive(Deserialize, Clone, Debug)]
 #[serde(default, deny_unknown_fields)]
 pub struct BlockscoutSettings {
-    /// The base URL of the Blockscout API.
-    pub base_url: Url,
-
     #[serde(with = "As::<Vec<DisplayFromStr>>")]
     pub instances: Vec<Instance>,
 
@@ -47,11 +33,10 @@ pub struct BlockscoutSettings {
 impl Default for BlockscoutSettings {
     fn default() -> Self {
         Self {
-            base_url: Url::parse("https://blockscout.com/").expect("should be correct base"),
-            instances: vec![
-                Instance("eth".into(), "mainnet".into()),
-                Instance("xdai".into(), "mainnet".into()),
-            ],
+            instances: serde_json::from_value(serde_json::json!([
+                {"title": "POA", "url": "https://blockscout.com/poa/core", "id": "poa/core"},
+                {"title": "Ethereum", "url": "https://blockscout.com/eth/mainnet", "id": "eth/mainnet"},
+            ])).expect("invalid default instances"),
             concurrent_requests: 10,
             request_timeout: time::Duration::from_secs(60),
         }
@@ -118,8 +103,6 @@ impl Settings {
         builder = builder.add_source(environment);
 
         let settings: Settings = builder.build()?.try_deserialize()?;
-
-        event!(Level::INFO, settings = ?settings, "Initilized with settings");
 
         Ok(settings)
     }
