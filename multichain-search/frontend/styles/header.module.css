@@ -41,3 +41,7 @@
     order: 0;
     flex-grow: 0;
 }
+
+.link:hover {
+    color: #848080;
+}
