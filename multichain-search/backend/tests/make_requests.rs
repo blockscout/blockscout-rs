@@ -1,5 +1,5 @@
 use actix_web::{http::StatusCode, test, web, web::Data, App};
-use multichain_api_gateway::{proxy, server, Settings};
+use multichain_search::{proxy, server, Settings};
 use pretty_assertions::assert_eq;
 use serde_json::json;
 use wiremock::{

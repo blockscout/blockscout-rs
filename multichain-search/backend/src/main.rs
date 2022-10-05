@@ -1,5 +1,5 @@
 use anyhow::Context;
-use multichain_api_gateway::{init_logs, server::run, Settings};
+use multichain_search::{init_logs, server::run, Settings};
 use std::error::Error;
 
 #[tokio::main]
