@@ -12,7 +12,7 @@ export const HeaderLink = ({ text, url }: Props) => {
     return (
       <Box as="li" listStyleType="none">
           <Link href={url} className={styles.link}>
-            <a>{text}</a>
+            {text}
           </Link>
       </Box>
     )
