@@ -2,7 +2,8 @@
 members = [
     "smart-contract-verifier",
     "smart-contract-verifier-http",
-    "multichain-api-gateway"
+    "multichain-api-gateway",
+    "sig-provider",
 ]
 
 [patch.crates-io]
