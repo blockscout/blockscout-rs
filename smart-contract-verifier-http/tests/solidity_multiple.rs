@@ -35,7 +35,7 @@ async fn global_app_router() -> &'static AppRouter {
         .await
 }
 
-async fn local_app_router(mut settings: Settings) -> AppRouter {
+async fn _local_app_router(mut settings: Settings) -> AppRouter {
     settings.sourcify.enabled = false;
     settings.metrics.enabled = false;
     settings.vyper.enabled = false;
