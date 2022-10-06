@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 actix-web = "4"
+actix-cors = "0.6"
 anyhow = "1.0"
 awc = { version = "3.0.0", features = ["openssl"] }
 chrono = { version = "0.4.22", features = ["serde"] }

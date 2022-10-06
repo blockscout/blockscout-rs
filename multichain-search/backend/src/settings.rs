@@ -89,7 +89,7 @@ pub struct Settings {
 
 impl Settings {
     pub fn new() -> anyhow::Result<Self> {
-        let config_path = std::env::var("MULTICHAIN_API_GATEWAY__CONFIG");
+        let config_path = std::env::var("MULTICHAIN_SEARCH__CONFIG");
 
         let mut builder = Config::builder();
         if let Ok(config_path) = config_path {
