@@ -1,5 +1,4 @@
 import { Link, Icon, Text, HStack, Tooltip, Box } from '@chakra-ui/react';
-import NextLink from 'next/link';
 import React from 'react';
 import styles from '../styles/header.module.css'
 import { HeaderLink } from './HeaderLink';

@@ -51,14 +51,13 @@ pub struct InstanceResponse {
 pub struct Response(pub HashMap<String, InstanceResponse>);
 
 impl BlockscoutProxy {
-    #[tracing::instrument(level = "debug")]
+    #[tracing::instrument(skip(self, body, request_head), level = "debug")]
     pub async fn make_requests(
         &self,
         path_and_query: Option<&PathAndQuery>,
         body: Bytes,
         request_head: &RequestHead,
     ) -> Response {
-        tracing::debug!("Building awc client");
         let client = Client::builder().timeout(self.request_timeout).finish();
 
         let responses = stream::iter(self.instances.iter())
@@ -78,7 +77,7 @@ impl BlockscoutProxy {
         Response(responses)
     }
 
-    #[tracing::instrument(skip(request), level = "debug")]
+    #[tracing::instrument(skip(request, body), level = "debug")]
     async fn send_request(
         instance: &Instance,
         request: ClientRequest,

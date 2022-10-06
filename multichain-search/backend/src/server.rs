@@ -1,24 +1,24 @@
-use std::net::TcpListener;
-
+use crate::proxy::{self, BlockscoutProxy};
+pub use crate::settings::{BlockscoutSettings, Settings};
+use actix_cors::Cors;
 use actix_web::{
     dev::Server,
     web,
     web::{Bytes, Data, Json},
     App, HttpRequest, HttpServer,
 };
+use std::net::TcpListener;
 use tracing_actix_web::TracingLogger;
 
-use crate::proxy::{self, BlockscoutProxy};
-pub use crate::settings::{BlockscoutSettings, Settings};
-
-#[tracing::instrument(skip(proxy))]
 pub async fn handle_request(
     request: HttpRequest,
     proxy: Data<BlockscoutProxy>,
     body: Bytes,
 ) -> Json<proxy::Response> {
+    let uri = request.uri();
+    tracing::info!(uri = ?uri, "Got request");
     let responses = proxy
-        .make_requests(request.uri().path_and_query(), body, request.head())
+        .make_requests(uri.path_and_query(), body, request.head())
         .await;
     Json(responses)
 }
@@ -32,8 +32,10 @@ pub fn run(settings: Settings) -> Result<Server, std::io::Error> {
     );
 
     let server = HttpServer::new(move || {
+        let cors = Cors::default().allow_any_origin();
         App::new()
             .wrap(TracingLogger::default())
+            .wrap(cors)
             .app_data(Data::new(proxy.clone()))
             .default_service(web::route().to(handle_request))
     })
