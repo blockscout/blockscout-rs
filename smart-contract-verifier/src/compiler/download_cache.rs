@@ -200,7 +200,7 @@ mod tests {
         #[async_trait]
         impl Fetcher for MockBlockingFetcher {
             async fn fetch(&self, ver: &Version) -> Result<PathBuf, FetchError> {
-                self.sync.lock().await;
+                let _guard = self.sync.lock().await;
                 Ok(PathBuf::from(ver.to_string()))
             }
 
