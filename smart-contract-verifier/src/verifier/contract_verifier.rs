@@ -54,7 +54,7 @@ pub struct Success {
     pub compiler_version: compiler::Version,
     pub file_path: String,
     pub contract_name: String,
-    pub abi: ethabi::Contract,
+    pub abi: Option<ethabi::Contract>,
     pub constructor_args: Option<DisplayBytes>,
 }
 

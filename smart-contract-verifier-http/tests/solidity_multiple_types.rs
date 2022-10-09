@@ -64,7 +64,7 @@ impl TestInput {
         self
     }
 
-    pub fn is_yul(mut self) -> Self {
+    pub fn set_is_yul(mut self) -> Self {
         self.is_yul = true;
         self
     }

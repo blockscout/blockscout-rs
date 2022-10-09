@@ -4,6 +4,7 @@ pub struct TestInput {
     pub contract_name: &'static str,
     pub compiler_version: &'static str,
     pub has_constructor_args: bool,
+    pub is_yul: bool,
 
     /// If None, the input would be read from the corresponding file
     pub standard_input: Option<String>,
@@ -19,6 +20,7 @@ impl TestInput {
             contract_name,
             compiler_version,
             has_constructor_args: false,
+            is_yul: false,
 
             standard_input: None,
             creation_tx_input: None,
@@ -28,6 +30,11 @@ impl TestInput {
 
     pub fn has_constructor_args(mut self) -> Self {
         self.has_constructor_args = true;
+        self
+    }
+
+    pub fn set_is_yul(mut self) -> Self {
+        self.is_yul = true;
         self
     }
 

@@ -102,15 +102,19 @@ async fn test_success(test_case: TestCase) {
 
     let verification_result = verification_response.result.expect("Checked above");
 
-    let abi: Result<ethabi::Contract, _> = serde_json::from_str(&verification_result.abi);
+    let abi: Option<Result<ethabi::Contract, _>> = verification_result
+        .abi
+        .as_ref()
+        .map(|abi| serde_json::from_str(abi));
     assert_eq!(
         verification_result.contract_name, test_case.contract_name,
         "Invalid contract name"
     );
+    assert!(abi.is_some(), "Vyper contracts must have abi");
     assert!(
-        abi.is_ok(),
+        abi.as_ref().unwrap().is_ok(),
         "Abi deserialization failed: {}",
-        abi.unwrap_err()
+        abi.unwrap().as_ref().unwrap_err()
     );
     assert_eq!(
         verification_result.constructor_arguments, test_case.expected_constructor_argument,
