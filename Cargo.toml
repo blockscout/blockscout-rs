@@ -8,3 +8,5 @@ members = [
 
 [patch.crates-io]
 ethers-solc = { git = "https://github.com/gakonst/ethers-rs", package = "ethers-solc", rev = "13a0144a" }
+# We need the master branch, because https://github.com/tokio-rs/prost/pull/714 isn't published yet
+prost-build = { git = "https://github.com/tokio-rs/prost" }

@@ -1,0 +1,14 @@
+type: google.api.Service
+config_version: 3
+
+http:
+  rules:
+    - selector: blockscout.sig_provider.v1.SignatureService.CreateSignatures
+      post: /api/v1/signatures
+      body: "*"
+    - selector: blockscout.sig_provider.v1.SignatureService.GetFunctionSignatures
+      get: /api/v1/signatures/function
+    - selector: blockscout.sig_provider.v1.SignatureService.GetEventSignatures
+      get: /api/v1/signatures/event
+    - selector: blockscout.sig_provider.v1.SignatureService.GetErrorSignatures
+      get: /api/v1/signatures/error

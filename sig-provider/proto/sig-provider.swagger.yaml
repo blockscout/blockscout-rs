@@ -1,0 +1,132 @@
+swagger: "2.0"
+info:
+  title: sig-provider.proto
+  version: version not set
+tags:
+  - name: SignatureService
+consumes:
+  - application/json
+produces:
+  - application/json
+paths:
+  /api/v1/signatures:
+    post:
+      operationId: SignatureService_CreateSignatures
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1CreateSignaturesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1CreateSignaturesRequest'
+      tags:
+        - SignatureService
+  /api/v1/signatures/error:
+    get:
+      operationId: SignatureService_GetErrorSignatures
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetSignaturesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: hex
+          in: query
+          required: false
+          type: string
+          format: byte
+      tags:
+        - SignatureService
+  /api/v1/signatures/event:
+    get:
+      operationId: SignatureService_GetEventSignatures
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetSignaturesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: hex
+          in: query
+          required: false
+          type: string
+          format: byte
+      tags:
+        - SignatureService
+  /api/v1/signatures/function:
+    get:
+      operationId: SignatureService_GetFunctionSignatures
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetSignaturesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: hex
+          in: query
+          required: false
+          type: string
+          format: byte
+      tags:
+        - SignatureService
+definitions:
+  protobufAny:
+    type: object
+    properties:
+      '@type':
+        type: string
+    additionalProperties: {}
+  rpcStatus:
+    type: object
+    properties:
+      code:
+        type: integer
+        format: int32
+      details:
+        type: array
+        items:
+          $ref: '#/definitions/protobufAny'
+      message:
+        type: string
+  v1CreateSignaturesRequest:
+    type: object
+    properties:
+      abi:
+        type: string
+      hash:
+        type: string
+        format: byte
+  v1CreateSignaturesResponse:
+    type: object
+  v1GetSignaturesResponse:
+    type: object
+    properties:
+      signatures:
+        type: array
+        items:
+          $ref: '#/definitions/v1Signature'
+  v1Signature:
+    type: object
+    properties:
+      name:
+        type: string

@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package blockscout.sig_provider.v1;
+
+option go_package = "github.com/blockscout/blockscout-rs/sig-provider";
+
+service SignatureService {
+  rpc CreateSignatures(CreateSignaturesRequest)
+      returns (CreateSignaturesResponse) {}
+  rpc GetFunctionSignatures(GetSignaturesRequest)
+      returns (GetSignaturesResponse) {}
+  rpc GetEventSignatures(GetSignaturesRequest) returns (GetSignaturesResponse) {
+  }
+  rpc GetErrorSignatures(GetSignaturesRequest) returns (GetSignaturesResponse) {
+  }
+}
+
+message CreateSignaturesRequest {
+  bytes hash = 1;
+  string abi = 2;
+}
+
+message CreateSignaturesResponse {}
+
+message GetSignaturesRequest { bytes hex = 1; }
+
+message Signature { string name = 1; }
+
+message GetSignaturesResponse { repeated Signature signatures = 1; }
