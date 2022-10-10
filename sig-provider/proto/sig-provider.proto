@@ -16,8 +16,7 @@ service SignatureService {
 }
 
 message CreateSignaturesRequest {
-  bytes hash = 1;
-  string abi = 2;
+  string abi = 1;
 }
 
 message CreateSignaturesResponse {}

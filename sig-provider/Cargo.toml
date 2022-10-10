@@ -14,10 +14,11 @@ serde = { version = "1", features = ["derive"] }
 serde_with = { version = "2.0", features = ["hex", "base64"] }
 async-trait = "0.1"
 bytes = "1.2"
-tokio = "1.21"
-# futures = "0.3"
-# config = "0.13"
-# log = "0.4"
+tokio = { version = "1", features = ["rt-multi-thread"] }
+anyhow = "1.0"
+config = "0.13"
+tracing = "0.1"
+futures = "0.3"
 # env_logger = "0.9"
 
 # [dev-dependencies]

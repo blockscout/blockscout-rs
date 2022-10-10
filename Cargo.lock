@@ -3702,8 +3702,11 @@ dependencies = [
  "actix-prost-build",
  "actix-prost-macros",
  "actix-web",
+ "anyhow",
  "async-trait",
  "bytes",
+ "config",
+ "futures",
  "prost 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "prost-build",
  "prost-types 0.11.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3712,6 +3715,7 @@ dependencies = [
  "tokio",
  "tonic",
  "tonic-build",
+ "tracing",
 ]
 
 [[package]]
