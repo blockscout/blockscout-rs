@@ -46,7 +46,6 @@ paths:
           in: query
           required: false
           type: string
-          format: byte
       tags:
         - SignatureService
   /api/v1/signatures/event:
@@ -66,7 +65,6 @@ paths:
           in: query
           required: false
           type: string
-          format: byte
       tags:
         - SignatureService
   /api/v1/signatures/function:
@@ -86,7 +84,6 @@ paths:
           in: query
           required: false
           type: string
-          format: byte
       tags:
         - SignatureService
 definitions:
@@ -113,9 +110,6 @@ definitions:
     properties:
       abi:
         type: string
-      hash:
-        type: string
-        format: byte
   v1CreateSignaturesResponse:
     type: object
   v1GetSignaturesResponse:

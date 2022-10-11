@@ -15,13 +15,11 @@ service SignatureService {
   }
 }
 
-message CreateSignaturesRequest {
-  string abi = 1;
-}
+message CreateSignaturesRequest { string abi = 1; }
 
 message CreateSignaturesResponse {}
 
-message GetSignaturesRequest { bytes hex = 1; }
+message GetSignaturesRequest { string hex = 1; }
 
 message Signature { string name = 1; }
 

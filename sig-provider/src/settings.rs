@@ -20,12 +20,29 @@ impl Eq for IgnoredAny {}
 #[serde(default, deny_unknown_fields)]
 pub struct Settings {
     pub server: ServerSettings,
+    pub sources: SourcesSettings,
 
     // Is required as we deny unknown fields, but allow users provide
     // path to config through PREFIX__CONFIG env variable. If removed,
     // the setup would fail with `unknown field `config`, expected one of...`
     #[serde(rename = "config")]
     config_path: IgnoredAny,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields)]
+pub struct SourcesSettings {
+    pub fourbyte: url::Url,
+    pub sigeth: url::Url,
+}
+
+impl Default for SourcesSettings {
+    fn default() -> Self {
+        Self {
+            fourbyte: url::Url::parse("https://www.4byte.directory/").unwrap(),
+            sigeth: url::Url::parse("https://sig.eth.samczsun.com/").unwrap(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]

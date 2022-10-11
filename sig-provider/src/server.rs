@@ -1,14 +1,18 @@
 use crate::{
+    fourbyte,
     proto::blockscout::sig_provider::v1::{
         signature_service_actix::route_signature_service,
-        signature_service_server::SignatureServiceServer,
+        signature_service_server::{SignatureService, SignatureServiceServer},
     },
-    Settings, SignatureServer,
+    sigeth, Settings, SignatureAggregator,
 };
 use actix_web::{App, HttpServer};
 use std::{net::SocketAddr, sync::Arc};
 
-pub fn http_server(signature: Arc<SignatureServer>, addr: SocketAddr) -> actix_web::dev::Server {
+pub fn http_server<S: SignatureService>(
+    signature: Arc<S>,
+    addr: SocketAddr,
+) -> actix_web::dev::Server {
     tracing::info!("starting http server on addr {}", addr);
     let server = HttpServer::new(move || {
         App::new().configure(|config| route_signature_service(config, signature.clone()))
@@ -19,8 +23,8 @@ pub fn http_server(signature: Arc<SignatureServer>, addr: SocketAddr) -> actix_w
     server.run()
 }
 
-pub fn grpc_server(
-    signature: Arc<SignatureServer>,
+pub fn grpc_server<S: SignatureService>(
+    signature: Arc<S>,
     addr: SocketAddr,
 ) -> impl futures::Future<Output = Result<(), tonic::transport::Error>> {
     tracing::info!("starting grpc server on addr {}", addr);
@@ -31,7 +35,10 @@ pub fn grpc_server(
 }
 
 pub async fn sig_provider(settings: Settings) -> Result<(), anyhow::Error> {
-    let signature = Arc::new(SignatureServer::default());
+    let signature = Arc::new(SignatureAggregator::new(vec![
+        Arc::new(fourbyte::Provider::new(settings.sources.fourbyte)),
+        Arc::new(sigeth::Provider::new(settings.sources.sigeth)),
+    ]));
 
     let mut futures = vec![];
 
