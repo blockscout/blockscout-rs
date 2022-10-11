@@ -103,16 +103,22 @@ async fn test_success(dir: &'static str, mut input: TestInput) {
         .result
         .expect("Verification result is not Some");
 
-    let abi: Result<ethabi::Contract, _> = serde_json::from_str(&verification_result.abi);
+    let abi: Option<Result<ethabi::Contract, _>> = verification_result
+        .abi
+        .as_ref()
+        .map(|abi| serde_json::from_str(abi));
     assert_eq!(
         verification_result.contract_name, input.contract_name,
         "Invalid contract name"
     );
-    assert!(
-        abi.is_ok(),
-        "Abi deserialization failed: {}",
-        abi.unwrap_err()
-    );
+    if !input.is_yul {
+        assert!(abi.is_some(), "Solidity contracts must have abi");
+        assert!(
+            abi.as_ref().unwrap().is_ok(),
+            "Abi deserialization failed: {}",
+            abi.unwrap().as_ref().unwrap_err()
+        );
+    }
     assert_eq!(
         verification_result.constructor_arguments, expected_constructor_argument,
         "Invalid constructor args"
@@ -185,6 +191,13 @@ mod success_tests {
         let contract_dir = "solidity_0.4.18";
         let test_input = TestInput::new("Main", "v0.4.18+commit.9cf6e910");
         test_success(contract_dir, test_input).await;
+    }
+
+    #[actix_rt::test]
+    async fn yul() {
+        let contract_dir = "yul";
+        let test_input = TestInput::new("Proxy", "v0.8.7+commit.e28d00a7").set_is_yul();
+        test_success(contract_dir, test_input).await
     }
 }
 

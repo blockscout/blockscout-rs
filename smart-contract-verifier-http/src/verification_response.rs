@@ -20,7 +20,7 @@ pub struct VerificationResult {
     pub optimization: Option<bool>,
     pub optimization_runs: Option<usize>,
     pub contract_libraries: BTreeMap<String, String>,
-    pub abi: String,
+    pub abi: Option<String>,
     pub sources: BTreeMap<String, String>,
 }
 
@@ -46,8 +46,10 @@ impl From<VerificationSuccess> for VerificationResult {
                 .into_iter()
                 .flat_map(|(_path, libs)| libs)
                 .collect(),
-            abi: serde_json::to_string(&verification_success.abi)
-                .expect("Is result of local compilation and, thus, should be always valid"),
+            abi: verification_success.abi.as_ref().map(|abi| {
+                serde_json::to_string(abi)
+                    .expect("Is result of local compilation and, thus, should be always valid")
+            }),
             sources: compiler_input
                 .sources
                 .into_iter()
@@ -70,7 +72,7 @@ impl From<SourcifySuccess> for VerificationResult {
             optimization: sourcify_success.optimization,
             optimization_runs: sourcify_success.optimization_runs,
             contract_libraries: sourcify_success.contract_libraries,
-            abi: sourcify_success.abi,
+            abi: Some(sourcify_success.abi),
             sources: sourcify_success.sources,
         }
     }
@@ -124,7 +126,7 @@ mod tests {
                         "some_library".into(),
                         "some_address".into(),
                     )]),
-                    abi: "abi".to_string(),
+                    abi: Some("abi".to_string()),
                     sources: serde_json::from_str(
                         r#"{
                             "source.sol": "content"
