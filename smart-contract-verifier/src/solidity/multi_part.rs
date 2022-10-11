@@ -58,36 +58,6 @@ impl From<MultiFileContent> for Vec<CompilerInput> {
     }
 }
 
-impl From<MultiFileContent> for CompilerInput {
-    fn from(content: MultiFileContent) -> Self {
-        let mut settings = Settings::default();
-        settings.optimizer.enabled = Some(content.optimization_runs.is_some());
-        settings.optimizer.runs = content.optimization_runs;
-        if let Some(libs) = content.contract_libraries {
-            // we have to know filename for library, but we don't know,
-            // so we assume that every file MAY contains all libraries
-            let libs = content
-                .sources
-                .iter()
-                .map(|(filename, _)| (PathBuf::from(filename), libs.clone()))
-                .collect();
-            settings.libraries = Libraries { libs };
-        }
-        settings.evm_version = content.evm_version;
-
-        let sources: Sources = content
-            .sources
-            .into_iter()
-            .map(|(name, content)| (name, Source { content }))
-            .collect();
-        CompilerInput {
-            language: "Solidity".to_string(),
-            sources,
-            settings,
-        }
-    }
-}
-
 pub async fn verify(
     compilers: Arc<Compilers<SolidityCompiler>>,
     request: VerificationRequest,
@@ -157,11 +127,18 @@ mod tests {
             .collect()
     }
 
-    fn test_to_input(multi_part: MultiFileContent, expected: &str) {
-        let input: CompilerInput = multi_part.try_into().unwrap();
-        let input_json = serde_json::to_string(&input).unwrap();
-        println!("{}", input_json);
-        assert_eq!(input_json, expected);
+    fn test_to_input(multi_part: MultiFileContent, expected: Vec<&str>) {
+        let inputs: Vec<CompilerInput> = multi_part.try_into().unwrap();
+        assert_eq!(
+            inputs.len(),
+            expected.len(),
+            "invalid number of compiler inputs"
+        );
+        for i in 0..expected.len() {
+            let input_json = serde_json::to_string(&inputs[i]).unwrap();
+            println!("{}", input_json);
+            assert_eq!(input_json, expected[i]);
+        }
     }
 
     #[test]
@@ -176,7 +153,7 @@ mod tests {
             )])),
         };
         let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":"pragma"}},"settings":{"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"london","libraries":{"source.sol":{"some_library":"some_address"}}}}"#;
-        test_to_input(multi_part, expected);
+        test_to_input(multi_part, vec![expected]);
         let multi_part = MultiFileContent {
             sources: sources(&[("source.sol", "")]),
             evm_version: Some(EvmVersion::SpuriousDragon),
@@ -184,6 +161,19 @@ mod tests {
             contract_libraries: None,
         };
         let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":""}},"settings":{"optimizer":{"enabled":false},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"spuriousDragon","libraries":{}}}"#;
-        test_to_input(multi_part, expected);
+        test_to_input(multi_part, vec![expected]);
+    }
+
+    #[test]
+    fn yul_and_solidity_to_inputs() {
+        let multi_part = MultiFileContent {
+            sources: sources(&[("source.sol", "pragma"), ("source2.yul", "object \"A\" {}")]),
+            evm_version: Some(EvmVersion::London),
+            optimization_runs: Some(200),
+            contract_libraries: None,
+        };
+        let expected_solidity = r#"{"language":"Solidity","sources":{"source.sol":{"content":"pragma"}},"settings":{"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"london","libraries":{}}}"#;
+        let expected_yul = r#"{"language":"Yul","sources":{"source2.yul":{"content":"object \"A\" {}"}},"settings":{"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"london","libraries":{}}}"#;
+        test_to_input(multi_part, vec![expected_solidity, expected_yul]);
     }
 }
