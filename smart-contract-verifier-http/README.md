@@ -114,7 +114,9 @@ Service supports 4 types of verification:
 
 ```json5
 {
-  // Creation transaction input
+  // (optional) Creation transaction input.
+  // If present, is used for contract verification,
+  // otherwise deployed bytecode is used
   "creation_bytecode": "0x608060...0033000b0c",
   // Bytecode stored in the blockchain
   "deployed_bytecode": "0x608060...0033",
@@ -145,7 +147,9 @@ Service supports 4 types of verification:
 ### Input
 ```json5
 {
-  // Creation transaction input
+  // (optional) Creation transaction input.
+  // If present, is used for contract verification,
+  // otherwise deployed bytecode is used
   "creation_bytecode": "0x608060...0033000b0c",
   // Bytecode stored in the blockchain
   "deployed_bytecode": "0x608060...0033",
@@ -190,7 +194,9 @@ Proxies verification requests to Sourcify service and returns responses (https:/
 ### Input
 ```json5
 {
-  // Creation transaction input
+  // (optional) Creation transaction input.
+  // If present, is used for contract verification,
+  // otherwise deployed bytecode is used
   "creation_bytecode": "0x608060...0033000b0c",
   // Bytecode stored in the blockchain
   "deployed_bytecode": "0x608060...0033",
