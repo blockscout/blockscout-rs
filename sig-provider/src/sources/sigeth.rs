@@ -23,7 +23,7 @@ impl Provider {
         if hex.starts_with("0x") {
             hex.to_owned()
         } else {
-            "0x".to_owned() + &hex
+            "0x".to_owned() + hex
         }
     }
 

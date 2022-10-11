@@ -21,8 +21,7 @@ impl SignatureAggregator {
     fn merge_signatures<I: IntoIterator<Item = GetSignaturesResponse>>(sigs: I) -> Vec<Signature> {
         let mut sigs: Vec<_> = sigs
             .into_iter()
-            .map(|sig| sig.signatures.into_iter())
-            .flatten()
+            .flat_map(|sig| sig.signatures.into_iter())
             .collect();
         sigs.sort_by(|a, b| a.name.cmp(&b.name));
         sigs.dedup();
