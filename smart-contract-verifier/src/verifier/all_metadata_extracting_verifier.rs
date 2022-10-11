@@ -21,8 +21,8 @@ pub struct Verifier<T> {
 impl<T: Source> base::Verifier for Verifier<T> {
     type Input = (CompilerOutput, CompilerOutput);
 
-    fn verify(&self, input: Self::Input) -> Result<VerificationSuccess, Vec<VerificationError>> {
-        self.verify(input.0, input.1)
+    fn verify(&self, input: &Self::Input) -> Result<VerificationSuccess, Vec<VerificationError>> {
+        self.verify(&input.0, &input.1)
     }
 }
 
@@ -42,8 +42,8 @@ impl<T: Source> Verifier<T> {
     /// of succeeded contract, if any. Otherwise, returns [`None`].
     pub fn verify(
         &self,
-        output: CompilerOutput,
-        output_modified: CompilerOutput,
+        output: &CompilerOutput,
+        output_modified: &CompilerOutput,
     ) -> Result<VerificationSuccess, Vec<VerificationError>> {
         let not_found_in_modified_compiler_output_error =
             |file_path: String, contract_name: Option<String>| match contract_name {
@@ -63,12 +63,12 @@ impl<T: Source> Verifier<T> {
             };
 
         let mut errors = Vec::new();
-        for (path, contracts) in output.contracts {
+        for (path, contracts) in &output.contracts {
             let contracts_modified = {
-                if let Some(contracts_modified) = output_modified.contracts.get(&path) {
+                if let Some(contracts_modified) = output_modified.contracts.get(path) {
                     contracts_modified
                 } else {
-                    let error = not_found_in_modified_compiler_output_error(path, None);
+                    let error = not_found_in_modified_compiler_output_error(path.clone(), None);
 
                     tracing::error!("{}", error);
                     errors.push(error);
@@ -79,11 +79,13 @@ impl<T: Source> Verifier<T> {
 
             for (name, contract) in contracts {
                 let contract_modified = {
-                    if let Some(contract) = contracts_modified.get(&name) {
+                    if let Some(contract) = contracts_modified.get(name) {
                         contract
                     } else {
-                        let error =
-                            not_found_in_modified_compiler_output_error(path.clone(), Some(name));
+                        let error = not_found_in_modified_compiler_output_error(
+                            path.clone(),
+                            Some(name.clone()),
+                        );
 
                         tracing::error!("{}", error);
                         errors.push(error);
@@ -95,14 +97,15 @@ impl<T: Source> Verifier<T> {
                 match self.compare(&contract, contract_modified) {
                     Ok((abi, constructor_args)) => {
                         return Ok(VerificationSuccess {
-                            file_path: path,
-                            contract_name: name,
+                            file_path: path.clone(),
+                            contract_name: name.clone(),
                             abi,
                             constructor_args: constructor_args.map(DisplayBytes::from),
                         })
                     }
                     Err(err) => {
-                        let error = VerificationError::with_contract(path.clone(), name, err);
+                        let error =
+                            VerificationError::with_contract(path.clone(), name.clone(), err);
 
                         match error {
                             VerificationError {

@@ -118,7 +118,7 @@ impl<'a, T: EvmCompiler> ContractVerifier<'a, T> {
 
         let verification_success = self
             .verifier
-            .verify((compiler_output, compiler_output_modified))
+            .verify(&(compiler_output, compiler_output_modified))
             .map_err(|errs| {
                 errs.into_iter()
                     .find_map(|err| match err {
