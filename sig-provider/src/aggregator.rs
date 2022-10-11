@@ -3,7 +3,7 @@ use crate::{
         signature_service_server::SignatureService, CreateSignaturesRequest,
         CreateSignaturesResponse, GetSignaturesRequest, GetSignaturesResponse, Signature,
     },
-    proxy::SignatureProvider,
+    provider::SignatureProvider,
 };
 use std::sync::Arc;
 
