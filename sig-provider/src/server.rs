@@ -36,8 +36,8 @@ pub fn grpc_server<S: SignatureService>(
 
 pub async fn sig_provider(settings: Settings) -> Result<(), anyhow::Error> {
     let signature = Arc::new(SignatureAggregator::new(vec![
-        Arc::new(fourbyte::Provider::new(settings.sources.fourbyte)),
-        Arc::new(sigeth::Provider::new(settings.sources.sigeth)),
+        Arc::new(fourbyte::Source::new(settings.sources.fourbyte)),
+        Arc::new(sigeth::Source::new(settings.sources.sigeth)),
     ]));
 
     let mut futures = vec![];

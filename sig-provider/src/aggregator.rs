@@ -3,29 +3,28 @@ use crate::{
         signature_service_server::SignatureService, CreateSignaturesRequest,
         CreateSignaturesResponse, GetSignaturesRequest, GetSignaturesResponse, Signature,
     },
-    provider::SignatureProvider,
+    SignatureSource,
 };
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 pub struct SignatureAggregator {
-    sources: Vec<Arc<dyn SignatureProvider + Send + Sync + 'static>>,
+    sources: Vec<Arc<dyn SignatureSource + Send + Sync + 'static>>,
 }
 
 impl SignatureAggregator {
     pub fn new(
-        sources: Vec<Arc<dyn SignatureProvider + Send + Sync + 'static>>,
+        sources: Vec<Arc<dyn SignatureSource + Send + Sync + 'static>>,
     ) -> SignatureAggregator {
         SignatureAggregator { sources }
     }
 
     fn merge_signatures<I: IntoIterator<Item = GetSignaturesResponse>>(sigs: I) -> Vec<Signature> {
-        let mut sigs: Vec<_> = sigs
+        let sigs: HashSet<_> = sigs
             .into_iter()
             .flat_map(|sig| sig.signatures.into_iter())
+            .map(|sig| sig.name)
             .collect();
-        sigs.sort_by(|a, b| a.name.cmp(&b.name));
-        sigs.dedup();
-        sigs
+        sigs.into_iter().map(|name| Signature { name }).collect()
     }
 }
 

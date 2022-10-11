@@ -3,17 +3,17 @@ use crate::{
         CreateSignaturesRequest, CreateSignaturesResponse, GetSignaturesRequest,
         GetSignaturesResponse, Signature,
     },
-    SignatureProvider,
+    SignatureSource,
 };
 
-pub struct Provider {
+pub struct Source {
     host: url::Url,
     client: reqwest::Client,
 }
 
-impl Provider {
-    pub fn new(host: url::Url) -> Provider {
-        Provider {
+impl Source {
+    pub fn new(host: url::Url) -> Source {
+        Source {
             host,
             client: reqwest::Client::new(),
         }
@@ -45,7 +45,7 @@ impl Provider {
 }
 
 #[async_trait::async_trait]
-impl SignatureProvider for Provider {
+impl SignatureSource for Source {
     async fn create_signatures(
         &self,
         request: CreateSignaturesRequest,
