@@ -1,13 +1,13 @@
 import type { GetServerSideProps, NextPage } from 'next'
 import { Search } from '../components/Search'
 
-import { useRouter } from 'next/router'
 import styles from '../styles/search.module.css'
 import { useEffect, useState } from 'react'
 
-import loadingIcon from 'icons/spinner.svg';
-import { Icon, Spinner } from '@chakra-ui/react'
-import { ProxySearchResults } from '../components/proxySearchResults'
+import { Spinner } from '@chakra-ui/react'
+import { ProxySearchResults } from '../components/ProxySearchResults'
+import config from '../config'
+
 
 
 interface Props {
@@ -17,14 +17,20 @@ interface Props {
 const SearchResults: NextPage<Props> = ({q}) => {
   const [isLoading, setLoading] = useState(false);
   const [data, setData] = useState(null)
+
   useEffect(() => {
-    setLoading(true)
-    fetch('http://localhost:8044/api/v1/search?q=' + q)
-      .then((res) => res.json())
-      .then((data) => {
-        setData(data)
-        setLoading(false)
-      })
+    if (config.PROXY_HOST) {
+      setLoading(true)
+      let url = new URL('/api/v1/search', config.PROXY_HOST).toString() + '?q=' + q;
+      fetch(url)
+        .then((res) => res.json())
+        .then((data) => {
+          setData(data)
+          setLoading(false)
+        })
+    } else {
+      console.log('failed to search: proxy host is unknown')
+    }
   }, [q])
 
   return (
@@ -34,7 +40,6 @@ const SearchResults: NextPage<Props> = ({q}) => {
             <div className={styles.output_results}>
               <p>Search results:</p>
             </div>
-            
             { isLoading ? <Spinner size='md' color="blue"/> : <ProxySearchResults responses={data || {}}></ProxySearchResults> }
           </div>
         </Search>

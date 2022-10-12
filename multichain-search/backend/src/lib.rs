@@ -1,3 +1,4 @@
+mod instances;
 pub mod proxy;
 pub mod server;
 mod settings;

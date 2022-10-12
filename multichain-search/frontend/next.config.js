@@ -2,15 +2,12 @@ const withReactSvg = require('next-react-svg')
 const path = require('path')
 
 module.exports = withReactSvg({
-  include: path.resolve(__dirname, 'src/assets/svg'),
+  include: path.resolve(__dirname, 'icons'),
+  reactStrictMode: false,
+  swcMinify: true,
+
   webpack(config, options) {
     return config
   }
 })
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  reactStrictMode: false,
-  swcMinify: true,
-}
 
-module.exports = nextConfig

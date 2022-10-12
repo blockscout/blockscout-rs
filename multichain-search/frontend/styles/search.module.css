@@ -12,8 +12,7 @@
   align-items: center;
   padding: 0px;
   gap: 78px;
-
-  width: 60%;
+  width: 1000px;
 }
 
 .output {
@@ -44,10 +43,18 @@ color: #000000;
 }
 
 .results {
- 
     display: inline-block;
     zoom: 1; 
     *display: inline;
-
 }
 
+
+.result_type {
+    background: #f5f6fa;
+    border-radius: 5px;
+    color: #77838f;
+    display: inline-block;
+    font-size: 14px;
+    line-height: normal;
+    padding: px;
+}
