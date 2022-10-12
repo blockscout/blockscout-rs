@@ -34,6 +34,10 @@ impl BlockscoutProxy {
             request_timeout,
         }
     }
+
+    pub fn instances(&self) -> Vec<Instance> {
+        self.instances.clone()
+    }
 }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Eq)]

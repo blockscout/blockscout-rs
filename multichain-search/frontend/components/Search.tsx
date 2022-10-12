@@ -5,7 +5,7 @@ import { SearchBar } from './SearchBar'
 import styles from '../styles/search.module.css'
 
 interface Props {
-  children: React.ReactNode,
+  children?: React.ReactNode,
   initialSearchValue: string,
 }
 

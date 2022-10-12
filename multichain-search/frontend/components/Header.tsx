@@ -6,9 +6,9 @@ import { HeaderLink } from './HeaderLink';
 export const Header = () => {
     return (
         <div className={styles.header}>
-        <Link href="/"> <h1>
+        <Link href="/" fontSize={24} fontWeight="bold"> 
           Blockscout Multi Search
-        </h1></Link>
+        </Link>
         <div className={styles.right}>
           <HeaderLink url="https://blockscout.com" text="Blockscout"/>
           <HeaderLink url="/about" text="About"/>

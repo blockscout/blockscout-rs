@@ -1,5 +1,8 @@
-use crate::proxy::{self, BlockscoutProxy};
 pub use crate::settings::{BlockscoutSettings, Settings};
+use crate::{
+    instances::get_instances,
+    proxy::{self, BlockscoutProxy},
+};
 use actix_cors::Cors;
 use actix_web::{
     dev::Server,
@@ -37,6 +40,7 @@ pub fn run(settings: Settings) -> Result<Server, std::io::Error> {
             .wrap(TracingLogger::default())
             .wrap(cors)
             .app_data(Data::new(proxy.clone()))
+            .service(web::scope("/api/v1").route("/instances", web::get().to(get_instances)))
             .default_service(web::route().to(handle_request))
     })
     .listen(listener)?

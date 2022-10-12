@@ -1,8 +1,10 @@
-import React, { ChangeEvent, FormEvent } from 'react';
+import React, { ChangeEvent, FormEvent, FormEventHandler } from 'react';
 
 import { Input, InputGroup, InputLeftAddon, InputRightElement } from '@chakra-ui/input';
-import { chakra } from '@chakra-ui/react';
+import { chakra, IconButton } from '@chakra-ui/react';
 import { useColorModeValue } from '@chakra-ui/color-mode';
+
+import  { SearchIcon } from '@chakra-ui/icons'
 
 import styles from '../styles/search.module.css'
 
@@ -26,15 +28,19 @@ export const SearchBar = ({initialValue}: Props) => {
   return (
     <chakra.form noValidate onSubmit={ onSubmit } display={{ base: 'none', lg: 'block' }} w="100%" className={styles.search}>
     <InputGroup size='md'>
-    <InputLeftAddon w="100px" color="#5A349C" fontWeight="bold">Search</InputLeftAddon>
+      <InputLeftAddon color="#5A349C" fontWeight="bold" fontSize={16}>
+        Search in chains
+      </InputLeftAddon>
       <Input
-        placeholder="by addresses / transactions / block / token... "
+        placeholder="by address / transaction / block / token... "
         ml="1px"
         onChange={ onChange }
         borderColor={ useColorModeValue('blackAlpha.100', 'whiteAlpha.200') }
         defaultValue={initialValue}
       />
-
+      <InputRightElement>
+        <IconButton size="sm" aria-label='search' icon={<SearchIcon/>} type="submit"></IconButton>
+      </InputRightElement>
     </InputGroup>
     </chakra.form>
 
