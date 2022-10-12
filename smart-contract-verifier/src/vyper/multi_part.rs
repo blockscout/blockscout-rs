@@ -1,6 +1,6 @@
-use super::compiler::VyperCompiler;
+use super::client::Client;
 use crate::{
-    compiler::{Compilers, Version},
+    compiler::Version,
     verifier::{ContractVerifier, Error, Success},
 };
 use bytes::Bytes;
@@ -48,13 +48,10 @@ impl From<MultiFileContent> for CompilerInput {
     }
 }
 
-pub async fn verify(
-    compilers: Arc<Compilers<VyperCompiler>>,
-    request: VerificationRequest,
-) -> Result<Success, Error> {
+pub async fn verify(client: Arc<Client>, request: VerificationRequest) -> Result<Success, Error> {
     let compiler_input = CompilerInput::from(request.content);
     let verifier = ContractVerifier::new(
-        compilers,
+        client.compilers(),
         &request.compiler_version,
         request.creation_bytecode,
         request.deployed_bytecode,

@@ -94,7 +94,7 @@ impl<T: Source> Verifier<T> {
                     }
                 };
 
-                match self.compare(&contract, contract_modified) {
+                match self.compare(contract, contract_modified) {
                     Ok((abi, constructor_args)) => {
                         return Ok(VerificationSuccess {
                             file_path: path.clone(),
