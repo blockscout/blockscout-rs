@@ -79,8 +79,13 @@ pub async fn verify(client: Arc<Client>, request: VerificationRequest) -> Result
                 continue;
             }
 
-            // Otherwise, verification either succeeded, or some uncorrectable error occurred
-            return result;
+            // If any error, it is uncorrectable and should be returned immediately, otherwise
+            // we allow middlewares to process success and only then return it to the caller
+            let success = result?;
+            for middleware in client.middlewares() {
+                middleware.call(&success).await;
+            }
+            return Ok(success);
         }
     }
 

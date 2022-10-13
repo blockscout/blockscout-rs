@@ -40,5 +40,12 @@ pub async fn verify(client: Arc<Client>, request: VerificationRequest) -> Result
         request.creation_bytecode,
         request.deployed_bytecode,
     )?;
-    verifier.verify(&compiler_input).await
+    let result = verifier.verify(&compiler_input).await;
+
+    // If case of success, we allow middlewares to process success and only then return it to the caller
+    let success = result?;
+    for middleware in client.middlewares() {
+        middleware.call(&success).await;
+    }
+    Ok(success)
 }
