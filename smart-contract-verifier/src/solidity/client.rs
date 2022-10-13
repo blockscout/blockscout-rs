@@ -35,7 +35,7 @@ impl ClientBuilder {
         self
     }
 
-    /// Returns a `SourcifyApiClient` using this builder configuration.
+    /// Returns a [`Client`] using this builder configuration.
     pub fn build(self) -> Client {
         Client::new(self.compilers, self.middleware_stack)
     }
@@ -47,7 +47,7 @@ pub struct Client {
 }
 
 impl Client {
-    /// See [`ClientBuilder`] for a more ergonomic way to build `SourcifyApiClient` instances.
+    /// See [`ClientBuilder`] for a more ergonomic way to build `Client` instances.
     pub fn new<T>(compilers: Compilers<SolidityCompiler>, middleware_stack: T) -> Self
     where
         T: Into<Box<[Arc<dyn Middleware<Success>>]>>,
