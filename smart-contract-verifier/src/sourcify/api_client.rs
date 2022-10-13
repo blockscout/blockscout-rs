@@ -117,7 +117,7 @@ impl SourcifyApiClient {
             .map_err(anyhow::Error::msg)
     }
 
-    pub fn middlewares(&self) -> &[Arc<dyn Middleware<Success>>] {
+    pub fn middleware(&self) -> &[Arc<dyn Middleware<Success>>] {
         self.middleware_stack.as_ref()
     }
 }

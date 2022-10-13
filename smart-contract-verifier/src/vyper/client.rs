@@ -62,7 +62,7 @@ impl Client {
         self.compilers.clone()
     }
 
-    pub fn middlewares(&self) -> &[Arc<dyn Middleware<Success>>] {
+    pub fn middleware(&self) -> &[Arc<dyn Middleware<Success>>] {
         self.middleware_stack.as_ref()
     }
 }
