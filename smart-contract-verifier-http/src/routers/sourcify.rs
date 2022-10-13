@@ -1,7 +1,7 @@
 use super::router::Router;
 use crate::{handlers::sourcify, settings::SourcifySettings};
 use actix_web::web;
-use smart_contract_verifier::SourcifyApiClient;
+use smart_contract_verifier::{SourcifyApiClient, SourcifyApiClientBuilder};
 
 pub struct SourcifyRouter {
     api_client: web::Data<SourcifyApiClient>,
@@ -9,11 +9,12 @@ pub struct SourcifyRouter {
 
 impl SourcifyRouter {
     pub fn new(settings: SourcifySettings) -> Self {
-        let api_client = SourcifyApiClient::new(
+        let api_client = SourcifyApiClientBuilder::new(
             settings.api_url,
             settings.request_timeout,
             settings.verification_attempts,
         )
+        .build()
         .expect("failed to build sourcify client");
         Self {
             api_client: web::Data::new(api_client),

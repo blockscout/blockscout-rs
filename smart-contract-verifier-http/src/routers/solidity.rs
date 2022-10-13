@@ -6,7 +6,8 @@ use crate::{
 use actix_web::web;
 use s3::{creds::Credentials, Bucket, Region};
 use smart_contract_verifier::{
-    Compilers, Fetcher, ListFetcher, S3Fetcher, SolcValidator, SolidityClient, SolidityCompiler,
+    Compilers, Fetcher, ListFetcher, S3Fetcher, SolcValidator, SolidityClient,
+    SolidityClientBuilder, SolidityCompiler,
 };
 use std::{str::FromStr, sync::Arc};
 use tokio::sync::Semaphore;
@@ -83,7 +84,7 @@ impl SolidityRouter {
             compilers_threads_semaphore,
         );
         compilers.load_from_dir(&dir).await;
-        let client = SolidityClient::new(compilers);
+        let client = SolidityClientBuilder::new(compilers).build();
         Ok(Self {
             client: web::Data::new(client),
         })
