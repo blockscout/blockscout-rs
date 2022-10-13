@@ -3,5 +3,5 @@ mod compiler;
 
 pub mod multi_part;
 
-pub use client::Client;
+pub use client::{Client, ClientBuilder};
 pub use compiler::VyperCompiler;

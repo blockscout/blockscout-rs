@@ -30,4 +30,4 @@ pub use solidity::{
     SolidityCompiler,
 };
 pub use sourcify::SourcifyApiClient;
-pub use vyper::{Client as VyperClient, VyperCompiler};
+pub use vyper::{Client as VyperClient, ClientBuilder as VyperClientBuilder, VyperCompiler};
