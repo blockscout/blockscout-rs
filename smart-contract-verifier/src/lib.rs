@@ -29,5 +29,5 @@ pub use solidity::{
     Client as SolidityClient, ClientBuilder as SolidityClientBuilder, SolcValidator,
     SolidityCompiler,
 };
-pub use sourcify::SourcifyApiClient;
+pub use sourcify::{SourcifyApiClient, SourcifyApiClientBuilder};
 pub use vyper::{Client as VyperClient, ClientBuilder as VyperClientBuilder, VyperCompiler};
