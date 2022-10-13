@@ -5,6 +5,7 @@ pub mod vyper;
 mod compiler;
 mod consts;
 mod metrics;
+mod middleware;
 mod verifier;
 
 // TODO: to be extracted in a separate crate
@@ -17,6 +18,8 @@ mod tests;
 pub(crate) use ethers_core::types::Bytes as DisplayBytes;
 
 pub use consts::{DEFAULT_SOLIDITY_COMPILER_LIST, DEFAULT_VYPER_COMPILER_LIST};
+
+pub use middleware::Middleware;
 
 pub use compiler::{Compilers, Fetcher, ListFetcher, S3Fetcher, Version};
 pub use sourcify::{Error as SourcifyError, Success as SourcifySuccess};
