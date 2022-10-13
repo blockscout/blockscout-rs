@@ -42,7 +42,7 @@ impl ClientBuilder {
 }
 
 pub struct Client {
-    compilers: Arc<Compilers<VyperCompiler>>,
+    compilers: Compilers<VyperCompiler>,
     middleware_stack: Box<[Arc<dyn Middleware<Success>>]>,
 }
 
@@ -53,13 +53,13 @@ impl Client {
         T: Into<Box<[Arc<dyn Middleware<Success>>]>>,
     {
         Self {
-            compilers: Arc::new(compilers),
+            compilers,
             middleware_stack: middleware_stack.into(),
         }
     }
 
-    pub fn compilers(&self) -> Arc<Compilers<VyperCompiler>> {
-        self.compilers.clone()
+    pub fn compilers(&self) -> &Compilers<VyperCompiler> {
+        &self.compilers
     }
 
     pub fn middleware(&self) -> &[Arc<dyn Middleware<Success>>] {

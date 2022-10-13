@@ -11,7 +11,7 @@ use crate::{
 use anyhow::anyhow;
 use bytes::Bytes;
 use ethers_solc::{CompilerInput, CompilerOutput};
-use std::{ops::Add, path::PathBuf, sync::Arc};
+use std::{ops::Add, path::PathBuf};
 use thiserror::Error;
 use tracing::instrument;
 
@@ -60,14 +60,14 @@ pub struct Success {
 }
 
 pub struct ContractVerifier<'a, T> {
-    compilers: Arc<Compilers<T>>,
+    compilers: &'a Compilers<T>,
     compiler_version: &'a compiler::Version,
     verifier: Box<dyn base::Verifier<Input = (CompilerOutput, CompilerOutput)>>,
 }
 
 impl<'a, T: EvmCompiler> ContractVerifier<'a, T> {
     pub fn new(
-        compilers: Arc<Compilers<T>>,
+        compilers: &'a Compilers<T>,
         compiler_version: &'a compiler::Version,
         creation_tx_input: Option<Bytes>,
         deployed_bytecode: Bytes,
