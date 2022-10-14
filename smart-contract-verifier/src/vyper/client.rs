@@ -3,12 +3,24 @@ use crate::{compiler::Compilers, middleware::Middleware, verifier::Success};
 use std::sync::Arc;
 
 pub struct ClientBuilder {
-    compilers: Compilers<VyperCompiler>,
+    compilers: Arc<Compilers<VyperCompiler>>,
     middleware_stack: Vec<Arc<dyn Middleware<Success>>>,
 }
 
 impl ClientBuilder {
+    /// Convenience method to initialize new client builder.
+    ///
+    /// If you need to keep a reference to the compilers after initialization, use [`new_arc`].
+    ///
+    /// [`new_arc`]: Self::new_arc
     pub fn new(compilers: Compilers<VyperCompiler>) -> Self {
+        Self::new_arc(Arc::new(compilers))
+    }
+
+    /// Initialize new client builder. [`new`] is more ergonomic if you don't need the `Arc`.
+    ///
+    /// [`new`]: Self::new
+    pub fn new_arc(compilers: Arc<Compilers<VyperCompiler>>) -> Self {
         Self {
             compilers,
             middleware_stack: vec![],
@@ -42,13 +54,13 @@ impl ClientBuilder {
 }
 
 pub struct Client {
-    compilers: Compilers<VyperCompiler>,
+    compilers: Arc<Compilers<VyperCompiler>>,
     middleware_stack: Box<[Arc<dyn Middleware<Success>>]>,
 }
 
 impl Client {
     /// See [`ClientBuilder`] for a more ergonomic way to build `Client` instances.
-    pub fn new<T>(compilers: Compilers<VyperCompiler>, middleware_stack: T) -> Self
+    pub fn new<T>(compilers: Arc<Compilers<VyperCompiler>>, middleware_stack: T) -> Self
     where
         T: Into<Box<[Arc<dyn Middleware<Success>>]>>,
     {
@@ -59,7 +71,7 @@ impl Client {
     }
 
     pub fn compilers(&self) -> &Compilers<VyperCompiler> {
-        &self.compilers
+        self.compilers.as_ref()
     }
 
     pub fn middleware(&self) -> &[Arc<dyn Middleware<Success>>] {
