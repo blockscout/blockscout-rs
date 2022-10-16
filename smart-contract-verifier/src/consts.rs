@@ -11,3 +11,5 @@ pub const DEFAULT_VYPER_COMPILER_LIST: &str =
 #[cfg(target_os = "macos")]
 pub const DEFAULT_VYPER_COMPILER_LIST: &str =
     "https://raw.githubusercontent.com/blockscout/solc-bin/main/vyper.macos.list.json";
+
+pub const DEFAULT_SOURCIFY_HOST: &str = "https://sourcify.dev/server/";
