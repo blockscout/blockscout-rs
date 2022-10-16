@@ -43,7 +43,10 @@ ethers-solc = { git = "https://github.com/gakonst/ethers-rs", package = "ethers-
 
 [dev-dependencies]
 const_format = "0.2"
+mockall = "0.11"
 pretty_assertions = "1.2"
 quick-xml = { version = "0.24", features = ["serialize"] }
 rand = "0.8"
+rstest = "0.15"
+tempfile = "3.3"
 wiremock = "0.5"
