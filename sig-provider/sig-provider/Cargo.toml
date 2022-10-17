@@ -1,0 +1,28 @@
+[package]
+name = "sig-provider"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sig-provider-proto = { path = "../sig-provider-proto" }
+actix-web = "4"
+tonic = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_with = { version = "2.0", features = ["hex", "base64"] }
+async-trait = "0.1"
+bytes = "1.2"
+tokio = { version = "1", features = ["rt-multi-thread"] }
+anyhow = "1.0"
+config = "0.13"
+tracing = "0.1"
+futures = "0.3"
+url = { version = "2", features = ["serde"] }
+reqwest = { version = "0.11", features = ["json"] }
+hex = "0.4"
+env_logger = "0.9"
+serde_json = "1.0"
+
+[dev-dependencies]
+http = "0.2"
+httpmock = "0.6"
+pretty_assertions = "1.3"

@@ -15,7 +15,7 @@ Session.vim
 .settings/
 
 ## Build
-/target
+**/target
 
 .pre-commit-config.yaml
 config.toml
