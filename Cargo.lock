@@ -4035,6 +4035,7 @@ dependencies = [
  "env_logger",
  "futures",
  "hex",
+ "http",
  "httpmock",
  "pretty_assertions",
  "prost 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",

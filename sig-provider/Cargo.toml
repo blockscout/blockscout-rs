@@ -26,6 +26,7 @@ env_logger = "0.9"
 serde_json = "1.0"
 
 [dev-dependencies]
+http = "0.2"
 httpmock = "0.6"
 pretty_assertions = "1.3"
 

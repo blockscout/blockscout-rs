@@ -6,8 +6,12 @@ use crate::{
     },
     sigeth, Settings, SignatureAggregator,
 };
-use actix_web::{App, HttpServer};
+use actix_web::{web::ServiceConfig, App, HttpServer};
 use std::{net::SocketAddr, sync::Arc};
+
+pub fn http_configure<S: SignatureService>(config: &mut ServiceConfig, signature: Arc<S>) {
+    route_signature_service(config, signature);
+}
 
 pub fn http_server<S: SignatureService>(
     signature: Arc<S>,
@@ -15,7 +19,7 @@ pub fn http_server<S: SignatureService>(
 ) -> actix_web::dev::Server {
     tracing::info!("starting http server on addr {}", addr);
     let server = HttpServer::new(move || {
-        App::new().configure(|config| route_signature_service(config, signature.clone()))
+        App::new().configure(|config| http_configure(config, signature.clone()))
     })
     .bind(addr)
     .unwrap_or_else(|_| panic!("failed to bind server"));
