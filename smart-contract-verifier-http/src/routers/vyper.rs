@@ -4,9 +4,7 @@ use crate::{
     settings::{FetcherSettings, VyperSettings},
 };
 use actix_web::web;
-use smart_contract_verifier::{
-    Compilers, ListFetcher, VyperClient, VyperClientBuilder, VyperCompiler,
-};
+use smart_contract_verifier::{Compilers, ListFetcher, VyperClient, VyperCompiler};
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 
@@ -37,7 +35,7 @@ impl VyperRouter {
         );
         let compilers = Compilers::new(fetcher, VyperCompiler::new(), compilers_threads_semaphore);
         compilers.load_from_dir(&dir).await;
-        let client = VyperClientBuilder::new(compilers).build();
+        let client = VyperClient::new(compilers);
         Ok(Self {
             client: web::Data::new(client),
         })

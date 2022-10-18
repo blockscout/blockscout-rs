@@ -20,13 +20,13 @@ fn middleware<Output: 'static + Send + Sync>() -> MockMiddleware<Output> {
 
 mod solidity {
     use super::*;
-    use types::solidity::VerificationRequest;
     use smart_contract_verifier::{
-        solidity, Compilers, ListFetcher, SolidityClientBuilder, SolidityCompiler,
-        VerificationSuccess, DEFAULT_SOLIDITY_COMPILER_LIST,
+        solidity, Compilers, ListFetcher, SolidityClient, SolidityCompiler, VerificationSuccess,
+        DEFAULT_SOLIDITY_COMPILER_LIST,
     };
     use std::{collections::BTreeMap, sync::Arc};
     use tokio::sync::{OnceCell, Semaphore};
+    use types::solidity::VerificationRequest;
 
     async fn global_compilers() -> &'static Arc<Compilers<SolidityCompiler>> {
         static COMPILERS: OnceCell<Arc<Compilers<SolidityCompiler>>> = OnceCell::const_new();
@@ -75,9 +75,7 @@ mod solidity {
     #[tokio::test]
     async fn multi_part(middleware: impl smart_contract_verifier::Middleware<VerificationSuccess>) {
         let compilers = global_compilers().await;
-        let client = SolidityClientBuilder::new_arc(compilers.clone())
-            .with(middleware)
-            .build();
+        let client = SolidityClient::new_arc(compilers.clone()).with_middleware(middleware);
 
         let request = default_request();
         solidity::multi_part::verify(
@@ -94,9 +92,7 @@ mod solidity {
         middleware: impl smart_contract_verifier::Middleware<VerificationSuccess>,
     ) {
         let compilers = global_compilers().await;
-        let client = SolidityClientBuilder::new_arc(compilers.clone())
-            .with(middleware)
-            .build();
+        let client = SolidityClient::new_arc(compilers.clone()).with_middleware(middleware);
 
         let request = default_request();
         solidity::standard_json::verify(
@@ -110,13 +106,13 @@ mod solidity {
 
 mod vyper {
     use super::*;
-    use types::vyper::VerificationRequest;
     use smart_contract_verifier::{
-        vyper, Compilers, ListFetcher, VerificationSuccess, VyperClientBuilder, VyperCompiler,
+        vyper, Compilers, ListFetcher, VerificationSuccess, VyperClient, VyperCompiler,
         DEFAULT_VYPER_COMPILER_LIST,
     };
     use std::{collections::BTreeMap, sync::Arc};
     use tokio::sync::{OnceCell, Semaphore};
+    use types::vyper::VerificationRequest;
 
     async fn global_compilers() -> &'static Arc<Compilers<VyperCompiler>> {
         static COMPILERS: OnceCell<Arc<Compilers<VyperCompiler>>> = OnceCell::const_new();
@@ -158,9 +154,7 @@ mod vyper {
     #[tokio::test]
     async fn multi_part(middleware: impl smart_contract_verifier::Middleware<VerificationSuccess>) {
         let compilers = global_compilers().await;
-        let client = VyperClientBuilder::new_arc(compilers.clone())
-            .with(middleware)
-            .build();
+        let client = VyperClient::new_arc(compilers.clone()).with_middleware(middleware);
 
         let request = default_request();
         vyper::multi_part::verify(
@@ -197,10 +191,9 @@ mod sourcify {
     #[tokio::test]
     async fn verify(middleware: impl smart_contract_verifier::Middleware<SourcifySuccess>) {
         let host = Url::try_from(DEFAULT_SOURCIFY_HOST).expect("Invalid Sourcify host Url");
-        let client = SourcifyApiClientBuilder::new(host, 10, 3.try_into().unwrap())
-            .with(middleware)
-            .build()
-            .expect("Sourcify client build failed");
+        let client = SourcifyApiClient::new(host, 10, 3.try_into().unwrap())
+            .expect("Sourcify client build failed")
+            .with_middleware(middleware);
 
         let request = default_request();
 

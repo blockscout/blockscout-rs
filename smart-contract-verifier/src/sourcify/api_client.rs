@@ -5,71 +5,19 @@ use reqwest_middleware::ClientWithMiddleware;
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use std::{num::NonZeroU32, sync::Arc, time::Duration};
 
-pub struct SourcifyApiClientBuilder {
-    host: Url,
-    request_timeout: u64,
-    verification_attempts: NonZeroU32,
-    middleware_stack: Vec<Arc<dyn Middleware<Success>>>,
-}
-
-impl SourcifyApiClientBuilder {
-    pub fn new(host: Url, request_timeout: u64, verification_attempts: NonZeroU32) -> Self {
-        Self {
-            host,
-            request_timeout,
-            verification_attempts,
-            middleware_stack: vec![],
-        }
-    }
-
-    /// Convenience method to attach middleware.
-    ///
-    /// If you need to keep a reference to the middleware after attaching, use [`with_arc`].
-    ///
-    /// [`with_arc`]: Self::with_arc
-    pub fn with<M>(self, middleware: M) -> Self
-    where
-        M: Middleware<Success>,
-    {
-        self.with_arc(Arc::new(middleware))
-    }
-
-    /// Add middleware to the chain. [`with`] is more ergonomic if you don't need the `Arc`.
-    ///
-    /// [`with`]: Self::with
-    pub fn with_arc(mut self, middleware: Arc<dyn Middleware<Success>>) -> Self {
-        self.middleware_stack.push(middleware);
-        self
-    }
-
-    /// Returns a `SourcifyApiClient` using this builder configuration.
-    pub fn build(self) -> Result<SourcifyApiClient, reqwest::Error> {
-        SourcifyApiClient::new(
-            self.host,
-            self.request_timeout,
-            self.verification_attempts,
-            self.middleware_stack,
-        )
-    }
-}
-
 pub struct SourcifyApiClient {
     host: Url,
     reqwest_client: ClientWithMiddleware,
-    middleware_stack: Box<[Arc<dyn Middleware<Success>>]>,
+    middleware: Option<Arc<dyn Middleware<Success>>>,
 }
 
 impl SourcifyApiClient {
-    /// See [`ClientBuilder`] for a more ergonomic way to build `SourcifyApiClient` instances.
-    pub fn new<T>(
+    /// Initialize new sourcify client.
+    pub fn new(
         host: Url,
         request_timeout: u64,
         verification_attempts: NonZeroU32,
-        middleware_stack: T,
-    ) -> Result<Self, reqwest::Error>
-    where
-        T: Into<Box<[Arc<dyn Middleware<Success>>]>>,
-    {
+    ) -> Result<Self, reqwest::Error> {
         let retry_policy =
             ExponentialBackoff::builder().build_with_max_retries(verification_attempts.get());
         let reqwest_client = reqwest::Client::builder()
@@ -82,10 +30,34 @@ impl SourcifyApiClient {
         Ok(Self {
             host,
             reqwest_client,
-            middleware_stack: middleware_stack.into(),
+            middleware: None,
         })
     }
 
+    /// Convenience method to attach middleware.
+    ///
+    /// If you need to keep a reference to the middleware after attaching, use [`with_middleware_arc`].
+    ///
+    /// [`with_middleware_arc`]: Self::with_middleware_arc
+    pub fn with_middleware(self, middleware: impl Middleware<Success>) -> Self {
+        self.with_middleware_arc(Arc::new(middleware))
+    }
+
+    /// Add middleware to the client. [`with_middleware`] is more ergonomic if you don't need the `Arc`.
+    ///
+    /// [`with_middleware`]: Self::with_middleware
+    pub fn with_middleware_arc(mut self, middleware: Arc<impl Middleware<Success>>) -> Self {
+        self.middleware = Some(middleware);
+        self
+    }
+
+    /// Provides a reference to the middleware, if there is any.
+    pub fn middleware(&self) -> Option<&dyn Middleware<Success>> {
+        self.middleware.as_ref().map(|m| m.as_ref())
+    }
+}
+
+impl SourcifyApiClient {
     pub(super) async fn verification_request(
         &self,
         params: &ApiRequest,
@@ -115,9 +87,5 @@ impl SourcifyApiClient {
             .json()
             .await
             .map_err(anyhow::Error::msg)
-    }
-
-    pub fn middleware(&self) -> &[Arc<dyn Middleware<Success>>] {
-        self.middleware_stack.as_ref()
     }
 }

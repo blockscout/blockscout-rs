@@ -57,8 +57,8 @@ pub async fn verify(
             let success =
                 Success::try_from(files).map_err(|err| Error::Validation(err.to_string()))?;
 
-            for middleware in sourcify_client.middleware() {
-                middleware.call(&success).await
+            if let Some(middleware) = sourcify_client.middleware() {
+                middleware.call(&success).await;
             }
 
             Ok(success)
