@@ -30,7 +30,7 @@ export const ResultTable = ({responses}: Props) => {
         </Tbody>
     return (
         <TableContainer width="100%" mt={ 8 }>
-            <Table variant="simple" minWidth="1040px" size="md" fontWeight={ 500 }>
+            <Table variant="simple" minWidth="1000px" size="md" fontWeight={ 500 }>
             <Thead>
                 <Tr>
                 <Th width="15%">Network</Th>

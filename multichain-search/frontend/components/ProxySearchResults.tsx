@@ -1,5 +1,5 @@
 import { SearchIcon } from '@chakra-ui/icons';
-import { Tabs, TabList, Tab, TabPanel, TabPanels } from '@chakra-ui/react';
+import { Tabs, TabList, Tab, TabPanel, TabPanels, Flex } from '@chakra-ui/react';
 import React from 'react';
 import styles from '../styles/search.module.css'
 import { ProxyResponse } from '../types/proxyResponse';
@@ -15,8 +15,8 @@ const background = "#edf2f7"
 export const ProxySearchResults = ({responses}: Props) => {
     if (responses) {
         let chains = Object.keys(responses).sort()
-        return (<div className={styles.results}>
-        <Tabs isFitted variant='soft-rounded' size='md' colorScheme='purple'>
+        return (<Flex className={styles.results} fontSize="14">
+        <Tabs isFitted variant='soft-rounded' size="sm" colorScheme='purple'>
             <TabList flexWrap="wrap" gap="5">
                 <Tab background={background}> <Network instance={{
                     url: "",
@@ -36,7 +36,7 @@ export const ProxySearchResults = ({responses}: Props) => {
                 })}
             </TabPanels>
         </Tabs>
-        </div>)
+        </Flex>)
     } else {
         return <>No results found</>
     }
