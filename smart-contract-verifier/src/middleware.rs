@@ -14,7 +14,7 @@ pub trait Middleware<Output>: 'static + Send + Sync {
     async fn call(&self, output: &Output) -> ();
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Composition<Output> {
     middleware_stack: Vec<Arc<dyn Middleware<Output>>>,
 }
