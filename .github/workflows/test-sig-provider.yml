@@ -4,7 +4,7 @@ on:
       - 'main'
   pull_request:
 
-name: Test Suite
+name: Test Suite (sig-provider)
 
 jobs:
   unit:
