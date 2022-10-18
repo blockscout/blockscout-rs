@@ -14,7 +14,7 @@ fn compile(
         .compile_well_known_types()
         .protoc_arg("--openapiv2_out=swagger")
         .protoc_arg("--openapiv2_opt")
-        .protoc_arg("grpc_api_configuration=src/api_config_http.yaml,output_format=yaml,allow_merge=true,merge_file_name=sig-provider")
+        .protoc_arg("grpc_api_configuration=proto/api_config_http.yaml,output_format=yaml,allow_merge=true,merge_file_name=sig-provider")
         .bytes(["."])
         .type_attribute(".", "#[actix_prost_macros::serde]");
     config.compile_protos(protos, includes)?;
@@ -22,10 +22,11 @@ fn compile(
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    std::fs::create_dir_all("./swagger").unwrap();
     let gens = Box::new(GeneratorList::new(vec![
         tonic_build::configure().service_generator(),
-        Box::new(ActixGenerator::new("src/api_config_http.yaml").unwrap()),
+        Box::new(ActixGenerator::new("proto/api_config_http.yaml").unwrap()),
     ]));
-    compile(&["src/sig-provider.proto"], &["src"], gens)?;
+    compile(&["proto/sig-provider.proto"], &["proto"], gens)?;
     Ok(())
 }
