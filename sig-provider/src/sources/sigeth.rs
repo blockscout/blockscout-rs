@@ -56,11 +56,12 @@ impl SignatureSource for Source {
         &self,
         request: CreateSignaturesRequest,
     ) -> Result<CreateSignaturesResponse, anyhow::Error> {
+        let abi = serde_json::from_str(&request.abi).map_err(anyhow::Error::msg)?;
         self.client
             .post(self.host.join("/api/v1/import").unwrap())
             .json(&json::CreateRequest {
                 kind: "abi",
-                data: vec![request.abi],
+                data: vec![abi],
             })
             .send()
             .await
@@ -118,7 +119,7 @@ mod json {
     pub struct CreateRequest {
         #[serde(rename = "type")]
         pub kind: &'static str,
-        pub data: Vec<String>,
+        pub data: Vec<serde_json::Value>,
     }
 
     #[derive(Debug, Deserialize)]
