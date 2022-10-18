@@ -1,7 +1,7 @@
 pub mod fourbyte;
 pub mod sigeth;
 
-use crate::proto::blockscout::sig_provider::v1::{
+use sig_provider_proto::blockscout::sig_provider::v1::{
     CreateSignaturesRequest, CreateSignaturesResponse, GetSignaturesRequest, GetSignaturesResponse,
 };
 

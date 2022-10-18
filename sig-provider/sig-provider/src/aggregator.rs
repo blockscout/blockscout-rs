@@ -1,9 +1,7 @@
-use crate::{
-    proto::blockscout::sig_provider::v1::{
-        signature_service_server::SignatureService, CreateSignaturesRequest,
-        CreateSignaturesResponse, GetSignaturesRequest, GetSignaturesResponse, Signature,
-    },
-    SignatureSource,
+use crate::SignatureSource;
+use sig_provider_proto::blockscout::sig_provider::v1::{
+    signature_service_server::SignatureService, CreateSignaturesRequest, CreateSignaturesResponse,
+    GetSignaturesRequest, GetSignaturesResponse, Signature,
 };
 use std::{collections::HashSet, sync::Arc};
 

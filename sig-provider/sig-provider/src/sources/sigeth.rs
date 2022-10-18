@@ -1,9 +1,7 @@
-use crate::{
-    proto::blockscout::sig_provider::v1::{
-        CreateSignaturesRequest, CreateSignaturesResponse, GetSignaturesRequest,
-        GetSignaturesResponse, Signature,
-    },
-    SignatureSource,
+use crate::SignatureSource;
+use sig_provider_proto::blockscout::sig_provider::v1::{
+    CreateSignaturesRequest, CreateSignaturesResponse, GetSignaturesRequest, GetSignaturesResponse,
+    Signature,
 };
 
 pub struct Source {

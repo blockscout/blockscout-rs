@@ -1,12 +1,9 @@
-use crate::{
-    fourbyte,
-    proto::blockscout::sig_provider::v1::{
-        signature_service_actix::route_signature_service,
-        signature_service_server::{SignatureService, SignatureServiceServer},
-    },
-    sigeth, Settings, SignatureAggregator,
-};
+use crate::{fourbyte, sigeth, Settings, SignatureAggregator};
 use actix_web::{web::ServiceConfig, App, HttpServer};
+use sig_provider_proto::blockscout::sig_provider::v1::{
+    signature_service_actix::route_signature_service,
+    signature_service_server::{SignatureService, SignatureServiceServer},
+};
 use std::{net::SocketAddr, sync::Arc};
 
 pub fn http_configure<S: SignatureService>(config: &mut ServiceConfig, signature: Arc<S>) {
