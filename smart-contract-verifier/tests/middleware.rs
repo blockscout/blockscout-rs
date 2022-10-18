@@ -1,4 +1,4 @@
-mod middleware_types;
+mod types;
 
 use mockall::mock;
 
@@ -20,7 +20,7 @@ fn middleware<Output: 'static + Send + Sync>() -> MockMiddleware<Output> {
 
 mod solidity {
     use super::*;
-    use middleware_types::solidity::VerificationRequest;
+    use types::solidity::VerificationRequest;
     use smart_contract_verifier::{
         solidity, Compilers, ListFetcher, SolidityClientBuilder, SolidityCompiler,
         VerificationSuccess, DEFAULT_SOLIDITY_COMPILER_LIST,
@@ -110,7 +110,7 @@ mod solidity {
 
 mod vyper {
     use super::*;
-    use middleware_types::vyper::VerificationRequest;
+    use types::vyper::VerificationRequest;
     use smart_contract_verifier::{
         vyper, Compilers, ListFetcher, VerificationSuccess, VyperClientBuilder, VyperCompiler,
         DEFAULT_VYPER_COMPILER_LIST,
@@ -175,7 +175,7 @@ mod vyper {
 mod sourcify {
     use super::*;
     use smart_contract_verifier::{
-        sourcify, sourcify::api::VerificationRequest, SourcifyApiClientBuilder, SourcifySuccess,
+        sourcify, sourcify::api::VerificationRequest, SourcifyApiClient, SourcifySuccess,
         DEFAULT_SOURCIFY_HOST,
     };
     use std::{collections::BTreeMap, sync::Arc};
