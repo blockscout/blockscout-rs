@@ -1,5 +1,5 @@
 const config = {
-    PROXY_HOST: process.env.PROCESS_HOST || "http://localhost:8044/"
+    PROXY_HOST: process.env.PROXY_HOST || "http://localhost:8044/"
 }
 
 
