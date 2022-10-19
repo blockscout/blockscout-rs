@@ -29,25 +29,6 @@ paths:
             $ref: '#/definitions/v1CreateSignaturesRequest'
       tags:
         - SignatureService
-  /api/v1/signatures/error:
-    get:
-      operationId: SignatureService_GetErrorSignatures
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1GetSignaturesResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/rpcStatus'
-      parameters:
-        - name: hex
-          in: query
-          required: false
-          type: string
-      tags:
-        - SignatureService
   /api/v1/signatures/event:
     get:
       operationId: SignatureService_GetEventSignatures

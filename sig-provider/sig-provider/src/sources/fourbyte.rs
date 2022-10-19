@@ -78,15 +78,6 @@ impl SignatureSource for Source {
         .await
     }
 
-    async fn get_error_signatures(
-        &self,
-        _request: GetSignaturesRequest,
-    ) -> Result<GetSignaturesResponse, anyhow::Error> {
-        Ok(GetSignaturesResponse {
-            signatures: Vec::default(),
-        })
-    }
-
     fn host(&self) -> String {
         self.host.to_string()
     }
