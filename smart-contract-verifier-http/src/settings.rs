@@ -3,7 +3,9 @@ use config::{Config, File};
 use cron::Schedule;
 use serde::{de, Deserialize};
 use serde_with::{serde_as, DisplayFromStr};
-use smart_contract_verifier::{DEFAULT_SOLIDITY_COMPILER_LIST, DEFAULT_VYPER_COMPILER_LIST};
+use smart_contract_verifier::{
+    DEFAULT_SOLIDITY_COMPILER_LIST, DEFAULT_SOURCIFY_HOST, DEFAULT_VYPER_COMPILER_LIST,
+};
 use std::{
     net::SocketAddr,
     num::{NonZeroU32, NonZeroUsize},
@@ -160,7 +162,7 @@ impl Default for SourcifySettings {
     fn default() -> Self {
         Self {
             enabled: true,
-            api_url: Url::try_from("https://sourcify.dev/server/").expect("valid url"),
+            api_url: Url::try_from(DEFAULT_SOURCIFY_HOST).expect("valid url"),
             verification_attempts: NonZeroU32::new(3).expect("Is not zero"),
             request_timeout: 10,
         }

@@ -1,6 +1,6 @@
-use super::compiler::SolidityCompiler;
+use super::client::Client;
 use crate::{
-    compiler::{Compilers, Version},
+    compiler::Version,
     verifier::{ContractVerifier, Error, Success},
 };
 use bytes::Bytes;
@@ -58,14 +58,11 @@ impl From<MultiFileContent> for Vec<CompilerInput> {
     }
 }
 
-pub async fn verify(
-    compilers: Arc<Compilers<SolidityCompiler>>,
-    request: VerificationRequest,
-) -> Result<Success, Error> {
+pub async fn verify(client: Arc<Client>, request: VerificationRequest) -> Result<Success, Error> {
     let compiler_version = request.compiler_version;
 
     let verifier = ContractVerifier::new(
-        compilers,
+        client.compilers(),
         &compiler_version,
         request.creation_bytecode,
         request.deployed_bytecode,
@@ -82,8 +79,13 @@ pub async fn verify(
                 continue;
             }
 
-            // Otherwise, verification either succeeded, or some uncorrectable error occurred
-            return result;
+            // If any error, it is uncorrectable and should be returned immediately, otherwise
+            // we allow middlewares to process success and only then return it to the caller
+            let success = result?;
+            if let Some(middleware) = client.middleware() {
+                middleware.call(&success).await;
+            }
+            return Ok(success);
         }
     }
 
