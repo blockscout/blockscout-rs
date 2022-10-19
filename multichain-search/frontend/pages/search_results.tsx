@@ -19,9 +19,9 @@ const SearchResults: NextPage<Props> = ({q}) => {
   const [data, setData] = useState(null)
 
   useEffect(() => {
-    if (config.PROXY_HOST) {
+    if (config.NEXT_PUBLIC_PROXY_HOST) {
       setLoading(true)
-      let url = new URL('/api/v1/search', config.PROXY_HOST).toString() + '?q=' + q;
+      let url = new URL('/api/v1/search', config.NEXT_PUBLIC_PROXY_HOST).toString() + '?q=' + q;
       fetch(url)
         .then((res) => res.json())
         .then((data) => {
