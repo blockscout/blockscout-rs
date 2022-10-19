@@ -31,7 +31,7 @@ interface InstancesResponse {
 }
 
 export const getServerSideProps: GetServerSideProps = async (context) => {
-  let url = new URL('/api/v1/instances', config.PROXY_HOST).toString();
+  let url = new URL('/api/v1/instances', config.NEXT_PUBLIC_PROXY_HOST).toString();
   let { items }: InstancesResponse = await fetch(url).then((r) => r.json())
   return {
     props: {
