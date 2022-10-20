@@ -6,14 +6,16 @@ use sig_provider_proto::blockscout::sig_provider::v1::{
 use std::{collections::HashSet, sync::Arc};
 
 pub struct SignatureAggregator {
-    sources: Vec<Arc<dyn SignatureSource + Send + Sync + 'static>>,
+    sources: Arc<Vec<Arc<dyn SignatureSource + Send + Sync + 'static>>>,
 }
 
 impl SignatureAggregator {
     pub fn new(
         sources: Vec<Arc<dyn SignatureSource + Send + Sync + 'static>>,
     ) -> SignatureAggregator {
-        SignatureAggregator { sources }
+        SignatureAggregator {
+            sources: Arc::new(sources),
+        }
     }
 
     fn merge_signatures<I: IntoIterator<Item = GetSignaturesResponse>>(sigs: I) -> Vec<Signature> {
@@ -27,16 +29,13 @@ impl SignatureAggregator {
 }
 
 macro_rules! proxy {
-    ($self:ident, $request:ident, $fn:ident) => {{
+    ($sources:ident, $request:ident, $fn:ident) => {{
         let request = $request.into_inner();
-        let tasks = $self
-            .sources
-            .iter()
-            .map(|source| source.$fn(request.clone()));
+        let tasks = $sources.iter().map(|source| source.$fn(request.clone()));
         let responses: Vec<_> = futures::future::join_all(tasks)
             .await
             .into_iter()
-            .zip($self.sources.iter())
+            .zip($sources.iter())
             .filter_map(|(resp, source)| match resp {
                 Ok(resp) => Some(resp),
                 Err(error) => {
@@ -60,7 +59,10 @@ impl SignatureService for SignatureAggregator {
         &self,
         request: tonic::Request<CreateSignaturesRequest>,
     ) -> Result<tonic::Response<CreateSignaturesResponse>, tonic::Status> {
-        let _responses = proxy!(self, request, create_signatures);
+        let sources = self.sources.clone();
+        tokio::spawn(async move {
+            let _responses = proxy!(sources, request, create_signatures);
+        });
         Ok(tonic::Response::new(CreateSignaturesResponse {}))
     }
 
@@ -68,7 +70,8 @@ impl SignatureService for SignatureAggregator {
         &self,
         request: tonic::Request<GetSignaturesRequest>,
     ) -> Result<tonic::Response<GetSignaturesResponse>, tonic::Status> {
-        let responses = proxy!(self, request, get_function_signatures);
+        let sources = &self.sources;
+        let responses = proxy!(sources, request, get_function_signatures);
         let signatures = Self::merge_signatures(responses.into_iter());
         Ok(tonic::Response::new(GetSignaturesResponse { signatures }))
     }
@@ -77,7 +80,8 @@ impl SignatureService for SignatureAggregator {
         &self,
         request: tonic::Request<GetSignaturesRequest>,
     ) -> Result<tonic::Response<GetSignaturesResponse>, tonic::Status> {
-        let responses = proxy!(self, request, get_event_signatures);
+        let sources = &self.sources;
+        let responses = proxy!(sources, request, get_event_signatures);
         let signatures = Self::merge_signatures(responses.into_iter());
         Ok(tonic::Response::new(GetSignaturesResponse { signatures }))
     }

@@ -3,7 +3,7 @@ use httpmock::MockServer;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use sig_provider::{fourbyte, http_configure, sigeth, SignatureAggregator};
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 fn new_service(fourbyte: url::Url, sigeth: url::Url) -> Arc<SignatureAggregator> {
     Arc::new(SignatureAggregator::new(vec![
@@ -40,19 +40,17 @@ async fn create() {
             .json_body(sigeth_response);
     });
 
-    let app = actix_web::test::init_service(App::new().configure(|config| {
-        http_configure(
-            config,
-            new_service(
-                format!("http://127.0.0.1:{}/", fourbyte.port())
-                    .parse()
-                    .unwrap(),
-                format!("http://127.0.0.1:{}/", sigeth.port())
-                    .parse()
-                    .unwrap(),
-            ),
-        )
-    }))
+    let agg = new_service(
+        format!("http://127.0.0.1:{}/", fourbyte.port())
+            .parse()
+            .unwrap(),
+        format!("http://127.0.0.1:{}/", sigeth.port())
+            .parse()
+            .unwrap(),
+    );
+    let app = actix_web::test::init_service(
+        App::new().configure(|config| http_configure(config, agg.clone())),
+    )
     .await;
 
     let request = serde_json::json!({"abi":"[{\"constant\":false,\"inputs\":[],\"name\":\"f\",\"outputs\":[],\"type\":\"function\"},{\"inputs\":[],\"type\":\"constructor\"},{\"anonymous\":false,\"inputs\":[{\"name\":\"\",\"type\":\"string\",\"indexed\":true}],\"name\":\"E\",\"type\":\"event\"}]"});
@@ -63,6 +61,8 @@ async fn create() {
         .set_json(request)
         .to_request();
     let response: serde_json::Value = actix_web::test::call_and_read_body_json(&app, request).await;
+    // allow async handle to work
+    tokio::time::sleep(Duration::from_millis(100)).await;
 
     fourbyte_handle.assert();
     sigeth_handle.assert();

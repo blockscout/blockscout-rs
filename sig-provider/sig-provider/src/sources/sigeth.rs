@@ -1,4 +1,5 @@
 use crate::SignatureSource;
+use reqwest_middleware::ClientWithMiddleware;
 use sig_provider_proto::blockscout::sig_provider::v1::{
     CreateSignaturesRequest, CreateSignaturesResponse, GetSignaturesRequest, GetSignaturesResponse,
     Signature,
@@ -6,14 +7,14 @@ use sig_provider_proto::blockscout::sig_provider::v1::{
 
 pub struct Source {
     host: url::Url,
-    client: reqwest::Client,
+    client: ClientWithMiddleware,
 }
 
 impl Source {
     pub fn new(host: url::Url) -> Source {
         Source {
             host,
-            client: reqwest::Client::new(),
+            client: super::new_client(),
         }
     }
 
