@@ -11,8 +11,6 @@ service SignatureService {
       returns (GetSignaturesResponse) {}
   rpc GetEventSignatures(GetSignaturesRequest) returns (GetSignaturesResponse) {
   }
-  rpc GetErrorSignatures(GetSignaturesRequest) returns (GetSignaturesResponse) {
-  }
 }
 
 message CreateSignaturesRequest { string abi = 1; }

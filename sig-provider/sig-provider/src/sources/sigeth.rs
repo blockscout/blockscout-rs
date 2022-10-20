@@ -92,18 +92,6 @@ impl SignatureSource for Source {
         Ok(GetSignaturesResponse { signatures })
     }
 
-    async fn get_error_signatures(
-        &self,
-        request: GetSignaturesRequest,
-    ) -> Result<GetSignaturesResponse, anyhow::Error> {
-        let hash = Self::hash(&request.hex);
-        let resp = self
-            .fetch(&format!("/api/v1/signatures?error={}&all", hash))
-            .await?;
-        let signatures = Self::convert(resp.result.error, &hash);
-        Ok(GetSignaturesResponse { signatures })
-    }
-
     fn host(&self) -> String {
         self.host.to_string()
     }

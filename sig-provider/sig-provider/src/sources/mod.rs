@@ -23,10 +23,6 @@ pub trait SignatureSource {
         &self,
         request: GetSignaturesRequest,
     ) -> Result<GetSignaturesResponse, anyhow::Error>;
-    async fn get_error_signatures(
-        &self,
-        request: GetSignaturesRequest,
-    ) -> Result<GetSignaturesResponse, anyhow::Error>;
 
     // for errors
     fn host(&self) -> String;

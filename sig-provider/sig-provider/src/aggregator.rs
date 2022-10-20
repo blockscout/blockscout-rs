@@ -85,14 +85,4 @@ impl SignatureService for SignatureAggregator {
         let signatures = Self::merge_signatures(responses.into_iter());
         Ok(tonic::Response::new(GetSignaturesResponse { signatures }))
     }
-
-    async fn get_error_signatures(
-        &self,
-        request: tonic::Request<GetSignaturesRequest>,
-    ) -> Result<tonic::Response<GetSignaturesResponse>, tonic::Status> {
-        let sources = &self.sources;
-        let responses = proxy!(sources, request, get_error_signatures);
-        let signatures = Self::merge_signatures(responses.into_iter());
-        Ok(tonic::Response::new(GetSignaturesResponse { signatures }))
-    }
 }
