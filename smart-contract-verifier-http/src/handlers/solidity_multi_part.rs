@@ -2,7 +2,7 @@ use crate::{metrics, verification_response::VerificationResponse, DisplayBytes};
 use actix_web::{error, web, web::Json};
 use ethers_solc::EvmVersion;
 use serde::Deserialize;
-use smart_contract_verifier::{solidity, Compilers, SolidityCompiler, VerificationError, Version};
+use smart_contract_verifier::{solidity, SolidityClient, VerificationError, Version};
 use std::{collections::BTreeMap, path::PathBuf, str::FromStr};
 use tracing::instrument;
 
@@ -77,14 +77,14 @@ impl TryFrom<MultiPartFiles> for solidity::multi_part::MultiFileContent {
     }
 }
 
-#[instrument(skip(compilers, params), level = "debug")]
+#[instrument(skip(client, params), level = "debug")]
 pub async fn verify(
-    compilers: web::Data<Compilers<SolidityCompiler>>,
+    client: web::Data<SolidityClient>,
     params: Json<VerificationRequest>,
 ) -> Result<Json<VerificationResponse>, actix_web::Error> {
     let request = params.into_inner().try_into()?;
 
-    let result = solidity::multi_part::verify(compilers.into_inner(), request).await;
+    let result = solidity::multi_part::verify(client.into_inner(), request).await;
 
     if let Ok(verification_success) = result {
         let response = VerificationResponse::ok(verification_success.into());

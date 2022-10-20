@@ -3,7 +3,7 @@ use actix_web::{error, web, web::Json};
 use anyhow::anyhow;
 use ethers_solc::CompilerInput;
 use serde::Deserialize;
-use smart_contract_verifier::{solidity, Compilers, SolidityCompiler, VerificationError, Version};
+use smart_contract_verifier::{solidity, SolidityClient, VerificationError, Version};
 use std::str::FromStr;
 use thiserror::Error;
 use tracing::instrument;
@@ -67,9 +67,9 @@ impl TryFrom<StandardJson> for solidity::standard_json::StandardJsonContent {
     }
 }
 
-#[instrument(skip(compilers, params), level = "debug")]
+#[instrument(skip(client, params), level = "debug")]
 pub async fn verify(
-    compilers: web::Data<Compilers<SolidityCompiler>>,
+    client: web::Data<SolidityClient>,
     params: Json<VerificationRequest>,
 ) -> Result<Json<VerificationResponse>, actix_web::Error> {
     let request = {
@@ -83,7 +83,7 @@ pub async fn verify(
         request.unwrap()
     };
 
-    let result = solidity::standard_json::verify(compilers.into_inner(), request).await;
+    let result = solidity::standard_json::verify(client.into_inner(), request).await;
 
     if let Ok(verification_success) = result {
         let response = VerificationResponse::ok(verification_success.into());

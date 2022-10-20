@@ -6,13 +6,13 @@ use crate::{
 use actix_web::web;
 use s3::{creds::Credentials, Bucket, Region};
 use smart_contract_verifier::{
-    Compilers, Fetcher, ListFetcher, S3Fetcher, SolcValidator, SolidityCompiler,
+    Compilers, Fetcher, ListFetcher, S3Fetcher, SolcValidator, SolidityClient, SolidityCompiler,
 };
 use std::{str::FromStr, sync::Arc};
 use tokio::sync::Semaphore;
 
 pub struct SolidityRouter {
-    compilers: web::Data<Compilers<SolidityCompiler>>,
+    client: web::Data<SolidityClient>,
 }
 
 fn new_region(region: Option<String>, endpoint: Option<String>) -> Option<Region> {
@@ -83,8 +83,9 @@ impl SolidityRouter {
             compilers_threads_semaphore,
         );
         compilers.load_from_dir(&dir).await;
+        let client = SolidityClient::new(compilers);
         Ok(Self {
-            compilers: web::Data::new(compilers),
+            client: web::Data::new(client),
         })
     }
 }
@@ -92,7 +93,7 @@ impl SolidityRouter {
 impl Router for SolidityRouter {
     fn register_routes(&self, service_config: &mut web::ServiceConfig) {
         service_config
-            .app_data(self.compilers.clone())
+            .app_data(self.client.clone())
             .service(
                 web::scope("/verify")
                     .route(

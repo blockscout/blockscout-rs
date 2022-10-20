@@ -4,12 +4,12 @@ use crate::{
     settings::{FetcherSettings, VyperSettings},
 };
 use actix_web::web;
-use smart_contract_verifier::{Compilers, ListFetcher, VyperCompiler};
+use smart_contract_verifier::{Compilers, ListFetcher, VyperClient, VyperCompiler};
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 
 pub struct VyperRouter {
-    compilers: web::Data<Compilers<VyperCompiler>>,
+    client: web::Data<VyperClient>,
 }
 
 impl VyperRouter {
@@ -35,8 +35,9 @@ impl VyperRouter {
         );
         let compilers = Compilers::new(fetcher, VyperCompiler::new(), compilers_threads_semaphore);
         compilers.load_from_dir(&dir).await;
+        let client = VyperClient::new(compilers);
         Ok(Self {
-            compilers: web::Data::new(compilers),
+            client: web::Data::new(client),
         })
     }
 }
@@ -44,7 +45,7 @@ impl VyperRouter {
 impl Router for VyperRouter {
     fn register_routes(&self, service_config: &mut web::ServiceConfig) {
         service_config
-            .app_data(self.compilers.clone())
+            .app_data(self.client.clone())
             .service(
                 web::scope("/verify")
                     .route("/multiple-files", web::post().to(vyper_multi_part::verify)),

@@ -17,5 +17,5 @@ pub trait Verifier {
     type Input;
 
     /// Verifies provided input data
-    fn verify(&self, input: Self::Input) -> Result<VerificationSuccess, Vec<VerificationError>>;
+    fn verify(&self, input: &Self::Input) -> Result<VerificationSuccess, Vec<VerificationError>>;
 }
