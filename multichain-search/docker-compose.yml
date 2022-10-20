@@ -1,0 +1,19 @@
+version: "3"
+services:
+  mc_backend:
+    image: "lymarenkolev/multichain-search:latest"
+    ports:
+      - "8044:8044"
+    volumes:
+      - ./backend/config.toml:/config.toml
+    environment:
+      - MULTICHAIN_SEARCH__CONFIG=/config.toml
+
+  mc_frontend:
+    image: "lymarenkolev/multichain-search-frontend:latest"
+    environment:
+      - NEXT_PUBLIC_PROXY_HOST=http://82.180.155.251:8044/
+      - PROXY_HOST=http://82.180.155.251:8044
+    ports:
+    - "80:3000"
+
