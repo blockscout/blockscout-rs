@@ -1,6 +1,8 @@
 pub mod fourbyte;
 pub mod sigeth;
 
+use std::time::Duration;
+
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use sig_provider_proto::blockscout::sig_provider::v1::{
@@ -32,7 +34,12 @@ pub trait SignatureSource {
 
 pub fn new_client() -> ClientWithMiddleware {
     let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
-    ClientBuilder::new(reqwest::Client::new())
-        .with(RetryTransientMiddleware::new_with_policy(retry_policy))
-        .build()
+    ClientBuilder::new(
+        reqwest::Client::builder()
+            .timeout(Duration::from_secs(10))
+            .build()
+            .unwrap(),
+    )
+    .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+    .build()
 }
