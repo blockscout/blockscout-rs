@@ -1,19 +1,13 @@
-use smart_contract_verifier::{Compilers, SolidityCompiler};
-
+use crate::versions::VersionsResponse;
 use actix_web::{
     web::{self, Json},
     Error,
 };
-use serde::Serialize;
-
-#[derive(Debug, Serialize)]
-pub struct VersionsResponse {
-    pub versions: Vec<String>,
-}
+use smart_contract_verifier::SolidityClient;
 
 pub async fn get_version_list(
-    compilers: web::Data<Compilers<SolidityCompiler>>,
+    client: web::Data<SolidityClient>,
 ) -> Result<Json<VersionsResponse>, Error> {
-    let versions = compilers.all_versions_sorted_str();
+    let versions = client.compilers().all_versions_sorted_str();
     Ok(Json(VersionsResponse { versions }))
 }

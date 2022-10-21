@@ -1,19 +1,13 @@
-use smart_contract_verifier::{Compilers, VyperCompiler};
-
+use crate::versions::VersionsResponse;
 use actix_web::{
     web::{self, Json},
     Error,
 };
-use serde::Serialize;
-
-#[derive(Debug, Serialize)]
-pub struct VersionsResponse {
-    pub versions: Vec<String>,
-}
+use smart_contract_verifier::VyperClient;
 
 pub async fn get_version_list(
-    compilers: web::Data<Compilers<VyperCompiler>>,
+    client: web::Data<VyperClient>,
 ) -> Result<Json<VersionsResponse>, Error> {
-    let versions = compilers.all_versions_sorted_str();
+    let versions = client.compilers().all_versions_sorted_str();
     Ok(Json(VersionsResponse { versions }))
 }
