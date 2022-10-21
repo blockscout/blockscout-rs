@@ -1,6 +1,6 @@
 target
 Dockerfile
-compilers
+*-compilers
 README.md
 tests
 config.toml
