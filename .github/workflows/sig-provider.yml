@@ -22,7 +22,7 @@ defaults:
 
 jobs:
   unit:
-    name: Unit tests
+    name: Unit, doc and integration tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
@@ -42,15 +42,15 @@ jobs:
         with:
           cache-on-failure: true
 
-      - name: cargo test 
+      - name: Unit tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture
         if: success() || failure()
 
-      - name: cargo test
+      - name: Doc tests
         run: cargo test --locked --workspace --all-features --doc
         if: success() || failure()
 
-      - name: cargo test
+      - name: Integration tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --test '*' -- --nocapture
         if: success() || failure()
 
@@ -83,6 +83,7 @@ jobs:
         run: cargo clippy --all --all-features -- -D warnings
     
   # push:
+  #   name: Docker build and docker push
   #   timeout-minutes: 30
   #   runs-on: ubuntu-latest
   #   needs:

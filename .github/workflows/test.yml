@@ -3,8 +3,10 @@ on:
     branches:
       - 'main'
   pull_request:
+    paths-ignore:
+      - "sig-provider/**"
 
-name: Test and lint (workspace)
+name: Test and lint (whole workspace)
 
 jobs:
   test:
