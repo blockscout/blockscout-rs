@@ -12,11 +12,11 @@ Install rustup from rustup.rs.
 ```
 git clone git@github.com:blockscout/blockscout-rs.git
 
-cd blockscout-rs
+cd blockscout-rs/smart-contract-verifier
 
-cargo build --all --release
+cargo build --release --bin smart-contract-verifier-http
 ```
-You can find the built binary in `target/release` folder.
+You can find the built binary in `target/release/` folder.
 
 ## Installing through cargo
 Another way to install the binary without cloning the repository is to use cargo straightway:
@@ -32,7 +32,7 @@ default values are used (if possible).
 
 ### Configuration file
 Service uses a configuration file the path to which is specified via `SMART_CONTRACT_VERIFIER__CONFIG=[path]` environment variable.
-The base configuration file with all available options could be found at [config/base.toml](./config/base.toml).
+The base configuration file with all available options could be found at [config/base.toml](./smart-contract-verifier-http/config/base.toml).
 
 Below is an example of a simple configuration file which is filled with default values.
 ```toml
@@ -99,7 +99,7 @@ Double underscore (`__`) is used as a separator. All variables should use
 `SMART_CONTRACT_VERIFIER` as a prefix.
 
 All available options for configuration through environment variables could be found at
-[config/base.env](./config/base.env)
+[config/base.env](./smart-contract-verifier-http/config/base.env)
 
 # Api
 

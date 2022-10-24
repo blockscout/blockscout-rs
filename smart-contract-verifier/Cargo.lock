@@ -4701,8 +4701,3 @@ dependencies = [
  "cc",
  "libc",
 ]
-
-[[patch.unused]]
-name = "prost-build"
-version = "0.11.1"
-source = "git+https://github.com/tokio-rs/prost#ec385dcb45344763b13bc55acd513521ce52042a"
