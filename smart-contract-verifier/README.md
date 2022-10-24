@@ -7,7 +7,7 @@ The service consists of 2 parts, a verification library and a transport layer th
 + [smart-contract-verifier](./smart-contract-verifier) - implements actual verification logic as a library and exposes an interface to be used by the transport layer;
 + A transport layer that implements some APIs over the service ([smart-contract-verifier-http](./smart-contract-verifier-http/)).
 
-For now, only REST API over HTTP is available as the transport layer. However, the transport protocol is not limited to our implementation, and you could implement your own APIs using [smart-contract-verifier](./smart-contract-verifier) library crate.
+For now, only REST API over HTTP is available as the transport layer. However, the transport protocol is not limited to our implementation, and you could implement your own APIs using the library crate.
 
 ## Build
 There are several ways to run the service discussed below.
