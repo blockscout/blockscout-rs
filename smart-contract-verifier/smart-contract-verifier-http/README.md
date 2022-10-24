@@ -1,40 +1,22 @@
-# <h1 align="center"> Smart-contract Verifier </h1>
+# <h1 align="center"> Smart-contract Verifier (HTTP Server) </h1>
 
 Smart-contract verification service. Runs as an HTTP server and allows
 making verification requests through REST API. It is stateless
 and answers requests based on provided information only.
 
-## Using docker compose
-You can build the provided sources using [docker-compose](./docker-compose.yaml) file presented in that directory.
-
-## Building from source
-Install rustup from rustup.rs.
-```
-git clone git@github.com:blockscout/blockscout-rs.git
-
-cd blockscout-rs
-
-cargo build --all --release
-```
-You can find the built binary in `target/release` folder.
-
-## Installing through cargo
-Another way to install the binary without cloning the repository is to use cargo straightway:
-```
-cargo install --git https://github.com/blockscout/blockscout-rs smart-contract-verifier-http
-```
-In that case, you can run the binary using just `smart-contract-verifier-http`.
-
 ## Configuration
+
 Service supports configuration via configuration file and environment variables.
 The latter overwrites the former in case if both are provided. For all missing fields
 default values are used (if possible).
 
 ### Configuration file
+
 Service uses a configuration file the path to which is specified via `SMART_CONTRACT_VERIFIER__CONFIG=[path]` environment variable.
 The base configuration file with all available options could be found at [config/base.toml](./config/base.toml).
 
 Below is an example of a simple configuration file which is filled with default values.
+
 ```toml
 [server]
 # IP address and port number the server should listen to
@@ -90,6 +72,7 @@ agent_endpoint = "localhost:6831"
 ```
 
 ### Environment variables
+
 Besides configuration file, one could use environment variables
 to configure the service. If case of overlapping, those values
 overwrites values from configuration file.
