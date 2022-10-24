@@ -32,7 +32,7 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           context: "{{defaultContext}}"
-          file: "./smart-contract-verifier-http/Dockerfile"
+          file: "./smart-contract-verifier/Dockerfile"
           push: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
