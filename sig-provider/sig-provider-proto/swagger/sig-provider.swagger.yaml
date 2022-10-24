@@ -4,11 +4,57 @@ info:
   version: version not set
 tags:
   - name: SignatureService
+  - name: AbiService
 consumes:
   - application/json
 produces:
   - application/json
 paths:
+  /api/v1/abi/event:
+    get:
+      operationId: AbiService_GetEventAbi
+      responses:
+        "200":
+          description: ""
+          schema:
+            $ref: '#/definitions/v1Abi'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: data
+          in: query
+          required: false
+          type: string
+        - name: topics
+          in: query
+          required: false
+          type: array
+          items:
+            type: string
+          collectionFormat: multi
+      tags:
+        - AbiService
+  /api/v1/abi/function:
+    get:
+      operationId: AbiService_GetFunctionAbi
+      responses:
+        "200":
+          description: ""
+          schema:
+            $ref: '#/definitions/v1Abi'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: txInput
+          in: query
+          required: false
+          type: string
+      tags:
+        - AbiService
   /api/v1/signatures:
     post:
       operationId: SignatureService_CreateSignatures
@@ -27,44 +73,6 @@ paths:
           required: true
           schema:
             $ref: '#/definitions/v1CreateSignaturesRequest'
-      tags:
-        - SignatureService
-  /api/v1/signatures/event:
-    get:
-      operationId: SignatureService_GetEventSignatures
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1GetSignaturesResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/rpcStatus'
-      parameters:
-        - name: hex
-          in: query
-          required: false
-          type: string
-      tags:
-        - SignatureService
-  /api/v1/signatures/function:
-    get:
-      operationId: SignatureService_GetFunctionSignatures
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1GetSignaturesResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/rpcStatus'
-      parameters:
-        - name: hex
-          in: query
-          required: false
-          type: string
       tags:
         - SignatureService
 definitions:
@@ -86,6 +94,29 @@ definitions:
           $ref: '#/definitions/protobufAny'
       message:
         type: string
+  v1Abi:
+    type: object
+    properties:
+      inputs:
+        type: array
+        items:
+          $ref: '#/definitions/v1Argument'
+      name:
+        type: string
+  v1Argument:
+    type: object
+    properties:
+      components:
+        type: array
+        items:
+          $ref: '#/definitions/v1Argument'
+      name:
+        type: string
+      type:
+        type: string
+      value:
+        type: string
+        title: decoded value
   v1CreateSignaturesRequest:
     type: object
     properties:
@@ -93,15 +124,13 @@ definitions:
         type: string
   v1CreateSignaturesResponse:
     type: object
-  v1GetSignaturesResponse:
+  v1GetEventAbiResponse:
     type: object
     properties:
-      signatures:
-        type: array
-        items:
-          $ref: '#/definitions/v1Signature'
-  v1Signature:
+      abi:
+        $ref: '#/definitions/v1Abi'
+  v1GetFunctionAbiResponse:
     type: object
     properties:
-      name:
-        type: string
+      abi:
+        $ref: '#/definitions/v1Abi'

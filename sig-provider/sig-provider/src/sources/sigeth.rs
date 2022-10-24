@@ -1,9 +1,5 @@
 use crate::SignatureSource;
 use reqwest_middleware::ClientWithMiddleware;
-use sig_provider_proto::blockscout::sig_provider::v1::{
-    CreateSignaturesRequest, CreateSignaturesResponse, GetSignaturesRequest, GetSignaturesResponse,
-    Signature,
-};
 
 pub struct Source {
     host: url::Url,
@@ -37,13 +33,11 @@ impl Source {
             .map_err(anyhow::Error::msg)
     }
 
-    fn convert(sigs: Option<json::SigMap>, hash: &str) -> Vec<Signature> {
+    fn convert(sigs: Option<json::SigMap>, hash: &str) -> Vec<String> {
+        // TODO: sort using "filtered" field
         sigs.and_then(|mut sigs| {
-            sigs.remove(hash).map(|sigs| {
-                sigs.into_iter()
-                    .map(|sig| Signature { name: sig.name })
-                    .collect()
-            })
+            sigs.remove(hash)
+                .map(|sigs| sigs.into_iter().map(|sig| sig.name).collect())
         })
         .unwrap_or_default()
     }
@@ -51,11 +45,8 @@ impl Source {
 
 #[async_trait::async_trait]
 impl SignatureSource for Source {
-    async fn create_signatures(
-        &self,
-        request: CreateSignaturesRequest,
-    ) -> Result<CreateSignaturesResponse, anyhow::Error> {
-        let abi = serde_json::from_str(&request.abi).map_err(anyhow::Error::msg)?;
+    async fn create_signatures(&self, abi: &str) -> Result<(), anyhow::Error> {
+        let abi = serde_json::from_str(abi).map_err(anyhow::Error::msg)?;
         self.client
             .post(self.host.join("/api/v1/import").unwrap())
             .json(&json::CreateRequest {
@@ -64,35 +55,29 @@ impl SignatureSource for Source {
             })
             .send()
             .await
-            .map(|_| CreateSignaturesResponse {})
+            .map(|_| ())
             .map_err(anyhow::Error::msg)
     }
 
-    async fn get_function_signatures(
-        &self,
-        request: GetSignaturesRequest,
-    ) -> Result<GetSignaturesResponse, anyhow::Error> {
-        let hash = Self::hash(&request.hex);
+    async fn get_function_signatures(&self, hex: &str) -> Result<Vec<String>, anyhow::Error> {
+        let hash = Self::hash(hex);
         let resp = self
             .fetch(&format!("/api/v1/signatures?function={}&all", hash))
             .await?;
         let signatures = Self::convert(resp.result.function, &hash);
-        Ok(GetSignaturesResponse { signatures })
+        Ok(signatures)
     }
 
-    async fn get_event_signatures(
-        &self,
-        request: GetSignaturesRequest,
-    ) -> Result<GetSignaturesResponse, anyhow::Error> {
-        let hash = Self::hash(&request.hex);
+    async fn get_event_signatures(&self, hex: &str) -> Result<Vec<String>, anyhow::Error> {
+        let hash = Self::hash(hex);
         let resp = self
             .fetch(&format!("/api/v1/signatures?event={}&all", hash))
             .await?;
         let signatures = Self::convert(resp.result.event, &hash);
-        Ok(GetSignaturesResponse { signatures })
+        Ok(signatures)
     }
 
-    fn host(&self) -> String {
+    fn source(&self) -> String {
         self.host.to_string()
     }
 }
