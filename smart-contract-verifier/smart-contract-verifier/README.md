@@ -1,4 +1,4 @@
-# <h1 align="center"> Smart-contract Verifier (logic) </h1>
+# <h1 align="center"> Smart-contract Verifier (Logic) </h1>
 
 Smart-contract verification service. Contains the main verification logic
 and exposes interface through which verification function could be called. 

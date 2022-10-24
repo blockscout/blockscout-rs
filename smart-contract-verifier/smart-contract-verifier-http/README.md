@@ -1,4 +1,4 @@
-# <h1 align="center"> Smart-contract Verifier (http-server) </h1>
+# <h1 align="center"> Smart-contract Verifier (HTTP Server) </h1>
 
 Smart-contract verification service. Runs as an HTTP server and allows
 making verification requests through REST API. It is stateless
