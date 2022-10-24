@@ -1,0 +1,52 @@
+[package]
+name = "smart-contract-verifier"
+version = "0.3.0"
+# authors = [""]
+edition = "2021"
+repository = "https://github.com/blockscout/blockscout-rs"
+keywords = ["ethereum", "web3", "solidity"]
+
+[dependencies]
+anyhow = "1.0"
+async-trait = "0.1"
+bytes = "1.2"
+chrono = "0.4"
+cron = "0.11"
+ethabi = "17.2"
+ethers-core = "0.17"
+ethers-solc = { version = "0.17", features = ["async"] }
+futures = "0.3"
+hex = "0.4"
+lazy_static = "1"
+minicbor = { version = "0.18", features = ["std"] }
+parking_lot = "0.12"
+primitive-types = "0.11"
+prometheus = "0.13"
+reqwest = { version = "0.11", features = ["json"] }
+rust-s3 = "0.32"
+semver = "1.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_with = "2"
+sha2 = "0.10"
+sscanf = "0.3"
+tempfile = "3.3"
+thiserror = "1.0"
+tokio = { version = "1", features = ["macros"] }
+tracing = "0.1"
+url = { version = "2.2", features = ["serde"] }
+reqwest-retry = "0.1"
+reqwest-middleware = "0.1"
+
+[patch.crates-io]
+ethers-solc = { git = "https://github.com/gakonst/ethers-rs", package = "ethers-solc", rev = "13a0144a" }
+
+[dev-dependencies]
+const_format = "0.2"
+mockall = "0.11"
+pretty_assertions = "1.2"
+quick-xml = { version = "0.24", features = ["serialize"] }
+rand = "0.8"
+rstest = "0.15"
+tempfile = "3.3"
+wiremock = "0.5"
