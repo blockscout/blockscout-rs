@@ -1,4 +1,0 @@
-[workspace]
-members = [
-    "multichain-search/backend"
-]
