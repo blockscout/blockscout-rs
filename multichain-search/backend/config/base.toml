@@ -5,9 +5,8 @@ addr = "0.0.0.0:8044"
 base_url = "https://blockscout.com"
 concurrent_requests = 10
 instances = [
-    "eth/mainnet",
-    "xdai/testnet",
-    "xdai/mainnet",
+    '{"title": "POA", "url": "https://blockscout.com/poa/core", "id": "poa/core"}',
+    '{"title": "Sokol", "url": "https://blockscout.com/poa/sokol", "id": "poa/sokol"}',
 ]
 request_timeout = 60
 
