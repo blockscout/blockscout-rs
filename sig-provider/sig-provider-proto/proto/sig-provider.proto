@@ -7,18 +7,37 @@ option go_package = "github.com/blockscout/blockscout-rs/sig-provider";
 service SignatureService {
   rpc CreateSignatures(CreateSignaturesRequest)
       returns (CreateSignaturesResponse) {}
-  rpc GetFunctionSignatures(GetSignaturesRequest)
-      returns (GetSignaturesResponse) {}
-  rpc GetEventSignatures(GetSignaturesRequest) returns (GetSignaturesResponse) {
-  }
+}
+
+service AbiService {
+  rpc GetFunctionAbi(GetFunctionAbiRequest) returns (GetFunctionAbiResponse) {}
+  rpc GetEventAbi(GetEventAbiRequest) returns (GetEventAbiResponse) {}
 }
 
 message CreateSignaturesRequest { string abi = 1; }
 
 message CreateSignaturesResponse {}
 
-message GetSignaturesRequest { string hex = 1; }
+message Argument {
+  string name = 1;
+  string type = 2;
+  repeated Argument components = 3;
+  // decoded value
+  string value = 4;
+}
 
-message Signature { string name = 1; }
+message Abi {
+  string name = 1;
+  repeated Argument inputs = 2;
+}
 
-message GetSignaturesResponse { repeated Signature signatures = 1; }
+message GetFunctionAbiRequest { string tx_input = 1; }
+
+message GetFunctionAbiResponse { Abi abi = 1; }
+
+message GetEventAbiRequest {
+  string data = 1;
+  repeated string topics = 2;
+}
+
+message GetEventAbiResponse { Abi abi = 1; }

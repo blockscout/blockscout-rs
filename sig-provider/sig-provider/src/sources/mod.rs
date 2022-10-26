@@ -1,31 +1,20 @@
 pub mod fourbyte;
 pub mod sigeth;
 
-use std::time::Duration;
-
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
-use sig_provider_proto::blockscout::sig_provider::v1::{
-    CreateSignaturesRequest, CreateSignaturesResponse, GetSignaturesRequest, GetSignaturesResponse,
-};
+use std::time::Duration;
 
 #[async_trait::async_trait]
 pub trait SignatureSource {
-    async fn create_signatures(
-        &self,
-        request: CreateSignaturesRequest,
-    ) -> Result<CreateSignaturesResponse, anyhow::Error>;
-    async fn get_function_signatures(
-        &self,
-        request: GetSignaturesRequest,
-    ) -> Result<GetSignaturesResponse, anyhow::Error>;
-    async fn get_event_signatures(
-        &self,
-        request: GetSignaturesRequest,
-    ) -> Result<GetSignaturesResponse, anyhow::Error>;
+    async fn create_signatures(&self, abi: &str) -> Result<(), anyhow::Error>;
+    // Resulting signatures should be sorted in priority descending order (first - max priority)
+    async fn get_function_signatures(&self, hex: &str) -> Result<Vec<String>, anyhow::Error>;
+    // Resulting signatures should be sorted in priority descending order (first - max priority)
+    async fn get_event_signatures(&self, hex: &str) -> Result<Vec<String>, anyhow::Error>;
 
     // for errors
-    fn host(&self) -> String;
+    fn source(&self) -> String;
 }
 
 pub fn new_client() -> ClientWithMiddleware {

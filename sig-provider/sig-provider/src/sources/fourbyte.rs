@@ -1,9 +1,5 @@
 use crate::SignatureSource;
 use reqwest_middleware::ClientWithMiddleware;
-use sig_provider_proto::blockscout::sig_provider::v1::{
-    CreateSignaturesRequest, CreateSignaturesResponse, GetSignaturesRequest, GetSignaturesResponse,
-    Signature,
-};
 
 pub struct Source {
     host: url::Url,
@@ -18,7 +14,7 @@ impl Source {
         }
     }
 
-    async fn fetch(&self, mut path: String) -> Result<GetSignaturesResponse, anyhow::Error> {
+    async fn fetch(&self, mut path: String) -> Result<Vec<String>, anyhow::Error> {
         let mut signatures = Vec::default();
         loop {
             let resp: json::GetResponse = self
@@ -30,56 +26,41 @@ impl Source {
                 .json()
                 .await
                 .map_err(anyhow::Error::msg)?;
-            signatures.extend(resp.results.into_iter().map(|sig| Signature {
-                name: sig.text_signature,
-            }));
+            signatures.extend(resp.results.into_iter().map(|sig| sig.text_signature));
             if let Some(next) = resp.next {
                 path = next;
             } else {
                 break;
             }
         }
-        Ok(GetSignaturesResponse { signatures })
+        // TODO: sort using "id" field
+        Ok(signatures)
     }
 }
 
 #[async_trait::async_trait]
 impl SignatureSource for Source {
-    async fn create_signatures(
-        &self,
-        request: CreateSignaturesRequest,
-    ) -> Result<CreateSignaturesResponse, anyhow::Error> {
+    async fn create_signatures(&self, abi: &str) -> Result<(), anyhow::Error> {
         self.client
             .post(self.host.join("/api/v1/import-solidity/").unwrap())
-            .json(&json::CreateRequest {
-                contract_abi: request.abi,
-            })
+            .json(&json::CreateRequest { contract_abi: abi })
             .send()
             .await
-            .map(|_| CreateSignaturesResponse {})
+            .map(|_| ())
             .map_err(anyhow::Error::msg)
     }
 
-    async fn get_function_signatures(
-        &self,
-        request: GetSignaturesRequest,
-    ) -> Result<GetSignaturesResponse, anyhow::Error> {
-        self.fetch(format!("/api/v1/signatures/?hex_signature={}", request.hex))
+    async fn get_function_signatures(&self, hex: &str) -> Result<Vec<String>, anyhow::Error> {
+        self.fetch(format!("/api/v1/signatures/?hex_signature={}", hex))
             .await
     }
 
-    async fn get_event_signatures(
-        &self,
-        request: GetSignaturesRequest,
-    ) -> Result<GetSignaturesResponse, anyhow::Error> {
-        self.fetch(format!(
-            "/api/v1/event-signatures/?hex_signature={}",
-            &request.hex
-        ))
-        .await
+    async fn get_event_signatures(&self, hex: &str) -> Result<Vec<String>, anyhow::Error> {
+        self.fetch(format!("/api/v1/event-signatures/?hex_signature={}", hex))
+            .await
     }
 
-    fn host(&self) -> String {
+    fn source(&self) -> String {
         self.host.to_string()
     }
 }
@@ -88,8 +69,8 @@ mod json {
     use serde::{Deserialize, Serialize};
 
     #[derive(Debug, Serialize)]
-    pub struct CreateRequest {
-        pub contract_abi: String,
+    pub struct CreateRequest<'a> {
+        pub contract_abi: &'a str,
     }
 
     #[derive(Debug, Deserialize)]

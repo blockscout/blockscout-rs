@@ -1,4 +1,4 @@
-use sig_provider::{sig_provider, Settings};
+use sig_provider_server::{sig_provider, Settings};
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
