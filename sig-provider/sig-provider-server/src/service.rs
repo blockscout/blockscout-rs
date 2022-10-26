@@ -24,11 +24,12 @@ impl SignatureService for Service {
         &self,
         request: tonic::Request<CreateSignaturesRequest>,
     ) -> Result<tonic::Response<CreateSignaturesResponse>, tonic::Status> {
-        self.agg
-            .create_signatures(request.into_inner().abi)
-            .await
-            .map(|_| tonic::Response::new(CreateSignaturesResponse {}))
-            .map_err(|e| tonic::Status::internal(e.to_string()))
+        let request = request.into_inner();
+        let agg = self.agg.clone();
+        tokio::spawn(async move {
+            let _result = agg.create_signatures(&request.abi).await;
+        });
+        Ok(tonic::Response::new(CreateSignaturesResponse {}))
     }
 }
 
@@ -38,8 +39,9 @@ impl AbiService for Service {
         &self,
         request: tonic::Request<GetFunctionAbiRequest>,
     ) -> Result<tonic::Response<GetFunctionAbiResponse>, tonic::Status> {
+        let request = request.into_inner();
         self.agg
-            .get_function_abi(request.into_inner().tx_input)
+            .get_function_abi(request.tx_input)
             .await
             .map(|abi| tonic::Response::new(GetFunctionAbiResponse { abi: Some(abi) }))
             .map_err(|e| tonic::Status::internal(e.to_string()))

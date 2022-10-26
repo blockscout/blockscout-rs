@@ -3,7 +3,7 @@ use sig_provider_proto::blockscout::sig_provider::v1::Abi;
 use std::{collections::HashSet, sync::Arc};
 
 pub struct SourceAggregator {
-    sources: Arc<Vec<Arc<dyn SignatureSource + Send + Sync + 'static>>>,
+    sources: Vec<Arc<dyn SignatureSource + Send + Sync + 'static>>,
 }
 
 macro_rules! proxy {
@@ -33,9 +33,7 @@ macro_rules! proxy {
 impl SourceAggregator {
     // You should provide sources in priority descending order (first - max priority)
     pub fn new(sources: Vec<Arc<dyn SignatureSource + Send + Sync + 'static>>) -> SourceAggregator {
-        SourceAggregator {
-            sources: Arc::new(sources),
-        }
+        SourceAggregator { sources }
     }
 
     fn merge_signatures<I: IntoIterator<Item = String>, II: IntoIterator<Item = I>>(
@@ -48,12 +46,9 @@ impl SourceAggregator {
             .collect()
     }
 
-    pub async fn create_signatures(&self, abi: String) -> Result<(), anyhow::Error> {
+    pub async fn create_signatures(&self, abi: &str) -> Result<(), anyhow::Error> {
         let sources = self.sources.clone();
-        tokio::spawn(async move {
-            let abi = &abi;
-            let _responses = proxy!(sources, abi, create_signatures);
-        });
+        let _responses = proxy!(sources, abi, create_signatures);
         Ok(())
     }
 
