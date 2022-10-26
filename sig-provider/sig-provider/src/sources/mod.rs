@@ -1,6 +1,9 @@
 pub mod fourbyte;
 pub mod sigeth;
 
+#[cfg(test)]
+pub mod mock;
+
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use std::time::Duration;

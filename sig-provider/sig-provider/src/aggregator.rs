@@ -1,5 +1,6 @@
 use crate::SignatureSource;
-use sig_provider_proto::blockscout::sig_provider::v1::Abi;
+use ethabi::ParamType;
+use sig_provider_proto::blockscout::sig_provider::v1::{Abi, Argument};
 use std::{collections::HashSet, sync::Arc};
 
 pub struct SourceAggregator {
@@ -66,8 +67,25 @@ impl SourceAggregator {
         Ok(signatures)
     }
 
-    pub async fn get_function_abi(&self, _tx_input: String) -> Result<Abi, anyhow::Error> {
-        anyhow::bail!("unimplemented")
+    pub async fn get_function_abi(&self, tx_input: &[u8]) -> Result<Abi, anyhow::Error> {
+        if tx_input.len() < 4 {
+            anyhow::bail!("tx input len must be at least 4 bytes");
+        }
+        let hex_sig = hex::encode(&tx_input[..4]);
+        let sigs = self.get_function_signatures(&hex_sig).await?;
+        sigs.into_iter()
+            .filter_map(|sig| {
+                parse_signature(&sig).and_then(|(name, args)| {
+                    parse_args(&args, &tx_input[4..]).map(|inputs| Abi {
+                        name: name.into(),
+                        inputs,
+                    })
+                })
+            })
+            .next()
+            .ok_or(anyhow::Error::msg(
+                "could not find any signature that fits given tx input",
+            ))
     }
 
     pub async fn get_event_abi(
@@ -76,5 +94,122 @@ impl SourceAggregator {
         _topics: Vec<String>,
     ) -> Result<Abi, anyhow::Error> {
         anyhow::bail!("unimplemented")
+    }
+}
+
+fn parse_signature(sig: &str) -> Option<(&str, Vec<ParamType>)> {
+    let start = sig.find('(')?;
+    let name = &sig[..start];
+    let sig = &sig[start..];
+    ethabi::param_type::Reader::read(sig)
+        .ok()
+        .and_then(|param| match param {
+            ParamType::Tuple(params) => Some(params),
+            _ => None,
+        })
+        .map(|params| (name, params))
+}
+
+fn parse_args(args: &[ParamType], tx_args: &[u8]) -> Option<Vec<Argument>> {
+    let decoded = ethabi::decode(args, tx_args).ok()?;
+
+    // decode will not fail if it decodes only part of the input data
+    // so we will encode the result and check, that we decoded the whole data
+    let encoded = ethabi::encode(&decoded);
+    if tx_args != encoded {
+        return None;
+    }
+
+    let inputs = args
+        .into_iter()
+        .zip(decoded.into_iter())
+        .enumerate()
+        .map(|(index, (param, value))| Argument {
+            name: format!("arg{}", index),
+            r#type: param.to_string(),
+            components: Default::default(),
+            value: value.to_string(),
+        })
+        .collect();
+    Some(inputs)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::mock;
+    use pretty_assertions::assert_eq;
+
+    #[tokio::test]
+    async fn function() {
+        let tests = vec![
+            (
+                "70a0823100000000000000000000000000000000219ab540356cbb839cbe05303d7705fa",
+                Abi {
+                    name: "balanceOf".into(),
+                    inputs: vec![Argument {
+                        name: "arg0".into(),
+                        r#type: "address".into(),
+                        components: vec![],
+                        value: "00000000219ab540356cbb839cbe05303d7705fa".into(),
+                    }],
+                },
+            ),
+            (
+                "70a082310000000000000000000000000000000000000000000000000000000000bc61591234567812345678000000000000000000000000000000000000000000000000",
+                Abi {
+                    name: "branch_passphrase_public".into(),
+                    inputs: vec![Argument {
+                        name: "arg0".into(),
+                        r#type: "uint256".into(),
+                        components: vec![],
+                        value: "bc6159".into(), // hex number 123456789
+                    }, Argument {
+                        name: "arg1".into(),
+                        r#type: "bytes8".into(),
+                        components: vec![],
+                        value: "1234567812345678".into(),
+                    }],
+                },
+            ),
+            (
+                "70a082310000000000000000000000000000000000000000000000000000000000bc615900000000000000000000000000000000219ab540356cbb839cbe05303d7705fa",
+                Abi {
+                    name: "passphrase_calculate_transfer".into(),
+                    inputs: vec![Argument {
+                        name: "arg0".into(),
+                        r#type: "uint64".into(),
+                        components: vec![],
+                        value: "bc6159".into(), // hex number 123456789
+                    }, Argument {
+                        name: "arg1".into(),
+                        r#type: "address".into(),
+                        components: vec![],
+                        value: "00000000219ab540356cbb839cbe05303d7705fa".into(),
+                    }],
+                },
+            ),
+        ];
+
+        for (input, abi) in tests {
+            let source = mock::Source::default()
+                .with_function(
+                    "70a08231".into(),
+                    Ok(vec![
+                        "balanceOf(address)".into(),
+                        "branch_passphrase_public(uint256,bytes8)".into(),
+                        "passphrase_calculate_transfer(uint64,address)".into(),
+                    ]),
+                )
+                .build();
+
+            let agg = Arc::new(SourceAggregator::new(vec![source.clone()]));
+
+            let function = agg
+                .get_function_abi(&hex::decode(input).unwrap())
+                .await
+                .unwrap();
+            assert_eq!(abi, function);
+        }
     }
 }
