@@ -2,7 +2,7 @@ version: "3"
 services:
   mc_backend:
     image: "lymarenkolev/multichain-search:latest"
-    #build: backend
+    build: backend
     ports:
       - "8044:8044"
     volumes:
