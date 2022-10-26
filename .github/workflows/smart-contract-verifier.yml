@@ -3,7 +3,7 @@ on:
     branches:
       - 'main'
     tags:
-      - 'v*'
+      - 'smart-contract-verifier/v*'
   pull_request:
 
 
@@ -99,7 +99,7 @@ jobs:
         id: regex
         with:
           text: ${{ github.ref }}
-          regex: '^(refs\/tags\/(v\d+\.\d+\.\d+)\+smart-contract-verifier)|(refs\/head\/(main))$'
+          regex: '^(refs\/tags\/smart-contract-verifier\/(v\d+\.\d+\.\d+))|(refs\/head\/(main))$'
       
       - name: Extract tag name
         id: tags_extractor

@@ -3,7 +3,7 @@ on:
     branches:
       - 'main'
     tags:
-      - 'v*'
+      - 'sig-provider/v*'
   pull_request:
 
 
@@ -99,7 +99,7 @@ jobs:
   #       id: regex
   #       with:
   #         text: ${{ github.ref }}
-  #         regex: '^(refs\/tags\/(v\d+\.\d+\.\d+)\+sig-provider)|(refs\/head\/(main))$'
+  #         regex: '^(refs\/tags\/sig-provider\/(v\d+\.\d+\.\d+))|(refs\/head\/(main))$'
       
   #     - name: Extract tag name
   #       id: tags_extractor
