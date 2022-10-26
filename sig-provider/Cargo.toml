@@ -1,5 +1,5 @@
 [workspace]
-members = ["sig-provider-proto", "sig-provider"]
+members = ["sig-provider", "sig-provider-proto", "sig-provider-server"]
 
 [patch.crates-io]
 # We need the master branch, because https://github.com/tokio-rs/prost/pull/714 isn't published yet
