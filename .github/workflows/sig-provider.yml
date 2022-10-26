@@ -99,7 +99,7 @@ jobs:
   #       id: regex
   #       with:
   #         text: ${{ github.ref }}
-  #         regex: '^(refs\/tags\/sig-provider\/(v\d+\.\d+\.\d+))|(refs\/head\/(main))$'
+  #         regex: '^(refs\/tags\/sig-provider\/(v\d+\.\d+\.\d+))|(refs\/heads\/(main))$'
       
   #     - name: Extract tag name
   #       id: tags_extractor
