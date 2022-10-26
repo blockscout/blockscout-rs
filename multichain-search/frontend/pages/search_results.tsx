@@ -6,32 +6,31 @@ import { useEffect, useState } from 'react'
 
 import { Spinner } from '@chakra-ui/react'
 import { ProxySearchResults } from '../components/ProxySearchResults'
-import config from '../config'
-
 
 
 interface Props {
-  q: string
+  q: string,
+  client_proxy_host: string,
 }
 
-const SearchResults: NextPage<Props> = ({q}) => {
+const SearchResults: NextPage<Props> = ({q, client_proxy_host}) => {
   const [isLoading, setLoading] = useState(false);
   const [data, setData] = useState(null)
 
   useEffect(() => {
-    if (config.NEXT_PUBLIC_PROXY_HOST) {
+    if (client_proxy_host) {
       setLoading(true)
-      let url = new URL('/api/v1/search', config.NEXT_PUBLIC_PROXY_HOST).toString() + '?q=' + q;
+      let url = new URL('/api/v1/search', client_proxy_host).toString() + '?q=' + q;
       fetch(url)
         .then((res) => res.json())
         .then((data) => {
           setData(data)
-          setLoading(false)
         })
+        .finally(() => setLoading(false))
     } else {
       console.log('failed to search: proxy host is unknown')
     }
-  }, [q])
+  }, [q, client_proxy_host])
 
   return (
     <>
@@ -55,7 +54,10 @@ export const getServerSideProps: GetServerSideProps = async ({ query }) => {
   }
 
   return {
-    props: {q: query.q},
+    props: {
+      q: query.q, 
+      client_proxy_host: process.env.CLIENT_PROXY_HOST,
+    },
   };
 }
 

@@ -41,13 +41,13 @@ export const Network = ({instance, addUrl = false, isBig = false}: Props) => {
     let network_logo = LOGOS[instance.id] || DEFAULT_LOGO;
     let network = null;
     if (isBig) {
-        network = <Flex width="200px" flexDirection="column" justifyContent="center" alignItems="center" background="#edf2f7" borderRadius="20px">
+        network = <Flex key={instance.id} width="200px" flexDirection="column" justifyContent="center" alignItems="center" background="#edf2f7" borderRadius="20px">
             <HStack> 
                 <Icon as={network_logo} boxSize={16}/> <Text color="gray.500" fontSize="14">{instance.title}</Text>
             </HStack>
         </Flex>
     } else {
-        network = <Flex flexDirection="column" justifyContent="center" alignItems="center" justifyItems="center">
+        network = <Flex key={instance.id} flexDirection="column" justifyContent="center" alignItems="center" justifyItems="center">
             <HStack>
                 <Icon as={network_icon} boxSize={8}/> <Text>{instance.title}</Text>
             </HStack>

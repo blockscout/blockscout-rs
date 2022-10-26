@@ -4,6 +4,6 @@ This service provides web application for blockscout multi-chain-search.
 
 Basically, it aggregates responses from all blockscout instances, and combines them into convenient form.
 
-Backend is written in rust lang
+Backend is written in rust
 
-Fronttned is wriiten in react and nextjs
+Frontend is written in react and nextjs
