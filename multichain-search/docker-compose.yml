@@ -2,7 +2,7 @@ version: "3"
 services:
   mc_backend:
     image: "lymarenkolev/multichain-search:latest"
-    build: .
+    #build: backend
     ports:
       - "8044:8044"
     volumes:
@@ -12,9 +12,9 @@ services:
 
   mc_frontend:
     image: "lymarenkolev/multichain-search-frontend:latest"
+    build: frontend
     environment:
-      - NEXT_PUBLIC_PROXY_HOST=http://82.180.155.251:8044/
-      - PROXY_HOST=http://82.180.155.251:8044
+      - PROXY_HOST=http://mc_backend:8044
+      - CLIENT_PROXY_HOST=http://localhost:8044
     ports:
     - "80:3000"
-

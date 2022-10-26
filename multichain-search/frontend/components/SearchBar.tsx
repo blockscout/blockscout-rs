@@ -21,8 +21,10 @@ export const SearchBar = ({initialValue}: Props) => {
 
   const onSubmit = React.useCallback((event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const url = 'search_results?q=' + value;
-    window.location.assign(url);
+    if (value) {
+      const url = 'search_results?q=' + value;
+      window.location.assign(url);
+    }
   }, [ value ]);
 
   return (
