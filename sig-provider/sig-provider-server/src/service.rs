@@ -39,8 +39,13 @@ impl AbiService for Service {
         request: tonic::Request<GetFunctionAbiRequest>,
     ) -> Result<tonic::Response<GetFunctionAbiResponse>, tonic::Status> {
         let request = request.into_inner();
-        let bytes = hex::decode(request.tx_input)
-            .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
+        let bytes = hex::decode(
+            request
+                .tx_input
+                .strip_prefix("0x")
+                .unwrap_or(&request.tx_input),
+        )
+        .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
         self.agg
             .get_function_abi(&bytes)
             .await
