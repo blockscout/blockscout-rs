@@ -136,8 +136,9 @@ fn parse_args(args: &[ParamType], tx_args: &[u8]) -> Option<Vec<Argument>> {
 
 #[cfg(test)]
 mod tests {
+    use crate::sources::MockSignatureSource;
+
     use super::*;
-    use crate::mock;
     use pretty_assertions::assert_eq;
 
     #[tokio::test]
@@ -192,16 +193,19 @@ mod tests {
         ];
 
         for (input, abi) in tests {
-            let source = mock::Source::default()
-                .with_function(
-                    "70a08231".into(),
+            let mut source = MockSignatureSource::new();
+            source
+                .expect_get_function_signatures()
+                .with(mockall::predicate::eq("70a08231"))
+                .times(1)
+                .returning(|_| {
                     Ok(vec![
                         "balanceOf(address)".into(),
                         "branch_passphrase_public(uint256,bytes8)".into(),
                         "passphrase_calculate_transfer(uint64,address)".into(),
-                    ]),
-                )
-                .build();
+                    ])
+                });
+            let source = Arc::new(source);
 
             let agg = Arc::new(SourceAggregator::new(vec![source.clone()]));
 
