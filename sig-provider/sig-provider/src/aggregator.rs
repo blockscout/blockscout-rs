@@ -83,9 +83,9 @@ impl SourceAggregator {
                 })
             })
             .next()
-            .ok_or(anyhow::Error::msg(
-                "could not find any signature that fits given tx input",
-            ))
+            .ok_or_else(|| {
+                anyhow::Error::msg("could not find any signature that fits given tx input")
+            })
     }
 
     pub async fn get_event_abi(
@@ -121,7 +121,7 @@ fn parse_args(args: &[ParamType], tx_args: &[u8]) -> Option<Vec<Argument>> {
     }
 
     let inputs = args
-        .into_iter()
+        .iter()
         .zip(decoded.into_iter())
         .enumerate()
         .map(|(index, (param, value))| Argument {
