@@ -1,0 +1,7 @@
+[server.http]
+enabled = true
+addr = "0.0.0.0:8050"
+
+[server.grpc]
+enabled = true
+addr = "0.0.0.0:8051"

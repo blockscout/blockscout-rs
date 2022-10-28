@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package blockscout.visualizer.v1;
+
+import "google/protobuf/field_mask.proto";
+
+option go_package = "github.com/blockscout/sol-to-uml/visualizer-server";
+
+service SolidityVisualizer {
+  rpc VisualizeContracts(VisualizeContractsRequest) returns (VisualizeResponse) {}
+
+  rpc VisualizeStorage(VisualizeStorageRequest) returns (VisualizeResponse) {}
+}
+
+message VisualizeContractsRequest {
+  map<string, string> sources = 1;
+
+  google.protobuf.FieldMask output_mask = 15;
+}
+
+message VisualizeStorageRequest {
+  map<string, string> sources = 1;
+  string file_name = 2;
+  string contract_name = 3;
+
+  google.protobuf.FieldMask output_mask = 15;
+}
+
+// The client should decide on what type they are interested in
+// and specify it through `request.output_mask` field. If omitted,
+// all types would be calculated and returned to the client.
+message VisualizeResponse {
+  optional bytes png = 1;
+  optional bytes svg = 2;
+}

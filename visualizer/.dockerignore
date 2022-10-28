@@ -1,0 +1,10 @@
+target
+.github
+dockerfile
+.idea
+.vscode
+outpit
+.gitmodules
+docker-compose.yml
+LICENSE
+README.md

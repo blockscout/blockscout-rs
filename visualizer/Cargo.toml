@@ -1,0 +1,9 @@
+[workspace]
+members = [
+    "visualizer",
+    "visualizer-server"
+]
+
+# We need the master branch, because https://github.com/tokio-rs/prost/pull/714 isn't published yet
+[patch.crates-io]
+prost-build = { git = "https://github.com/tokio-rs/prost" }

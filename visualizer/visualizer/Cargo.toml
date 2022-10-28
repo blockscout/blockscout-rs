@@ -1,0 +1,17 @@
+[package]
+name = "visualizer"
+version = "0.1.0"
+edition = "2021"
+repository = "https://github.com/blockscout/blockscout-rs/sol_to_uml"
+
+[dependencies]
+anyhow = "1.0"
+bytes = "1.2"
+futures = "0.3"
+lazy_static = "1.3"
+prometheus = "0.13"
+strum = { version = "0.24", features = ["derive"] }
+tempfile = "3.3"
+thiserror = "1.0"
+tokio = { version = "1", features = ["rt-multi-thread", "fs", "process"] }
+tracing = "0.1"
