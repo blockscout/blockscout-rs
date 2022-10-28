@@ -1,0 +1,15 @@
+[server]
+addr = "0.0.0.0:8044"
+
+[blockscout]
+base_url = "https://blockscout.com"
+concurrent_requests = 10
+instances = [
+    '{"title": "POA", "url": "https://blockscout.com/poa/core", "id": "poa/core"}',
+    '{"title": "Sokol", "url": "https://blockscout.com/poa/sokol", "id": "poa/sokol"}',
+]
+request_timeout = 60
+
+[jaeger]
+enabled = false
+agent_endpoint = "localhost:6831"
