@@ -11,7 +11,7 @@ name: Test, lint and docker (visualizer)
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: blockscout/visualizer-server
+  IMAGE_NAME: blockscout/visualizer
 
 defaults:
   run:
