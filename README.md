@@ -1,9 +1,14 @@
 <h1 align="center">Blockscout Rust Services</h1>
 
-[![smart-contract-verifier](https://github.com/blockscout/blockscout-rs/actions/workflows/smart-contract-verifier.yml/badge.svg?branch=main)](https://github.com/blockscout/blockscout-rs/actions) 
-[![sig-provider](https://github.com/blockscout/blockscout-rs/actions/workflows/sig-provider.yml/badge.svg?branch=main)](https://github.com/blockscout/blockscout-rs/actions)
-[![multichain-search](https://github.com/blockscout/blockscout-rs/actions/workflows/multichain-search.yml/badge.svg?branch=main)](https://github.com/blockscout/blockscout-rs/actions)
-[![visualizer](https://github.com/blockscout/blockscout-rs/actions/workflows/visualizer.yml/badge.svg?branch=main)](https://github.com/blockscout/blockscout-rs/actions)
+<a href="https://github.com/blockscout/blockscout-rs/actions/workflows/smart-contract-verifier.yml">
+   <img src="https://img.shields.io/github/workflow/status/blockscout/blockscout-rs/Test,%20lint%20and%20docker%20(smart-contract-verifier)?label=smart-contract-verifier&logo=github&style=plastic">
+</a> <a href="https://github.com/blockscout/blockscout-rs/actions/workflows/sig-provider.yml">
+   <img src="https://img.shields.io/github/workflow/status/blockscout/blockscout-rs/Test,%20lint%20and%20docker%20(sig-provider)?label=sig-provider&logo=github&style=plastic">
+</a> <a href="https://github.com/blockscout/blockscout-rs/actions/workflows/multichain-search.yml">
+   <img src="https://img.shields.io/github/workflow/status/blockscout/blockscout-rs/Test,%20lint%20and%20docker%20(multichain-search)?label=multichain-search&logo=github&style=plastic">
+</a> <a href="https://github.com/blockscout/blockscout-rs/actions/workflows/visualizer.yml">
+   <img src="https://img.shields.io/github/workflow/status/blockscout/blockscout-rs/Test,%20lint%20and%20docker%20(visualizer)?label=visualizer&logo=github&style=plastic">
+</a>
 
 
 A set of services used by [Blockscout](https://blockscout.com/) blockchain explorer, written in Rust.
