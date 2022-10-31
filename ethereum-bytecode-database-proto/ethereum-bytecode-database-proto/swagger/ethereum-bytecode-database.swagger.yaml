@@ -1,0 +1,409 @@
+swagger: "2.0"
+info:
+  title: ethereum-bytecode-database.proto
+  version: version not set
+tags:
+  - name: CreationBytecodeDatabase
+  - name: DeployedBytecodeDatabase
+consumes:
+  - application/json
+produces:
+  - application/json
+paths:
+  /bytecodes/creationInputs/sources/solidity:verifyMetadata:
+    post:
+      operationId: CreationBytecodeDatabase_VerifySolidityMetadata
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1VerifyResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1VerifySolidityMetadataRequest'
+      tags:
+        - CreationBytecodeDatabase
+  /bytecodes/creationInputs/sources/solidity:verifyMultiPart:
+    post:
+      operationId: CreationBytecodeDatabase_VerifySolidityMultiPart
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1VerifyResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1VerifySolidityMultiPartRequest'
+      tags:
+        - CreationBytecodeDatabase
+  /bytecodes/creationInputs/sources/solidity:verifyStandardJson:
+    post:
+      operationId: CreationBytecodeDatabase_VerifySolidityStandardJson
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1VerifyResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1VerifySolidityStandardJsonRequest'
+      tags:
+        - CreationBytecodeDatabase
+  /bytecodes/creationInputs/sources/vyper:verifyMultiPart:
+    post:
+      operationId: CreationBytecodeDatabase_VerifyVyperMultiPart
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1VerifyResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1VerifyVyperMultiPartRequest'
+      tags:
+        - CreationBytecodeDatabase
+  /bytecodes/creationInputs/sources:search:
+    post:
+      operationId: CreationBytecodeDatabase_SearchSources
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1SearchSourcesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1SearchSourcesRequest'
+      tags:
+        - CreationBytecodeDatabase
+  /bytecodes/deployedBytecodes/sources/solidity:verifyMetadata:
+    post:
+      operationId: DeployedBytecodeDatabase_VerifySolidityMetadata
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1VerifyResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1VerifySolidityMetadataRequest'
+      tags:
+        - DeployedBytecodeDatabase
+  /bytecodes/deployedBytecodes/sources/solidity:verifyMultiPart:
+    post:
+      operationId: DeployedBytecodeDatabase_VerifySolidityMultiPart
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1VerifyResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1VerifySolidityMultiPartRequest'
+      tags:
+        - DeployedBytecodeDatabase
+  /bytecodes/deployedBytecodes/sources/solidity:verifyStandardJson:
+    post:
+      operationId: DeployedBytecodeDatabase_VerifySolidityStandardJson
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1VerifyResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1VerifySolidityStandardJsonRequest'
+      tags:
+        - DeployedBytecodeDatabase
+  /bytecodes/deployedBytecodes/sources/vyper:verifyMultiPart:
+    post:
+      operationId: DeployedBytecodeDatabase_VerifyVyperMultiPart
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1VerifyResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1VerifyVyperMultiPartRequest'
+      tags:
+        - DeployedBytecodeDatabase
+  /bytecodes/deployedBytecodes/sources:search:
+    post:
+      operationId: DeployedBytecodeDatabase_SearchSources
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1SearchSourcesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1SearchSourcesRequest'
+      tags:
+        - DeployedBytecodeDatabase
+definitions:
+  SourceMatch:
+    type: string
+    enum:
+      - MATCH_UNSPECIFIED
+      - PARTIAL
+      - FULL
+    default: MATCH_UNSPECIFIED
+  SourceSourceFile:
+    type: object
+    properties:
+      content:
+        type: string
+      name:
+        type: string
+  SourceSourceType:
+    type: string
+    enum:
+      - SOURCE_TYPE_UNSPECIFIED
+      - SOLIDITY
+      - VYPER
+      - YUL
+    default: SOURCE_TYPE_UNSPECIFIED
+  SourceVerificationType:
+    type: string
+    enum:
+      - VERIFICATION_TYPE_UNSPECIFIED
+      - MULTI_PART_FILES
+      - STANDARD_JSON
+      - METADATA
+    default: VERIFICATION_TYPE_UNSPECIFIED
+  VerifyResponseResult:
+    type: object
+    properties:
+      abi:
+        type: string
+        title: |-
+          / Contract abi (https://docs.soliditylang.org/en/latest/abi-spec.html?highlight=abi#json);
+          / (does not exist for Yul contracts)
+      constructorArguments:
+        type: string
+        title: |-
+          / Constructor arguments used for deploying verified contract
+          / (exists only for creation inputs)
+      contractName:
+        type: string
+        title: / The name of the contract which was verified
+      fileName:
+        type: string
+        title: / The name of the file verified contract was located at
+      source:
+        $ref: '#/definitions/v1Source'
+        title: / A source used for the verification
+  protobufAny:
+    type: object
+    properties:
+      '@type':
+        type: string
+    additionalProperties: {}
+  rpcStatus:
+    type: object
+    properties:
+      code:
+        type: integer
+        format: int32
+      details:
+        type: array
+        items:
+          $ref: '#/definitions/protobufAny'
+      message:
+        type: string
+  v1SearchSourcesRequest:
+    type: object
+    properties:
+      bytecode:
+        type: string
+        title: / Bytecode to search the sources for
+  v1SearchSourcesResponse:
+    type: object
+    properties:
+      sources:
+        type: array
+        items:
+          $ref: '#/definitions/v1Source'
+  v1Source:
+    type: object
+    properties:
+      compilerSettings:
+        type: string
+        title: |-
+          / 'settings' key in Standard Input JSON
+          / (https://docs.soliditylang.org/en/latest/using-the-compiler.html#input-description)
+      compilerVersion:
+        type: string
+        title: Compiler version used to compile the contract
+      match:
+        $ref: '#/definitions/SourceMatch'
+        title: / Similar to Sourcify (see https://docs.sourcify.dev/docs/full-vs-partial-match/)
+      sourceFiles:
+        type: array
+        items:
+          $ref: '#/definitions/SourceSourceFile'
+      sourceType:
+        $ref: '#/definitions/SourceSourceType'
+      verificationType:
+        $ref: '#/definitions/SourceVerificationType'
+  v1VerifyResponse:
+    type: object
+    properties:
+      message:
+        type: string
+      result:
+        $ref: '#/definitions/VerifyResponseResult'
+      status:
+        type: integer
+        format: int32
+        title: / Status of 0 indicates successful verification
+  v1VerifySolidityMetadataRequest:
+    type: object
+    properties:
+      bytecode:
+        type: string
+        title: / Bytecode to compare local compilation result with
+      chosenContract:
+        type: integer
+        format: int32
+        description: |-
+          / (optional) index of the contract, if the provided files contain multiple metadata files (i.e. multiple contracts).
+          / By default, the first file is considered as a target contract.
+      compilerVersion:
+        type: string
+        title: / Compiler version used to compile the contract
+      sourcesFiles:
+        type: object
+        additionalProperties:
+          type: string
+        title: / Metadata along with actual sources
+  v1VerifySolidityMultiPartRequest:
+    type: object
+    properties:
+      bytecode:
+        type: string
+        title: / Bytecode to compare local compilation result with
+      compilerVersion:
+        type: string
+        title: / Compiler version used to compile the contract
+      evmVersion:
+        type: string
+        title: / Version of the EVM to compile for
+      libraries:
+        type: object
+        additionalProperties:
+          type: string
+        title: / Map from a library name to its address
+      optimizationRuns:
+        type: integer
+        format: int32
+        title: |-
+          / If present, optimizations are enabled with specified number of runs,
+          / otherwise optimizations are disabled
+      sourcesFiles:
+        type: object
+        additionalProperties:
+          type: string
+        title: / Map from a source file name to the actual source code
+  v1VerifySolidityStandardJsonRequest:
+    type: object
+    properties:
+      bytecode:
+        type: string
+        title: / Bytecode to compare local compilation result with
+      compilerVersion:
+        type: string
+        title: / Compiler version used to compile the contract
+      input:
+        type: string
+        title: / https://docs.soliditylang.org/en/latest/using-the-compiler.html#input-description
+  v1VerifyVyperMultiPartRequest:
+    type: object
+    properties:
+      bytecode:
+        type: string
+        title: / Bytecode to compare local compilation result with
+      compilerVersion:
+        type: string
+        title: / Compiler version used to compile the contract
+      evmVersion:
+        type: string
+        title: / Version of the EVM to compile for
+      optimizations:
+        type: boolean
+        title: / Flag enabling optimizations
+      sourceFiles:
+        type: object
+        additionalProperties:
+          type: string
+        title: / Source file name to the actual source code

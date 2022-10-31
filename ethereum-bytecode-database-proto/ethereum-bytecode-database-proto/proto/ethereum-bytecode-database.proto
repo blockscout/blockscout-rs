@@ -1,0 +1,149 @@
+syntax = "proto3";
+
+package blockscout.ethereumBytecodeDatabase.v1;
+
+option go_package = "github.com/blockscout/blockscout-rs/ethereum-bytecode-database";
+
+service CreationBytecodeDatabase {
+  rpc VerifySolidityMultiPart(VerifySolidityMultiPartRequest) returns (VerifyResponse) {}
+
+  rpc VerifySolidityStandardJson(VerifySolidityStandardJsonRequest) returns (VerifyResponse) {}
+
+  rpc VerifySolidityMetadata(VerifySolidityMetadataRequest) returns (VerifyResponse) {}
+
+  rpc VerifyVyperMultiPart(VerifyVyperMultiPartRequest) returns (VerifyResponse) {}
+
+  rpc SearchSources(SearchSourcesRequest) returns (SearchSourcesResponse) {}
+}
+
+service DeployedBytecodeDatabase {
+  rpc VerifySolidityMultiPart(VerifySolidityMultiPartRequest) returns (VerifyResponse) {}
+
+  rpc VerifySolidityStandardJson(VerifySolidityStandardJsonRequest) returns (VerifyResponse) {}
+
+  rpc VerifySolidityMetadata(VerifySolidityMetadataRequest) returns (VerifyResponse) {}
+
+  rpc VerifyVyperMultiPart(VerifyVyperMultiPartRequest) returns (VerifyResponse) {}
+
+  rpc SearchSources(SearchSourcesRequest) returns (SearchSourcesResponse) {}
+}
+
+message Source {
+  // Compiler version used to compile the contract
+  string compiler_version = 1;
+  /// 'settings' key in Standard Input JSON
+  /// (https://docs.soliditylang.org/en/latest/using-the-compiler.html#input-description)
+  string compiler_settings = 2;
+
+  enum Match {
+    MATCH_UNSPECIFIED = 0;
+    PARTIAL = 1;
+    FULL = 2;
+  }
+  /// Similar to Sourcify (see https://docs.sourcify.dev/docs/full-vs-partial-match/)
+  Match match = 99;
+
+  enum SourceType {
+    SOURCE_TYPE_UNSPECIFIED = 0;
+    SOLIDITY = 1;
+    VYPER = 2;
+    YUL = 3;
+  }
+  SourceType source_type = 3;
+
+  enum VerificationType {
+    VERIFICATION_TYPE_UNSPECIFIED = 0;
+    MULTI_PART_FILES = 1;
+    STANDARD_JSON = 2;
+    METADATA = 3;
+  };
+  VerificationType verification_type = 4;
+
+  message SourceFile {
+    string name = 1;
+    string content =  2;
+  }
+  repeated SourceFile source_files = 5;
+}
+
+message VerifySolidityMultiPartRequest {
+  /// Bytecode to compare local compilation result with
+  string bytecode = 1;
+  /// Compiler version used to compile the contract
+  string compiler_version = 2;
+  /// Version of the EVM to compile for
+  string evm_version = 3;
+  /// If present, optimizations are enabled with specified number of runs,
+  /// otherwise optimizations are disabled
+  optional int32 optimization_runs = 4;
+  /// Map from a source file name to the actual source code
+  map<string, string> sources_files = 5;
+  /// Map from a library name to its address
+  map<string, string> libraries = 6;
+}
+
+message VerifySolidityStandardJsonRequest {
+  /// Bytecode to compare local compilation result with
+  string bytecode = 1;
+  /// Compiler version used to compile the contract
+  string compiler_version = 2;
+  /// https://docs.soliditylang.org/en/latest/using-the-compiler.html#input-description
+  string input = 3;
+}
+
+
+message VerifySolidityMetadataRequest {
+  /// Bytecode to compare local compilation result with
+  string bytecode = 1;
+  /// Compiler version used to compile the contract
+  string compiler_version = 2;
+  /// Metadata along with actual sources
+  map<string, string> sources_files = 5;
+  /// (optional) index of the contract, if the provided files contain multiple metadata files (i.e. multiple contracts).
+  /// By default, the first file is considered as a target contract.
+  int32 chosen_contract = 4;
+}
+
+message VerifyVyperMultiPartRequest {
+  /// Bytecode to compare local compilation result with
+  string bytecode = 1;
+  /// Compiler version used to compile the contract
+  string compiler_version = 2;
+  /// Version of the EVM to compile for
+  string evm_version = 3;
+  /// Flag enabling optimizations
+  bool optimizations = 4;
+  /// Source file name to the actual source code
+  map<string, string> source_files = 5;
+}
+
+message VerifyResponse {
+  string message = 1;
+  /// Status of 0 indicates successful verification
+  int32 status = 2;
+
+  message Result {
+    /// The name of the file verified contract was located at
+    string file_name = 1;
+    /// The name of the contract which was verified
+    string contract_name = 2;
+    /// A source used for the verification
+    Source source = 4;
+    /// Constructor arguments used for deploying verified contract
+    /// (exists only for creation inputs)
+    optional string constructor_arguments = 5;
+    /// Contract abi (https://docs.soliditylang.org/en/latest/abi-spec.html?highlight=abi#json);
+    /// (does not exist for Yul contracts)
+    optional string abi = 6;
+  }
+  Result result = 3;
+}
+
+message SearchSourcesRequest {
+  /// Bytecode to search the sources for
+  string bytecode = 1;
+}
+
+message SearchSourcesResponse {
+  repeated Source sources = 1;
+}
