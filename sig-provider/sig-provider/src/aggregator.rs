@@ -1,5 +1,5 @@
 use crate::SignatureSource;
-use ethabi::ParamType;
+use ethabi::{ParamType, Token};
 use sig_provider_proto::blockscout::sig_provider::v1::{Abi, Argument};
 use std::{collections::HashSet, sync::Arc};
 
@@ -73,18 +73,25 @@ impl SourceAggregator {
         }
         let hex_sig = hex::encode(&tx_input[..4]);
         let sigs = self.get_function_signatures(&hex_sig).await?;
+        let found_signatures = sigs.len();
         sigs.into_iter()
             .filter_map(|sig| {
-                parse_signature(&sig).and_then(|(name, args)| {
-                    parse_args(&args, &tx_input[4..]).map(|inputs| Abi {
-                        name: name.into(),
-                        inputs,
-                    })
+                let (name, args) = parse_signature(&sig)?;
+                let values = decode_txinput(&args, &tx_input[4..])?;
+                let inputs = parse_args("arg".into(), &args, &values);
+                Some(Abi {
+                    name: name.into(),
+                    inputs,
                 })
             })
             .next()
             .ok_or_else(|| {
-                anyhow::Error::msg("could not find any signature that fits given tx input")
+                anyhow::Error::msg(
+                    format!(
+                        "could not find any signature that fits given tx input; found {} signatures, but could not fit arguments into any of them", 
+                        found_signatures
+                    )
+                )
             })
     }
 
@@ -110,7 +117,7 @@ fn parse_signature(sig: &str) -> Option<(&str, Vec<ParamType>)> {
         .map(|params| (name, params))
 }
 
-fn parse_args(args: &[ParamType], tx_args: &[u8]) -> Option<Vec<Argument>> {
+fn decode_txinput(args: &[ParamType], tx_args: &[u8]) -> Option<Vec<Token>> {
     let decoded = ethabi::decode(args, tx_args).ok()?;
 
     // decode will not fail if it decodes only part of the input data
@@ -119,19 +126,32 @@ fn parse_args(args: &[ParamType], tx_args: &[u8]) -> Option<Vec<Argument>> {
     if tx_args != encoded {
         return None;
     }
+    Some(decoded)
+}
 
+fn parse_arg(name: String, param: &ParamType, value: &Token) -> Argument {
+    let components = match (param, value) {
+        (ParamType::Tuple(param), Token::Tuple(value)) => {
+            parse_args(format!("{}_", name), &param, &value)
+        }
+        _ => Default::default(),
+    };
+    Argument {
+        name,
+        r#type: param.to_string(),
+        components,
+        value: value.to_string(),
+    }
+}
+
+fn parse_args(pref: String, args: &[ParamType], values: &[Token]) -> Vec<Argument> {
     let inputs = args
         .iter()
-        .zip(decoded.into_iter())
+        .zip(values.into_iter())
         .enumerate()
-        .map(|(index, (param, value))| Argument {
-            name: format!("arg{}", index),
-            r#type: param.to_string(),
-            components: Default::default(),
-            value: value.to_string(),
-        })
+        .map(|(index, (arg, value))| parse_arg(format!("{}{}", pref, index), arg, value))
         .collect();
-    Some(inputs)
+    inputs
 }
 
 #[cfg(test)]
@@ -139,6 +159,7 @@ mod tests {
     use crate::sources::MockSignatureSource;
 
     use super::*;
+    use ethabi::ethereum_types::{H160, U256};
     use pretty_assertions::assert_eq;
 
     #[tokio::test]
@@ -215,5 +236,105 @@ mod tests {
                 .unwrap();
             assert_eq!(abi, function);
         }
+    }
+
+    fn encode_tuple() -> String {
+        use ethabi::Token::*;
+        let res = ethabi::encode(&vec![
+            Tuple(vec![
+                Uint(U256::from_dec_str("123456789").unwrap()),
+                Address(H160(
+                    hex::decode("00000000219ab540356cbb839cbe05303d7705fa")
+                        .unwrap()
+                        .try_into()
+                        .unwrap(),
+                )),
+                Bytes(vec![123]),
+            ]),
+            Tuple(vec![
+                Uint(U256::from_dec_str("123").unwrap()),
+                FixedArray(vec![
+                    FixedBytes(vec![11, 12, 13, 14]),
+                    FixedBytes(vec![101, 102, 103, 104]),
+                ]),
+            ]),
+        ]);
+        hex::encode(&res)
+    }
+
+    #[tokio::test]
+    async fn function_tuple() {
+        let encoded = encode_tuple();
+        let input = "68705463".to_string() + &encoded;
+
+        let mut source = MockSignatureSource::new();
+        source
+            .expect_get_function_signatures()
+            .with(mockall::predicate::eq("68705463"))
+            .times(1)
+            .returning(|_| {
+                Ok(vec![
+                    "test((uint256,address,bytes),(uint8,bytes32[2]))".into()
+                ])
+            });
+        let source = Arc::new(source);
+
+        let agg = Arc::new(SourceAggregator::new(vec![source.clone()]));
+
+        let function = agg
+            .get_function_abi(&hex::decode(input).unwrap())
+            .await
+            .unwrap();
+
+        let expected = Abi {
+            name: "test".into(),
+            inputs: vec![
+                Argument {
+                    name: "arg0".into(),
+                    r#type: "(uint256,address,bytes)".into(),
+                    components: vec![
+                        Argument {
+                            name: "arg0_0".into(),
+                            r#type: "uint256".into(),
+                            components: vec![],
+                            value: "75bcd15".into(),
+                        },
+                        Argument {
+                            name: "arg0_1".into(),
+                            r#type: "address".into(),
+                            components: vec![],
+                            value: "00000000219ab540356cbb839cbe05303d7705fa".into(),
+                        },
+                        Argument {
+                            name: "arg0_2".into(),
+                            r#type: "bytes".into(),
+                            components: vec![],
+                            value: "7b".into(),
+                        },
+                    ],
+                    value: "(75bcd15,00000000219ab540356cbb839cbe05303d7705fa,7b)".into(),
+                },
+                Argument {
+                    name: "arg1".into(),
+                    r#type: "(uint8,bytes32[2])".into(),
+                    components: vec![
+                        Argument {
+                            name: "arg1_0".into(),
+                            r#type: "uint8".into(),
+                            components: vec![],
+                            value: "7b".into(),
+                        },
+                        Argument {
+                            name: "arg1_1".into(),
+                            r#type: "bytes32[2]".into(),
+                            components: vec![],
+                            value: "[0b0c0d0e00000000000000000000000000000000000000000000000000000000,6566676800000000000000000000000000000000000000000000000000000000]".into(),
+                        },
+                    ],
+                    value: "(7b,[0b0c0d0e00000000000000000000000000000000000000000000000000000000,6566676800000000000000000000000000000000000000000000000000000000])".into(),
+                },
+            ],
+        };
+        assert_eq!(expected, function);
     }
 }
