@@ -28,6 +28,10 @@ service DeployedBytecodeDatabase {
   rpc SearchSources(SearchSourcesRequest) returns (SearchSourcesResponse) {}
 }
 
+service Sourcify {
+  rpc Verify(VerifySourcifyRequest) returns (VerifyResponse) {}
+}
+
 message Source {
   // Compiler version used to compile the contract
   string compiler_version = 1;
@@ -95,8 +99,6 @@ message VerifySolidityStandardJsonRequest {
 message VerifySolidityMetadataRequest {
   /// Bytecode to compare local compilation result with
   string bytecode = 1;
-  /// Compiler version used to compile the contract
-  string compiler_version = 2;
   /// Metadata along with actual sources
   map<string, string> sources_files = 5;
   /// (optional) index of the contract, if the provided files contain multiple metadata files (i.e. multiple contracts).
@@ -146,4 +148,16 @@ message SearchSourcesRequest {
 
 message SearchSourcesResponse {
   repeated Source sources = 1;
+}
+
+message VerifySourcifyRequest {
+  /// Address of the contract to be verified
+  string address = 1;
+  /// The chain (network) the contract was deployed to
+  /// (https://docs.sourcify.dev/docs/api/chains/)
+  string chain = 2;
+  /// Files required for verification (see Sourcify Api)
+  map<string, string> sources_files = 3;
+  // (optional) see Sourcify Api
+  optional int32 chosenContract = 4;
 }

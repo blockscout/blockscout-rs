@@ -5,31 +5,12 @@ info:
 tags:
   - name: CreationBytecodeDatabase
   - name: DeployedBytecodeDatabase
+  - name: Sourcify
 consumes:
   - application/json
 produces:
   - application/json
 paths:
-  /bytecodes/creationInputs/sources/solidity:verifyMetadata:
-    post:
-      operationId: CreationBytecodeDatabase_VerifySolidityMetadata
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1VerifyResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/rpcStatus'
-      parameters:
-        - name: body
-          in: body
-          required: true
-          schema:
-            $ref: '#/definitions/v1VerifySolidityMetadataRequest'
-      tags:
-        - CreationBytecodeDatabase
   /bytecodes/creationInputs/sources/solidity:verifyMultiPart:
     post:
       operationId: CreationBytecodeDatabase_VerifySolidityMultiPart
@@ -110,26 +91,6 @@ paths:
             $ref: '#/definitions/v1SearchSourcesRequest'
       tags:
         - CreationBytecodeDatabase
-  /bytecodes/deployedBytecodes/sources/solidity:verifyMetadata:
-    post:
-      operationId: DeployedBytecodeDatabase_VerifySolidityMetadata
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1VerifyResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/rpcStatus'
-      parameters:
-        - name: body
-          in: body
-          required: true
-          schema:
-            $ref: '#/definitions/v1VerifySolidityMetadataRequest'
-      tags:
-        - DeployedBytecodeDatabase
   /bytecodes/deployedBytecodes/sources/solidity:verifyMultiPart:
     post:
       operationId: DeployedBytecodeDatabase_VerifySolidityMultiPart
@@ -210,6 +171,26 @@ paths:
             $ref: '#/definitions/v1SearchSourcesRequest'
       tags:
         - DeployedBytecodeDatabase
+  /sourcify:verify:
+    post:
+      operationId: Sourcify_Verify
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1VerifyResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1VerifySourcifyRequest'
+      tags:
+        - Sourcify
 definitions:
   SourceMatch:
     type: string
@@ -327,26 +308,6 @@ definitions:
         type: integer
         format: int32
         title: / Status of 0 indicates successful verification
-  v1VerifySolidityMetadataRequest:
-    type: object
-    properties:
-      bytecode:
-        type: string
-        title: / Bytecode to compare local compilation result with
-      chosenContract:
-        type: integer
-        format: int32
-        description: |-
-          / (optional) index of the contract, if the provided files contain multiple metadata files (i.e. multiple contracts).
-          / By default, the first file is considered as a target contract.
-      compilerVersion:
-        type: string
-        title: / Compiler version used to compile the contract
-      sourcesFiles:
-        type: object
-        additionalProperties:
-          type: string
-        title: / Metadata along with actual sources
   v1VerifySolidityMultiPartRequest:
     type: object
     properties:
@@ -387,6 +348,26 @@ definitions:
       input:
         type: string
         title: / https://docs.soliditylang.org/en/latest/using-the-compiler.html#input-description
+  v1VerifySourcifyRequest:
+    type: object
+    properties:
+      address:
+        type: string
+        title: / Address of the contract to be verified
+      chain:
+        type: string
+        title: |-
+          / The chain (network) the contract was deployed to
+          / (https://docs.sourcify.dev/docs/api/chains/)
+      chosenContract:
+        type: integer
+        format: int32
+        title: (optional) see Sourcify Api
+      sourcesFiles:
+        type: object
+        additionalProperties:
+          type: string
+        title: / Files required for verification (see Sourcify Api)
   v1VerifyVyperMultiPartRequest:
     type: object
     properties:

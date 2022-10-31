@@ -11,9 +11,9 @@ http:
       post: /bytecodes/creationInputs/sources/solidity:verifyStandardJson
       body: "*"
 
-    - selector: blockscout.ethereumBytecodeDatabase.v1.CreationBytecodeDatabase.VerifySolidityMetadata
-      post: /bytecodes/creationInputs/sources/solidity:verifyMetadata
-      body: "*"
+#    - selector: blockscout.ethereumBytecodeDatabase.v1.CreationBytecodeDatabase.VerifySolidityMetadata
+#      post: /bytecodes/creationInputs/sources/solidity:verifyMetadata
+#      body: "*"
 
     - selector: blockscout.ethereumBytecodeDatabase.v1.CreationBytecodeDatabase.VerifyVyperMultiPart
       post: /bytecodes/creationInputs/sources/vyper:verifyMultiPart
@@ -32,9 +32,9 @@ http:
       post: /bytecodes/deployedBytecodes/sources/solidity:verifyStandardJson
       body: "*"
 
-    - selector: blockscout.ethereumBytecodeDatabase.v1.DeployedBytecodeDatabase.VerifySolidityMetadata
-      post: /bytecodes/deployedBytecodes/sources/solidity:verifyMetadata
-      body: "*"
+#    - selector: blockscout.ethereumBytecodeDatabase.v1.DeployedBytecodeDatabase.VerifySolidityMetadata
+#      post: /bytecodes/deployedBytecodes/sources/solidity:verifyMetadata
+#      body: "*"
 
     - selector: blockscout.ethereumBytecodeDatabase.v1.DeployedBytecodeDatabase.VerifyVyperMultiPart
       post: /bytecodes/deployedBytecodes/sources/vyper:verifyMultiPart
@@ -42,4 +42,9 @@ http:
 
     - selector: blockscout.ethereumBytecodeDatabase.v1.DeployedBytecodeDatabase.SearchSources
       post: /bytecodes/deployedBytecodes/sources:search
+      body: "*"
+
+
+    - selector: blockscout.ethereumBytecodeDatabase.v1.Sourcify.Verify
+      post: /sourcify:verify
       body: "*"
