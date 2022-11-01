@@ -132,7 +132,7 @@ fn decode_txinput(args: &[ParamType], tx_args: &[u8]) -> Option<Vec<Token>> {
 fn parse_arg(name: String, param: &ParamType, value: &Token) -> Argument {
     let components = match (param, value) {
         (ParamType::Tuple(param), Token::Tuple(value)) => {
-            parse_args(format!("{}_", name), &param, &value)
+            parse_args(format!("{}_", name), param, value)
         }
         _ => Default::default(),
     };
@@ -147,7 +147,7 @@ fn parse_arg(name: String, param: &ParamType, value: &Token) -> Argument {
 fn parse_args(pref: String, args: &[ParamType], values: &[Token]) -> Vec<Argument> {
     let inputs = args
         .iter()
-        .zip(values.into_iter())
+        .zip(values.iter())
         .enumerate()
         .map(|(index, (arg, value))| parse_arg(format!("{}{}", pref, index), arg, value))
         .collect();
