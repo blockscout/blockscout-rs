@@ -1,11 +1,14 @@
 pub mod fourbyte;
 pub mod sigeth;
 
+use async_trait::async_trait;
+use mockall::automock;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use std::time::Duration;
 
-#[async_trait::async_trait]
+#[automock]
+#[async_trait]
 pub trait SignatureSource {
     async fn create_signatures(&self, abi: &str) -> Result<(), anyhow::Error>;
     // Resulting signatures should be sorted in priority descending order (first - max priority)

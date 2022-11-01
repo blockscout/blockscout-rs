@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use async_trait::async_trait;
 use sig_provider::SourceAggregator;
 use sig_provider_proto::blockscout::sig_provider::v1::{
@@ -7,6 +5,7 @@ use sig_provider_proto::blockscout::sig_provider::v1::{
     CreateSignaturesRequest, CreateSignaturesResponse, GetEventAbiRequest, GetEventAbiResponse,
     GetFunctionAbiRequest, GetFunctionAbiResponse,
 };
+use std::sync::Arc;
 
 pub struct Service {
     agg: Arc<SourceAggregator>,
@@ -40,8 +39,15 @@ impl AbiService for Service {
         request: tonic::Request<GetFunctionAbiRequest>,
     ) -> Result<tonic::Response<GetFunctionAbiResponse>, tonic::Status> {
         let request = request.into_inner();
+        let bytes = hex::decode(
+            request
+                .tx_input
+                .strip_prefix("0x")
+                .unwrap_or(&request.tx_input),
+        )
+        .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
         self.agg
-            .get_function_abi(request.tx_input)
+            .get_function_abi(&bytes)
             .await
             .map(|abi| tonic::Response::new(GetFunctionAbiResponse { abi: Some(abi) }))
             .map_err(|e| tonic::Status::internal(e.to_string()))
