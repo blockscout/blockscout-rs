@@ -57,9 +57,10 @@ message Source {
 
   enum VerificationType {
     VERIFICATION_TYPE_UNSPECIFIED = 0;
-    MULTI_PART_FILES = 1;
-    STANDARD_JSON = 2;
-    METADATA = 3;
+    FLATTENED_CONTRACT = 1;
+    MULTI_PART_FILES = 2;
+    STANDARD_JSON = 3;
+    METADATA = 4;
   };
   VerificationType verification_type = 4;
 

@@ -218,6 +218,7 @@ definitions:
     type: string
     enum:
       - VERIFICATION_TYPE_UNSPECIFIED
+      - FLATTENED_CONTRACT
       - MULTI_PART_FILES
       - STANDARD_JSON
       - METADATA
