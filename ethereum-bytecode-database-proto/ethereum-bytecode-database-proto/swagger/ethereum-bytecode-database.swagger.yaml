@@ -214,15 +214,6 @@ definitions:
       - VYPER
       - YUL
     default: SOURCE_TYPE_UNSPECIFIED
-  SourceVerificationType:
-    type: string
-    enum:
-      - VERIFICATION_TYPE_UNSPECIFIED
-      - FLATTENED_CONTRACT
-      - MULTI_PART_FILES
-      - STANDARD_JSON
-      - METADATA
-    default: VERIFICATION_TYPE_UNSPECIFIED
   VerifyResponseResult:
     type: object
     properties:
@@ -296,8 +287,6 @@ definitions:
           $ref: '#/definitions/SourceSourceFile'
       sourceType:
         $ref: '#/definitions/SourceSourceType'
-      verificationType:
-        $ref: '#/definitions/SourceVerificationType'
   v1VerifyResponse:
     type: object
     properties:

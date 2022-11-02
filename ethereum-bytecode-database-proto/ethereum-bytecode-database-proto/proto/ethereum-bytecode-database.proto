@@ -55,15 +55,6 @@ message Source {
   }
   SourceType source_type = 3;
 
-  enum VerificationType {
-    VERIFICATION_TYPE_UNSPECIFIED = 0;
-    FLATTENED_CONTRACT = 1;
-    MULTI_PART_FILES = 2;
-    STANDARD_JSON = 3;
-    METADATA = 4;
-  };
-  VerificationType verification_type = 4;
-
   message SourceFile {
     string name = 1;
     string content =  2;
