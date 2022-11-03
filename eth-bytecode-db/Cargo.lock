@@ -3,13 +3,13 @@
 version = 3
 
 [[package]]
-name = "ethereum-bytecode-database"
+name = "eth-bytecode-db"
 version = "0.1.0"
 
 [[package]]
-name = "ethereum-bytecode-database-proto"
+name = "eth-bytecode-db-proto"
 version = "0.1.0"
 
 [[package]]
-name = "ethereum-bytecode-database-server"
+name = "eth-bytecode-db-server"
 version = "0.1.0"
