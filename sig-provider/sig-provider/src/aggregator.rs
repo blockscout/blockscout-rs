@@ -106,8 +106,11 @@ impl SourceAggregator {
         sigs.into_iter()
             .filter_map(|sig| {
                 let (name, args) = parse_signature(&sig)?;
-                let values = decode_log(name.to_string(), &args, raw.clone())?;
-                let inputs = parse_args("arg".into(), &args, &values);
+                let (values, indexed) = decode_log(name.to_string(), &args, raw.clone())?;
+                let mut inputs = parse_args("arg".into(), &args, &values);
+                for (input, indexed) in inputs.iter_mut().zip(indexed) {
+                    input.indexed = Some(indexed);
+                }
                 Some(Abi {
                     name: name.into(),
                     inputs,
@@ -150,7 +153,7 @@ fn decode_txinput(args: &[ParamType], tx_args: &[u8]) -> Option<Vec<Token>> {
     Some(decoded)
 }
 
-fn decode_log(name: String, args: &[ParamType], raw: RawLog) -> Option<Vec<Token>> {
+fn decode_log(name: String, args: &[ParamType], raw: RawLog) -> Option<(Vec<Token>, Vec<bool>)> {
     const MAX_PERMUTATIONS: usize = 10000;
     // this is indeed can be very long
     // there are better ways to iterate over valid indexed permutations
@@ -168,12 +171,12 @@ fn decode_log(name: String, args: &[ParamType], raw: RawLog) -> Option<Vec<Token
         }
         let inputs = args
             .iter()
-            .zip(perm)
+            .zip(perm.iter())
             .enumerate()
             .map(|(ind, (param, indexed))| EventParam {
                 name: format!("{}", ind),
                 kind: param.clone(),
-                indexed,
+                indexed: *indexed,
             })
             .collect();
         let event = Event {
@@ -186,7 +189,7 @@ fn decode_log(name: String, args: &[ParamType], raw: RawLog) -> Option<Vec<Token
             .ok()
             .map(|log| log.params.into_iter().map(|param| param.value).collect());
         if let Some(tokens) = tokens {
-            return Some(tokens);
+            return Some((tokens, perm));
         }
     }
     None
@@ -203,6 +206,7 @@ fn parse_arg(name: String, param: &ParamType, value: &Token) -> Argument {
         name,
         r#type: param.to_string(),
         components,
+        indexed: None,
         value: value.to_string(),
     }
 }
@@ -236,6 +240,7 @@ mod tests {
                         name: "arg0".into(),
                         r#type: "address".into(),
                         components: vec![],
+                        indexed: None,
                         value: "00000000219ab540356cbb839cbe05303d7705fa".into(),
                     }],
                 },
@@ -244,34 +249,44 @@ mod tests {
                 "70a082310000000000000000000000000000000000000000000000000000000000bc61591234567812345678000000000000000000000000000000000000000000000000",
                 Abi {
                     name: "branch_passphrase_public".into(),
-                    inputs: vec![Argument {
-                        name: "arg0".into(),
-                        r#type: "uint256".into(),
-                        components: vec![],
-                        value: "bc6159".into(), // hex number 123456789
-                    }, Argument {
-                        name: "arg1".into(),
-                        r#type: "bytes8".into(),
-                        components: vec![],
-                        value: "1234567812345678".into(),
-                    }],
+                    inputs: vec![
+                        Argument {
+                            name: "arg0".into(),
+                            r#type: "uint256".into(),
+                            components: vec![],
+                            indexed: None,
+                            value: "bc6159".into(), // hex number 123456789
+                        },
+                        Argument {
+                            name: "arg1".into(),
+                            r#type: "bytes8".into(),
+                            components: vec![],
+                            indexed: None,
+                            value: "1234567812345678".into(),
+                        },
+                    ],
                 },
             ),
             (
                 "70a082310000000000000000000000000000000000000000000000000000000000bc615900000000000000000000000000000000219ab540356cbb839cbe05303d7705fa",
                 Abi {
                     name: "passphrase_calculate_transfer".into(),
-                    inputs: vec![Argument {
-                        name: "arg0".into(),
-                        r#type: "uint64".into(),
-                        components: vec![],
-                        value: "bc6159".into(), // hex number 123456789
-                    }, Argument {
-                        name: "arg1".into(),
-                        r#type: "address".into(),
-                        components: vec![],
-                        value: "00000000219ab540356cbb839cbe05303d7705fa".into(),
-                    }],
+                    inputs: vec![
+                        Argument {
+                            name: "arg0".into(),
+                            r#type: "uint64".into(),
+                            components: vec![],
+                            indexed: None,
+                            value: "bc6159".into(), // hex number 123456789
+                        },
+                        Argument {
+                            name: "arg1".into(),
+                            r#type: "address".into(),
+                            components: vec![],
+                            indexed: None,
+                            value: "00000000219ab540356cbb839cbe05303d7705fa".into(),
+                        },
+                    ],
                 },
             ),
         ];
@@ -360,21 +375,25 @@ mod tests {
                             name: "arg0_0".into(),
                             r#type: "uint256".into(),
                             components: vec![],
+                            indexed: None,
                             value: "75bcd15".into(),
                         },
                         Argument {
                             name: "arg0_1".into(),
                             r#type: "address".into(),
                             components: vec![],
+                            indexed: None,
                             value: "00000000219ab540356cbb839cbe05303d7705fa".into(),
                         },
                         Argument {
                             name: "arg0_2".into(),
                             r#type: "bytes".into(),
                             components: vec![],
+                            indexed: None,
                             value: "7b".into(),
                         },
                     ],
+                    indexed: None,
                     value: "(75bcd15,00000000219ab540356cbb839cbe05303d7705fa,7b)".into(),
                 },
                 Argument {
@@ -385,15 +404,18 @@ mod tests {
                             name: "arg1_0".into(),
                             r#type: "uint8".into(),
                             components: vec![],
+                            indexed: None,
                             value: "7b".into(),
                         },
                         Argument {
                             name: "arg1_1".into(),
                             r#type: "bytes32[2]".into(),
                             components: vec![],
+                            indexed: None,
                             value: "[0b0c0d0e00000000000000000000000000000000000000000000000000000000,6566676800000000000000000000000000000000000000000000000000000000]".into(),
                         },
                     ],
+                    indexed: None,
                     value: "(7b,[0b0c0d0e00000000000000000000000000000000000000000000000000000000,6566676800000000000000000000000000000000000000000000000000000000])".into(),
                 },
             ],
@@ -439,18 +461,21 @@ mod tests {
                             name: "arg0".into(),
                             r#type: "address".into(),
                             components: vec![],
+                            indexed: Some(true),
                             value: "b8ace4d9bc469ddc8e788e636e817c299a1a8150".into(),
                         },
                         Argument {
                             name: "arg1".into(),
                             r#type: "address".into(),
                             components: vec![],
+                            indexed: Some(true),
                             value: "f76c5b19e86c256482f4aad1dae620a0c3ac0cd6".into(),
                         },
                         Argument {
                             name: "arg2".into(),
                             r#type: "uint256".into(),
                             components: vec![],
+                            indexed: Some(false),
                             value: "6acfc0".into(),
                         },
                     ],
@@ -479,12 +504,14 @@ mod tests {
                             name: "arg0".into(),
                             r#type: "uint112".into(),
                             components: vec![],
+                            indexed: Some(false),
                             value: "83ed9ef578babdb5c".into(),
                         },
                         Argument {
                             name: "arg1".into(),
                             r#type: "uint112".into(),
                             components: vec![],
+                            indexed: Some(false),
                             value: "bf05c05e3ce0f57a7e39".into(),
                         },
                     ],
@@ -527,36 +554,42 @@ mod tests {
                             name: "arg0".into(),
                             r#type: "address".into(),
                             components: vec![],
+                            indexed: Some(true),
                             value: "68b3465833fb72a70ecdf485e0e4c7bd8665fc45".into(),
                         },
                         Argument {
                             name: "arg1".into(),
                             r#type: "uint256".into(),
                             components: vec![],
+                            indexed: Some(true),
                             value: "220575d6e7e8797ad18d0d660c7e1ecf4e1a1ed1".into(),
                         },
                         Argument {
                             name: "arg2".into(),
                             r#type: "uint256".into(),
                             components: vec![],
+                            indexed: Some(false),
                             value: "30d98d59a960000".into(),
                         },
                         Argument {
                             name: "arg3".into(),
                             r#type: "uint256".into(),
                             components: vec![],
+                            indexed: Some(false),
                             value: "0".into(),
                         },
                         Argument {
                             name: "arg4".into(),
                             r#type: "uint256".into(),
                             components: vec![],
+                            indexed: Some(false),
                             value: "0".into(),
                         },
                         Argument {
                             name: "arg5".into(),
                             r#type: "address".into(),
                             components: vec![],
+                            indexed: Some(false),
                             value: "0000000000000000000000469ef5a473f28f3a21".into(),
                         },
                     ],
