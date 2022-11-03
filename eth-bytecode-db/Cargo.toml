@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "eth-bytecode-db",
+    "eth-bytecode-db-server",
+    "eth-bytecode-db-proto"
+]

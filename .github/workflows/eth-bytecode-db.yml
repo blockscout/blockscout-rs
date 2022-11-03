@@ -3,19 +3,19 @@ on:
     branches:
       - 'main'
     tags:
-      - 'ethereum-bytecode-database/v*'
+      - 'eth-bytecode-db/v*'
   pull_request:
 
 
-name: Test, lint and docker (ethereum-bytecode-database)
+name: Test, lint and docker (eth-bytecode-db)
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: blockscout/ethereum-bytecode-database
+  IMAGE_NAME: blockscout/eth-bytecode-db
 
 defaults:
   run:
-    working-directory: ethereum-bytecode-database
+    working-directory: eth-bytecode-db
 
 jobs:
   test:
@@ -101,7 +101,7 @@ jobs:
 #        id: regex
 #        with:
 #          text: ${{ github.ref }}
-#          regex: '^(refs\/tags\/ethereum-bytecode-database\/(v\d+\.\d+\.\d+))|(refs\/heads\/(main))$'
+#          regex: '^(refs\/tags\/eth-bytecode-db\/(v\d+\.\d+\.\d+))|(refs\/heads\/(main))$'
 #
 #      - name: Extract tag name
 #        id: tags_extractor
@@ -128,8 +128,8 @@ jobs:
 #      - name: Build and push
 #        uses: docker/build-push-action@v2
 #        with:
-#          context: "ethereum-bytecode-database/backend"
-#          file: "ethereum-bytecode-database/backend/Dockerfile"
+#          context: "eth-bytecode-db/backend"
+#          file: "eth-bytecode-db/backend/Dockerfile"
 #          push: ${{ steps.tags_extractor.outputs.tags != '' }}
 #          tags: ${{ steps.tags_extractor.outputs.tags }}
 #          labels: ${{ steps.meta.outputs.labels }}

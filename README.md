@@ -28,7 +28,7 @@ A set of services used by [Blockscout](https://blockscout.com/) blockchain explo
 4. [visualizer](visualizer/) - service for evm visualization such as:
    1. Solidity contract visualization using [sol2uml](https://www.npmjs.com/package/sol2uml)
 
-5. [ethereum-bytecode-database](ethereum-bytecode-database/) - verifies smart-contracts and allow to search for the sources via bytecodes  
+5. [eth-bytecode-db](eth-bytecode-db/) - Ethereum Bytecode Database. Verifies smart-contracts and searches for the sources via bytecodes  
 
 ## Contributing
 
