@@ -1,5 +1,5 @@
 [package]
-name = "ethereum-bytecode-database-proto"
+name = "eth-bytecode-db-proto"
 version = "0.1.0"
 edition = "2021"
 

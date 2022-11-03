@@ -10,8 +10,8 @@
    <img src="https://img.shields.io/github/workflow/status/blockscout/blockscout-rs/Test,%20lint%20and%20docker%20(visualizer)?label=visualizer&logo=github&style=plastic">
 </a>
 
-<a href="https://github.com/blockscout/blockscout-rs/actions/workflows/ethereum-bytecode-database.yml">
-   <img src="https://img.shields.io/github/workflow/status/blockscout/blockscout-rs/Test,%20lint%20and%20docker%20(ethereum-bytecode-database)?label=ethereum-bytecode-database&logo=github&style=plastic">
+<a href="https://github.com/blockscout/blockscout-rs/actions/workflows/eth-bytecode-db.yml">
+   <img src="https://img.shields.io/github/workflow/status/blockscout/blockscout-rs/Test,%20lint%20and%20docker%20(eth-bytecode-db)?label=eth-bytecode-db&logo=github&style=plastic">
 </a>
 
 
