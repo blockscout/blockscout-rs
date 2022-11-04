@@ -16,7 +16,7 @@ pub struct SolidityRouter {
 }
 
 fn new_region(region: Option<String>, endpoint: Option<String>) -> Option<Region> {
-    let region = region.unwrap_or_else(|| "".to_string());
+    let region = region.unwrap_or_default();
     if let Some(endpoint) = endpoint {
         return Some(Region::Custom { region, endpoint });
     }

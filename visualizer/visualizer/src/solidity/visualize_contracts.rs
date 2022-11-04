@@ -45,7 +45,7 @@ pub async fn visualize_contracts(
             .arg("--hideFilename")
             .args(["-f", "svg"])
             .arg("-o")
-            .arg(&output_file)
+            .arg(output_file)
             .call()
             .await?;
 
