@@ -54,10 +54,10 @@ pub async fn visualize_storage(
             .arg("-c")
             .arg(&request.contract_name)
             .arg("-cf")
-            .arg(&file_name)
+            .arg(file_name)
             .args(["-f", "svg"])
             .arg("-o")
-            .arg(&output_file)
+            .arg(output_file)
             .call()
             .await?;
 
