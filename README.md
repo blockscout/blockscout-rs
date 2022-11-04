@@ -10,6 +10,10 @@
    <img src="https://img.shields.io/github/workflow/status/blockscout/blockscout-rs/Test,%20lint%20and%20docker%20(visualizer)?label=visualizer&logo=github&style=plastic">
 </a>
 
+<a href="https://github.com/blockscout/blockscout-rs/actions/workflows/eth-bytecode-db.yml">
+   <img src="https://img.shields.io/github/workflow/status/blockscout/blockscout-rs/Test,%20lint%20and%20docker%20(eth-bytecode-db)?label=eth-bytecode-db&logo=github&style=plastic">
+</a>
+
 
 A set of services used by [Blockscout](https://blockscout.com/) blockchain explorer, written in Rust.
 
@@ -23,6 +27,8 @@ A set of services used by [Blockscout](https://blockscout.com/) blockchain explo
 
 4. [visualizer](visualizer/) - service for evm visualization such as:
    1. Solidity contract visualization using [sol2uml](https://www.npmjs.com/package/sol2uml)
+
+5. [eth-bytecode-db](eth-bytecode-db/) - Ethereum Bytecode Database. Verifies smart-contracts and searches for the sources via bytecodes  
 
 ## Contributing
 
