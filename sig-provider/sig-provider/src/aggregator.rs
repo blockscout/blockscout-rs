@@ -154,22 +154,22 @@ fn decode_txinput(args: &[ParamType], tx_args: &[u8]) -> Option<Vec<Token>> {
 }
 
 fn decode_log(name: String, args: &[ParamType], raw: RawLog) -> Option<(Vec<Token>, Vec<bool>)> {
-    const MAX_PERMUTATIONS: usize = 10000;
-    // this is indeed can be very long
-    // there are better ways to iterate over valid indexed permutations
-    // but right now we think this is okayish
-    for (ind, perm) in (0..raw.topics.len() - 1)
-        .into_iter()
-        .map(|_| true)
-        .chain((0..args.len() - raw.topics.len() + 1).map(|_| false))
-        .permutations(args.len())
+    const MAX_COMBINATIONS: usize = 10000;
+    // because we don't know, which fields are indexed
+    // we try to iterate over all possible combinations
+    // and find whatever decodes without errors
+    for (ind, indexes) in (0..args.len())
+        .combinations(raw.topics.len() - 1)
         .enumerate()
-        .dedup_by(|x, y| x.1 == y.1)
     {
-        if ind > MAX_PERMUTATIONS {
+        if ind > MAX_COMBINATIONS {
             break;
         }
-        let inputs = args
+        let mut perm = vec![false; args.len()];
+        for indexed in indexes {
+            perm[indexed] = true;
+        }
+        let inputs: Vec<_> = args
             .iter()
             .zip(perm.iter())
             .enumerate()
@@ -316,7 +316,7 @@ mod tests {
         }
     }
 
-    fn encode_tuple() -> String {
+    fn encode_tx_input_tuple() -> String {
         use ethabi::Token::*;
         let res = ethabi::encode(&vec![
             Tuple(vec![
@@ -342,7 +342,7 @@ mod tests {
 
     #[tokio::test]
     async fn function_tuple() {
-        let encoded = encode_tuple();
+        let encoded = encode_tx_input_tuple();
         let input = "68705463".to_string() + &encoded;
 
         let mut source = MockSignatureSource::new();
@@ -609,8 +609,65 @@ mod tests {
             let agg = Arc::new(SourceAggregator::new(vec![source.clone()]));
 
             let event = agg.get_event_abi(input).await.unwrap();
-            dbg!(&event);
             assert_eq!(abi, event);
         }
+    }
+
+    #[tokio::test]
+    #[ignore]
+    // right now this doesn't work as expected, but we'll fix it in https://github.com/blockscout/blockscout-rs/issues/165
+    async fn event_tuple() {
+        let input = RawLog {
+            data: hex::decode("000000000000000000000000b8ace4d9bc469ddc8e788e636e817c299a1a8150000000000000000000000000f76c5b19e86c256482f4aad1dae620a0c3ac0cd6")
+                .unwrap(),
+            topics: vec![
+                H256::from_slice(
+                    &hex::decode(
+                        "cf74b4e62f836eeedcd6f92120ffb5afea90e6fa490d36f8b81075e2a7de0cf7",
+                    )
+                    .unwrap(),
+                ),
+                H256::from_slice(
+                    &hex::decode(
+                        "000000000000000000000000b8ace4d9bc469ddc8e788e636e817c299a1a8150",
+                    )
+                    .unwrap(),
+                ),
+            ],
+        };
+        let sig = "Test((address,address),address)";
+        let abi = Abi {
+            name: "Test".into(),
+            inputs: vec![
+                Argument {
+                    name: "arg0".into(),
+                    r#type: "(address,address)".into(),
+                    components: vec![],
+                    indexed: Some(true),
+                    value: "000000000000000000000000b8ace4d9bc469ddc8e788e636e817c299a1a8150"
+                        .into(),
+                },
+                Argument {
+                    name: "arg1".into(),
+                    r#type: "address".into(),
+                    components: vec![],
+                    indexed: Some(false),
+                    value: "b8ace4d9bc469ddc8e788e636e817c299a1a8150".into(),
+                },
+            ],
+        };
+        let expected = hex::encode(input.topics[0].as_bytes());
+        let mut source = MockSignatureSource::new();
+        source
+            .expect_get_event_signatures()
+            .withf(move |hex| hex == expected)
+            .times(1)
+            .returning(|_| Ok(vec![sig.into()]));
+        let source = Arc::new(source);
+
+        let agg = Arc::new(SourceAggregator::new(vec![source.clone()]));
+
+        let event = agg.get_event_abi(input).await.unwrap();
+        assert_eq!(abi, event);
     }
 }
