@@ -614,8 +614,64 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
-    // right now this doesn't work as expected, but we'll fix it in https://github.com/blockscout/blockscout-rs/issues/165
+    async fn event_dynamic() {
+        let input = RawLog {
+            data: hex::decode(
+                "000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000097465737431323334350000000000000000000000000000000000000000000000",
+            )
+            .unwrap(),
+            topics: vec![
+                H256::from_slice(
+                    &hex::decode(
+                        "74cb234c0dd0ccac09c19041a69978ccb865f1f44a2877a009549898f6395b10",
+                    )
+                    .unwrap(),
+                ),
+                H256::from_slice(
+                    &hex::decode(
+                        "2c3138faa13a5122f618ced1b0b4be95398183af357f6769e61ee2bccacc8b54",
+                    )
+                    .unwrap(),
+                ),
+            ],
+        };
+        let sig = "Test(string,string)";
+        let abi = Abi {
+            name: "Test".into(),
+            inputs: vec![
+                Argument {
+                    name: "arg0".into(),
+                    r#type: "string".into(),
+                    components: vec![],
+                    indexed: Some(true),
+                    value: "2c3138faa13a5122f618ced1b0b4be95398183af357f6769e61ee2bccacc8b54"
+                        .into(),
+                },
+                Argument {
+                    name: "arg1".into(),
+                    r#type: "string".into(),
+                    components: vec![],
+                    indexed: Some(false),
+                    value: "test12345".into(),
+                },
+            ],
+        };
+        let expected = hex::encode(input.topics[0].as_bytes());
+        let mut source = MockSignatureSource::new();
+        source
+            .expect_get_event_signatures()
+            .withf(move |hex| hex == expected)
+            .times(1)
+            .returning(|_| Ok(vec![sig.into()]));
+        let source = Arc::new(source);
+
+        let agg = Arc::new(SourceAggregator::new(vec![source.clone()]));
+
+        let event = agg.get_event_abi(input).await.unwrap();
+        assert_eq!(abi, event);
+    }
+
+    #[tokio::test]
     async fn event_tuple() {
         let input = RawLog {
             data: hex::decode("000000000000000000000000b8ace4d9bc469ddc8e788e636e817c299a1a8150000000000000000000000000f76c5b19e86c256482f4aad1dae620a0c3ac0cd6")
@@ -623,7 +679,7 @@ mod tests {
             topics: vec![
                 H256::from_slice(
                     &hex::decode(
-                        "cf74b4e62f836eeedcd6f92120ffb5afea90e6fa490d36f8b81075e2a7de0cf7",
+                        "5db533d27f83c494aa583a6f8222343e612dd3efd69499ca6ae5dda6c6097df0",
                     )
                     .unwrap(),
                 ),
@@ -635,24 +691,42 @@ mod tests {
                 ),
             ],
         };
-        let sig = "Test((address,address),address)";
+        let sig = "Test(address,(address,address))";
         let abi = Abi {
             name: "Test".into(),
             inputs: vec![
                 Argument {
                     name: "arg0".into(),
-                    r#type: "(address,address)".into(),
+                    r#type: "address".into(),
                     components: vec![],
-                    indexed: Some(true),
-                    value: "000000000000000000000000b8ace4d9bc469ddc8e788e636e817c299a1a8150"
-                        .into(),
+                    indexed: Some(
+                        true,
+                    ),
+                    value: "b8ace4d9bc469ddc8e788e636e817c299a1a8150".into(),
                 },
                 Argument {
                     name: "arg1".into(),
-                    r#type: "address".into(),
-                    components: vec![],
-                    indexed: Some(false),
-                    value: "b8ace4d9bc469ddc8e788e636e817c299a1a8150".into(),
+                    r#type: "(address,address)".into(),
+                    components: vec![
+                        Argument {
+                            name: "arg1_0".into(),
+                            r#type: "address".into(),
+                            components: vec![],
+                            indexed: None,
+                            value: "b8ace4d9bc469ddc8e788e636e817c299a1a8150".into(),
+                        },
+                        Argument {
+                            name: "arg1_1".into(),
+                            r#type: "address".into(),
+                            components: vec![],
+                            indexed: None,
+                            value: "f76c5b19e86c256482f4aad1dae620a0c3ac0cd6".into(),
+                        },
+                    ],
+                    indexed: Some(
+                        false,
+                    ),
+                    value: "(b8ace4d9bc469ddc8e788e636e817c299a1a8150,f76c5b19e86c256482f4aad1dae620a0c3ac0cd6)".into(),
                 },
             ],
         };
