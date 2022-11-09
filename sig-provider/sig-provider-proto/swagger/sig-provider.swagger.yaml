@@ -110,6 +110,9 @@ definitions:
         type: array
         items:
           $ref: '#/definitions/v1Argument'
+      indexed:
+        type: boolean
+        title: this is present only in events
       name:
         type: string
       type:

@@ -22,8 +22,10 @@ message Argument {
   string name = 1;
   string type = 2;
   repeated Argument components = 3;
+  // this is present only in events
+  optional bool indexed = 4;
   // decoded value
-  string value = 4;
+  string value = 5;
 }
 
 message Abi {

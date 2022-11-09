@@ -1,5 +1,6 @@
 use crate::SignatureSource;
-use ethabi::{ParamType, Token};
+use ethabi::{Event, EventParam, ParamType, RawLog, Token};
+use itertools::Itertools;
 use sig_provider_proto::blockscout::sig_provider::v1::{Abi, Argument};
 use std::{collections::HashSet, sync::Arc};
 
@@ -95,12 +96,35 @@ impl SourceAggregator {
             })
     }
 
-    pub async fn get_event_abi(
-        &self,
-        _data: String,
-        _topics: Vec<String>,
-    ) -> Result<Abi, anyhow::Error> {
-        anyhow::bail!("unimplemented")
+    pub async fn get_event_abi(&self, raw: RawLog) -> Result<Abi, anyhow::Error> {
+        if raw.topics.is_empty() {
+            anyhow::bail!("log should contain at least one topic");
+        }
+        let hex_sig = hex::encode(raw.topics[0].as_bytes());
+        let sigs = self.get_event_signatures(&hex_sig).await?;
+        let found_signatures = sigs.len();
+        sigs.into_iter()
+            .filter_map(|sig| {
+                let (name, args) = parse_signature(&sig)?;
+                let (values, indexed) = decode_log(name.to_string(), &args, raw.clone())?;
+                let mut inputs = parse_args("arg".into(), &args, &values);
+                for (input, indexed) in inputs.iter_mut().zip(indexed) {
+                    input.indexed = Some(indexed);
+                }
+                Some(Abi {
+                    name: name.into(),
+                    inputs,
+                })
+            })
+            .next()
+            .ok_or_else(|| {
+                anyhow::Error::msg(
+                    format!(
+                        "could not find any signature that fits given log; found {} signatures, but could not fit arguments into any of them", 
+                        found_signatures
+                    )
+                )
+            })
     }
 }
 
@@ -129,6 +153,48 @@ fn decode_txinput(args: &[ParamType], tx_args: &[u8]) -> Option<Vec<Token>> {
     Some(decoded)
 }
 
+fn decode_log(name: String, args: &[ParamType], raw: RawLog) -> Option<(Vec<Token>, Vec<bool>)> {
+    const MAX_COMBINATIONS: usize = 10000;
+    // because we don't know, which fields are indexed
+    // we try to iterate over all possible combinations
+    // and find whatever decodes without errors
+    for (ind, indexes) in (0..args.len())
+        .combinations(raw.topics.len() - 1)
+        .enumerate()
+    {
+        if ind > MAX_COMBINATIONS {
+            break;
+        }
+        let mut perm = vec![false; args.len()];
+        for indexed in indexes {
+            perm[indexed] = true;
+        }
+        let inputs: Vec<_> = args
+            .iter()
+            .zip(perm.iter())
+            .enumerate()
+            .map(|(ind, (param, indexed))| EventParam {
+                name: format!("{}", ind),
+                kind: param.clone(),
+                indexed: *indexed,
+            })
+            .collect();
+        let event = Event {
+            name: name.clone(),
+            inputs,
+            anonymous: false,
+        };
+        let tokens = event
+            .parse_log(raw.clone())
+            .ok()
+            .map(|log| log.params.into_iter().map(|param| param.value).collect());
+        if let Some(tokens) = tokens {
+            return Some((tokens, perm));
+        }
+    }
+    None
+}
+
 fn parse_arg(name: String, param: &ParamType, value: &Token) -> Argument {
     let components = match (param, value) {
         (ParamType::Tuple(param), Token::Tuple(value)) => {
@@ -140,6 +206,7 @@ fn parse_arg(name: String, param: &ParamType, value: &Token) -> Argument {
         name,
         r#type: param.to_string(),
         components,
+        indexed: None,
         value: value.to_string(),
     }
 }
@@ -159,7 +226,7 @@ mod tests {
     use crate::sources::MockSignatureSource;
 
     use super::*;
-    use ethabi::ethereum_types::{H160, U256};
+    use ethabi::ethereum_types::{H160, H256, U256};
     use pretty_assertions::assert_eq;
 
     #[tokio::test]
@@ -173,6 +240,7 @@ mod tests {
                         name: "arg0".into(),
                         r#type: "address".into(),
                         components: vec![],
+                        indexed: None,
                         value: "00000000219ab540356cbb839cbe05303d7705fa".into(),
                     }],
                 },
@@ -181,34 +249,44 @@ mod tests {
                 "70a082310000000000000000000000000000000000000000000000000000000000bc61591234567812345678000000000000000000000000000000000000000000000000",
                 Abi {
                     name: "branch_passphrase_public".into(),
-                    inputs: vec![Argument {
-                        name: "arg0".into(),
-                        r#type: "uint256".into(),
-                        components: vec![],
-                        value: "bc6159".into(), // hex number 123456789
-                    }, Argument {
-                        name: "arg1".into(),
-                        r#type: "bytes8".into(),
-                        components: vec![],
-                        value: "1234567812345678".into(),
-                    }],
+                    inputs: vec![
+                        Argument {
+                            name: "arg0".into(),
+                            r#type: "uint256".into(),
+                            components: vec![],
+                            indexed: None,
+                            value: "bc6159".into(), // hex number 123456789
+                        },
+                        Argument {
+                            name: "arg1".into(),
+                            r#type: "bytes8".into(),
+                            components: vec![],
+                            indexed: None,
+                            value: "1234567812345678".into(),
+                        },
+                    ],
                 },
             ),
             (
                 "70a082310000000000000000000000000000000000000000000000000000000000bc615900000000000000000000000000000000219ab540356cbb839cbe05303d7705fa",
                 Abi {
                     name: "passphrase_calculate_transfer".into(),
-                    inputs: vec![Argument {
-                        name: "arg0".into(),
-                        r#type: "uint64".into(),
-                        components: vec![],
-                        value: "bc6159".into(), // hex number 123456789
-                    }, Argument {
-                        name: "arg1".into(),
-                        r#type: "address".into(),
-                        components: vec![],
-                        value: "00000000219ab540356cbb839cbe05303d7705fa".into(),
-                    }],
+                    inputs: vec![
+                        Argument {
+                            name: "arg0".into(),
+                            r#type: "uint64".into(),
+                            components: vec![],
+                            indexed: None,
+                            value: "bc6159".into(), // hex number 123456789
+                        },
+                        Argument {
+                            name: "arg1".into(),
+                            r#type: "address".into(),
+                            components: vec![],
+                            indexed: None,
+                            value: "00000000219ab540356cbb839cbe05303d7705fa".into(),
+                        },
+                    ],
                 },
             ),
         ];
@@ -238,7 +316,7 @@ mod tests {
         }
     }
 
-    fn encode_tuple() -> String {
+    fn encode_tx_input_tuple() -> String {
         use ethabi::Token::*;
         let res = ethabi::encode(&vec![
             Tuple(vec![
@@ -264,7 +342,7 @@ mod tests {
 
     #[tokio::test]
     async fn function_tuple() {
-        let encoded = encode_tuple();
+        let encoded = encode_tx_input_tuple();
         let input = "68705463".to_string() + &encoded;
 
         let mut source = MockSignatureSource::new();
@@ -297,21 +375,25 @@ mod tests {
                             name: "arg0_0".into(),
                             r#type: "uint256".into(),
                             components: vec![],
+                            indexed: None,
                             value: "75bcd15".into(),
                         },
                         Argument {
                             name: "arg0_1".into(),
                             r#type: "address".into(),
                             components: vec![],
+                            indexed: None,
                             value: "00000000219ab540356cbb839cbe05303d7705fa".into(),
                         },
                         Argument {
                             name: "arg0_2".into(),
                             r#type: "bytes".into(),
                             components: vec![],
+                            indexed: None,
                             value: "7b".into(),
                         },
                     ],
+                    indexed: None,
                     value: "(75bcd15,00000000219ab540356cbb839cbe05303d7705fa,7b)".into(),
                 },
                 Argument {
@@ -322,19 +404,344 @@ mod tests {
                             name: "arg1_0".into(),
                             r#type: "uint8".into(),
                             components: vec![],
+                            indexed: None,
                             value: "7b".into(),
                         },
                         Argument {
                             name: "arg1_1".into(),
                             r#type: "bytes32[2]".into(),
                             components: vec![],
+                            indexed: None,
                             value: "[0b0c0d0e00000000000000000000000000000000000000000000000000000000,6566676800000000000000000000000000000000000000000000000000000000]".into(),
                         },
                     ],
+                    indexed: None,
                     value: "(7b,[0b0c0d0e00000000000000000000000000000000000000000000000000000000,6566676800000000000000000000000000000000000000000000000000000000])".into(),
                 },
             ],
         };
         assert_eq!(expected, function);
+    }
+
+    #[tokio::test]
+    async fn event() {
+        let tests = vec![
+            (
+                RawLog {
+                    data: hex::decode(
+                        "00000000000000000000000000000000000000000000000000000000006acfc0",
+                    )
+                    .unwrap(),
+                    topics: vec![
+                        H256::from_slice(
+                            &hex::decode(
+                                "ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+                            )
+                            .unwrap(),
+                        ),
+                        H256::from_slice(
+                            &hex::decode(
+                                "000000000000000000000000b8ace4d9bc469ddc8e788e636e817c299a1a8150",
+                            )
+                            .unwrap(),
+                        ),
+                        H256::from_slice(
+                            &hex::decode(
+                                "000000000000000000000000f76c5b19e86c256482f4aad1dae620a0c3ac0cd6",
+                            )
+                            .unwrap(),
+                        ),
+                    ],
+                },
+                "Transfer(address,address,uint256)",
+                Abi {
+                    name: "Transfer".into(),
+                    inputs: vec![
+                        Argument {
+                            name: "arg0".into(),
+                            r#type: "address".into(),
+                            components: vec![],
+                            indexed: Some(true),
+                            value: "b8ace4d9bc469ddc8e788e636e817c299a1a8150".into(),
+                        },
+                        Argument {
+                            name: "arg1".into(),
+                            r#type: "address".into(),
+                            components: vec![],
+                            indexed: Some(true),
+                            value: "f76c5b19e86c256482f4aad1dae620a0c3ac0cd6".into(),
+                        },
+                        Argument {
+                            name: "arg2".into(),
+                            r#type: "uint256".into(),
+                            components: vec![],
+                            indexed: Some(false),
+                            value: "6acfc0".into(),
+                        },
+                    ],
+                },
+            ),
+            (
+                RawLog {
+                    data: hex::decode(
+                        "0000000000000000000000000000000000000000000000083ed9ef578babdb5c00000000000000000000000000000000000000000000bf05c05e3ce0f57a7e39",
+                    )
+                    .unwrap(),
+                    topics: vec![
+                        H256::from_slice(
+                            &hex::decode(
+                                "1c411e9a96e071241c2f21f7726b17ae89e3cab4c78be50e062b03a9fffbbad1",
+                            )
+                            .unwrap(),
+                        ),
+                    ],
+                },
+                "Sync(uint112,uint112)",
+                Abi {
+                    name: "Sync".into(),
+                    inputs: vec![
+                        Argument {
+                            name: "arg0".into(),
+                            r#type: "uint112".into(),
+                            components: vec![],
+                            indexed: Some(false),
+                            value: "83ed9ef578babdb5c".into(),
+                        },
+                        Argument {
+                            name: "arg1".into(),
+                            r#type: "uint112".into(),
+                            components: vec![],
+                            indexed: Some(false),
+                            value: "bf05c05e3ce0f57a7e39".into(),
+                        },
+                    ],
+                },
+            ),
+            (
+                RawLog {
+                    data: hex::decode(
+                        "000000000000000000000000000000000000000000000000030d98d59a960000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000469ef5a473f28f3a21",
+                    )
+                    .unwrap(),
+                    topics: vec![
+                        H256::from_slice(
+                            &hex::decode(
+                                "d78ad95fa46c994b6551d0da85fc275fe613ce37657fb8d5e3d130840159d822",
+                            )
+                            .unwrap(),
+                        ),
+                        H256::from_slice(
+                            &hex::decode(
+                                "00000000000000000000000068b3465833fb72a70ecdf485e0e4c7bd8665fc45",
+                            )
+                            .unwrap(),
+                        ),
+                        // this is actually last argument, but we can't determine that just from signature
+                        // so we decode it as second argument
+                        H256::from_slice(
+                            &hex::decode(
+                                "000000000000000000000000220575d6e7e8797ad18d0d660c7e1ecf4e1a1ed1",
+                            )
+                            .unwrap(),
+                        ),
+                    ],
+                },
+                "Swap(address,uint256,uint256,uint256,uint256,address)",
+                Abi {
+                    name: "Swap".into(),
+                    inputs: vec![
+                        Argument {
+                            name: "arg0".into(),
+                            r#type: "address".into(),
+                            components: vec![],
+                            indexed: Some(true),
+                            value: "68b3465833fb72a70ecdf485e0e4c7bd8665fc45".into(),
+                        },
+                        Argument {
+                            name: "arg1".into(),
+                            r#type: "uint256".into(),
+                            components: vec![],
+                            indexed: Some(true),
+                            value: "220575d6e7e8797ad18d0d660c7e1ecf4e1a1ed1".into(),
+                        },
+                        Argument {
+                            name: "arg2".into(),
+                            r#type: "uint256".into(),
+                            components: vec![],
+                            indexed: Some(false),
+                            value: "30d98d59a960000".into(),
+                        },
+                        Argument {
+                            name: "arg3".into(),
+                            r#type: "uint256".into(),
+                            components: vec![],
+                            indexed: Some(false),
+                            value: "0".into(),
+                        },
+                        Argument {
+                            name: "arg4".into(),
+                            r#type: "uint256".into(),
+                            components: vec![],
+                            indexed: Some(false),
+                            value: "0".into(),
+                        },
+                        Argument {
+                            name: "arg5".into(),
+                            r#type: "address".into(),
+                            components: vec![],
+                            indexed: Some(false),
+                            value: "0000000000000000000000469ef5a473f28f3a21".into(),
+                        },
+                    ],
+                },
+            ),
+        ];
+        for (input, sig, abi) in tests {
+            let expected = hex::encode(input.topics[0].as_bytes());
+            let mut source = MockSignatureSource::new();
+            source
+                .expect_get_event_signatures()
+                .withf(move |hex| hex == expected)
+                .times(1)
+                .returning(|_| Ok(vec![sig.into()]));
+            let source = Arc::new(source);
+
+            let agg = Arc::new(SourceAggregator::new(vec![source.clone()]));
+
+            let event = agg.get_event_abi(input).await.unwrap();
+            assert_eq!(abi, event);
+        }
+    }
+
+    #[tokio::test]
+    async fn event_dynamic() {
+        let input = RawLog {
+            data: hex::decode(
+                "000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000097465737431323334350000000000000000000000000000000000000000000000",
+            )
+            .unwrap(),
+            topics: vec![
+                H256::from_slice(
+                    &hex::decode(
+                        "74cb234c0dd0ccac09c19041a69978ccb865f1f44a2877a009549898f6395b10",
+                    )
+                    .unwrap(),
+                ),
+                H256::from_slice(
+                    &hex::decode(
+                        "2c3138faa13a5122f618ced1b0b4be95398183af357f6769e61ee2bccacc8b54",
+                    )
+                    .unwrap(),
+                ),
+            ],
+        };
+        let sig = "Test(string,string)";
+        let abi = Abi {
+            name: "Test".into(),
+            inputs: vec![
+                Argument {
+                    name: "arg0".into(),
+                    r#type: "string".into(),
+                    components: vec![],
+                    indexed: Some(true),
+                    value: "2c3138faa13a5122f618ced1b0b4be95398183af357f6769e61ee2bccacc8b54"
+                        .into(),
+                },
+                Argument {
+                    name: "arg1".into(),
+                    r#type: "string".into(),
+                    components: vec![],
+                    indexed: Some(false),
+                    value: "test12345".into(),
+                },
+            ],
+        };
+        let expected = hex::encode(input.topics[0].as_bytes());
+        let mut source = MockSignatureSource::new();
+        source
+            .expect_get_event_signatures()
+            .withf(move |hex| hex == expected)
+            .times(1)
+            .returning(|_| Ok(vec![sig.into()]));
+        let source = Arc::new(source);
+
+        let agg = Arc::new(SourceAggregator::new(vec![source.clone()]));
+
+        let event = agg.get_event_abi(input).await.unwrap();
+        assert_eq!(abi, event);
+    }
+
+    #[tokio::test]
+    async fn event_tuple() {
+        let input = RawLog {
+            data: hex::decode("000000000000000000000000b8ace4d9bc469ddc8e788e636e817c299a1a8150000000000000000000000000f76c5b19e86c256482f4aad1dae620a0c3ac0cd6")
+                .unwrap(),
+            topics: vec![
+                H256::from_slice(
+                    &hex::decode(
+                        "5db533d27f83c494aa583a6f8222343e612dd3efd69499ca6ae5dda6c6097df0",
+                    )
+                    .unwrap(),
+                ),
+                H256::from_slice(
+                    &hex::decode(
+                        "000000000000000000000000b8ace4d9bc469ddc8e788e636e817c299a1a8150",
+                    )
+                    .unwrap(),
+                ),
+            ],
+        };
+        let sig = "Test(address,(address,address))";
+        let abi = Abi {
+            name: "Test".into(),
+            inputs: vec![
+                Argument {
+                    name: "arg0".into(),
+                    r#type: "address".into(),
+                    components: vec![],
+                    indexed: Some(
+                        true,
+                    ),
+                    value: "b8ace4d9bc469ddc8e788e636e817c299a1a8150".into(),
+                },
+                Argument {
+                    name: "arg1".into(),
+                    r#type: "(address,address)".into(),
+                    components: vec![
+                        Argument {
+                            name: "arg1_0".into(),
+                            r#type: "address".into(),
+                            components: vec![],
+                            indexed: None,
+                            value: "b8ace4d9bc469ddc8e788e636e817c299a1a8150".into(),
+                        },
+                        Argument {
+                            name: "arg1_1".into(),
+                            r#type: "address".into(),
+                            components: vec![],
+                            indexed: None,
+                            value: "f76c5b19e86c256482f4aad1dae620a0c3ac0cd6".into(),
+                        },
+                    ],
+                    indexed: Some(
+                        false,
+                    ),
+                    value: "(b8ace4d9bc469ddc8e788e636e817c299a1a8150,f76c5b19e86c256482f4aad1dae620a0c3ac0cd6)".into(),
+                },
+            ],
+        };
+        let expected = hex::encode(input.topics[0].as_bytes());
+        let mut source = MockSignatureSource::new();
+        source
+            .expect_get_event_signatures()
+            .withf(move |hex| hex == expected)
+            .times(1)
+            .returning(|_| Ok(vec![sig.into()]));
+        let source = Arc::new(source);
+
+        let agg = Arc::new(SourceAggregator::new(vec![source.clone()]));
+
+        let event = agg.get_event_abi(input).await.unwrap();
+        assert_eq!(abi, event);
     }
 }
