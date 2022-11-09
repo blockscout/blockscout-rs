@@ -17,7 +17,9 @@ paths:
         "200":
           description: ""
           schema:
-            $ref: '#/definitions/v1Abi'
+            type: array
+            items:
+              $ref: '#/definitions/v1Abi'
         default:
           description: An unexpected error response.
           schema:
@@ -43,7 +45,9 @@ paths:
         "200":
           description: ""
           schema:
-            $ref: '#/definitions/v1Abi'
+            type: array
+            items:
+              $ref: '#/definitions/v1Abi'
         default:
           description: An unexpected error response.
           schema:
@@ -131,9 +135,13 @@ definitions:
     type: object
     properties:
       abi:
-        $ref: '#/definitions/v1Abi'
+        type: array
+        items:
+          $ref: '#/definitions/v1Abi'
   v1GetFunctionAbiResponse:
     type: object
     properties:
       abi:
-        $ref: '#/definitions/v1Abi'
+        type: array
+        items:
+          $ref: '#/definitions/v1Abi'

@@ -68,14 +68,14 @@ impl SourceAggregator {
         Ok(signatures)
     }
 
-    pub async fn get_function_abi(&self, tx_input: &[u8]) -> Result<Abi, anyhow::Error> {
+    pub async fn get_function_abi(&self, tx_input: &[u8]) -> Result<Vec<Abi>, anyhow::Error> {
         if tx_input.len() < 4 {
             anyhow::bail!("tx input len must be at least 4 bytes");
         }
         let hex_sig = hex::encode(&tx_input[..4]);
         let sigs = self.get_function_signatures(&hex_sig).await?;
-        let found_signatures = sigs.len();
-        sigs.into_iter()
+        Ok(sigs
+            .into_iter()
             .filter_map(|sig| {
                 let (name, args) = parse_signature(&sig)?;
                 let values = decode_txinput(&args, &tx_input[4..])?;
@@ -85,25 +85,17 @@ impl SourceAggregator {
                     inputs,
                 })
             })
-            .next()
-            .ok_or_else(|| {
-                anyhow::Error::msg(
-                    format!(
-                        "could not find any signature that fits given tx input; found {} signatures, but could not fit arguments into any of them", 
-                        found_signatures
-                    )
-                )
-            })
+            .collect())
     }
 
-    pub async fn get_event_abi(&self, raw: RawLog) -> Result<Abi, anyhow::Error> {
+    pub async fn get_event_abi(&self, raw: RawLog) -> Result<Vec<Abi>, anyhow::Error> {
         if raw.topics.is_empty() {
             anyhow::bail!("log should contain at least one topic");
         }
         let hex_sig = hex::encode(raw.topics[0].as_bytes());
         let sigs = self.get_event_signatures(&hex_sig).await?;
-        let found_signatures = sigs.len();
-        sigs.into_iter()
+        Ok(sigs
+            .into_iter()
             .filter_map(|sig| {
                 let (name, args) = parse_signature(&sig)?;
                 let (values, indexed) = decode_log(name.to_string(), &args, raw.clone())?;
@@ -116,15 +108,7 @@ impl SourceAggregator {
                     inputs,
                 })
             })
-            .next()
-            .ok_or_else(|| {
-                anyhow::Error::msg(
-                    format!(
-                        "could not find any signature that fits given log; found {} signatures, but could not fit arguments into any of them", 
-                        found_signatures
-                    )
-                )
-            })
+            .collect())
     }
 }
 
@@ -312,7 +296,7 @@ mod tests {
                 .get_function_abi(&hex::decode(input).unwrap())
                 .await
                 .unwrap();
-            assert_eq!(abi, function);
+            assert_eq!(abi, function[0]);
         }
     }
 
@@ -420,7 +404,7 @@ mod tests {
                 },
             ],
         };
-        assert_eq!(expected, function);
+        assert_eq!(expected, function[0]);
     }
 
     #[tokio::test]
@@ -609,7 +593,7 @@ mod tests {
             let agg = Arc::new(SourceAggregator::new(vec![source.clone()]));
 
             let event = agg.get_event_abi(input).await.unwrap();
-            assert_eq!(abi, event);
+            assert_eq!(abi, event[0]);
         }
     }
 
@@ -668,7 +652,7 @@ mod tests {
         let agg = Arc::new(SourceAggregator::new(vec![source.clone()]));
 
         let event = agg.get_event_abi(input).await.unwrap();
-        assert_eq!(abi, event);
+        assert_eq!(abi, event[0]);
     }
 
     #[tokio::test]
@@ -742,6 +726,6 @@ mod tests {
         let agg = Arc::new(SourceAggregator::new(vec![source.clone()]));
 
         let event = agg.get_event_abi(input).await.unwrap();
-        assert_eq!(abi, event);
+        assert_eq!(abi, event[0]);
     }
 }
