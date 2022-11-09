@@ -21,6 +21,8 @@ impl Eq for IgnoredAny {}
 pub struct Settings {
     pub server: ServerSettings,
     pub sources: SourcesSettings,
+    pub metrics: MetricsSettings,
+    pub jaeger: JaegerSettings,
 
     // Is required as we deny unknown fields, but allow users provide
     // path to config through PREFIX__CONFIG env variable. If removed,
@@ -29,6 +31,23 @@ pub struct Settings {
     config_path: IgnoredAny,
 }
 
+impl Settings {
+    pub fn new() -> anyhow::Result<Self> {
+        let config_path = std::env::var("SIG_PROVIDER__CONFIG");
+
+        let mut builder = Config::builder();
+        if let Ok(config_path) = config_path {
+            builder = builder.add_source(File::with_name(&config_path));
+        };
+        // Use `__` so that it would be possible to address keys with underscores in names (e.g. `access_key`)
+        builder =
+            builder.add_source(config::Environment::with_prefix("SIG_PROVIDER").separator("__"));
+
+        let settings: Settings = builder.build()?.try_deserialize()?;
+
+        Ok(settings)
+    }
+}
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct SourcesSettings {
@@ -84,20 +103,36 @@ impl Default for GrpcServerSettings {
     }
 }
 
-impl Settings {
-    pub fn new() -> anyhow::Result<Self> {
-        let config_path = std::env::var("SIG_PROVIDER__CONFIG");
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct MetricsSettings {
+    pub enabled: bool,
+    pub addr: SocketAddr,
+    pub route: String,
+}
 
-        let mut builder = Config::builder();
-        if let Ok(config_path) = config_path {
-            builder = builder.add_source(File::with_name(&config_path));
-        };
-        // Use `__` so that it would be possible to address keys with underscores in names (e.g. `access_key`)
-        builder =
-            builder.add_source(config::Environment::with_prefix("SIG_PROVIDER").separator("__"));
+impl Default for MetricsSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            addr: SocketAddr::from_str("0.0.0.0:6060").expect("should be valid url"),
+            route: "/metrics".to_string(),
+        }
+    }
+}
 
-        let settings: Settings = builder.build()?.try_deserialize()?;
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct JaegerSettings {
+    pub enabled: bool,
+    pub agent_endpoint: String,
+}
 
-        Ok(settings)
+impl Default for JaegerSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            agent_endpoint: "localhost:6831".to_string(),
+        }
     }
 }

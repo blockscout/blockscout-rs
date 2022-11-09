@@ -12,3 +12,6 @@ http:
     - selector: blockscout.sig_provider.v1.AbiService.GetEventAbi
       get: /api/v1/abi/event
       response_body: "abi"
+
+    - selector: blockscout.sig_provider.v1.Health.Check
+      get: /health
