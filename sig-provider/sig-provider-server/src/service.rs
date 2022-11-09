@@ -49,7 +49,7 @@ impl AbiService for Service {
         self.agg
             .get_function_abi(&bytes)
             .await
-            .map(|abi| tonic::Response::new(GetFunctionAbiResponse { abi: Some(abi) }))
+            .map(|abi| tonic::Response::new(GetFunctionAbiResponse { abi }))
             .map_err(|e| tonic::Status::internal(e.to_string()))
     }
 
@@ -78,7 +78,7 @@ impl AbiService for Service {
                 topics,
             })
             .await
-            .map(|abi| tonic::Response::new(GetEventAbiResponse { abi: Some(abi) }))
+            .map(|abi| tonic::Response::new(GetEventAbiResponse { abi }))
             .map_err(|e| tonic::Status::internal(e.to_string()))
     }
 }
