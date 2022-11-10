@@ -11,7 +11,7 @@ consumes:
 produces:
   - application/json
 paths:
-  /bytecodes/creationInputs/sources/solidity:verifyMultiPart:
+  /bytecodes/creation-inputs/sources/solidity:verify-multi-part:
     post:
       operationId: CreationBytecodeDatabase_VerifySolidityMultiPart
       responses:
@@ -31,7 +31,7 @@ paths:
             $ref: '#/definitions/v1VerifySolidityMultiPartRequest'
       tags:
         - CreationBytecodeDatabase
-  /bytecodes/creationInputs/sources/solidity:verifyStandardJson:
+  /bytecodes/creation-inputs/sources/solidity:verify-standard-json:
     post:
       operationId: CreationBytecodeDatabase_VerifySolidityStandardJson
       responses:
@@ -51,7 +51,7 @@ paths:
             $ref: '#/definitions/v1VerifySolidityStandardJsonRequest'
       tags:
         - CreationBytecodeDatabase
-  /bytecodes/creationInputs/sources/vyper:verifyMultiPart:
+  /bytecodes/creation-inputs/sources/vyper:verify-multi-part:
     post:
       operationId: CreationBytecodeDatabase_VerifyVyperMultiPart
       responses:
@@ -71,7 +71,7 @@ paths:
             $ref: '#/definitions/v1VerifyVyperMultiPartRequest'
       tags:
         - CreationBytecodeDatabase
-  /bytecodes/creationInputs/sources:search:
+  /bytecodes/creation-inputs/sources:search:
     post:
       operationId: CreationBytecodeDatabase_SearchSources
       responses:
@@ -91,7 +91,7 @@ paths:
             $ref: '#/definitions/v1SearchSourcesRequest'
       tags:
         - CreationBytecodeDatabase
-  /bytecodes/deployedBytecodes/sources/solidity:verifyMultiPart:
+  /bytecodes/deployed-bytecodes/sources/solidity:verify-multi-part:
     post:
       operationId: DeployedBytecodeDatabase_VerifySolidityMultiPart
       responses:
@@ -111,7 +111,7 @@ paths:
             $ref: '#/definitions/v1VerifySolidityMultiPartRequest'
       tags:
         - DeployedBytecodeDatabase
-  /bytecodes/deployedBytecodes/sources/solidity:verifyStandardJson:
+  /bytecodes/deployed-bytecodes/sources/solidity:verify-standard-json:
     post:
       operationId: DeployedBytecodeDatabase_VerifySolidityStandardJson
       responses:
@@ -131,7 +131,7 @@ paths:
             $ref: '#/definitions/v1VerifySolidityStandardJsonRequest'
       tags:
         - DeployedBytecodeDatabase
-  /bytecodes/deployedBytecodes/sources/vyper:verifyMultiPart:
+  /bytecodes/deployed-bytecodes/sources/vyper:verify-multi-part:
     post:
       operationId: DeployedBytecodeDatabase_VerifyVyperMultiPart
       responses:
@@ -151,7 +151,7 @@ paths:
             $ref: '#/definitions/v1VerifyVyperMultiPartRequest'
       tags:
         - DeployedBytecodeDatabase
-  /bytecodes/deployedBytecodes/sources:search:
+  /bytecodes/deployed-bytecodes/sources:search:
     post:
       operationId: DeployedBytecodeDatabase_SearchSources
       responses:
