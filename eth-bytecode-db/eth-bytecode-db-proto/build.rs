@@ -14,7 +14,7 @@ fn compile(
         .compile_well_known_types()
         .protoc_arg("--openapiv2_out=swagger")
         .protoc_arg("--openapiv2_opt")
-        .protoc_arg("grpc_api_configuration=proto/api_config_http.yaml,output_format=yaml,allow_merge=true,merge_file_name=ethereum-bytecode-database")
+        .protoc_arg("grpc_api_configuration=proto/api_config_http.yaml,output_format=yaml,allow_merge=true,merge_file_name=eth-bytecode-db")
         .bytes(["."])
         .type_attribute(".", "#[actix_prost_macros::serde]");
     config.compile_protos(protos, includes)?;
@@ -27,6 +27,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         tonic_build::configure().service_generator(),
         Box::new(ActixGenerator::new("proto/api_config_http.yaml").unwrap()),
     ]));
-    compile(&["proto/ethereum-bytecode-database.proto"], &["proto"], gens)?;
+    compile(&["proto/eth-bytecode-db.proto"], &["proto"], gens)?;
     Ok(())
 }

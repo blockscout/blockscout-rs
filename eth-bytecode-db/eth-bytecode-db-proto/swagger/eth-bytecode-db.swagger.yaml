@@ -1,6 +1,6 @@
 swagger: "2.0"
 info:
-  title: ethereum-bytecode-database.proto
+  title: eth-bytecode-db.proto
   version: version not set
 tags:
   - name: CreationBytecodeDatabase

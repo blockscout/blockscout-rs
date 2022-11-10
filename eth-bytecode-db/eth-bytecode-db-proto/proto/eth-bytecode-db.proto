@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package blockscout.ethereumBytecodeDatabase.v1;
+package blockscout.ethBytecodeDb.v1;
 
-option go_package = "github.com/blockscout/blockscout-rs/ethereum-bytecode-database";
+option go_package = "github.com/blockscout/blockscout-rs/eth-bytecode-db";
 
 service CreationBytecodeDatabase {
   rpc VerifySolidityMultiPart(VerifySolidityMultiPartRequest) returns (VerifyResponse) {}
