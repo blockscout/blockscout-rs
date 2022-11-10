@@ -77,7 +77,7 @@ impl From<SourcifySuccess> for VerificationResult {
             contract_libraries: sourcify_success.contract_libraries,
             abi: Some(sourcify_success.abi),
             sources: sourcify_success.sources,
-            compiler_settings: "".into(),
+            compiler_settings: sourcify_success.compiler_settings,
         }
     }
 }

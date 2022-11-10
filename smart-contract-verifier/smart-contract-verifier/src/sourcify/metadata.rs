@@ -13,6 +13,10 @@ pub struct Metadata {
     pub settings: MetadataSettings,
     pub compiler: Compiler,
     pub output: Output,
+
+    // Is not deserialized and should be filled manually
+    #[serde(skip)]
+    pub raw_settings: String,
 }
 
 #[derive(Debug, PartialEq, Eq, Deserialize)]
@@ -49,8 +53,14 @@ impl Files {
             .0
             .get(METADATA_FILE_NAME)
             .ok_or_else(|| anyhow::Error::msg(format!("file {} not found", METADATA_FILE_NAME)))?;
-        let metadata: Metadata =
-            serde_json::from_str(metadata_content).map_err(anyhow::Error::msg)?;
+        let metadata = {
+            let mut metadata: Metadata =
+                serde_json::from_str(metadata_content).map_err(anyhow::Error::msg)?;
+            let raw_metadata: serde_json::Value = serde_json::from_str(metadata_content)?;
+            metadata.raw_settings = format!("{}", raw_metadata["settings"]);
+            metadata
+        };
+
         let source_files: BTreeMap<String, String> = self
             .0
             .into_iter()
@@ -96,6 +106,7 @@ impl TryFrom<Files> for Success {
             optimization_runs,
             abi,
             sources: source_files,
+            compiler_settings: metadata.raw_settings,
         })
     }
 }
@@ -169,6 +180,7 @@ mod tests {
                 optimization_runs: Some(200),
                 abi: r#"[{"inputs":[],"name":"retrieve","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}]"#.into(),
                 sources: BTreeMap::from([("source.sol".into(), "content".into())]),
+                compiler_settings: "{\"compilationTarget\":{\"example.sol\":\"Example\"},\"evmVersion\":\"london\",\"libraries\":{\"SafeMath\":\"0xFBe36e5cAD207d5fDee40E6568bb276a351f6713\"},\"optimizer\":{\"enabled\":false,\"runs\":200}}".to_string()
             }
         );
 
