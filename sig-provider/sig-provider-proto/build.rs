@@ -27,6 +27,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         tonic_build::configure().service_generator(),
         Box::new(ActixGenerator::new("proto/api_config_http.yaml").unwrap()),
     ]));
-    compile(&["proto/sig-provider.proto"], &["proto"], gens)?;
+    compile(
+        &["proto/sig-provider.proto", "proto/health.proto"],
+        &["proto"],
+        gens,
+    )?;
     Ok(())
 }
