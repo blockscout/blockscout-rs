@@ -4,11 +4,11 @@ config_version: 3
 http:
   rules:
     - selector: blockscout.visualizer.v1.SolidityVisualizer.VisualizeContracts
-      post: /api/v1/solidity:visualizeContracts
+      post: /api/v1/solidity:visualize-contracts
       body: "*"
 
     - selector: blockscout.visualizer.v1.SolidityVisualizer.VisualizeStorage
-      post: /api/v1/solidity:visualizeStorage
+      post: /api/v1/solidity:visualize-storage
       body: "*"
     
     - selector: blockscout.visualizer.v1.Health.Check
