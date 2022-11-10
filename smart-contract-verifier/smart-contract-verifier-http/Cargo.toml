@@ -14,8 +14,8 @@ actix-web-prom = "0.6"
 anyhow = "1.0"
 config = "0.13"
 cron = "0.11"
-ethers-core = "0.17"
-ethers-solc = { version = "0.17", features = ["svm-solc"] }
+ethers-core = "1.0"
+ethers-solc = { version = "1.0", features = ["svm-solc"] }
 futures = "0.3"
 lazy_static = "1"
 opentelemetry = { version = "0.17", features = ["rt-tokio"] }
@@ -35,9 +35,6 @@ tracing-actix-web = "0.6"
 tracing-opentelemetry = "0.17"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 url = { version = "2.2", features = ["serde"] }
-
-[patch.crates-io]
-ethers-solc = { git = "https://github.com/gakonst/ethers-rs", package = "ethers-solc", rev = "13a0144a" }
 
 [dev-dependencies]
 actix-rt = "2.7"
