@@ -66,7 +66,7 @@ async fn test_setup(request: serde_json::Value, url: &str) -> ServiceResponse {
 }
 
 async fn visualize_contract_success(request: serde_json::Value, expected_svg: String) {
-    let response = test_setup(request, "/api/v1/solidity:visualizeContracts").await;
+    let response = test_setup(request, "/api/v1/solidity:visualize-contracts").await;
     assert!(
         response.status().is_success(),
         "response: {:?}",
@@ -93,7 +93,7 @@ async fn visualize_contracts_success_from_dir(project_name: &str, sample_name: &
 }
 
 async fn visualize_storage_success(request: serde_json::Value, expected_svg: String) {
-    let response = test_setup(request, "/api/v1/solidity:visualizeStorage").await;
+    let response = test_setup(request, "/api/v1/solidity:visualize-storage").await;
 
     assert!(
         response.status().is_success(),
@@ -322,7 +322,7 @@ mod failure_tests {
             }
         });
 
-        let response = test_setup(request, "/api/v1/solidity:visualizeContracts").await;
+        let response = test_setup(request, "/api/v1/solidity:visualize-contracts").await;
 
         assert!(
             response.status().is_client_error(),
@@ -347,7 +347,7 @@ mod failure_tests {
             "contract_name": "dsd",
             "file_name": "SimpleContract.sol",
         });
-        let response = test_setup(request, "/api/v1/solidity:visualizeStorage").await;
+        let response = test_setup(request, "/api/v1/solidity:visualize-storage").await;
 
         assert!(
             response.status().is_client_error(),
@@ -369,7 +369,7 @@ mod failure_tests {
 
         let request = json!({ "sources": get_dir_files(&project_path) });
 
-        let response = test_setup(request, "/api/v1/solidity:visualizeContracts").await;
+        let response = test_setup(request, "/api/v1/solidity:visualize-contracts").await;
         assert!(
             response.status().is_client_error(),
             "Invalid status code (failed expected): {}",
@@ -398,7 +398,7 @@ mod failure_tests {
             "file_name": "ImportMissingInheritedContract.sol",
         });
 
-        let response = test_setup(request, "/api/v1/solidity:visualizeStorage").await;
+        let response = test_setup(request, "/api/v1/solidity:visualize-storage").await;
         assert!(
             response.status().is_client_error(),
             "Invalid status code (failed expected): {}",
