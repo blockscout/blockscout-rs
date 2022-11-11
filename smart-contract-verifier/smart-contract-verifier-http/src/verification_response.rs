@@ -11,6 +11,13 @@ pub struct VerificationResponse {
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(tag = "type")]
+pub enum BytecodePart {
+    Main { data: DisplayBytes },
+    Metadata { data: DisplayBytes },
+}
+
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct VerificationResult {
     pub file_name: String,
     pub contract_name: String,
@@ -23,6 +30,11 @@ pub struct VerificationResult {
     pub abi: Option<String>,
     pub sources: BTreeMap<String, String>,
     pub compiler_settings: String,
+
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub local_creation_input_parts: Vec<BytecodePart>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub local_deployed_bytecode_parts: Vec<BytecodePart>,
 }
 
 impl From<VerificationSuccess> for VerificationResult {
@@ -58,6 +70,10 @@ impl From<VerificationSuccess> for VerificationResult {
                 .map(|(path, source)| (path.to_string_lossy().to_string(), source.content))
                 .collect(),
             compiler_settings,
+
+            // TODO: fill with actual bytecode parts
+            local_creation_input_parts: vec![],
+            local_deployed_bytecode_parts: vec![],
         }
     }
 }
@@ -78,6 +94,10 @@ impl From<SourcifySuccess> for VerificationResult {
             abi: Some(sourcify_success.abi),
             sources: sourcify_success.sources,
             compiler_settings: sourcify_success.compiler_settings,
+
+            // We have no notion of bytecode parts for Sourcify verification
+            local_creation_input_parts: vec![],
+            local_deployed_bytecode_parts: vec![],
         }
     }
 }
@@ -113,6 +133,7 @@ mod tests {
     use super::*;
     use crate::tests::parse::test_serialize_json_ok;
     use serde_json::json;
+    use std::str::FromStr;
 
     #[test]
     fn parse_response() {
@@ -138,6 +159,15 @@ mod tests {
                     )
                     .unwrap(),
                     compiler_settings: "compiler_settings".into(),
+                    local_creation_input_parts: vec![
+                        BytecodePart::Main {
+                            data: DisplayBytes::from_str("0x1234").unwrap(),
+                        },
+                        BytecodePart::Metadata {
+                            data: DisplayBytes::from_str("0xcafe").unwrap(),
+                        },
+                    ],
+                    local_deployed_bytecode_parts: vec![],
                 }),
                 json!({
                     "message": "OK",
@@ -158,8 +188,11 @@ mod tests {
                         "sources": {
                             "source.sol": "content",
                         },
+                        "local_creation_input_parts": [
+                            { "type": "Main", "data": "0x1234" },
+                            { "type": "Metadata", "data": "0xcafe" }
+                        ]
                     },
-
                 }),
             ),
             (
