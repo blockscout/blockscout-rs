@@ -31,7 +31,7 @@ CREATE TYPE "verification_type" AS ENUM (
 );
 
 CREATE TABLE "sources" (
-  "id" SERIAL PRIMARY KEY,
+  "id" BIGSERIAL PRIMARY KEY,
   "created_at" timestamp NOT NULL DEFAULT (now()),
   "updated_at" timestamp NOT NULL DEFAULT (now()),
   "source_type" source_type NOT NULL,
@@ -45,7 +45,7 @@ CREATE TABLE "sources" (
 );
 
 CREATE TABLE "files" (
-  "id" SERIAL PRIMARY KEY,
+  "id" BIGSERIAL PRIMARY KEY,
   "created_at" timestamp NOT NULL DEFAULT (now()),
   "updated_at" timestamp NOT NULL DEFAULT (now()),
   "name" varchar NOT NULL,
@@ -61,7 +61,7 @@ CREATE TABLE "source_files" (
 );
 
 CREATE TABLE "bytecodes" (
-  "id" SERIAL PRIMARY KEY,
+  "id" BIGSERIAL PRIMARY KEY,
   "created_at" timestamp NOT NULL DEFAULT (now()),
   "updated_at" timestamp NOT NULL DEFAULT (now()),
   "source_id" bigserial NOT NULL,
@@ -69,7 +69,7 @@ CREATE TABLE "bytecodes" (
 );
 
 CREATE TABLE "parts" (
-  "id" SERIAL PRIMARY KEY,
+  "id" BIGSERIAL PRIMARY KEY,
   "created_at" timestamp NOT NULL DEFAULT (now()),
   "updated_at" timestamp NOT NULL DEFAULT (now()),
   "type" part_type NOT NULL,
@@ -86,7 +86,7 @@ CREATE TABLE "bytecode_parts" (
 );
 
 CREATE TABLE "verified_contracts" (
-  "id" SERIAL PRIMARY KEY,
+  "id" BIGSERIAL PRIMARY KEY,
   "created_at" timestamp NOT NULL DEFAULT (now()),
   "updated_at" timestamp NOT NULL DEFAULT (now()),
   "source_id" bigserial,
