@@ -69,7 +69,7 @@ dependencies = [
 [[package]]
 name = "actix-prost"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/actix-prost#ab65749cc6751bfa1f5c37d6bad6fa398f4bbb98"
+source = "git+https://github.com/blockscout/actix-prost#90e4f961ecbce12cc81071e3e55da6045fb97d1b"
 dependencies = [
  "actix-http",
  "actix-web",
@@ -83,7 +83,7 @@ dependencies = [
 [[package]]
 name = "actix-prost-build"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/actix-prost#ab65749cc6751bfa1f5c37d6bad6fa398f4bbb98"
+source = "git+https://github.com/blockscout/actix-prost#90e4f961ecbce12cc81071e3e55da6045fb97d1b"
 dependencies = [
  "prettyplease",
  "proc-macro2",
@@ -98,7 +98,7 @@ dependencies = [
 [[package]]
 name = "actix-prost-macros"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/actix-prost#ab65749cc6751bfa1f5c37d6bad6fa398f4bbb98"
+source = "git+https://github.com/blockscout/actix-prost#90e4f961ecbce12cc81071e3e55da6045fb97d1b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1059,19 +1059,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "env_logger"
-version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c90bf5f19754d10198ccb95b70664fc925bd1fc090a0fd9a6ebc54acc8cd6272"
-dependencies = [
- "atty",
- "humantime",
- "log",
- "regex",
- "termcolor",
-]
-
-[[package]]
 name = "ethabi"
 version = "17.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1462,12 +1449,6 @@ dependencies = [
  "tokio",
  "url",
 ]
-
-[[package]]
-name = "humantime"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
 
 [[package]]
 name = "hyper"
@@ -3041,7 +3022,6 @@ dependencies = [
  "async-trait",
  "bytes",
  "config",
- "env_logger",
  "ethabi",
  "futures",
  "hex",
