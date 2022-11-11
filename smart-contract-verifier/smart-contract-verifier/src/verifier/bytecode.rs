@@ -11,6 +11,10 @@ use std::marker::PhantomData;
 pub trait Source {
     /// Performs conversion from [`Contract`] into valid bytecode
     fn try_bytes_from_contract(contract: &Contract) -> Result<Bytes, BytecodeInitError>;
+
+    /// Indicates whether constructor arguments exist for the source
+    /// (used when comparing unused bytes with constructor ABI)
+    fn has_constructor_args() -> bool;
 }
 
 /// An indicator used in [`Bytecode`] showing that underlying bytecode
@@ -36,6 +40,10 @@ impl Source for DeployedBytecode {
 
         Ok(bytes)
     }
+
+    fn has_constructor_args() -> bool {
+        false
+    }
 }
 
 /// An indicator used in [`Bytecode`] showing that underlying bytecode
@@ -60,6 +68,10 @@ impl Source for CreationTxInput {
             .clone();
 
         Ok(bytes)
+    }
+
+    fn has_constructor_args() -> bool {
+        true
     }
 }
 
