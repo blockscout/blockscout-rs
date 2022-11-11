@@ -44,10 +44,14 @@ async fn test_setup(dir: &str, input: &mut TestInput) -> (ServiceResponse, Optio
     input.standard_input = Some(input.standard_input.clone().unwrap_or_else(|| {
         fs::read_to_string(&contract_path).expect("Error while reading source")
     }));
-    input.creation_tx_input = Some(input.creation_tx_input.clone().unwrap_or_else(|| {
-        fs::read_to_string(format!("{}/creation_tx_input", prefix))
-            .expect("Error while reading creation_tx_input")
-    }));
+    input.creation_tx_input = if !input.ignore_creation_tx_input {
+        Some(input.creation_tx_input.clone().unwrap_or_else(|| {
+            fs::read_to_string(format!("{}/creation_tx_input", prefix))
+                .expect("Error while reading creation_tx_input")
+        }))
+    } else {
+        None
+    };
     input.deployed_bytecode = Some(input.deployed_bytecode.clone().unwrap_or_else(|| {
         fs::read_to_string(format!("{}/deployed_bytecode", prefix))
             .expect("Error while reading deployed_bytecode")
@@ -62,7 +66,7 @@ async fn test_setup(dir: &str, input: &mut TestInput) -> (ServiceResponse, Optio
 
     let request = json!({
         "deployed_bytecode": input.deployed_bytecode.as_ref().unwrap(),
-        "creation_bytecode": input.creation_tx_input.as_ref().unwrap(),
+        "creation_bytecode": input.creation_tx_input.as_ref(),
         "compiler_version": input.compiler_version,
         "input": input.standard_input
     });
@@ -217,6 +221,14 @@ mod regression_tests {
         let contract_dir = "issue_with_creation_code";
         let test_input =
             TestInput::new("PancakeFactory", "v0.5.16+commit.9c3226ce").has_constructor_args();
+        test_success(contract_dir, test_input).await;
+    }
+
+    #[actix_rt::test]
+    async fn issue_6275() {
+        let contract_dir = "issue_6275";
+        let test_input =
+            TestInput::new("MultichainProxy", "v0.8.16+commit.07a7930e").ignore_creation_tx_input();
         test_success(contract_dir, test_input).await;
     }
 }
