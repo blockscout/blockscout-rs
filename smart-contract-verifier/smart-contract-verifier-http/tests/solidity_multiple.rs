@@ -540,6 +540,15 @@ mod tests_without_creation_tx_input {
         test_success(contract_dir, test_input).await;
     }
 
+    #[actix_rt::test]
+    async fn verifies_contract_with_constructor_args_in_abi() {
+        let contract_dir = "solidity_0.5.9_smart_contract";
+        let test_input = TestInput::new("TestToken", "v0.5.9+commit.c68bc34e")
+            .with_evm_version("petersburg")
+            .ignore_creation_tx_input();
+        test_success(contract_dir, test_input).await;
+    }
+
     // // Fails as deployed bytecode for both "A" and "B" contracts is the same (
     // // the only difference is constructor which does not make sense for deployed bytecode)
     // #[actix_rt::test]

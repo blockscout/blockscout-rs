@@ -275,8 +275,8 @@ impl<T: Source> Verifier<T> {
             Some(encoded_constructor_args)
         };
 
-        let expects_constructor_args =
-            abi_constructor.map(|input| input.inputs.len()).unwrap_or(0) > 0;
+        let expects_constructor_args = T::has_constructor_args() // check that the source actually should have constructor args
+                && abi_constructor.map(|input| input.inputs.len()).unwrap_or(0) > 0; // check that the contract itself should have constructor args
 
         match encoded_constructor_args {
             None if expects_constructor_args => Err(
