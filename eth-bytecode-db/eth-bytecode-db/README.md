@@ -33,7 +33,13 @@ sea-orm-cli migrate status
 sea-orm-cli migrate up
 ```
 
-4. Generate new migration:
+4. Downgrade by 1 migration:
+
+```bash
+sea-orm-cli migrate down
+```
+
+5. Generate new migration:
 
 ```bash
 sea-orm-cli migrate generate <migration name>
