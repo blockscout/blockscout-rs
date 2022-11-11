@@ -190,7 +190,7 @@ mod tests {
                         },
                         "local_creation_input_parts": [
                             { "type": "Main", "data": "0x1234" },
-                            { "type": "Metadata", "data": "0xcafe" }
+                            { "type": "Meta", "data": "0xcafe" }
                         ]
                     },
                 }),
