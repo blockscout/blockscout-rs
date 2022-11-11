@@ -14,7 +14,7 @@ pub struct VerificationResponse {
 #[serde(tag = "type")]
 pub enum BytecodePart {
     Main { data: DisplayBytes },
-    Metadata { data: DisplayBytes },
+    Meta { data: DisplayBytes },
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -163,7 +163,7 @@ mod tests {
                         BytecodePart::Main {
                             data: DisplayBytes::from_str("0x1234").unwrap(),
                         },
-                        BytecodePart::Metadata {
+                        BytecodePart::Meta {
                             data: DisplayBytes::from_str("0xcafe").unwrap(),
                         },
                     ],
