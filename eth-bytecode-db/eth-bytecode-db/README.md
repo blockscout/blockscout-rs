@@ -9,6 +9,7 @@
 
 ```bash
 docker run -p 5432:5432 --name eth-bytecode-postgres -e POSTGRES_PASSWORD=admin -d postgres
+docker exec -it eth-bytecode-postgres psql -U postgres -c 'create database eth-bytecode-db;'
 export DATABASE_URL=postgres://postgres:admin@localhost:5432/eth-bytecode-db
 ```
 
