@@ -7,6 +7,8 @@ use std::time::Duration;
 
 #[tokio::test]
 async fn create() {
+    let _ = env_logger::builder().is_test(true).try_init();
+
     let fourbyte_request = serde_json::json!({"contract_abi":"[{\"constant\":false,\"inputs\":[],\"name\":\"f\",\"outputs\":[],\"type\":\"function\"},{\"inputs\":[],\"type\":\"constructor\"},{\"anonymous\":false,\"inputs\":[{\"name\":\"\",\"type\":\"string\",\"indexed\":true}],\"name\":\"E\",\"type\":\"event\"}]"});
     let fourbyte_response = serde_json::json!({"num_processed":25,"num_imported":3,"num_duplicates":18,"num_ignored":4});
     let fourbyte = MockServer::start();
@@ -82,8 +84,9 @@ fn sort_json(mut v: Value) -> Value {
 }
 
 #[tokio::test]
-#[ignore] // TODO: fix for abi
 async fn get_function() {
+    let _ = env_logger::builder().is_test(true).try_init();
+
     let fourbyte_response = serde_json::json!({"count":4,"next":null,"previous":null,"results":[{"id":844293,"created_at":"2022-08-26T12:22:13.363345Z","text_signature":"watch_tg_invmru_119a5a98(address,uint256,uint256)","hex_signature":"0x70a08231","bytes_signature":"p 1"},{"id":166551,"created_at":"2019-09-24T11:36:57.296021Z","text_signature":"passphrase_calculate_transfer(uint64,address)","hex_signature":"0x70a08231","bytes_signature":"p 1"},{"id":166550,"created_at":"2019-09-24T11:36:37.525020Z","text_signature":"branch_passphrase_public(uint256,bytes8)","hex_signature":"0x70a08231","bytes_signature":"p 1"},{"id":143,"created_at":"2016-07-09T03:58:27.545013Z","text_signature":"balanceOf(address)","hex_signature":"0x70a08231","bytes_signature":"p 1"}]});
     let fourbyte = MockServer::start();
     let fourbyte_handle = fourbyte.mock(|when, then| {
@@ -122,23 +125,25 @@ async fn get_function() {
 
     let request = actix_web::test::TestRequest::default()
         .method(http::Method::GET)
-        .uri("/api/v1/signatures/function?hex=70a08231")
+        .uri("/api/v1/abi/function?txInput=0x70a0823100000000000000000000000000000000219ab540356cbb839cbe05303d7705fa")
         .to_request();
     let response: serde_json::Value = actix_web::test::call_and_read_body_json(&app, request).await;
 
     fourbyte_handle.assert();
     sigeth_handle.assert();
+
     assert_eq!(
         sort_json(
-            serde_json::json!({"signatures":[{"name":"balanceOf(address)"},{"name":"passphrase_calculate_transfer(uint64,address)"},{"name":"branch_passphrase_public(uint256,bytes8)"},{"name":"watch_tg_invmru_119a5a98(address,uint256,uint256)"}]})
+            serde_json::json!([{"inputs":[{"components":[],"indexed":null,"name":"arg0","type":"address","value":"00000000219ab540356cbb839cbe05303d7705fa"}],"name":"balanceOf"}])
         ),
         sort_json(response)
     );
 }
 
 #[tokio::test]
-#[ignore] // TODO: fix for abi
 async fn get_event() {
+    let _ = env_logger::builder().is_test(true).try_init();
+
     let fourbyte_response = serde_json::json!({"count":1,"next":null,"previous":null,"results":[{"id":22712,"created_at":"2021-08-20T01:34:39.165270Z","text_signature":"burn(uint256)","hex_signature":"0x42966c689b5afe9b9b3f8a7103b2a19980d59629bfd6a20a60972312ed41d836","bytes_signature":"BlhZþ?q\u{0003}²¡Õ)¿Ö¢\n`#\u{0012}íAØ6"}]});
     let fourbyte = MockServer::start();
     let fourbyte_handle = fourbyte.mock(|when, then| {
@@ -183,12 +188,14 @@ async fn get_event() {
 
     let request = actix_web::test::TestRequest::default()
         .method(http::Method::GET)
-        .uri("/api/v1/signatures/event?hex=42966c689b5afe9b9b3f8a7103b2a19980d59629bfd6a20a60972312ed41d836")
+        .uri("/api/v1/abi/event?topics=0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef&topics=000000000000000000000000b8ace4d9bc469ddc8e788e636e817c299a1a8150&topics=000000000000000000000000f76c5b19e86c256482f4aad1dae620a0c3ac0cd6&data=00000000000000000000000000000000000000000000000000000000006acfc0")
         .to_request();
     let response: serde_json::Value = actix_web::test::call_and_read_body_json(&app, request).await;
 
     fourbyte_handle.assert();
     sigeth_handle.assert();
+
+    println!("{}", response.to_string());
     assert_eq!(
         sort_json(serde_json::json!({"signatures":[{"name":"burn(uint256)"}]})),
         sort_json(response),
