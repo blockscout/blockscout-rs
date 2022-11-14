@@ -144,28 +144,28 @@ async fn get_function() {
 async fn get_event() {
     let _ = env_logger::builder().is_test(true).try_init();
 
-    let fourbyte_response = serde_json::json!({"count":1,"next":null,"previous":null,"results":[{"id":22712,"created_at":"2021-08-20T01:34:39.165270Z","text_signature":"burn(uint256)","hex_signature":"0x42966c689b5afe9b9b3f8a7103b2a19980d59629bfd6a20a60972312ed41d836","bytes_signature":"BlhZþ?q\u{0003}²¡Õ)¿Ö¢\n`#\u{0012}íAØ6"}]});
+    let fourbyte_response = serde_json::json!({"count":1,"next":null,"previous":null,"results":[{"id":1,"created_at":"2020-11-30T22:38:00.801049Z","text_signature":"Transfer(address,address,uint256)","hex_signature":"0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef","bytes_signature":"ÝòR­\u{001}bâÈiÂ°hü7ª+§ñcÄ¡\u{0016}(õZMõ#³ï"}]});
     let fourbyte = MockServer::start();
     let fourbyte_handle = fourbyte.mock(|when, then| {
         when.method(httpmock::Method::GET)
             .path("/api/v1/event-signatures/")
             .query_param(
                 "hex_signature",
-                "42966c689b5afe9b9b3f8a7103b2a19980d59629bfd6a20a60972312ed41d836",
+                "ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
             );
         then.status(200)
             .header("Content-type", "application/json")
             .json_body(fourbyte_response);
     });
 
-    let sigeth_response = serde_json::json!({"ok":true,"result":{"event":{"0x42966c689b5afe9b9b3f8a7103b2a19980d59629bfd6a20a60972312ed41d836":[{"name":"burn(uint256)","filtered":false}]},"function":{}}});
+    let sigeth_response = serde_json::json!({"ok":true,"result":{"event":{"0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef":[{"name":"Transfer(address,address,uint256)","filtered":false}]},"function":{}}});
     let sigeth = MockServer::start();
     let sigeth_handle = sigeth.mock(|when, then| {
         when.method(httpmock::Method::GET)
             .path("/api/v1/signatures")
             .query_param(
                 "event",
-                "0x42966c689b5afe9b9b3f8a7103b2a19980d59629bfd6a20a60972312ed41d836",
+                "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
             )
             .query_param_exists("all");
         then.status(200)
@@ -188,16 +188,17 @@ async fn get_event() {
 
     let request = actix_web::test::TestRequest::default()
         .method(http::Method::GET)
-        .uri("/api/v1/abi/event?topics=0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef&topics=000000000000000000000000b8ace4d9bc469ddc8e788e636e817c299a1a8150&topics=000000000000000000000000f76c5b19e86c256482f4aad1dae620a0c3ac0cd6&data=00000000000000000000000000000000000000000000000000000000006acfc0")
+        .uri("/api/v1/abi/event?topics=0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef,000000000000000000000000b8ace4d9bc469ddc8e788e636e817c299a1a8150,000000000000000000000000f76c5b19e86c256482f4aad1dae620a0c3ac0cd6&data=00000000000000000000000000000000000000000000000000000000006acfc0")
         .to_request();
     let response: serde_json::Value = actix_web::test::call_and_read_body_json(&app, request).await;
 
     fourbyte_handle.assert();
     sigeth_handle.assert();
 
-    println!("{}", response.to_string());
     assert_eq!(
-        sort_json(serde_json::json!({"signatures":[{"name":"burn(uint256)"}]})),
+        sort_json(
+            serde_json::json!([{"inputs":[{"components":[],"indexed":true,"name":"arg0","type":"address","value":"b8ace4d9bc469ddc8e788e636e817c299a1a8150"},{"components":[],"indexed":true,"name":"arg1","type":"address","value":"f76c5b19e86c256482f4aad1dae620a0c3ac0cd6"},{"components":[],"indexed":false,"name":"arg2","type":"uint256","value":"6acfc0"}],"name":"Transfer"}])
+        ),
         sort_json(response),
     );
 }
