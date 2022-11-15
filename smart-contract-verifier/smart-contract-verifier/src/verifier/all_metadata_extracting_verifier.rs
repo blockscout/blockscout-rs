@@ -369,8 +369,7 @@ mod verifier_initialization_tests {
             "Initialization without \"0x\" prefix failed"
         );
 
-        let verifier =
-            new_verifier::<DeployedBytecode>(concatcp!("0x", DEFAULT_DEPLOYED_BYTECODE));
+        let verifier = new_verifier::<DeployedBytecode>(concatcp!("0x", DEFAULT_DEPLOYED_BYTECODE));
         assert!(verifier.is_ok(), "Initialization with \"0x\" prefix failed");
     }
 

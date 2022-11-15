@@ -260,10 +260,7 @@ mod tests {
 
     #[tokio::test]
     async fn filter_versions() {
-        let versions: HashSet<Version> = vec![1, 2, 3, 4, 5]
-            .into_iter()
-            .map(new_version)
-            .collect();
+        let versions: HashSet<Version> = vec![1, 2, 3, 4, 5].into_iter().map(new_version).collect();
 
         let paths = versions.iter().map(|v| v.to_string().into()).chain(vec![
             "some_random_dir".into(),
