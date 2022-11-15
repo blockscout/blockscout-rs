@@ -81,7 +81,7 @@ jobs:
         run: cargo fmt --all -- --check --config imports_granularity=Crate
 
       - name: cargo clippy
-        run: cargo clippy --all --all-features --all-targets -- -D warnings
+        run: cargo clippy --all --all-targets --all-features -- -D warnings
 
   push:
     name: Docker build and docker push
