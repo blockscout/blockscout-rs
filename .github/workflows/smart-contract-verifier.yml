@@ -5,6 +5,9 @@ on:
     tags:
       - 'smart-contract-verifier/v*'
   pull_request:
+    paths:
+      - smart-contract-verifier/**
+      - .github/workflows/smart-contract-verifier.yml
 
 
 name: Test, lint and docker (smart-contract-verifier)
