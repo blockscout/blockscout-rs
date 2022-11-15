@@ -195,10 +195,9 @@ mod tests {
 
     fn check_parsing<T: FromStr + ToString>(ver_str: &str) -> T
     where
-        <T as std::str::FromStr>::Err: std::fmt::Debug,
+        <T as FromStr>::Err: std::fmt::Debug,
     {
-        let ver = T::from_str(ver_str).unwrap();
-        ver
+        T::from_str(ver_str).unwrap()
     }
 
     #[test]
@@ -283,7 +282,7 @@ mod tests {
 
     #[test]
     fn display_version() {
-        for (initial, expected) in vec![
+        for (initial, expected) in [
             ("v0.8.9+commit.e5eed63a", "v0.8.9+commit.e5eed63a"),
             (
                 "0.8.9-nightly.2021.09.11+commit.e5ee",
@@ -346,7 +345,7 @@ mod tests {
         assert!(sorted_versions.windows(2).all(|vals| vals[0] <= vals[1]));
         let seed = thread_rng().gen();
         let mut r = StdRng::seed_from_u64(seed);
-        let mut shuffled_versions = sorted_versions.clone();
+        let mut shuffled_versions = sorted_versions;
         for i in 0..times {
             shuffled_versions.shuffle(&mut r);
             shuffled_versions.sort();

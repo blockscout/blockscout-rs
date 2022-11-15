@@ -37,7 +37,7 @@ async fn server_start() {
     assert_eq!(resp.status(), 200);
 
     let body = resp.text().await.unwrap();
-    for s in vec![
+    for s in &[
         "# TYPE smart_contract_verifier_http_requests_duration_seconds histogram",
         "smart_contract_verifier_http_requests_duration_seconds_bucket{endpoint=\"/health\",method=\"GET\",status=\"200\"",
     ] {

@@ -223,7 +223,7 @@ mod tests {
     #[tokio::test]
     async fn fetch_file() {
         let expected_file = "this is 100% a valid compiler trust me";
-        let expected_hash = Sha256::digest(&expected_file);
+        let expected_hash = Sha256::digest(expected_file);
 
         let mock_server = MockServer::start().await;
 
@@ -357,7 +357,7 @@ mod tests {
 
             tokio::time::sleep(Duration::from_secs(2)).await;
 
-            let expected_versions = HashSet::from_iter(expected_versions.into_iter().cloned());
+            let expected_versions = HashSet::from_iter(expected_versions.iter().cloned());
             let versions = fetcher.versions.read();
             assert_eq!(expected_versions, *versions);
         }
@@ -377,7 +377,7 @@ mod tests {
 
             tokio::time::sleep(Duration::from_secs(2)).await;
 
-            let expected_versions = HashSet::from_iter(expected_versions.into_iter().cloned());
+            let expected_versions = HashSet::from_iter(expected_versions.iter().cloned());
             let versions = fetcher.versions.read();
             assert_eq!(expected_versions, *versions);
         }

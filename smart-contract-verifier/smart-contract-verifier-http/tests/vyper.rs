@@ -14,8 +14,8 @@ use smart_contract_verifier_http::{
 use std::{collections::BTreeMap, fs, str::from_utf8};
 use tokio::sync::OnceCell;
 
-const TEST_CASES_DIR: &'static str = "tests/test_cases_vyper";
-const ROUTE: &'static str = "/api/v1/vyper/verify/multiple-files";
+const TEST_CASES_DIR: &str = "tests/test_cases_vyper";
+const ROUTE: &str = "/api/v1/vyper/verify/multiple-files";
 
 async fn global_app_router() -> &'static AppRouter {
     static APP_ROUTER: OnceCell<AppRouter> = OnceCell::const_new();
@@ -67,12 +67,11 @@ async fn test_setup(test_case: &TestCase) -> ServiceResponse {
             format!("{}.vy", test_case.contract_name): test_case.source_code
         },
     });
-    let response = TestRequest::post()
+    TestRequest::post()
         .uri(ROUTE)
         .set_json(&request)
         .send_request(&app)
-        .await;
-    response
+        .await
 }
 
 async fn test_success(test_case: TestCase) {
@@ -196,7 +195,7 @@ async fn test_error(test_case: TestCase, expected_status: StatusCode, expected_m
 
 #[tokio::test]
 async fn vyper_verify_success() {
-    for test_case_name in vec!["simple", "arguments", "erc20", "erc667"] {
+    for test_case_name in &["simple", "arguments", "erc20", "erc667"] {
         let test_case = TestCase::from_name(test_case_name);
         test_success(test_case).await;
     }

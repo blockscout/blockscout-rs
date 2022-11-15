@@ -117,7 +117,7 @@ mod tests {
             "input": "{\"language\": \"Solidity\", \"sources\": {\"./src/contracts/Foo.sol\": {\"content\": \"pragma solidity ^0.8.2;\\n\\ncontract Foo {\\n    function bar() external pure returns (uint256) {\\n        return 42;\\n    }\\n}\\n\"}}, \"settings\": {\"metadata\": {\"useLiteralContent\": true}, \"optimizer\": {\"enabled\": true, \"runs\": 200}, \"outputSelection\": {\"*\": {\"*\": [\"abi\", \"evm.bytecode\", \"evm.deployedBytecode\", \"evm.methodIdentifiers\"], \"\": [\"id\", \"ast\"]}}}}"
         }"#;
 
-        let deserialized: VerificationRequest = serde_json::from_str(&input).expect("Valid json");
+        let deserialized: VerificationRequest = serde_json::from_str(input).expect("Valid json");
         assert_eq!(
             deserialized.deployed_bytecode, "0x6001",
             "Invalid deployed bytecode"
