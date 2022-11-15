@@ -225,6 +225,9 @@ If verification succeeds, the service returns 200 with a success status:
     "contract_libraries": {
       "MyLib": "0x123123..."
     },
+    // Raw settings pushed submitted to the compiler on local compilation
+    // (https://docs.soliditylang.org/en/v0.8.17/using-the-compiler.html#input-description)
+    "compiler_settings": "{ ... }",
     // (optional) automatically extracted from creation transaction input
     // constructor arguments used for deploying verified contract
     "constructor_arguments": "0xcafecafecafe",
