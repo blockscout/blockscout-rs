@@ -289,22 +289,22 @@ mod local_bytecode_initialization_tests {
     use pretty_assertions::assert_eq;
     use std::str::FromStr;
 
-    const CREATION_TX_INPUT_MAIN_PART_1: &'static str = "608060405234801561001057600080fd5b506040518060200161002190610050565b6020820181038252601f19601f820116604052506000908051906020019061004a92919061005c565b5061015f565b605c806101ac83390190565b8280546100689061012e565b90600052602060002090601f01602090048101928261008a57600085556100d1565b82601f106100a357805160ff19168380011785556100d1565b828001600101855582156100d1579182015b828111156100d05782518255916020019190600101906100b5565b5b5090506100de91906100e2565b5090565b5b808211156100fb5760008160009055506001016100e3565b5090565b7f4e487b7100000000000000000000000000000000000000000000000000000000600052602260045260246000fd5b6000600282049050600182168061014657607f821691505b602082108103610159576101586100ff565b5b50919050565b603f8061016d6000396000f3fe6080604052600080fdfe";
-    const CREATION_TX_INPUT_MAIN_PART_2: &'static str =
+    const CREATION_TX_INPUT_MAIN_PART_1: &str = "608060405234801561001057600080fd5b506040518060200161002190610050565b6020820181038252601f19601f820116604052506000908051906020019061004a92919061005c565b5061015f565b605c806101ac83390190565b8280546100689061012e565b90600052602060002090601f01602090048101928261008a57600085556100d1565b82601f106100a357805160ff19168380011785556100d1565b828001600101855582156100d1579182015b828111156100d05782518255916020019190600101906100b5565b5b5090506100de91906100e2565b5090565b5b808211156100fb5760008160009055506001016100e3565b5090565b7f4e487b7100000000000000000000000000000000000000000000000000000000600052602260045260246000fd5b6000600282049050600182168061014657607f821691505b602082108103610159576101586100ff565b5b50919050565b603f8061016d6000396000f3fe6080604052600080fdfe";
+    const CREATION_TX_INPUT_MAIN_PART_2: &str =
         "6080604052348015600f57600080fd5b50603f80601d6000396000f3fe6080604052600080fdfe";
 
-    // const DEPLOYED_BYTECODE_MAIN_PART_1: &'static str = "6080604052600080fdfe";
-    // const DEPLOYED_BYTECODE_MAIN_PART_2: &'static str = "6080604052600080cafe";
+    // const DEPLOYED_BYTECODE_MAIN_PART_1: &str = "6080604052600080fdfe";
+    // const DEPLOYED_BYTECODE_MAIN_PART_2: &str = "6080604052600080cafe";
 
-    const METADATA_PART_1: &'static str = "a26469706673582212202e82fb6222f966f0e56dc49cd1fb8a6b5eac9bdf74f62b8a5e9d8812901095d664736f6c634300080e0033";
-    const METADATA_PART_2: &'static str = "a2646970667358221220bd9f7fd5fb164e10dd86ccc9880d27a177e74ba873e6a9b97b6c4d7062b26ff064736f6c634300080e0033";
+    const METADATA_PART_1: &str = "a26469706673582212202e82fb6222f966f0e56dc49cd1fb8a6b5eac9bdf74f62b8a5e9d8812901095d664736f6c634300080e0033";
+    const METADATA_PART_2: &str = "a2646970667358221220bd9f7fd5fb164e10dd86ccc9880d27a177e74ba873e6a9b97b6c4d7062b26ff064736f6c634300080e0033";
 
-    const METADATA_PART1_MODIFIED: &'static str = "a264697066735822122028c67e368422bc9c0b12226a099aa62a1facd39b08a84427d7f3efe1e37029b864736f6c634300080e0033";
-    const METADATA_PART2_MODIFIED: &'static str = "a26469706673582212206b331720b143820ca2e65d7db53a1b005672433fcb7f2da3ab539851bddc226a64736f6c634300080e0033";
+    const METADATA_PART1_MODIFIED: &str = "a264697066735822122028c67e368422bc9c0b12226a099aa62a1facd39b08a84427d7f3efe1e37029b864736f6c634300080e0033";
+    const METADATA_PART2_MODIFIED: &str = "a26469706673582212206b331720b143820ca2e65d7db53a1b005672433fcb7f2da3ab539851bddc226a64736f6c634300080e0033";
 
-    // const DEFAULT_DEPLOYED_BYTECODE: &'static str =
+    // const DEFAULT_DEPLOYED_BYTECODE: &str =
     //     concatcp!(DEPLOYED_BYTECODE_MAIN_PART_1, METADATA_PART_1);
-    // const DEFAULT_DEPLOYED_BYTECODE_MODIFIED: &'static str =
+    // const DEFAULT_DEPLOYED_BYTECODE_MODIFIED: &str =
     //     concatcp!(DEPLOYED_BYTECODE_MAIN_PART_1, METADATA_PART1_MODIFIED);
 
     fn new_bytecode<T: Source>(bytecode: &str) -> Result<Bytecode<T>, BytecodeInitError> {
@@ -340,8 +340,8 @@ mod local_bytecode_initialization_tests {
 
     #[test]
     fn without_metadata() {
-        let creation_tx_input = format!("{}", CREATION_TX_INPUT_MAIN_PART_1);
-        let creation_tx_input_modified = format!("{}", CREATION_TX_INPUT_MAIN_PART_1);
+        let creation_tx_input = CREATION_TX_INPUT_MAIN_PART_1.to_string();
+        let creation_tx_input_modified = CREATION_TX_INPUT_MAIN_PART_1.to_string();
 
         let bytecode: Bytecode<CreationTxInput> =
             new_bytecode(&creation_tx_input).expect("Bytecode initialization failed");
@@ -469,7 +469,7 @@ mod local_bytecode_initialization_tests {
         let bytecode_modified = new_bytecode(&creation_tx_input_modified)
             .expect("Modified bytecode initialization failed");
 
-        let local_bytecode = LocalBytecode::new(bytecode.clone(), bytecode_modified);
+        let local_bytecode = LocalBytecode::new(bytecode, bytecode_modified);
 
         assert!(
             local_bytecode.is_err(),
@@ -501,7 +501,7 @@ mod local_bytecode_initialization_tests {
         let bytecode_modified = new_bytecode(&creation_tx_input_modified)
             .expect("Modified bytecode initialization failed");
 
-        let local_bytecode = LocalBytecode::new(bytecode.clone(), bytecode_modified);
+        let local_bytecode = LocalBytecode::new(bytecode, bytecode_modified);
 
         assert!(
             local_bytecode.is_err(),
@@ -538,7 +538,7 @@ mod local_bytecode_initialization_tests {
         let bytecode_modified = new_bytecode(&creation_tx_input_modified)
             .expect("Modified bytecode initialization failed");
 
-        let local_bytecode = LocalBytecode::new(bytecode.clone(), bytecode_modified);
+        let local_bytecode = LocalBytecode::new(bytecode, bytecode_modified);
 
         assert!(
             local_bytecode.is_err(),
@@ -573,7 +573,7 @@ mod local_bytecode_initialization_tests {
         let bytecode_modified = new_bytecode(&creation_tx_input_modified)
             .expect("Modified bytecode initialization failed");
 
-        let local_bytecode = LocalBytecode::new(bytecode.clone(), bytecode_modified);
+        let local_bytecode = LocalBytecode::new(bytecode, bytecode_modified);
 
         assert!(
             local_bytecode.is_err(),

@@ -19,8 +19,8 @@ use std::{
 };
 use tokio::sync::OnceCell;
 
-const CONTRACTS_DIR: &'static str = "tests/contracts";
-const ROUTE: &'static str = "/api/v1/solidity/verify/multiple-files";
+const CONTRACTS_DIR: &str = "tests/contracts";
+const ROUTE: &str = "/api/v1/solidity/verify/multiple-files";
 
 async fn global_app_router() -> &'static AppRouter {
     static APP_ROUTER: OnceCell<AppRouter> = OnceCell::const_new();

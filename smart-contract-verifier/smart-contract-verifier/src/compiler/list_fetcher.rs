@@ -411,13 +411,12 @@ mod tests {
         );
 
         for compiler_version in versions {
-            fetcher.fetch(&compiler_version).await.expect(
-                format!(
+            fetcher.fetch(&compiler_version).await.unwrap_or_else(|_| {
+                panic!(
                     "fetcher: can't download vyper compiler {}",
                     compiler_version
                 )
-                .as_str(),
-            );
+            });
         }
     }
 }
