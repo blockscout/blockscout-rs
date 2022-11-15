@@ -106,9 +106,7 @@ mod tests {
                     .await
                     .expect("Fetch releases");
                 let threads_semaphore = Arc::new(Semaphore::new(4));
-                let compilers =
-                    Compilers::new(Arc::new(fetcher), VyperCompiler::new(), threads_semaphore);
-                compilers
+                Compilers::new(Arc::new(fetcher), VyperCompiler::new(), threads_semaphore)
             })
             .await
     }

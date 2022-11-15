@@ -39,7 +39,8 @@ message GetFunctionAbiResponse { repeated Abi abi = 1; }
 
 message GetEventAbiRequest {
   string data = 1;
-  repeated string topics = 2;
+  // comma separated hex values, ex. `0x0000..1234,0x0000...5678`
+  string topics = 2;
 }
 
 message GetEventAbiResponse { repeated Abi abi = 1; }

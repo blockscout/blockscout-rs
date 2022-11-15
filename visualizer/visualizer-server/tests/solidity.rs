@@ -13,8 +13,8 @@ use visualizer_server::{route_solidity_visualizer, SolidityVisualizerService};
 use std::{collections::BTreeMap, fs, path::PathBuf, str::from_utf8, sync::Arc};
 use walkdir::WalkDir;
 
-const CONTRACTS_DIR: &'static str = "tests/contracts";
-const SAMPLES_DIR: &'static str = "tests/samples";
+const CONTRACTS_DIR: &str = "tests/contracts";
+const SAMPLES_DIR: &str = "tests/samples";
 
 fn get_dir_files(project_path: &PathBuf) -> BTreeMap<PathBuf, String> {
     let mut sources = BTreeMap::new();
@@ -56,13 +56,11 @@ async fn test_setup(request: serde_json::Value, url: &str) -> ServiceResponse {
     )
     .await;
 
-    let response = TestRequest::post()
-        .uri(&url)
+    TestRequest::post()
+        .uri(url)
         .set_json(&request)
         .send_request(&app)
-        .await;
-
-    response
+        .await
 }
 
 async fn visualize_contract_success(request: serde_json::Value, expected_svg: String) {
@@ -87,8 +85,8 @@ async fn visualize_contracts_success_from_dir(project_name: &str, sample_name: &
     });
 
     let svg_path = format!("{}/uml/{}.svg", SAMPLES_DIR, sample_name);
-    let expected_svg =
-        fs::read_to_string(&svg_path).expect(&format!("Error while reading {}.svg", sample_name));
+    let expected_svg = fs::read_to_string(&svg_path)
+        .unwrap_or_else(|_| panic!("Error while reading {}.svg", sample_name));
     visualize_contract_success(request, expected_svg).await;
 }
 
@@ -121,8 +119,8 @@ async fn visualize_storage_success_from_dir(
     });
 
     let svg_path = format!("{}/storage/{}.svg", SAMPLES_DIR, sample_name);
-    let expected_svg =
-        fs::read_to_string(&svg_path).expect(&format!("Error while reading {}.svg", sample_name));
+    let expected_svg = fs::read_to_string(&svg_path)
+        .unwrap_or_else(|_| panic!("Error while reading {}.svg", sample_name));
 
     visualize_storage_success(request, expected_svg).await;
 }

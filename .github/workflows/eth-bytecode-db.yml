@@ -5,7 +5,9 @@ on:
     tags:
       - 'eth-bytecode-db/v*'
   pull_request:
-
+    paths:
+      - eth-bytecode-db/**
+      - .github/workflows/eth-bytecode-db.yml
 
 name: Test, lint and docker (eth-bytecode-db)
 

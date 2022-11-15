@@ -29,7 +29,7 @@ async fn test_versions(uri: &str) {
 
     let versions_response: VersionsResponse = read_body_json(response).await;
     assert!(
-        versions_response.versions.len() > 0,
+        !versions_response.versions.is_empty(),
         "List of versions is empty"
     )
 }

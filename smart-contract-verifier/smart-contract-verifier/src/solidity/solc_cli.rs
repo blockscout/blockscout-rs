@@ -284,7 +284,7 @@ mod tests {
         Mock, MockServer, ResponseTemplate,
     };
 
-    const DEFAULT_COMPILER_INPUT: &'static str = r#"
+    const DEFAULT_COMPILER_INPUT: &str = r#"
     {
         "language": "Solidity",
         "sources": {
@@ -318,7 +318,7 @@ mod tests {
     }
     "#;
 
-    const DEFAULT_COMPILER_OUTPUT: &'static str = r#"
+    const DEFAULT_COMPILER_OUTPUT: &str = r#"
     {
         "contracts": {
             "A": {
@@ -458,7 +458,7 @@ mod tests {
                 ),
             ] {
                 let bytecode: String = actual_bytecode
-                    .expect(&format!("unlinked {}", name))
+                    .unwrap_or_else(|| panic!("unlinked {}", name))
                     .encode_hex();
                 assert_eq!(&bytecode, expected_bytecode, "wrong {}", name);
             }
@@ -497,14 +497,14 @@ mod tests {
 
     #[tokio::test]
     async fn compile() {
-        for ver in vec!["v0.4.8+commit.60cc1668", "v0.4.10+commit.f0d539ae"] {
+        for ver in &["v0.4.8+commit.60cc1668", "v0.4.10+commit.f0d539ae"] {
             let version = Version::from_str(ver).expect("valid version");
             let solc = get_solc(&version).await;
 
             let input: CompilerInput = serde_json::from_str(DEFAULT_COMPILER_INPUT).unwrap();
             let output: CompilerOutput = compile_using_cli(&solc, &input)
                 .await
-                .expect(&format!("failed to compile contracts with {}", ver));
+                .unwrap_or_else(|_| panic!("failed to compile contracts with {}", ver));
             assert!(
                 !output.has_error(),
                 "errors during compilation: {:?}",
@@ -512,12 +512,12 @@ mod tests {
             );
             let names: HashSet<String> =
                 output.contracts_into_iter().map(|(name, _)| name).collect();
-            let expected_names = HashSet::from_iter(vec!["Main".into(), "A".into(), "B".into()]);
+            let expected_names = HashSet::from_iter(["Main".into(), "A".into(), "B".into()]);
             assert_eq!(names, expected_names);
 
             for sources in vec![
-                BTreeMap::from_iter(vec![source("main.sol", "")]),
-                BTreeMap::from_iter(vec![source("main.sol", "some string")]),
+                BTreeMap::from_iter([source("main.sol", "")]),
+                BTreeMap::from_iter([source("main.sol", "some string")]),
             ] {
                 let input = CompilerInput {
                     language: "Solidity".into(),

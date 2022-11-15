@@ -5,6 +5,9 @@ on:
     tags:
       - 'visualizer/v*'
   pull_request:
+    paths:
+      - visualizer/**
+      - .github/workflows/visualizer.yml
 
 
 name: Test, lint and docker (visualizer)

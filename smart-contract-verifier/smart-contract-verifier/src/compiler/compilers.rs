@@ -158,12 +158,11 @@ mod tests {
                     .await
                     .expect("Fetch releases");
                 let threads_semaphore = Arc::new(Semaphore::new(4));
-                let compilers = Compilers::new(
+                Compilers::new(
                     Arc::new(fetcher),
                     SolidityCompiler::new(),
                     threads_semaphore,
-                );
-                compilers
+                )
             })
             .await
     }

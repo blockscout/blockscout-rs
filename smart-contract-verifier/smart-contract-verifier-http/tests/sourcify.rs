@@ -18,7 +18,7 @@ async fn should_return_200() {
             .await
             .expect("couldn't initialize the app"),
     );
-    let mut app = test::init_service(App::new().configure(configure_router(&*app_router))).await;
+    let app = test::init_service(App::new().configure(configure_router(&*app_router))).await;
 
     let metadata = include_str!("contracts/storage/metadata.json");
     let source = include_str!("contracts/storage/source.sol");
@@ -36,7 +36,7 @@ async fn should_return_200() {
     let resp = TestRequest::post()
         .uri("/api/v1/sourcify/verify")
         .set_json(&request_body)
-        .send_request(&mut app)
+        .send_request(&app)
         .await;
 
     assert!(
@@ -79,7 +79,7 @@ async fn invalid_contracts() {
             .await
             .expect("couldn't initialize the app"),
     );
-    let mut app = test::init_service(App::new().configure(configure_router(&*app_router))).await;
+    let app = test::init_service(App::new().configure(configure_router(&*app_router))).await;
 
     let metadata_content = include_str!("contracts/storage/metadata.json");
     let source = include_str!("contracts/storage/source.sol");
@@ -121,7 +121,7 @@ async fn invalid_contracts() {
         let resp = TestRequest::post()
             .uri("/api/v1/sourcify/verify")
             .set_json(&request_body)
-            .send_request(&mut app)
+            .send_request(&app)
             .await;
 
         let body: VerificationResponse = test::read_body_json(resp).await;

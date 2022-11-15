@@ -31,12 +31,10 @@ paths:
           required: false
           type: string
         - name: topics
+          description: comma separated hex values, ex. `0x0000..1234,0x0000...5678`
           in: query
           required: false
-          type: array
-          items:
-            type: string
-          collectionFormat: multi
+          type: string
       tags:
         - AbiService
   /api/v1/abi/function:
