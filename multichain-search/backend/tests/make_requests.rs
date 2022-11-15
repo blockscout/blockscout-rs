@@ -48,7 +48,7 @@ async fn check_make_requests() {
         let instance_response = actual_response
             .0
             .get(name)
-            .expect(&format!("response for {} not found", name));
+            .unwrap_or_else(|| panic!("response for {} not found", name));
         assert_eq!(instance_response.status, StatusCode::OK);
         assert_eq!(
             instance_response.uri.to_string(),
