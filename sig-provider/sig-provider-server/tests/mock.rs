@@ -67,7 +67,7 @@ async fn create() {
 fn sort_json_mut(v: &mut Value) {
     match v {
         Value::Array(arr) => {
-            arr.sort_by(|a, b| a.to_string().cmp(&b.to_string()));
+            arr.sort_by_key(|v| v.to_string());
         }
         Value::Object(obj) => {
             for (_, val) in obj.iter_mut() {
