@@ -29,6 +29,7 @@ pub struct Success {
     pub contract_libraries: BTreeMap<String, String>,
     pub abi: String,
     pub sources: BTreeMap<String, String>,
+    pub compiler_settings: String,
 }
 
 #[derive(Error, Debug)]

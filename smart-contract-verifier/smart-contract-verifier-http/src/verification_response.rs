@@ -22,11 +22,13 @@ pub struct VerificationResult {
     pub contract_libraries: BTreeMap<String, String>,
     pub abi: Option<String>,
     pub sources: BTreeMap<String, String>,
+    pub compiler_settings: String,
 }
 
 impl From<VerificationSuccess> for VerificationResult {
     fn from(verification_success: VerificationSuccess) -> Self {
         let compiler_input = verification_success.compiler_input;
+        let compiler_settings = serde_json::to_string(&compiler_input.settings).unwrap();
         VerificationResult {
             file_name: verification_success.file_path,
             contract_name: verification_success.contract_name,
@@ -55,6 +57,7 @@ impl From<VerificationSuccess> for VerificationResult {
                 .into_iter()
                 .map(|(path, source)| (path.to_string_lossy().to_string(), source.content))
                 .collect(),
+            compiler_settings,
         }
     }
 }
@@ -74,6 +77,7 @@ impl From<SourcifySuccess> for VerificationResult {
             contract_libraries: sourcify_success.contract_libraries,
             abi: Some(sourcify_success.abi),
             sources: sourcify_success.sources,
+            compiler_settings: sourcify_success.compiler_settings,
         }
     }
 }
@@ -133,6 +137,7 @@ mod tests {
                         }"#,
                     )
                     .unwrap(),
+                    compiler_settings: "compiler_settings".into(),
                 }),
                 json!({
                     "message": "OK",
@@ -149,6 +154,7 @@ mod tests {
                         "optimization": false,
                         "optimization_runs": 200,
                         "abi": "abi",
+                        "compiler_settings": "compiler_settings",
                         "sources": {
                             "source.sol": "content",
                         },
