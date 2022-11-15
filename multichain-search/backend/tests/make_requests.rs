@@ -7,6 +7,8 @@ use wiremock::{
     Mock, MockServer, ResponseTemplate,
 };
 
+// TEST
+
 #[actix_web::test]
 async fn check_make_requests() {
     let mock_server = MockServer::start().await;
