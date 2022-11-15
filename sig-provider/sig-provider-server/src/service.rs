@@ -60,9 +60,9 @@ impl AbiService for Service {
         let request = request.into_inner();
         let topics: Result<Vec<_>, _> = request
             .topics
-            .into_iter()
+            .split(',')
             .map(|topic| {
-                let hex = decode(&topic)?;
+                let hex = decode(topic)?;
                 if hex.len() != 32 {
                     return Err(tonic::Status::invalid_argument(
                         "topic len must be 32 bytes",
