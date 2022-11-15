@@ -7,7 +7,7 @@ use std::time::Duration;
 
 #[tokio::test]
 async fn create() {
-    let _ = env_logger::builder().is_test(true).try_init();
+    let _ = tracing_subscriber::fmt::try_init();
 
     let fourbyte_request = serde_json::json!({"contract_abi":"[{\"constant\":false,\"inputs\":[],\"name\":\"f\",\"outputs\":[],\"type\":\"function\"},{\"inputs\":[],\"type\":\"constructor\"},{\"anonymous\":false,\"inputs\":[{\"name\":\"\",\"type\":\"string\",\"indexed\":true}],\"name\":\"E\",\"type\":\"event\"}]"});
     let fourbyte_response = serde_json::json!({"num_processed":25,"num_imported":3,"num_duplicates":18,"num_ignored":4});
@@ -85,7 +85,7 @@ fn sort_json(mut v: Value) -> Value {
 
 #[tokio::test]
 async fn get_function() {
-    let _ = env_logger::builder().is_test(true).try_init();
+    let _ = tracing_subscriber::fmt::try_init();
 
     let fourbyte_response = serde_json::json!({"count":4,"next":null,"previous":null,"results":[{"id":844293,"created_at":"2022-08-26T12:22:13.363345Z","text_signature":"watch_tg_invmru_119a5a98(address,uint256,uint256)","hex_signature":"0x70a08231","bytes_signature":"p 1"},{"id":166551,"created_at":"2019-09-24T11:36:57.296021Z","text_signature":"passphrase_calculate_transfer(uint64,address)","hex_signature":"0x70a08231","bytes_signature":"p 1"},{"id":166550,"created_at":"2019-09-24T11:36:37.525020Z","text_signature":"branch_passphrase_public(uint256,bytes8)","hex_signature":"0x70a08231","bytes_signature":"p 1"},{"id":143,"created_at":"2016-07-09T03:58:27.545013Z","text_signature":"balanceOf(address)","hex_signature":"0x70a08231","bytes_signature":"p 1"}]});
     let fourbyte = MockServer::start();
@@ -142,9 +142,9 @@ async fn get_function() {
 
 #[tokio::test]
 async fn get_event() {
-    let _ = env_logger::builder().is_test(true).try_init();
+    let _ = tracing_subscriber::fmt::try_init();
 
-    let fourbyte_response = serde_json::json!({"count":1,"next":null,"previous":null,"results":[{"id":1,"created_at":"2020-11-30T22:38:00.801049Z","text_signature":"Transfer(address,address,uint256)","hex_signature":"0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef","bytes_signature":"ÝòR­\u{001}bâÈiÂ°hü7ª+§ñcÄ¡\u{0016}(õZMõ#³ï"}]});
+    let fourbyte_response = serde_json::json!({"count":1,"next":null,"previous":null,"results":[{"id":1,"created_at":"2020-11-30T22:38:00.801049Z","text_signature":"Transfer(address,address,uint256)","hex_signature":"0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef","bytes_signature":"\u{1234}\u{4132}\u{1244}\u{1110}"}]});
     let fourbyte = MockServer::start();
     let fourbyte_handle = fourbyte.mock(|when, then| {
         when.method(httpmock::Method::GET)
