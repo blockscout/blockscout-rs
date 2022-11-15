@@ -1,6 +1,8 @@
 [workspace]
 members = [
     "eth-bytecode-db",
+    "eth-bytecode-db/entity",
+    "eth-bytecode-db/migration",
     "eth-bytecode-db-server",
     "eth-bytecode-db-proto"
 ]
