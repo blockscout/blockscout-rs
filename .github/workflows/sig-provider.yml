@@ -5,6 +5,9 @@ on:
     tags:
       - 'sig-provider/v*'
   pull_request:
+    paths:
+      - sig-provider/**
+      - .github/workflows/sig-provider.yml
 
 
 name: Test, lint and docker (sig-provider)
