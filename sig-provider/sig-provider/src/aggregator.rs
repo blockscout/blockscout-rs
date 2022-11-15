@@ -302,7 +302,7 @@ mod tests {
 
     fn encode_tx_input_tuple() -> String {
         use ethabi::Token::*;
-        let res = ethabi::encode(&vec![
+        let res = ethabi::encode(&[
             Tuple(vec![
                 Uint(U256::from_dec_str("123456789").unwrap()),
                 Address(H160(
