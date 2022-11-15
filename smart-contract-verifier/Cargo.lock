@@ -3577,7 +3577,7 @@ checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
 
 [[package]]
 name = "smart-contract-verifier"
-version = "0.3.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3620,7 +3620,7 @@ dependencies = [
 
 [[package]]
 name = "smart-contract-verifier-http"
-version = "0.3.0"
+version = "0.6.0"
 dependencies = [
  "actix-rt",
  "actix-web",
