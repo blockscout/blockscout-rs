@@ -1,0 +1,27 @@
+{
+  "server": {
+    "addr": "0.0.0.0:8043"
+  },
+  "solidity": {
+    "enabled": true,
+    "compilers_dir": "/tmp/solidity-compilers",
+    "refresh_versions_schedule": "0 0 * * * * *",
+    "fetcher": {
+      "list": {
+        "list_url": "https://solc-bin.ethereum.org/linux-amd64/list.json"
+      }
+    }
+  },
+  "extensions": {
+    "solidity": {
+      "sig_provider": {
+        "enabled": true,
+        "url": "0.0.0.0:1234"
+      },
+      "sourcify": {
+        "enabled": false,
+        "url": "0.0.0.0:2345"
+      }
+    }
+  }
+}

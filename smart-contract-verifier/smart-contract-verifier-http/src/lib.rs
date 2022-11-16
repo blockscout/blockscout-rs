@@ -7,6 +7,8 @@ mod tracer;
 mod verification_response;
 mod versions;
 
+mod extensions;
+
 #[cfg(test)]
 mod tests;
 

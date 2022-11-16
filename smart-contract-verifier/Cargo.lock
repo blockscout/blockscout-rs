@@ -3626,6 +3626,7 @@ dependencies = [
  "actix-web",
  "actix-web-prom",
  "anyhow",
+ "async-trait",
  "config",
  "cron",
  "ethabi",

@@ -1,3 +1,4 @@
+use crate::extensions::{sig_provider, sourcify};
 use anyhow::anyhow;
 use config::{Config, File};
 use cron::Schedule;
@@ -38,6 +39,7 @@ pub struct Settings {
     pub metrics: MetricsSettings,
     pub jaeger: JaegerSettings,
     pub compilers: CompilersSettings,
+    pub extensions: ExtensionsSettings,
 
     // Is required as we deny unknown fields, but allow users provide
     // path to config through PREFIX__CONFIG env variable. If removed,
@@ -217,6 +219,25 @@ impl Default for CompilersSettings {
         });
         Self { max_threads }
     }
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ExtensionsSettings {
+    #[serde_as(as = "serde_with::EnumMap")]
+    solidity: Vec<Extensions>,
+    #[serde_as(as = "serde_with::EnumMap")]
+    sourcify: Vec<Extensions>,
+    #[serde_as(as = "serde_with::EnumMap")]
+    vyper: Vec<Extensions>,
+}
+
+#[derive(Deserialize, Clone, PartialEq, Eq, Debug)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub enum Extensions {
+    SigProvider(sig_provider::Settings),
+    Sourcify(sourcify::Settings),
 }
 
 impl Settings {

@@ -45,3 +45,19 @@ route = "/metrics"
 [jaeger]
 enabled = false
 agent_endpoint = "localhost:6831"
+
+[extensions.solidity.sig_provider]
+enabled = true
+addr = "0.0.0.0:1234"
+
+[extensions.solidity.sourcify]
+enabled = true
+addr = "0.0.0.0:2345"
+
+#[extensions.vyper.sig_provider]
+#enabled = true
+#url = "0.0.0.0:1234"
+#
+#[extensions.sourcify.sig_provider]
+#enabled = true
+#url = "0.0.0.0:1234"
