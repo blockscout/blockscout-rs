@@ -74,7 +74,7 @@ dependencies = [
  "actix-http",
  "actix-web",
  "http",
- "prost 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "prost",
  "serde",
  "serde_with",
  "tonic",
@@ -2483,22 +2483,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "399c3c31cdec40583bb68f0b18403400d01ec4289c383aa047560439952c4dd7"
 dependencies = [
  "bytes",
- "prost-derive 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "prost"
-version = "0.11.0"
-source = "git+https://github.com/tokio-rs/prost#ec385dcb45344763b13bc55acd513521ce52042a"
-dependencies = [
- "bytes",
- "prost-derive 0.11.0 (git+https://github.com/tokio-rs/prost)",
+ "prost-derive",
 ]
 
 [[package]]
 name = "prost-build"
-version = "0.11.1"
-source = "git+https://github.com/tokio-rs/prost#ec385dcb45344763b13bc55acd513521ce52042a"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d8b442418ea0822409d9e7d047cbf1e7e9e1760b172bf9982cf29d517c93511"
 dependencies = [
  "bytes",
  "heck",
@@ -2507,9 +2499,11 @@ dependencies = [
  "log",
  "multimap",
  "petgraph",
- "prost 0.11.0 (git+https://github.com/tokio-rs/prost)",
+ "prettyplease",
+ "prost",
  "prost-types",
  "regex",
+ "syn",
  "tempfile",
  "which",
 ]
@@ -2528,24 +2522,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "prost-derive"
-version = "0.11.0"
-source = "git+https://github.com/tokio-rs/prost#ec385dcb45344763b13bc55acd513521ce52042a"
-dependencies = [
- "anyhow",
- "itertools",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "prost-types"
-version = "0.11.1"
-source = "git+https://github.com/tokio-rs/prost#ec385dcb45344763b13bc55acd513521ce52042a"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "747761bc3dc48f9a34553bf65605cf6cb6288ba219f3450b4275dbd81539551a"
 dependencies = [
  "bytes",
- "prost 0.11.0 (git+https://github.com/tokio-rs/prost)",
+ "prost",
 ]
 
 [[package]]
@@ -3004,7 +2987,7 @@ dependencies = [
  "actix-prost-macros",
  "actix-web",
  "async-trait",
- "prost 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "prost",
  "prost-build",
  "serde",
  "serde_with",
@@ -3407,8 +3390,8 @@ dependencies = [
  "hyper-timeout",
  "percent-encoding",
  "pin-project",
- "prost 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "prost-derive 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "prost",
+ "prost-derive",
  "tokio",
  "tokio-stream",
  "tokio-util",
