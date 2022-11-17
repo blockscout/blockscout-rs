@@ -596,7 +596,7 @@ mod bytecode_parts_tests {
             BytecodePart::Meta {data: DisplayBytes::from_str("a165627a7a72305820b127de36a4e02cfe83fe4ccce7cfdbe00e4a2da70d71c3b2d0be5097bcfb94c8").unwrap() }
         ];
         super::assert_eq!(
-            expected_creation_tx_input_parts,
+            Some(expected_creation_tx_input_parts),
             result.local_creation_input_parts,
             "Invalid creation tx input parts"
         );
@@ -606,7 +606,7 @@ mod bytecode_parts_tests {
             BytecodePart::Meta {data: DisplayBytes::from_str("a165627a7a72305820b127de36a4e02cfe83fe4ccce7cfdbe00e4a2da70d71c3b2d0be5097bcfb94c8").unwrap() }
         ];
         super::assert_eq!(
-            expected_deployed_bytecode_parts,
+            Some(expected_deployed_bytecode_parts),
             result.local_deployed_bytecode_parts,
             "Invalid deployed bytecode parts"
         );
@@ -628,7 +628,7 @@ mod bytecode_parts_tests {
             BytecodePart::Meta {data: DisplayBytes::from_str("a2646970667358221220708123f84ee8016bdaaab1461b231024c52e14bd1f9c02b522c3c057528434dd64736f6c634300080e").unwrap() }
         ];
         super::assert_eq!(
-            expected_creation_tx_input_parts,
+            Some(expected_creation_tx_input_parts),
             result.local_creation_input_parts,
             "Invalid creation tx input parts"
         );
@@ -638,7 +638,7 @@ mod bytecode_parts_tests {
             BytecodePart::Meta {data: DisplayBytes::from_str("a26469706673582212205c9c5bb56fb32b38e31f567bf368712fd0bd017cf3b36663c99b9fa32ddf41ae64736f6c634300080e").unwrap() },
         ];
         super::assert_eq!(
-            expected_deployed_bytecode_parts,
+            Some(expected_deployed_bytecode_parts),
             result.local_deployed_bytecode_parts,
             "Invalid deployed bytecode parts"
         );

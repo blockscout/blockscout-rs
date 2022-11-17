@@ -46,10 +46,10 @@ pub struct VerificationResult {
     pub sources: BTreeMap<String, String>,
     pub compiler_settings: String,
 
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub local_creation_input_parts: Vec<BytecodePart>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub local_deployed_bytecode_parts: Vec<BytecodePart>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_creation_input_parts: Option<Vec<BytecodePart>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_deployed_bytecode_parts: Option<Vec<BytecodePart>>,
 }
 
 impl From<VerificationSuccess> for VerificationResult {
@@ -86,18 +86,22 @@ impl From<VerificationSuccess> for VerificationResult {
                 .collect(),
             compiler_settings,
 
-            local_creation_input_parts: verification_success
-                .local_bytecode_parts
-                .creation_tx_input_parts
-                .into_iter()
-                .map(|part| part.into())
-                .collect(),
-            local_deployed_bytecode_parts: verification_success
-                .local_bytecode_parts
-                .deployed_bytecode_parts
-                .into_iter()
-                .map(|part| part.into())
-                .collect(),
+            local_creation_input_parts: Some(
+                verification_success
+                    .local_bytecode_parts
+                    .creation_tx_input_parts
+                    .into_iter()
+                    .map(|part| part.into())
+                    .collect(),
+            ),
+            local_deployed_bytecode_parts: Some(
+                verification_success
+                    .local_bytecode_parts
+                    .deployed_bytecode_parts
+                    .into_iter()
+                    .map(|part| part.into())
+                    .collect(),
+            ),
         }
     }
 }
@@ -120,8 +124,8 @@ impl From<SourcifySuccess> for VerificationResult {
             compiler_settings: sourcify_success.compiler_settings,
 
             // We have no notion of bytecode parts for Sourcify verification
-            local_creation_input_parts: vec![],
-            local_deployed_bytecode_parts: vec![],
+            local_creation_input_parts: None,
+            local_deployed_bytecode_parts: None,
         }
     }
 }
@@ -183,15 +187,15 @@ mod tests {
                     )
                     .unwrap(),
                     compiler_settings: "compiler_settings".into(),
-                    local_creation_input_parts: vec![
+                    local_creation_input_parts: Some(vec![
                         BytecodePart::Main {
                             data: DisplayBytes::from_str("0x1234").unwrap(),
                         },
                         BytecodePart::Meta {
                             data: DisplayBytes::from_str("0xcafe").unwrap(),
                         },
-                    ],
-                    local_deployed_bytecode_parts: vec![],
+                    ]),
+                    local_deployed_bytecode_parts: Some(vec![]),
                 }),
                 json!({
                     "message": "OK",
@@ -215,7 +219,8 @@ mod tests {
                         "local_creation_input_parts": [
                             { "type": "Main", "data": "0x1234" },
                             { "type": "Meta", "data": "0xcafe" }
-                        ]
+                        ],
+                        "local_deployed_bytecode_parts": []
                     },
                 }),
             ),
