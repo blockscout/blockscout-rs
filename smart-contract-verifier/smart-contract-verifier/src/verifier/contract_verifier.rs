@@ -1,5 +1,6 @@
 use super::{
     all_metadata_extracting_verifier, base,
+    base::LocalBytecodeParts,
     bytecode::{CreationTxInput, DeployedBytecode},
     errors::{BytecodeInitError, VerificationError, VerificationErrorKind},
 };
@@ -57,6 +58,7 @@ pub struct Success {
     pub contract_name: String,
     pub abi: Option<ethabi::Contract>,
     pub constructor_args: Option<DisplayBytes>,
+    pub local_bytecode_parts: LocalBytecodeParts,
 }
 
 pub struct ContractVerifier<'a, T> {
@@ -159,6 +161,7 @@ impl<'a, T: EvmCompiler> ContractVerifier<'a, T> {
             contract_name: verification_success.contract_name,
             abi: verification_success.abi,
             constructor_args: verification_success.constructor_args,
+            local_bytecode_parts: verification_success.local_bytecode_parts,
         })
     }
 }

@@ -1,5 +1,23 @@
-use super::errors::VerificationError;
+use super::{
+    bytecode::{BytecodePart, LocalBytecode},
+    errors::VerificationError,
+};
 use crate::DisplayBytes;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LocalBytecodeParts {
+    pub creation_tx_input_parts: Vec<BytecodePart>,
+    pub deployed_bytecode_parts: Vec<BytecodePart>,
+}
+
+impl<T> From<LocalBytecode<T>> for LocalBytecodeParts {
+    fn from(local_bytecode: LocalBytecode<T>) -> Self {
+        LocalBytecodeParts {
+            creation_tx_input_parts: local_bytecode.creation_tx_input_parts,
+            deployed_bytecode_parts: local_bytecode.deployed_bytecode_parts,
+        }
+    }
+}
 
 /// The structure returned as a result when verification successes.
 /// Contains data needed to be sent back as a verification response.
@@ -9,6 +27,8 @@ pub struct VerificationSuccess {
     pub contract_name: String,
     pub abi: Option<ethabi::Contract>,
     pub constructor_args: Option<DisplayBytes>,
+
+    pub local_bytecode_parts: LocalBytecodeParts,
 }
 
 /// Combine different verifiers
