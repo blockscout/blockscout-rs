@@ -3,14 +3,14 @@ use serde::{Deserialize, Serialize};
 use smart_contract_verifier::{SourcifySuccess, VerificationSuccess};
 use std::{collections::BTreeMap, fmt::Display};
 
-#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct VerificationResponse {
     pub message: String,
     pub result: Option<VerificationResult>,
     pub status: VerificationStatus,
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(tag = "type")]
 pub enum BytecodePart {
     Main { data: DisplayBytes },
@@ -32,7 +32,7 @@ impl From<smart_contract_verifier::BytecodePart> for BytecodePart {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct VerificationResult {
     pub file_name: String,
     pub contract_name: String,
@@ -126,7 +126,7 @@ impl From<SourcifySuccess> for VerificationResult {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub enum VerificationStatus {
     #[serde(rename = "0")]
     Ok,
