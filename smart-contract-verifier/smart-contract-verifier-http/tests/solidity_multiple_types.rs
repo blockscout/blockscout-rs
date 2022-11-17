@@ -1,8 +1,8 @@
 #![allow(dead_code, unused)]
 
+use smart_contract_verifier::BytecodePart;
 use smart_contract_verifier_http::AppRouter;
 use std::collections::BTreeMap;
-use smart_contract_verifier::BytecodePart;
 
 pub struct TestInput {
     pub contract_name: &'static str,
