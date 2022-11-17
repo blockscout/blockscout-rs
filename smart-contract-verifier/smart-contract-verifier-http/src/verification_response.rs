@@ -17,6 +17,21 @@ pub enum BytecodePart {
     Meta { data: DisplayBytes },
 }
 
+impl From<smart_contract_verifier::BytecodePart> for BytecodePart {
+    fn from(part: smart_contract_verifier::BytecodePart) -> Self {
+        match part {
+            smart_contract_verifier::BytecodePart::Main { raw } => BytecodePart::Main {
+                data: DisplayBytes::from(raw),
+            },
+            smart_contract_verifier::BytecodePart::Metadata { metadata_raw, .. } => {
+                BytecodePart::Meta {
+                    data: DisplayBytes::from(metadata_raw),
+                }
+            }
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct VerificationResult {
     pub file_name: String,
@@ -71,9 +86,18 @@ impl From<VerificationSuccess> for VerificationResult {
                 .collect(),
             compiler_settings,
 
-            // TODO: fill with actual bytecode parts
-            local_creation_input_parts: vec![],
-            local_deployed_bytecode_parts: vec![],
+            local_creation_input_parts: verification_success
+                .local_bytecode_parts
+                .creation_tx_input_parts
+                .into_iter()
+                .map(|part| part.into())
+                .collect(),
+            local_deployed_bytecode_parts: verification_success
+                .local_bytecode_parts
+                .deployed_bytecode_parts
+                .into_iter()
+                .map(|part| part.into())
+                .collect(),
         }
     }
 }

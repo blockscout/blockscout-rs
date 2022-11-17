@@ -7,4 +7,5 @@ mod metadata;
 
 mod contract_verifier;
 
+pub use bytecode::BytecodePart;
 pub use contract_verifier::{ContractVerifier, Error, Success};
