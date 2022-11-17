@@ -3,6 +3,3 @@ members = [
     "smart-contract-verifier",
     "smart-contract-verifier-http",
 ]
-
-[patch.crates-io]
-ethers-solc = { git = "https://github.com/gakonst/ethers-rs", package = "ethers-solc", rev = "13a0144a" }

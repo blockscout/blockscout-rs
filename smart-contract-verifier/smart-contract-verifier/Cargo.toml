@@ -13,8 +13,8 @@ bytes = "1.2"
 chrono = "0.4"
 cron = "0.11"
 ethabi = "17.2"
-ethers-core = "0.17"
-ethers-solc = { version = "0.17", features = ["async"] }
+ethers-core = "1.0"
+ethers-solc = { version = "1.0", features = ["async"] }
 futures = "0.3"
 hex = "0.4"
 lazy_static = "1"
@@ -37,9 +37,6 @@ tracing = "0.1"
 url = { version = "2.2", features = ["serde"] }
 reqwest-retry = "0.1"
 reqwest-middleware = "0.1"
-
-[patch.crates-io]
-ethers-solc = { git = "https://github.com/gakonst/ethers-rs", package = "ethers-solc", rev = "13a0144a" }
 
 [dev-dependencies]
 const_format = "0.2"
