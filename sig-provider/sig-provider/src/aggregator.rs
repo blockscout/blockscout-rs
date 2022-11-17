@@ -126,15 +126,7 @@ fn parse_signature(sig: &str) -> Option<(&str, Vec<ParamType>)> {
 }
 
 fn decode_txinput(args: &[ParamType], tx_args: &[u8]) -> Option<Vec<Token>> {
-    let decoded = ethabi::decode(args, tx_args).ok()?;
-
-    // decode will not fail if it decodes only part of the input data
-    // so we will encode the result and check, that we decoded the whole data
-    let encoded = ethabi::encode(&decoded);
-    if tx_args != encoded {
-        return None;
-    }
-    Some(decoded)
+    ethabi::decode_whole(args, tx_args).ok()
 }
 
 fn decode_log(name: String, args: &[ParamType], raw: RawLog) -> Option<(Vec<Token>, Vec<bool>)> {
@@ -169,7 +161,7 @@ fn decode_log(name: String, args: &[ParamType], raw: RawLog) -> Option<(Vec<Toke
             anonymous: false,
         };
         let tokens = event
-            .parse_log(raw.clone())
+            .parse_log_whole(raw.clone())
             .ok()
             .map(|log| log.params.into_iter().map(|param| param.value).collect());
         if let Some(tokens) = tokens {
@@ -663,44 +655,35 @@ mod tests {
             topics: vec![
                 H256::from_slice(
                     &hex::decode(
-                        "5db533d27f83c494aa583a6f8222343e612dd3efd69499ca6ae5dda6c6097df0",
+                        "cf74b4e62f836eeedcd6f92120ffb5afea90e6fa490d36f8b81075e2a7de0cf7",
                     )
                     .unwrap(),
                 ),
                 H256::from_slice(
                     &hex::decode(
-                        "000000000000000000000000b8ace4d9bc469ddc8e788e636e817c299a1a8150",
+                        "000000000000000000000000abcde12345679ddc8e788e636e817c299a1a8150",
                     )
                     .unwrap(),
                 ),
             ],
         };
-        let sig = "Test(address,(address,address))";
+        let sig = "Test((address,address),address)";
         let abi = Abi {
             name: "Test".into(),
             inputs: vec![
                 Argument {
                     name: "arg0".into(),
-                    r#type: "address".into(),
-                    components: vec![],
-                    indexed: Some(
-                        true,
-                    ),
-                    value: "b8ace4d9bc469ddc8e788e636e817c299a1a8150".into(),
-                },
-                Argument {
-                    name: "arg1".into(),
                     r#type: "(address,address)".into(),
                     components: vec![
                         Argument {
-                            name: "arg1_0".into(),
+                            name: "arg0_0".into(),
                             r#type: "address".into(),
                             components: vec![],
                             indexed: None,
                             value: "b8ace4d9bc469ddc8e788e636e817c299a1a8150".into(),
                         },
                         Argument {
-                            name: "arg1_1".into(),
+                            name: "arg0_1".into(),
                             r#type: "address".into(),
                             components: vec![],
                             indexed: None,
@@ -711,6 +694,15 @@ mod tests {
                         false,
                     ),
                     value: "(b8ace4d9bc469ddc8e788e636e817c299a1a8150,f76c5b19e86c256482f4aad1dae620a0c3ac0cd6)".into(),
+                },
+                Argument {
+                    name: "arg1".into(),
+                    r#type: "address".into(),
+                    components: vec![],
+                    indexed: Some(
+                        true,
+                    ),
+                    value: "abcde12345679ddc8e788e636e817c299a1a8150".into(),
                 },
             ],
         };

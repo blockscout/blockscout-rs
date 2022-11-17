@@ -25,7 +25,7 @@ futures = "0.3"
 anyhow = "1.0"
 url = { version = "2", features = ["serde"] }
 hex = "0.4"
-ethabi = "17"
+ethabi = "18"
 
 [dev-dependencies]
 http = "0.2"
