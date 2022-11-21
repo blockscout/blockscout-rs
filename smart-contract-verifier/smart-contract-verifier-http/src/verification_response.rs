@@ -3,14 +3,36 @@ use serde::{Deserialize, Serialize};
 use smart_contract_verifier::{SourcifySuccess, VerificationSuccess};
 use std::{collections::BTreeMap, fmt::Display};
 
-#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct VerificationResponse {
     pub message: String,
     pub result: Option<VerificationResult>,
     pub status: VerificationStatus,
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum BytecodePart {
+    Main { data: DisplayBytes },
+    Meta { data: DisplayBytes },
+}
+
+impl From<smart_contract_verifier::BytecodePart> for BytecodePart {
+    fn from(part: smart_contract_verifier::BytecodePart) -> Self {
+        match part {
+            smart_contract_verifier::BytecodePart::Main { raw } => BytecodePart::Main {
+                data: DisplayBytes::from(raw),
+            },
+            smart_contract_verifier::BytecodePart::Metadata { metadata_raw, .. } => {
+                BytecodePart::Meta {
+                    data: DisplayBytes::from(metadata_raw),
+                }
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct VerificationResult {
     pub file_name: String,
     pub contract_name: String,
@@ -23,6 +45,11 @@ pub struct VerificationResult {
     pub abi: Option<String>,
     pub sources: BTreeMap<String, String>,
     pub compiler_settings: String,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_creation_input_parts: Option<Vec<BytecodePart>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_deployed_bytecode_parts: Option<Vec<BytecodePart>>,
 }
 
 impl From<VerificationSuccess> for VerificationResult {
@@ -58,6 +85,23 @@ impl From<VerificationSuccess> for VerificationResult {
                 .map(|(path, source)| (path.to_string_lossy().to_string(), source.content))
                 .collect(),
             compiler_settings,
+
+            local_creation_input_parts: Some(
+                verification_success
+                    .local_bytecode_parts
+                    .creation_tx_input_parts
+                    .into_iter()
+                    .map(|part| part.into())
+                    .collect(),
+            ),
+            local_deployed_bytecode_parts: Some(
+                verification_success
+                    .local_bytecode_parts
+                    .deployed_bytecode_parts
+                    .into_iter()
+                    .map(|part| part.into())
+                    .collect(),
+            ),
         }
     }
 }
@@ -78,11 +122,15 @@ impl From<SourcifySuccess> for VerificationResult {
             abi: Some(sourcify_success.abi),
             sources: sourcify_success.sources,
             compiler_settings: sourcify_success.compiler_settings,
+
+            // We have no notion of bytecode parts for Sourcify verification
+            local_creation_input_parts: None,
+            local_deployed_bytecode_parts: None,
         }
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub enum VerificationStatus {
     #[serde(rename = "0")]
     Ok,
@@ -113,6 +161,7 @@ mod tests {
     use super::*;
     use crate::tests::parse::test_serialize_json_ok;
     use serde_json::json;
+    use std::str::FromStr;
 
     #[test]
     fn parse_response() {
@@ -138,6 +187,15 @@ mod tests {
                     )
                     .unwrap(),
                     compiler_settings: "compiler_settings".into(),
+                    local_creation_input_parts: Some(vec![
+                        BytecodePart::Main {
+                            data: DisplayBytes::from_str("0x1234").unwrap(),
+                        },
+                        BytecodePart::Meta {
+                            data: DisplayBytes::from_str("0xcafe").unwrap(),
+                        },
+                    ]),
+                    local_deployed_bytecode_parts: Some(vec![]),
                 }),
                 json!({
                     "message": "OK",
@@ -158,8 +216,12 @@ mod tests {
                         "sources": {
                             "source.sol": "content",
                         },
+                        "local_creation_input_parts": [
+                            { "type": "main", "data": "0x1234" },
+                            { "type": "meta", "data": "0xcafe" }
+                        ],
+                        "local_deployed_bytecode_parts": []
                     },
-
                 }),
             ),
             (

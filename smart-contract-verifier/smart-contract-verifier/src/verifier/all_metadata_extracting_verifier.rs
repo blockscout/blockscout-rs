@@ -4,7 +4,11 @@ use super::{
     errors::{BytecodeInitError, VerificationError, VerificationErrorKind},
     metadata::MetadataHash,
 };
-use crate::{mismatch::Mismatch, DisplayBytes};
+use crate::{
+    mismatch::Mismatch,
+    verifier::bytecode::{CreationTxInput, DeployedBytecode},
+    DisplayBytes,
+};
 use bytes::Bytes;
 use ethabi::{Constructor, Token};
 use ethers_solc::{artifacts::Contract, Artifact, CompilerOutput};
@@ -95,12 +99,18 @@ impl<T: Source> Verifier<T> {
                 };
 
                 match self.compare(contract, contract_modified) {
-                    Ok((abi, constructor_args)) => {
+                    Ok(ComparisonSuccess {
+                        abi,
+                        constructor_args,
+                        local_bytecode,
+                    }) => {
                         return Ok(VerificationSuccess {
                             file_path: path.clone(),
                             contract_name: name.clone(),
                             abi,
                             constructor_args: constructor_args.map(DisplayBytes::from),
+
+                            local_bytecode_parts: local_bytecode.into(),
                         })
                     }
                     Err(err) => {
@@ -132,19 +142,40 @@ impl<T: Source> Verifier<T> {
         &self,
         contract: &Contract,
         contract_modified: &Contract,
-    ) -> Result<(Option<ethabi::Contract>, Option<Bytes>), VerificationErrorKind> {
-        let bytecode = Bytecode::try_from(contract).map_err(|err| match err {
-            BytecodeInitError::Empty => VerificationErrorKind::AbstractContract,
-            // Corresponding bytecode was not linked properly
-            BytecodeInitError::InvalidCreationTxInput(_)
-            | BytecodeInitError::InvalidDeployedBytecode(_) => VerificationErrorKind::LibraryMissed,
-        })?;
-        // If libraries were linked for main contract, they must be linked for modified contract as well
-        let bytecode_modified = Bytecode::try_from(contract_modified).map_err(|err| {
-            VerificationErrorKind::InternalError(format!("modified contract: {}", err))
-        })?;
+    ) -> Result<ComparisonSuccess<T>, VerificationErrorKind> {
+        let creation_tx_input: Bytecode<CreationTxInput> =
+            Bytecode::try_from(contract).map_err(|err| match err {
+                BytecodeInitError::Empty => VerificationErrorKind::AbstractContract,
+                // Corresponding bytecode was not linked properly
+                BytecodeInitError::InvalidCreationTxInput(_)
+                | BytecodeInitError::InvalidDeployedBytecode(_) => {
+                    VerificationErrorKind::LibraryMissed
+                }
+            })?;
+        let deployed_bytecode: Bytecode<DeployedBytecode> =
+            Bytecode::try_from(contract).map_err(|err| match err {
+                BytecodeInitError::Empty => VerificationErrorKind::AbstractContract,
+                // Corresponding bytecode was not linked properly
+                BytecodeInitError::InvalidCreationTxInput(_)
+                | BytecodeInitError::InvalidDeployedBytecode(_) => {
+                    VerificationErrorKind::LibraryMissed
+                }
+            })?;
 
-        let local_bytecode = LocalBytecode::new(bytecode, bytecode_modified)?;
+        // If there were no errors for main contract, there must not be any for modified contract as well
+        let creation_tx_input_modified: Bytecode<CreationTxInput> =
+            Bytecode::try_from(contract_modified).map_err(|err| {
+                VerificationErrorKind::InternalError(format!("modified contract: {}", err))
+            })?;
+        let deployed_bytecode_modified: Bytecode<DeployedBytecode> =
+            Bytecode::try_from(contract_modified).map_err(|err| {
+                VerificationErrorKind::InternalError(format!("modified contract: {}", err))
+            })?;
+
+        let local_bytecode = LocalBytecode::new(
+            (creation_tx_input, deployed_bytecode),
+            (creation_tx_input_modified, deployed_bytecode_modified),
+        )?;
 
         Self::compare_creation_tx_inputs(&self.remote_bytecode, &local_bytecode)?;
 
@@ -156,7 +187,11 @@ impl<T: Source> Verifier<T> {
             abi.as_ref().and_then(|abi| abi.constructor()),
         )?;
 
-        Ok((abi, constructor_args))
+        Ok(ComparisonSuccess {
+            abi,
+            constructor_args,
+            local_bytecode,
+        })
     }
 
     fn compare_creation_tx_inputs(
@@ -313,6 +348,12 @@ impl<T: Source> Verifier<T> {
 
         Ok(tokens)
     }
+}
+
+struct ComparisonSuccess<T> {
+    pub abi: Option<ethabi::Contract>,
+    pub constructor_args: Option<Bytes>,
+    pub local_bytecode: LocalBytecode<T>,
 }
 
 #[cfg(test)]

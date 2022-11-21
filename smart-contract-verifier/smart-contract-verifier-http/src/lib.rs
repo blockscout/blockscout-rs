@@ -16,5 +16,5 @@ pub use routers::{configure_router, AppRouter, Router};
 pub use run::run;
 pub use settings::Settings;
 pub use tracer::init_logs;
-pub use verification_response::{VerificationResponse, VerificationStatus};
+pub use verification_response::{BytecodePart, VerificationResponse, VerificationStatus};
 pub use versions::VersionsResponse;

@@ -233,7 +233,19 @@ If verification succeeds, the service returns 200 with a success status:
     "constructor_arguments": "0xcafecafecafe",
     // (optional) contract abi (https://docs.soliditylang.org/en/latest/abi-spec.html?highlight=abi#json);
     // is `null` for Yul contracts
-    "abi": "[ { ... } ]"
+    "abi": "[ { ... } ]",
+    // (optional) creation transaction input resultant from local compilation
+    // parsed and split on Main and Meta parts. Is null for Sourcify verification.
+    "local_creation_input_parts": [
+      { "type": "main", "data": "0x1234.." },
+      { "type": "meta", "data": "0xcafe.." }
+    ],
+    // (optional) deployed bytecode resultant from local compilation
+    // parsed and split on Main and Meta parts. Is null for Sourcify verification.
+    "local_deployed_bytecode_parts": [
+      { "type": "main", "data": "0x1234.." },
+      { "type": "meta", "data": "0xcafe.." }
+    ]
   },
   // Status of 0 indicates successful verification
   "status": 0
