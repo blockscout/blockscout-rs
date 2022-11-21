@@ -11,7 +11,7 @@ pub struct VerificationResponse {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "lowercase")]
 pub enum BytecodePart {
     Main { data: DisplayBytes },
     Meta { data: DisplayBytes },
@@ -217,8 +217,8 @@ mod tests {
                             "source.sol": "content",
                         },
                         "local_creation_input_parts": [
-                            { "type": "Main", "data": "0x1234" },
-                            { "type": "Meta", "data": "0xcafe" }
+                            { "type": "main", "data": "0x1234" },
+                            { "type": "meta", "data": "0xcafe" }
                         ],
                         "local_deployed_bytecode_parts": []
                     },
