@@ -7,7 +7,7 @@ use sea_orm::entity::prelude::*;
 #[sea_orm(table_name = "sources")]
 pub struct Model {
     #[sea_orm(primary_key)]
-    pub id: i32,
+    pub id: i64,
     pub created_at: DateTime,
     pub updated_at: DateTime,
     pub source_type: SourceType,
@@ -22,23 +22,23 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::bytecodes::Entity")]
-    Bytecodes,
     #[sea_orm(has_many = "super::source_files::Entity")]
     SourceFiles,
+    #[sea_orm(has_many = "super::bytecodes::Entity")]
+    Bytecodes,
     #[sea_orm(has_many = "super::verified_contracts::Entity")]
     VerifiedContracts,
-}
-
-impl Related<super::bytecodes::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Bytecodes.def()
-    }
 }
 
 impl Related<super::source_files::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::SourceFiles.def()
+    }
+}
+
+impl Related<super::bytecodes::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Bytecodes.def()
     }
 }
 

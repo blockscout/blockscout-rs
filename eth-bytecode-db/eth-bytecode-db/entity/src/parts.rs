@@ -7,10 +7,10 @@ use sea_orm::entity::prelude::*;
 #[sea_orm(table_name = "parts")]
 pub struct Model {
     #[sea_orm(primary_key)]
-    pub id: i32,
+    pub id: i64,
     pub created_at: DateTime,
     pub updated_at: DateTime,
-    pub r#type: PartType,
+    pub part_type: PartType,
     pub data: Vec<u8>,
 }
 

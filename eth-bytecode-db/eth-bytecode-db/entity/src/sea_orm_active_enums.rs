@@ -11,6 +11,14 @@ pub enum PartType {
     Metadata,
 }
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
+#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "bytecode_type")]
+pub enum BytecodeType {
+    #[sea_orm(string_value = "creation_input")]
+    CreationInput,
+    #[sea_orm(string_value = "deployed_bytecode")]
+    DeployedBytecode,
+}
+#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "verification_type")]
 pub enum VerificationType {
     #[sea_orm(string_value = "flattened_contract")]
@@ -21,14 +29,6 @@ pub enum VerificationType {
     MultiPartFiles,
     #[sea_orm(string_value = "standard_json")]
     StandardJson,
-}
-#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
-#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "bytecode_type")]
-pub enum BytecodeType {
-    #[sea_orm(string_value = "creation_input")]
-    CreationInput,
-    #[sea_orm(string_value = "deployed_bytecode")]
-    DeployedBytecode,
 }
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "source_type")]

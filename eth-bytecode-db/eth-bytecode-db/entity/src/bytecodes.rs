@@ -7,11 +7,11 @@ use sea_orm::entity::prelude::*;
 #[sea_orm(table_name = "bytecodes")]
 pub struct Model {
     #[sea_orm(primary_key)]
-    pub id: i32,
+    pub id: i64,
     pub created_at: DateTime,
     pub updated_at: DateTime,
     pub source_id: i64,
-    pub r#type: BytecodeType,
+    pub bytecode_type: BytecodeType,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
