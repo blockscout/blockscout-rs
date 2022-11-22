@@ -2,13 +2,17 @@ pub use sea_orm_migration::prelude::*;
 use sea_orm_migration::sea_orm::{ConnectionTrait, Statement, TransactionTrait};
 
 mod m20220101_000001_initial;
+mod m20221118_182727_rename_types;
 
 pub struct Migrator;
 
 #[async_trait::async_trait]
 impl MigratorTrait for Migrator {
     fn migrations() -> Vec<Box<dyn MigrationTrait>> {
-        vec![Box::new(m20220101_000001_initial::Migration)]
+        vec![
+            Box::new(m20220101_000001_initial::Migration),
+            Box::new(m20221118_182727_rename_types::Migration),
+        ]
     }
 }
 
