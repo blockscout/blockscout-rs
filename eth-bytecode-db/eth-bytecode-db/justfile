@@ -1,0 +1,27 @@
+# just is like `make` but better https://github.com/casey/just
+
+# list all recipes
+default:
+    just --list --unsorted
+
+start-postgres:
+    # we run it in --rm mode, so all data will be deleted after stopping
+    docker run -p 5432:5432 --name eth-bytecode-postgres -e POSTGRES_PASSWORD=admin --rm -d postgres
+    # wait for postgres to start
+    sleep 3
+    docker exec -it eth-bytecode-postgres psql -U postgres -c 'create database eth_bytecode_db;'
+
+stop-postgres:
+    docker kill eth-bytecode-postgres
+
+migrate-up database_url="postgres://postgres:admin@localhost:5432/eth_bytecode_db":
+    DATABASE_URL={{database_url}} sea-orm-cli migrate up
+
+migrate-down database_url="postgres://postgres:admin@localhost:5432/eth_bytecode_db":
+    DATABASE_URL={{database_url}} sea-orm-cli migrate up
+
+new-migration name:
+    sea-orm-cli migrate generate {{name}}
+
+generate-entities database_url="postgres://postgres:admin@localhost:5432/eth_bytecode_db":
+    DATABASE_URL={{database_url}} sea-orm-cli generate entity --lib -o entity/src
