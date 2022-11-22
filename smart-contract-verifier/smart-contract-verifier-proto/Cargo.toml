@@ -1,0 +1,21 @@
+[package]
+name = "smart-contract-verifier-proto"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+actix-prost = { git = "https://github.com/blockscout/actix-prost" }
+actix-prost-macros = { git = "https://github.com/blockscout/actix-prost" }
+actix-web = "4"
+prost = "0.11"
+tonic = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_with = { version = "2.0", features = ["hex", "base64"] }
+async-trait = "0.1"
+
+[build-dependencies]
+actix-prost-build = { git = "https://github.com/blockscout/actix-prost" }
+tonic-build = "0.8"
+prost-build = "0.11"

@@ -3909,6 +3909,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "smart-contract-verifier-proto"
+version = "0.1.0"
+dependencies = [
+ "actix-prost",
+ "actix-prost-build",
+ "actix-prost-macros",
+ "actix-web",
+ "async-trait",
+ "prost",
+ "prost-build",
+ "serde",
+ "serde_with",
+ "tonic",
+ "tonic-build",
+]
+
+[[package]]
 name = "smartstring"
 version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
