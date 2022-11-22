@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package blockscout.sig_provider.v1;
+package blockscout.smartContractVerifier.v1;
 
-option go_package = "github.com/blockscout/blockscout-rs/sig-provider";
+option go_package = "github.com/blockscout/blockscout-rs/smart-contract-verifier";
 
 // Copyright 2015 The gRPC Authors
 //
