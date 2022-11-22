@@ -1,5 +1,5 @@
 [package]
-name = "display-bytes"
+name = "hex-display-bytes"
 version = "1.0.0"
 edition = "2021"
 
