@@ -1,7 +1,12 @@
 [package]
 name = "blockscout-display-bytes"
 version = "1.0.0"
+description = "Encoding and decoding data into/from hexadecimal representation with '0x' prefix."
+license = "MIT
+repository = "https://github.com/blockscout/blockscout-rs"
 edition = "2021"
+keywords = ["display", "hex", "bytes"]
+categories = ["encoding"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
