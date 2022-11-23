@@ -3759,6 +3759,7 @@ dependencies = [
 [[package]]
 name = "sig-provider-proto"
 version = "0.1.0"
+source = "git+https://github.com/blockscout/blockscout-rs#ef9851f3569f84b4e26000c87dc1af99fe13c190"
 dependencies = [
  "actix-prost",
  "actix-prost-build",

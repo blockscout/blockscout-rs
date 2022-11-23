@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 async-trait = "0.1"
-sig-provider-proto = { path = "../../sig-provider/sig-provider-proto" }
+sig-provider-proto = { git = "https://github.com/blockscout/blockscout-rs" }
 smart-contract-verifier = { path = "../smart-contract-verifier" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
