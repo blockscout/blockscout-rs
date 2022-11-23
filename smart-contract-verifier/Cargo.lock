@@ -454,6 +454,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f4acc2bb1d1de55a55f818c10cdbc4a698f778666a7b17d2eab737aa6ed1b5e"
 dependencies = [
  "bytes",
+ "ethers-core",
  "hex",
  "serde",
  "thiserror",
@@ -3592,7 +3593,6 @@ dependencies = [
  "const_format",
  "cron",
  "ethabi",
- "ethers-core",
  "ethers-solc",
  "futures",
  "hex",
@@ -3636,7 +3636,6 @@ dependencies = [
  "config",
  "cron",
  "ethabi",
- "ethers-core",
  "ethers-solc",
  "futures",
  "lazy_static",

@@ -9,12 +9,11 @@ keywords = ["ethereum", "web3", "solidity"]
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"
-blockscout-display-bytes = "1.0"
+blockscout-display-bytes = { version = "1.0", features = ["ethers-core"] }
 bytes = "1.2"
 chrono = "0.4"
 cron = "0.11"
 ethabi = "17.2"
-ethers-core = "1.0"
 ethers-solc = { version = "1.0", features = ["async"] }
 futures = "0.3"
 hex = "0.4"
