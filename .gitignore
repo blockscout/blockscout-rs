@@ -19,3 +19,7 @@ Session.vim
 
 .pre-commit-config.yaml
 config.toml
+
+## Cargo.lock for libs
+libs/Cargo.lock
+
