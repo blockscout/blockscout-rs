@@ -37,16 +37,16 @@ jobs:
           cache-on-failure: true
 
       - name: Unit tests
-        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture
+        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --workspace --all-features --lib --bins -- --nocapture
         if: success() || failure()
 
       - name: Doc tests
-        run: cargo test --locked --workspace --all-features --doc
+        run: cargo test --workspace --all-features --doc
         if: success() || failure()
 
   #       TODO: Uncomment when integration test added
   #      - name: Integration tests
-  #        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --test '*' -- --nocapture
+  #        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --workspace --test '*' -- --nocapture
   #        if: success() || failure()
 
   lint:
