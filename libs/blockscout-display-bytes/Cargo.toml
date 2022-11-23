@@ -2,7 +2,7 @@
 name = "blockscout-display-bytes"
 version = "1.0.0"
 description = "Encoding and decoding data into/from hexadecimal representation with '0x' prefix."
-license = "MIT
+license = "MIT"
 repository = "https://github.com/blockscout/blockscout-rs"
 edition = "2021"
 keywords = ["display", "hex", "bytes"]
