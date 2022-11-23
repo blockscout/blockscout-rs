@@ -1,4 +1,4 @@
 [workspace]
 members = [
-    "blockscout-display-bytes"
+    "display-bytes"
 ]
