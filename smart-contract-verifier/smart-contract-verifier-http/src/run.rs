@@ -14,7 +14,7 @@ pub async fn run(settings: Settings) -> std::io::Result<()> {
     let metrics_addr = settings.metrics.addr;
     let metrics_endpoint = settings.metrics.route.clone();
 
-    tracing::info!("Smart-contract verifier is starting at {}", socket_addr);
+    tracing::info!("smart-contract verifier is starting at {}", socket_addr);
     let app_router = Arc::new(
         AppRouter::new(settings)
             .await

@@ -35,7 +35,12 @@ impl VyperRouter {
         );
         let compilers = Compilers::new(fetcher, VyperCompiler::new(), compilers_threads_semaphore);
         compilers.load_from_dir(&dir).await;
-        let client = VyperClient::new(compilers);
+        let mut client = VyperClient::new(compilers);
+        if let Some(extensions) = settings.extensions {
+            client = client.with_middleware(
+                sig_provider_extension::SigProvider::new(extensions.sig_provider).await?,
+            );
+        }
         Ok(Self {
             client: web::Data::new(client),
         })

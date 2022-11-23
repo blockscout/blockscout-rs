@@ -26,10 +26,10 @@ impl AppRouter {
             false => None,
             true => Some(VyperRouter::new(settings.vyper, compilers_lock).await?),
         };
-        let sourcify = settings
-            .sourcify
-            .enabled
-            .then(|| SourcifyRouter::new(settings.sourcify));
+        let sourcify = match settings.sourcify.enabled {
+            false => None,
+            true => Some(SourcifyRouter::new(settings.sourcify).await?),
+        };
         Ok(Self {
             solidity,
             vyper,
