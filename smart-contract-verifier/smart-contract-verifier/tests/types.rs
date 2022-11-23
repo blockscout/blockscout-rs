@@ -28,11 +28,11 @@ pub mod solidity {
             contract_libraries: Option<BTreeMap<String, String>>,
         ) -> Result<Self, anyhow::Error> {
             Ok(Self {
-                deployed_bytecode: ethers_core::types::Bytes::from_str(deployed_bytecode)
+                deployed_bytecode: blockscout_display_bytes::Bytes::from_str(deployed_bytecode)
                     .map_err(anyhow::Error::new)?
                     .0,
                 creation_bytecode: Some(
-                    ethers_core::types::Bytes::from_str(creation_bytecode)
+                    blockscout_display_bytes::Bytes::from_str(creation_bytecode)
                         .map_err(anyhow::Error::new)?
                         .0,
                 ),
@@ -113,11 +113,11 @@ pub mod vyper {
             evm_version: Option<String>,
         ) -> Result<Self, anyhow::Error> {
             Ok(Self {
-                deployed_bytecode: ethers_core::types::Bytes::from_str(deployed_bytecode)
+                deployed_bytecode: blockscout_display_bytes::Bytes::from_str(deployed_bytecode)
                     .map_err(anyhow::Error::new)?
                     .0,
                 creation_bytecode: Some(
-                    ethers_core::types::Bytes::from_str(creation_bytecode)
+                    blockscout_display_bytes::Bytes::from_str(creation_bytecode)
                         .map_err(anyhow::Error::new)?
                         .0,
                 ),

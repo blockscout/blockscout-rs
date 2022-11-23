@@ -9,6 +9,7 @@ keywords = ["ethereum", "web3", "solidity"]
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"
+blockscout-display-bytes = "1.0"
 bytes = "1.2"
 chrono = "0.4"
 cron = "0.11"

@@ -12,6 +12,7 @@ smart-contract-verifier = { path = "../smart-contract-verifier" }
 actix-web = "=4.1"
 actix-web-prom = "0.6"
 anyhow = "1.0"
+blockscout-display-bytes = "1.0"
 config = "0.13"
 cron = "0.11"
 ethers-core = "1.0"
