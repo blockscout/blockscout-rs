@@ -11,14 +11,14 @@ pub struct VyperVerifierService {}
 impl VyperVerifier for VyperVerifierService {
     async fn verify_multi_part(
         &self,
-        request: Request<VerifyVyperMultiPartRequest>,
+        _request: Request<VerifyVyperMultiPartRequest>,
     ) -> Result<Response<VerifyResponse>, Status> {
         todo!()
     }
 
     async fn list_versions(
         &self,
-        request: Request<ListVersionsRequest>,
+        _request: Request<ListVersionsRequest>,
     ) -> Result<Response<Versions>, Status> {
         todo!()
     }

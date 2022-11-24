@@ -17,15 +17,11 @@ use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
     vyper_verifier_server::VyperVerifierServer,
 };
 use std::{net::SocketAddr, sync::Arc};
-use tokio::sync::Semaphore;
 
 pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     init_logs(settings.jaeger);
 
-    let compilers_lock = Arc::new(Semaphore::new(settings.compilers.max_threads.get()));
-
-    let solidity_verifier =
-        Arc::new(SolidityVerifierService::new(settings.solidity, compilers_lock.clone()).await?);
+    let solidity_verifier = Arc::new(SolidityVerifierService::default());
     let vyper_verifier = Arc::new(VyperVerifierService::default());
     let sourcify_verifier = Arc::new(SourcifyVerifierService::default());
     let health = Arc::new(HealthService::default());

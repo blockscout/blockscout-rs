@@ -10,7 +10,7 @@ pub struct SourcifyVerifierService {}
 impl SourcifyVerifier for SourcifyVerifierService {
     async fn verify(
         &self,
-        request: Request<VerifyViaSourcifyRequest>,
+        _request: Request<VerifyViaSourcifyRequest>,
     ) -> Result<Response<VerifyResponse>, Status> {
         todo!()
     }
