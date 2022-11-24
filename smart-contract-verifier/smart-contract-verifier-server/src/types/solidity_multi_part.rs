@@ -95,6 +95,7 @@ impl TryFrom<VerifySolidityMultiPartRequestWrapper> for VerificationRequest {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
     use std::collections::HashMap;
 
     #[test]
