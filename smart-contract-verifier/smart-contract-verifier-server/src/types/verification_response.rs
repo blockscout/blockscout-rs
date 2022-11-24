@@ -189,6 +189,7 @@ mod tests {
         artifacts::{Libraries, Optimizer, Settings, Source},
         CompilerInput, EvmVersion,
     };
+    use pretty_assertions::assert_eq;
     use smart_contract_verifier::{VerificationSuccess, Version};
     use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::VerifyResponse;
     use std::{
