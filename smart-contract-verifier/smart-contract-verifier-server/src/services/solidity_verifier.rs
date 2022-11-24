@@ -1,7 +1,10 @@
 use crate::{
     metrics,
     settings::{FetcherSettings, S3FetcherSettings, SoliditySettings},
-    types::{VerifyResponseWrapper, VerifySolidityMultiPartRequestWrapper},
+    types::{
+        StandardJsonParseError, VerifyResponseWrapper, VerifySolidityMultiPartRequestWrapper,
+        VerifySolidityStandardJsonRequestWrapper,
+    },
 };
 use s3::{creds::Credentials, Bucket, Region};
 use smart_contract_verifier::{
@@ -92,9 +95,44 @@ impl SolidityVerifier for SolidityVerifierService {
 
     async fn verify_standard_json(
         &self,
-        _request: Request<VerifySolidityStandardJsonRequest>,
+        request: Request<VerifySolidityStandardJsonRequest>,
     ) -> Result<Response<VerifyResponse>, Status> {
-        todo!()
+        let request: VerifySolidityStandardJsonRequestWrapper = request.into_inner().into();
+        let verification_request = {
+            let request: Result<_, StandardJsonParseError> = request.try_into();
+            if let Err(err) = request {
+                match err {
+                    StandardJsonParseError::InvalidContent(_) => {
+                        return Err(Status::invalid_argument(err.to_string()))
+                    }
+                    StandardJsonParseError::BadRequest(_) => {
+                        return Ok(Response::new(VerifyResponseWrapper::err(err).into_inner()))
+                    }
+                }
+            }
+            request.unwrap()
+        };
+        let result =
+            solidity::standard_json::verify(self.client.clone(), verification_request).await;
+
+        if let Ok(verification_success) = result {
+            let response = VerifyResponseWrapper::ok(verification_success.into());
+            metrics::count_verify_contract("solidity", response.status, "multi-part");
+            return Ok(Response::new(response.into_inner()));
+        }
+
+        let err = result.unwrap_err();
+        match err {
+            VerificationError::Compilation(_)
+            | VerificationError::NoMatchingContracts
+            | VerificationError::CompilerVersionMismatch(_) => {
+                Ok(Response::new(VerifyResponseWrapper::err(err).into_inner()))
+            }
+            VerificationError::Initialization(_) | VerificationError::VersionNotFound(_) => {
+                Err(Status::invalid_argument(err.to_string()))
+            }
+            VerificationError::Internal(_) => Err(Status::internal(err.to_string())),
+        }
     }
 
     async fn list_versions(
