@@ -1,7 +1,7 @@
 use super::router::Router;
 use crate::{
     handlers::{solidity_multi_part, solidity_standard_json, solidity_version_list},
-    settings::{FetcherSettings, S3FetcherSettings, SoliditySettings},
+    settings::{Extensions, FetcherSettings, S3FetcherSettings, SoliditySettings},
 };
 use actix_web::web;
 use s3::{creds::Credentials, Bucket, Region};
@@ -52,6 +52,7 @@ fn new_bucket(settings: &S3FetcherSettings) -> anyhow::Result<Arc<Bucket>> {
 impl SolidityRouter {
     pub async fn new(
         settings: SoliditySettings,
+        extensions: Extensions,
         compilers_threads_semaphore: Arc<Semaphore>,
     ) -> anyhow::Result<Self> {
         let dir = settings.compilers_dir.clone();
@@ -84,10 +85,9 @@ impl SolidityRouter {
         );
         compilers.load_from_dir(&dir).await;
         let mut client = SolidityClient::new(compilers);
-        if let Some(extensions) = settings.extensions {
-            client = client.with_middleware(
-                sig_provider_extension::SigProvider::new(extensions.sig_provider).await?,
-            );
+        if let Some(sig_provider) = extensions.sig_provider {
+            client = client
+                .with_middleware(sig_provider_extension::SigProvider::new(sig_provider).await?);
         }
         Ok(Self {
             client: web::Data::new(client),

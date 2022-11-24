@@ -34,7 +34,7 @@ struct SigProviderImpl {
 }
 
 impl SigProviderImpl {
-    async fn create_signatures(self: Arc<Self>, abi: String) {
+    async fn create_signatures(&self, abi: String) {
         let mut client = SignatureServiceClient::new(self.connection.clone());
         let _ = client
             .create_signatures(CreateSignaturesRequest { abi })

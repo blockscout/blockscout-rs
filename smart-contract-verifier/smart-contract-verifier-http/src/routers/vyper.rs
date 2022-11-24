@@ -1,7 +1,7 @@
 use super::router::Router;
 use crate::{
     handlers::{vyper_multi_part, vyper_version_list},
-    settings::{FetcherSettings, VyperSettings},
+    settings::{Extensions, FetcherSettings, VyperSettings},
 };
 use actix_web::web;
 use smart_contract_verifier::{Compilers, ListFetcher, VyperClient, VyperCompiler};
@@ -15,6 +15,7 @@ pub struct VyperRouter {
 impl VyperRouter {
     pub async fn new(
         settings: VyperSettings,
+        extensions: Extensions,
         compilers_threads_semaphore: Arc<Semaphore>,
     ) -> anyhow::Result<Self> {
         let dir = settings.compilers_dir.clone();
@@ -36,10 +37,9 @@ impl VyperRouter {
         let compilers = Compilers::new(fetcher, VyperCompiler::new(), compilers_threads_semaphore);
         compilers.load_from_dir(&dir).await;
         let mut client = VyperClient::new(compilers);
-        if let Some(extensions) = settings.extensions {
-            client = client.with_middleware(
-                sig_provider_extension::SigProvider::new(extensions.sig_provider).await?,
-            );
+        if let Some(sig_provider) = extensions.sig_provider {
+            client = client
+                .with_middleware(sig_provider_extension::SigProvider::new(sig_provider).await?);
         }
         Ok(Self {
             client: web::Data::new(client),

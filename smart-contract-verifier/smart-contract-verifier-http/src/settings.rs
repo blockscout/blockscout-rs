@@ -38,6 +38,7 @@ pub struct Settings {
     pub metrics: MetricsSettings,
     pub jaeger: JaegerSettings,
     pub compilers: CompilersSettings,
+    pub extensions: ExtensionsSettings,
 
     // Is required as we deny unknown fields, but allow users provide
     // path to config through PREFIX__CONFIG env variable. If removed,
@@ -68,7 +69,6 @@ pub struct SoliditySettings {
     #[serde_as(as = "DisplayFromStr")]
     pub refresh_versions_schedule: Schedule,
     pub fetcher: FetcherSettings,
-    pub extensions: Option<Extensions>,
 }
 
 impl Default for SoliditySettings {
@@ -80,7 +80,6 @@ impl Default for SoliditySettings {
             compilers_dir: default_dir,
             refresh_versions_schedule: Schedule::from_str("0 0 * * * * *").unwrap(), // every hour
             fetcher: Default::default(),
-            extensions: None,
         }
     }
 }
@@ -94,7 +93,6 @@ pub struct VyperSettings {
     #[serde_as(as = "DisplayFromStr")]
     pub refresh_versions_schedule: Schedule,
     pub fetcher: FetcherSettings,
-    pub extensions: Option<Extensions>,
 }
 
 impl Default for VyperSettings {
@@ -109,7 +107,6 @@ impl Default for VyperSettings {
             compilers_dir: default_dir,
             refresh_versions_schedule: Schedule::from_str("0 0 * * * * *").unwrap(), // every hour
             fetcher,
-            extensions: None,
         }
     }
 }
@@ -160,7 +157,6 @@ pub struct SourcifySettings {
     /// Should be at least one. Set to `3` by default.
     pub verification_attempts: NonZeroU32,
     pub request_timeout: u64,
-    pub extensions: Option<Extensions>,
 }
 
 impl Default for SourcifySettings {
@@ -170,7 +166,6 @@ impl Default for SourcifySettings {
             api_url: Url::try_from(DEFAULT_SOURCIFY_HOST).expect("valid url"),
             verification_attempts: NonZeroU32::new(3).expect("Is not zero"),
             request_timeout: 10,
-            extensions: None,
         }
     }
 }
@@ -225,10 +220,18 @@ impl Default for CompilersSettings {
     }
 }
 
-#[derive(Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ExtensionsSettings {
+    pub solidity: Extensions,
+    pub sourcify: Extensions,
+    pub vyper: Extensions,
+}
+
+#[derive(Default, Deserialize, Clone, PartialEq, Eq, Debug)]
+#[serde(default, deny_unknown_fields)]
 pub struct Extensions {
-    pub sig_provider: sig_provider_extension::Config,
+    pub sig_provider: Option<sig_provider_extension::Config>,
 }
 
 impl Settings {

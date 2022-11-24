@@ -1,5 +1,8 @@
 use super::router::Router;
-use crate::{handlers::sourcify, settings::SourcifySettings};
+use crate::{
+    handlers::sourcify,
+    settings::{Extensions, SourcifySettings},
+};
 use actix_web::web;
 use smart_contract_verifier::SourcifyApiClient;
 
@@ -8,17 +11,16 @@ pub struct SourcifyRouter {
 }
 
 impl SourcifyRouter {
-    pub async fn new(settings: SourcifySettings) -> anyhow::Result<Self> {
+    pub async fn new(settings: SourcifySettings, extensions: Extensions) -> anyhow::Result<Self> {
         let mut api_client = SourcifyApiClient::new(
             settings.api_url,
             settings.request_timeout,
             settings.verification_attempts,
         )
         .expect("failed to build sourcify client");
-        if let Some(extensions) = settings.extensions {
-            api_client = api_client.with_middleware(
-                sig_provider_extension::SigProvider::new(extensions.sig_provider).await?,
-            );
+        if let Some(sig_provider) = extensions.sig_provider {
+            api_client = api_client
+                .with_middleware(sig_provider_extension::SigProvider::new(sig_provider).await?);
         }
         Ok(Self {
             api_client: web::Data::new(api_client),

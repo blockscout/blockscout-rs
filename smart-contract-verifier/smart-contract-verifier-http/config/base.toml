@@ -23,9 +23,6 @@ list_url = "https://solc-bin.ethereum.org/linux-amd64/list.json"
 ## The only required field for the s3 fetcher
 #bucket = "bucket"
 
-# [solidity.extensions.sig_provider]
-# url = "http://127.0.0.1:9000/"
-
 [vyper]
 enabled = true
 compilers_dir = "/tmp/vyper-compilers"
@@ -34,17 +31,20 @@ refresh_versions_schedule = "0 0 * * * * *"
 list_url = "https://raw.githubusercontent.com/blockscout/solc-bin/main/vyper.list.json"
 # list_url = "https://raw.githubusercontent.com/blockscout/solc-bin/main/vyper.macos.list.json"
 
-# [vyper.extensions.sig_provider]
-# url = "http://127.0.0.1:9000/"
-
 [sourcify]
 enabled = true
 api_url = "https://sourcify.dev/server/"
 verification_attempts = 3
 request_timeout = 10
 
-# [sourcify.extensions.sig_provider]
-# url = "http://127.0.0.1:9000/"
+# [extensions.solidity.sig_provider]
+# url = "http://127.0.0.1:8051/"
+
+# [extensions.vyper.sig_provider]
+# url = "http://127.0.0.1:8051/"
+
+# [extensions.sourcify.sig_provider]
+# url = "http://127.0.0.1:8051/"
 
 [metrics]
 enabled = false
