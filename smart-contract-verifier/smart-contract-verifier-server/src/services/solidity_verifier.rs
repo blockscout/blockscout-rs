@@ -1,4 +1,5 @@
 use crate::{
+    metrics,
     settings::{FetcherSettings, S3FetcherSettings, SoliditySettings},
     types::{VerifyResponseWrapper, VerifySolidityMultiPartRequestWrapper},
 };
@@ -71,7 +72,7 @@ impl SolidityVerifier for SolidityVerifierService {
 
         if let Ok(verification_success) = result {
             let response = VerifyResponseWrapper::ok(verification_success.into());
-            // metrics::count_verify_contract("solidity", &response.status, "multi-part");
+            metrics::count_verify_contract("solidity", response.status, "multi-part");
             return Ok(Response::new(response.into_inner()));
         }
 
