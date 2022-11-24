@@ -1,5 +1,6 @@
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use ethers_solc::EvmVersion;
+use serde::{Deserialize, Serialize};
 use smart_contract_verifier::{
     solidity::multi_part::{MultiFileContent, VerificationRequest},
     Version,
@@ -7,6 +8,7 @@ use smart_contract_verifier::{
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::VerifySolidityMultiPartRequest;
 use std::{collections::BTreeMap, ops::Deref, path::PathBuf, str::FromStr};
 
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct VerifySolidityMultiPartRequestWrapper(VerifySolidityMultiPartRequest);
 
 impl From<VerifySolidityMultiPartRequest> for VerifySolidityMultiPartRequestWrapper {
