@@ -1,7 +1,11 @@
-use crate::settings::{FetcherSettings, S3FetcherSettings, SoliditySettings};
+use crate::{
+    settings::{FetcherSettings, S3FetcherSettings, SoliditySettings},
+    types::{VerifyResponseWrapper, VerifySolidityMultiPartRequestWrapper},
+};
 use s3::{creds::Credentials, Bucket, Region};
 use smart_contract_verifier::{
-    Compilers, Fetcher, ListFetcher, S3Fetcher, SolcValidator, SolidityClient, SolidityCompiler,
+    solidity, Compilers, Fetcher, ListFetcher, S3Fetcher, SolcValidator, SolidityClient,
+    SolidityCompiler, VerificationError,
 };
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
     solidity_verifier_server::SolidityVerifier, ListVersionsRequest, ListVersionsResponse,
@@ -12,7 +16,7 @@ use tokio::sync::Semaphore;
 use tonic::{Request, Response, Status};
 
 pub struct SolidityVerifierService {
-    _client: Arc<SolidityClient>,
+    client: Arc<SolidityClient>,
 }
 
 impl SolidityVerifierService {
@@ -51,7 +55,7 @@ impl SolidityVerifierService {
         compilers.load_from_dir(&dir).await;
         let client = SolidityClient::new(compilers);
         Ok(Self {
-            _client: Arc::new(client),
+            client: Arc::new(client),
         })
     }
 }
@@ -60,9 +64,29 @@ impl SolidityVerifierService {
 impl SolidityVerifier for SolidityVerifierService {
     async fn verify_multi_part(
         &self,
-        _request: Request<VerifySolidityMultiPartRequest>,
+        request: Request<VerifySolidityMultiPartRequest>,
     ) -> Result<Response<VerifyResponse>, Status> {
-        todo!()
+        let request: VerifySolidityMultiPartRequestWrapper = request.into_inner().into();
+        let result = solidity::multi_part::verify(self.client.clone(), request.try_into()?).await;
+
+        if let Ok(verification_success) = result {
+            let response = VerifyResponseWrapper::ok(verification_success.into());
+            // metrics::count_verify_contract("solidity", &response.status, "multi-part");
+            return Ok(Response::new(response.into_inner()));
+        }
+
+        let err = result.unwrap_err();
+        match err {
+            VerificationError::Compilation(_)
+            | VerificationError::NoMatchingContracts
+            | VerificationError::CompilerVersionMismatch(_) => {
+                Ok(Response::new(VerifyResponseWrapper::err(err).into_inner()))
+            }
+            VerificationError::Initialization(_) | VerificationError::VersionNotFound(_) => {
+                Err(Status::invalid_argument(err.to_string()))
+            }
+            VerificationError::Internal(_) => Err(Status::internal(err.to_string())),
+        }
     }
 
     async fn verify_standard_json(

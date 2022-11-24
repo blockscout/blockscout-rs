@@ -4031,6 +4031,7 @@ dependencies = [
  "prometheus",
  "rust-s3",
  "serde",
+ "serde_json",
  "serde_with",
  "sig-provider-extension",
  "smart-contract-verifier",
