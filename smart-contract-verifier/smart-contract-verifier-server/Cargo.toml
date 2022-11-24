@@ -1,0 +1,33 @@
+[package]
+name = "smart-contract-verifier-server"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+smart-contract-verifier = { path = "../smart-contract-verifier" }
+smart-contract-verifier-proto = { path = "../smart-contract-verifier-proto" }
+
+actix-web = "4"
+actix-web-prom = "0.6"
+anyhow = "1.0"
+async-trait = "0.1"
+blockscout-display-bytes = { version = "1.0", features = ["ethers-core"] }
+config = "0.13"
+cron = "0.11"
+ethers-solc = "1.0"
+futures = "0.3"
+lazy_static = "1"
+opentelemetry = { version = "0.18", features = ["rt-tokio"] }
+opentelemetry-jaeger = { version = "0.17", features = ["rt-tokio"] }
+prometheus = "0.13"
+rust-s3 = "0.32"
+serde = "1.0"
+serde_with = "2.1"
+tokio = { version = "1", features = ["rt-multi-thread"] }
+tonic = "0.8"
+tracing = "0.1"
+tracing-opentelemetry = "0.18"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+url = "2.3"
