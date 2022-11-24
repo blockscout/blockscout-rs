@@ -139,7 +139,8 @@ impl SolidityVerifier for SolidityVerifierService {
         &self,
         _request: Request<ListVersionsRequest>,
     ) -> Result<Response<ListVersionsResponse>, Status> {
-        todo!()
+        let versions = self.client.compilers().all_versions_sorted_str();
+        Ok(Response::new(ListVersionsResponse { versions }))
     }
 }
 
