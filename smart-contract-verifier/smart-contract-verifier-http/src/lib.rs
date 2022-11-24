@@ -10,7 +10,7 @@ mod versions;
 #[cfg(test)]
 mod tests;
 
-pub use ethers_core::types::Bytes as DisplayBytes;
+pub use blockscout_display_bytes::Bytes as DisplayBytes;
 
 pub use routers::{configure_router, AppRouter, Router};
 pub use run::run;

@@ -12,9 +12,9 @@ smart-contract-verifier = { path = "../smart-contract-verifier" }
 actix-web = "=4.1"
 actix-web-prom = "0.6"
 anyhow = "1.0"
+blockscout-display-bytes = { version = "1.0", features = ["ethers-core"] }
 config = "0.13"
 cron = "0.11"
-ethers-core = "1.0"
 ethers-solc = { version = "1.0", features = ["svm-solc"] }
 futures = "0.3"
 lazy_static = "1"
