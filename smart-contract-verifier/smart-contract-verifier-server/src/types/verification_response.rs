@@ -175,82 +175,149 @@ pub mod verify_response {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use crate::tests::parse::test_serialize_json_ok;
-//     use serde_json::json;
-//     use std::str::FromStr;
-//
-//     #[test]
-//     fn parse_response() {
-//         test_serialize_json_ok(vec![
-//             (
-//                 VerificationResponse::ok(VerificationResult {
-//                     file_name: "File.sol".to_string(),
-//                     contract_name: "contract_name".to_string(),
-//                     compiler_version: "compiler_version".to_string(),
-//                     evm_version: "evm_version".to_string(),
-//                     constructor_arguments: Some(DisplayBytes::from([0xca, 0xfe])),
-//                     optimization: Some(false),
-//                     optimization_runs: Some(200),
-//                     contract_libraries: BTreeMap::from([(
-//                         "some_library".into(),
-//                         "some_address".into(),
-//                     )]),
-//                     abi: Some("abi".to_string()),
-//                     sources: serde_json::from_str(
-//                         r#"{
-//                             "source.sol": "content"
-//                         }"#,
-//                     )
-//                         .unwrap(),
-//                     compiler_settings: "compiler_settings".into(),
-//                     local_creation_input_parts: Some(vec![
-//                         BytecodePart::Main {
-//                             data: DisplayBytes::from_str("0x1234").unwrap(),
-//                         },
-//                         BytecodePart::Meta {
-//                             data: DisplayBytes::from_str("0xcafe").unwrap(),
-//                         },
-//                     ]),
-//                     local_deployed_bytecode_parts: Some(vec![]),
-//                 }),
-//                 json!({
-//                     "message": "OK",
-//                     "status": "0",
-//                     "result": {
-//                         "file_name": "File.sol",
-//                         "contract_name": "contract_name",
-//                         "compiler_version": "compiler_version",
-//                         "evm_version": "evm_version",
-//                         "constructor_arguments": "0xcafe",
-//                         "contract_libraries": {
-//                             "some_library": "some_address",
-//                         },
-//                         "optimization": false,
-//                         "optimization_runs": 200,
-//                         "abi": "abi",
-//                         "compiler_settings": "compiler_settings",
-//                         "sources": {
-//                             "source.sol": "content",
-//                         },
-//                         "local_creation_input_parts": [
-//                             { "type": "main", "data": "0x1234" },
-//                             { "type": "meta", "data": "0xcafe" }
-//                         ],
-//                         "local_deployed_bytecode_parts": []
-//                     },
-//                 }),
-//             ),
-//             (
-//                 VerificationResponse::err("Parse error"),
-//                 json!({
-//                     "message": "Parse error",
-//                     "status": "1",
-//                     "result": null,
-//                 }),
-//             ),
-//         ])
-//     }
-// }
+#[cfg(test)]
+mod tests {
+    use super::{
+        verify_response::{
+            result::{BytecodePart, BytecodePartWrapper},
+            Result, ResultWrapper,
+        },
+        *,
+    };
+    use blockscout_display_bytes::Bytes as DisplayBytes;
+    use ethers_solc::{
+        artifacts::{Libraries, Optimizer, Settings, Source},
+        CompilerInput, EvmVersion,
+    };
+    use smart_contract_verifier::{VerificationSuccess, Version};
+    use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::VerifyResponse;
+    use std::{
+        collections::{BTreeMap, HashMap},
+        str::FromStr,
+    };
+
+    #[test]
+    fn from_verification_success() {
+        let compiler_settings = Settings {
+            optimizer: Optimizer {
+                enabled: Some(true),
+                runs: Some(200),
+                ..Default::default()
+            },
+            evm_version: Some(EvmVersion::London),
+            libraries: Libraries {
+                libs: BTreeMap::from([(
+                    "lib_path".into(),
+                    BTreeMap::from([("lib_name".into(), "lib_address".into())]),
+                )]),
+            },
+            ..Default::default()
+        };
+        let verification_success = VerificationSuccess {
+            compiler_input: CompilerInput {
+                language: "Solidity".to_string(),
+                sources: BTreeMap::from([(
+                    "path".into(),
+                    Source {
+                        content: "content".into(),
+                    },
+                )]),
+                settings: compiler_settings.clone(),
+            },
+            compiler_output: Default::default(),
+            compiler_version: Version::from_str("v0.8.17+commit.8df45f5f").unwrap(),
+            file_path: "file_path".to_string(),
+            contract_name: "contract_name".to_string(),
+            abi: Some(Default::default()),
+            constructor_args: Some(DisplayBytes::from_str("0x123456").unwrap()),
+            local_bytecode_parts: Default::default(),
+        };
+
+        let result = ResultWrapper::from(verification_success).into_inner();
+
+        let expected = Result {
+            file_name: "file_path".to_string(),
+            contract_name: "contract_name".to_string(),
+            compiler_version: "v0.8.17+commit.8df45f5f".to_string(),
+            sources: HashMap::from([("path".into(), "content".into())]),
+            evm_version: "london".to_string(),
+            optimizations: Some(true),
+            optimization_runs: Some(200),
+            contract_libraries: HashMap::from([("lib_name".into(), "lib_address".into())]),
+            compiler_settings: serde_json::to_string(&compiler_settings).unwrap(),
+            constructor_arguments: Some("0x123456".into()),
+            abi: Some(serde_json::to_string(&ethabi::Contract::default()).unwrap()),
+            local_creation_input_parts: vec![],
+            local_deployed_bytecode_parts: vec![],
+        };
+
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn ok_verify_response() {
+        let verification_success = VerificationSuccess {
+            compiler_input: CompilerInput {
+                language: "Solidity".to_string(),
+                sources: Default::default(),
+                settings: Default::default(),
+            },
+            compiler_output: Default::default(),
+            compiler_version: Version::from_str("v0.8.17+commit.8df45f5f").unwrap(),
+            file_path: "file_path".to_string(),
+            contract_name: "contract_name".to_string(),
+            abi: None,
+            constructor_args: None,
+            local_bytecode_parts: Default::default(),
+        };
+        let result = ResultWrapper::from(verification_success);
+
+        let response = VerifyResponseWrapper::ok(result.clone()).into_inner();
+
+        let expected = VerifyResponse {
+            message: "OK".to_string(),
+            status: 0,
+            result: Some(result.into_inner()),
+        };
+
+        assert_eq!(expected, response);
+    }
+
+    #[test]
+    fn err_verify_response() {
+        let response = VerifyResponseWrapper::err("parse error").into_inner();
+        let expected = VerifyResponse {
+            message: "parse error".to_string(),
+            status: 1,
+            result: None,
+        };
+        assert_eq!(expected, response);
+    }
+
+    #[test]
+    fn from_bytecode_parts() {
+        // Main part
+        let verifier_bytecode_part = smart_contract_verifier::BytecodePart::Main {
+            raw: DisplayBytes::from_str("0x1234").unwrap().0,
+        };
+        let proto_bytecode_part = BytecodePartWrapper::from(verifier_bytecode_part).into_inner();
+        let expected = BytecodePart {
+            r#type: "main".to_string(),
+            data: "0x1234".to_string(),
+        };
+        assert_eq!(expected, proto_bytecode_part);
+
+        // Meta part
+        let verifier_bytecode_part = smart_contract_verifier::BytecodePart::Metadata {
+            metadata_raw: DisplayBytes::from_str("0x1234").unwrap().0,
+            metadata: Default::default(),
+            metadata_length_raw: Default::default(),
+        };
+        let proto_bytecode_part = BytecodePartWrapper::from(verifier_bytecode_part).into_inner();
+        let expected = BytecodePart {
+            r#type: "meta".to_string(),
+            data: "0x1234".to_string(),
+        };
+        assert_eq!(expected, proto_bytecode_part);
+    }
+}

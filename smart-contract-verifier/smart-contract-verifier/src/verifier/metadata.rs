@@ -7,7 +7,7 @@ use thiserror::Error;
 /// (https://docs.soliditylang.org/en/v0.8.14/metadata.html#encoding-of-the-metadata-hash-in-the-bytecode).
 ///
 /// Currently we are interested only in `solc` value.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct MetadataHash {
     pub solc: Option<Version>,
 }
