@@ -19,6 +19,7 @@ impl SourcifyRouter {
         )
         .expect("failed to build sourcify client");
         if let Some(sig_provider) = extensions.sig_provider {
+            // TODO(#221): create only one instance of middleware/connection 
             api_client = api_client
                 .with_middleware(sig_provider_extension::SigProvider::new(sig_provider).await?);
         }

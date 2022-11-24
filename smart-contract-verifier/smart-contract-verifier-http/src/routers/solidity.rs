@@ -86,6 +86,7 @@ impl SolidityRouter {
         compilers.load_from_dir(&dir).await;
         let mut client = SolidityClient::new(compilers);
         if let Some(sig_provider) = extensions.sig_provider {
+            // TODO(#221): create only one instance of middleware/connection 
             client = client
                 .with_middleware(sig_provider_extension::SigProvider::new(sig_provider).await?);
         }
