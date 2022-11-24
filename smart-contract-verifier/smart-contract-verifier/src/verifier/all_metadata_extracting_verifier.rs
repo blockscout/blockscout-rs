@@ -22,7 +22,7 @@ pub struct Verifier<T> {
     remote_bytecode: Bytecode<T>,
 }
 
-impl<T: Source> base::Verifier for Verifier<T> {
+impl<T: Source + Send + Sync> base::Verifier for Verifier<T> {
     type Input = (CompilerOutput, CompilerOutput);
 
     fn verify(&self, input: &Self::Input) -> Result<VerificationSuccess, Vec<VerificationError>> {
