@@ -2,4 +2,5 @@
 members = [
     "smart-contract-verifier",
     "smart-contract-verifier-http",
+    "sig-provider-extension",
 ]

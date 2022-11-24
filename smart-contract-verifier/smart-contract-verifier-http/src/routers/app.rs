@@ -20,16 +20,27 @@ impl AppRouter {
         let compilers_lock = Arc::new(Semaphore::new(settings.compilers.max_threads.get()));
         let solidity = match settings.solidity.enabled {
             false => None,
-            true => Some(SolidityRouter::new(settings.solidity, compilers_lock.clone()).await?),
+            true => Some(
+                SolidityRouter::new(
+                    settings.solidity,
+                    settings.extensions.solidity,
+                    compilers_lock.clone(),
+                )
+                .await?,
+            ),
         };
         let vyper = match settings.vyper.enabled {
             false => None,
-            true => Some(VyperRouter::new(settings.vyper, compilers_lock).await?),
+            true => Some(
+                VyperRouter::new(settings.vyper, settings.extensions.vyper, compilers_lock).await?,
+            ),
         };
-        let sourcify = settings
-            .sourcify
-            .enabled
-            .then(|| SourcifyRouter::new(settings.sourcify));
+        let sourcify = match settings.sourcify.enabled {
+            false => None,
+            true => {
+                Some(SourcifyRouter::new(settings.sourcify, settings.extensions.sourcify).await?)
+            }
+        };
         Ok(Self {
             solidity,
             vyper,

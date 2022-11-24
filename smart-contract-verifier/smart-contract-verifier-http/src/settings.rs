@@ -38,6 +38,7 @@ pub struct Settings {
     pub metrics: MetricsSettings,
     pub jaeger: JaegerSettings,
     pub compilers: CompilersSettings,
+    pub extensions: ExtensionsSettings,
 
     // Is required as we deny unknown fields, but allow users provide
     // path to config through PREFIX__CONFIG env variable. If removed,
@@ -217,6 +218,20 @@ impl Default for CompilersSettings {
         });
         Self { max_threads }
     }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ExtensionsSettings {
+    pub solidity: Extensions,
+    pub sourcify: Extensions,
+    pub vyper: Extensions,
+}
+
+#[derive(Default, Deserialize, Clone, PartialEq, Eq, Debug)]
+#[serde(default, deny_unknown_fields)]
+pub struct Extensions {
+    pub sig_provider: Option<sig_provider_extension::Config>,
 }
 
 impl Settings {
