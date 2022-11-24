@@ -1,5 +1,5 @@
 use config::{Config, File};
-use serde::{de, Deserialize};
+use serde::{de, Deserialize, Serialize};
 use std::{net::SocketAddr, str::FromStr};
 
 /// Wrapper under [`serde::de::IgnoredAny`] which implements
@@ -16,7 +16,7 @@ impl PartialEq for IgnoredAny {
 
 impl Eq for IgnoredAny {}
 
-#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct Settings {
     pub server: ServerSettings,
@@ -27,7 +27,7 @@ pub struct Settings {
     // Is required as we deny unknown fields, but allow users provide
     // path to config through PREFIX__CONFIG env variable. If removed,
     // the setup would fail with `unknown field `config`, expected one of...`
-    #[serde(rename = "config")]
+    #[serde(skip_serializing, rename = "config")]
     config_path: IgnoredAny,
 }
 
@@ -48,7 +48,7 @@ impl Settings {
         Ok(settings)
     }
 }
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct SourcesSettings {
     pub fourbyte: url::Url,
@@ -64,14 +64,14 @@ impl Default for SourcesSettings {
     }
 }
 
-#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct ServerSettings {
     pub http: HttpServerSettings,
     pub grpc: GrpcServerSettings,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct HttpServerSettings {
     pub enabled: bool,
@@ -87,7 +87,7 @@ impl Default for HttpServerSettings {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct GrpcServerSettings {
     pub enabled: bool,
@@ -103,7 +103,7 @@ impl Default for GrpcServerSettings {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct MetricsSettings {
     pub enabled: bool,
@@ -121,7 +121,7 @@ impl Default for MetricsSettings {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct JaegerSettings {
     pub enabled: bool,
@@ -132,7 +132,7 @@ impl Default for JaegerSettings {
     fn default() -> Self {
         Self {
             enabled: false,
-            agent_endpoint: "localhost:6831".to_string(),
+            agent_endpoint: "127.0.0.1:6831".to_string(),
         }
     }
 }

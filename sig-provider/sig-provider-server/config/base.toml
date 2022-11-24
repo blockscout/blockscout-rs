@@ -1,0 +1,20 @@
+[server.http]
+enabled = true
+addr = "0.0.0.0:8050"
+
+[server.grpc]
+enabled = true
+addr = "0.0.0.0:8051"
+
+[sources]
+fourbyte = "https://www.4byte.directory/"
+sigeth = "https://sig.eth.samczsun.com/"
+
+[metrics]
+enabled = false
+addr = "0.0.0.0:6060"
+route = "/metrics"
+
+[jaeger]
+enabled = false
+agent_endpoint = "127.0.0.1:6831"

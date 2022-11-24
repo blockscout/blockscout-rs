@@ -3020,6 +3020,7 @@ dependencies = [
  "sig-provider",
  "sig-provider-proto",
  "tokio",
+ "toml",
  "tonic",
  "tracing",
  "tracing-opentelemetry",
