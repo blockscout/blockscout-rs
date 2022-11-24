@@ -4114,6 +4114,7 @@ dependencies = [
  "serde_with",
  "smart-contract-verifier",
  "smart-contract-verifier-proto",
+ "thiserror",
  "tokio",
  "tonic",
  "tracing",
