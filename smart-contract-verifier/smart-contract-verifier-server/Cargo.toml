@@ -33,3 +33,6 @@ tracing = "0.1"
 tracing-opentelemetry = "0.18"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 url = "2.3"
+
+[dev-dependencies]
+ethabi = "18.0"
