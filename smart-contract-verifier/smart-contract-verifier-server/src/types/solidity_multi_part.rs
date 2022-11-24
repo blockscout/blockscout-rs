@@ -91,3 +91,65 @@ impl TryFrom<VerifySolidityMultiPartRequestWrapper> for VerificationRequest {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[test]
+    fn try_into_verification_request() {
+        let request = VerifySolidityMultiPartRequest {
+            creation_tx_input: Some("0x1234".to_string()),
+            deployed_bytecode: "0x5678".to_string(),
+            compiler_version: "v0.8.17+commit.8df45f5f".to_string(),
+            sources: HashMap::from([("source_path".into(), "source_content".into())]),
+            evm_version: "london".to_string(),
+            optimization_runs: Some(200),
+            libraries: HashMap::from([("Lib".into(), "0xcafe".into())]),
+        };
+
+        let verification_request: VerificationRequest =
+            <VerifySolidityMultiPartRequestWrapper>::from(request)
+                .try_into()
+                .expect("Try_into verification request failed");
+
+        let expected = VerificationRequest {
+            creation_bytecode: Some(DisplayBytes::from_str("0x1234").unwrap().0),
+            deployed_bytecode: DisplayBytes::from_str("0x5678").unwrap().0,
+            compiler_version: Version::from_str("v0.8.17+commit.8df45f5f").unwrap(),
+            content: MultiFileContent {
+                sources: BTreeMap::from([("source_path".into(), "source_content".into())]),
+                evm_version: Some(EvmVersion::London),
+                optimization_runs: Some(200),
+                contract_libraries: Some(BTreeMap::from([("Lib".into(), "0xcafe".into())])),
+            },
+        };
+
+        assert_eq!(expected, verification_request);
+    }
+
+    #[test]
+    // 'default' should result in None in MultiFileContent
+    fn default_evm_version() {
+        let request = VerifySolidityMultiPartRequest {
+            creation_tx_input: None,
+            deployed_bytecode: "".to_string(),
+            compiler_version: "v0.8.17+commit.8df45f5f".to_string(),
+            sources: Default::default(),
+            evm_version: "default".to_string(),
+            optimization_runs: None,
+            libraries: Default::default(),
+        };
+
+        let verification_request: VerificationRequest =
+            <VerifySolidityMultiPartRequestWrapper>::from(request)
+                .try_into()
+                .expect("Try_into verification request failed");
+
+        assert_eq!(
+            None, verification_request.content.evm_version,
+            "'default' should result in `None`"
+        )
+    }
+}
