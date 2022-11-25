@@ -93,7 +93,7 @@ pub mod verify_response {
                     .into_iter()
                     .map(|(path, source)| (path.to_string_lossy().to_string(), source.content))
                     .collect(),
-                optimizations: compiler_input.settings.optimizer.enabled,
+                optimization: compiler_input.settings.optimizer.enabled,
                 optimization_runs: compiler_input.settings.optimizer.runs.map(|i| i as i32),
                 contract_libraries: compiler_input
                     .settings
@@ -242,7 +242,7 @@ mod tests {
             compiler_version: "v0.8.17+commit.8df45f5f".to_string(),
             sources: HashMap::from([("path".into(), "content".into())]),
             evm_version: "london".to_string(),
-            optimizations: Some(true),
+            optimization: Some(true),
             optimization_runs: Some(200),
             contract_libraries: HashMap::from([("lib_name".into(), "lib_address".into())]),
             compiler_settings: serde_json::to_string(&compiler_settings).unwrap(),
