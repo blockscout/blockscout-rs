@@ -46,7 +46,7 @@ impl TryFrom<VerifySolidityMultiPartRequestWrapper> for VerificationRequest {
                 tonic::Status::invalid_argument(format!("Invalid deployed bytecode: {:?}", err))
             })?
             .0;
-        let creation_bytecode = match &request.creation_tx_input {
+        let creation_bytecode = match &request.creation_bytecode {
             None => None,
             Some(creation_bytecode) => Some(
                 DisplayBytes::from_str(creation_bytecode)
@@ -100,7 +100,7 @@ mod tests {
     #[test]
     fn try_into_verification_request() {
         let request = VerifySolidityMultiPartRequest {
-            creation_tx_input: Some("0x1234".to_string()),
+            creation_bytecode: Some("0x1234".to_string()),
             deployed_bytecode: "0x5678".to_string(),
             compiler_version: "v0.8.17+commit.8df45f5f".to_string(),
             sources: BTreeMap::from([("source_path".into(), "source_content".into())]),
@@ -133,7 +133,7 @@ mod tests {
     // 'default' should result in None in MultiFileContent
     fn default_evm_version() {
         let request = VerifySolidityMultiPartRequest {
-            creation_tx_input: None,
+            creation_bytecode: None,
             deployed_bytecode: "".to_string(),
             compiler_version: "v0.8.17+commit.8df45f5f".to_string(),
             sources: Default::default(),
