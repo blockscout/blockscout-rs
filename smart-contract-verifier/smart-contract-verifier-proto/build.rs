@@ -16,6 +16,7 @@ fn compile(
         .protoc_arg("--openapiv2_opt")
         .protoc_arg("grpc_api_configuration=proto/api_config_http.yaml,output_format=yaml,allow_merge=true,merge_file_name=smart-contract-verifier")
         .bytes(["."])
+        .btree_map(["."])
         .type_attribute(".", "#[actix_prost_macros::serde]");
     config.compile_protos(protos, includes)?;
     Ok(())
