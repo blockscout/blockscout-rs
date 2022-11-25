@@ -269,12 +269,12 @@ definitions:
       compilerVersion:
         type: string
         title: / Compiler version used to compile the contract
-      creationTxInput:
+      creationBytecode:
         type: string
         title: / If present, used to compare local compilation result with
       deployedBytecode:
         type: string
-        title: / If creation_tx_input is not present, used to compare local compilation result with
+        title: / If creation_bytecode is not present, used to compare local compilation result with
       evmVersion:
         type: string
         title: / Version of the EVM to compile for
@@ -300,12 +300,12 @@ definitions:
       compilerVersion:
         type: string
         title: / Compiler version used to compile the contract
-      creationTxInput:
+      creationBytecode:
         type: string
         title: / If present, used to compare local compilation result with
       deployedBytecode:
         type: string
-        title: / If creation_tx_input is not present, used to compare local compilation result with
+        title: / If creation_bytecode is not present, used to compare local compilation result with
       input:
         type: string
         title: / https://docs.soliditylang.org/en/latest/using-the-compiler.html#input-description
@@ -335,12 +335,12 @@ definitions:
       compilerVersion:
         type: string
         title: / Compiler version used to compile the contract
-      creationTxInput:
+      creationBytecode:
         type: string
         title: / If present, used to compare local compilation result with
       deployedBytecode:
         type: string
-        title: / If creation_tx_input is not present, used to compare local compilation result with
+        title: / If creation_bytecode is not present, used to compare local compilation result with
       evmVersion:
         type: string
         title: / Version of the EVM to compile for

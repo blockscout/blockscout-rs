@@ -24,8 +24,8 @@ service SourcifyVerifier {
 
 message VerifySolidityMultiPartRequest {
   /// If present, used to compare local compilation result with
-  optional string creation_tx_input = 1;
-  /// If creation_tx_input is not present, used to compare local compilation result with
+  optional string creation_bytecode = 1;
+  /// If creation_bytecode is not present, used to compare local compilation result with
   string deployed_bytecode = 2;
   /// Compiler version used to compile the contract
   string compiler_version = 3;
@@ -42,8 +42,8 @@ message VerifySolidityMultiPartRequest {
 
 message VerifySolidityStandardJsonRequest {
   /// If present, used to compare local compilation result with
-  optional string creation_tx_input = 1;
-  /// If creation_tx_input is not present, used to compare local compilation result with
+  optional string creation_bytecode = 1;
+  /// If creation_bytecode is not present, used to compare local compilation result with
   string deployed_bytecode = 2;
   /// Compiler version used to compile the contract
   string compiler_version = 3;
@@ -54,8 +54,8 @@ message VerifySolidityStandardJsonRequest {
 
 message VerifyVyperMultiPartRequest {
   /// If present, used to compare local compilation result with
-  optional string creation_tx_input = 1;
-  /// If creation_tx_input is not present, used to compare local compilation result with
+  optional string creation_bytecode = 1;
+  /// If creation_bytecode is not present, used to compare local compilation result with
   string deployed_bytecode = 2;
   /// Compiler version used to compile the contract
   string compiler_version = 3;
