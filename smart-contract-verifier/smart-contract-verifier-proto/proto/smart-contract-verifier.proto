@@ -95,7 +95,7 @@ message VerifyResponse {
     string evm_version = 5;
     /// (optional) WARNING: Before version 0.8.6 omitting the 'enabled' key was not equivalent to setting
     /// it to false and would actually disable all the optimizations.
-    optional bool optimizations = 6;
+    optional bool optimization = 6;
     /// (optional) Specify number of optimizer runs, if optimizations are enabled
     optional int32 optimization_runs = 7;
     /// Addresses of the libraries

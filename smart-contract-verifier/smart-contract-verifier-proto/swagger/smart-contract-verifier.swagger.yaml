@@ -207,15 +207,15 @@ definitions:
         description: |-
           / (optional) deployed bytecode resultant from local compilation
           / parsed and split on Main and Meta parts. Is null for Sourcify verification.
-      optimizationRuns:
-        type: integer
-        format: int32
-        title: / (optional) Specify number of optimizer runs, if optimizations are enabled
-      optimizations:
+      optimization:
         type: boolean
         description: |-
           / (optional) WARNING: Before version 0.8.6 omitting the 'enabled' key was not equivalent to setting
           / it to false and would actually disable all the optimizations.
+      optimizationRuns:
+        type: integer
+        format: int32
+        title: / (optional) Specify number of optimizer runs, if optimizations are enabled
       sources:
         type: object
         additionalProperties:
