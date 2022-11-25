@@ -269,6 +269,11 @@ definitions:
       compilerVersion:
         type: string
         title: / Compiler version used to compile the contract
+      contractLibraries:
+        type: object
+        additionalProperties:
+          type: string
+        title: / Map from a library name to its address
       creationBytecode:
         type: string
         title: / If present, used to compare local compilation result with
@@ -278,11 +283,6 @@ definitions:
       evmVersion:
         type: string
         title: / Version of the EVM to compile for
-      libraries:
-        type: object
-        additionalProperties:
-          type: string
-        title: / Map from a library name to its address
       optimizationRuns:
         type: integer
         format: int32

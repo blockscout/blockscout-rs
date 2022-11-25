@@ -37,7 +37,7 @@ message VerifySolidityMultiPartRequest {
   /// otherwise optimizations are disabled
   optional int32 optimization_runs = 5;
   /// Map from a library name to its address
-  map<string, string> libraries = 7;
+  map<string, string> contract_libraries = 7;
 }
 
 message VerifySolidityStandardJsonRequest {
