@@ -37,3 +37,4 @@ url = "2.3"
 [dev-dependencies]
 ethabi = "18.0"
 pretty_assertions = "1.3"
+reqwest = "0.11.13"
