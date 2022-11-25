@@ -86,7 +86,7 @@ impl TryFrom<VerifySolidityMultiPartRequestWrapper> for VerificationRequest {
                 sources,
                 evm_version,
                 optimization_runs: request.optimization_runs.map(|i| i as usize),
-                contract_libraries: Some(request.libraries.into_iter().collect()),
+                contract_libraries: Some(request.contract_libraries.into_iter().collect()),
             },
         })
     }
@@ -106,7 +106,7 @@ mod tests {
             sources: BTreeMap::from([("source_path".into(), "source_content".into())]),
             evm_version: "london".to_string(),
             optimization_runs: Some(200),
-            libraries: BTreeMap::from([("Lib".into(), "0xcafe".into())]),
+            contract_libraries: BTreeMap::from([("Lib".into(), "0xcafe".into())]),
         };
 
         let verification_request: VerificationRequest =
@@ -139,7 +139,7 @@ mod tests {
             sources: Default::default(),
             evm_version: "default".to_string(),
             optimization_runs: None,
-            libraries: Default::default(),
+            contract_libraries: Default::default(),
         };
 
         let verification_request: VerificationRequest =
