@@ -1,6 +1,6 @@
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
-    vyper_verifier_server::VyperVerifier, ListVersionsRequest, VerifyResponse,
-    VerifyVyperMultiPartRequest, Versions,
+    vyper_verifier_server::VyperVerifier, ListVersionsRequest, ListVersionsResponse,
+    VerifyResponse, VerifyVyperMultiPartRequest,
 };
 use tonic::{Request, Response, Status};
 
@@ -19,7 +19,7 @@ impl VyperVerifier for VyperVerifierService {
     async fn list_versions(
         &self,
         _request: Request<ListVersionsRequest>,
-    ) -> Result<Response<Versions>, Status> {
+    ) -> Result<Response<ListVersionsResponse>, Status> {
         todo!()
     }
 }

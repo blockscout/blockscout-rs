@@ -1,6 +1,6 @@
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
-    solidity_verifier_server::SolidityVerifier, ListVersionsRequest, VerifyResponse,
-    VerifySolidityMultiPartRequest, VerifySolidityStandardJsonRequest, Versions,
+    solidity_verifier_server::SolidityVerifier, ListVersionsRequest, ListVersionsResponse,
+    VerifyResponse, VerifySolidityMultiPartRequest, VerifySolidityStandardJsonRequest,
 };
 use tonic::{Request, Response, Status};
 
@@ -26,7 +26,7 @@ impl SolidityVerifier for SolidityVerifierService {
     async fn list_versions(
         &self,
         _request: Request<ListVersionsRequest>,
-    ) -> Result<Response<Versions>, Status> {
+    ) -> Result<Response<ListVersionsResponse>, Status> {
         todo!()
     }
 }

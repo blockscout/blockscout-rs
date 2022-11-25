@@ -59,7 +59,7 @@ paths:
         "200":
           description: A successful response.
           schema:
-            $ref: '#/definitions/v1Versions'
+            $ref: '#/definitions/v1ListVersionsResponse'
         default:
           description: An unexpected error response.
           schema:
@@ -113,7 +113,7 @@ paths:
         "200":
           description: A successful response.
           schema:
-            $ref: '#/definitions/v1Versions'
+            $ref: '#/definitions/v1ListVersionsResponse'
         default:
           description: An unexpected error response.
           schema:
@@ -244,6 +244,14 @@ definitions:
     properties:
       status:
         $ref: '#/definitions/HealthCheckResponseServingStatus'
+  v1ListVersionsResponse:
+    type: object
+    properties:
+      versions:
+        type: array
+        items:
+          type: string
+        title: / Compiler versions available for verification
   v1VerifyResponse:
     type: object
     properties:
@@ -341,10 +349,3 @@ definitions:
         additionalProperties:
           type: string
         title: / Source file name to the actual source code
-  v1Versions:
-    type: object
-    properties:
-      versions:
-        type: array
-        items:
-          type: string

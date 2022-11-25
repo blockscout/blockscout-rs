@@ -9,13 +9,13 @@ service SolidityVerifier {
 
   rpc VerifyStandardJson(VerifySolidityStandardJsonRequest) returns (VerifyResponse) {}
 
-  rpc ListVersions(ListVersionsRequest) returns (Versions) {}
+  rpc ListVersions(ListVersionsRequest) returns (ListVersionsResponse) {}
 }
 
 service VyperVerifier {
   rpc VerifyMultiPart(VerifyVyperMultiPartRequest) returns (VerifyResponse) {}
 
-  rpc ListVersions(ListVersionsRequest) returns (Versions) {}
+  rpc ListVersions(ListVersionsRequest) returns (ListVersionsResponse) {}
 }
 
 service SourcifyVerifier {
@@ -126,6 +126,7 @@ message VerifyResponse {
 
 message ListVersionsRequest {}
 
-message Versions {
+message ListVersionsResponse {
+  /// Compiler versions available for verification
   repeated string versions = 1;
 }
