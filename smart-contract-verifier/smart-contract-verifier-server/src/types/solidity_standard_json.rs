@@ -54,7 +54,7 @@ impl TryFrom<VerifySolidityStandardJsonRequestWrapper> for VerificationRequest {
         let deployed_bytecode = DisplayBytes::from_str(&request.deployed_bytecode)
             .map_err(|err| anyhow!("Invalid deployed bytecode: {:?}", err))?
             .0;
-        let creation_bytecode = match request.creation_tx_input {
+        let creation_bytecode = match request.creation_bytecode {
             None => None,
             Some(creation_bytecode) => Some(
                 DisplayBytes::from_str(&creation_bytecode)
@@ -84,7 +84,7 @@ mod tests {
     #[test]
     fn try_into_verification_request() {
         let request = VerifySolidityStandardJsonRequest {
-            creation_tx_input: Some("0x1234".to_string()),
+            creation_bytecode: Some("0x1234".to_string()),
             deployed_bytecode: "0x5678".to_string(),
             compiler_version: "v0.8.17+commit.8df45f5f".to_string(),
             input: "{\"language\": \"Solidity\", \"sources\": {\"./src/contracts/Foo.sol\": {\"content\": \"pragma solidity ^0.8.2;\\n\\ncontract Foo {\\n    function bar() external pure returns (uint256) {\\n        return 42;\\n    }\\n}\\n\"}}, \"settings\": {\"metadata\": {\"useLiteralContent\": true}, \"optimizer\": {\"enabled\": true, \"runs\": 200}, \"outputSelection\": {\"*\": {\"*\": [\"abi\", \"evm.bytecode\", \"evm.deployedBytecode\", \"evm.methodIdentifiers\"], \"\": [\"id\", \"ast\"]}}}}".to_string()
