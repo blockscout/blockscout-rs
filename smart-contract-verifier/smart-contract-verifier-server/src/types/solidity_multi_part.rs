@@ -96,7 +96,6 @@ impl TryFrom<VerifySolidityMultiPartRequestWrapper> for VerificationRequest {
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
-    use std::collections::HashMap;
 
     #[test]
     fn try_into_verification_request() {
@@ -104,10 +103,10 @@ mod tests {
             creation_tx_input: Some("0x1234".to_string()),
             deployed_bytecode: "0x5678".to_string(),
             compiler_version: "v0.8.17+commit.8df45f5f".to_string(),
-            sources: HashMap::from([("source_path".into(), "source_content".into())]),
+            sources: BTreeMap::from([("source_path".into(), "source_content".into())]),
             evm_version: "london".to_string(),
             optimization_runs: Some(200),
-            libraries: HashMap::from([("Lib".into(), "0xcafe".into())]),
+            libraries: BTreeMap::from([("Lib".into(), "0xcafe".into())]),
         };
 
         let verification_request: VerificationRequest =
