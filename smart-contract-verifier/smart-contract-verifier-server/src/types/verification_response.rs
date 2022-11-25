@@ -192,10 +192,7 @@ mod tests {
     use pretty_assertions::assert_eq;
     use smart_contract_verifier::{VerificationSuccess, Version};
     use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::VerifyResponse;
-    use std::{
-        collections::{BTreeMap, HashMap},
-        str::FromStr,
-    };
+    use std::{collections::BTreeMap, str::FromStr};
 
     #[test]
     fn from_verification_success() {
@@ -240,11 +237,11 @@ mod tests {
             file_name: "file_path".to_string(),
             contract_name: "contract_name".to_string(),
             compiler_version: "v0.8.17+commit.8df45f5f".to_string(),
-            sources: HashMap::from([("path".into(), "content".into())]),
+            sources: BTreeMap::from([("path".into(), "content".into())]),
             evm_version: "london".to_string(),
             optimization: Some(true),
             optimization_runs: Some(200),
-            contract_libraries: HashMap::from([("lib_name".into(), "lib_address".into())]),
+            contract_libraries: BTreeMap::from([("lib_name".into(), "lib_address".into())]),
             compiler_settings: serde_json::to_string(&compiler_settings).unwrap(),
             constructor_arguments: Some("0x123456".into()),
             abi: Some(serde_json::to_string(&ethabi::Contract::default()).unwrap()),
