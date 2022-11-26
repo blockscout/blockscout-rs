@@ -260,9 +260,10 @@ definitions:
       result:
         $ref: '#/definitions/VerifyResponseResult'
       status:
-        type: integer
-        format: int32
-        title: / Status of 0 indicates successful verification
+        type: string
+        title: |-
+          / Status of "0" indicates successful verification,
+          / status of "1" - that verification failed
   v1VerifySolidityMultiPartRequest:
     type: object
     properties:
