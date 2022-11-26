@@ -1,5 +1,11 @@
-use crate::settings::{FetcherSettings, VyperSettings};
-use smart_contract_verifier::{Compilers, ListFetcher, VyperClient, VyperCompiler};
+use crate::{
+    metrics,
+    settings::{FetcherSettings, VyperSettings},
+    types::{VerifyResponseWrapper, VerifyVyperMultiPartRequestWrapper},
+};
+use smart_contract_verifier::{
+    vyper, Compilers, ListFetcher, VerificationError, VyperClient, VyperCompiler,
+};
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
     vyper_verifier_server::VyperVerifier, ListVersionsRequest, ListVersionsResponse,
     VerifyResponse, VerifyVyperMultiPartRequest,
@@ -9,7 +15,7 @@ use tokio::sync::Semaphore;
 use tonic::{Request, Response, Status};
 
 pub struct VyperVerifierService {
-    _client: Arc<VyperClient>,
+    client: Arc<VyperClient>,
 }
 
 impl VyperVerifierService {
@@ -37,7 +43,7 @@ impl VyperVerifierService {
         compilers.load_from_dir(&dir).await;
         let client = VyperClient::new(compilers);
         Ok(Self {
-            _client: Arc::new(client),
+            client: Arc::new(client),
         })
     }
 }
@@ -46,9 +52,29 @@ impl VyperVerifierService {
 impl VyperVerifier for VyperVerifierService {
     async fn verify_multi_part(
         &self,
-        _request: Request<VerifyVyperMultiPartRequest>,
+        request: Request<VerifyVyperMultiPartRequest>,
     ) -> Result<Response<VerifyResponse>, Status> {
-        todo!()
+        let request: VerifyVyperMultiPartRequestWrapper = request.into_inner().into();
+        let result = vyper::multi_part::verify(self.client.clone(), request.try_into()?).await;
+
+        if let Ok(verification_success) = result {
+            let response = VerifyResponseWrapper::ok(verification_success.into());
+            metrics::count_verify_contract("vyper", response.status, "multi-part");
+            return Ok(Response::new(response.into_inner()));
+        }
+
+        let err = result.unwrap_err();
+        match err {
+            VerificationError::Compilation(_)
+            | VerificationError::NoMatchingContracts
+            | VerificationError::CompilerVersionMismatch(_) => {
+                Ok(Response::new(VerifyResponseWrapper::err(err).into_inner()))
+            }
+            VerificationError::Initialization(_) | VerificationError::VersionNotFound(_) => {
+                Err(Status::invalid_argument(err.to_string()))
+            }
+            VerificationError::Internal(_) => Err(Status::internal(err.to_string())),
+        }
     }
 
     async fn list_versions(
