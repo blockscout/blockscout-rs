@@ -1,5 +1,9 @@
-use crate::settings::SourcifySettings;
-use smart_contract_verifier::SourcifyApiClient;
+use crate::{
+    metrics,
+    settings::SourcifySettings,
+    types::{VerifyResponseWrapper, VerifyViaSourcifyRequestWrapper},
+};
+use smart_contract_verifier::{sourcify, sourcify::Error, SourcifyApiClient};
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
     sourcify_verifier_server::SourcifyVerifier, VerifyResponse, VerifyViaSourcifyRequest,
 };
@@ -7,7 +11,7 @@ use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
 pub struct SourcifyVerifierService {
-    _client: Arc<SourcifyApiClient>,
+    client: Arc<SourcifyApiClient>,
 }
 
 impl SourcifyVerifierService {
@@ -19,7 +23,7 @@ impl SourcifyVerifierService {
         )
         .expect("failed to build sourcify client");
         Ok(Self {
-            _client: Arc::new(client),
+            client: Arc::new(client),
         })
     }
 }
@@ -28,8 +32,21 @@ impl SourcifyVerifierService {
 impl SourcifyVerifier for SourcifyVerifierService {
     async fn verify(
         &self,
-        _request: Request<VerifyViaSourcifyRequest>,
+        request: Request<VerifyViaSourcifyRequest>,
     ) -> Result<Response<VerifyResponse>, Status> {
-        todo!()
+        let request: VerifyViaSourcifyRequestWrapper = request.into_inner().into();
+        let response = sourcify::api::verify(self.client.clone(), request.try_into()?).await;
+
+        let result = match response {
+            Ok(verification_success) => Ok(VerifyResponseWrapper::ok(verification_success.into())),
+            Err(err) => match err {
+                Error::Internal(err) => Err(Status::internal(err.to_string())),
+                Error::Verification(err) => Ok(VerifyResponseWrapper::err(err)),
+                Error::Validation(err) => Err(Status::invalid_argument(err)),
+            },
+        }?;
+
+        metrics::count_verify_contract("solidity", &result.status, "sourcify");
+        return Ok(Response::new(result.into_inner()));
     }
 }
