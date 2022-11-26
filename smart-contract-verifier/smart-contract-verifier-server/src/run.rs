@@ -36,10 +36,10 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         )),
         false => None,
     };
-    let sourcify_verifier = settings
-        .sourcify
-        .enabled
-        .then(|| Arc::new(SourcifyVerifierService::default()));
+    let sourcify_verifier = match settings.sourcify.enabled {
+        true => Some(Arc::new(SourcifyVerifierService::new(settings.sourcify)?)),
+        false => None,
+    };
     let health = Arc::new(HealthService::default());
     let metrics = Metrics::new(settings.metrics.route);
     let mut futures = vec![];
