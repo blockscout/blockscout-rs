@@ -4,25 +4,32 @@ use actix_web::{
     App,
 };
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
-    solidity_verifier_actix::route_solidity_verifier, ListVersionsResponse,
+    solidity_verifier_actix::route_solidity_verifier, vyper_verifier_actix::route_vyper_verifier,
+    ListVersionsResponse,
 };
-use smart_contract_verifier_server::{Settings, SolidityVerifierService};
+use smart_contract_verifier_server::{Settings, SolidityVerifierService, VyperVerifierService};
 use std::{str::from_utf8, sync::Arc};
 use tokio::sync::Semaphore;
 
 async fn test_versions(uri: &str) {
     let settings = Settings::default();
-    let compilers_lock = Semaphore::new(settings.compilers.max_threads.get());
+    let compilers_lock = Arc::new(Semaphore::new(settings.compilers.max_threads.get()));
+
     let solidity_service = SolidityVerifierService::new(
         settings.solidity,
-        Arc::new(compilers_lock),
+        compilers_lock.clone(),
         settings.extensions.solidity,
     )
     .await
-    .expect("couldn't initialize the app");
+    .expect("couldn't initialize solidity service");
+    let vyper_service = VyperVerifierService::new(settings.vyper, compilers_lock.clone())
+        .await
+        .expect("couldn't initialize vyper service");
 
     let app = test::init_service(
-        App::new().configure(|config| route_solidity_verifier(config, Arc::new(solidity_service))),
+        App::new()
+            .configure(|config| route_solidity_verifier(config, Arc::new(solidity_service)))
+            .configure(|config| route_vyper_verifier(config, Arc::new(vyper_service))),
     )
     .await;
 
@@ -51,7 +58,7 @@ async fn solidity() {
     test_versions("/api/v1/solidity/versions").await;
 }
 
-// #[actix_rt::test]
-// async fn vyper() {
-//     test_versions("/api/v1/vyper/versions").await;
-// }
+#[tokio::test]
+async fn vyper() {
+    test_versions("/api/v1/vyper/versions").await;
+}
