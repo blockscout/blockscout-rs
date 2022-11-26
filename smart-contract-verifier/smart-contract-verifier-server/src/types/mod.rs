@@ -1,5 +1,6 @@
 mod solidity_multi_part;
 mod solidity_standard_json;
+mod sourcify;
 mod verification_response;
 mod vyper_multi_part;
 

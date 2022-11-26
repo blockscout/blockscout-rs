@@ -5,6 +5,7 @@ use super::{
 use anyhow::anyhow;
 use std::{collections::BTreeMap, sync::Arc};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerificationRequest {
     pub address: String,
     pub chain: String,
