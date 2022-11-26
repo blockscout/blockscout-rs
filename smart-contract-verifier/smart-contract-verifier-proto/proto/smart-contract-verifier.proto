@@ -62,7 +62,7 @@ message VerifyVyperMultiPartRequest {
   /// Source file name to the actual source code
   map<string, string> sources = 6;
   /// Version of the EVM to compile for
-  string evm_version = 4;
+  optional string evm_version = 4;
 }
 
 message VerifyViaSourcifyRequest {
