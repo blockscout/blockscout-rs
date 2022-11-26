@@ -172,7 +172,7 @@ Proxies verification requests to Sourcify service and returns responses (https:/
 ## Vyper Multi-Part files
 
 ### Route
-`POST /api/v1/vyper/verify/standard-json`
+`POST /api/v1/vyper/verify/multiple-files`
 
 ### Input
 ```json5
