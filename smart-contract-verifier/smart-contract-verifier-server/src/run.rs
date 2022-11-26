@@ -35,10 +35,12 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         )),
         false => None,
     };
-    let vyper_verifier = settings
-        .vyper
-        .enabled
-        .then(|| Arc::new(VyperVerifierService::default()));
+    let vyper_verifier = match settings.vyper.enabled {
+        true => Some(Arc::new(
+            VyperVerifierService::new(settings.vyper, compilers_lock.clone()).await?,
+        )),
+        false => None,
+    };
     let sourcify_verifier = settings
         .sourcify
         .enabled
