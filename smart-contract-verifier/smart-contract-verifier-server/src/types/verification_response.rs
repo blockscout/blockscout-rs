@@ -29,7 +29,7 @@ impl VerifyResponseWrapper {
     pub fn ok(result: verify_response::ResultWrapper) -> Self {
         VerifyResponse {
             message: "OK".to_string(),
-            status: 0,
+            status: "0".to_string(),
             result: Some(result.into_inner()),
         }
         .into()
@@ -38,7 +38,7 @@ impl VerifyResponseWrapper {
     pub fn err(message: impl Display) -> Self {
         VerifyResponse {
             message: message.to_string(),
-            status: 1,
+            status: "1".to_string(),
             result: None,
         }
         .into()
@@ -274,7 +274,7 @@ mod tests {
 
         let expected = VerifyResponse {
             message: "OK".to_string(),
-            status: 0,
+            status: "0".to_string(),
             result: Some(result.into_inner()),
         };
 
@@ -286,7 +286,7 @@ mod tests {
         let response = VerifyResponseWrapper::err("parse error").into_inner();
         let expected = VerifyResponse {
             message: "parse error".to_string(),
-            status: 1,
+            status: "1".to_string(),
             result: None,
         };
         assert_eq!(expected, response);
