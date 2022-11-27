@@ -32,7 +32,7 @@ async fn global_service() -> &'static Arc<VyperVerifierService> {
             let compilers_lock = Semaphore::new(settings.compilers.max_threads.get());
             let service = VyperVerifierService::new(settings.vyper, Arc::new(compilers_lock))
                 .await
-                .expect("couldn't initialize the app");
+                .expect("couldn't initialize the service");
             Arc::new(service)
         })
         .await
