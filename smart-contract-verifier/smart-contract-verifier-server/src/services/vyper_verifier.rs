@@ -59,7 +59,7 @@ impl VyperVerifier for VyperVerifierService {
 
         if let Ok(verification_success) = result {
             let response = VerifyResponseWrapper::ok(verification_success.into());
-            metrics::count_verify_contract("vyper", response.status, "multi-part");
+            metrics::count_verify_contract("vyper", &response.status, "multi-part");
             return Ok(Response::new(response.into_inner()));
         }
 

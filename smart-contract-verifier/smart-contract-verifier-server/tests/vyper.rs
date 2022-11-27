@@ -98,7 +98,7 @@ async fn test_success(test_case: TestCase) {
     let verification_response: VerifyResponse = read_body_json(response).await;
     assert_eq!(
         verification_response.status,
-        0, // success
+        "0", // success
         "Invalid verification status. Response: {:?}",
         verification_response
     );
@@ -173,7 +173,7 @@ async fn test_failure(test_case: TestCase, expected_message: &str) {
 
     assert_eq!(
         verification_response.status,
-        1, // failed
+        "1", // failed
         "Invalid verification status. Response: {:?}",
         verification_response
     );
