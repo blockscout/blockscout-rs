@@ -33,7 +33,7 @@ async fn global_service() -> &'static Arc<SolidityVerifierService> {
             let compilers_lock = Semaphore::new(settings.compilers.max_threads.get());
             let service = SolidityVerifierService::new(settings.solidity, Arc::new(compilers_lock))
                 .await
-                .expect("couldn't initialize the app");
+                .expect("couldn't initialize the service");
             Arc::new(service)
         })
         .await
