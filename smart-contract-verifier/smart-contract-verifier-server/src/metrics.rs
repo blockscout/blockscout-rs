@@ -13,10 +13,10 @@ lazy_static! {
     .unwrap();
 }
 
-pub fn count_verify_contract(language: &str, status: i32, method: &str) {
+pub fn count_verify_contract(language: &str, status: &str, method: &str) {
     let status = match status {
-        0 => "ok",
-        1 => "fail",
+        "0" => "ok",
+        "1" => "fail",
         _ => "unknown",
     };
     VERIFICATION

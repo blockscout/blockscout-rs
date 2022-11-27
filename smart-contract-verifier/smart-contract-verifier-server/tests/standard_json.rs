@@ -105,7 +105,7 @@ async fn test_success(dir: &'static str, mut input: TestInput) {
 
     assert_eq!(
         verification_response.status,
-        0, // success
+        "0", // success
         "Invalid verification status. Response: {:?}",
         verification_response
     );
