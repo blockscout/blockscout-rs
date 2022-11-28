@@ -13,10 +13,13 @@ use tokio::sync::Semaphore;
 async fn test_versions(uri: &str) {
     let settings = Settings::default();
     let compilers_lock = Semaphore::new(settings.compilers.max_threads.get());
-    let solidity_service =
-        SolidityVerifierService::new(settings.solidity, Arc::new(compilers_lock))
-            .await
-            .expect("couldn't initialize the app");
+    let solidity_service = SolidityVerifierService::new(
+        settings.solidity,
+        Arc::new(compilers_lock),
+        settings.extensions.solidity,
+    )
+    .await
+    .expect("couldn't initialize the app");
 
     let app = test::init_service(
         App::new().configure(|config| route_solidity_verifier(config, Arc::new(solidity_service))),
