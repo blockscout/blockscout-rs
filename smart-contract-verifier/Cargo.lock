@@ -4032,6 +4032,7 @@ dependencies = [
  "rust-s3",
  "serde",
  "serde_with",
+ "sig-provider-extension",
  "smart-contract-verifier",
  "smart-contract-verifier-proto",
  "tokio",
