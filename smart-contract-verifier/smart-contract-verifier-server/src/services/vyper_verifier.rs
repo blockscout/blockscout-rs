@@ -1,6 +1,6 @@
 use crate::{
     metrics,
-    settings::{FetcherSettings, VyperSettings},
+    settings::{Extensions, FetcherSettings, VyperSettings},
     types::{VerifyResponseWrapper, VerifyVyperMultiPartRequestWrapper},
 };
 use smart_contract_verifier::{
@@ -22,6 +22,8 @@ impl VyperVerifierService {
     pub async fn new(
         settings: VyperSettings,
         compilers_threads_semaphore: Arc<Semaphore>,
+        /* Otherwise, results in compilation warning if all extensions are disabled */
+        #[allow(unused_variables)] extensions: Extensions,
     ) -> anyhow::Result<Self> {
         let dir = settings.compilers_dir.clone();
         let list_url = match settings.fetcher {
@@ -41,7 +43,18 @@ impl VyperVerifierService {
         );
         let compilers = Compilers::new(fetcher, VyperCompiler::new(), compilers_threads_semaphore);
         compilers.load_from_dir(&dir).await;
-        let client = VyperClient::new(compilers);
+
+        /* Otherwise, results in compilation warning if all extensions are disabled */
+        #[allow(unused_mut)]
+        let mut client = VyperClient::new(compilers);
+
+        #[cfg(feature = "sig-provider-extension")]
+        if let Some(sig_provider) = extensions.sig_provider {
+            // TODO(#221): create only one instance of middleware/connection
+            client = client
+                .with_middleware(sig_provider_extension::SigProvider::new(sig_provider).await?);
+        }
+
         Ok(Self {
             client: Arc::new(client),
         })

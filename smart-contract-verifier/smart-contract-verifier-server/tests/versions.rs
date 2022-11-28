@@ -18,13 +18,17 @@ async fn test_versions(uri: &str) {
     let solidity_service = SolidityVerifierService::new(
         settings.solidity,
         compilers_lock.clone(),
-        settings.extensions.solidity,
+        settings.extensions.solidity.clone(),
     )
     .await
     .expect("couldn't initialize solidity service");
-    let vyper_service = VyperVerifierService::new(settings.vyper, compilers_lock.clone())
-        .await
-        .expect("couldn't initialize vyper service");
+    let vyper_service = VyperVerifierService::new(
+        settings.vyper,
+        compilers_lock.clone(),
+        settings.extensions.solidity.clone(),
+    )
+    .await
+    .expect("couldn't initialize vyper service");
 
     let app = test::init_service(
         App::new()
