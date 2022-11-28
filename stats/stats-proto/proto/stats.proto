@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package blockscout.stats.v1;
+
+option go_package = "github.com/blockscout/blockscout-rs/stats";
+
+service Stats { rpc GetStats(GetStatsRequest) returns (GetStatsResponse); }
+
+message GetStatsRequest {}
+message GetStatsResponse {}
