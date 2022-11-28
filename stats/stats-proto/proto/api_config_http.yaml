@@ -3,8 +3,10 @@ config_version: 3
 
 http:
   rules:
-    - selector: blockscout.stats.v1.Stats.GetStats
+    - selector: blockscout.stats.v1.StatsService.GetStats
       get: /api/v1/stats
+    - selector: blockscout.stats.v1.StatsService.GetNewBlocks
+      get: /api/v1/new_blocks
 
     - selector: blockscout.stats.v1.Health.Check
       get: /health
