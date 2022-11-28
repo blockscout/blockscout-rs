@@ -172,7 +172,7 @@ Proxies verification requests to Sourcify service and returns responses (https:/
 ## Vyper Multi-Part files
 
 ### Route
-`POST /api/v1/vyper/verify/standard-json`
+`POST /api/v1/vyper/verify/multiple-files`
 
 ### Input
 ```json5
@@ -247,8 +247,8 @@ If verification succeeds, the service returns 200 with a success status:
       { "type": "meta", "data": "0xcafe.." }
     ]
   },
-  // Status of 0 indicates successful verification
-  "status": 0
+  // Status of "0" indicates successful verification
+  "status": "0"
 }
 ```
 
@@ -260,7 +260,7 @@ the service returns 200 with the failure status:
   // Message indicating the reason for failure
   "message": "Compilation error: contracts/3_Ballot.sol:4:1: ParserError: Expected pragma, import directive or contract/interface/library/struct/enum/constant/function definition.\n12312313vddfvfdvfd\n^------^",
   // Non-zero status indicates an error code (currently only error code of `1` is possible)
-  "status": 1
+  "status": "1"
 }
 ```
 
