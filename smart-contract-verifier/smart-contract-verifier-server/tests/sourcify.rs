@@ -13,8 +13,10 @@ async fn global_service() -> &'static Arc<SourcifyVerifierService> {
     SERVICE
         .get_or_init(|| async {
             let settings = Settings::default();
-            let service = SourcifyVerifierService::new(settings.sourcify)
-                .expect("couldn't initialize the service");
+            let service =
+                SourcifyVerifierService::new(settings.sourcify, settings.extensions.sourcify)
+                    .await
+                    .expect("couldn't initialize the service");
             Arc::new(service)
         })
         .await

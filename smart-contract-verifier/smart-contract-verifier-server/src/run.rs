@@ -47,7 +47,9 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         false => None,
     };
     let sourcify_verifier = match settings.sourcify.enabled {
-        true => Some(Arc::new(SourcifyVerifierService::new(settings.sourcify)?)),
+        true => Some(Arc::new(
+            SourcifyVerifierService::new(settings.sourcify, settings.extensions.sourcify).await?,
+        )),
         false => None,
     };
     let health = Arc::new(HealthService::default());
