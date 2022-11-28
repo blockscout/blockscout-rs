@@ -231,6 +231,7 @@ pub struct ExtensionsSettings {
 #[derive(Default, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(default, deny_unknown_fields)]
 pub struct Extensions {
+    #[cfg(feature = "sig-provider-extension")]
     pub sig_provider: Option<sig_provider_extension::Config>,
 }
 
