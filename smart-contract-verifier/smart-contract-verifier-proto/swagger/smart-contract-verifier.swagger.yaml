@@ -1,0 +1,352 @@
+swagger: "2.0"
+info:
+  title: smart-contract-verifier.proto
+  version: version not set
+tags:
+  - name: SolidityVerifier
+  - name: VyperVerifier
+  - name: SourcifyVerifier
+  - name: Health
+consumes:
+  - application/json
+produces:
+  - application/json
+paths:
+  /api/v1/solidity/verify/multiple-files:
+    post:
+      operationId: SolidityVerifier_VerifyMultiPart
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1VerifyResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1VerifySolidityMultiPartRequest'
+      tags:
+        - SolidityVerifier
+  /api/v1/solidity/verify/standard-json:
+    post:
+      operationId: SolidityVerifier_VerifyStandardJson
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1VerifyResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1VerifySolidityStandardJsonRequest'
+      tags:
+        - SolidityVerifier
+  /api/v1/solidity/versions:
+    get:
+      operationId: SolidityVerifier_ListVersions
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListVersionsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - SolidityVerifier
+  /api/v1/sourcify/verify:
+    post:
+      operationId: SourcifyVerifier_Verify
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1VerifyResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1VerifyViaSourcifyRequest'
+      tags:
+        - SourcifyVerifier
+  /api/v1/vyper/verify/multiple-files:
+    post:
+      operationId: VyperVerifier_VerifyMultiPart
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1VerifyResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1VerifyVyperMultiPartRequest'
+      tags:
+        - VyperVerifier
+  /api/v1/vyper/versions:
+    get:
+      operationId: VyperVerifier_ListVersions
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListVersionsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - VyperVerifier
+  /health:
+    get:
+      summary: |-
+        If the requested service is unknown, the call will fail with status
+        NOT_FOUND.
+      operationId: Health_Check
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1HealthCheckResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: service
+          in: query
+          required: false
+          type: string
+      tags:
+        - Health
+definitions:
+  HealthCheckResponseServingStatus:
+    type: string
+    enum:
+      - UNKNOWN
+      - SERVING
+      - NOT_SERVING
+      - SERVICE_UNKNOWN
+    default: UNKNOWN
+  Resultbytecode_part:
+    type: object
+    properties:
+      data:
+        type: string
+      type:
+        type: string
+  VerifyResponseResult:
+    type: object
+    properties:
+      abi:
+        type: string
+        title: |-
+          / Contract abi (https://docs.soliditylang.org/en/latest/abi-spec.html?highlight=abi#json);
+          / (does not exist for Yul contracts)
+      compilerSettings:
+        type: string
+        title: |-
+          / Raw settings pushed submitted to the compiler on local compilation
+          / (https://docs.soliditylang.org/en/v0.8.17/using-the-compiler.html#input-description)
+      compilerVersion:
+        type: string
+        title: / Compiler version used for verification
+      constructorArguments:
+        type: string
+        title: |-
+          / Constructor arguments used for deploying verified contract
+          / (exists only for creation inputs)
+      contractLibraries:
+        type: object
+        additionalProperties:
+          type: string
+        title: / Addresses of the libraries
+      contractName:
+        type: string
+        title: / The name of the contract which was verified
+      evmVersion:
+        type: string
+        title: / Version of the EVM contract was compile for
+      fileName:
+        type: string
+        title: / The name of the file verified contract was located at
+      localCreationInputParts:
+        type: array
+        items:
+          $ref: '#/definitions/Resultbytecode_part'
+        description: |-
+          / (optional) creation transaction input resultant from local compilation
+          / parsed and split on Main and Meta parts. Is null for Sourcify verification.
+      localDeployedBytecodeParts:
+        type: array
+        items:
+          $ref: '#/definitions/Resultbytecode_part'
+        description: |-
+          / (optional) deployed bytecode resultant from local compilation
+          / parsed and split on Main and Meta parts. Is null for Sourcify verification.
+      optimization:
+        type: boolean
+        description: |-
+          / (optional) WARNING: Before version 0.8.6 omitting the 'enabled' key was not equivalent to setting
+          / it to false and would actually disable all the optimizations.
+      optimizationRuns:
+        type: integer
+        format: int32
+        title: / (optional) Specify number of optimizer runs, if optimizations are enabled
+      sources:
+        type: object
+        additionalProperties:
+          type: string
+        title: / Source files given for verification
+  protobufAny:
+    type: object
+    properties:
+      '@type':
+        type: string
+    additionalProperties: {}
+  rpcStatus:
+    type: object
+    properties:
+      code:
+        type: integer
+        format: int32
+      details:
+        type: array
+        items:
+          $ref: '#/definitions/protobufAny'
+      message:
+        type: string
+  v1HealthCheckResponse:
+    type: object
+    properties:
+      status:
+        $ref: '#/definitions/HealthCheckResponseServingStatus'
+  v1ListVersionsResponse:
+    type: object
+    properties:
+      versions:
+        type: array
+        items:
+          type: string
+        title: / Compiler versions available for verification
+  v1VerifyResponse:
+    type: object
+    properties:
+      message:
+        type: string
+      result:
+        $ref: '#/definitions/VerifyResponseResult'
+      status:
+        type: string
+        title: |-
+          / Status of "0" indicates successful verification,
+          / status of "1" - that verification failed
+  v1VerifySolidityMultiPartRequest:
+    type: object
+    properties:
+      compilerVersion:
+        type: string
+        title: / Compiler version used to compile the contract
+      contractLibraries:
+        type: object
+        additionalProperties:
+          type: string
+        title: / Map from a library name to its address
+      creationBytecode:
+        type: string
+        title: / If present, used to compare local compilation result with
+      deployedBytecode:
+        type: string
+        title: / If creation_bytecode is not present, used to compare local compilation result with
+      evmVersion:
+        type: string
+        title: / Version of the EVM to compile for
+      optimizationRuns:
+        type: integer
+        format: int32
+        title: |-
+          / If present, optimizations are enabled with specified number of runs,
+          / otherwise optimizations are disabled
+      sources:
+        type: object
+        additionalProperties:
+          type: string
+        title: / Map from a source file name to the actual source code
+  v1VerifySolidityStandardJsonRequest:
+    type: object
+    properties:
+      compilerVersion:
+        type: string
+        title: / Compiler version used to compile the contract
+      creationBytecode:
+        type: string
+        title: / If present, used to compare local compilation result with
+      deployedBytecode:
+        type: string
+        title: / If creation_bytecode is not present, used to compare local compilation result with
+      input:
+        type: string
+        title: / https://docs.soliditylang.org/en/latest/using-the-compiler.html#input-description
+  v1VerifyViaSourcifyRequest:
+    type: object
+    properties:
+      address:
+        type: string
+        title: / Address of the contract to be verified
+      chain:
+        type: string
+        title: |-
+          / The chain (network) the contract was deployed to
+          / (https://docs.sourcify.dev/docs/api/chains/)
+      chosenContract:
+        type: integer
+        format: int32
+        title: (optional) see Sourcify Api
+      files:
+        type: object
+        additionalProperties:
+          type: string
+        title: / Files required for verification (see Sourcify Api)
+  v1VerifyVyperMultiPartRequest:
+    type: object
+    properties:
+      compilerVersion:
+        type: string
+        title: / Compiler version used to compile the contract
+      creationBytecode:
+        type: string
+        title: / If present, used to compare local compilation result with
+      deployedBytecode:
+        type: string
+        title: / If creation_bytecode is not present, used to compare local compilation result with
+      evmVersion:
+        type: string
+        title: / Version of the EVM to compile for
+      sources:
+        type: object
+        additionalProperties:
+          type: string
+        title: / Source file name to the actual source code

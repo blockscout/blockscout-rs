@@ -32,7 +32,7 @@ pub struct VerificationSuccess {
 }
 
 /// Combine different verifiers
-pub trait Verifier {
+pub trait Verifier: Send + Sync {
     /// Verification input (in most cases consists the output returned by compiler)
     type Input;
 
