@@ -10,6 +10,20 @@ consumes:
 produces:
   - application/json
 paths:
+  /api/v1/stats:
+    get:
+      operationId: Stats_GetStats
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetStatsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - Stats
   /health:
     get:
       summary: |-
