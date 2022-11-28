@@ -29,7 +29,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             SolidityVerifierService::new(
                 settings.solidity,
                 compilers_lock.clone(),
-                settings.extensions.solidity.clone(),
+                settings.extensions.solidity,
             )
             .await?,
         )),
@@ -40,7 +40,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             VyperVerifierService::new(
                 settings.vyper,
                 compilers_lock.clone(),
-                settings.extensions.solidity.clone(),
+                settings.extensions.vyper,
             )
             .await?,
         )),
