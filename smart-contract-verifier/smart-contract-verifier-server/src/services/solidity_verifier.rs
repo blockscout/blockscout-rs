@@ -1,6 +1,6 @@
 use crate::{
     metrics,
-    settings::{FetcherSettings, S3FetcherSettings, SoliditySettings},
+    settings::{Extensions, FetcherSettings, S3FetcherSettings, SoliditySettings},
     types::{
         StandardJsonParseError, VerifyResponseWrapper, VerifySolidityMultiPartRequestWrapper,
         VerifySolidityStandardJsonRequestWrapper,
@@ -27,6 +27,8 @@ impl SolidityVerifierService {
     pub async fn new(
         settings: SoliditySettings,
         compilers_threads_semaphore: Arc<Semaphore>,
+        /* Otherwise, results in compilation warning if all extensions are disabled */
+        #[allow(unused_variables)] extensions: Extensions,
     ) -> anyhow::Result<Self> {
         let dir = settings.compilers_dir.clone();
         let schedule = settings.refresh_versions_schedule;
@@ -57,7 +59,18 @@ impl SolidityVerifierService {
             compilers_threads_semaphore,
         );
         compilers.load_from_dir(&dir).await;
-        let client = SolidityClient::new(compilers);
+
+        /* Otherwise, results in compilation warning if all extensions are disabled */
+        #[allow(unused_mut)]
+        let mut client = SolidityClient::new(compilers);
+
+        #[cfg(feature = "sig-provider-extension")]
+        if let Some(sig_provider) = extensions.sig_provider {
+            // TODO(#221): create only one instance of middleware/connection
+            client = client
+                .with_middleware(sig_provider_extension::SigProvider::new(sig_provider).await?);
+        }
+
         Ok(Self {
             client: Arc::new(client),
         })

@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 smart-contract-verifier = { path = "../smart-contract-verifier" }
 smart-contract-verifier-proto = { path = "../smart-contract-verifier-proto" }
+sig-provider-extension = { path = "../sig-provider-extension", optional = true }
 
 actix-web = "4"
 actix-web-prom = "0.6"

@@ -1,4 +1,6 @@
 [workspace]
 members = [
-    "display-bytes"
+    "display-bytes",
+    "solidity-metadata",
+    "mismatch",
 ]
