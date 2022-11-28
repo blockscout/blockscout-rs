@@ -46,6 +46,7 @@ pub struct Settings {
     #[serde(rename = "config")]
     config_path: IgnoredAny,
 }
+
 #[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct ServerSettings {
