@@ -1,10 +1,8 @@
-use super::{
-    errors::{BytecodeInitError, VerificationErrorKind},
-    metadata::MetadataHash,
-};
-use crate::mismatch::Mismatch;
+use super::errors::{BytecodeInitError, VerificationErrorKind};
 use bytes::{Buf, Bytes};
 use ethers_solc::{artifacts::Contract, Artifact};
+use mismatch::Mismatch;
+use solidity_metadata::MetadataHash;
 use std::marker::PhantomData;
 
 /// Types that can be used as Bytecode source indicator
