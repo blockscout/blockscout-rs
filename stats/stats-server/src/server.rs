@@ -1,16 +1,16 @@
-use crate::{service::StatsService, settings::Settings};
+use crate::{service::Service, settings::Settings};
 use actix_web::{web::ServiceConfig, App, HttpServer};
 use stats_proto::blockscout::stats::v1::{
-    stats_actix::route_stats,
-    stats_server::{Stats, StatsServer},
+    stats_service_actix::route_stats_service,
+    stats_service_server::{StatsService, StatsServiceServer},
 };
 use std::{net::SocketAddr, sync::Arc};
 
-pub fn http_configure(config: &mut ServiceConfig, s: Arc<impl Stats>) {
-    route_stats(config, s);
+pub fn http_configure(config: &mut ServiceConfig, s: Arc<impl StatsService>) {
+    route_stats_service(config, s);
 }
 
-pub fn http_server(s: Arc<impl Stats>, addr: SocketAddr) -> actix_web::dev::Server {
+pub fn http_server(s: Arc<impl StatsService>, addr: SocketAddr) -> actix_web::dev::Server {
     tracing::info!("starting http server on addr {}", addr);
     let server =
         HttpServer::new(move || App::new().configure(|config| http_configure(config, s.clone())))
@@ -21,18 +21,18 @@ pub fn http_server(s: Arc<impl Stats>, addr: SocketAddr) -> actix_web::dev::Serv
 }
 
 pub fn grpc_server(
-    s: Arc<impl Stats>,
+    s: Arc<impl StatsService>,
     addr: SocketAddr,
 ) -> impl futures::Future<Output = Result<(), tonic::transport::Error>> {
     tracing::info!("starting grpc server on addr {}", addr);
-    let server = tonic::transport::Server::builder().add_service(StatsServer::from_arc(s));
+    let server = tonic::transport::Server::builder().add_service(StatsServiceServer::from_arc(s));
     server.serve(addr)
 }
 
 pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
     let mut futures = vec![];
 
-    let service = Arc::new(StatsService::new());
+    let service = Arc::new(Service::new());
 
     if settings.server.http.enabled {
         let http_server = {

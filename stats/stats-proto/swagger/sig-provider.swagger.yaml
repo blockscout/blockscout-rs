@@ -3,27 +3,60 @@ info:
   title: stats.proto
   version: version not set
 tags:
-  - name: Stats
+  - name: StatsService
   - name: Health
 consumes:
   - application/json
 produces:
   - application/json
 paths:
-  /api/v1/stats:
+  /api/v1/blocks/new:
     get:
-      operationId: Stats_GetStats
+      operationId: StatsService_GetNewBlocks
       responses:
         "200":
           description: A successful response.
           schema:
-            $ref: '#/definitions/v1GetStatsResponse'
+            $ref: '#/definitions/v1Chart'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: from
+          description: Default is first data point
+          in: query
+          required: false
+          type: string
+        - name: to
+          description: Default is last data point
+          in: query
+          required: false
+          type: string
+        - name: precision
+          in: query
+          required: false
+          type: string
+          enum:
+            - DAY
+            - MONTH
+          default: DAY
+      tags:
+        - StatsService
+  /api/v1/counters:
+    get:
+      operationId: StatsService_GetCounters
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1Counters'
         default:
           description: An unexpected error response.
           schema:
             $ref: '#/definitions/rpcStatus'
       tags:
-        - Stats
+        - StatsService
   /health:
     get:
       summary: |-
@@ -73,10 +106,35 @@ definitions:
           $ref: '#/definitions/protobufAny'
       message:
         type: string
-  v1GetStatsResponse:
+  v1Chart:
     type: object
+    properties:
+      chart:
+        type: array
+        items:
+          $ref: '#/definitions/v1Point'
+  v1Counters:
+    type: object
+    properties:
+      totalBlocksAllTime:
+        type: string
+        format: uint64
   v1HealthCheckResponse:
     type: object
     properties:
       status:
         $ref: '#/definitions/HealthCheckResponseServingStatus'
+  v1Point:
+    type: object
+    properties:
+      date:
+        type: string
+      value:
+        type: string
+        format: uint64
+  v1Precision:
+    type: string
+    enum:
+      - DAY
+      - MONTH
+    default: DAY
