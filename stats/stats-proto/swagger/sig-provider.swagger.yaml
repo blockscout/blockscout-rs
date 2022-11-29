@@ -10,7 +10,7 @@ consumes:
 produces:
   - application/json
 paths:
-  /api/v1/new_blocks:
+  /api/v1/blocks/new:
     get:
       operationId: StatsService_GetNewBlocks
       responses:
@@ -43,14 +43,14 @@ paths:
           default: DAY
       tags:
         - StatsService
-  /api/v1/stats:
+  /api/v1/counters:
     get:
-      operationId: StatsService_GetStats
+      operationId: StatsService_GetCounters
       responses:
         "200":
           description: A successful response.
           schema:
-            $ref: '#/definitions/v1Stats'
+            $ref: '#/definitions/v1Counters'
         default:
           description: An unexpected error response.
           schema:
@@ -113,6 +113,12 @@ definitions:
         type: array
         items:
           $ref: '#/definitions/v1Point'
+  v1Counters:
+    type: object
+    properties:
+      totalBlocksAllTime:
+        type: string
+        format: uint64
   v1HealthCheckResponse:
     type: object
     properties:
@@ -132,9 +138,3 @@ definitions:
       - DAY
       - MONTH
     default: DAY
-  v1Stats:
-    type: object
-    properties:
-      totalBlocksAllTime:
-        type: string
-        format: uint64

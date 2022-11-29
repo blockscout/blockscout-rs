@@ -5,11 +5,11 @@ package blockscout.stats.v1;
 option go_package = "github.com/blockscout/blockscout-rs/stats";
 
 service StatsService {
-  rpc GetStats(StatsRequest) returns (Stats);
+  rpc GetCounters(CountersRequest) returns (Counters);
   rpc GetNewBlocks(ChartRequest) returns (Chart);
 }
 
-message StatsRequest {}
+message CountersRequest {}
 
 message Point {
   string date = 1;
@@ -18,7 +18,7 @@ message Point {
 
 message Chart { repeated Point chart = 1; }
 
-message Stats { uint64 total_blocks_all_time = 1; }
+message Counters { uint64 total_blocks_all_time = 1; }
 
 enum Precision {
   DAY = 0;
