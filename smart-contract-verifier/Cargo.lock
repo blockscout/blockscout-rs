@@ -2270,6 +2270,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "mismatch"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7703ac44509e7daa98776efae839db0d6835ffb742bec050c62b28a958d465bd"
+dependencies = [
+ "thiserror",
+]
+
+[[package]]
 name = "mockall"
 version = "0.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3931,6 +3940,7 @@ dependencies = [
  "hex",
  "lazy_static",
  "minicbor",
+ "mismatch",
  "mockall",
  "parking_lot",
  "pretty_assertions",
@@ -3948,6 +3958,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "sha2 0.10.6",
+ "solidity-metadata",
  "sscanf",
  "tempfile",
  "thiserror",
@@ -4073,6 +4084,18 @@ dependencies = [
  "lalrpop-util",
  "phf",
  "unicode-xid",
+]
+
+[[package]]
+name = "solidity-metadata"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "18f0ee752c2f80c87498dba10c2120492c42073f73b37ffb49e79fcd1e91bff3"
+dependencies = [
+ "blockscout-display-bytes",
+ "minicbor",
+ "semver",
+ "thiserror",
 ]
 
 [[package]]
