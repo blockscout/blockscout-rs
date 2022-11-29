@@ -33,19 +33,18 @@ service Sourcify {
 }
 
 message Source {
+  /// The name of the file verified contract was located at
+  string file_name = 1;
+
+  /// The name of the contract which was verified
+  string contract_name = 2;
+
   // Compiler version used to compile the contract
-  string compiler_version = 1;
+  string compiler_version = 3;
+
   /// 'settings' key in Standard Input JSON
   /// (https://docs.soliditylang.org/en/latest/using-the-compiler.html#input-description)
-  string compiler_settings = 2;
-
-  enum Match {
-    MATCH_UNSPECIFIED = 0;
-    PARTIAL = 1;
-    FULL = 2;
-  }
-  /// Similar to Sourcify (see https://docs.sourcify.dev/docs/full-vs-partial-match/)
-  Match match = 99;
+  string compiler_settings = 4;
 
   enum SourceType {
     SOURCE_TYPE_UNSPECIFIED = 0;
@@ -53,13 +52,29 @@ message Source {
     VYPER = 2;
     YUL = 3;
   }
-  SourceType source_type = 3;
+  SourceType source_type = 6;
 
   message SourceFile {
     string name = 1;
     string content =  2;
   }
-  repeated SourceFile source_files = 5;
+  repeated SourceFile source_files = 7;
+
+  /// Constructor arguments used for deploying verified contract
+  /// (exists only for creation inputs)
+  optional string constructor_arguments = 8;
+
+  /// Contract abi (https://docs.soliditylang.org/en/latest/abi-spec.html?highlight=abi#json);
+  /// (does not exist for Yul contracts)
+  optional string abi = 9;
+
+  enum Match {
+    MATCH_UNSPECIFIED = 0;
+    PARTIAL = 1;
+    FULL = 2;
+  }
+  /// Similar to Sourcify (see https://docs.sourcify.dev/docs/full-vs-partial-match/)
+  Match match = 10;
 }
 
 message VerifySolidityMultiPartRequest {
@@ -116,21 +131,7 @@ message VerifyResponse {
   /// Status of 0 indicates successful verification
   int32 status = 2;
 
-  message Result {
-    /// The name of the file verified contract was located at
-    string file_name = 1;
-    /// The name of the contract which was verified
-    string contract_name = 2;
-    /// A source used for the verification
-    Source source = 4;
-    /// Constructor arguments used for deploying verified contract
-    /// (exists only for creation inputs)
-    optional string constructor_arguments = 5;
-    /// Contract abi (https://docs.soliditylang.org/en/latest/abi-spec.html?highlight=abi#json);
-    /// (does not exist for Yul contracts)
-    optional string abi = 6;
-  }
-  Result result = 3;
+  Source source = 3;
 }
 
 message SearchSourcesRequest {

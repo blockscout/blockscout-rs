@@ -214,28 +214,6 @@ definitions:
       - VYPER
       - YUL
     default: SOURCE_TYPE_UNSPECIFIED
-  VerifyResponseResult:
-    type: object
-    properties:
-      abi:
-        type: string
-        title: |-
-          / Contract abi (https://docs.soliditylang.org/en/latest/abi-spec.html?highlight=abi#json);
-          / (does not exist for Yul contracts)
-      constructorArguments:
-        type: string
-        title: |-
-          / Constructor arguments used for deploying verified contract
-          / (exists only for creation inputs)
-      contractName:
-        type: string
-        title: / The name of the contract which was verified
-      fileName:
-        type: string
-        title: / The name of the file verified contract was located at
-      source:
-        $ref: '#/definitions/v1Source'
-        title: / A source used for the verification
   protobufAny:
     type: object
     properties:
@@ -270,6 +248,11 @@ definitions:
   v1Source:
     type: object
     properties:
+      abi:
+        type: string
+        title: |-
+          / Contract abi (https://docs.soliditylang.org/en/latest/abi-spec.html?highlight=abi#json);
+          / (does not exist for Yul contracts)
       compilerSettings:
         type: string
         title: |-
@@ -278,6 +261,17 @@ definitions:
       compilerVersion:
         type: string
         title: Compiler version used to compile the contract
+      constructorArguments:
+        type: string
+        title: |-
+          / Constructor arguments used for deploying verified contract
+          / (exists only for creation inputs)
+      contractName:
+        type: string
+        title: / The name of the contract which was verified
+      fileName:
+        type: string
+        title: / The name of the file verified contract was located at
       match:
         $ref: '#/definitions/SourceMatch'
         title: / Similar to Sourcify (see https://docs.sourcify.dev/docs/full-vs-partial-match/)
@@ -292,8 +286,8 @@ definitions:
     properties:
       message:
         type: string
-      result:
-        $ref: '#/definitions/VerifyResponseResult'
+      source:
+        $ref: '#/definitions/v1Source'
       status:
         type: integer
         format: int32
