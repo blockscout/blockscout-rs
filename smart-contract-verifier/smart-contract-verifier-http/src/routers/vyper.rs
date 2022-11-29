@@ -15,7 +15,8 @@ pub struct VyperRouter {
 impl VyperRouter {
     pub async fn new(
         settings: VyperSettings,
-        extensions: Extensions,
+        /* Otherwise, results in compilation warning if all extensions are disabled */
+        #[allow(unused_variables)] extensions: Extensions,
         compilers_threads_semaphore: Arc<Semaphore>,
     ) -> anyhow::Result<Self> {
         let dir = settings.compilers_dir.clone();
@@ -36,12 +37,18 @@ impl VyperRouter {
         );
         let compilers = Compilers::new(fetcher, VyperCompiler::new(), compilers_threads_semaphore);
         compilers.load_from_dir(&dir).await;
+
+        /* Otherwise, results in compilation warning if all extensions are disabled */
+        #[allow(unused_mut)]
         let mut client = VyperClient::new(compilers);
+
+        #[cfg(feature = "sig-provider-extension")]
         if let Some(sig_provider) = extensions.sig_provider {
             // TODO(#221): create only one instance of middleware/connection
             client = client
                 .with_middleware(sig_provider_extension::SigProvider::new(sig_provider).await?);
         }
+
         Ok(Self {
             client: web::Data::new(client),
         })

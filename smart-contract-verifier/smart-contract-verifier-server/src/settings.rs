@@ -46,16 +46,42 @@ pub struct Settings {
     #[serde(rename = "config")]
     config_path: IgnoredAny,
 }
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+
+#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct ServerSettings {
+    pub http: HttpServerSettings,
+    pub grpc: GrpcServerSettings,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct HttpServerSettings {
+    pub enabled: bool,
     pub addr: SocketAddr,
 }
 
-impl Default for ServerSettings {
+impl Default for HttpServerSettings {
     fn default() -> Self {
         Self {
-            addr: SocketAddr::from_str("0.0.0.0:8043").expect("should be valid url"),
+            enabled: true,
+            addr: SocketAddr::from_str("0.0.0.0:8043").unwrap(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct GrpcServerSettings {
+    pub enabled: bool,
+    pub addr: SocketAddr,
+}
+
+impl Default for GrpcServerSettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            addr: SocketAddr::from_str("0.0.0.0:8044").unwrap(),
         }
     }
 }
