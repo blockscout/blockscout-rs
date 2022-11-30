@@ -1,0 +1,140 @@
+swagger: "2.0"
+info:
+  title: stats.proto
+  version: version not set
+tags:
+  - name: StatsService
+  - name: Health
+consumes:
+  - application/json
+produces:
+  - application/json
+paths:
+  /api/v1/blocks/new:
+    get:
+      operationId: StatsService_GetNewBlocks
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1Chart'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: from
+          description: Default is first data point
+          in: query
+          required: false
+          type: string
+        - name: to
+          description: Default is last data point
+          in: query
+          required: false
+          type: string
+        - name: precision
+          in: query
+          required: false
+          type: string
+          enum:
+            - DAY
+            - MONTH
+          default: DAY
+      tags:
+        - StatsService
+  /api/v1/counters:
+    get:
+      operationId: StatsService_GetCounters
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1Counters'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - StatsService
+  /health:
+    get:
+      summary: |-
+        If the requested service is unknown, the call will fail with status
+        NOT_FOUND.
+      operationId: Health_Check
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1HealthCheckResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: service
+          in: query
+          required: false
+          type: string
+      tags:
+        - Health
+definitions:
+  HealthCheckResponseServingStatus:
+    type: string
+    enum:
+      - UNKNOWN
+      - SERVING
+      - NOT_SERVING
+      - SERVICE_UNKNOWN
+    default: UNKNOWN
+  protobufAny:
+    type: object
+    properties:
+      '@type':
+        type: string
+    additionalProperties: {}
+  rpcStatus:
+    type: object
+    properties:
+      code:
+        type: integer
+        format: int32
+      details:
+        type: array
+        items:
+          $ref: '#/definitions/protobufAny'
+      message:
+        type: string
+  v1Chart:
+    type: object
+    properties:
+      chart:
+        type: array
+        items:
+          $ref: '#/definitions/v1Point'
+  v1Counters:
+    type: object
+    properties:
+      totalBlocksAllTime:
+        type: string
+        format: uint64
+  v1HealthCheckResponse:
+    type: object
+    properties:
+      status:
+        $ref: '#/definitions/HealthCheckResponseServingStatus'
+  v1Point:
+    type: object
+    properties:
+      date:
+        type: string
+      value:
+        type: string
+        format: uint64
+  v1Precision:
+    type: string
+    enum:
+      - DAY
+      - MONTH
+    default: DAY

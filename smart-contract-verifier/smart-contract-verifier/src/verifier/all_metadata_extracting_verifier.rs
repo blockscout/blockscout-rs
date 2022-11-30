@@ -2,16 +2,16 @@ use super::{
     base::{self, VerificationSuccess},
     bytecode::{Bytecode, BytecodePart, LocalBytecode, Source},
     errors::{BytecodeInitError, VerificationError, VerificationErrorKind},
-    metadata::MetadataHash,
 };
 use crate::{
-    mismatch::Mismatch,
     verifier::bytecode::{CreationTxInput, DeployedBytecode},
     DisplayBytes,
 };
 use bytes::Bytes;
 use ethabi::{Constructor, Token};
 use ethers_solc::{artifacts::Contract, Artifact, CompilerOutput};
+use mismatch::Mismatch;
+use solidity_metadata::MetadataHash;
 
 /// Verifier used for contract verification.
 ///
