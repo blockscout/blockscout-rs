@@ -2,16 +2,16 @@ use super::{
     base::{self, VerificationSuccess},
     bytecode::{Bytecode, BytecodePart, LocalBytecode, Source},
     errors::{BytecodeInitError, VerificationError, VerificationErrorKind},
-    metadata::MetadataHash,
 };
 use crate::{
-    mismatch::Mismatch,
     verifier::bytecode::{CreationTxInput, DeployedBytecode},
     DisplayBytes,
 };
 use bytes::Bytes;
 use ethabi::{Constructor, Token};
 use ethers_solc::{artifacts::Contract, Artifact, CompilerOutput};
+use mismatch::Mismatch;
+use solidity_metadata::MetadataHash;
 
 /// Verifier used for contract verification.
 ///
@@ -258,17 +258,16 @@ impl<T: Source> Verifier<T> {
                         });
                     }
                 }
-                BytecodePart::Metadata {
-                    metadata,
-                    metadata_length_raw,
-                    ..
-                } => {
+                BytecodePart::Metadata { metadata, raw, .. } => {
                     let (remote_metadata, remote_metadata_length) =
                         MetadataHash::from_cbor(&remote_raw[i..])
                             .map_err(|err| VerificationErrorKind::MetadataParse(err.to_string()))?;
 
                     let start_index = i + remote_metadata_length;
-                    if &remote_raw[start_index..start_index + 2] != metadata_length_raw {
+                    let raw_start_index = raw.len() - 2;
+                    if remote_raw[start_index..start_index + 2]
+                        != raw[raw_start_index..raw_start_index + 2]
+                    {
                         return Err(VerificationErrorKind::MetadataParse(
                             "metadata length mismatch".into(),
                         ));

@@ -23,11 +23,9 @@ impl From<smart_contract_verifier::BytecodePart> for BytecodePart {
             smart_contract_verifier::BytecodePart::Main { raw } => BytecodePart::Main {
                 data: DisplayBytes::from(raw),
             },
-            smart_contract_verifier::BytecodePart::Metadata { metadata_raw, .. } => {
-                BytecodePart::Meta {
-                    data: DisplayBytes::from(metadata_raw),
-                }
-            }
+            smart_contract_verifier::BytecodePart::Metadata { raw, .. } => BytecodePart::Meta {
+                data: DisplayBytes::from(raw),
+            },
         }
     }
 }

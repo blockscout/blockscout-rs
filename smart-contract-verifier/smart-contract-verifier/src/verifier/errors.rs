@@ -1,4 +1,5 @@
-use crate::{mismatch::Mismatch, DisplayBytes};
+use crate::DisplayBytes;
+use mismatch::Mismatch;
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
 

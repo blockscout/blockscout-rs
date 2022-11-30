@@ -7,11 +7,8 @@ pub mod middleware;
 mod compiler;
 mod consts;
 mod metrics;
-mod verifier;
-
-// TODO: to be extracted in a separate crate
-mod mismatch;
 mod scheduler;
+mod verifier;
 
 #[cfg(test)]
 mod tests;

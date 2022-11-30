@@ -33,7 +33,7 @@ async fn global_service() -> &'static Arc<VyperVerifierService> {
             let service = VyperVerifierService::new(
                 settings.vyper,
                 Arc::new(compilers_lock),
-                settings.extensions.solidity,
+                settings.extensions.vyper,
             )
             .await
             .expect("couldn't initialize the service");
