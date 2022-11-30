@@ -162,12 +162,10 @@ pub mod verify_response {
                         r#type: "main".to_string(),
                         data: DisplayBytes::from(raw).to_string(),
                     },
-                    smart_contract_verifier::BytecodePart::Metadata { metadata_raw, .. } => {
-                        BytecodePart {
-                            r#type: "meta".to_string(),
-                            data: DisplayBytes::from(metadata_raw).to_string(),
-                        }
-                    }
+                    smart_contract_verifier::BytecodePart::Metadata { raw, .. } => BytecodePart {
+                        r#type: "meta".to_string(),
+                        data: DisplayBytes::from(raw).to_string(),
+                    },
                 };
                 inner.into()
             }
@@ -307,9 +305,8 @@ mod tests {
 
         // Meta part
         let verifier_bytecode_part = smart_contract_verifier::BytecodePart::Metadata {
-            metadata_raw: DisplayBytes::from_str("0x1234").unwrap().0,
+            raw: DisplayBytes::from_str("0x1234").unwrap().0,
             metadata: Default::default(),
-            metadata_length_raw: Default::default(),
         };
         let proto_bytecode_part = BytecodePartWrapper::from(verifier_bytecode_part).into_inner();
         let expected = BytecodePart {
