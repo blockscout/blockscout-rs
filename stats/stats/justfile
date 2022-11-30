@@ -20,6 +20,9 @@ migrate-up database_url="postgres://postgres:admin@localhost:5432/stats":
 migrate-down database_url="postgres://postgres:admin@localhost:5432/stats":
     DATABASE_URL={{database_url}} sea-orm-cli migrate up
 
+new-migration name:
+    sea-orm-cli migrate generate {{name}}
+
 generate-entities database_url="postgres://postgres:admin@localhost:5432/stats":
     DATABASE_URL={{database_url}} sea-orm-cli generate entity --lib -o entity/src
 
