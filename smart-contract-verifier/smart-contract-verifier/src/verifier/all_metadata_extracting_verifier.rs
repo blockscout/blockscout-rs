@@ -258,17 +258,16 @@ impl<T: Source> Verifier<T> {
                         });
                     }
                 }
-                BytecodePart::Metadata {
-                    metadata,
-                    metadata_length_raw,
-                    ..
-                } => {
+                BytecodePart::Metadata { metadata, raw, .. } => {
                     let (remote_metadata, remote_metadata_length) =
                         MetadataHash::from_cbor(&remote_raw[i..])
                             .map_err(|err| VerificationErrorKind::MetadataParse(err.to_string()))?;
 
                     let start_index = i + remote_metadata_length;
-                    if &remote_raw[start_index..start_index + 2] != metadata_length_raw {
+                    let raw_start_index = raw.len() - 2;
+                    if remote_raw[start_index..start_index + 2]
+                        != raw[raw_start_index..raw_start_index + 2]
+                    {
                         return Err(VerificationErrorKind::MetadataParse(
                             "metadata length mismatch".into(),
                         ));
