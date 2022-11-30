@@ -1,10 +1,8 @@
-use super::{
-    errors::{BytecodeInitError, VerificationErrorKind},
-    metadata::MetadataHash,
-};
-use crate::mismatch::Mismatch;
+use super::errors::{BytecodeInitError, VerificationErrorKind};
 use bytes::{Buf, Bytes};
 use ethers_solc::{artifacts::Contract, Artifact};
+use mismatch::Mismatch;
+use solidity_metadata::MetadataHash;
 use std::marker::PhantomData;
 
 /// Types that can be used as Bytecode source indicator
@@ -128,25 +126,15 @@ impl<T: Source> TryFrom<&Contract> for Bytecode<T> {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BytecodePart {
-    Main {
-        raw: Bytes,
-    },
-    Metadata {
-        metadata_raw: Bytes,
-        metadata: MetadataHash,
-        metadata_length_raw: Bytes,
-    },
+    Main { raw: Bytes },
+    Metadata { raw: Bytes, metadata: MetadataHash },
 }
 
 impl BytecodePart {
     pub fn size(&self) -> usize {
         match self {
             BytecodePart::Main { raw } => raw.len(),
-            BytecodePart::Metadata {
-                metadata_raw,
-                metadata_length_raw,
-                ..
-            } => metadata_raw.len() + metadata_length_raw.len(),
+            BytecodePart::Metadata { raw, .. } => raw.len(),
         }
     }
 }
@@ -297,8 +285,9 @@ impl<T> LocalBytecode<T> {
                 ));
             }
             // Decode length of metadata hash representation
-            let metadata_length_raw = raw.slice((i + metadata_length)..(i + metadata_length + 2));
-            let encoded_metadata_length = metadata_length_raw.clone().get_u16() as usize;
+            let mut metadata_length_raw =
+                raw.slice((i + metadata_length)..(i + metadata_length + 2));
+            let encoded_metadata_length = metadata_length_raw.get_u16() as usize;
             if encoded_metadata_length != metadata_length {
                 return Err(VerificationErrorKind::InternalError(format!(
                     "encoded metadata length does not correspond to actual metadata length: {}",
@@ -307,9 +296,8 @@ impl<T> LocalBytecode<T> {
             }
 
             parts.push(BytecodePart::Metadata {
-                metadata_raw: raw.slice(i..(i + metadata_length)),
+                raw: raw.slice(i..(i + metadata_length + 2)),
                 metadata,
-                metadata_length_raw,
             });
 
             // Update index to point where metadata part begins
@@ -407,12 +395,7 @@ mod local_bytecode_initialization_tests {
         if raw.len() != len + 2 {
             panic!("Metadata bytecode part has invalid length");
         }
-        let metadata_length_raw = raw.slice(len..raw.len());
-        BytecodePart::Metadata {
-            metadata_raw: raw.slice(0..len),
-            metadata,
-            metadata_length_raw,
-        }
+        BytecodePart::Metadata { raw, metadata }
     }
 
     #[test]

@@ -6,12 +6,12 @@ use super::{
 };
 use crate::{
     compiler::{self, Compilers, EvmCompiler},
-    mismatch::Mismatch,
     DisplayBytes,
 };
 use anyhow::anyhow;
 use bytes::Bytes;
 use ethers_solc::{CompilerInput, CompilerOutput};
+use mismatch::Mismatch;
 use std::{ops::Add, path::PathBuf};
 use thiserror::Error;
 use tracing::instrument;

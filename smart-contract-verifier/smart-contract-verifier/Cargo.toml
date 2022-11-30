@@ -19,24 +19,26 @@ futures = "0.3"
 hex = "0.4"
 lazy_static = "1"
 minicbor = { version = "0.18", features = ["std"] }
+mismatch = "1.0"
 parking_lot = "0.12"
 primitive-types = "0.11"
 prometheus = "0.13"
 reqwest = { version = "0.11", features = ["json"] }
+reqwest-middleware = "0.1"
+reqwest-retry = "0.1"
 rust-s3 = "0.32"
 semver = "1.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_with = "2"
 sha2 = "0.10"
+solidity-metadata = "1.0"
 sscanf = "0.3"
 tempfile = "3.3"
 thiserror = "1.0"
 tokio = { version = "1", features = ["macros"] }
 tracing = "0.1"
 url = { version = "2.2", features = ["serde"] }
-reqwest-retry = "0.1"
-reqwest-middleware = "0.1"
 
 [dev-dependencies]
 const_format = "0.2"
