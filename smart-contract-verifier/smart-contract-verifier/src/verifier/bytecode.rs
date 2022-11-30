@@ -395,12 +395,7 @@ mod local_bytecode_initialization_tests {
         if raw.len() != len + 2 {
             panic!("Metadata bytecode part has invalid length");
         }
-        let metadata_length_raw = raw.slice(len..raw.len());
-        BytecodePart::Metadata {
-            metadata_raw: raw.slice(0..len),
-            metadata,
-            metadata_length_raw,
-        }
+        BytecodePart::Metadata { raw, metadata }
     }
 
     #[test]
