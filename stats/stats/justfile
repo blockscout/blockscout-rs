@@ -1,0 +1,25 @@
+# just is like `make` but better https://github.com/casey/just
+
+# list all recipes
+default:
+    just --list --unsorted
+
+start-postgres:
+    # we run it in --rm mode, so all data will be deleted after stopping
+    docker run -p 5432:5432 --name stats-postgres -e POSTGRES_PASSWORD=admin --rm -d postgres
+    # wait for postgres to start
+    sleep 3
+    docker exec -it stats-postgres psql -U postgres -c 'create database stats;'
+
+stop-postgres:
+    docker kill stats-postgres
+
+migrate-up database_url="postgres://postgres:admin@localhost:5432/stats":
+    DATABASE_URL={{database_url}} sea-orm-cli migrate up
+
+migrate-down database_url="postgres://postgres:admin@localhost:5432/stats":
+    DATABASE_URL={{database_url}} sea-orm-cli migrate up
+
+generate-entities database_url="postgres://postgres:admin@localhost:5432/stats":
+    DATABASE_URL={{database_url}} sea-orm-cli generate entity --lib -o entity/src
+

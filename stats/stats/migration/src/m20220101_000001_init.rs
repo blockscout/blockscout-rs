@@ -8,8 +8,8 @@ impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let sql = r#"
 CREATE TYPE "chart_value_type" AS ENUM (
-  'Int',
-  'Double'
+  'INT',
+  'DOUBLE'
 );
 
 CREATE TABLE "charts" (
