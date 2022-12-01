@@ -17,7 +17,7 @@ paths:
         "200":
           description: A successful response.
           schema:
-            $ref: '#/definitions/v1Chart'
+            $ref: '#/definitions/v1ChartInt'
         default:
           description: An unexpected error response.
           schema:
@@ -106,13 +106,13 @@ definitions:
           $ref: '#/definitions/protobufAny'
       message:
         type: string
-  v1Chart:
+  v1ChartInt:
     type: object
     properties:
       chart:
         type: array
         items:
-          $ref: '#/definitions/v1Point'
+          $ref: '#/definitions/v1PointInt'
   v1Counters:
     type: object
     properties:
@@ -124,7 +124,7 @@ definitions:
     properties:
       status:
         $ref: '#/definitions/HealthCheckResponseServingStatus'
-  v1Point:
+  v1PointInt:
     type: object
     properties:
       date:
