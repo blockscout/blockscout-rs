@@ -4,7 +4,7 @@ use super::{
 };
 use crate::DisplayBytes;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct LocalBytecodeParts {
     pub creation_tx_input_parts: Vec<BytecodePart>,
     pub deployed_bytecode_parts: Vec<BytecodePart>,
