@@ -3,8 +3,8 @@ use std::str::FromStr;
 use async_trait::async_trait;
 use chrono::{Datelike, Duration, NaiveDateTime};
 use stats_proto::blockscout::stats::v1::{
-    stats_service_server::StatsService, Chart, ChartRequest, Counters, CountersRequest, Point,
-    Precision,
+    stats_service_server::StatsService, ChartInt, ChartRequest, Counters, CountersRequest,
+    PointInt, Precision,
 };
 use tonic::{Request, Response, Status};
 
@@ -29,20 +29,20 @@ impl StatsService for Service {
     async fn get_new_blocks(
         &self,
         request: Request<ChartRequest>,
-    ) -> Result<Response<Chart>, Status> {
+    ) -> Result<Response<ChartInt>, Status> {
         let request = request.into_inner();
         let start = NaiveDateTime::from_str("2022-01-01T00:00:00").unwrap();
         let chart = match Precision::from_i32(request.precision).unwrap() {
             Precision::Day => (0..90)
                 .into_iter()
-                .map(|i| Point {
+                .map(|i| PointInt {
                     date: (start + Duration::days(i)).format("%d-%m-%Y").to_string(),
                     value: 100 + (i as u64 % 10),
                 })
                 .collect(),
             Precision::Month => (0..3)
                 .into_iter()
-                .map(|i| Point {
+                .map(|i| PointInt {
                     date: start
                         .with_month(start.month() + i)
                         .unwrap()
@@ -52,6 +52,6 @@ impl StatsService for Service {
                 })
                 .collect(),
         };
-        Ok(Response::new(Chart { chart }))
+        Ok(Response::new(ChartInt { chart }))
     }
 }
