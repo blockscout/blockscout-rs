@@ -137,7 +137,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
   deploy_main:
-    if: "github.ref_name == main"
+    if: "github.ref_name == 'main'"
     name: Deploy smart-contract-verifier
     needs: push
     uses: blockscout/blockscout-ci-cd/.github/workflows/deploy.yaml@master
