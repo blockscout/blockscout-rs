@@ -136,3 +136,11 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+  deploy_main:
+    name: Deploy smart-contract-verifier
+    needs: push
+    uses: blockscout/blockscout-ci-cd/.github/workflows/deploy.yaml@master
+    with:
+      env_vars: VALUES_DIR=deploy/values/smart-contract-verifier,APP_NAME=bs-stack
+      appNamespace: sc-verifier
+    secrets: inherit
