@@ -90,6 +90,7 @@ mod tests {
     use super::*;
     use crate::DisplayBytes;
     use entity::{bytecodes, parts, sea_orm_active_enums::PartType};
+    use pretty_assertions::assert_eq;
     use sea_orm::{DatabaseBackend, MockDatabase};
     use std::str::FromStr;
 

@@ -30,6 +30,7 @@ pub struct VerificationResult {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum BytecodeTy {
     Main,
     Meta,
@@ -45,7 +46,6 @@ impl From<BytecodeTy> for PartType {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
-#[serde(tag = "type", rename_all = "snake_case")]
 pub struct BytecodePart {
     pub data: String,
     pub r#type: BytecodeTy,
@@ -54,7 +54,7 @@ pub struct BytecodePart {
 pub async fn create_source(
     db: &DatabaseConnection,
     verification_result: VerificationResult,
-) -> Result<(), anyhow::Error> {
+) -> Result<sources::Model, anyhow::Error> {
     let txn = db.begin().await?;
 
     let raw_creation_input = hex::decode(
@@ -160,7 +160,7 @@ pub async fn create_source(
     }
 
     txn.commit().await?;
-    Ok(())
+    Ok(source)
 }
 
 async fn insert_parts(

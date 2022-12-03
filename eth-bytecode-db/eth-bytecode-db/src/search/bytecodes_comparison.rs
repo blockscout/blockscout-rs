@@ -230,6 +230,7 @@ fn parse_constructor_args(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
     use semver::Version;
     use std::str::FromStr;
 

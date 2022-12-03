@@ -1,0 +1,35 @@
+{
+    "file_name": "source.sol",
+    "contract_name": "Id10{{ID}}",
+    "compiler_version": "v0.8.7+commit.e28d00a7",
+    "evm_version": "london",
+    "constructor_arguments": null,
+    "optimization": false,
+    "optimization_runs": null,
+    "contract_libraries": {},
+    "abi": "[{\"type\":\"function\",\"name\":\"get_id\",\"inputs\":[],\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"pure\"}]",
+    "sources": {
+        "source.sol": "// SPDX-License-Identifier: GPL-3.0\npragma solidity =0.8.7;\ncontract Id10{{ID}} {\n    function get_id() public pure returns (uint) {\n        return 0x10{{ID}};\n    }\n}\n"
+    },
+    "compiler_settings": "{\"optimizer\":{\"enabled\":false},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"outputSelection\":{\"*\":{\"\":[\"ast\"],\"*\":[\"abi\",\"evm.bytecode\",\"evm.deployedBytecode\",\"evm.methodIdentifiers\"]}},\"evmVersion\":\"london\",\"libraries\":{}}",
+    "local_creation_input_parts": [
+        {
+            "type": "main",
+            "data": "0x608060405234801561001057600080fd5b5060bb8061001f6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c8063f43fa80514602d575b600080fd5b60336047565b604051603e91906062565b60405180910390f35b60006510{{ID}}905090565b605c81607b565b82525050565b6000602082019050607560008301846055565b92915050565b600081905091905056fe"
+        },
+        {
+            "type": "meta",
+            "data": "0xa2646970667358221220ad5a5e9ea0429c6665dc23af78b0acca8d56235be9dc3573672141811ea4a0da64736f6c63430008070033"
+        }
+    ],
+    "local_deployed_bytecode_parts": [
+        {
+            "type": "main",
+            "data": "0x6080604052348015600f57600080fd5b506004361060285760003560e01c8063f43fa80514602d575b600080fd5b60336047565b604051603e91906062565b60405180910390f35b60006510{{ID}}905090565b605c81607b565b82525050565b6000602082019050607560008301846055565b92915050565b600081905091905056fe"
+        },
+        {
+            "type": "meta",
+            "data": "0xa2646970667358221220ad5a5e9ea0429c6665dc23af78b0acca8d56235be9dc3573672141811ea4a0da64736f6c63430008070033"
+        }
+    ]
+}
