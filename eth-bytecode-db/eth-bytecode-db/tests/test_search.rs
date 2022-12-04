@@ -1,13 +1,13 @@
-use std::{collections::HashMap, str::FromStr};
-
-use entity::{sea_orm_active_enums::BytecodeType, sources};
+use entity::sea_orm_active_enums::BytecodeType;
 use eth_bytecode_db::{
-    create::{create_source, BytecodePart, VerificationResult},
     search::{find_partial_match_contract, BytecodeRemote},
+    tests::verifier_mock::{
+        generate_and_insert, BytecodePart, ContractType, PartTy, VerificationResult,
+    },
 };
 use migration::{DbErr, MigratorTrait};
-use rstest::*;
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, Statement};
+use std::{collections::HashMap, str::FromStr};
 use url::Url;
 
 pub struct TestDbGuard {
@@ -73,69 +73,13 @@ impl TestDbGuard {
     }
 }
 
-#[fixture]
-async fn db(#[default("default")] name: &str) -> TestDbGuard {
-    let db_name = format!("test_db_{}", name);
-    TestDbGuard::new(&db_name).await
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-enum ContractType {
-    Small,
-    Medium,
-    Big,
-    Constructor,
-}
-
-fn get_contract(id: usize, ty: ContractType) -> VerificationResult {
-    match ty {
-        ContractType::Small => {
-            let template = include_str!("contracts/type_1.json");
-            get_verification_result(template, id).expect("should be valid verification result")
-        }
-        ContractType::Medium => {
-            let template = include_str!("contracts/type_2.json");
-            get_verification_result(template, id).expect("should be valid verification result")
-        }
-        ContractType::Big => {
-            let template = include_str!("contracts/type_3.json");
-            get_verification_result(template, id).expect("should be valid verification result")
-        }
-        ContractType::Constructor => {
-            let template = include_str!("contracts/type_4.json");
-            get_verification_result(template, id).expect("should be valid verification result")
-        }
-    }
-}
-
-fn get_verification_result(
-    template: &str,
-    id: usize,
-) -> Result<VerificationResult, serde_json::Error> {
-    serde_json::from_str(&template.replace("{{ID}}", &format!("{:0>10}", id)))
-}
-
-async fn push_contract(
-    db: &DatabaseConnection,
-    id: usize,
-    ty: ContractType,
-) -> Result<sources::Model, anyhow::Error> {
-    let verification_result = get_contract(id, ty);
-    create_source(db, verification_result).await
-}
-
-#[rstest::rstest]
 #[tokio::test]
-async fn test_search_bytecode(
-    #[future]
-    #[with("search_bytecode")]
-    db: TestDbGuard,
-) {
+async fn test_search_bytecodes() {
     tracing_subscriber::fmt()
         .with_env_filter("search=info,sqlx=warn")
         .init();
 
-    let db = db.await;
+    let db = TestDbGuard::new("test_db_search_bytecodes").await;
     let conn = db.conn().await;
     let mut all_sources = HashMap::new();
     for i in 1..10 {
@@ -145,13 +89,14 @@ async fn test_search_bytecode(
             ContractType::Big,
             ContractType::Constructor,
         ] {
-            let source = push_contract(conn, i, ty)
+            let source = generate_and_insert(conn, i, ty)
                 .await
                 .expect("cannot push contract");
             all_sources.insert((i, ty), source);
         }
     }
 
+    // Search known bytecodes
     for i in 1..10 {
         for ty in [
             ContractType::Small,
@@ -162,7 +107,7 @@ async fn test_search_bytecode(
             let expected_source = all_sources
                 .get(&(i, ty))
                 .expect("source should be in hashmap");
-            let expected_contract = get_contract(i, ty);
+            let expected_contract = VerificationResult::generate(i, ty);
 
             let mut raw_creation_input = expected_contract
                 .local_creation_input_parts
@@ -183,9 +128,10 @@ async fn test_search_bytecode(
                 data,
                 bytecode_type: BytecodeType::CreationInput,
             };
-            let partial_match = find_partial_match_contract(conn, search).await;
+            let partial_match = find_partial_match_contract(conn, search)
+                .await
+                .expect("error during contract search");
             let contract = partial_match
-                .expect("error during contract search")
                 .unwrap_or_else(|| panic!("contract not found. id={}, ty={:?}", i, ty));
 
             assert_eq!(&contract.source, expected_source);
@@ -197,8 +143,73 @@ async fn test_search_bytecode(
             );
         }
     }
+
+    // Search unknow bytecodes
+    for i in 20..30 {
+        for ty in [
+            ContractType::Small,
+            ContractType::Medium,
+            ContractType::Big,
+            ContractType::Constructor,
+        ] {
+            let unknow_contract = VerificationResult::generate(i, ty);
+            let raw_creation_input = unknow_contract
+                .local_creation_input_parts
+                .iter()
+                .map(change_part_for_search)
+                .collect::<Vec<_>>()
+                .join("");
+            let data = blockscout_display_bytes::Bytes::from_str(&raw_creation_input)
+                .unwrap()
+                .0;
+            let search = BytecodeRemote {
+                data,
+                bytecode_type: BytecodeType::CreationInput,
+            };
+
+            let partial_match = find_partial_match_contract(conn, search)
+                .await
+                .expect("unkown contract should not give error");
+            assert!(
+                partial_match.is_none(),
+                "found some contact, but bytecode is unknow"
+            );
+        }
+    }
+
+    // Search random strings
+    for bytecode in ["", "6080", "0000", "1111"] {
+        let data = blockscout_display_bytes::Bytes::from_str(bytecode)
+            .unwrap()
+            .0;
+        let search = BytecodeRemote {
+            data,
+            bytecode_type: BytecodeType::CreationInput,
+        };
+
+        let partial_match = find_partial_match_contract(conn, search)
+            .await
+            .expect("random string should not give error");
+        assert!(
+            partial_match.is_none(),
+            "found some contact, but bytecode is random string"
+        );
+    }
 }
 
-fn change_part_for_search(part: &BytecodePart) -> &str {
-    part.data.trim_start_matches("0x")
+fn change_part_for_search(part: &BytecodePart) -> String {
+    let changed = match part.r#type {
+        PartTy::Main => &part.data,
+        PartTy::Meta => {
+            let n = part.data.len();
+            let metadata_length = &part.data[n - 4..];
+            match metadata_length {
+                "0033" => "a2646970667358221220c424331e61ba143d01f757e1a3b6ddcfe99698f6c1862e2133c4d7d277854b9564736f6c63430008070033",
+                "0032" => "a265627a7a72315820a648f0e3107b949c9f7567adacfd4b276c9fc37dc06b172c7efbd1a0e58206ce64736f6c63430005110032",
+                "0029" => "a165627a7a72305820a61b515152276dcea013aa8566142e7d3f07992c7c9512373cc7ba9a33fc2eab0029",
+                _ => panic!("unknown metadata length '{}', add this type of metadata to mock", metadata_length)
+            }
+        }
+    };
+    changed.trim_start_matches("0x").to_string()
 }

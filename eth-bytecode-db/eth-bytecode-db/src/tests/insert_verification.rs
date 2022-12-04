@@ -1,3 +1,7 @@
+// TODO: after implementing https://github.com/blockscout/blockscout-rs/issues/208
+// remove this file and use code from "store verification results"
+
+use crate::tests::verifier_mock::{BytecodePart, VerificationResult};
 use entity::{
     bytecode_parts, bytecodes, files, parts,
     sea_orm_active_enums::{BytecodeType, PartType, SourceType},
@@ -9,49 +13,8 @@ use sea_orm::{
     ActiveValue::Set,
     DatabaseTransaction, TransactionTrait,
 };
-use serde::Deserialize;
-use std::collections::BTreeMap;
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
-pub struct VerificationResult {
-    pub file_name: String,
-    pub contract_name: String,
-    pub compiler_version: String,
-    pub evm_version: String,
-    pub constructor_arguments: Option<String>,
-    pub optimization: Option<bool>,
-    pub optimization_runs: Option<usize>,
-    pub contract_libraries: BTreeMap<String, String>,
-    pub abi: Option<String>,
-    pub sources: BTreeMap<String, String>,
-    pub compiler_settings: String,
-    pub local_creation_input_parts: Vec<BytecodePart>,
-    pub local_deployed_bytecode_parts: Vec<BytecodePart>,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum BytecodeTy {
-    Main,
-    Meta,
-}
-
-impl From<BytecodeTy> for PartType {
-    fn from(ty: BytecodeTy) -> Self {
-        match ty {
-            BytecodeTy::Main => PartType::Main,
-            BytecodeTy::Meta => PartType::Metadata,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
-pub struct BytecodePart {
-    pub data: String,
-    pub r#type: BytecodeTy,
-}
-
-pub async fn create_source(
+pub async fn insert_verification_result(
     db: &DatabaseConnection,
     verification_result: VerificationResult,
 ) -> Result<sources::Model, anyhow::Error> {
@@ -79,7 +42,6 @@ pub async fn create_source(
     let compiler_settings = serde_json::from_str(&verification_result.compiler_settings)?;
     let abi = serde_json::from_str(&verification_result.abi.unwrap_or_default())?;
 
-    //println!("insert source");
     let source = sources::ActiveModel {
         source_type: Set(SourceType::Solidity),
         compiler_version: Set(verification_result.compiler_version),
@@ -94,7 +56,6 @@ pub async fn create_source(
     .insert(&txn)
     .await?;
 
-    //println!("insert creation bytecode");
     let bytecode = bytecodes::ActiveModel {
         source_id: Set(source.id),
         bytecode_type: Set(BytecodeType::CreationInput),
@@ -109,7 +70,6 @@ pub async fn create_source(
     )
     .await?;
 
-    //println!("insert deployed bytecode");
     let bytecode = bytecodes::ActiveModel {
         source_id: Set(source.id),
         bytecode_type: Set(BytecodeType::DeployedBytecode),
@@ -124,11 +84,6 @@ pub async fn create_source(
     )
     .await?;
 
-    // let verified_contract = verified_contracts::ActiveModel {
-    //     source_id: Set(source.id),
-    //     raw_bytecode:
-    // };
-
     for (name, content) in verification_result.sources {
         let file = files::Entity::find()
             .filter(Expr::col(files::Column::Name).eq(name.clone()))
@@ -136,7 +91,6 @@ pub async fn create_source(
             .one(&txn)
             .await?;
 
-        //println!("insert file {}", name);
         let file = match file {
             Some(file) => file,
             None => {
@@ -149,7 +103,6 @@ pub async fn create_source(
                 .await?
             }
         };
-        //println!("connect file to source file");
         let _ = source_files::ActiveModel {
             source_id: Set(source.id),
             file_id: Set(file.id),
@@ -178,7 +131,6 @@ async fn insert_parts(
             .one(txn)
             .await?;
 
-        //println!("insert part #{order}");
         let part_db = match part_db {
             Some(part) => part,
             None => {
@@ -192,7 +144,6 @@ async fn insert_parts(
             }
         };
 
-        //println!("connect part with bytecode");
         let _ = bytecode_parts::ActiveModel {
             bytecode_id: Set(bytecode_id),
             part_id: Set(part_db.id),

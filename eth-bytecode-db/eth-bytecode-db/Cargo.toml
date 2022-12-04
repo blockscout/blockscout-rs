@@ -28,7 +28,6 @@ tracing-subscriber = {version = "0.3", features = ["env-filter"]}
 
 [dev-dependencies]
 pretty_assertions = "1.2"
-rstest = "0.16"
 url = "2.3"
 sea-orm-migration = {version = "0.10", features = ["runtime-tokio-rustls", "sqlx-postgres"]}
 migration = {path = "./migration"}

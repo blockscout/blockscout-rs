@@ -4,15 +4,15 @@
 default:
     just --list --unsorted
 
-start-postgres:
-    # we run it in --rm mode, so all data will be deleted after stopping
-    docker run -p 5432:5432 --name eth-bytecode-postgres -e POSTGRES_PASSWORD=admin --rm -d postgres
-    # wait for postgres to start
-    sleep 3
-    docker exec -it eth-bytecode-postgres psql -U postgres -c 'create database eth_bytecode_db;'
 
-stop-postgres:
-    docker kill eth-bytecode-postgres
+start-postgres docker_name="eth-bytecode-postgres" db_name="eth_bytecode_db":
+    # we run it in --rm mode, so all data will be deleted after stopping
+    docker run -p 5432:5432 --name {{docker_name}} -e POSTGRES_PASSWORD=admin --rm -d postgres
+    # wait for postgres to start, but only if db_name is not empty
+    $SHELL -c '[[ -z "{{db_name}}" ]] || (sleep 3 && docker exec -it {{docker_name}} psql -U postgres -c "create database {{db_name}};")'
+
+stop-postgres docker_name="eth-bytecode-postgres":
+    docker kill {{docker_name}}
 
 migrate-up database_url="postgres://postgres:admin@localhost:5432/eth_bytecode_db":
     DATABASE_URL={{database_url}} sea-orm-cli migrate up
@@ -25,3 +25,9 @@ new-migration name:
 
 generate-entities database_url="postgres://postgres:admin@localhost:5432/eth_bytecode_db":
     DATABASE_URL={{database_url}} sea-orm-cli generate entity --lib -o entity/src
+
+
+test database_url="postgres://postgres:admin@localhost:5432/eth_bytecode_db":
+    DATABASE_URL={{database_url}} cargo test -- --include-ignored
+
+test-with-db: (start-postgres "eth-bytecode-postgres-test" "") (test "postgres://postgres:admin@localhost:5432/") && (stop-postgres "eth-bytecode-postgres-test")

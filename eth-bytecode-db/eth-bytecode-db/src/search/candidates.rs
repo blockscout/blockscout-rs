@@ -12,6 +12,8 @@ pub struct BytecodeCandidate {
 }
 
 impl BytecodeCandidate {
+    /// Compare self with remote bytecode.
+    /// Return Ok(()) if this candidate meets the requirements
     pub fn is_match(&self, remote_data: &Bytes) -> Result<(), CompareError> {
         let local =
             LocalBytecode::new(&self.parts).expect("local bytecode should contain valid metadata");
