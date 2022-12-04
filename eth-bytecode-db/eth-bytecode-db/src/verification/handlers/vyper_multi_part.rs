@@ -27,7 +27,7 @@ impl From<VerificationRequest<MultiPartFiles>> for VerifyVyperMultiPartRequest {
             deployed_bytecode,
             compiler_version: request.compiler_version,
             sources: request.content.source_files,
-            evm_version: request.content.evm_version,
+            evm_version: Some(request.content.evm_version),
         }
     }
 }
