@@ -26,3 +26,8 @@ new-migration name:
 generate-entities database_url="postgres://postgres:admin@localhost:5432/stats":
     DATABASE_URL={{database_url}} sea-orm-cli generate entity --lib -o entity/src
 
+test database_url *args:
+    DATABASE_URL={{database_url}} cargo test {{args}}
+
+# runs with default database_url
+test-default *args: (test "postgres://postgres:admin@localhost:5432/stats" args)
