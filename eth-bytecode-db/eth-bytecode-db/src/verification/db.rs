@@ -1,29 +1,34 @@
-use std::collections::BTreeMap;
-
 use super::types::{self};
+use anyhow::Context;
 use entity::{
     bytecode_parts, bytecodes, files, parts, sea_orm_active_enums, source_files, sources,
 };
 use sea_orm::{
-    sea_query::{Expr, OnConflict},
-    ActiveModelTrait,
-    ActiveValue::Set,
+    entity::prelude::ColumnTrait, sea_query::OnConflict, ActiveModelTrait, ActiveValue::Set,
     DatabaseConnection, DatabaseTransaction, EntityTrait, QueryFilter, TransactionTrait,
 };
+use std::collections::BTreeMap;
 
 pub async fn insert_data(
     db_client: &DatabaseConnection,
     source_response: types::Source,
 ) -> Result<(), anyhow::Error> {
-    let txn = db_client.begin().await?;
+    let txn = db_client
+        .begin()
+        .await
+        .context("begin database transaction")?;
 
     let source_files = source_response.source_files.clone();
     let creation_input_parts = source_response.creation_input_parts.clone();
     let deployed_bytecode_parts = source_response.deployed_bytecode_parts.clone();
 
-    let source = insert_source_details(&txn, source_response).await?;
+    let source = insert_source_details(&txn, source_response)
+        .await
+        .context("insert source details")?;
 
-    insert_source_files(&txn, &source, source_files).await?;
+    insert_source_files(&txn, &source, source_files)
+        .await
+        .context("insert source files")?;
 
     insert_bytecodes(
         &txn,
@@ -31,16 +36,18 @@ pub async fn insert_data(
         creation_input_parts,
         types::BytecodeType::CreationInput,
     )
-    .await?;
+    .await
+    .context("insert creation input")?;
     insert_bytecodes(
         &txn,
         source.id,
         deployed_bytecode_parts,
         types::BytecodeType::DeployedBytecode,
     )
-    .await?;
+    .await
+    .context("insert deployed bytecode")?;
 
-    txn.commit().await?;
+    txn.commit().await.context("commit transaction")?;
 
     Ok(())
 }
@@ -51,12 +58,13 @@ async fn insert_source_details(
 ) -> Result<sources::Model, anyhow::Error> {
     let abi = match source.abi {
         None => None,
-        Some(abi) => serde_json::from_str(&abi)?,
+        Some(abi) => serde_json::from_str(&abi).context("deserialize abi")?,
     };
     let source = sources::ActiveModel {
         source_type: Set(source.source_type.into()),
         compiler_version: Set(source.compiler_version),
-        compiler_settings: Set(serde_json::from_str(&source.compiler_settings)?),
+        compiler_settings: Set(serde_json::from_str(&source.compiler_settings)
+            .context("deserialize compiler settings")?),
         file_name: Set(source.file_name),
         contract_name: Set(source.contract_name),
         raw_creation_input: Set(source.raw_creation_input),
@@ -65,7 +73,8 @@ async fn insert_source_details(
         ..Default::default()
     }
     .insert(txn)
-    .await?;
+    .await
+    .context("insert into \"sources\"")?;
 
     Ok(source)
 }
@@ -78,22 +87,22 @@ async fn insert_source_files(
     for (name, content) in source_files {
         let file = {
             let file = files::Entity::find()
-                .filter(Expr::col(files::Column::Name).eq(name.clone()))
-                .filter(Expr::col(files::Column::Content).eq(content.clone())) // TODO: I believe it is quite expensive to search by the content
+                .filter(files::Column::Name.eq(name.clone()))
+                .filter(files::Column::Content.eq(content.clone())) // TODO: I believe it is quite expensive to search by the content
                 .one(txn)
-                .await?;
+                .await
+                .context("select from \"files\" by \"name\" and \"content\"")?;
 
             match file {
                 Some(file) => file,
-                None => {
-                    files::ActiveModel {
-                        name: Set(name),
-                        content: Set(content),
-                        ..Default::default()
-                    }
-                    .insert(txn)
-                    .await?
+                None => files::ActiveModel {
+                    name: Set(name),
+                    content: Set(content),
+                    ..Default::default()
                 }
+                .insert(txn)
+                .await
+                .context("insert into \"files\"")?,
             }
         };
 
@@ -109,7 +118,8 @@ async fn insert_source_files(
                     .to_owned(),
             )
             .exec(txn)
-            .await?;
+            .await
+            .context("insert into \"source_files\"")?;
     }
 
     Ok(())
@@ -124,22 +134,22 @@ async fn insert_bytecodes(
     let bytecode = {
         let bytecode_type = sea_orm_active_enums::BytecodeType::from(bytecode_type);
         let bytecode = bytecodes::Entity::find()
-            .filter(Expr::col(bytecodes::Column::SourceId).eq(source_id))
-            .filter(Expr::col(bytecodes::Column::BytecodeType).eq(bytecode_type.clone()))
+            .filter(bytecodes::Column::SourceId.eq(source_id))
+            .filter(bytecodes::Column::BytecodeType.eq(bytecode_type.clone()))
             .one(txn)
-            .await?;
+            .await
+            .context("select from \"bytecodes\" by \"source_id\" \"bytecode_type\"")?;
 
         match bytecode {
             Some(bytecode) => bytecode,
-            None => {
-                bytecodes::ActiveModel {
-                    source_id: Set(source_id),
-                    bytecode_type: Set(bytecode_type),
-                    ..Default::default()
-                }
-                .insert(txn)
-                .await?
+            None => bytecodes::ActiveModel {
+                source_id: Set(source_id),
+                bytecode_type: Set(bytecode_type),
+                ..Default::default()
             }
+            .insert(txn)
+            .await
+            .context("insert into \"bytecodes\"")?,
         }
     };
 
@@ -147,22 +157,22 @@ async fn insert_bytecodes(
         let part = {
             let part_type = sea_orm_active_enums::PartType::from(&part);
             let part_model = parts::Entity::find()
-                .filter(Expr::col(parts::Column::Data).eq(part.data()))
-                .filter(Expr::col(parts::Column::PartType).eq(part_type.clone()))
+                .filter(parts::Column::Data.eq(part.data()))
+                .filter(parts::Column::PartType.eq(part_type.clone()))
                 .one(txn)
-                .await?;
+                .await
+                .context("select from \"parts\" by \"data\" and \"part_type\"")?;
 
             match part_model {
                 Some(part_model) => part_model,
-                None => {
-                    parts::ActiveModel {
-                        data: Set(part.data_owned()),
-                        part_type: Set(part_type),
-                        ..Default::default()
-                    }
-                    .insert(txn)
-                    .await?
+                None => parts::ActiveModel {
+                    data: Set(part.data_owned()),
+                    part_type: Set(part_type),
+                    ..Default::default()
                 }
+                .insert(txn)
+                .await
+                .context("insert into \"parts\"")?,
             }
         };
 
@@ -173,7 +183,8 @@ async fn insert_bytecodes(
             ..Default::default()
         }
         .insert(txn)
-        .await?;
+        .await
+        .context("insert into \"bytecode_parts\"")?;
     }
 
     Ok(())

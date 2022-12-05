@@ -60,7 +60,7 @@ pub async fn verify(
         } else {
             Err(Error::Internal(
                 anyhow::anyhow!(
-                    "unknown verified file extension: expected \".sol\" or \".vy\"; file_name={}",
+                    "unknown verified file extension: expected \".sol\" or \".yul\"; file_name={}",
                     file_name
                 )
                 .context("verifier service connection"),

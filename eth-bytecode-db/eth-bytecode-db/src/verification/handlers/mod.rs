@@ -99,7 +99,7 @@ async fn process_verify_response(
 
     db::insert_data(db_client, source.clone())
         .await
-        .with_context(|| "Failed to insert data into database")
+        .context("Insert data into database")
         .map_err(Error::Internal)?;
 
     Ok(source)
