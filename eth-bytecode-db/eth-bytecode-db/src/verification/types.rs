@@ -1,11 +1,10 @@
 use super::smart_contract_verifier;
 use entity::sea_orm_active_enums;
-use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /********** Bytecode Part **********/
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BytecodePart {
     Main { data: Vec<u8> },
     Meta { data: Vec<u8> },
@@ -51,7 +50,7 @@ impl BytecodePart {
 
 /********** Bytecode Type **********/
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BytecodeType {
     CreationInput,
     DeployedBytecode,
@@ -68,7 +67,7 @@ impl From<BytecodeType> for sea_orm_active_enums::BytecodeType {
 
 /********** Source Type **********/
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SourceType {
     Solidity,
     Vyper,
@@ -87,7 +86,7 @@ impl From<SourceType> for sea_orm_active_enums::SourceType {
 
 /********** Match Type **********/
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MatchType {
     Partial,
     Full,
@@ -95,7 +94,7 @@ pub enum MatchType {
 
 /********** Source **********/
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Source {
     pub file_name: String,
     pub contract_name: String,
@@ -115,7 +114,7 @@ pub struct Source {
 
 /********** Verification Request **********/
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VerificationRequest<T> {
     pub bytecode: String,
     pub bytecode_type: BytecodeType,

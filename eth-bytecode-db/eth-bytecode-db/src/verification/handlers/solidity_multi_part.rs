@@ -7,10 +7,9 @@ use super::{
     },
     process_verify_response,
 };
-use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MultiPartFiles {
     pub source_files: BTreeMap<String, String>,
     pub evm_version: String,
