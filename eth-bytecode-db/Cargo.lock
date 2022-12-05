@@ -2970,7 +2970,8 @@ dependencies = [
 [[package]]
 name = "solidity-metadata"
 version = "1.0.0"
-source = "git+https://github.com/blockscout/blockscout-rs?branch=lymarenkolev/add-libs#045f314310abdd3105cd60d005a572f70f69fe0a"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "18f0ee752c2f80c87498dba10c2120492c42073f73b37ffb49e79fcd1e91bff3"
 dependencies = [
  "blockscout-display-bytes",
  "minicbor",

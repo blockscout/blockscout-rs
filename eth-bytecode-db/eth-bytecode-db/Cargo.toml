@@ -20,7 +20,7 @@ sea-orm = { version = "0.10", features = [ "sqlx-postgres", "runtime-tokio-rustl
 semver = "1.0"
 serde = "1.0"
 serde_json = "1.0"
-solidity-metadata = {git = "https://github.com/blockscout/blockscout-rs", branch = "lymarenkolev/add-libs"}
+solidity-metadata = "1.0"
 thiserror = "1.0"
 tokio = {version = "1.21", features = ["full"]}
 tracing = "0.1"

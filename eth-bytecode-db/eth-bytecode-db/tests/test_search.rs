@@ -74,6 +74,7 @@ impl TestDbGuard {
 }
 
 #[tokio::test]
+#[ignore]
 async fn test_search_bytecodes() {
     tracing_subscriber::fmt()
         .with_env_filter("search=info,sqlx=warn")
