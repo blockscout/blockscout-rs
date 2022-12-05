@@ -17,7 +17,7 @@ impl TryFrom<smart_contract_verifier::BytecodePart> for BytecodePart {
         let data = hex::decode(value.data.trim_start_matches("0x"))?;
         match value.r#type.as_str() {
             "main" => Ok(Self::Main { data }),
-            "meta" => Ok(Self::Main { data }),
+            "meta" => Ok(Self::Meta { data }),
             _ => Err(anyhow::anyhow!("Unknown type")),
         }
     }
