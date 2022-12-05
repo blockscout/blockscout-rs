@@ -7,8 +7,9 @@ use super::{
     },
     process_verify_response,
 };
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StandardJson {
     pub input: String,
 }
