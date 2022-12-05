@@ -1,0 +1,61 @@
+global:
+  env: testing
+# enable stats deploy
+stats:
+  enabled: true
+  image:
+    _default: ghcr.io/blockscout/stats:main
+
+  replicas:
+    app: 1
+  docker:
+    port: 80
+    targetPort: 8050
+    #metricsPort: 6060
+
+  service:
+    # ClusterIP, NodePort or LoadBalancer
+    type: ClusterIP
+
+  # enable ingress
+  ingress:
+    enabled: true
+    host:
+      _default: stats-test.aws-k8s.blockscout.com
+    # enable https
+    tls:
+      enabled: true
+
+  resources:
+    limits:
+      memory:
+        _default: "0.5Gi"
+      cpu:
+        _default: "0.25"
+    requests:
+      memory:
+        _default: "0.5Gi"
+      cpu:
+        _default: "0.25"
+
+  # node label
+  nodeSelector:
+    enabled: true
+    app: blockscout
+
+  # probes
+  # livenessProbe:
+  #   enabled: true
+  #   path: /health
+  # readinessProbe:
+  #   enabled: true
+  #   path: /health
+
+  # enable Horizontal Pod Autoscaler
+  hpa:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 10
+    cpuTarget: 90
+
+  environment: {}
