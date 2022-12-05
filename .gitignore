@@ -23,3 +23,5 @@ config.toml
 ## Cargo.lock for libs
 libs/Cargo.lock
 
+## Secrets
+**.decrypted~**
