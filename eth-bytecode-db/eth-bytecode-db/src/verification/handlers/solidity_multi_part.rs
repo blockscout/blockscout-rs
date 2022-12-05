@@ -76,3 +76,79 @@ pub async fn verify(
     )
     .await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn from_verification_request_creation_input() {
+        let request = VerificationRequest {
+            bytecode: "0x1234".to_string(),
+            bytecode_type: BytecodeType::CreationInput,
+            compiler_version: "compiler_version".to_string(),
+            content: MultiPartFiles {
+                source_files: BTreeMap::from([
+                    ("source_file1".into(), "content1".into()),
+                    ("source_file2".into(), "content2".into()),
+                ]),
+                evm_version: "london".to_string(),
+                optimization_runs: Some(200),
+                libraries: BTreeMap::from([("lib1".into(), "0xcafe".into())]),
+            },
+        };
+        let expected = VerifySolidityMultiPartRequest {
+            creation_bytecode: Some("0x1234".to_string()),
+            deployed_bytecode: "".to_string(),
+            compiler_version: "compiler_version".to_string(),
+            sources: BTreeMap::from([
+                ("source_file1".into(), "content1".into()),
+                ("source_file2".into(), "content2".into()),
+            ]),
+            evm_version: "london".to_string(),
+            optimization_runs: Some(200),
+            contract_libraries: BTreeMap::from([("lib1".into(), "0xcafe".into())]),
+        };
+        assert_eq!(
+            expected,
+            VerifySolidityMultiPartRequest::from(request),
+            "Invalid conversion"
+        );
+    }
+
+    #[test]
+    fn from_verification_request_deployed_bytecode() {
+        let request = VerificationRequest {
+            bytecode: "0x1234".to_string(),
+            bytecode_type: BytecodeType::DeployedBytecode,
+            compiler_version: "compiler_version".to_string(),
+            content: MultiPartFiles {
+                source_files: BTreeMap::from([
+                    ("source_file1".into(), "content1".into()),
+                    ("source_file2".into(), "content2".into()),
+                ]),
+                evm_version: "london".to_string(),
+                optimization_runs: Some(200),
+                libraries: BTreeMap::from([("lib1".into(), "0xcafe".into())]),
+            },
+        };
+        let expected = VerifySolidityMultiPartRequest {
+            creation_bytecode: None,
+            deployed_bytecode: "0x1234".to_string(),
+            compiler_version: "compiler_version".to_string(),
+            sources: BTreeMap::from([
+                ("source_file1".into(), "content1".into()),
+                ("source_file2".into(), "content2".into()),
+            ]),
+            evm_version: "london".to_string(),
+            optimization_runs: Some(200),
+            contract_libraries: BTreeMap::from([("lib1".into(), "0xcafe".into())]),
+        };
+        assert_eq!(
+            expected,
+            VerifySolidityMultiPartRequest::from(request),
+            "Invalid conversion"
+        );
+    }
+}

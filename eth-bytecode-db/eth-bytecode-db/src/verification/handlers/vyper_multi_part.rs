@@ -59,3 +59,73 @@ pub async fn verify(
     )
     .await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn from_verification_request_creation_input() {
+        let request = VerificationRequest {
+            bytecode: "0x1234".to_string(),
+            bytecode_type: BytecodeType::CreationInput,
+            compiler_version: "compiler_version".to_string(),
+            content: MultiPartFiles {
+                evm_version: "istanbul".to_string(),
+                optimizations: true,
+                source_files: BTreeMap::from([
+                    ("source_file1".into(), "content1".into()),
+                    ("source_file2".into(), "content2".into()),
+                ]),
+            },
+        };
+        let expected = VerifyVyperMultiPartRequest {
+            creation_bytecode: Some("0x1234".to_string()),
+            deployed_bytecode: "".to_string(),
+            compiler_version: "compiler_version".to_string(),
+            sources: BTreeMap::from([
+                ("source_file1".into(), "content1".into()),
+                ("source_file2".into(), "content2".into()),
+            ]),
+            evm_version: Some("istanbul".to_string()),
+        };
+        assert_eq!(
+            expected,
+            VerifyVyperMultiPartRequest::from(request),
+            "Invalid conversion"
+        );
+    }
+
+    #[test]
+    fn from_verification_request_deployed_bytecode() {
+        let request = VerificationRequest {
+            bytecode: "0x1234".to_string(),
+            bytecode_type: BytecodeType::DeployedBytecode,
+            compiler_version: "compiler_version".to_string(),
+            content: MultiPartFiles {
+                evm_version: "istanbul".to_string(),
+                optimizations: true,
+                source_files: BTreeMap::from([
+                    ("source_file1".into(), "content1".into()),
+                    ("source_file2".into(), "content2".into()),
+                ]),
+            },
+        };
+        let expected = VerifyVyperMultiPartRequest {
+            creation_bytecode: None,
+            deployed_bytecode: "0x1234".to_string(),
+            compiler_version: "compiler_version".to_string(),
+            sources: BTreeMap::from([
+                ("source_file1".into(), "content1".into()),
+                ("source_file2".into(), "content2".into()),
+            ]),
+            evm_version: Some("istanbul".to_string()),
+        };
+        assert_eq!(
+            expected,
+            VerifyVyperMultiPartRequest::from(request),
+            "Invalid conversion"
+        );
+    }
+}

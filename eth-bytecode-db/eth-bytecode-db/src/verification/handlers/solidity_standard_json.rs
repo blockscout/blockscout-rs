@@ -69,3 +69,55 @@ pub async fn verify(
     )
     .await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn from_verification_request_creation_input() {
+        let request = VerificationRequest {
+            bytecode: "0x1234".to_string(),
+            bytecode_type: BytecodeType::CreationInput,
+            compiler_version: "compiler_version".to_string(),
+            content: StandardJson {
+                input: "standard_json_input".to_string(),
+            },
+        };
+        let expected = VerifySolidityStandardJsonRequest {
+            creation_bytecode: Some("0x1234".to_string()),
+            deployed_bytecode: "".to_string(),
+            compiler_version: "compiler_version".to_string(),
+            input: "standard_json_input".to_string(),
+        };
+        assert_eq!(
+            expected,
+            VerifySolidityStandardJsonRequest::from(request),
+            "Invalid conversion"
+        );
+    }
+
+    #[test]
+    fn from_verification_request_deployed_bytecode() {
+        let request = VerificationRequest {
+            bytecode: "0x1234".to_string(),
+            bytecode_type: BytecodeType::DeployedBytecode,
+            compiler_version: "compiler_version".to_string(),
+            content: StandardJson {
+                input: "standard_json_input".to_string(),
+            },
+        };
+        let expected = VerifySolidityStandardJsonRequest {
+            creation_bytecode: None,
+            deployed_bytecode: "0x1234".to_string(),
+            compiler_version: "compiler_version".to_string(),
+            input: "standard_json_input".to_string(),
+        };
+        assert_eq!(
+            expected,
+            VerifySolidityStandardJsonRequest::from(request),
+            "Invalid conversion"
+        );
+    }
+}
