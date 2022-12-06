@@ -5,12 +5,15 @@ default:
     just --list --unsorted
 
 db-host := "localhost"
-db-port := "5432"
+db-port := "9432"
 db-user := "postgres"
 db-password := "admin"
 db-name := "eth_bytecode_db"
-docker-name := "eth-bytecode-postgres"
 export DATABASE_URL := "postgres://" + db-user + ":" + db-password + "@" + db-host + ":" + db-port + "/" + db-name
+
+docker-name := "eth-bytecode-postgres"
+test-db-port := "9433"
+
 
 start-postgres:
     # we run it in --rm mode, so all data will be deleted after stopping
@@ -38,6 +41,6 @@ test:
     cargo test -- --include-ignored
 
 test-with-db:
-    just db-port=5433 db-name="" docker-name="{{docker-name}}-test" start-postgres
-    just db-port=5433 db-name=""                                    test
-    just                         docker-name="{{docker-name}}-test" stop-postgres
+    just db-port="{{test-db-port}}" db-name="" docker-name="{{docker-name}}-test" start-postgres
+    just db-port="{{test-db-port}}" db-name=""                                    test
+    just                            docker-name="{{docker-name}}-test" stop-postgres
