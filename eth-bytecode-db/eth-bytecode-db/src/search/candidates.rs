@@ -19,7 +19,7 @@ impl BytecodeCandidate {
             LocalBytecode::new(&self.parts).expect("local bytecode should contain valid metadata");
         let result = compare(remote_data, &local);
         if result.is_err() {
-            tracing::debug!(error = ?result, "bytecode unmatch");
+            tracing::debug!(error = ?result, "bytecode mismatch");
         };
         result
     }

@@ -10,9 +10,7 @@ async fn main() {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
-    let db_url = std::env::var_os("DATABASE_URL")
-        .map(|v| v.into_string().unwrap())
-        .expect("no DATABASE_URL env");
+    let db_url = std::env::var("DATABASE_URL").expect("no DATABASE_URL env");
     let db: DatabaseConnection = Database::connect(db_url).await.unwrap();
     let count = sources::Entity::find().count(&db).await.unwrap();
     if count < 10000 {
@@ -22,7 +20,7 @@ async fn main() {
 
         for i in 0..1000 {
             if i % 100 == 0 {
-                println!("SAME CONTRACTS. task #{}", i);
+                tracing::info!("SAME CONTRACTS. task #{}", i);
             }
 
             let permit = semaphore.clone().acquire_owned().await.unwrap();
@@ -36,7 +34,7 @@ async fn main() {
 
         for id in 10..5020 {
             if id % 100 == 0 {
-                println!("DIFFERENT SMALL CONTRACTS. task #{}", id);
+                tracing::info!("DIFFERENT SMALL CONTRACTS. task #{}", id);
             }
 
             let permit = semaphore.clone().acquire_owned().await.unwrap();
@@ -50,7 +48,7 @@ async fn main() {
 
         for id in 10..5020 {
             if id % 100 == 0 {
-                println!("DIFFERENT MEDIUM CONTRACT. task #{}", id);
+                tracing::info!("DIFFERENT MEDIUM CONTRACT. task #{}", id);
             }
             let permit = semaphore.clone().acquire_owned().await.unwrap();
             let db = db.clone();
@@ -65,6 +63,6 @@ async fn main() {
             handle.await.unwrap().unwrap();
         }
     } else {
-        println!("database is full already. exit");
+        println!("Database is full already. exit");
     }
 }

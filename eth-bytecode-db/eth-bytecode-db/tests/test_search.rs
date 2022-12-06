@@ -16,9 +16,7 @@ pub struct TestDbGuard {
 
 impl TestDbGuard {
     pub async fn new(db_name: &str) -> Self {
-        let db_url = std::env::var_os("DATABASE_URL")
-            .map(|v| v.into_string().unwrap())
-            .expect("no DATABASE_URL env");
+        let db_url = std::env::var("DATABASE_URL").expect("no DATABASE_URL env");
         let url = Url::parse(&db_url).expect("unvalid database url");
         let db_url = url.join("/").unwrap().to_string();
         let no_db_conn = Database::connect(db_url)
@@ -77,9 +75,11 @@ impl TestDbGuard {
 #[ignore]
 async fn test_search_bytecodes() {
     tracing_subscriber::fmt()
-        .with_env_filter("search=info,sqlx=warn")
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::from_default_env()
+                .add_directive("sqlx=warn".parse().unwrap()),
+        )
         .init();
-
     let db = TestDbGuard::new("test_db_search_bytecodes").await;
     let conn = db.conn().await;
     let mut all_sources = HashMap::new();

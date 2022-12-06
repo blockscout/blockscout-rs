@@ -66,7 +66,11 @@ where
         &bytecode.raw(),
         constructor.as_ref(),
         is_creation_input,
-    )?;
+    )
+    .map_err(|e| {
+        tracing::error!("failed to extract constructor: {}", e);
+        e
+    })?;
     Ok(PartialMatchContract {
         source,
         constructor_args,

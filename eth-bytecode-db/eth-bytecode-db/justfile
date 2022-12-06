@@ -4,30 +4,40 @@
 default:
     just --list --unsorted
 
+default-db-host := "localhost"
+default-db-port := "5432"
+default-db-user := "postgres"
+default-db-password := "admin"
+default-db-name := "eth_bytecode_db"
+default-docker-name := "eth-bytecode-postgres"
 
-start-postgres docker_name="eth-bytecode-postgres" db_name="eth_bytecode_db":
+start-postgres db-port=default-db-port db-user=default-db-user db-password=default-db-password db-name=default-db-name docker-name=default-docker-name:
     # we run it in --rm mode, so all data will be deleted after stopping
-    docker run -p 5432:5432 --name {{docker_name}} -e POSTGRES_PASSWORD=admin --rm -d postgres
+    docker run -p {{db-port}}:5432 --name {{docker-name}} -e POSTGRES_PASSWORD={{db-password}} -e POSTGRES_USER={{db-user}} --rm -d postgres
+    sleep 3
     # wait for postgres to start, but only if db_name is not empty
-    $SHELL -c '[[ -z "{{db_name}}" ]] || (sleep 3 && docker exec -it {{docker_name}} psql -U postgres -c "create database {{db_name}};")'
+    $SHELL -c '[[ -z "{{db-name}}" ]] || docker exec -it {{docker-name}} psql -U postgres -c "create database {{db-name}};"'
 
-stop-postgres docker_name="eth-bytecode-postgres":
-    docker kill {{docker_name}}
+stop-postgres docker-name=default-docker-name:
+    docker kill {{docker-name}}
 
-migrate-up database_url="postgres://postgres:admin@localhost:5432/eth_bytecode_db":
-    DATABASE_URL={{database_url}} sea-orm-cli migrate up
+migrate-up db-host=default-db-host db-port=default-db-port db-user=default-db-user db-password=default-db-password db-name=default-db-name:
+    DATABASE_URL="postgres://{{db-user}}:{{db-password}}@{{db-host}}:{{db-port}}/{{db-name}}" sea-orm-cli migrate up
 
-migrate-down database_url="postgres://postgres:admin@localhost:5432/eth_bytecode_db":
-    DATABASE_URL={{database_url}} sea-orm-cli migrate up
+migrate-down db-host=default-db-host db-port=default-db-port db-user=default-db-user db-password=default-db-password db-name=default-db-name:
+    DATABASE_URL="postgres://{{db-user}}:{{db-password}}@{{db-host}}:{{db-port}}/{{db-name}}" sea-orm-cli migrate up
 
 new-migration name:
     sea-orm-cli migrate generate {{name}}
 
-generate-entities database_url="postgres://postgres:admin@localhost:5432/eth_bytecode_db":
-    DATABASE_URL={{database_url}} sea-orm-cli generate entity --lib -o entity/src
+generate-entities db-host=default-db-host db-port=default-db-port db-user=default-db-user db-password=default-db-password db-name=default-db-name:
+    DATABASE_URL="postgres://{{db-user}}:{{db-password}}@{{db-host}}:{{db-port}}/{{db-name}}" sea-orm-cli generate entity --lib -o entity/src
+
+test db-host=default-db-host db-port=default-db-port db-user=default-db-user db-password=default-db-password db-name=default-db-name:
+    DATABASE_URL="postgres://{{db-user}}:{{db-password}}@{{db-host}}:{{db-port}}/{{db-name}}" cargo test -- --include-ignored
 
 
-test database_url="postgres://postgres:admin@localhost:5432/eth_bytecode_db":
-    DATABASE_URL={{database_url}} cargo test -- --include-ignored
-
-test-with-db: (start-postgres "eth-bytecode-postgres-test" "") (test "postgres://postgres:admin@localhost:5432/") && (stop-postgres "eth-bytecode-postgres-test")
+# start test-postgres on 5433 port
+# cargo test
+# stop test-postgres
+test-with-db: (start-postgres "5433" default-db-user default-db-password "" "eth-bytecode-postgres-test") (test "localhost" "5433" default-db-user default-db-password "") && (stop-postgres "eth-bytecode-postgres-test")
