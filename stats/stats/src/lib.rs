@@ -1,8 +1,7 @@
 use chrono::NaiveDateTime;
 use entity::chart_data_int;
 use sea_orm::{
-    DatabaseConnection, DbBackend, DbErr, EntityTrait, FromQueryResult, JsonValue, QuerySelect,
-    Statement,
+    DatabaseConnection, DbBackend, DbErr, EntityTrait, FromQueryResult, JsonValue, Statement,
 };
 use stats_proto::blockscout::stats::v1::{ChartInt, Counters, PointInt};
 use std::collections::HashMap;
@@ -47,7 +46,7 @@ pub async fn get_counters(db: &DatabaseConnection) -> Result<Counters, ReadError
     ))
     .all(db)
     .await?;
-    let data: HashMap<_, _> = data.into_iter().filter_map(|row| parse_json(row)).collect();
+    let data: HashMap<_, _> = data.into_iter().filter_map(parse_json).collect();
     let counters = Counters {
         total_blocks_all_time: get_counter_from_data(&data, "total_blocks_all_time")?,
     };
@@ -171,6 +170,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "needs database to run"]
     async fn get_counters_mock() {
         let _ = tracing_subscriber::fmt::try_init();
 
@@ -186,6 +186,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "needs database to run"]
     async fn get_chart_int_mock() {
         let _ = tracing_subscriber::fmt::try_init();
 
