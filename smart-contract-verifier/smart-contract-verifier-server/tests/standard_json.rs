@@ -263,7 +263,7 @@ mod match_types_tests {
 
     fn check_match_type(response: VerifyResponse, expected: MatchType) {
         assert_eq!(
-            expected as i32,
+            Into::<i32>::into(expected),
             response
                 .result
                 .expect("Test succeeded, thus result should exist")

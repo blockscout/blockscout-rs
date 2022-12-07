@@ -121,7 +121,9 @@ pub mod verify_response {
                     .into_iter()
                     .map(|part| result::BytecodePartWrapper::from(part).into_inner())
                     .collect(),
-                match_type: result::MatchTypeWrapper::from(value.match_type).into_inner() as i32,
+                match_type: result::MatchTypeWrapper::from(value.match_type)
+                    .into_inner()
+                    .into(),
             };
 
             inner.into()
@@ -148,7 +150,9 @@ pub mod verify_response {
                 // We have no notion of bytecode parts for Sourcify verification
                 local_creation_input_parts: vec![],
                 local_deployed_bytecode_parts: vec![],
-                match_type: result::MatchTypeWrapper::from(value.match_type).into_inner() as i32,
+                match_type: result::MatchTypeWrapper::from(value.match_type)
+                    .into_inner()
+                    .into(),
             };
 
             inner.into()
