@@ -3,11 +3,12 @@ use super::smart_contract_verifier::{
     sourcify_verifier_client::SourcifyVerifierClient, vyper_verifier_client::VyperVerifierClient,
 };
 use sea_orm::DatabaseConnection;
+use std::sync::Arc;
 use tonic::transport::{Channel, Uri};
 
 #[derive(Clone, Debug)]
 pub struct Client {
-    pub db_client: DatabaseConnection,
+    pub db_client: Arc<DatabaseConnection>,
     pub solidity_client: SolidityVerifierClient<Channel>,
     pub vyper_client: VyperVerifierClient<Channel>,
     pub sourcify_client: SourcifyVerifierClient<Channel>,
@@ -16,6 +17,13 @@ pub struct Client {
 impl Client {
     pub async fn new(
         db_client: DatabaseConnection,
+        verifier_uri: Uri,
+    ) -> Result<Self, anyhow::Error> {
+        Self::new_arc(Arc::new(db_client), verifier_uri).await
+    }
+
+    pub async fn new_arc(
+        db_client: Arc<DatabaseConnection>,
         verifier_uri: Uri,
     ) -> Result<Self, anyhow::Error> {
         let channel = Channel::builder(verifier_uri)

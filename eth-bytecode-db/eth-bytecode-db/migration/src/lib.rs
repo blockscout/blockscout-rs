@@ -3,6 +3,7 @@ use sea_orm_migration::sea_orm::{ConnectionTrait, Statement, TransactionTrait};
 
 mod m20220101_000001_initial;
 mod m20221118_182727_rename_types;
+mod m20221122_222955_add_indexes;
 mod m20221130_231403_add_unique_files_name_and_content_index;
 mod m20221201_015147_add_unique_bytecodes_source_id_and_type_index;
 
@@ -14,6 +15,7 @@ impl MigratorTrait for Migrator {
         vec![
             Box::new(m20220101_000001_initial::Migration),
             Box::new(m20221118_182727_rename_types::Migration),
+            Box::new(m20221122_222955_add_indexes::Migration),
             Box::new(m20221130_231403_add_unique_files_name_and_content_index::Migration),
             Box::new(m20221201_015147_add_unique_bytecodes_source_id_and_type_index::Migration),
         ]

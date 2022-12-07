@@ -91,7 +91,7 @@ where
 }
 
 async fn start_server_and_init_client(
-    db_client: DatabaseConnection,
+    db_client: Arc<DatabaseConnection>,
     solidity_service: MockSolidityVerifierService,
     vyper_service: MockVyperVerifierService,
 ) -> Client {
@@ -103,7 +103,7 @@ async fn start_server_and_init_client(
 
     let uri = Uri::from_str(&format!("http://{}", server_addr.to_string().as_str()))
         .expect("Returned server address is invalid Uri");
-    Client::new(db_client, uri)
+    Client::new_arc(db_client, uri)
         .await
         .expect("Client initialization failed")
 }
@@ -161,6 +161,7 @@ pub async fn test_data_is_added_into_database<T, GrpcT, F, Fut>(
         .expect("Verification failed");
 
     let db_client = db.client();
+    let db_client = db_client.as_ref();
 
     /* Assert inserted into "sources" */
 
@@ -468,6 +469,7 @@ pub async fn historical_data_is_added_into_database<T, GrpcT, F, Fut>(
         .expect("Verification failed");
 
     let db_client = db.client();
+    let db_client = db_client.as_ref();
 
     let source_id = sources::Entity::find()
         .one(db_client)

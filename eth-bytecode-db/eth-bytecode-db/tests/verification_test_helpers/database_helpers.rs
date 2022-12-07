@@ -1,9 +1,10 @@
 use migration::MigratorTrait;
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbErr, Statement};
+use std::sync::Arc;
 
 #[derive(Clone, Debug)]
 pub struct TestDbGuard {
-    conn_with_db: DatabaseConnection,
+    conn_with_db: Arc<DatabaseConnection>,
 }
 
 impl TestDbGuard {
@@ -35,11 +36,13 @@ impl TestDbGuard {
             .await
             .expect("Database migration failed");
 
-        TestDbGuard { conn_with_db }
+        TestDbGuard {
+            conn_with_db: Arc::new(conn_with_db),
+        }
     }
 
-    pub fn client(&self) -> &DatabaseConnection {
-        &self.conn_with_db
+    pub fn client(&self) -> Arc<DatabaseConnection> {
+        self.conn_with_db.clone()
     }
 
     async fn create_database(db: &DatabaseConnection, db_name: &str) -> Result<(), DbErr> {
