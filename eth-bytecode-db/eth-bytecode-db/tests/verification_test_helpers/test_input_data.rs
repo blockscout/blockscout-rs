@@ -55,6 +55,7 @@ pub fn input_data_1<T>(
                     data: "0xcdef".to_string(),
                 },
             ],
+            match_type: result::MatchType::Partial.into(),
         }),
     };
 
