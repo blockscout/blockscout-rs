@@ -47,9 +47,10 @@ impl VerifyResponseWrapper {
 
 pub mod verify_response {
     use std::ops::Deref;
-    use smart_contract_verifier::VerificationSuccess;
+    use smart_contract_verifier::{SourcifySuccess, VerificationSuccess};
     pub use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::verify_response::Result;
     use serde::{Serialize, Deserialize};
+    use blockscout_display_bytes::Bytes as DisplayBytes;
 
     #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
     pub struct ResultWrapper(Result);
@@ -126,6 +127,32 @@ pub mod verify_response {
         }
     }
 
+    impl From<SourcifySuccess> for ResultWrapper {
+        fn from(value: SourcifySuccess) -> Self {
+            let inner = Result {
+                file_name: value.file_name,
+                contract_name: value.contract_name,
+                compiler_version: value.compiler_version,
+                sources: value.sources,
+                evm_version: value.evm_version,
+                optimization: value.optimization,
+                optimization_runs: value.optimization_runs.map(|i| i as i32),
+                contract_libraries: value.contract_libraries,
+                compiler_settings: value.compiler_settings,
+                constructor_arguments: value
+                    .constructor_arguments
+                    .map(|bytes| DisplayBytes::from(bytes).to_string()),
+                abi: Some(value.abi),
+
+                // We have no notion of bytecode parts for Sourcify verification
+                local_creation_input_parts: vec![],
+                local_deployed_bytecode_parts: vec![],
+            };
+
+            inner.into()
+        }
+    }
+
     pub mod result {
         use std::ops::Deref;
         pub use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::verify_response::result::BytecodePart;
@@ -188,7 +215,7 @@ mod tests {
         CompilerInput, EvmVersion,
     };
     use pretty_assertions::assert_eq;
-    use smart_contract_verifier::{VerificationSuccess, Version};
+    use smart_contract_verifier::{SourcifySuccess, VerificationSuccess, Version};
     use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::VerifyResponse;
     use std::{collections::BTreeMap, str::FromStr};
 
@@ -243,6 +270,43 @@ mod tests {
             compiler_settings: serde_json::to_string(&compiler_settings).unwrap(),
             constructor_arguments: Some("0x123456".into()),
             abi: Some(serde_json::to_string(&ethabi::Contract::default()).unwrap()),
+            local_creation_input_parts: vec![],
+            local_deployed_bytecode_parts: vec![],
+        };
+
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn from_sourcify_success() {
+        let verification_success = SourcifySuccess {
+            file_name: "file_name".to_string(),
+            compiler_version: "v0.8.17+commit.8df45f5f".to_string(),
+            evm_version: "london".to_string(),
+            optimization: Some(true),
+            optimization_runs: Some(200),
+            constructor_arguments: Some(DisplayBytes::from_str("0x123456").unwrap().0),
+            contract_name: "contract_name".to_string(),
+            abi: "abi".to_string(),
+            sources: BTreeMap::from([("path".into(), "content".into())]),
+            contract_libraries: BTreeMap::from([("lib_name".into(), "lib_address".into())]),
+            compiler_settings: "compiler_settings".to_string(),
+        };
+
+        let result = ResultWrapper::from(verification_success).into_inner();
+
+        let expected = Result {
+            file_name: "file_name".to_string(),
+            contract_name: "contract_name".to_string(),
+            compiler_version: "v0.8.17+commit.8df45f5f".to_string(),
+            sources: BTreeMap::from([("path".into(), "content".into())]),
+            evm_version: "london".to_string(),
+            optimization: Some(true),
+            optimization_runs: Some(200),
+            contract_libraries: BTreeMap::from([("lib_name".into(), "lib_address".into())]),
+            compiler_settings: "compiler_settings".to_string(),
+            constructor_arguments: Some("0x123456".into()),
+            abi: Some("abi".to_string()),
             local_creation_input_parts: vec![],
             local_deployed_bytecode_parts: vec![],
         };
