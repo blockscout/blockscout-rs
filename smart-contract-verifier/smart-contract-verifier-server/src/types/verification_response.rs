@@ -121,6 +121,7 @@ pub mod verify_response {
                     .into_iter()
                     .map(|part| result::BytecodePartWrapper::from(part).into_inner())
                     .collect(),
+                match_type: result::MatchTypeWrapper::from(value.match_type).into_inner() as i32,
             };
 
             inner.into()
@@ -147,6 +148,7 @@ pub mod verify_response {
                 // We have no notion of bytecode parts for Sourcify verification
                 local_creation_input_parts: vec![],
                 local_deployed_bytecode_parts: vec![],
+                match_type: result::MatchTypeWrapper::from(value.match_type).into_inner() as i32,
             };
 
             inner.into()
@@ -155,7 +157,7 @@ pub mod verify_response {
 
     pub mod result {
         use std::ops::Deref;
-        pub use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::verify_response::result::BytecodePart;
+        pub use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::verify_response::result::{MatchType, BytecodePart};
         use serde::{Serialize, Deserialize};
         use blockscout_display_bytes::Bytes as DisplayBytes;
 
@@ -197,6 +199,39 @@ pub mod verify_response {
                 inner.into()
             }
         }
+
+        #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+        pub struct MatchTypeWrapper(MatchType);
+
+        impl From<MatchType> for MatchTypeWrapper {
+            fn from(inner: MatchType) -> Self {
+                Self(inner)
+            }
+        }
+
+        impl Deref for MatchTypeWrapper {
+            type Target = MatchType;
+
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+
+        impl MatchTypeWrapper {
+            pub fn into_inner(self) -> MatchType {
+                self.0
+            }
+        }
+
+        impl From<smart_contract_verifier::MatchType> for MatchTypeWrapper {
+            fn from(value: smart_contract_verifier::MatchType) -> Self {
+                let inner = match value {
+                    smart_contract_verifier::MatchType::Partial => MatchType::Partial,
+                    smart_contract_verifier::MatchType::Full => MatchType::Full,
+                };
+                inner.into()
+            }
+        }
     }
 }
 
@@ -215,7 +250,7 @@ mod tests {
         CompilerInput, EvmVersion,
     };
     use pretty_assertions::assert_eq;
-    use smart_contract_verifier::{SourcifySuccess, VerificationSuccess, Version};
+    use smart_contract_verifier::{SourcifySuccess, MatchType, VerificationSuccess, Version};
     use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::VerifyResponse;
     use std::{collections::BTreeMap, str::FromStr};
 
@@ -254,6 +289,7 @@ mod tests {
             abi: Some(Default::default()),
             constructor_args: Some(DisplayBytes::from_str("0x123456").unwrap()),
             local_bytecode_parts: Default::default(),
+            match_type: MatchType::Partial,
         };
 
         let result = ResultWrapper::from(verification_success).into_inner();
@@ -272,6 +308,7 @@ mod tests {
             abi: Some(serde_json::to_string(&ethabi::Contract::default()).unwrap()),
             local_creation_input_parts: vec![],
             local_deployed_bytecode_parts: vec![],
+            match_type: 1,
         };
 
         assert_eq!(expected, result);
@@ -291,8 +328,8 @@ mod tests {
             sources: BTreeMap::from([("path".into(), "content".into())]),
             contract_libraries: BTreeMap::from([("lib_name".into(), "lib_address".into())]),
             compiler_settings: "compiler_settings".to_string(),
+            match_type: MatchType::Full,
         };
-
         let result = ResultWrapper::from(verification_success).into_inner();
 
         let expected = Result {
@@ -309,6 +346,7 @@ mod tests {
             abi: Some("abi".to_string()),
             local_creation_input_parts: vec![],
             local_deployed_bytecode_parts: vec![],
+            match_type: 2,
         };
 
         assert_eq!(expected, result);
@@ -329,6 +367,7 @@ mod tests {
             abi: None,
             constructor_args: None,
             local_bytecode_parts: Default::default(),
+            match_type: MatchType::Partial,
         };
         let result = ResultWrapper::from(verification_success);
 

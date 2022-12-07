@@ -91,7 +91,7 @@ async fn test_setup(dir: &str, input: &mut TestInput) -> (ServiceResponse, Optio
     (response, expected_constructor_argument)
 }
 
-async fn test_success(dir: &'static str, mut input: TestInput) {
+async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse {
     let (response, expected_constructor_argument) = test_setup(dir, &mut input).await;
 
     // Assert that status code is success
@@ -106,6 +106,7 @@ async fn test_success(dir: &'static str, mut input: TestInput) {
     }
 
     let verification_response: VerifyResponse = read_body_json(response).await;
+    let verification_response_clone = verification_response.clone();
 
     assert_eq!(
         verification_response.status,
@@ -201,6 +202,8 @@ async fn test_success(dir: &'static str, mut input: TestInput) {
         .map(|(path, source)| (path.to_str().unwrap().to_string(), source.content))
         .collect();
     assert_eq!(verification_result.sources, sources, "Invalid source");
+
+    verification_response_clone
 }
 
 mod success_tests {
@@ -220,7 +223,7 @@ mod success_tests {
     async fn yul() {
         let contract_dir = "yul";
         let test_input = TestInput::new("Proxy", "v0.8.7+commit.e28d00a7").set_is_yul();
-        test_success(contract_dir, test_input).await
+        test_success(contract_dir, test_input).await;
     }
 }
 
@@ -249,5 +252,32 @@ mod regression_tests {
         let test_input =
             TestInput::new("MultichainProxy", "v0.8.16+commit.07a7930e").ignore_creation_tx_input();
         test_success(contract_dir, test_input).await;
+    }
+}
+
+mod match_types_tests {
+    use super::*;
+    use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::verify_response::result::MatchType;
+    use crate::standard_json_types::TestInput;
+    use crate::test_success;
+
+    fn check_match_type(response: VerifyResponse, expected: MatchType) {
+        assert_eq!(expected as i32, response.result.expect("Test succeeded, thus result should exist").match_type, "Invalid match type")
+    }
+
+    #[tokio::test]
+    async fn partial_match() {
+        let contract_dir = "match_type_partial";
+        let test_input = TestInput::new("Storage", "v0.8.7+commit.e28d00a7");
+        let response = test_success(contract_dir, test_input).await;
+        check_match_type(response, MatchType::Partial);
+    }
+
+    #[tokio::test]
+    async fn full_match() {
+        let contract_dir = "match_type_full";
+        let test_input = TestInput::new("Storage", "v0.8.7+commit.e28d00a7");
+        let response = test_success(contract_dir, test_input).await;
+        check_match_type(response, MatchType::Full);
     }
 }

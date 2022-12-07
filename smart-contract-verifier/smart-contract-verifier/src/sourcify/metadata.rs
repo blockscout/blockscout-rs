@@ -1,4 +1,5 @@
 use super::types::{Files, Success};
+use crate::MatchType;
 use ethers_solc::EvmVersion;
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -71,10 +72,10 @@ impl Files {
     }
 }
 
-impl TryFrom<Files> for Success {
+impl TryFrom<(Files, MatchType)> for Success {
     type Error = anyhow::Error;
 
-    fn try_from(files: Files) -> Result<Self, Self::Error> {
+    fn try_from((files, match_type): (Files, MatchType)) -> Result<Self, Self::Error> {
         let (metadata, source_files) = files.extract_metadata_and_source_files()?;
 
         let compiler_version = metadata.compiler.version;
@@ -107,6 +108,7 @@ impl TryFrom<Files> for Success {
             abi,
             sources: source_files,
             compiler_settings: metadata.raw_settings,
+            match_type,
         })
     }
 }
@@ -160,13 +162,14 @@ mod tests {
 
     #[test]
     fn parse_response_from_files() {
+        let match_type = MatchType::Partial;
         let files = Files(BTreeMap::from([
             ("source.sol".into(), "content".into()),
             (METADATA_FILE_NAME.into(), DEFAULT_METADATA.into()),
         ]));
 
         let verification_result =
-            Success::try_from(files).expect("parse response from files failed");
+            Success::try_from((files, match_type)).expect("parse response from files failed");
         assert_eq!(
             verification_result,
             Success {
@@ -180,11 +183,12 @@ mod tests {
                 optimization_runs: Some(200),
                 abi: r#"[{"inputs":[],"name":"retrieve","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}]"#.into(),
                 sources: BTreeMap::from([("source.sol".into(), "content".into())]),
-                compiler_settings: "{\"compilationTarget\":{\"example.sol\":\"Example\"},\"evmVersion\":\"london\",\"libraries\":{\"SafeMath\":\"0xFBe36e5cAD207d5fDee40E6568bb276a351f6713\"},\"optimizer\":{\"enabled\":false,\"runs\":200}}".to_string()
+                compiler_settings: "{\"compilationTarget\":{\"example.sol\":\"Example\"},\"evmVersion\":\"london\",\"libraries\":{\"SafeMath\":\"0xFBe36e5cAD207d5fDee40E6568bb276a351f6713\"},\"optimizer\":{\"enabled\":false,\"runs\":200}}".to_string(),
+                match_type,
             }
         );
 
         let files = Files(BTreeMap::from([("source.sol".into(), "content".into())]));
-        Success::try_from(files).expect_err("Parsing files without metadata should fail");
+        Success::try_from((files, match_type)).expect_err("Parsing files without metadata should fail");
     }
 }
