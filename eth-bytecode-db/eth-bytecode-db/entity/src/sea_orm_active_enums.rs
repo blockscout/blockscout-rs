@@ -3,14 +3,6 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
-#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "part_type")]
-pub enum PartType {
-    #[sea_orm(string_value = "main")]
-    Main,
-    #[sea_orm(string_value = "metadata")]
-    Metadata,
-}
-#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "bytecode_type")]
 pub enum BytecodeType {
     #[sea_orm(string_value = "creation_input")]
@@ -39,4 +31,12 @@ pub enum SourceType {
     Vyper,
     #[sea_orm(string_value = "yul")]
     Yul,
+}
+#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
+#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "part_type")]
+pub enum PartType {
+    #[sea_orm(string_value = "main")]
+    Main,
+    #[sea_orm(string_value = "metadata")]
+    Metadata,
 }
