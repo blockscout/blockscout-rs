@@ -3,13 +3,14 @@ use super::{
         client::Client,
         errors::Error,
         smart_contract_verifier::VerifySolidityMultiPartRequest,
-        types::{BytecodeType, Source, SourceType, VerificationRequest},
+        types::{BytecodeType, Source, SourceType, VerificationRequest, VerificationType},
     },
     process_verify_response,
 };
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MultiPartFiles {
     pub source_files: BTreeMap<String, String>,
     pub evm_version: String,
@@ -42,6 +43,7 @@ pub async fn verify(
     let bytecode_type = request.bytecode_type;
     let raw_request_bytecode = hex::decode(request.bytecode.clone().trim_start_matches("0x"))
         .map_err(|err| Error::InvalidArgument(format!("invalid bytecode: {}", err)))?;
+    let verification_settings = serde_json::json!(&request);
 
     let request: VerifySolidityMultiPartRequest = request.into();
     let response = client
@@ -73,6 +75,8 @@ pub async fn verify(
         bytecode_type,
         raw_request_bytecode,
         source_type_fn,
+        verification_settings,
+        VerificationType::MultiPartFiles,
     )
     .await
 }

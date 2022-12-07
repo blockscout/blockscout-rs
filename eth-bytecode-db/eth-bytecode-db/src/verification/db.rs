@@ -1,7 +1,8 @@
-use super::types::{self};
+use super::{types, BytecodeType};
 use anyhow::Context;
 use entity::{
     bytecode_parts, bytecodes, files, parts, sea_orm_active_enums, source_files, sources,
+    verified_contracts,
 };
 use sea_orm::{
     entity::prelude::ColumnTrait, sea_query::OnConflict, ActiveModelTrait, ActiveValue::Set,
@@ -9,10 +10,10 @@ use sea_orm::{
 };
 use std::collections::BTreeMap;
 
-pub async fn insert_data(
+pub(crate) async fn insert_data(
     db_client: &DatabaseConnection,
     source_response: types::Source,
-) -> Result<(), anyhow::Error> {
+) -> Result<i64, anyhow::Error> {
     let txn = db_client
         .begin()
         .await
@@ -48,6 +49,31 @@ pub async fn insert_data(
     .context("insert deployed bytecode")?;
 
     txn.commit().await.context("commit transaction")?;
+
+    Ok(source.id)
+}
+
+pub(crate) async fn insert_verified_contract_data(
+    db_client: &DatabaseConnection,
+    source_id: i64,
+    raw_bytecode: Vec<u8>,
+    bytecode_type: BytecodeType,
+    verification_settings: serde_json::Value,
+    verification_type: types::VerificationType,
+) -> Result<(), anyhow::Error> {
+    verified_contracts::ActiveModel {
+        source_id: Set(source_id),
+        raw_bytecode: Set(raw_bytecode),
+        bytecode_type: Set(sea_orm_active_enums::BytecodeType::from(bytecode_type)),
+        verification_settings: Set(verification_settings),
+        verification_type: Set(sea_orm_active_enums::VerificationType::from(
+            verification_type,
+        )),
+        ..Default::default()
+    }
+    .insert(db_client)
+    .await
+    .context("insert into verified contracts")?;
 
     Ok(())
 }

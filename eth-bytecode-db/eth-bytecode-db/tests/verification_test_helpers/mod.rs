@@ -7,6 +7,7 @@ use blockscout_display_bytes::Bytes as DisplayBytes;
 use database_helpers::TestDbGuard;
 use entity::{
     bytecode_parts, bytecodes, files, parts, sea_orm_active_enums, source_files, sources,
+    verified_contracts,
 };
 use eth_bytecode_db::verification::{
     BytecodeType, Client, Error, Source, SourceType, VerificationRequest,
@@ -436,5 +437,78 @@ pub async fn test_data_is_added_into_database<T, GrpcT, F, Fut>(
                     && bytecode_part.part_id == deployed_meta_part_id
             ),
         "Invalid deployed bytecode meta bytecode part"
+    );
+}
+
+pub async fn historical_data_is_added_into_database<T, GrpcT, F, Fut>(
+    db_prefix: &str,
+    service_type: VerifierServiceType<GrpcT>,
+    default_request_content: T,
+    verify: F,
+    verification_settings: serde_json::Value,
+    verification_type: sea_orm_active_enums::VerificationType,
+) where
+    F: Fn(Client, VerificationRequest<T>) -> Fut,
+    Fut: Future<Output = Result<Source, Error>>,
+    T: Clone,
+    GrpcT: From<VerificationRequest<T>>,
+{
+    let source_type = SourceType::from(&service_type);
+    let db = init_db(db_prefix, "historical_data_is_added_into_database").await;
+    let input_data = test_input_data::input_data_1(
+        generate_verification_request(1, default_request_content),
+        source_type,
+    );
+    let (solidity_service, vyper_service) = init_services(service_type, vec![input_data.clone()]);
+    let client =
+        start_server_and_init_client(db.client().clone(), solidity_service, vyper_service).await;
+
+    let _source = verify(client, input_data.request)
+        .await
+        .expect("Verification failed");
+
+    let db_client = db.client();
+
+    let source_id = sources::Entity::find()
+        .one(db_client)
+        .await
+        .expect("Error while reading source")
+        .unwrap()
+        .id;
+
+    let verified_contracts = verified_contracts::Entity::find()
+        .all(db_client)
+        .await
+        .expect("Error while reading verified contracts");
+    assert_eq!(
+        1,
+        verified_contracts.len(),
+        "Invalid number of verified contracts returned. Expected 1, actual {}",
+        verified_contracts.len()
+    );
+    let verified_contract = &verified_contracts[0];
+
+    assert_eq!(source_id, verified_contract.source_id, "Invalid source id");
+    assert_eq!(
+        vec![0x01u8],
+        verified_contract.raw_bytecode,
+        "Invalid raw bytecode"
+    );
+    assert_eq!(
+        sea_orm_active_enums::BytecodeType::CreationInput,
+        verified_contract.bytecode_type,
+        "Invalid bytecode type"
+    );
+    println!(
+        "{}",
+        serde_json::to_string(&verified_contract.verification_settings).unwrap()
+    );
+    assert_eq!(
+        verification_settings, verified_contract.verification_settings,
+        "Invalid verificaiton settings"
+    );
+    assert_eq!(
+        verification_type, verified_contract.verification_type,
+        "Invalid verification type"
     );
 }

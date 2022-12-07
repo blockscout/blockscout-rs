@@ -8,7 +8,7 @@ use super::{
     db,
     errors::Error,
     smart_contract_verifier,
-    types::{BytecodePart, BytecodeType, MatchType, Source, SourceType},
+    types::{BytecodePart, BytecodeType, MatchType, Source, SourceType, VerificationType},
 };
 use anyhow::Context;
 use sea_orm::DatabaseConnection;
@@ -19,6 +19,8 @@ async fn process_verify_response(
     bytecode_type: BytecodeType,
     raw_request_bytecode: Vec<u8>,
     source_type_fn: fn(&str) -> Result<SourceType, Error>,
+    verification_settings: serde_json::Value,
+    verification_type: VerificationType,
 ) -> Result<Source, Error> {
     let result = match response.status.as_str() {
         "0" if response.result.is_some() => response.result.unwrap(),
@@ -97,10 +99,22 @@ async fn process_verify_response(
         deployed_bytecode_parts,
     };
 
-    db::insert_data(db_client, source.clone())
+    let source_id = db::insert_data(db_client, source.clone())
         .await
         .context("Insert data into database")
         .map_err(Error::Internal)?;
+
+    // For historical data we just log any errors but do not propagate them further
+    let _ = db::insert_verified_contract_data(
+        db_client,
+        source_id,
+        raw_request_bytecode,
+        bytecode_type,
+        verification_settings,
+        verification_type,
+    )
+    .await
+    .map_err(|err| tracing::warn!("Error while inserting verified contract data: {}", err));
 
     Ok(source)
 }

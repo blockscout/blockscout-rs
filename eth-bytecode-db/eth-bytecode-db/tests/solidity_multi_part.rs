@@ -1,6 +1,7 @@
 mod verification_test_helpers;
 
 use crate::verification_test_helpers::VerifierServiceType;
+use entity::sea_orm_active_enums;
 use eth_bytecode_db::verification::{solidity_multi_part, solidity_multi_part::MultiPartFiles};
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
     VerifyResponse, VerifySolidityMultiPartRequest,
@@ -57,4 +58,30 @@ async fn test_data_is_added_into_database() {
         solidity_multi_part::verify,
     )
     .await
+}
+
+#[tokio::test]
+#[ignore = "Needs database to run"]
+async fn historical_data_is_added_into_database() {
+    let verification_settings = serde_json::json!({
+        "bytecode": "0x01",
+        "bytecode_type": "CreationInput",
+        "compiler_version": "compiler_version",
+        "evm_version": "london",
+        "libraries": {},
+        "optimization_runs": null,
+        "source_files": {}
+    });
+    let verification_type = sea_orm_active_enums::VerificationType::MultiPartFiles;
+    verification_test_helpers::historical_data_is_added_into_database(
+        DB_PREFIX,
+        VerifierServiceType::Solidity {
+            add_into_service: Arc::new(add_into_service),
+        },
+        default_request_content(),
+        solidity_multi_part::verify,
+        verification_settings,
+        verification_type,
+    )
+    .await;
 }
