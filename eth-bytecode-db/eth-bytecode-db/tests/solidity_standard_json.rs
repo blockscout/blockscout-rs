@@ -1,32 +1,29 @@
 mod verification_test_helpers;
 
 use crate::verification_test_helpers::VerifierServiceType;
-use eth_bytecode_db::verification::{solidity_multi_part, solidity_multi_part::MultiPartFiles};
+use eth_bytecode_db::verification::{solidity_standard_json, solidity_standard_json::StandardJson};
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
-    VerifyResponse, VerifySolidityMultiPartRequest,
+    VerifyResponse, VerifySolidityStandardJsonRequest,
 };
 use std::sync::Arc;
 use tonic::Response;
 use verification_test_helpers::smart_contract_veriifer_mock::MockSolidityVerifierService;
 
-const DB_PREFIX: &str = "solidity_multi_part";
+const DB_PREFIX: &str = "solidity_standard_json";
 
-fn default_request_content() -> MultiPartFiles {
-    MultiPartFiles {
-        source_files: Default::default(),
-        evm_version: "london".to_string(),
-        optimization_runs: None,
-        libraries: Default::default(),
+fn default_request_content() -> StandardJson {
+    StandardJson {
+        input: "".to_string(),
     }
 }
 
 fn add_into_service(
     solidity_service: &mut MockSolidityVerifierService,
-    request: VerifySolidityMultiPartRequest,
+    request: VerifySolidityStandardJsonRequest,
     response: VerifyResponse,
 ) {
     solidity_service
-        .expect_verify_multi_part()
+        .expect_verify_standard_json()
         .withf(move |arg| arg.get_ref() == &request)
         .returning(move |_| Ok(Response::new(response.clone())));
 }
@@ -40,7 +37,7 @@ async fn returns_valid_source() {
             add_into_service: Arc::new(add_into_service),
         },
         default_request_content(),
-        solidity_multi_part::verify,
+        solidity_standard_json::verify,
     )
     .await
 }
@@ -54,7 +51,7 @@ async fn test_data_is_added_into_database() {
             add_into_service: Arc::new(add_into_service),
         },
         default_request_content(),
-        solidity_multi_part::verify,
+        solidity_standard_json::verify,
     )
     .await
 }
