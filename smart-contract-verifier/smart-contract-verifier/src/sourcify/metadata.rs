@@ -189,6 +189,7 @@ mod tests {
         );
 
         let files = Files(BTreeMap::from([("source.sol".into(), "content".into())]));
-        Success::try_from((files, match_type)).expect_err("Parsing files without metadata should fail");
+        Success::try_from((files, match_type))
+            .expect_err("Parsing files without metadata should fail");
     }
 }

@@ -262,7 +262,14 @@ mod match_types_tests {
     use crate::test_success;
 
     fn check_match_type(response: VerifyResponse, expected: MatchType) {
-        assert_eq!(expected as i32, response.result.expect("Test succeeded, thus result should exist").match_type, "Invalid match type")
+        assert_eq!(
+            expected as i32,
+            response
+                .result
+                .expect("Test succeeded, thus result should exist")
+                .match_type,
+            "Invalid match type"
+        )
     }
 
     #[tokio::test]

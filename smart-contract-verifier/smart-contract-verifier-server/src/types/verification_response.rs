@@ -250,7 +250,7 @@ mod tests {
         CompilerInput, EvmVersion,
     };
     use pretty_assertions::assert_eq;
-    use smart_contract_verifier::{SourcifySuccess, MatchType, VerificationSuccess, Version};
+    use smart_contract_verifier::{MatchType, SourcifySuccess, VerificationSuccess, Version};
     use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::VerifyResponse;
     use std::{collections::BTreeMap, str::FromStr};
 
