@@ -24,7 +24,7 @@ async fn global_service() -> &'static Arc<SourcifyVerifierService> {
 
 #[rstest::rstest]
 #[case("0x1277E7D253e0c073418B986b8228BF282554cA5e", "FULL")]
-#[case("0x4C3c2181D54cF7bDF0EF2F37414Adf527DDC1653", "PARTIAL")]
+#[case("0xec979FF845de38501bAE33a70C981fa3C65C08c7", "PARTIAL")]
 #[tokio::test]
 async fn should_return_200(#[case] address: String, #[case] match_type: String) {
     let service = global_service().await;
