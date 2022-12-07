@@ -76,9 +76,9 @@ async fn test_setup(dir: &str, input: &mut TestInput) -> (ServiceResponse, Optio
     });
 
     let request = json!({
-        "deployed_bytecode": input.deployed_bytecode.as_ref().unwrap(),
-        "creation_bytecode": input.creation_tx_input.as_ref(),
-        "compiler_version": input.compiler_version,
+        "deployedBytecode": input.deployed_bytecode.as_ref().unwrap(),
+        "creationBytecode": input.creation_tx_input.as_ref(),
+        "compilerVersion": input.compiler_version,
         "input": input.standard_input
     });
 

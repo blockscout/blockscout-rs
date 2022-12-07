@@ -73,9 +73,9 @@ async fn test_setup(test_case: &TestCase) -> ServiceResponse {
     .await;
 
     let request = serde_json::json!({
-        "deployed_bytecode": test_case.deployed_bytecode,
-        "creation_bytecode": test_case.creation_bytecode,
-        "compiler_version": test_case.compiler_version,
+        "deployedBytecode": test_case.deployed_bytecode,
+        "creationBytecode": test_case.creation_bytecode,
+        "compilerVersion": test_case.compiler_version,
         "sources": {
             format!("{}.vy", test_case.contract_name): test_case.source_code
         },
