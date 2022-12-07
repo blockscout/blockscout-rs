@@ -92,7 +92,7 @@ fn get_constructor(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::DisplayBytes;
+    use blockscout_display_bytes::Bytes as DisplayBytes;
     use entity::{bytecodes, parts, sea_orm_active_enums::PartType};
     use pretty_assertions::assert_eq;
     use sea_orm::{DatabaseBackend, MockDatabase};
@@ -104,7 +104,7 @@ mod tests {
     /// contract Number {
     ///     uint public number;
     ///     string public str;
-    ///     
+    ///
     ///     constructor(uint _number, string memory _str) {
     ///         number = _number;
     ///         str = _str;

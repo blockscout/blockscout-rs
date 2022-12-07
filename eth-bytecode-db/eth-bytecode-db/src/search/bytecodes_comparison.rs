@@ -1,6 +1,6 @@
 // TODO: try move to common crate since code is copipasted from smart-contract-verifier
 
-use crate::DisplayBytes;
+use blockscout_display_bytes::Bytes as DisplayBytes;
 use bytes::Bytes;
 use entity::{parts, sea_orm_active_enums::PartType};
 use ethabi::{Constructor, Token};
