@@ -1,8 +1,5 @@
 use chrono::NaiveDateTime;
-use entity::chart_data_int;
-use sea_orm::{
-    DatabaseConnection, DbBackend, DbErr, EntityTrait, FromQueryResult, JsonValue, Statement,
-};
+use sea_orm::{DatabaseConnection, DbBackend, DbErr, FromQueryResult, Statement};
 use stats_proto::blockscout::stats::v1::{ChartInt, Counters, PointInt};
 use std::collections::HashMap;
 use thiserror::Error;
@@ -15,15 +12,15 @@ pub enum ReadError {
     NotFound(String),
 }
 
-fn parse_json(row: JsonValue) -> Option<(String, (String, u64))> {
-    let name = row.get("name")?.as_str()?;
-    let date = row.get("date")?.as_str()?;
-    let value = row.get("value")?.as_u64()?;
-    Some((name.into(), (date.into(), value)))
+#[derive(FromQueryResult)]
+struct CounterData {
+    name: String,
+    date: NaiveDateTime,
+    value: i64,
 }
 
 fn get_counter_from_data(
-    data: &HashMap<String, (String, u64)>,
+    data: &HashMap<String, (NaiveDateTime, u64)>,
     name: &str,
 ) -> Result<u64, ReadError> {
     data.get(name)
@@ -32,7 +29,7 @@ fn get_counter_from_data(
 }
 
 pub async fn get_counters(db: &DatabaseConnection) -> Result<Counters, ReadError> {
-    let data = JsonValue::find_by_statement(Statement::from_string(
+    let data = CounterData::find_by_statement(Statement::from_string(
         DbBackend::Postgres,
         r#"
         SELECT distinct on (charts.id) charts.name, data.date, data.value 
@@ -46,7 +43,10 @@ pub async fn get_counters(db: &DatabaseConnection) -> Result<Counters, ReadError
     ))
     .all(db)
     .await?;
-    let data: HashMap<_, _> = data.into_iter().filter_map(parse_json).collect();
+    let data: HashMap<_, _> = data
+        .into_iter()
+        .map(|data| (data.name, (data.date, data.value as u64)))
+        .collect();
     let counters = Counters {
         total_blocks_all_time: get_counter_from_data(&data, "total_blocks_all_time")?,
     };
@@ -60,10 +60,9 @@ struct DateValue {
 }
 
 pub async fn get_chart_int(db: &DatabaseConnection, name: &str) -> Result<ChartInt, DbErr> {
-    let data: Vec<DateValue> = chart_data_int::Entity::find()
-        .from_raw_sql(Statement::from_sql_and_values(
-            DbBackend::Postgres,
-            r#"
+    let data = DateValue::find_by_statement(Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        r#"
             SELECT data.date, data.value 
                 FROM "chart_data_int" "data"
                 INNER JOIN "charts"
@@ -71,11 +70,10 @@ pub async fn get_chart_int(db: &DatabaseConnection, name: &str) -> Result<ChartI
                 WHERE charts.name = $1
                 ORDER BY data.date;
             "#,
-            vec![name.into()],
-        ))
-        .into_model()
-        .all(db)
-        .await?;
+        vec![name.into()],
+    ))
+    .all(db)
+    .await?;
     let chart = data
         .into_iter()
         .map(|row| PointInt {
@@ -95,9 +93,7 @@ mod tests {
     use url::Url;
 
     async fn init_db(name: &str) -> DatabaseConnection {
-        let db_url = std::env::var_os("DATABASE_URL")
-            .map(|v| v.into_string().unwrap())
-            .expect("no DATABASE_URL env");
+        let db_url = std::env::var("DATABASE_URL").expect("no DATABASE_URL env");
         let url = Url::parse(&db_url).expect("unvalid database url");
         let db_url = url.join("/").unwrap().to_string();
         let raw_conn = Database::connect(db_url)
