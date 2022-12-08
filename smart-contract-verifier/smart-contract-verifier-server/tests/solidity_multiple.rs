@@ -76,22 +76,22 @@ async fn test_setup(dir: &str, input: &mut TestInput) -> (ServiceResponse, Optio
 
     let request = if let Some(optimization_runs) = input.optimization_runs {
         json!({
-            "deployed_bytecode": input.deployed_bytecode.as_ref().unwrap(),
-            "creation_bytecode": input.creation_tx_input.as_ref(),
-            "compiler_version": input.compiler_version,
+            "deployedBytecode": input.deployed_bytecode.as_ref().unwrap(),
+            "creationBytecode": input.creation_tx_input.as_ref(),
+            "compilerVersion": input.compiler_version,
             "sources": BTreeMap::from([(contract_path, input.source_code.as_ref().unwrap())]),
-            "evm_version": input.evm_version,
-            "contract_libraries": input.contract_libraries,
-            "optimization_runs": optimization_runs
+            "evmVersion": input.evm_version,
+            "contractLibraries": input.contract_libraries,
+            "optimizationRuns": optimization_runs
         })
     } else {
         json!({
-            "deployed_bytecode": input.deployed_bytecode.as_ref().unwrap(),
-            "creation_bytecode": input.creation_tx_input.as_ref(),
-            "compiler_version": input.compiler_version,
+            "deployedBytecode": input.deployed_bytecode.as_ref().unwrap(),
+            "creationBytecode": input.creation_tx_input.as_ref(),
+            "compilerVersion": input.compiler_version,
             "sources": BTreeMap::from([(contract_path, input.source_code.as_ref().unwrap())]),
-            "evm_version": input.evm_version,
-            "contract_libraries": input.contract_libraries
+            "evmVersion": input.evm_version,
+            "contractLibraries": input.contract_libraries
         })
     };
 
