@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 mod database_helpers;
 pub mod smart_contract_veriifer_mock;
 mod test_input_data;
