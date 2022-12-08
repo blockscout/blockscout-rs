@@ -66,22 +66,9 @@ async fn process_verify_response(
     let (deployed_bytecode_parts, raw_deployed_bytecode) =
         parse_local_parts(result.local_deployed_bytecode_parts, "deployed bytecode")?;
 
-    let match_type = match bytecode_type {
-        BytecodeType::CreationInput => {
-            if raw_request_bytecode == raw_creation_input {
-                MatchType::Full
-            } else {
-                MatchType::Partial
-            }
-        }
-        BytecodeType::DeployedBytecode => {
-            if raw_request_bytecode == raw_deployed_bytecode {
-                MatchType::Full
-            } else {
-                MatchType::Partial
-            }
-        }
-    };
+    let match_type = MatchType::from(
+        smart_contract_verifier::MatchType::from_i32(result.match_type).unwrap_or_default(),
+    );
 
     let source = Source {
         file_name: result.file_name,

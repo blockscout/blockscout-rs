@@ -89,8 +89,19 @@ impl From<SourceType> for sea_orm_active_enums::SourceType {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MatchType {
+    Unknown,
     Partial,
     Full,
+}
+
+impl From<smart_contract_verifier::MatchType> for MatchType {
+    fn from(value: smart_contract_verifier::MatchType) -> Self {
+        match value {
+            smart_contract_verifier::MatchType::Unspecified => MatchType::Unknown,
+            smart_contract_verifier::MatchType::Partial => MatchType::Partial,
+            smart_contract_verifier::MatchType::Full => MatchType::Full,
+        }
+    }
 }
 
 /********** Source **********/
