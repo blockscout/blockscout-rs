@@ -22,8 +22,11 @@ async fn global_service() -> &'static Arc<SourcifyVerifierService> {
         .await
 }
 
+#[rstest::rstest]
+#[case("0x1277E7D253e0c073418B986b8228BF282554cA5e", "FULL")]
+#[case("0xec979FF845de38501bAE33a70C981fa3C65C08c7", "PARTIAL")]
 #[tokio::test]
-async fn should_return_200() {
+async fn should_return_200(#[case] address: String, #[case] match_type: String) {
     let service = global_service().await;
     let app = test::init_service(
         App::new().configure(|config| route_sourcify_verifier(config, service.clone())),
@@ -35,7 +38,7 @@ async fn should_return_200() {
     let request_body = json!({
         // relies on the fact that the sokol testnet has this contract
         // https://blockscout.com/poa/sokol/address/0x1277E7D253e0c073418B986b8228BF282554cA5e
-        "address": "0x1277E7D253e0c073418B986b8228BF282554cA5e",
+        "address": address,
         "chain": "77",
         "files": {
             "source.sol": source,
@@ -58,7 +61,7 @@ async fn should_return_200() {
     let body: serde_json::Value = test::read_body_json(resp).await;
     assert_eq!(
         body,
-        serde_json::json!({
+        json!({
             "message": "OK",
             "result": {
                 "fileName": "contracts/1_Storage.sol",
@@ -75,7 +78,8 @@ async fn should_return_200() {
                 },
                 "compilerSettings": "{\"compilationTarget\":{\"contracts/1_Storage.sol\":\"Storage\"},\"evmVersion\":\"london\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]}",
                 "localCreationInputParts": [],
-                "localDeployedBytecodeParts": []
+                "localDeployedBytecodeParts": [],
+                "matchType": match_type
             },
             "status": "0"
         }),

@@ -2,7 +2,7 @@ use super::{
     bytecode::{BytecodePart, LocalBytecode},
     errors::VerificationError,
 };
-use crate::DisplayBytes;
+use crate::{DisplayBytes, MatchType};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct LocalBytecodeParts {
@@ -29,6 +29,7 @@ pub struct VerificationSuccess {
     pub constructor_args: Option<DisplayBytes>,
 
     pub local_bytecode_parts: LocalBytecodeParts,
+    pub match_type: MatchType,
 }
 
 /// Combine different verifiers
