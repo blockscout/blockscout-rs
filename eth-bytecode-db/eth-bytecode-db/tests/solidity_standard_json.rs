@@ -1,6 +1,5 @@
 mod verification_test_helpers;
 
-use crate::verification_test_helpers::VerifierServiceType;
 use entity::sea_orm_active_enums;
 use eth_bytecode_db::verification::{solidity_standard_json, solidity_standard_json::StandardJson};
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
@@ -8,7 +7,10 @@ use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
 };
 use std::sync::Arc;
 use tonic::Response;
-use verification_test_helpers::smart_contract_veriifer_mock::MockSolidityVerifierService;
+use verification_test_helpers::{
+    generate_verification_request, smart_contract_veriifer_mock::MockSolidityVerifierService,
+    VerifierServiceType,
+};
 
 const DB_PREFIX: &str = "solidity_standard_json";
 
@@ -36,8 +38,10 @@ async fn returns_valid_source() {
         DB_PREFIX,
         VerifierServiceType::Solidity {
             add_into_service: Arc::new(add_into_service),
+            generate_request: Arc::new(|id: u8| {
+                generate_verification_request(id, default_request_content())
+            }),
         },
-        default_request_content(),
         solidity_standard_json::verify,
     )
     .await
@@ -50,8 +54,10 @@ async fn test_data_is_added_into_database() {
         DB_PREFIX,
         VerifierServiceType::Solidity {
             add_into_service: Arc::new(add_into_service),
+            generate_request: Arc::new(|id: u8| {
+                generate_verification_request(id, default_request_content())
+            }),
         },
-        default_request_content(),
         solidity_standard_json::verify,
     )
     .await
@@ -71,8 +77,10 @@ async fn historical_data_is_added_into_database() {
         DB_PREFIX,
         VerifierServiceType::Solidity {
             add_into_service: Arc::new(add_into_service),
+            generate_request: Arc::new(|id: u8| {
+                generate_verification_request(id, default_request_content())
+            }),
         },
-        default_request_content(),
         solidity_standard_json::verify,
         verification_settings,
         verification_type,

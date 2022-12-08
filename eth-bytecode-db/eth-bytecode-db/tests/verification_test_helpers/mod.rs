@@ -2,7 +2,6 @@ mod database_helpers;
 pub mod smart_contract_veriifer_mock;
 mod test_input_data;
 
-use crate::verification_test_helpers::smart_contract_veriifer_mock::SmartContractVerifierServer;
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use database_helpers::TestDbGuard;
 use entity::{
@@ -15,7 +14,10 @@ use eth_bytecode_db::verification::{
 use pretty_assertions::assert_eq;
 use sea_orm::{DatabaseConnection, EntityTrait};
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::VerifyResponse;
-use smart_contract_veriifer_mock::{MockSolidityVerifierService, MockVyperVerifierService};
+use smart_contract_veriifer_mock::{
+    MockSolidityVerifierService, MockSourcifyVerifierService, MockVyperVerifierService,
+    SmartContractVerifierServer,
+};
 use std::{collections::HashSet, future::Future, str::FromStr, sync::Arc};
 use test_input_data::TestInputData;
 use tonic::transport::Uri;
@@ -23,25 +25,50 @@ use tonic::transport::Uri;
 type AddIntoServiceFn<Service, GrpcT> = Arc<dyn Fn(&mut Service, GrpcT, VerifyResponse)>;
 
 #[derive(Clone)]
-pub enum VerifierServiceType<GrpcT> {
+pub enum VerifierServiceType<Request, GrpcT>
+// where GrpcT: From<Request>
+{
     Solidity {
         add_into_service: AddIntoServiceFn<MockSolidityVerifierService, GrpcT>,
+        generate_request: Arc<dyn Fn(u8) -> Request>,
     },
     Vyper {
         add_into_service: AddIntoServiceFn<MockVyperVerifierService, GrpcT>,
+        generate_request: Arc<dyn Fn(u8) -> Request>,
+    },
+    Sourcify {
+        add_into_service: AddIntoServiceFn<MockSourcifyVerifierService, GrpcT>,
+        generate_request: Arc<dyn Fn(u8) -> Request>,
     },
 }
 
-impl<GrpcT> From<&VerifierServiceType<GrpcT>> for SourceType {
-    fn from(value: &VerifierServiceType<GrpcT>) -> Self {
+impl<Request, GrpcT> From<&VerifierServiceType<Request, GrpcT>> for SourceType {
+    fn from(value: &VerifierServiceType<Request, GrpcT>) -> Self {
         match value {
             VerifierServiceType::Solidity { .. } => SourceType::Solidity,
             VerifierServiceType::Vyper { .. } => SourceType::Vyper,
+            VerifierServiceType::Sourcify { .. } => SourceType::Solidity,
         }
     }
 }
 
-fn generate_verification_request<T>(id: u8, content: T) -> VerificationRequest<T> {
+impl<Request, GrpcT> VerifierServiceType<Request, GrpcT> {
+    pub fn generate_request(&self, id: u8) -> Request {
+        match self {
+            VerifierServiceType::Solidity {
+                generate_request, ..
+            }
+            | VerifierServiceType::Vyper {
+                generate_request, ..
+            }
+            | VerifierServiceType::Sourcify {
+                generate_request, ..
+            } => generate_request(id),
+        }
+    }
+}
+
+pub fn generate_verification_request<T>(id: u8, content: T) -> VerificationRequest<T> {
     VerificationRequest {
         bytecode: DisplayBytes::from([id]).to_string(),
         bytecode_type: BytecodeType::CreationInput,
@@ -59,45 +86,69 @@ async fn init_db(db_prefix: &str, test_name: &str) -> TestDbGuard {
     TestDbGuard::new(db_name.as_str(), db_url).await
 }
 
-fn init_services<T, GrpcT>(
-    service_type: VerifierServiceType<GrpcT>,
-    input_data: Vec<TestInputData<T>>,
-) -> (MockSolidityVerifierService, MockVyperVerifierService)
+struct Services {
+    solidity_service: MockSolidityVerifierService,
+    vyper_service: MockVyperVerifierService,
+    sourcify_service: MockSourcifyVerifierService,
+}
+
+fn init_services<Request, GrpcT>(
+    service_type: VerifierServiceType<Request, GrpcT>,
+    input_data: Vec<TestInputData<Request>>,
+) -> Services
 where
-    T: Clone,
-    GrpcT: From<VerificationRequest<T>>,
+    Request: Clone,
+    GrpcT: From<Request>,
 {
     let mut solidity_service = MockSolidityVerifierService::new();
     let mut vyper_service = MockVyperVerifierService::new();
+    let mut sourcify_service = MockSourcifyVerifierService::new();
 
     match service_type {
-        VerifierServiceType::Solidity { add_into_service } => {
+        VerifierServiceType::Solidity {
+            add_into_service, ..
+        } => {
             for input in input_data {
                 let request = GrpcT::from(input.request.clone());
                 let response = input.response;
                 add_into_service(&mut solidity_service, request, response.clone())
             }
         }
-        VerifierServiceType::Vyper { add_into_service } => {
+        VerifierServiceType::Vyper {
+            add_into_service, ..
+        } => {
             for input in input_data {
                 let request = GrpcT::from(input.request.clone());
                 let response = input.response;
                 add_into_service(&mut vyper_service, request, response.clone())
             }
         }
+        VerifierServiceType::Sourcify {
+            add_into_service, ..
+        } => {
+            for input in input_data {
+                let request = GrpcT::from(input.request.clone());
+                let response = input.response;
+                add_into_service(&mut sourcify_service, request, response.clone())
+            }
+        }
     }
 
-    (solidity_service, vyper_service)
+    Services {
+        solidity_service,
+        vyper_service,
+        sourcify_service,
+    }
 }
 
 async fn start_server_and_init_client(
     db_client: Arc<DatabaseConnection>,
-    solidity_service: MockSolidityVerifierService,
-    vyper_service: MockVyperVerifierService,
+    services: Services,
 ) -> Client {
     let server_addr = SmartContractVerifierServer::new()
-        .solidity_service(solidity_service)
-        .vyper_service(vyper_service)
+        .solidity_service(services.solidity_service)
+        .vyper_service(services.vyper_service)
+        .sourcify_service(services.sourcify_service)
         .start()
         .await;
 
@@ -108,25 +159,23 @@ async fn start_server_and_init_client(
         .expect("Client initialization failed")
 }
 
-pub async fn returns_valid_source<T, GrpcT, F, Fut>(
+pub async fn returns_valid_source<Request, GrpcT, F, Fut>(
     db_prefix: &str,
-    service_type: VerifierServiceType<GrpcT>,
-    default_request_content: T,
+    service_type: VerifierServiceType<Request, GrpcT>,
     verify: F,
 ) where
-    F: Fn(Client, VerificationRequest<T>) -> Fut,
+    F: Fn(Client, Request) -> Fut,
     Fut: Future<Output = Result<Source, Error>>,
-    T: Clone,
-    GrpcT: From<VerificationRequest<T>>,
+    Request: Clone,
+    GrpcT: From<Request>,
 {
     let db = init_db(db_prefix, "returns_valid_source").await;
     let input_data = test_input_data::input_data_1(
-        generate_verification_request(1, default_request_content),
+        service_type.generate_request(1),
         SourceType::from(&service_type),
     );
-    let (solidity_service, vyper_service) = init_services(service_type, vec![input_data.clone()]);
-    let client =
-        start_server_and_init_client(db.client().clone(), solidity_service, vyper_service).await;
+    let services = init_services(service_type, vec![input_data.clone()]);
+    let client = start_server_and_init_client(db.client().clone(), services).await;
 
     let source = verify(client, input_data.request)
         .await
@@ -135,26 +184,21 @@ pub async fn returns_valid_source<T, GrpcT, F, Fut>(
     assert_eq!(input_data.source, source, "Invalid source");
 }
 
-pub async fn test_data_is_added_into_database<T, GrpcT, F, Fut>(
+pub async fn test_data_is_added_into_database<Request, GrpcT, F, Fut>(
     db_prefix: &str,
-    service_type: VerifierServiceType<GrpcT>,
-    default_request_content: T,
+    service_type: VerifierServiceType<Request, GrpcT>,
     verify: F,
 ) where
-    F: Fn(Client, VerificationRequest<T>) -> Fut,
+    F: Fn(Client, Request) -> Fut,
     Fut: Future<Output = Result<Source, Error>>,
-    T: Clone,
-    GrpcT: From<VerificationRequest<T>>,
+    Request: Clone,
+    GrpcT: From<Request>,
 {
     let source_type = SourceType::from(&service_type);
     let db = init_db(db_prefix, "test_data_is_added_into_database").await;
-    let input_data = test_input_data::input_data_1(
-        generate_verification_request(1, default_request_content),
-        source_type,
-    );
-    let (solidity_service, vyper_service) = init_services(service_type, vec![input_data.clone()]);
-    let client =
-        start_server_and_init_client(db.client().clone(), solidity_service, vyper_service).await;
+    let input_data = test_input_data::input_data_1(service_type.generate_request(1), source_type);
+    let services = init_services(service_type, vec![input_data.clone()]);
+    let client = start_server_and_init_client(db.client().clone(), services).await;
 
     let _source = verify(client, input_data.request)
         .await
@@ -441,28 +485,23 @@ pub async fn test_data_is_added_into_database<T, GrpcT, F, Fut>(
     );
 }
 
-pub async fn historical_data_is_added_into_database<T, GrpcT, F, Fut>(
+pub async fn historical_data_is_added_into_database<Request, GrpcT, F, Fut>(
     db_prefix: &str,
-    service_type: VerifierServiceType<GrpcT>,
-    default_request_content: T,
+    service_type: VerifierServiceType<Request, GrpcT>,
     verify: F,
     verification_settings: serde_json::Value,
     verification_type: sea_orm_active_enums::VerificationType,
 ) where
-    F: Fn(Client, VerificationRequest<T>) -> Fut,
+    F: Fn(Client, Request) -> Fut,
     Fut: Future<Output = Result<Source, Error>>,
-    T: Clone,
-    GrpcT: From<VerificationRequest<T>>,
+    Request: Clone,
+    GrpcT: From<Request>,
 {
     let source_type = SourceType::from(&service_type);
     let db = init_db(db_prefix, "historical_data_is_added_into_database").await;
-    let input_data = test_input_data::input_data_1(
-        generate_verification_request(1, default_request_content),
-        source_type,
-    );
-    let (solidity_service, vyper_service) = init_services(service_type, vec![input_data.clone()]);
-    let client =
-        start_server_and_init_client(db.client().clone(), solidity_service, vyper_service).await;
+    let input_data = test_input_data::input_data_1(service_type.generate_request(1), source_type);
+    let services = init_services(service_type, vec![input_data.clone()]);
+    let client = start_server_and_init_client(db.client().clone(), services).await;
 
     let _source = verify(client, input_data.request)
         .await
