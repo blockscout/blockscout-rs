@@ -10,39 +10,6 @@ consumes:
 produces:
   - application/json
 paths:
-  /api/v1/blocks/new:
-    get:
-      operationId: StatsService_GetNewBlocks
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1ChartInt'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/rpcStatus'
-      parameters:
-        - name: from
-          description: Default is first data point
-          in: query
-          required: false
-          type: string
-        - name: to
-          description: Default is last data point
-          in: query
-          required: false
-          type: string
-        - name: precision
-          in: query
-          required: false
-          type: string
-          enum:
-            - DAY
-            - MONTH
-          default: DAY
-      tags:
-        - StatsService
   /api/v1/counters:
     get:
       operationId: StatsService_GetCounters
@@ -55,6 +22,35 @@ paths:
           description: An unexpected error response.
           schema:
             $ref: '#/definitions/rpcStatus'
+      tags:
+        - StatsService
+  /api/v1/line:
+    get:
+      operationId: StatsService_GetLine
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1Chart'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: name
+          in: query
+          required: false
+          type: string
+        - name: from
+          description: Default is first data point
+          in: query
+          required: false
+          type: string
+        - name: to
+          description: Default is last data point
+          in: query
+          required: false
+          type: string
       tags:
         - StatsService
   /health:
@@ -106,35 +102,28 @@ definitions:
           $ref: '#/definitions/protobufAny'
       message:
         type: string
-  v1ChartInt:
+  v1Chart:
     type: object
     properties:
       chart:
         type: array
         items:
-          $ref: '#/definitions/v1PointInt'
+          $ref: '#/definitions/v1Point'
   v1Counters:
     type: object
     properties:
       totalBlocksAllTime:
         type: string
-        format: uint64
   v1HealthCheckResponse:
     type: object
     properties:
       status:
         $ref: '#/definitions/HealthCheckResponseServingStatus'
-  v1PointInt:
+  v1Point:
     type: object
     properties:
       date:
         type: string
       value:
         type: string
-        format: uint64
-  v1Precision:
-    type: string
-    enum:
-      - DAY
-      - MONTH
-    default: DAY
+    title: All integers are encoded as strings to prevent data loss

@@ -1,6 +1,6 @@
 use chrono::NaiveDateTime;
 use sea_orm::{DatabaseConnection, DbBackend, DbErr, FromQueryResult, Statement};
-use stats_proto::blockscout::stats::v1::{ChartInt, Counters, PointInt};
+use stats_proto::blockscout::stats::v1::{Chart, Counters, Point};
 use std::collections::HashMap;
 use thiserror::Error;
 
@@ -48,7 +48,7 @@ pub async fn get_counters(db: &DatabaseConnection) -> Result<Counters, ReadError
         .map(|data| (data.name, (data.date, data.value as u64)))
         .collect();
     let counters = Counters {
-        total_blocks_all_time: get_counter_from_data(&data, "total_blocks_all_time")?,
+        total_blocks_all_time: get_counter_from_data(&data, "total_blocks_all_time")?.to_string(),
     };
     Ok(counters)
 }
@@ -59,7 +59,7 @@ struct DateValue {
     value: i64,
 }
 
-pub async fn get_chart_int(db: &DatabaseConnection, name: &str) -> Result<ChartInt, DbErr> {
+pub async fn get_chart_int(db: &DatabaseConnection, name: &str) -> Result<Chart, DbErr> {
     let data = DateValue::find_by_statement(Statement::from_sql_and_values(
         DbBackend::Postgres,
         r#"
@@ -76,12 +76,12 @@ pub async fn get_chart_int(db: &DatabaseConnection, name: &str) -> Result<ChartI
     .await?;
     let chart = data
         .into_iter()
-        .map(|row| PointInt {
-            date: row.date.format("%d-%m-%Y").to_string(),
-            value: row.value as u64,
+        .map(|row| Point {
+            date: row.date.format("%Y-%m-%d").to_string(),
+            value: row.value.to_string(),
         })
         .collect();
-    Ok(ChartInt { chart })
+    Ok(Chart { chart })
 }
 
 #[cfg(test)]
@@ -175,7 +175,7 @@ mod tests {
         let counters = get_counters(&db).await.unwrap();
         assert_eq!(
             Counters {
-                total_blocks_all_time: 1350
+                total_blocks_all_time: "1350".into(),
             },
             counters
         );
@@ -190,19 +190,19 @@ mod tests {
         insert_mock_data(&db).await;
         let chart = get_chart_int(&db, "new_blocks_per_day").await.unwrap();
         assert_eq!(
-            ChartInt {
+            Chart {
                 chart: vec![
-                    PointInt {
+                    Point {
                         date: "10-11-2022".into(),
-                        value: 100,
+                        value: "100".into(),
                     },
-                    PointInt {
+                    Point {
                         date: "11-11-2022".into(),
-                        value: 150,
+                        value: "150".into(),
                     },
-                    PointInt {
+                    Point {
                         date: "12-11-2022".into(),
-                        value: 200,
+                        value: "200".into(),
                     },
                 ]
             },
