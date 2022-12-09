@@ -1,9 +1,9 @@
 use super::client::Client;
 use crate::{
     compiler::Version,
+    verification_request,
     verifier::{ContractVerifier, Error, Success},
 };
-use bytes::Bytes;
 use ethers_solc::{
     artifacts::{BytecodeHash, Libraries, Settings, SettingsMetadata, Source, Sources},
     CompilerInput, EvmVersion,
@@ -11,14 +11,7 @@ use ethers_solc::{
 use semver::VersionReq;
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct VerificationRequest {
-    pub deployed_bytecode: Bytes,
-    pub creation_bytecode: Option<Bytes>,
-    pub compiler_version: Version,
-
-    pub content: MultiFileContent,
-}
+pub type VerificationRequest = verification_request::VerificationRequest<MultiFileContent>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MultiFileContent {

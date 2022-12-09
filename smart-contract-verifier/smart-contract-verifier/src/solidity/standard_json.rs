@@ -1,20 +1,14 @@
 use super::client::Client;
 use crate::{
-    compiler::Version,
+    verification_request,
     verifier::{ContractVerifier, Error, Success},
 };
-use bytes::Bytes;
 use ethers_solc::{artifacts::output_selection::OutputSelection, CompilerInput};
 use std::sync::Arc;
 
-pub struct VerificationRequest {
-    pub deployed_bytecode: Bytes,
-    pub creation_bytecode: Option<Bytes>,
-    pub compiler_version: Version,
+pub type VerificationRequest = verification_request::VerificationRequest<StandardJsonContent>;
 
-    pub content: StandardJsonContent,
-}
-
+#[derive(Debug, Clone)]
 pub struct StandardJsonContent {
     pub input: CompilerInput,
 }

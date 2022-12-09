@@ -9,6 +9,7 @@ mod compiler;
 mod consts;
 mod metrics;
 mod scheduler;
+mod verification_request;
 mod verifier;
 
 #[cfg(test)]
