@@ -5,8 +5,8 @@ http:
   rules:
     - selector: blockscout.stats.v1.StatsService.GetCounters
       get: /api/v1/counters
-    - selector: blockscout.stats.v1.StatsService.GetNewBlocks
-      get: /api/v1/blocks/new
+    - selector: blockscout.stats.v1.StatsService.GetLineChart
+      get: /api/v1/charts/line
 
     - selector: blockscout.stats.v1.Health.Check
       get: /health
