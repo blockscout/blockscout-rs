@@ -1,6 +1,6 @@
 use chrono::NaiveDateTime;
 use sea_orm::{DatabaseConnection, DbBackend, DbErr, FromQueryResult, Statement};
-use stats_proto::blockscout::stats::v1::{Chart, Counters, Point};
+use stats_proto::blockscout::stats::v1::{Counters, LineData, Point};
 use std::collections::HashMap;
 use thiserror::Error;
 
@@ -59,7 +59,7 @@ struct DateValue {
     value: i64,
 }
 
-pub async fn get_chart_int(db: &DatabaseConnection, name: &str) -> Result<Chart, DbErr> {
+pub async fn get_chart_int(db: &DatabaseConnection, name: &str) -> Result<LineData, DbErr> {
     let data = DateValue::find_by_statement(Statement::from_sql_and_values(
         DbBackend::Postgres,
         r#"
@@ -81,7 +81,7 @@ pub async fn get_chart_int(db: &DatabaseConnection, name: &str) -> Result<Chart,
             value: row.value.to_string(),
         })
         .collect();
-    Ok(Chart { chart })
+    Ok(LineData { chart })
 }
 
 #[cfg(test)]
@@ -190,7 +190,7 @@ mod tests {
         insert_mock_data(&db).await;
         let chart = get_chart_int(&db, "new_blocks_per_day").await.unwrap();
         assert_eq!(
-            Chart {
+            LineData {
                 chart: vec![
                     Point {
                         date: "10-11-2022".into(),

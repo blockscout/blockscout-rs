@@ -1,7 +1,8 @@
 use async_trait::async_trait;
 use chrono::{Duration, NaiveDate};
 use stats_proto::blockscout::stats::v1::{
-    stats_service_server::StatsService, Chart, ChartRequest, Counters, CountersRequest, Point,
+    stats_service_server::StatsService, Counters, GetCountersRequest, GetLineChartRequest,
+    LineData, Point,
 };
 use std::str::FromStr;
 use tonic::{Request, Response, Status};
@@ -28,14 +29,17 @@ fn generate_intervals(mut start: NaiveDate) -> Vec<NaiveDate> {
 impl StatsService for Service {
     async fn get_counters(
         &self,
-        _request: Request<CountersRequest>,
+        _request: Request<GetCountersRequest>,
     ) -> Result<Response<Counters>, Status> {
         Ok(Response::new(Counters {
             total_blocks_all_time: "16075890".into(),
         }))
     }
 
-    async fn get_line(&self, request: Request<ChartRequest>) -> Result<Response<Chart>, Status> {
+    async fn get_line_chart(
+        &self,
+        request: Request<GetLineChartRequest>,
+    ) -> Result<Response<LineData>, Status> {
         let request = request.into_inner();
         let start = NaiveDate::from_str("2022-01-01").unwrap();
         let from = request
@@ -61,6 +65,6 @@ impl StatsService for Service {
                 value: (100 + ((i * 1103515245 + 12345) % 100)).to_string(),
             })
             .collect();
-        Ok(Response::new(Chart { chart }))
+        Ok(Response::new(LineData { chart }))
     }
 }
