@@ -17,7 +17,7 @@ paths:
         "200":
           description: A successful response.
           schema:
-            $ref: '#/definitions/v1LineData'
+            $ref: '#/definitions/v1LineChart'
         default:
           description: An unexpected error response.
           schema:
@@ -112,7 +112,7 @@ definitions:
     properties:
       status:
         $ref: '#/definitions/HealthCheckResponseServingStatus'
-  v1LineData:
+  v1LineChart:
     type: object
     properties:
       chart:

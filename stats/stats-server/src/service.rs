@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use chrono::{Duration, NaiveDate};
 use stats_proto::blockscout::stats::v1::{
     stats_service_server::StatsService, Counters, GetCountersRequest, GetLineChartRequest,
-    LineData, Point,
+    LineChart, Point,
 };
 use std::str::FromStr;
 use tonic::{Request, Response, Status};
@@ -39,7 +39,7 @@ impl StatsService for Service {
     async fn get_line_chart(
         &self,
         request: Request<GetLineChartRequest>,
-    ) -> Result<Response<LineData>, Status> {
+    ) -> Result<Response<LineChart>, Status> {
         let request = request.into_inner();
         let start = NaiveDate::from_str("2022-01-01").unwrap();
         let from = request
@@ -65,6 +65,6 @@ impl StatsService for Service {
                 value: (100 + ((i * 1103515245 + 12345) % 100)).to_string(),
             })
             .collect();
-        Ok(Response::new(LineData { chart }))
+        Ok(Response::new(LineChart { chart }))
     }
 }
