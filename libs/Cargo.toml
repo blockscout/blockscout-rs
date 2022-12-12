@@ -1,6 +1,2 @@
 [workspace]
-members = [
-    "display-bytes",
-    "solidity-metadata",
-    "mismatch",
-]
+members = ["display-bytes", "solidity-metadata", "mismatch", "blockscout-db"]
