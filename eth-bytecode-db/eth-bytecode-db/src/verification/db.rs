@@ -10,6 +10,14 @@ use sea_orm::{
 };
 use std::collections::BTreeMap;
 
+#[cfg(feature = "test-bins")]
+pub async fn _insert_test_data(
+    db_client: &DatabaseConnection,
+    source_response: types::Source,
+) -> Result<i64, anyhow::Error> {
+    insert_data(db_client, source_response).await
+}
+
 pub(crate) async fn insert_data(
     db_client: &DatabaseConnection,
     source_response: types::Source,
