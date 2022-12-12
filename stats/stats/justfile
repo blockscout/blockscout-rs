@@ -25,6 +25,7 @@ new-migration name:
 
 generate-entities database_url="postgres://postgres:admin@localhost:5432/stats":
     DATABASE_URL={{database_url}} sea-orm-cli generate entity --lib -o entity/src
+    cargo fmt --all -- --config imports_granularity=Crate
 
 test database_url *args:
     DATABASE_URL={{database_url}} cargo test {{args}}

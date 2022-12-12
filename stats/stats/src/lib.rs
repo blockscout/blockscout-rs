@@ -193,15 +193,15 @@ mod tests {
             LineChart {
                 chart: vec![
                     Point {
-                        date: "10-11-2022".into(),
+                        date: "2022-11-10".into(),
                         value: "100".into(),
                     },
                     Point {
-                        date: "11-11-2022".into(),
+                        date: "2022-11-11".into(),
                         value: "150".into(),
                     },
                     Point {
-                        date: "12-11-2022".into(),
+                        date: "2022-11-12".into(),
                         value: "200".into(),
                     },
                 ]
