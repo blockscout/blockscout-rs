@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use chrono::{Duration, NaiveDate};
 use stats_proto::blockscout::stats::v1::{
-    stats_service_server::StatsService, ChartInt, ChartRequest, Counters, CountersRequest,
-    PointInt, Precision,
+    stats_service_server::StatsService, Counters, GetCountersRequest, GetLineChartRequest,
+    LineChart, Point,
 };
 use std::str::FromStr;
 use tonic::{Request, Response, Status};
@@ -15,15 +15,12 @@ impl Service {
     }
 }
 
-fn generate_intervals(mut start: NaiveDate, precision: Precision) -> Vec<NaiveDate> {
+fn generate_intervals(mut start: NaiveDate) -> Vec<NaiveDate> {
     let now = chrono::offset::Utc::now().naive_utc().date();
     let mut times = vec![];
     while start < now {
         times.push(start);
-        match precision {
-            Precision::Day => start += Duration::days(1),
-            Precision::Month => start = chronoutil::delta::shift_months(start, 1),
-        }
+        start += Duration::days(1);
     }
     times
 }
@@ -32,31 +29,26 @@ fn generate_intervals(mut start: NaiveDate, precision: Precision) -> Vec<NaiveDa
 impl StatsService for Service {
     async fn get_counters(
         &self,
-        _request: Request<CountersRequest>,
+        _request: Request<GetCountersRequest>,
     ) -> Result<Response<Counters>, Status> {
         Ok(Response::new(Counters {
-            total_blocks_all_time: 16075890,
+            total_blocks_all_time: "16075890".into(),
         }))
     }
 
-    async fn get_new_blocks(
+    async fn get_line_chart(
         &self,
-        request: Request<ChartRequest>,
-    ) -> Result<Response<ChartInt>, Status> {
+        request: Request<GetLineChartRequest>,
+    ) -> Result<Response<LineChart>, Status> {
         let request = request.into_inner();
         let start = NaiveDate::from_str("2022-01-01").unwrap();
-        let precision = Precision::from_i32(request.precision).unwrap();
-        let base_value = match precision {
-            Precision::Day => 100,
-            Precision::Month => 3000,
-        };
         let from = request
             .from
-            .map(|date| NaiveDate::parse_from_str(&date, "%d-%m-%Y").unwrap());
+            .map(|date| NaiveDate::parse_from_str(&date, "%Y-%m-%d").unwrap());
         let to = request
             .to
-            .map(|date| NaiveDate::parse_from_str(&date, "%d-%m-%Y").unwrap());
-        let chart = generate_intervals(start, precision)
+            .map(|date| NaiveDate::parse_from_str(&date, "%Y-%m-%d").unwrap());
+        let chart = generate_intervals(start)
             .into_iter()
             .filter(|date| match from {
                 Some(from) => date >= &from,
@@ -67,11 +59,12 @@ impl StatsService for Service {
                 None => true,
             })
             .enumerate()
-            .map(|(i, date)| PointInt {
-                date: date.format("%d-%m-%Y").to_string(),
-                value: base_value + (i as u64 % 100),
+            .map(|(i, date)| Point {
+                date: date.format("%Y-%m-%d").to_string(),
+                // use linear congruental generator as some quick pseudo rand integers
+                value: (100 + ((i * 1103515245 + 12345) % 100)).to_string(),
             })
             .collect();
-        Ok(Response::new(ChartInt { chart }))
+        Ok(Response::new(LineChart { chart }))
     }
 }

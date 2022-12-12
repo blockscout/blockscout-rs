@@ -10,19 +10,23 @@ consumes:
 produces:
   - application/json
 paths:
-  /api/v1/blocks/new:
+  /api/v1/charts/line:
     get:
-      operationId: StatsService_GetNewBlocks
+      operationId: StatsService_GetLineChart
       responses:
         "200":
           description: A successful response.
           schema:
-            $ref: '#/definitions/v1ChartInt'
+            $ref: '#/definitions/v1LineChart'
         default:
           description: An unexpected error response.
           schema:
             $ref: '#/definitions/rpcStatus'
       parameters:
+        - name: name
+          in: query
+          required: false
+          type: string
         - name: from
           description: Default is first data point
           in: query
@@ -33,14 +37,6 @@ paths:
           in: query
           required: false
           type: string
-        - name: precision
-          in: query
-          required: false
-          type: string
-          enum:
-            - DAY
-            - MONTH
-          default: DAY
       tags:
         - StatsService
   /api/v1/counters:
@@ -106,35 +102,28 @@ definitions:
           $ref: '#/definitions/protobufAny'
       message:
         type: string
-  v1ChartInt:
-    type: object
-    properties:
-      chart:
-        type: array
-        items:
-          $ref: '#/definitions/v1PointInt'
   v1Counters:
     type: object
     properties:
       totalBlocksAllTime:
         type: string
-        format: uint64
   v1HealthCheckResponse:
     type: object
     properties:
       status:
         $ref: '#/definitions/HealthCheckResponseServingStatus'
-  v1PointInt:
+  v1LineChart:
+    type: object
+    properties:
+      chart:
+        type: array
+        items:
+          $ref: '#/definitions/v1Point'
+  v1Point:
     type: object
     properties:
       date:
         type: string
       value:
         type: string
-        format: uint64
-  v1Precision:
-    type: string
-    enum:
-      - DAY
-      - MONTH
-    default: DAY
+    title: All integers are encoded as strings to prevent data loss

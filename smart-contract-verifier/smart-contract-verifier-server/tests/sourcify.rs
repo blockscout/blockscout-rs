@@ -22,8 +22,11 @@ async fn global_service() -> &'static Arc<SourcifyVerifierService> {
         .await
 }
 
+#[rstest::rstest]
+#[case("0x1277E7D253e0c073418B986b8228BF282554cA5e", "FULL")]
+#[case("0xec979FF845de38501bAE33a70C981fa3C65C08c7", "PARTIAL")]
 #[tokio::test]
-async fn should_return_200() {
+async fn should_return_200(#[case] address: String, #[case] match_type: String) {
     let service = global_service().await;
     let app = test::init_service(
         App::new().configure(|config| route_sourcify_verifier(config, service.clone())),
@@ -35,7 +38,7 @@ async fn should_return_200() {
     let request_body = json!({
         // relies on the fact that the sokol testnet has this contract
         // https://blockscout.com/poa/sokol/address/0x1277E7D253e0c073418B986b8228BF282554cA5e
-        "address": "0x1277E7D253e0c073418B986b8228BF282554cA5e",
+        "address": address,
         "chain": "77",
         "files": {
             "source.sol": source,
@@ -58,24 +61,25 @@ async fn should_return_200() {
     let body: serde_json::Value = test::read_body_json(resp).await;
     assert_eq!(
         body,
-        serde_json::json!({
+        json!({
             "message": "OK",
             "result": {
-                "file_name": "contracts/1_Storage.sol",
-                "contract_name": "Storage",
-                "compiler_version": "0.8.7+commit.e28d00a7",
-                "evm_version": "london",
-                "constructor_arguments": null,
+                "fileName": "contracts/1_Storage.sol",
+                "contractName": "Storage",
+                "compilerVersion": "0.8.7+commit.e28d00a7",
+                "evmVersion": "london",
+                "constructorArguments": null,
                 "optimization": false,
-                "optimization_runs": 200,
-                "contract_libraries": {},
+                "optimizationRuns": 200,
+                "contractLibraries": {},
                 "abi": "[{\"inputs\":[],\"name\":\"retrieve\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"num\",\"type\":\"uint256\"}],\"name\":\"store\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
                 "sources": {
                     "1_Storage.sol": "// SPDX-License-Identifier: GPL-3.0\n\npragma solidity >=0.7.0 <0.9.0;\n\n/**\n * @title Storage\n * @dev Store & retrieve value in a variable\n * @custom:dev-run-script ./scripts/deploy_with_ethers.ts\n */\ncontract Storage {\n\n    uint256 number;\n\n    /**\n     * @dev Store value in variable\n     * @param num value to store\n     */\n    function store(uint256 num) public {\n        number = num;\n    }\n\n    /**\n     * @dev Return value \n     * @return value of 'number'\n     */\n    function retrieve() public view returns (uint256){\n        return number;\n    }\n}"
                 },
-                "compiler_settings": "{\"compilationTarget\":{\"contracts/1_Storage.sol\":\"Storage\"},\"evmVersion\":\"london\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]}",
-                "local_creation_input_parts": [],
-                "local_deployed_bytecode_parts": []
+                "compilerSettings": "{\"compilationTarget\":{\"contracts/1_Storage.sol\":\"Storage\"},\"evmVersion\":\"london\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]}",
+                "localCreationInputParts": [],
+                "localDeployedBytecodeParts": [],
+                "matchType": match_type
             },
             "status": "0"
         }),
