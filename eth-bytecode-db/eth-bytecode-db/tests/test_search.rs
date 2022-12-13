@@ -1,6 +1,6 @@
 use entity::sea_orm_active_enums::BytecodeType;
 use eth_bytecode_db::{
-    search::{find_partial_match_contract, BytecodeRemote},
+    search::{find_partial_match_contracts, BytecodeRemote},
     tests::verifier_mock::{
         generate_and_insert, BytecodePart, ContractType, PartTy, VerificationResult,
     },
@@ -97,6 +97,16 @@ async fn test_search_bytecodes() {
         }
     }
 
+    let repeated_id = 77777;
+    let repeated_amount = 10;
+    let repeated_ty = ContractType::Small;
+    for _ in 0..repeated_amount {
+        let source = generate_and_insert(conn, repeated_id, repeated_ty)
+            .await
+            .expect("cannot push contract");
+        all_sources.insert((repeated_id, repeated_ty), source);
+    }
+
     // Search known bytecodes
     for i in 1..10 {
         for ty in [
@@ -129,20 +139,70 @@ async fn test_search_bytecodes() {
                 data,
                 bytecode_type: BytecodeType::CreationInput,
             };
-            let partial_match = find_partial_match_contract(conn, search)
+            let partial_matches = find_partial_match_contracts(conn, &search)
                 .await
                 .expect("error during contract search");
-            let contract = partial_match
-                .unwrap_or_else(|| panic!("contract not found. id={}, ty={:?}", i, ty));
 
-            assert_eq!(&contract.source, expected_source);
             assert_eq!(
-                contract.constructor_args.map(hex::encode),
+                partial_matches.len(),
+                1,
+                "contract not found. id={}, ty={:?}",
+                i,
+                ty
+            );
+            let contract = partial_matches
+                .into_iter()
+                .next()
+                .expect("checked that len is 1");
+
+            assert_eq!(&contract.contract_name, &expected_source.contract_name);
+            assert_eq!(
+                contract.constructor_arguments,
                 expected_contract
                     .constructor_arguments
                     .map(|args| args.trim_start_matches("0x").to_string())
             );
         }
+    }
+
+    // Search repeated bytecodes
+
+    let expected_source = all_sources
+        .get(&(repeated_id, repeated_ty))
+        .expect("source should be in hashmap");
+    let expected_contract = VerificationResult::generate(repeated_id, repeated_ty);
+    let mut raw_creation_input = expected_contract
+        .local_creation_input_parts
+        .iter()
+        .map(change_part_for_search)
+        .collect::<Vec<_>>()
+        .join("");
+
+    match &expected_contract.constructor_arguments {
+        Some(args) => raw_creation_input.push_str(args.trim_start_matches("0x")),
+        None => {}
+    };
+
+    let data = blockscout_display_bytes::Bytes::from_str(&raw_creation_input)
+        .unwrap()
+        .0;
+    let search = BytecodeRemote {
+        data,
+        bytecode_type: BytecodeType::CreationInput,
+    };
+    let partial_matches = find_partial_match_contracts(conn, &search)
+        .await
+        .expect("error during contract search");
+    assert_eq!(partial_matches.len(), repeated_amount);
+    for contract in partial_matches {
+        assert_eq!(&contract.contract_name, &expected_source.contract_name);
+        assert_eq!(
+            contract.constructor_arguments,
+            expected_contract
+                .clone()
+                .constructor_arguments
+                .map(|args| args.trim_start_matches("0x").to_string())
+        );
     }
 
     // Search unknow bytecodes
@@ -168,11 +228,11 @@ async fn test_search_bytecodes() {
                 bytecode_type: BytecodeType::CreationInput,
             };
 
-            let partial_match = find_partial_match_contract(conn, search)
+            let partial_matches = find_partial_match_contracts(conn, &search)
                 .await
                 .expect("unkown contract should not give error");
             assert!(
-                partial_match.is_none(),
+                partial_matches.is_empty(),
                 "found some contact, but bytecode is unknow"
             );
         }
@@ -188,11 +248,11 @@ async fn test_search_bytecodes() {
             bytecode_type: BytecodeType::CreationInput,
         };
 
-        let partial_match = find_partial_match_contract(conn, search)
+        let partial_matches = find_partial_match_contracts(conn, &search)
             .await
             .expect("random string should not give error");
         assert!(
-            partial_match.is_none(),
+            partial_matches.is_empty(),
             "found some contact, but bytecode is random string"
         );
     }
