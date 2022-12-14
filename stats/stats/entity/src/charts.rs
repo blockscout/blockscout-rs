@@ -12,7 +12,6 @@ pub struct Model {
     pub name: String,
     pub r#type: ChartType,
     pub value_type: ChartValueType,
-    pub last_updated_id: Option<i64>,
     pub created_at: DateTime,
 }
 
