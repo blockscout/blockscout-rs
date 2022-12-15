@@ -45,8 +45,7 @@ impl super::UpdaterTrait for Updater {
                     ON data.chart_id = charts.id
                 WHERE charts.name = $1
                 ORDER BY charts.id, data.id DESC;
-            "#
-            .into(),
+            "#,
             vec![name.into()],
         ))
         .one(db)
@@ -60,8 +59,7 @@ impl super::UpdaterTrait for Updater {
                         FROM public.blocks
                         WHERE date(blocks.timestamp) >= $1
                         GROUP BY day;
-                    "#
-                    .into(),
+                    "#,
                     vec![row.date.into()],
                 ))
                 .all(blockscout)
@@ -204,6 +202,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "needs database to run"]
     async fn update_new_blocks_recurrent() {
         let _ = tracing_subscriber::fmt::try_init();
         let (db, blockscout) = init_db_all("update_new_blocks_recurrent").await;
@@ -253,6 +252,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "needs database to run"]
     async fn update_new_blocks_fresh() {
         let _ = tracing_subscriber::fmt::try_init();
         let (db, blockscout) = init_db_all("update_new_blocks_fresh").await;
@@ -295,6 +295,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "needs database to run"]
     async fn update_new_blocks_last() {
         let _ = tracing_subscriber::fmt::try_init();
         let (db, blockscout) = init_db_all("update_new_blocks_no_change").await;
