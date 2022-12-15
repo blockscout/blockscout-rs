@@ -1,11 +1,11 @@
 use crate::{
     metrics,
     settings::{Extensions, SourcifySettings},
-    types::{VerifyResponseWrapper, VerifyViaSourcifyRequestWrapper},
+    types::{VerifyViaSourcifyRequestWrapper, VerifyViaSourcifyResponseWrapper},
 };
 use smart_contract_verifier::{sourcify, sourcify::Error, SourcifyApiClient};
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
-    sourcify_verifier_server::SourcifyVerifier, VerifyResponse, VerifyViaSourcifyRequest,
+    sourcify_verifier_server::SourcifyVerifier, VerifyViaSourcifyRequest, VerifyViaSourcifyResponse,
 };
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
@@ -48,15 +48,17 @@ impl SourcifyVerifier for SourcifyVerifierService {
     async fn verify(
         &self,
         request: Request<VerifyViaSourcifyRequest>,
-    ) -> Result<Response<VerifyResponse>, Status> {
+    ) -> Result<Response<VerifyViaSourcifyResponse>, Status> {
         let request: VerifyViaSourcifyRequestWrapper = request.into_inner().into();
         let response = sourcify::api::verify(self.client.clone(), request.try_into()?).await;
 
         let result = match response {
-            Ok(verification_success) => Ok(VerifyResponseWrapper::ok(verification_success.into())),
+            Ok(verification_success) => Ok(VerifyViaSourcifyResponseWrapper::ok(
+                verification_success.into(),
+            )),
             Err(err) => match err {
                 Error::Internal(err) => Err(Status::internal(err.to_string())),
-                Error::Verification(err) => Ok(VerifyResponseWrapper::err(err)),
+                Error::Verification(err) => Ok(VerifyViaSourcifyResponseWrapper::err(err)),
                 Error::Validation(err) => Err(Status::invalid_argument(err)),
             },
         }?;

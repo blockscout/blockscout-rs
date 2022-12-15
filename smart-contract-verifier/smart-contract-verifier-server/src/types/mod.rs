@@ -2,6 +2,7 @@ mod solidity_multi_part;
 mod solidity_standard_json;
 mod sourcify;
 mod verification_response;
+mod verification_response_sourcify;
 mod vyper_multi_part;
 
 pub use solidity_multi_part::VerifySolidityMultiPartRequestWrapper;
@@ -10,4 +11,5 @@ pub use solidity_standard_json::{
 };
 pub use sourcify::VerifyViaSourcifyRequestWrapper;
 pub use verification_response::VerifyResponseWrapper;
+pub use verification_response_sourcify::VerifyViaSourcifyResponseWrapper;
 pub use vyper_multi_part::VerifyVyperMultiPartRequestWrapper;

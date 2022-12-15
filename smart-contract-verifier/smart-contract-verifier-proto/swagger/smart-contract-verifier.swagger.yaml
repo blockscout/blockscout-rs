@@ -73,7 +73,7 @@ paths:
         "200":
           description: A successful response.
           schema:
-            $ref: '#/definitions/v1VerifyResponse'
+            $ref: '#/definitions/v1VerifyViaSourcifyResponse'
         default:
           description: An unexpected error response.
           schema:
@@ -151,13 +151,6 @@ definitions:
       - NOT_SERVING
       - SERVICE_UNKNOWN
     default: UNKNOWN
-  ResultMatchType:
-    type: string
-    enum:
-      - MATCH_TYPE_UNSPECIFIED
-      - PARTIAL
-      - FULL
-    default: MATCH_TYPE_UNSPECIFIED
   Resultbytecode_part:
     type: object
     properties:
@@ -165,7 +158,50 @@ definitions:
         type: string
       type:
         type: string
-  VerifyResponseResult:
+  protobufAny:
+    type: object
+    properties:
+      '@type':
+        type: string
+    additionalProperties: {}
+  rpcStatus:
+    type: object
+    properties:
+      code:
+        type: integer
+        format: int32
+      details:
+        type: array
+        items:
+          $ref: '#/definitions/protobufAny'
+      message:
+        type: string
+  v1HealthCheckResponse:
+    type: object
+    properties:
+      status:
+        $ref: '#/definitions/HealthCheckResponseServingStatus'
+  v1ListVersionsResponse:
+    type: object
+    properties:
+      versions:
+        type: array
+        items:
+          type: string
+        title: / Compiler versions available for verification
+  v1VerifyResponse:
+    type: object
+    properties:
+      message:
+        type: string
+      result:
+        $ref: '#/definitions/v1VerifyResponseResult'
+      status:
+        type: string
+        title: |-
+          / Status of "0" indicates successful verification,
+          / status of "1" - that verification failed
+  v1VerifyResponseResult:
     type: object
     properties:
       abi:
@@ -215,7 +251,7 @@ definitions:
           / Deployed bytecode resultant from local compilation
           / parsed and split on Main and Meta parts. Is empty for Sourcify verification.
       matchType:
-        $ref: '#/definitions/ResultMatchType'
+        $ref: '#/definitions/v1VerifyResponseResultMatchType'
         title: / Similar to Sourcify (see https://docs.sourcify.dev/docs/full-vs-partial-match/)
       optimization:
         type: boolean
@@ -231,49 +267,13 @@ definitions:
         additionalProperties:
           type: string
         title: / Source files given for verification
-  protobufAny:
-    type: object
-    properties:
-      '@type':
-        type: string
-    additionalProperties: {}
-  rpcStatus:
-    type: object
-    properties:
-      code:
-        type: integer
-        format: int32
-      details:
-        type: array
-        items:
-          $ref: '#/definitions/protobufAny'
-      message:
-        type: string
-  v1HealthCheckResponse:
-    type: object
-    properties:
-      status:
-        $ref: '#/definitions/HealthCheckResponseServingStatus'
-  v1ListVersionsResponse:
-    type: object
-    properties:
-      versions:
-        type: array
-        items:
-          type: string
-        title: / Compiler versions available for verification
-  v1VerifyResponse:
-    type: object
-    properties:
-      message:
-        type: string
-      result:
-        $ref: '#/definitions/VerifyResponseResult'
-      status:
-        type: string
-        title: |-
-          / Status of "0" indicates successful verification,
-          / status of "1" - that verification failed
+  v1VerifyResponseResultMatchType:
+    type: string
+    enum:
+      - MATCH_TYPE_UNSPECIFIED
+      - PARTIAL
+      - FULL
+    default: MATCH_TYPE_UNSPECIFIED
   v1VerifySolidityMultiPartRequest:
     type: object
     properties:
@@ -340,6 +340,77 @@ definitions:
         additionalProperties:
           type: string
         title: / Files required for verification (see Sourcify Api)
+  v1VerifyViaSourcifyResponse:
+    type: object
+    properties:
+      message:
+        type: string
+      result:
+        $ref: '#/definitions/v1VerifyViaSourcifyResponseResult'
+      status:
+        type: string
+        title: |-
+          / Status of "0" indicates successful verification,
+          / status of "1" - that verification failed
+  v1VerifyViaSourcifyResponseResult:
+    type: object
+    properties:
+      abi:
+        type: string
+        title: |-
+          / Contract abi (https://docs.soliditylang.org/en/latest/abi-spec.html?highlight=abi#json);
+          / (does not exist for Yul contracts)
+      compilerSettings:
+        type: string
+        title: |-
+          / Raw settings pushed submitted to the compiler on local compilation
+          / (https://docs.soliditylang.org/en/v0.8.17/using-the-compiler.html#input-description)
+      compilerVersion:
+        type: string
+        title: / Compiler version used for verification
+      constructorArguments:
+        type: string
+        title: |-
+          / Constructor arguments used for deploying verified contract
+          / (exists only for creation inputs)
+      contractLibraries:
+        type: object
+        additionalProperties:
+          type: string
+        title: / Addresses of the libraries
+      contractName:
+        type: string
+        title: / The name of the contract which was verified
+      evmVersion:
+        type: string
+        title: / Version of the EVM contract was compile for
+      fileName:
+        type: string
+        title: / The name of the file verified contract was located at
+      matchType:
+        $ref: '#/definitions/v1VerifyViaSourcifyResponseResultMatchType'
+        title: / Similar to Sourcify (see https://docs.sourcify.dev/docs/full-vs-partial-match/)
+      optimization:
+        type: boolean
+        description: |-
+          / (optional) WARNING: Before version 0.8.6 omitting the 'enabled' key was not equivalent to setting
+          / it to false and would actually disable all the optimizations.
+      optimizationRuns:
+        type: integer
+        format: int32
+        title: / (optional) Specify number of optimizer runs, if optimizations are enabled
+      sources:
+        type: object
+        additionalProperties:
+          type: string
+        title: / Source files given for verification
+  v1VerifyViaSourcifyResponseResultMatchType:
+    type: string
+    enum:
+      - MATCH_TYPE_UNSPECIFIED
+      - PARTIAL
+      - FULL
+    default: MATCH_TYPE_UNSPECIFIED
   v1VerifyVyperMultiPartRequest:
     type: object
     properties:
