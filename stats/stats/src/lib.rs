@@ -48,7 +48,10 @@ pub async fn get_counters(db: &DatabaseConnection) -> Result<Counters, ReadError
         .map(|data| (data.name, (data.date, data.value as u64)))
         .collect();
     let counters = Counters {
-        total_blocks_all_time: get_counter_from_data(&data, "total_blocks_all_time")?.to_string(),
+        counters: HashMap::from_iter([(
+            "total_blocks_all_time".into(),
+            get_counter_from_data(&data, "total_blocks_all_time")?.to_string(),
+        )]),
     };
     Ok(counters)
 }
@@ -175,7 +178,7 @@ mod tests {
         let counters = get_counters(&db).await.unwrap();
         assert_eq!(
             Counters {
-                total_blocks_all_time: "1350".into(),
+                counters: HashMap::from_iter([("total_blocks_all_time".into(), "1350".into())]),
             },
             counters
         );
