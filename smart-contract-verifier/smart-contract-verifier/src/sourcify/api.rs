@@ -53,7 +53,7 @@ pub async fn verify(
                     )
                 })
                 .map_err(Error::Internal)?;
-            let files = Files::try_from(api_files_response)
+            let files = Files::try_from((api_files_response, &params.chain, &params.address))
                 .map_err(|err| anyhow!("error while parsing Sourcify files response: {}", err))
                 .map_err(Error::Internal)?;
             let match_type = match_type_from_verification_result(result)?;
