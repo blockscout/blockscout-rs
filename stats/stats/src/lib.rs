@@ -48,7 +48,10 @@ pub async fn get_counters(db: &DatabaseConnection) -> Result<Counters, ReadError
         .map(|data| (data.name, (data.date, data.value as u64)))
         .collect();
     let counters = Counters {
-        total_blocks_all_time: get_counter_from_data(&data, "total_blocks_all_time")?.to_string(),
+        counters: HashMap::from_iter([(
+            "totalBlocksAllTime".into(),
+            get_counter_from_data(&data, "totalBlocksAllTime")?.to_string(),
+        )]),
     };
     Ok(counters)
 }
@@ -131,10 +134,10 @@ mod tests {
             DbBackend::Postgres,
             r#"
             INSERT INTO "charts" VALUES
-                (default, 'total_blocks_all_time', 'COUNTER', 'INT', 0),
-                (default, 'new_blocks_per_day', 'LINE', 'INT', 0),
-                (default, 'total_txs_all_time', 'COUNTER', 'INT', 0),
-                (default, 'new_txs_per_day', 'LINE', 'INT', 0);
+                (default, 'totalBlocksAllTime', 'COUNTER', 'INT', 0),
+                (default, 'newBlocksPerDay', 'LINE', 'INT', 0),
+                (default, 'totalTxsAllTime', 'COUNTER', 'INT', 0),
+                (default, 'newTxsPerDay', 'LINE', 'INT', 0);
             "#
             .into(),
         ))
@@ -175,7 +178,7 @@ mod tests {
         let counters = get_counters(&db).await.unwrap();
         assert_eq!(
             Counters {
-                total_blocks_all_time: "1350".into(),
+                counters: HashMap::from_iter([("totalBlocksAllTime".into(), "1350".into())]),
             },
             counters
         );
@@ -188,7 +191,7 @@ mod tests {
 
         let db = init_db("get_chart_int_mock").await;
         insert_mock_data(&db).await;
-        let chart = get_chart_int(&db, "new_blocks_per_day").await.unwrap();
+        let chart = get_chart_int(&db, "newBlocksPerDay").await.unwrap();
         assert_eq!(
             LineChart {
                 chart: vec![

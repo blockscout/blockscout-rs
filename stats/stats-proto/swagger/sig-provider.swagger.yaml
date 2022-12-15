@@ -105,8 +105,10 @@ definitions:
   v1Counters:
     type: object
     properties:
-      totalBlocksAllTime:
-        type: string
+      counters:
+        type: object
+        additionalProperties:
+          type: string
   v1HealthCheckResponse:
     type: object
     properties:
