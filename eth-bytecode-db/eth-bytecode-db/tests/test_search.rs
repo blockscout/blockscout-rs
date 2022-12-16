@@ -1,4 +1,4 @@
-#![cfg(feature = "test-bins")]
+#![cfg(feature = "test-utils")]
 
 use entity::sea_orm_active_enums::BytecodeType;
 use eth_bytecode_db::{
