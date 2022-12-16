@@ -1,0 +1,376 @@
+swagger: "2.0"
+info:
+  title: eth-bytecode-db.proto
+  version: version not set
+tags:
+  - name: CreationBytecodeDatabase
+  - name: DeployedBytecodeDatabase
+  - name: Sourcify
+consumes:
+  - application/json
+produces:
+  - application/json
+paths:
+  /bytecodes/creation-inputs/sources/solidity:verify-multi-part:
+    post:
+      operationId: CreationBytecodeDatabase_VerifySolidityMultiPart
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1VerifyResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1VerifySolidityMultiPartRequest'
+      tags:
+        - CreationBytecodeDatabase
+  /bytecodes/creation-inputs/sources/solidity:verify-standard-json:
+    post:
+      operationId: CreationBytecodeDatabase_VerifySolidityStandardJson
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1VerifyResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1VerifySolidityStandardJsonRequest'
+      tags:
+        - CreationBytecodeDatabase
+  /bytecodes/creation-inputs/sources/vyper:verify-multi-part:
+    post:
+      operationId: CreationBytecodeDatabase_VerifyVyperMultiPart
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1VerifyResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1VerifyVyperMultiPartRequest'
+      tags:
+        - CreationBytecodeDatabase
+  /bytecodes/creation-inputs/sources:search:
+    post:
+      operationId: CreationBytecodeDatabase_SearchSources
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1SearchSourcesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1SearchSourcesRequest'
+      tags:
+        - CreationBytecodeDatabase
+  /bytecodes/deployed-bytecodes/sources/solidity:verify-multi-part:
+    post:
+      operationId: DeployedBytecodeDatabase_VerifySolidityMultiPart
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1VerifyResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1VerifySolidityMultiPartRequest'
+      tags:
+        - DeployedBytecodeDatabase
+  /bytecodes/deployed-bytecodes/sources/solidity:verify-standard-json:
+    post:
+      operationId: DeployedBytecodeDatabase_VerifySolidityStandardJson
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1VerifyResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1VerifySolidityStandardJsonRequest'
+      tags:
+        - DeployedBytecodeDatabase
+  /bytecodes/deployed-bytecodes/sources/vyper:verify-multi-part:
+    post:
+      operationId: DeployedBytecodeDatabase_VerifyVyperMultiPart
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1VerifyResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1VerifyVyperMultiPartRequest'
+      tags:
+        - DeployedBytecodeDatabase
+  /bytecodes/deployed-bytecodes/sources:search:
+    post:
+      operationId: DeployedBytecodeDatabase_SearchSources
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1SearchSourcesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1SearchSourcesRequest'
+      tags:
+        - DeployedBytecodeDatabase
+  /sourcify:verify:
+    post:
+      operationId: Sourcify_Verify
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1VerifyResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1VerifySourcifyRequest'
+      tags:
+        - Sourcify
+definitions:
+  SourceMatch:
+    type: string
+    enum:
+      - MATCH_UNSPECIFIED
+      - PARTIAL
+      - FULL
+    default: MATCH_UNSPECIFIED
+    description: ' - MATCH_UNSPECIFIED: Default value. This value is unused.'
+  SourceSourceFile:
+    type: object
+    properties:
+      content:
+        type: string
+      name:
+        type: string
+  SourceSourceType:
+    type: string
+    enum:
+      - SOURCE_TYPE_UNSPECIFIED
+      - SOLIDITY
+      - VYPER
+      - YUL
+    default: SOURCE_TYPE_UNSPECIFIED
+    description: ' - SOURCE_TYPE_UNSPECIFIED: Default value. This value is unused.'
+  protobufAny:
+    type: object
+    properties:
+      '@type':
+        type: string
+    additionalProperties: {}
+  rpcStatus:
+    type: object
+    properties:
+      code:
+        type: integer
+        format: int32
+      details:
+        type: array
+        items:
+          $ref: '#/definitions/protobufAny'
+      message:
+        type: string
+  v1SearchSourcesRequest:
+    type: object
+    properties:
+      bytecode:
+        type: string
+        title: / Bytecode to search the sources for
+  v1SearchSourcesResponse:
+    type: object
+    properties:
+      sources:
+        type: array
+        items:
+          $ref: '#/definitions/v1Source'
+  v1Source:
+    type: object
+    properties:
+      abi:
+        type: string
+        title: |-
+          / Contract abi (https://docs.soliditylang.org/en/latest/abi-spec.html?highlight=abi#json);
+          / (does not exist for Yul contracts)
+      compilerSettings:
+        type: string
+        title: |-
+          / 'settings' key in Standard Input JSON
+          / (https://docs.soliditylang.org/en/latest/using-the-compiler.html#input-description)
+      compilerVersion:
+        type: string
+        title: Compiler version used to compile the contract
+      constructorArguments:
+        type: string
+        title: |-
+          / Constructor arguments used for deploying verified contract
+          / (exists only for creation inputs)
+      contractName:
+        type: string
+        title: / The name of the contract which was verified
+      fileName:
+        type: string
+        title: / The name of the file verified contract was located at
+      match:
+        $ref: '#/definitions/SourceMatch'
+        title: / Similar to Sourcify (see https://docs.sourcify.dev/docs/full-vs-partial-match/)
+      sourceFiles:
+        type: array
+        items:
+          $ref: '#/definitions/SourceSourceFile'
+      sourceType:
+        $ref: '#/definitions/SourceSourceType'
+  v1VerifyResponse:
+    type: object
+    properties:
+      message:
+        type: string
+      source:
+        $ref: '#/definitions/v1Source'
+      status:
+        type: integer
+        format: int32
+        title: / Status of 0 indicates successful verification
+  v1VerifySolidityMultiPartRequest:
+    type: object
+    properties:
+      bytecode:
+        type: string
+        title: / Bytecode to compare local compilation result with
+      compilerVersion:
+        type: string
+        title: / Compiler version used to compile the contract
+      evmVersion:
+        type: string
+        title: / Version of the EVM to compile for
+      libraries:
+        type: object
+        additionalProperties:
+          type: string
+        title: / Map from a library name to its address
+      optimizationRuns:
+        type: integer
+        format: int32
+        title: |-
+          / If present, optimizations are enabled with specified number of runs,
+          / otherwise optimizations are disabled
+      sourcesFiles:
+        type: object
+        additionalProperties:
+          type: string
+        title: / Map from a source file name to the actual source code
+  v1VerifySolidityStandardJsonRequest:
+    type: object
+    properties:
+      bytecode:
+        type: string
+        title: / Bytecode to compare local compilation result with
+      compilerVersion:
+        type: string
+        title: / Compiler version used to compile the contract
+      input:
+        type: string
+        title: / https://docs.soliditylang.org/en/latest/using-the-compiler.html#input-description
+  v1VerifySourcifyRequest:
+    type: object
+    properties:
+      address:
+        type: string
+        title: / Address of the contract to be verified
+      chain:
+        type: string
+        title: |-
+          / The chain (network) the contract was deployed to
+          / (https://docs.sourcify.dev/docs/api/chains/)
+      chosenContract:
+        type: integer
+        format: int32
+        title: (optional) see Sourcify Api
+      sourcesFiles:
+        type: object
+        additionalProperties:
+          type: string
+        title: / Files required for verification (see Sourcify Api)
+  v1VerifyVyperMultiPartRequest:
+    type: object
+    properties:
+      bytecode:
+        type: string
+        title: / Bytecode to compare local compilation result with
+      compilerVersion:
+        type: string
+        title: / Compiler version used to compile the contract
+      evmVersion:
+        type: string
+        title: / Version of the EVM to compile for
+      optimizations:
+        type: boolean
+        title: / Flag enabling optimizations
+      sourceFiles:
+        type: object
+        additionalProperties:
+          type: string
+        title: / Source file name to the actual source code
