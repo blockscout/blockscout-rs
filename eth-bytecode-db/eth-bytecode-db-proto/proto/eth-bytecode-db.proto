@@ -47,6 +47,7 @@ message Source {
   string compiler_settings = 4;
 
   enum SourceType {
+    // Default value. This value is unused.
     SOURCE_TYPE_UNSPECIFIED = 0;
     SOLIDITY = 1;
     VYPER = 2;
@@ -60,15 +61,16 @@ message Source {
   }
   repeated SourceFile source_files = 7;
 
-  /// Constructor arguments used for deploying verified contract
-  /// (exists only for creation inputs)
-  optional string constructor_arguments = 8;
-
   /// Contract abi (https://docs.soliditylang.org/en/latest/abi-spec.html?highlight=abi#json);
   /// (does not exist for Yul contracts)
-  optional string abi = 9;
+  optional string abi = 8;
+
+  /// Constructor arguments used for deploying verified contract
+  /// (exists only for creation inputs)
+  optional string constructor_arguments = 9;
 
   enum Match {
+    // Default value. This value is unused.
     MATCH_UNSPECIFIED = 0;
     PARTIAL = 1;
     FULL = 2;
