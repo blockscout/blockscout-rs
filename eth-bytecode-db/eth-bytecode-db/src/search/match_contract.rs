@@ -140,13 +140,10 @@ mod tests {
             abi: Some(
                 serde_json::json!([ { "inputs": [ { "internalType": "uint256", "name": "_number", "type": "uint256" } ], "stateMutability": "nonpayable", "type": "constructor" }, { "inputs": [], "name": "number", "outputs": [ { "internalType": "uint256", "name": "", "type": "uint256" } ], "stateMutability": "view", "type": "function" } ]),
             ),
-            raw_creation_input: hex::decode(&format!("{}{}", NUMBER_MAIN_PART, NUMBER_META_PART))
+            raw_creation_input: hex::decode(format!("{}{}", NUMBER_MAIN_PART, NUMBER_META_PART))
                 .unwrap(),
-            raw_deployed_bytecode: hex::decode(&format!(
-                "{}{}",
-                NUMBER_MAIN_PART, NUMBER_META_PART
-            ))
-            .unwrap(),
+            raw_deployed_bytecode: hex::decode(format!("{}{}", NUMBER_MAIN_PART, NUMBER_META_PART))
+                .unwrap(),
             created_at: Default::default(),
             updated_at: Default::default(),
         }
