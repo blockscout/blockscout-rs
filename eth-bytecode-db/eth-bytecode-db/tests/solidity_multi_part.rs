@@ -4,6 +4,7 @@ use entity::sea_orm_active_enums;
 use eth_bytecode_db::verification::{
     solidity_multi_part, solidity_multi_part::MultiPartFiles, SourceType, VerificationRequest,
 };
+use rstest::{fixture, rstest};
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
     VerifyResponse, VerifySolidityMultiPartRequest,
 };
@@ -51,18 +52,23 @@ impl VerifierService<VerifySolidityMultiPartRequest, VerificationRequest<MultiPa
     }
 }
 
+#[fixture]
+fn service() -> MockSolidityVerifierService {
+    MockSolidityVerifierService::new()
+}
+
+#[rstest]
 #[tokio::test]
 #[ignore = "Needs database to run"]
-async fn returns_valid_source() {
-    let service = MockSolidityVerifierService::new();
+async fn returns_valid_source(service: MockSolidityVerifierService) {
     verification_test_helpers::returns_valid_source(DB_PREFIX, service, solidity_multi_part::verify)
         .await
 }
 
+#[rstest]
 #[tokio::test]
 #[ignore = "Needs database to run"]
-async fn test_data_is_added_into_database() {
-    let service = MockSolidityVerifierService::new();
+async fn test_data_is_added_into_database(service: MockSolidityVerifierService) {
     verification_test_helpers::test_data_is_added_into_database(
         DB_PREFIX,
         service,
@@ -71,9 +77,10 @@ async fn test_data_is_added_into_database() {
     .await
 }
 
+#[rstest]
 #[tokio::test]
 #[ignore = "Needs database to run"]
-async fn historical_data_is_added_into_database() {
+async fn historical_data_is_added_into_database(service: MockSolidityVerifierService) {
     let verification_settings = serde_json::json!({
         "bytecode": "0x01",
         "bytecode_type": "CreationInput",
@@ -84,7 +91,6 @@ async fn historical_data_is_added_into_database() {
         "source_files": {}
     });
     let verification_type = sea_orm_active_enums::VerificationType::MultiPartFiles;
-    let service = MockSolidityVerifierService::new();
     verification_test_helpers::historical_data_is_added_into_database(
         DB_PREFIX,
         service,

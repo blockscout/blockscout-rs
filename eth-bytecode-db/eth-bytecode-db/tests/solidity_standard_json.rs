@@ -4,6 +4,7 @@ use entity::sea_orm_active_enums;
 use eth_bytecode_db::verification::{
     solidity_standard_json, solidity_standard_json::StandardJson, SourceType, VerificationRequest,
 };
+use rstest::{fixture, rstest};
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
     VerifyResponse, VerifySolidityStandardJsonRequest,
 };
@@ -48,10 +49,15 @@ impl VerifierService<VerifySolidityStandardJsonRequest, VerificationRequest<Stan
     }
 }
 
+#[fixture]
+fn service() -> MockSolidityVerifierService {
+    MockSolidityVerifierService::new()
+}
+
+#[rstest]
 #[tokio::test]
 #[ignore = "Needs database to run"]
-async fn returns_valid_source() {
-    let service = MockSolidityVerifierService::new();
+async fn returns_valid_source(service: MockSolidityVerifierService) {
     verification_test_helpers::returns_valid_source(
         DB_PREFIX,
         service,
@@ -60,10 +66,10 @@ async fn returns_valid_source() {
     .await
 }
 
+#[rstest]
 #[tokio::test]
 #[ignore = "Needs database to run"]
-async fn test_data_is_added_into_database() {
-    let service = MockSolidityVerifierService::new();
+async fn test_data_is_added_into_database(service: MockSolidityVerifierService) {
     verification_test_helpers::test_data_is_added_into_database(
         DB_PREFIX,
         service,
@@ -72,9 +78,10 @@ async fn test_data_is_added_into_database() {
     .await
 }
 
+#[rstest]
 #[tokio::test]
 #[ignore = "Needs database to run"]
-async fn historical_data_is_added_into_database() {
+async fn historical_data_is_added_into_database(service: MockSolidityVerifierService) {
     let verification_settings = serde_json::json!({
         "bytecode": "0x01",
         "bytecode_type": "CreationInput",
@@ -82,7 +89,6 @@ async fn historical_data_is_added_into_database() {
         "input": ""
     });
     let verification_type = sea_orm_active_enums::VerificationType::StandardJson;
-    let service = MockSolidityVerifierService::new();
     verification_test_helpers::historical_data_is_added_into_database(
         DB_PREFIX,
         service,
