@@ -62,7 +62,7 @@ message VerifyVyperMultiPartRequest {
   /// Source file name to the actual source code
   map<string, string> sources = 6;
   /// Version of the EVM to compile for
-  string evm_version = 4;
+  optional string evm_version = 4;
 }
 
 message VerifyViaSourcifyRequest {
@@ -115,12 +115,20 @@ message VerifyResponse {
       string type = 1;
       string data = 2;
     };
-    /// (optional) creation transaction input resultant from local compilation
-    /// parsed and split on Main and Meta parts. Is null for Sourcify verification.
+    /// Creation transaction input resultant from local compilation
+    /// parsed and split on Main and Meta parts. Is empty for Sourcify verification.
     repeated bytecode_part local_creation_input_parts = 12;
-    /// (optional) deployed bytecode resultant from local compilation
-    /// parsed and split on Main and Meta parts. Is null for Sourcify verification.
+    /// Deployed bytecode resultant from local compilation
+    /// parsed and split on Main and Meta parts. Is empty for Sourcify verification.
     repeated bytecode_part local_deployed_bytecode_parts = 13;
+
+    enum MatchType {
+      MATCH_TYPE_UNSPECIFIED = 0;
+      PARTIAL = 1;
+      FULL = 2;
+    }
+    /// Similar to Sourcify (see https://docs.sourcify.dev/docs/full-vs-partial-match/)
+    MatchType match_type = 14;
   }
   Result result = 3;
 }

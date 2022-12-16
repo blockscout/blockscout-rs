@@ -1,10 +1,12 @@
 use super::{
     api_client::SourcifyApiClient,
-    types::{ApiRequest, ApiVerificationResponse, Error, Files, Success},
+    types::{ApiRequest, ApiVerificationResponse, Error, Files, ResultItem, Success},
 };
+use crate::MatchType;
 use anyhow::anyhow;
 use std::{collections::BTreeMap, sync::Arc};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerificationRequest {
     pub address: String,
     pub chain: String,
@@ -40,7 +42,7 @@ pub async fn verify(
         .map_err(Error::Internal)?;
 
     match response {
-        ApiVerificationResponse::Verified { result: _ } => {
+        ApiVerificationResponse::Verified { result } => {
             let api_files_response = sourcify_client
                 .source_files_request(&params)
                 .await
@@ -54,8 +56,9 @@ pub async fn verify(
             let files = Files::try_from(api_files_response)
                 .map_err(|err| anyhow!("error while parsing Sourcify files response: {}", err))
                 .map_err(Error::Internal)?;
-            let success =
-                Success::try_from(files).map_err(|err| Error::Validation(err.to_string()))?;
+            let match_type = match_type_from_verification_result(result)?;
+            let success = Success::try_from((files, match_type))
+                .map_err(|err| Error::Validation(err.to_string()))?;
 
             if let Some(middleware) = sourcify_client.middleware() {
                 middleware.call(&success).await;
@@ -68,5 +71,21 @@ pub async fn verify(
             let error_message = format!("{}: {:?}", message, errors);
             Err(Error::Validation(error_message))
         }
+    }
+}
+
+fn match_type_from_verification_result(result: Vec<ResultItem>) -> Result<MatchType, Error> {
+    let item = result
+        .get(0)
+        .ok_or_else(|| {
+            anyhow::anyhow!("invalid number of result items returned while verification succeeded")
+        })
+        .map_err(Error::Internal)?;
+    match item.status.as_str() {
+        "partial" => Ok(MatchType::Partial),
+        "perfect" => Ok(MatchType::Full),
+        _ => Err(Error::Internal(anyhow::anyhow!(
+            "invalid match type status returned by the Sourcify instance"
+        ))),
     }
 }

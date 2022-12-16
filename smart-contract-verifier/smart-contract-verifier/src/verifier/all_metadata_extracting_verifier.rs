@@ -5,7 +5,7 @@ use super::{
 };
 use crate::{
     verifier::bytecode::{CreationTxInput, DeployedBytecode},
-    DisplayBytes,
+    DisplayBytes, MatchType,
 };
 use bytes::Bytes;
 use ethabi::{Constructor, Token};
@@ -103,6 +103,7 @@ impl<T: Source> Verifier<T> {
                         abi,
                         constructor_args,
                         local_bytecode,
+                        match_type,
                     }) => {
                         return Ok(VerificationSuccess {
                             file_path: path.clone(),
@@ -111,6 +112,7 @@ impl<T: Source> Verifier<T> {
                             constructor_args: constructor_args.map(DisplayBytes::from),
 
                             local_bytecode_parts: local_bytecode.into(),
+                            match_type,
                         })
                     }
                     Err(err) => {
@@ -177,7 +179,7 @@ impl<T: Source> Verifier<T> {
             (creation_tx_input_modified, deployed_bytecode_modified),
         )?;
 
-        Self::compare_creation_tx_inputs(&self.remote_bytecode, &local_bytecode)?;
+        let match_type = Self::compare_creation_tx_inputs(&self.remote_bytecode, &local_bytecode)?;
 
         let abi = contract.get_abi().map(|abi| abi.into_owned());
 
@@ -191,15 +193,22 @@ impl<T: Source> Verifier<T> {
             abi,
             constructor_args,
             local_bytecode,
+            match_type,
         })
     }
 
     fn compare_creation_tx_inputs(
         remote_bytecode: &Bytecode<T>,
         local_bytecode: &LocalBytecode<T>,
-    ) -> Result<(), VerificationErrorKind> {
+    ) -> Result<MatchType, VerificationErrorKind> {
         let remote_creation_tx_input = remote_bytecode.bytecode();
         let local_creation_tx_input = local_bytecode.bytecode();
+
+        if remote_creation_tx_input.starts_with(local_creation_tx_input) {
+            // If local compilation bytecode is prefix of remote one,
+            // metadata parts are the same and we do not need to compare bytecode parts.
+            return Ok(MatchType::Full);
+        }
 
         if remote_creation_tx_input.len() < local_creation_tx_input.len() {
             return Err(VerificationErrorKind::BytecodeLengthMismatch {
@@ -220,7 +229,7 @@ impl<T: Source> Verifier<T> {
             local_bytecode.bytecode_parts(),
         )?;
 
-        Ok(())
+        Ok(MatchType::Partial)
     }
 
     /// Performs an actual comparison of locally compiled bytecode
@@ -258,17 +267,16 @@ impl<T: Source> Verifier<T> {
                         });
                     }
                 }
-                BytecodePart::Metadata {
-                    metadata,
-                    metadata_length_raw,
-                    ..
-                } => {
+                BytecodePart::Metadata { metadata, raw, .. } => {
                     let (remote_metadata, remote_metadata_length) =
                         MetadataHash::from_cbor(&remote_raw[i..])
                             .map_err(|err| VerificationErrorKind::MetadataParse(err.to_string()))?;
 
                     let start_index = i + remote_metadata_length;
-                    if &remote_raw[start_index..start_index + 2] != metadata_length_raw {
+                    let raw_start_index = raw.len() - 2;
+                    if remote_raw[start_index..start_index + 2]
+                        != raw[raw_start_index..raw_start_index + 2]
+                    {
                         return Err(VerificationErrorKind::MetadataParse(
                             "metadata length mismatch".into(),
                         ));
@@ -354,6 +362,7 @@ struct ComparisonSuccess<T> {
     pub abi: Option<ethabi::Contract>,
     pub constructor_args: Option<Bytes>,
     pub local_bytecode: LocalBytecode<T>,
+    pub match_type: MatchType,
 }
 
 #[cfg(test)]

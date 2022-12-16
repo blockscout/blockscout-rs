@@ -1,0 +1,34 @@
+# just is like `make` but better https://github.com/casey/just
+
+# list all recipes
+default:
+    just --list --unsorted
+
+start-postgres:
+    # we run it in --rm mode, so all data will be deleted after stopping
+    docker run -p 5432:5432 --name blockscout-postgres -e POSTGRES_PASSWORD=admin --rm -d postgres
+    # wait for postgres to start
+    sleep 3
+    docker exec -it blockscout-postgres psql -U postgres -c 'create database blockscout;'
+
+stop-postgres:
+    docker kill blockscout-postgres
+
+migrate-up database_url="postgres://postgres:admin@localhost:5432/blockscout":
+    DATABASE_URL={{database_url}} sea-orm-cli migrate up
+
+migrate-down database_url="postgres://postgres:admin@localhost:5432/blockscout":
+    DATABASE_URL={{database_url}} sea-orm-cli migrate down
+
+new-migration name:
+    sea-orm-cli migrate generate {{name}}
+
+generate-entities database_url="postgres://postgres:admin@localhost:5432/blockscout":
+    DATABASE_URL={{database_url}} sea-orm-cli generate entity --lib -o entity/src
+    cargo fmt --all -- --config imports_granularity=Crate
+
+generate-migration database_url="postgres://postgres:admin@localhost:5432/blockscout?ssl=false" migration_file="migration/src/migration.sql":
+    docker run --network=host -e 'DATABASE_URL={{database_url}}' --entrypoint "/bin/sh" --rm blockscout/blockscout:4.1.8 -c 'bin/blockscout eval "Elixir.Explorer.ReleaseTasks.create_and_migrate()"'
+    docker exec blockscout-postgres pg_dump -s --inserts -h localhost -U postgres blockscout > {{migration_file}}
+    # remove unwanted config
+    sed -i '/SELECT pg_catalog.set_config/d' {{migration_file}}

@@ -151,6 +151,13 @@ definitions:
       - NOT_SERVING
       - SERVICE_UNKNOWN
     default: UNKNOWN
+  ResultMatchType:
+    type: string
+    enum:
+      - MATCH_TYPE_UNSPECIFIED
+      - PARTIAL
+      - FULL
+    default: MATCH_TYPE_UNSPECIFIED
   Resultbytecode_part:
     type: object
     properties:
@@ -198,15 +205,18 @@ definitions:
         items:
           $ref: '#/definitions/Resultbytecode_part'
         description: |-
-          / (optional) creation transaction input resultant from local compilation
-          / parsed and split on Main and Meta parts. Is null for Sourcify verification.
+          / Creation transaction input resultant from local compilation
+          / parsed and split on Main and Meta parts. Is empty for Sourcify verification.
       localDeployedBytecodeParts:
         type: array
         items:
           $ref: '#/definitions/Resultbytecode_part'
         description: |-
-          / (optional) deployed bytecode resultant from local compilation
-          / parsed and split on Main and Meta parts. Is null for Sourcify verification.
+          / Deployed bytecode resultant from local compilation
+          / parsed and split on Main and Meta parts. Is empty for Sourcify verification.
+      matchType:
+        $ref: '#/definitions/ResultMatchType'
+        title: / Similar to Sourcify (see https://docs.sourcify.dev/docs/full-vs-partial-match/)
       optimization:
         type: boolean
         description: |-

@@ -6,7 +6,7 @@ use super::{
 };
 use crate::{
     compiler::{self, Compilers, EvmCompiler},
-    DisplayBytes,
+    DisplayBytes, MatchType,
 };
 use anyhow::anyhow;
 use bytes::Bytes;
@@ -59,6 +59,7 @@ pub struct Success {
     pub abi: Option<ethabi::Contract>,
     pub constructor_args: Option<DisplayBytes>,
     pub local_bytecode_parts: LocalBytecodeParts,
+    pub match_type: MatchType,
 }
 
 pub struct ContractVerifier<'a, T> {
@@ -162,6 +163,7 @@ impl<'a, T: EvmCompiler> ContractVerifier<'a, T> {
             abi: verification_success.abi,
             constructor_args: verification_success.constructor_args,
             local_bytecode_parts: verification_success.local_bytecode_parts,
+            match_type: verification_success.match_type,
         })
     }
 }

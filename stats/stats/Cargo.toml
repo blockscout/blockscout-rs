@@ -3,6 +3,24 @@ name = "stats"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
+entity = { path = "./entity" }
+sea-orm = { version = "0.10", features = [
+    "sqlx-postgres",
+    "runtime-tokio-rustls",
+    "debug-print",
+] }
+stats-proto = { path = "../stats-proto" }
+tokio = "1"
+thiserror = "1.0"
+chrono = "0.4"
+
+[dev-dependencies]
+pretty_assertions = "1.2"
+url = "2.3"
+sea-orm-migration = { version = "0.10", features = [
+    "runtime-tokio-rustls",
+    "sqlx-postgres",
+] }
+migration = { path = "./migration" }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

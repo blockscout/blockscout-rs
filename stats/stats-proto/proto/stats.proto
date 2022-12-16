@@ -5,30 +5,26 @@ package blockscout.stats.v1;
 option go_package = "github.com/blockscout/blockscout-rs/stats";
 
 service StatsService {
-  rpc GetCounters(CountersRequest) returns (Counters);
-  rpc GetNewBlocks(ChartRequest) returns (Chart);
+  rpc GetCounters(GetCountersRequest) returns (Counters);
+  rpc GetLineChart(GetLineChartRequest) returns (LineChart);
 }
 
-message CountersRequest {}
+message GetCountersRequest {}
 
+// All integers are encoded as strings to prevent data loss
 message Point {
   string date = 1;
-  uint64 value = 2;
+  string value = 2;
 }
 
-message Chart { repeated Point chart = 1; }
+message LineChart { repeated Point chart = 1; }
 
-message Counters { uint64 total_blocks_all_time = 1; }
+message Counters { map<string, string> counters = 1; }
 
-enum Precision {
-  DAY = 0;
-  MONTH = 1;
-}
-
-message ChartRequest {
+message GetLineChartRequest {
+  string name = 1;
   // Default is first data point
-  optional string from = 1;
+  optional string from = 2;
   // Default is last data point
-  optional string to = 2;
-  Precision precision = 3;
+  optional string to = 3;
 }

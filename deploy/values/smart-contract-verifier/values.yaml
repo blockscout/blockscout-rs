@@ -1,0 +1,95 @@
+global:
+  env: testing
+# enable Smart-contract-verifier deploy
+scVerifier:
+  enabled: true
+  image:
+    _default: ghcr.io/blockscout/smart-contract-verifier:main
+
+  replicas:
+    app: 1
+  docker:
+    port: 80
+    targetPort: 8043
+    metricsPort: 6060
+
+  service:
+    # ClusterIP, NodePort or LoadBalancer
+    type: ClusterIP
+
+  # enable ingress
+  ingress:
+    enabled: true
+    host:
+      _default: sc-verifier-test.aws-k8s.blockscout.com
+    # enable https
+    tls:
+      enabled: true
+
+  resources:
+    limits:
+      memory:
+        _default: "0.5Gi"
+      cpu:
+        _default: "0.25"
+    requests:
+      memory:
+        _default: "0.5Gi"
+      cpu:
+        _default: "0.25"
+
+    # node label
+    nodeSelector:
+      enabled: true
+      app: blockscout
+
+    # probes
+    livenessProbe:
+      enabled: true
+      path: /health
+    readinessProbe:
+      enabled: true
+      path: /health
+
+  hpa:
+    minReplicas: 1
+    maxReplicas: 10
+    cpuTarget: 90
+
+  environment:
+    SMART_CONTRACT_VERIFIER__SERVER__ADDR:
+      _default: 0.0.0.0:8043
+
+    SMART_CONTRACT_VERIFIER__SOLIDITY__ENABLED:
+      _default: 'true'
+    SMART_CONTRACT_VERIFIER__SOLIDITY__COMPILERS_DIR:
+      _default: /tmp/solidity-compilers
+    SMART_CONTRACT_VERIFIER__SOLIDITY__REFRESH_VERSIONS_SCHEDULE:
+      _default: 0 0 * * * * *
+
+    # It depends on the OS you are running the service on
+    # SMART_CONTRACT_VERIFIER__SOLIDITY__FETCHER__LIST__LIST_URL:
+    #   _default: https://solc-bin.ethereum.org/linux-amd64/list.json
+    #SMART_CONTRACT_VERIFIER__SOLIDITY__FETCHER__LIST__LIST_URL=https://solc-bin.ethereum.org/macosx-amd64/list.json
+    #SMART_CONTRACT_VERIFIER__SOLIDITY__FETCHER__LIST__LIST_URL=https://solc-bin.ethereum.org/windows-amd64/list.json
+
+    SMART_CONTRACT_VERIFIER__SOURCIFY__ENABLED:
+      _default: 'true'
+    SMART_CONTRACT_VERIFIER__SOURCIFY__API_URL:
+      _default: https://sourcify.dev/server/
+    SMART_CONTRACT_VERIFIER__SOURCIFY__VERIFICATION_ATTEMPTS:
+      _default: 3
+    SMART_CONTRACT_VERIFIER__SOURCIFY__REQUEST_TIMEOUT:
+      _default: 10
+
+    SMART_CONTRACT_VERIFIER__METRICS__ENABLED:
+      _default: 'true'
+    SMART_CONTRACT_VERIFIER__METRICS__ADDR:
+      _default: 0.0.0.0:6060
+    SMART_CONTRACT_VERIFIER__METRICS__ROUTE:
+      _default: /metrics
+
+    SMART_CONTRACT_VERIFIER__JAEGER__ENABLED:
+      _default: 'true'
+    SMART_CONTRACT_VERIFIER__JAEGER__AGENT_ENDPOINT:
+      _default: simplest-agent.observability.svc.cluster.local:5775

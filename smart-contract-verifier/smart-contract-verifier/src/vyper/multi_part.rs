@@ -10,6 +10,7 @@ use ethers_solc::{
 };
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerificationRequest {
     pub deployed_bytecode: Bytes,
     pub creation_bytecode: Option<Bytes>,
@@ -18,6 +19,7 @@ pub struct VerificationRequest {
     pub content: MultiFileContent,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MultiFileContent {
     pub sources: BTreeMap<PathBuf, String>,
     pub evm_version: Option<EvmVersion>,

@@ -1,3 +1,4 @@
+use crate::MatchType;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -30,6 +31,7 @@ pub struct Success {
     pub abi: String,
     pub sources: BTreeMap<String, String>,
     pub compiler_settings: String,
+    pub match_type: MatchType,
 }
 
 #[derive(Error, Debug)]

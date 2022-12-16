@@ -1,2 +1,8 @@
 [workspace]
-members = ["stats", "stats-proto", "stats-server"]
+members = [
+    "stats",
+    "stats-proto",
+    "stats-server",
+    "stats/migration",
+    "stats/entity",
+]

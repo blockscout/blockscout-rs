@@ -17,22 +17,41 @@ use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
     vyper_verifier_server::VyperVerifierServer,
 };
 use std::{net::SocketAddr, sync::Arc};
+use tokio::sync::Semaphore;
 
 pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     init_logs(settings.jaeger);
 
-    let solidity_verifier = settings
-        .solidity
-        .enabled
-        .then(|| Arc::new(SolidityVerifierService::default()));
-    let vyper_verifier = settings
-        .vyper
-        .enabled
-        .then(|| Arc::new(VyperVerifierService::default()));
-    let sourcify_verifier = settings
-        .sourcify
-        .enabled
-        .then(|| Arc::new(SourcifyVerifierService::default()));
+    let compilers_lock = Arc::new(Semaphore::new(settings.compilers.max_threads.get()));
+
+    let solidity_verifier = match settings.solidity.enabled {
+        true => Some(Arc::new(
+            SolidityVerifierService::new(
+                settings.solidity,
+                compilers_lock.clone(),
+                settings.extensions.solidity,
+            )
+            .await?,
+        )),
+        false => None,
+    };
+    let vyper_verifier = match settings.vyper.enabled {
+        true => Some(Arc::new(
+            VyperVerifierService::new(
+                settings.vyper,
+                compilers_lock.clone(),
+                settings.extensions.vyper,
+            )
+            .await?,
+        )),
+        false => None,
+    };
+    let sourcify_verifier = match settings.sourcify.enabled {
+        true => Some(Arc::new(
+            SourcifyVerifierService::new(settings.sourcify, settings.extensions.sourcify).await?,
+        )),
+        false => None,
+    };
     let health = Arc::new(HealthService::default());
     let metrics = Metrics::new(settings.metrics.route);
     let mut futures = vec![];

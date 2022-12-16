@@ -199,6 +199,7 @@ definitions:
       - PARTIAL
       - FULL
     default: MATCH_UNSPECIFIED
+    description: ' - MATCH_UNSPECIFIED: Default value. This value is unused.'
   SourceSourceFile:
     type: object
     properties:
@@ -214,6 +215,7 @@ definitions:
       - VYPER
       - YUL
     default: SOURCE_TYPE_UNSPECIFIED
+    description: ' - SOURCE_TYPE_UNSPECIFIED: Default value. This value is unused.'
   protobufAny:
     type: object
     properties:
