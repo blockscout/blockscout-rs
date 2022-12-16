@@ -117,6 +117,8 @@ impl super::UpdaterTrait for Updater {
 mod tests {
     use super::*;
     use crate::{get_chart_int, UpdaterTrait};
+    use blockscout_db::entity::{addresses, blocks};
+    use chrono::NaiveDateTime;
     use entity::{
         charts,
         sea_orm_active_enums::{ChartType, ChartValueType},
@@ -167,38 +169,54 @@ mod tests {
         (db, blockscout)
     }
 
-    async fn mock_blockscout(blockscout: &DatabaseConnection) {
-        blockscout
-            .query_one(Statement::from_string(
-                DbBackend::Postgres,
-                r#"
-            INSERT INTO public.addresses VALUES
-                (0, 0, '', '', now(), now(), 0, false, false, 0, 0, 0);
-                "#
-                .into(),
-            ))
-            .await
-            .unwrap();
+    fn mock_block(index: i64, ts: &str) -> blocks::ActiveModel {
+        blocks::ActiveModel {
+            number: Set(index),
+            hash: Set(index.to_le_bytes().to_vec()),
+            timestamp: Set(NaiveDateTime::from_str(ts).unwrap()),
+            consensus: Set(Default::default()),
+            gas_limit: Set(Default::default()),
+            gas_used: Set(Default::default()),
+            miner_hash: Set(Default::default()),
+            nonce: Set(Default::default()),
+            parent_hash: Set(Default::default()),
+            inserted_at: Set(Default::default()),
+            updated_at: Set(Default::default()),
+            ..Default::default()
+        }
+    }
 
-        blockscout
-            .query_one(Statement::from_string(
-                DbBackend::Postgres,
-                r#"
-            INSERT INTO public.blocks VALUES
-                (false, 0, 0, 0, '0', '', '', 0, '', 0, '2022-11-09T23:59:59', 0, now(), now(), false, 0, false),
-                (false, 0, 0, 0, '1', '', '', 1, '', 0, '2022-11-10T00:00:00', 0, now(), now(), false, 0, false),
-                (false, 0, 0, 0, '2', '', '', 2, '', 0, '2022-11-10T12:00:00', 0, now(), now(), false, 0, false),
-                (false, 0, 0, 0, '3', '', '', 3, '', 0, '2022-11-10T23:59:59', 0, now(), now(), false, 0, false),
-                (false, 0, 0, 0, '4', '', '', 4, '', 0, '2022-11-11T00:00:00', 0, now(), now(), false, 0, false),
-                (false, 0, 0, 0, '5', '', '', 5, '', 0, '2022-11-11T12:00:00', 0, now(), now(), false, 0, false),
-                (false, 0, 0, 0, '6', '', '', 6, '', 0, '2022-11-11T15:00:00', 0, now(), now(), false, 0, false),
-                (false, 0, 0, 0, '7', '', '', 7, '', 0, '2022-11-11T23:59:59', 0, now(), now(), false, 0, false),
-                (false, 0, 0, 0, '8', '', '', 8, '', 0, '2022-11-12T00:00:00', 0, now(), now(), false, 0, false);
-            "#
-                .into(),
-            ))
-            .await
-            .unwrap();
+    async fn mock_blockscout(blockscout: &DatabaseConnection) {
+        addresses::Entity::insert(addresses::ActiveModel {
+            hash: Set(vec![]),
+            inserted_at: Set(Default::default()),
+            updated_at: Set(Default::default()),
+            ..Default::default()
+        })
+        .exec(blockscout)
+        .await
+        .unwrap();
+
+        let block_timestamps = vec![
+            "2022-11-09T23:59:59",
+            "2022-11-10T00:00:00",
+            "2022-11-10T12:00:00",
+            "2022-11-10T23:59:59",
+            "2022-11-11T00:00:00",
+            "2022-11-11T12:00:00",
+            "2022-11-11T15:00:00",
+            "2022-11-11T23:59:59",
+            "2022-11-12T00:00:00",
+        ];
+        blocks::Entity::insert_many(
+            block_timestamps
+                .into_iter()
+                .enumerate()
+                .map(|(ind, ts)| mock_block(ind as i64, ts)),
+        )
+        .exec(blockscout)
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
