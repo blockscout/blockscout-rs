@@ -1120,7 +1120,6 @@ dependencies = [
  "pretty_assertions",
  "rstest",
  "sea-orm",
- "sea-query",
  "semver",
  "serde",
  "serde_json",
