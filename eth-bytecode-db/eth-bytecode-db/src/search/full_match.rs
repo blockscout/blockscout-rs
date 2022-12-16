@@ -12,11 +12,15 @@ where
 {
     let candidates = find_source_candidates(db, remote).await?;
     let mut matches = vec![];
-    for candidate in candidates.into_iter() {
+    for candidate in candidates.iter() {
         let match_contract =
             MatchContract::build(db, candidate.id, remote, MatchType::Full).await?;
         matches.push(match_contract);
     }
+    if matches.len() > 1 {
+        let ids: Vec<i64> = candidates.iter().map(|c| c.id).collect();
+        tracing::error!(ids = ?ids, "Full match candidates contains more than one item");
+    };
     Ok(matches)
 }
 
