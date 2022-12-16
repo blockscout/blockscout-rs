@@ -5,6 +5,7 @@ use serde::Deserialize;
 use std::collections::BTreeMap;
 
 const METADATA_FILE_NAME: &str = "metadata.json";
+const SOURCES_PREFIX: &str = "sources/";
 
 // There is struct for metadata in ethers_solc::artifacts::Metadata
 // however it is for standard json input of compiler and
@@ -53,7 +54,7 @@ impl Files {
         let metadata_content = self
             .0
             .get(METADATA_FILE_NAME)
-            .ok_or_else(|| anyhow::Error::msg(format!("file {} not found", METADATA_FILE_NAME)))?;
+            .ok_or_else(|| anyhow::anyhow!("file {} not found", METADATA_FILE_NAME))?;
         let metadata = {
             let mut metadata: Metadata =
                 serde_json::from_str(metadata_content).map_err(anyhow::Error::msg)?;
@@ -65,7 +66,10 @@ impl Files {
         let source_files: BTreeMap<String, String> = self
             .0
             .into_iter()
-            .filter(|(name, _)| !name.ends_with(METADATA_FILE_NAME))
+            .filter_map(|(name, content)| {
+                name.strip_prefix(SOURCES_PREFIX)
+                    .map(|s| (s.into(), content))
+            })
             .collect();
 
         Ok((metadata, source_files))
@@ -143,7 +147,7 @@ mod tests {
     #[test]
     fn parse_metadata_from_files() {
         let files = Files(BTreeMap::from([
-            ("source.sol".into(), "content".into()),
+            (format!("{SOURCES_PREFIX}source.sol"), "content".into()),
             (METADATA_FILE_NAME.into(), DEFAULT_METADATA.into()),
         ]));
         let result = files.extract_metadata_and_source_files();
@@ -154,7 +158,10 @@ mod tests {
             BTreeMap::from([("source.sol".into(), "content".into())]),
         );
 
-        let files = Files(BTreeMap::from([("source.sol".into(), "content".into())]));
+        let files = Files(BTreeMap::from([(
+            format!("{SOURCES_PREFIX}source.sol"),
+            "content".into(),
+        )]));
         files
             .extract_metadata_and_source_files()
             .expect_err("Parsing files without metadata should fail");
@@ -164,7 +171,7 @@ mod tests {
     fn parse_response_from_files() {
         let match_type = MatchType::Partial;
         let files = Files(BTreeMap::from([
-            ("source.sol".into(), "content".into()),
+            (format!("{SOURCES_PREFIX}source.sol"), "content".into()),
             (METADATA_FILE_NAME.into(), DEFAULT_METADATA.into()),
         ]));
 
@@ -188,7 +195,10 @@ mod tests {
             }
         );
 
-        let files = Files(BTreeMap::from([("source.sol".into(), "content".into())]));
+        let files = Files(BTreeMap::from([(
+            format!("{SOURCES_PREFIX}source.sol"),
+            "content".into(),
+        )]));
         Success::try_from((files, match_type))
             .expect_err("Parsing files without metadata should fail");
     }
