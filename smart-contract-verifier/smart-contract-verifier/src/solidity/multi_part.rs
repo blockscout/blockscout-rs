@@ -38,8 +38,8 @@ impl From<MultiFileContent> for Vec<CompilerInput> {
             // so we assume that every file MAY contains all libraries
             let libs = content
                 .sources
-                .iter()
-                .map(|(filename, _)| (PathBuf::from(filename), libs.clone()))
+                .keys()
+                .map(|filename| (PathBuf::from(filename), libs.clone()))
                 .collect();
             settings.libraries = Libraries { libs };
         }
