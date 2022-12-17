@@ -4,6 +4,7 @@ mod database_helpers;
 pub mod smart_contract_veriifer_mock;
 mod test_input_data;
 
+use async_trait::async_trait;
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use database_helpers::TestDbGuard;
 use entity::{
@@ -17,10 +18,11 @@ use pretty_assertions::assert_eq;
 use sea_orm::{DatabaseConnection, EntityTrait};
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::VerifyResponse;
 use smart_contract_veriifer_mock::SmartContractVerifierServer;
-use std::{collections::HashSet, future::Future, str::FromStr, sync::Arc};
+use std::{collections::HashSet, str::FromStr, sync::Arc};
 use test_input_data::TestInputData;
 use tonic::transport::Uri;
 
+#[async_trait]
 pub trait VerifierService<Request> {
     type GrpcT: From<Request>;
 
@@ -31,6 +33,8 @@ pub trait VerifierService<Request> {
     fn generate_request(&self, id: u8) -> Request;
 
     fn source_type(&self) -> SourceType;
+
+    async fn verify(client: Client, request: Request) -> Result<Source, Error>;
 }
 
 pub fn generate_verification_request<T>(id: u8, content: T) -> VerificationRequest<T> {
@@ -75,13 +79,9 @@ where
         .expect("Client initialization failed")
 }
 
-pub async fn test_returns_valid_source<Request, F, Fut>(
-    db_prefix: &str,
-    service: impl VerifierService<Request>,
-    verify: F,
-) where
-    F: Fn(Client, Request) -> Fut,
-    Fut: Future<Output = Result<Source, Error>>,
+pub async fn test_returns_valid_source<Service, Request>(db_prefix: &str, service: Service)
+where
+    Service: VerifierService<Request>,
     Request: Clone,
 {
     let db = init_db(db_prefix, "returns_valid_source").await;
@@ -90,21 +90,17 @@ pub async fn test_returns_valid_source<Request, F, Fut>(
     let client =
         start_server_and_init_client(db.client().clone(), service, vec![input_data.clone()]).await;
 
-    let source = verify(client, input_data.request)
+    let source = Service::verify(client, input_data.request)
         .await
         .expect("Verification failed");
 
     assert_eq!(input_data.source, source, "Invalid source");
 }
 
-pub async fn test_data_is_added_into_database<Request, F, Fut>(
-    db_prefix: &str,
-    service: impl VerifierService<Request>,
-    verify: F,
-) where
-    F: Fn(Client, Request) -> Fut,
-    Fut: Future<Output = Result<Source, Error>>,
+pub async fn test_data_is_added_into_database<Service, Request>(db_prefix: &str, service: Service)
+where
     Request: Clone,
+    Service: VerifierService<Request>,
 {
     let source_type = service.source_type();
     let db = init_db(db_prefix, "test_data_is_added_into_database").await;
@@ -112,7 +108,7 @@ pub async fn test_data_is_added_into_database<Request, F, Fut>(
     let client =
         start_server_and_init_client(db.client().clone(), service, vec![input_data.clone()]).await;
 
-    let _source = verify(client, input_data.request)
+    let _source = Service::verify(client, input_data.request)
         .await
         .expect("Verification failed");
 
@@ -397,16 +393,14 @@ pub async fn test_data_is_added_into_database<Request, F, Fut>(
     );
 }
 
-pub async fn historical_data_is_added_into_database<Request, F, Fut>(
+pub async fn historical_data_is_added_into_database<Service, Request>(
     db_prefix: &str,
-    service: impl VerifierService<Request>,
-    verify: F,
+    service: Service,
     verification_settings: serde_json::Value,
     verification_type: sea_orm_active_enums::VerificationType,
 ) where
-    F: Fn(Client, Request) -> Fut,
-    Fut: Future<Output = Result<Source, Error>>,
     Request: Clone,
+    Service: VerifierService<Request>,
 {
     let source_type = service.source_type();
     let db = init_db(db_prefix, "historical_data_is_added_into_database").await;
@@ -414,7 +408,7 @@ pub async fn historical_data_is_added_into_database<Request, F, Fut>(
     let client =
         start_server_and_init_client(db.client().clone(), service, vec![input_data.clone()]).await;
 
-    let _source = verify(client, input_data.request)
+    let _source = Service::verify(client, input_data.request)
         .await
         .expect("Verification failed");
 

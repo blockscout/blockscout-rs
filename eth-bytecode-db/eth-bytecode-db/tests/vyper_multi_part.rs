@@ -1,8 +1,10 @@
 mod verification_test_helpers;
 
+use async_trait::async_trait;
 use entity::sea_orm_active_enums;
 use eth_bytecode_db::verification::{
-    vyper_multi_part, vyper_multi_part::MultiPartFiles, SourceType, VerificationRequest,
+    vyper_multi_part, vyper_multi_part::MultiPartFiles, Client, Error, Source, SourceType,
+    VerificationRequest,
 };
 use rstest::{fixture, rstest};
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
@@ -25,6 +27,7 @@ fn default_request_content() -> MultiPartFiles {
     }
 }
 
+#[async_trait]
 impl VerifierService<VerificationRequest<MultiPartFiles>> for MockVyperVerifierService {
     type GrpcT = VerifyVyperMultiPartRequest;
 
@@ -45,6 +48,13 @@ impl VerifierService<VerificationRequest<MultiPartFiles>> for MockVyperVerifierS
     fn source_type(&self) -> SourceType {
         SourceType::Vyper
     }
+
+    async fn verify(
+        client: Client,
+        request: VerificationRequest<MultiPartFiles>,
+    ) -> Result<Source, Error> {
+        vyper_multi_part::verify(client, request).await
+    }
 }
 
 #[fixture]
@@ -56,24 +66,14 @@ fn service() -> MockVyperVerifierService {
 #[tokio::test]
 #[ignore = "Needs database to run"]
 async fn returns_valid_source(service: MockVyperVerifierService) {
-    verification_test_helpers::test_returns_valid_source(
-        DB_PREFIX,
-        service,
-        vyper_multi_part::verify,
-    )
-    .await
+    verification_test_helpers::test_returns_valid_source(DB_PREFIX, service).await
 }
 
 #[rstest]
 #[tokio::test]
 #[ignore = "Needs database to run"]
 async fn test_data_is_added_into_database(service: MockVyperVerifierService) {
-    verification_test_helpers::test_data_is_added_into_database(
-        DB_PREFIX,
-        service,
-        vyper_multi_part::verify,
-    )
-    .await
+    verification_test_helpers::test_data_is_added_into_database(DB_PREFIX, service).await
 }
 
 #[rstest]
@@ -92,7 +92,6 @@ async fn historical_data_is_added_into_database(service: MockVyperVerifierServic
     verification_test_helpers::historical_data_is_added_into_database(
         DB_PREFIX,
         service,
-        vyper_multi_part::verify,
         verification_settings,
         verification_type,
     )

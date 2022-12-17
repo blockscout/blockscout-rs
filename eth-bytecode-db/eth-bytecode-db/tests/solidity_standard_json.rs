@@ -1,8 +1,10 @@
 mod verification_test_helpers;
 
+use async_trait::async_trait;
 use entity::sea_orm_active_enums;
 use eth_bytecode_db::verification::{
-    solidity_standard_json, solidity_standard_json::StandardJson, SourceType, VerificationRequest,
+    solidity_standard_json, solidity_standard_json::StandardJson, Client, Error, Source,
+    SourceType, VerificationRequest,
 };
 use rstest::{fixture, rstest};
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
@@ -23,6 +25,7 @@ fn default_request_content() -> StandardJson {
     }
 }
 
+#[async_trait]
 impl VerifierService<VerificationRequest<StandardJson>> for MockSolidityVerifierService {
     type GrpcT = VerifySolidityStandardJsonRequest;
 
@@ -47,6 +50,13 @@ impl VerifierService<VerificationRequest<StandardJson>> for MockSolidityVerifier
     fn source_type(&self) -> SourceType {
         SourceType::Solidity
     }
+
+    async fn verify(
+        client: Client,
+        request: VerificationRequest<StandardJson>,
+    ) -> Result<Source, Error> {
+        solidity_standard_json::verify(client, request).await
+    }
 }
 
 #[fixture]
@@ -58,24 +68,14 @@ fn service() -> MockSolidityVerifierService {
 #[tokio::test]
 #[ignore = "Needs database to run"]
 async fn returns_valid_source(service: MockSolidityVerifierService) {
-    verification_test_helpers::test_returns_valid_source(
-        DB_PREFIX,
-        service,
-        solidity_standard_json::verify,
-    )
-    .await
+    verification_test_helpers::test_returns_valid_source(DB_PREFIX, service).await
 }
 
 #[rstest]
 #[tokio::test]
 #[ignore = "Needs database to run"]
 async fn test_data_is_added_into_database(service: MockSolidityVerifierService) {
-    verification_test_helpers::test_data_is_added_into_database(
-        DB_PREFIX,
-        service,
-        solidity_standard_json::verify,
-    )
-    .await
+    verification_test_helpers::test_data_is_added_into_database(DB_PREFIX, service).await
 }
 
 #[rstest]
@@ -92,7 +92,6 @@ async fn historical_data_is_added_into_database(service: MockSolidityVerifierSer
     verification_test_helpers::historical_data_is_added_into_database(
         DB_PREFIX,
         service,
-        solidity_standard_json::verify,
         verification_settings,
         verification_type,
     )

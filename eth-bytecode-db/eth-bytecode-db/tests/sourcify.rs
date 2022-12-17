@@ -1,6 +1,9 @@
 mod verification_test_helpers;
 
-use eth_bytecode_db::verification::{sourcify, sourcify::VerificationRequest, SourceType};
+use async_trait::async_trait;
+use eth_bytecode_db::verification::{
+    sourcify, sourcify::VerificationRequest, Client, Error, Source, SourceType,
+};
 use rstest::{fixture, rstest};
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
     VerifyResponse, VerifyViaSourcifyRequest,
@@ -13,6 +16,7 @@ use verification_test_helpers::{
 
 const DB_PREFIX: &str = "sourcify";
 
+#[async_trait]
 impl VerifierService<VerificationRequest> for MockSourcifyVerifierService {
     type GrpcT = VerifyViaSourcifyRequest;
 
@@ -38,6 +42,10 @@ impl VerifierService<VerificationRequest> for MockSourcifyVerifierService {
     fn source_type(&self) -> SourceType {
         SourceType::Solidity
     }
+
+    async fn verify(client: Client, request: VerificationRequest) -> Result<Source, Error> {
+        sourcify::verify(client, request).await
+    }
 }
 
 #[fixture]
@@ -49,5 +57,5 @@ fn service() -> MockSourcifyVerifierService {
 #[tokio::test]
 #[ignore = "Needs database to run"]
 async fn returns_valid_source(service: MockSourcifyVerifierService) {
-    verification_test_helpers::test_returns_valid_source(DB_PREFIX, service, sourcify::verify).await
+    verification_test_helpers::test_returns_valid_source(DB_PREFIX, service).await
 }
