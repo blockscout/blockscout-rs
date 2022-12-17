@@ -33,17 +33,6 @@ pub trait VerifierService<Request> {
     fn source_type(&self) -> SourceType;
 }
 
-fn init_service<Service, Request>(service: &mut Service, input_data: Vec<TestInputData<Request>>)
-where
-    Service: VerifierService<Request>,
-{
-    for input in input_data {
-        let response = input.response.clone();
-        let request = <Service as VerifierService<Request>>::GrpcT::from(input.request);
-        service.add_into_service(request, response)
-    }
-}
-
 pub fn generate_verification_request<T>(id: u8, content: T) -> VerificationRequest<T> {
     VerificationRequest {
         bytecode: DisplayBytes::from([id]).to_string(),
@@ -62,10 +51,21 @@ async fn init_db(db_prefix: &str, test_name: &str) -> TestDbGuard {
     TestDbGuard::new(db_name.as_str(), db_url).await
 }
 
-async fn start_server_and_init_client<Request>(
-    service: impl VerifierService<Request>,
+async fn start_server_and_init_client<Service, Request>(
     db_client: Arc<DatabaseConnection>,
-) -> Client {
+    mut service: Service,
+    input_data: Vec<TestInputData<Request>>,
+) -> Client
+where
+    Service: VerifierService<Request>,
+{
+    // Initialize service
+    for input in input_data {
+        let response = input.response.clone();
+        let request = Service::GrpcT::from(input.request);
+        service.add_into_service(request, response)
+    }
+    // Initialize server
     let server_addr = service.build_server().start().await;
 
     let uri = Uri::from_str(&format!("http://{}", server_addr.to_string().as_str()))
@@ -77,7 +77,7 @@ async fn start_server_and_init_client<Request>(
 
 pub async fn test_returns_valid_source<Request, F, Fut>(
     db_prefix: &str,
-    mut service: impl VerifierService<Request>,
+    service: impl VerifierService<Request>,
     verify: F,
 ) where
     F: Fn(Client, Request) -> Fut,
@@ -87,8 +87,8 @@ pub async fn test_returns_valid_source<Request, F, Fut>(
     let db = init_db(db_prefix, "returns_valid_source").await;
     let input_data =
         test_input_data::input_data_1(service.generate_request(1), service.source_type());
-    init_service(&mut service, vec![input_data.clone()]);
-    let client = start_server_and_init_client(service, db.client().clone()).await;
+    let client =
+        start_server_and_init_client(db.client().clone(), service, vec![input_data.clone()]).await;
 
     let source = verify(client, input_data.request)
         .await
@@ -99,7 +99,7 @@ pub async fn test_returns_valid_source<Request, F, Fut>(
 
 pub async fn test_data_is_added_into_database<Request, F, Fut>(
     db_prefix: &str,
-    mut service: impl VerifierService<Request>,
+    service: impl VerifierService<Request>,
     verify: F,
 ) where
     F: Fn(Client, Request) -> Fut,
@@ -109,8 +109,8 @@ pub async fn test_data_is_added_into_database<Request, F, Fut>(
     let source_type = service.source_type();
     let db = init_db(db_prefix, "test_data_is_added_into_database").await;
     let input_data = test_input_data::input_data_1(service.generate_request(1), source_type);
-    init_service(&mut service, vec![input_data.clone()]);
-    let client = start_server_and_init_client(service, db.client().clone()).await;
+    let client =
+        start_server_and_init_client(db.client().clone(), service, vec![input_data.clone()]).await;
 
     let _source = verify(client, input_data.request)
         .await
@@ -399,7 +399,7 @@ pub async fn test_data_is_added_into_database<Request, F, Fut>(
 
 pub async fn historical_data_is_added_into_database<Request, F, Fut>(
     db_prefix: &str,
-    mut service: impl VerifierService<Request>,
+    service: impl VerifierService<Request>,
     verify: F,
     verification_settings: serde_json::Value,
     verification_type: sea_orm_active_enums::VerificationType,
@@ -411,8 +411,8 @@ pub async fn historical_data_is_added_into_database<Request, F, Fut>(
     let source_type = service.source_type();
     let db = init_db(db_prefix, "historical_data_is_added_into_database").await;
     let input_data = test_input_data::input_data_1(service.generate_request(1), source_type);
-    init_service(&mut service, vec![input_data.clone()]);
-    let client = start_server_and_init_client(service, db.client().clone()).await;
+    let client =
+        start_server_and_init_client(db.client().clone(), service, vec![input_data.clone()]).await;
 
     let _source = verify(client, input_data.request)
         .await
