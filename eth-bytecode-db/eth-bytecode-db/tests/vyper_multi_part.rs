@@ -65,7 +65,7 @@ fn service() -> MockVyperVerifierService {
 #[rstest]
 #[tokio::test]
 #[ignore = "Needs database to run"]
-async fn returns_valid_source(service: MockVyperVerifierService) {
+async fn test_returns_valid_source(service: MockVyperVerifierService) {
     verification_test_helpers::test_returns_valid_source(DB_PREFIX, service).await
 }
 
@@ -79,7 +79,7 @@ async fn test_data_is_added_into_database(service: MockVyperVerifierService) {
 #[rstest]
 #[tokio::test]
 #[ignore = "Needs database to run"]
-async fn historical_data_is_added_into_database(service: MockVyperVerifierService) {
+async fn test_historical_data_is_added_into_database(service: MockVyperVerifierService) {
     let verification_settings = serde_json::json!({
         "bytecode": "0x01",
         "bytecode_type": "CreationInput",
@@ -89,7 +89,7 @@ async fn historical_data_is_added_into_database(service: MockVyperVerifierServic
         "source_files": {}
     });
     let verification_type = sea_orm_active_enums::VerificationType::MultiPartFiles;
-    verification_test_helpers::historical_data_is_added_into_database(
+    verification_test_helpers::test_historical_data_is_added_into_database(
         DB_PREFIX,
         service,
         verification_settings,

@@ -67,7 +67,7 @@ fn service() -> MockSolidityVerifierService {
 #[rstest]
 #[tokio::test]
 #[ignore = "Needs database to run"]
-async fn returns_valid_source(service: MockSolidityVerifierService) {
+async fn test_returns_valid_source(service: MockSolidityVerifierService) {
     verification_test_helpers::test_returns_valid_source(DB_PREFIX, service).await
 }
 
@@ -81,7 +81,7 @@ async fn test_data_is_added_into_database(service: MockSolidityVerifierService) 
 #[rstest]
 #[tokio::test]
 #[ignore = "Needs database to run"]
-async fn historical_data_is_added_into_database(service: MockSolidityVerifierService) {
+async fn test_historical_data_is_added_into_database(service: MockSolidityVerifierService) {
     let verification_settings = serde_json::json!({
         "bytecode": "0x01",
         "bytecode_type": "CreationInput",
@@ -89,7 +89,7 @@ async fn historical_data_is_added_into_database(service: MockSolidityVerifierSer
         "input": ""
     });
     let verification_type = sea_orm_active_enums::VerificationType::StandardJson;
-    verification_test_helpers::historical_data_is_added_into_database(
+    verification_test_helpers::test_historical_data_is_added_into_database(
         DB_PREFIX,
         service,
         verification_settings,

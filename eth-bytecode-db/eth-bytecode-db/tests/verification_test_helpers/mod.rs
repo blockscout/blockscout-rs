@@ -84,7 +84,7 @@ where
     Service: VerifierService<Request>,
     Request: Clone,
 {
-    let db = init_db(db_prefix, "returns_valid_source").await;
+    let db = init_db(db_prefix, "test_returns_valid_source").await;
     let input_data =
         test_input_data::input_data_1(service.generate_request(1), service.source_type());
     let client =
@@ -393,7 +393,7 @@ where
     );
 }
 
-pub async fn historical_data_is_added_into_database<Service, Request>(
+pub async fn test_historical_data_is_added_into_database<Service, Request>(
     db_prefix: &str,
     service: Service,
     verification_settings: serde_json::Value,
@@ -403,7 +403,7 @@ pub async fn historical_data_is_added_into_database<Service, Request>(
     Service: VerifierService<Request>,
 {
     let source_type = service.source_type();
-    let db = init_db(db_prefix, "historical_data_is_added_into_database").await;
+    let db = init_db(db_prefix, "test_historical_data_is_added_into_database").await;
     let input_data = test_input_data::input_data_1(service.generate_request(1), source_type);
     let client =
         start_server_and_init_client(db.client().clone(), service, vec![input_data.clone()]).await;
