@@ -31,13 +31,16 @@ pub trait VerifierService<Request> {
     fn generate_request(&self, id: u8) -> Request;
 
     fn source_type(&self) -> SourceType;
+}
 
-    fn init_service(&mut self, input_data: Vec<TestInputData<Request>>) {
-        for input in input_data {
-            let response = input.response.clone();
-            let request = Self::GrpcT::from(input.request);
-            self.add_into_service(request, response)
-        }
+fn init_service<Service, Request>(service: &mut Service, input_data: Vec<TestInputData<Request>>)
+where
+    Service: VerifierService<Request>,
+{
+    for input in input_data {
+        let response = input.response.clone();
+        let request = <Service as VerifierService<Request>>::GrpcT::from(input.request);
+        service.add_into_service(request, response)
     }
 }
 
@@ -84,7 +87,7 @@ pub async fn test_returns_valid_source<Request, F, Fut>(
     let db = init_db(db_prefix, "returns_valid_source").await;
     let input_data =
         test_input_data::input_data_1(service.generate_request(1), service.source_type());
-    service.init_service(vec![input_data.clone()]);
+    init_service(&mut service, vec![input_data.clone()]);
     let client = start_server_and_init_client(service, db.client().clone()).await;
 
     let source = verify(client, input_data.request)
@@ -106,7 +109,7 @@ pub async fn test_data_is_added_into_database<Request, F, Fut>(
     let source_type = service.source_type();
     let db = init_db(db_prefix, "test_data_is_added_into_database").await;
     let input_data = test_input_data::input_data_1(service.generate_request(1), source_type);
-    service.init_service(vec![input_data.clone()]);
+    init_service(&mut service, vec![input_data.clone()]);
     let client = start_server_and_init_client(service, db.client().clone()).await;
 
     let _source = verify(client, input_data.request)
@@ -408,7 +411,7 @@ pub async fn historical_data_is_added_into_database<Request, F, Fut>(
     let source_type = service.source_type();
     let db = init_db(db_prefix, "historical_data_is_added_into_database").await;
     let input_data = test_input_data::input_data_1(service.generate_request(1), source_type);
-    service.init_service(vec![input_data.clone()]);
+    init_service(&mut service, vec![input_data.clone()]);
     let client = start_server_and_init_client(service, db.client().clone()).await;
 
     let _source = verify(client, input_data.request)
