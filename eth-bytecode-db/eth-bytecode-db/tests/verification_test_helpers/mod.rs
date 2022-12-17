@@ -21,11 +21,10 @@ use std::{collections::HashSet, future::Future, str::FromStr, sync::Arc};
 use test_input_data::TestInputData;
 use tonic::transport::Uri;
 
-pub trait VerifierService<GrpcT, Request>
-where
-    GrpcT: From<Request>,
-{
-    fn add_into_service(&mut self, request: GrpcT, response: VerifyResponse);
+pub trait VerifierService<Request> {
+    type GrpcT: From<Request>;
+
+    fn add_into_service(&mut self, request: Self::GrpcT, response: VerifyResponse);
 
     fn build_server(self) -> SmartContractVerifierServer;
 
@@ -36,7 +35,7 @@ where
     fn init_service(&mut self, input_data: Vec<TestInputData<Request>>) {
         for input in input_data {
             let response = input.response.clone();
-            let request = GrpcT::from(input.request);
+            let request = Self::GrpcT::from(input.request);
             self.add_into_service(request, response)
         }
     }
@@ -55,18 +54,15 @@ async fn init_db(db_prefix: &str, test_name: &str) -> TestDbGuard {
     #[allow(unused_variables)]
     let db_url: Option<String> = None;
     // Uncomment if providing url explicitly is more convenient
-    let db_url = Some("postgres://postgres:admin@localhost:9432/".into());
+    // let db_url = Some("postgres://postgres:admin@localhost:9432/".into());
     let db_name = format!("{}_{}", db_prefix, test_name);
     TestDbGuard::new(db_name.as_str(), db_url).await
 }
 
-async fn start_server_and_init_client_new<GrpcT, Request>(
-    service: impl VerifierService<GrpcT, Request>,
+async fn start_server_and_init_client<Request>(
+    service: impl VerifierService<Request>,
     db_client: Arc<DatabaseConnection>,
-) -> Client
-where
-    GrpcT: From<Request>,
-{
+) -> Client {
     let server_addr = service.build_server().start().await;
 
     let uri = Uri::from_str(&format!("http://{}", server_addr.to_string().as_str()))
@@ -76,21 +72,20 @@ where
         .expect("Client initialization failed")
 }
 
-pub async fn returns_valid_source<GrpcT, Request, F, Fut>(
+pub async fn test_returns_valid_source<Request, F, Fut>(
     db_prefix: &str,
-    mut service: impl VerifierService<GrpcT, Request>,
+    mut service: impl VerifierService<Request>,
     verify: F,
 ) where
     F: Fn(Client, Request) -> Fut,
     Fut: Future<Output = Result<Source, Error>>,
     Request: Clone,
-    GrpcT: From<Request>,
 {
     let db = init_db(db_prefix, "returns_valid_source").await;
     let input_data =
         test_input_data::input_data_1(service.generate_request(1), service.source_type());
     service.init_service(vec![input_data.clone()]);
-    let client = start_server_and_init_client_new(service, db.client().clone()).await;
+    let client = start_server_and_init_client(service, db.client().clone()).await;
 
     let source = verify(client, input_data.request)
         .await
@@ -99,21 +94,20 @@ pub async fn returns_valid_source<GrpcT, Request, F, Fut>(
     assert_eq!(input_data.source, source, "Invalid source");
 }
 
-pub async fn test_data_is_added_into_database<GrpcT, Request, F, Fut>(
+pub async fn test_data_is_added_into_database<Request, F, Fut>(
     db_prefix: &str,
-    mut service: impl VerifierService<GrpcT, Request>,
+    mut service: impl VerifierService<Request>,
     verify: F,
 ) where
     F: Fn(Client, Request) -> Fut,
     Fut: Future<Output = Result<Source, Error>>,
     Request: Clone,
-    GrpcT: From<Request>,
 {
     let source_type = service.source_type();
     let db = init_db(db_prefix, "test_data_is_added_into_database").await;
     let input_data = test_input_data::input_data_1(service.generate_request(1), source_type);
     service.init_service(vec![input_data.clone()]);
-    let client = start_server_and_init_client_new(service, db.client().clone()).await;
+    let client = start_server_and_init_client(service, db.client().clone()).await;
 
     let _source = verify(client, input_data.request)
         .await
@@ -400,9 +394,9 @@ pub async fn test_data_is_added_into_database<GrpcT, Request, F, Fut>(
     );
 }
 
-pub async fn historical_data_is_added_into_database<GrpcT, Request, F, Fut>(
+pub async fn historical_data_is_added_into_database<Request, F, Fut>(
     db_prefix: &str,
-    mut service: impl VerifierService<GrpcT, Request>,
+    mut service: impl VerifierService<Request>,
     verify: F,
     verification_settings: serde_json::Value,
     verification_type: sea_orm_active_enums::VerificationType,
@@ -410,13 +404,12 @@ pub async fn historical_data_is_added_into_database<GrpcT, Request, F, Fut>(
     F: Fn(Client, Request) -> Fut,
     Fut: Future<Output = Result<Source, Error>>,
     Request: Clone,
-    GrpcT: From<Request>,
 {
     let source_type = service.source_type();
     let db = init_db(db_prefix, "historical_data_is_added_into_database").await;
     let input_data = test_input_data::input_data_1(service.generate_request(1), source_type);
     service.init_service(vec![input_data.clone()]);
-    let client = start_server_and_init_client_new(service, db.client().clone()).await;
+    let client = start_server_and_init_client(service, db.client().clone()).await;
 
     let _source = verify(client, input_data.request)
         .await

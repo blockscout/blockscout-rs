@@ -25,9 +25,9 @@ fn default_request_content() -> MultiPartFiles {
     }
 }
 
-impl VerifierService<VerifyVyperMultiPartRequest, VerificationRequest<MultiPartFiles>>
-    for MockVyperVerifierService
-{
+impl VerifierService<VerificationRequest<MultiPartFiles>> for MockVyperVerifierService {
+    type GrpcT = VerifyVyperMultiPartRequest;
+
     fn add_into_service(&mut self, request: VerifyVyperMultiPartRequest, response: VerifyResponse) {
         self.expect_verify_multi_part()
             .withf(move |arg| arg.get_ref() == &request)
@@ -56,8 +56,12 @@ fn service() -> MockVyperVerifierService {
 #[tokio::test]
 #[ignore = "Needs database to run"]
 async fn returns_valid_source(service: MockVyperVerifierService) {
-    verification_test_helpers::returns_valid_source(DB_PREFIX, service, vyper_multi_part::verify)
-        .await
+    verification_test_helpers::test_returns_valid_source(
+        DB_PREFIX,
+        service,
+        vyper_multi_part::verify,
+    )
+    .await
 }
 
 #[rstest]

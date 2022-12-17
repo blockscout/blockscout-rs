@@ -23,9 +23,9 @@ fn default_request_content() -> StandardJson {
     }
 }
 
-impl VerifierService<VerifySolidityStandardJsonRequest, VerificationRequest<StandardJson>>
-    for MockSolidityVerifierService
-{
+impl VerifierService<VerificationRequest<StandardJson>> for MockSolidityVerifierService {
+    type GrpcT = VerifySolidityStandardJsonRequest;
+
     fn add_into_service(
         &mut self,
         request: VerifySolidityStandardJsonRequest,
@@ -58,7 +58,7 @@ fn service() -> MockSolidityVerifierService {
 #[tokio::test]
 #[ignore = "Needs database to run"]
 async fn returns_valid_source(service: MockSolidityVerifierService) {
-    verification_test_helpers::returns_valid_source(
+    verification_test_helpers::test_returns_valid_source(
         DB_PREFIX,
         service,
         solidity_standard_json::verify,

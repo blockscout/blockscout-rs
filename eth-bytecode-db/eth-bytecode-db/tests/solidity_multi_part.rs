@@ -26,9 +26,9 @@ fn default_request_content() -> MultiPartFiles {
     }
 }
 
-impl VerifierService<VerifySolidityMultiPartRequest, VerificationRequest<MultiPartFiles>>
-    for MockSolidityVerifierService
-{
+impl VerifierService<VerificationRequest<MultiPartFiles>> for MockSolidityVerifierService {
+    type GrpcT = VerifySolidityMultiPartRequest;
+
     fn add_into_service(
         &mut self,
         request: VerifySolidityMultiPartRequest,
@@ -61,8 +61,12 @@ fn service() -> MockSolidityVerifierService {
 #[tokio::test]
 #[ignore = "Needs database to run"]
 async fn returns_valid_source(service: MockSolidityVerifierService) {
-    verification_test_helpers::returns_valid_source(DB_PREFIX, service, solidity_multi_part::verify)
-        .await
+    verification_test_helpers::test_returns_valid_source(
+        DB_PREFIX,
+        service,
+        solidity_multi_part::verify,
+    )
+    .await
 }
 
 #[rstest]

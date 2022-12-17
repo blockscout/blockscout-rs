@@ -13,9 +13,9 @@ use verification_test_helpers::{
 
 const DB_PREFIX: &str = "sourcify";
 
-impl VerifierService<VerifyViaSourcifyRequest, VerificationRequest>
-    for MockSourcifyVerifierService
-{
+impl VerifierService<VerificationRequest> for MockSourcifyVerifierService {
+    type GrpcT = VerifyViaSourcifyRequest;
+
     fn add_into_service(&mut self, request: VerifyViaSourcifyRequest, response: VerifyResponse) {
         self.expect_verify()
             .withf(move |arg| arg.get_ref() == &request)
@@ -49,5 +49,5 @@ fn service() -> MockSourcifyVerifierService {
 #[tokio::test]
 #[ignore = "Needs database to run"]
 async fn returns_valid_source(service: MockSourcifyVerifierService) {
-    verification_test_helpers::returns_valid_source(DB_PREFIX, service, sourcify::verify).await
+    verification_test_helpers::test_returns_valid_source(DB_PREFIX, service, sourcify::verify).await
 }
