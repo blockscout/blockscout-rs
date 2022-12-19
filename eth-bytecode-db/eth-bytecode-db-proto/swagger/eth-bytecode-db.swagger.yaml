@@ -22,7 +22,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/rpcStatus'
+            $ref: '#/definitions/googlerpcStatus'
       parameters:
         - name: body
           in: body
@@ -42,7 +42,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/rpcStatus'
+            $ref: '#/definitions/googlerpcStatus'
       parameters:
         - name: body
           in: body
@@ -62,7 +62,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/rpcStatus'
+            $ref: '#/definitions/googlerpcStatus'
       parameters:
         - name: body
           in: body
@@ -82,7 +82,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/rpcStatus'
+            $ref: '#/definitions/googlerpcStatus'
       parameters:
         - name: body
           in: body
@@ -102,7 +102,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/rpcStatus'
+            $ref: '#/definitions/googlerpcStatus'
       parameters:
         - name: body
           in: body
@@ -122,7 +122,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/rpcStatus'
+            $ref: '#/definitions/googlerpcStatus'
       parameters:
         - name: body
           in: body
@@ -142,7 +142,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/rpcStatus'
+            $ref: '#/definitions/googlerpcStatus'
       parameters:
         - name: body
           in: body
@@ -162,7 +162,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/rpcStatus'
+            $ref: '#/definitions/googlerpcStatus'
       parameters:
         - name: body
           in: body
@@ -182,7 +182,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/rpcStatus'
+            $ref: '#/definitions/googlerpcStatus'
       parameters:
         - name: body
           in: body
@@ -216,13 +216,7 @@ definitions:
       - YUL
     default: SOURCE_TYPE_UNSPECIFIED
     description: ' - SOURCE_TYPE_UNSPECIFIED: Default value. This value is unused.'
-  protobufAny:
-    type: object
-    properties:
-      '@type':
-        type: string
-    additionalProperties: {}
-  rpcStatus:
+  googlerpcStatus:
     type: object
     properties:
       code:
@@ -234,6 +228,12 @@ definitions:
           $ref: '#/definitions/protobufAny'
       message:
         type: string
+  protobufAny:
+    type: object
+    properties:
+      '@type':
+        type: string
+    additionalProperties: {}
   v1SearchSourcesRequest:
     type: object
     properties:
@@ -291,9 +291,14 @@ definitions:
       source:
         $ref: '#/definitions/v1Source'
       status:
-        type: integer
-        format: int32
-        title: / Status of 0 indicates successful verification
+        $ref: '#/definitions/v1VerifyResponseStatus'
+  v1VerifyResponseStatus:
+    type: string
+    enum:
+      - STATUS_UNSPECIFIED
+      - SUCCESS
+      - FAILURE
+    default: STATUS_UNSPECIFIED
   v1VerifySolidityMultiPartRequest:
     type: object
     properties:
@@ -317,7 +322,7 @@ definitions:
         title: |-
           / If present, optimizations are enabled with specified number of runs,
           / otherwise optimizations are disabled
-      sourcesFiles:
+      sourceFiles:
         type: object
         additionalProperties:
           type: string
@@ -349,7 +354,7 @@ definitions:
         type: integer
         format: int32
         title: (optional) see Sourcify Api
-      sourcesFiles:
+      sourceFiles:
         type: object
         additionalProperties:
           type: string

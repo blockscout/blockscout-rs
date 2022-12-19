@@ -9,7 +9,7 @@ service CreationBytecodeDatabase {
 
   rpc VerifySolidityStandardJson(VerifySolidityStandardJsonRequest) returns (VerifyResponse) {}
 
-  rpc VerifySolidityMetadata(VerifySolidityMetadataRequest) returns (VerifyResponse) {}
+//  rpc VerifySolidityMetadata(VerifySolidityMetadataRequest) returns (VerifyResponse) {}
 
   rpc VerifyVyperMultiPart(VerifyVyperMultiPartRequest) returns (VerifyResponse) {}
 
@@ -21,7 +21,7 @@ service DeployedBytecodeDatabase {
 
   rpc VerifySolidityStandardJson(VerifySolidityStandardJsonRequest) returns (VerifyResponse) {}
 
-  rpc VerifySolidityMetadata(VerifySolidityMetadataRequest) returns (VerifyResponse) {}
+//  rpc VerifySolidityMetadata(VerifySolidityMetadataRequest) returns (VerifyResponse) {}
 
   rpc VerifyVyperMultiPart(VerifyVyperMultiPartRequest) returns (VerifyResponse) {}
 
@@ -90,7 +90,7 @@ message VerifySolidityMultiPartRequest {
   /// otherwise optimizations are disabled
   optional int32 optimization_runs = 4;
   /// Map from a source file name to the actual source code
-  map<string, string> sources_files = 5;
+  map<string, string> source_files = 5;
   /// Map from a library name to its address
   map<string, string> libraries = 6;
 }
@@ -105,15 +105,15 @@ message VerifySolidityStandardJsonRequest {
 }
 
 
-message VerifySolidityMetadataRequest {
-  /// Bytecode to compare local compilation result with
-  string bytecode = 1;
-  /// Metadata along with actual sources
-  map<string, string> sources_files = 5;
-  /// (optional) index of the contract, if the provided files contain multiple metadata files (i.e. multiple contracts).
-  /// By default, the first file is considered as a target contract.
-  int32 chosen_contract = 4;
-}
+//message VerifySolidityMetadataRequest {
+//  /// Bytecode to compare local compilation result with
+//  string bytecode = 1;
+//  /// Metadata along with actual sources
+//  map<string, string> source_files = 5;
+//  /// (optional) index of the contract, if the provided files contain multiple metadata files (i.e. multiple contracts).
+//  /// By default, the first file is considered as a target contract.
+//  int32 chosen_contract = 4;
+//}
 
 message VerifyVyperMultiPartRequest {
   /// Bytecode to compare local compilation result with
@@ -130,8 +130,13 @@ message VerifyVyperMultiPartRequest {
 
 message VerifyResponse {
   string message = 1;
-  /// Status of 0 indicates successful verification
-  int32 status = 2;
+
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    SUCCESS = 1;
+    FAILURE = 2;
+  }
+  Status status = 2;
 
   Source source = 3;
 }
@@ -152,7 +157,7 @@ message VerifySourcifyRequest {
   /// (https://docs.sourcify.dev/docs/api/chains/)
   string chain = 2;
   /// Files required for verification (see Sourcify Api)
-  map<string, string> sources_files = 3;
+  map<string, string> source_files = 3;
   // (optional) see Sourcify Api
   optional int32 chosenContract = 4;
 }
