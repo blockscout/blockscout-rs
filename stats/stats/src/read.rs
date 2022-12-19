@@ -1,4 +1,4 @@
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::NaiveDate;
 use sea_orm::{DatabaseConnection, DbBackend, DbErr, FromQueryResult, Statement};
 use stats_proto::blockscout::stats::v1::{Counters, LineChart, Point};
 use std::collections::HashMap;
@@ -15,12 +15,12 @@ pub enum ReadError {
 #[derive(FromQueryResult)]
 struct CounterData {
     name: String,
-    date: NaiveDateTime,
+    date: NaiveDate,
     value: i64,
 }
 
 fn get_counter_from_data(
-    data: &HashMap<String, (NaiveDateTime, u64)>,
+    data: &HashMap<String, (NaiveDate, u64)>,
     name: &str,
 ) -> Result<u64, ReadError> {
     data.get(name)
@@ -48,7 +48,10 @@ pub async fn get_counters(db: &DatabaseConnection) -> Result<Counters, ReadError
         .map(|data| (data.name, (data.date, data.value as u64)))
         .collect();
     let counters = Counters {
-        total_blocks_all_time: get_counter_from_data(&data, "total_blocks_all_time")?.to_string(),
+        counters: HashMap::from_iter([(
+            "totalBlocksAllTime".into(),
+            get_counter_from_data(&data, "totalBlocksAllTime")?.to_string(),
+        )]),
     };
     Ok(counters)
 }
@@ -86,10 +89,16 @@ pub async fn get_chart_int(db: &DatabaseConnection, name: &str) -> Result<LineCh
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use super::*;
+    use entity::{
+        chart_data_int, charts,
+        sea_orm_active_enums::{ChartType, ChartValueType},
+    };
     use migration::MigratorTrait;
     use pretty_assertions::assert_eq;
-    use sea_orm::{ConnectionTrait, Database};
+    use sea_orm::{ConnectionTrait, Database, EntityTrait, Set};
     use url::Url;
 
     async fn init_db(name: &str) -> DatabaseConnection {
@@ -126,41 +135,42 @@ mod tests {
         conn
     }
 
+    fn mock_chart_data(chart_id: i32, date: &str, value: i64) -> chart_data_int::ActiveModel {
+        chart_data_int::ActiveModel {
+            chart_id: Set(chart_id),
+            date: Set(NaiveDate::from_str(date).unwrap()),
+            value: Set(value),
+            ..Default::default()
+        }
+    }
+
     async fn insert_mock_data(db: &DatabaseConnection) {
-        db.query_one(Statement::from_string(
-            DbBackend::Postgres,
-            r#"
-            INSERT INTO "charts" VALUES
-                (default, 'total_blocks_all_time', 'COUNTER', 'INT', 0),
-                (default, 'new_blocks_per_day', 'LINE', 'INT', 0),
-                (default, 'total_txs_all_time', 'COUNTER', 'INT', 0),
-                (default, 'new_txs_per_day', 'LINE', 'INT', 0);
-            "#
-            .into(),
-        ))
+        charts::Entity::insert_many([
+            charts::ActiveModel {
+                name: Set("totalBlocksAllTime".into()),
+                r#type: Set(ChartType::Counter),
+                value_type: Set(ChartValueType::Int),
+                ..Default::default()
+            },
+            charts::ActiveModel {
+                name: Set("newBlocksPerDay".into()),
+                r#type: Set(ChartType::Line),
+                value_type: Set(ChartValueType::Int),
+                ..Default::default()
+            },
+        ])
+        .exec(db)
         .await
         .unwrap();
-        db.query_one(Statement::from_string(
-            DbBackend::Postgres,
-            r#"
-            INSERT INTO "chart_data_int" VALUES
-                (default, 1, date '2022-11-10', 1000),
-                (default, 2, date '2022-11-10', 100),
-                (default, 3, date '2022-11-10', 3000),
-                (default, 4, date '2022-11-10', 300),
-
-                (default, 1, date '2022-11-11', 1150),
-                (default, 2, date '2022-11-11', 150),
-                (default, 3, date '2022-11-11', 3350),
-                (default, 4, date '2022-11-11', 350),
-
-                (default, 1, date '2022-11-12', 1350),
-                (default, 2, date '2022-11-12', 200),
-                (default, 3, date '2022-11-12', 3750),
-                (default, 4, date '2022-11-12', 400);
-            "#
-            .into(),
-        ))
+        chart_data_int::Entity::insert_many([
+            mock_chart_data(1, "2022-11-10", 1000),
+            mock_chart_data(2, "2022-11-10", 100),
+            mock_chart_data(1, "2022-11-11", 1150),
+            mock_chart_data(2, "2022-11-11", 150),
+            mock_chart_data(1, "2022-11-12", 1350),
+            mock_chart_data(2, "2022-11-12", 200),
+        ])
+        .exec(db)
         .await
         .unwrap();
     }
@@ -175,7 +185,7 @@ mod tests {
         let counters = get_counters(&db).await.unwrap();
         assert_eq!(
             Counters {
-                total_blocks_all_time: "1350".into(),
+                counters: HashMap::from_iter([("totalBlocksAllTime".into(), "1350".into())]),
             },
             counters
         );
@@ -188,20 +198,20 @@ mod tests {
 
         let db = init_db("get_chart_int_mock").await;
         insert_mock_data(&db).await;
-        let chart = get_chart_int(&db, "new_blocks_per_day").await.unwrap();
+        let chart = get_chart_int(&db, "newBlocksPerDay").await.unwrap();
         assert_eq!(
             LineChart {
                 chart: vec![
                     Point {
-                        date: "10-11-2022".into(),
+                        date: "2022-11-10".into(),
                         value: "100".into(),
                     },
                     Point {
-                        date: "11-11-2022".into(),
+                        date: "2022-11-11".into(),
                         value: "150".into(),
                     },
                     Point {
-                        date: "12-11-2022".into(),
+                        date: "2022-11-12".into(),
                         value: "200".into(),
                     },
                 ]
