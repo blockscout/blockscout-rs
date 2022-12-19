@@ -345,6 +345,7 @@ definitions:
       - SUCCESS
       - FAILURE
     default: STATUS_UNSPECIFIED
+    description: ' - STATUS_UNSPECIFIED: Default value. This value is unused.'
   v2VerifySolidityMultiPartRequest:
     type: object
     properties:
