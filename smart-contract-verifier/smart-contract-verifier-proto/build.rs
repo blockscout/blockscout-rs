@@ -14,7 +14,7 @@ fn compile(
         .compile_well_known_types()
         .protoc_arg("--openapiv2_out=swagger")
         .protoc_arg("--openapiv2_opt")
-        .protoc_arg("grpc_api_configuration=proto/api_config_http.yaml,output_format=yaml,allow_merge=true,merge_file_name=smart-contract-verifier")
+        .protoc_arg("grpc_api_configuration=proto/v2/api_config_http.yaml,output_format=yaml,allow_merge=true,merge_file_name=smart-contract-verifier")
         .bytes(["."])
         .btree_map(["."])
         .type_attribute(".", "#[actix_prost_macros::serde]");
@@ -26,10 +26,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all("./swagger").unwrap();
     let gens = Box::new(GeneratorList::new(vec![
         tonic_build::configure().service_generator(),
-        Box::new(ActixGenerator::new("proto/api_config_http.yaml").unwrap()),
+        Box::new(ActixGenerator::new("proto/v2/api_config_http.yaml").unwrap()),
     ]));
     compile(
-        &["proto/smart-contract-verifier.proto", "proto/health.proto"],
+        &["proto/v2/smart-contract-verifier.proto", "proto/v2/health.proto"],
         &["proto"],
         gens,
     )?;

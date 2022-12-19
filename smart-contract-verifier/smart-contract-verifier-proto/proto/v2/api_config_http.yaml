@@ -1,0 +1,51 @@
+type: google.api.Service
+config_version: 3
+
+http:
+  rules:
+    ######################## Creation Byteocode Database ########################
+
+    - selector: blockscout.smartContractVerifier.v2.CreationBytecodeDatabase.VerifySolidityMultiPart
+      post: /bytecodes/creation-inputs/sources/solidity:verify-multi-part
+      body: "*"
+
+    - selector: blockscout.smartContractVerifier.v2.CreationBytecodeDatabase.VerifySolidityStandardJson
+      post: /bytecodes/creation-inputs/sources/solidity:verify-standard-json
+      body: "*"
+
+    - selector: blockscout.smartContractVerifier.v2.CreationBytecodeDatabase.VerifyVyperMultiPart
+      post: /bytecodes/creation-inputs/sources/vyper:verify-multi-part
+      body: "*"
+
+    ######################## Deployed Byteocode Database ########################
+
+    - selector: blockscout.smartContractVerifier.v2.DeployedBytecodeDatabase.VerifySolidityMultiPart
+      post: /bytecodes/deployed-bytecodes/sources/solidity:verify-multi-part
+      body: "*"
+
+    - selector: blockscout.smartContractVerifier.v2.DeployedBytecodeDatabase.VerifySolidityStandardJson
+      post: /bytecodes/deployed-bytecodes/sources/solidity:verify-standard-json
+      body: "*"
+
+    - selector: blockscout.smartContractVerifier.v2.DeployedBytecodeDatabase.VerifyVyperMultiPart
+      post: /bytecodes/deployed-bytecodes/sources/vyper:verify-multi-part
+      body: "*"
+
+    ######################## Sourcify ########################
+
+    - selector: blockscout.smartContractVerifier.v2.Sourcify.Verify
+      post: /sourcify:verify
+      body: "*"
+
+    ######################## Compilers ########################
+
+    - selector: blockscout.smartContractVerifier.v2.Compilers.ListSolidityVersions
+      get: /compilers/solidity/versions
+
+    - selector: blockscout.smartContractVerifier.v2.Compilers.ListVyperVersions
+      get: /compilers/vyper/versions
+
+    ######################## Health ########################
+
+    - selector: blockscout.smartContractVerifier.v2.Health.Check
+      get: /health

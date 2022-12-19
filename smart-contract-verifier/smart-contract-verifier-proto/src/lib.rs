@@ -4,7 +4,7 @@ pub mod blockscout {
         pub mod v1 {
             include!(concat!(
                 env!("OUT_DIR"),
-                "/blockscout.smart_contract_verifier.v1.rs"
+                "/blockscout.smart_contract_verifier.v2.rs"
             ));
         }
     }
