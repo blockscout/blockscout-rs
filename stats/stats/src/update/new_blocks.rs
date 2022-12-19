@@ -93,7 +93,7 @@ impl super::UpdaterTrait for Updater {
             id: Default::default(),
             chart_id: Set(id),
             date: Set(row.day),
-            value: Set(row.count as i64),
+            value: Set(row.count),
             created_at: Default::default(),
         });
 
