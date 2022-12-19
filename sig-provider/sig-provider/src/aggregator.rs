@@ -321,7 +321,7 @@ mod tests {
                 ]),
             ]),
         ]);
-        hex::encode(&res)
+        hex::encode(res)
     }
 
     #[tokio::test]
