@@ -40,3 +40,15 @@ rstest = "0.16"
 sea-orm = { version = "*", features = ["mock"] }
 tokio-stream = { version = "0.1", features = ["net"] }
 url = "2.3"
+
+[features]
+# When activated includes helper methods for tests and benchmarking
+test-utils = []
+
+[[bin]]
+name = "database_populate"
+required-features = ["test-utils"]
+
+[[bin]]
+name = "database_search"
+required-features = ["test-utils"]
