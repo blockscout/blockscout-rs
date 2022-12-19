@@ -6,6 +6,7 @@ tags:
   - name: CreationBytecodeDatabase
   - name: DeployedBytecodeDatabase
   - name: Sourcify
+  - name: Compilers
 consumes:
   - application/json
 produces:
@@ -171,6 +172,34 @@ paths:
             $ref: '#/definitions/v1SearchSourcesRequest'
       tags:
         - DeployedBytecodeDatabase
+  /compilers/solidity/versions:
+    get:
+      operationId: Compilers_ListSolidityVersions
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListVersionsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      tags:
+        - Compilers
+  /compilers/vyper/versions:
+    get:
+      operationId: Compilers_ListVyperVersions
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListVersionsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      tags:
+        - Compilers
   /sourcify:verify:
     post:
       operationId: Sourcify_Verify
@@ -234,6 +263,14 @@ definitions:
       '@type':
         type: string
     additionalProperties: {}
+  v1ListVersionsResponse:
+    type: object
+    properties:
+      versions:
+        type: array
+        items:
+          type: string
+        title: / Compiler versions available
   v1SearchSourcesRequest:
     type: object
     properties:

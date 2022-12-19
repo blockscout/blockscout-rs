@@ -28,6 +28,12 @@ service Sourcify {
   rpc Verify(VerifySourcifyRequest) returns (VerifyResponse) {}
 }
 
+service Compilers {
+  rpc ListSolidityVersions(ListVersionsRequest) returns (ListVersionsResponse) {}
+
+  rpc ListVyperVersions(ListVersionsRequest) returns (ListVersionsResponse) {}
+}
+
 message Source {
   /// The name of the file verified contract was located at
   string file_name = 1;
@@ -145,4 +151,11 @@ message VerifySourcifyRequest {
   map<string, string> source_files = 3;
   // (optional) see Sourcify Api
   optional int32 chosenContract = 4;
+}
+
+message ListVersionsRequest {}
+
+message ListVersionsResponse {
+  /// Compiler versions available
+  repeated string versions = 1;
 }

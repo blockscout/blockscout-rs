@@ -40,3 +40,9 @@ http:
     - selector: blockscout.ethBytecodeDb.v1.Sourcify.Verify
       post: /sourcify:verify
       body: "*"
+
+    - selector: blockscout.ethBytecodeDb.v1.Compilers.ListSolidityVersions
+      get: /compilers/solidity/versions
+
+    - selector: blockscout.ethBytecodeDb.v1.Compilers.ListVyperVersions
+      get: /compilers/vyper/versions
