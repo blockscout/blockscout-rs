@@ -227,7 +227,7 @@ mod tests {
 
         charts::Entity::insert(charts::ActiveModel {
             name: Set("new_blocks_per_day".into()),
-            r#type: Set(ChartType::Line),
+            chart_type: Set(ChartType::Line),
             value_type: Set(ChartValueType::Int),
             ..Default::default()
         })
@@ -277,7 +277,7 @@ mod tests {
 
         charts::Entity::insert(charts::ActiveModel {
             name: Set("new_blocks_per_day".into()),
-            r#type: Set(ChartType::Line),
+            chart_type: Set(ChartType::Line),
             value_type: Set(ChartValueType::Int),
             ..Default::default()
         })
@@ -320,7 +320,7 @@ mod tests {
 
         charts::Entity::insert(charts::ActiveModel {
             name: Set("new_blocks_per_day".into()),
-            r#type: Set(ChartType::Line),
+            chart_type: Set(ChartType::Line),
             value_type: Set(ChartValueType::Int),
             ..Default::default()
         })

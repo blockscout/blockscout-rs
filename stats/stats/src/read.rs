@@ -148,13 +148,13 @@ mod tests {
         charts::Entity::insert_many([
             charts::ActiveModel {
                 name: Set("totalBlocksAllTime".into()),
-                r#type: Set(ChartType::Counter),
+                chart_type: Set(ChartType::Counter),
                 value_type: Set(ChartValueType::Int),
                 ..Default::default()
             },
             charts::ActiveModel {
                 name: Set("newBlocksPerDay".into()),
-                r#type: Set(ChartType::Line),
+                chart_type: Set(ChartType::Line),
                 value_type: Set(ChartValueType::Int),
                 ..Default::default()
             },
