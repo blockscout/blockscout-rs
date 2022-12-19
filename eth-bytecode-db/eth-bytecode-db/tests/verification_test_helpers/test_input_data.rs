@@ -1,6 +1,4 @@
-use eth_bytecode_db::verification::{
-    BytecodePart, MatchType, Source, SourceType, VerificationRequest,
-};
+use eth_bytecode_db::verification::{BytecodePart, MatchType, Source, SourceType};
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
     verify_response, verify_response::result, VerifyResponse,
 };
@@ -8,15 +6,12 @@ use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TestInputData<T> {
-    pub request: VerificationRequest<T>,
+    pub request: T,
     pub response: VerifyResponse,
     pub source: Source,
 }
 
-pub fn input_data_1<T>(
-    request: VerificationRequest<T>,
-    source_type: SourceType,
-) -> TestInputData<T> {
+pub fn input_data_1<T>(request: T, source_type: SourceType) -> TestInputData<T> {
     let verify_response = VerifyResponse {
         message: "Ok".to_string(),
         status: "0".to_string(),

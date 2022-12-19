@@ -5,7 +5,7 @@ use super::{
         smart_contract_verifier::VerifySolidityStandardJsonRequest,
         types::{BytecodeType, Source, SourceType, VerificationRequest, VerificationType},
     },
-    process_verify_response,
+    process_verify_response, ProcessResponseAction,
 };
 use serde::{Deserialize, Serialize};
 
@@ -65,11 +65,13 @@ pub async fn verify(
     process_verify_response(
         &client.db_client,
         response,
-        bytecode_type,
-        raw_request_bytecode,
         source_type_fn,
-        verification_settings,
-        VerificationType::StandardJson,
+        ProcessResponseAction::SaveData {
+            bytecode_type,
+            raw_request_bytecode,
+            verification_settings,
+            verification_type: VerificationType::StandardJson,
+        },
     )
     .await
 }
