@@ -11,10 +11,6 @@ http:
       post: /bytecodes/creation-inputs/sources/solidity:verify-standard-json
       body: "*"
 
-#    - selector: blockscout.ethBytecodeDb.v1.CreationBytecodeDatabase.VerifySolidityMetadata
-#      post: /bytecodes/creation-inputs/sources/solidity:verify-metadata
-#      body: "*"
-
     - selector: blockscout.ethBytecodeDb.v1.CreationBytecodeDatabase.VerifyVyperMultiPart
       post: /bytecodes/creation-inputs/sources/vyper:verify-multi-part
       body: "*"
@@ -31,10 +27,6 @@ http:
     - selector: blockscout.ethBytecodeDb.v1.DeployedBytecodeDatabase.VerifySolidityStandardJson
       post: /bytecodes/deployed-bytecodes/sources/solidity:verify-standard-json
       body: "*"
-
-#    - selector: blockscout.ethBytecodeDb.v1.DeployedBytecodeDatabase.VerifySolidityMetadata
-#      post: /bytecodes/deployed-bytecodes/sources/solidity:verify-metadata
-#      body: "*"
 
     - selector: blockscout.ethBytecodeDb.v1.DeployedBytecodeDatabase.VerifyVyperMultiPart
       post: /bytecodes/deployed-bytecodes/sources/vyper:verify-multi-part

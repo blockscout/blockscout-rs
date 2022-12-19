@@ -9,8 +9,6 @@ service CreationBytecodeDatabase {
 
   rpc VerifySolidityStandardJson(VerifySolidityStandardJsonRequest) returns (VerifyResponse) {}
 
-//  rpc VerifySolidityMetadata(VerifySolidityMetadataRequest) returns (VerifyResponse) {}
-
   rpc VerifyVyperMultiPart(VerifyVyperMultiPartRequest) returns (VerifyResponse) {}
 
   rpc SearchSources(SearchSourcesRequest) returns (SearchSourcesResponse) {}
@@ -20,8 +18,6 @@ service DeployedBytecodeDatabase {
   rpc VerifySolidityMultiPart(VerifySolidityMultiPartRequest) returns (VerifyResponse) {}
 
   rpc VerifySolidityStandardJson(VerifySolidityStandardJsonRequest) returns (VerifyResponse) {}
-
-//  rpc VerifySolidityMetadata(VerifySolidityMetadataRequest) returns (VerifyResponse) {}
 
   rpc VerifyVyperMultiPart(VerifyVyperMultiPartRequest) returns (VerifyResponse) {}
 
@@ -103,17 +99,6 @@ message VerifySolidityStandardJsonRequest {
   /// https://docs.soliditylang.org/en/latest/using-the-compiler.html#input-description
   string input = 3;
 }
-
-
-//message VerifySolidityMetadataRequest {
-//  /// Bytecode to compare local compilation result with
-//  string bytecode = 1;
-//  /// Metadata along with actual sources
-//  map<string, string> source_files = 5;
-//  /// (optional) index of the contract, if the provided files contain multiple metadata files (i.e. multiple contracts).
-//  /// By default, the first file is considered as a target contract.
-//  int32 chosen_contract = 4;
-//}
 
 message VerifyVyperMultiPartRequest {
   /// Bytecode to compare local compilation result with
