@@ -143,7 +143,6 @@ message VerifyResponse {
     /// parsed and split on Main and Meta parts. Is empty for Sourcify verification.
     repeated BytecodePart local_deployed_bytecode_parts = 2;
   }
-
   ExtraData extra_data = 4;
 }
 
