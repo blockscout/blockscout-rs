@@ -162,7 +162,7 @@ mod tests {
         .await
         .unwrap();
 
-        let block_timestamps: Vec<_> = vec![
+        let block_timestamps = vec![
             "2022-11-09T23:59:59",
             "2022-11-10T00:00:00",
             "2022-11-10T12:00:00",
@@ -177,16 +177,12 @@ mod tests {
         .filter(|val| {
             NaiveDateTime::from_str(val).unwrap().date() <= NaiveDate::from_str(max_date).unwrap()
         })
-        .collect();
-        blocks::Entity::insert_many(
-            block_timestamps
-                .into_iter()
-                .enumerate()
-                .map(|(ind, ts)| mock_block(ind as i64, ts)),
-        )
-        .exec(blockscout)
-        .await
-        .unwrap();
+        .enumerate()
+        .map(|(ind, ts)| mock_block(ind as i64, ts));
+        blocks::Entity::insert_many(block_timestamps)
+            .exec(blockscout)
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
