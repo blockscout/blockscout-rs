@@ -30,3 +30,8 @@ http:
     - selector: blockscout.smartContractVerifier.v2.SourcifyVerifier.Verify
       post: /verifier/sourcify/sources:verify
       body: "*"
+
+    #################### Health ####################
+
+    - selector: blockscout.smartContractVerifier.v2.Health.Check
+      get: /health
