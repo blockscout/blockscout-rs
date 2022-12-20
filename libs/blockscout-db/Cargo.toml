@@ -6,5 +6,5 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-blockscout-db-migration = { path = "./blockscout-db-migration" }
-blockscout-db-entity = { path = "./blockscout-db-entity" }
+blockscout-db-migration = { path = "./migration" }
+blockscout-db-entity = { path = "./entity" }
