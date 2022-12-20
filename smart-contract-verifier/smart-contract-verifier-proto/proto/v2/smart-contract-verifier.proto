@@ -130,6 +130,21 @@ message VerifyResponse {
   Status status = 2;
 
   Source source = 3;
+
+  message ExtraData {
+    message BytecodePart {
+      string type = 1;
+      string data = 2;
+    };
+    /// Creation transaction input resultant from local compilation
+    /// parsed and split on Main and Meta parts. Is empty for Sourcify verification.
+    repeated BytecodePart local_creation_input_parts = 1;
+    /// Deployed bytecode resultant from local compilation
+    /// parsed and split on Main and Meta parts. Is empty for Sourcify verification.
+    repeated BytecodePart local_deployed_bytecode_parts = 2;
+  }
+
+  ExtraData extra_data = 4;
 }
 
 message VerifySourcifyRequest {

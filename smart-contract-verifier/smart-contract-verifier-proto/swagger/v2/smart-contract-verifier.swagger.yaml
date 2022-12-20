@@ -143,6 +143,13 @@ paths:
       tags:
         - VyperVerifier
 definitions:
+  ExtraDataBytecodePart:
+    type: object
+    properties:
+      data:
+        type: string
+      type:
+        type: string
   HealthCheckResponseServingStatus:
     type: string
     enum:
@@ -175,6 +182,23 @@ definitions:
       - YUL
     default: SOURCE_TYPE_UNSPECIFIED
     description: ' - SOURCE_TYPE_UNSPECIFIED: Default value. This value is unused.'
+  VerifyResponseExtraData:
+    type: object
+    properties:
+      localCreationInputParts:
+        type: array
+        items:
+          $ref: '#/definitions/ExtraDataBytecodePart'
+        description: |-
+          / Creation transaction input resultant from local compilation
+          / parsed and split on Main and Meta parts. Is empty for Sourcify verification.
+      localDeployedBytecodeParts:
+        type: array
+        items:
+          $ref: '#/definitions/ExtraDataBytecodePart'
+        description: |-
+          / Deployed bytecode resultant from local compilation
+          / parsed and split on Main and Meta parts. Is empty for Sourcify verification.
   googlerpcStatus:
     type: object
     properties:
@@ -252,6 +276,8 @@ definitions:
   v2VerifyResponse:
     type: object
     properties:
+      extraData:
+        $ref: '#/definitions/VerifyResponseExtraData'
       message:
         type: string
       source:
