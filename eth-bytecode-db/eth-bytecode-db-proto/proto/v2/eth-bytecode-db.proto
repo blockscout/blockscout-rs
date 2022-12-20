@@ -1,37 +1,29 @@
 syntax = "proto3";
 
-package blockscout.ethBytecodeDb.v1;
+package blockscout.ethBytecodeDb.v2;
 
 option go_package = "github.com/blockscout/blockscout-rs/eth-bytecode-db";
 
-service CreationBytecodeDatabase {
-  rpc VerifySolidityMultiPart(VerifySolidityMultiPartRequest) returns (VerifyResponse) {}
-
-  rpc VerifySolidityStandardJson(VerifySolidityStandardJsonRequest) returns (VerifyResponse) {}
-
-  rpc VerifyVyperMultiPart(VerifyVyperMultiPartRequest) returns (VerifyResponse) {}
-
+service Database {
   rpc SearchSources(SearchSourcesRequest) returns (SearchSourcesResponse) {}
 }
 
-service DeployedBytecodeDatabase {
-  rpc VerifySolidityMultiPart(VerifySolidityMultiPartRequest) returns (VerifyResponse) {}
+service SolidityVerifier {
+  rpc VerifyMultiPart(VerifySolidityMultiPartRequest) returns (VerifyResponse) {}
 
-  rpc VerifySolidityStandardJson(VerifySolidityStandardJsonRequest) returns (VerifyResponse) {}
+  rpc VerifyStandardJson(VerifySolidityStandardJsonRequest) returns (VerifyResponse) {}
 
-  rpc VerifyVyperMultiPart(VerifyVyperMultiPartRequest) returns (VerifyResponse) {}
-
-  rpc SearchSources(SearchSourcesRequest) returns (SearchSourcesResponse) {}
+  rpc ListCompilerVersions(ListCompilerVersionsRequest) returns (ListCompilerVersionsResponse) {}
 }
 
-service Sourcify {
+service VyperVerifier {
+  rpc VerifyMultiPart(VerifyVyperMultiPartRequest) returns (VerifyResponse) {}
+
+  rpc ListCompilerVersions(ListCompilerVersionsRequest) returns (ListCompilerVersionsResponse) {}
+}
+
+service SourcifyVerifier {
   rpc Verify(VerifySourcifyRequest) returns (VerifyResponse) {}
-}
-
-service Compilers {
-  rpc ListSolidityVersions(ListVersionsRequest) returns (ListVersionsResponse) {}
-
-  rpc ListVyperVersions(ListVersionsRequest) returns (ListVersionsResponse) {}
 }
 
 message Source {
@@ -81,42 +73,54 @@ message Source {
   Match match = 10;
 }
 
+enum BytecodeType {
+  BYTECODE_TYPE_UNSPECIFIED = 0;
+  CREATION_INPUT = 1;
+  DEPLOYED_BYTECODE = 2;
+}
+
 message VerifySolidityMultiPartRequest {
   /// Bytecode to compare local compilation result with
   string bytecode = 1;
+  /// Either CREATION_INPUT or DEPLOYED_BYTECODE, depending on what should be verified
+  BytecodeType bytecode_type = 2;
   /// Compiler version used to compile the contract
-  string compiler_version = 2;
+  string compiler_version = 3;
   /// Version of the EVM to compile for
-  string evm_version = 3;
+  string evm_version = 4;
   /// If present, optimizations are enabled with specified number of runs,
   /// otherwise optimizations are disabled
-  optional int32 optimization_runs = 4;
+  optional int32 optimization_runs = 5;
   /// Map from a source file name to the actual source code
-  map<string, string> source_files = 5;
+  map<string, string> source_files = 6;
   /// Map from a library name to its address
-  map<string, string> libraries = 6;
+  map<string, string> libraries = 7;
 }
 
 message VerifySolidityStandardJsonRequest {
   /// Bytecode to compare local compilation result with
   string bytecode = 1;
+  /// Either CREATION_INPUT or DEPLOYED_BYTECODE, depending on what should be verified
+  BytecodeType bytecode_type = 2;
   /// Compiler version used to compile the contract
-  string compiler_version = 2;
+  string compiler_version = 3;
   /// https://docs.soliditylang.org/en/latest/using-the-compiler.html#input-description
-  string input = 3;
+  string input = 4;
 }
 
 message VerifyVyperMultiPartRequest {
   /// Bytecode to compare local compilation result with
   string bytecode = 1;
+  /// Either CREATION_INPUT or DEPLOYED_BYTECODE, depending on what should be verified
+  BytecodeType bytecode_type = 2;
   /// Compiler version used to compile the contract
-  string compiler_version = 2;
+  string compiler_version = 3;
   /// Version of the EVM to compile for
-  string evm_version = 3;
+  string evm_version = 4;
   /// Flag enabling optimizations
-  bool optimizations = 4;
+  bool optimizations = 5;
   /// Source file name to the actual source code
-  map<string, string> source_files = 5;
+  map<string, string> source_files = 6;
 }
 
 message VerifyResponse {
@@ -135,6 +139,8 @@ message VerifyResponse {
 message SearchSourcesRequest {
   /// Bytecode to search the sources for
   string bytecode = 1;
+  /// Either CREATION_INPUT or DEPLOYED_BYTECODE, depending on what you are looking upon
+  BytecodeType bytecode_type = 2;
 }
 
 message SearchSourcesResponse {
@@ -153,9 +159,9 @@ message VerifySourcifyRequest {
   optional int32 chosenContract = 4;
 }
 
-message ListVersionsRequest {}
+message ListCompilerVersionsRequest {}
 
-message ListVersionsResponse {
+message ListCompilerVersionsResponse {
   /// Compiler versions available
-  repeated string versions = 1;
+  repeated string compiler_versions = 1;
 }
