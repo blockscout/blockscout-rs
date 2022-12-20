@@ -36,7 +36,7 @@ pub async fn get_counters(db: &DatabaseConnection) -> Result<Counters, ReadError
             FROM "chart_data_int" "data"
             INNER JOIN "charts"
                 ON data.chart_id = charts.id
-            WHERE charts.type = 'COUNTER'
+            WHERE charts.chart_type = 'COUNTER'
             ORDER BY charts.id, data.id DESC;
         "#
         .into(),

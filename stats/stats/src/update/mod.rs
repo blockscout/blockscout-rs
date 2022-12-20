@@ -1,4 +1,5 @@
 pub mod new_blocks;
+pub mod total_blocks;
 
 use async_trait::async_trait;
 use sea_orm::{DatabaseConnection, DbErr};
