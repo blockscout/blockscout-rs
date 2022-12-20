@@ -1,3 +1,5 @@
 pub mod search;
-pub mod tests;
 pub mod verification;
+
+#[cfg(feature = "test-utils")]
+pub mod tests;
