@@ -12,7 +12,7 @@ fn compile(
     config
         .service_generator(generator)
         .compile_well_known_types()
-        .protoc_arg("--openapiv2_out=swagger")
+        .protoc_arg("--openapiv2_out=swagger/v2")
         .protoc_arg("--openapiv2_opt")
         .protoc_arg("grpc_api_configuration=proto/v2/api_config_http.yaml,output_format=yaml,allow_merge=true,merge_file_name=smart-contract-verifier")
         .bytes(["."])
@@ -23,7 +23,7 @@ fn compile(
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    std::fs::create_dir_all("./swagger").unwrap();
+    std::fs::create_dir_all("./swagger/v2").unwrap();
     let gens = Box::new(GeneratorList::new(vec![
         tonic_build::configure().service_generator(),
         Box::new(ActixGenerator::new("proto/v2/api_config_http.yaml").unwrap()),

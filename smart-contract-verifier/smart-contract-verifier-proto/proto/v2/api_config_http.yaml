@@ -3,49 +3,30 @@ config_version: 3
 
 http:
   rules:
-    ######################## Creation Byteocode Database ########################
+    #################### Solidity Verifier ####################
 
-    - selector: blockscout.smartContractVerifier.v2.CreationBytecodeDatabase.VerifySolidityMultiPart
-      post: /bytecodes/creation-inputs/sources/solidity:verify-multi-part
+    - selector: blockscout.smartContractVerifier.v2.SolidityVerifier.VerifyMultiPart
+      post: /verifier/solidity/sources:verifyMultiPart
       body: "*"
 
-    - selector: blockscout.smartContractVerifier.v2.CreationBytecodeDatabase.VerifySolidityStandardJson
-      post: /bytecodes/creation-inputs/sources/solidity:verify-standard-json
+    - selector: blockscout.smartContractVerifier.v2.SolidityVerifier.VerifyStandardJson
+      post: /verifier/solidity/sources:verifyStandardJson
       body: "*"
 
-    - selector: blockscout.smartContractVerifier.v2.CreationBytecodeDatabase.VerifyVyperMultiPart
-      post: /bytecodes/creation-inputs/sources/vyper:verify-multi-part
+    - selector: blockscout.smartContractVerifier.v2.SolidityVerifier.ListCompilerVersions
+      get: /verifier/solidity/versions
+
+    #################### Vyper Verifier ####################
+
+    - selector: blockscout.smartContractVerifier.v2.VyperVerifier.VerifyMultiPart
+      post: /verifier/vyper/sources:verifyMultiPart
       body: "*"
 
-    ######################## Deployed Byteocode Database ########################
+    - selector: blockscout.smartContractVerifier.v2.VyperVerifier.ListCompilerVersions
+      get: /verifier/vyper/versions
 
-    - selector: blockscout.smartContractVerifier.v2.DeployedBytecodeDatabase.VerifySolidityMultiPart
-      post: /bytecodes/deployed-bytecodes/sources/solidity:verify-multi-part
+    #################### Sourcify Verifier ####################
+
+    - selector: blockscout.smartContractVerifier.v2.SourcifyVerifier.Verify
+      post: /verifier/sourcify/sources:verify
       body: "*"
-
-    - selector: blockscout.smartContractVerifier.v2.DeployedBytecodeDatabase.VerifySolidityStandardJson
-      post: /bytecodes/deployed-bytecodes/sources/solidity:verify-standard-json
-      body: "*"
-
-    - selector: blockscout.smartContractVerifier.v2.DeployedBytecodeDatabase.VerifyVyperMultiPart
-      post: /bytecodes/deployed-bytecodes/sources/vyper:verify-multi-part
-      body: "*"
-
-    ######################## Sourcify ########################
-
-    - selector: blockscout.smartContractVerifier.v2.Sourcify.Verify
-      post: /sourcify:verify
-      body: "*"
-
-    ######################## Compilers ########################
-
-    - selector: blockscout.smartContractVerifier.v2.Compilers.ListSolidityVersions
-      get: /compilers/solidity/versions
-
-    - selector: blockscout.smartContractVerifier.v2.Compilers.ListVyperVersions
-      get: /compilers/vyper/versions
-
-    ######################## Health ########################
-
-    - selector: blockscout.smartContractVerifier.v2.Health.Check
-      get: /health
