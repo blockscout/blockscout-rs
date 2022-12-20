@@ -568,10 +568,27 @@ dependencies = [
 [[package]]
 name = "blockscout-db"
 version = "4.1.8"
-source = "git+https://github.com/blockscout/blockscout-rs#602c1b5d97b5ccd81bd7f38c29318b011eb5d225"
+source = "git+https://github.com/blockscout/blockscout-rs#e4409334a8d050821a665e8e67f242472eac4c6e"
 dependencies = [
- "entity 4.1.8",
- "migration 4.1.8",
+ "blockscout-db-entity",
+ "blockscout-db-migration",
+]
+
+[[package]]
+name = "blockscout-db-entity"
+version = "4.1.8"
+source = "git+https://github.com/blockscout/blockscout-rs#e4409334a8d050821a665e8e67f242472eac4c6e"
+dependencies = [
+ "sea-orm",
+]
+
+[[package]]
+name = "blockscout-db-migration"
+version = "4.1.8"
+source = "git+https://github.com/blockscout/blockscout-rs#e4409334a8d050821a665e8e67f242472eac4c6e"
+dependencies = [
+ "async-std",
+ "sea-orm-migration",
 ]
 
 [[package]]
@@ -1050,14 +1067,6 @@ dependencies = [
 [[package]]
 name = "entity"
 version = "0.1.0"
-dependencies = [
- "sea-orm",
-]
-
-[[package]]
-name = "entity"
-version = "4.1.8"
-source = "git+https://github.com/blockscout/blockscout-rs#602c1b5d97b5ccd81bd7f38c29318b011eb5d225"
 dependencies = [
  "sea-orm",
 ]
@@ -1646,15 +1655,6 @@ checksum = "2dffe52ecf27772e601905b7522cb4ef790d2cc203488bbd0e2fe85fcb74566d"
 [[package]]
 name = "migration"
 version = "0.1.0"
-dependencies = [
- "async-std",
- "sea-orm-migration",
-]
-
-[[package]]
-name = "migration"
-version = "4.1.8"
-source = "git+https://github.com/blockscout/blockscout-rs#602c1b5d97b5ccd81bd7f38c29318b011eb5d225"
 dependencies = [
  "async-std",
  "sea-orm-migration",
@@ -2826,8 +2826,8 @@ dependencies = [
  "async-trait",
  "blockscout-db",
  "chrono",
- "entity 0.1.0",
- "migration 0.1.0",
+ "entity",
+ "migration",
  "pretty_assertions",
  "sea-orm",
  "sea-orm-migration",
