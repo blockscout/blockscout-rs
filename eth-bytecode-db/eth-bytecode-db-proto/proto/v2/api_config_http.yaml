@@ -12,11 +12,11 @@ http:
     #################### SolidityVerifier ####################
 
     - selector: blockscout.ethBytecodeDb.v2.SolidityVerifier.VerifyMultiPart
-      post: /verifier/solidity/sources:verifyMultiPart
+      post: /verifier/solidity/sources:verify-multi-part
       body: "*"
 
     - selector: blockscout.ethBytecodeDb.v2.SolidityVerifier.VerifyStandardJson
-      post: /verifier/solidity/sources:verifyStandardJson
+      post: /verifier/solidity/sources:verify-standard-json
       body: "*"
 
     - selector: blockscout.ethBytecodeDb.v2.SolidityVerifier.ListCompilerVersions
@@ -25,7 +25,7 @@ http:
     #################### Vyper Verifier ####################
 
     - selector: blockscout.ethBytecodeDb.v2.VyperVerifier.VerifyMultiPart
-      post: /verifier/vyper/sources:verifyMultiPart
+      post: /verifier/vyper/sources:verify-multi-part
       body: "*"
 
     - selector: blockscout.ethBytecodeDb.v2.VyperVerifier.ListCompilerVersions

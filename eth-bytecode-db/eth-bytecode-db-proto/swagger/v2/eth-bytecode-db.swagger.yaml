@@ -32,7 +32,7 @@ paths:
             $ref: '#/definitions/v2SearchSourcesRequest'
       tags:
         - Database
-  /verifier/solidity/sources:verifyMultiPart:
+  /verifier/solidity/sources:verify-multi-part:
     post:
       operationId: SolidityVerifier_VerifyMultiPart
       responses:
@@ -52,7 +52,7 @@ paths:
             $ref: '#/definitions/v2VerifySolidityMultiPartRequest'
       tags:
         - SolidityVerifier
-  /verifier/solidity/sources:verifyStandardJson:
+  /verifier/solidity/sources:verify-standard-json:
     post:
       operationId: SolidityVerifier_VerifyStandardJson
       responses:
@@ -106,7 +106,7 @@ paths:
             $ref: '#/definitions/v2VerifySourcifyRequest'
       tags:
         - SourcifyVerifier
-  /verifier/vyper/sources:verifyMultiPart:
+  /verifier/vyper/sources:verify-multi-part:
     post:
       operationId: VyperVerifier_VerifyMultiPart
       responses:
