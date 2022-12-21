@@ -187,10 +187,12 @@ async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse
     }
 
     let result_compiler_settings: CompilerSettings =
-        serde_json::from_str(&result_source.compiler_settings).unwrap_or_else(|_| panic!(
-            "Compiler Settings deserialization failed: {}",
-            &result_source.compiler_settings
-        ));
+        serde_json::from_str(&result_source.compiler_settings).unwrap_or_else(|_| {
+            panic!(
+                "Compiler Settings deserialization failed: {}",
+                &result_source.compiler_settings
+            )
+        });
     assert_eq!(
         result_compiler_settings.evm_version.unwrap_or("default"),
         input.evm_version,
