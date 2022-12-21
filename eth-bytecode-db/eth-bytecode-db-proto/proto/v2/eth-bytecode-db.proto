@@ -150,7 +150,9 @@ message VerifySourcifyRequest {
   /// (https://docs.sourcify.dev/docs/api/chains/)
   string chain = 2;
   /// Files required for verification (see Sourcify Api)
-  map<string, string> source_files = 3;
+  // Named as `files` instead of `source_files`
+  // to correspond with Sourcify api
+  map<string, string> files = 3;
   // (optional) see Sourcify Api
   optional int32 chosenContract = 4;
 }
