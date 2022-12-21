@@ -37,7 +37,7 @@ message Source {
   string compiler_settings = 4;
 
   enum SourceType {
-    // Default value. This value is unused.
+    // Default value. Used if is impossible to determine the source type.
     SOURCE_TYPE_UNSPECIFIED = 0;
     SOLIDITY = 1;
     VYPER = 2;

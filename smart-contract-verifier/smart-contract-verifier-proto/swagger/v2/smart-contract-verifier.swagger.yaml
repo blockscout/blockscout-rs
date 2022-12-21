@@ -181,7 +181,7 @@ definitions:
       - VYPER
       - YUL
     default: SOURCE_TYPE_UNSPECIFIED
-    description: ' - SOURCE_TYPE_UNSPECIFIED: Default value. This value is unused.'
+    description: ' - SOURCE_TYPE_UNSPECIFIED: Default value. Used if is impossible to determine the source type.'
   VerifyResponseExtraData:
     type: object
     properties:

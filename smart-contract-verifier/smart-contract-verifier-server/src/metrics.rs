@@ -14,11 +14,6 @@ lazy_static! {
 }
 
 pub fn count_verify_contract(language: &str, status: &str, method: &str) {
-    let status = match status {
-        "0" => "ok",
-        "1" => "fail",
-        _ => "unknown",
-    };
     VERIFICATION
         .with_label_values(&[language, method, status])
         .inc();

@@ -4136,6 +4136,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "blockscout-display-bytes",
+ "bytes",
  "config",
  "cron",
  "ethabi 18.0.0",

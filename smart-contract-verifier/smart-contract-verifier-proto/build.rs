@@ -29,7 +29,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Box::new(ActixGenerator::new("proto/v2/api_config_http.yaml").unwrap()),
     ]));
     compile(
-        &["proto/v2/smart-contract-verifier.proto", "proto/v2/health.proto"],
+        &[
+            "proto/v2/smart-contract-verifier.proto",
+            "proto/v2/health.proto",
+        ],
         &["proto"],
         gens,
     )?;
