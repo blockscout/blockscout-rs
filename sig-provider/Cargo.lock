@@ -3099,6 +3099,7 @@ dependencies = [
 [[package]]
 name = "startuper"
 version = "0.1.0"
+source = "git+https://github.com/blockscout/blockscout-rs?branch=lymarenkolev/add-startuper#42d36763a87ea518cd027a06cdedea8c965873e9"
 dependencies = [
  "actix-web",
  "actix-web-prom",
