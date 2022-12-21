@@ -345,11 +345,14 @@ definitions:
         type: integer
         format: int32
         title: (optional) see Sourcify Api
-      sourceFiles:
+      files:
         type: object
         additionalProperties:
           type: string
-        title: / Files required for verification (see Sourcify Api)
+        title: |-
+          / Files required for verification (see Sourcify Api)
+          Is named as `files` instead of `source_files`
+          to correspond with Sourcify api
   v2VerifyVyperMultiPartRequest:
     type: object
     properties:

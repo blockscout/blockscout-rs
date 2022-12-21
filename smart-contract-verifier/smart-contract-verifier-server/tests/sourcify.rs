@@ -45,7 +45,7 @@ async fn should_return_200() {
         // https://blockscout.com/poa/sokol/address/0x1277E7D253e0c073418B986b8228BF282554cA5e
         "address": address,
         "chain": "77",
-        "sourceFiles": {
+        "files": {
             "source.sol": source,
             "metadata.json": metadata,
         }
@@ -106,7 +106,7 @@ async fn invalid_contracts() {
                 // relies on fact that the sokol HASN'T any contract with this address
                 "address": "0x1234567890123456789012345678901234567890",
                 "chain": "77",
-                "sourceFiles": {
+                "files": {
                     "metadata.json": metadata_content,
                     "contracts/1_Storage.sol": source,
                 },
@@ -117,7 +117,7 @@ async fn invalid_contracts() {
             json!({
                 "address": "0x1234567890123456789012345678901234567890",
                 "chain": "77",
-                "sourceFiles": {},
+                "files": {},
             }),
             "Metadata file not found",
         ),
@@ -127,7 +127,7 @@ async fn invalid_contracts() {
                 // sourcify and `source` contains wrong source code
                 "address": "0xDD00Fe656dC893863Ae537430Dd13631aA2F55F0",
                 "chain": "77",
-                "sourceFiles": {
+                "files": {
                     "metadata.json": metadata_content,
                     "contracts/1_Storage.sol": source,
                 },

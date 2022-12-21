@@ -38,7 +38,7 @@ impl TryFrom<VerifySourcifyRequestWrapper> for VerificationRequest {
         Ok(Self {
             address: request.address,
             chain: request.chain,
-            files: request.source_files,
+            files: request.files,
             chosen_contract: request.chosen_contract.map(|i| i as usize),
         })
     }
@@ -55,7 +55,7 @@ mod tests {
         let request = VerifySourcifyRequest {
             address: "0x0123456789abcdef".to_string(),
             chain: "77".to_string(),
-            source_files: BTreeMap::from([("metadata".into(), "metadata_content".into())]),
+            files: BTreeMap::from([("metadata".into(), "metadata_content".into())]),
             chosen_contract: Some(2),
         };
 
