@@ -4155,6 +4155,7 @@ dependencies = [
  "sig-provider-extension",
  "smart-contract-verifier",
  "smart-contract-verifier-proto",
+ "startuper",
  "thiserror",
  "tokio",
  "tonic",
@@ -4246,6 +4247,25 @@ dependencies = [
  "quote",
  "regex-syntax",
  "syn",
+]
+
+[[package]]
+name = "startuper"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "actix-web-prom",
+ "anyhow",
+ "futures",
+ "opentelemetry 0.18.0",
+ "opentelemetry-jaeger 0.17.0",
+ "prometheus",
+ "serde",
+ "tokio",
+ "tonic",
+ "tracing",
+ "tracing-opentelemetry 0.18.0",
+ "tracing-subscriber",
 ]
 
 [[package]]
