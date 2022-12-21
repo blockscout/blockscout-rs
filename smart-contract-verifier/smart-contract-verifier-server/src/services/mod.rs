@@ -4,6 +4,6 @@ mod sourcify_verifier;
 mod vyper_verifier;
 
 pub use health::HealthService;
-// pub use solidity_verifier::SolidityVerifierService;
-// pub use sourcify_verifier::SourcifyVerifierService;
-// pub use vyper_verifier::VyperVerifierService;
+pub use solidity_verifier::SolidityVerifierService;
+pub use sourcify_verifier::SourcifyVerifierService;
+pub use vyper_verifier::VyperVerifierService;

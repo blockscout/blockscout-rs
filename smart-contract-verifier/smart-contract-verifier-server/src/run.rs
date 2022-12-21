@@ -1,5 +1,13 @@
 use crate::{
     metrics::Metrics,
+    proto::{
+        health_actix::route_health, health_server::HealthServer,
+        solidity_verifier_actix::route_solidity_verifier,
+        solidity_verifier_server::SolidityVerifierServer,
+        sourcify_verifier_actix::route_sourcify_verifier,
+        sourcify_verifier_server::SourcifyVerifierServer,
+        vyper_verifier_actix::route_vyper_verifier, vyper_verifier_server::VyperVerifierServer,
+    },
     services::{
         HealthService, SolidityVerifierService, SourcifyVerifierService, VyperVerifierService,
     },
@@ -8,14 +16,6 @@ use crate::{
 };
 use actix_web::{dev::Server, App, HttpServer};
 use actix_web_prom::PrometheusMetrics;
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
-    health_actix::route_health, health_server::HealthServer,
-    solidity_verifier_actix::route_solidity_verifier,
-    solidity_verifier_server::SolidityVerifierServer,
-    sourcify_verifier_actix::route_sourcify_verifier,
-    sourcify_verifier_server::SourcifyVerifierServer, vyper_verifier_actix::route_vyper_verifier,
-    vyper_verifier_server::VyperVerifierServer,
-};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::Semaphore;
 
