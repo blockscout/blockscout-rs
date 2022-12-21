@@ -151,6 +151,17 @@ async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse
             "Abi deserialization failed: {}",
             abi.unwrap().as_ref().unwrap_err()
         );
+        assert_eq!(
+            result_source.source_type().as_str_name(),
+            "SOLIDITY",
+            "Invalid source type"
+        );
+    } else {
+        assert_eq!(
+            result_source.source_type().as_str_name(),
+            "YUL",
+            "Invalid source type"
+        );
     }
     let result_constructor_arguments = result_source
         .constructor_arguments
