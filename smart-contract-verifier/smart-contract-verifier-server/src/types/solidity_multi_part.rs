@@ -44,14 +44,13 @@ impl TryFrom<VerifySolidityMultiPartRequestWrapper> for VerificationRequest {
         let bytecode = DisplayBytes::from_str(&request.bytecode)
             .map_err(|err| tonic::Status::invalid_argument(format!("Invalid bytecode: {:?}", err)))?
             .0;
-        let (creation_bytecode, deployed_bytecode) =
-            match BytecodeType::from_i32(request.bytecode_type).unwrap_or_default() {
-                BytecodeType::Unspecified => Err(tonic::Status::invalid_argument(
-                    "bytecode type is unspecified",
-                ))?,
-                BytecodeType::CreationInput => (Some(bytecode), bytes::Bytes::new()),
-                BytecodeType::DeployedBytecode => (None, bytecode),
-            };
+        let (creation_bytecode, deployed_bytecode) = match request.bytecode_type() {
+            BytecodeType::Unspecified => Err(tonic::Status::invalid_argument(
+                "bytecode type is unspecified",
+            ))?,
+            BytecodeType::CreationInput => (Some(bytecode), bytes::Bytes::new()),
+            BytecodeType::DeployedBytecode => (None, bytecode),
+        };
 
         let compiler_version = Version::from_str(&request.compiler_version).map_err(|err| {
             tonic::Status::invalid_argument(format!("Invalid compiler version: {}", err))
