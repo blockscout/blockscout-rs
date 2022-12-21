@@ -1,5 +1,8 @@
 use config::{Config, File};
 use serde::{de, Deserialize, Serialize};
+use startuper::{
+    GrpcServerSettings, HttpServerSettings, JaegerSettings, MetricsSettings, ServerSettings,
+};
 use std::{net::SocketAddr, str::FromStr};
 
 /// Wrapper under [`serde::de::IgnoredAny`] which implements
@@ -16,7 +19,7 @@ impl PartialEq for IgnoredAny {
 
 impl Eq for IgnoredAny {}
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct Settings {
     pub server: ServerSettings,
@@ -29,6 +32,27 @@ pub struct Settings {
     // the setup would fail with `unknown field `config`, expected one of...`
     #[serde(skip_serializing, rename = "config")]
     config_path: IgnoredAny,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            server: ServerSettings {
+                http: HttpServerSettings {
+                    enabled: true,
+                    addr: SocketAddr::from_str("0.0.0.0:8050").unwrap(),
+                },
+                grpc: GrpcServerSettings {
+                    enabled: true,
+                    addr: SocketAddr::from_str("0.0.0.0:8051").unwrap(),
+                },
+            },
+            sources: Default::default(),
+            metrics: Default::default(),
+            jaeger: Default::default(),
+            config_path: Default::default(),
+        }
+    }
 }
 
 impl Settings {
@@ -60,79 +84,6 @@ impl Default for SourcesSettings {
         Self {
             fourbyte: url::Url::parse("https://www.4byte.directory/").unwrap(),
             sigeth: url::Url::parse("https://sig.eth.samczsun.com/").unwrap(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(default, deny_unknown_fields)]
-pub struct ServerSettings {
-    pub http: HttpServerSettings,
-    pub grpc: GrpcServerSettings,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct HttpServerSettings {
-    pub enabled: bool,
-    pub addr: SocketAddr,
-}
-
-impl Default for HttpServerSettings {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            addr: SocketAddr::from_str("0.0.0.0:8050").expect("valid addr"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct GrpcServerSettings {
-    pub enabled: bool,
-    pub addr: SocketAddr,
-}
-
-impl Default for GrpcServerSettings {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            addr: SocketAddr::from_str("0.0.0.0:8051").expect("valid addr"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct MetricsSettings {
-    pub enabled: bool,
-    pub addr: SocketAddr,
-    pub route: String,
-}
-
-impl Default for MetricsSettings {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            addr: SocketAddr::from_str("0.0.0.0:6060").expect("should be valid url"),
-            route: "/metrics".to_string(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct JaegerSettings {
-    pub enabled: bool,
-    pub agent_endpoint: String,
-}
-
-impl Default for JaegerSettings {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            agent_endpoint: "127.0.0.1:6831".to_string(),
         }
     }
 }

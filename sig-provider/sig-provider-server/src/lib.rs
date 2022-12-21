@@ -1,10 +1,9 @@
 pub mod health;
 pub mod metrics;
-mod server;
+mod run;
 mod service;
 mod settings;
-pub mod tracing;
 
-pub use server::*;
+pub use run::*;
 pub use service::Service;
 pub use settings::*;
