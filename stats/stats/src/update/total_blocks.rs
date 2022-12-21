@@ -34,7 +34,7 @@ impl super::UpdaterTrait for Updater {
         let data = blocks::Entity::find()
             .column(blocks::Column::Number)
             .column(blocks::Column::Timestamp)
-            .order_by_desc(blocks::Column::Timestamp)
+            .order_by_desc(blocks::Column::Number)
             .into_model::<TotalBlocksData>()
             .one(blockscout)
             .await?;
