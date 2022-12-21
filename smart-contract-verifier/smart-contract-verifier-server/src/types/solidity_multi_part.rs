@@ -59,16 +59,19 @@ impl TryFrom<VerifySolidityMultiPartRequestWrapper> for VerificationRequest {
         let sources: BTreeMap<PathBuf, String> = request
             .source_files
             .into_iter()
-            .map(|(name, content)| (PathBuf::from_str(&name).unwrap(), content))
+            .map(|(name, content)| {
+                (
+                    PathBuf::from_str(&name).unwrap(), /* TODO: why unwrap? */
+                    content,
+                )
+            })
             .collect();
 
-        let evm_version = if request.evm_version != "default" {
-            Some(
-                EvmVersion::from_str(&request.evm_version)
-                    .map_err(tonic::Status::invalid_argument)?,
-            )
-        } else {
-            None
+        let evm_version = match request.evm_version {
+            Some(version) if version != "default" => {
+                Some(EvmVersion::from_str(&version).map_err(tonic::Status::invalid_argument)?)
+            }
+            _ => None,
         };
 
         Ok(Self {
@@ -99,7 +102,7 @@ mod tests {
             bytecode_type: BytecodeType::CreationInput.into(),
             compiler_version: "v0.8.17+commit.8df45f5f".to_string(),
             source_files: BTreeMap::from([("source_path".into(), "source_content".into())]),
-            evm_version: "london".to_string(),
+            evm_version: Some("london".to_string()),
             optimization_runs: Some(200),
             libraries: BTreeMap::from([("Lib".into(), "0xcafe".into())]),
         };
@@ -142,7 +145,7 @@ mod tests {
             bytecode_type: BytecodeType::CreationInput.into(),
             compiler_version: "v0.8.17+commit.8df45f5f".to_string(),
             source_files: Default::default(),
-            evm_version: "default".to_string(),
+            evm_version: Some("default".to_string()),
             optimization_runs: None,
             libraries: Default::default(),
         };
@@ -155,6 +158,30 @@ mod tests {
         assert_eq!(
             None, verification_request.content.evm_version,
             "'default' should result in `None`"
+        )
+    }
+
+    #[test]
+    // 'null' should result in None in MultiFileContent
+    fn null_evm_version() {
+        let request = VerifySolidityMultiPartRequest {
+            bytecode: "".to_string(),
+            bytecode_type: BytecodeType::CreationInput.into(),
+            compiler_version: "v0.8.17+commit.8df45f5f".to_string(),
+            source_files: Default::default(),
+            evm_version: None,
+            optimization_runs: None,
+            libraries: Default::default(),
+        };
+
+        let verification_request: VerificationRequest =
+            <VerifySolidityMultiPartRequestWrapper>::from(request)
+                .try_into()
+                .expect("Try_into verification request failed");
+
+        assert_eq!(
+            None, verification_request.content.evm_version,
+            "Absent evm_version should result in `None`"
         )
     }
 }

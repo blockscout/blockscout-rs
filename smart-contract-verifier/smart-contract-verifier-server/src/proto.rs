@@ -3,5 +3,5 @@ pub use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::
     sourcify_verifier_server, verify_response, BytecodeType, HealthCheckRequest,
     HealthCheckResponse, ListCompilerVersionsRequest, ListCompilerVersionsResponse, Source,
     VerifyResponse, VerifySolidityMultiPartRequest, VerifySolidityStandardJsonRequest,
-    VerifySourcifyRequest,
+    VerifySourcifyRequest, VerifyVyperMultiPartRequest,
 };
