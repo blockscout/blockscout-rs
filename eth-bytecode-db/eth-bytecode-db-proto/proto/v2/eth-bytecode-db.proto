@@ -86,8 +86,8 @@ message VerifySolidityMultiPartRequest {
   BytecodeType bytecode_type = 2;
   /// Compiler version used to compile the contract
   string compiler_version = 3;
-  /// Version of the EVM to compile for
-  string evm_version = 4;
+  /// Version of the EVM to compile for. If absent results in default EVM version
+  optional string evm_version = 4;
   /// If present, optimizations are enabled with specified number of runs,
   /// otherwise optimizations are disabled
   optional int32 optimization_runs = 5;
@@ -115,10 +115,10 @@ message VerifyVyperMultiPartRequest {
   BytecodeType bytecode_type = 2;
   /// Compiler version used to compile the contract
   string compiler_version = 3;
-  /// Version of the EVM to compile for
-  string evm_version = 4;
-  /// Flag enabling optimizations
-  bool optimizations = 5;
+  /// Version of the EVM to compile for. If absent results in default EVM version
+  optional string evm_version = 4;
+  /// Flag enabling optimizations. If absent, default value is `true`
+  optional bool optimizations = 5;
   /// Source file name to the actual source code
   map<string, string> source_files = 6;
 }

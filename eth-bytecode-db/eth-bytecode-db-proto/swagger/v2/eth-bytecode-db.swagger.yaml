@@ -280,7 +280,7 @@ definitions:
         title: / Compiler version used to compile the contract
       evmVersion:
         type: string
-        title: / Version of the EVM to compile for
+        title: / Version of the EVM to compile for. If absent results in default EVM version
       libraries:
         type: object
         additionalProperties:
@@ -346,10 +346,10 @@ definitions:
         title: / Compiler version used to compile the contract
       evmVersion:
         type: string
-        title: / Version of the EVM to compile for
+        title: / Version of the EVM to compile for. If absent results in default EVM version
       optimizations:
         type: boolean
-        title: / Flag enabling optimizations
+        title: / Flag enabling optimizations. If absent, default value is `true`
       sourceFiles:
         type: object
         additionalProperties:
