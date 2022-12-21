@@ -3,9 +3,10 @@
 use mockall::mock;
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
     solidity_verifier_server::{SolidityVerifier, SolidityVerifierServer},
+    sourcify_verifier_server::{SourcifyVerifier, SourcifyVerifierServer},
     vyper_verifier_server::{VyperVerifier, VyperVerifierServer},
     ListVersionsRequest, ListVersionsResponse, VerifyResponse, VerifySolidityMultiPartRequest,
-    VerifySolidityStandardJsonRequest, VerifyVyperMultiPartRequest,
+    VerifySolidityStandardJsonRequest, VerifyViaSourcifyRequest, VerifyVyperMultiPartRequest,
 };
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
@@ -36,10 +37,21 @@ mock! {
     }
 }
 
+mock! {
+    #[derive(Clone)]
+    pub SourcifyVerifierService {}
+
+    #[async_trait::async_trait]
+    impl SourcifyVerifier for SourcifyVerifierService {
+        async fn verify(&self, request: tonic::Request<VerifyViaSourcifyRequest>) -> Result<tonic::Response<VerifyResponse>, tonic::Status>;
+    }
+}
+
 #[derive(Default)]
 pub struct SmartContractVerifierServer {
     solidity_service: Option<MockSolidityVerifierService>,
     vyper_service: Option<MockVyperVerifierService>,
+    sourcify_service: Option<MockSourcifyVerifierService>,
 }
 
 impl SmartContractVerifierServer {
@@ -47,6 +59,7 @@ impl SmartContractVerifierServer {
         Self {
             solidity_service: None,
             vyper_service: None,
+            sourcify_service: None,
         }
     }
 
@@ -60,6 +73,11 @@ impl SmartContractVerifierServer {
         self
     }
 
+    pub fn sourcify_service(mut self, sourcify_service: MockSourcifyVerifierService) -> Self {
+        self.sourcify_service = Some(sourcify_service);
+        self
+    }
+
     pub async fn start(self) -> SocketAddr {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -68,6 +86,7 @@ impl SmartContractVerifierServer {
             Server::builder()
                 .add_optional_service(self.solidity_service.map(SolidityVerifierServer::new))
                 .add_optional_service(self.vyper_service.map(VyperVerifierServer::new))
+                .add_optional_service(self.sourcify_service.map(SourcifyVerifierServer::new))
                 .serve_with_incoming(tokio_stream::wrappers::TcpListenerStream::new(listener))
                 .await
                 .unwrap();

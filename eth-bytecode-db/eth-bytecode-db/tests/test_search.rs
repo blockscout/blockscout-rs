@@ -1,3 +1,5 @@
+#![cfg(feature = "test-utils")]
+
 use entity::{sea_orm_active_enums::BytecodeType, sources};
 use eth_bytecode_db::{
     search::{find_contract, BytecodeRemote},

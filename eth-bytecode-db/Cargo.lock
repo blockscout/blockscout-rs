@@ -1137,6 +1137,18 @@ dependencies = [
 [[package]]
 name = "eth-bytecode-db-proto"
 version = "0.1.0"
+dependencies = [
+ "actix-prost",
+ "actix-prost-build",
+ "actix-prost-macros",
+ "actix-web",
+ "prost",
+ "prost-build",
+ "serde",
+ "serde_with",
+ "tonic",
+ "tonic-build",
+]
 
 [[package]]
 name = "eth-bytecode-db-server"

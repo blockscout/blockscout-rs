@@ -1,5 +1,6 @@
 pub mod solidity_multi_part;
 pub mod solidity_standard_json;
+pub mod sourcify;
 pub mod vyper_multi_part;
 
 ////////////////////////////////////////////////////////////////////////////////////////////
@@ -13,14 +14,21 @@ use super::{
 use anyhow::Context;
 use sea_orm::DatabaseConnection;
 
+enum ProcessResponseAction {
+    IgnoreDb,
+    SaveData {
+        bytecode_type: BytecodeType,
+        raw_request_bytecode: Vec<u8>,
+        verification_settings: serde_json::Value,
+        verification_type: VerificationType,
+    },
+}
+
 async fn process_verify_response(
     db_client: &DatabaseConnection,
     response: smart_contract_verifier::VerifyResponse,
-    bytecode_type: BytecodeType,
-    raw_request_bytecode: Vec<u8>,
     source_type_fn: fn(&str) -> Result<SourceType, Error>,
-    verification_settings: serde_json::Value,
-    verification_type: VerificationType,
+    action: ProcessResponseAction,
 ) -> Result<Source, Error> {
     let result = match response.status.as_str() {
         "0" if response.result.is_some() => response.result.unwrap(),
@@ -86,22 +94,32 @@ async fn process_verify_response(
         deployed_bytecode_parts,
     };
 
-    let source_id = db::insert_data(db_client, source.clone())
-        .await
-        .context("Insert data into database")
-        .map_err(Error::Internal)?;
+    match action {
+        ProcessResponseAction::IgnoreDb => {}
+        ProcessResponseAction::SaveData {
+            bytecode_type,
+            raw_request_bytecode,
+            verification_settings,
+            verification_type,
+        } => {
+            let source_id = db::insert_data(db_client, source.clone())
+                .await
+                .context("Insert data into database")
+                .map_err(Error::Internal)?;
 
-    // For historical data we just log any errors but do not propagate them further
-    let _ = db::insert_verified_contract_data(
-        db_client,
-        source_id,
-        raw_request_bytecode,
-        bytecode_type,
-        verification_settings,
-        verification_type,
-    )
-    .await
-    .map_err(|err| tracing::warn!("Error while inserting verified contract data: {}", err));
+            // For historical data we just log any errors but do not propagate them further
+            let _ = db::insert_verified_contract_data(
+                db_client,
+                source_id,
+                raw_request_bytecode,
+                bytecode_type,
+                verification_settings,
+                verification_type,
+            )
+            .await
+            .map_err(|err| tracing::warn!("Error while inserting verified contract data: {}", err));
+        }
+    }
 
     Ok(source)
 }

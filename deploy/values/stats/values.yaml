@@ -20,6 +20,11 @@ stats:
   # enable ingress
   ingress:
     enabled: true
+    annotations:
+      - 'nginx.ingress.kubernetes.io/cors-allow-origin: "https://*.blockscout-main.test.aws-k8s.blockscout.com, https://*.test.aws-k8s.blockscout.com, https://*.blockscout.com, http://localhost:3000"'
+      - 'nginx.ingress.kubernetes.io/cors-allow-credentials: "true"'
+      - 'nginx.ingress.kubernetes.io/cors-allow-methods: PUT, GET, POST, OPTIONS, DELETE, PATCH'
+      - 'nginx.ingress.kubernetes.io/enable-cors: "true"'
     host:
       _default: stats-test.aws-k8s.blockscout.com
     # enable https
@@ -59,3 +64,29 @@ stats:
     cpuTarget: 90
 
   environment: {}
+
+postgres:
+  enabled: true
+  image: postgres:13.8
+  port: 5432
+
+  command: '["docker-entrypoint.sh", "-c"]'
+  args: '["max_connections=200"]'
+
+  # strategy: Recreate
+
+  persistence: false
+  storage: 10Gi
+
+  resources:
+    limits:
+      memory:
+        _default: "4Gi"
+      cpu:
+        _default: "2"
+    requests:
+      memory:
+        _default: "4Gi"
+      cpu:
+        _default: "2"
+

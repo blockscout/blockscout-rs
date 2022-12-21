@@ -4,7 +4,7 @@ use stats_proto::blockscout::stats::v1::{
     stats_service_server::StatsService, Counters, GetCountersRequest, GetLineChartRequest,
     LineChart, Point,
 };
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr};
 use tonic::{Request, Response, Status};
 
 pub struct Service {}
@@ -32,7 +32,13 @@ impl StatsService for Service {
         _request: Request<GetCountersRequest>,
     ) -> Result<Response<Counters>, Status> {
         Ok(Response::new(Counters {
-            total_blocks_all_time: "16075890".into(),
+            counters: HashMap::from_iter([
+                ("totalBlocksAllTime".into(), "16075890".into()),
+                ("averageBlockTime".into(), "12.1".into()),
+                ("completedTransactions".into(), "190722170".into()),
+                ("totalTransactions".into(), "200122120".into()),
+                ("totalAccounts".into(), "123945332".into()),
+            ]),
         }))
     }
 
