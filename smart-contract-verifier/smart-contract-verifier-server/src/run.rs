@@ -39,11 +39,13 @@ impl startuper::HttpRouter for HttpRouter {
         } else {
             service_config
         };
-        if let Some(sourcify) = &self.sourcify_verifier {
+        let service_config = if let Some(sourcify) = &self.sourcify_verifier {
             service_config.configure(|config| route_sourcify_verifier(config, sourcify.clone()))
         } else {
             service_config
         };
+
+        let _ = service_config;
     }
 }
 
