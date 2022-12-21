@@ -28,11 +28,9 @@ pub fn from_verification_success(value: VerificationSuccess) -> Source {
         source_files: compiler_input
             .sources
             .into_iter()
-            .map(|(path, source)| {
-                (source::SourceFile {
-                    name: path.to_string_lossy().to_string(),
-                    content: source.content,
-                })
+            .map(|(path, source)| source::SourceFile {
+                name: path.to_string_lossy().to_string(),
+                content: source.content,
             })
             .collect(),
         abi: value.abi.as_ref().map(|abi| {

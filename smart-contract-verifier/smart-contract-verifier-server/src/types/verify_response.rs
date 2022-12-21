@@ -1,10 +1,9 @@
 use crate::proto::{
-    source,
-    verify_response::{self, ExtraData, Status},
+    verify_response::{ExtraData, Status},
     Source, VerifyResponse,
 };
 use serde::{Deserialize, Serialize};
-use smart_contract_verifier::{BytecodePart, SourcifySuccess, VerificationSuccess};
+use smart_contract_verifier::{SourcifySuccess, VerificationSuccess};
 use std::{fmt::Display, mem, ops::Deref};
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
@@ -59,7 +58,7 @@ impl VerifyResponseOk for VerificationSuccess {
 }
 
 impl VerifyResponseOk for SourcifySuccess {
-    fn result(mut self) -> (Source, ExtraData) {
+    fn result(self) -> (Source, ExtraData) {
         let extra_data = ExtraData {
             local_creation_input_parts: vec![],
             local_deployed_bytecode_parts: vec![],
@@ -147,13 +146,10 @@ mod tests {
     use super::{extra_data::bytecode_part::BytecodePartWrapper, *};
     use crate::proto::verify_response::extra_data::BytecodePart;
     use blockscout_display_bytes::Bytes as DisplayBytes;
-    use ethers_solc::{
-        artifacts::{Libraries, Optimizer, Settings, Source},
-        CompilerInput, EvmVersion,
-    };
+    use ethers_solc::CompilerInput;
     use pretty_assertions::assert_eq;
-    use smart_contract_verifier::{MatchType, SourcifySuccess, VerificationSuccess, Version};
-    use std::{collections::BTreeMap, str::FromStr};
+    use smart_contract_verifier::{MatchType, VerificationSuccess, Version};
+    use std::str::FromStr;
 
     #[test]
     fn ok_verify_response() {

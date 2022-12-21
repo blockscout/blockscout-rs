@@ -1,7 +1,7 @@
 use crate::{
     metrics,
     proto::{
-        solidity_verifier_server::SolidityVerifier, verify_response, ListCompilerVersionsRequest,
+        solidity_verifier_server::SolidityVerifier, ListCompilerVersionsRequest,
         ListCompilerVersionsResponse, VerifyResponse, VerifySolidityMultiPartRequest,
         VerifySolidityStandardJsonRequest,
     },
