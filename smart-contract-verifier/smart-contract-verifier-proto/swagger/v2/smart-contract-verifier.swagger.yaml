@@ -166,13 +166,6 @@ definitions:
       - FULL
     default: MATCH_UNSPECIFIED
     description: ' - MATCH_UNSPECIFIED: Default value. This value is unused.'
-  SourceSourceFile:
-    type: object
-    properties:
-      content:
-        type: string
-      name:
-        type: string
   SourceSourceType:
     type: string
     enum:
@@ -268,9 +261,9 @@ definitions:
         $ref: '#/definitions/SourceMatch'
         title: / Similar to Sourcify (see https://docs.sourcify.dev/docs/full-vs-partial-match/)
       sourceFiles:
-        type: array
-        items:
-          $ref: '#/definitions/SourceSourceFile'
+        type: object
+        additionalProperties:
+          type: string
       sourceType:
         $ref: '#/definitions/SourceSourceType'
   v2VerifyResponse:

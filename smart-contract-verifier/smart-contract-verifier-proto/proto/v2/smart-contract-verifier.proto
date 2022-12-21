@@ -45,11 +45,7 @@ message Source {
   }
   SourceType source_type = 6;
 
-  message SourceFile {
-    string name = 1;
-    string content =  2;
-  }
-  repeated SourceFile source_files = 7;
+  map<string, string> source_files = 7;
 
   /// Contract abi (https://docs.soliditylang.org/en/latest/abi-spec.html?highlight=abi#json);
   /// (does not exist for Yul contracts)

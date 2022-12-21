@@ -199,7 +199,7 @@ async fn test_success(test_case: TestCase) {
             .into_iter()
             .next()
             .unwrap()
-            .content,
+            .1,
         test_case.source_code,
         "Invalid source"
     );

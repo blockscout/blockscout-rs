@@ -28,10 +28,7 @@ pub fn from_verification_success(value: VerificationSuccess) -> Source {
         source_files: compiler_input
             .sources
             .into_iter()
-            .map(|(path, source)| source::SourceFile {
-                name: path.to_string_lossy().to_string(),
-                content: source.content,
-            })
+            .map(|(path, source)| (path.to_string_lossy().to_string(), source.content))
             .collect(),
         abi: value.abi.as_ref().map(|abi| {
             serde_json::to_string(abi)
@@ -54,11 +51,7 @@ pub fn from_sourcify_success(value: SourcifySuccess) -> Source {
         compiler_version: value.compiler_version,
         compiler_settings: value.compiler_settings,
         source_type: source::SourceType::Solidity.into(),
-        source_files: value
-            .sources
-            .into_iter()
-            .map(|(name, content)| source::SourceFile { name, content })
-            .collect(),
+        source_files: value.sources,
         abi: Some(value.abi),
         constructor_arguments: value
             .constructor_arguments
@@ -124,10 +117,7 @@ mod tests {
             compiler_version: "v0.8.17+commit.8df45f5f".to_string(),
             compiler_settings: serde_json::to_string(&compiler_settings).unwrap(),
             source_type: source::SourceType::Solidity.into(),
-            source_files: Vec::from([source::SourceFile {
-                name: "file_name".into(),
-                content: "content".into(),
-            }]),
+            source_files: BTreeMap::from([("file_name".into(), "content".into())]),
             constructor_arguments: Some("0x123456".into()),
             abi: Some(serde_json::to_string(&ethabi::Contract::default()).unwrap()),
             r#match: source::Match::Partial.into(),
@@ -160,10 +150,7 @@ mod tests {
             compiler_version: "v0.8.17+commit.8df45f5f".to_string(),
             compiler_settings: "compiler_settings".to_string(),
             source_type: source::SourceType::Solidity.into(),
-            source_files: Vec::from([source::SourceFile {
-                name: "file_name".into(),
-                content: "content".into(),
-            }]),
+            source_files: BTreeMap::from([("file_name".into(), "content".into())]),
             constructor_arguments: Some("0x123456".into()),
             abi: Some("abi".to_string()),
             r#match: source::Match::Full.into(),

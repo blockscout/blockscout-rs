@@ -233,12 +233,7 @@ async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse
         "Invalid number of sources"
     );
     assert_eq!(
-        result_source
-            .source_files
-            .into_iter()
-            .next()
-            .unwrap()
-            .content,
+        result_source.source_files.into_iter().next().unwrap().1,
         input.source_code.expect("Set `Some` on test_setup"),
         "Invalid source"
     );

@@ -9,13 +9,13 @@ use actix_web::{
 };
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use ethers_solc::artifacts::StandardJsonCompilerInput;
-use itertools::Itertools;
 use serde_json::json;
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
-    solidity_verifier_actix::route_solidity_verifier, source::SourceFile, VerifyResponse,
+    solidity_verifier_actix::route_solidity_verifier, VerifyResponse,
 };
 use smart_contract_verifier_server::{Settings, SolidityVerifierService};
 use std::{
+    collections::BTreeMap,
     fs,
     str::{from_utf8, FromStr},
     sync::Arc,
@@ -177,21 +177,15 @@ async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse
         standard_input.sources.len(),
         "Invalid number of sources"
     );
-    let expected_sources: Vec<_> = standard_input
+    let expected_sources: BTreeMap<_, _> = standard_input
         .sources
         .into_iter()
-        .map(|(path, source)| SourceFile {
-            name: path.to_str().unwrap().to_string(),
-            content: source.content,
-        })
-        .sorted_by_key(|source_file| (source_file.name.clone(), source_file.content.clone()))
+        .map(|(path, source)| (path.to_str().unwrap().to_string(), source.content))
         .collect();
-    let actual_sources: Vec<_> = verification_result
-        .source_files
-        .into_iter()
-        .sorted_by_key(|source_file| (source_file.name.clone(), source_file.content.clone()))
-        .collect();
-    assert_eq!(actual_sources, expected_sources, "Invalid source");
+    assert_eq!(
+        verification_result.source_files, expected_sources,
+        "Invalid source"
+    );
 
     let compiler_settings: ethers_solc::artifacts::Settings =
         serde_json::from_str(&verification_result.compiler_settings)
