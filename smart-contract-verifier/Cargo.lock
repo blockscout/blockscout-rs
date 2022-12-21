@@ -4142,6 +4142,7 @@ dependencies = [
  "ethabi 18.0.0",
  "ethers-solc",
  "futures",
+ "itertools",
  "lazy_static",
  "opentelemetry 0.18.0",
  "opentelemetry-jaeger 0.17.0",
