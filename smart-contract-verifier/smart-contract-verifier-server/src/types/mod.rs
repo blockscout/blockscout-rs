@@ -11,4 +11,4 @@ pub use solidity_standard_json::{
 };
 pub use sourcify::VerifySourcifyRequestWrapper;
 pub use verify_response::VerifyResponseWrapper;
-// pub use vyper_multi_part::VerifyVyperMultiPartRequestWrapper;
+pub use vyper_multi_part::VerifyVyperMultiPartRequestWrapper;

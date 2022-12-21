@@ -1,7 +1,7 @@
 mod health;
 mod solidity_verifier;
 mod sourcify_verifier;
-// mod vyper_verifier;
+mod vyper_verifier;
 
 pub use health::HealthService;
 // pub use solidity_verifier::SolidityVerifierService;
