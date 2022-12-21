@@ -90,8 +90,3 @@ postgres:
       cpu:
         _default: "2"
 
-  environment:
-    POSTGRES_USER:
-      _default: 'postgres'
-    POSTGRES_HOST_AUTH_METHOD:
-      _default: 'trust'
