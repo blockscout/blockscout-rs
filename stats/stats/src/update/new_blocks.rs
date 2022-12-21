@@ -30,12 +30,15 @@ pub struct Updater {}
 
 #[async_trait]
 impl super::UpdaterTrait for Updater {
+    fn name(&self) -> String {
+        "newBlocksPerDay".into()
+    }
+
     async fn update(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
     ) -> Result<(), UpdateError> {
-        let name = "newBlocksPerDay";
         let last_row = ChartData::find_by_statement(Statement::from_sql_and_values(
             DbBackend::Postgres,
             r#"
@@ -46,7 +49,7 @@ impl super::UpdaterTrait for Updater {
                 WHERE charts.name = $1
                 ORDER BY charts.id, data.id DESC;
             "#,
-            vec![name.into()],
+            vec![self.name().into()],
         ))
         .one(db)
         .await?;
@@ -80,11 +83,11 @@ impl super::UpdaterTrait for Updater {
                 .await?;
                 let id = charts::Entity::find()
                     .column(charts::Column::Id)
-                    .filter(charts::Column::Name.eq(name))
+                    .filter(charts::Column::Name.eq(self.name()))
                     .into_model::<ChartId>()
                     .one(db)
                     .await?
-                    .ok_or_else(|| UpdateError::NotFound(name.into()))?;
+                    .ok_or_else(|| UpdateError::NotFound(self.name()))?;
                 (id.id, data)
             }
         };
@@ -249,7 +252,9 @@ mod tests {
         mock_blockscout(&blockscout).await;
 
         Updater::default().update(&db, &blockscout).await.unwrap();
-        let data = get_chart_int(&db, "newBlocksPerDay").await.unwrap();
+        let data = get_chart_int(&db, "newBlocksPerDay", None, None)
+            .await
+            .unwrap();
         let expected = LineChart {
             chart: vec![
                 Point {
@@ -288,7 +293,9 @@ mod tests {
         mock_blockscout(&blockscout).await;
 
         Updater::default().update(&db, &blockscout).await.unwrap();
-        let data = get_chart_int(&db, "newBlocksPerDay").await.unwrap();
+        let data = get_chart_int(&db, "newBlocksPerDay", None, None)
+            .await
+            .unwrap();
         let expected = LineChart {
             chart: vec![
                 Point {
@@ -363,7 +370,9 @@ mod tests {
         mock_blockscout(&blockscout).await;
 
         Updater::default().update(&db, &blockscout).await.unwrap();
-        let data = get_chart_int(&db, "newBlocksPerDay").await.unwrap();
+        let data = get_chart_int(&db, "newBlocksPerDay", None, None)
+            .await
+            .unwrap();
         let expected = LineChart {
             chart: vec![
                 Point {

@@ -12,7 +12,7 @@ pub enum ReadError {
     NotFound(String),
 }
 
-#[derive(FromQueryResult)]
+#[derive(Debug, FromQueryResult)]
 struct CounterData {
     name: String,
     date: NaiveDate,
@@ -43,6 +43,7 @@ pub async fn get_counters(db: &DatabaseConnection) -> Result<Counters, ReadError
     ))
     .all(db)
     .await?;
+    dbg!(&data);
     let data: HashMap<_, _> = data
         .into_iter()
         .map(|data| (data.name, (data.date, data.value as u64)))
@@ -62,7 +63,12 @@ struct DateValue {
     value: i64,
 }
 
-pub async fn get_chart_int(db: &DatabaseConnection, name: &str) -> Result<LineChart, DbErr> {
+pub async fn get_chart_int(
+    db: &DatabaseConnection,
+    name: &str,
+    from: Option<NaiveDate>,
+    to: Option<NaiveDate>,
+) -> Result<LineChart, DbErr> {
     let data = DateValue::find_by_statement(Statement::from_sql_and_values(
         DbBackend::Postgres,
         r#"
@@ -79,6 +85,14 @@ pub async fn get_chart_int(db: &DatabaseConnection, name: &str) -> Result<LineCh
     .await?;
     let chart = data
         .into_iter()
+        .filter(|row| match from {
+            Some(from) => row.date >= from,
+            None => true,
+        })
+        .filter(|row| match to {
+            Some(to) => row.date <= to,
+            None => true,
+        })
         .map(|row| Point {
             date: row.date.format("%Y-%m-%d").to_string(),
             value: row.value.to_string(),
@@ -198,7 +212,9 @@ mod tests {
 
         let db = init_db("get_chart_int_mock").await;
         insert_mock_data(&db).await;
-        let chart = get_chart_int(&db, "newBlocksPerDay").await.unwrap();
+        let chart = get_chart_int(&db, "newBlocksPerDay", None, None)
+            .await
+            .unwrap();
         assert_eq!(
             LineChart {
                 chart: vec![

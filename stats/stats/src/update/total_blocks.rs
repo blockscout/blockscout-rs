@@ -25,12 +25,15 @@ pub struct Updater {}
 
 #[async_trait]
 impl super::UpdaterTrait for Updater {
+    fn name(&self) -> String {
+        "totalBlocksAllTime".into()
+    }
+
     async fn update(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
     ) -> Result<(), UpdateError> {
-        let name = "totalBlocksAllTime";
         let data = blocks::Entity::find()
             .column(blocks::Column::Number)
             .column(blocks::Column::Timestamp)
@@ -49,11 +52,11 @@ impl super::UpdaterTrait for Updater {
 
         let id = charts::Entity::find()
             .column(charts::Column::Id)
-            .filter(charts::Column::Name.eq(name))
+            .filter(charts::Column::Name.eq(self.name()))
             .into_model::<ChartId>()
             .one(db)
             .await?
-            .ok_or_else(|| UpdateError::NotFound(name.into()))?;
+            .ok_or_else(|| UpdateError::NotFound(self.name()))?;
 
         let data = chart_data_int::ActiveModel {
             id: Default::default(),

@@ -19,8 +19,8 @@ impl Eq for IgnoredAny {}
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct Settings {
-    pub server: ServerSettings,
     pub stats: StatsSettings,
+    pub server: ServerSettings,
 
     // Is required as we deny unknown fields, but allow users provide
     // path to config through PREFIX__CONFIG env variable. If removed,
@@ -48,7 +48,10 @@ impl Settings {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
-pub struct StatsSettings {}
+pub struct StatsSettings {
+    pub db_url: String,
+    // pub blockscout_db_url: String,
+}
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
