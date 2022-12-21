@@ -16,6 +16,7 @@ tokio = "1"
 thiserror = "1.0"
 chrono = "0.4"
 async-trait = "0.1"
+tracing = "0.1"
 
 [dev-dependencies]
 pretty_assertions = "1.2"

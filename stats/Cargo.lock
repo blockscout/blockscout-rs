@@ -2834,6 +2834,7 @@ dependencies = [
  "stats-proto",
  "thiserror",
  "tokio",
+ "tracing",
  "tracing-subscriber",
  "url",
 ]

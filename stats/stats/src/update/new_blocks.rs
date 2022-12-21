@@ -35,7 +35,7 @@ impl super::UpdaterTrait for Updater {
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
     ) -> Result<(), UpdateError> {
-        let name = "new_blocks_per_day";
+        let name = "newBlocksPerDay";
         let last_row = ChartData::find_by_statement(Statement::from_sql_and_values(
             DbBackend::Postgres,
             r#"
@@ -226,7 +226,7 @@ mod tests {
         let (db, blockscout) = init_db_all("update_new_blocks_recurrent").await;
 
         charts::Entity::insert(charts::ActiveModel {
-            name: Set("new_blocks_per_day".into()),
+            name: Set("newBlocksPerDay".into()),
             chart_type: Set(ChartType::Line),
             value_type: Set(ChartValueType::Int),
             ..Default::default()
@@ -249,7 +249,7 @@ mod tests {
         mock_blockscout(&blockscout).await;
 
         Updater::default().update(&db, &blockscout).await.unwrap();
-        let data = get_chart_int(&db, "new_blocks_per_day").await.unwrap();
+        let data = get_chart_int(&db, "newBlocksPerDay").await.unwrap();
         let expected = LineChart {
             chart: vec![
                 Point {
@@ -276,7 +276,7 @@ mod tests {
         let (db, blockscout) = init_db_all("update_new_blocks_fresh").await;
 
         charts::Entity::insert(charts::ActiveModel {
-            name: Set("new_blocks_per_day".into()),
+            name: Set("newBlocksPerDay".into()),
             chart_type: Set(ChartType::Line),
             value_type: Set(ChartValueType::Int),
             ..Default::default()
@@ -288,7 +288,7 @@ mod tests {
         mock_blockscout(&blockscout).await;
 
         Updater::default().update(&db, &blockscout).await.unwrap();
-        let data = get_chart_int(&db, "new_blocks_per_day").await.unwrap();
+        let data = get_chart_int(&db, "newBlocksPerDay").await.unwrap();
         let expected = LineChart {
             chart: vec![
                 Point {
@@ -316,10 +316,10 @@ mod tests {
     #[ignore = "needs database to run"]
     async fn update_new_blocks_last() {
         let _ = tracing_subscriber::fmt::try_init();
-        let (db, blockscout) = init_db_all("update_new_blocks_no_change").await;
+        let (db, blockscout) = init_db_all("update_new_blocks_last").await;
 
         charts::Entity::insert(charts::ActiveModel {
-            name: Set("new_blocks_per_day".into()),
+            name: Set("newBlocksPerDay".into()),
             chart_type: Set(ChartType::Line),
             value_type: Set(ChartValueType::Int),
             ..Default::default()
@@ -363,7 +363,7 @@ mod tests {
         mock_blockscout(&blockscout).await;
 
         Updater::default().update(&db, &blockscout).await.unwrap();
-        let data = get_chart_int(&db, "new_blocks_per_day").await.unwrap();
+        let data = get_chart_int(&db, "newBlocksPerDay").await.unwrap();
         let expected = LineChart {
             chart: vec![
                 Point {
