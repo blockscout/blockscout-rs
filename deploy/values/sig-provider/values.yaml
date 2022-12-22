@@ -1,0 +1,76 @@
+global:
+  env: testing
+# enable sig-provider deploy
+sigProvider:
+  enabled: true
+  image:
+    _default: ghcr.io/blockscout/sig-provider:main
+
+  replicas:
+    app: 1
+  docker:
+    port: 80
+    targetPort: 8050
+    metricsPort: 6060
+
+  strategy: RollingUpdate
+
+  service:
+    # ClusterIP, NodePort or LoadBalancer
+    type: ClusterIP
+
+  # enable ingress
+  ingress:
+    enabled: true
+    annotations: {}
+    host:
+      _default: sig-provider-test.aws-k8s.blockscout.com
+    # enable https
+    tls:
+      enabled: true
+      createSecret: false
+
+  resources:
+    limits:
+      memory:
+        _default: "0.5Gi"
+      cpu:
+        _default: "0.25"
+    requests:
+      memory:
+        _default: "0.5Gi"
+      cpu:
+        _default: "0.25"
+
+  # node label
+  nodeSelector:
+    enabled: true
+    labels:
+      _default:
+        app: blockscout
+
+  # probes
+  livenessProbe:
+    enabled: false
+    path: /health
+    params:
+      initialDelaySeconds: 100
+      periodSeconds: 100
+  readinessProbe:
+    enabled: false
+    path: /health
+    params:
+      initialDelaySeconds: 60
+      periodSeconds: 10
+      timeoutSeconds: 60
+
+  # enable Horizontal Pod Autoscaler
+  hpa:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 10
+    cpuTarget: 90
+
+  environment: {}
+    # ENV:
+    #   _default: 'true'
