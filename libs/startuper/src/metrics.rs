@@ -32,10 +32,9 @@ impl Metrics {
         &self.http_middleware
     }
 
-    pub fn run_server(&self, addr: SocketAddr) -> actix_web::dev::Server {
-        tracing::info!(addr = ?addr, "starting metris server");
-        let metrics_middleware = self.metrics_middleware.clone();
-        HttpServer::new(move || App::new().wrap(metrics_middleware.clone()))
+    pub fn run_server(self, addr: SocketAddr) -> actix_web::dev::Server {
+        tracing::info!(addr = ?addr, "starting metrics server");
+        HttpServer::new(move || App::new().wrap(self.metrics_middleware.clone()))
             .bind(addr)
             .unwrap()
             .run()

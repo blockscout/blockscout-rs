@@ -1,8 +1,8 @@
 use crate::{
-    logging::init_logs,
     metrics::Metrics,
     router::{configure_router, HttpRouter},
     settings::{JaegerSettings, MetricsSettings, ServerSettings},
+    tracing::init_logs,
 };
 use actix_web::{App, HttpServer};
 use actix_web_prom::PrometheusMetrics;
