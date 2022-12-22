@@ -566,6 +566,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "blockscout-service-launcher"
+version = "0.1.0"
+source = "git+https://github.com/blockscout/blockscout-rs?branch=lymarenkolev/add-startuper#eec747566c75696c6ce7ab3656e751a31a3a4be5"
+dependencies = [
+ "actix-web",
+ "actix-web-prom",
+ "anyhow",
+ "futures",
+ "opentelemetry 0.18.0",
+ "opentelemetry-jaeger 0.17.0",
+ "prometheus",
+ "serde",
+ "tokio",
+ "tonic",
+ "tracing",
+ "tracing-opentelemetry 0.18.0",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "brotli"
 version = "3.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4136,6 +4156,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "blockscout-display-bytes",
+ "blockscout-service-launcher",
  "config",
  "cron",
  "ethabi 18.0.0",
