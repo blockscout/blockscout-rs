@@ -616,6 +616,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "blockscout-service-launcher"
+version = "0.1.0"
+source = "git+https://github.com/blockscout/blockscout-rs?branch=lymarenkolev/add-startuper#039431184f51280c9b8ac5f4666db5510beb52e4"
+dependencies = [
+ "actix-web",
+ "actix-web-prom",
+ "anyhow",
+ "futures",
+ "opentelemetry",
+ "opentelemetry-jaeger",
+ "prometheus",
+ "serde",
+ "tokio",
+ "tonic",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "brotli"
 version = "3.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3003,6 +3023,7 @@ dependencies = [
  "actix-web-prom",
  "anyhow",
  "async-trait",
+ "blockscout-service-launcher",
  "bytes",
  "config",
  "ethabi",
@@ -3019,7 +3040,6 @@ dependencies = [
  "serde_with",
  "sig-provider",
  "sig-provider-proto",
- "startuper",
  "tokio",
  "toml",
  "tonic",
@@ -3094,26 +3114,6 @@ checksum = "02e2d2db9033d13a1567121ddd7a095ee144db4e1ca1b1bda3419bc0da294ebd"
 dependencies = [
  "libc",
  "winapi",
-]
-
-[[package]]
-name = "startuper"
-version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs?branch=lymarenkolev/add-startuper#42d36763a87ea518cd027a06cdedea8c965873e9"
-dependencies = [
- "actix-web",
- "actix-web-prom",
- "anyhow",
- "futures",
- "opentelemetry",
- "opentelemetry-jaeger",
- "prometheus",
- "serde",
- "tokio",
- "tonic",
- "tracing",
- "tracing-opentelemetry",
- "tracing-subscriber",
 ]
 
 [[package]]

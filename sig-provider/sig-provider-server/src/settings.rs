@@ -1,8 +1,8 @@
-use config::{Config, File};
-use serde::{de, Deserialize, Serialize};
-use startuper::{
+use blockscout_service_launcher::{
     GrpcServerSettings, HttpServerSettings, JaegerSettings, MetricsSettings, ServerSettings,
 };
+use config::{Config, File};
+use serde::{de, Deserialize, Serialize};
 use std::{net::SocketAddr, str::FromStr};
 
 /// Wrapper under [`serde::de::IgnoredAny`] which implements

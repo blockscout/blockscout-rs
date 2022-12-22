@@ -8,15 +8,15 @@ use actix_web::{App, HttpServer};
 use actix_web_prom::PrometheusMetrics;
 use std::net::SocketAddr;
 
-pub struct StartupSettings {
+pub struct LaunchSettings {
     pub service_name: String,
     pub server: ServerSettings,
     pub metrics: MetricsSettings,
     pub jaeger: JaegerSettings,
 }
 
-pub async fn start_it_up<R>(
-    settings: &StartupSettings,
+pub async fn launch<R>(
+    settings: &LaunchSettings,
     http: R,
     grpc: tonic::transport::server::Router,
 ) -> Result<(), anyhow::Error>

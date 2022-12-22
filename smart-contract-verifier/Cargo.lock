@@ -566,6 +566,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "blockscout-service-launcher"
+version = "0.1.0"
+source = "git+https://github.com/blockscout/blockscout-rs?branch=lymarenkolev/add-startuper#039431184f51280c9b8ac5f4666db5510beb52e4"
+dependencies = [
+ "actix-web",
+ "actix-web-prom",
+ "anyhow",
+ "futures",
+ "opentelemetry 0.18.0",
+ "opentelemetry-jaeger 0.17.0",
+ "prometheus",
+ "serde",
+ "tokio",
+ "tonic",
+ "tracing",
+ "tracing-opentelemetry 0.18.0",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "brotli"
 version = "3.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4136,6 +4156,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "blockscout-display-bytes",
+ "blockscout-service-launcher",
  "config",
  "cron",
  "ethabi 18.0.0",
@@ -4155,7 +4176,6 @@ dependencies = [
  "sig-provider-extension",
  "smart-contract-verifier",
  "smart-contract-verifier-proto",
- "startuper",
  "thiserror",
  "tokio",
  "tonic",
@@ -4247,26 +4267,6 @@ dependencies = [
  "quote",
  "regex-syntax",
  "syn",
-]
-
-[[package]]
-name = "startuper"
-version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs?branch=lymarenkolev/add-startuper#42d36763a87ea518cd027a06cdedea8c965873e9"
-dependencies = [
- "actix-web",
- "actix-web-prom",
- "anyhow",
- "futures",
- "opentelemetry 0.18.0",
- "opentelemetry-jaeger 0.17.0",
- "prometheus",
- "serde",
- "tokio",
- "tonic",
- "tracing",
- "tracing-opentelemetry 0.18.0",
- "tracing-subscriber",
 ]
 
 [[package]]

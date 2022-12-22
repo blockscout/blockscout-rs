@@ -1,5 +1,6 @@
 use crate::{health::HealthService, settings::SourcesSettings, Service, Settings};
 use actix_web::web::ServiceConfig;
+use blockscout_service_launcher::LaunchSettings;
 use sig_provider::{fourbyte, sigeth, SourceAggregator};
 use sig_provider_proto::blockscout::sig_provider::v1::{
     abi_service_actix::route_abi_service,
@@ -27,7 +28,9 @@ struct HttpRouter<S: SignatureService, A: AbiService> {
     health: Arc<HealthService>,
 }
 
-impl<S: SignatureService, A: AbiService> startuper::HttpRouter for HttpRouter<S, A> {
+impl<S: SignatureService, A: AbiService> blockscout_service_launcher::HttpRouter
+    for HttpRouter<S, A>
+{
     fn register_routes(&self, service_config: &mut actix_web::web::ServiceConfig) {
         service_config
             .configure(|config| route_health(config, self.health.clone()))
@@ -64,12 +67,12 @@ pub async fn sig_provider(settings: Settings) -> Result<(), anyhow::Error> {
         abi: service.clone(),
         health,
     };
-    let startup_settings = startuper::StartupSettings {
+    let launch_settings = LaunchSettings {
         service_name: "sig_provider".to_owned(),
         server: settings.server,
         metrics: settings.metrics,
         jaeger: settings.jaeger,
     };
 
-    startuper::start_it_up(&startup_settings, http_router, grpc_router).await
+    blockscout_service_launcher::launch(&launch_settings, http_router, grpc_router).await
 }

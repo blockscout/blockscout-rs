@@ -3,6 +3,6 @@ members = [
     "blockscout-db",
     "display-bytes",
     "mismatch",
-    "startuper",
+    "blockscout-service-launcher",
     "solidity-metadata",
 ]

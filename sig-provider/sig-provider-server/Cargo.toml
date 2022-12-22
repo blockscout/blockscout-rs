@@ -26,7 +26,7 @@ anyhow = "1.0"
 url = { version = "2", features = ["serde"] }
 hex = "0.4"
 ethabi = "17"
-startuper = { git = "https://github.com/blockscout/blockscout-rs", branch = "lymarenkolev/add-startuper" }
+blockscout-service-launcher = { git = "https://github.com/blockscout/blockscout-rs", branch = "lymarenkolev/add-startuper" }
 
 [dev-dependencies]
 http = "0.2"

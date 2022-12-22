@@ -4,6 +4,7 @@ use crate::{
     },
     settings::Settings,
 };
+use blockscout_service_launcher::LaunchSettings;
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
     health_actix::route_health, health_server::HealthServer,
     solidity_verifier_actix::route_solidity_verifier,
@@ -12,7 +13,6 @@ use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
     sourcify_verifier_server::SourcifyVerifierServer, vyper_verifier_actix::route_vyper_verifier,
     vyper_verifier_server::VyperVerifierServer,
 };
-use startuper::StartupSettings;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 
@@ -24,7 +24,7 @@ struct HttpRouter {
     health: Arc<HealthService>,
 }
 
-impl startuper::HttpRouter for HttpRouter {
+impl blockscout_service_launcher::HttpRouter for HttpRouter {
     fn register_routes(&self, service_config: &mut actix_web::web::ServiceConfig) {
         let service_config =
             service_config.configure(|config| route_health(config, self.health.clone()));
@@ -105,11 +105,11 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         sourcify_verifier,
         health,
     };
-    let startup_settings = StartupSettings {
+    let launch_settings = LaunchSettings {
         service_name: "smart_contract_verifier".to_owned(),
         server: settings.server,
         metrics: settings.metrics,
         jaeger: settings.jaeger,
     };
-    startuper::start_it_up(&startup_settings, http_router, grpc_router).await
+    blockscout_service_launcher::launch(&launch_settings, http_router, grpc_router).await
 }

@@ -1,4 +1,5 @@
 use anyhow::anyhow;
+use blockscout_service_launcher::{JaegerSettings, MetricsSettings, ServerSettings};
 use config::{Config, File};
 use cron::Schedule;
 use serde::{de, Deserialize};
@@ -6,7 +7,6 @@ use serde_with::{serde_as, DisplayFromStr};
 use smart_contract_verifier::{
     DEFAULT_SOLIDITY_COMPILER_LIST, DEFAULT_SOURCIFY_HOST, DEFAULT_VYPER_COMPILER_LIST,
 };
-use startuper::{JaegerSettings, MetricsSettings, ServerSettings};
 use std::{
     num::{NonZeroU32, NonZeroUsize},
     path::PathBuf,
