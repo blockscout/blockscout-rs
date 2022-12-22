@@ -10,4 +10,5 @@ pub mod parts;
 pub mod sea_orm_active_enums;
 pub mod source_files;
 pub mod sources;
+pub mod sources_m2m_files;
 pub mod verified_contracts;
