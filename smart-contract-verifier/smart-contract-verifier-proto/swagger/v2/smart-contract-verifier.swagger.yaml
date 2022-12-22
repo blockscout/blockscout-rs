@@ -158,14 +158,14 @@ definitions:
       - NOT_SERVING
       - SERVICE_UNKNOWN
     default: UNKNOWN
-  SourceMatch:
+  SourceMatchType:
     type: string
     enum:
-      - MATCH_UNSPECIFIED
+      - MATCH_TYPE_UNSPECIFIED
       - PARTIAL
       - FULL
-    default: MATCH_UNSPECIFIED
-    description: ' - MATCH_UNSPECIFIED: Default value. This value is unused.'
+    default: MATCH_TYPE_UNSPECIFIED
+    description: ' - MATCH_TYPE_UNSPECIFIED: Default value. This value is unused.'
   SourceSourceType:
     type: string
     enum:
@@ -257,8 +257,8 @@ definitions:
       fileName:
         type: string
         title: / The name of the file verified contract was located at
-      match:
-        $ref: '#/definitions/SourceMatch'
+      matchType:
+        $ref: '#/definitions/SourceMatchType'
         title: / Similar to Sourcify (see https://docs.sourcify.dev/docs/full-vs-partial-match/)
       sourceFiles:
         type: object

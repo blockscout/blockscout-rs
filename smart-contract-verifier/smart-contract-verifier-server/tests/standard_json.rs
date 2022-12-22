@@ -263,15 +263,15 @@ mod regression_tests {
 mod match_types_tests {
     use super::*;
     use crate::{standard_json_types::TestInput, test_success};
-    use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::source::Match;
+    use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::source::MatchType;
 
-    fn check_match_type(response: VerifyResponse, expected: Match) {
+    fn check_match_type(response: VerifyResponse, expected: MatchType) {
         assert_eq!(
             expected,
             response
                 .source
                 .expect("Test succeeded, thus result should exist")
-                .r#match(),
+                .match_type(),
             "Invalid match type"
         )
     }
@@ -281,7 +281,7 @@ mod match_types_tests {
         let contract_dir = "match_type_partial";
         let test_input = TestInput::new("Storage", "v0.8.7+commit.e28d00a7");
         let response = test_success(contract_dir, test_input).await;
-        check_match_type(response, Match::Partial);
+        check_match_type(response, MatchType::Partial);
     }
 
     #[tokio::test]
@@ -289,6 +289,6 @@ mod match_types_tests {
         let contract_dir = "match_type_full";
         let test_input = TestInput::new("Storage", "v0.8.7+commit.e28d00a7");
         let response = test_success(contract_dir, test_input).await;
-        check_match_type(response, Match::Full);
+        check_match_type(response, MatchType::Full);
     }
 }

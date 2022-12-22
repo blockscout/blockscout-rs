@@ -55,14 +55,14 @@ message Source {
   /// (exists only for creation inputs)
   optional string constructor_arguments = 9;
 
-  enum Match {
+  enum MatchType {
     // Default value. This value is unused.
-    MATCH_UNSPECIFIED = 0;
+    MATCH_TYPE_UNSPECIFIED = 0;
     PARTIAL = 1;
     FULL = 2;
   }
   /// Similar to Sourcify (see https://docs.sourcify.dev/docs/full-vs-partial-match/)
-  Match match = 10;
+  MatchType match_type = 10;
 }
 
 enum BytecodeType {

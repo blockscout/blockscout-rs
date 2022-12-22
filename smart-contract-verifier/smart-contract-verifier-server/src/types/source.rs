@@ -15,8 +15,8 @@ pub fn from_verification_success(value: VerificationSuccess) -> Source {
     };
 
     let match_type = match value.match_type {
-        MatchType::Partial => source::Match::Partial,
-        MatchType::Full => source::Match::Full,
+        MatchType::Partial => source::MatchType::Partial,
+        MatchType::Full => source::MatchType::Full,
     };
 
     Source {
@@ -35,14 +35,14 @@ pub fn from_verification_success(value: VerificationSuccess) -> Source {
                 .expect("Is result of local compilation and, thus, should be always valid")
         }),
         constructor_arguments: value.constructor_args.map(|args| args.to_string()),
-        r#match: match_type.into(),
+        match_type: match_type.into(),
     }
 }
 
 pub fn from_sourcify_success(value: SourcifySuccess) -> Source {
     let match_type = match value.match_type {
-        MatchType::Partial => source::Match::Partial,
-        MatchType::Full => source::Match::Full,
+        MatchType::Partial => source::MatchType::Partial,
+        MatchType::Full => source::MatchType::Full,
     };
 
     Source {
@@ -56,7 +56,7 @@ pub fn from_sourcify_success(value: SourcifySuccess) -> Source {
         constructor_arguments: value
             .constructor_arguments
             .map(|bytes| DisplayBytes::from(bytes).to_string()),
-        r#match: match_type.into(),
+        match_type: match_type.into(),
     }
 }
 
@@ -120,7 +120,7 @@ mod tests {
             source_files: BTreeMap::from([("file_name".into(), "content".into())]),
             constructor_arguments: Some("0x123456".into()),
             abi: Some(serde_json::to_string(&ethabi::Contract::default()).unwrap()),
-            r#match: source::Match::Partial.into(),
+            match_type: source::MatchType::Partial.into(),
         };
 
         assert_eq!(expected, result);
@@ -153,7 +153,7 @@ mod tests {
             source_files: BTreeMap::from([("file_name".into(), "content".into())]),
             constructor_arguments: Some("0x123456".into()),
             abi: Some("abi".to_string()),
-            r#match: source::Match::Full.into(),
+            match_type: source::MatchType::Full.into(),
         };
 
         assert_eq!(expected, result);
