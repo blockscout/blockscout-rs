@@ -2,8 +2,8 @@ use super::{
     super::{
         client::Client,
         errors::Error,
-        smart_contract_verifier::VerifyVyperMultiPartRequest,
-        types::{BytecodeType, Source, SourceType, VerificationRequest, VerificationType},
+        smart_contract_verifier::{BytecodeType, VerifyVyperMultiPartRequest},
+        types::{Source, VerificationRequest, VerificationType},
     },
     process_verify_response, ProcessResponseAction,
 };
@@ -12,23 +12,20 @@ use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MultiPartFiles {
-    pub evm_version: String,
-    pub optimizations: bool,
+    pub evm_version: Option<String>,
+    pub optimizations: Option<bool>,
     pub source_files: BTreeMap<String, String>,
 }
 
 impl From<VerificationRequest<MultiPartFiles>> for VerifyVyperMultiPartRequest {
     fn from(request: VerificationRequest<MultiPartFiles>) -> Self {
-        let (creation_bytecode, deployed_bytecode) = match request.bytecode_type {
-            BytecodeType::CreationInput => (Some(request.bytecode), "".to_string()),
-            BytecodeType::DeployedBytecode => (None, request.bytecode),
-        };
         Self {
-            creation_bytecode,
-            deployed_bytecode,
+            bytecode: request.bytecode,
+            bytecode_type: BytecodeType::from(request.bytecode_type).into(),
             compiler_version: request.compiler_version,
-            sources: request.content.source_files,
-            evm_version: Some(request.content.evm_version),
+            source_files: request.content.source_files,
+            evm_version: request.content.evm_version,
+            optimizations: request.content.optimizations,
         }
     }
 }
@@ -50,12 +47,9 @@ pub async fn verify(
         .map_err(Error::from)?
         .into_inner();
 
-    let source_type_fn = |_file_name: &str| Ok(SourceType::Vyper);
-
     process_verify_response(
         &client.db_client,
         response,
-        source_type_fn,
         ProcessResponseAction::SaveData {
             bytecode_type,
             raw_request_bytecode,

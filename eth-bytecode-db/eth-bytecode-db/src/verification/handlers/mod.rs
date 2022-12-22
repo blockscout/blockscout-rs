@@ -9,7 +9,7 @@ use super::{
     db,
     errors::Error,
     smart_contract_verifier,
-    types::{BytecodePart, BytecodeType, MatchType, Source, SourceType, VerificationType},
+    types::{BytecodePart, BytecodeType, Source, VerificationType},
 };
 use anyhow::Context;
 use sea_orm::DatabaseConnection;
@@ -27,24 +27,22 @@ enum ProcessResponseAction {
 async fn process_verify_response(
     db_client: &DatabaseConnection,
     response: smart_contract_verifier::VerifyResponse,
-    source_type_fn: fn(&str) -> Result<SourceType, Error>,
     action: ProcessResponseAction,
 ) -> Result<Source, Error> {
-    let result = match response.status.as_str() {
-        "0" if response.result.is_some() => response.result.unwrap(),
-        "1" => Err(Error::VerificationFailed {
+    let (source, extra_data) = match response.status() {
+        smart_contract_verifier::Status::Success
+            if response.source.is_some() && response.extra_data.is_some() =>
+        {
+            (response.source.unwrap(), response.extra_data.unwrap())
+        }
+        smart_contract_verifier::Status::Failure => Err(Error::VerificationFailed {
             message: response.message,
         })?,
         _ => Err(Error::Internal(
-            anyhow::anyhow!(
-                "invalid status: {}. One of \"0\" or \"1\" expected",
-                response.status
-            )
-            .context("verifier service connection"),
+            anyhow::anyhow!("invalid status: {}", response.status)
+                .context("verifier service connection"),
         ))?,
     };
-
-    let source_type = source_type_fn(result.file_name.as_str())?;
 
     let parse_local_parts = |local_parts: Vec<smart_contract_verifier::BytecodePart>,
                              bytecode_type: &str|
@@ -70,23 +68,23 @@ async fn process_verify_response(
     };
 
     let (creation_input_parts, raw_creation_input) =
-        parse_local_parts(result.local_creation_input_parts, "creation input")?;
-    let (deployed_bytecode_parts, raw_deployed_bytecode) =
-        parse_local_parts(result.local_deployed_bytecode_parts, "deployed bytecode")?;
+        parse_local_parts(extra_data.local_creation_input_parts, "creation input")?;
+    let (deployed_bytecode_parts, raw_deployed_bytecode) = parse_local_parts(
+        extra_data.local_deployed_bytecode_parts,
+        "deployed bytecode",
+    )?;
 
-    let match_type = MatchType::from(
-        smart_contract_verifier::MatchType::from_i32(result.match_type).unwrap_or_default(),
-    );
-
+    let source_type = source.source_type().try_into().map_err(Error::Internal)?;
+    let match_type = source.match_type().into();
     let source = Source {
-        file_name: result.file_name,
-        contract_name: result.contract_name,
-        compiler_version: result.compiler_version,
-        compiler_settings: result.compiler_settings,
+        file_name: source.file_name,
+        contract_name: source.contract_name,
+        compiler_version: source.compiler_version,
+        compiler_settings: source.compiler_settings,
         source_type,
-        source_files: result.sources,
-        abi: result.abi,
-        constructor_arguments: result.constructor_arguments,
+        source_files: source.source_files,
+        abi: source.abi,
+        constructor_arguments: source.constructor_arguments,
         match_type,
         raw_creation_input,
         raw_deployed_bytecode,
