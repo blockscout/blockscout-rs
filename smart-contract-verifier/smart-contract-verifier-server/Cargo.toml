@@ -34,7 +34,7 @@ tracing = "0.1"
 tracing-opentelemetry = "0.18"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 url = "2.3"
-blockscout-service-launcher = { git = "https://github.com/blockscout/blockscout-rs", branch = "lymarenkolev/add-startuper" }
+blockscout-service-launcher = "0.1"
 
 
 [dev-dependencies]
