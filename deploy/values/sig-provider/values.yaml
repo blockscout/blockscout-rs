@@ -51,13 +51,13 @@ sigProvider:
 
   # probes
   livenessProbe:
-    enabled: true
+    enabled: false
     path: /health
     params:
       initialDelaySeconds: 100
       periodSeconds: 100
   readinessProbe:
-    enabled: true
+    enabled: false
     path: /health
     params:
       initialDelaySeconds: 60
