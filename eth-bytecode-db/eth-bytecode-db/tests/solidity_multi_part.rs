@@ -7,7 +7,7 @@ use eth_bytecode_db::verification::{
     VerificationRequest,
 };
 use rstest::{fixture, rstest};
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
+use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
     VerifyResponse, VerifySolidityMultiPartRequest,
 };
 use tonic::Response;
@@ -22,7 +22,7 @@ const DB_PREFIX: &str = "solidity_multi_part";
 fn default_request_content() -> MultiPartFiles {
     MultiPartFiles {
         source_files: Default::default(),
-        evm_version: "london".to_string(),
+        evm_version: Some("london".to_string()),
         optimization_runs: None,
         libraries: Default::default(),
     }

@@ -111,6 +111,16 @@ impl TryFrom<smart_contract_verifier::SourceType> for SourceType {
     }
 }
 
+impl From<SourceType> for smart_contract_verifier::SourceType {
+    fn from(value: SourceType) -> Self {
+        match value {
+            SourceType::Solidity => smart_contract_verifier::SourceType::Solidity,
+            SourceType::Vyper => smart_contract_verifier::SourceType::Vyper,
+            SourceType::Yul => smart_contract_verifier::SourceType::Yul,
+        }
+    }
+}
+
 /********** Match Type **********/
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
