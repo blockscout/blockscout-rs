@@ -618,7 +618,7 @@ dependencies = [
 [[package]]
 name = "blockscout-service-launcher"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs?branch=lymarenkolev/add-startuper#039431184f51280c9b8ac5f4666db5510beb52e4"
+source = "git+https://github.com/blockscout/blockscout-rs?branch=lymarenkolev/add-startuper#eec747566c75696c6ce7ab3656e751a31a3a4be5"
 dependencies = [
  "actix-web",
  "actix-web-prom",
