@@ -10,9 +10,8 @@ pub struct Model {
     pub id: i32,
     #[sea_orm(unique)]
     pub name: String,
-    pub r#type: ChartType,
+    pub chart_type: ChartType,
     pub value_type: ChartValueType,
-    pub last_updated_id: Option<i64>,
     pub created_at: DateTime,
 }
 

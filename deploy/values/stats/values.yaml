@@ -64,3 +64,29 @@ stats:
     cpuTarget: 90
 
   environment: {}
+
+postgres:
+  enabled: true
+  image: postgres:13.8
+  port: 5432
+
+  command: '["docker-entrypoint.sh", "-c"]'
+  args: '["max_connections=200"]'
+
+  # strategy: Recreate
+
+  persistence: false
+  storage: 10Gi
+
+  resources:
+    limits:
+      memory:
+        _default: "4Gi"
+      cpu:
+        _default: "2"
+    requests:
+      memory:
+        _default: "4Gi"
+      cpu:
+        _default: "2"
+

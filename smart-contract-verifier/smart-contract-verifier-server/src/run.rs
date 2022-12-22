@@ -1,5 +1,4 @@
 use crate::{
-    metrics::Metrics,
     proto::{
         health_actix::route_health, health_server::HealthServer,
         solidity_verifier_actix::route_solidity_verifier,
@@ -12,16 +11,58 @@ use crate::{
         HealthService, SolidityVerifierService, SourcifyVerifierService, VyperVerifierService,
     },
     settings::Settings,
-    tracing::init_logs,
 };
-use actix_web::{dev::Server, App, HttpServer};
-use actix_web_prom::PrometheusMetrics;
-use std::{net::SocketAddr, sync::Arc};
+use blockscout_service_launcher::LaunchSettings;
+use std::sync::Arc;
 use tokio::sync::Semaphore;
 
-pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
-    init_logs(settings.jaeger);
+#[derive(Clone)]
+struct HttpRouter {
+    solidity_verifier: Option<Arc<SolidityVerifierService>>,
+    vyper_verifier: Option<Arc<VyperVerifierService>>,
+    sourcify_verifier: Option<Arc<SourcifyVerifierService>>,
+    health: Arc<HealthService>,
+}
 
+impl blockscout_service_launcher::HttpRouter for HttpRouter {
+    fn register_routes(&self, service_config: &mut actix_web::web::ServiceConfig) {
+        let service_config =
+            service_config.configure(|config| route_health(config, self.health.clone()));
+
+        let service_config = if let Some(solidity) = &self.solidity_verifier {
+            service_config.configure(|config| route_solidity_verifier(config, solidity.clone()))
+        } else {
+            service_config
+        };
+        let service_config = if let Some(vyper) = &self.vyper_verifier {
+            service_config.configure(|config| route_vyper_verifier(config, vyper.clone()))
+        } else {
+            service_config
+        };
+        let service_config = if let Some(sourcify) = &self.sourcify_verifier {
+            service_config.configure(|config| route_sourcify_verifier(config, sourcify.clone()))
+        } else {
+            service_config
+        };
+
+        let _ = service_config;
+    }
+}
+
+fn grpc_router(
+    solidity_verifier: Option<Arc<SolidityVerifierService>>,
+    vyper_verifier: Option<Arc<VyperVerifierService>>,
+    sourcify_verifier: Option<Arc<SourcifyVerifierService>>,
+    health: Arc<HealthService>,
+) -> tonic::transport::server::Router {
+    tonic::transport::Server::builder()
+        .add_service(HealthServer::from_arc(health))
+        .add_optional_service(solidity_verifier.map(SolidityVerifierServer::from_arc))
+        .add_optional_service(vyper_verifier.map(VyperVerifierServer::from_arc))
+        .add_optional_service(sourcify_verifier.map(SourcifyVerifierServer::from_arc))
+}
+
+pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let compilers_lock = Arc::new(Semaphore::new(settings.compilers.max_threads.get()));
 
     let solidity_verifier = match settings.solidity.enabled {
@@ -53,117 +94,23 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         false => None,
     };
     let health = Arc::new(HealthService::default());
-    let metrics = Metrics::new(settings.metrics.route);
-    let mut futures = vec![];
-
-    if settings.server.http.enabled {
-        let http_server = {
-            let http_server_future = http_server(
-                solidity_verifier.clone(),
-                vyper_verifier.clone(),
-                sourcify_verifier.clone(),
-                health.clone(),
-                metrics.middleware().clone(),
-                settings.server.http.addr,
-            );
-            tokio::spawn(async move { http_server_future.await.map_err(anyhow::Error::msg) })
-        };
-        futures.push(http_server)
-    }
-
-    if settings.server.grpc.enabled {
-        let grpc_server = {
-            tokio::spawn(async move {
-                grpc_server(
-                    solidity_verifier,
-                    vyper_verifier,
-                    sourcify_verifier,
-                    health,
-                    settings.server.grpc.addr,
-                )
-                .await
-            })
-        };
-        futures.push(grpc_server)
-    }
-
-    if settings.metrics.enabled {
-        futures.push(tokio::spawn(async move {
-            metrics.run_server(settings.metrics.addr).await?;
-            Ok(())
-        }))
-    }
-
-    let (res, _, others) = futures::future::select_all(futures).await;
-    for future in others.into_iter() {
-        future.abort()
-    }
-    res?
-}
-
-pub fn http_server(
-    solidity_verifier: Option<Arc<SolidityVerifierService>>,
-    vyper_verifier: Option<Arc<VyperVerifierService>>,
-    sourcify_verifier: Option<Arc<SourcifyVerifierService>>,
-    health: Arc<HealthService>,
-    metrics: PrometheusMetrics,
-    addr: SocketAddr,
-) -> Server {
-    tracing::info!("starting http server on addr {}", addr);
-    let server = HttpServer::new(move || {
-        let app = App::new()
-            .wrap(metrics.clone())
-            .configure(|config| route_health(config, health.clone()));
-        let app = if let Some(solidity_verifier) = &solidity_verifier {
-            app.configure(|config| route_solidity_verifier(config, solidity_verifier.clone()))
-        } else {
-            app
-        };
-        let app = if let Some(vyper_verifier) = &vyper_verifier {
-            app.configure(|config| route_vyper_verifier(config, vyper_verifier.clone()))
-        } else {
-            app
-        };
-        if let Some(sourcify_verifier) = &sourcify_verifier {
-            app.configure(|config| route_sourcify_verifier(config, sourcify_verifier.clone()))
-        } else {
-            app
-        }
-    })
-    .bind(addr)
-    .unwrap_or_else(|_| panic!("failed to bind server"));
-
-    server.run()
-}
-
-pub async fn grpc_server(
-    solidity_verifier: Option<Arc<SolidityVerifierService>>,
-    vyper_verifier: Option<Arc<VyperVerifierService>>,
-    sourcify_verifier: Option<Arc<SourcifyVerifierService>>,
-    health: Arc<HealthService>,
-    addr: SocketAddr,
-) -> Result<(), anyhow::Error> {
-    tracing::info!("starting grpc server on addr {}", addr);
-    let server = {
-        let server =
-            tonic::transport::Server::builder().add_service(HealthServer::from_arc(health));
-        let server = if let Some(solidity_verifier) = solidity_verifier {
-            server.add_service(SolidityVerifierServer::from_arc(solidity_verifier))
-        } else {
-            server
-        };
-        let server = if let Some(vyper_verifier) = vyper_verifier {
-            server.add_service(VyperVerifierServer::from_arc(vyper_verifier))
-        } else {
-            server
-        };
-        if let Some(sourcify_verifier) = sourcify_verifier {
-            server.add_service(SourcifyVerifierServer::from_arc(sourcify_verifier))
-        } else {
-            server
-        }
+    let grpc_router = grpc_router(
+        solidity_verifier.clone(),
+        vyper_verifier.clone(),
+        sourcify_verifier.clone(),
+        health.clone(),
+    );
+    let http_router = HttpRouter {
+        solidity_verifier,
+        vyper_verifier,
+        sourcify_verifier,
+        health,
     };
-
-    server.serve(addr).await?;
-    Ok(())
+    let launch_settings = LaunchSettings {
+        service_name: "smart_contract_verifier".to_owned(),
+        server: settings.server,
+        metrics: settings.metrics,
+        jaeger: settings.jaeger,
+    };
+    blockscout_service_launcher::launch(&launch_settings, http_router, grpc_router).await
 }
