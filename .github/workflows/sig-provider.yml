@@ -2,7 +2,6 @@ on:
   push:
     branches:
       - 'main'
-      - 'add-sig-provider-deploy'
     tags:
       - 'sig-provider/v*'
   pull_request:
