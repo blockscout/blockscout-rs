@@ -8,6 +8,7 @@ on:
     paths:
       - smart-contract-verifier/**
       - .github/workflows/smart-contract-verifier.yml
+      - .github/actions/deps/**
 
 
 name: Test, lint and docker (smart-contract-verifier)

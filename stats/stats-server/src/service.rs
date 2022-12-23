@@ -3,6 +3,7 @@ use std::str::FromStr;
 use async_trait::async_trait;
 use chrono::NaiveDate;
 use sea_orm::{Database, DatabaseConnection, DbErr};
+use stats::migration::MigratorTrait;
 use stats_proto::blockscout::stats::v1::{
     stats_service_server::StatsService, Counters, GetCountersRequest, GetLineChartRequest,
     LineChart,
@@ -11,13 +12,19 @@ use tonic::{Request, Response, Status};
 
 pub struct Service {
     db: DatabaseConnection,
+    #[allow(dead_code)]
+    blockscout: DatabaseConnection,
 }
 
 impl Service {
-    pub async fn new(db_url: &str) -> Result<Self, DbErr> {
+    pub async fn new(db_url: &str, blockscout_db_url: &str) -> Result<Self, DbErr> {
         let db = Database::connect(db_url).await?;
-        stats::mock::fill_mock_data(&db).await?;
-        Ok(Self { db })
+        let blockscout = Database::connect(blockscout_db_url).await?;
+        Ok(Self { db, blockscout })
+    }
+
+    pub async fn migrate(&self) -> Result<(), DbErr> {
+        stats::migration::Migrator::up(&self.db, None).await
     }
 }
 

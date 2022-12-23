@@ -8,6 +8,7 @@ use sig_provider_proto::blockscout::sig_provider::v1::{
 };
 use std::sync::Arc;
 
+#[derive(Clone)]
 pub struct Service {
     agg: Arc<SourceAggregator>,
 }

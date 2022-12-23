@@ -10,13 +10,13 @@ stats-proto = { path = "../stats-proto" }
 sea-orm = { version = "0.10", features = [
     "sqlx-postgres",
     "runtime-tokio-rustls",
-    "debug-print",
 ] }
 tokio = "1"
 thiserror = "1.0"
 chrono = "0.4"
 async-trait = "0.1"
 tracing = "0.1"
+migration = { path = "./migration" }
 
 [dev-dependencies]
 pretty_assertions = "1.2"
@@ -25,5 +25,4 @@ sea-orm-migration = { version = "0.10", features = [
     "runtime-tokio-rustls",
     "sqlx-postgres",
 ] }
-migration = { path = "./migration" }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

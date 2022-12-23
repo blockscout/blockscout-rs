@@ -1,5 +1,5 @@
 use entity::sources;
-use eth_bytecode_db::tests::verifier_mock::{generate_and_insert, ContractType};
+use eth_bytecode_db::tests::verifier_mock::{generate_and_insert, ContractInfo, ContractType};
 use sea_orm::{Database, DatabaseConnection, EntityTrait, PaginatorTrait};
 use std::sync::Arc;
 use tokio::sync::Semaphore;
@@ -25,8 +25,12 @@ async fn main() {
 
             let permit = semaphore.clone().acquire_owned().await.unwrap();
             let db = db.clone();
+            let info = ContractInfo {
+                id: 1,
+                ty: ContractType::Small,
+            };
             join_handles.push(tokio::spawn(async move {
-                let res = generate_and_insert(db.as_ref(), 1, ContractType::Small).await;
+                let res = generate_and_insert(db.as_ref(), &info).await;
                 drop(permit);
                 res
             }));
@@ -39,8 +43,12 @@ async fn main() {
 
             let permit = semaphore.clone().acquire_owned().await.unwrap();
             let db = db.clone();
+            let info = ContractInfo {
+                id,
+                ty: ContractType::Small,
+            };
             join_handles.push(tokio::spawn(async move {
-                let res = generate_and_insert(db.as_ref(), id, ContractType::Small).await;
+                let res = generate_and_insert(db.as_ref(), &info).await;
                 drop(permit);
                 res
             }));
@@ -52,8 +60,12 @@ async fn main() {
             }
             let permit = semaphore.clone().acquire_owned().await.unwrap();
             let db = db.clone();
+            let info = ContractInfo {
+                id,
+                ty: ContractType::Medium,
+            };
             join_handles.push(tokio::spawn(async move {
-                let res = generate_and_insert(db.as_ref(), id, ContractType::Medium).await;
+                let res = generate_and_insert(db.as_ref(), &info).await;
                 drop(permit);
                 res
             }));

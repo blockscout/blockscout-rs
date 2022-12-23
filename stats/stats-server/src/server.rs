@@ -34,7 +34,11 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
 
     let mut futures = vec![];
 
-    let service = Arc::new(Service::new(&settings.stats.db_url).await?);
+    let service = Arc::new(Service::new(&settings.db_url, &settings.blockscout_db_url).await?);
+
+    if settings.run_migrations {
+        service.migrate().await?;
+    }
 
     if settings.server.http.enabled {
         let http_server = {

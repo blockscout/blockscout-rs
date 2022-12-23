@@ -1,4 +1,5 @@
 use anyhow::anyhow;
+use blockscout_service_launcher::{JaegerSettings, MetricsSettings, ServerSettings};
 use config::{Config, File};
 use cron::Schedule;
 use serde::{de, Deserialize};
@@ -7,7 +8,6 @@ use smart_contract_verifier::{
     DEFAULT_SOLIDITY_COMPILER_LIST, DEFAULT_SOURCIFY_HOST, DEFAULT_VYPER_COMPILER_LIST,
 };
 use std::{
-    net::SocketAddr,
     num::{NonZeroU32, NonZeroUsize},
     path::PathBuf,
     str::FromStr,
@@ -28,7 +28,7 @@ impl PartialEq for IgnoredAny {
 
 impl Eq for IgnoredAny {}
 
-#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, Default, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct Settings {
     pub server: ServerSettings,
@@ -45,45 +45,6 @@ pub struct Settings {
     // the setup would fail with `unknown field `config`, expected one of...`
     #[serde(rename = "config")]
     config_path: IgnoredAny,
-}
-
-#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
-#[serde(default, deny_unknown_fields)]
-pub struct ServerSettings {
-    pub http: HttpServerSettings,
-    pub grpc: GrpcServerSettings,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct HttpServerSettings {
-    pub enabled: bool,
-    pub addr: SocketAddr,
-}
-
-impl Default for HttpServerSettings {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            addr: SocketAddr::from_str("0.0.0.0:8043").unwrap(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct GrpcServerSettings {
-    pub enabled: bool,
-    pub addr: SocketAddr,
-}
-
-impl Default for GrpcServerSettings {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            addr: SocketAddr::from_str("0.0.0.0:8044").unwrap(),
-        }
-    }
 }
 
 #[serde_as]
@@ -192,40 +153,6 @@ impl Default for SourcifySettings {
             api_url: Url::try_from(DEFAULT_SOURCIFY_HOST).expect("valid url"),
             verification_attempts: NonZeroU32::new(3).expect("Is not zero"),
             request_timeout: 10,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct MetricsSettings {
-    pub enabled: bool,
-    pub addr: SocketAddr,
-    pub route: String,
-}
-
-impl Default for MetricsSettings {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            addr: SocketAddr::from_str("0.0.0.0:6060").expect("should be valid url"),
-            route: "/metrics".to_string(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct JaegerSettings {
-    pub enabled: bool,
-    pub agent_endpoint: String,
-}
-
-impl Default for JaegerSettings {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            agent_endpoint: "localhost:6831".to_string(),
         }
     }
 }

@@ -52,33 +52,38 @@ pub enum ContractType {
     Constructor,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ContractInfo {
+    pub id: usize,
+    pub ty: ContractType,
+}
+
 pub async fn generate_and_insert(
     db: &DatabaseConnection,
-    id: usize,
-    ty: ContractType,
+    info: &ContractInfo,
 ) -> Result<sources::Model, anyhow::Error> {
-    let verification_result = VerificationResult::generate(id, ty);
+    let verification_result = VerificationResult::generate(info);
     insert_verification_result(db, verification_result).await
 }
 
 impl VerificationResult {
-    pub fn generate(id: usize, ty: ContractType) -> Self {
-        match ty {
+    pub fn generate(info: &ContractInfo) -> Self {
+        match info.ty {
             ContractType::Small => {
                 let template = include_str!("contracts/type_1.json");
-                Self::from_template(template, id).expect("should be valid verification result")
+                Self::from_template(template, info.id).expect("should be valid verification result")
             }
             ContractType::Medium => {
                 let template = include_str!("contracts/type_2.json");
-                Self::from_template(template, id).expect("should be valid verification result")
+                Self::from_template(template, info.id).expect("should be valid verification result")
             }
             ContractType::Big => {
                 let template = include_str!("contracts/type_3.json");
-                Self::from_template(template, id).expect("should be valid verification result")
+                Self::from_template(template, info.id).expect("should be valid verification result")
             }
             ContractType::Constructor => {
                 let template = include_str!("contracts/type_4.json");
-                Self::from_template(template, id).expect("should be valid verification result")
+                Self::from_template(template, info.id).expect("should be valid verification result")
             }
         }
     }
