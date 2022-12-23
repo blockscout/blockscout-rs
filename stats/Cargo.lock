@@ -2867,6 +2867,7 @@ dependencies = [
  "chrono",
  "config",
  "futures",
+ "sea-orm",
  "serde",
  "serde_with",
  "stats",
@@ -2874,6 +2875,7 @@ dependencies = [
  "tokio",
  "tonic",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
