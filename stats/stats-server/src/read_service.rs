@@ -1,30 +1,21 @@
-use std::str::FromStr;
-
 use async_trait::async_trait;
 use chrono::NaiveDate;
-use sea_orm::{Database, DatabaseConnection, DbErr};
-use stats::{migration::MigratorTrait, ReadError};
+use sea_orm::{DatabaseConnection, DbErr};
+use stats::ReadError;
 use stats_proto::blockscout::stats::v1::{
     stats_service_server::StatsService, Counters, GetCountersRequest, GetLineChartRequest,
     LineChart,
 };
+use std::{str::FromStr, sync::Arc};
 use tonic::{Request, Response, Status};
 
-pub struct Service {
-    db: DatabaseConnection,
-    #[allow(dead_code)]
-    blockscout: DatabaseConnection,
+pub struct ReadService {
+    db: Arc<DatabaseConnection>,
 }
 
-impl Service {
-    pub async fn new(db_url: &str, blockscout_db_url: &str) -> Result<Self, DbErr> {
-        let db = Database::connect(db_url).await?;
-        let blockscout = Database::connect(blockscout_db_url).await?;
-        Ok(Self { db, blockscout })
-    }
-
-    pub async fn migrate(&self) -> Result<(), DbErr> {
-        stats::migration::Migrator::up(&self.db, None).await
+impl ReadService {
+    pub async fn new(db: Arc<DatabaseConnection>) -> Result<Self, DbErr> {
+        Ok(Self { db })
     }
 }
 
@@ -36,7 +27,7 @@ fn map_read_error(err: ReadError) -> Status {
 }
 
 #[async_trait]
-impl StatsService for Service {
+impl StatsService for ReadService {
     async fn get_counters(
         &self,
         _request: Request<GetCountersRequest>,

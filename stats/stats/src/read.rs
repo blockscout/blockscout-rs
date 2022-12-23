@@ -86,17 +86,21 @@ pub async fn get_chart_int(
         .await?
         .ok_or_else(|| ReadError::NotFound(name.into()))?;
 
-    let mut data_request = chart_data_int::Entity::find()
+    let data_request = chart_data_int::Entity::find()
         .column(chart_data_int::Column::Date)
         .column(chart_data_int::Column::Value)
         .filter(chart_data_int::Column::ChartId.eq(id.id))
         .order_by_asc(chart_data_int::Column::Date);
 
-    if let Some(from) = from {
-        data_request = data_request.filter(chart_data_int::Column::Date.gte(from))
+    let data_request = if let Some(from) = from {
+        data_request.filter(chart_data_int::Column::Date.gte(from))
+    } else {
+        data_request
     };
-    if let Some(to) = to {
-        data_request = data_request.filter(chart_data_int::Column::Date.lte(to))
+    let data_request = if let Some(to) = to {
+        data_request.filter(chart_data_int::Column::Date.lte(to))
+    } else {
+        data_request
     };
 
     let data = data_request.into_model::<DateValue>().all(db).await?;

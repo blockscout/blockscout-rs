@@ -1,12 +1,13 @@
+use super::UpdateError;
 use async_trait::async_trait;
 use chrono::NaiveDate;
-use entity::{chart_data_int, charts};
-use sea_orm::{
-    sea_query, ColumnTrait, DatabaseConnection, DbBackend, EntityTrait, FromQueryResult,
-    QueryFilter, QuerySelect, Set, Statement,
+use entity::{
+    chart_data_int,
+    sea_orm_active_enums::{ChartType, ChartValueType},
 };
-
-use super::UpdateError;
+use sea_orm::{
+    prelude::*, sea_query, DbBackend, FromQueryResult, QueryOrder, QuerySelect, Set, Statement,
+};
 
 #[derive(FromQueryResult)]
 struct NewBlocksData {
@@ -15,23 +16,21 @@ struct NewBlocksData {
 }
 
 #[derive(Debug, FromQueryResult)]
-struct ChartData {
-    id: i32,
+struct ChartDate {
     date: NaiveDate,
 }
 
-#[derive(Debug, FromQueryResult)]
-struct ChartID {
-    id: i32,
-}
-
 #[derive(Default, Debug)]
-pub struct Updater {}
+pub struct NewBlocks {}
 
 #[async_trait]
-impl super::UpdaterTrait for Updater {
+impl super::Chart for NewBlocks {
     fn name(&self) -> &str {
         "newBlocksPerDay"
+    }
+
+    async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
+        super::create_chart(db, self.name().into(), ChartType::Line, ChartValueType::Int).await
     }
 
     async fn update(
@@ -39,23 +38,21 @@ impl super::UpdaterTrait for Updater {
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
     ) -> Result<(), UpdateError> {
-        let last_row = ChartData::find_by_statement(Statement::from_sql_and_values(
-            DbBackend::Postgres,
-            r#"
-            SELECT distinct on (charts.id) charts.id, data.date 
-                FROM "chart_data_int" "data"
-                INNER JOIN "charts"
-                    ON data.chart_id = charts.id
-                WHERE charts.name = $1
-                ORDER BY charts.id, data.id DESC;
-            "#,
-            vec![self.name().into()],
-        ))
-        .one(db)
-        .await?;
-        let (id, data) = match last_row {
+        let id = super::find_chart(db, self.name())
+            .await?
+            .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
+        let last_row = chart_data_int::Entity::find()
+            .column(chart_data_int::Column::Date)
+            .filter(chart_data_int::Column::ChartId.eq(id))
+            .order_by_desc(chart_data_int::Column::Date)
+            .into_model::<ChartDate>()
+            .one(db)
+            .await?;
+
+        // TODO: rewrite using orm/build request with `where` clause
+        let data = match last_row {
             Some(row) => {
-                let data = NewBlocksData::find_by_statement(Statement::from_sql_and_values(
+                NewBlocksData::find_by_statement(Statement::from_sql_and_values(
                     DbBackend::Postgres,
                     r#"
                     SELECT date(blocks.timestamp) as day, COUNT(*)
@@ -66,11 +63,10 @@ impl super::UpdaterTrait for Updater {
                     vec![row.date.into()],
                 ))
                 .all(blockscout)
-                .await?;
-                (row.id, data)
+                .await?
             }
             None => {
-                let data = NewBlocksData::find_by_statement(Statement::from_string(
+                NewBlocksData::find_by_statement(Statement::from_string(
                     DbBackend::Postgres,
                     r#"
                     SELECT date(blocks.timestamp) as day, COUNT(*)
@@ -80,15 +76,7 @@ impl super::UpdaterTrait for Updater {
                     .into(),
                 ))
                 .all(blockscout)
-                .await?;
-                let id = charts::Entity::find()
-                    .column(charts::Column::Id)
-                    .filter(charts::Column::Name.eq(self.name()))
-                    .into_model::<ChartID>()
-                    .one(db)
-                    .await?
-                    .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
-                (id.id, data)
+                .await?
             }
         };
 
@@ -119,13 +107,9 @@ impl super::UpdaterTrait for Updater {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{get_chart_int, UpdaterTrait};
+    use crate::{get_chart_int, Chart};
     use blockscout_db::entity::{addresses, blocks};
     use chrono::NaiveDateTime;
-    use entity::{
-        charts,
-        sea_orm_active_enums::{ChartType, ChartValueType},
-    };
     use migration::MigratorTrait;
     use pretty_assertions::assert_eq;
     use sea_orm::{ConnectionTrait, Database, Statement};
@@ -228,16 +212,8 @@ mod tests {
         let _ = tracing_subscriber::fmt::try_init();
         let (db, blockscout) = init_db_all("update_new_blocks_recurrent").await;
 
-        let updater = Updater::default();
-        charts::Entity::insert(charts::ActiveModel {
-            name: Set(updater.name().into()),
-            chart_type: Set(ChartType::Line),
-            value_type: Set(ChartValueType::Int),
-            ..Default::default()
-        })
-        .exec(&db)
-        .await
-        .unwrap();
+        let updater = NewBlocks::default();
+        updater.create(&db).await.unwrap();
 
         // set wrong value and check, that it was rewritten
         chart_data_int::Entity::insert(chart_data_int::ActiveModel {
@@ -281,16 +257,8 @@ mod tests {
         let _ = tracing_subscriber::fmt::try_init();
         let (db, blockscout) = init_db_all("update_new_blocks_fresh").await;
 
-        let updater = Updater::default();
-        charts::Entity::insert(charts::ActiveModel {
-            name: Set(updater.name().into()),
-            chart_type: Set(ChartType::Line),
-            value_type: Set(ChartValueType::Int),
-            ..Default::default()
-        })
-        .exec(&db)
-        .await
-        .unwrap();
+        let updater = NewBlocks::default();
+        updater.create(&db).await.unwrap();
 
         mock_blockscout(&blockscout).await;
 
@@ -327,16 +295,8 @@ mod tests {
         let _ = tracing_subscriber::fmt::try_init();
         let (db, blockscout) = init_db_all("update_new_blocks_last").await;
 
-        let updater = Updater::default();
-        charts::Entity::insert(charts::ActiveModel {
-            name: Set(updater.name().into()),
-            chart_type: Set(ChartType::Line),
-            value_type: Set(ChartValueType::Int),
-            ..Default::default()
-        })
-        .exec(&db)
-        .await
-        .unwrap();
+        let updater = NewBlocks::default();
+        updater.create(&db).await.unwrap();
 
         // set wrong values and check, that they wasn't rewritten
         // except the last one
