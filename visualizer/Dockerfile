@@ -3,23 +3,13 @@ RUN apt-get update && apt-get install -y curl wget unzip
 WORKDIR /app
 
 # Install protoc
-RUN curl -s https://api.github.com/repos/protocolbuffers/protobuf/releases/latest \ 
-          | grep "browser_download_url" \
-          | grep "protoc-.*-linux-x86_64" \
-          | cut -d : -f 2,3 \
-          | tr -d '"' \
-          | xargs wget -O ./protoc.zip \
+RUN wget https://github.com/protocolbuffers/protobuf/releases/download/v21.12/protoc-21.12-linux-x86_64.zip -O ./protoc.zip \
     && unzip protoc.zip \
     && mv ./include/* /usr/include/ \
     && mv ./bin/protoc /usr/bin/protoc
 
 # Install protoc-gen-openapiv2
-RUN curl -s https://api.github.com/repos/grpc-ecosystem/grpc-gateway/releases/latest \
-          | grep "browser_download_url" \
-          | grep "protoc-gen-openapiv2-.*-linux-x86_64" \
-          | cut -d : -f 2,3 \
-          | tr -d '"' \
-          | xargs wget -O ./protoc-gen-openapiv2 \
+RUN RUN wget https://github.com/grpc-ecosystem/grpc-gateway/releases/download/v2.15.0/protoc-gen-openapiv2-v2.15.0-linux-x86_64 -O ./protoc-gen-openapiv2 \
         && chmod +x protoc-gen-openapiv2 \
         && mv ./protoc-gen-openapiv2 /usr/bin/protoc-gen-openapiv2
 
