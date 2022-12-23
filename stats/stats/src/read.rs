@@ -1,5 +1,9 @@
 use chrono::NaiveDate;
-use sea_orm::{DatabaseConnection, DbBackend, DbErr, FromQueryResult, Statement};
+use entity::{chart_data_int, charts};
+use sea_orm::{
+    ColumnTrait, DatabaseConnection, DbBackend, DbErr, EntityTrait, FromQueryResult, QueryFilter,
+    QueryOrder, QuerySelect, Statement,
+};
 use stats_proto::blockscout::stats::v1::{Counters, LineChart, Point};
 use std::collections::HashMap;
 use thiserror::Error;
@@ -43,7 +47,7 @@ pub async fn get_counters(db: &DatabaseConnection) -> Result<Counters, ReadError
     ))
     .all(db)
     .await?;
-    dbg!(&data);
+
     let data: HashMap<_, _> = data
         .into_iter()
         .map(|data| (data.name, (data.date, data.value as u64)))
@@ -63,36 +67,45 @@ struct DateValue {
     value: i64,
 }
 
+#[derive(FromQueryResult)]
+struct ChartID {
+    id: i32,
+}
+
 pub async fn get_chart_int(
     db: &DatabaseConnection,
     name: &str,
     from: Option<NaiveDate>,
     to: Option<NaiveDate>,
-) -> Result<LineChart, DbErr> {
-    let data = DateValue::find_by_statement(Statement::from_sql_and_values(
-        DbBackend::Postgres,
-        r#"
-            SELECT data.date, data.value 
-                FROM "chart_data_int" "data"
-                INNER JOIN "charts"
-                    ON data.chart_id = charts.id
-                WHERE charts.name = $1
-                ORDER BY data.date;
-            "#,
-        vec![name.into()],
-    ))
-    .all(db)
-    .await?;
+) -> Result<LineChart, ReadError> {
+    let id = charts::Entity::find()
+        .column(charts::Column::Id)
+        .filter(charts::Column::Name.eq(name))
+        .into_model::<ChartID>()
+        .one(db)
+        .await?
+        .ok_or_else(|| ReadError::NotFound(name.into()))?;
+
+    let data_request = chart_data_int::Entity::find()
+        .column(chart_data_int::Column::Date)
+        .column(chart_data_int::Column::Value)
+        .filter(chart_data_int::Column::ChartId.eq(id.id))
+        .order_by_asc(chart_data_int::Column::Date);
+
+    let data_request = if let Some(from) = from {
+        data_request.filter(chart_data_int::Column::Date.gte(from))
+    } else {
+        data_request
+    };
+    let data_request = if let Some(to) = to {
+        data_request.filter(chart_data_int::Column::Date.lte(to))
+    } else {
+        data_request
+    };
+
+    let data = data_request.into_model::<DateValue>().all(db).await?;
     let chart = data
         .into_iter()
-        .filter(|row| match from {
-            Some(from) => row.date >= from,
-            None => true,
-        })
-        .filter(|row| match to {
-            Some(to) => row.date <= to,
-            None => true,
-        })
         .map(|row| Point {
             date: row.date.format("%Y-%m-%d").to_string(),
             value: row.value.to_string(),

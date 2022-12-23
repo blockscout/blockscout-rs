@@ -21,7 +21,7 @@ struct ChartData {
 }
 
 #[derive(Debug, FromQueryResult)]
-struct ChartId {
+struct ChartID {
     id: i32,
 }
 
@@ -84,7 +84,7 @@ impl super::UpdaterTrait for Updater {
                 let id = charts::Entity::find()
                     .column(charts::Column::Id)
                     .filter(charts::Column::Name.eq(self.name()))
-                    .into_model::<ChartId>()
+                    .into_model::<ChartID>()
                     .one(db)
                     .await?
                     .ok_or_else(|| UpdateError::NotFound(self.name()))?;
