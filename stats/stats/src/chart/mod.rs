@@ -53,7 +53,7 @@ pub async fn create_chart(
     value_type: ChartValueType,
 ) -> Result<(), DbErr> {
     let id = find_chart(db, &name).await?;
-    if let Some(_) = id {
+    if id.is_some() {
         return Ok(());
     }
     charts::Entity::insert(charts::ActiveModel {
