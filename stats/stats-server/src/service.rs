@@ -9,6 +9,7 @@ use stats_proto::blockscout::stats::v1::{
 use std::{collections::HashMap, str::FromStr};
 use tonic::{Request, Response, Status};
 
+#[derive(Clone)]
 pub struct Service {
     db: DatabaseConnection,
     #[allow(dead_code)]
