@@ -16,7 +16,7 @@ struct TotalBlocksData {
 }
 
 #[derive(Debug, FromQueryResult)]
-struct ChartId {
+struct ChartID {
     id: i32,
 }
 
@@ -25,12 +25,15 @@ pub struct Updater {}
 
 #[async_trait]
 impl super::UpdaterTrait for Updater {
+    fn name(&self) -> &str {
+        "totalBlocksAllTime"
+    }
+
     async fn update(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
     ) -> Result<(), UpdateError> {
-        let name = "totalBlocksAllTime";
         let data = blocks::Entity::find()
             .column(blocks::Column::Number)
             .column(blocks::Column::Timestamp)
@@ -49,11 +52,11 @@ impl super::UpdaterTrait for Updater {
 
         let id = charts::Entity::find()
             .column(charts::Column::Id)
-            .filter(charts::Column::Name.eq(name))
-            .into_model::<ChartId>()
+            .filter(charts::Column::Name.eq(self.name()))
+            .into_model::<ChartID>()
             .one(db)
             .await?
-            .ok_or_else(|| UpdateError::NotFound(name.into()))?;
+            .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
 
         let data = chart_data_int::ActiveModel {
             id: Default::default(),
@@ -190,9 +193,10 @@ mod tests {
     async fn update_total_blocks_recurrent() {
         let _ = tracing_subscriber::fmt::try_init();
         let (db, blockscout) = init_db_all("update_total_blocks_recurrent").await;
+        let updater = Updater::default();
 
         charts::Entity::insert(charts::ActiveModel {
-            name: Set("totalBlocksAllTime".into()),
+            name: Set(updater.name().into()),
             chart_type: Set(ChartType::Counter),
             value_type: Set(ChartValueType::Int),
             ..Default::default()
@@ -213,9 +217,9 @@ mod tests {
 
         mock_blockscout(&blockscout, "2022-11-11").await;
 
-        Updater::default().update(&db, &blockscout).await.unwrap();
+        updater.update(&db, &blockscout).await.unwrap();
         let data = get_counters(&db).await.unwrap();
-        assert_eq!("7", data.counters["totalBlocksAllTime"]);
+        assert_eq!("7", data.counters[updater.name()]);
     }
 
     #[tokio::test]
@@ -223,9 +227,10 @@ mod tests {
     async fn update_total_blocks_fresh() {
         let _ = tracing_subscriber::fmt::try_init();
         let (db, blockscout) = init_db_all("update_total_blocks_fresh").await;
+        let updater = Updater::default();
 
         charts::Entity::insert(charts::ActiveModel {
-            name: Set("totalBlocksAllTime".into()),
+            name: Set(updater.name().into()),
             chart_type: Set(ChartType::Counter),
             value_type: Set(ChartValueType::Int),
             ..Default::default()
@@ -236,9 +241,9 @@ mod tests {
 
         mock_blockscout(&blockscout, "2022-11-12").await;
 
-        Updater::default().update(&db, &blockscout).await.unwrap();
+        updater.update(&db, &blockscout).await.unwrap();
         let data = get_counters(&db).await.unwrap();
-        assert_eq!("8", data.counters["totalBlocksAllTime"]);
+        assert_eq!("8", data.counters[updater.name()]);
     }
 
     #[tokio::test]
@@ -246,9 +251,10 @@ mod tests {
     async fn update_total_blocks_last() {
         let _ = tracing_subscriber::fmt::try_init();
         let (db, blockscout) = init_db_all("update_total_blocks_last").await;
+        let updater = Updater::default();
 
         charts::Entity::insert(charts::ActiveModel {
-            name: Set("totalBlocksAllTime".into()),
+            name: Set(updater.name().into()),
             chart_type: Set(ChartType::Counter),
             value_type: Set(ChartValueType::Int),
             ..Default::default()
@@ -269,8 +275,8 @@ mod tests {
 
         mock_blockscout(&blockscout, "2022-11-11").await;
 
-        Updater::default().update(&db, &blockscout).await.unwrap();
+        updater.update(&db, &blockscout).await.unwrap();
         let data = get_counters(&db).await.unwrap();
-        assert_eq!("7", data.counters["totalBlocksAllTime"]);
+        assert_eq!("7", data.counters[updater.name()]);
     }
 }

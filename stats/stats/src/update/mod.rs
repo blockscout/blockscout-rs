@@ -1,3 +1,4 @@
+pub mod mock;
 pub mod new_blocks;
 pub mod total_blocks;
 
@@ -12,6 +13,8 @@ pub trait UpdaterTrait {
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
     ) -> Result<(), UpdateError>;
+
+    fn name(&self) -> &str;
 }
 
 #[derive(Error, Debug)]

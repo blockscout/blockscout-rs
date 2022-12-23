@@ -1,5 +1,9 @@
 use chrono::NaiveDate;
-use sea_orm::{DatabaseConnection, DbBackend, DbErr, FromQueryResult, Statement};
+use entity::{chart_data_int, charts};
+use sea_orm::{
+    ColumnTrait, DatabaseConnection, DbBackend, DbErr, EntityTrait, FromQueryResult, QueryFilter,
+    QueryOrder, QuerySelect, Statement,
+};
 use stats_proto::blockscout::stats::v1::{Counters, LineChart, Point};
 use std::collections::HashMap;
 use thiserror::Error;
@@ -12,7 +16,7 @@ pub enum ReadError {
     NotFound(String),
 }
 
-#[derive(FromQueryResult)]
+#[derive(Debug, FromQueryResult)]
 struct CounterData {
     name: String,
     date: NaiveDate,
@@ -43,6 +47,7 @@ pub async fn get_counters(db: &DatabaseConnection) -> Result<Counters, ReadError
     ))
     .all(db)
     .await?;
+
     let data: HashMap<_, _> = data
         .into_iter()
         .map(|data| (data.name, (data.date, data.value as u64)))
@@ -62,21 +67,39 @@ struct DateValue {
     value: i64,
 }
 
-pub async fn get_chart_int(db: &DatabaseConnection, name: &str) -> Result<LineChart, DbErr> {
-    let data = DateValue::find_by_statement(Statement::from_sql_and_values(
-        DbBackend::Postgres,
-        r#"
-            SELECT data.date, data.value 
-                FROM "chart_data_int" "data"
-                INNER JOIN "charts"
-                    ON data.chart_id = charts.id
-                WHERE charts.name = $1
-                ORDER BY data.date;
-            "#,
-        vec![name.into()],
-    ))
-    .all(db)
-    .await?;
+#[derive(FromQueryResult)]
+struct ChartID {
+    id: i32,
+}
+
+pub async fn get_chart_int(
+    db: &DatabaseConnection,
+    name: &str,
+    from: Option<NaiveDate>,
+    to: Option<NaiveDate>,
+) -> Result<LineChart, ReadError> {
+    let id = charts::Entity::find()
+        .column(charts::Column::Id)
+        .filter(charts::Column::Name.eq(name))
+        .into_model::<ChartID>()
+        .one(db)
+        .await?
+        .ok_or_else(|| ReadError::NotFound(name.into()))?;
+
+    let mut data_request = chart_data_int::Entity::find()
+        .column(chart_data_int::Column::Date)
+        .column(chart_data_int::Column::Value)
+        .filter(chart_data_int::Column::ChartId.eq(id.id))
+        .order_by_asc(chart_data_int::Column::Date);
+
+    if let Some(from) = from {
+        data_request = data_request.filter(chart_data_int::Column::Date.gte(from))
+    };
+    if let Some(to) = to {
+        data_request = data_request.filter(chart_data_int::Column::Date.lte(to))
+    };
+
+    let data = data_request.into_model::<DateValue>().all(db).await?;
     let chart = data
         .into_iter()
         .map(|row| Point {
@@ -198,7 +221,9 @@ mod tests {
 
         let db = init_db("get_chart_int_mock").await;
         insert_mock_data(&db).await;
-        let chart = get_chart_int(&db, "newBlocksPerDay").await.unwrap();
+        let chart = get_chart_int(&db, "newBlocksPerDay", None, None)
+            .await
+            .unwrap();
         assert_eq!(
             LineChart {
                 chart: vec![

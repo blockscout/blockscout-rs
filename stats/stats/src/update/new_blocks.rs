@@ -21,7 +21,7 @@ struct ChartData {
 }
 
 #[derive(Debug, FromQueryResult)]
-struct ChartId {
+struct ChartID {
     id: i32,
 }
 
@@ -30,12 +30,15 @@ pub struct Updater {}
 
 #[async_trait]
 impl super::UpdaterTrait for Updater {
+    fn name(&self) -> &str {
+        "newBlocksPerDay"
+    }
+
     async fn update(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
     ) -> Result<(), UpdateError> {
-        let name = "newBlocksPerDay";
         let last_row = ChartData::find_by_statement(Statement::from_sql_and_values(
             DbBackend::Postgres,
             r#"
@@ -46,7 +49,7 @@ impl super::UpdaterTrait for Updater {
                 WHERE charts.name = $1
                 ORDER BY charts.id, data.id DESC;
             "#,
-            vec![name.into()],
+            vec![self.name().into()],
         ))
         .one(db)
         .await?;
@@ -80,11 +83,11 @@ impl super::UpdaterTrait for Updater {
                 .await?;
                 let id = charts::Entity::find()
                     .column(charts::Column::Id)
-                    .filter(charts::Column::Name.eq(name))
-                    .into_model::<ChartId>()
+                    .filter(charts::Column::Name.eq(self.name()))
+                    .into_model::<ChartID>()
                     .one(db)
                     .await?
-                    .ok_or_else(|| UpdateError::NotFound(name.into()))?;
+                    .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
                 (id.id, data)
             }
         };
@@ -225,8 +228,9 @@ mod tests {
         let _ = tracing_subscriber::fmt::try_init();
         let (db, blockscout) = init_db_all("update_new_blocks_recurrent").await;
 
+        let updater = Updater::default();
         charts::Entity::insert(charts::ActiveModel {
-            name: Set("newBlocksPerDay".into()),
+            name: Set(updater.name().into()),
             chart_type: Set(ChartType::Line),
             value_type: Set(ChartValueType::Int),
             ..Default::default()
@@ -248,8 +252,10 @@ mod tests {
 
         mock_blockscout(&blockscout).await;
 
-        Updater::default().update(&db, &blockscout).await.unwrap();
-        let data = get_chart_int(&db, "newBlocksPerDay").await.unwrap();
+        updater.update(&db, &blockscout).await.unwrap();
+        let data = get_chart_int(&db, updater.name(), None, None)
+            .await
+            .unwrap();
         let expected = LineChart {
             chart: vec![
                 Point {
@@ -275,8 +281,9 @@ mod tests {
         let _ = tracing_subscriber::fmt::try_init();
         let (db, blockscout) = init_db_all("update_new_blocks_fresh").await;
 
+        let updater = Updater::default();
         charts::Entity::insert(charts::ActiveModel {
-            name: Set("newBlocksPerDay".into()),
+            name: Set(updater.name().into()),
             chart_type: Set(ChartType::Line),
             value_type: Set(ChartValueType::Int),
             ..Default::default()
@@ -287,8 +294,10 @@ mod tests {
 
         mock_blockscout(&blockscout).await;
 
-        Updater::default().update(&db, &blockscout).await.unwrap();
-        let data = get_chart_int(&db, "newBlocksPerDay").await.unwrap();
+        updater.update(&db, &blockscout).await.unwrap();
+        let data = get_chart_int(&db, updater.name(), None, None)
+            .await
+            .unwrap();
         let expected = LineChart {
             chart: vec![
                 Point {
@@ -318,8 +327,9 @@ mod tests {
         let _ = tracing_subscriber::fmt::try_init();
         let (db, blockscout) = init_db_all("update_new_blocks_last").await;
 
+        let updater = Updater::default();
         charts::Entity::insert(charts::ActiveModel {
-            name: Set("newBlocksPerDay".into()),
+            name: Set(updater.name().into()),
             chart_type: Set(ChartType::Line),
             value_type: Set(ChartValueType::Int),
             ..Default::default()
@@ -362,8 +372,10 @@ mod tests {
 
         mock_blockscout(&blockscout).await;
 
-        Updater::default().update(&db, &blockscout).await.unwrap();
-        let data = get_chart_int(&db, "newBlocksPerDay").await.unwrap();
+        updater.update(&db, &blockscout).await.unwrap();
+        let data = get_chart_int(&db, updater.name(), None, None)
+            .await
+            .unwrap();
         let expected = LineChart {
             chart: vec![
                 Point {
