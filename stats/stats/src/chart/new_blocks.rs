@@ -1,15 +1,13 @@
+use super::UpdateError;
 use async_trait::async_trait;
 use chrono::NaiveDate;
 use entity::{
-    chart_data_int, charts,
+    chart_data_int,
     sea_orm_active_enums::{ChartType, ChartValueType},
 };
 use sea_orm::{
-    sea_query, ColumnTrait, DatabaseConnection, DbBackend, DbErr, EntityTrait, FromQueryResult,
-    QueryFilter, QueryOrder, QuerySelect, Set, Statement,
+    prelude::*, sea_query, DbBackend, FromQueryResult, QueryOrder, QuerySelect, Set, Statement,
 };
-
-use super::UpdateError;
 
 #[derive(FromQueryResult)]
 struct NewBlocksData {
@@ -20,11 +18,6 @@ struct NewBlocksData {
 #[derive(Debug, FromQueryResult)]
 struct ChartDate {
     date: NaiveDate,
-}
-
-#[derive(Debug, FromQueryResult)]
-struct ChartID {
-    id: i32,
 }
 
 #[derive(Default, Debug)]
@@ -45,16 +38,12 @@ impl super::Chart for NewBlocks {
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
     ) -> Result<(), UpdateError> {
-        let id = charts::Entity::find()
-            .column(charts::Column::Id)
-            .filter(charts::Column::Name.eq(self.name()))
-            .into_model::<ChartID>()
-            .one(db)
+        let id = super::find_chart(db, self.name())
             .await?
             .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
         let last_row = chart_data_int::Entity::find()
             .column(chart_data_int::Column::Date)
-            .filter(chart_data_int::Column::ChartId.eq(id.id))
+            .filter(chart_data_int::Column::ChartId.eq(id))
             .order_by_desc(chart_data_int::Column::Date)
             .into_model::<ChartDate>()
             .one(db)
@@ -93,7 +82,7 @@ impl super::Chart for NewBlocks {
 
         let data = data.into_iter().map(|row| chart_data_int::ActiveModel {
             id: Default::default(),
-            chart_id: Set(id.id),
+            chart_id: Set(id),
             date: Set(row.day),
             value: Set(row.count),
             created_at: Default::default(),

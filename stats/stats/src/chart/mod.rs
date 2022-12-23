@@ -7,7 +7,7 @@ use entity::{
     charts,
     sea_orm_active_enums::{ChartType, ChartValueType},
 };
-use sea_orm::{sea_query, DatabaseConnection, DbErr, EntityTrait, Set};
+use sea_orm::{prelude::*, sea_query, FromQueryResult, QuerySelect, Set};
 use thiserror::Error;
 
 #[async_trait]
@@ -31,12 +31,31 @@ pub enum UpdateError {
     NotFound(String),
 }
 
+#[derive(Debug, FromQueryResult)]
+struct ChartID {
+    id: i32,
+}
+
+pub async fn find_chart(db: &DatabaseConnection, name: &str) -> Result<Option<i32>, DbErr> {
+    charts::Entity::find()
+        .column(charts::Column::Id)
+        .filter(charts::Column::Name.eq(name))
+        .into_model::<ChartID>()
+        .one(db)
+        .await
+        .map(|id| id.map(|id| id.id))
+}
+
 pub async fn create_chart(
     db: &DatabaseConnection,
     name: String,
     chart_type: ChartType,
     value_type: ChartValueType,
 ) -> Result<(), DbErr> {
+    let id = find_chart(db, &name).await?;
+    if let Some(_) = id {
+        return Ok(());
+    }
     charts::Entity::insert(charts::ActiveModel {
         name: Set(name),
         chart_type: Set(chart_type),

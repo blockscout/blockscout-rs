@@ -1,26 +1,17 @@
+use super::UpdateError;
 use async_trait::async_trait;
 use blockscout_db::entity::blocks;
 use chrono::NaiveDateTime;
 use entity::{
-    chart_data_int, charts,
+    chart_data_int,
     sea_orm_active_enums::{ChartType, ChartValueType},
 };
-use sea_orm::{
-    sea_query, ColumnTrait, DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QueryFilter,
-    QueryOrder, QuerySelect, Set,
-};
-
-use super::UpdateError;
+use sea_orm::{prelude::*, sea_query, FromQueryResult, QueryOrder, QuerySelect, Set};
 
 #[derive(FromQueryResult)]
 struct TotalBlocksData {
     number: i64,
     timestamp: NaiveDateTime,
-}
-
-#[derive(Debug, FromQueryResult)]
-struct ChartID {
-    id: i32,
 }
 
 #[derive(Default, Debug)]
@@ -47,11 +38,7 @@ impl super::Chart for TotalBlocks {
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
     ) -> Result<(), UpdateError> {
-        let id = charts::Entity::find()
-            .column(charts::Column::Id)
-            .filter(charts::Column::Name.eq(self.name()))
-            .into_model::<ChartID>()
-            .one(db)
+        let id = super::find_chart(db, self.name())
             .await?
             .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
 
@@ -73,7 +60,7 @@ impl super::Chart for TotalBlocks {
 
         let data = chart_data_int::ActiveModel {
             id: Default::default(),
-            chart_id: Set(id.id),
+            chart_id: Set(id),
             date: Set(data.timestamp.date()),
             value: Set(data.number),
             created_at: Default::default(),
