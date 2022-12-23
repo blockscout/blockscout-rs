@@ -14,7 +14,7 @@ pub trait UpdaterTrait {
         blockscout: &DatabaseConnection,
     ) -> Result<(), UpdateError>;
 
-    fn name(&self) -> String;
+    fn name(&self) -> &str;
 }
 
 #[derive(Error, Debug)]
