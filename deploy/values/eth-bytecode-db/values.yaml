@@ -72,12 +72,25 @@ ethBytecodeDb:
     maxReplicas: 10
     cpuTarget: 90
 
+  # enable service to connect to RDS
+  rds:
+    enabled: false
+    endpoint:
+      _default: <endpoint>.<region>.rds.amazonaws.com
+
   environment: {}
     # ENV:
     #   _default: 'true'
+    ########### just example
+    ########### put DATABASE envs in secrets.yaml under ethBytecodeDb.environment
+    # DATABASE_URL:
+    # # postgres pod
+    #   _default: postgresql://<user>:<pass>@postgres:5432/<db>
+    # # RDS
+    #   _default: postgresql://<user>:<pass>@db-eth-bytecode-db-svc:5432/<db>
 
 postgres:
-  enabled: true
+  enabled: false
   image: postgres:13.8
   port: 5432
 
