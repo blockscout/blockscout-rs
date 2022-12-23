@@ -29,19 +29,21 @@ async fn process_verify_response(
     response: smart_contract_verifier::VerifyResponse,
     action: ProcessResponseAction,
 ) -> Result<Source, Error> {
-    let (source, extra_data) = match response.status() {
-        smart_contract_verifier::Status::Success
-            if response.source.is_some() && response.extra_data.is_some() =>
-        {
-            (response.source.unwrap(), response.extra_data.unwrap())
+    let (source, extra_data) = match (response.status(), response.source, response.extra_data) {
+        (smart_contract_verifier::Status::Success, Some(source), Some(extra_data)) => {
+            (source, extra_data)
         }
-        smart_contract_verifier::Status::Failure => Err(Error::VerificationFailed {
-            message: response.message,
-        })?,
-        _ => Err(Error::Internal(
-            anyhow::anyhow!("invalid status: {}", response.status)
-                .context("verifier service connection"),
-        ))?,
+        (smart_contract_verifier::Status::Failure, _, _) => {
+            return Err(Error::VerificationFailed {
+                message: response.message,
+            })
+        }
+        _ => {
+            return Err(Error::Internal(
+                anyhow::anyhow!("invalid status: {}", response.status)
+                    .context("verifier service connection"),
+            ))
+        }
     };
 
     let parse_local_parts = |local_parts: Vec<smart_contract_verifier::BytecodePart>,
