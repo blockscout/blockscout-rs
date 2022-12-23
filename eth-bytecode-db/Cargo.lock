@@ -75,7 +75,7 @@ dependencies = [
 [[package]]
 name = "actix-prost"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/actix-prost#90e4f961ecbce12cc81071e3e55da6045fb97d1b"
+source = "git+https://github.com/blockscout/actix-prost#6b3e058b8fa7ae9641f63b73627fed77f1418605"
 dependencies = [
  "actix-http",
  "actix-web",
@@ -89,7 +89,7 @@ dependencies = [
 [[package]]
 name = "actix-prost-build"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/actix-prost#90e4f961ecbce12cc81071e3e55da6045fb97d1b"
+source = "git+https://github.com/blockscout/actix-prost#6b3e058b8fa7ae9641f63b73627fed77f1418605"
 dependencies = [
  "prettyplease",
  "proc-macro2",
@@ -104,7 +104,7 @@ dependencies = [
 [[package]]
 name = "actix-prost-macros"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/actix-prost#90e4f961ecbce12cc81071e3e55da6045fb97d1b"
+source = "git+https://github.com/blockscout/actix-prost#6b3e058b8fa7ae9641f63b73627fed77f1418605"
 dependencies = [
  "proc-macro2",
  "quote",
