@@ -1,0 +1,102 @@
+global:
+  env: testing
+
+# enable eth-bytecode-db deploy
+ethBytecodeDb:
+  enabled: true
+  image:
+    _default: ghcr.io/blockscout/eth-bytecode-db:main
+
+  replicas:
+    app: 1
+  docker:
+    port: 80
+    targetPort: 8050
+    metricsPort: 6060
+
+  strategy: RollingUpdate
+
+  service:
+    # ClusterIP, NodePort or LoadBalancer
+    type: ClusterIP
+
+  # enable ingress
+  ingress:
+    enabled: true
+    annotations: {}
+    host:
+      _default: eth-bytecode-db-test.aws-k8s.blockscout.com
+    # enable https
+    tls:
+      enabled: true
+      createSecret: false
+
+  resources:
+    limits:
+      memory:
+        _default: "0.5Gi"
+      cpu:
+        _default: "0.25"
+    requests:
+      memory:
+        _default: "0.5Gi"
+      cpu:
+        _default: "0.25"
+
+  # node label
+  nodeSelector:
+    enabled: true
+    labels:
+      _default:
+        app: blockscout
+
+  # probes
+  livenessProbe:
+    enabled: true
+    path: /health
+    params:
+      initialDelaySeconds: 100
+      periodSeconds: 100
+  readinessProbe:
+    enabled: true
+    path: /health
+    params:
+      initialDelaySeconds: 60
+      periodSeconds: 10
+      timeoutSeconds: 60
+
+  # enable Horizontal Pod Autoscaler
+  hpa:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 10
+    cpuTarget: 90
+
+  environment: {}
+    # ENV:
+    #   _default: 'true'
+
+postgres:
+  enabled: true
+  image: postgres:13.8
+  port: 5432
+
+  command: '["docker-entrypoint.sh", "-c"]'
+  args: '["max_connections=200"]'
+
+  # strategy: Recreate
+
+  persistence: true
+  storage: 20Gi
+
+  resources:
+    limits:
+      memory:
+        _default: "4Gi"
+      cpu:
+        _default: "2"
+    requests:
+      memory:
+        _default: "4Gi"
+      cpu:
+        _default: "2"
