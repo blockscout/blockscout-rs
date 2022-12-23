@@ -43,17 +43,17 @@ message Source {
     VYPER = 2;
     YUL = 3;
   }
-  SourceType source_type = 6;
+  SourceType source_type = 5;
 
-  map<string, string> source_files = 7;
+  map<string, string> source_files = 6;
 
   /// Contract abi (https://docs.soliditylang.org/en/latest/abi-spec.html?highlight=abi#json);
   /// (does not exist for Yul contracts)
-  optional string abi = 8;
+  optional string abi = 7;
 
   /// Constructor arguments used for deploying verified contract
   /// (exists only for creation inputs)
-  optional string constructor_arguments = 9;
+  optional string constructor_arguments = 8;
 
   enum MatchType {
     // Default value. This value is unused.
@@ -62,7 +62,7 @@ message Source {
     FULL = 2;
   }
   /// Similar to Sourcify (see https://docs.sourcify.dev/docs/full-vs-partial-match/)
-  MatchType match_type = 10;
+  MatchType match_type = 9;
 }
 
 enum BytecodeType {
@@ -131,7 +131,7 @@ message VerifyResponse {
     message BytecodePart {
       string type = 1;
       string data = 2;
-    };
+    }
     /// Creation transaction input resultant from local compilation
     /// parsed and split on Main and Meta parts. Is empty for Sourcify verification.
     repeated BytecodePart local_creation_input_parts = 1;
@@ -153,7 +153,7 @@ message VerifySourcifyRequest {
   // to correspond with Sourcify api
   map<string, string> files = 3;
   // (optional) see Sourcify Api
-  optional int32 chosenContract = 4;
+  optional int32 chosen_contract = 4;
 }
 
 message ListCompilerVersionsRequest {}
