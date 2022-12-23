@@ -23,3 +23,4 @@ sea-orm = { version = "0.10", features = [
     "runtime-tokio-rustls",
 ] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+cron = "0.12"
