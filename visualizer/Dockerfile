@@ -9,7 +9,7 @@ RUN wget https://github.com/protocolbuffers/protobuf/releases/download/v21.12/pr
     && mv ./bin/protoc /usr/bin/protoc
 
 # Install protoc-gen-openapiv2
-RUN RUN wget https://github.com/grpc-ecosystem/grpc-gateway/releases/download/v2.15.0/protoc-gen-openapiv2-v2.15.0-linux-x86_64 -O ./protoc-gen-openapiv2 \
+RUN wget https://github.com/grpc-ecosystem/grpc-gateway/releases/download/v2.15.0/protoc-gen-openapiv2-v2.15.0-linux-x86_64 -O ./protoc-gen-openapiv2 \
         && chmod +x protoc-gen-openapiv2 \
         && mv ./protoc-gen-openapiv2 /usr/bin/protoc-gen-openapiv2
 
