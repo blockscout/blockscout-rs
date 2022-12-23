@@ -8,7 +8,7 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
     pub chart_id: i32,
-    pub date: DateTime,
+    pub date: Date,
     pub value: i64,
     pub created_at: DateTime,
 }

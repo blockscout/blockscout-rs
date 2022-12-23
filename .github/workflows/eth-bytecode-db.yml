@@ -8,6 +8,7 @@ on:
     paths:
       - eth-bytecode-db/**
       - .github/workflows/eth-bytecode-db.yml
+      - .github/actions/deps/**
 
 name: Test, lint and docker (eth-bytecode-db)
 

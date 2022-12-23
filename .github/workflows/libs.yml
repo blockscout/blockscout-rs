@@ -6,6 +6,7 @@ on:
     paths:
       - libs/**
       - .github/workflows/libs.yml
+      - .github/actions/deps/**
 
 name: Test, lint (libs)
 
