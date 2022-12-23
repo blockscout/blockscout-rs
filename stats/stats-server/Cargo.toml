@@ -18,3 +18,8 @@ tracing = "0.1"
 futures = "0.3"
 anyhow = "1.0"
 chrono = "0.4"
+sea-orm = { version = "0.10", features = [
+    "sqlx-postgres",
+    "runtime-tokio-rustls",
+] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

@@ -1,5 +1,7 @@
 use async_trait::async_trait;
 use chrono::{Duration, NaiveDate};
+use sea_orm::{Database, DatabaseConnection, DbErr};
+use stats::migration::MigratorTrait;
 use stats_proto::blockscout::stats::v1::{
     stats_service_server::StatsService, Counters, GetCountersRequest, GetLineChartRequest,
     LineChart, Point,
@@ -7,11 +9,21 @@ use stats_proto::blockscout::stats::v1::{
 use std::{collections::HashMap, str::FromStr};
 use tonic::{Request, Response, Status};
 
-pub struct Service {}
+pub struct Service {
+    db: DatabaseConnection,
+    #[allow(dead_code)]
+    blockscout: DatabaseConnection,
+}
 
 impl Service {
-    pub fn new() -> Self {
-        Self {}
+    pub async fn new(db_url: &str, blockscout_db_url: &str) -> Result<Self, DbErr> {
+        let db = Database::connect(db_url).await?;
+        let blockscout = Database::connect(blockscout_db_url).await?;
+        Ok(Self { db, blockscout })
+    }
+
+    pub async fn migrate(&self) -> Result<(), DbErr> {
+        stats::migration::Migrator::up(&self.db, None).await
     }
 }
 
