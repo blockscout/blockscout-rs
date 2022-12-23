@@ -1,9 +1,9 @@
-use sea_orm_migration::sea_orm::{ActiveValue, TransactionTrait};
-use sea_orm_migration::prelude::*;
-use sea_orm_migration::sea_orm::entity::prelude::*;
-use sea_orm_migration::seaql_migrations::Relation;
 use crate::m20221222_155714_create_table_bytecode_types::BytecodeTypes;
-// use crate::m20221222_155714_create_table_bytecode_types::BytecodeTypes;
+use sea_orm_migration::{
+    prelude::*,
+    sea_orm::{entity::prelude::*, ActiveValue, TransactionTrait},
+    seaql_migrations::Relation,
+};
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
@@ -11,23 +11,31 @@ pub struct Migration;
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        let txn= manager.get_connection().begin().await?;
-        let _creation_input = ActiveModel {
+        let txn = manager.get_connection().begin().await?;
+        let creation_input = ActiveModel {
             bytecode_type: ActiveValue::Set("CREATION_INPUT".into()),
             seq: ActiveValue::Set(0),
-        }.insert(&txn).await?;
-        let _deployed_bytecode= ActiveModel {
+        };
+        let deployed_bytecode = ActiveModel {
             bytecode_type: ActiveValue::Set("DEPLOYED_BYTECODE".into()),
             seq: ActiveValue::Set(1),
-        }.insert(&txn).await?;
+        };
+
+        Entity::insert_many([creation_input, deployed_bytecode])
+            .on_conflict(
+                OnConflict::column(BytecodeTypes::BytecodeType)
+                    .do_nothing()
+                    .to_owned(),
+            )
+            .exec(&txn)
+            .await?;
 
         txn.commit().await
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
-            .truncate_table(
-                Table::truncate().table(BytecodeTypes::Table).to_owned())
+            .truncate_table(Table::truncate().table(BytecodeTypes::Table).to_owned())
             .await
     }
 }
