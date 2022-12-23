@@ -63,7 +63,11 @@ stats:
     maxReplicas: 10
     cpuTarget: 90
 
-  environment: {}
+  environment:
+    RUST_LOG: 
+      _default: info
+    STATS__RUN_MIGRATIONS:
+      _default: true
 
 postgres:
   enabled: true
