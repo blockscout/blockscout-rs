@@ -1,3 +1,6 @@
+use blockscout_service_launcher::{
+    GrpcServerSettings, HttpServerSettings, JaegerSettings, MetricsSettings, ServerSettings,
+};
 use config::{Config, File};
 use cron::Schedule;
 use serde::{de, Deserialize, Serialize};
@@ -29,12 +32,38 @@ pub struct Settings {
     pub update_schedule: Schedule,
 
     pub server: ServerSettings,
+    pub metrics: MetricsSettings,
+    pub jaeger: JaegerSettings,
 
     // Is required as we deny unknown fields, but allow users provide
     // path to config through PREFIX__CONFIG env variable. If removed,
     // the setup would fail with `unknown field `config`, expected one of...`
     #[serde(skip_serializing, rename = "config")]
     config_path: IgnoredAny,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            server: ServerSettings {
+                http: HttpServerSettings {
+                    enabled: true,
+                    addr: SocketAddr::from_str("0.0.0.0:8050").unwrap(),
+                },
+                grpc: GrpcServerSettings {
+                    enabled: false,
+                    addr: SocketAddr::from_str("0.0.0.0:8051").unwrap(),
+                },
+            },
+            db_url: Default::default(),
+            update_schedule: Schedule::from_str("0 0 1 * * * *").unwrap(),
+            blockscout_db_url: Default::default(),
+            run_migrations: Default::default(),
+            metrics: Default::default(),
+            jaeger: Default::default(),
+            config_path: Default::default(),
+        }
+    }
 }
 
 impl Settings {
@@ -51,57 +80,5 @@ impl Settings {
         let settings: Settings = builder.build()?.try_deserialize()?;
 
         Ok(settings)
-    }
-}
-
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            db_url: Default::default(),
-            run_migrations: Default::default(),
-            blockscout_db_url: Default::default(),
-            update_schedule: Schedule::from_str("0 0 1 * * * *").unwrap(),
-            server: Default::default(),
-            config_path: Default::default(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(default, deny_unknown_fields)]
-pub struct ServerSettings {
-    pub http: HttpServerSettings,
-    pub grpc: GrpcServerSettings,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct HttpServerSettings {
-    pub enabled: bool,
-    pub addr: SocketAddr,
-}
-
-impl Default for HttpServerSettings {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            addr: SocketAddr::from_str("0.0.0.0:8050").expect("valid addr"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct GrpcServerSettings {
-    pub enabled: bool,
-    pub addr: SocketAddr,
-}
-
-impl Default for GrpcServerSettings {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            addr: SocketAddr::from_str("0.0.0.0:8051").expect("valid addr"),
-        }
     }
 }

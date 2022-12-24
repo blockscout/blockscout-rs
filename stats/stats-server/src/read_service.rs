@@ -9,6 +9,7 @@ use stats_proto::blockscout::stats::v1::{
 use std::{str::FromStr, sync::Arc};
 use tonic::{Request, Response, Status};
 
+#[derive(Clone)]
 pub struct ReadService {
     db: Arc<DatabaseConnection>,
 }
