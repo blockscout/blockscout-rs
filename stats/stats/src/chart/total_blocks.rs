@@ -1,13 +1,12 @@
+use super::UpdateError;
 use async_trait::async_trait;
 use blockscout_db::entity::blocks;
 use chrono::NaiveDateTime;
-use entity::{chart_data_int, charts};
-use sea_orm::{
-    sea_query, ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, QueryFilter,
-    QueryOrder, QuerySelect, Set,
+use entity::{
+    chart_data_int,
+    sea_orm_active_enums::{ChartType, ChartValueType},
 };
-
-use super::UpdateError;
+use sea_orm::{prelude::*, sea_query, FromQueryResult, QueryOrder, QuerySelect, Set};
 
 #[derive(FromQueryResult)]
 struct TotalBlocksData {
@@ -15,22 +14,34 @@ struct TotalBlocksData {
     timestamp: NaiveDateTime,
 }
 
-#[derive(Debug, FromQueryResult)]
-struct ChartId {
-    id: i32,
-}
-
 #[derive(Default, Debug)]
-pub struct Updater {}
+pub struct TotalBlocks {}
 
 #[async_trait]
-impl super::UpdaterTrait for Updater {
+impl super::Chart for TotalBlocks {
+    fn name(&self) -> &str {
+        "totalBlocksAllTime"
+    }
+
+    async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
+        super::create_chart(
+            db,
+            self.name().into(),
+            ChartType::Counter,
+            ChartValueType::Int,
+        )
+        .await
+    }
+
     async fn update(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
     ) -> Result<(), UpdateError> {
-        let name = "totalBlocksAllTime";
+        let id = super::find_chart(db, self.name())
+            .await?
+            .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
+
         let data = blocks::Entity::find()
             .column(blocks::Column::Number)
             .column(blocks::Column::Timestamp)
@@ -47,17 +58,9 @@ impl super::UpdaterTrait for Updater {
             }
         };
 
-        let id = charts::Entity::find()
-            .column(charts::Column::Id)
-            .filter(charts::Column::Name.eq(name))
-            .into_model::<ChartId>()
-            .one(db)
-            .await?
-            .ok_or_else(|| UpdateError::NotFound(name.into()))?;
-
         let data = chart_data_int::ActiveModel {
             id: Default::default(),
-            chart_id: Set(id.id),
+            chart_id: Set(id),
             date: Set(data.timestamp.date()),
             value: Set(data.number),
             created_at: Default::default(),
@@ -82,13 +85,9 @@ impl super::UpdaterTrait for Updater {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{get_counters, UpdaterTrait};
+    use crate::{get_counters, Chart};
     use blockscout_db::entity::{addresses, blocks};
     use chrono::{NaiveDate, NaiveDateTime};
-    use entity::{
-        charts,
-        sea_orm_active_enums::{ChartType, ChartValueType},
-    };
     use migration::MigratorTrait;
     use pretty_assertions::assert_eq;
     use sea_orm::{ConnectionTrait, Database, Statement};
@@ -190,16 +189,9 @@ mod tests {
     async fn update_total_blocks_recurrent() {
         let _ = tracing_subscriber::fmt::try_init();
         let (db, blockscout) = init_db_all("update_total_blocks_recurrent").await;
+        let updater = TotalBlocks::default();
 
-        charts::Entity::insert(charts::ActiveModel {
-            name: Set("totalBlocksAllTime".into()),
-            chart_type: Set(ChartType::Counter),
-            value_type: Set(ChartValueType::Int),
-            ..Default::default()
-        })
-        .exec(&db)
-        .await
-        .unwrap();
+        updater.create(&db).await.unwrap();
 
         chart_data_int::Entity::insert(chart_data_int::ActiveModel {
             chart_id: Set(1),
@@ -213,9 +205,9 @@ mod tests {
 
         mock_blockscout(&blockscout, "2022-11-11").await;
 
-        Updater::default().update(&db, &blockscout).await.unwrap();
+        updater.update(&db, &blockscout).await.unwrap();
         let data = get_counters(&db).await.unwrap();
-        assert_eq!("7", data.counters["totalBlocksAllTime"]);
+        assert_eq!("7", data.counters[updater.name()]);
     }
 
     #[tokio::test]
@@ -223,22 +215,15 @@ mod tests {
     async fn update_total_blocks_fresh() {
         let _ = tracing_subscriber::fmt::try_init();
         let (db, blockscout) = init_db_all("update_total_blocks_fresh").await;
+        let updater = TotalBlocks::default();
 
-        charts::Entity::insert(charts::ActiveModel {
-            name: Set("totalBlocksAllTime".into()),
-            chart_type: Set(ChartType::Counter),
-            value_type: Set(ChartValueType::Int),
-            ..Default::default()
-        })
-        .exec(&db)
-        .await
-        .unwrap();
+        updater.create(&db).await.unwrap();
 
         mock_blockscout(&blockscout, "2022-11-12").await;
 
-        Updater::default().update(&db, &blockscout).await.unwrap();
+        updater.update(&db, &blockscout).await.unwrap();
         let data = get_counters(&db).await.unwrap();
-        assert_eq!("8", data.counters["totalBlocksAllTime"]);
+        assert_eq!("8", data.counters[updater.name()]);
     }
 
     #[tokio::test]
@@ -246,16 +231,9 @@ mod tests {
     async fn update_total_blocks_last() {
         let _ = tracing_subscriber::fmt::try_init();
         let (db, blockscout) = init_db_all("update_total_blocks_last").await;
+        let updater = TotalBlocks::default();
 
-        charts::Entity::insert(charts::ActiveModel {
-            name: Set("totalBlocksAllTime".into()),
-            chart_type: Set(ChartType::Counter),
-            value_type: Set(ChartValueType::Int),
-            ..Default::default()
-        })
-        .exec(&db)
-        .await
-        .unwrap();
+        updater.create(&db).await.unwrap();
 
         chart_data_int::Entity::insert(chart_data_int::ActiveModel {
             chart_id: Set(1),
@@ -269,8 +247,8 @@ mod tests {
 
         mock_blockscout(&blockscout, "2022-11-11").await;
 
-        Updater::default().update(&db, &blockscout).await.unwrap();
+        updater.update(&db, &blockscout).await.unwrap();
         let data = get_counters(&db).await.unwrap();
-        assert_eq!("7", data.counters["totalBlocksAllTime"]);
+        assert_eq!("7", data.counters[updater.name()]);
     }
 }

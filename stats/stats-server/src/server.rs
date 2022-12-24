@@ -1,6 +1,8 @@
-use crate::{service::Service, settings::Settings};
+use crate::{read_service::ReadService, settings::Settings, update_service::UpdateService};
 use actix_web::web::ServiceConfig;
 use blockscout_service_launcher::LaunchSettings;
+use sea_orm::Database;
+use stats::{migration::MigratorTrait, Chart, NewBlocks, TotalBlocks};
 use stats_proto::blockscout::stats::v1::{
     stats_service_actix::route_stats_service,
     stats_service_server::{StatsService, StatsServiceServer},
@@ -27,13 +29,34 @@ fn grpc_router<S: StatsService>(stats: Arc<S>) -> tonic::transport::server::Rout
 }
 
 pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
-    let stats = Arc::new(Service::new(&settings.db_url, &settings.blockscout_db_url).await?);
-    if settings.run_migrations {
-        stats.migrate().await?;
-    };
+    let db = Arc::new(Database::connect(&settings.db_url).await?);
+    let blockscout = Arc::new(Database::connect(&settings.blockscout_db_url).await?);
 
-    let grpc_router = grpc_router(stats.clone());
-    let http_router = HttpRouter { stats };
+    if settings.run_migrations {
+        stats::migration::Migrator::up(&db, None).await?;
+    }
+
+    let charts: Vec<Arc<dyn Chart + Send + Sync + 'static>> = vec![
+        Arc::new(TotalBlocks::default()),
+        Arc::new(NewBlocks::default()),
+    ];
+    // TODO: may be run this with migrations or have special config
+    for chart in charts.iter() {
+        chart.create(&db).await?;
+    }
+
+    let update_service = Arc::new(UpdateService::new(db.clone(), blockscout, charts).await?);
+    tokio::spawn(async move {
+        update_service.update().await;
+        update_service.run_cron(settings.update_schedule).await;
+    });
+
+    let read_service = Arc::new(ReadService::new(db).await?);
+
+    let grpc_router = grpc_router(read_service.clone());
+    let http_router = HttpRouter {
+        stats: read_service,
+    };
     let launch_settings = LaunchSettings {
         service_name: "stats".to_owned(),
         server: settings.server,

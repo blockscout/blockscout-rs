@@ -2,7 +2,9 @@ use blockscout_service_launcher::{
     GrpcServerSettings, HttpServerSettings, JaegerSettings, MetricsSettings, ServerSettings,
 };
 use config::{Config, File};
+use cron::Schedule;
 use serde::{de, Deserialize, Serialize};
+use serde_with::{serde_as, DisplayFromStr};
 use std::{net::SocketAddr, str::FromStr};
 
 /// Wrapper under [`serde::de::IgnoredAny`] which implements
@@ -19,12 +21,15 @@ impl PartialEq for IgnoredAny {
 
 impl Eq for IgnoredAny {}
 
+#[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct Settings {
     pub db_url: String,
     pub run_migrations: bool,
     pub blockscout_db_url: String,
+    #[serde_as(as = "DisplayFromStr")]
+    pub update_schedule: Schedule,
 
     pub server: ServerSettings,
     pub metrics: MetricsSettings,
@@ -51,6 +56,7 @@ impl Default for Settings {
                 },
             },
             db_url: Default::default(),
+            update_schedule: Schedule::from_str("0 0 1 * * * *").unwrap(),
             blockscout_db_url: Default::default(),
             run_migrations: Default::default(),
             metrics: Default::default(),
