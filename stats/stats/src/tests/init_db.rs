@@ -3,7 +3,8 @@ use sea_orm::{prelude::*, ConnectionTrait, Database, Statement};
 use url::Url;
 
 pub async fn init_db<M: MigratorTrait>(name: &str, db_url: Option<String>) -> DatabaseConnection {
-    let db_url = db_url.unwrap_or(std::env::var("DATABASE_URL").expect("no DATABASE_URL env"));
+    let db_url =
+        db_url.unwrap_or_else(|| std::env::var("DATABASE_URL").expect("no DATABASE_URL env"));
     let url = Url::parse(&db_url).expect("unvalid database url");
     let db_url = url.join("/").unwrap().to_string();
     let raw_conn = Database::connect(db_url)

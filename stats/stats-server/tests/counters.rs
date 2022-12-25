@@ -34,6 +34,8 @@ async fn test_counters_ok() {
         let settings = settings.clone();
         tokio::spawn(async move { stats(settings).await })
     };
+    // Sleep until server will start and calculate all values
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 
     let client = client();
 
