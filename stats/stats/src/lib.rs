@@ -2,6 +2,8 @@ mod chart;
 mod counters_list;
 mod read;
 
+pub mod tests;
+
 pub use entity;
 pub use migration;
 

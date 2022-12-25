@@ -62,111 +62,22 @@ impl crate::Chart for TotalBlocks {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{get_counters, Chart};
-    use blockscout_db::entity::{addresses, blocks};
-    use chrono::{NaiveDate, NaiveDateTime};
+    use crate::{
+        get_counters,
+        tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
+        Chart,
+    };
+    use chrono::NaiveDate;
     use entity::chart_data_int;
-    use migration::MigratorTrait;
     use pretty_assertions::assert_eq;
-    use sea_orm::{ConnectionTrait, Database, Set, Statement};
+    use sea_orm::Set;
     use std::str::FromStr;
-    use url::Url;
-
-    async fn init_db<M: MigratorTrait>(name: &str) -> DatabaseConnection {
-        let db_url = std::env::var("DATABASE_URL").expect("no DATABASE_URL env");
-        let url = Url::parse(&db_url).expect("unvalid database url");
-        let db_url = url.join("/").unwrap().to_string();
-        let raw_conn = Database::connect(db_url)
-            .await
-            .expect("failed to connect to postgres");
-
-        raw_conn
-            .execute(Statement::from_string(
-                sea_orm::DatabaseBackend::Postgres,
-                format!("DROP DATABASE IF EXISTS {} WITH (FORCE)", name),
-            ))
-            .await
-            .expect("failed to drop test database");
-        raw_conn
-            .execute(Statement::from_string(
-                sea_orm::DatabaseBackend::Postgres,
-                format!("CREATE DATABASE {}", name),
-            ))
-            .await
-            .expect("failed to create test database");
-
-        let db_url = url.join(&format!("/{name}")).unwrap().to_string();
-        let conn = Database::connect(db_url.clone())
-            .await
-            .expect("failed to connect to test db");
-        M::up(&conn, None).await.expect("failed to run migrations");
-
-        conn
-    }
-
-    async fn init_db_all(name: &str) -> (DatabaseConnection, DatabaseConnection) {
-        let db = init_db::<migration::Migrator>(name).await;
-        let blockscout =
-            init_db::<blockscout_db::migration::Migrator>(&(name.to_owned() + "_blockscout")).await;
-        (db, blockscout)
-    }
-
-    fn mock_block(index: i64, ts: &str) -> blocks::ActiveModel {
-        blocks::ActiveModel {
-            number: Set(index),
-            hash: Set(index.to_le_bytes().to_vec()),
-            timestamp: Set(NaiveDateTime::from_str(ts).unwrap()),
-            consensus: Set(Default::default()),
-            gas_limit: Set(Default::default()),
-            gas_used: Set(Default::default()),
-            miner_hash: Set(Default::default()),
-            nonce: Set(Default::default()),
-            parent_hash: Set(Default::default()),
-            inserted_at: Set(Default::default()),
-            updated_at: Set(Default::default()),
-            ..Default::default()
-        }
-    }
-
-    async fn mock_blockscout(blockscout: &DatabaseConnection, max_date: &str) {
-        addresses::Entity::insert(addresses::ActiveModel {
-            hash: Set(vec![]),
-            inserted_at: Set(Default::default()),
-            updated_at: Set(Default::default()),
-            ..Default::default()
-        })
-        .exec(blockscout)
-        .await
-        .unwrap();
-
-        let block_timestamps = vec![
-            "2022-11-09T23:59:59",
-            "2022-11-10T00:00:00",
-            "2022-11-10T12:00:00",
-            "2022-11-10T23:59:59",
-            "2022-11-11T00:00:00",
-            "2022-11-11T12:00:00",
-            "2022-11-11T15:00:00",
-            "2022-11-11T23:59:59",
-            "2022-11-12T00:00:00",
-        ]
-        .into_iter()
-        .filter(|val| {
-            NaiveDateTime::from_str(val).unwrap().date() <= NaiveDate::from_str(max_date).unwrap()
-        })
-        .enumerate()
-        .map(|(ind, ts)| mock_block(ind as i64, ts));
-        blocks::Entity::insert_many(block_timestamps)
-            .exec(blockscout)
-            .await
-            .unwrap();
-    }
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_total_blocks_recurrent() {
         let _ = tracing_subscriber::fmt::try_init();
-        let (db, blockscout) = init_db_all("update_total_blocks_recurrent").await;
+        let (db, blockscout) = init_db_all("update_total_blocks_recurrent", None).await;
         let updater = TotalBlocks::default();
 
         updater.create(&db).await.unwrap();
@@ -181,7 +92,7 @@ mod tests {
         .await
         .unwrap();
 
-        mock_blockscout(&blockscout, "2022-11-11").await;
+        fill_mock_blockscout_data(&blockscout, "2022-11-11").await;
 
         updater.update(&db, &blockscout).await.unwrap();
         let data = get_counters(&db).await.unwrap();
@@ -192,12 +103,12 @@ mod tests {
     #[ignore = "needs database to run"]
     async fn update_total_blocks_fresh() {
         let _ = tracing_subscriber::fmt::try_init();
-        let (db, blockscout) = init_db_all("update_total_blocks_fresh").await;
+        let (db, blockscout) = init_db_all("update_total_blocks_fresh", None).await;
         let updater = TotalBlocks::default();
 
         updater.create(&db).await.unwrap();
 
-        mock_blockscout(&blockscout, "2022-11-12").await;
+        fill_mock_blockscout_data(&blockscout, "2022-11-12").await;
 
         updater.update(&db, &blockscout).await.unwrap();
         let data = get_counters(&db).await.unwrap();
@@ -208,7 +119,7 @@ mod tests {
     #[ignore = "needs database to run"]
     async fn update_total_blocks_last() {
         let _ = tracing_subscriber::fmt::try_init();
-        let (db, blockscout) = init_db_all("update_total_blocks_last").await;
+        let (db, blockscout) = init_db_all("update_total_blocks_last", None).await;
         let updater = TotalBlocks::default();
 
         updater.create(&db).await.unwrap();
@@ -223,7 +134,7 @@ mod tests {
         .await
         .unwrap();
 
-        mock_blockscout(&blockscout, "2022-11-11").await;
+        fill_mock_blockscout_data(&blockscout, "2022-11-11").await;
 
         updater.update(&db, &blockscout).await.unwrap();
         let data = get_counters(&db).await.unwrap();

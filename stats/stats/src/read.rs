@@ -139,49 +139,15 @@ pub async fn get_chart_int(
 mod tests {
     use std::str::FromStr;
 
+    use crate::tests::init_db::init_db;
+
     use super::*;
     use entity::{
         chart_data_int, charts,
         sea_orm_active_enums::{ChartType, ChartValueType},
     };
-    use migration::MigratorTrait;
     use pretty_assertions::assert_eq;
-    use sea_orm::{ConnectionTrait, Database, EntityTrait, Set};
-    use url::Url;
-
-    async fn init_db(name: &str) -> DatabaseConnection {
-        let db_url = std::env::var("DATABASE_URL").expect("no DATABASE_URL env");
-        let url = Url::parse(&db_url).expect("unvalid database url");
-        let db_url = url.join("/").unwrap().to_string();
-        let raw_conn = Database::connect(db_url)
-            .await
-            .expect("failed to connect to postgres");
-
-        raw_conn
-            .execute(Statement::from_string(
-                sea_orm::DatabaseBackend::Postgres,
-                format!("DROP DATABASE IF EXISTS {} WITH (FORCE)", name),
-            ))
-            .await
-            .expect("failed to drop test database");
-        raw_conn
-            .execute(Statement::from_string(
-                sea_orm::DatabaseBackend::Postgres,
-                format!("CREATE DATABASE {}", name),
-            ))
-            .await
-            .expect("failed to create test database");
-
-        let db_url = url.join(&format!("/{name}")).unwrap().to_string();
-        let conn = Database::connect(db_url.clone())
-            .await
-            .expect("failed to connect to test db");
-        migration::Migrator::up(&conn, None)
-            .await
-            .expect("failed to run migrations");
-
-        conn
-    }
+    use sea_orm::{EntityTrait, Set};
 
     fn mock_chart_data(chart_id: i32, date: &str, value: i64) -> chart_data_int::ActiveModel {
         chart_data_int::ActiveModel {
@@ -228,7 +194,7 @@ mod tests {
     async fn get_counters_mock() {
         let _ = tracing_subscriber::fmt::try_init();
 
-        let db = init_db("get_counters_mock").await;
+        let db = init_db::<migration::Migrator>("get_counters_mock", None).await;
         insert_mock_data(&db).await;
         let counters = get_counters(&db).await.unwrap();
         assert_eq!(
@@ -247,7 +213,7 @@ mod tests {
     async fn get_chart_int_mock() {
         let _ = tracing_subscriber::fmt::try_init();
 
-        let db = init_db("get_chart_int_mock").await;
+        let db = init_db::<migration::Migrator>("get_chart_int_mock", None).await;
         insert_mock_data(&db).await;
         let chart = get_chart_int(&db, "newBlocksPerDay", None, None)
             .await
