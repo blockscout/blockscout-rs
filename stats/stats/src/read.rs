@@ -8,6 +8,8 @@ use stats_proto::blockscout::stats::v1::{Counters, LineChart, Point};
 use std::collections::HashMap;
 use thiserror::Error;
 
+use crate::counters_list;
+
 #[derive(Error, Debug)]
 pub enum ReadError {
     #[error("database error {0}")]
@@ -20,44 +22,53 @@ pub enum ReadError {
 struct CounterData {
     name: String,
     date: NaiveDate,
-    value: i64,
-}
-
-fn get_counter_from_data(
-    data: &HashMap<String, (NaiveDate, u64)>,
-    name: &str,
-) -> Result<u64, ReadError> {
-    data.get(name)
-        .map(|(_, value)| *value)
-        .ok_or_else(|| ReadError::NotFound(name.into()))
+    value: String,
 }
 
 pub async fn get_counters(db: &DatabaseConnection) -> Result<Counters, ReadError> {
+    let int_counters = _get_counters(db, "chart_data_int").await?;
+    let double_counters = _get_counters(db, "chart_data_double").await?;
+
+    let counters = int_counters.into_iter().chain(double_counters).collect();
+    let counters = Counters { counters };
+    Ok(counters)
+}
+
+async fn _get_counters(
+    db: &DatabaseConnection,
+    table_name: &str,
+) -> Result<HashMap<String, String>, ReadError> {
     let data = CounterData::find_by_statement(Statement::from_string(
         DbBackend::Postgres,
-        r#"
-        SELECT distinct on (charts.id) charts.name, data.date, data.value 
-            FROM "chart_data_int" "data"
+        format!(
+            r#"
+        SELECT distinct on (charts.id) charts.name, data.date, data.value::text
+            FROM "{}" "data"
             INNER JOIN "charts"
                 ON data.chart_id = charts.id
             WHERE charts.chart_type = 'COUNTER'
             ORDER BY charts.id, data.id DESC;
-        "#
-        .into(),
+        "#,
+            table_name
+        ),
     ))
     .all(db)
     .await?;
 
     let data: HashMap<_, _> = data
         .into_iter()
-        .map(|data| (data.name, (data.date, data.value as u64)))
+        .map(|data| (data.name, (data.date, data.value)))
         .collect();
-    let counters = Counters {
-        counters: HashMap::from_iter([(
-            "totalBlocksAllTime".into(),
-            get_counter_from_data(&data, "totalBlocksAllTime")?.to_string(),
-        )]),
-    };
+
+    let counters: HashMap<String, String> = data
+        .into_iter()
+        .filter_map(|(counter_name, (_, value))| {
+            counters_list::COUNTERS
+                .contains(&counter_name.as_str())
+                .then_some((counter_name, value))
+        })
+        .collect();
+
     Ok(counters)
 }
 

@@ -1,12 +1,10 @@
-use super::UpdateError;
+use super::utils::insert_counter_int_data;
+use crate::{counters_list, UpdateError};
 use async_trait::async_trait;
 use blockscout_db::entity::blocks;
 use chrono::NaiveDateTime;
-use entity::{
-    chart_data_int,
-    sea_orm_active_enums::{ChartType, ChartValueType},
-};
-use sea_orm::{prelude::*, sea_query, FromQueryResult, QueryOrder, QuerySelect, Set};
+use entity::sea_orm_active_enums::{ChartType, ChartValueType};
+use sea_orm::{DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QueryOrder, QuerySelect};
 
 #[derive(FromQueryResult)]
 struct TotalBlocksData {
@@ -18,13 +16,13 @@ struct TotalBlocksData {
 pub struct TotalBlocks {}
 
 #[async_trait]
-impl super::Chart for TotalBlocks {
+impl crate::Chart for TotalBlocks {
     fn name(&self) -> &str {
-        "totalBlocksAllTime"
+        counters_list::TOTAL_BLOCKS
     }
 
     async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
-        super::create_chart(
+        crate::chart::create_chart(
             db,
             self.name().into(),
             ChartType::Counter,
@@ -38,7 +36,7 @@ impl super::Chart for TotalBlocks {
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
     ) -> Result<(), UpdateError> {
-        let id = super::find_chart(db, self.name())
+        let id = crate::chart::find_chart(db, self.name())
             .await?
             .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
 
@@ -57,27 +55,7 @@ impl super::Chart for TotalBlocks {
                 return Ok(());
             }
         };
-
-        let data = chart_data_int::ActiveModel {
-            id: Default::default(),
-            chart_id: Set(id),
-            date: Set(data.timestamp.date()),
-            value: Set(data.number),
-            created_at: Default::default(),
-        };
-
-        chart_data_int::Entity::insert(data)
-            .on_conflict(
-                sea_query::OnConflict::columns([
-                    chart_data_int::Column::ChartId,
-                    chart_data_int::Column::Date,
-                ])
-                .update_column(chart_data_int::Column::Value)
-                .to_owned(),
-            )
-            .exec(db)
-            .await?;
-
+        insert_counter_int_data(db, id, data.timestamp.date(), data.number).await?;
         Ok(())
     }
 }
@@ -88,9 +66,10 @@ mod tests {
     use crate::{get_counters, Chart};
     use blockscout_db::entity::{addresses, blocks};
     use chrono::{NaiveDate, NaiveDateTime};
+    use entity::chart_data_int;
     use migration::MigratorTrait;
     use pretty_assertions::assert_eq;
-    use sea_orm::{ConnectionTrait, Database, Statement};
+    use sea_orm::{ConnectionTrait, Database, Set, Statement};
     use std::str::FromStr;
     use url::Url;
 

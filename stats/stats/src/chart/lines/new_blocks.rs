@@ -1,4 +1,3 @@
-use super::UpdateError;
 use async_trait::async_trait;
 use chrono::NaiveDate;
 use entity::{
@@ -8,6 +7,8 @@ use entity::{
 use sea_orm::{
     prelude::*, sea_query, DbBackend, FromQueryResult, QueryOrder, QuerySelect, Set, Statement,
 };
+
+use crate::UpdateError;
 
 #[derive(FromQueryResult)]
 struct NewBlocksData {
@@ -24,13 +25,14 @@ struct ChartDate {
 pub struct NewBlocks {}
 
 #[async_trait]
-impl super::Chart for NewBlocks {
+impl crate::Chart for NewBlocks {
     fn name(&self) -> &str {
         "newBlocksPerDay"
     }
 
     async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
-        super::create_chart(db, self.name().into(), ChartType::Line, ChartValueType::Int).await
+        crate::chart::create_chart(db, self.name().into(), ChartType::Line, ChartValueType::Int)
+            .await
     }
 
     async fn update(
@@ -38,7 +40,7 @@ impl super::Chart for NewBlocks {
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
     ) -> Result<(), UpdateError> {
-        let id = super::find_chart(db, self.name())
+        let id = crate::chart::find_chart(db, self.name())
             .await?
             .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
         let last_row = chart_data_int::Entity::find()
