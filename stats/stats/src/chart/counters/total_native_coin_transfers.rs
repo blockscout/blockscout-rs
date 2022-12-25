@@ -6,12 +6,12 @@ use entity::sea_orm_active_enums::{ChartType, ChartValueType};
 use sea_orm::prelude::*;
 
 #[derive(Default, Debug)]
-pub struct TotalCoinHolders {}
+pub struct TotalNativeCoinTransfers {}
 
 #[async_trait]
-impl crate::Chart for TotalCoinHolders {
+impl crate::Chart for TotalNativeCoinTransfers {
     fn name(&self) -> &str {
-        counters_list::TOTAL_COIN_HOLDERS
+        counters_list::TOTAL_NATIVE_COIN_TRANSFERS
     }
 
     async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
@@ -37,7 +37,7 @@ impl crate::Chart for TotalCoinHolders {
             db,
             chart_id,
             chrono::offset::Local::now().date_naive(),
-            409559,
+            32528,
         )
         .await?;
         Ok(())

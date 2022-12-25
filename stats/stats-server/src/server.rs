@@ -42,8 +42,8 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
         Arc::new(counters::CompletedTxns::default()),
         Arc::new(counters::TotalAccounts::default()),
         Arc::new(counters::TotalBlocks::default()),
-        Arc::new(counters::TotalCoinHolders::default()),
-        Arc::new(counters::TotalCoinTransfers::default()),
+        Arc::new(counters::TotalNativeCoinHolders::default()),
+        Arc::new(counters::TotalNativeCoinTransfers::default()),
         Arc::new(counters::TotalTokens::default()),
         Arc::new(counters::TotalTxns::default()),
     ];
