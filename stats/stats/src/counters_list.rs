@@ -1,4 +1,4 @@
-pub static TOTAL_BLOCKS: &str = "totalBlocksAllTime";
+pub static TOTAL_BLOCKS: &str = "totalBlocks";
 pub static AVERAGE_BLOCK_TIME: &str = "averageBlockTime";
 pub static COMPLETED_TXNS: &str = "completedTransactions";
 pub static TOTAL_TXNS: &str = "totalTransactions";

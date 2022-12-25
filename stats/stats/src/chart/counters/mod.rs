@@ -1,5 +1,3 @@
-mod utils;
-
 mod average_block_time;
 mod completed_txns;
 mod total_accounts;

@@ -1,6 +1,5 @@
 #![allow(unused_variables)]
-use super::utils::insert_counter_double_data;
-use crate::{counters_list, UpdateError};
+use crate::{chart::insert::insert_double_data, counters_list, UpdateError};
 use async_trait::async_trait;
 use entity::sea_orm_active_enums::{ChartType, ChartValueType};
 use sea_orm::prelude::*;
@@ -33,7 +32,7 @@ impl crate::Chart for TotalTokens {
             .await?
             .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
         // TODO: remove mock
-        insert_counter_double_data(
+        insert_double_data(
             db,
             chart_id,
             chrono::offset::Local::now().date_naive(),

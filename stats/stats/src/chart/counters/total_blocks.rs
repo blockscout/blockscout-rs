@@ -1,5 +1,4 @@
-use super::utils::insert_counter_int_data;
-use crate::{counters_list, UpdateError};
+use crate::{chart::insert::insert_int_data, counters_list, UpdateError};
 use async_trait::async_trait;
 use blockscout_db::entity::blocks;
 use chrono::NaiveDateTime;
@@ -55,7 +54,7 @@ impl crate::Chart for TotalBlocks {
                 return Ok(());
             }
         };
-        insert_counter_int_data(db, id, data.timestamp.date(), data.number).await?;
+        insert_int_data(db, id, data.timestamp.date(), data.number).await?;
         Ok(())
     }
 }

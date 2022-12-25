@@ -25,19 +25,29 @@ struct CounterData {
     value: String,
 }
 
+#[derive(Debug, Clone, Copy)]
+enum Data {
+    Int,
+    Double,
+}
+
 pub async fn get_counters(db: &DatabaseConnection) -> Result<Counters, ReadError> {
-    let int_counters = _get_counters(db, "chart_data_int").await?;
-    let double_counters = _get_counters(db, "chart_data_double").await?;
+    let int_counters = get_counters_data(db, Data::Int).await?;
+    let double_counters = get_counters_data(db, Data::Double).await?;
 
     let counters = int_counters.into_iter().chain(double_counters).collect();
     let counters = Counters { counters };
     Ok(counters)
 }
 
-async fn _get_counters(
+async fn get_counters_data(
     db: &DatabaseConnection,
-    table_name: &str,
+    data: Data,
 ) -> Result<HashMap<String, String>, ReadError> {
+    let table_name = match data {
+        Data::Int => "chart_data_int",
+        Data::Double => "chart_data_double",
+    };
     let data = CounterData::find_by_statement(Statement::from_string(
         DbBackend::Postgres,
         format!(
@@ -185,7 +195,7 @@ mod tests {
     async fn insert_mock_data(db: &DatabaseConnection) {
         charts::Entity::insert_many([
             charts::ActiveModel {
-                name: Set("totalBlocksAllTime".into()),
+                name: Set(counters_list::TOTAL_BLOCKS.to_string()),
                 chart_type: Set(ChartType::Counter),
                 value_type: Set(ChartValueType::Int),
                 ..Default::default()
@@ -223,7 +233,10 @@ mod tests {
         let counters = get_counters(&db).await.unwrap();
         assert_eq!(
             Counters {
-                counters: HashMap::from_iter([("totalBlocksAllTime".into(), "1350".into())]),
+                counters: HashMap::from_iter([(
+                    counters_list::TOTAL_BLOCKS.to_string(),
+                    "1350".into()
+                )]),
             },
             counters
         );

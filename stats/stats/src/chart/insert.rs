@@ -3,7 +3,7 @@ use entity::{chart_data_double, chart_data_int};
 
 use sea_orm::{prelude::*, sea_query, ConnectionTrait, Set};
 
-pub async fn insert_counter_int_data<C: ConnectionTrait>(
+pub async fn insert_int_data<C: ConnectionTrait>(
     db: &C,
     chart_id: i32,
     date: NaiveDate,
@@ -32,7 +32,7 @@ pub async fn insert_counter_int_data<C: ConnectionTrait>(
     Ok(())
 }
 
-pub async fn insert_counter_double_data<C: ConnectionTrait>(
+pub async fn insert_double_data<C: ConnectionTrait>(
     db: &C,
     chart_id: i32,
     date: NaiveDate,

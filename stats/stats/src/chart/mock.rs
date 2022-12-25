@@ -1,3 +1,4 @@
+use crate::counters_list;
 use chrono::{Duration, NaiveDate};
 use entity::{
     chart_data_int, charts,
@@ -21,7 +22,7 @@ pub async fn fill_mock_data(db: &DatabaseConnection) -> Result<(), DbErr> {
     charts::Entity::delete_many().exec(db).await?;
 
     let total_blocks_id = charts::Entity::insert(charts::ActiveModel {
-        name: Set("totalBlocksAllTime".into()),
+        name: Set(counters_list::TOTAL_BLOCKS.to_string()),
         chart_type: Set(ChartType::Counter),
         value_type: Set(ChartValueType::Int),
         ..Default::default()
