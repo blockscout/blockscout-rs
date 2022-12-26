@@ -1,18 +1,18 @@
 use crate::{
+    proto::{
+        health_actix::route_health, health_server::HealthServer,
+        solidity_verifier_actix::route_solidity_verifier,
+        solidity_verifier_server::SolidityVerifierServer,
+        sourcify_verifier_actix::route_sourcify_verifier,
+        sourcify_verifier_server::SourcifyVerifierServer,
+        vyper_verifier_actix::route_vyper_verifier, vyper_verifier_server::VyperVerifierServer,
+    },
     services::{
         HealthService, SolidityVerifierService, SourcifyVerifierService, VyperVerifierService,
     },
     settings::Settings,
 };
 use blockscout_service_launcher::LaunchSettings;
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
-    health_actix::route_health, health_server::HealthServer,
-    solidity_verifier_actix::route_solidity_verifier,
-    solidity_verifier_server::SolidityVerifierServer,
-    sourcify_verifier_actix::route_sourcify_verifier,
-    sourcify_verifier_server::SourcifyVerifierServer, vyper_verifier_actix::route_vyper_verifier,
-    vyper_verifier_server::VyperVerifierServer,
-};
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 
@@ -64,6 +64,7 @@ fn grpc_router(
 
 pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let compilers_lock = Arc::new(Semaphore::new(settings.compilers.max_threads.get()));
+
     let solidity_verifier = match settings.solidity.enabled {
         true => Some(Arc::new(
             SolidityVerifierService::new(

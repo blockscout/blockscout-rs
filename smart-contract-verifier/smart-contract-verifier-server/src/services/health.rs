@@ -1,4 +1,4 @@
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
+use crate::proto::{
     health_check_response, health_server::Health, HealthCheckRequest, HealthCheckResponse,
 };
 

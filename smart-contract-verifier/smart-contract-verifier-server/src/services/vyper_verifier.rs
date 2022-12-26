@@ -1,14 +1,14 @@
 use crate::{
     metrics,
+    proto::{
+        vyper_verifier_server::VyperVerifier, ListCompilerVersionsRequest,
+        ListCompilerVersionsResponse, VerifyResponse, VerifyVyperMultiPartRequest,
+    },
     settings::{Extensions, FetcherSettings, VyperSettings},
     types::{VerifyResponseWrapper, VerifyVyperMultiPartRequestWrapper},
 };
 use smart_contract_verifier::{
     vyper, Compilers, ListFetcher, VerificationError, VyperClient, VyperCompiler,
-};
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
-    vyper_verifier_server::VyperVerifier, ListVersionsRequest, ListVersionsResponse,
-    VerifyResponse, VerifyVyperMultiPartRequest,
 };
 use std::sync::Arc;
 use tokio::sync::Semaphore;
@@ -71,8 +71,8 @@ impl VyperVerifier for VyperVerifierService {
         let result = vyper::multi_part::verify(self.client.clone(), request.try_into()?).await;
 
         if let Ok(verification_success) = result {
-            let response = VerifyResponseWrapper::ok(verification_success.into());
-            metrics::count_verify_contract("vyper", &response.status, "multi-part");
+            let response = VerifyResponseWrapper::ok(verification_success);
+            metrics::count_verify_contract("vyper", response.status().as_str_name(), "multi-part");
             return Ok(Response::new(response.into_inner()));
         }
 
@@ -90,11 +90,13 @@ impl VyperVerifier for VyperVerifierService {
         }
     }
 
-    async fn list_versions(
+    async fn list_compiler_versions(
         &self,
-        _request: Request<ListVersionsRequest>,
-    ) -> Result<Response<ListVersionsResponse>, Status> {
-        let versions = self.client.compilers().all_versions_sorted_str();
-        Ok(Response::new(ListVersionsResponse { versions }))
+        _request: Request<ListCompilerVersionsRequest>,
+    ) -> Result<Response<ListCompilerVersionsResponse>, Status> {
+        let compiler_versions = self.client.compilers().all_versions_sorted_str();
+        Ok(Response::new(ListCompilerVersionsResponse {
+            compiler_versions,
+        }))
     }
 }

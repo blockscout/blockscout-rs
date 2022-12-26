@@ -1,4 +1,5 @@
 mod metrics;
+mod proto;
 mod run;
 mod services;
 mod settings;

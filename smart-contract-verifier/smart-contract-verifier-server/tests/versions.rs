@@ -3,9 +3,9 @@ use actix_web::{
     test::{read_body, read_body_json, TestRequest},
     App,
 };
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
+use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
     solidity_verifier_actix::route_solidity_verifier, vyper_verifier_actix::route_vyper_verifier,
-    ListVersionsResponse,
+    ListCompilerVersionsResponse,
 };
 use smart_contract_verifier_server::{Settings, SolidityVerifierService, VyperVerifierService};
 use std::{str::from_utf8, sync::Arc};
@@ -50,19 +50,19 @@ async fn test_versions(uri: &str) {
         )
     }
 
-    let versions_response: ListVersionsResponse = read_body_json(response).await;
+    let versions_response: ListCompilerVersionsResponse = read_body_json(response).await;
     assert!(
-        !versions_response.versions.is_empty(),
+        !versions_response.compiler_versions.is_empty(),
         "List of versions is empty"
     )
 }
 
 #[tokio::test]
 async fn solidity() {
-    test_versions("/api/v1/solidity/versions").await;
+    test_versions("/verifier/solidity/versions").await;
 }
 
 #[tokio::test]
 async fn vyper() {
-    test_versions("/api/v1/vyper/versions").await;
+    test_versions("/verifier/vyper/versions").await;
 }

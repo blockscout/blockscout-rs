@@ -1,5 +1,10 @@
 use crate::{
     metrics,
+    proto::{
+        solidity_verifier_server::SolidityVerifier, ListCompilerVersionsRequest,
+        ListCompilerVersionsResponse, VerifyResponse, VerifySolidityMultiPartRequest,
+        VerifySolidityStandardJsonRequest,
+    },
     settings::{Extensions, FetcherSettings, S3FetcherSettings, SoliditySettings},
     types::{
         StandardJsonParseError, VerifyResponseWrapper, VerifySolidityMultiPartRequestWrapper,
@@ -10,10 +15,6 @@ use s3::{creds::Credentials, Bucket, Region};
 use smart_contract_verifier::{
     solidity, Compilers, Fetcher, ListFetcher, S3Fetcher, SolcValidator, SolidityClient,
     SolidityCompiler, VerificationError,
-};
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
-    solidity_verifier_server::SolidityVerifier, ListVersionsRequest, ListVersionsResponse,
-    VerifyResponse, VerifySolidityMultiPartRequest, VerifySolidityStandardJsonRequest,
 };
 use std::{str::FromStr, sync::Arc};
 use tokio::sync::Semaphore;
@@ -87,8 +88,12 @@ impl SolidityVerifier for SolidityVerifierService {
         let result = solidity::multi_part::verify(self.client.clone(), request.try_into()?).await;
 
         if let Ok(verification_success) = result {
-            let response = VerifyResponseWrapper::ok(verification_success.into());
-            metrics::count_verify_contract("solidity", &response.status, "multi-part");
+            let response = VerifyResponseWrapper::ok(verification_success);
+            metrics::count_verify_contract(
+                "solidity",
+                response.status().as_str_name(),
+                "multi-part",
+            );
             return Ok(Response::new(response.into_inner()));
         }
 
@@ -129,8 +134,12 @@ impl SolidityVerifier for SolidityVerifierService {
             solidity::standard_json::verify(self.client.clone(), verification_request).await;
 
         if let Ok(verification_success) = result {
-            let response = VerifyResponseWrapper::ok(verification_success.into());
-            metrics::count_verify_contract("solidity", &response.status, "multi-part");
+            let response = VerifyResponseWrapper::ok(verification_success);
+            metrics::count_verify_contract(
+                "solidity",
+                response.status().as_str_name(),
+                "multi-part",
+            );
             return Ok(Response::new(response.into_inner()));
         }
 
@@ -148,12 +157,14 @@ impl SolidityVerifier for SolidityVerifierService {
         }
     }
 
-    async fn list_versions(
+    async fn list_compiler_versions(
         &self,
-        _request: Request<ListVersionsRequest>,
-    ) -> Result<Response<ListVersionsResponse>, Status> {
-        let versions = self.client.compilers().all_versions_sorted_str();
-        Ok(Response::new(ListVersionsResponse { versions }))
+        _request: Request<ListCompilerVersionsRequest>,
+    ) -> Result<Response<ListCompilerVersionsResponse>, Status> {
+        let compiler_versions = self.client.compilers().all_versions_sorted_str();
+        Ok(Response::new(ListCompilerVersionsResponse {
+            compiler_versions,
+        }))
     }
 }
 

@@ -1,3 +1,4 @@
+use crate::proto::{BytecodeType, VerifySolidityStandardJsonRequest};
 use anyhow::anyhow;
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use ethers_solc::CompilerInput;
@@ -6,7 +7,6 @@ use smart_contract_verifier::{
     solidity::standard_json::{StandardJsonContent, VerificationRequest},
     Version,
 };
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::VerifySolidityStandardJsonRequest;
 use std::{ops::Deref, str::FromStr};
 use thiserror::Error;
 
@@ -51,16 +51,15 @@ impl TryFrom<VerifySolidityStandardJsonRequestWrapper> for VerificationRequest {
     fn try_from(request: VerifySolidityStandardJsonRequestWrapper) -> Result<Self, Self::Error> {
         let request = request.into_inner();
 
-        let deployed_bytecode = DisplayBytes::from_str(&request.deployed_bytecode)
+        let bytecode = DisplayBytes::from_str(&request.bytecode)
             .map_err(|err| anyhow!("Invalid deployed bytecode: {:?}", err))?
             .0;
-        let creation_bytecode = match request.creation_bytecode {
-            None => None,
-            Some(creation_bytecode) => Some(
-                DisplayBytes::from_str(&creation_bytecode)
-                    .map_err(|err| anyhow!("Invalid creation bytecode: {:?}", err))?
-                    .0,
-            ),
+        let (creation_bytecode, deployed_bytecode) = match request.bytecode_type() {
+            BytecodeType::Unspecified => Err(ParseError::BadRequest(anyhow!(
+                "Bytecode type is unspecified"
+            )))?,
+            BytecodeType::CreationInput => (Some(bytecode), bytes::Bytes::new()),
+            BytecodeType::DeployedBytecode => (None, bytecode),
         };
         let compiler_version = Version::from_str(&request.compiler_version)
             .map_err(|err| anyhow!("Invalid compiler version: {}", err))?;
@@ -83,22 +82,24 @@ mod tests {
 
     #[test]
     fn try_into_verification_request() {
-        let request = VerifySolidityStandardJsonRequest {
-            creation_bytecode: Some("0x1234".to_string()),
-            deployed_bytecode: "0x5678".to_string(),
+        /********** Creation Input **********/
+
+        let mut request = VerifySolidityStandardJsonRequest {
+            bytecode: "0x1234".to_string(),
+            bytecode_type: BytecodeType::CreationInput.into(),
             compiler_version: "v0.8.17+commit.8df45f5f".to_string(),
             input: "{\"language\": \"Solidity\", \"sources\": {\"./src/contracts/Foo.sol\": {\"content\": \"pragma solidity ^0.8.2;\\n\\ncontract Foo {\\n    function bar() external pure returns (uint256) {\\n        return 42;\\n    }\\n}\\n\"}}, \"settings\": {\"metadata\": {\"useLiteralContent\": true}, \"optimizer\": {\"enabled\": true, \"runs\": 200}, \"outputSelection\": {\"*\": {\"*\": [\"abi\", \"evm.bytecode\", \"evm.deployedBytecode\", \"evm.methodIdentifiers\"], \"\": [\"id\", \"ast\"]}}}}".to_string()
         };
         let input: CompilerInput = serde_json::from_str(&request.input).unwrap();
 
         let verification_request: VerificationRequest =
-            <VerifySolidityStandardJsonRequestWrapper>::from(request)
+            <VerifySolidityStandardJsonRequestWrapper>::from(request.clone())
                 .try_into()
                 .expect("Try_into verification request failed");
 
-        let expected = VerificationRequest {
+        let mut expected = VerificationRequest {
             creation_bytecode: Some(DisplayBytes::from_str("0x1234").unwrap().0),
-            deployed_bytecode: DisplayBytes::from_str("0x5678").unwrap().0,
+            deployed_bytecode: DisplayBytes::from_str("").unwrap().0,
             compiler_version: Version::from_str("v0.8.17+commit.8df45f5f").unwrap(),
             content: StandardJsonContent { input },
         };
@@ -120,6 +121,24 @@ mod tests {
             serde_json::to_string(&expected.content.input).unwrap(),
             serde_json::to_string(&verification_request.content.input).unwrap(),
             "compiler input"
+        );
+
+        /********** Deployed Bytecode **********/
+
+        request.bytecode_type = BytecodeType::DeployedBytecode.into();
+        expected.deployed_bytecode = expected.creation_bytecode.take().unwrap();
+
+        let verification_request: VerificationRequest =
+            <VerifySolidityStandardJsonRequestWrapper>::from(request)
+                .try_into()
+                .expect("Deployed bytecode: try_into verification request failed");
+        assert_eq!(
+            expected.creation_bytecode, verification_request.creation_bytecode,
+            "Invalid creation bytecode when deployed bytecode provided"
+        );
+        assert_eq!(
+            expected.deployed_bytecode, verification_request.deployed_bytecode,
+            "Invalid deployed bytecode when deployed bytecode provided"
         );
     }
 }

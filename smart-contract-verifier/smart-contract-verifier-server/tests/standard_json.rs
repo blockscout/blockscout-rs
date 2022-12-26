@@ -10,7 +10,7 @@ use actix_web::{
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use ethers_solc::artifacts::StandardJsonCompilerInput;
 use serde_json::json;
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
+use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
     solidity_verifier_actix::route_solidity_verifier, VerifyResponse,
 };
 use smart_contract_verifier_server::{Settings, SolidityVerifierService};
@@ -23,7 +23,7 @@ use std::{
 use tokio::sync::{OnceCell, Semaphore};
 
 const CONTRACTS_DIR: &str = "tests/contracts";
-const ROUTE: &str = "/api/v1/solidity/verify/standard-json";
+const ROUTE: &str = "/verifier/solidity/sources:verify-standard-json";
 
 async fn global_service() -> &'static Arc<SolidityVerifierService> {
     static SERVICE: OnceCell<Arc<SolidityVerifierService>> = OnceCell::const_new();
@@ -75,9 +75,17 @@ async fn test_setup(dir: &str, input: &mut TestInput) -> (ServiceResponse, Optio
         .expect("Expected constructor args must be valid")
     });
 
+    let (bytecode, bytecode_type) = if !input.ignore_creation_tx_input {
+        (input.creation_tx_input.as_ref().unwrap(), "CREATION_INPUT")
+    } else {
+        (
+            input.deployed_bytecode.as_ref().unwrap(),
+            "DEPLOYED_BYTECODE",
+        )
+    };
     let request = json!({
-        "deployedBytecode": input.deployed_bytecode.as_ref().unwrap(),
-        "creationBytecode": input.creation_tx_input.as_ref(),
+        "bytecode": bytecode,
+        "bytecodeType": bytecode_type,
         "compilerVersion": input.compiler_version,
         "input": input.standard_input
     });
@@ -109,15 +117,15 @@ async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse
     let verification_response_clone = verification_response.clone();
 
     assert_eq!(
-        verification_response.status,
-        "0", // success
+        verification_response.status().as_str_name(),
+        "SUCCESS", // success
         "Invalid verification status. Response: {:?}",
         verification_response
     );
 
     let verification_result = verification_response
-        .result
-        .expect("Verification result is not Some");
+        .source
+        .expect("Verification source is not Some");
 
     let abi: Option<Result<ethabi::Contract, _>> = verification_result
         .abi
@@ -134,6 +142,17 @@ async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse
             "Abi deserialization failed: {}",
             abi.unwrap().as_ref().unwrap_err()
         );
+        assert_eq!(
+            verification_result.source_type().as_str_name(),
+            "SOLIDITY",
+            "Invalid source type"
+        );
+    } else {
+        assert_eq!(
+            verification_result.source_type().as_str_name(),
+            "YUL",
+            "Invalid source type"
+        );
     }
 
     let verification_result_constructor_arguments = verification_result
@@ -144,64 +163,50 @@ async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse
         verification_result_constructor_arguments, expected_constructor_argument,
         "Invalid constructor args"
     );
+    assert_eq!(
+        verification_result.compiler_version, input.compiler_version,
+        "Invalid compiler version"
+    );
 
     let standard_input: StandardJsonCompilerInput =
         serde_json::from_str(&input.standard_input.expect("Set `Some` on test_setup"))
             .expect("Standard input deserialization");
 
     assert_eq!(
-        verification_result.evm_version,
-        standard_input
-            .settings
-            .evm_version
-            .map(|version| version.to_string())
-            .unwrap_or_else(|| "default".to_string()),
-        "Invalid evm version"
-    );
-    assert_eq!(
-        verification_result.compiler_version, input.compiler_version,
-        "Invalid compiler version"
-    );
-    let libs = {
-        let mut formatted_libs = BTreeMap::new();
-        standard_input
-            .settings
-            .libraries
-            .libs
-            .into_iter()
-            .for_each(|(_path, libs)| {
-                libs.into_iter().for_each(|(contract, address)| {
-                    formatted_libs.insert(contract, address);
-                })
-            });
-        formatted_libs
-    };
-    assert_eq!(
-        verification_result.contract_libraries, libs,
-        "Invalid contract libraries"
-    );
-    assert_eq!(
-        verification_result.optimization, standard_input.settings.optimizer.enabled,
-        "Invalid optimization"
-    );
-    assert_eq!(
-        verification_result
-            .optimization_runs
-            .map(|runs| runs as usize),
-        standard_input.settings.optimizer.runs,
-        "Invalid optimization runs"
-    );
-    assert_eq!(
-        verification_result.sources.len(),
+        verification_result.source_files.len(),
         standard_input.sources.len(),
         "Invalid number of sources"
     );
-    let sources: BTreeMap<_, _> = standard_input
+    let expected_sources: BTreeMap<_, _> = standard_input
         .sources
         .into_iter()
         .map(|(path, source)| (path.to_str().unwrap().to_string(), source.content))
         .collect();
-    assert_eq!(verification_result.sources, sources, "Invalid source");
+    assert_eq!(
+        verification_result.source_files, expected_sources,
+        "Invalid source"
+    );
+
+    let compiler_settings: ethers_solc::artifacts::Settings =
+        serde_json::from_str(&verification_result.compiler_settings)
+            .expect("Compiler settings deserialization failed");
+
+    assert_eq!(
+        compiler_settings.evm_version, standard_input.settings.evm_version,
+        "Invalid evm version"
+    );
+    assert_eq!(
+        compiler_settings.libraries, standard_input.settings.libraries,
+        "Invalid contract libraries"
+    );
+    assert_eq!(
+        compiler_settings.optimizer.enabled, standard_input.settings.optimizer.enabled,
+        "Invalid optimization"
+    );
+    assert_eq!(
+        compiler_settings.optimizer.runs, standard_input.settings.optimizer.runs,
+        "Invalid optimization runs"
+    );
 
     verification_response_clone
 }
@@ -257,17 +262,16 @@ mod regression_tests {
 
 mod match_types_tests {
     use super::*;
-    use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::verify_response::result::MatchType;
-    use crate::standard_json_types::TestInput;
-    use crate::test_success;
+    use crate::{standard_json_types::TestInput, test_success};
+    use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::source::MatchType;
 
     fn check_match_type(response: VerifyResponse, expected: MatchType) {
         assert_eq!(
-            Into::<i32>::into(expected),
+            expected,
             response
-                .result
+                .source
                 .expect("Test succeeded, thus result should exist")
-                .match_type,
+                .match_type(),
             "Invalid match type"
         )
     }

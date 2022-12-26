@@ -1,39 +1,39 @@
+use crate::proto::VerifySourcifyRequest;
 use serde::{Deserialize, Serialize};
 use smart_contract_verifier::sourcify::api::VerificationRequest;
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::VerifyViaSourcifyRequest;
 use std::ops::Deref;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
-pub struct VerifyViaSourcifyRequestWrapper(VerifyViaSourcifyRequest);
+pub struct VerifySourcifyRequestWrapper(VerifySourcifyRequest);
 
-impl From<VerifyViaSourcifyRequest> for VerifyViaSourcifyRequestWrapper {
-    fn from(inner: VerifyViaSourcifyRequest) -> Self {
+impl From<VerifySourcifyRequest> for VerifySourcifyRequestWrapper {
+    fn from(inner: VerifySourcifyRequest) -> Self {
         Self(inner)
     }
 }
 
-impl Deref for VerifyViaSourcifyRequestWrapper {
-    type Target = VerifyViaSourcifyRequest;
+impl Deref for VerifySourcifyRequestWrapper {
+    type Target = VerifySourcifyRequest;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl VerifyViaSourcifyRequestWrapper {
-    pub fn new(inner: VerifyViaSourcifyRequest) -> Self {
+impl VerifySourcifyRequestWrapper {
+    pub fn new(inner: VerifySourcifyRequest) -> Self {
         Self(inner)
     }
 
-    pub fn into_inner(self) -> VerifyViaSourcifyRequest {
+    pub fn into_inner(self) -> VerifySourcifyRequest {
         self.0
     }
 }
 
-impl TryFrom<VerifyViaSourcifyRequestWrapper> for VerificationRequest {
+impl TryFrom<VerifySourcifyRequestWrapper> for VerificationRequest {
     type Error = tonic::Status;
 
-    fn try_from(request: VerifyViaSourcifyRequestWrapper) -> Result<Self, Self::Error> {
+    fn try_from(request: VerifySourcifyRequestWrapper) -> Result<Self, Self::Error> {
         let request = request.into_inner();
         Ok(Self {
             address: request.address,
@@ -52,7 +52,7 @@ mod tests {
 
     #[test]
     fn try_into_verification_request() {
-        let request = VerifyViaSourcifyRequest {
+        let request = VerifySourcifyRequest {
             address: "0x0123456789abcdef".to_string(),
             chain: "77".to_string(),
             files: BTreeMap::from([("metadata".into(), "metadata_content".into())]),
@@ -60,7 +60,7 @@ mod tests {
         };
 
         let verification_request: VerificationRequest =
-            <VerifyViaSourcifyRequestWrapper>::from(request)
+            <VerifySourcifyRequestWrapper>::from(request)
                 .try_into()
                 .expect("Try_into verification request failed");
 

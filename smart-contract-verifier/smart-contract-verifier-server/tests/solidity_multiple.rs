@@ -9,8 +9,9 @@ use actix_web::{
 };
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use pretty_assertions::assert_eq;
+use serde::Deserialize;
 use serde_json::json;
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
+use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
     solidity_verifier_actix::route_solidity_verifier, VerifyResponse,
 };
 use smart_contract_verifier_server::{Settings, SolidityVerifierService};
@@ -24,7 +25,7 @@ use std::{
 use tokio::sync::{OnceCell, Semaphore};
 
 const CONTRACTS_DIR: &str = "tests/contracts";
-const ROUTE: &str = "/api/v1/solidity/verify/multiple-files";
+const ROUTE: &str = "/verifier/solidity/sources:verify-multi-part";
 
 async fn global_service() -> &'static Arc<SolidityVerifierService> {
     static SERVICE: OnceCell<Arc<SolidityVerifierService>> = OnceCell::const_new();
@@ -74,26 +75,23 @@ async fn test_setup(dir: &str, input: &mut TestInput) -> (ServiceResponse, Optio
             .expect("Error while reading constructor_arguments")
     });
 
-    let request = if let Some(optimization_runs) = input.optimization_runs {
-        json!({
-            "deployedBytecode": input.deployed_bytecode.as_ref().unwrap(),
-            "creationBytecode": input.creation_tx_input.as_ref(),
-            "compilerVersion": input.compiler_version,
-            "sources": BTreeMap::from([(contract_path, input.source_code.as_ref().unwrap())]),
-            "evmVersion": input.evm_version,
-            "contractLibraries": input.contract_libraries,
-            "optimizationRuns": optimization_runs
-        })
+    let (bytecode, bytecode_type) = if !input.ignore_creation_tx_input {
+        (input.creation_tx_input.as_ref().unwrap(), "CREATION_INPUT")
     } else {
-        json!({
-            "deployedBytecode": input.deployed_bytecode.as_ref().unwrap(),
-            "creationBytecode": input.creation_tx_input.as_ref(),
-            "compilerVersion": input.compiler_version,
-            "sources": BTreeMap::from([(contract_path, input.source_code.as_ref().unwrap())]),
-            "evmVersion": input.evm_version,
-            "contractLibraries": input.contract_libraries
-        })
+        (
+            input.deployed_bytecode.as_ref().unwrap(),
+            "DEPLOYED_BYTECODE",
+        )
     };
+    let request = json!({
+        "bytecode": bytecode,
+        "bytecodeType": bytecode_type,
+        "compilerVersion": input.compiler_version,
+        "sourceFiles": BTreeMap::from([(contract_path, input.source_code.as_ref().unwrap())]),
+        "evmVersion": input.evm_version,
+        "libraries": input.contract_libraries,
+        "optimizationRuns": input.optimization_runs
+    });
 
     let response = TestRequest::post()
         .uri(ROUTE)
@@ -122,24 +120,28 @@ async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse
     let verification_response_clone = verification_response.clone();
 
     assert_eq!(
-        verification_response.status,
-        "0", // success
+        verification_response.status().as_str_name(),
+        "SUCCESS", // success
         "Invalid verification status. Response: {:?}",
         verification_response
     );
 
     assert!(
-        verification_response.result.is_some(),
-        "Verification result is not Some"
+        verification_response.source.is_some(),
+        "Verification source is not Some"
+    );
+    assert!(
+        verification_response.extra_data.is_some(),
+        "Verification extra data is not Some"
     );
 
-    let verification_result = verification_response.result.expect("Checked above");
-    let abi: Option<Result<ethabi::Contract, _>> = verification_result
+    let result_source = verification_response.source.expect("Checked above");
+    let abi: Option<Result<ethabi::Contract, _>> = result_source
         .abi
         .as_ref()
         .map(|abi| serde_json::from_str(abi));
     assert_eq!(
-        verification_result.contract_name, input.contract_name,
+        result_source.contract_name, input.contract_name,
         "Invalid contract name"
     );
     if !input.is_yul {
@@ -149,46 +151,90 @@ async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse
             "Abi deserialization failed: {}",
             abi.unwrap().as_ref().unwrap_err()
         );
+        assert_eq!(
+            result_source.source_type().as_str_name(),
+            "SOLIDITY",
+            "Invalid source type"
+        );
+    } else {
+        assert_eq!(
+            result_source.source_type().as_str_name(),
+            "YUL",
+            "Invalid source type"
+        );
     }
-    let verification_result_constructor_arguments = verification_result
+    let result_constructor_arguments = result_source
         .constructor_arguments
         .map(|args| DisplayBytes::from_str(&args).unwrap());
     let expected_constructor_argument =
         expected_constructor_argument.map(|args| DisplayBytes::from_str(&args).unwrap());
     assert_eq!(
-        verification_result_constructor_arguments, expected_constructor_argument,
+        result_constructor_arguments, expected_constructor_argument,
         "Invalid constructor args"
     );
-
     assert_eq!(
-        verification_result.evm_version, input.evm_version,
+        result_source.compiler_version, input.compiler_version,
+        "Invalid compiler version"
+    );
+
+    mod compiler_settings {
+        use serde::Deserialize;
+
+        #[derive(Default, Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        pub struct Optimizer {
+            pub enabled: Option<bool>,
+            pub runs: Option<i32>,
+        }
+    }
+
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct CompilerSettings<'a> {
+        pub evm_version: Option<&'a str>,
+        pub libraries: BTreeMap<String, BTreeMap<String, String>>,
+        #[serde(default)]
+        pub optimizer: compiler_settings::Optimizer,
+    }
+
+    let result_compiler_settings: CompilerSettings =
+        serde_json::from_str(&result_source.compiler_settings).unwrap_or_else(|_| {
+            panic!(
+                "Compiler Settings deserialization failed: {}",
+                &result_source.compiler_settings
+            )
+        });
+    assert_eq!(
+        result_compiler_settings.evm_version.unwrap_or("default"),
+        input.evm_version,
         "Invalid evm version"
     );
     assert_eq!(
-        verification_result.compiler_version, input.compiler_version,
-        "Invalid compiler version"
-    );
-    assert_eq!(
-        verification_result.contract_libraries, input.contract_libraries,
+        result_compiler_settings
+            .libraries
+            .into_values()
+            .next()
+            .unwrap_or_default(),
+        input.contract_libraries,
         "Invalid contract libraries"
     );
     assert_eq!(
-        verification_result.optimization,
+        result_compiler_settings.optimizer.enabled,
         Some(input.optimization_runs.is_some()),
         "Invalid optimization"
     );
     assert_eq!(
-        verification_result.optimization_runs, input.optimization_runs,
+        result_compiler_settings.optimizer.runs, input.optimization_runs,
         "Invalid optimization runs"
     );
     assert_eq!(
-        verification_result.sources.len(),
+        result_source.source_files.len(),
         1,
         "Invalid number of sources"
     );
     assert_eq!(
-        verification_result.sources.values().next().unwrap(),
-        &input.source_code.expect("Set `Some` on test_setup"),
+        result_source.source_files.into_iter().next().unwrap().1,
+        input.source_code.expect("Set `Some` on test_setup"),
         "Invalid source"
     );
 
@@ -208,15 +254,19 @@ async fn test_failure(dir: &str, mut input: TestInput, expected_message: &str) {
     let verification_response: VerifyResponse = read_body_json(response).await;
 
     assert_eq!(
-        verification_response.status,
-        "1", // failure
+        verification_response.status().as_str_name(),
+        "FAILURE", // failure
         "Invalid verification status. Response: {:?}",
         verification_response
     );
 
     assert!(
-        verification_response.result.is_none(),
-        "Failure verification result should be None"
+        verification_response.source.is_none(),
+        "In case of failure, source should be None"
+    );
+    assert!(
+        verification_response.extra_data.is_none(),
+        "In case of failure, extra data should be None"
     );
 
     assert!(
@@ -578,69 +628,69 @@ mod tests_without_creation_tx_input {
     }
 }
 
-// mod bytecode_parts_tests {
-//     use super::*;
-//     use smart_contract_verifier_http::BytecodePart;
-//
-//     #[tokio::test]
-//     async fn one_main_one_meta() {
-//         let contract_dir = "simple_storage";
-//         let test_input = TestInput::new("SimpleStorage", "v0.4.24+commit.e67f0147");
-//         let result = test_success(contract_dir, test_input)
-//             .await
-//             .result
-//             .expect("Was unpacked successfully inside test_success");
-//
-//         let expected_creation_tx_input_parts = vec![
-//             BytecodePart::Main {data: DisplayBytes::from_str("608060405234801561001057600080fd5b5060df8061001f6000396000f3006080604052600436106049576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff16806360fe47b114604e5780636d4ce63c146078575b600080fd5b348015605957600080fd5b5060766004803603810190808035906020019092919050505060a0565b005b348015608357600080fd5b50608a60aa565b6040518082815260200191505060405180910390f35b8060008190555050565b600080549050905600").unwrap()},
-//             BytecodePart::Meta {data: DisplayBytes::from_str("a165627a7a72305820b127de36a4e02cfe83fe4ccce7cfdbe00e4a2da70d71c3b2d0be5097bcfb94c8").unwrap() }
-//         ];
-//         super::assert_eq!(
-//             Some(expected_creation_tx_input_parts),
-//             result.local_creation_input_parts,
-//             "Invalid creation tx input parts"
-//         );
-//
-//         let expected_deployed_bytecode_parts = vec![
-//             BytecodePart::Main {data: DisplayBytes::from_str("6080604052600436106049576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff16806360fe47b114604e5780636d4ce63c146078575b600080fd5b348015605957600080fd5b5060766004803603810190808035906020019092919050505060a0565b005b348015608357600080fd5b50608a60aa565b6040518082815260200191505060405180910390f35b8060008190555050565b600080549050905600").unwrap()},
-//             BytecodePart::Meta {data: DisplayBytes::from_str("a165627a7a72305820b127de36a4e02cfe83fe4ccce7cfdbe00e4a2da70d71c3b2d0be5097bcfb94c8").unwrap() }
-//         ];
-//         super::assert_eq!(
-//             Some(expected_deployed_bytecode_parts),
-//             result.local_deployed_bytecode_parts,
-//             "Invalid deployed bytecode parts"
-//         );
-//     }
-//
-//     #[tokio::test]
-//     async fn two_main_two_meta() {
-//         let contract_dir = "issue_5636";
-//         let test_input = TestInput::new("B", "v0.8.14+commit.80d49f37").with_optimization_runs(200);
-//         let result = test_success(contract_dir, test_input)
-//             .await
-//             .result
-//             .expect("Was unpacked successfully inside test_success");
-//
-//         let expected_creation_tx_input_parts = vec![
-//             BytecodePart::Main {data: DisplayBytes::from_str("608060405234801561001057600080fd5b506040516100206020820161004e565b601f1982820381018352601f909101166040528051610048916000916020919091019061005a565b5061012d565b605c8061017a83390190565b828054610066906100f3565b90600052602060002090601f01602090048101928261008857600085556100ce565b82601f106100a157805160ff19168380011785556100ce565b828001600101855582156100ce579182015b828111156100ce5782518255916020019190600101906100b3565b506100da9291506100de565b5090565b5b808211156100da57600081556001016100df565b600181811c9082168061010757607f821691505b60208210810361012757634e487b7160e01b600052602260045260246000fd5b50919050565b603f8061013b6000396000f3fe6080604052600080fdfe").unwrap()},
-//             BytecodePart::Meta {data: DisplayBytes::from_str("a26469706673582212205c9c5bb56fb32b38e31f567bf368712fd0bd017cf3b36663c99b9fa32ddf41ae64736f6c634300080e").unwrap() },
-//             BytecodePart::Main {data: DisplayBytes::from_str("6080604052348015600f57600080fd5b50603f80601d6000396000f3fe6080604052600080fdfe").unwrap()},
-//             BytecodePart::Meta {data: DisplayBytes::from_str("a2646970667358221220708123f84ee8016bdaaab1461b231024c52e14bd1f9c02b522c3c057528434dd64736f6c634300080e").unwrap() }
-//         ];
-//         super::assert_eq!(
-//             Some(expected_creation_tx_input_parts),
-//             result.local_creation_input_parts,
-//             "Invalid creation tx input parts"
-//         );
-//
-//         let expected_deployed_bytecode_parts = vec![
-//             BytecodePart::Main {data: DisplayBytes::from_str("0x6080604052600080fdfe").unwrap()},
-//             BytecodePart::Meta {data: DisplayBytes::from_str("a26469706673582212205c9c5bb56fb32b38e31f567bf368712fd0bd017cf3b36663c99b9fa32ddf41ae64736f6c634300080e").unwrap() },
-//         ];
-//         super::assert_eq!(
-//             Some(expected_deployed_bytecode_parts),
-//             result.local_deployed_bytecode_parts,
-//             "Invalid deployed bytecode parts"
-//         );
-//     }
-// }
+mod bytecode_parts_tests {
+    use super::*;
+    use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::verify_response::extra_data::BytecodePart;
+
+    #[tokio::test]
+    async fn one_main_one_meta() {
+        let contract_dir = "simple_storage";
+        let test_input = TestInput::new("SimpleStorage", "v0.4.24+commit.e67f0147");
+        let extra_data = test_success(contract_dir, test_input)
+            .await
+            .extra_data
+            .expect("Was unpacked successfully inside test_success");
+
+        let expected_creation_tx_input_parts = vec![
+            BytecodePart {r#type: "main".into(), data: "0x608060405234801561001057600080fd5b5060df8061001f6000396000f3006080604052600436106049576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff16806360fe47b114604e5780636d4ce63c146078575b600080fd5b348015605957600080fd5b5060766004803603810190808035906020019092919050505060a0565b005b348015608357600080fd5b50608a60aa565b6040518082815260200191505060405180910390f35b8060008190555050565b600080549050905600".into()},
+            BytecodePart {r#type: "meta".into(), data: "0xa165627a7a72305820b127de36a4e02cfe83fe4ccce7cfdbe00e4a2da70d71c3b2d0be5097bcfb94c80029".into() }
+        ];
+        super::assert_eq!(
+            expected_creation_tx_input_parts,
+            extra_data.local_creation_input_parts,
+            "Invalid creation tx input parts"
+        );
+
+        let expected_deployed_bytecode_parts = vec![
+            BytecodePart {r#type: "main".into(), data: "0x6080604052600436106049576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff16806360fe47b114604e5780636d4ce63c146078575b600080fd5b348015605957600080fd5b5060766004803603810190808035906020019092919050505060a0565b005b348015608357600080fd5b50608a60aa565b6040518082815260200191505060405180910390f35b8060008190555050565b600080549050905600".into()},
+            BytecodePart {r#type: "meta".into(), data: "0xa165627a7a72305820b127de36a4e02cfe83fe4ccce7cfdbe00e4a2da70d71c3b2d0be5097bcfb94c80029".into() }
+        ];
+        super::assert_eq!(
+            expected_deployed_bytecode_parts,
+            extra_data.local_deployed_bytecode_parts,
+            "Invalid deployed bytecode parts"
+        );
+    }
+
+    #[tokio::test]
+    async fn two_main_two_meta() {
+        let contract_dir = "issue_5636";
+        let test_input = TestInput::new("B", "v0.8.14+commit.80d49f37").with_optimization_runs(200);
+        let extra_data = test_success(contract_dir, test_input)
+            .await
+            .extra_data
+            .expect("Was unpacked successfully inside test_success");
+
+        let expected_creation_tx_input_parts = vec![
+            BytecodePart {r#type: "main".into(), data: "0x608060405234801561001057600080fd5b506040516100206020820161004e565b601f1982820381018352601f909101166040528051610048916000916020919091019061005a565b5061012d565b605c8061017a83390190565b828054610066906100f3565b90600052602060002090601f01602090048101928261008857600085556100ce565b82601f106100a157805160ff19168380011785556100ce565b828001600101855582156100ce579182015b828111156100ce5782518255916020019190600101906100b3565b506100da9291506100de565b5090565b5b808211156100da57600081556001016100df565b600181811c9082168061010757607f821691505b60208210810361012757634e487b7160e01b600052602260045260246000fd5b50919050565b603f8061013b6000396000f3fe6080604052600080fdfe".into()},
+            BytecodePart {r#type: "meta".into(), data: "0xa26469706673582212205c9c5bb56fb32b38e31f567bf368712fd0bd017cf3b36663c99b9fa32ddf41ae64736f6c634300080e0033".into() },
+            BytecodePart {r#type: "main".into(), data: "0x6080604052348015600f57600080fd5b50603f80601d6000396000f3fe6080604052600080fdfe".into()},
+            BytecodePart {r#type: "meta".into(), data: "0xa2646970667358221220708123f84ee8016bdaaab1461b231024c52e14bd1f9c02b522c3c057528434dd64736f6c634300080e0033".into() }
+        ];
+        super::assert_eq!(
+            expected_creation_tx_input_parts,
+            extra_data.local_creation_input_parts,
+            "Invalid creation tx input parts"
+        );
+
+        let expected_deployed_bytecode_parts = vec![
+            BytecodePart {r#type: "main".into(), data: "0x6080604052600080fdfe".into()},
+            BytecodePart {r#type: "meta".into(), data: "0xa26469706673582212205c9c5bb56fb32b38e31f567bf368712fd0bd017cf3b36663c99b9fa32ddf41ae64736f6c634300080e0033".into() }
+        ];
+        super::assert_eq!(
+            expected_deployed_bytecode_parts,
+            extra_data.local_deployed_bytecode_parts,
+            "Invalid deployed bytecode parts"
+        );
+    }
+}

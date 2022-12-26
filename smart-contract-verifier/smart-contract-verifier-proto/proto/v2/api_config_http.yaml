@@ -1,0 +1,37 @@
+type: google.api.Service
+config_version: 3
+
+http:
+  rules:
+    #################### Solidity Verifier ####################
+
+    - selector: blockscout.smartContractVerifier.v2.SolidityVerifier.VerifyMultiPart
+      post: /verifier/solidity/sources:verify-multi-part
+      body: "*"
+
+    - selector: blockscout.smartContractVerifier.v2.SolidityVerifier.VerifyStandardJson
+      post: /verifier/solidity/sources:verify-standard-json
+      body: "*"
+
+    - selector: blockscout.smartContractVerifier.v2.SolidityVerifier.ListCompilerVersions
+      get: /verifier/solidity/versions
+
+    #################### Vyper Verifier ####################
+
+    - selector: blockscout.smartContractVerifier.v2.VyperVerifier.VerifyMultiPart
+      post: /verifier/vyper/sources:verify-multi-part
+      body: "*"
+
+    - selector: blockscout.smartContractVerifier.v2.VyperVerifier.ListCompilerVersions
+      get: /verifier/vyper/versions
+
+    #################### Sourcify Verifier ####################
+
+    - selector: blockscout.smartContractVerifier.v2.SourcifyVerifier.Verify
+      post: /verifier/sourcify/sources:verify
+      body: "*"
+
+    #################### Health ####################
+
+    - selector: blockscout.smartContractVerifier.v2.Health.Check
+      get: /health

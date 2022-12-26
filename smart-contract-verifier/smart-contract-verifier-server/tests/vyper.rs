@@ -7,8 +7,9 @@ use actix_web::{
 };
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use serde::{Deserialize, Serialize};
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
-    vyper_verifier_actix::route_vyper_verifier, VerifyResponse,
+use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
+    source::SourceType, verify_response::Status, vyper_verifier_actix::route_vyper_verifier,
+    BytecodeType, VerifyResponse,
 };
 use smart_contract_verifier_server::{Settings, VyperVerifierService};
 use std::{
@@ -22,7 +23,7 @@ use tokio::sync::{OnceCell, Semaphore};
 mod solidity_multiple_types;
 
 const TEST_CASES_DIR: &str = "tests/test_cases_vyper";
-const ROUTE: &str = "/api/v1/vyper/verify/multiple-files";
+const ROUTE: &str = "/verifier/vyper/sources:verify-multi-part";
 
 async fn global_service() -> &'static Arc<VyperVerifierService> {
     static SERVICE: OnceCell<Arc<VyperVerifierService>> = OnceCell::const_new();
@@ -73,10 +74,10 @@ async fn test_setup(test_case: &TestCase) -> ServiceResponse {
     .await;
 
     let request = serde_json::json!({
-        "deployedBytecode": test_case.deployed_bytecode,
-        "creationBytecode": test_case.creation_bytecode,
+        "bytecode": test_case.creation_bytecode,
+        "bytecodeType": BytecodeType::CreationInput.as_str_name(),
         "compilerVersion": test_case.compiler_version,
-        "sources": {
+        "sourceFiles": {
             format!("{}.vy", test_case.contract_name): test_case.source_code
         },
     });
@@ -101,18 +102,22 @@ async fn test_success(test_case: TestCase) {
 
     let verification_response: VerifyResponse = read_body_json(response).await;
     assert_eq!(
-        verification_response.status,
-        "0", // success
+        verification_response.status(),
+        Status::Success,
         "Invalid verification status. Response: {:?}",
         verification_response
     );
 
     assert!(
-        verification_response.result.is_some(),
-        "Verification result is not Some"
+        verification_response.source.is_some(),
+        "Verification source is not Some"
+    );
+    assert!(
+        verification_response.extra_data.is_some(),
+        "Verification extra_data is not Some"
     );
 
-    let verification_result = verification_response.result.expect("Checked above");
+    let verification_result = verification_response.source.expect("Checked above");
 
     let abi: Option<Result<ethabi::Contract, _>> = verification_result
         .abi
@@ -128,6 +133,11 @@ async fn test_success(test_case: TestCase) {
         "Abi deserialization failed: {}",
         abi.unwrap().as_ref().unwrap_err()
     );
+    assert_eq!(
+        verification_result.source_type(),
+        SourceType::Vyper,
+        "Invalid source type"
+    );
     let verification_result_constructor_arguments = verification_result
         .constructor_arguments
         .map(|args| DisplayBytes::from_str(&args).unwrap());
@@ -139,27 +149,58 @@ async fn test_success(test_case: TestCase) {
         verification_result.compiler_version, test_case.compiler_version,
         "Invalid compiler version"
     );
+
+    mod compiler_settings {
+        use serde::Deserialize;
+
+        #[derive(Default, Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        pub struct Optimizer {
+            pub enabled: Option<bool>,
+            pub runs: Option<i32>,
+        }
+    }
+
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct CompilerSettings {
+        pub libraries: BTreeMap<String, BTreeMap<String, String>>,
+        #[serde(default)]
+        pub optimizer: compiler_settings::Optimizer,
+    }
+    let compiler_settings: CompilerSettings =
+        serde_json::from_str(&verification_result.compiler_settings).unwrap_or_else(|_| {
+            panic!(
+                "Compiler Settings deserialization failed: {}",
+                &verification_result.compiler_settings
+            )
+        });
     assert_eq!(
-        verification_result.contract_libraries,
+        compiler_settings.libraries,
         BTreeMap::new(),
         "Invalid contract libraries"
     );
     assert_eq!(
-        verification_result.optimization, None,
+        compiler_settings.optimizer.enabled, None,
         "Invalid optimization"
     );
     assert_eq!(
-        verification_result.optimization_runs, None,
+        compiler_settings.optimizer.runs, None,
         "Invalid optimization runs"
     );
     assert_eq!(
-        verification_result.sources.len(),
+        verification_result.source_files.len(),
         1,
         "Invalid number of sources"
     );
     assert_eq!(
-        verification_result.sources.values().next().unwrap(),
-        &test_case.source_code,
+        verification_result
+            .source_files
+            .into_iter()
+            .next()
+            .unwrap()
+            .1,
+        test_case.source_code,
         "Invalid source"
     );
 }
@@ -176,15 +217,19 @@ async fn test_failure(test_case: TestCase, expected_message: &str) {
     let verification_response: VerifyResponse = read_body_json(response).await;
 
     assert_eq!(
-        verification_response.status,
-        "1", // failed
+        verification_response.status(),
+        Status::Failure,
         "Invalid verification status. Response: {:?}",
         verification_response
     );
 
     assert!(
-        verification_response.result.is_none(),
-        "Failure verification result should be None"
+        verification_response.source.is_none(),
+        "Failure verification source should be None"
+    );
+    assert!(
+        verification_response.extra_data.is_none(),
+        "Failure verification extra data should be None"
     );
 
     assert!(
@@ -251,10 +296,5 @@ async fn vyper_verify_error() {
 
     let mut test_case = TestCase::from_name("simple");
     test_case.creation_bytecode = "0xkeklol".to_string();
-    test_error(
-        test_case,
-        StatusCode::BAD_REQUEST,
-        "Invalid creation bytecode: ",
-    )
-    .await;
+    test_error(test_case, StatusCode::BAD_REQUEST, "Invalid bytecode: ").await;
 }
