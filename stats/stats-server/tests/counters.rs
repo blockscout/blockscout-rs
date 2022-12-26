@@ -1,0 +1,75 @@
+use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
+use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
+use stats::tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data};
+use stats_server::{stats, Settings};
+use std::collections::HashSet;
+
+fn client() -> ClientWithMiddleware {
+    let retry_policy = ExponentialBackoff::builder()
+        .build_with_total_retry_duration(std::time::Duration::from_secs(10));
+    ClientBuilder::new(reqwest::Client::new())
+        .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+        .build()
+}
+
+#[tokio::test]
+#[ignore = "needs database"]
+async fn test_counters_ok() {
+    let db_url = std::env::var("DATABASE_URL").expect("no DATABASE_URL env");
+    let (_stats, blockscout) = init_db_all("test_counters_ok", Some(db_url.clone())).await;
+    let stats_db_url = format!("{}/test_counters_ok", db_url);
+    let blockscout_db_url = format!("{}/test_counters_ok_blockscout", db_url);
+    fill_mock_blockscout_data(&blockscout, "2022-11-11").await;
+
+    let mut settings = Settings::default();
+    settings.server.grpc.enabled = false;
+    settings.metrics.enabled = false;
+    settings.jaeger.enabled = false;
+    settings.db_url = stats_db_url;
+    settings.blockscout_db_url = blockscout_db_url;
+
+    let base = format!("http://{}", settings.server.http.addr);
+
+    let _server_handle = {
+        let settings = settings.clone();
+        tokio::spawn(async move { stats(settings).await })
+    };
+    // Sleep until server will start and calculate all values
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
+    let client = client();
+
+    let resp = client
+        .get(format!("{base}/api/v1/counters"))
+        .send()
+        .await
+        .expect("failed to connect to server");
+    assert_eq!(resp.status(), 200);
+
+    let counters: serde_json::Value = resp
+        .json()
+        .await
+        .expect("failed to convert response to json");
+    let counters = counters
+        .as_object()
+        .expect("response has to be json object")
+        .get("counters")
+        .expect("response doesn't have 'counters' field")
+        .as_object()
+        .expect("'counters' field has to be json object");
+    let counter_names: HashSet<_> = counters.keys().map(|c| c.as_str()).collect();
+    let expected_counter_names: HashSet<_> = [
+        "totalBlocks",
+        "averageBlockTime",
+        "completedTransactions",
+        "totalTransactions",
+        "totalAccounts",
+        "totalTokens",
+        "totalNativeCoinHolders",
+        "totalNativeCoinTransfers",
+    ]
+    .into_iter()
+    .collect();
+
+    assert_eq!(counter_names, expected_counter_names);
+}

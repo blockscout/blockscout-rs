@@ -1,6 +1,7 @@
+pub mod counters;
+pub mod insert;
+pub mod lines;
 pub mod mock;
-pub mod new_blocks;
-pub mod total_blocks;
 
 use async_trait::async_trait;
 use entity::{

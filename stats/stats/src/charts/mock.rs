@@ -6,6 +6,8 @@ use entity::{
 use sea_orm::{DatabaseConnection, DbErr, EntityTrait, Set};
 use std::str::FromStr;
 
+use crate::counters::counters_list;
+
 fn generate_intervals(mut start: NaiveDate) -> Vec<NaiveDate> {
     let now = chrono::offset::Utc::now().naive_utc().date();
     let mut times = vec![];
@@ -21,7 +23,7 @@ pub async fn fill_mock_data(db: &DatabaseConnection) -> Result<(), DbErr> {
     charts::Entity::delete_many().exec(db).await?;
 
     let total_blocks_id = charts::Entity::insert(charts::ActiveModel {
-        name: Set("totalBlocksAllTime".into()),
+        name: Set(counters_list::TOTAL_BLOCKS.to_string()),
         chart_type: Set(ChartType::Counter),
         value_type: Set(ChartValueType::Int),
         ..Default::default()

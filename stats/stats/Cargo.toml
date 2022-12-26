@@ -17,10 +17,10 @@ chrono = "0.4"
 async-trait = "0.1"
 tracing = "0.1"
 migration = { path = "./migration" }
+url = "2.3"
 
 [dev-dependencies]
 pretty_assertions = "1.2"
-url = "2.3"
 sea-orm-migration = { version = "0.10", features = [
     "runtime-tokio-rustls",
     "sqlx-postgres",
