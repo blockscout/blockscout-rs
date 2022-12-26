@@ -1,5 +1,5 @@
 [package]
-name = "migration"
+name = "blockscout-db-migration"
 version = "4.1.8"
 edition = "2021"
 publish = false

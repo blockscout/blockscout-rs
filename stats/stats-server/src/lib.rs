@@ -1,6 +1,7 @@
+mod read_service;
 mod server;
-mod service;
 mod settings;
+mod update_service;
 
 pub use server::stats;
 pub use settings::Settings;

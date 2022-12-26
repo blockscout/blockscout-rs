@@ -96,6 +96,16 @@ impl From<SourceType> for sea_orm_active_enums::SourceType {
     }
 }
 
+impl From<sea_orm_active_enums::SourceType> for SourceType {
+    fn from(source_type: sea_orm_active_enums::SourceType) -> Self {
+        match source_type {
+            sea_orm_active_enums::SourceType::Solidity => SourceType::Solidity,
+            sea_orm_active_enums::SourceType::Vyper => SourceType::Vyper,
+            sea_orm_active_enums::SourceType::Yul => SourceType::Yul,
+        }
+    }
+}
+
 impl TryFrom<smart_contract_verifier::SourceType> for SourceType {
     type Error = anyhow::Error;
 

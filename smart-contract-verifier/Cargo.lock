@@ -69,7 +69,7 @@ dependencies = [
 [[package]]
 name = "actix-prost"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/actix-prost#6b3e058b8fa7ae9641f63b73627fed77f1418605"
+source = "git+https://github.com/blockscout/actix-prost#90e4f961ecbce12cc81071e3e55da6045fb97d1b"
 dependencies = [
  "actix-http",
  "actix-web",
@@ -83,7 +83,7 @@ dependencies = [
 [[package]]
 name = "actix-prost-build"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/actix-prost#6b3e058b8fa7ae9641f63b73627fed77f1418605"
+source = "git+https://github.com/blockscout/actix-prost#90e4f961ecbce12cc81071e3e55da6045fb97d1b"
 dependencies = [
  "prettyplease",
  "proc-macro2",
@@ -98,7 +98,7 @@ dependencies = [
 [[package]]
 name = "actix-prost-macros"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/actix-prost#6b3e058b8fa7ae9641f63b73627fed77f1418605"
+source = "git+https://github.com/blockscout/actix-prost#90e4f961ecbce12cc81071e3e55da6045fb97d1b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -563,6 +563,27 @@ dependencies = [
  "hex",
  "serde",
  "thiserror",
+]
+
+[[package]]
+name = "blockscout-service-launcher"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ce1834d52614001133c0f10dac910cb3bba8f1755ac0e1046855ceff4400054"
+dependencies = [
+ "actix-web",
+ "actix-web-prom",
+ "anyhow",
+ "futures",
+ "opentelemetry 0.18.0",
+ "opentelemetry-jaeger 0.17.0",
+ "prometheus",
+ "serde",
+ "tokio",
+ "tonic",
+ "tracing",
+ "tracing-opentelemetry 0.18.0",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -1296,7 +1317,7 @@ version = "18.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7413c5f74cc903ea37386a8965a936cbeb334bd270862fdece542c1b2dcbc898"
 dependencies = [
- "ethereum-types 0.14.0",
+ "ethereum-types 0.14.1",
  "hex",
  "once_cell",
  "regex",
@@ -1353,9 +1374,9 @@ dependencies = [
 
 [[package]]
 name = "ethereum-types"
-version = "0.14.0"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81224dc661606574f5a0f28c9947d0ee1d93ff11c5f1c4e7272f52e8c0b5483c"
+checksum = "02d215cbf040552efcbe99a38372fe80ab9d00268e20012b79fcd0f073edd8ee"
 dependencies = [
  "ethbloom 0.13.0",
  "fixed-hash 0.8.0",
@@ -4136,6 +4157,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "blockscout-display-bytes",
+ "blockscout-service-launcher",
  "bytes",
  "config",
  "cron",
