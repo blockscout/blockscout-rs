@@ -7,7 +7,7 @@ use eth_bytecode_db::verification::{
     SourceType, VerificationRequest,
 };
 use rstest::{fixture, rstest};
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
+use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
     VerifyResponse, VerifySolidityStandardJsonRequest,
 };
 use tonic::Response;

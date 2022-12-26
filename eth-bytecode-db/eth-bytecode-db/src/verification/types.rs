@@ -66,6 +66,17 @@ impl From<BytecodeType> for sea_orm_active_enums::BytecodeType {
     }
 }
 
+impl From<BytecodeType> for smart_contract_verifier::BytecodeType {
+    fn from(value: BytecodeType) -> Self {
+        match value {
+            BytecodeType::CreationInput => smart_contract_verifier::BytecodeType::CreationInput,
+            BytecodeType::DeployedBytecode => {
+                smart_contract_verifier::BytecodeType::DeployedBytecode
+            }
+        }
+    }
+}
+
 /********** Source Type **********/
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -91,6 +102,31 @@ impl From<sea_orm_active_enums::SourceType> for SourceType {
             sea_orm_active_enums::SourceType::Solidity => SourceType::Solidity,
             sea_orm_active_enums::SourceType::Vyper => SourceType::Vyper,
             sea_orm_active_enums::SourceType::Yul => SourceType::Yul,
+        }
+    }
+}
+
+impl TryFrom<smart_contract_verifier::SourceType> for SourceType {
+    type Error = anyhow::Error;
+
+    fn try_from(value: smart_contract_verifier::SourceType) -> Result<Self, Self::Error> {
+        match value {
+            smart_contract_verifier::SourceType::Unspecified => {
+                Err(anyhow::anyhow!("Unknown type: {}", value.as_str_name()))
+            }
+            smart_contract_verifier::SourceType::Solidity => Ok(SourceType::Solidity),
+            smart_contract_verifier::SourceType::Vyper => Ok(SourceType::Vyper),
+            smart_contract_verifier::SourceType::Yul => Ok(SourceType::Yul),
+        }
+    }
+}
+
+impl From<SourceType> for smart_contract_verifier::SourceType {
+    fn from(value: SourceType) -> Self {
+        match value {
+            SourceType::Solidity => smart_contract_verifier::SourceType::Solidity,
+            SourceType::Vyper => smart_contract_verifier::SourceType::Vyper,
+            SourceType::Yul => smart_contract_verifier::SourceType::Yul,
         }
     }
 }

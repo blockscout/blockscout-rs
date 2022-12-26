@@ -1,12 +1,13 @@
 #![allow(dead_code)]
 
 use mockall::mock;
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
+use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
     solidity_verifier_server::{SolidityVerifier, SolidityVerifierServer},
     sourcify_verifier_server::{SourcifyVerifier, SourcifyVerifierServer},
     vyper_verifier_server::{VyperVerifier, VyperVerifierServer},
-    ListVersionsRequest, ListVersionsResponse, VerifyResponse, VerifySolidityMultiPartRequest,
-    VerifySolidityStandardJsonRequest, VerifyViaSourcifyRequest, VerifyVyperMultiPartRequest,
+    ListCompilerVersionsRequest, ListCompilerVersionsResponse, VerifyResponse,
+    VerifySolidityMultiPartRequest, VerifySolidityStandardJsonRequest, VerifySourcifyRequest,
+    VerifyVyperMultiPartRequest,
 };
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
@@ -21,7 +22,7 @@ mock! {
 
         async fn verify_standard_json(&self, request: tonic::Request<VerifySolidityStandardJsonRequest>) -> Result<tonic::Response<VerifyResponse>, tonic::Status>;
 
-        async fn list_versions(&self, request: tonic::Request<ListVersionsRequest>) -> Result<tonic::Response<ListVersionsResponse>, tonic::Status>;
+        async fn list_compiler_versions(&self, request: tonic::Request<ListCompilerVersionsRequest>) -> Result<tonic::Response<ListCompilerVersionsResponse>, tonic::Status>;
     }
 }
 
@@ -33,7 +34,7 @@ mock! {
     impl VyperVerifier for VyperVerifierService {
         async fn verify_multi_part(&self, request: tonic::Request<VerifyVyperMultiPartRequest>) -> Result<tonic::Response<VerifyResponse>, tonic::Status>;
 
-        async fn list_versions(&self, request: tonic::Request<ListVersionsRequest>) -> Result<tonic::Response<ListVersionsResponse>, tonic::Status>;
+        async fn list_compiler_versions(&self, request: tonic::Request<ListCompilerVersionsRequest>) -> Result<tonic::Response<ListCompilerVersionsResponse>, tonic::Status>;
     }
 }
 
@@ -43,7 +44,7 @@ mock! {
 
     #[async_trait::async_trait]
     impl SourcifyVerifier for SourcifyVerifierService {
-        async fn verify(&self, request: tonic::Request<VerifyViaSourcifyRequest>) -> Result<tonic::Response<VerifyResponse>, tonic::Status>;
+        async fn verify(&self, request: tonic::Request<VerifySourcifyRequest>) -> Result<tonic::Response<VerifyResponse>, tonic::Status>;
     }
 }
 

@@ -7,7 +7,7 @@ use eth_bytecode_db::verification::{
     VerificationRequest,
 };
 use rstest::{fixture, rstest};
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v1::{
+use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
     VerifyResponse, VerifyVyperMultiPartRequest,
 };
 use tonic::Response;
@@ -22,8 +22,8 @@ const DB_PREFIX: &str = "vyper_multi_part";
 fn default_request_content() -> MultiPartFiles {
     MultiPartFiles {
         source_files: Default::default(),
-        evm_version: "london".to_string(),
-        optimizations: false,
+        evm_version: Some("london".to_string()),
+        optimizations: Some(false),
     }
 }
 

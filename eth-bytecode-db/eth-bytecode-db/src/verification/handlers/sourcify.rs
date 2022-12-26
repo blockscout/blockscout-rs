@@ -1,9 +1,7 @@
 use super::{
     super::{
-        client::Client,
-        errors::Error,
-        smart_contract_verifier::VerifyViaSourcifyRequest,
-        types::{Source, SourceType},
+        client::Client, errors::Error, smart_contract_verifier::VerifySourcifyRequest,
+        types::Source,
     },
     process_verify_response, ProcessResponseAction,
 };
@@ -18,9 +16,9 @@ pub struct VerificationRequest {
     pub source_files: BTreeMap<String, String>,
 }
 
-impl From<VerificationRequest> for VerifyViaSourcifyRequest {
+impl From<VerificationRequest> for VerifySourcifyRequest {
     fn from(request: VerificationRequest) -> Self {
-        VerifyViaSourcifyRequest {
+        VerifySourcifyRequest {
             address: request.address,
             chain: request.chain,
             files: request.source_files,
@@ -30,7 +28,7 @@ impl From<VerificationRequest> for VerifyViaSourcifyRequest {
 }
 
 pub async fn verify(mut client: Client, request: VerificationRequest) -> Result<Source, Error> {
-    let request: VerifyViaSourcifyRequest = request.into();
+    let request: VerifySourcifyRequest = request.into();
     let response = client
         .sourcify_client
         .verify(request)
@@ -38,13 +36,5 @@ pub async fn verify(mut client: Client, request: VerificationRequest) -> Result<
         .map_err(Error::from)?
         .into_inner();
 
-    let source_type_fn = |_file_name: &str| Ok(SourceType::Solidity);
-
-    process_verify_response(
-        &client.db_client,
-        response,
-        source_type_fn,
-        ProcessResponseAction::IgnoreDb,
-    )
-    .await
+    process_verify_response(&client.db_client, response, ProcessResponseAction::IgnoreDb).await
 }
