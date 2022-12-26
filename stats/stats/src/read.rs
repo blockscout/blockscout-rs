@@ -1,5 +1,10 @@
+use crate::counters::counters_list;
 use chrono::NaiveDate;
-use sea_orm::{DatabaseConnection, DbBackend, DbErr, FromQueryResult, Statement};
+use entity::{chart_data_int, charts};
+use sea_orm::{
+    ColumnTrait, DatabaseConnection, DbBackend, DbErr, EntityTrait, FromQueryResult, QueryFilter,
+    QueryOrder, QuerySelect, Statement,
+};
 use stats_proto::blockscout::stats::v1::{Counters, LineChart, Point};
 use std::collections::HashMap;
 use thiserror::Error;
@@ -12,47 +17,67 @@ pub enum ReadError {
     NotFound(String),
 }
 
-#[derive(FromQueryResult)]
+#[derive(Debug, FromQueryResult)]
 struct CounterData {
     name: String,
     date: NaiveDate,
-    value: i64,
+    value: String,
 }
 
-fn get_counter_from_data(
-    data: &HashMap<String, (NaiveDate, u64)>,
-    name: &str,
-) -> Result<u64, ReadError> {
-    data.get(name)
-        .map(|(_, value)| *value)
-        .ok_or_else(|| ReadError::NotFound(name.into()))
+#[derive(Debug, Clone, Copy)]
+enum Data {
+    Int,
+    Double,
 }
 
 pub async fn get_counters(db: &DatabaseConnection) -> Result<Counters, ReadError> {
+    let int_counters = get_counters_data(db, Data::Int).await?;
+    let double_counters = get_counters_data(db, Data::Double).await?;
+
+    let counters = int_counters.into_iter().chain(double_counters).collect();
+    let counters = Counters { counters };
+    Ok(counters)
+}
+
+async fn get_counters_data(
+    db: &DatabaseConnection,
+    data: Data,
+) -> Result<HashMap<String, String>, ReadError> {
+    let table_name = match data {
+        Data::Int => "chart_data_int",
+        Data::Double => "chart_data_double",
+    };
     let data = CounterData::find_by_statement(Statement::from_string(
         DbBackend::Postgres,
-        r#"
-        SELECT distinct on (charts.id) charts.name, data.date, data.value 
-            FROM "chart_data_int" "data"
+        format!(
+            r#"
+            SELECT distinct on (charts.id) charts.name, data.date, data.value::text
+            FROM "{}" "data"
             INNER JOIN "charts"
                 ON data.chart_id = charts.id
             WHERE charts.chart_type = 'COUNTER'
             ORDER BY charts.id, data.id DESC;
-        "#
-        .into(),
+        "#,
+            table_name
+        ),
     ))
     .all(db)
     .await?;
+
     let data: HashMap<_, _> = data
         .into_iter()
-        .map(|data| (data.name, (data.date, data.value as u64)))
+        .map(|data| (data.name, (data.date, data.value)))
         .collect();
-    let counters = Counters {
-        counters: HashMap::from_iter([(
-            "totalBlocksAllTime".into(),
-            get_counter_from_data(&data, "totalBlocksAllTime")?.to_string(),
-        )]),
-    };
+
+    let counters: HashMap<String, String> = data
+        .into_iter()
+        .filter_map(|(counter_name, (_, value))| {
+            counters_list::COUNTERS
+                .contains(&counter_name.as_str())
+                .then_some((counter_name, value))
+        })
+        .collect();
+
     Ok(counters)
 }
 
@@ -62,21 +87,43 @@ struct DateValue {
     value: i64,
 }
 
-pub async fn get_chart_int(db: &DatabaseConnection, name: &str) -> Result<LineChart, DbErr> {
-    let data = DateValue::find_by_statement(Statement::from_sql_and_values(
-        DbBackend::Postgres,
-        r#"
-            SELECT data.date, data.value 
-                FROM "chart_data_int" "data"
-                INNER JOIN "charts"
-                    ON data.chart_id = charts.id
-                WHERE charts.name = $1
-                ORDER BY data.date;
-            "#,
-        vec![name.into()],
-    ))
-    .all(db)
-    .await?;
+#[derive(FromQueryResult)]
+struct ChartID {
+    id: i32,
+}
+
+pub async fn get_chart_int(
+    db: &DatabaseConnection,
+    name: &str,
+    from: Option<NaiveDate>,
+    to: Option<NaiveDate>,
+) -> Result<LineChart, ReadError> {
+    let id = charts::Entity::find()
+        .column(charts::Column::Id)
+        .filter(charts::Column::Name.eq(name))
+        .into_model::<ChartID>()
+        .one(db)
+        .await?
+        .ok_or_else(|| ReadError::NotFound(name.into()))?;
+
+    let data_request = chart_data_int::Entity::find()
+        .column(chart_data_int::Column::Date)
+        .column(chart_data_int::Column::Value)
+        .filter(chart_data_int::Column::ChartId.eq(id.id))
+        .order_by_asc(chart_data_int::Column::Date);
+
+    let data_request = if let Some(from) = from {
+        data_request.filter(chart_data_int::Column::Date.gte(from))
+    } else {
+        data_request
+    };
+    let data_request = if let Some(to) = to {
+        data_request.filter(chart_data_int::Column::Date.lte(to))
+    } else {
+        data_request
+    };
+
+    let data = data_request.into_model::<DateValue>().all(db).await?;
     let chart = data
         .into_iter()
         .map(|row| Point {
@@ -91,49 +138,15 @@ pub async fn get_chart_int(db: &DatabaseConnection, name: &str) -> Result<LineCh
 mod tests {
     use std::str::FromStr;
 
+    use crate::tests::init_db::init_db;
+
     use super::*;
     use entity::{
         chart_data_int, charts,
         sea_orm_active_enums::{ChartType, ChartValueType},
     };
-    use migration::MigratorTrait;
     use pretty_assertions::assert_eq;
-    use sea_orm::{ConnectionTrait, Database, EntityTrait, Set};
-    use url::Url;
-
-    async fn init_db(name: &str) -> DatabaseConnection {
-        let db_url = std::env::var("DATABASE_URL").expect("no DATABASE_URL env");
-        let url = Url::parse(&db_url).expect("unvalid database url");
-        let db_url = url.join("/").unwrap().to_string();
-        let raw_conn = Database::connect(db_url)
-            .await
-            .expect("failed to connect to postgres");
-
-        raw_conn
-            .execute(Statement::from_string(
-                sea_orm::DatabaseBackend::Postgres,
-                format!("DROP DATABASE IF EXISTS {} WITH (FORCE)", name),
-            ))
-            .await
-            .expect("failed to drop test database");
-        raw_conn
-            .execute(Statement::from_string(
-                sea_orm::DatabaseBackend::Postgres,
-                format!("CREATE DATABASE {}", name),
-            ))
-            .await
-            .expect("failed to create test database");
-
-        let db_url = url.join(&format!("/{name}")).unwrap().to_string();
-        let conn = Database::connect(db_url.clone())
-            .await
-            .expect("failed to connect to test db");
-        migration::Migrator::up(&conn, None)
-            .await
-            .expect("failed to run migrations");
-
-        conn
-    }
+    use sea_orm::{EntityTrait, Set};
 
     fn mock_chart_data(chart_id: i32, date: &str, value: i64) -> chart_data_int::ActiveModel {
         chart_data_int::ActiveModel {
@@ -147,7 +160,7 @@ mod tests {
     async fn insert_mock_data(db: &DatabaseConnection) {
         charts::Entity::insert_many([
             charts::ActiveModel {
-                name: Set("totalBlocksAllTime".into()),
+                name: Set(counters_list::TOTAL_BLOCKS.to_string()),
                 chart_type: Set(ChartType::Counter),
                 value_type: Set(ChartValueType::Int),
                 ..Default::default()
@@ -180,12 +193,15 @@ mod tests {
     async fn get_counters_mock() {
         let _ = tracing_subscriber::fmt::try_init();
 
-        let db = init_db("get_counters_mock").await;
+        let db = init_db::<migration::Migrator>("get_counters_mock", None).await;
         insert_mock_data(&db).await;
         let counters = get_counters(&db).await.unwrap();
         assert_eq!(
             Counters {
-                counters: HashMap::from_iter([("totalBlocksAllTime".into(), "1350".into())]),
+                counters: HashMap::from_iter([(
+                    counters_list::TOTAL_BLOCKS.to_string(),
+                    "1350".into()
+                )]),
             },
             counters
         );
@@ -196,9 +212,11 @@ mod tests {
     async fn get_chart_int_mock() {
         let _ = tracing_subscriber::fmt::try_init();
 
-        let db = init_db("get_chart_int_mock").await;
+        let db = init_db::<migration::Migrator>("get_chart_int_mock", None).await;
         insert_mock_data(&db).await;
-        let chart = get_chart_int(&db, "newBlocksPerDay").await.unwrap();
+        let chart = get_chart_int(&db, "newBlocksPerDay", None, None)
+            .await
+            .unwrap();
         assert_eq!(
             LineChart {
                 chart: vec![

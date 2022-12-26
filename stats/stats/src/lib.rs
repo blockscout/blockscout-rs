@@ -1,8 +1,10 @@
+mod charts;
 mod read;
-mod update;
+
+pub mod tests;
 
 pub use entity;
 pub use migration;
 
+pub use charts::{counters, lines, mock, Chart, UpdateError};
 pub use read::{get_chart_int, get_counters, ReadError};
-pub use update::{new_blocks, UpdaterTrait};

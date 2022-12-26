@@ -17,6 +17,12 @@ fn compile(
         .protoc_arg("grpc_api_configuration=proto/api_config_http.yaml,output_format=yaml,allow_merge=true,merge_file_name=sig-provider")
         .bytes(["."])
         .type_attribute(".", "#[actix_prost_macros::serde]");
+    for path in protos.iter() {
+        println!("cargo:rerun-if-changed={}", path.as_ref().display())
+    }
+    for path in includes.iter() {
+        println!("cargo:rerun-if-changed={}", path.as_ref().display())
+    }
     config.compile_protos(protos, includes)?;
     Ok(())
 }
