@@ -1,24 +1,24 @@
 #![allow(unused_variables)]
-use crate::{chart::insert::insert_double_data, counters_list, UpdateError};
+use crate::{charts::insert::insert_int_data, UpdateError};
 use async_trait::async_trait;
 use entity::sea_orm_active_enums::{ChartType, ChartValueType};
 use sea_orm::prelude::*;
 
 #[derive(Default, Debug)]
-pub struct TotalTokens {}
+pub struct TotalNativeCoinTransfers {}
 
 #[async_trait]
-impl crate::Chart for TotalTokens {
+impl crate::Chart for TotalNativeCoinTransfers {
     fn name(&self) -> &str {
-        counters_list::TOTAL_TOKENS
+        super::counters_list::TOTAL_NATIVE_COIN_TRANSFERS
     }
 
     async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
-        crate::chart::create_chart(
+        crate::charts::create_chart(
             db,
             self.name().into(),
             ChartType::Counter,
-            ChartValueType::Double,
+            ChartValueType::Int,
         )
         .await
     }
@@ -28,15 +28,15 @@ impl crate::Chart for TotalTokens {
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
     ) -> Result<(), UpdateError> {
-        let chart_id = crate::chart::find_chart(db, self.name())
+        let chart_id = crate::charts::find_chart(db, self.name())
             .await?
             .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
         // TODO: remove mock
-        insert_double_data(
+        insert_int_data(
             db,
             chart_id,
             chrono::offset::Local::now().date_naive(),
-            84392233.47282,
+            32528,
         )
         .await?;
         Ok(())

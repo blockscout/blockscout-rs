@@ -1,5 +1,5 @@
 #![allow(unused_variables)]
-use crate::{chart::insert::insert_int_data, counters_list, UpdateError};
+use crate::{charts::insert::insert_int_data, UpdateError};
 use async_trait::async_trait;
 use entity::sea_orm_active_enums::{ChartType, ChartValueType};
 use sea_orm::prelude::*;
@@ -10,11 +10,11 @@ pub struct CompletedTxns {}
 #[async_trait]
 impl crate::Chart for CompletedTxns {
     fn name(&self) -> &str {
-        counters_list::COMPLETED_TXNS
+        super::counters_list::COMPLETED_TXNS
     }
 
     async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
-        crate::chart::create_chart(
+        crate::charts::create_chart(
             db,
             self.name().into(),
             ChartType::Counter,
@@ -28,7 +28,7 @@ impl crate::Chart for CompletedTxns {
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
     ) -> Result<(), UpdateError> {
-        let chart_id = crate::chart::find_chart(db, self.name())
+        let chart_id = crate::charts::find_chart(db, self.name())
             .await?
             .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
 

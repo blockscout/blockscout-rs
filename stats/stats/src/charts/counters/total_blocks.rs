@@ -1,4 +1,4 @@
-use crate::{chart::insert::insert_int_data, counters_list, UpdateError};
+use crate::{charts::insert::insert_int_data, UpdateError};
 use async_trait::async_trait;
 use blockscout_db::entity::blocks;
 use chrono::NaiveDateTime;
@@ -17,11 +17,11 @@ pub struct TotalBlocks {}
 #[async_trait]
 impl crate::Chart for TotalBlocks {
     fn name(&self) -> &str {
-        counters_list::TOTAL_BLOCKS
+        super::counters_list::TOTAL_BLOCKS
     }
 
     async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
-        crate::chart::create_chart(
+        crate::charts::create_chart(
             db,
             self.name().into(),
             ChartType::Counter,
@@ -35,7 +35,7 @@ impl crate::Chart for TotalBlocks {
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
     ) -> Result<(), UpdateError> {
-        let id = crate::chart::find_chart(db, self.name())
+        let id = crate::charts::find_chart(db, self.name())
             .await?
             .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
 

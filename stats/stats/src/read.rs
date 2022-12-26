@@ -1,3 +1,4 @@
+use crate::counters::counters_list;
 use chrono::NaiveDate;
 use entity::{chart_data_int, charts};
 use sea_orm::{
@@ -7,8 +8,6 @@ use sea_orm::{
 use stats_proto::blockscout::stats::v1::{Counters, LineChart, Point};
 use std::collections::HashMap;
 use thiserror::Error;
-
-use crate::counters_list;
 
 #[derive(Error, Debug)]
 pub enum ReadError {
@@ -52,7 +51,7 @@ async fn get_counters_data(
         DbBackend::Postgres,
         format!(
             r#"
-        SELECT distinct on (charts.id) charts.name, data.date, data.value::text
+            SELECT distinct on (charts.id) charts.name, data.date, data.value::text
             FROM "{}" "data"
             INNER JOIN "charts"
                 ON data.chart_id = charts.id

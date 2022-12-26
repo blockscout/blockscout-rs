@@ -1,4 +1,3 @@
-use crate::counters_list;
 use chrono::{Duration, NaiveDate};
 use entity::{
     chart_data_int, charts,
@@ -6,6 +5,8 @@ use entity::{
 };
 use sea_orm::{DatabaseConnection, DbErr, EntityTrait, Set};
 use std::str::FromStr;
+
+use crate::counters::counters_list;
 
 fn generate_intervals(mut start: NaiveDate) -> Vec<NaiveDate> {
     let now = chrono::offset::Utc::now().naive_utc().date();

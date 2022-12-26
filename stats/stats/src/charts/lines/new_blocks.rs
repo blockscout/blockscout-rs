@@ -31,7 +31,7 @@ impl crate::Chart for NewBlocks {
     }
 
     async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
-        crate::chart::create_chart(db, self.name().into(), ChartType::Line, ChartValueType::Int)
+        crate::charts::create_chart(db, self.name().into(), ChartType::Line, ChartValueType::Int)
             .await
     }
 
@@ -40,7 +40,7 @@ impl crate::Chart for NewBlocks {
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
     ) -> Result<(), UpdateError> {
-        let id = crate::chart::find_chart(db, self.name())
+        let id = crate::charts::find_chart(db, self.name())
             .await?
             .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
         let last_row = chart_data_int::Entity::find()
