@@ -286,6 +286,45 @@ dependencies = [
 ]
 
 [[package]]
+name = "amplify"
+version = "3.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "116019a174e912931d5b19ca7ab6a22596d12cdb1320358fad3368f0aba135a9"
+dependencies = [
+ "amplify_derive",
+ "amplify_num",
+]
+
+[[package]]
+name = "amplify_derive"
+version = "2.11.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c3de270e75f27a4468a7c344070109046656e85cb522141f7d40ab4b83803ac"
+dependencies = [
+ "amplify_syn",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "amplify_num"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f27d3d00d3d115395a7a8a4dc045feb7aa82b641e485f7e15f4e67ac16f4f56d"
+
+[[package]]
+name = "amplify_syn"
+version = "1.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "da24db1445cc7bc3842fa072c2d51fe5b25b812b6a572d65842a4c72e87221ac"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "android_system_properties"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1236,11 +1275,15 @@ name = "eth-bytecode-db-server"
 version = "0.1.0"
 dependencies = [
  "actix-web",
+ "amplify",
  "anyhow",
  "async-trait",
  "blockscout-service-launcher",
  "config",
+ "eth-bytecode-db",
  "eth-bytecode-db-proto",
+ "pretty_assertions",
+ "rstest",
  "serde",
  "tokio",
  "tonic",
