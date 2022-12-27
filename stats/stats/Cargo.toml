@@ -18,6 +18,7 @@ async-trait = "0.1"
 tracing = "0.1"
 migration = { path = "./migration" }
 url = "2.3"
+rand = "0.8"
 
 [dev-dependencies]
 pretty_assertions = "1.2"

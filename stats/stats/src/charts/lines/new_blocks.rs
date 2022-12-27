@@ -1,20 +1,15 @@
+use super::lines_list;
+use crate::{
+    charts::insert::{insert_int_data_many, IntValueItem},
+    UpdateError,
+};
 use async_trait::async_trait;
 use chrono::NaiveDate;
 use entity::{
     chart_data_int,
     sea_orm_active_enums::{ChartType, ChartValueType},
 };
-use sea_orm::{
-    prelude::*, sea_query, DbBackend, FromQueryResult, QueryOrder, QuerySelect, Set, Statement,
-};
-
-use crate::UpdateError;
-
-#[derive(FromQueryResult)]
-struct NewBlocksData {
-    day: NaiveDate,
-    count: i64,
-}
+use sea_orm::{prelude::*, DbBackend, FromQueryResult, QueryOrder, QuerySelect, Statement};
 
 #[derive(Debug, FromQueryResult)]
 struct ChartDate {
@@ -27,7 +22,7 @@ pub struct NewBlocks {}
 #[async_trait]
 impl crate::Chart for NewBlocks {
     fn name(&self) -> &str {
-        "newBlocksPerDay"
+        lines_list::NEW_BLOCKS
     }
 
     async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
@@ -54,13 +49,13 @@ impl crate::Chart for NewBlocks {
         // TODO: rewrite using orm/build request with `where` clause
         let data = match last_row {
             Some(row) => {
-                NewBlocksData::find_by_statement(Statement::from_sql_and_values(
+                IntValueItem::find_by_statement(Statement::from_sql_and_values(
                     DbBackend::Postgres,
                     r#"
-                    SELECT date(blocks.timestamp) as day, COUNT(*)
+                    SELECT date(blocks.timestamp) as date, COUNT(*) as value
                         FROM public.blocks
                         WHERE date(blocks.timestamp) >= $1
-                        GROUP BY day;
+                        GROUP BY date;
                     "#,
                     vec![row.date.into()],
                 ))
@@ -68,12 +63,12 @@ impl crate::Chart for NewBlocks {
                 .await?
             }
             None => {
-                NewBlocksData::find_by_statement(Statement::from_string(
+                IntValueItem::find_by_statement(Statement::from_string(
                     DbBackend::Postgres,
                     r#"
-                    SELECT date(blocks.timestamp) as day, COUNT(*)
+                    SELECT date(blocks.timestamp) as date, COUNT(*) as value
                         FROM public.blocks
-                        GROUP BY day;
+                        GROUP BY date;
                     "#
                     .into(),
                 ))
@@ -82,26 +77,8 @@ impl crate::Chart for NewBlocks {
             }
         };
 
-        let data = data.into_iter().map(|row| chart_data_int::ActiveModel {
-            id: Default::default(),
-            chart_id: Set(id),
-            date: Set(row.day),
-            value: Set(row.count),
-            created_at: Default::default(),
-        });
-
-        chart_data_int::Entity::insert_many(data)
-            .on_conflict(
-                sea_query::OnConflict::columns([
-                    chart_data_int::Column::ChartId,
-                    chart_data_int::Column::Date,
-                ])
-                .update_column(chart_data_int::Column::Value)
-                .to_owned(),
-            )
-            .exec(db)
-            .await?;
-
+        let data = data.into_iter().map(|item| item.active_model(id));
+        insert_int_data_many(db, data).await?;
         Ok(())
     }
 }
@@ -109,10 +86,11 @@ impl crate::Chart for NewBlocks {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{get_chart_int, tests::init_db::init_db_all, Chart};
+    use crate::{get_chart_data, tests::init_db::init_db_all, Chart};
     use blockscout_db::entity::{addresses, blocks};
     use chrono::NaiveDateTime;
     use pretty_assertions::assert_eq;
+    use sea_orm::Set;
     use stats_proto::blockscout::stats::v1::{LineChart, Point};
     use std::str::FromStr;
 
@@ -189,7 +167,7 @@ mod tests {
         mock_blockscout(&blockscout).await;
 
         updater.update(&db, &blockscout).await.unwrap();
-        let data = get_chart_int(&db, updater.name(), None, None)
+        let data = get_chart_data(&db, updater.name(), None, None)
             .await
             .unwrap();
         let expected = LineChart {
@@ -223,7 +201,7 @@ mod tests {
         mock_blockscout(&blockscout).await;
 
         updater.update(&db, &blockscout).await.unwrap();
-        let data = get_chart_int(&db, updater.name(), None, None)
+        let data = get_chart_data(&db, updater.name(), None, None)
             .await
             .unwrap();
         let expected = LineChart {
@@ -293,7 +271,7 @@ mod tests {
         mock_blockscout(&blockscout).await;
 
         updater.update(&db, &blockscout).await.unwrap();
-        let data = get_chart_int(&db, updater.name(), None, None)
+        let data = get_chart_data(&db, updater.name(), None, None)
             .await
             .unwrap();
         let expected = LineChart {
