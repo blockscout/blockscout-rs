@@ -16,9 +16,9 @@ pub struct SolidityVerifierService {
     client: Client,
 }
 
-impl Default for SolidityVerifierService {
-    fn default() -> Self {
-        todo!()
+impl SolidityVerifierService {
+    pub fn new(client: Client) -> Self {
+        Self { client }
     }
 }
 

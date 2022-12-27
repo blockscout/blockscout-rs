@@ -10,9 +10,9 @@ pub struct SourcifyVerifierService {
     client: Client,
 }
 
-impl Default for SourcifyVerifierService {
-    fn default() -> Self {
-        todo!()
+impl SourcifyVerifierService {
+    pub fn new(client: Client) -> Self {
+        Self { client }
     }
 }
 

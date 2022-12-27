@@ -14,9 +14,9 @@ pub struct VyperVerifierService {
     client: Client,
 }
 
-impl Default for VyperVerifierService {
-    fn default() -> Self {
-        todo!()
+impl VyperVerifierService {
+    pub fn new(client: Client) -> Self {
+        Self { client }
     }
 }
 

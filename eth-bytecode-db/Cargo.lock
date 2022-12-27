@@ -1284,7 +1284,9 @@ dependencies = [
  "eth-bytecode-db-proto",
  "pretty_assertions",
  "rstest",
+ "sea-orm",
  "serde",
+ "serde_with",
  "tokio",
  "tonic",
 ]
