@@ -7,6 +7,7 @@ tags:
   - name: SolidityVerifier
   - name: VyperVerifier
   - name: SourcifyVerifier
+  - name: Health
 consumes:
   - application/json
 produces:
@@ -32,6 +33,28 @@ paths:
             $ref: '#/definitions/v2SearchSourcesRequest'
       tags:
         - Database
+  /health:
+    get:
+      summary: |-
+        If the requested service is unknown, the call will fail with status
+        NOT_FOUND.
+      operationId: Health_Check
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v2HealthCheckResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: service
+          in: query
+          required: false
+          type: string
+      tags:
+        - Health
   /verifier/solidity/sources:verify-multi-part:
     post:
       operationId: SolidityVerifier_VerifyMultiPart
@@ -141,6 +164,14 @@ paths:
       tags:
         - VyperVerifier
 definitions:
+  HealthCheckResponseServingStatus:
+    type: string
+    enum:
+      - UNKNOWN
+      - SERVING
+      - NOT_SERVING
+      - SERVICE_UNKNOWN
+    default: UNKNOWN
   SourceMatchType:
     type: string
     enum:
@@ -183,6 +214,11 @@ definitions:
       - CREATION_INPUT
       - DEPLOYED_BYTECODE
     default: BYTECODE_TYPE_UNSPECIFIED
+  v2HealthCheckResponse:
+    type: object
+    properties:
+      status:
+        $ref: '#/definitions/HealthCheckResponseServingStatus'
   v2ListCompilerVersionsResponse:
     type: object
     properties:

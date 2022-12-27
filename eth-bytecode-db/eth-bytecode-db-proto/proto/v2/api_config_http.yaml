@@ -36,3 +36,8 @@ http:
     - selector: blockscout.ethBytecodeDb.v2.SourcifyVerifier.Verify
       post: /verifier/sourcify/sources:verify
       body: "*"
+
+    #################### Health ####################
+
+    - selector: blockscout.ethBytecodeDb.v2.Health.Check
+      get: /health
