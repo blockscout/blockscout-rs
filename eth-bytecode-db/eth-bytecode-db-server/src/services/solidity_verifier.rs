@@ -1,14 +1,15 @@
+use super::verifier_base;
 use crate::{
     proto::{
         solidity_verifier_server, ListCompilerVersionsRequest, ListCompilerVersionsResponse,
         VerifyResponse, VerifySolidityMultiPartRequest, VerifySolidityStandardJsonRequest,
     },
-    types::{BytecodeTypeWrapper, VerifyResponseWrapper},
+    types::BytecodeTypeWrapper,
 };
 use amplify::Wrapper;
 use async_trait::async_trait;
 use eth_bytecode_db::verification::{
-    solidity_multi_part, solidity_standard_json, Client, Error, VerificationRequest,
+    solidity_multi_part, solidity_standard_json, Client, VerificationRequest,
 };
 
 pub struct SolidityVerifierService {
@@ -43,18 +44,7 @@ impl solidity_verifier_server::SolidityVerifier for SolidityVerifierService {
         };
         let result = solidity_multi_part::verify(self.client.clone(), verification_request).await;
 
-        match result {
-            Ok(source) => {
-                let response = VerifyResponseWrapper::ok(source);
-                Ok(tonic::Response::new(response.into()))
-            }
-            Err(Error::VerificationFailed { message }) => {
-                let response = VerifyResponseWrapper::err(message);
-                Ok(tonic::Response::new(response.into()))
-            }
-            Err(Error::InvalidArgument(message)) => Err(tonic::Status::invalid_argument(message)),
-            Err(Error::Internal(message)) => Err(tonic::Status::internal(message.to_string())),
-        }
+        verifier_base::process_verification_result(result)
     }
 
     async fn verify_standard_json(
@@ -75,18 +65,7 @@ impl solidity_verifier_server::SolidityVerifier for SolidityVerifierService {
         let result =
             solidity_standard_json::verify(self.client.clone(), verification_request).await;
 
-        match result {
-            Ok(source) => {
-                let response = VerifyResponseWrapper::ok(source);
-                Ok(tonic::Response::new(response.into()))
-            }
-            Err(Error::VerificationFailed { message }) => {
-                let response = VerifyResponseWrapper::err(message);
-                Ok(tonic::Response::new(response.into()))
-            }
-            Err(Error::InvalidArgument(message)) => Err(tonic::Status::invalid_argument(message)),
-            Err(Error::Internal(message)) => Err(tonic::Status::internal(message.to_string())),
-        }
+        verifier_base::process_verification_result(result)
     }
 
     async fn list_compiler_versions(

@@ -1,13 +1,14 @@
+use super::verifier_base;
 use crate::{
     proto::{
         vyper_verifier_server, ListCompilerVersionsRequest, ListCompilerVersionsResponse,
         VerifyResponse, VerifyVyperMultiPartRequest,
     },
-    types::{BytecodeTypeWrapper, VerifyResponseWrapper},
+    types::BytecodeTypeWrapper,
 };
 use amplify::Wrapper;
 use async_trait::async_trait;
-use eth_bytecode_db::verification::{vyper_multi_part, Client, Error, VerificationRequest};
+use eth_bytecode_db::verification::{vyper_multi_part, Client, VerificationRequest};
 
 pub struct VyperVerifierService {
     client: Client,
@@ -40,18 +41,7 @@ impl vyper_verifier_server::VyperVerifier for VyperVerifierService {
         };
         let result = vyper_multi_part::verify(self.client.clone(), verification_request).await;
 
-        match result {
-            Ok(source) => {
-                let response = VerifyResponseWrapper::ok(source);
-                Ok(tonic::Response::new(response.into()))
-            }
-            Err(Error::VerificationFailed { message }) => {
-                let response = VerifyResponseWrapper::err(message);
-                Ok(tonic::Response::new(response.into()))
-            }
-            Err(Error::InvalidArgument(message)) => Err(tonic::Status::invalid_argument(message)),
-            Err(Error::Internal(message)) => Err(tonic::Status::internal(message.to_string())),
-        }
+        verifier_base::process_verification_result(result)
     }
 
     async fn list_compiler_versions(

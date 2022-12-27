@@ -1,11 +1,9 @@
-use crate::{
-    proto::{sourcify_verifier_server, VerifyResponse, VerifySourcifyRequest},
-    types::VerifyResponseWrapper,
-};
+use super::verifier_base;
+use crate::proto::{sourcify_verifier_server, VerifyResponse, VerifySourcifyRequest};
 use async_trait::async_trait;
 use eth_bytecode_db::verification::{
     sourcify::{self, VerificationRequest},
-    Client, Error,
+    Client,
 };
 
 pub struct SourcifyVerifierService {
@@ -35,17 +33,6 @@ impl sourcify_verifier_server::SourcifyVerifier for SourcifyVerifierService {
 
         let result = sourcify::verify(self.client.clone(), verification_request).await;
 
-        match result {
-            Ok(source) => {
-                let response = VerifyResponseWrapper::ok(source);
-                Ok(tonic::Response::new(response.into()))
-            }
-            Err(Error::VerificationFailed { message }) => {
-                let response = VerifyResponseWrapper::err(message);
-                Ok(tonic::Response::new(response.into()))
-            }
-            Err(Error::InvalidArgument(message)) => Err(tonic::Status::invalid_argument(message)),
-            Err(Error::Internal(message)) => Err(tonic::Status::internal(message.to_string())),
-        }
+        verifier_base::process_verification_result(result)
     }
 }
