@@ -37,7 +37,6 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
     }
 
     let charts: Vec<Arc<dyn Chart + Send + Sync + 'static>> = vec![
-        Arc::new(lines::NewBlocks::default()),
         Arc::new(counters::AverageBlockTime::default()),
         Arc::new(counters::CompletedTxns::default()),
         Arc::new(counters::TotalAccounts::default()),
@@ -46,6 +45,20 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
         Arc::new(counters::TotalNativeCoinTransfers::default()),
         Arc::new(counters::TotalTokens::default()),
         Arc::new(counters::TotalTxns::default()),
+        Arc::new(lines::AccountGrowth::default()),
+        Arc::new(lines::ActiveAccounts::default()),
+        Arc::new(lines::AverageBlockSize::default()),
+        Arc::new(lines::AverageGasLimit::default()),
+        Arc::new(lines::AverageGasPrice::default()),
+        Arc::new(lines::AverageTxnFee::default()),
+        Arc::new(lines::GasUsedGrowth::default()),
+        Arc::new(lines::NativeCoinHoldersGrowth::default()),
+        Arc::new(lines::NativeCoinSupply::default()),
+        Arc::new(lines::NewBlocks::default()),
+        Arc::new(lines::NewNativeCoinTransfers::default()),
+        Arc::new(lines::NewTxns::default()),
+        Arc::new(lines::TxnFee::default()),
+        Arc::new(lines::TxnsGrowth::default()),
     ];
     // TODO: may be run this with migrations or have special config
     for chart in charts.iter() {

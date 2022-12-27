@@ -3246,6 +3246,7 @@ dependencies = [
  "entity",
  "migration",
  "pretty_assertions",
+ "rand",
  "sea-orm",
  "sea-orm-migration",
  "stats-proto",
