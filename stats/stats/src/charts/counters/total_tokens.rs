@@ -1,5 +1,8 @@
 #![allow(unused_variables)]
-use crate::{charts::insert::insert_int_data, UpdateError};
+use crate::{
+    charts::insert::{insert_int_data, IntValueItem},
+    UpdateError,
+};
 use async_trait::async_trait;
 use entity::sea_orm_active_enums::{ChartType, ChartValueType};
 use sea_orm::prelude::*;
@@ -32,13 +35,11 @@ impl crate::Chart for TotalTokens {
             .await?
             .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
         // TODO: remove mock
-        insert_int_data(
-            db,
-            chart_id,
-            chrono::offset::Local::now().date_naive(),
-            1234,
-        )
-        .await?;
+        let item = IntValueItem {
+            date: chrono::offset::Local::now().date_naive(),
+            value: 1234,
+        };
+        insert_int_data(db, chart_id, item).await?;
         Ok(())
     }
 }

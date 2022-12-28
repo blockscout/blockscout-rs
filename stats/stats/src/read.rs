@@ -1,6 +1,9 @@
-use crate::counters::counters_list;
+use crate::{
+    charts::insert::{DoubleValueItem, IntValueItem},
+    counters::counters_list,
+};
 use chrono::NaiveDate;
-use entity::{chart_data_int, charts};
+use entity::{chart_data_double, chart_data_int, charts, sea_orm_active_enums::ChartValueType};
 use sea_orm::{
     ColumnTrait, DatabaseConnection, DbBackend, DbErr, EntityTrait, FromQueryResult, QueryFilter,
     QueryOrder, QuerySelect, Statement,
@@ -81,35 +84,50 @@ async fn get_counters_data(
     Ok(counters)
 }
 
-#[derive(FromQueryResult)]
-struct DateValue {
-    date: NaiveDate,
-    value: i64,
-}
-
-#[derive(FromQueryResult)]
-struct ChartID {
-    id: i32,
-}
-
-pub async fn get_chart_int(
+pub async fn get_chart_data(
     db: &DatabaseConnection,
     name: &str,
     from: Option<NaiveDate>,
     to: Option<NaiveDate>,
 ) -> Result<LineChart, ReadError> {
-    let id = charts::Entity::find()
+    let chart = charts::Entity::find()
         .column(charts::Column::Id)
         .filter(charts::Column::Name.eq(name))
-        .into_model::<ChartID>()
         .one(db)
         .await?
         .ok_or_else(|| ReadError::NotFound(name.into()))?;
 
+    let chart = match chart.value_type {
+        ChartValueType::Int => get_chart_int(db, chart.id, from, to)
+            .await?
+            .into_iter()
+            .map(|row| Point {
+                date: row.date.format("%Y-%m-%d").to_string(),
+                value: row.value.to_string(),
+            })
+            .collect(),
+        ChartValueType::Double => get_chart_double(db, chart.id, from, to)
+            .await?
+            .into_iter()
+            .map(|row| Point {
+                date: row.date.format("%Y-%m-%d").to_string(),
+                value: row.value.to_string(),
+            })
+            .collect(),
+    };
+    Ok(LineChart { chart })
+}
+
+async fn get_chart_int(
+    db: &DatabaseConnection,
+    chart_id: i32,
+    from: Option<NaiveDate>,
+    to: Option<NaiveDate>,
+) -> Result<Vec<IntValueItem>, DbErr> {
     let data_request = chart_data_int::Entity::find()
         .column(chart_data_int::Column::Date)
         .column(chart_data_int::Column::Value)
-        .filter(chart_data_int::Column::ChartId.eq(id.id))
+        .filter(chart_data_int::Column::ChartId.eq(chart_id))
         .order_by_asc(chart_data_int::Column::Date);
 
     let data_request = if let Some(from) = from {
@@ -122,16 +140,32 @@ pub async fn get_chart_int(
     } else {
         data_request
     };
+    data_request.into_model().all(db).await
+}
 
-    let data = data_request.into_model::<DateValue>().all(db).await?;
-    let chart = data
-        .into_iter()
-        .map(|row| Point {
-            date: row.date.format("%Y-%m-%d").to_string(),
-            value: row.value.to_string(),
-        })
-        .collect();
-    Ok(LineChart { chart })
+async fn get_chart_double(
+    db: &DatabaseConnection,
+    chart_id: i32,
+    from: Option<NaiveDate>,
+    to: Option<NaiveDate>,
+) -> Result<Vec<DoubleValueItem>, DbErr> {
+    let data_request = chart_data_double::Entity::find()
+        .column(chart_data_double::Column::Date)
+        .column(chart_data_double::Column::Value)
+        .filter(chart_data_double::Column::ChartId.eq(chart_id))
+        .order_by_asc(chart_data_double::Column::Date);
+
+    let data_request = if let Some(from) = from {
+        data_request.filter(chart_data_double::Column::Date.gte(from))
+    } else {
+        data_request
+    };
+    let data_request = if let Some(to) = to {
+        data_request.filter(chart_data_double::Column::Date.lte(to))
+    } else {
+        data_request
+    };
+    data_request.into_model().all(db).await
 }
 
 #[cfg(test)]
@@ -214,7 +248,7 @@ mod tests {
 
         let db = init_db::<migration::Migrator>("get_chart_int_mock", None).await;
         insert_mock_data(&db).await;
-        let chart = get_chart_int(&db, "newBlocksPerDay", None, None)
+        let chart = get_chart_data(&db, "newBlocksPerDay", None, None)
             .await
             .unwrap();
         assert_eq!(

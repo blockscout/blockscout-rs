@@ -6,33 +6,23 @@ use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
 };
 use smart_contract_verifier_server::{Settings, SourcifyVerifierService};
 use std::sync::Arc;
-use tokio::sync::OnceCell;
 
 const ROUTE: &str = "/verifier/sourcify/sources:verify";
 
-async fn global_service() -> &'static Arc<SourcifyVerifierService> {
-    static SERVICE: OnceCell<Arc<SourcifyVerifierService>> = OnceCell::const_new();
-    SERVICE
-        .get_or_init(|| async {
-            let settings = Settings::default();
-            let service =
-                SourcifyVerifierService::new(settings.sourcify, settings.extensions.sourcify)
-                    .await
-                    .expect("couldn't initialize the service");
-            Arc::new(service)
-        })
+async fn init_service() -> Arc<SourcifyVerifierService> {
+    let settings = Settings::default();
+    let service = SourcifyVerifierService::new(settings.sourcify, settings.extensions.sourcify)
         .await
+        .expect("couldn't initialize the service");
+    Arc::new(service)
 }
 
-// #[rstest::rstest]
-// #[case("0x1277E7D253e0c073418B986b8228BF282554cA5e", "FULL")]
-// #[case("0xec979FF845de38501bAE33a70C981fa3C65C08c7", "PARTIAL")]
+#[rstest::rstest]
+#[case("0x1277E7D253e0c073418B986b8228BF282554cA5e", "FULL")]
+#[case("0xec979FF845de38501bAE33a70C981fa3C65C08c7", "PARTIAL")]
 #[tokio::test]
-// async fn should_return_200(#[case] address: String, #[case] match_type: String) {
-async fn should_return_200() {
-    let address = "0x1277E7D253e0c073418B986b8228BF282554cA5e";
-    let match_type = "FULL";
-    let service = global_service().await;
+async fn should_return_200(#[case] address: String, #[case] match_type: String) {
+    let service = init_service().await;
     let app = test::init_service(
         App::new().configure(|config| route_sourcify_verifier(config, service.clone())),
     )
@@ -92,7 +82,7 @@ async fn should_return_200() {
 
 #[tokio::test]
 async fn invalid_contracts() {
-    let service = global_service().await;
+    let service = init_service().await;
     let app = test::init_service(
         App::new().configure(|config| route_sourcify_verifier(config, service.clone())),
     )

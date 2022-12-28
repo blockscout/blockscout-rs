@@ -1,4 +1,7 @@
-use crate::{charts::insert::insert_int_data, UpdateError};
+use crate::{
+    charts::insert::{insert_int_data, IntValueItem},
+    UpdateError,
+};
 use async_trait::async_trait;
 use blockscout_db::entity::blocks;
 use chrono::NaiveDateTime;
@@ -54,7 +57,11 @@ impl crate::Chart for TotalBlocks {
                 return Ok(());
             }
         };
-        insert_int_data(db, id, data.timestamp.date(), data.number).await?;
+        let item = IntValueItem {
+            date: data.timestamp.date(),
+            value: data.number,
+        };
+        insert_int_data(db, id, item).await?;
         Ok(())
     }
 }

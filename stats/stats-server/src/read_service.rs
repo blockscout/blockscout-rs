@@ -48,7 +48,7 @@ impl StatsService for ReadService {
             .from
             .and_then(|date| NaiveDate::from_str(&date).ok());
         let to = request.to.and_then(|date| NaiveDate::from_str(&date).ok());
-        let chart = stats::get_chart_int(&self.db, &request.name, from, to)
+        let chart = stats::get_chart_data(&self.db, &request.name, from, to)
             .await
             .map_err(map_read_error)?;
         Ok(Response::new(chart))
