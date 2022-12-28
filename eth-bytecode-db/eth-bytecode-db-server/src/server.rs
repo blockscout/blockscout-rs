@@ -91,7 +91,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let http_router = router;
 
     let launch_settings = LaunchSettings {
-        service_name: "eth-bytecode-db".to_owned(),
+        service_name: "eth_bytecode_db".to_owned(),
         server: settings.server,
         metrics: settings.metrics,
         jaeger: settings.jaeger,

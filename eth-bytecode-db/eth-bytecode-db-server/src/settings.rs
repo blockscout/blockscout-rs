@@ -33,7 +33,7 @@ pub struct Settings {
     // Is required as we deny unknown fields, but allow users provide
     // path to config through PREFIX__CONFIG env variable. If removed,
     // the setup would fail with `unknown field `config`, expected one of...`
-    #[serde(rename = "config")]
+    #[serde(default, rename = "config")]
     config_path: IgnoredAny,
 }
 
