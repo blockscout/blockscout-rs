@@ -7,15 +7,15 @@ use async_trait::async_trait;
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use eth_bytecode_db::search::{self, BytecodeRemote};
 use sea_orm::DatabaseConnection;
-use std::str::FromStr;
+use std::{str::FromStr, sync::Arc};
 
 pub struct DatabaseService {
-    pub db_client: DatabaseConnection,
+    pub db_client: Arc<DatabaseConnection>,
 }
 
-impl Default for DatabaseService {
-    fn default() -> Self {
-        todo!()
+impl DatabaseService {
+    pub fn new_arc(db_client: Arc<DatabaseConnection>) -> Self {
+        Self { db_client }
     }
 }
 
@@ -37,7 +37,7 @@ impl Database for DatabaseService {
                 .0,
         };
 
-        let sources = search::find_contract(&self.db_client, &bytecode_remote)
+        let sources = search::find_contract(self.db_client.as_ref(), &bytecode_remote)
             .await
             .map_err(|err| tonic::Status::internal(err.to_string()))?;
 
