@@ -12,7 +12,7 @@ use reqwest::Url;
 use serde::Serialize;
 use smart_contract_verifer_mock::SmartContractVerifierServer;
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2 as smart_contract_verifier_v2;
-use std::{net::SocketAddr, str::FromStr, time::Duration};
+use std::{net::SocketAddr, str::FromStr};
 use tonic::transport::Uri;
 
 const DB_PREFIX: &str = "eth_bytecode_db_server";
@@ -49,40 +49,25 @@ where
 async fn init_eth_bytecode_db_server(db_url: &str, verifier_addr: SocketAddr) -> Url {
     let verifier_uri = Uri::from_str(&format!("http://{}", verifier_addr)).unwrap();
 
-    let mut settings = {
+    let settings = {
         let mut settings = Settings::default(db_url.into(), verifier_uri);
 
-        settings.server.http.addr = SocketAddr::from_str("127.0.0.1:10000").unwrap();
+        // Take a random port in range [10000..65535]
+        let port = (rand::random::<u16>() % 55535) + 10000;
+        settings.server.http.addr = SocketAddr::from_str(&format!("127.0.0.1:{port}")).unwrap();
         settings.server.grpc.enabled = false;
         settings.metrics.enabled = false;
         settings.jaeger.enabled = false;
         settings
     };
 
-    let server_addr = {
-        // We do not know what ports are busy, so we just iterate through the range until we find an empty port number
-        let mut port = 10000u16;
-        while port < 65535 {
-            settings.server.http.addr.set_port(port);
-            {
-                let settings = settings.clone();
-                let handle =
-                    tokio::spawn(async move { eth_bytecode_db_server::run(settings).await });
-                // The assumption is that 1 sec is enough to server to fail in case if the port is busy.
-                // In case of blinking tests that is the first place to look for the possible cause.
-                tokio::time::sleep(Duration::from_secs(1)).await;
-                if !handle.is_finished() {
-                    // If server has not failed in 1 second, assume that it would be successfully run
-                    break;
-                }
-            }
-            port += 1;
-        }
-        settings.server.http.addr
+    let _server_handle = {
+        let settings = settings.clone();
+        tokio::spawn(async move { eth_bytecode_db_server::run(settings).await })
     };
 
     let client = reqwest::Client::new();
-    let base = Url::parse(&format!("http://{}", server_addr)).unwrap();
+    let base = Url::parse(&format!("http://{}", settings.server.http.addr)).unwrap();
 
     let health_endpoint = base.join("health").unwrap();
     // Wait for the server to start
