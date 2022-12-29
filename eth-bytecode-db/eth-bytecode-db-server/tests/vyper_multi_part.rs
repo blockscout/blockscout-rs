@@ -40,7 +40,6 @@ fn service() -> MockVyperVerifierService {
 
 #[rstest]
 #[tokio::test]
-#[timeout(std::time::Duration::from_secs(30))]
 #[ignore = "Needs database to run"]
 async fn test_returns_valid_source(service: MockVyperVerifierService) {
     let default_request = VerifyVyperMultiPartRequest {
