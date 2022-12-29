@@ -67,4 +67,15 @@ impl Settings {
 
         Ok(settings)
     }
+
+    pub fn default(database_url: String, verifier_uri: tonic::transport::Uri) -> Self {
+        Self {
+            server: Default::default(),
+            metrics: Default::default(),
+            jaeger: Default::default(),
+            database: DatabaseSettings { url: database_url },
+            verifier: VerifierSettings { uri: verifier_uri },
+            config_path: Default::default(),
+        }
+    }
 }
