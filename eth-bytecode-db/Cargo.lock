@@ -1288,6 +1288,7 @@ dependencies = [
  "amplify",
  "anyhow",
  "async-trait",
+ "blockscout-display-bytes",
  "blockscout-service-launcher",
  "config",
  "eth-bytecode-db",
