@@ -29,7 +29,7 @@ impl VerifierService for MockVyperVerifierService {
     }
 
     fn source_type(&self) -> verification::SourceType {
-        verification::SourceType::Solidity
+        verification::SourceType::Vyper
     }
 }
 
