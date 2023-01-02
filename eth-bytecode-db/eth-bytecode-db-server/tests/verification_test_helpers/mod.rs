@@ -1,10 +1,13 @@
+#![allow(unused_imports, dead_code)]
+
 mod database_helpers;
 pub mod smart_contract_verifer_mock;
 mod test_input_data;
 
+use amplify::set;
 use async_trait::async_trait;
 use database_helpers::TestDbGuard;
-use eth_bytecode_db::verification::SourceType;
+use eth_bytecode_db::verification::{MatchType, SourceType};
 use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2 as eth_bytecode_db_v2;
 use eth_bytecode_db_server::Settings;
 use pretty_assertions::assert_eq;
@@ -15,7 +18,9 @@ use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2 as sm
 use std::{net::SocketAddr, str::FromStr};
 use tonic::transport::Uri;
 
-const DB_PREFIX: &str = "eth_bytecode_db_server";
+const DB_PREFIX: &str = "server";
+
+const DB_SEARCH_ROUTE: &str = "/bytecodes/sources:search";
 
 #[async_trait]
 pub trait VerifierService {
@@ -30,7 +35,7 @@ async fn init_db(test_suite_name: &str, test_name: &str) -> TestDbGuard {
     #[allow(unused_variables)]
     let db_url: Option<String> = None;
     // Uncomment if providing url explicitly is more convenient
-    // let db_url = Some("postgres://postgres:admin@localhost:9432/".into());
+    let db_url = Some("postgres://postgres:admin@localhost:9432/".into());
     let db_name = format!("{}_{}_{}", DB_PREFIX, test_suite_name, test_name);
     TestDbGuard::new(db_name.as_str(), db_url).await
 }
@@ -57,6 +62,7 @@ async fn init_eth_bytecode_db_server(db_url: &str, verifier_addr: SocketAddr) ->
         settings.server.http.addr = SocketAddr::from_str(&format!("127.0.0.1:{port}")).unwrap();
         settings.server.grpc.enabled = false;
         settings.metrics.enabled = false;
+        settings.tracing.enabled = false;
         settings.jaeger.enabled = false;
         settings
     };
@@ -96,7 +102,7 @@ pub async fn test_returns_valid_source<Service, Request>(
 {
     let db = init_db(test_suite_name, "test_returns_valid_source").await;
 
-    let test_data = test_input_data::input_data_1(service.source_type());
+    let test_data = test_input_data::input_data_1(service.source_type(), MatchType::Partial);
 
     let db_url = db.db_url();
     let verifier_addr = init_verifier_server(service, test_data.verifier_response).await;
@@ -128,5 +134,111 @@ pub async fn test_returns_valid_source<Service, Request>(
     assert_eq!(
         test_data.eth_bytecode_db_response, verification_response,
         "Invalid verification response"
+    );
+}
+
+pub async fn test_verify_then_search<Service, Request>(
+    test_suite_name: &str,
+    service: Service,
+    route: &str,
+    verification_request: Request,
+) where
+    Service: VerifierService,
+    Request: Serialize,
+{
+    let db = init_db(test_suite_name, "test_verify_then_search").await;
+
+    let test_data = test_input_data::input_data_1(service.source_type(), MatchType::Full);
+    let creation_input = test_data.creation_input().unwrap();
+    let deployed_bytecode = test_data.deployed_bytecode().unwrap();
+
+    let db_url = db.db_url();
+    let verifier_addr = init_verifier_server(service, test_data.verifier_response).await;
+
+    let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
+
+    let response = reqwest::Client::new()
+        .post(eth_bytecode_db_base.join(route).unwrap())
+        .json(&verification_request)
+        .send()
+        .await
+        .expect("Failed to send verification request");
+
+    let verification_response: eth_bytecode_db_v2::VerifyResponse = response
+        .json()
+        .await
+        .expect("Verification response deserialization failed");
+
+    let creation_input_search_response: eth_bytecode_db_v2::SearchSourcesResponse = {
+        let request = {
+            eth_bytecode_db_v2::SearchSourcesRequest {
+                bytecode: creation_input,
+                bytecode_type: eth_bytecode_db_v2::BytecodeType::CreationInput.into(),
+            }
+        };
+
+        let response = reqwest::Client::new()
+            .post(eth_bytecode_db_base.join(DB_SEARCH_ROUTE).unwrap())
+            .json(&request)
+            .send()
+            .await
+            .expect("Failed to send creation input search request");
+        // Assert that status code is success
+        if !response.status().is_success() {
+            let status = response.status();
+            let message = response.text().await.expect("Read body as text");
+            panic!(
+                "Creation input search: invalid status code (success expected). Status: {}. Message: {}",
+                status, message
+            )
+        }
+        response
+            .json()
+            .await
+            .expect("Creation input search response deserialization failed")
+    };
+
+    let deployed_bytecode_search_response: eth_bytecode_db_v2::SearchSourcesResponse = {
+        let request = {
+            eth_bytecode_db_v2::SearchSourcesRequest {
+                bytecode: deployed_bytecode,
+                bytecode_type: eth_bytecode_db_v2::BytecodeType::DeployedBytecode.into(),
+            }
+        };
+
+        let response = reqwest::Client::new()
+            .post(eth_bytecode_db_base.join(DB_SEARCH_ROUTE).unwrap())
+            .json(&request)
+            .send()
+            .await
+            .expect("Failed to send deployed bytecode search request");
+        // Assert that status code is success
+        if !response.status().is_success() {
+            let status = response.status();
+            let message = response.text().await.expect("Read body as text");
+            panic!(
+                "Deployed bytecode search: invalid status code (success expected). Status: {}. Message: {}",
+                status, message
+            )
+        }
+        response
+            .json()
+            .await
+            .expect("Deployed bytecode search response deserialization failed")
+    };
+
+    assert_eq!(
+        creation_input_search_response, deployed_bytecode_search_response,
+        "Results for creation input and deployed bytecode searches differ"
+    );
+    assert_eq!(
+        1,
+        creation_input_search_response.sources.len(),
+        "Invalid number of sources returned"
+    );
+    assert_eq!(
+        verification_response.source.unwrap(),
+        creation_input_search_response.sources[0],
+        "Sources returned on verification and search differ"
     );
 }

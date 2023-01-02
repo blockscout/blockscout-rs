@@ -8,4 +8,4 @@ members = [
 ]
 
 [patch.crates-io]
-blockscout-service-launcher = {git = "https://github.com/blockscout/blockscout-rs", branch = "rimrakhimov/launcher/optional-tracing" }
+blockscout-service-launcher = {git = "https://github.com/blockscout/blockscout-rs", branch = "rimrakhimov/launcher/disabled-metrics" }

@@ -13,7 +13,7 @@ use verification_test_helpers::{
     VerifierService,
 };
 
-const TEST_SUITE_NAME: &str = "sourcify";
+const TEST_SUITE_NAME: &str = "solidity_standard_json";
 
 const ROUTE: &str = "/api/v2/verifier/solidity/sources:verify-standard-json";
 
@@ -50,6 +50,26 @@ async fn test_returns_valid_source(service: MockSolidityVerifierService) {
         input: "".to_string(),
     };
     verification_test_helpers::test_returns_valid_source(
+        TEST_SUITE_NAME,
+        service,
+        ROUTE,
+        default_request,
+    )
+    .await;
+}
+
+#[rstest]
+#[tokio::test]
+#[timeout(std::time::Duration::from_secs(30))]
+#[ignore = "Needs database to run"]
+async fn test_verify_then_search(service: MockSolidityVerifierService) {
+    let default_request = VerifySolidityStandardJsonRequest {
+        bytecode: "".to_string(),
+        bytecode_type: BytecodeType::CreationInput.into(),
+        compiler_version: "".to_string(),
+        input: "".to_string(),
+    };
+    verification_test_helpers::test_verify_then_search(
         TEST_SUITE_NAME,
         service,
         ROUTE,

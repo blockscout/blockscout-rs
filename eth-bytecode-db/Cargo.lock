@@ -667,8 +667,8 @@ dependencies = [
 
 [[package]]
 name = "blockscout-service-launcher"
-version = "0.2.0"
-source = "git+https://github.com/blockscout/blockscout-rs?branch=rimrakhimov/launcher/optional-tracing#8b2dc233cede0e0a5c482a793da8c842cadff071"
+version = "0.2.1"
+source = "git+https://github.com/blockscout/blockscout-rs?branch=rimrakhimov/launcher/disabled-metrics#4bde849d9d95c871740e7eb6e64e6741f1061f3e"
 dependencies = [
  "actix-web",
  "actix-web-prom",
