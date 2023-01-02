@@ -1,4 +1,6 @@
-use blockscout_service_launcher::{JaegerSettings, MetricsSettings, ServerSettings};
+use blockscout_service_launcher::{
+    JaegerSettings, MetricsSettings, ServerSettings, TracingSettings,
+};
 use config::{Config, File};
 use serde::{de, Deserialize};
 use serde_with::{serde_as, DisplayFromStr};
@@ -24,6 +26,8 @@ pub struct Settings {
     pub server: ServerSettings,
     #[serde(default)]
     pub metrics: MetricsSettings,
+    #[serde(default)]
+    pub tracing: TracingSettings,
     #[serde(default)]
     pub jaeger: JaegerSettings,
 
@@ -72,6 +76,7 @@ impl Settings {
         Self {
             server: Default::default(),
             metrics: Default::default(),
+            tracing: Default::default(),
             jaeger: Default::default(),
             database: DatabaseSettings { url: database_url },
             verifier: VerifierSettings { uri: verifier_uri },
