@@ -24,7 +24,7 @@ pub async fn launch<R>(
 where
     R: HttpRouter + Send + Sync + Clone + 'static,
 {
-    init_logs(&settings.service_name, &settings.jaeger);
+    init_logs(&settings.service_name, &settings.tracing, &settings.jaeger);
     let metrics = Metrics::new(&settings.service_name, &settings.metrics.route);
 
     let mut futures = vec![];

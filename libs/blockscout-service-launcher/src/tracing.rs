@@ -5,9 +5,18 @@ use opentelemetry::{
 };
 use tracing_subscriber::{filter::LevelFilter, layer::SubscriberExt, prelude::*};
 
-use crate::JaegerSettings;
+use crate::{JaegerSettings, TracingSettings};
 
-pub fn init_logs(service_name: &str, jaeger_settings: &JaegerSettings) {
+pub fn init_logs(
+    service_name: &str,
+    tracing_settings: &TracingSettings,
+    jaeger_settings: &JaegerSettings,
+) {
+    // If tracing is disabled, there is nothing to initialize
+    if !tracing_settings.enabled {
+        return;
+    }
+
     let stdout = tracing_subscriber::fmt::layer().with_filter(
         tracing_subscriber::EnvFilter::builder()
             .with_default_directive(LevelFilter::INFO.into())
