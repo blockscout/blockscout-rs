@@ -1,7 +1,7 @@
 use crate::{
     metrics::Metrics,
     router::{configure_router, HttpRouter},
-    settings::{JaegerSettings, MetricsSettings, ServerSettings},
+    settings::{JaegerSettings, MetricsSettings, ServerSettings, TracingSettings},
     tracing::init_logs,
 };
 use actix_web::{App, HttpServer};
@@ -12,6 +12,7 @@ pub struct LaunchSettings {
     pub service_name: String,
     pub server: ServerSettings,
     pub metrics: MetricsSettings,
+    pub tracing: TracingSettings,
     pub jaeger: JaegerSettings,
 }
 
