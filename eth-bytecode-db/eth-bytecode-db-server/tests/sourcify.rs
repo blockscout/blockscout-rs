@@ -13,7 +13,7 @@ use verification_test_helpers::{
 
 const TEST_SUITE_NAME: &str = "sourcify";
 
-const ROUTE: &str = "/verifier/sourcify/sources:verify";
+const ROUTE: &str = "/api/v2/verifier/sourcify/sources:verify";
 
 #[async_trait]
 impl VerifierService for MockSourcifyVerifierService {

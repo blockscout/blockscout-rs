@@ -15,7 +15,7 @@ use verification_test_helpers::{
 
 const TEST_SUITE_NAME: &str = "sourcify";
 
-const ROUTE: &str = "/verifier/vyper/sources:verify-multi-part";
+const ROUTE: &str = "/api/v2/verifier/vyper/sources:verify-multi-part";
 
 #[async_trait]
 impl VerifierService for MockVyperVerifierService {

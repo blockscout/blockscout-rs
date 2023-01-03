@@ -15,7 +15,7 @@ use verification_test_helpers::{
 
 const TEST_SUITE_NAME: &str = "sourcify";
 
-const ROUTE: &str = "/verifier/solidity/sources:verify-standard-json";
+const ROUTE: &str = "/api/v2/verifier/solidity/sources:verify-standard-json";
 
 #[async_trait]
 impl VerifierService for MockSolidityVerifierService {
