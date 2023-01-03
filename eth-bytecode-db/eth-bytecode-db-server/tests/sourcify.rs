@@ -38,7 +38,7 @@ fn service() -> MockSourcifyVerifierService {
 
 #[rstest]
 #[tokio::test]
-#[timeout(std::time::Duration::from_secs(300))]
+#[timeout(std::time::Duration::from_secs(60))]
 #[ignore = "Needs database to run"]
 async fn test_returns_valid_source(service: MockSourcifyVerifierService) {
     let default_request = VerifySourcifyRequest {

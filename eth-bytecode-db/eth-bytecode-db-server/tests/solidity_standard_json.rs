@@ -40,7 +40,7 @@ fn service() -> MockSolidityVerifierService {
 
 #[rstest]
 #[tokio::test]
-#[timeout(std::time::Duration::from_secs(300))]
+#[timeout(std::time::Duration::from_secs(60))]
 #[ignore = "Needs database to run"]
 async fn test_returns_valid_source(service: MockSolidityVerifierService) {
     let default_request = VerifySolidityStandardJsonRequest {
@@ -60,7 +60,7 @@ async fn test_returns_valid_source(service: MockSolidityVerifierService) {
 
 #[rstest]
 #[tokio::test]
-#[timeout(std::time::Duration::from_secs(30))]
+#[timeout(std::time::Duration::from_secs(60))]
 #[ignore = "Needs database to run"]
 async fn test_verify_then_search(service: MockSolidityVerifierService) {
     let default_request = VerifySolidityStandardJsonRequest {
