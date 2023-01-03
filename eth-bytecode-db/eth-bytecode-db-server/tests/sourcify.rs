@@ -8,7 +8,7 @@ use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2 as sm
 use tonic::Response;
 use verification_test_helpers::{
     smart_contract_verifer_mock::{MockSourcifyVerifierService, SmartContractVerifierServer},
-    VerifierService,
+    test_cases, VerifierService,
 };
 
 const TEST_SUITE_NAME: &str = "sourcify";
@@ -47,11 +47,5 @@ async fn test_returns_valid_source(service: MockSourcifyVerifierService) {
         files: Default::default(),
         chosen_contract: None,
     };
-    verification_test_helpers::test_returns_valid_source(
-        TEST_SUITE_NAME,
-        service,
-        ROUTE,
-        default_request,
-    )
-    .await;
+    test_cases::test_returns_valid_source(TEST_SUITE_NAME, service, ROUTE, default_request).await;
 }

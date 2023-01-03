@@ -10,7 +10,7 @@ use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2 as sm
 use tonic::Response;
 use verification_test_helpers::{
     smart_contract_verifer_mock::{MockSolidityVerifierService, SmartContractVerifierServer},
-    VerifierService,
+    test_cases, VerifierService,
 };
 
 const TEST_SUITE_NAME: &str = "solidity_standard_json";
@@ -49,13 +49,7 @@ async fn test_returns_valid_source(service: MockSolidityVerifierService) {
         compiler_version: "".to_string(),
         input: "".to_string(),
     };
-    verification_test_helpers::test_returns_valid_source(
-        TEST_SUITE_NAME,
-        service,
-        ROUTE,
-        default_request,
-    )
-    .await;
+    test_cases::test_returns_valid_source(TEST_SUITE_NAME, service, ROUTE, default_request).await;
 }
 
 #[rstest]
@@ -69,11 +63,5 @@ async fn test_verify_then_search(service: MockSolidityVerifierService) {
         compiler_version: "".to_string(),
         input: "".to_string(),
     };
-    verification_test_helpers::test_verify_then_search(
-        TEST_SUITE_NAME,
-        service,
-        ROUTE,
-        default_request,
-    )
-    .await;
+    test_cases::test_verify_then_search(TEST_SUITE_NAME, service, ROUTE, default_request).await;
 }
