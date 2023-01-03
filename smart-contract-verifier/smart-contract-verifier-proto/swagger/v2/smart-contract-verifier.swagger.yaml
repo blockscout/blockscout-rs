@@ -12,6 +12,114 @@ consumes:
 produces:
   - application/json
 paths:
+  /api/v2/verifier/solidity/sources:verify-multi-part:
+    post:
+      operationId: SolidityVerifier_VerifyMultiPart
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v2VerifyResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v2VerifySolidityMultiPartRequest'
+      tags:
+        - SolidityVerifier
+  /api/v2/verifier/solidity/sources:verify-standard-json:
+    post:
+      operationId: SolidityVerifier_VerifyStandardJson
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v2VerifyResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v2VerifySolidityStandardJsonRequest'
+      tags:
+        - SolidityVerifier
+  /api/v2/verifier/solidity/versions:
+    get:
+      operationId: SolidityVerifier_ListCompilerVersions
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v2ListCompilerVersionsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      tags:
+        - SolidityVerifier
+  /api/v2/verifier/sourcify/sources:verify:
+    post:
+      operationId: SourcifyVerifier_Verify
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v2VerifyResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v2VerifySourcifyRequest'
+      tags:
+        - SourcifyVerifier
+  /api/v2/verifier/vyper/sources:verify-multi-part:
+    post:
+      operationId: VyperVerifier_VerifyMultiPart
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v2VerifyResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v2VerifyVyperMultiPartRequest'
+      tags:
+        - VyperVerifier
+  /api/v2/verifier/vyper/versions:
+    get:
+      operationId: VyperVerifier_ListCompilerVersions
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v2ListCompilerVersionsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      tags:
+        - VyperVerifier
   /health:
     get:
       summary: |-
@@ -34,114 +142,6 @@ paths:
           type: string
       tags:
         - Health
-  /verifier/solidity/sources:verify-multi-part:
-    post:
-      operationId: SolidityVerifier_VerifyMultiPart
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v2VerifyResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/googlerpcStatus'
-      parameters:
-        - name: body
-          in: body
-          required: true
-          schema:
-            $ref: '#/definitions/v2VerifySolidityMultiPartRequest'
-      tags:
-        - SolidityVerifier
-  /verifier/solidity/sources:verify-standard-json:
-    post:
-      operationId: SolidityVerifier_VerifyStandardJson
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v2VerifyResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/googlerpcStatus'
-      parameters:
-        - name: body
-          in: body
-          required: true
-          schema:
-            $ref: '#/definitions/v2VerifySolidityStandardJsonRequest'
-      tags:
-        - SolidityVerifier
-  /verifier/solidity/versions:
-    get:
-      operationId: SolidityVerifier_ListCompilerVersions
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v2ListCompilerVersionsResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/googlerpcStatus'
-      tags:
-        - SolidityVerifier
-  /verifier/sourcify/sources:verify:
-    post:
-      operationId: SourcifyVerifier_Verify
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v2VerifyResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/googlerpcStatus'
-      parameters:
-        - name: body
-          in: body
-          required: true
-          schema:
-            $ref: '#/definitions/v2VerifySourcifyRequest'
-      tags:
-        - SourcifyVerifier
-  /verifier/vyper/sources:verify-multi-part:
-    post:
-      operationId: VyperVerifier_VerifyMultiPart
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v2VerifyResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/googlerpcStatus'
-      parameters:
-        - name: body
-          in: body
-          required: true
-          schema:
-            $ref: '#/definitions/v2VerifyVyperMultiPartRequest'
-      tags:
-        - VyperVerifier
-  /verifier/vyper/versions:
-    get:
-      operationId: VyperVerifier_ListCompilerVersions
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v2ListCompilerVersionsResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/googlerpcStatus'
-      tags:
-        - VyperVerifier
 definitions:
   ExtraDataBytecodePart:
     type: object
