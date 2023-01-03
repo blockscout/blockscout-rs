@@ -20,8 +20,8 @@ const DB_PREFIX: &str = "server";
 const DB_SEARCH_ROUTE: &str = "/api/v2/bytecodes/sources:search";
 
 #[async_trait]
-pub trait VerifierService {
-    fn add_into_service(&mut self, response: smart_contract_verifier_v2::VerifyResponse);
+pub trait VerifierService<Response> {
+    fn add_into_service(&mut self, response: Response);
 
     fn build_server(self) -> SmartContractVerifierServer;
 }
@@ -35,12 +35,12 @@ async fn init_db(test_suite_name: &str, test_name: &str) -> TestDbGuard {
     TestDbGuard::new(db_name.as_str(), db_url).await
 }
 
-async fn init_verifier_server<Service>(
+async fn init_verifier_server<Service, Response>(
     mut service: Service,
-    verifier_response: smart_contract_verifier_v2::VerifyResponse,
+    verifier_response: Response,
 ) -> SocketAddr
 where
-    Service: VerifierService,
+    Service: VerifierService<Response>,
 {
     service.add_into_service(verifier_response);
     service.build_server().start().await
@@ -101,7 +101,7 @@ pub mod test_cases {
         request: Request,
         source_type: SourceType,
     ) where
-        Service: VerifierService,
+        Service: VerifierService<smart_contract_verifier_v2::VerifyResponse>,
         Request: Serialize,
     {
         let db = init_db(test_suite_name, "test_returns_valid_source").await;
@@ -148,7 +148,7 @@ pub mod test_cases {
         verification_request: Request,
         source_type: SourceType,
     ) where
-        Service: VerifierService,
+        Service: VerifierService<smart_contract_verifier_v2::VerifyResponse>,
         Request: Serialize,
     {
         let db = init_db(test_suite_name, "test_verify_then_search").await;

@@ -16,7 +16,7 @@ const TEST_SUITE_NAME: &str = "sourcify";
 const ROUTE: &str = "/api/v2/verifier/sourcify/sources:verify";
 
 #[async_trait]
-impl VerifierService for MockSourcifyVerifierService {
+impl VerifierService<smart_contract_verifier_v2::VerifyResponse> for MockSourcifyVerifierService {
     fn add_into_service(&mut self, response: smart_contract_verifier_v2::VerifyResponse) {
         self.expect_verify()
             .returning(move |_| Ok(Response::new(response.clone())));
@@ -44,5 +44,12 @@ async fn test_returns_valid_source(service: MockSourcifyVerifierService) {
         chosen_contract: None,
     };
     let source_type = verification::SourceType::Solidity;
-    test_cases::test_returns_valid_source(TEST_SUITE_NAME, service, ROUTE, default_request, source_type).await;
+    test_cases::test_returns_valid_source(
+        TEST_SUITE_NAME,
+        service,
+        ROUTE,
+        default_request,
+        source_type,
+    )
+    .await;
 }

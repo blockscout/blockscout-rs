@@ -18,7 +18,7 @@ const TEST_SUITE_NAME: &str = "solidity_multi_part";
 const ROUTE: &str = "/api/v2/verifier/solidity/sources:verify-multi-part";
 
 #[async_trait]
-impl VerifierService for MockSolidityVerifierService {
+impl VerifierService<smart_contract_verifier_v2::VerifyResponse> for MockSolidityVerifierService {
     fn add_into_service(&mut self, response: smart_contract_verifier_v2::VerifyResponse) {
         self.expect_verify_multi_part()
             .returning(move |_| Ok(Response::new(response.clone())));
@@ -49,7 +49,14 @@ async fn test_returns_valid_source(service: MockSolidityVerifierService) {
         libraries: Default::default(),
     };
     let source_type = verification::SourceType::Solidity;
-    test_cases::test_returns_valid_source(TEST_SUITE_NAME, service, ROUTE, default_request, source_type).await;
+    test_cases::test_returns_valid_source(
+        TEST_SUITE_NAME,
+        service,
+        ROUTE,
+        default_request,
+        source_type,
+    )
+    .await;
 }
 
 #[rstest]
@@ -67,5 +74,12 @@ async fn test_verify_then_search(service: MockSolidityVerifierService) {
         libraries: Default::default(),
     };
     let source_type = verification::SourceType::Solidity;
-    test_cases::test_verify_then_search(TEST_SUITE_NAME, service, ROUTE, default_request, source_type).await;
+    test_cases::test_verify_then_search(
+        TEST_SUITE_NAME,
+        service,
+        ROUTE,
+        default_request,
+        source_type,
+    )
+    .await;
 }
