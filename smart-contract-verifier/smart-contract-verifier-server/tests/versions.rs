@@ -59,10 +59,10 @@ async fn test_versions(uri: &str) {
 
 #[tokio::test]
 async fn solidity() {
-    test_versions("/verifier/solidity/versions").await;
+    test_versions("/api/v2/verifier/solidity/versions").await;
 }
 
 #[tokio::test]
 async fn vyper() {
-    test_versions("/verifier/vyper/versions").await;
+    test_versions("/api/v2/verifier/vyper/versions").await;
 }

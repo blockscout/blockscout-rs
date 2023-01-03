@@ -7,7 +7,7 @@ use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
 use smart_contract_verifier_server::{Settings, SourcifyVerifierService};
 use std::sync::Arc;
 
-const ROUTE: &str = "/verifier/sourcify/sources:verify";
+const ROUTE: &str = "/api/v2/verifier/sourcify/sources:verify";
 
 async fn init_service() -> Arc<SourcifyVerifierService> {
     let settings = Settings::default();

@@ -235,7 +235,7 @@ mod tests {
     fn parse_nightly() {
         let ver = check_parsing::<NightlyVersion>("v10.8.9-nightly.2021.9.11+commit.e5eed63a");
         assert_eq!(ver.version, semver::Version::new(10, 8, 9));
-        assert_eq!(ver.date, NaiveDate::from_ymd(2021, 9, 11));
+        assert_eq!(ver.date, NaiveDate::from_ymd_opt(2021, 9, 11).unwrap());
         assert_eq!(ver.commit, "e5eed63a");
         check_parsing::<NightlyVersion>("v0.0.0-nightly.1990.1.1+commit.00000000");
         check_parsing::<NightlyVersion>(

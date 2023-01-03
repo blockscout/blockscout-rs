@@ -6,35 +6,35 @@ http:
     #################### SolidityVerifier ####################
 
     - selector: blockscout.ethBytecodeDb.v2.Database.SearchSources
-      post: /bytecodes/sources:search
+      post: /api/v2/bytecodes/sources:search
       body: "*"
 
     #################### SolidityVerifier ####################
 
     - selector: blockscout.ethBytecodeDb.v2.SolidityVerifier.VerifyMultiPart
-      post: /verifier/solidity/sources:verify-multi-part
+      post: /api/v2/verifier/solidity/sources:verify-multi-part
       body: "*"
 
     - selector: blockscout.ethBytecodeDb.v2.SolidityVerifier.VerifyStandardJson
-      post: /verifier/solidity/sources:verify-standard-json
+      post: /api/v2/verifier/solidity/sources:verify-standard-json
       body: "*"
 
     - selector: blockscout.ethBytecodeDb.v2.SolidityVerifier.ListCompilerVersions
-      get: /verifier/solidity/versions
+      get: /api/v2/verifier/solidity/versions
 
     #################### Vyper Verifier ####################
 
     - selector: blockscout.ethBytecodeDb.v2.VyperVerifier.VerifyMultiPart
-      post: /verifier/vyper/sources:verify-multi-part
+      post: /api/v2/verifier/vyper/sources:verify-multi-part
       body: "*"
 
     - selector: blockscout.ethBytecodeDb.v2.VyperVerifier.ListCompilerVersions
-      get: /verifier/vyper/versions
+      get: /api/v2/verifier/vyper/versions
 
     #################### Sourcify Verifier ####################
 
     - selector: blockscout.ethBytecodeDb.v2.SourcifyVerifier.Verify
-      post: /verifier/sourcify/sources:verify
+      post: /api/v2/verifier/sourcify/sources:verify
       body: "*"
 
     #################### Health ####################
