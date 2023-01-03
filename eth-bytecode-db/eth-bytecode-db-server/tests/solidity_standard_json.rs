@@ -27,10 +27,6 @@ impl VerifierService for MockSolidityVerifierService {
     fn build_server(self) -> SmartContractVerifierServer {
         SmartContractVerifierServer::new().solidity_service(self)
     }
-
-    fn source_type(&self) -> verification::SourceType {
-        verification::SourceType::Solidity
-    }
 }
 
 #[fixture]
@@ -49,7 +45,8 @@ async fn test_returns_valid_source(service: MockSolidityVerifierService) {
         compiler_version: "".to_string(),
         input: "".to_string(),
     };
-    test_cases::test_returns_valid_source(TEST_SUITE_NAME, service, ROUTE, default_request).await;
+    let source_type = verification::SourceType::Solidity;
+    test_cases::test_returns_valid_source(TEST_SUITE_NAME, service, ROUTE, default_request, source_type).await;
 }
 
 #[rstest]
@@ -63,5 +60,6 @@ async fn test_verify_then_search(service: MockSolidityVerifierService) {
         compiler_version: "".to_string(),
         input: "".to_string(),
     };
-    test_cases::test_verify_then_search(TEST_SUITE_NAME, service, ROUTE, default_request).await;
+    let source_type = verification::SourceType::Solidity;
+    test_cases::test_verify_then_search(TEST_SUITE_NAME, service, ROUTE, default_request, source_type).await;
 }

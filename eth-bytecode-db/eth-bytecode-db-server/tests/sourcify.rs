@@ -25,10 +25,6 @@ impl VerifierService for MockSourcifyVerifierService {
     fn build_server(self) -> SmartContractVerifierServer {
         SmartContractVerifierServer::new().sourcify_service(self)
     }
-
-    fn source_type(&self) -> verification::SourceType {
-        verification::SourceType::Solidity
-    }
 }
 
 #[fixture]
@@ -47,5 +43,6 @@ async fn test_returns_valid_source(service: MockSourcifyVerifierService) {
         files: Default::default(),
         chosen_contract: None,
     };
-    test_cases::test_returns_valid_source(TEST_SUITE_NAME, service, ROUTE, default_request).await;
+    let source_type = verification::SourceType::Solidity;
+    test_cases::test_returns_valid_source(TEST_SUITE_NAME, service, ROUTE, default_request, source_type).await;
 }

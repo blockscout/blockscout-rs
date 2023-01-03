@@ -27,10 +27,6 @@ impl VerifierService for MockVyperVerifierService {
     fn build_server(self) -> SmartContractVerifierServer {
         SmartContractVerifierServer::new().vyper_service(self)
     }
-
-    fn source_type(&self) -> verification::SourceType {
-        verification::SourceType::Vyper
-    }
 }
 
 #[fixture]
@@ -51,7 +47,8 @@ async fn test_returns_valid_source(service: MockVyperVerifierService) {
         source_files: Default::default(),
         optimizations: None,
     };
-    test_cases::test_returns_valid_source(TEST_SUITE_NAME, service, ROUTE, default_request).await;
+    let source_type = verification::SourceType::Vyper;
+    test_cases::test_returns_valid_source(TEST_SUITE_NAME, service, ROUTE, default_request, source_type).await;
 }
 
 #[rstest]
@@ -67,5 +64,6 @@ async fn test_verify_then_search(service: MockVyperVerifierService) {
         source_files: Default::default(),
         optimizations: None,
     };
-    test_cases::test_verify_then_search(TEST_SUITE_NAME, service, ROUTE, default_request).await;
+    let source_type = verification::SourceType::Vyper;
+    test_cases::test_verify_then_search(TEST_SUITE_NAME, service, ROUTE, default_request, source_type).await;
 }

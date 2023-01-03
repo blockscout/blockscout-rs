@@ -24,8 +24,6 @@ pub trait VerifierService {
     fn add_into_service(&mut self, response: smart_contract_verifier_v2::VerifyResponse);
 
     fn build_server(self) -> SmartContractVerifierServer;
-
-    fn source_type(&self) -> SourceType;
 }
 
 async fn init_db(test_suite_name: &str, test_name: &str) -> TestDbGuard {
@@ -101,13 +99,14 @@ pub mod test_cases {
         service: Service,
         route: &str,
         request: Request,
+        source_type: SourceType,
     ) where
         Service: VerifierService,
         Request: Serialize,
     {
         let db = init_db(test_suite_name, "test_returns_valid_source").await;
 
-        let test_data = test_input_data::input_data_1(service.source_type(), MatchType::Partial);
+        let test_data = test_input_data::input_data_1(source_type, MatchType::Partial);
 
         let db_url = db.db_url();
         let verifier_addr = init_verifier_server(service, test_data.verifier_response).await;
@@ -147,13 +146,14 @@ pub mod test_cases {
         service: Service,
         route: &str,
         verification_request: Request,
+        source_type: SourceType,
     ) where
         Service: VerifierService,
         Request: Serialize,
     {
         let db = init_db(test_suite_name, "test_verify_then_search").await;
 
-        let test_data = test_input_data::input_data_1(service.source_type(), MatchType::Full);
+        let test_data = test_input_data::input_data_1(source_type, MatchType::Full);
         let creation_input = test_data.creation_input().unwrap();
         let deployed_bytecode = test_data.deployed_bytecode().unwrap();
 
