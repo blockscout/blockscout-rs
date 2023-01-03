@@ -33,28 +33,6 @@ paths:
             $ref: '#/definitions/v2SearchSourcesRequest'
       tags:
         - Database
-  /api/v2/health:
-    get:
-      summary: |-
-        If the requested service is unknown, the call will fail with status
-        NOT_FOUND.
-      operationId: Health_Check
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v2HealthCheckResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/googlerpcStatus'
-      parameters:
-        - name: service
-          in: query
-          required: false
-          type: string
-      tags:
-        - Health
   /api/v2/verifier/solidity/sources:verify-multi-part:
     post:
       operationId: SolidityVerifier_VerifyMultiPart
@@ -163,6 +141,28 @@ paths:
             $ref: '#/definitions/googlerpcStatus'
       tags:
         - VyperVerifier
+  /health:
+    get:
+      summary: |-
+        If the requested service is unknown, the call will fail with status
+        NOT_FOUND.
+      operationId: Health_Check
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v2HealthCheckResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: service
+          in: query
+          required: false
+          type: string
+      tags:
+        - Health
 definitions:
   HealthCheckResponseServingStatus:
     type: string

@@ -40,4 +40,4 @@ http:
     #################### Health ####################
 
     - selector: blockscout.ethBytecodeDb.v2.Health.Check
-      get: /api/v2/health
+      get: /health
