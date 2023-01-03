@@ -13,7 +13,7 @@ consumes:
 produces:
   - application/json
 paths:
-  /bytecodes/sources:search:
+  /api/v2/bytecodes/sources:search:
     post:
       operationId: Database_SearchSources
       responses:
@@ -33,7 +33,7 @@ paths:
             $ref: '#/definitions/v2SearchSourcesRequest'
       tags:
         - Database
-  /health:
+  /api/v2/health:
     get:
       summary: |-
         If the requested service is unknown, the call will fail with status
@@ -55,7 +55,7 @@ paths:
           type: string
       tags:
         - Health
-  /verifier/solidity/sources:verify-multi-part:
+  /api/v2/verifier/solidity/sources:verify-multi-part:
     post:
       operationId: SolidityVerifier_VerifyMultiPart
       responses:
@@ -75,7 +75,7 @@ paths:
             $ref: '#/definitions/v2VerifySolidityMultiPartRequest'
       tags:
         - SolidityVerifier
-  /verifier/solidity/sources:verify-standard-json:
+  /api/v2/verifier/solidity/sources:verify-standard-json:
     post:
       operationId: SolidityVerifier_VerifyStandardJson
       responses:
@@ -95,7 +95,7 @@ paths:
             $ref: '#/definitions/v2VerifySolidityStandardJsonRequest'
       tags:
         - SolidityVerifier
-  /verifier/solidity/versions:
+  /api/v2/verifier/solidity/versions:
     get:
       operationId: SolidityVerifier_ListCompilerVersions
       responses:
@@ -109,7 +109,7 @@ paths:
             $ref: '#/definitions/googlerpcStatus'
       tags:
         - SolidityVerifier
-  /verifier/sourcify/sources:verify:
+  /api/v2/verifier/sourcify/sources:verify:
     post:
       operationId: SourcifyVerifier_Verify
       responses:
@@ -129,7 +129,7 @@ paths:
             $ref: '#/definitions/v2VerifySourcifyRequest'
       tags:
         - SourcifyVerifier
-  /verifier/vyper/sources:verify-multi-part:
+  /api/v2/verifier/vyper/sources:verify-multi-part:
     post:
       operationId: VyperVerifier_VerifyMultiPart
       responses:
@@ -149,7 +149,7 @@ paths:
             $ref: '#/definitions/v2VerifyVyperMultiPartRequest'
       tags:
         - VyperVerifier
-  /verifier/vyper/versions:
+  /api/v2/verifier/vyper/versions:
     get:
       operationId: VyperVerifier_ListCompilerVersions
       responses:
