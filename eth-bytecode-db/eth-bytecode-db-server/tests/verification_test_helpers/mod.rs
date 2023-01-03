@@ -20,7 +20,7 @@ use tonic::transport::Uri;
 
 const DB_PREFIX: &str = "server";
 
-const DB_SEARCH_ROUTE: &str = "/bytecodes/sources:search";
+const DB_SEARCH_ROUTE: &str = "/api/v2/bytecodes/sources:search";
 
 #[async_trait]
 pub trait VerifierService {
