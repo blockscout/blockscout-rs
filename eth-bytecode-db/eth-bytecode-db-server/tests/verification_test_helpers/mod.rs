@@ -35,7 +35,7 @@ async fn init_db(test_suite_name: &str, test_name: &str) -> TestDbGuard {
     #[allow(unused_variables)]
     let db_url: Option<String> = None;
     // Uncomment if providing url explicitly is more convenient
-    let db_url = Some("postgres://postgres:admin@localhost:9432/".into());
+    // let db_url = Some("postgres://postgres:admin@localhost:9432/".into());
     let db_name = format!("{}_{}_{}", DB_PREFIX, test_suite_name, test_name);
     TestDbGuard::new(db_name.as_str(), db_url).await
 }
