@@ -23,7 +23,7 @@ use tokio::sync::{OnceCell, Semaphore};
 mod solidity_multiple_types;
 
 const TEST_CASES_DIR: &str = "tests/test_cases_vyper";
-const ROUTE: &str = "/verifier/vyper/sources:verify-multi-part";
+const ROUTE: &str = "/api/v2/verifier/vyper/sources:verify-multi-part";
 
 async fn global_service() -> &'static Arc<VyperVerifierService> {
     static SERVICE: OnceCell<Arc<VyperVerifierService>> = OnceCell::const_new();
