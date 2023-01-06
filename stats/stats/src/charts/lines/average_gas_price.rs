@@ -46,7 +46,7 @@ impl crate::Chart for AverageGasPrice {
             .await?;
 
         // TODO: remove mock
-        let data = mocked_double_lines(0.000000004..0.0001)
+        let data = mocked_double_lines(5.0..200.0)
             .into_iter()
             .map(|item| item.active_model(id));
         insert_double_data_many(db, data).await?;
