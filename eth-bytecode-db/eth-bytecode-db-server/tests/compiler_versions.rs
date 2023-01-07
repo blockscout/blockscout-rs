@@ -105,9 +105,8 @@ async fn vyper() {
     let verifier = MockVyperVerifierService::new();
     let verifier_response = smart_contract_verifier_v2::ListCompilerVersionsResponse {
         compiler_versions: vec![
-            "v0.5.11+commit.22be8592".into(),
-            "v0.6.7+commit.b8d736ae".into(),
-            "v0.8.7+commit.e28d00a7".into(),
+            "v0.3.1+commit.0463ea4c".into(),
+            "v0.3.6+commit.4a2124d0".into(),
         ],
     };
     test_versions(route, verifier, verifier_response).await;
