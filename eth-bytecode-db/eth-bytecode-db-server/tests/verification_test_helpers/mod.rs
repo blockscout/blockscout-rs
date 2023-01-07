@@ -35,7 +35,7 @@ async fn init_db(test_suite_name: &str, test_name: &str) -> TestDbGuard {
     TestDbGuard::new(db_name.as_str(), db_url).await
 }
 
-async fn init_verifier_server<Service, Response>(
+pub async fn init_verifier_server<Service, Response>(
     mut service: Service,
     verifier_response: Response,
 ) -> SocketAddr
@@ -46,7 +46,7 @@ where
     service.build_server().start().await
 }
 
-async fn init_eth_bytecode_db_server(db_url: &str, verifier_addr: SocketAddr) -> Url {
+pub async fn init_eth_bytecode_db_server(db_url: &str, verifier_addr: SocketAddr) -> Url {
     let verifier_uri = Uri::from_str(&format!("http://{}", verifier_addr)).unwrap();
 
     let settings = {
