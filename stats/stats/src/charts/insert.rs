@@ -1,6 +1,7 @@
 use chrono::NaiveDate;
 use entity::{chart_data_double, chart_data_int};
 use sea_orm::{prelude::*, sea_query, ConnectionTrait, FromQueryResult, Set};
+
 #[derive(FromQueryResult)]
 pub struct IntValueItem {
     pub date: NaiveDate,
