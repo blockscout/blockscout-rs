@@ -20,7 +20,7 @@ pub struct TotalBlocks {}
 #[async_trait]
 impl crate::Chart for TotalBlocks {
     fn name(&self) -> &str {
-        super::counters_list::TOTAL_BLOCKS
+        "totalBlocks"
     }
 
     async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {

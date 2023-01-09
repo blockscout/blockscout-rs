@@ -1,4 +1,3 @@
-use super::lines_list;
 use crate::{
     charts::insert::{insert_int_data_many, IntValueItem},
     UpdateError,
@@ -22,7 +21,7 @@ pub struct NewBlocks {}
 #[async_trait]
 impl crate::Chart for NewBlocks {
     fn name(&self) -> &str {
-        lines_list::NEW_BLOCKS
+        "newBlocks"
     }
 
     async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
