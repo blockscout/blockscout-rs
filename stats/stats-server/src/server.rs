@@ -37,14 +37,17 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
     }
 
     let charts: Vec<Arc<dyn Chart + Send + Sync + 'static>> = vec![
+        // finished counters
         Arc::new(counters::TotalBlocks::default()),
+        // finished lines
         Arc::new(lines::NewBlocks::default()),
+        // mock counters
         Arc::new(counters::MockCounterDouble::new(
             "averageBlockTime".into(),
             34.25,
         )),
         Arc::new(counters::MockCounterInt::new(
-            "completedTxns".into(),
+            "completedTransactions".into(),
             956276037263,
         )),
         Arc::new(counters::MockCounterInt::new(
@@ -60,8 +63,12 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
             32528,
         )),
         Arc::new(counters::MockCounterInt::new("totalTokens".into(), 1234)),
-        Arc::new(counters::MockCounterInt::new("totalTxns".into(), 84273733)),
-        Arc::new(lines::MockLineInt::new("accountGrowth".into(), 100..500)),
+        Arc::new(counters::MockCounterInt::new(
+            "totalTransactions".into(),
+            84273733,
+        )),
+        // mock lines
+        Arc::new(lines::MockLineInt::new("accountsGrowth".into(), 100..500)),
         Arc::new(lines::MockLineInt::new(
             "activeAccounts".into(),
             200..200_000,
@@ -99,7 +106,7 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
             100..10_000,
         )),
         Arc::new(lines::MockLineInt::new("newTxns".into(), 200..20_000)),
-        Arc::new(lines::MockLineDouble::new("txnFee".into(), 0.0001..0.01)),
+        Arc::new(lines::MockLineDouble::new("txnsFee".into(), 0.0001..0.01)),
         Arc::new(lines::MockLineInt::new(
             "txnsGrowth".into(),
             1000..10_000_000,
