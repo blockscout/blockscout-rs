@@ -34,13 +34,20 @@ impl UpdateService {
     }
 
     pub async fn update(&self) {
+        let full_update = stats::is_blockscout_indexing(&self.blockscout, &self.db)
+            .await
+            .unwrap_or_else(|e| {
+                tracing::error!("error during blockscout indexing check: {}", e);
+                true
+            });
+        tracing::info!(full_update = full_update, "start updating all charts");
         let handles = self.charts.iter().map(|chart| {
             let db = self.db.clone();
             let blockscout = self.blockscout.clone();
             let chart = chart.clone();
             tokio::spawn(async move {
                 tracing::info!("updating {}", chart.name());
-                let result = chart.update(&db, &blockscout).await;
+                let result = chart.update(&db, &blockscout, full_update).await;
                 if let Err(err) = result {
                     tracing::error!("error during updating {}: {}", chart.name(), err);
                 }

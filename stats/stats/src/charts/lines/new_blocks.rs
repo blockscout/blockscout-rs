@@ -33,17 +33,22 @@ impl crate::Chart for NewBlocks {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
+        full: bool,
     ) -> Result<(), UpdateError> {
         let id = crate::charts::find_chart(db, self.name())
             .await?
             .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
-        let last_row = chart_data_int::Entity::find()
-            .column(chart_data_int::Column::Date)
-            .filter(chart_data_int::Column::ChartId.eq(id))
-            .order_by_desc(chart_data_int::Column::Date)
-            .into_model::<ChartDate>()
-            .one(db)
-            .await?;
+        let last_row = if full {
+            None
+        } else {
+            chart_data_int::Entity::find()
+                .column(chart_data_int::Column::Date)
+                .filter(chart_data_int::Column::ChartId.eq(id))
+                .order_by_desc(chart_data_int::Column::Date)
+                .into_model::<ChartDate>()
+                .one(db)
+                .await?
+        };
 
         // TODO: rewrite using orm/build request with `where` clause
         let data = match last_row {
@@ -165,7 +170,7 @@ mod tests {
 
         mock_blockscout(&blockscout).await;
 
-        updater.update(&db, &blockscout).await.unwrap();
+        updater.update(&db, &blockscout, true).await.unwrap();
         let data = get_chart_data(&db, updater.name(), None, None)
             .await
             .unwrap();
@@ -199,7 +204,7 @@ mod tests {
 
         mock_blockscout(&blockscout).await;
 
-        updater.update(&db, &blockscout).await.unwrap();
+        updater.update(&db, &blockscout, true).await.unwrap();
         let data = get_chart_data(&db, updater.name(), None, None)
             .await
             .unwrap();
@@ -269,7 +274,7 @@ mod tests {
 
         mock_blockscout(&blockscout).await;
 
-        updater.update(&db, &blockscout).await.unwrap();
+        updater.update(&db, &blockscout, true).await.unwrap();
         let data = get_chart_data(&db, updater.name(), None, None)
             .await
             .unwrap();

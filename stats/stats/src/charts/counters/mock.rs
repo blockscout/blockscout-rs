@@ -38,6 +38,7 @@ impl crate::Chart for MockCounterInt {
         &self,
         db: &DatabaseConnection,
         _blockscout: &DatabaseConnection,
+        _full: bool,
     ) -> Result<(), UpdateError> {
         let chart_id = crate::charts::find_chart(db, self.name())
             .await?
@@ -84,6 +85,7 @@ impl crate::Chart for MockCounterDouble {
         &self,
         db: &DatabaseConnection,
         _blockscout: &DatabaseConnection,
+        _full: bool,
     ) -> Result<(), UpdateError> {
         let chart_id = crate::charts::find_chart(db, self.name())
             .await?
