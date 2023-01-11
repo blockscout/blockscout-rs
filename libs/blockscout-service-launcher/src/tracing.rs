@@ -11,10 +11,10 @@ pub fn init_logs(
     service_name: &str,
     tracing_settings: &TracingSettings,
     jaeger_settings: &JaegerSettings,
-) {
+) -> Result<(), anyhow::Error> {
     // If tracing is disabled, there is nothing to initialize
     if !tracing_settings.enabled {
-        return;
+        return Ok(());
     }
 
     let stdout = tracing_subscriber::fmt::layer().with_filter(
@@ -26,8 +26,7 @@ pub fn init_logs(
         // output logs (tracing) to stdout with log level taken from env (default is INFO)
         .with(stdout);
     if jaeger_settings.enabled {
-        let tracer = init_jaeger_tracer(service_name, &jaeger_settings.agent_endpoint)
-            .expect("failed to init tracer");
+        let tracer = init_jaeger_tracer(service_name, &jaeger_settings.agent_endpoint)?;
         registry
             // output traces to jaeger with default log level (default is DEBUG)
             .with(
@@ -38,8 +37,8 @@ pub fn init_logs(
             .try_init()
     } else {
         registry.try_init()
-    }
-    .expect("failed to register tracer with registry");
+    }?;
+    Ok(())
 }
 
 pub fn init_jaeger_tracer(
