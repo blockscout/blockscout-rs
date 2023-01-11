@@ -60,6 +60,20 @@ impl Default for MetricsSettings {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
+pub struct TracingSettings {
+    /// If disabled, tracing is not initialized for neither
+    /// stdout, nor jaeger (enabled by default).
+    pub enabled: bool,
+}
+
+impl Default for TracingSettings {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct JaegerSettings {
     pub enabled: bool,
     pub agent_endpoint: String,
