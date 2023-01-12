@@ -8,7 +8,7 @@ const MIN_BLOCK_KEY: &str = "min_block";
 pub async fn is_blockscout_indexing(
     blockscout: &DatabaseConnection,
     db: &DatabaseConnection,
-) -> Result<bool, DbErr> {
+) -> Result<(bool, i64), DbErr> {
     let min_block_blockscout = get_min_block_blockscout(blockscout).await?;
     let min_block_saved = get_min_block_saved(db).await?;
     tracing::info!(
@@ -16,15 +16,7 @@ pub async fn is_blockscout_indexing(
         min_block_saved = min_block_saved,
         "checking min block in blockscout database"
     );
-    Ok(min_block_blockscout < min_block_saved)
-}
-
-pub async fn save_indexing_info(
-    blockscout: &DatabaseConnection,
-    db: &DatabaseConnection,
-) -> Result<(), DbErr> {
-    let min_block_blockscout = get_min_block_blockscout(blockscout).await?;
-    set_min_block_saved(db, min_block_blockscout).await
+    Ok((min_block_blockscout < min_block_saved, min_block_blockscout))
 }
 
 #[derive(FromQueryResult)]
@@ -59,7 +51,7 @@ async fn get_min_block_saved(db: &DatabaseConnection) -> Result<i64, DbErr> {
     Ok(value)
 }
 
-async fn set_min_block_saved(db: &DatabaseConnection, value: i64) -> Result<(), DbErr> {
+pub async fn set_min_block_saved(db: &DatabaseConnection, value: i64) -> Result<(), DbErr> {
     kv_storage::set_value(db, MIN_BLOCK_KEY, &value.to_string()).await
 }
 

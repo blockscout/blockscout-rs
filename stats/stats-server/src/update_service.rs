@@ -34,12 +34,13 @@ impl UpdateService {
     }
 
     pub async fn update(&self) {
-        let full_update = stats::is_blockscout_indexing(&self.blockscout, &self.db)
-            .await
-            .unwrap_or_else(|e| {
-                tracing::error!("error during blockscout indexing check: {}", e);
-                true
-            });
+        let (full_update, min_block_blockscout) =
+            stats::is_blockscout_indexing(&self.blockscout, &self.db)
+                .await
+                .unwrap_or_else(|e| {
+                    tracing::error!("error during blockscout indexing check: {}", e);
+                    (true, i64::MAX)
+                });
         tracing::info!(full_update = full_update, "start updating all charts");
         let handles = self.charts.iter().map(|chart| {
             let db = self.db.clone();
@@ -54,7 +55,7 @@ impl UpdateService {
             })
         });
         futures::future::join_all(handles).await;
-        if let Err(e) = stats::save_indexing_info(&self.blockscout, &self.db).await {
+        if let Err(e) = stats::set_min_block_saved(&self.db, min_block_blockscout).await {
             tracing::error!("error during saving indexing info: {}", e);
         }
     }
