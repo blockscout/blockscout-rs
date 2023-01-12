@@ -72,6 +72,7 @@ impl crate::Chart for MockLineInt {
         &self,
         db: &DatabaseConnection,
         _blockscout: &DatabaseConnection,
+        _full: bool,
     ) -> Result<(), UpdateError> {
         let id = crate::charts::find_chart(db, self.name())
             .await?
@@ -117,6 +118,7 @@ impl crate::Chart for MockLineDouble {
         &self,
         db: &DatabaseConnection,
         _blockscout: &DatabaseConnection,
+        _full: bool,
     ) -> Result<(), UpdateError> {
         let id = crate::charts::find_chart(db, self.name())
             .await?
