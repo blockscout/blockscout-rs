@@ -170,12 +170,40 @@ mod tests {
 
         mock_blockscout(&blockscout).await;
 
+        // Note that update is not full, therefore there is no entry with date `2022-11-09`
+        updater.update(&db, &blockscout, false).await.unwrap();
+        let data = get_chart_data(&db, updater.name(), None, None)
+            .await
+            .unwrap();
+        let expected = LineChart {
+            chart: vec![
+                Point {
+                    date: "2022-11-10".into(),
+                    value: "3".into(),
+                },
+                Point {
+                    date: "2022-11-11".into(),
+                    value: "4".into(),
+                },
+                Point {
+                    date: "2022-11-12".into(),
+                    value: "1".into(),
+                },
+            ],
+        };
+        assert_eq!(expected, data);
+
+        // note that update is full, therefore there is entry with date `2022-11-09`
         updater.update(&db, &blockscout, true).await.unwrap();
         let data = get_chart_data(&db, updater.name(), None, None)
             .await
             .unwrap();
         let expected = LineChart {
             chart: vec![
+                Point {
+                    date: "2022-11-09".into(),
+                    value: "1".into(),
+                },
                 Point {
                     date: "2022-11-10".into(),
                     value: "3".into(),
@@ -274,7 +302,7 @@ mod tests {
 
         mock_blockscout(&blockscout).await;
 
-        updater.update(&db, &blockscout, true).await.unwrap();
+        updater.update(&db, &blockscout, false).await.unwrap();
         let data = get_chart_data(&db, updater.name(), None, None)
             .await
             .unwrap();
