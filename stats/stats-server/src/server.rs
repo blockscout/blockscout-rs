@@ -29,6 +29,9 @@ fn grpc_router<S: StatsService>(stats: Arc<S>) -> tonic::transport::server::Rout
 }
 
 pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
+    let charts_config = std::fs::read(settings.charts_config)?;
+    let charts_config = toml::from_slice(&charts_config)?;
+
     let db = Arc::new(Database::connect(&settings.db_url).await?);
     let blockscout = Arc::new(Database::connect(&settings.blockscout_db_url).await?);
 
@@ -123,9 +126,9 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
         update_service.run_cron(settings.update_schedule).await;
     });
 
-    let read_service = Arc::new(ReadService::new(db).await?);
+    let read_service = Arc::new(ReadService::new(db, charts_config).await?);
 
-    let grpc_router = grpc_router(read_service.clone());
+    let grpc_router = grpc_router(read_service.clone());    
     let http_router = HttpRouter {
         stats: read_service,
     };

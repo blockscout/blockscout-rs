@@ -103,7 +103,7 @@ mod tests {
 
         updater.update(&db, &blockscout).await.unwrap();
         let data = get_counters(&db).await.unwrap();
-        assert_eq!("7", data.counters[updater.name()]);
+        assert_eq!("7", data[updater.name()]);
     }
 
     #[tokio::test]
@@ -119,7 +119,7 @@ mod tests {
 
         updater.update(&db, &blockscout).await.unwrap();
         let data = get_counters(&db).await.unwrap();
-        assert_eq!("8", data.counters[updater.name()]);
+        assert_eq!("8", data[updater.name()]);
     }
 
     #[tokio::test]
@@ -145,6 +145,6 @@ mod tests {
 
         updater.update(&db, &blockscout).await.unwrap();
         let data = get_counters(&db).await.unwrap();
-        assert_eq!("7", data.counters[updater.name()]);
+        assert_eq!("7", data[updater.name()]);
     }
 }
