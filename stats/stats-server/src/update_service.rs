@@ -54,6 +54,9 @@ impl UpdateService {
             })
         });
         futures::future::join_all(handles).await;
+        if let Err(e) = stats::save_indexing_info(&self.blockscout, &self.db).await {
+            tracing::error!("error during saving indexing info: {}", e);
+        }
     }
 
     pub async fn run_cron(self: Arc<Self>, schedule: Schedule) {

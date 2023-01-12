@@ -16,12 +16,15 @@ pub async fn is_blockscout_indexing(
         min_block_saved = min_block_saved,
         "checking min block in blockscout database"
     );
-    if min_block_blockscout < min_block_saved {
-        set_min_block_saved(db, min_block_blockscout).await?;
-        Ok(true)
-    } else {
-        Ok(false)
-    }
+    Ok(min_block_blockscout < min_block_saved)
+}
+
+pub async fn save_indexing_info(
+    blockscout: &DatabaseConnection,
+    db: &DatabaseConnection,
+) -> Result<(), DbErr> {
+    let min_block_blockscout = get_min_block_blockscout(blockscout).await?;
+    set_min_block_saved(db, min_block_blockscout).await
 }
 
 #[derive(FromQueryResult)]
