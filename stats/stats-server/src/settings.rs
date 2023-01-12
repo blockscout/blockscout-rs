@@ -1,5 +1,6 @@
 use blockscout_service_launcher::{
     GrpcServerSettings, HttpServerSettings, JaegerSettings, MetricsSettings, ServerSettings,
+    TracingSettings,
 };
 use config::{Config, File};
 use cron::Schedule;
@@ -34,6 +35,7 @@ pub struct Settings {
     pub server: ServerSettings,
     pub metrics: MetricsSettings,
     pub jaeger: JaegerSettings,
+    pub tracing: TracingSettings,
 
     // Is required as we deny unknown fields, but allow users provide
     // path to config through PREFIX__CONFIG env variable. If removed,
@@ -61,6 +63,7 @@ impl Default for Settings {
             run_migrations: Default::default(),
             metrics: Default::default(),
             jaeger: Default::default(),
+            tracing: Default::default(),
             config_path: Default::default(),
         }
     }

@@ -37,6 +37,7 @@ impl crate::Chart for TotalBlocks {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
+        _full: bool,
     ) -> Result<(), UpdateError> {
         let id = crate::charts::find_chart(db, self.name())
             .await?
@@ -101,7 +102,7 @@ mod tests {
 
         fill_mock_blockscout_data(&blockscout, "2022-11-11").await;
 
-        updater.update(&db, &blockscout).await.unwrap();
+        updater.update(&db, &blockscout, true).await.unwrap();
         let data = get_counters(&db).await.unwrap();
         assert_eq!("7", data.counters[updater.name()]);
     }
@@ -117,7 +118,7 @@ mod tests {
 
         fill_mock_blockscout_data(&blockscout, "2022-11-12").await;
 
-        updater.update(&db, &blockscout).await.unwrap();
+        updater.update(&db, &blockscout, true).await.unwrap();
         let data = get_counters(&db).await.unwrap();
         assert_eq!("8", data.counters[updater.name()]);
     }
@@ -143,7 +144,7 @@ mod tests {
 
         fill_mock_blockscout_data(&blockscout, "2022-11-11").await;
 
-        updater.update(&db, &blockscout).await.unwrap();
+        updater.update(&db, &blockscout, true).await.unwrap();
         let data = get_counters(&db).await.unwrap();
         assert_eq!("7", data.counters[updater.name()]);
     }
