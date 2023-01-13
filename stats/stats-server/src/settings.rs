@@ -6,7 +6,7 @@ use config::{Config, File};
 use cron::Schedule;
 use serde::{de, Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
-use std::{net::SocketAddr, str::FromStr};
+use std::{net::SocketAddr, path::PathBuf, str::FromStr};
 
 /// Wrapper under [`serde::de::IgnoredAny`] which implements
 /// [`PartialEq`] and [`Eq`] for fields to be ignored.
@@ -31,6 +31,7 @@ pub struct Settings {
     pub blockscout_db_url: String,
     #[serde_as(as = "DisplayFromStr")]
     pub update_schedule: Schedule,
+    pub charts_config: PathBuf,
 
     pub server: ServerSettings,
     pub metrics: MetricsSettings,
@@ -59,6 +60,7 @@ impl Default for Settings {
             },
             db_url: Default::default(),
             update_schedule: Schedule::from_str("0 0 1 * * * *").unwrap(),
+            charts_config: PathBuf::from_str("config/charts.toml").unwrap(),
             blockscout_db_url: Default::default(),
             run_migrations: Default::default(),
             metrics: Default::default(),
