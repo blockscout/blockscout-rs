@@ -3,9 +3,10 @@ use opentelemetry::{
     sdk::{self, propagation::TraceContextPropagator},
     trace::TraceError,
 };
-use tracing_subscriber::{filter::LevelFilter, layer::SubscriberExt, prelude::*};
+use std::marker::Send;
+use tracing_subscriber::{filter::LevelFilter, layer::SubscriberExt, prelude::*, Layer, Registry};
 
-use crate::{JaegerSettings, TracingSettings};
+use crate::{JaegerSettings, TracingFormat, TracingSettings};
 
 pub fn init_logs(
     service_name: &str,
@@ -17,11 +18,23 @@ pub fn init_logs(
         return Ok(());
     }
 
-    let stdout = tracing_subscriber::fmt::layer().with_filter(
-        tracing_subscriber::EnvFilter::builder()
-            .with_default_directive(LevelFilter::INFO.into())
-            .from_env_lossy(),
-    );
+    let stdout: Box<(dyn Layer<Registry> + Sync + Send + 'static)> = match tracing_settings.format {
+        TracingFormat::Default => Box::new(
+            tracing_subscriber::fmt::layer().with_filter(
+                tracing_subscriber::EnvFilter::builder()
+                    .with_default_directive(LevelFilter::INFO.into())
+                    .from_env_lossy(),
+            ),
+        ),
+        TracingFormat::Json => Box::new(
+            tracing_subscriber::fmt::layer().json().with_filter(
+                tracing_subscriber::EnvFilter::builder()
+                    .with_default_directive(LevelFilter::INFO.into())
+                    .from_env_lossy(),
+            ),
+        ),
+    };
+
     let registry = tracing_subscriber::registry()
         // output logs (tracing) to stdout with log level taken from env (default is INFO)
         .with(stdout);

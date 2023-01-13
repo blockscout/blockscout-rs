@@ -33,17 +33,22 @@ impl crate::Chart for NewBlocks {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
+        full: bool,
     ) -> Result<(), UpdateError> {
         let id = crate::charts::find_chart(db, self.name())
             .await?
             .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
-        let last_row = chart_data_int::Entity::find()
-            .column(chart_data_int::Column::Date)
-            .filter(chart_data_int::Column::ChartId.eq(id))
-            .order_by_desc(chart_data_int::Column::Date)
-            .into_model::<ChartDate>()
-            .one(db)
-            .await?;
+        let last_row = if full {
+            None
+        } else {
+            chart_data_int::Entity::find()
+                .column(chart_data_int::Column::Date)
+                .filter(chart_data_int::Column::ChartId.eq(id))
+                .order_by_desc(chart_data_int::Column::Date)
+                .into_model::<ChartDate>()
+                .one(db)
+                .await?
+        };
 
         // TODO: rewrite using orm/build request with `where` clause
         let data = match last_row {
@@ -164,7 +169,8 @@ mod tests {
 
         mock_blockscout(&blockscout).await;
 
-        updater.update(&db, &blockscout).await.unwrap();
+        // Note that update is not full, therefore there is no entry with date `2022-11-09`
+        updater.update(&db, &blockscout, false).await.unwrap();
         let data = get_chart_data(&db, updater.name(), None, None)
             .await
             .unwrap();
@@ -183,6 +189,33 @@ mod tests {
             },
         ];
         assert_eq!(expected, data);
+
+        // note that update is full, therefore there is entry with date `2022-11-09`
+        updater.update(&db, &blockscout, true).await.unwrap();
+        let data = get_chart_data(&db, updater.name(), None, None)
+            .await
+            .unwrap();
+        let expected = LineChart {
+            chart: vec![
+                Point {
+                    date: "2022-11-09".into(),
+                    value: "1".into(),
+                },
+                Point {
+                    date: "2022-11-10".into(),
+                    value: "3".into(),
+                },
+                Point {
+                    date: "2022-11-11".into(),
+                    value: "4".into(),
+                },
+                Point {
+                    date: "2022-11-12".into(),
+                    value: "1".into(),
+                },
+            ],
+        };
+        assert_eq!(expected, data);
     }
 
     #[tokio::test]
@@ -196,7 +229,7 @@ mod tests {
 
         mock_blockscout(&blockscout).await;
 
-        updater.update(&db, &blockscout).await.unwrap();
+        updater.update(&db, &blockscout, true).await.unwrap();
         let data = get_chart_data(&db, updater.name(), None, None)
             .await
             .unwrap();
@@ -264,7 +297,7 @@ mod tests {
 
         mock_blockscout(&blockscout).await;
 
-        updater.update(&db, &blockscout).await.unwrap();
+        updater.update(&db, &blockscout, false).await.unwrap();
         let data = get_chart_data(&db, updater.name(), None, None)
             .await
             .unwrap();

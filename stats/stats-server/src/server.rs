@@ -1,7 +1,7 @@
 use crate::{read_service::ReadService, settings::Settings, update_service::UpdateService};
 use actix_web::web::ServiceConfig;
 use blockscout_service_launcher::LaunchSettings;
-use sea_orm::Database;
+use sea_orm::{ConnectOptions, Database};
 use stats::{counters, lines, migration::MigratorTrait, Chart};
 use stats_proto::blockscout::stats::v1::{
     stats_service_actix::route_stats_service,
@@ -32,8 +32,25 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
     let charts_config = std::fs::read(settings.charts_config)?;
     let charts_config = toml::from_slice(&charts_config)?;
 
-    let db = Arc::new(Database::connect(&settings.db_url).await?);
-    let blockscout = Arc::new(Database::connect(&settings.blockscout_db_url).await?);
+    let launch_settings = LaunchSettings {
+        service_name: "stats".to_owned(),
+        server: settings.server,
+        metrics: settings.metrics,
+        tracing: settings.tracing,
+        jaeger: settings.jaeger,
+    };
+    blockscout_service_launcher::init_logs(
+        &launch_settings.service_name,
+        &launch_settings.tracing,
+        &launch_settings.jaeger,
+    )?;
+    let mut opt = ConnectOptions::new(settings.db_url.clone());
+    opt.sqlx_logging_level(tracing::log::LevelFilter::Debug);
+    let db = Arc::new(Database::connect(opt).await?);
+
+    let mut opt = ConnectOptions::new(settings.blockscout_db_url.clone());
+    opt.sqlx_logging_level(tracing::log::LevelFilter::Debug);
+    let blockscout = Arc::new(Database::connect(opt).await?);
 
     if settings.run_migrations {
         stats::migration::Migrator::up(&db, None).await?;
@@ -131,12 +148,6 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
     let grpc_router = grpc_router(read_service.clone());
     let http_router = HttpRouter {
         stats: read_service,
-    };
-    let launch_settings = LaunchSettings {
-        service_name: "stats".to_owned(),
-        server: settings.server,
-        metrics: settings.metrics,
-        jaeger: settings.jaeger,
     };
 
     blockscout_service_launcher::launch(&launch_settings, http_router, grpc_router).await

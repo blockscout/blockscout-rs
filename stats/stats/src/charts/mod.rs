@@ -20,6 +20,7 @@ pub trait Chart {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
+        full: bool,
     ) -> Result<(), UpdateError>;
 }
 
