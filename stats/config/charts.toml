@@ -1,34 +1,35 @@
 [[counters]]
 id = "totalBlocks"
-label = "Total Blocks"
+title = "Total Blocks"
 
 [[counters]]
 id = "averageBlockTime"
-label = "Average Block Time"
+title = "Average Block Time"
+units = "s"
 
 [[counters]]
 id = "completedTransactions"
-label = "Completed Transactions"
+title = "Completed Transactions"
 
 [[counters]]
 id = "totalAccounts"
-label = "Total Accounts"
+title = "Total Accounts"
 
 [[counters]]
 id = "totalNativeCoinHolders"
-label = "Total Native Coin Holders"
+title = "Total Native Coin Holders"
 
 [[counters]]
 id = "totalNativeCoinTransfers"
-label = "Total Native Coin Transfers"
+title = "Total Native Coin Transfers"
 
 [[counters]]
 id = "totalTokens"
-label = "Total Tokens"
+title = "Total Tokens"
 
 [[counters]]
 id = "totalTransactions"
-label = "Total Transactions"
+title = "Total Transactions"
 
 
 [[lines.sections]]

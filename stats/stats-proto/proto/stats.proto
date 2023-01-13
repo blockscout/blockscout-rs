@@ -15,7 +15,8 @@ message GetCountersRequest {}
 message Counter {
   string id = 1;
   string value = 2;
-  string label = 3;
+  string title = 3;
+  optional string units = 4;
 }
 
 message Counters { repeated Counter counters = 1; }

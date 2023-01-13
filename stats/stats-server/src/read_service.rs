@@ -13,7 +13,8 @@ use tonic::{Request, Response, Status};
 #[derive(Debug, Clone, Deserialize)]
 pub struct CounterInfo {
     pub id: String,
-    pub label: String,
+    pub title: String,
+    pub units: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -66,9 +67,10 @@ impl StatsService for ReadService {
             .iter()
             .filter_map(|info| {
                 data.remove(&info.id).map(|value| Counter {
-                    label: info.label.clone(),
                     id: info.id.clone(),
                     value,
+                    title: info.title.clone(),
+                    units: info.units.clone(),
                 })
             })
             .collect();

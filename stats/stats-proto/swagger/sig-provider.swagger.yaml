@@ -121,7 +121,9 @@ definitions:
     properties:
       id:
         type: string
-      label:
+      title:
+        type: string
+      units:
         type: string
       value:
         type: string
