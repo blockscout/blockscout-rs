@@ -68,6 +68,8 @@ stats:
       _default: info
     STATS__RUN_MIGRATIONS:
       _default: true
+    STATS__TRACING__FORMAT:
+      _default: json
 
 postgres:
   enabled: true
