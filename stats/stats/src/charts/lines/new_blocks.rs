@@ -195,26 +195,24 @@ mod tests {
         let data = get_chart_data(&db, updater.name(), None, None)
             .await
             .unwrap();
-        let expected = LineChart {
-            chart: vec![
-                Point {
-                    date: "2022-11-09".into(),
-                    value: "1".into(),
-                },
-                Point {
-                    date: "2022-11-10".into(),
-                    value: "3".into(),
-                },
-                Point {
-                    date: "2022-11-11".into(),
-                    value: "4".into(),
-                },
-                Point {
-                    date: "2022-11-12".into(),
-                    value: "1".into(),
-                },
-            ],
-        };
+        let expected = vec![
+            Point {
+                date: NaiveDate::from_str("2022-11-09").unwrap(),
+                value: "1".into(),
+            },
+            Point {
+                date: NaiveDate::from_str("2022-11-10").unwrap(),
+                value: "3".into(),
+            },
+            Point {
+                date: NaiveDate::from_str("2022-11-11").unwrap(),
+                value: "4".into(),
+            },
+            Point {
+                date: NaiveDate::from_str("2022-11-12").unwrap(),
+                value: "1".into(),
+            },
+        ];
         assert_eq!(expected, data);
     }
 

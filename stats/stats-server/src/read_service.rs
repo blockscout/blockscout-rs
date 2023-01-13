@@ -7,7 +7,7 @@ use stats_proto::blockscout::stats::v1::{
     stats_service_server::StatsService, Counter, Counters, GetCountersRequest, GetLineChartRequest,
     GetLineChartsRequest, LineChart, LineCharts, Point,
 };
-use std::{str::FromStr, sync::Arc};
+use std::{collections::HashSet, str::FromStr, sync::Arc};
 use tonic::{Request, Response, Status};
 
 #[derive(Debug, Clone, Deserialize)]
@@ -26,14 +26,20 @@ pub struct ChartsConfig {
 pub struct ReadService {
     db: Arc<DatabaseConnection>,
     charts_config: ChartsConfig,
+    charts_filter: HashSet<String>,
 }
 
 impl ReadService {
     pub async fn new(
         db: Arc<DatabaseConnection>,
         charts_config: ChartsConfig,
+        charts_filter: HashSet<String>,
     ) -> Result<Self, DbErr> {
-        Ok(Self { db, charts_config })
+        Ok(Self {
+            db,
+            charts_config,
+            charts_filter,
+        })
     }
 }
 
@@ -75,6 +81,12 @@ impl StatsService for ReadService {
         request: Request<GetLineChartRequest>,
     ) -> Result<Response<LineChart>, Status> {
         let request = request.into_inner();
+        if !self.charts_filter.contains(&request.name) {
+            return Err(tonic::Status::not_found(format!(
+                "chart {} not found",
+                request.name
+            )));
+        }
         let from = request
             .from
             .and_then(|date| NaiveDate::from_str(&date).ok());
