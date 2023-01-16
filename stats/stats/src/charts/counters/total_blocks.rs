@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use blockscout_db::entity::blocks;
 use chrono::NaiveDateTime;
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, FromQueryResult, QueryOrder, QuerySelect};
+use sea_orm::{prelude::*, sea_query::Expr, FromQueryResult, QuerySelect};
 
 #[derive(FromQueryResult)]
 struct TotalBlocksData {
@@ -38,9 +38,9 @@ impl crate::Chart for TotalBlocks {
             .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
 
         let data = blocks::Entity::find()
-            .column(blocks::Column::Number)
-            .column(blocks::Column::Timestamp)
-            .order_by_desc(blocks::Column::Number)
+            .select_only()
+            .column_as(Expr::col(blocks::Column::Number).count(), "number")
+            .column_as(Expr::col(blocks::Column::Timestamp).max(), "timestamp")
             .into_model::<TotalBlocksData>()
             .one(blockscout)
             .await?;
@@ -98,7 +98,7 @@ mod tests {
 
         updater.update(&db, &blockscout, true).await.unwrap();
         let data = get_counters(&db).await.unwrap();
-        assert_eq!("7", data[updater.name()]);
+        assert_eq!("8", data[updater.name()]);
     }
 
     #[tokio::test]
@@ -114,7 +114,7 @@ mod tests {
 
         updater.update(&db, &blockscout, true).await.unwrap();
         let data = get_counters(&db).await.unwrap();
-        assert_eq!("8", data[updater.name()]);
+        assert_eq!("9", data[updater.name()]);
     }
 
     #[tokio::test]
@@ -140,6 +140,6 @@ mod tests {
 
         updater.update(&db, &blockscout, true).await.unwrap();
         let data = get_counters(&db).await.unwrap();
-        assert_eq!("7", data[updater.name()]);
+        assert_eq!("8", data[updater.name()]);
     }
 }
