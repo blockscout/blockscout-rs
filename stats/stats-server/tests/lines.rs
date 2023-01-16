@@ -2,6 +2,7 @@ use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use stats::tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data};
 use stats_server::{stats, Settings};
+use std::{path::PathBuf, str::FromStr};
 
 fn client() -> ClientWithMiddleware {
     let retry_policy = ExponentialBackoff::builder()
@@ -21,6 +22,7 @@ async fn test_lines_ok() {
     fill_mock_blockscout_data(&blockscout, "2022-11-11").await;
 
     let mut settings = Settings::default();
+    settings.charts_config = PathBuf::from_str("../config/charts.toml").unwrap();
     settings.server.grpc.enabled = false;
     settings.metrics.enabled = false;
     settings.jaeger.enabled = false;
@@ -31,7 +33,7 @@ async fn test_lines_ok() {
 
     let _server_handle = {
         let settings = settings.clone();
-        tokio::spawn(async move { stats(settings).await })
+        tokio::spawn(async move { stats(settings).await.unwrap() })
     };
     // Sleep until server will start and calculate all values
     tokio::time::sleep(std::time::Duration::from_secs(5)).await;
@@ -55,7 +57,7 @@ async fn test_lines_ok() {
         "txnsGrowth",
     ] {
         let resp = client
-            .get(format!("{base}/api/v1/charts/line?name={line_name}"))
+            .get(format!("{base}/api/v1/lines/{line_name}"))
             .send()
             .await
             .expect("failed to connect to server");

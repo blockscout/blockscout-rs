@@ -1,4 +1,8 @@
-use crate::{read_service::ReadService, settings::Settings, update_service::UpdateService};
+use crate::{
+    read_service::{ChartsConfig, ReadService},
+    settings::Settings,
+    update_service::UpdateService,
+};
 use actix_web::web::ServiceConfig;
 use blockscout_service_launcher::LaunchSettings;
 use sea_orm::{ConnectOptions, Database};
@@ -7,7 +11,7 @@ use stats_proto::blockscout::stats::v1::{
     stats_service_actix::route_stats_service,
     stats_service_server::{StatsService, StatsServiceServer},
 };
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 pub fn http_configure(config: &mut ServiceConfig, s: Arc<impl StatsService>) {
     route_stats_service(config, s);
@@ -29,6 +33,9 @@ fn grpc_router<S: StatsService>(stats: Arc<S>) -> tonic::transport::server::Rout
 }
 
 pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
+    let charts_config = std::fs::read(settings.charts_config)?;
+    let charts_config: ChartsConfig = toml::from_slice(&charts_config)?;
+
     let launch_settings = LaunchSettings {
         service_name: "stats".to_owned(),
         server: settings.server,
@@ -129,6 +136,33 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
             1000..10_000_000,
         )),
     ];
+
+    let charts_filter: HashSet<_> = charts_config
+        .counters
+        .iter()
+        .map(|counter| counter.id.clone())
+        .chain(
+            charts_config
+                .lines
+                .sections
+                .iter()
+                .flat_map(|section| section.charts.iter().map(|chart| chart.id.clone())),
+        )
+        .collect();
+
+    let mut charts_double_filter = charts_filter.clone();
+    let charts: Vec<_> = charts
+        .into_iter()
+        .filter(|chart| charts_double_filter.remove(chart.name()))
+        .collect();
+
+    if !charts_double_filter.is_empty() {
+        return Err(anyhow::anyhow!(
+            "some of the chart ids from config are unknown: {:?}",
+            charts_double_filter
+        ));
+    }
+
     // TODO: may be run this with migrations or have special config
     for chart in charts.iter() {
         chart.create(&db).await?;
@@ -140,7 +174,7 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
         update_service.run_cron(settings.update_schedule).await;
     });
 
-    let read_service = Arc::new(ReadService::new(db).await?);
+    let read_service = Arc::new(ReadService::new(db, charts_config, charts_filter).await?);
 
     let grpc_router = grpc_router(read_service.clone());
     let http_router = HttpRouter {
