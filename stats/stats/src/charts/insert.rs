@@ -1,6 +1,7 @@
 use chrono::NaiveDate;
 use entity::{chart_data_double, chart_data_int};
 use sea_orm::{prelude::*, sea_query, ConnectionTrait, FromQueryResult, Set};
+
 #[derive(FromQueryResult)]
 pub struct IntValueItem {
     pub date: NaiveDate,
@@ -42,9 +43,7 @@ pub async fn insert_int_data<C: ConnectionTrait>(
     chart_id: i32,
     value: IntValueItem,
 ) -> Result<(), DbErr> {
-    let data = value.active_model(chart_id);
-    insert_int_data_many(db, vec![data].into_iter()).await?;
-    Ok(())
+    insert_int_data_many(db, std::iter::once(value.active_model(chart_id))).await
 }
 
 pub async fn insert_double_data<C: ConnectionTrait>(
@@ -52,15 +51,13 @@ pub async fn insert_double_data<C: ConnectionTrait>(
     chart_id: i32,
     value: DoubleValueItem,
 ) -> Result<(), DbErr> {
-    let data = value.active_model(chart_id);
-    insert_double_data_many(db, vec![data].into_iter()).await?;
-    Ok(())
+    insert_double_data_many(db, std::iter::once(value.active_model(chart_id))).await
 }
 
 pub async fn insert_int_data_many<C, D>(db: &C, data: D) -> Result<(), DbErr>
 where
     C: ConnectionTrait,
-    D: Iterator<Item = chart_data_int::ActiveModel>,
+    D: IntoIterator<Item = chart_data_int::ActiveModel>,
 {
     chart_data_int::Entity::insert_many(data)
         .on_conflict(
@@ -79,7 +76,7 @@ where
 pub async fn insert_double_data_many<C, D>(db: &C, data: D) -> Result<(), DbErr>
 where
     C: ConnectionTrait,
-    D: Iterator<Item = chart_data_double::ActiveModel>,
+    D: IntoIterator<Item = chart_data_double::ActiveModel>,
 {
     chart_data_double::Entity::insert_many(data)
         .on_conflict(

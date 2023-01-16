@@ -11,15 +11,26 @@ use sea_orm::{prelude::*, sea_query, FromQueryResult, QuerySelect, Set};
 use thiserror::Error;
 
 #[async_trait]
-pub trait Chart {
+pub trait Chart: Sync {
     fn name(&self) -> &str;
+    fn chart_type(&self) -> ChartType;
 
-    async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr>;
+    async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
+        crate::charts::create_chart(
+            db,
+            self.name().into(),
+            self.chart_type(),
+            // TODO: remove
+            ChartValueType::Int,
+        )
+        .await
+    }
 
     async fn update(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
+        full: bool,
     ) -> Result<(), UpdateError>;
 }
 

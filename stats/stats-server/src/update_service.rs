@@ -1,13 +1,14 @@
 use chrono::Utc;
 use cron::Schedule;
 use sea_orm::{DatabaseConnection, DbErr};
-use stats::Chart;
 use std::sync::Arc;
+
+use crate::charts::Charts;
 
 pub struct UpdateService {
     db: Arc<DatabaseConnection>,
     blockscout: Arc<DatabaseConnection>,
-    charts: Vec<Arc<dyn Chart + Send + Sync + 'static>>,
+    charts: Arc<Charts>,
 }
 
 fn time_till_next_call(schedule: &Schedule) -> std::time::Duration {
@@ -24,7 +25,7 @@ impl UpdateService {
     pub async fn new(
         db: Arc<DatabaseConnection>,
         blockscout: Arc<DatabaseConnection>,
-        charts: Vec<Arc<dyn Chart + Send + Sync + 'static>>,
+        charts: Arc<Charts>,
     ) -> Result<Self, DbErr> {
         Ok(Self {
             db,
@@ -34,19 +35,30 @@ impl UpdateService {
     }
 
     pub async fn update(&self) {
-        let handles = self.charts.iter().map(|chart| {
+        let (full_update, min_block_blockscout) =
+            stats::is_blockscout_indexing(&self.blockscout, &self.db)
+                .await
+                .unwrap_or_else(|e| {
+                    tracing::error!("error during blockscout indexing check: {}", e);
+                    (true, i64::MAX)
+                });
+        tracing::info!(full_update = full_update, "start updating all charts");
+        let handles = self.charts.charts.iter().map(|chart| {
             let db = self.db.clone();
             let blockscout = self.blockscout.clone();
             let chart = chart.clone();
             tokio::spawn(async move {
                 tracing::info!("updating {}", chart.name());
-                let result = chart.update(&db, &blockscout).await;
+                let result = chart.update(&db, &blockscout, full_update).await;
                 if let Err(err) = result {
                     tracing::error!("error during updating {}: {}", chart.name(), err);
                 }
             })
         });
         futures::future::join_all(handles).await;
+        if let Err(e) = stats::set_min_block_saved(&self.db, min_block_blockscout).await {
+            tracing::error!("error during saving indexing info: {}", e);
+        }
     }
 
     pub async fn run_cron(self: Arc<Self>, schedule: Schedule) {

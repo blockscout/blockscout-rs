@@ -25,7 +25,7 @@ use std::{
 use tokio::sync::{OnceCell, Semaphore};
 
 const CONTRACTS_DIR: &str = "tests/contracts";
-const ROUTE: &str = "/verifier/solidity/sources:verify-multi-part";
+const ROUTE: &str = "/api/v2/verifier/solidity/sources:verify-multi-part";
 
 async fn global_service() -> &'static Arc<SolidityVerifierService> {
     static SERVICE: OnceCell<Arc<SolidityVerifierService>> = OnceCell::const_new();

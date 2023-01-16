@@ -2,7 +2,6 @@ use crate::{
     metrics::Metrics,
     router::{configure_router, HttpRouter},
     settings::{JaegerSettings, MetricsSettings, ServerSettings, TracingSettings},
-    tracing::init_logs,
 };
 use actix_web::{App, HttpServer};
 use actix_web_prom::PrometheusMetrics;
@@ -24,8 +23,6 @@ pub async fn launch<R>(
 where
     R: HttpRouter + Send + Sync + Clone + 'static,
 {
-    init_logs(&settings.service_name, &settings.tracing, &settings.jaeger);
-
     let metrics = settings
         .metrics
         .enabled

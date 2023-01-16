@@ -5,8 +5,8 @@ use crate::{
 use async_trait::async_trait;
 use blockscout_db::entity::blocks;
 use chrono::NaiveDateTime;
-use entity::sea_orm_active_enums::{ChartType, ChartValueType};
-use sea_orm::{DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QueryOrder, QuerySelect};
+use entity::sea_orm_active_enums::ChartType;
+use sea_orm::{prelude::*, sea_query::Expr, FromQueryResult, QuerySelect};
 
 #[derive(FromQueryResult)]
 struct TotalBlocksData {
@@ -20,32 +20,27 @@ pub struct TotalBlocks {}
 #[async_trait]
 impl crate::Chart for TotalBlocks {
     fn name(&self) -> &str {
-        super::counters_list::TOTAL_BLOCKS
+        "totalBlocks"
     }
 
-    async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
-        crate::charts::create_chart(
-            db,
-            self.name().into(),
-            ChartType::Counter,
-            ChartValueType::Int,
-        )
-        .await
+    fn chart_type(&self) -> ChartType {
+        ChartType::Counter
     }
 
     async fn update(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
+        _full: bool,
     ) -> Result<(), UpdateError> {
         let id = crate::charts::find_chart(db, self.name())
             .await?
             .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
 
         let data = blocks::Entity::find()
-            .column(blocks::Column::Number)
-            .column(blocks::Column::Timestamp)
-            .order_by_desc(blocks::Column::Number)
+            .select_only()
+            .column_as(Expr::col(blocks::Column::Number).count(), "number")
+            .column_as(Expr::col(blocks::Column::Timestamp).max(), "timestamp")
             .into_model::<TotalBlocksData>()
             .one(blockscout)
             .await?;
@@ -101,9 +96,9 @@ mod tests {
 
         fill_mock_blockscout_data(&blockscout, "2022-11-11").await;
 
-        updater.update(&db, &blockscout).await.unwrap();
+        updater.update(&db, &blockscout, true).await.unwrap();
         let data = get_counters(&db).await.unwrap();
-        assert_eq!("7", data.counters[updater.name()]);
+        assert_eq!("8", data[updater.name()]);
     }
 
     #[tokio::test]
@@ -117,9 +112,9 @@ mod tests {
 
         fill_mock_blockscout_data(&blockscout, "2022-11-12").await;
 
-        updater.update(&db, &blockscout).await.unwrap();
+        updater.update(&db, &blockscout, true).await.unwrap();
         let data = get_counters(&db).await.unwrap();
-        assert_eq!("8", data.counters[updater.name()]);
+        assert_eq!("9", data[updater.name()]);
     }
 
     #[tokio::test]
@@ -143,8 +138,8 @@ mod tests {
 
         fill_mock_blockscout_data(&blockscout, "2022-11-11").await;
 
-        updater.update(&db, &blockscout).await.unwrap();
+        updater.update(&db, &blockscout, true).await.unwrap();
         let data = get_counters(&db).await.unwrap();
-        assert_eq!("7", data.counters[updater.name()]);
+        assert_eq!("8", data[updater.name()]);
     }
 }

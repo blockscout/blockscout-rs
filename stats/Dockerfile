@@ -41,4 +41,6 @@ COPY --from=build /app/target/release/stats-server /app/stats-server
 RUN chown -R $APP_USER:$APP_USER /app
 USER app
 
+COPY ./config/charts.toml ./config/charts.toml 
+
 CMD ["./stats-server"]

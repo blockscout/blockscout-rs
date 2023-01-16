@@ -1,14 +1,10 @@
-use crate::{
-    charts::insert::{DoubleValueItem, IntValueItem},
-    counters::counters_list,
-};
+use crate::charts::insert::{DoubleValueItem, IntValueItem};
 use chrono::NaiveDate;
 use entity::{chart_data_double, chart_data_int, charts, sea_orm_active_enums::ChartValueType};
 use sea_orm::{
     ColumnTrait, DatabaseConnection, DbBackend, DbErr, EntityTrait, FromQueryResult, QueryFilter,
     QueryOrder, QuerySelect, Statement,
 };
-use stats_proto::blockscout::stats::v1::{Counters, LineChart, Point};
 use std::collections::HashMap;
 use thiserror::Error;
 
@@ -23,7 +19,6 @@ pub enum ReadError {
 #[derive(Debug, FromQueryResult)]
 struct CounterData {
     name: String,
-    date: NaiveDate,
     value: String,
 }
 
@@ -33,12 +28,11 @@ enum Data {
     Double,
 }
 
-pub async fn get_counters(db: &DatabaseConnection) -> Result<Counters, ReadError> {
+pub async fn get_counters(db: &DatabaseConnection) -> Result<HashMap<String, String>, ReadError> {
     let int_counters = get_counters_data(db, Data::Int).await?;
     let double_counters = get_counters_data(db, Data::Double).await?;
 
     let counters = int_counters.into_iter().chain(double_counters).collect();
-    let counters = Counters { counters };
     Ok(counters)
 }
 
@@ -54,7 +48,7 @@ async fn get_counters_data(
         DbBackend::Postgres,
         format!(
             r#"
-            SELECT distinct on (charts.id) charts.name, data.date, data.value::text
+            SELECT distinct on (charts.id) charts.name, data.value::text
             FROM "{}" "data"
             INNER JOIN "charts"
                 ON data.chart_id = charts.id
@@ -67,21 +61,18 @@ async fn get_counters_data(
     .all(db)
     .await?;
 
-    let data: HashMap<_, _> = data
+    let counters: HashMap<_, _> = data
         .into_iter()
-        .map(|data| (data.name, (data.date, data.value)))
-        .collect();
-
-    let counters: HashMap<String, String> = data
-        .into_iter()
-        .filter_map(|(counter_name, (_, value))| {
-            counters_list::COUNTERS
-                .contains(&counter_name.as_str())
-                .then_some((counter_name, value))
-        })
+        .map(|data| (data.name, data.value))
         .collect();
 
     Ok(counters)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Point {
+    pub date: NaiveDate,
+    pub value: String,
 }
 
 pub async fn get_chart_data(
@@ -89,7 +80,7 @@ pub async fn get_chart_data(
     name: &str,
     from: Option<NaiveDate>,
     to: Option<NaiveDate>,
-) -> Result<LineChart, ReadError> {
+) -> Result<Vec<Point>, ReadError> {
     let chart = charts::Entity::find()
         .column(charts::Column::Id)
         .filter(charts::Column::Name.eq(name))
@@ -102,7 +93,7 @@ pub async fn get_chart_data(
             .await?
             .into_iter()
             .map(|row| Point {
-                date: row.date.format("%Y-%m-%d").to_string(),
+                date: row.date,
                 value: row.value.to_string(),
             })
             .collect(),
@@ -110,12 +101,12 @@ pub async fn get_chart_data(
             .await?
             .into_iter()
             .map(|row| Point {
-                date: row.date.format("%Y-%m-%d").to_string(),
+                date: row.date,
                 value: row.value.to_string(),
             })
             .collect(),
     };
-    Ok(LineChart { chart })
+    Ok(chart)
 }
 
 async fn get_chart_int(
@@ -170,17 +161,15 @@ async fn get_chart_double(
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-
-    use crate::tests::init_db::init_db;
-
     use super::*;
+    use crate::{counters::TotalBlocks, tests::init_db::init_db, Chart};
     use entity::{
         chart_data_int, charts,
         sea_orm_active_enums::{ChartType, ChartValueType},
     };
     use pretty_assertions::assert_eq;
     use sea_orm::{EntityTrait, Set};
+    use std::str::FromStr;
 
     fn mock_chart_data(chart_id: i32, date: &str, value: i64) -> chart_data_int::ActiveModel {
         chart_data_int::ActiveModel {
@@ -194,7 +183,7 @@ mod tests {
     async fn insert_mock_data(db: &DatabaseConnection) {
         charts::Entity::insert_many([
             charts::ActiveModel {
-                name: Set(counters_list::TOTAL_BLOCKS.to_string()),
+                name: Set(TotalBlocks::default().name().to_string()),
                 chart_type: Set(ChartType::Counter),
                 value_type: Set(ChartValueType::Int),
                 ..Default::default()
@@ -231,12 +220,7 @@ mod tests {
         insert_mock_data(&db).await;
         let counters = get_counters(&db).await.unwrap();
         assert_eq!(
-            Counters {
-                counters: HashMap::from_iter([(
-                    counters_list::TOTAL_BLOCKS.to_string(),
-                    "1350".into()
-                )]),
-            },
+            HashMap::from_iter([("totalBlocks".into(), "1350".into())]),
             counters
         );
     }
@@ -252,22 +236,20 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(
-            LineChart {
-                chart: vec![
-                    Point {
-                        date: "2022-11-10".into(),
-                        value: "100".into(),
-                    },
-                    Point {
-                        date: "2022-11-11".into(),
-                        value: "150".into(),
-                    },
-                    Point {
-                        date: "2022-11-12".into(),
-                        value: "200".into(),
-                    },
-                ]
-            },
+            vec![
+                Point {
+                    date: NaiveDate::from_str("2022-11-10").unwrap(),
+                    value: "100".into(),
+                },
+                Point {
+                    date: NaiveDate::from_str("2022-11-11").unwrap(),
+                    value: "150".into(),
+                },
+                Point {
+                    date: NaiveDate::from_str("2022-11-12").unwrap(),
+                    value: "200".into(),
+                },
+            ],
             chart
         );
     }
