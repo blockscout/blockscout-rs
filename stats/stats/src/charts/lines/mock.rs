@@ -63,6 +63,11 @@ impl crate::Chart for MockLineInt {
         &self.name
     }
 
+    fn chart_type(&self) -> ChartType {
+        ChartType::Line
+    }
+
+    // TODO: remove when we remove chart value type
     async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
         crate::charts::create_chart(db, self.name().into(), ChartType::Line, ChartValueType::Int)
             .await
@@ -104,6 +109,11 @@ impl crate::Chart for MockLineDouble {
         &self.name
     }
 
+    fn chart_type(&self) -> ChartType {
+        ChartType::Line
+    }
+
+    // TODO: remove when we remove chart value type
     async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
         crate::charts::create_chart(
             db,

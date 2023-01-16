@@ -1,3 +1,4 @@
+mod charts;
 mod read_service;
 mod server;
 mod settings;

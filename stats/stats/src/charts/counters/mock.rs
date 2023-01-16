@@ -24,6 +24,11 @@ impl crate::Chart for MockCounterInt {
         &self.name
     }
 
+    fn chart_type(&self) -> ChartType {
+        ChartType::Counter
+    }
+
+    // TODO: remove when we remove chart value type
     async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
         crate::charts::create_chart(
             db,
@@ -71,6 +76,11 @@ impl crate::Chart for MockCounterDouble {
         &self.name
     }
 
+    fn chart_type(&self) -> ChartType {
+        ChartType::Counter
+    }
+
+    // TODO: remove when we remove chart value type
     async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
         crate::charts::create_chart(
             db,

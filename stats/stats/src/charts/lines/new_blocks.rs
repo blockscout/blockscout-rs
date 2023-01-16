@@ -4,10 +4,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use chrono::NaiveDate;
-use entity::{
-    chart_data_int,
-    sea_orm_active_enums::{ChartType, ChartValueType},
-};
+use entity::{chart_data_int, sea_orm_active_enums::ChartType};
 use sea_orm::{prelude::*, DbBackend, FromQueryResult, QueryOrder, QuerySelect, Statement};
 
 #[derive(Debug, FromQueryResult)]
@@ -24,9 +21,8 @@ impl crate::Chart for NewBlocks {
         "newBlocks"
     }
 
-    async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
-        crate::charts::create_chart(db, self.name().into(), ChartType::Line, ChartValueType::Int)
-            .await
+    fn chart_type(&self) -> ChartType {
+        ChartType::Line
     }
 
     async fn update(
