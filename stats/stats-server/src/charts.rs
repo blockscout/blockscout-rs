@@ -16,7 +16,7 @@ pub struct Config {
     pub lines: LineCharts,
 }
 
-type ArcChart = Arc<dyn Chart + Send + Sync + 'static>;
+pub type ArcChart = Arc<dyn Chart + Send + Sync + 'static>;
 
 pub struct Charts {
     pub config: Config,
