@@ -1,46 +1,25 @@
 use async_trait::async_trait;
 use chrono::NaiveDate;
 use sea_orm::{DatabaseConnection, DbErr};
-use serde::Deserialize;
 use stats::ReadError;
 use stats_proto::blockscout::stats::v1::{
     stats_service_server::StatsService, Counter, Counters, GetCountersRequest, GetLineChartRequest,
     GetLineChartsRequest, LineChart, LineCharts, Point,
 };
-use std::{collections::HashSet, str::FromStr, sync::Arc};
+use std::{str::FromStr, sync::Arc};
 use tonic::{Request, Response, Status};
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct CounterInfo {
-    pub id: String,
-    pub title: String,
-    pub units: Option<String>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct ChartsConfig {
-    pub counters: Vec<CounterInfo>,
-    pub lines: LineCharts,
-}
+use crate::charts::Charts;
 
 #[derive(Clone)]
 pub struct ReadService {
     db: Arc<DatabaseConnection>,
-    charts_config: ChartsConfig,
-    charts_filter: HashSet<String>,
+    charts: Arc<Charts>,
 }
 
 impl ReadService {
-    pub async fn new(
-        db: Arc<DatabaseConnection>,
-        charts_config: ChartsConfig,
-        charts_filter: HashSet<String>,
-    ) -> Result<Self, DbErr> {
-        Ok(Self {
-            db,
-            charts_config,
-            charts_filter,
-        })
+    pub async fn new(db: Arc<DatabaseConnection>, charts: Arc<Charts>) -> Result<Self, DbErr> {
+        Ok(Self { db, charts })
     }
 }
 
@@ -62,7 +41,8 @@ impl StatsService for ReadService {
             .map_err(map_read_error)?;
 
         let counters = self
-            .charts_config
+            .charts
+            .config
             .counters
             .iter()
             .filter_map(|info| {
@@ -83,7 +63,7 @@ impl StatsService for ReadService {
         request: Request<GetLineChartRequest>,
     ) -> Result<Response<LineChart>, Status> {
         let request = request.into_inner();
-        if !self.charts_filter.contains(&request.name) {
+        if !self.charts.lines_filter.contains(&request.name) {
             return Err(tonic::Status::not_found(format!(
                 "chart {} not found",
                 request.name
@@ -109,6 +89,6 @@ impl StatsService for ReadService {
         &self,
         _request: tonic::Request<GetLineChartsRequest>,
     ) -> Result<tonic::Response<LineCharts>, tonic::Status> {
-        Ok(Response::new(self.charts_config.lines.clone()))
+        Ok(Response::new(self.charts.config.lines.clone()))
     }
 }

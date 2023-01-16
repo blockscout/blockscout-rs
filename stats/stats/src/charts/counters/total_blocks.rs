@@ -5,8 +5,8 @@ use crate::{
 use async_trait::async_trait;
 use blockscout_db::entity::blocks;
 use chrono::NaiveDateTime;
-use entity::sea_orm_active_enums::{ChartType, ChartValueType};
-use sea_orm::{DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QueryOrder, QuerySelect};
+use entity::sea_orm_active_enums::ChartType;
+use sea_orm::{prelude::*, FromQueryResult, QueryOrder, QuerySelect};
 
 #[derive(FromQueryResult)]
 struct TotalBlocksData {
@@ -23,14 +23,8 @@ impl crate::Chart for TotalBlocks {
         "totalBlocks"
     }
 
-    async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
-        crate::charts::create_chart(
-            db,
-            self.name().into(),
-            ChartType::Counter,
-            ChartValueType::Int,
-        )
-        .await
+    fn chart_type(&self) -> ChartType {
+        ChartType::Counter
     }
 
     async fn update(
