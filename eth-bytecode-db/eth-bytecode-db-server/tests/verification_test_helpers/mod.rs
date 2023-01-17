@@ -106,7 +106,7 @@ pub mod test_cases {
     {
         let db = init_db(test_suite_name, "test_returns_valid_source").await;
 
-    let test_data = test_input_data::basic(source_type, MatchType::Partial);
+        let test_data = test_input_data::basic(source_type, MatchType::Partial);
 
         let db_url = db.db_url();
         let verifier_addr = init_verifier_server(service, test_data.verifier_response).await;
