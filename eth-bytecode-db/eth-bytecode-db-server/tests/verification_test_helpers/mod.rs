@@ -102,7 +102,7 @@ pub async fn test_returns_valid_source<Service, Request>(
 {
     let db = init_db(test_suite_name, "test_returns_valid_source").await;
 
-    let test_data = test_input_data::input_data_1(service.source_type(), MatchType::Partial);
+    let test_data = test_input_data::basic(service.source_type(), MatchType::Partial);
 
     let db_url = db.db_url();
     let verifier_addr = init_verifier_server(service, test_data.verifier_response).await;
@@ -148,7 +148,7 @@ pub async fn test_verify_then_search<Service, Request>(
 {
     let db = init_db(test_suite_name, "test_verify_then_search").await;
 
-    let test_data = test_input_data::input_data_1(service.source_type(), MatchType::Full);
+    let test_data = test_input_data::basic(service.source_type(), MatchType::Full);
     let creation_input = test_data.creation_input().unwrap();
     let deployed_bytecode = test_data.deployed_bytecode().unwrap();
 
