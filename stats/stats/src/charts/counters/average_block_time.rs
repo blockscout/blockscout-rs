@@ -76,7 +76,7 @@ mod tests {
     #[ignore = "needs database to run"]
     async fn update_average_block_time() {
         let _ = tracing_subscriber::fmt::try_init();
-        let (db, blockscout) = init_db_all("update_total_blocks_recurrent", None).await;
+        let (db, blockscout) = init_db_all("update_average_block_time", None).await;
         let updater = AverageBlockTime::default();
 
         updater.create(&db).await.unwrap();
