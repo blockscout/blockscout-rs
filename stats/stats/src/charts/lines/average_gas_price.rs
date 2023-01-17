@@ -26,7 +26,7 @@ impl AverageGasPrice {
                 r#"
                     SELECT
                         blocks.timestamp::date as date,
-                        TRIM((AVG(gas_price) / $1)::TEXT, '0') as value
+                        TRIM_SCALE((AVG(gas_price) / $1))::TEXT as value
                     FROM transactions
                     JOIN blocks on transactions.block_number = blocks.number
                     WHERE date(blocks.timestamp) >= $2
@@ -39,7 +39,7 @@ impl AverageGasPrice {
                 r#"
                     SELECT
                         blocks.timestamp::date as date,
-                        TRIM((AVG(gas_price) / $1)::TEXT, '0') as value
+                        TRIM_SCALE((AVG(gas_price) / $1))::TEXT as value
                     FROM transactions
                     JOIN blocks on transactions.block_number = blocks.number
                     GROUP BY date
