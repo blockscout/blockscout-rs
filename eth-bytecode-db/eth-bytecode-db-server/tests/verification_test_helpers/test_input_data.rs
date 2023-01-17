@@ -36,7 +36,7 @@ impl TestInputData {
     }
 }
 
-pub fn input_data_1(source_type: SourceType, match_type: MatchType) -> TestInputData {
+pub fn basic(source_type: SourceType, match_type: MatchType) -> TestInputData {
     let smart_contract_verifier_match_type = match match_type {
         MatchType::Unknown => smart_contract_verifier_proto_v2::source::MatchType::Unspecified,
         MatchType::Partial => smart_contract_verifier_proto_v2::source::MatchType::Partial,
