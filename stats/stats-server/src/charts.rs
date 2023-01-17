@@ -81,13 +81,10 @@ impl Charts {
         vec![
             // finished counters
             Arc::new(counters::TotalBlocks::default()),
+            Arc::new(counters::AverageBlockTime::default()),
             // finished lines
             Arc::new(lines::NewBlocks::default()),
             // mock counters
-            Arc::new(counters::MockCounterDouble::new(
-                "averageBlockTime".into(),
-                34.25,
-            )),
             Arc::new(counters::MockCounterInt::new(
                 "completedTransactions".into(),
                 956276037263,
