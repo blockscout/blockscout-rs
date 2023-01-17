@@ -1,12 +1,12 @@
 // mod lines_list;
 mod mock;
-//mod utils;
+mod utils;
 
 // mod accounts_growth;
 // mod active_accounts;
 // mod average_block_size;
 // mod average_gas_limit;
-// mod average_gas_price;
+mod average_gas_price;
 // mod average_txn_fee;
 // mod gas_used_growth;
 // mod native_coin_holders_growth;
@@ -21,7 +21,7 @@ mod new_blocks;
 // pub use active_accounts::ActiveAccounts;
 // pub use average_block_size::AverageBlockSize;
 // pub use average_gas_limit::AverageGasLimit;
-// pub use average_gas_price::AverageGasPrice;
+pub use average_gas_price::AverageGasPrice;
 // pub use average_txn_fee::AverageTxnFee;
 // pub use gas_used_growth::GasUsedGrowth;
 // pub use native_coin_holders_growth::NativeCoinHoldersGrowth;
