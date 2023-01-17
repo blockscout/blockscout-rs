@@ -1,14 +1,11 @@
 #![allow(unused_variables)]
 use super::utils::OnlyDate;
 use crate::{
-    charts::insert::{insert_double_data_many, DoubleValueItem},
+    charts::insert::{insert_data_many, DateValue},
     UpdateError,
 };
 use async_trait::async_trait;
-use entity::{
-    chart_data_int,
-    sea_orm_active_enums::{ChartType, ChartValueType},
-};
+use entity::{chart_data, sea_orm_active_enums::ChartType};
 use sea_orm::{prelude::*, DbBackend, FromQueryResult, QueryOrder, QuerySelect, Statement};
 
 #[derive(Default, Debug)]
@@ -22,15 +19,15 @@ impl AverageGasPrice {
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
         last_row: Option<OnlyDate>,
-    ) -> Result<Vec<DoubleValueItem>, DbErr> {
+    ) -> Result<Vec<DateValue>, DbErr> {
         let stmnt = match last_row {
             Some(row) => Statement::from_sql_and_values(
                 DbBackend::Postgres,
                 r#"
-                    SELECT 
-                        blocks.timestamp::date as date, 
-                        ROUND(AVG(gas_price) / $1)::float as value
-                    FROM transactions 
+                    SELECT
+                        blocks.timestamp::date as date,
+                        TRIM((AVG(gas_price) / $1)::TEXT, '0') as value
+                    FROM transactions
                     JOIN blocks on transactions.block_number = blocks.number
                     WHERE date(blocks.timestamp) >= $2
                     GROUP BY date
@@ -40,10 +37,10 @@ impl AverageGasPrice {
             None => Statement::from_sql_and_values(
                 DbBackend::Postgres,
                 r#"
-                    SELECT 
-                        blocks.timestamp::date as date, 
-                        (AVG(gas_price) / $1)::float as value
-                    FROM transactions 
+                    SELECT
+                        blocks.timestamp::date as date,
+                        TRIM((AVG(gas_price) / $1)::TEXT, '0') as value
+                    FROM transactions
                     JOIN blocks on transactions.block_number = blocks.number
                     GROUP BY date
                     "#,
@@ -51,9 +48,7 @@ impl AverageGasPrice {
             ),
         };
 
-        let data = DoubleValueItem::find_by_statement(stmnt)
-            .all(blockscout)
-            .await?;
+        let data = DateValue::find_by_statement(stmnt).all(blockscout).await?;
 
         Ok(data)
     }
@@ -68,16 +63,6 @@ impl crate::Chart for AverageGasPrice {
         ChartType::Line
     }
 
-    async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
-        crate::charts::create_chart(
-            db,
-            self.name().into(),
-            self.chart_type(),
-            ChartValueType::Double,
-        )
-        .await
-    }
-
     async fn update(
         &self,
         db: &DatabaseConnection,
@@ -90,22 +75,21 @@ impl crate::Chart for AverageGasPrice {
         let last_row = if full {
             None
         } else {
-            chart_data_int::Entity::find()
-                .column(chart_data_int::Column::Date)
-                .filter(chart_data_int::Column::ChartId.eq(id))
-                .order_by_desc(chart_data_int::Column::Date)
+            chart_data::Entity::find()
+                .column(chart_data::Column::Date)
+                .filter(chart_data::Column::ChartId.eq(id))
+                .order_by_desc(chart_data::Column::Date)
                 .into_model::<OnlyDate>()
                 .one(db)
                 .await?
         };
 
-        let data: Vec<_> = self
+        let data = self
             .get_current_value(db, blockscout, last_row)
             .await?
             .into_iter()
-            .map(|item| item.active_model(id))
-            .collect();
-        insert_double_data_many(db, data).await?;
+            .map(|item| item.active_model(id));
+        insert_data_many(db, data).await?;
         Ok(())
     }
 }

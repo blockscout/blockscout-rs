@@ -26,7 +26,7 @@ pub use average_gas_price::AverageGasPrice;
 // pub use gas_used_growth::GasUsedGrowth;
 // pub use native_coin_holders_growth::NativeCoinHoldersGrowth;
 // pub use native_coin_supply::NativeCoinSupply;
-pub use mock::{MockLineDouble, MockLineInt};
+pub use mock::MockLine;
 pub use new_blocks::NewBlocks;
 // pub use new_native_coins_transfers::NewNativeCoinTransfers;
 // pub use new_txns::NewTxns;
