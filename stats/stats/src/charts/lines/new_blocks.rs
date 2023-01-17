@@ -1,10 +1,10 @@
 use crate::{
-    charts::insert::{insert_int_data_many, IntValueItem},
+    charts::insert::{insert_data_many, DateValue},
     UpdateError,
 };
 use async_trait::async_trait;
 use chrono::NaiveDate;
-use entity::{chart_data_int, sea_orm_active_enums::ChartType};
+use entity::{chart_data, sea_orm_active_enums::ChartType};
 use sea_orm::{prelude::*, DbBackend, FromQueryResult, QueryOrder, QuerySelect, Statement};
 
 #[derive(Debug, FromQueryResult)]
@@ -37,10 +37,10 @@ impl crate::Chart for NewBlocks {
         let last_row = if full {
             None
         } else {
-            chart_data_int::Entity::find()
-                .column(chart_data_int::Column::Date)
-                .filter(chart_data_int::Column::ChartId.eq(id))
-                .order_by_desc(chart_data_int::Column::Date)
+            chart_data::Entity::find()
+                .column(chart_data::Column::Date)
+                .filter(chart_data::Column::ChartId.eq(id))
+                .order_by_desc(chart_data::Column::Date)
                 .into_model::<ChartDate>()
                 .one(db)
                 .await?
@@ -49,10 +49,10 @@ impl crate::Chart for NewBlocks {
         // TODO: rewrite using orm/build request with `where` clause
         let data = match last_row {
             Some(row) => {
-                IntValueItem::find_by_statement(Statement::from_sql_and_values(
+                DateValue::find_by_statement(Statement::from_sql_and_values(
                     DbBackend::Postgres,
                     r#"
-                    SELECT date(blocks.timestamp) as date, COUNT(*) as value
+                    SELECT date(blocks.timestamp) as date, COUNT(*)::TEXT as value
                         FROM public.blocks
                         WHERE date(blocks.timestamp) >= $1
                         GROUP BY date;
@@ -63,10 +63,10 @@ impl crate::Chart for NewBlocks {
                 .await?
             }
             None => {
-                IntValueItem::find_by_statement(Statement::from_string(
+                DateValue::find_by_statement(Statement::from_string(
                     DbBackend::Postgres,
                     r#"
-                    SELECT date(blocks.timestamp) as date, COUNT(*) as value
+                    SELECT date(blocks.timestamp) as date, COUNT(*)::TEXT as value
                         FROM public.blocks
                         GROUP BY date;
                     "#
@@ -78,7 +78,7 @@ impl crate::Chart for NewBlocks {
         };
 
         let data = data.into_iter().map(|item| item.active_model(id));
-        insert_int_data_many(db, data).await?;
+        insert_data_many(db, data).await?;
         Ok(())
     }
 }
@@ -153,10 +153,10 @@ mod tests {
         updater.create(&db).await.unwrap();
 
         // set wrong value and check, that it was rewritten
-        chart_data_int::Entity::insert(chart_data_int::ActiveModel {
+        chart_data::Entity::insert(chart_data::ActiveModel {
             chart_id: Set(1),
             date: Set(NaiveDate::from_str("2022-11-10").unwrap()),
-            value: Set(100),
+            value: Set(100.to_string()),
             ..Default::default()
         })
         .exec(&db)
@@ -259,29 +259,29 @@ mod tests {
 
         // set wrong values and check, that they wasn't rewritten
         // except the last one
-        chart_data_int::Entity::insert_many([
-            chart_data_int::ActiveModel {
+        chart_data::Entity::insert_many([
+            chart_data::ActiveModel {
                 chart_id: Set(1),
                 date: Set(NaiveDate::from_str("2022-11-09").unwrap()),
-                value: Set(2),
+                value: Set(2.to_string()),
                 ..Default::default()
             },
-            chart_data_int::ActiveModel {
+            chart_data::ActiveModel {
                 chart_id: Set(1),
                 date: Set(NaiveDate::from_str("2022-11-10").unwrap()),
-                value: Set(4),
+                value: Set(4.to_string()),
                 ..Default::default()
             },
-            chart_data_int::ActiveModel {
+            chart_data::ActiveModel {
                 chart_id: Set(1),
                 date: Set(NaiveDate::from_str("2022-11-11").unwrap()),
-                value: Set(5),
+                value: Set(5.to_string()),
                 ..Default::default()
             },
-            chart_data_int::ActiveModel {
+            chart_data::ActiveModel {
                 chart_id: Set(1),
                 date: Set(NaiveDate::from_str("2022-11-12").unwrap()),
-                value: Set(2),
+                value: Set(2.to_string()),
                 ..Default::default()
             },
         ])
