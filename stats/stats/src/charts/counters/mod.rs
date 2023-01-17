@@ -11,7 +11,7 @@ mod total_blocks;
 // pub use average_block_time::AverageBlockTime;
 // pub use completed_txns::CompletedTxns;
 // pub use total_accounts::TotalAccounts;
-pub use mock::{MockCounterDouble, MockCounterInt};
+pub use mock::MockCounter;
 pub use total_blocks::TotalBlocks;
 // pub use total_native_coin_holders::TotalNativeCoinHolders;
 // pub use total_native_coin_transfers::TotalNativeCoinTransfers;

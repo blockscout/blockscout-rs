@@ -1,5 +1,5 @@
 use crate::{
-    charts::insert::{insert_int_data, IntValueItem},
+    charts::insert::{insert_data, DateValue},
     UpdateError,
 };
 use async_trait::async_trait;
@@ -52,11 +52,11 @@ impl crate::Chart for TotalBlocks {
                 return Ok(());
             }
         };
-        let item = IntValueItem {
+        let item = DateValue {
             date: data.timestamp.date(),
-            value: data.number,
+            value: data.number.to_string(),
         };
-        insert_int_data(db, id, item).await?;
+        insert_data(db, id, item).await?;
         Ok(())
     }
 }
@@ -70,7 +70,7 @@ mod tests {
         Chart,
     };
     use chrono::NaiveDate;
-    use entity::chart_data_int;
+    use entity::chart_data;
     use pretty_assertions::assert_eq;
     use sea_orm::Set;
     use std::str::FromStr;
@@ -84,10 +84,10 @@ mod tests {
 
         updater.create(&db).await.unwrap();
 
-        chart_data_int::Entity::insert(chart_data_int::ActiveModel {
+        chart_data::Entity::insert(chart_data::ActiveModel {
             chart_id: Set(1),
             date: Set(NaiveDate::from_str("2022-11-10").unwrap()),
-            value: Set(1),
+            value: Set(1.to_string()),
             ..Default::default()
         })
         .exec(&db)
@@ -126,10 +126,10 @@ mod tests {
 
         updater.create(&db).await.unwrap();
 
-        chart_data_int::Entity::insert(chart_data_int::ActiveModel {
+        chart_data::Entity::insert(chart_data::ActiveModel {
             chart_id: Set(1),
             date: Set(NaiveDate::from_str("2022-11-11").unwrap()),
-            value: Set(1),
+            value: Set(1.to_string()),
             ..Default::default()
         })
         .exec(&db)
