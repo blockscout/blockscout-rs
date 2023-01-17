@@ -81,8 +81,8 @@ postgres:
 
   # strategy: Recreate
 
-  persistence: false
-  storage: 10Gi
+  persistence: true
+  storage: 1Gi
 
   resources:
     limits:

@@ -1,25 +1,22 @@
 use crate::{
-    charts::insert::{insert_double_data, DoubleValueItem},
+    charts::insert::{insert_data, DateValue},
     UpdateError,
 };
 use async_trait::async_trait;
-use entity::sea_orm_active_enums::{ChartType, ChartValueType};
+use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 
 #[derive(Default, Debug)]
 pub struct AverageBlockTime {}
 
 impl AverageBlockTime {
-    async fn get_current_value(
-        &self,
-        blockscout: &DatabaseConnection,
-    ) -> Result<DoubleValueItem, DbErr> {
-        let item = DoubleValueItem::find_by_statement(Statement::from_sql_and_values(
+    async fn get_current_value(&self, blockscout: &DatabaseConnection) -> Result<DateValue, DbErr> {
+        let item = DateValue::find_by_statement(Statement::from_sql_and_values(
             DbBackend::Postgres,
             r#"
             SELECT 
                 max(timestamp)::date as date, 
-                (CASE WHEN avg(diff) IS NULL THEN 0::float ELSE avg(diff) END) as value
+                TRIM_SCALE((CASE WHEN avg(diff) IS NULL THEN 0 ELSE avg(diff) END))::TEXT as value
             FROM
             (
                 SELECT
@@ -50,16 +47,6 @@ impl crate::Chart for AverageBlockTime {
         ChartType::Counter
     }
 
-    async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
-        crate::charts::create_chart(
-            db,
-            self.name().into(),
-            self.chart_type(),
-            ChartValueType::Double,
-        )
-        .await
-    }
-
     async fn update(
         &self,
         db: &DatabaseConnection,
@@ -70,7 +57,7 @@ impl crate::Chart for AverageBlockTime {
             .await?
             .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
         let item = self.get_current_value(blockscout).await?;
-        insert_double_data(db, chart_id, item).await?;
+        insert_data(db, chart_id, item).await?;
         Ok(())
     }
 }

@@ -85,71 +85,62 @@ impl Charts {
             // finished lines
             Arc::new(lines::NewBlocks::default()),
             // mock counters
-            Arc::new(counters::MockCounterInt::new(
+            Arc::new(counters::MockCounter::new(
                 "completedTransactions".into(),
-                956276037263,
+                "956276037263".into(),
             )),
-            Arc::new(counters::MockCounterInt::new(
+            Arc::new(counters::MockCounter::new(
                 "totalAccounts".into(),
-                765543,
+                "765543".into(),
             )),
-            Arc::new(counters::MockCounterInt::new(
+            Arc::new(counters::MockCounter::new(
                 "totalNativeCoinHolders".into(),
-                409559,
+                "409559".into(),
             )),
-            Arc::new(counters::MockCounterInt::new(
+            Arc::new(counters::MockCounter::new(
                 "totalNativeCoinTransfers".into(),
-                32528,
+                "32528".into(),
             )),
-            Arc::new(counters::MockCounterInt::new("totalTokens".into(), 1234)),
-            Arc::new(counters::MockCounterInt::new(
+            Arc::new(counters::MockCounter::new(
+                "totalTokens".into(),
+                "1234".into(),
+            )),
+            Arc::new(counters::MockCounter::new(
                 "totalTransactions".into(),
-                84273733,
+                "84273733".into(),
             )),
             // mock lines
-            Arc::new(lines::MockLineInt::new("accountsGrowth".into(), 100..500)),
-            Arc::new(lines::MockLineInt::new(
-                "activeAccounts".into(),
-                200..200_000,
-            )),
-            Arc::new(lines::MockLineInt::new(
+            Arc::new(lines::MockLine::new("accountsGrowth".into(), 100..500)),
+            Arc::new(lines::MockLine::new("activeAccounts".into(), 200..200_000)),
+            Arc::new(lines::MockLine::new(
                 "averageBlockSize".into(),
                 90_000..100_000,
             )),
-            Arc::new(lines::MockLineInt::new(
+            Arc::new(lines::MockLine::new(
                 "averageGasLimit".into(),
                 8_000_000..30_000_000,
             )),
-            Arc::new(lines::MockLineDouble::new(
-                "averageGasPrice".into(),
-                5.0..200.0,
-            )),
-            Arc::new(lines::MockLineDouble::new(
-                "averageTxnFee".into(),
-                0.0001..0.01,
-            )),
-            Arc::new(lines::MockLineInt::new(
+            Arc::new(lines::MockLine::new("averageGasPrice".into(), 5.0..200.0)),
+            Arc::new(lines::MockLine::new("averageTxnFee".into(), 0.0001..0.01)),
+            Arc::new(lines::MockLine::new(
                 "gasUsedGrowth".into(),
                 1_000_000..100_000_000,
             )),
-            Arc::new(lines::MockLineInt::new(
+            Arc::new(lines::MockLine::new(
                 "nativeCoinHoldersGrowth".into(),
                 1000..5000,
             )),
-            Arc::new(lines::MockLineInt::new(
+            Arc::new(lines::MockLine::new(
                 "nativeCoinSupply".into(),
                 1_000_000..100_000_000,
             )),
-            Arc::new(lines::MockLineInt::new(
+            Arc::new(lines::MockLine::new(
                 "newNativeCoinTransfers".into(),
                 100..10_000,
             )),
-            Arc::new(lines::MockLineInt::new("newTxns".into(), 200..20_000)),
-            Arc::new(lines::MockLineDouble::new("txnsFee".into(), 0.0001..0.01)),
-            Arc::new(lines::MockLineInt::new(
-                "txnsGrowth".into(),
-                1000..10_000_000,
-            )),
+            Arc::new(lines::MockLine::new("newTxns".into(), 200..20_000)),
+            Arc::new(lines::MockLine::new("txnsFee".into(), 0.0001..0.01)),
+            Arc::new(lines::MockLine::new("txnsGrowth".into(), 1000..10_000_000)),
         ]
     }
 }
