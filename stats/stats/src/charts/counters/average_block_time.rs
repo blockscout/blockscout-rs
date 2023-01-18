@@ -25,6 +25,7 @@ impl AverageBlockTime {
                         EPOCH FROM timestamp - lag(timestamp) OVER (ORDER BY timestamp)
                     ) as diff
                 FROM "blocks"
+                WHERE consensus = true
             ) t
             "#,
             vec![],

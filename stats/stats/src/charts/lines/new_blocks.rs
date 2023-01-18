@@ -49,7 +49,7 @@ impl crate::Chart for NewBlocks {
                     r#"
                     SELECT date(blocks.timestamp) as date, COUNT(*)::TEXT as value
                         FROM public.blocks
-                        WHERE date(blocks.timestamp) >= $1
+                        WHERE date(blocks.timestamp) >= $1 AND consensus = true
                         GROUP BY date;
                     "#,
                     vec![row.date.into()],
@@ -63,6 +63,7 @@ impl crate::Chart for NewBlocks {
                     r#"
                     SELECT date(blocks.timestamp) as date, COUNT(*)::TEXT as value
                         FROM public.blocks
+                        WHERE consensus = true
                         GROUP BY date;
                     "#
                     .into(),
@@ -81,62 +82,15 @@ impl crate::Chart for NewBlocks {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{get_chart_data, tests::init_db::init_db_all, Chart, Point};
-    use blockscout_db::entity::{addresses, blocks};
-    use chrono::{NaiveDate, NaiveDateTime};
+    use crate::{
+        get_chart_data,
+        tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
+        Chart, Point,
+    };
+    use chrono::NaiveDate;
     use pretty_assertions::assert_eq;
     use sea_orm::Set;
     use std::str::FromStr;
-
-    fn mock_block(index: i64, ts: &str) -> blocks::ActiveModel {
-        blocks::ActiveModel {
-            number: Set(index),
-            hash: Set(index.to_le_bytes().to_vec()),
-            timestamp: Set(NaiveDateTime::from_str(ts).unwrap()),
-            consensus: Set(Default::default()),
-            gas_limit: Set(Default::default()),
-            gas_used: Set(Default::default()),
-            miner_hash: Set(Default::default()),
-            nonce: Set(Default::default()),
-            parent_hash: Set(Default::default()),
-            inserted_at: Set(Default::default()),
-            updated_at: Set(Default::default()),
-            ..Default::default()
-        }
-    }
-
-    async fn mock_blockscout(blockscout: &DatabaseConnection) {
-        addresses::Entity::insert(addresses::ActiveModel {
-            hash: Set(vec![]),
-            inserted_at: Set(Default::default()),
-            updated_at: Set(Default::default()),
-            ..Default::default()
-        })
-        .exec(blockscout)
-        .await
-        .unwrap();
-
-        let block_timestamps = vec![
-            "2022-11-09T23:59:59",
-            "2022-11-10T00:00:00",
-            "2022-11-10T12:00:00",
-            "2022-11-10T23:59:59",
-            "2022-11-11T00:00:00",
-            "2022-11-11T12:00:00",
-            "2022-11-11T15:00:00",
-            "2022-11-11T23:59:59",
-            "2022-11-12T00:00:00",
-        ];
-        blocks::Entity::insert_many(
-            block_timestamps
-                .into_iter()
-                .enumerate()
-                .map(|(ind, ts)| mock_block(ind as i64, ts)),
-        )
-        .exec(blockscout)
-        .await
-        .unwrap();
-    }
 
     #[tokio::test]
     #[ignore = "needs database to run"]
@@ -158,7 +112,7 @@ mod tests {
         .await
         .unwrap();
 
-        mock_blockscout(&blockscout).await;
+        fill_mock_blockscout_data(&blockscout, "2022-11-12").await;
 
         // Note that update is not full, therefore there is no entry with date `2022-11-09`
         updater.update(&db, &blockscout, false).await.unwrap();
@@ -216,7 +170,7 @@ mod tests {
         let updater = NewBlocks::default();
         updater.create(&db).await.unwrap();
 
-        mock_blockscout(&blockscout).await;
+        fill_mock_blockscout_data(&blockscout, "2022-11-12").await;
 
         updater.update(&db, &blockscout, true).await.unwrap();
         let data = get_chart_data(&db, updater.name(), None, None)
@@ -284,7 +238,7 @@ mod tests {
         .await
         .unwrap();
 
-        mock_blockscout(&blockscout).await;
+        fill_mock_blockscout_data(&blockscout, "2022-11-12").await;
 
         updater.update(&db, &blockscout, false).await.unwrap();
         let data = get_chart_data(&db, updater.name(), None, None)

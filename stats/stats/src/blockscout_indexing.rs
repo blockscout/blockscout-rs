@@ -16,7 +16,8 @@ pub async fn is_blockscout_indexing(
         min_block_saved = min_block_saved,
         "checking min block in blockscout database"
     );
-    Ok((min_block_blockscout < min_block_saved, min_block_blockscout))
+    let is_indexing = min_block_blockscout != min_block_saved;
+    Ok((is_indexing, min_block_blockscout))
 }
 
 #[derive(FromQueryResult)]
@@ -28,6 +29,7 @@ async fn get_min_block_blockscout(blockscout: &DatabaseConnection) -> Result<i64
     let min_block = blocks::Entity::find()
         .select_only()
         .column_as(Expr::col(blocks::Column::Number).min(), "min_block")
+        .filter(blocks::Column::Consensus.eq(true))
         .into_model::<MinBlock>()
         .one(blockscout)
         .await?;

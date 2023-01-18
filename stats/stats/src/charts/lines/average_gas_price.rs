@@ -1,6 +1,6 @@
 use super::utils::OnlyDate;
 use crate::{
-    charts::insert::{insert_data_many, DateValue},
+    charts::insert::{insert_data_many, DateValue, DateValueDouble},
     UpdateError,
 };
 use async_trait::async_trait;
@@ -24,10 +24,10 @@ impl AverageGasPrice {
                 r#"
                     SELECT
                         blocks.timestamp::date as date,
-                        TRIM_SCALE((AVG(gas_price) / $1))::TEXT as value
+                        (AVG(gas_price) / $1)::float as value
                     FROM transactions
-                    JOIN blocks on transactions.block_number = blocks.number
-                    WHERE date(blocks.timestamp) >= $2
+                    JOIN blocks ON transactions.block_number = blocks.number
+                    WHERE date(blocks.timestamp) >= $2 AND blocks.consensus = true
                     GROUP BY date
                     "#,
                 vec![GWEI.into(), row.date.into()],
@@ -37,17 +37,20 @@ impl AverageGasPrice {
                 r#"
                     SELECT
                         blocks.timestamp::date as date,
-                        TRIM_SCALE((AVG(gas_price) / $1))::TEXT as value
+                        (AVG(gas_price) / $1)::float as value
                     FROM transactions
-                    JOIN blocks on transactions.block_number = blocks.number
+                    JOIN blocks ON transactions.block_number = blocks.number
+                    WHERE blocks.consensus = true
                     GROUP BY date
                     "#,
                 vec![GWEI.into()],
             ),
         };
 
-        let data = DateValue::find_by_statement(stmnt).all(blockscout).await?;
-
+        let data = DateValueDouble::find_by_statement(stmnt)
+            .all(blockscout)
+            .await?;
+        let data = data.into_iter().map(DateValue::from).collect();
         Ok(data)
     }
 }
