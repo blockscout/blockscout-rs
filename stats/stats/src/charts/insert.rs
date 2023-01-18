@@ -3,9 +3,24 @@ use entity::chart_data;
 use sea_orm::{prelude::*, sea_query, ConnectionTrait, FromQueryResult, Set};
 
 #[derive(FromQueryResult)]
+pub struct DateValueDouble {
+    pub date: NaiveDate,
+    pub value: f64,
+}
+
+#[derive(FromQueryResult)]
 pub struct DateValue {
     pub date: NaiveDate,
     pub value: String,
+}
+
+impl From<DateValueDouble> for DateValue {
+    fn from(double: DateValueDouble) -> Self {
+        Self {
+            date: double.date,
+            value: double.value.to_string(),
+        }
+    }
 }
 
 impl DateValue {

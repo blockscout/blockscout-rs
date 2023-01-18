@@ -41,6 +41,7 @@ impl crate::Chart for TotalBlocks {
             .select_only()
             .column_as(Expr::col(blocks::Column::Number).count(), "number")
             .column_as(Expr::col(blocks::Column::Timestamp).max(), "timestamp")
+            .filter(blocks::Column::Consensus.eq(true))
             .into_model::<TotalBlocksData>()
             .one(blockscout)
             .await?;
