@@ -1,4 +1,3 @@
-#![allow(unused_variables)]
 use super::utils::OnlyDate;
 use crate::{
     charts::insert::{insert_data_many, DateValue},
@@ -16,7 +15,6 @@ const GWEI: i64 = 1_000_000_000;
 impl AverageGasPrice {
     async fn get_current_value(
         &self,
-        db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
         last_row: Option<OnlyDate>,
     ) -> Result<Vec<DateValue>, DbErr> {
@@ -85,7 +83,7 @@ impl crate::Chart for AverageGasPrice {
         };
 
         let data = self
-            .get_current_value(db, blockscout, last_row)
+            .get_current_value(blockscout, last_row)
             .await?
             .into_iter()
             .map(|item| item.active_model(id));
@@ -124,15 +122,15 @@ mod tests {
         let expected = vec![
             Point {
                 date: NaiveDate::from_str("2022-11-09").unwrap(),
-                value: "71.123456789".into(),
+                value: "0".into(),
             },
             Point {
                 date: NaiveDate::from_str("2022-11-10").unwrap(),
-                value: "71.123456789".into(),
+                value: "2.8086419725".into(),
             },
             Point {
                 date: NaiveDate::from_str("2022-11-11").unwrap(),
-                value: "71.123456789".into(),
+                value: "6.1790123395".into(),
             },
         ];
         assert_eq!(expected, data);

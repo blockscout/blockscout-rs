@@ -40,7 +40,15 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
 
     let transactios = block_timestamps
         .iter()
-        .map(|b| mock_transaction(b, 21_000, 71_123_456_789));
+        // make 1/3 of blocks empty
+        .filter(|b| b.number.as_ref() % 3 != 1)
+        .map(|b| {
+            mock_transaction(
+                b,
+                21_000,
+                (b.number.as_ref() * 1_123_456_789) % 70_000_000_000,
+            )
+        });
     transactions::Entity::insert_many(transactios)
         .exec(blockscout)
         .await
