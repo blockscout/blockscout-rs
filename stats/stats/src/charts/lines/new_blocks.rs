@@ -1,16 +1,11 @@
+use super::utils::OnlyDate;
 use crate::{
     charts::insert::{insert_data_many, DateValue},
     UpdateError,
 };
 use async_trait::async_trait;
-use chrono::NaiveDate;
 use entity::{chart_data, sea_orm_active_enums::ChartType};
 use sea_orm::{prelude::*, DbBackend, FromQueryResult, QueryOrder, QuerySelect, Statement};
-
-#[derive(Debug, FromQueryResult)]
-struct ChartDate {
-    date: NaiveDate,
-}
 
 #[derive(Default, Debug)]
 pub struct NewBlocks {}
@@ -41,7 +36,7 @@ impl crate::Chart for NewBlocks {
                 .column(chart_data::Column::Date)
                 .filter(chart_data::Column::ChartId.eq(id))
                 .order_by_desc(chart_data::Column::Date)
-                .into_model::<ChartDate>()
+                .into_model::<OnlyDate>()
                 .one(db)
                 .await?
         };
@@ -88,7 +83,7 @@ mod tests {
     use super::*;
     use crate::{get_chart_data, tests::init_db::init_db_all, Chart, Point};
     use blockscout_db::entity::{addresses, blocks};
-    use chrono::NaiveDateTime;
+    use chrono::{NaiveDate, NaiveDateTime};
     use pretty_assertions::assert_eq;
     use sea_orm::Set;
     use std::str::FromStr;

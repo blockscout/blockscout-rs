@@ -84,6 +84,7 @@ impl Charts {
             Arc::new(counters::AverageBlockTime::default()),
             // finished lines
             Arc::new(lines::NewBlocks::default()),
+            Arc::new(lines::AverageGasPrice::default()),
             // mock counters
             Arc::new(counters::MockCounter::new(
                 "completedTransactions".into(),
@@ -120,7 +121,6 @@ impl Charts {
                 "averageGasLimit".into(),
                 8_000_000..30_000_000,
             )),
-            Arc::new(lines::MockLine::new("averageGasPrice".into(), 5.0..200.0)),
             Arc::new(lines::MockLine::new("averageTxnFee".into(), 0.0001..0.01)),
             Arc::new(lines::MockLine::new(
                 "gasUsedGrowth".into(),
