@@ -1,5 +1,5 @@
 use crate::{
-    charts::insert::{insert_data, DateValue},
+    charts::insert::{insert_data, DateValue, DateValueDouble},
     UpdateError,
 };
 use async_trait::async_trait;
@@ -11,12 +11,12 @@ pub struct AverageBlockTime {}
 
 impl AverageBlockTime {
     async fn get_current_value(&self, blockscout: &DatabaseConnection) -> Result<DateValue, DbErr> {
-        let item = DateValue::find_by_statement(Statement::from_sql_and_values(
+        let item = DateValueDouble::find_by_statement(Statement::from_sql_and_values(
             DbBackend::Postgres,
             r#"
-            SELECT 
+            SELECT
                 max(timestamp)::date as date, 
-                TRIM_SCALE((CASE WHEN avg(diff) IS NULL THEN 0 ELSE avg(diff) END))::TEXT as value
+                (CASE WHEN avg(diff) IS NULL THEN 0 ELSE avg(diff) END)::float as value
             FROM
             (
                 SELECT
@@ -32,6 +32,7 @@ impl AverageBlockTime {
         ))
         .one(blockscout)
         .await?
+        .map(DateValue::from)
         .ok_or_else(|| DbErr::Custom("internal error: query returned nothing".into()))?;
 
         Ok(item)
