@@ -1,14 +1,48 @@
-use super::utils::OnlyDate;
 use crate::{
-    charts::insert::{insert_data_many, DateValue},
+    charts::{insert::DateValue, ChartUpdater},
     UpdateError,
 };
 use async_trait::async_trait;
-use entity::{chart_data, sea_orm_active_enums::ChartType};
-use sea_orm::{prelude::*, DbBackend, FromQueryResult, QueryOrder, QuerySelect, Statement};
+use chrono::NaiveDate;
+use entity::sea_orm_active_enums::ChartType;
+use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 
 #[derive(Default, Debug)]
 pub struct NewBlocks {}
+
+#[async_trait]
+impl ChartUpdater for NewBlocks {
+    async fn get_values(
+        &self,
+        blockscout: &DatabaseConnection,
+        last_row: Option<NaiveDate>,
+    ) -> Result<Vec<DateValue>, UpdateError> {
+        let stmnt = match last_row {
+            Some(row) => Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                r#"
+                    SELECT date(blocks.timestamp) as date, COUNT(*)::TEXT as value
+                        FROM public.blocks
+                        WHERE date(blocks.timestamp) >= $1 AND consensus = true
+                        GROUP BY date;
+                    "#,
+                vec![row.into()],
+            ),
+            None => Statement::from_string(
+                DbBackend::Postgres,
+                r#"
+                    SELECT date(blocks.timestamp) as date, COUNT(*)::TEXT as value
+                        FROM public.blocks
+                        WHERE consensus = true
+                        GROUP BY date;
+                    "#
+                .into(),
+            ),
+        };
+        let data = DateValue::find_by_statement(stmnt).all(blockscout).await?;
+        Ok(data)
+    }
+}
 
 #[async_trait]
 impl crate::Chart for NewBlocks {
@@ -26,56 +60,7 @@ impl crate::Chart for NewBlocks {
         blockscout: &DatabaseConnection,
         full: bool,
     ) -> Result<(), UpdateError> {
-        let id = crate::charts::find_chart(db, self.name())
-            .await?
-            .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
-        let last_row = if full {
-            None
-        } else {
-            chart_data::Entity::find()
-                .column(chart_data::Column::Date)
-                .filter(chart_data::Column::ChartId.eq(id))
-                .order_by_desc(chart_data::Column::Date)
-                .into_model::<OnlyDate>()
-                .one(db)
-                .await?
-        };
-
-        // TODO: rewrite using orm/build request with `where` clause
-        let data = match last_row {
-            Some(row) => {
-                DateValue::find_by_statement(Statement::from_sql_and_values(
-                    DbBackend::Postgres,
-                    r#"
-                    SELECT date(blocks.timestamp) as date, COUNT(*)::TEXT as value
-                        FROM public.blocks
-                        WHERE date(blocks.timestamp) >= $1 AND consensus = true
-                        GROUP BY date;
-                    "#,
-                    vec![row.date.into()],
-                ))
-                .all(blockscout)
-                .await?
-            }
-            None => {
-                DateValue::find_by_statement(Statement::from_string(
-                    DbBackend::Postgres,
-                    r#"
-                    SELECT date(blocks.timestamp) as date, COUNT(*)::TEXT as value
-                        FROM public.blocks
-                        WHERE consensus = true
-                        GROUP BY date;
-                    "#
-                    .into(),
-                ))
-                .all(blockscout)
-                .await?
-            }
-        };
-
-        let data = data.into_iter().map(|item| item.active_model(id));
-        insert_data_many(db, data).await?;
-        Ok(())
+        self.update_with_values(db, blockscout, full).await
     }
 }
 
@@ -88,6 +73,7 @@ mod tests {
         Chart, Point,
     };
     use chrono::NaiveDate;
+    use entity::chart_data;
     use pretty_assertions::assert_eq;
     use sea_orm::Set;
     use std::str::FromStr;

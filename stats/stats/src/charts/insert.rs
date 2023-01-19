@@ -3,15 +3,24 @@ use entity::chart_data;
 use sea_orm::{prelude::*, sea_query, ConnectionTrait, FromQueryResult, Set};
 
 #[derive(FromQueryResult)]
-pub struct DateValueDouble {
+pub struct DateValueInt {
     pub date: NaiveDate,
-    pub value: f64,
+    pub value: i64,
+}
+
+impl From<DateValueInt> for DateValue {
+    fn from(double: DateValueInt) -> Self {
+        Self {
+            date: double.date,
+            value: double.value.to_string(),
+        }
+    }
 }
 
 #[derive(FromQueryResult)]
-pub struct DateValue {
+pub struct DateValueDouble {
     pub date: NaiveDate,
-    pub value: String,
+    pub value: f64,
 }
 
 impl From<DateValueDouble> for DateValue {
@@ -21,6 +30,12 @@ impl From<DateValueDouble> for DateValue {
             value: double.value.to_string(),
         }
     }
+}
+
+#[derive(FromQueryResult)]
+pub struct DateValue {
+    pub date: NaiveDate,
+    pub value: String,
 }
 
 impl DateValue {
@@ -35,18 +50,10 @@ impl DateValue {
     }
 }
 
-pub async fn insert_data<C: ConnectionTrait>(
-    db: &C,
-    chart_id: i32,
-    value: DateValue,
-) -> Result<(), DbErr> {
-    insert_data_many(db, std::iter::once(value.active_model(chart_id))).await
-}
-
 pub async fn insert_data_many<C, D>(db: &C, data: D) -> Result<(), DbErr>
 where
     C: ConnectionTrait,
-    D: IntoIterator<Item = chart_data::ActiveModel>,
+    D: IntoIterator<Item = chart_data::ActiveModel> + Send + Sync,
 {
     chart_data::Entity::insert_many(data)
         .on_conflict(

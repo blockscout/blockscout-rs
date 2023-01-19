@@ -1,5 +1,5 @@
 use crate::{
-    charts::insert::{insert_data_many, DateValue},
+    charts::{insert::DateValue, ChartFullUpdater},
     UpdateError,
 };
 use async_trait::async_trait;
@@ -49,6 +49,18 @@ impl<T: SampleUniform + PartialOrd + Clone + ToString> MockLine<T> {
 }
 
 #[async_trait]
+impl<T: SampleUniform + PartialOrd + Clone + ToString + Send + Sync + 'static> ChartFullUpdater
+    for MockLine<T>
+{
+    async fn get_values(
+        &self,
+        _blockscout: &DatabaseConnection,
+    ) -> Result<Vec<DateValue>, UpdateError> {
+        Ok(mocked_lines(self.range.clone()))
+    }
+}
+
+#[async_trait]
 impl<T: SampleUniform + PartialOrd + Clone + ToString + Send + Sync + 'static> crate::Chart
     for MockLine<T>
 {
@@ -63,17 +75,9 @@ impl<T: SampleUniform + PartialOrd + Clone + ToString + Send + Sync + 'static> c
     async fn update(
         &self,
         db: &DatabaseConnection,
-        _blockscout: &DatabaseConnection,
-        _full: bool,
+        blockscout: &DatabaseConnection,
+        full: bool,
     ) -> Result<(), UpdateError> {
-        let id = crate::charts::find_chart(db, self.name())
-            .await?
-            .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
-
-        let data = mocked_lines(self.range.clone())
-            .into_iter()
-            .map(|item| item.active_model(id));
-        insert_data_many(db, data).await?;
-        Ok(())
+        self.update_with_values(db, blockscout, full).await
     }
 }

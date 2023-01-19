@@ -1,23 +1,27 @@
-use super::utils::OnlyDate;
 use crate::{
-    charts::insert::{insert_data_many, DateValue, DateValueDouble},
+    charts::{
+        insert::{DateValue, DateValueDouble},
+        ChartUpdater,
+    },
     UpdateError,
 };
 use async_trait::async_trait;
-use entity::{chart_data, sea_orm_active_enums::ChartType};
-use sea_orm::{prelude::*, DbBackend, FromQueryResult, QueryOrder, QuerySelect, Statement};
+use chrono::NaiveDate;
+use entity::sea_orm_active_enums::ChartType;
+use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 
 #[derive(Default, Debug)]
 pub struct AverageGasPrice {}
 
 const GWEI: i64 = 1_000_000_000;
 
-impl AverageGasPrice {
-    async fn get_current_value(
+#[async_trait]
+impl ChartUpdater for AverageGasPrice {
+    async fn get_values(
         &self,
         blockscout: &DatabaseConnection,
-        last_row: Option<OnlyDate>,
-    ) -> Result<Vec<DateValue>, DbErr> {
+        last_row: Option<NaiveDate>,
+    ) -> Result<Vec<DateValue>, UpdateError> {
         let stmnt = match last_row {
             Some(row) => Statement::from_sql_and_values(
                 DbBackend::Postgres,
@@ -30,7 +34,7 @@ impl AverageGasPrice {
                     WHERE date(blocks.timestamp) >= $2 AND blocks.consensus = true
                     GROUP BY date
                     "#,
-                vec![GWEI.into(), row.date.into()],
+                vec![GWEI.into(), row.into()],
             ),
             None => Statement::from_sql_and_values(
                 DbBackend::Postgres,
@@ -70,28 +74,7 @@ impl crate::Chart for AverageGasPrice {
         blockscout: &DatabaseConnection,
         full: bool,
     ) -> Result<(), UpdateError> {
-        let id = crate::charts::find_chart(db, self.name())
-            .await?
-            .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
-        let last_row = if full {
-            None
-        } else {
-            chart_data::Entity::find()
-                .column(chart_data::Column::Date)
-                .filter(chart_data::Column::ChartId.eq(id))
-                .order_by_desc(chart_data::Column::Date)
-                .into_model::<OnlyDate>()
-                .one(db)
-                .await?
-        };
-
-        let data = self
-            .get_current_value(blockscout, last_row)
-            .await?
-            .into_iter()
-            .map(|item| item.active_model(id));
-        insert_data_many(db, data).await?;
-        Ok(())
+        self.update_with_values(db, blockscout, full).await
     }
 }
 
