@@ -18,7 +18,7 @@ use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2 as sm
 use std::{net::SocketAddr, str::FromStr};
 use tonic::transport::Uri;
 
-const DB_PREFIX: &str = "server";
+const DB_PREFIX: &str = "eth_bytecode_db_server";
 
 const DB_SEARCH_ROUTE: &str = "/api/v2/bytecodes/sources:search";
 

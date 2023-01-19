@@ -3,23 +3,24 @@ pub mod insert;
 pub mod lines;
 
 use async_trait::async_trait;
-use entity::{
-    charts,
-    sea_orm_active_enums::{ChartType, ChartValueType},
-};
+use entity::{charts, sea_orm_active_enums::ChartType};
 use sea_orm::{prelude::*, sea_query, FromQueryResult, QuerySelect, Set};
 use thiserror::Error;
 
 #[async_trait]
-pub trait Chart {
+pub trait Chart: Sync {
     fn name(&self) -> &str;
+    fn chart_type(&self) -> ChartType;
 
-    async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr>;
+    async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
+        crate::charts::create_chart(db, self.name().into(), self.chart_type()).await
+    }
 
     async fn update(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
+        full: bool,
     ) -> Result<(), UpdateError>;
 }
 
@@ -50,7 +51,6 @@ pub async fn create_chart(
     db: &DatabaseConnection,
     name: String,
     chart_type: ChartType,
-    value_type: ChartValueType,
 ) -> Result<(), DbErr> {
     let id = find_chart(db, &name).await?;
     if id.is_some() {
@@ -59,7 +59,6 @@ pub async fn create_chart(
     charts::Entity::insert(charts::ActiveModel {
         name: Set(name),
         chart_type: Set(chart_type),
-        value_type: Set(value_type),
         ..Default::default()
     })
     .on_conflict(
