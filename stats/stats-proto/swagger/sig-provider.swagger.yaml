@@ -10,7 +10,35 @@ consumes:
 produces:
   - application/json
 paths:
-  /api/v1/charts/line:
+  /api/v1/counters:
+    get:
+      operationId: StatsService_GetCounters
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1Counters'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - StatsService
+  /api/v1/lines:
+    get:
+      operationId: StatsService_GetLineCharts
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1LineCharts'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - StatsService
+  /api/v1/lines/{name}:
     get:
       operationId: StatsService_GetLineChart
       responses:
@@ -24,8 +52,8 @@ paths:
             $ref: '#/definitions/rpcStatus'
       parameters:
         - name: name
-          in: query
-          required: false
+          in: path
+          required: true
           type: string
         - name: from
           description: Default is first data point
@@ -37,20 +65,6 @@ paths:
           in: query
           required: false
           type: string
-      tags:
-        - StatsService
-  /api/v1/counters:
-    get:
-      operationId: StatsService_GetCounters
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1Counters'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/rpcStatus'
       tags:
         - StatsService
   /health:
@@ -102,13 +116,24 @@ definitions:
           $ref: '#/definitions/protobufAny'
       message:
         type: string
+  v1Counter:
+    type: object
+    properties:
+      id:
+        type: string
+      title:
+        type: string
+      units:
+        type: string
+      value:
+        type: string
   v1Counters:
     type: object
     properties:
       counters:
-        type: object
-        additionalProperties:
-          type: string
+        type: array
+        items:
+          $ref: '#/definitions/v1Counter'
   v1HealthCheckResponse:
     type: object
     properties:
@@ -121,6 +146,33 @@ definitions:
         type: array
         items:
           $ref: '#/definitions/v1Point'
+  v1LineChartInfo:
+    type: object
+    properties:
+      description:
+        type: string
+      id:
+        type: string
+      title:
+        type: string
+  v1LineChartSection:
+    type: object
+    properties:
+      charts:
+        type: array
+        items:
+          $ref: '#/definitions/v1LineChartInfo'
+      id:
+        type: string
+      title:
+        type: string
+  v1LineCharts:
+    type: object
+    properties:
+      sections:
+        type: array
+        items:
+          $ref: '#/definitions/v1LineChartSection'
   v1Point:
     type: object
     properties:

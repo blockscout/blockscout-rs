@@ -10,11 +10,3 @@ pub enum ChartType {
     #[sea_orm(string_value = "LINE")]
     Line,
 }
-#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
-#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "chart_value_type")]
-pub enum ChartValueType {
-    #[sea_orm(string_value = "DOUBLE")]
-    Double,
-    #[sea_orm(string_value = "INT")]
-    Int,
-}

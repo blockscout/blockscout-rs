@@ -6,10 +6,28 @@ option go_package = "github.com/blockscout/blockscout-rs/stats";
 
 service StatsService {
   rpc GetCounters(GetCountersRequest) returns (Counters);
+  rpc GetLineCharts(GetLineChartsRequest) returns (LineCharts);
   rpc GetLineChart(GetLineChartRequest) returns (LineChart);
 }
 
 message GetCountersRequest {}
+
+message Counter {
+  string id = 1;
+  string value = 2;
+  string title = 3;
+  optional string units = 4;
+}
+
+message Counters { repeated Counter counters = 1; }
+
+message GetLineChartRequest {
+  string name = 1;
+  // Default is first data point
+  optional string from = 2;
+  // Default is last data point
+  optional string to = 3;
+}
 
 // All integers are encoded as strings to prevent data loss
 message Point {
@@ -19,12 +37,18 @@ message Point {
 
 message LineChart { repeated Point chart = 1; }
 
-message Counters { map<string, string> counters = 1; }
+message GetLineChartsRequest {}
 
-message GetLineChartRequest {
-  string name = 1;
-  // Default is first data point
-  optional string from = 2;
-  // Default is last data point
-  optional string to = 3;
+message LineChartInfo {
+  string id = 1;
+  string title = 2;
+  string description = 3;
 }
+
+message LineChartSection {
+  string id = 1;
+  string title = 2;
+  repeated LineChartInfo charts = 3;
+}
+
+message LineCharts { repeated LineChartSection sections = 1; }

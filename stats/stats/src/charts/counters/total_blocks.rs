@@ -1,12 +1,12 @@
 use crate::{
-    charts::insert::{insert_int_data, IntValueItem},
+    charts::insert::{insert_data, DateValue},
     UpdateError,
 };
 use async_trait::async_trait;
 use blockscout_db::entity::blocks;
 use chrono::NaiveDateTime;
-use entity::sea_orm_active_enums::{ChartType, ChartValueType};
-use sea_orm::{DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QueryOrder, QuerySelect};
+use entity::sea_orm_active_enums::ChartType;
+use sea_orm::{prelude::*, sea_query::Expr, FromQueryResult, QuerySelect};
 
 #[derive(FromQueryResult)]
 struct TotalBlocksData {
@@ -20,32 +20,28 @@ pub struct TotalBlocks {}
 #[async_trait]
 impl crate::Chart for TotalBlocks {
     fn name(&self) -> &str {
-        super::counters_list::TOTAL_BLOCKS
+        "totalBlocks"
     }
 
-    async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
-        crate::charts::create_chart(
-            db,
-            self.name().into(),
-            ChartType::Counter,
-            ChartValueType::Int,
-        )
-        .await
+    fn chart_type(&self) -> ChartType {
+        ChartType::Counter
     }
 
     async fn update(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
+        _full: bool,
     ) -> Result<(), UpdateError> {
         let id = crate::charts::find_chart(db, self.name())
             .await?
             .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
 
         let data = blocks::Entity::find()
-            .column(blocks::Column::Number)
-            .column(blocks::Column::Timestamp)
-            .order_by_desc(blocks::Column::Number)
+            .select_only()
+            .column_as(Expr::col(blocks::Column::Number).count(), "number")
+            .column_as(Expr::col(blocks::Column::Timestamp).max(), "timestamp")
+            .filter(blocks::Column::Consensus.eq(true))
             .into_model::<TotalBlocksData>()
             .one(blockscout)
             .await?;
@@ -57,11 +53,11 @@ impl crate::Chart for TotalBlocks {
                 return Ok(());
             }
         };
-        let item = IntValueItem {
+        let item = DateValue {
             date: data.timestamp.date(),
-            value: data.number,
+            value: data.number.to_string(),
         };
-        insert_int_data(db, id, item).await?;
+        insert_data(db, id, item).await?;
         Ok(())
     }
 }
@@ -75,7 +71,7 @@ mod tests {
         Chart,
     };
     use chrono::NaiveDate;
-    use entity::chart_data_int;
+    use entity::chart_data;
     use pretty_assertions::assert_eq;
     use sea_orm::Set;
     use std::str::FromStr;
@@ -89,10 +85,10 @@ mod tests {
 
         updater.create(&db).await.unwrap();
 
-        chart_data_int::Entity::insert(chart_data_int::ActiveModel {
+        chart_data::Entity::insert(chart_data::ActiveModel {
             chart_id: Set(1),
             date: Set(NaiveDate::from_str("2022-11-10").unwrap()),
-            value: Set(1),
+            value: Set(1.to_string()),
             ..Default::default()
         })
         .exec(&db)
@@ -101,9 +97,9 @@ mod tests {
 
         fill_mock_blockscout_data(&blockscout, "2022-11-11").await;
 
-        updater.update(&db, &blockscout).await.unwrap();
+        updater.update(&db, &blockscout, true).await.unwrap();
         let data = get_counters(&db).await.unwrap();
-        assert_eq!("7", data.counters[updater.name()]);
+        assert_eq!("8", data[updater.name()]);
     }
 
     #[tokio::test]
@@ -117,9 +113,9 @@ mod tests {
 
         fill_mock_blockscout_data(&blockscout, "2022-11-12").await;
 
-        updater.update(&db, &blockscout).await.unwrap();
+        updater.update(&db, &blockscout, true).await.unwrap();
         let data = get_counters(&db).await.unwrap();
-        assert_eq!("8", data.counters[updater.name()]);
+        assert_eq!("9", data[updater.name()]);
     }
 
     #[tokio::test]
@@ -131,10 +127,10 @@ mod tests {
 
         updater.create(&db).await.unwrap();
 
-        chart_data_int::Entity::insert(chart_data_int::ActiveModel {
+        chart_data::Entity::insert(chart_data::ActiveModel {
             chart_id: Set(1),
             date: Set(NaiveDate::from_str("2022-11-11").unwrap()),
-            value: Set(1),
+            value: Set(1.to_string()),
             ..Default::default()
         })
         .exec(&db)
@@ -143,8 +139,8 @@ mod tests {
 
         fill_mock_blockscout_data(&blockscout, "2022-11-11").await;
 
-        updater.update(&db, &blockscout).await.unwrap();
+        updater.update(&db, &blockscout, true).await.unwrap();
         let data = get_counters(&db).await.unwrap();
-        assert_eq!("7", data.counters[updater.name()]);
+        assert_eq!("8", data[updater.name()]);
     }
 }

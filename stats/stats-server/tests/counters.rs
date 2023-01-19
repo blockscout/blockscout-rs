@@ -1,8 +1,9 @@
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use stats::tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data};
+use stats_proto::blockscout::stats::v1::Counters;
 use stats_server::{stats, Settings};
-use std::collections::HashSet;
+use std::{collections::HashSet, path::PathBuf, str::FromStr};
 
 fn client() -> ClientWithMiddleware {
     let retry_policy = ExponentialBackoff::builder()
@@ -22,6 +23,7 @@ async fn test_counters_ok() {
     fill_mock_blockscout_data(&blockscout, "2022-11-11").await;
 
     let mut settings = Settings::default();
+    settings.charts_config = PathBuf::from_str("../config/charts.toml").unwrap();
     settings.server.grpc.enabled = false;
     settings.metrics.enabled = false;
     settings.jaeger.enabled = false;
@@ -32,7 +34,7 @@ async fn test_counters_ok() {
 
     let _server_handle = {
         let settings = settings.clone();
-        tokio::spawn(async move { stats(settings).await })
+        tokio::spawn(async move { stats(settings).await.unwrap() })
     };
     // Sleep until server will start and calculate all values
     tokio::time::sleep(std::time::Duration::from_secs(5)).await;
@@ -46,18 +48,11 @@ async fn test_counters_ok() {
         .expect("failed to connect to server");
     assert_eq!(resp.status(), 200);
 
-    let counters: serde_json::Value = resp
+    let counters: Counters = resp
         .json()
         .await
         .expect("failed to convert response to json");
-    let counters = counters
-        .as_object()
-        .expect("response has to be json object")
-        .get("counters")
-        .expect("response doesn't have 'counters' field")
-        .as_object()
-        .expect("'counters' field has to be json object");
-    let counter_names: HashSet<_> = counters.keys().map(|c| c.as_str()).collect();
+    let counter_names: HashSet<_> = counters.counters.iter().map(|c| c.id.as_str()).collect();
     let expected_counter_names: HashSet<_> = [
         "totalBlocks",
         "averageBlockTime",

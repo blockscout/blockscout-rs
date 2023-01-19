@@ -4,20 +4,6 @@
 default:
     just --list --unsorted
 
-start-postgres:
-    # we run it in --rm mode, so all data will be deleted after stopping
-    docker run -p 5432:5432 --name stats-postgres -e POSTGRES_PASSWORD=admin --rm -d postgres
-    # wait for postgres to start
-    sleep 3
-    docker exec -it stats-postgres psql -U postgres -c 'create database stats;'
-
-stop-postgres:
-    docker kill stats-postgres
-
-restart-postgres:
-    just stop-postgres || true
-    just start-postgres
-
 migrate-up database_url="postgres://postgres:admin@localhost:5432/stats":
     DATABASE_URL={{database_url}} sea-orm-cli migrate up
 
@@ -31,10 +17,4 @@ generate-entities database_url="postgres://postgres:admin@localhost:5432/stats":
     DATABASE_URL={{database_url}} sea-orm-cli generate entity --lib -o entity/src
     cargo fmt --all -- --config imports_granularity=Crate
 
-restart-generate-entities: restart-postgres migrate-up generate-entities stop-postgres
-
-test database_url *args:
-    DATABASE_URL={{database_url}} cargo test {{args}}
-
-# runs with default database_url
-test-default *args: (test "postgres://postgres:admin@localhost:5432/" args)
+# restart-generate-entities: restart-postgres migrate-up generate-entities stop-postgres
