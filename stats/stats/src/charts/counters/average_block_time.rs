@@ -1,5 +1,8 @@
 use crate::{
-    charts::insert::{insert_data, DateValue, DateValueDouble},
+    charts::{
+        insert::{DateValue, DateValueDouble},
+        ChartFullUpdater,
+    },
     UpdateError,
 };
 use async_trait::async_trait;
@@ -9,8 +12,12 @@ use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 #[derive(Default, Debug)]
 pub struct AverageBlockTime {}
 
-impl AverageBlockTime {
-    async fn get_current_value(&self, blockscout: &DatabaseConnection) -> Result<DateValue, DbErr> {
+#[async_trait]
+impl ChartFullUpdater for AverageBlockTime {
+    async fn get_values(
+        &self,
+        blockscout: &DatabaseConnection,
+    ) -> Result<Vec<DateValue>, UpdateError> {
         let item = DateValueDouble::find_by_statement(Statement::from_sql_and_values(
             DbBackend::Postgres,
             r#"
@@ -33,9 +40,9 @@ impl AverageBlockTime {
         .one(blockscout)
         .await?
         .map(DateValue::from)
-        .ok_or_else(|| DbErr::Custom("internal error: query returned nothing".into()))?;
+        .ok_or_else(|| UpdateError::Internal("queryw returned nothing".into()))?;
 
-        Ok(item)
+        Ok(vec![item])
     }
 }
 
@@ -53,14 +60,9 @@ impl crate::Chart for AverageBlockTime {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
-        _full: bool,
+        full: bool,
     ) -> Result<(), UpdateError> {
-        let chart_id = crate::charts::find_chart(db, self.name())
-            .await?
-            .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
-        let item = self.get_current_value(blockscout).await?;
-        insert_data(db, chart_id, item).await?;
-        Ok(())
+        self.update_with_values(db, blockscout, full).await
     }
 }
 

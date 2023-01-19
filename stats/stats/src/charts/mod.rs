@@ -3,9 +3,21 @@ pub mod insert;
 pub mod lines;
 
 use async_trait::async_trait;
-use entity::{charts, sea_orm_active_enums::ChartType};
-use sea_orm::{prelude::*, sea_query, FromQueryResult, QuerySelect, Set};
+use chrono::NaiveDate;
+use entity::{chart_data, charts, sea_orm_active_enums::ChartType};
+use insert::{insert_data_many, DateValue};
+use sea_orm::{prelude::*, sea_query, FromQueryResult, QueryOrder, QuerySelect, Set};
 use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum UpdateError {
+    #[error("database error {0}")]
+    DB(#[from] DbErr),
+    #[error("chart {0} not found")]
+    NotFound(String),
+    #[error("internal error: {0}")]
+    Internal(String),
+}
 
 #[async_trait]
 pub trait Chart: Sync {
@@ -22,14 +34,6 @@ pub trait Chart: Sync {
         blockscout: &DatabaseConnection,
         full: bool,
     ) -> Result<(), UpdateError>;
-}
-
-#[derive(Error, Debug)]
-pub enum UpdateError {
-    #[error("database error {0}")]
-    DB(#[from] DbErr),
-    #[error("chart {0} not found")]
-    NotFound(String),
 }
 
 #[derive(Debug, FromQueryResult)]
@@ -69,4 +73,73 @@ pub async fn create_chart(
     .exec(db)
     .await?;
     Ok(())
+}
+
+#[async_trait]
+pub trait ChartFullUpdater: Chart {
+    async fn get_values(
+        &self,
+        blockscout: &DatabaseConnection,
+    ) -> Result<Vec<DateValue>, UpdateError>;
+
+    async fn update_with_values(
+        &self,
+        db: &DatabaseConnection,
+        blockscout: &DatabaseConnection,
+        _full: bool,
+    ) -> Result<(), UpdateError> {
+        let chart_id = crate::charts::find_chart(db, self.name())
+            .await?
+            .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
+        let values = self
+            .get_values(blockscout)
+            .await?
+            .into_iter()
+            .map(|value| value.active_model(chart_id));
+        insert_data_many(db, values).await?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, FromQueryResult)]
+pub struct OnlyDate {
+    pub date: NaiveDate,
+}
+
+#[async_trait]
+pub trait ChartUpdater: Chart {
+    async fn get_values(
+        &self,
+        blockscout: &DatabaseConnection,
+        last_row: Option<NaiveDate>,
+    ) -> Result<Vec<DateValue>, UpdateError>;
+
+    async fn update_with_values(
+        &self,
+        db: &DatabaseConnection,
+        blockscout: &DatabaseConnection,
+        full: bool,
+    ) -> Result<(), UpdateError> {
+        let chart_id = crate::charts::find_chart(db, self.name())
+            .await?
+            .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
+        let last_row = if full {
+            None
+        } else {
+            chart_data::Entity::find()
+                .column(chart_data::Column::Date)
+                .filter(chart_data::Column::ChartId.eq(chart_id))
+                .order_by_desc(chart_data::Column::Date)
+                .into_model::<OnlyDate>()
+                .one(db)
+                .await?
+        };
+        let values = self
+            .get_values(blockscout, last_row.map(|row| row.date))
+            .await?
+            .into_iter()
+            .map(|value| value.active_model(chart_id));
+        insert_data_many(db, values).await?;
+        Ok(())
+    }
 }
