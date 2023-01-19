@@ -1,4 +1,4 @@
-use super::enums::{MatchTypeWrapper, SourceTypeWrapper};
+use super::source::SourceWrapper;
 use crate::proto;
 use amplify::{From, Wrapper};
 use eth_bytecode_db::verification;
@@ -8,24 +8,10 @@ pub struct VerifyResponseWrapper(proto::VerifyResponse);
 
 impl VerifyResponseWrapper {
     pub fn ok(verification_source: verification::Source) -> Self {
-        let source_type = SourceTypeWrapper::from(verification_source.source_type).into_inner();
-        let match_type = MatchTypeWrapper::from(verification_source.match_type).into_inner();
-        let proto_source = proto::Source {
-            file_name: verification_source.file_name,
-            contract_name: verification_source.contract_name,
-            compiler_version: verification_source.compiler_version,
-            compiler_settings: verification_source.compiler_settings,
-            source_type: source_type.into(),
-            source_files: verification_source.source_files,
-            abi: verification_source.abi,
-            constructor_arguments: verification_source.constructor_arguments,
-            match_type: match_type.into(),
-        };
-
         proto::VerifyResponse {
             message: "OK".to_string(),
             status: proto::verify_response::Status::Success.into(),
-            source: Some(proto_source),
+            source: Some(SourceWrapper::from(verification_source).into_inner()),
         }
         .into()
     }
@@ -43,57 +29,32 @@ impl VerifyResponseWrapper {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::BTreeMap;
 
     #[test]
     fn ok_verify_response() {
         let verification_source = verification::Source {
-            file_name: "file_name".to_string(),
-            contract_name: "contract_name".to_string(),
-            compiler_version: "compiler_version".to_string(),
-            compiler_settings: "compiler_settings".to_string(),
+            file_name: "".to_string(),
+            contract_name: "".to_string(),
+            compiler_version: "".to_string(),
+            compiler_settings: "".to_string(),
             source_type: verification::SourceType::Solidity,
-            source_files: BTreeMap::from([("source".into(), "content".into())]),
-            abi: Some("abi".into()),
-            constructor_arguments: Some("args".into()),
-            match_type: verification::MatchType::Partial,
-            raw_creation_input: vec![0u8, 1u8, 2u8, 3u8, 4u8],
-            raw_deployed_bytecode: vec![5u8, 6u8, 7u8, 8u8],
-            creation_input_parts: vec![
-                verification::BytecodePart::Main {
-                    data: vec![0u8, 1u8],
-                },
-                verification::BytecodePart::Meta {
-                    data: vec![3u8, 4u8],
-                },
-            ],
-            deployed_bytecode_parts: vec![
-                verification::BytecodePart::Main {
-                    data: vec![5u8, 6u8],
-                },
-                verification::BytecodePart::Meta {
-                    data: vec![7u8, 8u8],
-                },
-            ],
+            source_files: Default::default(),
+            abi: None,
+            constructor_arguments: None,
+            match_type: verification::MatchType::Unknown,
+            raw_creation_input: vec![],
+            raw_deployed_bytecode: vec![],
+            creation_input_parts: vec![],
+            deployed_bytecode_parts: vec![],
         };
-
-        let response = VerifyResponseWrapper::ok(verification_source).into_inner();
 
         let expected = proto::VerifyResponse {
             message: "OK".to_string(),
             status: proto::verify_response::Status::Success.into(),
-            source: Some(proto::Source {
-                file_name: "file_name".to_string(),
-                contract_name: "contract_name".to_string(),
-                compiler_version: "compiler_version".to_string(),
-                compiler_settings: "compiler_settings".to_string(),
-                source_type: proto::source::SourceType::Solidity.into(),
-                source_files: BTreeMap::from([("source".into(), "content".into())]),
-                abi: Some("abi".into()),
-                constructor_arguments: Some("args".into()),
-                match_type: proto::source::MatchType::Partial.into(),
-            }),
+            source: Some(SourceWrapper::from(verification_source.clone()).into_inner()),
         };
+
+        let response = VerifyResponseWrapper::ok(verification_source).into_inner();
 
         assert_eq!(expected, response);
     }

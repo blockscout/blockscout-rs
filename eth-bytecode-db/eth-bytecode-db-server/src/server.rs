@@ -70,11 +70,11 @@ impl blockscout_service_launcher::HttpRouter for Router {
 
 pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let health = Arc::new(HealthService::default());
-    let database = Arc::new(DatabaseService::default());
 
-    let db_connection = sea_orm::Database::connect(settings.database.url).await?;
-    let client = Client::new(db_connection, settings.verifier.uri).await?;
+    let db_connection = Arc::new(sea_orm::Database::connect(settings.database.url).await?);
+    let client = Client::new_arc(db_connection.clone(), settings.verifier.uri).await?;
 
+    let database = Arc::new(DatabaseService::new_arc(db_connection));
     let solidity_verifier = Arc::new(SolidityVerifierService::new(client.clone()));
     let vyper_verifier = Arc::new(VyperVerifierService::new(client.clone()));
     let sourcify_verifier = Arc::new(SourcifyVerifierService::new(client.clone()));
@@ -94,6 +94,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         service_name: "eth_bytecode_db".to_owned(),
         server: settings.server,
         metrics: settings.metrics,
+        tracing: settings.tracing,
         jaeger: settings.jaeger,
     };
     blockscout_service_launcher::launch(&launch_settings, http_router, grpc_router).await

@@ -1,6 +1,6 @@
 use crate::proto;
 use amplify::{From, Wrapper};
-use eth_bytecode_db::verification;
+use eth_bytecode_db::{search, verification};
 
 /********** Bytecode Type **********/
 
@@ -19,6 +19,20 @@ impl TryFrom<BytecodeTypeWrapper> for verification::BytecodeType {
             proto::BytecodeType::DeployedBytecode => {
                 Ok(verification::BytecodeType::DeployedBytecode)
             }
+        }
+    }
+}
+
+impl TryFrom<BytecodeTypeWrapper> for search::BytecodeType {
+    type Error = tonic::Status;
+
+    fn try_from(value: BytecodeTypeWrapper) -> Result<Self, Self::Error> {
+        match value.into_inner() {
+            proto::BytecodeType::Unspecified => Err(tonic::Status::invalid_argument(
+                "Bytecode type is not specified",
+            )),
+            proto::BytecodeType::CreationInput => Ok(search::BytecodeType::CreationInput),
+            proto::BytecodeType::DeployedBytecode => Ok(search::BytecodeType::DeployedBytecode),
         }
     }
 }
