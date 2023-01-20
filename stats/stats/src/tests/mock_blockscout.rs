@@ -38,6 +38,15 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
         .await
         .unwrap();
 
+    let accounts = [1, 2, 3, 4, 5, 6, 7, 8]
+        .into_iter()
+        .map(mock_address)
+        .collect::<Vec<_>>();
+    addresses::Entity::insert_many(accounts.clone())
+        .exec(blockscout)
+        .await
+        .unwrap();
+
     let txns = blocks
         .iter()
         // make 1/3 of blocks empty
@@ -47,6 +56,7 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
                 b,
                 21_000,
                 (b.number.as_ref() * 1_123_456_789) % 70_000_000_000,
+                &accounts,
             )
         });
     transactions::Entity::insert_many(txns)
@@ -88,12 +98,29 @@ fn mock_block(index: i64, ts: &str, consensus: bool) -> blocks::ActiveModel {
     }
 }
 
+fn mock_address(seed: u8) -> addresses::ActiveModel {
+    let hash = std::iter::repeat(seed).take(32).collect();
+    addresses::ActiveModel {
+        hash: Set(hash),
+        inserted_at: Set(Default::default()),
+        updated_at: Set(Default::default()),
+        ..Default::default()
+    }
+}
+
 fn mock_transaction(
     block: &blocks::ActiveModel,
     gas: i64,
     gas_price: i64,
+    address_list: &Vec<addresses::ActiveModel>,
 ) -> transactions::ActiveModel {
     let block_number = block.number.as_ref().to_owned() as i32;
+
+    let address_index = (block_number as usize) % address_list.len();
+    let from_address_hash = address_list[address_index].hash.as_ref().to_vec();
+    let address_index = (block_number as usize + 1) % address_list.len();
+    let to_address_hash = address_list[address_index].hash.as_ref().to_vec();
+
     transactions::ActiveModel {
         block_number: Set(Some(block_number)),
         block_hash: Set(Some(block.hash.as_ref().to_vec())),
@@ -108,7 +135,8 @@ fn mock_transaction(
         value: Set(Default::default()),
         inserted_at: Set(Default::default()),
         updated_at: Set(Default::default()),
-        from_address_hash: Set(Default::default()),
+        from_address_hash: Set(from_address_hash),
+        to_address_hash: Set(Some(to_address_hash)),
         cumulative_gas_used: Set(Some(Default::default())),
         gas_used: Set(Some(Default::default())),
         index: Set(Some(Default::default())),

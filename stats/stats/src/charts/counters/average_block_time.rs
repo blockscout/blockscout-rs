@@ -69,25 +69,12 @@ impl crate::Chart for AverageBlockTime {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        get_counters,
-        tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
-        Chart,
-    };
-    use pretty_assertions::assert_eq;
+    use crate::tests::simple_test::simple_test_counter;
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_average_block_time() {
-        let _ = tracing_subscriber::fmt::try_init();
-        let (db, blockscout) = init_db_all("update_average_block_time", None).await;
-        let updater = AverageBlockTime::default();
-
-        updater.create(&db).await.unwrap();
-        fill_mock_blockscout_data(&blockscout, "2022-11-11").await;
-
-        updater.update(&db, &blockscout, true).await.unwrap();
-        let data = get_counters(&db).await.unwrap();
-        assert_eq!("24685.714285714286", data[updater.name()]);
+        let counter = AverageBlockTime::default();
+        simple_test_counter("update_average_block_time", counter, "21600.125").await;
     }
 }
