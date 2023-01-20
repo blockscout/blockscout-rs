@@ -8,8 +8,8 @@ title = "Average Block Time"
 units = "s"
 
 [[counters]]
-id = "completedTransactions"
-title = "Completed Transactions"
+id = "completedTxns"
+title = "Completed Txns"
 
 [[counters]]
 id = "totalAccounts"
@@ -28,8 +28,8 @@ id = "totalTokens"
 title = "Total Tokens"
 
 [[counters]]
-id = "totalTransactions"
-title = "Total Transactions"
+id = "totalTxns"
+title = "Total Txns"
 
 
 [[lines.sections]]
