@@ -81,44 +81,23 @@ impl crate::Chart for AverageGasPrice {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        charts::Chart,
-        get_chart_data,
-        tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
-        Point,
-    };
-    use chrono::NaiveDate;
-    use pretty_assertions::assert_eq;
-    use std::str::FromStr;
+    use crate::tests::simple_test::simple_test_chart;
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_average_gas_price() {
-        let _ = tracing_subscriber::fmt::try_init();
-        let (db, blockscout) = init_db_all("update_average_gas_price", None).await;
-        let updater = AverageGasPrice::default();
+        let chart = AverageGasPrice::default();
 
-        updater.create(&db).await.unwrap();
-        fill_mock_blockscout_data(&blockscout, "2022-11-11").await;
-
-        updater.update(&db, &blockscout, true).await.unwrap();
-        let data = get_chart_data(&db, updater.name(), None, None)
-            .await
-            .unwrap();
-        let expected = vec![
-            Point {
-                date: NaiveDate::from_str("2022-11-09").unwrap(),
-                value: "0".into(),
-            },
-            Point {
-                date: NaiveDate::from_str("2022-11-10").unwrap(),
-                value: "2.8086419725".into(),
-            },
-            Point {
-                date: NaiveDate::from_str("2022-11-11").unwrap(),
-                value: "6.1790123395".into(),
-            },
-        ];
-        assert_eq!(expected, data);
+        simple_test_chart(
+            "update_average_gas_price",
+            chart,
+            vec![
+                ("2022-11-09", "0"),
+                ("2022-11-10", "2.8086419725"),
+                ("2022-11-11", "6.1790123395"),
+                ("2022-11-12", "8.987654312"),
+            ],
+        )
+        .await;
     }
 }
