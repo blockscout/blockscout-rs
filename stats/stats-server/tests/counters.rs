@@ -56,8 +56,8 @@ async fn test_counters_ok() {
     let expected_counter_names: HashSet<_> = [
         "totalBlocks",
         "averageBlockTime",
-        "completedTransactions",
-        "totalTransactions",
+        "completedTxns",
+        "totalTxns",
         "totalAccounts",
         "totalTokens",
         "totalNativeCoinHolders",
