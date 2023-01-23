@@ -2,6 +2,7 @@ pub mod counters;
 pub mod insert;
 pub mod lines;
 
+use crate::metrics;
 use async_trait::async_trait;
 use chrono::NaiveDate;
 use entity::{chart_data, charts, sea_orm_active_enums::ChartType};
@@ -94,14 +95,18 @@ pub trait ChartFullUpdater: Chart {
             .await
             .map_err(UpdateError::LocalDB)?
             .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
-        let values = self
-            .get_values(blockscout)
-            .await?
-            .into_iter()
-            .map(|value| value.active_model(chart_id));
+        let values = {
+            let _timer = metrics::CHART_FETCH_NEW_DATA_TIME
+                .with_label_values(&[self.name()])
+                .start_timer();
+            self.get_values(blockscout)
+                .await?
+                .into_iter()
+                .map(|value| value.active_model(chart_id))
+        };
         insert_data_many(db, values)
             .await
-            .map_err(UpdateError::LocalDB)?;
+            .map_err(UpdateError::BlockscoutDB)?;
         Ok(())
     }
 }
@@ -141,11 +146,15 @@ pub trait ChartUpdater: Chart {
                 .await
                 .map_err(UpdateError::LocalDB)?
         };
-        let values = self
-            .get_values(blockscout, last_row.map(|row| row.date))
-            .await?
-            .into_iter()
-            .map(|value| value.active_model(chart_id));
+        let values = {
+            let _timer = metrics::CHART_FETCH_NEW_DATA_TIME
+                .with_label_values(&[self.name()])
+                .start_timer();
+            self.get_values(blockscout, last_row.map(|row| row.date))
+                .await?
+                .into_iter()
+                .map(|value| value.active_model(chart_id))
+        };
         insert_data_many(db, values)
             .await
             .map_err(UpdateError::LocalDB)?;
