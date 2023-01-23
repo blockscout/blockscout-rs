@@ -60,6 +60,8 @@ impl UpdateService {
                         .with_label_values(&[chart.name()])
                         .inc();
                     tracing::error!("error during updating {}: {}", chart.name(), err);
+                } else {
+                    tracing::info!("successfully updated chart {}", chart.name());
                 }
             })
         });
