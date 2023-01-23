@@ -1,6 +1,6 @@
 use actix_web::{App, HttpServer};
 use actix_web_prom::{PrometheusMetrics, PrometheusMetricsBuilder};
-use std::net::SocketAddr;
+use std::{collections::HashMap, net::SocketAddr};
 
 #[derive(Clone)]
 pub struct Metrics {
@@ -11,12 +11,13 @@ pub struct Metrics {
 impl Metrics {
     pub fn new(service_name: &str, endpoint: &str) -> Self {
         let registry = prometheus::default_registry();
-        let metrics_middleware =
-            PrometheusMetricsBuilder::new(&(service_name.to_owned() + "_metrics"))
-                .registry(registry.clone())
-                .endpoint(endpoint)
-                .build()
-                .unwrap();
+        let const_labels = HashMap::from([("service".into(), service_name.into())]);
+        let metrics_middleware = PrometheusMetricsBuilder::new("rust_microservices")
+            .registry(registry.clone())
+            .endpoint(endpoint)
+            .const_labels(const_labels)
+            .build()
+            .unwrap();
         let http_middleware = PrometheusMetricsBuilder::new(service_name)
             .registry(registry.clone())
             .build()
