@@ -14,8 +14,8 @@ use thiserror::Error;
 pub enum UpdateError {
     #[error("blockscout database error: {0}")]
     BlockscoutDB(DbErr),
-    #[error("local database error: {0}")]
-    LocalDB(DbErr),
+    #[error("stats database error: {0}")]
+    StatsDB(DbErr),
     #[error("chart {0} not found")]
     NotFound(String),
     #[error("internal error: {0}")]
@@ -93,7 +93,7 @@ pub trait ChartFullUpdater: Chart {
     ) -> Result<(), UpdateError> {
         let chart_id = crate::charts::find_chart(db, self.name())
             .await
-            .map_err(UpdateError::LocalDB)?
+            .map_err(UpdateError::StatsDB)?
             .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
         let values = {
             let _timer = metrics::CHART_FETCH_NEW_DATA_TIME
@@ -132,7 +132,7 @@ pub trait ChartUpdater: Chart {
     ) -> Result<(), UpdateError> {
         let chart_id = crate::charts::find_chart(db, self.name())
             .await
-            .map_err(UpdateError::LocalDB)?
+            .map_err(UpdateError::StatsDB)?
             .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
         let last_row = if full {
             None
@@ -144,7 +144,7 @@ pub trait ChartUpdater: Chart {
                 .into_model::<OnlyDate>()
                 .one(db)
                 .await
-                .map_err(UpdateError::LocalDB)?
+                .map_err(UpdateError::StatsDB)?
         };
         let values = {
             let _timer = metrics::CHART_FETCH_NEW_DATA_TIME
@@ -157,7 +157,7 @@ pub trait ChartUpdater: Chart {
         };
         insert_data_many(db, values)
             .await
-            .map_err(UpdateError::LocalDB)?;
+            .map_err(UpdateError::StatsDB)?;
         Ok(())
     }
 }
