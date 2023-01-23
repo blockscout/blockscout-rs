@@ -46,7 +46,10 @@ impl ChartUpdater for ActiveAccounts {
             ),
         };
 
-        let data = DateValue::find_by_statement(stmnt).all(blockscout).await?;
+        let data = DateValue::find_by_statement(stmnt)
+            .all(blockscout)
+            .await
+            .map_err(UpdateError::BlockscoutDB)?;
         Ok(data)
     }
 }

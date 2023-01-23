@@ -2,6 +2,7 @@ pub mod counters;
 pub mod insert;
 pub mod lines;
 
+use crate::metrics;
 use async_trait::async_trait;
 use chrono::NaiveDate;
 use entity::{chart_data, charts, sea_orm_active_enums::ChartType};
@@ -9,12 +10,12 @@ use insert::{insert_data_many, DateValue};
 use sea_orm::{prelude::*, sea_query, FromQueryResult, QueryOrder, QuerySelect, Set};
 use thiserror::Error;
 
-use crate::metrics;
-
 #[derive(Error, Debug)]
 pub enum UpdateError {
-    #[error("database error {0}")]
-    DB(#[from] DbErr),
+    #[error("blockscout database error: {0}")]
+    BlockscoutDB(DbErr),
+    #[error("stats database error: {0}")]
+    StatsDB(DbErr),
     #[error("chart {0} not found")]
     NotFound(String),
     #[error("internal error: {0}")]
@@ -91,7 +92,8 @@ pub trait ChartFullUpdater: Chart {
         _full: bool,
     ) -> Result<(), UpdateError> {
         let chart_id = crate::charts::find_chart(db, self.name())
-            .await?
+            .await
+            .map_err(UpdateError::StatsDB)?
             .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
         let values = {
             let _timer = metrics::CHART_FETCH_NEW_DATA_TIME
@@ -102,7 +104,9 @@ pub trait ChartFullUpdater: Chart {
                 .into_iter()
                 .map(|value| value.active_model(chart_id))
         };
-        insert_data_many(db, values).await?;
+        insert_data_many(db, values)
+            .await
+            .map_err(UpdateError::BlockscoutDB)?;
         Ok(())
     }
 }
@@ -127,7 +131,8 @@ pub trait ChartUpdater: Chart {
         full: bool,
     ) -> Result<(), UpdateError> {
         let chart_id = crate::charts::find_chart(db, self.name())
-            .await?
+            .await
+            .map_err(UpdateError::StatsDB)?
             .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
         let last_row = if full {
             None
@@ -138,7 +143,8 @@ pub trait ChartUpdater: Chart {
                 .order_by_desc(chart_data::Column::Date)
                 .into_model::<OnlyDate>()
                 .one(db)
-                .await?
+                .await
+                .map_err(UpdateError::StatsDB)?
         };
         let values = {
             let _timer = metrics::CHART_FETCH_NEW_DATA_TIME
@@ -149,7 +155,9 @@ pub trait ChartUpdater: Chart {
                 .into_iter()
                 .map(|value| value.active_model(chart_id))
         };
-        insert_data_many(db, values).await?;
+        insert_data_many(db, values)
+            .await
+            .map_err(UpdateError::StatsDB)?;
         Ok(())
     }
 }

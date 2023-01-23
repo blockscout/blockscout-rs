@@ -38,7 +38,8 @@ impl ChartFullUpdater for AverageBlockTime {
             vec![],
         ))
         .one(blockscout)
-        .await?
+        .await
+        .map_err(UpdateError::BlockscoutDB)?
         .map(DateValue::from)
         .ok_or_else(|| UpdateError::Internal("query returned nothing".into()))?;
 

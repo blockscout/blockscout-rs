@@ -32,7 +32,8 @@ impl ChartFullUpdater for TotalTxns {
             .into(),
         ))
         .one(blockscout)
-        .await?
+        .await
+        .map_err(UpdateError::BlockscoutDB)?
         .ok_or_else(|| UpdateError::Internal("query returned nothing".into()))?;
 
         Ok(vec![data])

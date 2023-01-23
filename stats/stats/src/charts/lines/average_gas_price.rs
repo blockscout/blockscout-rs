@@ -53,7 +53,8 @@ impl ChartUpdater for AverageGasPrice {
 
         let data = DateValueDouble::find_by_statement(stmnt)
             .all(blockscout)
-            .await?;
+            .await
+            .map_err(UpdateError::BlockscoutDB)?;
         let data = data.into_iter().map(DateValue::from).collect();
         Ok(data)
     }

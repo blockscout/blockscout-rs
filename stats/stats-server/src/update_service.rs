@@ -66,6 +66,7 @@ impl UpdateService {
             })
         });
         futures::future::join_all(handles).await;
+        tracing::info!("updating all charts is completed");
         if let Err(e) = stats::set_min_block_saved(&self.db, min_block_blockscout).await {
             tracing::error!("error during saving indexing info: {}", e);
         }
