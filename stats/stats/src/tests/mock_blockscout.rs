@@ -1,10 +1,9 @@
-use blockscout_db::entity::{addresses, blocks, transactions};
+use blockscout_db::entity::{addresses, blocks, tokens, transactions};
 use chrono::{NaiveDate, NaiveDateTime};
 use sea_orm::{prelude::Decimal, DatabaseConnection, EntityTrait, Set};
 use std::str::FromStr;
 
 pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date: &str) {
-    // TODO: add transactions and tokens
     addresses::Entity::insert(addresses::ActiveModel {
         hash: Set(vec![]),
         inserted_at: Set(Default::default()),
@@ -40,6 +39,15 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
 
     let accounts = (1..9).into_iter().map(mock_address).collect::<Vec<_>>();
     addresses::Entity::insert_many(accounts.clone())
+        .exec(blockscout)
+        .await
+        .unwrap();
+
+    let tokens = accounts
+        .iter()
+        .take(4)
+        .map(|addr| mock_token(addr.hash.as_ref().clone()));
+    tokens::Entity::insert_many(tokens)
         .exec(blockscout)
         .await
         .unwrap();
@@ -137,6 +145,16 @@ fn mock_transaction(
         cumulative_gas_used: Set(Some(Default::default())),
         gas_used: Set(Some(Default::default())),
         index: Set(Some(Default::default())),
+        ..Default::default()
+    }
+}
+
+fn mock_token(hash: Vec<u8>) -> tokens::ActiveModel {
+    tokens::ActiveModel {
+        r#type: Set(Default::default()),
+        contract_address_hash: Set(hash),
+        inserted_at: Set(Default::default()),
+        updated_at: Set(Default::default()),
         ..Default::default()
     }
 }
