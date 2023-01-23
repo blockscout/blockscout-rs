@@ -49,8 +49,16 @@ impl UpdateService {
             let chart = chart.clone();
             tokio::spawn(async move {
                 tracing::info!("updating {}", chart.name());
-                let result = chart.update(&db, &blockscout, full_update).await;
+                let result = {
+                    let _timer = stats::metrics::CHART_UPDATE_TIME
+                        .with_label_values(&[chart.name()])
+                        .start_timer();
+                    chart.update(&db, &blockscout, full_update).await
+                };
                 if let Err(err) = result {
+                    stats::metrics::UPDATE_ERRORS
+                        .with_label_values(&[chart.name()])
+                        .inc();
                     tracing::error!("error during updating {}: {}", chart.name(), err);
                 }
             })
@@ -66,7 +74,10 @@ impl UpdateService {
             let sleep_duration = time_till_next_call(&schedule);
             tracing::debug!("scheduled next run of stats update in {:?}", sleep_duration);
             tokio::time::sleep(sleep_duration).await;
-            self.update().await;
+            {
+                let _timer = stats::metrics::UPDATE_TIME.start_timer();
+                self.update().await;
+            }
         }
     }
 }

@@ -9,6 +9,8 @@ use insert::{insert_data_many, DateValue};
 use sea_orm::{prelude::*, sea_query, FromQueryResult, QueryOrder, QuerySelect, Set};
 use thiserror::Error;
 
+use crate::metrics;
+
 #[derive(Error, Debug)]
 pub enum UpdateError {
     #[error("database error {0}")]
@@ -91,11 +93,15 @@ pub trait ChartFullUpdater: Chart {
         let chart_id = crate::charts::find_chart(db, self.name())
             .await?
             .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
-        let values = self
-            .get_values(blockscout)
-            .await?
-            .into_iter()
-            .map(|value| value.active_model(chart_id));
+        let values = {
+            let _timer = metrics::CHART_FETCH_NEW_DATA_TIME
+                .with_label_values(&[self.name()])
+                .start_timer();
+            self.get_values(blockscout)
+                .await?
+                .into_iter()
+                .map(|value| value.active_model(chart_id))
+        };
         insert_data_many(db, values).await?;
         Ok(())
     }
@@ -134,11 +140,15 @@ pub trait ChartUpdater: Chart {
                 .one(db)
                 .await?
         };
-        let values = self
-            .get_values(blockscout, last_row.map(|row| row.date))
-            .await?
-            .into_iter()
-            .map(|value| value.active_model(chart_id));
+        let values = {
+            let _timer = metrics::CHART_FETCH_NEW_DATA_TIME
+                .with_label_values(&[self.name()])
+                .start_timer();
+            self.get_values(blockscout, last_row.map(|row| row.date))
+                .await?
+                .into_iter()
+                .map(|value| value.active_model(chart_id))
+        };
         insert_data_many(db, values).await?;
         Ok(())
     }
