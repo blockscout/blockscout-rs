@@ -2,7 +2,7 @@
 mod mock;
 mod utils;
 
-// mod accounts_growth;
+mod accounts_growth;
 mod active_accounts;
 // mod average_block_size;
 // mod average_gas_limit;
@@ -17,7 +17,7 @@ mod new_blocks;
 // mod txns_fee;
 // mod txns_growth;
 
-// pub use accounts_growth::AccountGrowth;
+pub use accounts_growth::AccountsGrowth;
 pub use active_accounts::ActiveAccounts;
 // pub use average_block_size::AverageBlockSize;
 // pub use average_gas_limit::AverageGasLimit;
