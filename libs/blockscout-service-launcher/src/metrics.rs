@@ -11,7 +11,7 @@ pub struct Metrics {
 impl Metrics {
     pub fn new(service_name: &str, endpoint: &str) -> Self {
         let registry = prometheus::default_registry();
-        let const_labels = HashMap::from([("service".into(), service_name.into())]);
+        let const_labels = HashMap::from([("rust_service".into(), service_name.into())]);
         let metrics_middleware = PrometheusMetricsBuilder::new("rust_microservices")
             .registry(registry.clone())
             .endpoint(endpoint)
