@@ -18,6 +18,8 @@ tracing = "0.1"
 migration = { path = "./migration" }
 url = "2.3"
 rand = "0.8"
+lazy_static = "1.4"
+prometheus = "0.13"
 
 [dev-dependencies]
 pretty_assertions = "1.2"
