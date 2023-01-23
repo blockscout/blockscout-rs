@@ -30,7 +30,8 @@ impl ChartFullUpdater for TotalBlocks {
             .filter(blocks::Column::Consensus.eq(true))
             .into_model::<TotalBlocksData>()
             .one(blockscout)
-            .await?
+            .await
+            .map_err(UpdateError::BlockscoutDB)?
             .ok_or_else(|| UpdateError::Internal("query returned nothing".into()))?;
 
         let data = DateValue {

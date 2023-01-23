@@ -11,8 +11,10 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum UpdateError {
-    #[error("database error {0}")]
-    DB(#[from] DbErr),
+    #[error("blockscout database error: {0}")]
+    BlockscoutDB(DbErr),
+    #[error("local database error: {0}")]
+    LocalDB(DbErr),
     #[error("chart {0} not found")]
     NotFound(String),
     #[error("internal error: {0}")]
@@ -89,14 +91,17 @@ pub trait ChartFullUpdater: Chart {
         _full: bool,
     ) -> Result<(), UpdateError> {
         let chart_id = crate::charts::find_chart(db, self.name())
-            .await?
+            .await
+            .map_err(UpdateError::LocalDB)?
             .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
         let values = self
             .get_values(blockscout)
             .await?
             .into_iter()
             .map(|value| value.active_model(chart_id));
-        insert_data_many(db, values).await?;
+        insert_data_many(db, values)
+            .await
+            .map_err(UpdateError::LocalDB)?;
         Ok(())
     }
 }
@@ -121,7 +126,8 @@ pub trait ChartUpdater: Chart {
         full: bool,
     ) -> Result<(), UpdateError> {
         let chart_id = crate::charts::find_chart(db, self.name())
-            .await?
+            .await
+            .map_err(UpdateError::LocalDB)?
             .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
         let last_row = if full {
             None
@@ -132,14 +138,17 @@ pub trait ChartUpdater: Chart {
                 .order_by_desc(chart_data::Column::Date)
                 .into_model::<OnlyDate>()
                 .one(db)
-                .await?
+                .await
+                .map_err(UpdateError::LocalDB)?
         };
         let values = self
             .get_values(blockscout, last_row.map(|row| row.date))
             .await?
             .into_iter()
             .map(|value| value.active_model(chart_id));
-        insert_data_many(db, values).await?;
+        insert_data_many(db, values)
+            .await
+            .map_err(UpdateError::LocalDB)?;
         Ok(())
     }
 }
