@@ -1,8 +1,19 @@
 use migration::MigratorTrait;
 use sea_orm::{prelude::*, ConnectionTrait, Database, Statement};
+use std::{collections::HashSet, sync::Mutex};
 use url::Url;
 
 pub async fn init_db<M: MigratorTrait>(name: &str, db_url: Option<String>) -> DatabaseConnection {
+    lazy_static::lazy_static! {
+        static ref DB_NAMES: Mutex<HashSet<String>> = Default::default();
+    }
+
+    let db_not_created = {
+        let mut guard = DB_NAMES.lock().unwrap();
+        guard.insert(name.to_owned())
+    };
+    assert!(db_not_created, "db with name {} already was created", name);
+
     let db_url =
         db_url.unwrap_or_else(|| std::env::var("DATABASE_URL").expect("no DATABASE_URL env"));
     let url = Url::parse(&db_url).expect("unvalid database url");

@@ -35,6 +35,8 @@ impl UpdateService {
     }
 
     pub async fn update(&self) {
+        let _timer = stats::metrics::UPDATE_TIME.start_timer();
+
         let (full_update, min_block_blockscout) =
             stats::is_blockscout_indexing(&self.blockscout, &self.db)
                 .await
@@ -77,10 +79,7 @@ impl UpdateService {
             let sleep_duration = time_till_next_call(&schedule);
             tracing::debug!("scheduled next run of stats update in {:?}", sleep_duration);
             tokio::time::sleep(sleep_duration).await;
-            {
-                let _timer = stats::metrics::UPDATE_TIME.start_timer();
-                self.update().await;
-            }
+            self.update().await;
         }
     }
 }
