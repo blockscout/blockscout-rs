@@ -30,7 +30,7 @@ impl ChartUpdater for AverageGasPrice {
                         blocks.timestamp::date as date,
                         (AVG(gas_price) / $1)::float as value
                     FROM transactions
-                    JOIN blocks ON transactions.block_number = blocks.number
+                    JOIN blocks ON transactions.block_hash = blocks.hash
                     WHERE date(blocks.timestamp) >= $2 AND blocks.consensus = true
                     GROUP BY date
                     "#,
@@ -43,7 +43,7 @@ impl ChartUpdater for AverageGasPrice {
                         blocks.timestamp::date as date,
                         (AVG(gas_price) / $1)::float as value
                     FROM transactions
-                    JOIN blocks ON transactions.block_number = blocks.number
+                    JOIN blocks ON transactions.block_hash = blocks.hash
                     WHERE blocks.consensus = true
                     GROUP BY date
                     "#,

@@ -1,5 +1,8 @@
 use crate::{
-    charts::{insert::DateValue, ChartUpdater},
+    charts::{
+        insert::{DateValue, DateValueDouble},
+        ChartUpdater,
+    },
     UpdateError,
 };
 use async_trait::async_trait;
@@ -8,10 +11,10 @@ use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 
 #[derive(Default, Debug)]
-pub struct ActiveAccounts {}
+pub struct TxnsFee {}
 
 #[async_trait]
-impl ChartUpdater for ActiveAccounts {
+impl ChartUpdater for TxnsFee {
     async fn get_values(
         &self,
         blockscout: &DatabaseConnection,
@@ -22,12 +25,14 @@ impl ChartUpdater for ActiveAccounts {
                 DbBackend::Postgres,
                 r#"
                 SELECT 
-                    DATE(blocks.timestamp) as date, 
-                    COUNT(DISTINCT from_address_hash)::TEXT as value
-                FROM transactions 
-                JOIN blocks on transactions.block_hash = blocks.hash
-                WHERE date(blocks.timestamp) >= $1 AND blocks.consensus = true
-                GROUP BY date(blocks.timestamp);
+                    DATE(b.timestamp) as date, 
+                    (SUM(t.gas_used * t.gas_price) / 1000000000000000000)::FLOAT as value
+                FROM transactions t
+                JOIN blocks       b ON t.block_hash = b.hash
+                WHERE
+                    DATE(b.timestamp) >= $1 AND
+                    b.consensus = true
+                GROUP BY DATE(b.timestamp)
                 "#,
                 vec![row.into()],
             ),
@@ -35,30 +40,34 @@ impl ChartUpdater for ActiveAccounts {
                 DbBackend::Postgres,
                 r#"
                 SELECT 
-                    DATE(blocks.timestamp) as date, 
-                    COUNT(DISTINCT from_address_hash)::TEXT as value
-                FROM transactions 
-                JOIN blocks on transactions.block_hash = blocks.hash
-                WHERE blocks.consensus = true
-                GROUP BY date(blocks.timestamp);
+                    DATE(b.timestamp) as date, 
+                    (SUM(t.gas_used * t.gas_price) / 1000000000000000000)::FLOAT as value
+                FROM transactions t
+                JOIN blocks       b ON t.block_hash = b.hash
+                WHERE b.consensus = true
+                GROUP BY DATE(b.timestamp)
                 "#,
                 vec![],
             ),
         };
 
-        let data = DateValue::find_by_statement(stmnt)
+        let data = DateValueDouble::find_by_statement(stmnt)
             .all(blockscout)
             .await
-            .map_err(UpdateError::BlockscoutDB)?;
+            .map_err(UpdateError::BlockscoutDB)?
+            .into_iter()
+            .map(DateValue::from)
+            .collect::<Vec<_>>();
         Ok(data)
     }
 }
 
 #[async_trait]
-impl crate::Chart for ActiveAccounts {
+impl crate::Chart for TxnsFee {
     fn name(&self) -> &str {
-        "activeAccounts"
+        "txnsFee"
     }
+
     fn chart_type(&self) -> ChartType {
         ChartType::Line
     }
@@ -75,22 +84,21 @@ impl crate::Chart for ActiveAccounts {
 
 #[cfg(test)]
 mod tests {
+    use super::TxnsFee;
     use crate::tests::simple_test::simple_test_chart;
-
-    use super::ActiveAccounts;
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn update_active_accounts() {
-        let chart = ActiveAccounts::default();
+    async fn update_txns_fee() {
+        let chart = TxnsFee::default();
         simple_test_chart(
-            "update_active_accounts",
+            "update_txns_fee",
             chart,
             vec![
-                ("2022-11-09", "1"),
-                ("2022-11-10", "2"),
-                ("2022-11-11", "2"),
-                ("2022-11-12", "1"),
+                ("2022-11-09", "0"),
+                ("2022-11-10", "0.000117962962845"),
+                ("2022-11-11", "0.000259518518259"),
+                ("2022-11-12", "0.000188740740552"),
             ],
         )
         .await;

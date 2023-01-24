@@ -143,7 +143,7 @@ fn mock_transaction(
         from_address_hash: Set(from_address_hash),
         to_address_hash: Set(Some(to_address_hash)),
         cumulative_gas_used: Set(Some(Default::default())),
-        gas_used: Set(Some(Default::default())),
+        gas_used: Set(Some(Decimal::new(gas, 0))),
         index: Set(Some(Default::default())),
         ..Default::default()
     }
