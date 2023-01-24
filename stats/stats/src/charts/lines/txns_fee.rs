@@ -13,6 +13,8 @@ use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 #[derive(Default, Debug)]
 pub struct TxnsFee {}
 
+const ETHER: i64 = i64::pow(10, 18);
+
 #[async_trait]
 impl ChartUpdater for TxnsFee {
     async fn get_values(
@@ -26,28 +28,28 @@ impl ChartUpdater for TxnsFee {
                 r#"
                 SELECT 
                     DATE(b.timestamp) as date, 
-                    (SUM(t.gas_used * t.gas_price) / 1000000000000000000)::FLOAT as value
+                    (SUM(t.gas_used * t.gas_price) / $1)::FLOAT as value
                 FROM transactions t
                 JOIN blocks       b ON t.block_hash = b.hash
                 WHERE
-                    DATE(b.timestamp) >= $1 AND
+                    DATE(b.timestamp) >= $2 AND
                     b.consensus = true
                 GROUP BY DATE(b.timestamp)
                 "#,
-                vec![row.into()],
+                vec![ETHER.into(), row.into()],
             ),
             None => Statement::from_sql_and_values(
                 DbBackend::Postgres,
                 r#"
                 SELECT 
                     DATE(b.timestamp) as date, 
-                    (SUM(t.gas_used * t.gas_price) / 1000000000000000000)::FLOAT as value
+                    (SUM(t.gas_used * t.gas_price) / $1)::FLOAT as value
                 FROM transactions t
                 JOIN blocks       b ON t.block_hash = b.hash
                 WHERE b.consensus = true
                 GROUP BY DATE(b.timestamp)
                 "#,
-                vec![],
+                vec![ETHER.into()],
             ),
         };
 
