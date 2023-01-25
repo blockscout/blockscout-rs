@@ -90,6 +90,7 @@ impl Charts {
             Arc::new(lines::AverageGasPrice::default()),
             Arc::new(lines::ActiveAccounts::default()),
             Arc::new(lines::AccountsGrowth::default()),
+            Arc::new(lines::TxnsFee::default()),
             // mock counters
             Arc::new(counters::MockCounter::new(
                 "totalAccounts".into(),
@@ -130,7 +131,6 @@ impl Charts {
                 100..10_000,
             )),
             Arc::new(lines::MockLine::new("newTxns".into(), 200..20_000)),
-            Arc::new(lines::MockLine::new("txnsFee".into(), 0.0001..0.01)),
             Arc::new(lines::MockLine::new("txnsGrowth".into(), 1000..10_000_000)),
         ]
     }

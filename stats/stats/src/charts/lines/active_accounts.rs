@@ -25,7 +25,7 @@ impl ChartUpdater for ActiveAccounts {
                     DATE(blocks.timestamp) as date, 
                     COUNT(DISTINCT from_address_hash)::TEXT as value
                 FROM transactions 
-                JOIN blocks on transactions.block_number = blocks.number
+                JOIN blocks on transactions.block_hash = blocks.hash
                 WHERE date(blocks.timestamp) >= $1 AND blocks.consensus = true
                 GROUP BY date(blocks.timestamp);
                 "#,
@@ -38,7 +38,7 @@ impl ChartUpdater for ActiveAccounts {
                     DATE(blocks.timestamp) as date, 
                     COUNT(DISTINCT from_address_hash)::TEXT as value
                 FROM transactions 
-                JOIN blocks on transactions.block_number = blocks.number
+                JOIN blocks on transactions.block_hash = blocks.hash
                 WHERE blocks.consensus = true
                 GROUP BY date(blocks.timestamp);
                 "#,

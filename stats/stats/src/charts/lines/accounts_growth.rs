@@ -27,7 +27,7 @@ impl ChartUpdater for AccountsGrowth {
                     SELECT DISTINCT ON (t.from_address_hash)
                         b.timestamp::date as date
                     FROM transactions  t
-                    JOIN blocks        b ON t.block_number = b.number
+                    JOIN blocks        b ON t.block_hash = b.hash
                     WHERE b.consensus = true
                     ORDER BY t.from_address_hash, b.timestamp
                 ) first_tx
