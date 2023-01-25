@@ -1,5 +1,5 @@
 mod average_block_time;
-// mod completed_txns;
+mod completed_txns;
 // mod total_accounts;
 mod mock;
 mod total_blocks;
@@ -9,7 +9,7 @@ mod total_tokens;
 mod total_txns;
 
 pub use average_block_time::AverageBlockTime;
-// pub use completed_txns::CompletedTxns;
+pub use completed_txns::CompletedTxns;
 // pub use total_accounts::TotalAccounts;
 pub use mock::MockCounter;
 pub use total_blocks::TotalBlocks;

@@ -52,7 +52,9 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
         .await
         .unwrap();
 
-    let txns = blocks
+    let failed_block = blocks.last().unwrap();
+
+    let txns = blocks[0..blocks.len() - 1]
         .iter()
         // make 1/3 of blocks empty
         .filter(|b| b.number.as_ref() % 3 != 1)
@@ -65,6 +67,19 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
             )
         });
     transactions::Entity::insert_many(txns)
+        .exec(blockscout)
+        .await
+        .unwrap();
+
+    let failed_txns = vec![
+        mock_failed_transaction(vec![123, 21], None, None),
+        mock_failed_transaction(
+            vec![123, 22],
+            Some(failed_block),
+            Some("dropped/replaced".into()),
+        ),
+    ];
+    transactions::Entity::insert_many(failed_txns)
         .exec(blockscout)
         .await
         .unwrap();
@@ -145,6 +160,34 @@ fn mock_transaction(
         cumulative_gas_used: Set(Some(Default::default())),
         gas_used: Set(Some(Default::default())),
         index: Set(Some(Default::default())),
+        ..Default::default()
+    }
+}
+
+fn mock_failed_transaction(
+    hash: Vec<u8>,
+    block: Option<&blocks::ActiveModel>,
+    error: Option<String>,
+) -> transactions::ActiveModel {
+    transactions::ActiveModel {
+        block_number: Set(block.map(|block| *block.number.as_ref() as i32)),
+        block_hash: Set(block.map(|block| block.hash.as_ref().to_vec())),
+        cumulative_gas_used: Set(block.map(|_| Default::default())),
+        gas_used: Set(block.map(|_| Default::default())),
+        index: Set(block.map(|_| Default::default())),
+        error: Set(error),
+        hash: Set(hash),
+        gas_price: Set(Decimal::new(1_123_456_789, 0)),
+        gas: Set(Decimal::new(21_000, 0)),
+        input: Set(Default::default()),
+        nonce: Set(Default::default()),
+        r: Set(Default::default()),
+        s: Set(Default::default()),
+        v: Set(Default::default()),
+        value: Set(Default::default()),
+        inserted_at: Set(Default::default()),
+        updated_at: Set(Default::default()),
+        from_address_hash: Set(vec![]),
         ..Default::default()
     }
 }

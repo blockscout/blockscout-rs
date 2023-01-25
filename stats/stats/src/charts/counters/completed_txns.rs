@@ -7,10 +7,10 @@ use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 
 #[derive(Default, Debug)]
-pub struct TotalTxns {}
+pub struct CompletedTxns {}
 
 #[async_trait]
-impl ChartFullUpdater for TotalTxns {
+impl ChartFullUpdater for CompletedTxns {
     async fn get_values(
         &self,
         blockscout: &DatabaseConnection,
@@ -22,6 +22,7 @@ impl ChartFullUpdater for TotalTxns {
                 (
                     SELECT count(*)::text
                         FROM transactions
+                        WHERE block_hash IS NOT NULL AND (error IS NULL OR error::text != 'dropped/replaced')
                 ) AS "value",
                 (
                     SELECT max(timestamp)::date as "date" 
@@ -41,9 +42,9 @@ impl ChartFullUpdater for TotalTxns {
 }
 
 #[async_trait]
-impl crate::Chart for TotalTxns {
+impl crate::Chart for CompletedTxns {
     fn name(&self) -> &str {
-        "totalTxns"
+        "completedTxns"
     }
 
     fn chart_type(&self) -> ChartType {
@@ -67,8 +68,8 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn update_total_txns() {
-        let counter = TotalTxns::default();
-        simple_test_counter("update_total_txns", counter, "7").await;
+    async fn update_completed_txns() {
+        let counter = CompletedTxns::default();
+        simple_test_counter("update_completed_txns", counter, "5").await;
     }
 }

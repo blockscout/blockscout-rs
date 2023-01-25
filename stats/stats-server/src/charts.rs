@@ -84,16 +84,13 @@ impl Charts {
             Arc::new(counters::AverageBlockTime::default()),
             Arc::new(counters::TotalTxns::default()),
             Arc::new(counters::TotalTokens::default()),
+            Arc::new(counters::CompletedTxns::default()),
             // finished lines
             Arc::new(lines::NewBlocks::default()),
             Arc::new(lines::AverageGasPrice::default()),
             Arc::new(lines::ActiveAccounts::default()),
             Arc::new(lines::AccountsGrowth::default()),
             // mock counters
-            Arc::new(counters::MockCounter::new(
-                "completedTxns".into(),
-                "956276037263".into(),
-            )),
             Arc::new(counters::MockCounter::new(
                 "totalAccounts".into(),
                 "765543".into(),
