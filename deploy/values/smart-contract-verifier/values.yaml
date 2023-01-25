@@ -90,6 +90,6 @@ scVerifier:
       _default: /metrics
 
     SMART_CONTRACT_VERIFIER__JAEGER__ENABLED:
-      _default: 'true'
+      _default: 'false'
     SMART_CONTRACT_VERIFIER__JAEGER__AGENT_ENDPOINT:
       _default: simplest-agent.observability.svc.cluster.local:5775
