@@ -13,7 +13,7 @@ mod average_gas_price;
 // mod native_coin_supply;
 mod new_blocks;
 // mod new_native_coins_transfers;
-// mod new_txns;
+mod new_txns;
 mod txns_fee;
 // mod txns_growth;
 
@@ -29,6 +29,6 @@ pub use average_gas_price::AverageGasPrice;
 pub use mock::MockLine;
 pub use new_blocks::NewBlocks;
 // pub use new_native_coins_transfers::NewNativeCoinTransfers;
-// pub use new_txns::NewTxns;
+pub use new_txns::NewTxns;
 pub use txns_fee::TxnsFee;
 // pub use txns_growth::TxnsGrowth;
