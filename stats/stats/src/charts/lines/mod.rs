@@ -4,7 +4,7 @@ mod utils;
 
 mod accounts_growth;
 mod active_accounts;
-// mod average_block_size;
+mod average_block_size;
 // mod average_gas_limit;
 mod average_gas_price;
 // mod average_txn_fee;
@@ -19,7 +19,7 @@ mod txns_fee;
 
 pub use accounts_growth::AccountsGrowth;
 pub use active_accounts::ActiveAccounts;
-// pub use average_block_size::AverageBlockSize;
+pub use average_block_size::AverageBlockSize;
 // pub use average_gas_limit::AverageGasLimit;
 pub use average_gas_price::AverageGasPrice;
 // pub use average_txn_fee::AverageTxnFee;
