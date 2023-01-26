@@ -113,6 +113,7 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
 }
 
 fn mock_block(index: i64, ts: &str, consensus: bool) -> blocks::ActiveModel {
+    let size = 1000 + (index as i32 * 15485863) % 5000;
     blocks::ActiveModel {
         number: Set(index),
         hash: Set(index.to_le_bytes().to_vec()),
@@ -125,6 +126,7 @@ fn mock_block(index: i64, ts: &str, consensus: bool) -> blocks::ActiveModel {
         parent_hash: Set((index - 1).to_le_bytes().to_vec()),
         inserted_at: Set(Default::default()),
         updated_at: Set(Default::default()),
+        size: Set(Some(size)),
         ..Default::default()
     }
 }
