@@ -1,20 +1,10 @@
-use serde::Deserialize;
+use crate::charts_config::{ChartSettings, Config};
 use stats::{counters, entity::sea_orm_active_enums::ChartType, lines, Chart};
-use stats_proto::blockscout::stats::v1::LineCharts;
-use std::{collections::HashSet, hash::Hash, sync::Arc};
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct CounterInfo {
-    pub id: String,
-    pub title: String,
-    pub units: Option<String>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct Config {
-    pub counters: Vec<CounterInfo>,
-    pub lines: LineCharts,
-}
+use std::{
+    collections::{HashMap, HashSet},
+    hash::Hash,
+    sync::Arc,
+};
 
 pub type ArcChart = Arc<dyn Chart + Send + Sync + 'static>;
 
@@ -23,6 +13,7 @@ pub struct Charts {
     pub charts: Vec<ArcChart>,
     pub counters_filter: HashSet<String>,
     pub lines_filter: HashSet<String>,
+    pub settings: HashMap<String, ChartSettings>,
 }
 
 fn new_hashset_check_duplicates<T: Hash + Eq, I: IntoIterator<Item = T>>(
@@ -38,8 +29,30 @@ fn new_hashset_check_duplicates<T: Hash + Eq, I: IntoIterator<Item = T>>(
     Ok(result)
 }
 
+struct ValidatedConfig {
+    charts: Vec<ArcChart>,
+    counters_filter: HashSet<String>,
+    lines_filter: HashSet<String>,
+}
+
 impl Charts {
     pub fn new(config: Config) -> Result<Self, anyhow::Error> {
+        let ValidatedConfig {
+            charts,
+            counters_filter,
+            lines_filter,
+        } = Self::validate_config(&config)?;
+        let settings = Self::new_settings(&config);
+        Ok(Self {
+            config,
+            charts,
+            counters_filter,
+            lines_filter,
+            settings,
+        })
+    }
+
+    fn validate_config(config: &Config) -> Result<ValidatedConfig, anyhow::Error> {
         let counters_filter = config.counters.iter().map(|counter| counter.id.clone());
         let counters_filter = new_hashset_check_duplicates(counters_filter)
             .map_err(|id| anyhow::anyhow!("encountered same id twice: {}", id))?;
@@ -69,12 +82,26 @@ impl Charts {
             ));
         }
 
-        Ok(Self {
-            config,
+        Ok(ValidatedConfig {
             charts,
             counters_filter,
             lines_filter,
         })
+    }
+
+    // assumes that config is valid
+    fn new_settings(config: &Config) -> HashMap<String, ChartSettings> {
+        config
+            .counters
+            .iter()
+            .map(|counter| (counter.id.clone(), counter.settings.clone()))
+            .chain(config.lines.sections.iter().flat_map(|section| {
+                section
+                    .charts
+                    .iter()
+                    .map(|chart| (chart.id.clone(), chart.settings.clone()))
+            }))
+            .collect()
     }
 
     fn all_charts() -> Vec<ArcChart> {

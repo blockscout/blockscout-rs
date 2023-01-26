@@ -1,7 +1,5 @@
 use crate::{
-    charts::{self, Charts},
-    read_service::ReadService,
-    settings::Settings,
+    charts::Charts, charts_config, read_service::ReadService, settings::Settings,
     update_service::UpdateService,
 };
 use actix_web::web::ServiceConfig;
@@ -48,7 +46,7 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
     )?;
 
     let charts_config = std::fs::read(settings.charts_config)?;
-    let charts_config: charts::Config = toml::from_slice(&charts_config)?;
+    let charts_config: charts_config::Config = toml::from_slice(&charts_config)?;
 
     let mut opt = ConnectOptions::new(settings.db_url.clone());
     opt.sqlx_logging_level(tracing::log::LevelFilter::Debug);
@@ -71,10 +69,11 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
 
     let update_service =
         Arc::new(UpdateService::new(db.clone(), blockscout, charts.clone()).await?);
-    tokio::spawn(async move {
-        update_service.update().await;
-        update_service.run_cron(settings.update_schedule).await;
-    });
+
+    if settings.update_on_start {
+        update_service.clone().force_update_all();
+    }
+    update_service.run(settings.default_schedule);
 
     let read_service = Arc::new(ReadService::new(db, charts).await?);
 
