@@ -8,10 +8,10 @@ use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 
 #[derive(Default, Debug)]
-pub struct ActiveAccounts {}
+pub struct AverageBlockSize {}
 
 #[async_trait]
-impl ChartUpdater for ActiveAccounts {
+impl ChartUpdater for AverageBlockSize {
     async fn get_values(
         &self,
         blockscout: &DatabaseConnection,
@@ -21,26 +21,26 @@ impl ChartUpdater for ActiveAccounts {
             Some(row) => Statement::from_sql_and_values(
                 DbBackend::Postgres,
                 r#"
-                SELECT 
-                    DATE(blocks.timestamp) as date, 
-                    COUNT(DISTINCT from_address_hash)::TEXT as value
-                FROM transactions 
-                JOIN blocks on transactions.block_hash = blocks.hash
-                WHERE date(blocks.timestamp) >= $1 AND blocks.consensus = true
-                GROUP BY date(blocks.timestamp);
+                SELECT
+                    DATE(blocks.timestamp) as date,
+                    ROUND(AVG(blocks.size))::TEXT as value
+                FROM blocks
+                WHERE 
+                    DATE(blocks.timestamp) >= $1 AND 
+                    consensus = true
+                GROUP BY date
                 "#,
                 vec![row.into()],
             ),
             None => Statement::from_sql_and_values(
                 DbBackend::Postgres,
                 r#"
-                SELECT 
-                    DATE(blocks.timestamp) as date, 
-                    COUNT(DISTINCT from_address_hash)::TEXT as value
-                FROM transactions 
-                JOIN blocks on transactions.block_hash = blocks.hash
-                WHERE blocks.consensus = true
-                GROUP BY date(blocks.timestamp);
+                SELECT
+                    DATE(blocks.timestamp) as date,
+                    ROUND(AVG(blocks.size))::TEXT as value
+                FROM blocks
+                WHERE consensus = true
+                GROUP BY date
                 "#,
                 vec![],
             ),
@@ -55,10 +55,11 @@ impl ChartUpdater for ActiveAccounts {
 }
 
 #[async_trait]
-impl crate::Chart for ActiveAccounts {
+impl crate::Chart for AverageBlockSize {
     fn name(&self) -> &str {
-        "activeAccounts"
+        "averageBlockSize"
     }
+
     fn chart_type(&self) -> ChartType {
         ChartType::Line
     }
@@ -75,22 +76,21 @@ impl crate::Chart for ActiveAccounts {
 
 #[cfg(test)]
 mod tests {
+    use super::AverageBlockSize;
     use crate::tests::simple_test::simple_test_chart;
-
-    use super::ActiveAccounts;
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn update_active_accounts() {
-        let chart = ActiveAccounts::default();
+    async fn update_average_block_size() {
+        let chart = AverageBlockSize::default();
         simple_test_chart(
-            "update_active_accounts",
+            "update_average_block_size",
             chart,
             vec![
-                ("2022-11-09", "1"),
-                ("2022-11-10", "2"),
-                ("2022-11-11", "2"),
-                ("2022-11-12", "1"),
+                ("2022-11-09", "1000"),
+                ("2022-11-10", "2726"),
+                ("2022-11-11", "3247"),
+                ("2022-11-12", "2904"),
             ],
         )
         .await;

@@ -8,10 +8,10 @@ use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 
 #[derive(Default, Debug)]
-pub struct ActiveAccounts {}
+pub struct NewTxns {}
 
 #[async_trait]
-impl ChartUpdater for ActiveAccounts {
+impl ChartUpdater for NewTxns {
     async fn get_values(
         &self,
         blockscout: &DatabaseConnection,
@@ -22,12 +22,14 @@ impl ChartUpdater for ActiveAccounts {
                 DbBackend::Postgres,
                 r#"
                 SELECT 
-                    DATE(blocks.timestamp) as date, 
-                    COUNT(DISTINCT from_address_hash)::TEXT as value
-                FROM transactions 
-                JOIN blocks on transactions.block_hash = blocks.hash
-                WHERE date(blocks.timestamp) >= $1 AND blocks.consensus = true
-                GROUP BY date(blocks.timestamp);
+                    date(b.timestamp) as date, 
+                    COUNT(*)::TEXT as value
+                FROM transactions t
+                JOIN blocks       b ON t.block_hash = b.hash
+                WHERE 
+                    date(b.timestamp) >= $1 AND 
+                    b.consensus = true
+                GROUP BY date;
                 "#,
                 vec![row.into()],
             ),
@@ -35,12 +37,12 @@ impl ChartUpdater for ActiveAccounts {
                 DbBackend::Postgres,
                 r#"
                 SELECT 
-                    DATE(blocks.timestamp) as date, 
-                    COUNT(DISTINCT from_address_hash)::TEXT as value
-                FROM transactions 
-                JOIN blocks on transactions.block_hash = blocks.hash
-                WHERE blocks.consensus = true
-                GROUP BY date(blocks.timestamp);
+                    date(b.timestamp) as date, 
+                    COUNT(*)::TEXT as value
+                FROM transactions t
+                JOIN blocks       b ON t.block_hash = b.hash
+                WHERE b.consensus = true
+                GROUP BY date;
                 "#,
                 vec![],
             ),
@@ -55,10 +57,11 @@ impl ChartUpdater for ActiveAccounts {
 }
 
 #[async_trait]
-impl crate::Chart for ActiveAccounts {
+impl crate::Chart for NewTxns {
     fn name(&self) -> &str {
-        "activeAccounts"
+        "newTxns"
     }
+
     fn chart_type(&self) -> ChartType {
         ChartType::Line
     }
@@ -75,21 +78,20 @@ impl crate::Chart for ActiveAccounts {
 
 #[cfg(test)]
 mod tests {
+    use super::NewTxns;
     use crate::tests::simple_test::simple_test_chart;
-
-    use super::ActiveAccounts;
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn update_active_accounts() {
-        let chart = ActiveAccounts::default();
+    async fn update_new_txns() {
+        let chart = NewTxns::default();
         simple_test_chart(
-            "update_active_accounts",
+            "update_new_txns",
             chart,
             vec![
-                ("2022-11-09", "1"),
-                ("2022-11-10", "2"),
-                ("2022-11-11", "2"),
+                ("2022-11-09", "2"),
+                ("2022-11-10", "4"),
+                ("2022-11-11", "4"),
                 ("2022-11-12", "1"),
             ],
         )

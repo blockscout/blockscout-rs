@@ -29,14 +29,14 @@ visualizer:
   resources:
     limits:
       memory:
-        _default: "0.5Gi"
+        _default: "0.05Gi"
       cpu:
-        _default: "0.25"
+        _default: "0.05"
     requests:
       memory:
-        _default: "0.5Gi"
+        _default: "0.05Gi"
       cpu:
-        _default: "0.25"
+        _default: "0.05"
 
   # node label
   nodeSelector:
