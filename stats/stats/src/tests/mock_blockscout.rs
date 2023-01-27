@@ -67,6 +67,7 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
                     (b.number.as_ref() * 1_123_456_789) % 70_000_000_000,
                     &accounts,
                     0,
+                    false,
                 ),
                 mock_transaction(
                     b,
@@ -74,6 +75,7 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
                     (b.number.as_ref() * 1_123_456_789) % 70_000_000_000,
                     &accounts,
                     1,
+                    true,
                 ),
             ]
         });
@@ -147,6 +149,7 @@ fn mock_transaction(
     gas_price: i64,
     address_list: &Vec<addresses::ActiveModel>,
     index: i32,
+    is_contract_call: bool,
 ) -> transactions::ActiveModel {
     let block_number = block.number.as_ref().to_owned() as i32;
     let hash = vec![0, 0, 0, 0, block_number as u8, index as u8];
@@ -154,6 +157,12 @@ fn mock_transaction(
     let from_address_hash = address_list[address_index].hash.as_ref().to_vec();
     let address_index = (block_number as usize + 1) % address_list.len();
     let to_address_hash = address_list[address_index].hash.as_ref().to_vec();
+    let input = is_contract_call
+        .then(|| vec![60u8, 80u8])
+        .unwrap_or_default();
+    let value = (!is_contract_call)
+        .then_some(1_000_000_000_000)
+        .unwrap_or_default();
 
     transactions::ActiveModel {
         block_number: Set(Some(block_number)),
@@ -161,12 +170,12 @@ fn mock_transaction(
         hash: Set(hash),
         gas_price: Set(Decimal::new(gas_price, 0)),
         gas: Set(Decimal::new(gas, 0)),
-        input: Set(Default::default()),
+        input: Set(input),
         nonce: Set(Default::default()),
         r: Set(Default::default()),
         s: Set(Default::default()),
         v: Set(Default::default()),
-        value: Set(Default::default()),
+        value: Set(Decimal::new(value, 0)),
         inserted_at: Set(Default::default()),
         updated_at: Set(Default::default()),
         from_address_hash: Set(from_address_hash),
