@@ -1,9 +1,8 @@
+use crate::charts::{ArcChart, Charts};
 use chrono::Utc;
 use cron::Schedule;
 use sea_orm::{DatabaseConnection, DbErr};
 use std::sync::Arc;
-
-use crate::charts::{ArcChart, Charts};
 
 pub struct UpdateService {
     db: Arc<DatabaseConnection>,
@@ -32,6 +31,35 @@ impl UpdateService {
             blockscout,
             charts,
         })
+    }
+
+    pub async fn force_update_all(self: Arc<Self>) {
+        let tasks = self.charts.charts.iter().map(|chart| {
+            let this = self.clone();
+            let chart = chart.clone();
+            tokio::spawn(async move { this.update(chart).await })
+        });
+        futures::future::join_all(tasks).await;
+    }
+
+    pub fn run(self: Arc<Self>, default_schedule: Schedule) {
+        for chart in self.charts.charts.iter() {
+            let settings = self
+                .charts
+                .settings
+                .get(chart.name())
+                .expect("enabled chart must contain settings");
+            {
+                let this = self.clone();
+                let chart = chart.clone();
+                let schedule = settings
+                    .update_schedule
+                    .as_ref()
+                    .unwrap_or(&default_schedule)
+                    .clone();
+                tokio::spawn(async move { this.run_cron(chart, schedule).await });
+            }
+        }
     }
 
     async fn update(&self, chart: ArcChart) {
@@ -74,32 +102,6 @@ impl UpdateService {
             );
             tokio::time::sleep(sleep_duration).await;
             self.update(chart.clone()).await;
-        }
-    }
-
-    pub fn force_update_all(self: Arc<Self>) {
-        for chart in self.charts.charts.iter() {
-            {
-                let this = self.clone();
-                let chart = chart.clone();
-                tokio::spawn(async move { this.update(chart).await });
-            }
-        }
-    }
-
-    pub fn run(self: Arc<Self>, default_schedule: Schedule) {
-        for chart in self.charts.charts.iter() {
-            let settings = self.charts.settings.get(chart.name()).unwrap();
-            {
-                let this = self.clone();
-                let chart = chart.clone();
-                let schedule = settings
-                    .update_schedule
-                    .as_ref()
-                    .unwrap_or(&default_schedule)
-                    .clone();
-                tokio::spawn(async move { this.run_cron(chart, schedule).await });
-            }
         }
     }
 }
