@@ -12,7 +12,7 @@ pub async fn init_db<M: MigratorTrait>(name: &str, db_url: Option<String>) -> Da
         let mut guard = DB_NAMES.lock().unwrap();
         guard.insert(name.to_owned())
     };
-    assert!(db_not_created, "db with name {} already was created", name);
+    assert!(db_not_created, "db with name {name} already was created",);
 
     let db_url =
         db_url.unwrap_or_else(|| std::env::var("DATABASE_URL").expect("no DATABASE_URL env"));
@@ -25,14 +25,14 @@ pub async fn init_db<M: MigratorTrait>(name: &str, db_url: Option<String>) -> Da
     raw_conn
         .execute(Statement::from_string(
             sea_orm::DatabaseBackend::Postgres,
-            format!("DROP DATABASE IF EXISTS {} WITH (FORCE)", name),
+            format!("DROP DATABASE IF EXISTS {name} WITH (FORCE)",),
         ))
         .await
         .expect("failed to drop test database");
     raw_conn
         .execute(Statement::from_string(
             sea_orm::DatabaseBackend::Postgres,
-            format!("CREATE DATABASE {}", name),
+            format!("CREATE DATABASE {name}",),
         ))
         .await
         .expect("failed to create test database");
