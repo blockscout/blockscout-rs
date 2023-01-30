@@ -114,12 +114,13 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
 
 fn mock_block(index: i64, ts: &str, consensus: bool) -> blocks::ActiveModel {
     let size = 1000 + (index as i32 * 15485863) % 5000;
+    let gas_limit = if index <= 3 { 12_500_000 } else { 30_000_000 };
     blocks::ActiveModel {
         number: Set(index),
         hash: Set(index.to_le_bytes().to_vec()),
         timestamp: Set(NaiveDateTime::from_str(ts).unwrap()),
         consensus: Set(consensus),
-        gas_limit: Set(Default::default()),
+        gas_limit: Set(Decimal::new(gas_limit, 0)),
         gas_used: Set(Default::default()),
         miner_hash: Set(Default::default()),
         nonce: Set(Default::default()),

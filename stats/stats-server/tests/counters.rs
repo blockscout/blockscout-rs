@@ -18,8 +18,8 @@ fn client() -> ClientWithMiddleware {
 async fn test_counters_ok() {
     let db_url = std::env::var("DATABASE_URL").expect("no DATABASE_URL env");
     let (_stats, blockscout) = init_db_all("test_counters_ok", Some(db_url.clone())).await;
-    let stats_db_url = format!("{}/test_counters_ok", db_url);
-    let blockscout_db_url = format!("{}/test_counters_ok_blockscout", db_url);
+    let stats_db_url = format!("{db_url}/test_counters_ok",);
+    let blockscout_db_url = format!("{db_url}/test_counters_ok_blockscout",);
     fill_mock_blockscout_data(&blockscout, "2022-11-11").await;
 
     let mut settings = Settings::default();
