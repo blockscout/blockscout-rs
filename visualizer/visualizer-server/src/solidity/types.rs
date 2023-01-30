@@ -85,8 +85,7 @@ mod tests {
         let actual_error = output_mask(field_mask).expect_err("must be invalid output mask");
         assert!(
             actual_error.to_string().contains(expected_error),
-            "actual error doesn't contains expected part: {}",
-            actual_error
+            "actual error doesn't contains expected part: {actual_error}"
         );
     }
 

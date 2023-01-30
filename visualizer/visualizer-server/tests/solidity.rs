@@ -78,15 +78,15 @@ async fn visualize_contract_success(request: serde_json::Value, expected_svg: St
 }
 
 async fn visualize_contracts_success_from_dir(project_name: &str, sample_name: &str) {
-    let project_path = PathBuf::from(format!("{}/{}", CONTRACTS_DIR, project_name));
+    let project_path = PathBuf::from(format!("{CONTRACTS_DIR}/{project_name}",));
 
     let request = json!({
         "sources": get_dir_files(&project_path),
     });
 
-    let svg_path = format!("{}/uml/{}.svg", SAMPLES_DIR, sample_name);
+    let svg_path = format!("{SAMPLES_DIR}/uml/{sample_name}.svg");
     let expected_svg = fs::read_to_string(&svg_path)
-        .unwrap_or_else(|_| panic!("Error while reading {}.svg", sample_name));
+        .unwrap_or_else(|_| panic!("Error while reading {sample_name}.svg",));
     visualize_contract_success(request, expected_svg).await;
 }
 
@@ -110,7 +110,7 @@ async fn visualize_storage_success_from_dir(
     main_contract_filename: &str,
     sample_name: &str,
 ) {
-    let project_path = PathBuf::from(format!("{}/{}", CONTRACTS_DIR, project_name));
+    let project_path = PathBuf::from(format!("{CONTRACTS_DIR}/{project_name}"));
 
     let request = json!({
         "sources": get_dir_files(&project_path),
@@ -118,9 +118,9 @@ async fn visualize_storage_success_from_dir(
         "file_name": main_contract_filename,
     });
 
-    let svg_path = format!("{}/storage/{}.svg", SAMPLES_DIR, sample_name);
+    let svg_path = format!("{SAMPLES_DIR}/storage/{sample_name}.svg");
     let expected_svg = fs::read_to_string(&svg_path)
-        .unwrap_or_else(|_| panic!("Error while reading {}.svg", sample_name));
+        .unwrap_or_else(|_| panic!("Error while reading {sample_name}.svg",));
 
     visualize_storage_success(request, expected_svg).await;
 }
@@ -146,8 +146,8 @@ mod success_simple_tests {
 
     #[actix_web::test]
     async fn storage_simple_contract_alt_path() {
-        let contract_path = format!("{}/SimpleContract.sol", CONTRACTS_DIR);
-        let storage_path = format!("{}/storage/simple_contract.svg", SAMPLES_DIR);
+        let contract_path = format!("{CONTRACTS_DIR}/SimpleContract.sol",);
+        let storage_path = format!("{SAMPLES_DIR}/storage/simple_contract.svg",);
         let contract =
             fs::read_to_string(&contract_path).expect("Error while reading SimpleContract.sol");
         let storage =
@@ -311,7 +311,7 @@ mod failure_tests {
 
     #[actix_web::test]
     async fn uml_wrong_path() {
-        let contract_path = format!("{}/SimpleContract.sol", CONTRACTS_DIR);
+        let contract_path = format!("{CONTRACTS_DIR}/SimpleContract.sol",);
         let contract =
             fs::read_to_string(&contract_path).expect("Error while reading SimpleContract.sol");
         let request = json!({
@@ -331,14 +331,13 @@ mod failure_tests {
         let message = response.response().error().unwrap().to_string();
         assert!(
             message.contains("All paths should be relative"),
-            "Invalid response message: {}",
-            message
+            "Invalid response message: {message}",
         );
     }
 
     #[actix_web::test]
     async fn storage_wrong_main_contract() {
-        let contract_path = PathBuf::from(format!("{}/SimpleContract.sol", CONTRACTS_DIR));
+        let contract_path = PathBuf::from(format!("{CONTRACTS_DIR}/SimpleContract.sol",));
 
         let request = json!({
             "sources": get_dir_files(&contract_path),
@@ -356,14 +355,13 @@ mod failure_tests {
         let message = response.response().error().unwrap().to_string();
         assert!(
             message.contains("Failed to find contract with name"),
-            "Invalid response message: {}",
-            message
+            "Invalid response message: {message}",
         );
     }
 
     #[actix_web::test]
     async fn uml_library_with_syntax_error() {
-        let project_path = PathBuf::from(format!("{}/library_syntax_error", CONTRACTS_DIR));
+        let project_path = PathBuf::from(format!("{CONTRACTS_DIR}/library_syntax_error",));
 
         let request = json!({ "sources": get_dir_files(&project_path) });
 
@@ -376,8 +374,7 @@ mod failure_tests {
         let err = response.response().error().unwrap().to_string();
         assert!(
             err.contains("Failed to parse solidity code",),
-            "Invalid response, wrong error type: {}",
-            err
+            "Invalid response, wrong error type: {err}",
         )
     }
 
@@ -386,8 +383,7 @@ mod failure_tests {
         // sol2uml returns error if main contract is inherited from missing contract
         // cause it affects main contract storage
         let project_path = PathBuf::from(format!(
-            "{}/ImportMissingInheritedContract.sol",
-            CONTRACTS_DIR
+            "{CONTRACTS_DIR}/ImportMissingInheritedContract.sol",
         ));
 
         let request = json!({
@@ -405,8 +401,7 @@ mod failure_tests {
         let err = response.response().error().unwrap().to_string();
         assert!(
             err.contains("Failed to find inherited contract",),
-            "Invalid response, wrong error type: {}",
-            err
+            "Invalid response, wrong error type: {err}",
         )
     }
 }
