@@ -44,8 +44,7 @@ async fn get_min_block_saved(db: &DatabaseConnection) -> Result<i64, DbErr> {
     let value = match value {
         Some(v) => v.parse::<i64>().map_err(|e| {
             DbErr::Type(format!(
-                "cannot parse value in kv_storage with key '{}': {}",
-                MIN_BLOCK_KEY, e
+                "cannot parse value in kv_storage with key '{MIN_BLOCK_KEY}': {e}",
             ))
         })?,
         None => i64::MAX,
