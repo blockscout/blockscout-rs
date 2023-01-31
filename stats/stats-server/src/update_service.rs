@@ -33,11 +33,11 @@ impl UpdateService {
         })
     }
 
-    pub async fn force_update_all(self: Arc<Self>) {
+    pub async fn force_update_all(self: Arc<Self>, force_full: bool) {
         let tasks = self.charts.charts.iter().map(|chart| {
             let this = self.clone();
             let chart = chart.clone();
-            tokio::spawn(async move { this.update(chart).await })
+            tokio::spawn(async move { this.update(chart, force_full).await })
         });
         futures::future::join_all(tasks).await;
     }
@@ -62,21 +62,13 @@ impl UpdateService {
         }
     }
 
-    async fn update(&self, chart: ArcChart) {
-        // TODO: store min_block_blockscout for each chart
-        let (full_update, min_block_blockscout) =
-            stats::is_blockscout_indexing(&self.blockscout, &self.db)
-                .await
-                .unwrap_or_else(|e| {
-                    tracing::error!("error during blockscout indexing check: {}", e);
-                    (true, i64::MAX)
-                });
-        tracing::info!(full_update = full_update, "updating {}", chart.name());
+    async fn update(&self, chart: ArcChart, force_full: bool) {
+        tracing::info!("updating {}", chart.name());
         let result = {
             let _timer = stats::metrics::CHART_UPDATE_TIME
                 .with_label_values(&[chart.name()])
                 .start_timer();
-            chart.update(&self.db, &self.blockscout, full_update).await
+            chart.update(&self.db, &self.blockscout, force_full).await
         };
         if let Err(err) = result {
             stats::metrics::UPDATE_ERRORS
@@ -85,10 +77,6 @@ impl UpdateService {
             tracing::error!("error during updating {}: {}", chart.name(), err);
         } else {
             tracing::info!("successfully updated chart {}", chart.name());
-        }
-        // TODO: store min_block_blockscout for each chart
-        if let Err(e) = stats::set_min_block_saved(&self.db, min_block_blockscout).await {
-            tracing::error!("error during saving indexing info: {}", e);
         }
     }
 
@@ -101,7 +89,7 @@ impl UpdateService {
                 sleep_duration
             );
             tokio::time::sleep(sleep_duration).await;
-            self.update(chart.clone()).await;
+            self.update(chart.clone(), false).await;
         }
     }
 }

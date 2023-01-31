@@ -1,6 +1,5 @@
 // mod lines_list;
 mod mock;
-mod utils;
 
 mod accounts_growth;
 mod active_accounts;
