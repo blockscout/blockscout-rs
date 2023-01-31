@@ -58,7 +58,7 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
         .iter()
         // make 1/3 of blocks empty
         .filter(|b| b.number.as_ref() % 3 != 1)
-        // add 2 transactions to block
+        // add 3 transactions to block
         .flat_map(|b| {
             [
                 mock_transaction(
@@ -75,6 +75,14 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
                     (b.number.as_ref() * 1_123_456_789) % 70_000_000_000,
                     &accounts,
                     1,
+                    false,
+                ),
+                mock_transaction(
+                    b,
+                    21_000,
+                    (b.number.as_ref() * 1_123_456_789) % 70_000_000_000,
+                    &accounts,
+                    2,
                     true,
                 ),
             ]

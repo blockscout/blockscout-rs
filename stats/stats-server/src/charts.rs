@@ -121,6 +121,7 @@ impl Charts {
             Arc::new(lines::NewTxns::default()),
             Arc::new(lines::AverageBlockSize::default()),
             Arc::new(lines::AverageGasLimit::default()),
+            Arc::new(lines::NewNativeCoinTransfers::default()),
             // mock counters
             Arc::new(counters::MockCounter::new(
                 "totalAccounts".into(),
@@ -147,10 +148,6 @@ impl Charts {
             Arc::new(lines::MockLine::new(
                 "nativeCoinSupply".into(),
                 1_000_000..100_000_000,
-            )),
-            Arc::new(lines::MockLine::new(
-                "newNativeCoinTransfers".into(),
-                100..10_000,
             )),
             Arc::new(lines::MockLine::new("txnsGrowth".into(), 1000..10_000_000)),
         ]
