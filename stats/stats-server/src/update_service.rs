@@ -1,9 +1,8 @@
+use crate::charts::{ArcChart, Charts};
 use chrono::Utc;
 use cron::Schedule;
 use sea_orm::{DatabaseConnection, DbErr};
 use std::sync::Arc;
-
-use crate::charts::Charts;
 
 pub struct UpdateService {
     db: Arc<DatabaseConnection>,
@@ -34,9 +33,37 @@ impl UpdateService {
         })
     }
 
-    pub async fn update(&self) {
-        let _timer = stats::metrics::UPDATE_TIME.start_timer();
+    pub async fn force_update_all(self: Arc<Self>) {
+        let tasks = self.charts.charts.iter().map(|chart| {
+            let this = self.clone();
+            let chart = chart.clone();
+            tokio::spawn(async move { this.update(chart).await })
+        });
+        futures::future::join_all(tasks).await;
+    }
 
+    pub fn run(self: Arc<Self>, default_schedule: Schedule) {
+        for chart in self.charts.charts.iter() {
+            let settings = self
+                .charts
+                .settings
+                .get(chart.name())
+                .expect("enabled chart must contain settings");
+            {
+                let this = self.clone();
+                let chart = chart.clone();
+                let schedule = settings
+                    .update_schedule
+                    .as_ref()
+                    .unwrap_or(&default_schedule)
+                    .clone();
+                tokio::spawn(async move { this.run_cron(chart, schedule).await });
+            }
+        }
+    }
+
+    async fn update(&self, chart: ArcChart) {
+        // TODO: store min_block_blockscout for each chart
         let (full_update, min_block_blockscout) =
             stats::is_blockscout_indexing(&self.blockscout, &self.db)
                 .await
@@ -44,42 +71,37 @@ impl UpdateService {
                     tracing::error!("error during blockscout indexing check: {}", e);
                     (true, i64::MAX)
                 });
-        tracing::info!(full_update = full_update, "start updating all charts");
-        let handles = self.charts.charts.iter().map(|chart| {
-            let db = self.db.clone();
-            let blockscout = self.blockscout.clone();
-            let chart = chart.clone();
-            tokio::spawn(async move {
-                tracing::info!("updating {}", chart.name());
-                let result = {
-                    let _timer = stats::metrics::CHART_UPDATE_TIME
-                        .with_label_values(&[chart.name()])
-                        .start_timer();
-                    chart.update(&db, &blockscout, full_update).await
-                };
-                if let Err(err) = result {
-                    stats::metrics::UPDATE_ERRORS
-                        .with_label_values(&[chart.name()])
-                        .inc();
-                    tracing::error!("error during updating {}: {}", chart.name(), err);
-                } else {
-                    tracing::info!("successfully updated chart {}", chart.name());
-                }
-            })
-        });
-        futures::future::join_all(handles).await;
-        tracing::info!("updating all charts is completed");
+        tracing::info!(full_update = full_update, "updating {}", chart.name());
+        let result = {
+            let _timer = stats::metrics::CHART_UPDATE_TIME
+                .with_label_values(&[chart.name()])
+                .start_timer();
+            chart.update(&self.db, &self.blockscout, full_update).await
+        };
+        if let Err(err) = result {
+            stats::metrics::UPDATE_ERRORS
+                .with_label_values(&[chart.name()])
+                .inc();
+            tracing::error!("error during updating {}: {}", chart.name(), err);
+        } else {
+            tracing::info!("successfully updated chart {}", chart.name());
+        }
+        // TODO: store min_block_blockscout for each chart
         if let Err(e) = stats::set_min_block_saved(&self.db, min_block_blockscout).await {
             tracing::error!("error during saving indexing info: {}", e);
         }
     }
 
-    pub async fn run_cron(self: Arc<Self>, schedule: Schedule) {
+    async fn run_cron(&self, chart: ArcChart, schedule: Schedule) {
         loop {
             let sleep_duration = time_till_next_call(&schedule);
-            tracing::debug!("scheduled next run of stats update in {:?}", sleep_duration);
+            tracing::info!(
+                "scheduled next run of chart {} update in {:?}",
+                chart.name(),
+                sleep_duration
+            );
             tokio::time::sleep(sleep_duration).await;
-            self.update().await;
+            self.update(chart.clone()).await;
         }
     }
 }
