@@ -181,7 +181,7 @@ pub trait ChartUpdater: Chart {
             match last_row {
                 Some(row) => {
                     if let Some(block) = row.min_blockscout_block {
-                        if block != min_blockscout_block {
+                        if block == min_blockscout_block {
                             tracing::info!(
                                 min_blockscout_block = min_blockscout_block,
                                 min_chart_block = block,
