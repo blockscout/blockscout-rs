@@ -9,7 +9,7 @@ use crate::{
 use amplify::Wrapper;
 use async_trait::async_trait;
 use eth_bytecode_db::verification::{
-    solidity_multi_part, solidity_standard_json, Client, VerificationRequest,
+    compiler_versions, solidity_multi_part, solidity_standard_json, Client, VerificationRequest,
 };
 
 pub struct SolidityVerifierService {
@@ -72,6 +72,8 @@ impl solidity_verifier_server::SolidityVerifier for SolidityVerifierService {
         &self,
         _request: tonic::Request<ListCompilerVersionsRequest>,
     ) -> Result<tonic::Response<ListCompilerVersionsResponse>, tonic::Status> {
-        todo!()
+        let result = compiler_versions::solidity_versions(self.client.clone()).await;
+
+        verifier_base::process_compiler_versions_result(result)
     }
 }

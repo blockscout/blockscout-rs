@@ -31,5 +31,6 @@ pretty_assertions = "1.3"
 reqwest = { version = "0.11", features = ["json"]}
 rand = "0.8"
 rstest = "0.16"
+sea-orm = { version = "*", features = [ "sqlx-sqlite" ]}
 tokio-stream = { version = "0.1", features = ["net"] }
 tracing = "0.1"
