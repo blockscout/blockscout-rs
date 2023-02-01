@@ -63,7 +63,7 @@ impl UpdateService {
     }
 
     async fn update(&self, chart: ArcChart, force_full: bool) {
-        tracing::info!("updating {}", chart.name());
+        tracing::info!(chart = chart.name(), "updating chart");
         let result = {
             let _timer = stats::metrics::CHART_UPDATE_TIME
                 .with_label_values(&[chart.name()])
@@ -74,9 +74,9 @@ impl UpdateService {
             stats::metrics::UPDATE_ERRORS
                 .with_label_values(&[chart.name()])
                 .inc();
-            tracing::error!("error during updating {}: {}", chart.name(), err);
+            tracing::error!(chart = chart.name(), "error during updating chart: {}", err);
         } else {
-            tracing::info!("successfully updated chart {}", chart.name());
+            tracing::info!(chart = chart.name(), "successfully updated chart");
         }
     }
 
@@ -84,8 +84,8 @@ impl UpdateService {
         loop {
             let sleep_duration = time_till_next_call(&schedule);
             tracing::info!(
-                "scheduled next run of chart {} update in {:?}",
-                chart.name(),
+                chart = chart.name(),
+                "scheduled next run of chart update in {:?}",
                 sleep_duration
             );
             tokio::time::sleep(sleep_duration).await;
