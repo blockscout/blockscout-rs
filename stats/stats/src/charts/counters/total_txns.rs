@@ -1,8 +1,5 @@
 use crate::{
-    charts::{
-        insert::{DateValue, DateValueDouble},
-        ChartFullUpdater,
-    },
+    charts::{insert::DateValue, ChartFullUpdater},
     UpdateError,
 };
 use async_trait::async_trait;
@@ -10,47 +7,43 @@ use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 
 #[derive(Default, Debug)]
-pub struct AverageBlockTime {}
+pub struct TotalTxns {}
 
 #[async_trait]
-impl ChartFullUpdater for AverageBlockTime {
+impl ChartFullUpdater for TotalTxns {
     async fn get_values(
         &self,
         blockscout: &DatabaseConnection,
     ) -> Result<Vec<DateValue>, UpdateError> {
-        let item = DateValueDouble::find_by_statement(Statement::from_sql_and_values(
+        let data = DateValue::find_by_statement(Statement::from_string(
             DbBackend::Postgres,
             r#"
-            SELECT
-                max(timestamp)::date as date, 
-                (CASE WHEN avg(diff) IS NULL THEN 0 ELSE avg(diff) END)::float as value
-            FROM
-            (
-                SELECT
-                    timestamp,
-                    EXTRACT(
-                        EPOCH FROM timestamp - lag(timestamp) OVER (ORDER BY timestamp)
-                    ) as diff
-                FROM "blocks"
-                WHERE consensus = true
-            ) t
-            "#,
-            vec![],
+            SELECT 
+                (
+                    SELECT count(*)::text
+                        FROM transactions
+                ) AS "value",
+                (
+                    SELECT max(timestamp)::date as "date" 
+                        FROM blocks
+                        WHERE blocks.consensus = true
+                ) AS "date"
+            "#
+            .into(),
         ))
         .one(blockscout)
         .await
         .map_err(UpdateError::BlockscoutDB)?
-        .map(DateValue::from)
         .ok_or_else(|| UpdateError::Internal("query returned nothing".into()))?;
 
-        Ok(vec![item])
+        Ok(vec![data])
     }
 }
 
 #[async_trait]
-impl crate::Chart for AverageBlockTime {
+impl crate::Chart for TotalTxns {
     fn name(&self) -> &str {
-        "averageBlockTime"
+        "totalTxns"
     }
 
     fn chart_type(&self) -> ChartType {
@@ -74,8 +67,8 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn update_average_block_time() {
-        let counter = AverageBlockTime::default();
-        simple_test_counter("update_average_block_time", counter, "21600.125").await;
+    async fn update_total_txns() {
+        let counter = TotalTxns::default();
+        simple_test_counter("update_total_txns", counter, "12").await;
     }
 }

@@ -1,5 +1,5 @@
 use crate::{
-    charts::insert::{insert_data, DateValue},
+    charts::{insert::DateValue, ChartFullUpdater},
     UpdateError,
 };
 use async_trait::async_trait;
@@ -18,6 +18,31 @@ struct TotalBlocksData {
 pub struct TotalBlocks {}
 
 #[async_trait]
+impl ChartFullUpdater for TotalBlocks {
+    async fn get_values(
+        &self,
+        blockscout: &DatabaseConnection,
+    ) -> Result<Vec<DateValue>, UpdateError> {
+        let data = blocks::Entity::find()
+            .select_only()
+            .column_as(Expr::col(blocks::Column::Number).count(), "number")
+            .column_as(Expr::col(blocks::Column::Timestamp).max(), "timestamp")
+            .filter(blocks::Column::Consensus.eq(true))
+            .into_model::<TotalBlocksData>()
+            .one(blockscout)
+            .await
+            .map_err(UpdateError::BlockscoutDB)?
+            .ok_or_else(|| UpdateError::Internal("query returned nothing".into()))?;
+
+        let data = DateValue {
+            date: data.timestamp.date(),
+            value: data.number.to_string(),
+        };
+        Ok(vec![data])
+    }
+}
+
+#[async_trait]
 impl crate::Chart for TotalBlocks {
     fn name(&self) -> &str {
         "totalBlocks"
@@ -31,34 +56,9 @@ impl crate::Chart for TotalBlocks {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
-        _full: bool,
+        full: bool,
     ) -> Result<(), UpdateError> {
-        let id = crate::charts::find_chart(db, self.name())
-            .await?
-            .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
-
-        let data = blocks::Entity::find()
-            .select_only()
-            .column_as(Expr::col(blocks::Column::Number).count(), "number")
-            .column_as(Expr::col(blocks::Column::Timestamp).max(), "timestamp")
-            .filter(blocks::Column::Consensus.eq(true))
-            .into_model::<TotalBlocksData>()
-            .one(blockscout)
-            .await?;
-
-        let data = match data {
-            Some(data) => data,
-            None => {
-                tracing::warn!("no blocks data was found");
-                return Ok(());
-            }
-        };
-        let item = DateValue {
-            date: data.timestamp.date(),
-            value: data.number.to_string(),
-        };
-        insert_data(db, id, item).await?;
-        Ok(())
+        self.update_with_values(db, blockscout, full).await
     }
 }
 

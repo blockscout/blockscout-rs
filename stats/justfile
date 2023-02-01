@@ -23,3 +23,9 @@ test database_url *args:
 
 # runs with default database_url
 test-default *args: (test "postgres://postgres:admin@localhost:5432/" args)
+
+restart-generate-entities: 
+    just restart-postgres
+    just stats/migrate-up
+    just stats/generate-entities
+    just stop-postgres

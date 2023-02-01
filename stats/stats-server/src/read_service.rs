@@ -89,6 +89,6 @@ impl StatsService for ReadService {
         &self,
         _request: tonic::Request<GetLineChartsRequest>,
     ) -> Result<tonic::Response<LineCharts>, tonic::Status> {
-        Ok(Response::new(self.charts.config.lines.clone()))
+        Ok(Response::new(self.charts.config.lines.clone().into()))
     }
 }

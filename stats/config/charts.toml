@@ -1,6 +1,7 @@
 [[counters]]
 id = "totalBlocks"
 title = "Total Blocks"
+update_schedule = "0 0 */3 * * * *"
 
 [[counters]]
 id = "averageBlockTime"
@@ -8,8 +9,9 @@ title = "Average Block Time"
 units = "s"
 
 [[counters]]
-id = "completedTransactions"
-title = "Completed Transactions"
+id = "completedTxns"
+title = "Completed Txns"
+update_schedule = "0 0 */3 * * * *"
 
 [[counters]]
 id = "totalAccounts"
@@ -28,8 +30,9 @@ id = "totalTokens"
 title = "Total Tokens"
 
 [[counters]]
-id = "totalTransactions"
-title = "Total Transactions"
+id = "totalTxns"
+title = "Total Txns"
+update_schedule = "0 0 */3 * * * *"
 
 
 [[lines.sections]]

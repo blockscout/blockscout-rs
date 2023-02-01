@@ -11,12 +11,12 @@ use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 
 #[derive(Default, Debug)]
-pub struct AverageGasPrice {}
+pub struct TxnsFee {}
 
-const GWEI: i64 = 1_000_000_000;
+const ETHER: i64 = i64::pow(10, 18);
 
 #[async_trait]
-impl ChartUpdater for AverageGasPrice {
+impl ChartUpdater for TxnsFee {
     async fn get_values(
         &self,
         blockscout: &DatabaseConnection,
@@ -26,45 +26,50 @@ impl ChartUpdater for AverageGasPrice {
             Some(row) => Statement::from_sql_and_values(
                 DbBackend::Postgres,
                 r#"
-                    SELECT
-                        blocks.timestamp::date as date,
-                        (AVG(gas_price) / $1)::float as value
-                    FROM transactions
-                    JOIN blocks ON transactions.block_hash = blocks.hash
-                    WHERE date(blocks.timestamp) >= $2 AND blocks.consensus = true
-                    GROUP BY date
-                    "#,
-                vec![GWEI.into(), row.into()],
+                SELECT 
+                    DATE(b.timestamp) as date, 
+                    (SUM(t.gas_used * t.gas_price) / $1)::FLOAT as value
+                FROM transactions t
+                JOIN blocks       b ON t.block_hash = b.hash
+                WHERE
+                    DATE(b.timestamp) >= $2 AND
+                    b.consensus = true
+                GROUP BY DATE(b.timestamp)
+                "#,
+                vec![ETHER.into(), row.into()],
             ),
             None => Statement::from_sql_and_values(
                 DbBackend::Postgres,
                 r#"
-                    SELECT
-                        blocks.timestamp::date as date,
-                        (AVG(gas_price) / $1)::float as value
-                    FROM transactions
-                    JOIN blocks ON transactions.block_hash = blocks.hash
-                    WHERE blocks.consensus = true
-                    GROUP BY date
-                    "#,
-                vec![GWEI.into()],
+                SELECT 
+                    DATE(b.timestamp) as date, 
+                    (SUM(t.gas_used * t.gas_price) / $1)::FLOAT as value
+                FROM transactions t
+                JOIN blocks       b ON t.block_hash = b.hash
+                WHERE b.consensus = true
+                GROUP BY DATE(b.timestamp)
+                "#,
+                vec![ETHER.into()],
             ),
         };
 
         let data = DateValueDouble::find_by_statement(stmnt)
             .all(blockscout)
             .await
-            .map_err(UpdateError::BlockscoutDB)?;
-        let data = data.into_iter().map(DateValue::from).collect();
+            .map_err(UpdateError::BlockscoutDB)?
+            .into_iter()
+            .map(DateValue::from)
+            .collect::<Vec<_>>();
         Ok(data)
     }
 }
 
 #[async_trait]
-impl crate::Chart for AverageGasPrice {
+impl crate::Chart for TxnsFee {
     fn name(&self) -> &str {
-        "averageGasPrice"
+        "txnsFee"
     }
+
     fn chart_type(&self) -> ChartType {
         ChartType::Line
     }
@@ -81,22 +86,21 @@ impl crate::Chart for AverageGasPrice {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::TxnsFee;
     use crate::tests::simple_test::simple_test_chart;
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn update_average_gas_price() {
-        let chart = AverageGasPrice::default();
-
+    async fn update_txns_fee() {
+        let chart = TxnsFee::default();
         simple_test_chart(
-            "update_average_gas_price",
+            "update_txns_fee",
             chart,
             vec![
                 ("2022-11-09", "0"),
-                ("2022-11-10", "2.8086419725"),
-                ("2022-11-11", "6.1790123395"),
-                ("2022-11-12", "1.123456789"),
+                ("2022-11-10", "0.00023592592569"),
+                ("2022-11-11", "0.000519037036518"),
+                ("2022-11-12", "0.000023592592569"),
             ],
         )
         .await;
