@@ -12,16 +12,19 @@ use rstest::rstest;
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2 as smart_contract_verifier_v2;
 use tonic::Response;
 
+const TEST_SUITE_NAME: &str = "compiler_versions";
+
 async fn test_versions(
+    test_name: &str,
     route: &str,
     verifier: impl VerifierService<smart_contract_verifier_v2::ListCompilerVersionsResponse>,
     verifier_response: smart_contract_verifier_v2::ListCompilerVersionsResponse,
 ) {
-    let db_url = "sqlite::memory:";
+    let db = verification_test_helpers::init_db(TEST_SUITE_NAME, test_name).await;
     let verifier_addr =
         verification_test_helpers::init_verifier_server(verifier, verifier_response.clone()).await;
     let eth_bytecode_db_base =
-        verification_test_helpers::init_eth_bytecode_db_server(db_url, verifier_addr).await;
+        verification_test_helpers::init_eth_bytecode_db_server(db.db_url(), verifier_addr).await;
 
     let response = reqwest::Client::new()
         .get(eth_bytecode_db_base.join(route).unwrap())
@@ -53,7 +56,10 @@ async fn test_versions(
 #[rstest]
 #[tokio::test]
 #[timeout(std::time::Duration::from_secs(60))]
+#[ignore = "Needs database to run"]
 async fn solidity() {
+    const TEST_NAME: &str = "solidity";
+
     impl VerifierService<smart_contract_verifier_v2::ListCompilerVersionsResponse>
         for MockSolidityVerifierService
     {
@@ -79,12 +85,15 @@ async fn solidity() {
             "v0.8.7+commit.e28d00a7".into(),
         ],
     };
-    test_versions(route, verifier, verifier_response).await;
+    test_versions(TEST_NAME, route, verifier, verifier_response).await;
 }
 #[rstest]
 #[tokio::test]
 #[timeout(std::time::Duration::from_secs(60))]
+#[ignore = "Needs database to run"]
 async fn vyper() {
+    const TEST_NAME: &str = "vyper";
+
     impl VerifierService<smart_contract_verifier_v2::ListCompilerVersionsResponse>
         for MockVyperVerifierService
     {
@@ -109,5 +118,5 @@ async fn vyper() {
             "v0.3.6+commit.4a2124d0".into(),
         ],
     };
-    test_versions(route, verifier, verifier_response).await;
+    test_versions(TEST_NAME, route, verifier, verifier_response).await;
 }

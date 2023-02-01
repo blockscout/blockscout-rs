@@ -26,7 +26,7 @@ pub trait VerifierService<Response> {
     fn build_server(self) -> SmartContractVerifierServer;
 }
 
-async fn init_db(test_suite_name: &str, test_name: &str) -> TestDbGuard {
+pub async fn init_db(test_suite_name: &str, test_name: &str) -> TestDbGuard {
     #[allow(unused_variables)]
     let db_url: Option<String> = None;
     // Uncomment if providing url explicitly is more convenient
