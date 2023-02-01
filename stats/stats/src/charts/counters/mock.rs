@@ -1,25 +1,39 @@
 use crate::{
-    charts::insert::{insert_double_data, insert_int_data, DoubleValueItem, IntValueItem},
+    charts::{insert::DateValue, ChartFullUpdater},
     UpdateError,
 };
 use async_trait::async_trait;
-use entity::sea_orm_active_enums::{ChartType, ChartValueType};
+use entity::sea_orm_active_enums::ChartType;
 use sea_orm::prelude::*;
 
 #[derive(Debug)]
-pub struct MockCounterInt {
+pub struct MockCounter {
     name: String,
-    value: i64,
+    value: String,
 }
 
-impl MockCounterInt {
-    pub fn new(name: String, value: i64) -> Self {
+impl MockCounter {
+    pub fn new(name: String, value: String) -> Self {
         Self { name, value }
     }
 }
 
 #[async_trait]
-impl crate::Chart for MockCounterInt {
+impl ChartFullUpdater for MockCounter {
+    async fn get_values(
+        &self,
+        _blockscout: &DatabaseConnection,
+    ) -> Result<Vec<DateValue>, UpdateError> {
+        let item = DateValue {
+            date: chrono::offset::Local::now().date_naive(),
+            value: self.value.clone(),
+        };
+        Ok(vec![item])
+    }
+}
+
+#[async_trait]
+impl crate::Chart for MockCounter {
     fn name(&self) -> &str {
         &self.name
     }
@@ -28,84 +42,12 @@ impl crate::Chart for MockCounterInt {
         ChartType::Counter
     }
 
-    // TODO: remove when we remove chart value type
-    async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
-        crate::charts::create_chart(
-            db,
-            self.name().into(),
-            ChartType::Counter,
-            ChartValueType::Int,
-        )
-        .await
-    }
-
     async fn update(
         &self,
         db: &DatabaseConnection,
-        _blockscout: &DatabaseConnection,
-        _full: bool,
+        blockscout: &DatabaseConnection,
+        full: bool,
     ) -> Result<(), UpdateError> {
-        let chart_id = crate::charts::find_chart(db, self.name())
-            .await?
-            .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
-
-        let item = IntValueItem {
-            date: chrono::offset::Local::now().date_naive(),
-            value: self.value,
-        };
-        insert_int_data(db, chart_id, item).await?;
-        Ok(())
-    }
-}
-
-#[derive(Debug)]
-pub struct MockCounterDouble {
-    name: String,
-    value: f64,
-}
-
-impl MockCounterDouble {
-    pub fn new(name: String, value: f64) -> Self {
-        Self { name, value }
-    }
-}
-
-#[async_trait]
-impl crate::Chart for MockCounterDouble {
-    fn name(&self) -> &str {
-        &self.name
-    }
-
-    fn chart_type(&self) -> ChartType {
-        ChartType::Counter
-    }
-
-    // TODO: remove when we remove chart value type
-    async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
-        crate::charts::create_chart(
-            db,
-            self.name().into(),
-            ChartType::Counter,
-            ChartValueType::Double,
-        )
-        .await
-    }
-
-    async fn update(
-        &self,
-        db: &DatabaseConnection,
-        _blockscout: &DatabaseConnection,
-        _full: bool,
-    ) -> Result<(), UpdateError> {
-        let chart_id = crate::charts::find_chart(db, self.name())
-            .await?
-            .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
-
-        let item = DoubleValueItem {
-            date: chrono::offset::Local::now().date_naive(),
-            value: self.value,
-        };
-        insert_double_data(db, chart_id, item).await?;
-        Ok(())
+        self.update_with_values(db, blockscout, full).await
     }
 }

@@ -3,6 +3,7 @@ mod charts;
 mod kv_storage;
 mod read;
 
+pub mod metrics;
 pub mod tests;
 
 pub use entity;

@@ -2,13 +2,25 @@ pub mod counters;
 pub mod insert;
 pub mod lines;
 
+use crate::metrics;
 use async_trait::async_trait;
-use entity::{
-    charts,
-    sea_orm_active_enums::{ChartType, ChartValueType},
-};
-use sea_orm::{prelude::*, sea_query, FromQueryResult, QuerySelect, Set};
+use chrono::NaiveDate;
+use entity::{chart_data, charts, sea_orm_active_enums::ChartType};
+use insert::{insert_data_many, DateValue};
+use sea_orm::{prelude::*, sea_query, FromQueryResult, QueryOrder, QuerySelect, Set};
 use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum UpdateError {
+    #[error("blockscout database error: {0}")]
+    BlockscoutDB(DbErr),
+    #[error("stats database error: {0}")]
+    StatsDB(DbErr),
+    #[error("chart {0} not found")]
+    NotFound(String),
+    #[error("internal error: {0}")]
+    Internal(String),
+}
 
 #[async_trait]
 pub trait Chart: Sync {
@@ -16,14 +28,7 @@ pub trait Chart: Sync {
     fn chart_type(&self) -> ChartType;
 
     async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
-        crate::charts::create_chart(
-            db,
-            self.name().into(),
-            self.chart_type(),
-            // TODO: remove
-            ChartValueType::Int,
-        )
-        .await
+        crate::charts::create_chart(db, self.name().into(), self.chart_type()).await
     }
 
     async fn update(
@@ -32,14 +37,6 @@ pub trait Chart: Sync {
         blockscout: &DatabaseConnection,
         full: bool,
     ) -> Result<(), UpdateError>;
-}
-
-#[derive(Error, Debug)]
-pub enum UpdateError {
-    #[error("database error {0}")]
-    DB(#[from] DbErr),
-    #[error("chart {0} not found")]
-    NotFound(String),
 }
 
 #[derive(Debug, FromQueryResult)]
@@ -61,7 +58,6 @@ pub async fn create_chart(
     db: &DatabaseConnection,
     name: String,
     chart_type: ChartType,
-    value_type: ChartValueType,
 ) -> Result<(), DbErr> {
     let id = find_chart(db, &name).await?;
     if id.is_some() {
@@ -70,7 +66,6 @@ pub async fn create_chart(
     charts::Entity::insert(charts::ActiveModel {
         name: Set(name),
         chart_type: Set(chart_type),
-        value_type: Set(value_type),
         ..Default::default()
     })
     .on_conflict(
@@ -81,4 +76,88 @@ pub async fn create_chart(
     .exec(db)
     .await?;
     Ok(())
+}
+
+#[async_trait]
+pub trait ChartFullUpdater: Chart {
+    async fn get_values(
+        &self,
+        blockscout: &DatabaseConnection,
+    ) -> Result<Vec<DateValue>, UpdateError>;
+
+    async fn update_with_values(
+        &self,
+        db: &DatabaseConnection,
+        blockscout: &DatabaseConnection,
+        _full: bool,
+    ) -> Result<(), UpdateError> {
+        let chart_id = crate::charts::find_chart(db, self.name())
+            .await
+            .map_err(UpdateError::StatsDB)?
+            .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
+        let values = {
+            let _timer = metrics::CHART_FETCH_NEW_DATA_TIME
+                .with_label_values(&[self.name()])
+                .start_timer();
+            self.get_values(blockscout)
+                .await?
+                .into_iter()
+                .map(|value| value.active_model(chart_id))
+        };
+        insert_data_many(db, values)
+            .await
+            .map_err(UpdateError::BlockscoutDB)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, FromQueryResult)]
+pub struct OnlyDate {
+    pub date: NaiveDate,
+}
+
+#[async_trait]
+pub trait ChartUpdater: Chart {
+    async fn get_values(
+        &self,
+        blockscout: &DatabaseConnection,
+        last_row: Option<NaiveDate>,
+    ) -> Result<Vec<DateValue>, UpdateError>;
+
+    async fn update_with_values(
+        &self,
+        db: &DatabaseConnection,
+        blockscout: &DatabaseConnection,
+        full: bool,
+    ) -> Result<(), UpdateError> {
+        let chart_id = crate::charts::find_chart(db, self.name())
+            .await
+            .map_err(UpdateError::StatsDB)?
+            .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
+        let last_row = if full {
+            None
+        } else {
+            chart_data::Entity::find()
+                .column(chart_data::Column::Date)
+                .filter(chart_data::Column::ChartId.eq(chart_id))
+                .order_by_desc(chart_data::Column::Date)
+                .into_model::<OnlyDate>()
+                .one(db)
+                .await
+                .map_err(UpdateError::StatsDB)?
+        };
+        let values = {
+            let _timer = metrics::CHART_FETCH_NEW_DATA_TIME
+                .with_label_values(&[self.name()])
+                .start_timer();
+            self.get_values(blockscout, last_row.map(|row| row.date))
+                .await?
+                .into_iter()
+                .map(|value| value.active_model(chart_id))
+        };
+        insert_data_many(db, values)
+            .await
+            .map_err(UpdateError::StatsDB)?;
+        Ok(())
+    }
 }

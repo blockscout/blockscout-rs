@@ -25,3 +25,4 @@ libs/Cargo.lock
 
 ## Secrets
 **.decrypted~**
+**.dec**

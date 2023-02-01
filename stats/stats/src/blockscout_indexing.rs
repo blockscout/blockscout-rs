@@ -16,7 +16,8 @@ pub async fn is_blockscout_indexing(
         min_block_saved = min_block_saved,
         "checking min block in blockscout database"
     );
-    Ok((min_block_blockscout < min_block_saved, min_block_blockscout))
+    let is_indexing = min_block_blockscout != min_block_saved;
+    Ok((is_indexing, min_block_blockscout))
 }
 
 #[derive(FromQueryResult)]
@@ -28,6 +29,7 @@ async fn get_min_block_blockscout(blockscout: &DatabaseConnection) -> Result<i64
     let min_block = blocks::Entity::find()
         .select_only()
         .column_as(Expr::col(blocks::Column::Number).min(), "min_block")
+        .filter(blocks::Column::Consensus.eq(true))
         .into_model::<MinBlock>()
         .one(blockscout)
         .await?;
@@ -42,8 +44,7 @@ async fn get_min_block_saved(db: &DatabaseConnection) -> Result<i64, DbErr> {
     let value = match value {
         Some(v) => v.parse::<i64>().map_err(|e| {
             DbErr::Type(format!(
-                "cannot parse value in kv_storage with key '{}': {}",
-                MIN_BLOCK_KEY, e
+                "cannot parse value in kv_storage with key '{MIN_BLOCK_KEY}': {e}",
             ))
         })?,
         None => i64::MAX,

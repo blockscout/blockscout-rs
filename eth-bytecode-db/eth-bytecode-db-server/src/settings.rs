@@ -1,6 +1,9 @@
-use blockscout_service_launcher::{JaegerSettings, MetricsSettings, ServerSettings};
+use blockscout_service_launcher::{
+    JaegerSettings, MetricsSettings, ServerSettings, TracingSettings,
+};
 use config::{Config, File};
 use serde::{de, Deserialize};
+use serde_with::{serde_as, DisplayFromStr};
 
 /// Wrapper under [`serde::de::IgnoredAny`] which implements
 /// [`PartialEq`] and [`Eq`] for fields to be ignored.
@@ -16,18 +19,40 @@ impl PartialEq for IgnoredAny {
 
 impl Eq for IgnoredAny {}
 
-#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
-#[serde(default, deny_unknown_fields)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct Settings {
+    #[serde(default)]
     pub server: ServerSettings,
+    #[serde(default)]
     pub metrics: MetricsSettings,
+    #[serde(default)]
+    pub tracing: TracingSettings,
+    #[serde(default)]
     pub jaeger: JaegerSettings,
+
+    pub database: DatabaseSettings,
+    pub verifier: VerifierSettings,
 
     // Is required as we deny unknown fields, but allow users provide
     // path to config through PREFIX__CONFIG env variable. If removed,
     // the setup would fail with `unknown field `config`, expected one of...`
-    #[serde(rename = "config")]
+    #[serde(default, rename = "config")]
     config_path: IgnoredAny,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct DatabaseSettings {
+    pub url: String,
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct VerifierSettings {
+    #[serde_as(as = "DisplayFromStr")]
+    pub uri: tonic::transport::Uri,
 }
 
 impl Settings {
@@ -45,5 +70,17 @@ impl Settings {
         let settings: Settings = builder.build()?.try_deserialize()?;
 
         Ok(settings)
+    }
+
+    pub fn default(database_url: String, verifier_uri: tonic::transport::Uri) -> Self {
+        Self {
+            server: Default::default(),
+            metrics: Default::default(),
+            tracing: Default::default(),
+            jaeger: Default::default(),
+            database: DatabaseSettings { url: database_url },
+            verifier: VerifierSettings { uri: verifier_uri },
+            config_path: Default::default(),
+        }
     }
 }

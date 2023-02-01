@@ -30,7 +30,8 @@ pub struct Settings {
     pub run_migrations: bool,
     pub blockscout_db_url: String,
     #[serde_as(as = "DisplayFromStr")]
-    pub update_schedule: Schedule,
+    pub default_schedule: Schedule,
+    pub update_on_start: bool,
     pub charts_config: PathBuf,
 
     pub server: ServerSettings,
@@ -59,7 +60,8 @@ impl Default for Settings {
                 },
             },
             db_url: Default::default(),
-            update_schedule: Schedule::from_str("0 0 1 * * * *").unwrap(),
+            default_schedule: Schedule::from_str("0 0 1 * * * *").unwrap(),
+            update_on_start: true,
             charts_config: PathBuf::from_str("config/charts.toml").unwrap(),
             blockscout_db_url: Default::default(),
             run_migrations: Default::default(),

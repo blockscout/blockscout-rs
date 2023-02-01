@@ -1,20 +1,10 @@
-use serde::Deserialize;
+use crate::charts_config::{ChartSettings, Config};
 use stats::{counters, entity::sea_orm_active_enums::ChartType, lines, Chart};
-use stats_proto::blockscout::stats::v1::LineCharts;
-use std::{collections::HashSet, hash::Hash, sync::Arc};
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct CounterInfo {
-    pub id: String,
-    pub title: String,
-    pub units: Option<String>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct Config {
-    pub counters: Vec<CounterInfo>,
-    pub lines: LineCharts,
-}
+use std::{
+    collections::{HashMap, HashSet},
+    hash::Hash,
+    sync::Arc,
+};
 
 pub type ArcChart = Arc<dyn Chart + Send + Sync + 'static>;
 
@@ -23,6 +13,7 @@ pub struct Charts {
     pub charts: Vec<ArcChart>,
     pub counters_filter: HashSet<String>,
     pub lines_filter: HashSet<String>,
+    pub settings: HashMap<String, ChartSettings>,
 }
 
 fn new_hashset_check_duplicates<T: Hash + Eq, I: IntoIterator<Item = T>>(
@@ -38,8 +29,30 @@ fn new_hashset_check_duplicates<T: Hash + Eq, I: IntoIterator<Item = T>>(
     Ok(result)
 }
 
+struct ValidatedConfig {
+    charts: Vec<ArcChart>,
+    counters_filter: HashSet<String>,
+    lines_filter: HashSet<String>,
+}
+
 impl Charts {
     pub fn new(config: Config) -> Result<Self, anyhow::Error> {
+        let ValidatedConfig {
+            charts,
+            counters_filter,
+            lines_filter,
+        } = Self::validate_config(&config)?;
+        let settings = Self::new_settings(&config);
+        Ok(Self {
+            config,
+            charts,
+            counters_filter,
+            lines_filter,
+            settings,
+        })
+    }
+
+    fn validate_config(config: &Config) -> Result<ValidatedConfig, anyhow::Error> {
         let counters_filter = config.counters.iter().map(|counter| counter.id.clone());
         let counters_filter = new_hashset_check_duplicates(counters_filter)
             .map_err(|id| anyhow::anyhow!("encountered same id twice: {}", id))?;
@@ -69,90 +82,77 @@ impl Charts {
             ));
         }
 
-        Ok(Self {
-            config,
+        Ok(ValidatedConfig {
             charts,
             counters_filter,
             lines_filter,
         })
     }
 
+    // assumes that config is valid
+    fn new_settings(config: &Config) -> HashMap<String, ChartSettings> {
+        config
+            .counters
+            .iter()
+            .map(|counter| (counter.id.clone(), counter.settings.clone()))
+            .chain(config.lines.sections.iter().flat_map(|section| {
+                section
+                    .charts
+                    .iter()
+                    .map(|chart| (chart.id.clone(), chart.settings.clone()))
+            }))
+            .collect()
+    }
+
     fn all_charts() -> Vec<ArcChart> {
         vec![
             // finished counters
             Arc::new(counters::TotalBlocks::default()),
+            Arc::new(counters::AverageBlockTime::default()),
+            Arc::new(counters::TotalTxns::default()),
+            Arc::new(counters::TotalTokens::default()),
+            Arc::new(counters::CompletedTxns::default()),
             // finished lines
             Arc::new(lines::NewBlocks::default()),
+            Arc::new(lines::AverageGasPrice::default()),
+            Arc::new(lines::ActiveAccounts::default()),
+            Arc::new(lines::AccountsGrowth::default()),
+            Arc::new(lines::TxnsFee::default()),
+            Arc::new(lines::NewTxns::default()),
+            Arc::new(lines::AverageBlockSize::default()),
+            Arc::new(lines::AverageGasLimit::default()),
             // mock counters
-            Arc::new(counters::MockCounterDouble::new(
-                "averageBlockTime".into(),
-                34.25,
-            )),
-            Arc::new(counters::MockCounterInt::new(
-                "completedTransactions".into(),
-                956276037263,
-            )),
-            Arc::new(counters::MockCounterInt::new(
+            Arc::new(counters::MockCounter::new(
                 "totalAccounts".into(),
-                765543,
+                "765543".into(),
             )),
-            Arc::new(counters::MockCounterInt::new(
+            Arc::new(counters::MockCounter::new(
                 "totalNativeCoinHolders".into(),
-                409559,
+                "409559".into(),
             )),
-            Arc::new(counters::MockCounterInt::new(
+            Arc::new(counters::MockCounter::new(
                 "totalNativeCoinTransfers".into(),
-                32528,
-            )),
-            Arc::new(counters::MockCounterInt::new("totalTokens".into(), 1234)),
-            Arc::new(counters::MockCounterInt::new(
-                "totalTransactions".into(),
-                84273733,
+                "32528".into(),
             )),
             // mock lines
-            Arc::new(lines::MockLineInt::new("accountsGrowth".into(), 100..500)),
-            Arc::new(lines::MockLineInt::new(
-                "activeAccounts".into(),
-                200..200_000,
-            )),
-            Arc::new(lines::MockLineInt::new(
-                "averageBlockSize".into(),
-                90_000..100_000,
-            )),
-            Arc::new(lines::MockLineInt::new(
-                "averageGasLimit".into(),
-                8_000_000..30_000_000,
-            )),
-            Arc::new(lines::MockLineDouble::new(
-                "averageGasPrice".into(),
-                5.0..200.0,
-            )),
-            Arc::new(lines::MockLineDouble::new(
-                "averageTxnFee".into(),
-                0.0001..0.01,
-            )),
-            Arc::new(lines::MockLineInt::new(
+            Arc::new(lines::MockLine::new("averageTxnFee".into(), 0.0001..0.01)),
+            Arc::new(lines::MockLine::new(
                 "gasUsedGrowth".into(),
                 1_000_000..100_000_000,
             )),
-            Arc::new(lines::MockLineInt::new(
+            Arc::new(lines::MockLine::new(
                 "nativeCoinHoldersGrowth".into(),
                 1000..5000,
             )),
-            Arc::new(lines::MockLineInt::new(
+            Arc::new(lines::MockLine::new(
                 "nativeCoinSupply".into(),
                 1_000_000..100_000_000,
             )),
-            Arc::new(lines::MockLineInt::new(
+            Arc::new(lines::MockLine::new(
                 "newNativeCoinTransfers".into(),
                 100..10_000,
             )),
-            Arc::new(lines::MockLineInt::new("newTxns".into(), 200..20_000)),
-            Arc::new(lines::MockLineDouble::new("txnsFee".into(), 0.0001..0.01)),
-            Arc::new(lines::MockLineInt::new(
-                "txnsGrowth".into(),
-                1000..10_000_000,
-            )),
+            Arc::new(lines::MockLine::new("txnsGrowth".into(), 1000..10_000_000)),
         ]
     }
 }

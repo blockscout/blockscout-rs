@@ -2,6 +2,7 @@ mod database;
 mod health;
 mod solidity_verifier;
 mod sourcify_verifier;
+mod verifier_base;
 mod vyper_verifier;
 
 pub use database::DatabaseService;
