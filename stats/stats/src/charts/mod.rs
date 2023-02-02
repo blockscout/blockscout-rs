@@ -4,6 +4,7 @@ pub mod lines;
 
 use crate::metrics;
 use async_trait::async_trait;
+use blockscout_db::entity::blocks;
 use chrono::NaiveDate;
 use entity::{chart_data, charts, sea_orm_active_enums::ChartType};
 use insert::{insert_data_many, DateValue};
@@ -35,7 +36,7 @@ pub trait Chart: Sync {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
-        full: bool,
+        force_full: bool,
     ) -> Result<(), UpdateError>;
 }
 
@@ -89,7 +90,7 @@ pub trait ChartFullUpdater: Chart {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
-        _full: bool,
+        _force_full: bool,
     ) -> Result<(), UpdateError> {
         let chart_id = crate::charts::find_chart(db, self.name())
             .await
@@ -102,7 +103,7 @@ pub trait ChartFullUpdater: Chart {
             self.get_values(blockscout)
                 .await?
                 .into_iter()
-                .map(|value| value.active_model(chart_id))
+                .map(|value| value.active_model(chart_id, None))
         };
         insert_data_many(db, values)
             .await
@@ -112,8 +113,31 @@ pub trait ChartFullUpdater: Chart {
 }
 
 #[derive(Debug, FromQueryResult)]
-pub struct OnlyDate {
+struct SyncInfo {
     pub date: NaiveDate,
+    pub min_blockscout_block: Option<i64>,
+}
+
+#[derive(FromQueryResult)]
+struct MinBlock {
+    min_block: i64,
+}
+
+async fn get_min_block_blockscout(blockscout: &DatabaseConnection) -> Result<i64, DbErr> {
+    let min_block = blocks::Entity::find()
+        .select_only()
+        .column_as(
+            sea_query::Expr::col(blocks::Column::Number).min(),
+            "min_block",
+        )
+        .filter(blocks::Column::Consensus.eq(true))
+        .into_model::<MinBlock>()
+        .one(blockscout)
+        .await?;
+
+    min_block
+        .map(|r| r.min_block)
+        .ok_or_else(|| DbErr::RecordNotFound("no blocks found in blockscout database".into()))
 }
 
 #[async_trait]
@@ -128,32 +152,79 @@ pub trait ChartUpdater: Chart {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
-        full: bool,
+        force_full: bool,
     ) -> Result<(), UpdateError> {
         let chart_id = crate::charts::find_chart(db, self.name())
             .await
             .map_err(UpdateError::StatsDB)?
             .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
-        let last_row = if full {
+        let min_blockscout_block = get_min_block_blockscout(blockscout)
+            .await
+            .map_err(UpdateError::BlockscoutDB)?;
+        let last_row: Option<NaiveDate> = if force_full {
+            tracing::info!(
+                min_blockscout_block = min_blockscout_block,
+                chart = self.name(),
+                "running full update due to force override"
+            );
             None
         } else {
-            chart_data::Entity::find()
+            let last_row = chart_data::Entity::find()
                 .column(chart_data::Column::Date)
                 .filter(chart_data::Column::ChartId.eq(chart_id))
                 .order_by_desc(chart_data::Column::Date)
-                .into_model::<OnlyDate>()
+                .into_model::<SyncInfo>()
                 .one(db)
                 .await
-                .map_err(UpdateError::StatsDB)?
+                .map_err(UpdateError::StatsDB)?;
+
+            match last_row {
+                Some(row) => {
+                    if let Some(block) = row.min_blockscout_block {
+                        if block == min_blockscout_block {
+                            tracing::info!(
+                                min_blockscout_block = min_blockscout_block,
+                                min_chart_block = block,
+                                chart = self.name(),
+                                "running partial update"
+                            );
+                            Some(row.date)
+                        } else {
+                            tracing::info!(
+                                min_blockscout_block = min_blockscout_block,
+                                min_chart_block = block,
+                                chart = self.name(),
+                                "running full update due to min blocks mismatch"
+                            );
+                            None
+                        }
+                    } else {
+                        tracing::info!(
+                            min_blockscout_block = min_blockscout_block,
+                            chart = self.name(),
+                            "running full update due to lack of saved min block"
+                        );
+                        None
+                    }
+                }
+                None => {
+                    tracing::info!(
+                        min_blockscout_block = min_blockscout_block,
+                        chart = self.name(),
+                        "running full update due to lack of history data"
+                    );
+                    None
+                }
+            }
         };
         let values = {
             let _timer = metrics::CHART_FETCH_NEW_DATA_TIME
                 .with_label_values(&[self.name()])
                 .start_timer();
-            self.get_values(blockscout, last_row.map(|row| row.date))
+            self.get_values(blockscout, last_row)
                 .await?
                 .into_iter()
-                .map(|value| value.active_model(chart_id))
+                .map(|value| value.active_model(chart_id, Some(min_blockscout_block)))
         };
         insert_data_many(db, values)
             .await

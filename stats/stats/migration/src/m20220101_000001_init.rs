@@ -24,7 +24,8 @@ CREATE TABLE "chart_data" (
   "chart_id" int NOT NULL,
   "date" date NOT NULL,
   "value" varchar(64) NOT NULL,
-  "created_at" timestamp NOT NULL DEFAULT (now())
+  "created_at" timestamp NOT NULL DEFAULT (now()),
+  "min_blockscout_block" bigint
 );
 
 CREATE UNIQUE INDEX ON "chart_data" ("chart_id", "date");
