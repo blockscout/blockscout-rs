@@ -1,7 +1,7 @@
 use crate::{
     charts::{
         insert::{DateValue, DateValueDouble},
-        ChartFullUpdater,
+        updater::ChartFullUpdater,
     },
     UpdateError,
 };

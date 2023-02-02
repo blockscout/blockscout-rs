@@ -32,7 +32,7 @@ impl From<DateValueDouble> for DateValue {
     }
 }
 
-#[derive(FromQueryResult)]
+#[derive(FromQueryResult, Debug, Clone)]
 pub struct DateValue {
     pub date: NaiveDate,
     pub value: String,

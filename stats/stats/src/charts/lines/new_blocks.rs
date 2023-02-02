@@ -1,5 +1,5 @@
 use crate::{
-    charts::{insert::DateValue, ChartUpdater},
+    charts::{insert::DateValue, updater::ChartUpdater},
     UpdateError,
 };
 use async_trait::async_trait;
@@ -71,7 +71,7 @@ impl crate::Chart for NewBlocks {
 mod tests {
     use super::*;
     use crate::{
-        charts::get_min_block_blockscout,
+        charts::updater::get_min_block_blockscout,
         get_chart_data,
         tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
         Chart, Point,
