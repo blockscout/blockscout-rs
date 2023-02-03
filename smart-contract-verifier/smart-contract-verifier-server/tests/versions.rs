@@ -44,9 +44,7 @@ async fn test_versions(uri: &str) {
         let status = response.status();
         let body = read_body(response).await;
         let message = from_utf8(&body).expect("Read body as UTF-8");
-        panic!(
-            "Invalid status code (success expected). Status: {status}. Message: {message}"
-        )
+        panic!("Invalid status code (success expected). Status: {status}. Message: {message}")
     }
 
     let versions_response: ListCompilerVersionsResponse = read_body_json(response).await;

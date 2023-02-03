@@ -462,14 +462,12 @@ mod local_bytecode_initialization_tests {
     #[test]
     fn with_one_metadata() {
         let creation_tx_input_str = format!("{CREATION_TX_INPUT_MAIN_PART_1}{METADATA_PART_1}");
-        let creation_tx_input_modified_str = format!(
-            "{CREATION_TX_INPUT_MAIN_PART_1}{METADATA_PART1_MODIFIED}"
-        );
+        let creation_tx_input_modified_str =
+            format!("{CREATION_TX_INPUT_MAIN_PART_1}{METADATA_PART1_MODIFIED}");
 
         let deployed_bytecode_str = format!("{DEPLOYED_BYTECODE_MAIN_PART_1}{METADATA_PART_1}");
-        let deployed_bytecode_modified_str = format!(
-            "{DEPLOYED_BYTECODE_MAIN_PART_1}{METADATA_PART1_MODIFIED}"
-        );
+        let deployed_bytecode_modified_str =
+            format!("{DEPLOYED_BYTECODE_MAIN_PART_1}{METADATA_PART1_MODIFIED}");
 
         // Verify bytecode for creation tx input first
         {
@@ -611,16 +609,14 @@ mod local_bytecode_initialization_tests {
 
     #[test]
     fn with_two_metadata_but_one_main_part() {
-        let creation_tx_input_str = format!(
-            "{CREATION_TX_INPUT_MAIN_PART_1}{METADATA_PART_1}{METADATA_PART_2}"
-        );
+        let creation_tx_input_str =
+            format!("{CREATION_TX_INPUT_MAIN_PART_1}{METADATA_PART_1}{METADATA_PART_2}");
         let creation_tx_input_modified_str = format!(
             "{CREATION_TX_INPUT_MAIN_PART_1}{METADATA_PART1_MODIFIED}{METADATA_PART2_MODIFIED}"
         );
 
-        let deployed_bytecode_str = format!(
-            "{DEPLOYED_BYTECODE_MAIN_PART_1}{METADATA_PART_1}{METADATA_PART_2}"
-        );
+        let deployed_bytecode_str =
+            format!("{DEPLOYED_BYTECODE_MAIN_PART_1}{METADATA_PART_1}{METADATA_PART_2}");
         let deployed_bytecode_modified_str = format!(
             "{DEPLOYED_BYTECODE_MAIN_PART_1}{METADATA_PART1_MODIFIED}{METADATA_PART2_MODIFIED}"
         );
@@ -690,9 +686,8 @@ mod local_bytecode_initialization_tests {
     fn with_different_lengths_should_fail() {
         let creation_tx_input_str = format!("{CREATION_TX_INPUT_MAIN_PART_1}{METADATA_PART_1}");
         // additional byte
-        let creation_tx_input_modified_str = format!(
-            "{CREATION_TX_INPUT_MAIN_PART_1}{METADATA_PART1_MODIFIED}12"
-        );
+        let creation_tx_input_modified_str =
+            format!("{CREATION_TX_INPUT_MAIN_PART_1}{METADATA_PART1_MODIFIED}12");
 
         let deployed_bytecode_str = DEPLOYED_BYTECODE_MAIN_PART_1.to_string();
         let deployed_bytecode_modified_str = DEPLOYED_BYTECODE_MAIN_PART_1.to_string();
@@ -723,11 +718,9 @@ mod local_bytecode_initialization_tests {
 
     #[test]
     fn with_invalid_metadata_should_fail() {
-        let creation_tx_input_str =
-            format!("{CREATION_TX_INPUT_MAIN_PART_1}cafe{METADATA_PART_1}");
-        let creation_tx_input_modified_str = format!(
-            "{CREATION_TX_INPUT_MAIN_PART_1}abcd{METADATA_PART1_MODIFIED}"
-        );
+        let creation_tx_input_str = format!("{CREATION_TX_INPUT_MAIN_PART_1}cafe{METADATA_PART_1}");
+        let creation_tx_input_modified_str =
+            format!("{CREATION_TX_INPUT_MAIN_PART_1}abcd{METADATA_PART1_MODIFIED}");
 
         let deployed_bytecode_str = DEPLOYED_BYTECODE_MAIN_PART_1.to_string();
         let deployed_bytecode_modified_str = DEPLOYED_BYTECODE_MAIN_PART_1.to_string();
