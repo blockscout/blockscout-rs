@@ -2,6 +2,7 @@ use crate::{
     metrics::Metrics,
     router::{configure_router, HttpRouter},
     settings::{JaegerSettings, MetricsSettings, ServerSettings, TracingSettings},
+    HttpServerSettings,
 };
 use actix_web::{App, HttpServer};
 use actix_web_prom::PrometheusMetrics;
@@ -37,7 +38,7 @@ where
                 metrics
                     .as_ref()
                     .map(|metrics| metrics.http_middleware().clone()),
-                settings.server.http.addr,
+                &settings.server.http,
             );
             tokio::spawn(async move { http_server_future.await.map_err(anyhow::Error::msg) })
         };
@@ -70,27 +71,33 @@ where
 fn http_serve<R>(
     http: R,
     metrics: Option<PrometheusMetrics>,
-    addr: SocketAddr,
+    settings: &HttpServerSettings,
 ) -> actix_web::dev::Server
 where
     R: HttpRouter + Send + Sync + Clone + 'static,
 {
-    tracing::info!("starting http server on addr {}", addr);
+    tracing::info!("starting http server on addr {}", settings.addr);
 
+    let json_cfg = actix_web::web::JsonConfig::default().limit(settings.max_body_size);
     if let Some(metrics) = metrics {
         HttpServer::new(move || {
             App::new()
                 .wrap(metrics.clone())
+                .app_data(json_cfg.clone())
                 .configure(configure_router(&http))
         })
-        .bind(addr)
+        .bind(settings.addr)
         .expect("failed to bind server")
         .run()
     } else {
-        HttpServer::new(move || App::new().configure(configure_router(&http)))
-            .bind(addr)
-            .expect("failed to bind server")
-            .run()
+        HttpServer::new(move || {
+            App::new()
+                .app_data(json_cfg.clone())
+                .configure(configure_router(&http))
+        })
+        .bind(settings.addr)
+        .expect("failed to bind server")
+        .run()
     }
 }
 
