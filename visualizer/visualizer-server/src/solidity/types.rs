@@ -5,11 +5,22 @@ use crate::proto::{
     google::protobuf::FieldMask,
 };
 use bytes::Bytes;
+use lazy_static::lazy_static;
+use regex::{Regex, RegexBuilder};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    path::{Component, Path, PathBuf},
+    path::{Path, PathBuf},
 };
 use visualizer::{OutputMask, ResponseFieldMask};
+
+lazy_static! {
+    static ref REGEX_ONLY_CHARS: Regex = RegexBuilder::new(r"[^a-z0-9_./-]")
+        .case_insensitive(true)
+        .multi_line(true)
+        .build()
+        .unwrap();
+    static ref REGEX_NO_DOTS: Regex = Regex::new(r"(^|/)[.]+($|/)").unwrap();
+}
 
 fn sources(sources: HashMap<String, String>) -> BTreeMap<PathBuf, String> {
     sources
@@ -36,37 +47,28 @@ fn output_mask(field_mask: Option<FieldMask>) -> Result<OutputMask, anyhow::Erro
 }
 
 fn fix_sources_paths(sources: BTreeMap<PathBuf, String>) -> BTreeMap<PathBuf, String> {
-    const REPLACE_PREFIX_FROM: &str = "@";
-    const REPLACE_PREFIX_TO: &str = "_";
-
-    let path_prefixes = sources
-        .keys()
-        .map(|path| {
-            path.components()
-                .find(|c| matches!(c, Component::Normal(_)))
-                .and_then(|c| c.as_os_str().to_str())
-                .unwrap_or_default()
-                .to_string()
-        })
-        .filter(|c| c.starts_with(REPLACE_PREFIX_TO))
-        .collect::<HashSet<_>>();
-
     sources
         .into_iter()
         .map(|(path, content)| {
-            // remove / prefix
-            let mut path = path.strip_prefix("/").unwrap_or(&path).to_owned();
-            // if there is a similar prefix that starting with REPLACE_PREFIX_TO,
-            // then change our path to this prefix
-            for prefix in path_prefixes.iter() {
-                let prefix_to_replace = prefix.replacen(REPLACE_PREFIX_TO, REPLACE_PREFIX_FROM, 1);
-                if let Ok(rest) = path.strip_prefix(prefix_to_replace) {
-                    path = Path::new(prefix).join(rest);
-                }
-            }
+            let path = path
+                .as_os_str()
+                .to_str()
+                .map(|path_str| {
+                    let path_str = sanitize_path(path_str.trim_start_matches('/'));
+                    Path::new(&path_str).to_path_buf()
+                })
+                .unwrap_or(path);
             (path, content)
         })
         .collect()
+}
+
+// Should be the same as in
+// https://github.com/ethereum/sourcify/blob/d0882a5d6158d0f56e121835d79860034f072cd8/services/verification/src/services/Injector.ts#L907
+fn sanitize_path(path: &str) -> String {
+    let path = REGEX_ONLY_CHARS.replace_all(path, "_");
+    let path = REGEX_NO_DOTS.replace_all(path.as_ref(), "_");
+    path.to_string()
 }
 
 impl TryFrom<VisualizeContractsRequest> for visualizer::VisualizeContractsRequest {
@@ -193,56 +195,58 @@ mod tests {
     fn valid_fix_sources_paths() {
         test_sources_paths(
             serde_json::json!({
-                "/root/kek/a.txt": "content",
-                "root/kek/b.txt": "content",
+                "/root/kek/a.txt": "content1",
+                "root/kek/b.txt": "content1",
                 "/a.txt": "content",
             }),
             serde_json::json!({
-                "root/kek/a.txt": "content",
-                "root/kek/b.txt": "content",
+                "root/kek/a.txt": "content1",
+                "root/kek/b.txt": "content1",
                 "a.txt": "content",
             }),
         );
 
         test_sources_paths(
             serde_json::json!({
-                "@hello/kitty/a.sol": "content",
-                "/_hello/kitty/b.sol": "content",
+                "@hello/kitty/a.sol": "content2",
+                "/_hello/kitty/b.sol": "content2",
             }),
             serde_json::json!({
-                "_hello/kitty/a.sol": "content",
-                "_hello/kitty/b.sol": "content",
-            }),
-        );
-
-        test_sources_paths(
-            serde_json::json!({
-                "/@hello/kitty/a.sol": "content",
-                "/_hello/kitty/b.sol": "content",
-            }),
-            serde_json::json!({
-                "_hello/kitty/a.sol": "content",
-                "_hello/kitty/b.sol": "content",
+                "_hello/kitty/a.sol": "content2",
+                "_hello/kitty/b.sol": "content2",
             }),
         );
 
         test_sources_paths(
             serde_json::json!({
-                "/h@llo/kitty/a.sol": "content",
-                "/h_llo/kitty/b.sol": "content",
+                "/@hello/kitty/a.sol": "content3",
+                "/_hello/kitty/b.sol": "content3",
             }),
             serde_json::json!({
-                "h@llo/kitty/a.sol": "content",
-                "h_llo/kitty/b.sol": "content",
+                "_hello/kitty/a.sol": "content3",
+                "_hello/kitty/b.sol": "content3",
             }),
         );
 
         test_sources_paths(
             serde_json::json!({
-                "/@hello/kitty/a.sol": "content",
+                "/h@llo/kitty/a.sol": "content4",
+                "/h_llo/kitty/b.sol": "content4",
             }),
             serde_json::json!({
-                "@hello/kitty/a.sol": "content",
+                "h_llo/kitty/a.sol": "content4",
+                "h_llo/kitty/b.sol": "content4",
+            }),
+        );
+
+        test_sources_paths(
+            serde_json::json!({
+                "/_hello/!№%:,;()kitty/a.sol": "content5",
+                "/hello/kitty/../a.sol": "content5",
+            }),
+            serde_json::json!({
+                "_hello/________kitty/a.sol": "content5",
+                "hello/kitty_a.sol": "content5",
             }),
         );
     }
