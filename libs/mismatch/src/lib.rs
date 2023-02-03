@@ -34,7 +34,7 @@ impl<T: fmt::Display> fmt::Display for Mismatch<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_fmt(format_args!("Expected {}", self.expected))?;
         match &self.found {
-            Some(found) => f.write_fmt(format_args!(", found {}", found)),
+            Some(found) => f.write_fmt(format_args!(", found {found}")),
             None => Ok(()),
         }
     }
@@ -53,10 +53,10 @@ mod test {
         let mismatch = Mismatch::new(expected, found);
 
         // when
-        let actual = format!("{}", mismatch);
+        let actual = format!("{mismatch}");
 
         // then
-        assert_eq!(format!("Expected {}, found {}", expected, found), actual);
+        assert_eq!(format!("Expected {expected}, found {found}"), actual);
     }
 
     #[test]
@@ -66,9 +66,9 @@ mod test {
         let mismatch = Mismatch::expected(expected);
 
         // when
-        let actual = format!("{}", mismatch);
+        let actual = format!("{mismatch}");
 
         // then
-        assert_eq!(format!("Expected {}", expected), actual);
+        assert_eq!(format!("Expected {expected}"), actual);
     }
 }
