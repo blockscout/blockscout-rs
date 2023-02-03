@@ -8,7 +8,9 @@ use crate::{
 };
 use amplify::Wrapper;
 use async_trait::async_trait;
-use eth_bytecode_db::verification::{vyper_multi_part, Client, VerificationRequest};
+use eth_bytecode_db::verification::{
+    compiler_versions, vyper_multi_part, Client, VerificationRequest,
+};
 
 pub struct VyperVerifierService {
     client: Client,
@@ -48,6 +50,8 @@ impl vyper_verifier_server::VyperVerifier for VyperVerifierService {
         &self,
         _request: tonic::Request<ListCompilerVersionsRequest>,
     ) -> Result<tonic::Response<ListCompilerVersionsResponse>, tonic::Status> {
-        todo!()
+        let result = compiler_versions::vyper_versions(self.client.clone()).await;
+
+        verifier_base::process_compiler_versions_result(result)
     }
 }

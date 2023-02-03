@@ -8,10 +8,10 @@ use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 
 #[derive(Default, Debug)]
-pub struct NewTxns {}
+pub struct NewNativeCoinTransfers {}
 
 #[async_trait]
-impl ChartUpdater for NewTxns {
+impl ChartUpdater for NewNativeCoinTransfers {
     async fn get_values(
         &self,
         blockscout: &DatabaseConnection,
@@ -22,14 +22,16 @@ impl ChartUpdater for NewTxns {
                 DbBackend::Postgres,
                 r#"
                 SELECT 
-                    date(b.timestamp) as date, 
+                    DATE(b.timestamp) as date,
                     COUNT(*)::TEXT as value
                 FROM transactions t
                 JOIN blocks       b ON t.block_hash = b.hash
-                WHERE 
-                    date(b.timestamp) >= $1 AND 
-                    b.consensus = true
-                GROUP BY date;
+                WHERE
+                    DATE(b.timestamp) >= $1 AND
+                    b.consensus = true AND
+                    LENGTH(t.input) = 0 AND
+                    t.value >= 0
+                GROUP BY date
                 "#,
                 vec![row.into()],
             ),
@@ -37,12 +39,15 @@ impl ChartUpdater for NewTxns {
                 DbBackend::Postgres,
                 r#"
                 SELECT 
-                    date(b.timestamp) as date, 
+                    DATE(b.timestamp) as date,
                     COUNT(*)::TEXT as value
                 FROM transactions t
                 JOIN blocks       b ON t.block_hash = b.hash
-                WHERE b.consensus = true
-                GROUP BY date;
+                WHERE
+                    b.consensus = true AND
+                    LENGTH(t.input) = 0 AND
+                    t.value >= 0
+                GROUP BY date
                 "#,
                 vec![],
             ),
@@ -57,9 +62,9 @@ impl ChartUpdater for NewTxns {
 }
 
 #[async_trait]
-impl crate::Chart for NewTxns {
+impl crate::Chart for NewNativeCoinTransfers {
     fn name(&self) -> &str {
-        "newTxns"
+        "newNativeCoinTransfers"
     }
 
     fn chart_type(&self) -> ChartType {
@@ -70,28 +75,28 @@ impl crate::Chart for NewTxns {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
-        force_full: bool,
+        full: bool,
     ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, force_full).await
+        self.update_with_values(db, blockscout, full).await
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::NewTxns;
+    use super::NewNativeCoinTransfers;
     use crate::tests::simple_test::simple_test_chart;
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn update_new_txns() {
-        let chart = NewTxns::default();
+    async fn update_native_coins_transfers() {
+        let chart = NewNativeCoinTransfers::default();
         simple_test_chart(
-            "update_new_txns",
+            "update_native_coins_transfers",
             chart,
             vec![
-                ("2022-11-09", "3"),
-                ("2022-11-10", "6"),
-                ("2022-11-11", "6"),
+                ("2022-11-09", "2"),
+                ("2022-11-10", "4"),
+                ("2022-11-11", "4"),
                 ("2022-11-12", "1"),
             ],
         )
