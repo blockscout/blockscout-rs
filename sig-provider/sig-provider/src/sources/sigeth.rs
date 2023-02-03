@@ -62,7 +62,7 @@ impl SignatureSource for Source {
     async fn get_function_signatures(&self, hex: &str) -> Result<Vec<String>, anyhow::Error> {
         let hash = Self::hash(hex);
         let resp = self
-            .fetch(&format!("/api/v1/signatures?function={}&all", hash))
+            .fetch(&format!("/api/v1/signatures?function={hash}&all"))
             .await?;
         let signatures = Self::convert(resp.result.function, &hash);
         Ok(signatures)
@@ -71,7 +71,7 @@ impl SignatureSource for Source {
     async fn get_event_signatures(&self, hex: &str) -> Result<Vec<String>, anyhow::Error> {
         let hash = Self::hash(hex);
         let resp = self
-            .fetch(&format!("/api/v1/signatures?event={}&all", hash))
+            .fetch(&format!("/api/v1/signatures?event={hash}&all"))
             .await?;
         let signatures = Self::convert(resp.result.event, &hash);
         Ok(signatures)
