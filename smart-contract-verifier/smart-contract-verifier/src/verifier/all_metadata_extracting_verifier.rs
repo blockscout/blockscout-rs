@@ -167,11 +167,11 @@ impl<T: Source> Verifier<T> {
         // If there were no errors for main contract, there must not be any for modified contract as well
         let creation_tx_input_modified: Bytecode<CreationTxInput> =
             Bytecode::try_from(contract_modified).map_err(|err| {
-                VerificationErrorKind::InternalError(format!("modified contract: {}", err))
+                VerificationErrorKind::InternalError(format!("modified contract: {err}"))
             })?;
         let deployed_bytecode_modified: Bytecode<DeployedBytecode> =
             Bytecode::try_from(contract_modified).map_err(|err| {
-                VerificationErrorKind::InternalError(format!("modified contract: {}", err))
+                VerificationErrorKind::InternalError(format!("modified contract: {err}"))
             })?;
 
         let local_bytecode = LocalBytecode::new(

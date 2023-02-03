@@ -22,8 +22,7 @@ async fn test_versions(uri: &str) {
         let body = read_body(response).await;
         let message = from_utf8(&body).expect("Read body as UTF-8");
         panic!(
-            "Invalid status code (success expected). Status: {}. Message: {}",
-            status, message
+            "Invalid status code (success expected). Status: {status}. Message: {message}"
         )
     }
 

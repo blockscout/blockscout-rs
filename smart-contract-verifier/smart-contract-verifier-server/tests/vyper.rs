@@ -60,7 +60,7 @@ fn default_contract_name() -> String {
 
 impl TestCase {
     fn from_name(name: &str) -> Self {
-        let test_case_path = format!("{}/{}.json", TEST_CASES_DIR, name);
+        let test_case_path = format!("{TEST_CASES_DIR}/{name}.json");
         let content = fs::read_to_string(test_case_path).expect("failed to read file");
         serde_json::from_str(&content).expect("invalid test case format")
     }
@@ -95,8 +95,7 @@ async fn test_success(test_case: TestCase) {
         let body = read_body(response).await;
         let message = from_utf8(&body).expect("Read body as UTF-8");
         panic!(
-            "Invalid status code (success expected). Status: {}. Messsage: {}",
-            status, message
+            "Invalid status code (success expected). Status: {status}. Messsage: {message}"
         )
     }
 
@@ -104,8 +103,7 @@ async fn test_success(test_case: TestCase) {
     assert_eq!(
         verification_response.status(),
         Status::Success,
-        "Invalid verification status. Response: {:?}",
-        verification_response
+        "Invalid verification status. Response: {verification_response:?}"
     );
 
     assert!(
@@ -219,8 +217,7 @@ async fn test_failure(test_case: TestCase, expected_message: &str) {
     assert_eq!(
         verification_response.status(),
         Status::Failure,
-        "Invalid verification status. Response: {:?}",
-        verification_response
+        "Invalid verification status. Response: {verification_response:?}"
     );
 
     assert!(
@@ -245,12 +242,11 @@ async fn test_error(test_case: TestCase, expected_status: StatusCode, expected_m
     let body = read_body(response).await;
     let message = from_utf8(&body).expect("Read body as UTF-8");
 
-    assert_eq!(status, expected_status, "Invalid status code: {}", status,);
+    assert_eq!(status, expected_status, "Invalid status code: {status}",);
 
     assert!(
         message.contains(expected_message),
-        "Invalid message: {}",
-        message
+        "Invalid message: {message}"
     );
 }
 

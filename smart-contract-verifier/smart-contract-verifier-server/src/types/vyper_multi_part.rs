@@ -42,7 +42,7 @@ impl TryFrom<VerifyVyperMultiPartRequestWrapper> for VerificationRequest {
         let request = request.into_inner();
 
         let bytecode = DisplayBytes::from_str(&request.bytecode)
-            .map_err(|err| tonic::Status::invalid_argument(format!("Invalid bytecode: {:?}", err)))?
+            .map_err(|err| tonic::Status::invalid_argument(format!("Invalid bytecode: {err:?}")))?
             .0;
         let (creation_bytecode, deployed_bytecode) = match request.bytecode_type() {
             BytecodeType::Unspecified => Err(tonic::Status::invalid_argument(
@@ -52,7 +52,7 @@ impl TryFrom<VerifyVyperMultiPartRequestWrapper> for VerificationRequest {
             BytecodeType::DeployedBytecode => (None, bytecode),
         };
         let compiler_version = Version::from_str(&request.compiler_version).map_err(|err| {
-            tonic::Status::invalid_argument(format!("Invalid compiler version: {}", err))
+            tonic::Status::invalid_argument(format!("Invalid compiler version: {err}"))
         })?;
 
         let sources: BTreeMap<PathBuf, String> = request
