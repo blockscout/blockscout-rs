@@ -1,8 +1,5 @@
 use crate::{
-    charts::{
-        insert::{DateValue, DateValueDouble},
-        ChartUpdater,
-    },
+    charts::{insert::DateValue, ChartUpdater},
     UpdateError,
 };
 use async_trait::async_trait;
@@ -11,12 +8,10 @@ use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 
 #[derive(Default, Debug)]
-pub struct TxnsFee {}
-
-const ETHER: i64 = i64::pow(10, 18);
+pub struct NewNativeCoinTransfers {}
 
 #[async_trait]
-impl ChartUpdater for TxnsFee {
+impl ChartUpdater for NewNativeCoinTransfers {
     async fn get_values(
         &self,
         blockscout: &DatabaseConnection,
@@ -27,47 +22,49 @@ impl ChartUpdater for TxnsFee {
                 DbBackend::Postgres,
                 r#"
                 SELECT 
-                    DATE(b.timestamp) as date, 
-                    (SUM(t.gas_used * t.gas_price) / $1)::FLOAT as value
+                    DATE(b.timestamp) as date,
+                    COUNT(*)::TEXT as value
                 FROM transactions t
                 JOIN blocks       b ON t.block_hash = b.hash
                 WHERE
-                    DATE(b.timestamp) >= $2 AND
-                    b.consensus = true
-                GROUP BY DATE(b.timestamp)
+                    DATE(b.timestamp) >= $1 AND
+                    b.consensus = true AND
+                    LENGTH(t.input) = 0 AND
+                    t.value >= 0
+                GROUP BY date
                 "#,
-                vec![ETHER.into(), row.into()],
+                vec![row.into()],
             ),
             None => Statement::from_sql_and_values(
                 DbBackend::Postgres,
                 r#"
                 SELECT 
-                    DATE(b.timestamp) as date, 
-                    (SUM(t.gas_used * t.gas_price) / $1)::FLOAT as value
+                    DATE(b.timestamp) as date,
+                    COUNT(*)::TEXT as value
                 FROM transactions t
                 JOIN blocks       b ON t.block_hash = b.hash
-                WHERE b.consensus = true
-                GROUP BY DATE(b.timestamp)
+                WHERE
+                    b.consensus = true AND
+                    LENGTH(t.input) = 0 AND
+                    t.value >= 0
+                GROUP BY date
                 "#,
-                vec![ETHER.into()],
+                vec![],
             ),
         };
 
-        let data = DateValueDouble::find_by_statement(stmnt)
+        let data = DateValue::find_by_statement(stmnt)
             .all(blockscout)
             .await
-            .map_err(UpdateError::BlockscoutDB)?
-            .into_iter()
-            .map(DateValue::from)
-            .collect::<Vec<_>>();
+            .map_err(UpdateError::BlockscoutDB)?;
         Ok(data)
     }
 }
 
 #[async_trait]
-impl crate::Chart for TxnsFee {
+impl crate::Chart for NewNativeCoinTransfers {
     fn name(&self) -> &str {
-        "txnsFee"
+        "newNativeCoinTransfers"
     }
 
     fn chart_type(&self) -> ChartType {
@@ -78,29 +75,29 @@ impl crate::Chart for TxnsFee {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
-        force_full: bool,
+        full: bool,
     ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, force_full).await
+        self.update_with_values(db, blockscout, full).await
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::TxnsFee;
+    use super::NewNativeCoinTransfers;
     use crate::tests::simple_test::simple_test_chart;
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn update_txns_fee() {
-        let chart = TxnsFee::default();
+    async fn update_native_coins_transfers() {
+        let chart = NewNativeCoinTransfers::default();
         simple_test_chart(
-            "update_txns_fee",
+            "update_native_coins_transfers",
             chart,
             vec![
-                ("2022-11-09", "0"),
-                ("2022-11-10", "0.000353888888535"),
-                ("2022-11-11", "0.000778555554777"),
-                ("2022-11-12", "0.000023592592569"),
+                ("2022-11-09", "2"),
+                ("2022-11-10", "4"),
+                ("2022-11-11", "4"),
+                ("2022-11-12", "1"),
             ],
         )
         .await;
