@@ -14,7 +14,7 @@ async fn check_make_requests() {
 
     for name in names.iter() {
         Mock::given(method("GET"))
-            .and(path(format!("poa/{}/api/v1/my_name", name)))
+            .and(path(format!("poa/{name}/api/v1/my_name")))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "name": name })))
             .mount(&mock_server)
             .await;
@@ -22,9 +22,9 @@ async fn check_make_requests() {
     let server_host = mock_server.uri();
     let mut settings = Settings::default();
     settings.blockscout.instances = serde_json::from_value(serde_json::json!([
-        {"title": "Mocked blockscout 1", "url": format!("{}/poa/blockscout-1", server_host), "id": "blockscout-1"},
-        {"title": "Mocked blockscout 2", "url": format!("{}/poa/blockscout-2", server_host), "id": "blockscout-2"},
-        {"title": "Mocked blockscout 3", "url": format!("{}/poa/blockscout-3", server_host), "id": "blockscout-3"},
+        {"title": "Mocked blockscout 1", "url": format!("{server_host}/poa/blockscout-1"), "id": "blockscout-1"},
+        {"title": "Mocked blockscout 2", "url": format!("{server_host}/poa/blockscout-2"), "id": "blockscout-2"},
+        {"title": "Mocked blockscout 3", "url": format!("{server_host}/poa/blockscout-3"), "id": "blockscout-3"},
     ])).unwrap();
 
     let proxy = proxy::BlockscoutProxy::new(
@@ -48,11 +48,11 @@ async fn check_make_requests() {
         let instance_response = actual_response
             .0
             .get(name)
-            .unwrap_or_else(|| panic!("response for {} not found", name));
+            .unwrap_or_else(|| panic!("response for {name} not found"));
         assert_eq!(instance_response.status, StatusCode::OK);
         assert_eq!(
             instance_response.uri.to_string(),
-            format!("{}/poa/{}/api/v1/my_name", server_host, name)
+            format!("{server_host}/poa/{name}/api/v1/my_name")
         );
         assert_eq!(instance_response.instance.id, name);
         assert_eq!(
