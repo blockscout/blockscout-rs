@@ -31,7 +31,7 @@ pub async fn init_db(test_suite_name: &str, test_name: &str) -> TestDbGuard {
     let db_url: Option<String> = None;
     // Uncomment if providing url explicitly is more convenient
     // let db_url = Some("postgres://postgres:admin@localhost:9432/".into());
-    let db_name = format!("{}_{}_{}", DB_PREFIX, test_suite_name, test_name);
+    let db_name = format!("{DB_PREFIX}_{test_suite_name}_{test_name}");
     TestDbGuard::new(db_name.as_str(), db_url).await
 }
 
@@ -47,7 +47,7 @@ where
 }
 
 pub async fn init_eth_bytecode_db_server(db_url: &str, verifier_addr: SocketAddr) -> Url {
-    let verifier_uri = Uri::from_str(&format!("http://{}", verifier_addr)).unwrap();
+    let verifier_uri = Uri::from_str(&format!("http://{verifier_addr}")).unwrap();
 
     let settings = {
         let mut settings = Settings::default(db_url.into(), verifier_uri);
@@ -124,10 +124,7 @@ pub mod test_cases {
         if !response.status().is_success() {
             let status = response.status();
             let message = response.text().await.expect("Read body as text");
-            panic!(
-                "Invalid status code (success expected). Status: {}. Message: {}",
-                status, message
-            )
+            panic!("Invalid status code (success expected). Status: {status}. Message: {message}")
         }
 
         let verification_response: eth_bytecode_db_v2::VerifyResponse = response
@@ -193,8 +190,7 @@ pub mod test_cases {
                 let status = response.status();
                 let message = response.text().await.expect("Read body as text");
                 panic!(
-                    "Creation input search: invalid status code (success expected). Status: {}. Message: {}",
-                    status, message
+                    "Creation input search: invalid status code (success expected). Status: {status}. Message: {message}"
                 )
             }
             response
@@ -222,8 +218,7 @@ pub mod test_cases {
                 let status = response.status();
                 let message = response.text().await.expect("Read body as text");
                 panic!(
-                    "Deployed bytecode search: invalid status code (success expected). Status: {}. Message: {}",
-                    status, message
+                    "Deployed bytecode search: invalid status code (success expected). Status: {status}. Message: {message}"
                 )
             }
             response
