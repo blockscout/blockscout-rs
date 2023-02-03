@@ -133,7 +133,7 @@ mod metadata_hash_deserialization_tests {
             ParseMetadataHashError::InvalidSolcVersion(_) => "InvalidSolcVersion",
             ParseMetadataHashError::DuplicateKeys => "DuplicateKeys",
         };
-        format!("{:?}", error).contains(parse_metadata_hash_error_to_string(expected))
+        format!("{error:?}").contains(parse_metadata_hash_error_to_string(expected))
     }
 
     #[test]
@@ -206,7 +206,7 @@ mod metadata_hash_deserialization_tests {
         let first = "a2646970667358221220bcc988b1311237f2c00ccd0bfbd8b01d24dc18f720603b0de93fe6327df5362564736f6c634300080e";
         let second =
             "a165627a7a72305820d4fba422541feba2d648f6657d9354ec14ea9f5919b520abe0feb60981d7b17c";
-        let hex = format!("{}{}", first, second);
+        let hex = format!("{first}{second}");
         let encoded = DisplayBytes::from_str(&hex).unwrap().0;
         let expected = MetadataHash {
             solc: Some(Version::new(0, 8, 14)),
