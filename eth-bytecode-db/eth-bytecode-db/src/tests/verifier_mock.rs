@@ -89,6 +89,6 @@ impl VerificationResult {
     }
 
     fn from_template(template: &str, id: usize) -> Result<Self, serde_json::Error> {
-        serde_json::from_str(&template.replace("{{ID}}", &format!("{:0>10}", id)))
+        serde_json::from_str(&template.replace("{{ID}}", &format!("{id:0>10}")))
     }
 }
