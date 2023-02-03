@@ -30,7 +30,7 @@ impl ChartFullUpdater for TotalAccounts {
         let data = cache
             .get_or_update(async move { AccountsGrowth::read_values(blockscout).await })
             .await?;
-        let data = data.into_iter().rev().take(1).collect();
+        let data = data.into_iter().max().into_iter().collect();
         Ok(data)
     }
 }
