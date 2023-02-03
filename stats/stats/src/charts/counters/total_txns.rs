@@ -1,5 +1,5 @@
 use crate::{
-    charts::{insert::DateValue, ChartFullUpdater},
+    charts::{insert::DateValue, updater::ChartFullUpdater},
     UpdateError,
 };
 use async_trait::async_trait;
