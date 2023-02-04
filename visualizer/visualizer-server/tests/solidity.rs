@@ -83,7 +83,6 @@ async fn visualize_contracts_success_from_dir(project_name: &str, sample_name: &
     let request = json!({
         "sources": get_dir_files(&project_path),
     });
-
     let svg_path = format!("{SAMPLES_DIR}/uml/{sample_name}.svg");
     let expected_svg = fs::read_to_string(&svg_path)
         .unwrap_or_else(|_| panic!("Error while reading {sample_name}.svg",));
@@ -217,6 +216,28 @@ mod success_advanced_tests {
         )
         .await;
     }
+
+    #[actix_web::test]
+    async fn uml_starting_slash() {
+        let contract_path = format!("{CONTRACTS_DIR}/SimpleContract.sol",);
+        let contract =
+            fs::read_to_string(&contract_path).expect("Error while reading SimpleContract.sol");
+        let svg_path = format!("{SAMPLES_DIR}/uml/simple_contract.svg",);
+        let expected_svg = fs::read_to_string(&svg_path)
+            .unwrap_or_else(|_| panic!("Error while reading simple_contract.svg",));
+        let request = json!({
+            "sources": {
+                "/usr/SimpleContract.sol": contract,
+            }
+        });
+        visualize_contract_success(request, expected_svg).await;
+    }
+
+    // filename that starts with @
+    #[actix_web::test]
+    async fn uml_starting_at_sign() {
+        visualize_contracts_success_from_dir("openzeppelin_lib", "openzeppelin_lib").await;
+    }
 }
 
 mod success_known_issues {
@@ -308,32 +329,6 @@ mod success_known_issues {
 
 mod failure_tests {
     use super::*;
-
-    #[actix_web::test]
-    async fn uml_wrong_path() {
-        let contract_path = format!("{CONTRACTS_DIR}/SimpleContract.sol",);
-        let contract =
-            fs::read_to_string(&contract_path).expect("Error while reading SimpleContract.sol");
-        let request = json!({
-            "sources": {
-                "/usr/SimpleContract.sol": contract,
-            }
-        });
-
-        let response = test_setup(request, "/api/v1/solidity:visualize-contracts").await;
-
-        assert!(
-            response.status().is_client_error(),
-            "Invalid status code (failed expected): {}",
-            response.status()
-        );
-
-        let message = response.response().error().unwrap().to_string();
-        assert!(
-            message.contains("All paths should be relative"),
-            "Invalid response message: {message}",
-        );
-    }
 
     #[actix_web::test]
     async fn storage_wrong_main_contract() {

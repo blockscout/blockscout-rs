@@ -5,11 +5,22 @@ use crate::proto::{
     google::protobuf::FieldMask,
 };
 use bytes::Bytes;
+use lazy_static::lazy_static;
+use regex::{Regex, RegexBuilder};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 use visualizer::{OutputMask, ResponseFieldMask};
+
+lazy_static! {
+    static ref REGEX_ONLY_CHARS: Regex = RegexBuilder::new(r"[^a-z0-9_./-]")
+        .case_insensitive(true)
+        .multi_line(true)
+        .build()
+        .unwrap();
+    static ref REGEX_NO_DOTS: Regex = Regex::new(r"(^|/)[.]+($|/)").unwrap();
+}
 
 fn sources(sources: HashMap<String, String>) -> BTreeMap<PathBuf, String> {
     sources
@@ -35,12 +46,37 @@ fn output_mask(field_mask: Option<FieldMask>) -> Result<OutputMask, anyhow::Erro
     Ok(output_mask)
 }
 
+fn fix_sources_paths(sources: BTreeMap<PathBuf, String>) -> BTreeMap<PathBuf, String> {
+    sources
+        .into_iter()
+        .map(|(path, content)| {
+            let path = path
+                .as_os_str()
+                .to_str()
+                .map(|path_str| {
+                    let path_str = sanitize_path(path_str.trim_start_matches('/'));
+                    Path::new(&path_str).to_path_buf()
+                })
+                .unwrap_or(path);
+            (path, content)
+        })
+        .collect()
+}
+
+// Should be the same as in
+// https://github.com/ethereum/sourcify/blob/d0882a5d6158d0f56e121835d79860034f072cd8/services/verification/src/services/Injector.ts#L907
+fn sanitize_path(path: &str) -> String {
+    let path = REGEX_ONLY_CHARS.replace_all(path, "_");
+    let path = REGEX_NO_DOTS.replace_all(path.as_ref(), "_");
+    path.to_string()
+}
+
 impl TryFrom<VisualizeContractsRequest> for visualizer::VisualizeContractsRequest {
     type Error = anyhow::Error;
 
     fn try_from(request: VisualizeContractsRequest) -> Result<Self, Self::Error> {
         Ok(Self {
-            sources: sources(request.sources),
+            sources: fix_sources_paths(sources(request.sources)),
             output_mask: output_mask(request.output_mask)?,
         })
     }
@@ -51,7 +87,7 @@ impl TryFrom<VisualizeStorageRequest> for visualizer::VisualizeStorageRequest {
 
     fn try_from(request: VisualizeStorageRequest) -> Result<Self, Self::Error> {
         Ok(Self {
-            sources: sources(request.sources),
+            sources: fix_sources_paths(sources(request.sources)),
             file_path: PathBuf::from(request.file_name),
             contract_name: request.contract_name,
             output_mask: output_mask(request.output_mask)?,
@@ -143,6 +179,75 @@ mod tests {
             ]
         }"#,
             "invalid response filed mask: abcd",
+        );
+    }
+
+    fn test_sources_paths(input: serde_json::Value, expected: serde_json::Value) {
+        let actual =
+            fix_sources_paths(serde_json::from_value(input).expect("invalid input: not map"));
+        assert_eq!(
+            serde_json::to_value(actual).expect("BTree map should be valud Value"),
+            expected
+        );
+    }
+
+    #[test]
+    fn valid_fix_sources_paths() {
+        test_sources_paths(
+            serde_json::json!({
+                "/root/kek/a.txt": "content1",
+                "root/kek/b.txt": "content1",
+                "/a.txt": "content",
+            }),
+            serde_json::json!({
+                "root/kek/a.txt": "content1",
+                "root/kek/b.txt": "content1",
+                "a.txt": "content",
+            }),
+        );
+
+        test_sources_paths(
+            serde_json::json!({
+                "@hello/kitty/a.sol": "content2",
+                "/_hello/kitty/b.sol": "content2",
+            }),
+            serde_json::json!({
+                "_hello/kitty/a.sol": "content2",
+                "_hello/kitty/b.sol": "content2",
+            }),
+        );
+
+        test_sources_paths(
+            serde_json::json!({
+                "/@hello/kitty/a.sol": "content3",
+                "/_hello/kitty/b.sol": "content3",
+            }),
+            serde_json::json!({
+                "_hello/kitty/a.sol": "content3",
+                "_hello/kitty/b.sol": "content3",
+            }),
+        );
+
+        test_sources_paths(
+            serde_json::json!({
+                "/h@llo/kitty/a.sol": "content4",
+                "/h_llo/kitty/b.sol": "content4",
+            }),
+            serde_json::json!({
+                "h_llo/kitty/a.sol": "content4",
+                "h_llo/kitty/b.sol": "content4",
+            }),
+        );
+
+        test_sources_paths(
+            serde_json::json!({
+                "/_hello/!№%:,;()kitty/a.sol": "content5",
+                "/hello/kitty/../a.sol": "content5",
+            }),
+            serde_json::json!({
+                "_hello/________kitty/a.sol": "content5",
+                "hello/kitty_a.sol": "content5",
+            }),
         );
     }
 }
