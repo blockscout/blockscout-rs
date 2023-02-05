@@ -138,7 +138,7 @@ mod tests {
         );
         for i in 0..expected.len() {
             let input_json = serde_json::to_string(&inputs[i]).unwrap();
-            println!("{}", input_json);
+            println!("{input_json}");
             assert_eq!(input_json, expected[i]);
         }
     }

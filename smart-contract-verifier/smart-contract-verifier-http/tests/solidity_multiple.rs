@@ -58,27 +58,27 @@ async fn test_setup(dir: &str, input: &mut TestInput) -> (ServiceResponse, Optio
         }
     };
 
-    let prefix = format!("{}/{}", CONTRACTS_DIR, dir);
+    let prefix = format!("{CONTRACTS_DIR}/{dir}");
     let suffix = if input.is_yul { "yul" } else { "sol" };
-    let contract_path = format!("{}/source.{}", prefix, suffix);
+    let contract_path = format!("{prefix}/source.{suffix}");
     input.source_code = Some(input.source_code.clone().unwrap_or_else(|| {
         fs::read_to_string(&contract_path).expect("Error while reading source")
     }));
     input.creation_tx_input = if !input.ignore_creation_tx_input {
         Some(input.creation_tx_input.clone().unwrap_or_else(|| {
-            fs::read_to_string(format!("{}/creation_tx_input", prefix))
+            fs::read_to_string(format!("{prefix}/creation_tx_input"))
                 .expect("Error while reading creation_tx_input")
         }))
     } else {
         None
     };
     input.deployed_bytecode = Some(input.deployed_bytecode.clone().unwrap_or_else(|| {
-        fs::read_to_string(format!("{}/deployed_bytecode", prefix))
+        fs::read_to_string(format!("{prefix}/deployed_bytecode"))
             .expect("Error while reading deployed_bytecode")
     }));
     let expected_constructor_argument = input.has_constructor_args.then(|| {
         DisplayBytes::from_str(
-            &fs::read_to_string(format!("{}/constructor_arguments", prefix))
+            &fs::read_to_string(format!("{prefix}/constructor_arguments"))
                 .expect("Error while reading constructor_arguments"),
         )
         .expect("Expected constructor args must be valid")
@@ -122,10 +122,7 @@ async fn test_success(dir: &'static str, mut input: TestInput) -> VerificationRe
         let status = response.status();
         let body = read_body(response).await;
         let message = from_utf8(&body).expect("Read body as UTF-8");
-        panic!(
-            "Invalid status code (success expected). Status: {}. Messsage: {}",
-            status, message
-        )
+        panic!("Invalid status code (success expected). Status: {status}. Messsage: {message}")
     }
 
     let verification_response: VerificationResponse = read_body_json(response).await;

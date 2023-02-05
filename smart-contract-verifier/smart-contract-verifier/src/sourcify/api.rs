@@ -68,7 +68,7 @@ pub async fn verify(
         }
         ApiVerificationResponse::Error { error } => Err(Error::Verification(error)),
         ApiVerificationResponse::ValidationErrors { message, errors } => {
-            let error_message = format!("{}: {:?}", message, errors);
+            let error_message = format!("{message}: {errors:?}");
             Err(Error::Validation(error_message))
         }
     }

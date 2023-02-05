@@ -461,17 +461,13 @@ mod local_bytecode_initialization_tests {
 
     #[test]
     fn with_one_metadata() {
-        let creation_tx_input_str = format!("{}{}", CREATION_TX_INPUT_MAIN_PART_1, METADATA_PART_1);
-        let creation_tx_input_modified_str = format!(
-            "{}{}",
-            CREATION_TX_INPUT_MAIN_PART_1, METADATA_PART1_MODIFIED
-        );
+        let creation_tx_input_str = format!("{CREATION_TX_INPUT_MAIN_PART_1}{METADATA_PART_1}");
+        let creation_tx_input_modified_str =
+            format!("{CREATION_TX_INPUT_MAIN_PART_1}{METADATA_PART1_MODIFIED}");
 
-        let deployed_bytecode_str = format!("{}{}", DEPLOYED_BYTECODE_MAIN_PART_1, METADATA_PART_1);
-        let deployed_bytecode_modified_str = format!(
-            "{}{}",
-            DEPLOYED_BYTECODE_MAIN_PART_1, METADATA_PART1_MODIFIED
-        );
+        let deployed_bytecode_str = format!("{DEPLOYED_BYTECODE_MAIN_PART_1}{METADATA_PART_1}");
+        let deployed_bytecode_modified_str =
+            format!("{DEPLOYED_BYTECODE_MAIN_PART_1}{METADATA_PART1_MODIFIED}");
 
         // Verify bytecode for creation tx input first
         {
@@ -535,33 +531,17 @@ mod local_bytecode_initialization_tests {
     #[test]
     fn with_two_metadata() {
         let creation_tx_input_str = format!(
-            "{}{}{}{}",
-            CREATION_TX_INPUT_MAIN_PART_1,
-            METADATA_PART_1,
-            CREATION_TX_INPUT_MAIN_PART_2,
-            METADATA_PART_2
+            "{CREATION_TX_INPUT_MAIN_PART_1}{METADATA_PART_1}{CREATION_TX_INPUT_MAIN_PART_2}{METADATA_PART_2}"
         );
         let creation_tx_input_modified_str = format!(
-            "{}{}{}{}",
-            CREATION_TX_INPUT_MAIN_PART_1,
-            METADATA_PART1_MODIFIED,
-            CREATION_TX_INPUT_MAIN_PART_2,
-            METADATA_PART2_MODIFIED
+            "{CREATION_TX_INPUT_MAIN_PART_1}{METADATA_PART1_MODIFIED}{CREATION_TX_INPUT_MAIN_PART_2}{METADATA_PART2_MODIFIED}"
         );
 
         let deployed_bytecode_str = format!(
-            "{}{}{}{}",
-            DEPLOYED_BYTECODE_MAIN_PART_1,
-            METADATA_PART_1,
-            DEPLOYED_BYTECODE_MAIN_PART_2,
-            METADATA_PART_2
+            "{DEPLOYED_BYTECODE_MAIN_PART_1}{METADATA_PART_1}{DEPLOYED_BYTECODE_MAIN_PART_2}{METADATA_PART_2}"
         );
         let deployed_bytecode_modified_str = format!(
-            "{}{}{}{}",
-            DEPLOYED_BYTECODE_MAIN_PART_1,
-            METADATA_PART1_MODIFIED,
-            DEPLOYED_BYTECODE_MAIN_PART_2,
-            METADATA_PART2_MODIFIED
+            "{DEPLOYED_BYTECODE_MAIN_PART_1}{METADATA_PART1_MODIFIED}{DEPLOYED_BYTECODE_MAIN_PART_2}{METADATA_PART2_MODIFIED}"
         );
 
         // Verify bytecode for creation tx input first
@@ -629,22 +609,16 @@ mod local_bytecode_initialization_tests {
 
     #[test]
     fn with_two_metadata_but_one_main_part() {
-        let creation_tx_input_str = format!(
-            "{}{}{}",
-            CREATION_TX_INPUT_MAIN_PART_1, METADATA_PART_1, METADATA_PART_2
-        );
+        let creation_tx_input_str =
+            format!("{CREATION_TX_INPUT_MAIN_PART_1}{METADATA_PART_1}{METADATA_PART_2}");
         let creation_tx_input_modified_str = format!(
-            "{}{}{}",
-            CREATION_TX_INPUT_MAIN_PART_1, METADATA_PART1_MODIFIED, METADATA_PART2_MODIFIED
+            "{CREATION_TX_INPUT_MAIN_PART_1}{METADATA_PART1_MODIFIED}{METADATA_PART2_MODIFIED}"
         );
 
-        let deployed_bytecode_str = format!(
-            "{}{}{}",
-            DEPLOYED_BYTECODE_MAIN_PART_1, METADATA_PART_1, METADATA_PART_2
-        );
+        let deployed_bytecode_str =
+            format!("{DEPLOYED_BYTECODE_MAIN_PART_1}{METADATA_PART_1}{METADATA_PART_2}");
         let deployed_bytecode_modified_str = format!(
-            "{}{}{}",
-            DEPLOYED_BYTECODE_MAIN_PART_1, METADATA_PART1_MODIFIED, METADATA_PART2_MODIFIED
+            "{DEPLOYED_BYTECODE_MAIN_PART_1}{METADATA_PART1_MODIFIED}{METADATA_PART2_MODIFIED}"
         );
 
         // Verify bytecode for creation tx input first
@@ -710,12 +684,10 @@ mod local_bytecode_initialization_tests {
 
     #[test]
     fn with_different_lengths_should_fail() {
-        let creation_tx_input_str = format!("{}{}", CREATION_TX_INPUT_MAIN_PART_1, METADATA_PART_1);
+        let creation_tx_input_str = format!("{CREATION_TX_INPUT_MAIN_PART_1}{METADATA_PART_1}");
         // additional byte
-        let creation_tx_input_modified_str = format!(
-            "{}{}12",
-            CREATION_TX_INPUT_MAIN_PART_1, METADATA_PART1_MODIFIED
-        );
+        let creation_tx_input_modified_str =
+            format!("{CREATION_TX_INPUT_MAIN_PART_1}{METADATA_PART1_MODIFIED}12");
 
         let deployed_bytecode_str = DEPLOYED_BYTECODE_MAIN_PART_1.to_string();
         let deployed_bytecode_modified_str = DEPLOYED_BYTECODE_MAIN_PART_1.to_string();
@@ -737,8 +709,7 @@ mod local_bytecode_initialization_tests {
             VerificationErrorKind::InternalError(error) => {
                 assert!(
                     error.contains("length mismatch"),
-                    "Invalid error message: {}",
-                    error
+                    "Invalid error message: {error}"
                 )
             }
             _ => panic!("Invalid error"),
@@ -747,12 +718,9 @@ mod local_bytecode_initialization_tests {
 
     #[test]
     fn with_invalid_metadata_should_fail() {
-        let creation_tx_input_str =
-            format!("{}cafe{}", CREATION_TX_INPUT_MAIN_PART_1, METADATA_PART_1);
-        let creation_tx_input_modified_str = format!(
-            "{}abcd{}",
-            CREATION_TX_INPUT_MAIN_PART_1, METADATA_PART1_MODIFIED
-        );
+        let creation_tx_input_str = format!("{CREATION_TX_INPUT_MAIN_PART_1}cafe{METADATA_PART_1}");
+        let creation_tx_input_modified_str =
+            format!("{CREATION_TX_INPUT_MAIN_PART_1}abcd{METADATA_PART1_MODIFIED}");
 
         let deployed_bytecode_str = DEPLOYED_BYTECODE_MAIN_PART_1.to_string();
         let deployed_bytecode_modified_str = DEPLOYED_BYTECODE_MAIN_PART_1.to_string();
@@ -774,8 +742,7 @@ mod local_bytecode_initialization_tests {
             VerificationErrorKind::InternalError(error) => {
                 assert!(
                     error.contains("failed to parse bytecode part"),
-                    "Invalid error message: {}",
-                    error
+                    "Invalid error message: {error}"
                 )
             }
             _ => panic!("Invalid error"),
@@ -813,7 +780,7 @@ mod local_bytecode_initialization_tests {
         );
         match local_bytecode.unwrap_err() {
             VerificationErrorKind::InternalError(error) => {
-                assert!(error.contains(""), "Invalid error message: {}", error)
+                assert!(error.contains(""), "Invalid error message: {error}")
             }
             _ => panic!("failed to parse metadata length"),
         }
@@ -856,8 +823,7 @@ mod local_bytecode_initialization_tests {
                     error.contains(
                         "encoded metadata length does not correspond to actual metadata length"
                     ),
-                    "Invalid error message: {}",
-                    error
+                    "Invalid error message: {error}"
                 )
             }
             _ => panic!("failed to parse metadata length"),
