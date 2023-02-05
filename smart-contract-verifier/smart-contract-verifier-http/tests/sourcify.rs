@@ -23,10 +23,10 @@ async fn should_return_200() {
     let metadata = include_str!("contracts/storage/metadata.json");
     let source = include_str!("contracts/storage/source.sol");
     let request_body = json!({
-        // relies on the fact that the sokol testnet has this contract
-        // https://blockscout.com/poa/sokol/address/0x1277E7D253e0c073418B986b8228BF282554cA5e
-        "address": "0x1277E7D253e0c073418B986b8228BF282554cA5e",
-        "chain": "77",
+        // relies on the fact that the POA Network Core has this contract
+        // https://blockscout.com/poa/core/address/0xe94dD562dB27e3FC6FA701739Da7b3149CE983E1
+        "address": "0xe94dD562dB27e3FC6FA701739Da7b3149CE983E1",
+        "chain": "99",
         "files": {
             "source.sol": source,
             "metadata.json": metadata,
@@ -86,30 +86,30 @@ async fn invalid_contracts() {
     for (request_body, error_message) in [
         (
             json!({
-                // relies on fact that the sokol HASN'T any contract with this address
+                // relies on fact that the POA Network Core HASN'T any contract with this address
                 "address": "0x1234567890123456789012345678901234567890",
-                "chain": "77",
+                "chain": "99",
                 "files": {
                     "metadata.json": metadata_content,
                     "contracts/1_Storage.sol": source,
                 },
             }),
-            "Sokol does not have a contract",
+            "POA Network Core does not have a contract",
         ),
         (
             json!({
                 "address": "0x1234567890123456789012345678901234567890",
-                "chain": "77",
+                "chain": "99",
                 "files": {},
             }),
             "Metadata file not found",
         ),
         (
             json!({
-                // relies on fact that sokol has some contract, but it is not verified in
+                // relies on fact that POA Network Core has some contract, but it is not verified in
                 // sourcify and `source` contains wrong source code
-                "address": "0xDD00Fe656dC893863Ae537430Dd13631aA2F55F0",
-                "chain": "77",
+                "address": "0xAb2f2Dd3120dE530d38936EE09A74a6d17e3Da44",
+                "chain": "99",
                 "files": {
                     "metadata.json": metadata_content,
                     "contracts/1_Storage.sol": source,
