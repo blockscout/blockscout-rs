@@ -51,12 +51,12 @@ impl SignatureSource for Source {
     }
 
     async fn get_function_signatures(&self, hex: &str) -> Result<Vec<String>, anyhow::Error> {
-        self.fetch(format!("/api/v1/signatures/?hex_signature={}", hex))
+        self.fetch(format!("/api/v1/signatures/?hex_signature={hex}"))
             .await
     }
 
     async fn get_event_signatures(&self, hex: &str) -> Result<Vec<String>, anyhow::Error> {
-        self.fetch(format!("/api/v1/event-signatures/?hex_signature={}", hex))
+        self.fetch(format!("/api/v1/event-signatures/?hex_signature={hex}"))
             .await
     }
 

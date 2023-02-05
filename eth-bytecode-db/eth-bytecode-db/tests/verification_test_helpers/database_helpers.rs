@@ -28,7 +28,7 @@ impl TestDbGuard {
             .expect("Database creation failed");
 
         // Migrate database
-        let db_url = format!("{}/{}", db_url, db_name);
+        let db_url = format!("{db_url}/{db_name}");
         let conn_with_db = Database::connect(&db_url)
             .await
             .expect("Connection to postgres (with database) failed");
@@ -49,7 +49,7 @@ impl TestDbGuard {
         tracing::info!(name = db_name, "creating database");
         db.execute(Statement::from_string(
             db.get_database_backend(),
-            format!("CREATE DATABASE {}", db_name),
+            format!("CREATE DATABASE {db_name}"),
         ))
         .await?;
         Ok(())
@@ -59,7 +59,7 @@ impl TestDbGuard {
         tracing::info!(name = db_name, "dropping database");
         db.execute(Statement::from_string(
             db.get_database_backend(),
-            format!("DROP DATABASE IF EXISTS {} WITH (FORCE)", db_name),
+            format!("DROP DATABASE IF EXISTS {db_name} WITH (FORCE)"),
         ))
         .await?;
         Ok(())

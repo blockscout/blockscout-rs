@@ -36,10 +36,7 @@ async fn test_versions(
     if !response.status().is_success() {
         let status = response.status();
         let message = response.text().await.expect("Read body as text");
-        panic!(
-            "Invalid status code (success expected). Status: {}. Message: {}",
-            status, message
-        )
+        panic!("Invalid status code (success expected). Status: {status}. Message: {message}")
     }
 
     let response: eth_bytecode_db_v2::ListCompilerVersionsResponse = response

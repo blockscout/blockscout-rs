@@ -24,14 +24,14 @@ async fn init_db<M: MigratorTrait>(name: &str) -> DatabaseConnection {
     raw_conn
         .execute(Statement::from_string(
             sea_orm::DatabaseBackend::Postgres,
-            format!("DROP DATABASE IF EXISTS {} WITH (FORCE)", name),
+            format!("DROP DATABASE IF EXISTS {name} WITH (FORCE)"),
         ))
         .await
         .expect("failed to drop test database");
     raw_conn
         .execute(Statement::from_string(
             sea_orm::DatabaseBackend::Postgres,
-            format!("CREATE DATABASE {}", name),
+            format!("CREATE DATABASE {name}"),
         ))
         .await
         .expect("failed to create test database");
@@ -99,7 +99,7 @@ fn change_part_for_search(part: &BytecodePart) -> String {
                 "0033" => "a2646970667358221220c424331e61ba143d01f757e1a3b6ddcfe99698f6c1862e2133c4d7d277854b9564736f6c63430008070033",
                 "0032" => "a265627a7a72315820a648f0e3107b949c9f7567adacfd4b276c9fc37dc06b172c7efbd1a0e58206ce64736f6c63430005110032",
                 "0029" => "a165627a7a72305820a61b515152276dcea013aa8566142e7d3f07992c7c9512373cc7ba9a33fc2eab0029",
-                _ => panic!("unknown metadata length '{}', add this type of metadata to mock", metadata_length)
+                _ => panic!("unknown metadata length '{metadata_length}', add this type of metadata to mock")
             }
         }
     };
@@ -129,8 +129,7 @@ async fn check_bytecode_search(
     assert_eq!(
         partial_matches.len(),
         1,
-        "contract not found. info={:?}",
-        contract_info
+        "contract not found. info={contract_info:?}"
     );
     let contract = partial_matches
         .into_iter()

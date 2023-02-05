@@ -260,7 +260,7 @@ mod tests {
             Error::Compilation(errors) => {
                 assert!(errors.into_iter().any(|err| err.contains("ParserError")))
             }
-            _ => panic!("Invalid compilation error: {:?}", result),
+            _ => panic!("Invalid compilation error: {result:?}"),
         }
     }
 }

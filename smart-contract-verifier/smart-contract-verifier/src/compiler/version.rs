@@ -40,7 +40,7 @@ impl FromStr for ReleaseVersion {
             String,
             String,
         )
-        .map_err(|e| ParseError::Parse(format!("{:?}", e)))?;
+        .map_err(|e| ParseError::Parse(format!("{e:?}")))?;
         let version = semver::Version {
             major,
             minor,
@@ -83,7 +83,7 @@ impl FromStr for NightlyVersion {
             String,
             String,
         )
-        .map_err(|e| ParseError::Parse(format!("{:?}", e)))?;
+        .map_err(|e| ParseError::Parse(format!("{e:?}")))?;
         let version = semver::Version::new(major, minor, patch);
         let date = NaiveDate::parse_from_str(&date, DATE_FORMAT)
             .map_err(|e| ParseError::Parse(e.to_string()))?;

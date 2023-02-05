@@ -88,7 +88,7 @@ mod types {
                 let libs: Vec<String> = self
                     .libs
                     .iter()
-                    .map(|(name, address)| format!("{}:{}", name, address))
+                    .map(|(name, address)| format!("{name}:{address}"))
                     .collect();
                 vec.push(libs.join(","))
             }
@@ -458,7 +458,7 @@ mod tests {
                 ),
             ] {
                 let bytecode: String = actual_bytecode
-                    .unwrap_or_else(|| panic!("unlinked {}", name))
+                    .unwrap_or_else(|| panic!("unlinked {name}"))
                     .encode_hex();
                 assert_eq!(&bytecode, expected_bytecode, "wrong {}", name);
             }
@@ -504,7 +504,7 @@ mod tests {
             let input: CompilerInput = serde_json::from_str(DEFAULT_COMPILER_INPUT).unwrap();
             let output: CompilerOutput = compile_using_cli(&solc, &input)
                 .await
-                .unwrap_or_else(|_| panic!("failed to compile contracts with {}", ver));
+                .unwrap_or_else(|_| panic!("failed to compile contracts with {ver}"));
             assert!(
                 !output.has_error(),
                 "errors during compilation: {:?}",

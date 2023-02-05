@@ -31,9 +31,7 @@ impl Database for DatabaseService {
         let bytecode_remote = BytecodeRemote {
             bytecode_type: BytecodeTypeWrapper::from_inner(bytecode_type).try_into()?,
             data: DisplayBytes::from_str(&request.bytecode)
-                .map_err(|err| {
-                    tonic::Status::invalid_argument(format!("Invalid bytecode: {}", err))
-                })?
+                .map_err(|err| tonic::Status::invalid_argument(format!("Invalid bytecode: {err}")))?
                 .0,
         };
 

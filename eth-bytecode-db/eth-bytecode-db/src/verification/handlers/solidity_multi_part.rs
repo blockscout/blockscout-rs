@@ -38,7 +38,7 @@ pub async fn verify(
 ) -> Result<Source, Error> {
     let bytecode_type = request.bytecode_type;
     let raw_request_bytecode = hex::decode(request.bytecode.clone().trim_start_matches("0x"))
-        .map_err(|err| Error::InvalidArgument(format!("invalid bytecode: {}", err)))?;
+        .map_err(|err| Error::InvalidArgument(format!("invalid bytecode: {err}")))?;
     let verification_settings = serde_json::json!(&request);
 
     let request: VerifySolidityMultiPartRequest = request.into();
