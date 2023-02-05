@@ -37,7 +37,7 @@ async fn main() {
             bytecode_type: BytecodeType::CreationInput,
         };
         let contract = find_contract(&db, &search).await;
-        println!("{:?}", contract);
+        println!("{contract:?}");
     }
     println!("AVG time: {}", now.elapsed().as_secs_f64() / (n as f64));
 }

@@ -342,11 +342,11 @@ mod tests {
         for random_string in [
             "",
             "6080",
-            &format!("{}53", DEFAULT_MAIN),
-            &format!("6080{}", DEFAULT_MAIN),
+            &format!("{DEFAULT_MAIN}53"),
+            &format!("6080{DEFAULT_MAIN}"),
         ] {
             let bytecodes = vec![DEFAULT_MAIN, DEFAULT_META];
-            let remote = format!("{}{}", random_string, DEFAULT_META);
+            let remote = format!("{random_string}{DEFAULT_META}");
             test_compare(&remote, bytecodes, false);
         }
     }
@@ -374,13 +374,10 @@ mod tests {
         for (random_string1, random_string2) in [
             ("", ""),
             ("6080", "6080"),
+            (&format!("{DEFAULT_MAIN}53"), &format!("{DEFAULT_MAIN}53")),
             (
-                &format!("{}53", DEFAULT_MAIN),
-                &format!("{}53", DEFAULT_MAIN),
-            ),
-            (
-                &format!("6080{}", DEFAULT_MAIN),
-                &format!("6080{}", DEFAULT_MAIN),
+                &format!("6080{DEFAULT_MAIN}"),
+                &format!("6080{DEFAULT_MAIN}"),
             ),
         ] {
             let bytecodes = vec![DEFAULT_MAIN, DEFAULT_META, DEFAULT_MAIN, DEFAULT_META];
