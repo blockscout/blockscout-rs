@@ -158,7 +158,7 @@ fn decode_log(name: String, args: &[ParamType], raw: RawLog) -> Option<(Vec<Toke
             .zip(perm.iter())
             .enumerate()
             .map(|(ind, (param, indexed))| EventParam {
-                name: format!("{}", ind),
+                name: format!("{ind}"),
                 kind: param.clone(),
                 indexed: *indexed,
             })
@@ -182,7 +182,7 @@ fn decode_log(name: String, args: &[ParamType], raw: RawLog) -> Option<(Vec<Toke
 fn parse_arg(name: String, param: &ParamType, value: &Token) -> Argument {
     let components = match (param, value) {
         (ParamType::Tuple(param), Token::Tuple(value)) => {
-            parse_args(format!("{}_", name), param, value)
+            parse_args(format!("{name}_"), param, value)
         }
         _ => Default::default(),
     };
@@ -200,7 +200,7 @@ fn parse_args(pref: String, args: &[ParamType], values: &[Token]) -> Vec<Argumen
         .iter()
         .zip(values.iter())
         .enumerate()
-        .map(|(index, (arg, value))| parse_arg(format!("{}{}", pref, index), arg, value))
+        .map(|(index, (arg, value))| parse_arg(format!("{pref}{index}"), arg, value))
         .collect();
     inputs
 }
