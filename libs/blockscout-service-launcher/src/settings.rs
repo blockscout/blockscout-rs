@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::{net::SocketAddr, str::FromStr};
 
+/// HTTP and GRPC server settings.
+/// Notice that, by default, HTTP server is enabled, and GRPC is disabled.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct ServerSettings {
@@ -36,7 +38,7 @@ pub struct GrpcServerSettings {
 impl Default for GrpcServerSettings {
     fn default() -> Self {
         Self {
-            enabled: true,
+            enabled: false,
             addr: SocketAddr::from_str("0.0.0.0:8051").unwrap(),
         }
     }
