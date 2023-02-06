@@ -1,5 +1,5 @@
 use crate::{
-    charts::{insert::DateValue, ChartUpdater},
+    charts::{insert::DateValue, updater::ChartUpdater},
     UpdateError,
 };
 use async_trait::async_trait;
@@ -70,9 +70,9 @@ impl crate::Chart for NewTxns {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
-        full: bool,
+        force_full: bool,
     ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, full).await
+        self.update_with_values(db, blockscout, force_full).await
     }
 }
 
@@ -89,9 +89,9 @@ mod tests {
             "update_new_txns",
             chart,
             vec![
-                ("2022-11-09", "2"),
-                ("2022-11-10", "4"),
-                ("2022-11-11", "4"),
+                ("2022-11-09", "3"),
+                ("2022-11-10", "6"),
+                ("2022-11-11", "6"),
                 ("2022-11-12", "1"),
             ],
         )

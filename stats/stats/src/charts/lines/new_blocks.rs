@@ -1,5 +1,5 @@
 use crate::{
-    charts::{insert::DateValue, ChartUpdater},
+    charts::{insert::DateValue, updater::ChartUpdater},
     UpdateError,
 };
 use async_trait::async_trait;
@@ -61,9 +61,9 @@ impl crate::Chart for NewBlocks {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
-        full: bool,
+        force_full: bool,
     ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, full).await
+        self.update_with_values(db, blockscout, force_full).await
     }
 }
 
@@ -71,6 +71,7 @@ impl crate::Chart for NewBlocks {
 mod tests {
     use super::*;
     use crate::{
+        charts::updater::get_min_block_blockscout,
         get_chart_data,
         tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
         Chart, Point,
@@ -86,22 +87,23 @@ mod tests {
     async fn update_new_blocks_recurrent() {
         let _ = tracing_subscriber::fmt::try_init();
         let (db, blockscout) = init_db_all("update_new_blocks_recurrent", None).await;
+        fill_mock_blockscout_data(&blockscout, "2022-11-12").await;
 
         let updater = NewBlocks::default();
         updater.create(&db).await.unwrap();
 
+        let min_blockscout_block = get_min_block_blockscout(&blockscout).await.unwrap();
         // set wrong value and check, that it was rewritten
         chart_data::Entity::insert(chart_data::ActiveModel {
             chart_id: Set(1),
             date: Set(NaiveDate::from_str("2022-11-10").unwrap()),
             value: Set(100.to_string()),
+            min_blockscout_block: Set(Some(min_blockscout_block)),
             ..Default::default()
         })
         .exec(&db)
         .await
         .unwrap();
-
-        fill_mock_blockscout_data(&blockscout, "2022-11-12").await;
 
         // Note that update is not full, therefore there is no entry with date `2022-11-09`
         updater.update(&db, &blockscout, false).await.unwrap();
@@ -155,11 +157,10 @@ mod tests {
     async fn update_new_blocks_fresh() {
         let _ = tracing_subscriber::fmt::try_init();
         let (db, blockscout) = init_db_all("update_new_blocks_fresh", None).await;
+        fill_mock_blockscout_data(&blockscout, "2022-11-12").await;
 
         let updater = NewBlocks::default();
         updater.create(&db).await.unwrap();
-
-        fill_mock_blockscout_data(&blockscout, "2022-11-12").await;
 
         updater.update(&db, &blockscout, true).await.unwrap();
         let data = get_chart_data(&db, updater.name(), None, None)
@@ -191,10 +192,12 @@ mod tests {
     async fn update_new_blocks_last() {
         let _ = tracing_subscriber::fmt::try_init();
         let (db, blockscout) = init_db_all("update_new_blocks_last", None).await;
+        fill_mock_blockscout_data(&blockscout, "2022-11-12").await;
 
         let updater = NewBlocks::default();
         updater.create(&db).await.unwrap();
 
+        let min_blockscout_block = get_min_block_blockscout(&blockscout).await.unwrap();
         // set wrong values and check, that they wasn't rewritten
         // except the last one
         chart_data::Entity::insert_many([
@@ -202,32 +205,34 @@ mod tests {
                 chart_id: Set(1),
                 date: Set(NaiveDate::from_str("2022-11-09").unwrap()),
                 value: Set(2.to_string()),
+                min_blockscout_block: Set(Some(min_blockscout_block)),
                 ..Default::default()
             },
             chart_data::ActiveModel {
                 chart_id: Set(1),
                 date: Set(NaiveDate::from_str("2022-11-10").unwrap()),
                 value: Set(4.to_string()),
+                min_blockscout_block: Set(Some(min_blockscout_block)),
                 ..Default::default()
             },
             chart_data::ActiveModel {
                 chart_id: Set(1),
                 date: Set(NaiveDate::from_str("2022-11-11").unwrap()),
                 value: Set(5.to_string()),
+                min_blockscout_block: Set(Some(min_blockscout_block)),
                 ..Default::default()
             },
             chart_data::ActiveModel {
                 chart_id: Set(1),
                 date: Set(NaiveDate::from_str("2022-11-12").unwrap()),
                 value: Set(2.to_string()),
+                min_blockscout_block: Set(Some(min_blockscout_block)),
                 ..Default::default()
             },
         ])
         .exec(&db)
         .await
         .unwrap();
-
-        fill_mock_blockscout_data(&blockscout, "2022-11-12").await;
 
         updater.update(&db, &blockscout, false).await.unwrap();
         let data = get_chart_data(&db, updater.name(), None, None)

@@ -1,7 +1,7 @@
 use crate::{
     charts::{
         insert::{DateValue, DateValueDouble},
-        ChartUpdater,
+        updater::ChartUpdater,
     },
     UpdateError,
 };
@@ -78,9 +78,9 @@ impl crate::Chart for TxnsFee {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
-        full: bool,
+        force_full: bool,
     ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, full).await
+        self.update_with_values(db, blockscout, force_full).await
     }
 }
 
@@ -98,8 +98,8 @@ mod tests {
             chart,
             vec![
                 ("2022-11-09", "0"),
-                ("2022-11-10", "0.00023592592569"),
-                ("2022-11-11", "0.000519037036518"),
+                ("2022-11-10", "0.000353888888535"),
+                ("2022-11-11", "0.000778555554777"),
                 ("2022-11-12", "0.000023592592569"),
             ],
         )

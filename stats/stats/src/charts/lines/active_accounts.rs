@@ -1,5 +1,5 @@
 use crate::{
-    charts::{insert::DateValue, ChartUpdater},
+    charts::{insert::DateValue, updater::ChartUpdater},
     UpdateError,
 };
 use async_trait::async_trait;
@@ -67,9 +67,9 @@ impl crate::Chart for ActiveAccounts {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
-        full: bool,
+        force_full: bool,
     ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, full).await
+        self.update_with_values(db, blockscout, force_full).await
     }
 }
 

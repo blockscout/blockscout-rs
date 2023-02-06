@@ -1,5 +1,5 @@
 use crate::{
-    charts::{insert::DateValue, ChartFullUpdater},
+    charts::{insert::DateValue, updater::ChartFullUpdater},
     UpdateError,
 };
 use async_trait::async_trait;
@@ -76,8 +76,8 @@ impl<T: SampleUniform + PartialOrd + Clone + ToString + Send + Sync + 'static> c
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
-        full: bool,
+        force_full: bool,
     ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, full).await
+        self.update_with_values(db, blockscout, force_full).await
     }
 }

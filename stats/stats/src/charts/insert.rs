@@ -32,20 +32,25 @@ impl From<DateValueDouble> for DateValue {
     }
 }
 
-#[derive(FromQueryResult)]
+#[derive(FromQueryResult, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DateValue {
     pub date: NaiveDate,
     pub value: String,
 }
 
 impl DateValue {
-    pub fn active_model(&self, chart_id: i32) -> chart_data::ActiveModel {
+    pub fn active_model(
+        &self,
+        chart_id: i32,
+        min_blockscout_block: Option<i64>,
+    ) -> chart_data::ActiveModel {
         chart_data::ActiveModel {
             id: Default::default(),
             chart_id: Set(chart_id),
             date: Set(self.date),
             value: Set(self.value.clone()),
             created_at: Default::default(),
+            min_blockscout_block: Set(min_blockscout_block),
         }
     }
 }

@@ -73,7 +73,7 @@ impl StatsService for ReadService {
             .from
             .and_then(|date| NaiveDate::from_str(&date).ok());
         let to = request.to.and_then(|date| NaiveDate::from_str(&date).ok());
-        let data = stats::get_chart_data(&self.db, &request.name, from, to)
+        let mut data: Vec<_> = stats::get_chart_data(&self.db, &request.name, from, to)
             .await
             .map_err(map_read_error)?
             .into_iter()
@@ -82,6 +82,9 @@ impl StatsService for ReadService {
                 value: point.value,
             })
             .collect();
+
+        // remove last data point, because it can be partially updated
+        data.pop();
         Ok(Response::new(LineChart { chart: data }))
     }
 

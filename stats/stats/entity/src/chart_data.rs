@@ -11,6 +11,7 @@ pub struct Model {
     pub date: Date,
     pub value: String,
     pub created_at: DateTime,
+    pub min_blockscout_block: Option<i64>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

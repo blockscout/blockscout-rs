@@ -10,7 +10,7 @@ sigProvider:
     app: 1
   docker:
     port: 80
-    targetPort: 8050
+    targetPort: 8043
     metricsPort: 6060
 
   strategy: RollingUpdate
@@ -71,6 +71,12 @@ sigProvider:
     maxReplicas: 10
     cpuTarget: 90
 
-  environment: {}
+  environment:
+    SIG_PROVIDER__METRICS__ENABLED:
+      _default: 'true'
+    SIG_PROVIDER__SERVER__HTTP__ADDR:
+      _default: 0.0.0.0:8043
+    SIG_PROVIDER__SERVER__GRPC__ENABLED:
+      _default: 'false'
     # ENV:
     #   _default: 'true'

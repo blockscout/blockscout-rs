@@ -1,5 +1,5 @@
 use crate::{
-    charts::{insert::DateValue, ChartFullUpdater},
+    charts::{insert::DateValue, updater::ChartFullUpdater},
     UpdateError,
 };
 use async_trait::async_trait;
@@ -55,9 +55,9 @@ impl crate::Chart for CompletedTxns {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
-        full: bool,
+        force_full: bool,
     ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, full).await
+        self.update_with_values(db, blockscout, force_full).await
     }
 }
 
@@ -70,6 +70,6 @@ mod tests {
     #[ignore = "needs database to run"]
     async fn update_completed_txns() {
         let counter = CompletedTxns::default();
-        simple_test_counter("update_completed_txns", counter, "10").await;
+        simple_test_counter("update_completed_txns", counter, "15").await;
     }
 }

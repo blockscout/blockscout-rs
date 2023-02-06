@@ -13,6 +13,7 @@ pub struct ServerSettings {
 pub struct HttpServerSettings {
     pub enabled: bool,
     pub addr: SocketAddr,
+    pub max_body_size: usize,
 }
 
 impl Default for HttpServerSettings {
@@ -20,6 +21,7 @@ impl Default for HttpServerSettings {
         Self {
             enabled: true,
             addr: SocketAddr::from_str("0.0.0.0:8043").unwrap(),
+            max_body_size: 10 * 1024 * 1024, // 10 Mb
         }
     }
 }

@@ -1,5 +1,5 @@
 use crate::charts_config::{ChartSettings, Config};
-use stats::{counters, entity::sea_orm_active_enums::ChartType, lines, Chart};
+use stats::{cache::Cache, counters, entity::sea_orm_active_enums::ChartType, lines, Chart};
 use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
@@ -105,6 +105,7 @@ impl Charts {
     }
 
     fn all_charts() -> Vec<ArcChart> {
+        let accounts_cache = Cache::default();
         vec![
             // finished counters
             Arc::new(counters::TotalBlocks::default()),
@@ -112,20 +113,18 @@ impl Charts {
             Arc::new(counters::TotalTxns::default()),
             Arc::new(counters::TotalTokens::default()),
             Arc::new(counters::CompletedTxns::default()),
+            Arc::new(counters::TotalAccounts::new(accounts_cache.clone())),
             // finished lines
             Arc::new(lines::NewBlocks::default()),
             Arc::new(lines::AverageGasPrice::default()),
             Arc::new(lines::ActiveAccounts::default()),
-            Arc::new(lines::AccountsGrowth::default()),
+            Arc::new(lines::AccountsGrowth::new(accounts_cache)),
             Arc::new(lines::TxnsFee::default()),
             Arc::new(lines::NewTxns::default()),
             Arc::new(lines::AverageBlockSize::default()),
             Arc::new(lines::AverageGasLimit::default()),
+            Arc::new(lines::NewNativeCoinTransfers::default()),
             // mock counters
-            Arc::new(counters::MockCounter::new(
-                "totalAccounts".into(),
-                "765543".into(),
-            )),
             Arc::new(counters::MockCounter::new(
                 "totalNativeCoinHolders".into(),
                 "409559".into(),
@@ -147,10 +146,6 @@ impl Charts {
             Arc::new(lines::MockLine::new(
                 "nativeCoinSupply".into(),
                 1_000_000..100_000_000,
-            )),
-            Arc::new(lines::MockLine::new(
-                "newNativeCoinTransfers".into(),
-                100..10_000,
             )),
             Arc::new(lines::MockLine::new("txnsGrowth".into(), 1000..10_000_000)),
         ]

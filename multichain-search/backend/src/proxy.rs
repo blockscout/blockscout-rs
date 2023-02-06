@@ -69,7 +69,7 @@ impl BlockscoutProxy {
                 let mut url = instance.url.clone().to_string();
                 if let Some(path_and_query) = path_and_query {
                     url = url.trim_end_matches('/').to_string();
-                    url = format!("{}{}", url, path_and_query)
+                    url = format!("{url}{path_and_query}")
                 };
                 let request = client.request_from(url, request_head);
                 let response = Self::send_request(instance, request, body.clone()).await;

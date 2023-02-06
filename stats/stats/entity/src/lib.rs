@@ -4,5 +4,4 @@ pub mod prelude;
 
 pub mod chart_data;
 pub mod charts;
-pub mod kv_storage;
 pub mod sea_orm_active_enums;

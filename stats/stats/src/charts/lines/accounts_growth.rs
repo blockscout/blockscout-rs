@@ -1,21 +1,25 @@
 use crate::{
-    charts::{insert::DateValue, ChartUpdater},
+    charts::{cache::Cache, insert::DateValue, updater::ChartFullUpdater},
     UpdateError,
 };
 use async_trait::async_trait;
-use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
+use tokio::sync::Mutex;
 
-#[derive(Default, Debug)]
-pub struct AccountsGrowth {}
+pub struct AccountsGrowth {
+    cache: Mutex<Cache<Vec<DateValue>>>,
+}
 
-#[async_trait]
-impl ChartUpdater for AccountsGrowth {
-    async fn get_values(
-        &self,
+impl AccountsGrowth {
+    pub fn new(cache: Cache<Vec<DateValue>>) -> Self {
+        Self {
+            cache: Mutex::new(cache),
+        }
+    }
+
+    pub async fn read_values(
         blockscout: &DatabaseConnection,
-        _last_row: Option<NaiveDate>,
     ) -> Result<Vec<DateValue>, UpdateError> {
         let stmnt = Statement::from_sql_and_values(
             DbBackend::Postgres,
@@ -45,6 +49,19 @@ impl ChartUpdater for AccountsGrowth {
 }
 
 #[async_trait]
+impl ChartFullUpdater for AccountsGrowth {
+    async fn get_values(
+        &self,
+        blockscout: &DatabaseConnection,
+    ) -> Result<Vec<DateValue>, UpdateError> {
+        let mut cache = self.cache.lock().await;
+        cache
+            .get_or_update(async move { Self::read_values(blockscout).await })
+            .await
+    }
+}
+
+#[async_trait]
 impl crate::Chart for AccountsGrowth {
     fn name(&self) -> &str {
         "accountsGrowth"
@@ -57,21 +74,21 @@ impl crate::Chart for AccountsGrowth {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
-        full: bool,
+        force_full: bool,
     ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, full).await
+        self.update_with_values(db, blockscout, force_full).await
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::AccountsGrowth;
+    use super::*;
     use crate::tests::simple_test::simple_test_chart;
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_accounts_growth() {
-        let chart = AccountsGrowth::default();
+        let chart = AccountsGrowth::new(Cache::default());
         simple_test_chart(
             "update_accounts_growth",
             chart,
