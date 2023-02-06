@@ -21,7 +21,7 @@ impl Default for HttpServerSettings {
         Self {
             enabled: true,
             addr: SocketAddr::from_str("0.0.0.0:8043").unwrap(),
-            max_body_size: 10 * 1024 * 1024, // 10 Mb
+            max_body_size: 2 * 1024 * 1024, // 2 Mb - default Actix value
         }
     }
 }
