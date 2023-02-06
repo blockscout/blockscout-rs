@@ -14,7 +14,7 @@ mod new_blocks;
 mod new_native_coins_transfers;
 mod new_txns;
 mod txns_fee;
-// mod txns_growth;
+mod txns_growth;
 
 pub use accounts_growth::AccountsGrowth;
 pub use active_accounts::ActiveAccounts;
@@ -30,4 +30,4 @@ pub use new_blocks::NewBlocks;
 pub use new_native_coins_transfers::NewNativeCoinTransfers;
 pub use new_txns::NewTxns;
 pub use txns_fee::TxnsFee;
-// pub use txns_growth::TxnsGrowth;
+pub use txns_growth::TxnsGrowth;

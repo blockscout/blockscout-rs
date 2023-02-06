@@ -88,62 +88,7 @@ pub trait ChartUpdater: Chart {
         let min_blockscout_block = get_min_block_blockscout(blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?;
-        let last_row: Option<NaiveDate> = if force_full {
-            tracing::info!(
-                min_blockscout_block = min_blockscout_block,
-                chart = self.name(),
-                "running full update due to force override"
-            );
-            None
-        } else {
-            let last_row = chart_data::Entity::find()
-                .column(chart_data::Column::Date)
-                .filter(chart_data::Column::ChartId.eq(chart_id))
-                .order_by_desc(chart_data::Column::Date)
-                .into_model::<SyncInfo>()
-                .one(db)
-                .await
-                .map_err(UpdateError::StatsDB)?;
-
-            match last_row {
-                Some(row) => {
-                    if let Some(block) = row.min_blockscout_block {
-                        if block == min_blockscout_block {
-                            tracing::info!(
-                                min_blockscout_block = min_blockscout_block,
-                                min_chart_block = block,
-                                chart = self.name(),
-                                "running partial update"
-                            );
-                            Some(row.date)
-                        } else {
-                            tracing::info!(
-                                min_blockscout_block = min_blockscout_block,
-                                min_chart_block = block,
-                                chart = self.name(),
-                                "running full update due to min blocks mismatch"
-                            );
-                            None
-                        }
-                    } else {
-                        tracing::info!(
-                            min_blockscout_block = min_blockscout_block,
-                            chart = self.name(),
-                            "running full update due to lack of saved min block"
-                        );
-                        None
-                    }
-                }
-                None => {
-                    tracing::info!(
-                        min_blockscout_block = min_blockscout_block,
-                        chart = self.name(),
-                        "running full update due to lack of history data"
-                    );
-                    None
-                }
-            }
-        };
+        let last_row = get_last_row(self, chart_id, min_blockscout_block, db, force_full).await?;
         let values = {
             let _timer = metrics::CHART_FETCH_NEW_DATA_TIME
                 .with_label_values(&[self.name()])
@@ -158,4 +103,75 @@ pub trait ChartUpdater: Chart {
             .map_err(UpdateError::StatsDB)?;
         Ok(())
     }
+}
+
+pub async fn get_last_row<C>(
+    chart: &C,
+    chart_id: i32,
+    min_blockscout_block: i64,
+    db: &DatabaseConnection,
+    force_full: bool,
+) -> Result<Option<NaiveDate>, UpdateError>
+where
+    C: Chart + ?Sized,
+{
+    let last_row: Option<NaiveDate> = if force_full {
+        tracing::info!(
+            min_blockscout_block = min_blockscout_block,
+            chart = chart.name(),
+            "last_row is None due to force override"
+        );
+        None
+    } else {
+        let last_row = chart_data::Entity::find()
+            .column(chart_data::Column::Date)
+            .filter(chart_data::Column::ChartId.eq(chart_id))
+            .order_by_desc(chart_data::Column::Date)
+            .into_model::<SyncInfo>()
+            .one(db)
+            .await
+            .map_err(UpdateError::StatsDB)?;
+
+        match last_row {
+            Some(row) => {
+                if let Some(block) = row.min_blockscout_block {
+                    if block == min_blockscout_block {
+                        tracing::info!(
+                            min_blockscout_block = min_blockscout_block,
+                            min_chart_block = block,
+                            last_row = ?row.date,
+                            chart = chart.name(),
+                            "last_row is Some"
+                        );
+                        Some(row.date)
+                    } else {
+                        tracing::info!(
+                            min_blockscout_block = min_blockscout_block,
+                            min_chart_block = block,
+                            chart = chart.name(),
+                            "last_row is None due to min blocks mismatch"
+                        );
+                        None
+                    }
+                } else {
+                    tracing::info!(
+                        min_blockscout_block = min_blockscout_block,
+                        chart = chart.name(),
+                        "last_row is None due to lack of saved min block"
+                    );
+                    None
+                }
+            }
+            None => {
+                tracing::info!(
+                    min_blockscout_block = min_blockscout_block,
+                    chart = chart.name(),
+                    "last_row is None due to lack of history data"
+                );
+                None
+            }
+        }
+    };
+
+    Ok(last_row)
 }
