@@ -1,29 +1,17 @@
 use crate::{
-    charts::{insert::DateValue, updater::ChartUpdater},
+    charts::{
+        insert::{DateValue, DateValueDecimal},
+        updater::ChartUpdater,
+    },
     UpdateError,
 };
 use async_trait::async_trait;
-use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 
 #[derive(Default, Debug)]
 pub struct GasUsedGrowth {}
 
-#[derive(FromQueryResult)]
-pub struct DateValueDecimal {
-    pub date: NaiveDate,
-    pub value: Decimal,
-}
-
-impl From<DateValueDecimal> for DateValue {
-    fn from(value: DateValueDecimal) -> Self {
-        Self {
-            date: value.date,
-            value: value.value.to_string(),
-        }
-    }
-}
 #[async_trait]
 impl ChartUpdater for GasUsedGrowth {
     async fn get_values(

@@ -32,6 +32,21 @@ impl From<DateValueDouble> for DateValue {
     }
 }
 
+#[derive(FromQueryResult)]
+pub struct DateValueDecimal {
+    pub date: NaiveDate,
+    pub value: Decimal,
+}
+
+impl From<DateValueDecimal> for DateValue {
+    fn from(value: DateValueDecimal) -> Self {
+        Self {
+            date: value.date,
+            value: value.value.to_string(),
+        }
+    }
+}
+
 #[derive(FromQueryResult, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DateValue {
     pub date: NaiveDate,
