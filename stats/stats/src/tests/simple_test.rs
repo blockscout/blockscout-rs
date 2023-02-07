@@ -10,13 +10,13 @@ pub async fn simple_test_chart(test_name: &str, chart: impl Chart, expected: Vec
     fill_mock_blockscout_data(&blockscout, "2022-11-12").await;
 
     chart.update(&db, &blockscout, true).await.unwrap();
-    _simple_test_chart(&db, &chart, &expected).await;
+    get_chart_and_assert_eq(&db, &chart, &expected).await;
 
     chart.update(&db, &blockscout, false).await.unwrap();
-    _simple_test_chart(&db, &chart, &expected).await;
+    get_chart_and_assert_eq(&db, &chart, &expected).await;
 }
 
-async fn _simple_test_chart(
+async fn get_chart_and_assert_eq(
     db: &DatabaseConnection,
     chart: &impl Chart,
     expected: &Vec<(&str, &str)>,
@@ -40,13 +40,13 @@ pub async fn simple_test_counter(test_name: &str, counter: impl Chart, expected:
     fill_mock_blockscout_data(&blockscout, "2022-11-12").await;
 
     counter.update(&db, &blockscout, true).await.unwrap();
-    _simple_test_counter(&db, &counter, expected).await;
+    get_counter_and_assert_eq(&db, &counter, expected).await;
 
     counter.update(&db, &blockscout, false).await.unwrap();
-    _simple_test_counter(&db, &counter, expected).await;
+    get_counter_and_assert_eq(&db, &counter, expected).await;
 }
 
-async fn _simple_test_counter(db: &DatabaseConnection, counter: &impl Chart, expected: &str) {
+async fn get_counter_and_assert_eq(db: &DatabaseConnection, counter: &impl Chart, expected: &str) {
     let data = get_counters(db).await.unwrap();
     let data = &data[counter.name()];
     assert_eq!(expected, data);

@@ -105,7 +105,7 @@ pub trait ChartUpdater: Chart {
     }
 }
 
-pub async fn get_last_row<C>(
+async fn get_last_row<C>(
     chart: &C,
     chart_id: i32,
     min_blockscout_block: i64,
@@ -119,7 +119,7 @@ where
         tracing::info!(
             min_blockscout_block = min_blockscout_block,
             chart = chart.name(),
-            "last_row is None due to force override"
+            "running full update due to force override"
         );
         None
     } else {
@@ -141,7 +141,7 @@ where
                             min_chart_block = block,
                             last_row = ?row.date,
                             chart = chart.name(),
-                            "last_row is Some"
+                            "running partial update"
                         );
                         Some(row.date)
                     } else {
@@ -149,7 +149,7 @@ where
                             min_blockscout_block = min_blockscout_block,
                             min_chart_block = block,
                             chart = chart.name(),
-                            "last_row is None due to min blocks mismatch"
+                            "running full update due to min blocks mismatch"
                         );
                         None
                     }
@@ -157,7 +157,7 @@ where
                     tracing::info!(
                         min_blockscout_block = min_blockscout_block,
                         chart = chart.name(),
-                        "last_row is None due to lack of saved min block"
+                        "running full update due to lack of saved min block"
                     );
                     None
                 }
@@ -166,7 +166,7 @@ where
                 tracing::info!(
                     min_blockscout_block = min_blockscout_block,
                     chart = chart.name(),
-                    "last_row is None due to lack of history data"
+                    "running full update due to lack of history data"
                 );
                 None
             }

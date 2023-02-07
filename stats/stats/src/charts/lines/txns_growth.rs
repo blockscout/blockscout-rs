@@ -4,7 +4,7 @@ use crate::{
     charts::{
         find_chart,
         insert::{insert_data_many, DateValue},
-        updater::{get_last_row, get_min_block_blockscout},
+        updater::get_min_block_blockscout,
     },
     UpdateError,
 };
@@ -40,7 +40,7 @@ impl crate::Chart for TxnsGrowth {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
-        full: bool,
+        _full: bool,
     ) -> Result<(), UpdateError> {
         let chart_id = find_chart(db, self.name())
             .await
@@ -49,59 +49,60 @@ impl crate::Chart for TxnsGrowth {
         let min_blockscout_block = get_min_block_blockscout(blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?;
-        let last_row = get_last_row(self, chart_id, min_blockscout_block, db, full).await?;
         let mut data = {
             let mut cache = self.cache.lock().await;
             cache
-                .get_or_update(async move { NewTxns::read_values(blockscout, last_row).await })
+                .get_or_update(async move { NewTxns::read_values(blockscout, None).await })
                 .await?
         };
-        data.sort();
+        data.sort_unstable();
         let min_data = data.first().map(|v| v.date);
-        if let Some(to) = min_data {
-            let last_data: Option<DateValue> = chart_data::Entity::find()
-                .column(chart_data::Column::Date)
-                .column(chart_data::Column::Value)
-                .filter(chart_data::Column::ChartId.eq(chart_id))
-                .filter(chart_data::Column::Date.lt(to))
-                .order_by_desc(chart_data::Column::Date)
-                .into_model()
-                .one(db)
-                .await
-                .map_err(UpdateError::StatsDB)?;
-            let mut starting_sum = match last_data {
-                Some(last_data) => last_data
-                    .value
-                    .parse::<i64>()
-                    .map_err(|e| UpdateError::Internal(e.to_string()))?,
-                None => {
-                    if last_row.is_some() {
-                        tracing::warn!(
-                            chart_name = self.name(),
-                            last_row = ?last_row,
-                            "last_row is Some, but chart doesn't have any data until this row"
-                        );
-                    }
-                    0
-                }
-            };
-            for date_value in data.iter_mut() {
-                let v = date_value
-                    .value
-                    .parse::<i64>()
-                    .map_err(|e| UpdateError::Internal(e.to_string()))?;
-                date_value.value = (v + starting_sum).to_string();
-                starting_sum += v;
+        let to = match min_data {
+            Some(to) => to,
+            None => {
+                tracing::warn!("new txns returned empty array");
+                return Ok(());
             }
-            let values = data
-                .into_iter()
-                .map(|value| value.active_model(chart_id, Some(min_blockscout_block)));
-            insert_data_many(db, values)
-                .await
-                .map_err(UpdateError::StatsDB)?;
-        } else {
-            tracing::warn!("new txns returned empty array")
         };
+
+        let last_data: Option<DateValue> = chart_data::Entity::find()
+            .column(chart_data::Column::Date)
+            .column(chart_data::Column::Value)
+            .filter(chart_data::Column::ChartId.eq(chart_id))
+            .filter(chart_data::Column::Date.lt(to))
+            .order_by_desc(chart_data::Column::Date)
+            .into_model()
+            .one(db)
+            .await
+            .map_err(UpdateError::StatsDB)?;
+        let mut starting_sum = match last_data {
+            Some(last_data) => last_data
+                .value
+                .parse::<i64>()
+                .map_err(|e| UpdateError::Internal(e.to_string()))?,
+            None => {
+                tracing::info!(
+                    chart_name = self.name(),
+                    "calculating growth from 0, because no old data was found"
+                );
+                0
+            }
+        };
+        for date_value in data.iter_mut() {
+            let v = date_value
+                .value
+                .parse::<i64>()
+                .map_err(|e| UpdateError::Internal(e.to_string()))?;
+            date_value.value = (v + starting_sum).to_string();
+            starting_sum += v;
+        }
+        let values = data
+            .into_iter()
+            .map(|value| value.active_model(chart_id, Some(min_blockscout_block)));
+        insert_data_many(db, values)
+            .await
+            .map_err(UpdateError::StatsDB)?;
+
         Ok(())
     }
 }
