@@ -42,6 +42,7 @@ pub trait ChartFullUpdater: Chart {
 #[derive(Debug, FromQueryResult)]
 struct SyncInfo {
     pub date: NaiveDate,
+    pub value: String,
     pub min_blockscout_block: Option<i64>,
 }
 
@@ -72,7 +73,7 @@ pub trait ChartUpdater: Chart {
     async fn get_values(
         &self,
         blockscout: &DatabaseConnection,
-        last_row: Option<NaiveDate>,
+        last_row: Option<DateValue>,
     ) -> Result<Vec<DateValue>, UpdateError>;
 
     async fn update_with_values(
@@ -88,7 +89,7 @@ pub trait ChartUpdater: Chart {
         let min_blockscout_block = get_min_block_blockscout(blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?;
-        let last_row: Option<NaiveDate> = if force_full {
+        let last_row: Option<DateValue> = if force_full {
             tracing::info!(
                 min_blockscout_block = min_blockscout_block,
                 chart = self.name(),
@@ -96,11 +97,14 @@ pub trait ChartUpdater: Chart {
             );
             None
         } else {
-            let last_row = chart_data::Entity::find()
+            let last_row: Option<SyncInfo> = chart_data::Entity::find()
                 .column(chart_data::Column::Date)
+                .column(chart_data::Column::Value)
+                .column(chart_data::Column::MinBlockscoutBlock)
                 .filter(chart_data::Column::ChartId.eq(chart_id))
                 .order_by_desc(chart_data::Column::Date)
-                .into_model::<SyncInfo>()
+                .offset(1)
+                .into_model()
                 .one(db)
                 .await
                 .map_err(UpdateError::StatsDB)?;
@@ -115,7 +119,10 @@ pub trait ChartUpdater: Chart {
                                 chart = self.name(),
                                 "running partial update"
                             );
-                            Some(row.date)
+                            Some(DateValue {
+                                date: row.date,
+                                value: row.value,
+                            })
                         } else {
                             tracing::info!(
                                 min_blockscout_block = min_blockscout_block,

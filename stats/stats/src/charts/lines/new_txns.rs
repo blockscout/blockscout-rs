@@ -3,7 +3,6 @@ use crate::{
     UpdateError,
 };
 use async_trait::async_trait;
-use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 
@@ -15,7 +14,7 @@ impl ChartUpdater for NewTxns {
     async fn get_values(
         &self,
         blockscout: &DatabaseConnection,
-        last_row: Option<NaiveDate>,
+        last_row: Option<DateValue>,
     ) -> Result<Vec<DateValue>, UpdateError> {
         let stmnt = match last_row {
             Some(row) => Statement::from_sql_and_values(
@@ -27,11 +26,11 @@ impl ChartUpdater for NewTxns {
                 FROM transactions t
                 JOIN blocks       b ON t.block_hash = b.hash
                 WHERE 
-                    date(b.timestamp) >= $1 AND 
+                    date(b.timestamp) > $1 AND 
                     b.consensus = true
                 GROUP BY date;
                 "#,
-                vec![row.into()],
+                vec![row.date.into()],
             ),
             None => Statement::from_sql_and_values(
                 DbBackend::Postgres,

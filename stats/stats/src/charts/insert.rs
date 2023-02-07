@@ -9,10 +9,10 @@ pub struct DateValueInt {
 }
 
 impl From<DateValueInt> for DateValue {
-    fn from(double: DateValueInt) -> Self {
+    fn from(value: DateValueInt) -> Self {
         Self {
-            date: double.date,
-            value: double.value.to_string(),
+            date: value.date,
+            value: value.value.to_string(),
         }
     }
 }
@@ -24,10 +24,10 @@ pub struct DateValueDouble {
 }
 
 impl From<DateValueDouble> for DateValue {
-    fn from(double: DateValueDouble) -> Self {
+    fn from(value: DateValueDouble) -> Self {
         Self {
-            date: double.date,
-            value: double.value.to_string(),
+            date: value.date,
+            value: value.value.to_string(),
         }
     }
 }

@@ -3,7 +3,6 @@ use crate::{
     UpdateError,
 };
 use async_trait::async_trait;
-use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 
@@ -15,7 +14,7 @@ impl ChartUpdater for NewBlocks {
     async fn get_values(
         &self,
         blockscout: &DatabaseConnection,
-        last_row: Option<NaiveDate>,
+        last_row: Option<DateValue>,
     ) -> Result<Vec<DateValue>, UpdateError> {
         let stmnt = match last_row {
             Some(row) => Statement::from_sql_and_values(
@@ -23,10 +22,10 @@ impl ChartUpdater for NewBlocks {
                 r#"
                     SELECT date(blocks.timestamp) as date, COUNT(*)::TEXT as value
                         FROM public.blocks
-                        WHERE date(blocks.timestamp) >= $1 AND consensus = true
+                        WHERE date(blocks.timestamp) > $1 AND consensus = true
                         GROUP BY date;
                     "#,
-                vec![row.into()],
+                vec![row.date.into()],
             ),
             None => Statement::from_string(
                 DbBackend::Postgres,
@@ -94,13 +93,22 @@ mod tests {
 
         let min_blockscout_block = get_min_block_blockscout(&blockscout).await.unwrap();
         // set wrong value and check, that it was rewritten
-        chart_data::Entity::insert(chart_data::ActiveModel {
-            chart_id: Set(1),
-            date: Set(NaiveDate::from_str("2022-11-10").unwrap()),
-            value: Set(100.to_string()),
-            min_blockscout_block: Set(Some(min_blockscout_block)),
-            ..Default::default()
-        })
+        chart_data::Entity::insert_many([
+            chart_data::ActiveModel {
+                chart_id: Set(1),
+                date: Set(NaiveDate::from_str("2022-11-10").unwrap()),
+                value: Set(3.to_string()),
+                min_blockscout_block: Set(Some(min_blockscout_block)),
+                ..Default::default()
+            },
+            chart_data::ActiveModel {
+                chart_id: Set(1),
+                date: Set(NaiveDate::from_str("2022-11-11").unwrap()),
+                value: Set(100.to_string()),
+                min_blockscout_block: Set(Some(min_blockscout_block)),
+                ..Default::default()
+            },
+        ])
         .exec(&db)
         .await
         .unwrap();
