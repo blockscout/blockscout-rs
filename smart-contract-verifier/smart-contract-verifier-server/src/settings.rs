@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use blockscout_service_launcher::{JaegerSettings, MetricsSettings, ServerSettings};
+use blockscout_service_launcher::{JaegerSettings, MetricsSettings, ServerSettings, TracingSettings};
 use config::{Config, File};
 use cron::Schedule;
 use serde::{de, Deserialize};
@@ -37,6 +37,7 @@ pub struct Settings {
     pub sourcify: SourcifySettings,
     pub metrics: MetricsSettings,
     pub jaeger: JaegerSettings,
+    pub tracing: TracingSettings,
     pub compilers: CompilersSettings,
     pub extensions: ExtensionsSettings,
 
