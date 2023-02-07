@@ -12,7 +12,7 @@ use crate::{
     },
     settings::Settings,
 };
-use blockscout_service_launcher::{LaunchSettings};
+use blockscout_service_launcher::LaunchSettings;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 

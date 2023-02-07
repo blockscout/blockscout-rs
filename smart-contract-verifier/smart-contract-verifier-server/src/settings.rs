@@ -1,5 +1,7 @@
 use anyhow::anyhow;
-use blockscout_service_launcher::{JaegerSettings, MetricsSettings, ServerSettings, TracingSettings};
+use blockscout_service_launcher::{
+    JaegerSettings, MetricsSettings, ServerSettings, TracingSettings,
+};
 use config::{Config, File};
 use cron::Schedule;
 use serde::{de, Deserialize};
