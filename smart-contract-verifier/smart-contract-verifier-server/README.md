@@ -22,13 +22,15 @@ Below is an example of a simple configuration file which is filled with default 
 # When disabled, HTTP server is not running
 enabled = true
 # IP address and port number the HTTP server should listen to
-addr = "0.0.0.0:8043"
+addr = "0.0.0.0:8050"
+# The maximum JSON payload is able to be processed
+max_body_size = 2097152
 
 [server.grpc]
-# When disabled, GRPC server is not running
-enabled = true
+# (Disabled by default) When disabled, GRPC server is not running
+enabled = false
 # IP address and port number the GRPC server should listen to
-addr = "0.0.0.0:8044"
+addr = "0.0.0.0:8051"
 
 [solidity]
 # When disabled, solidity related handlers are not available
