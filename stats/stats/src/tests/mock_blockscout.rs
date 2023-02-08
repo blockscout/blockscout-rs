@@ -131,7 +131,7 @@ fn mock_block(index: i64, ts: &str, consensus: bool) -> blocks::ActiveModel {
         timestamp: Set(NaiveDateTime::from_str(ts).unwrap()),
         consensus: Set(consensus),
         gas_limit: Set(Decimal::new(gas_limit, 0)),
-        gas_used: Set(Default::default()),
+        gas_used: Set(Decimal::from(size * 10)),
         miner_hash: Set(Default::default()),
         nonce: Set(Default::default()),
         parent_hash: Set((index - 1).to_le_bytes().to_vec()),

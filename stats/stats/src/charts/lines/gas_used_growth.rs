@@ -27,20 +27,14 @@ impl ChartUpdater for GasUsedGrowth {
                 let stmnt = Statement::from_sql_and_values(
                     DbBackend::Postgres,
                     r#"
-                SELECT 
-                    date, 
-                    (sum(value) OVER (ORDER BY date)) AS value
-                FROM (
                     SELECT 
                         DATE(blocks.timestamp) as date, 
-                        SUM(transactions.gas_used) as value
-                    FROM transactions 
-                    JOIN blocks on transactions.block_hash = blocks.hash
+                        (sum(sum(blocks.gas_used)) OVER (ORDER BY date(blocks.timestamp))) AS value
+                    FROM blocks
                     WHERE DATE(blocks.timestamp) > $1 AND blocks.consensus = true
                     GROUP BY date(blocks.timestamp)
-                ) daily_sum
-                ORDER BY date;
-                "#,
+                    ORDER BY date;
+                    "#,
                     vec![row.date.into()],
                 );
                 DateValueDecimal::find_by_statement(stmnt)
@@ -59,19 +53,14 @@ impl ChartUpdater for GasUsedGrowth {
                 let stmnt = Statement::from_sql_and_values(
                     DbBackend::Postgres,
                     r#"
-                SELECT 
-                    date, 
-                    (sum(value) OVER (ORDER BY date))::TEXT AS value
-                FROM (
                     SELECT 
                         DATE(blocks.timestamp) as date, 
-                        SUM(transactions.gas_used) as value
-                    FROM transactions 
-                    JOIN blocks on transactions.block_hash = blocks.hash
+                        (sum(sum(blocks.gas_used)) OVER (ORDER BY date(blocks.timestamp)))::TEXT AS value
+                    FROM blocks
                     WHERE blocks.consensus = true
                     GROUP BY date(blocks.timestamp)
-                ) daily_sum;
-                "#,
+                    ORDER BY date;
+                    "#,
                     vec![],
                 );
                 DateValue::find_by_statement(stmnt)
@@ -118,10 +107,10 @@ mod tests {
             "update_gas_used_growth",
             chart,
             vec![
-                ("2022-11-09", "63000"),
-                ("2022-11-10", "189000"),
-                ("2022-11-11", "315000"),
-                ("2022-11-12", "336000"),
+                ("2022-11-09", "10000"),
+                ("2022-11-10", "91780"),
+                ("2022-11-11", "221640"),
+                ("2022-11-12", "250680"),
             ],
         )
         .await;
