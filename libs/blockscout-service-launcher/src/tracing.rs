@@ -1,3 +1,4 @@
+use crate::{JaegerSettings, TracingFormat, TracingSettings};
 use opentelemetry::{
     global::{self},
     sdk::{self, propagation::TraceContextPropagator},
@@ -5,8 +6,6 @@ use opentelemetry::{
 };
 use std::marker::Send;
 use tracing_subscriber::{filter::LevelFilter, layer::SubscriberExt, prelude::*, Layer, Registry};
-
-use crate::{JaegerSettings, TracingFormat, TracingSettings};
 
 pub fn init_logs(
     service_name: &str,

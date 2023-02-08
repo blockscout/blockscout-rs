@@ -131,7 +131,7 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           context: "smart-contract-verifier"
-          file: "smart-contract-verifier/Dockerfile"
+          file: "smart-contract-verifier/smart-contract-verifier-server/Dockerfile"
           push: ${{ steps.tags_extractor.outputs.tags != '' }}
           tags: ${{ steps.tags_extractor.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

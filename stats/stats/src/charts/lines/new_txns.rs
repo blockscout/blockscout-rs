@@ -1,18 +1,26 @@
 use crate::{
+    cache::Cache,
     charts::{insert::DateValue, updater::ChartUpdater},
     UpdateError,
 };
 use async_trait::async_trait;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
+use tokio::sync::Mutex;
 
-#[derive(Default, Debug)]
-pub struct NewTxns {}
+#[derive(Debug)]
+pub struct NewTxns {
+    cache: Mutex<Cache<Vec<DateValue>>>,
+}
 
-#[async_trait]
-impl ChartUpdater for NewTxns {
-    async fn get_values(
-        &self,
+impl NewTxns {
+    pub fn new(cache: Cache<Vec<DateValue>>) -> Self {
+        Self {
+            cache: Mutex::new(cache),
+        }
+    }
+
+    pub async fn read_values(
         blockscout: &DatabaseConnection,
         last_row: Option<DateValue>,
     ) -> Result<Vec<DateValue>, UpdateError> {
@@ -56,6 +64,20 @@ impl ChartUpdater for NewTxns {
 }
 
 #[async_trait]
+impl ChartUpdater for NewTxns {
+    async fn get_values(
+        &self,
+        blockscout: &DatabaseConnection,
+        last_row: Option<NaiveDate>,
+    ) -> Result<Vec<DateValue>, UpdateError> {
+        let mut cache = self.cache.lock().await;
+        cache
+            .get_or_update(async move { Self::read_values(blockscout, last_row).await })
+            .await
+    }
+}
+
+#[async_trait]
 impl crate::Chart for NewTxns {
     fn name(&self) -> &str {
         "newTxns"
@@ -78,12 +100,12 @@ impl crate::Chart for NewTxns {
 #[cfg(test)]
 mod tests {
     use super::NewTxns;
-    use crate::tests::simple_test::simple_test_chart;
+    use crate::{cache::Cache, tests::simple_test::simple_test_chart};
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_new_txns() {
-        let chart = NewTxns::default();
+        let chart = NewTxns::new(Cache::default());
         simple_test_chart(
             "update_new_txns",
             chart,
