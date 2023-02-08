@@ -8,10 +8,25 @@ visualizer:
 
   replicas:
     app: 1
-  docker:
-    port: 80
-    targetPort: 8050
-    # metricsPort: 6060
+  ports:
+    http:
+      number: 8050
+      protocol: TCP
+      host: 'http.'
+      path: "/"
+      pathType: Prefix
+    grpc:
+      number: 8051
+      protocol: TCP
+      host: 'grpc.'
+      path: "/"
+      pathType: Prefix
+    metrics:
+      number: 6060
+      protocol: TCP
+      host: "metrics."
+      path: "/metrics"
+      pathType: Exact
 
   service:
     # ClusterIP, NodePort or LoadBalancer
