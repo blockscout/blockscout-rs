@@ -68,7 +68,7 @@ impl ChartUpdater for NewTxns {
     async fn get_values(
         &self,
         blockscout: &DatabaseConnection,
-        last_row: Option<NaiveDate>,
+        last_row: Option<DateValue>,
     ) -> Result<Vec<DateValue>, UpdateError> {
         let mut cache = self.cache.lock().await;
         cache
