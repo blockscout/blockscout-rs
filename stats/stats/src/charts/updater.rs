@@ -42,6 +42,7 @@ pub trait ChartFullUpdater: Chart {
 #[derive(Debug, FromQueryResult)]
 struct SyncInfo {
     pub date: NaiveDate,
+    pub value: String,
     pub min_blockscout_block: Option<i64>,
 }
 
@@ -72,7 +73,7 @@ pub trait ChartUpdater: Chart {
     async fn get_values(
         &self,
         blockscout: &DatabaseConnection,
-        last_row: Option<NaiveDate>,
+        last_row: Option<DateValue>,
     ) -> Result<Vec<DateValue>, UpdateError>;
 
     async fn update_with_values(
@@ -111,11 +112,11 @@ async fn get_last_row<C>(
     min_blockscout_block: i64,
     db: &DatabaseConnection,
     force_full: bool,
-) -> Result<Option<NaiveDate>, UpdateError>
+) -> Result<Option<DateValue>, UpdateError>
 where
     C: Chart + ?Sized,
 {
-    let last_row: Option<NaiveDate> = if force_full {
+    let last_row = if force_full {
         tracing::info!(
             min_blockscout_block = min_blockscout_block,
             chart = chart.name(),
@@ -123,11 +124,14 @@ where
         );
         None
     } else {
-        let last_row = chart_data::Entity::find()
+        let last_row: Option<SyncInfo> = chart_data::Entity::find()
             .column(chart_data::Column::Date)
+            .column(chart_data::Column::Value)
+            .column(chart_data::Column::MinBlockscoutBlock)
             .filter(chart_data::Column::ChartId.eq(chart_id))
             .order_by_desc(chart_data::Column::Date)
-            .into_model::<SyncInfo>()
+            .offset(1)
+            .into_model()
             .one(db)
             .await
             .map_err(UpdateError::StatsDB)?;
@@ -139,11 +143,13 @@ where
                         tracing::info!(
                             min_blockscout_block = min_blockscout_block,
                             min_chart_block = block,
-                            last_row = ?row.date,
                             chart = chart.name(),
                             "running partial update"
                         );
-                        Some(row.date)
+                        Some(DateValue {
+                            date: row.date,
+                            value: row.value,
+                        })
                     } else {
                         tracing::info!(
                             min_blockscout_block = min_blockscout_block,

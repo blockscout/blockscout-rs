@@ -6,7 +6,6 @@ use crate::{
     UpdateError,
 };
 use async_trait::async_trait;
-use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 
@@ -20,7 +19,7 @@ impl ChartUpdater for AverageGasPrice {
     async fn get_values(
         &self,
         blockscout: &DatabaseConnection,
-        last_row: Option<NaiveDate>,
+        last_row: Option<DateValue>,
     ) -> Result<Vec<DateValue>, UpdateError> {
         let stmnt = match last_row {
             Some(row) => Statement::from_sql_and_values(
@@ -31,10 +30,10 @@ impl ChartUpdater for AverageGasPrice {
                         (AVG(gas_price) / $1)::float as value
                     FROM transactions
                     JOIN blocks ON transactions.block_hash = blocks.hash
-                    WHERE date(blocks.timestamp) >= $2 AND blocks.consensus = true
+                    WHERE date(blocks.timestamp) > $2 AND blocks.consensus = true
                     GROUP BY date
                     "#,
-                vec![GWEI.into(), row.into()],
+                vec![GWEI.into(), row.date.into()],
             ),
             None => Statement::from_sql_and_values(
                 DbBackend::Postgres,

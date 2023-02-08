@@ -3,7 +3,6 @@ use crate::{
     UpdateError,
 };
 use async_trait::async_trait;
-use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 
@@ -15,7 +14,7 @@ impl ChartUpdater for AverageBlockSize {
     async fn get_values(
         &self,
         blockscout: &DatabaseConnection,
-        last_row: Option<NaiveDate>,
+        last_row: Option<DateValue>,
     ) -> Result<Vec<DateValue>, UpdateError> {
         let stmnt = match last_row {
             Some(row) => Statement::from_sql_and_values(
@@ -26,11 +25,11 @@ impl ChartUpdater for AverageBlockSize {
                     ROUND(AVG(blocks.size))::TEXT as value
                 FROM blocks
                 WHERE 
-                    DATE(blocks.timestamp) >= $1 AND 
+                    DATE(blocks.timestamp) > $1 AND 
                     consensus = true
                 GROUP BY date
                 "#,
-                vec![row.into()],
+                vec![row.date.into()],
             ),
             None => Statement::from_sql_and_values(
                 DbBackend::Postgres,
