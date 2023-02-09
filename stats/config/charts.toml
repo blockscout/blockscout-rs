@@ -24,6 +24,7 @@ title = "Total Native Coin Holders"
 [[counters]]
 id = "totalNativeCoinTransfers"
 title = "Total Native Coin Transfers"
+update_schedule = "0 0 13 * * * *"
 
 [[counters]]
 id = "totalTokens"
@@ -104,6 +105,7 @@ description = "Cumulative token holders number for the period"
 id = "newNativeCoinTransfers"
 title = "New native coins transfers"
 description = "New token transfers number for the period"
+update_schedule = "0 0 1 * * * *"
 
 [[lines.sections.charts]]
 id = "nativeCoinSupply"

@@ -46,7 +46,7 @@ pub async fn get_counters(db: &DatabaseConnection) -> Result<HashMap<String, Str
     Ok(counters)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Point {
     pub date: NaiveDate,
     pub value: String,

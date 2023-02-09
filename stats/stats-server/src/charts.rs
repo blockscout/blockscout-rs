@@ -107,6 +107,7 @@ impl Charts {
     fn all_charts() -> Vec<ArcChart> {
         let accounts_cache = Cache::default();
         let transactions_cache = Cache::default();
+        let new_native_coin_transfers = Arc::new(lines::NewNativeCoinTransfers::default());
         vec![
             // finished counters
             Arc::new(counters::TotalBlocks::default()),
@@ -115,6 +116,9 @@ impl Charts {
             Arc::new(counters::TotalTokens::default()),
             Arc::new(counters::CompletedTxns::default()),
             Arc::new(counters::TotalAccounts::new(accounts_cache.clone())),
+            Arc::new(counters::TotalNativeCoinTransfers::new(
+                new_native_coin_transfers.clone(),
+            )),
             // finished lines
             Arc::new(lines::NewBlocks::default()),
             Arc::new(lines::AverageGasPrice::default()),
@@ -125,16 +129,12 @@ impl Charts {
             Arc::new(lines::TxnsGrowth::new(transactions_cache)),
             Arc::new(lines::AverageBlockSize::default()),
             Arc::new(lines::AverageGasLimit::default()),
-            Arc::new(lines::NewNativeCoinTransfers::default()),
             Arc::new(lines::GasUsedGrowth::default()),
+            new_native_coin_transfers,
             // mock counters
             Arc::new(counters::MockCounter::new(
                 "totalNativeCoinHolders".into(),
                 "409559".into(),
-            )),
-            Arc::new(counters::MockCounter::new(
-                "totalNativeCoinTransfers".into(),
-                "32528".into(),
             )),
             // mock lines
             Arc::new(lines::MockLine::new("averageTxnFee".into(), 0.0001..0.01)),
