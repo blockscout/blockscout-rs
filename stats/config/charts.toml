@@ -54,10 +54,10 @@ description = "Cumulative accounts number per period"
 id = "transactions"
 title = "Transactions"
 
-# [[lines.sections.charts]]
-# id = "averageTxnFee"
-# title = "Average transaction fee"
-# description = "The average amount in USD spent per transaction"
+[[lines.sections.charts]]
+id = "averageTxnFee"
+title = "Average transaction fee"
+description = "The average amount in USD spent per transaction"
 
 [[lines.sections.charts]]
 id = "txnsFee"
@@ -96,10 +96,10 @@ description = "Average size of blocks in bytes"
 id = "tokens"
 title = "Tokens"
 
-# [[lines.sections.charts]]
-# id = "nativeCoinHoldersGrowth"
-# title = "Native coin holders growth"
-# description = "Cumulative token holders number for the period"
+[[lines.sections.charts]]
+id = "nativeCoinHoldersGrowth"
+title = "Native coin holders growth"
+description = "Cumulative token holders number for the period"
 
 [[lines.sections.charts]]
 id = "newNativeCoinTransfers"
@@ -107,10 +107,10 @@ title = "New native coins transfers"
 description = "New token transfers number for the period"
 update_schedule = "0 0 1 * * * *"
 
-# [[lines.sections.charts]]
-# id = "nativeCoinSupply"
-# title = "Native coin circulating supply"
-# description = "Amount of token circulating supply for the period"
+[[lines.sections.charts]]
+id = "nativeCoinSupply"
+title = "Native coin circulating supply"
+description = "Amount of token circulating supply for the period"
 
 
 [[lines.sections]]
