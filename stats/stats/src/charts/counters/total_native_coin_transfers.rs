@@ -1,6 +1,6 @@
 use crate::{
     charts::{
-        find_chart,
+        create_chart, find_chart,
         insert::{insert_data_many, DateValue},
         updater::get_min_block_blockscout,
     },
@@ -32,9 +32,8 @@ impl TotalNativeCoinTransfers {
         tracing::info!(
             chart_name = self.name(),
             parent_chart_name = self.parent.name(),
-            "create and update parent"
+            "update parent"
         );
-        self.parent.create(db).await.map_err(UpdateError::StatsDB)?;
         self.parent.update(db, blockscout, full).await?;
         let data = get_chart_data(db, self.parent.name(), None, None).await?;
         Ok(data)
@@ -49,6 +48,11 @@ impl crate::Chart for TotalNativeCoinTransfers {
 
     fn chart_type(&self) -> ChartType {
         ChartType::Counter
+    }
+
+    async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
+        self.parent.create(db).await?;
+        create_chart(db, self.name().into(), self.chart_type()).await
     }
 
     async fn update(
