@@ -53,18 +53,18 @@ scVerifier:
       cpu:
         _default: "0.1"
 
-    # node label
-    nodeSelector:
-      enabled: true
-      app: blockscout
+  # node label
+  nodeSelector:
+    enabled: true
+    app: blockscout
 
-    # probes
-    livenessProbe:
-      enabled: true
-      path: /health?service=
-    readinessProbe:
-      enabled: true
-      path: /health?service=
+  # probes
+  livenessProbe:
+    enabled: true
+    path: /health?service=
+  readinessProbe:
+    enabled: true
+    path: /health?service=
 
   hpa:
     minReplicas: 1
