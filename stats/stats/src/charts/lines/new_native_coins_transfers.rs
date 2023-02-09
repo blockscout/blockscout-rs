@@ -1,18 +1,26 @@
 use crate::{
+    cache::Cache,
     charts::{insert::DateValue, updater::ChartUpdater},
     UpdateError,
 };
 use async_trait::async_trait;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
+use tokio::sync::Mutex;
 
-#[derive(Default, Debug)]
-pub struct NewNativeCoinTransfers {}
+#[derive(Debug)]
+pub struct NewNativeCoinTransfers {
+    cache: Mutex<Cache<Vec<DateValue>>>,
+}
 
-#[async_trait]
-impl ChartUpdater for NewNativeCoinTransfers {
-    async fn get_values(
-        &self,
+impl NewNativeCoinTransfers {
+    pub fn new(cache: Cache<Vec<DateValue>>) -> Self {
+        Self {
+            cache: Mutex::new(cache),
+        }
+    }
+
+    pub async fn read_values(
         blockscout: &DatabaseConnection,
         last_row: Option<DateValue>,
     ) -> Result<Vec<DateValue>, UpdateError> {
@@ -61,6 +69,20 @@ impl ChartUpdater for NewNativeCoinTransfers {
 }
 
 #[async_trait]
+impl ChartUpdater for NewNativeCoinTransfers {
+    async fn get_values(
+        &self,
+        blockscout: &DatabaseConnection,
+        last_row: Option<DateValue>,
+    ) -> Result<Vec<DateValue>, UpdateError> {
+        let mut cache = self.cache.lock().await;
+        cache
+            .get_or_update(async move { Self::read_values(blockscout, last_row).await })
+            .await
+    }
+}
+
+#[async_trait]
 impl crate::Chart for NewNativeCoinTransfers {
     fn name(&self) -> &str {
         "newNativeCoinTransfers"
@@ -83,12 +105,12 @@ impl crate::Chart for NewNativeCoinTransfers {
 #[cfg(test)]
 mod tests {
     use super::NewNativeCoinTransfers;
-    use crate::tests::simple_test::simple_test_chart;
+    use crate::{cache::Cache, tests::simple_test::simple_test_chart};
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_native_coins_transfers() {
-        let chart = NewNativeCoinTransfers::default();
+        let chart = NewNativeCoinTransfers::new(Cache::default());
         simple_test_chart(
             "update_native_coins_transfers",
             chart,
