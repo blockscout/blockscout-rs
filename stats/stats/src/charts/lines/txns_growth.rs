@@ -1,28 +1,47 @@
 use super::NewTxns;
 use crate::{
-    cache::Cache,
-    charts::{
-        find_chart,
-        insert::{insert_data_many, DateValue},
-        updater::get_min_block_blockscout,
-    },
+    charts::{chart::Chart, create_chart, insert::DateValue, updater::ChartDependentUpdate},
     UpdateError,
 };
 use async_trait::async_trait;
-use entity::{chart_data, sea_orm_active_enums::ChartType};
-use sea_orm::{prelude::*, QueryOrder, QuerySelect};
-use tokio::sync::Mutex;
+use entity::sea_orm_active_enums::ChartType;
+use sea_orm::prelude::*;
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct TxnsGrowth {
-    cache: Mutex<Cache<Vec<DateValue>>>,
+    parent: Arc<NewTxns>,
 }
 
 impl TxnsGrowth {
-    pub fn new(cache: Cache<Vec<DateValue>>) -> Self {
-        Self {
-            cache: Mutex::new(cache),
+    pub fn new(parent: Arc<NewTxns>) -> Self {
+        Self { parent }
+    }
+}
+
+#[async_trait]
+impl ChartDependentUpdate<NewTxns> for TxnsGrowth {
+    fn parent(&self) -> Arc<NewTxns> {
+        self.parent.clone()
+    }
+
+    async fn get_values(
+        &self,
+        mut parent_data: Vec<DateValue>,
+    ) -> Result<Vec<DateValue>, UpdateError> {
+        let mut prev_sum = 0;
+        for item in parent_data.iter_mut() {
+            let value = item.value.parse::<i64>().map_err(|e| {
+                UpdateError::Internal(format!(
+                    "failed to parse values to int in chart '{}': {}",
+                    self.parent.name(),
+                    e
+                ))
+            })?;
+            item.value = (value + prev_sum).to_string();
+            prev_sum += value;
         }
+        Ok(parent_data)
     }
 }
 
@@ -36,73 +55,18 @@ impl crate::Chart for TxnsGrowth {
         ChartType::Line
     }
 
+    async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
+        self.parent.create(db).await?;
+        create_chart(db, self.name().into(), self.chart_type()).await
+    }
+
     async fn update(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
-        _full: bool,
+        force_full: bool,
     ) -> Result<(), UpdateError> {
-        let chart_id = find_chart(db, self.name())
-            .await
-            .map_err(UpdateError::StatsDB)?
-            .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
-        let min_blockscout_block = get_min_block_blockscout(blockscout)
-            .await
-            .map_err(UpdateError::BlockscoutDB)?;
-        let mut data = {
-            let mut cache = self.cache.lock().await;
-            cache
-                .get_or_update(async move { NewTxns::read_values(blockscout, None).await })
-                .await?
-        };
-        data.sort_unstable();
-        let min_data = data.first().map(|v| v.date);
-        let to = match min_data {
-            Some(to) => to,
-            None => {
-                tracing::warn!("new txns returned empty array");
-                return Ok(());
-            }
-        };
-
-        let last_data: Option<DateValue> = chart_data::Entity::find()
-            .column(chart_data::Column::Date)
-            .column(chart_data::Column::Value)
-            .filter(chart_data::Column::ChartId.eq(chart_id))
-            .filter(chart_data::Column::Date.lt(to))
-            .order_by_desc(chart_data::Column::Date)
-            .into_model()
-            .one(db)
-            .await
-            .map_err(UpdateError::StatsDB)?;
-        let mut starting_sum = match last_data {
-            Some(last_data) => last_data
-                .value
-                .parse::<i64>()
-                .map_err(|e| UpdateError::Internal(e.to_string()))?,
-            None => {
-                tracing::info!(
-                    chart_name = self.name(),
-                    "calculating growth from 0, because no old data was found"
-                );
-                0
-            }
-        };
-        for date_value in data.iter_mut() {
-            let v = date_value
-                .value
-                .parse::<i64>()
-                .map_err(|e| UpdateError::Internal(e.to_string()))?;
-            date_value.value = (v + starting_sum).to_string();
-            starting_sum += v;
-        }
-        let values = data
-            .into_iter()
-            .map(|value| value.active_model(chart_id, Some(min_blockscout_block)));
-        insert_data_many(db, values)
-            .await
-            .map_err(UpdateError::StatsDB)?;
-
+        self.update_with_values(db, blockscout, force_full).await?;
         Ok(())
     }
 }
@@ -110,12 +74,13 @@ impl crate::Chart for TxnsGrowth {
 #[cfg(test)]
 mod tests {
     use super::TxnsGrowth;
-    use crate::{cache::Cache, tests::simple_test::simple_test_chart};
+    use crate::{lines::NewTxns, tests::simple_test::simple_test_chart};
+    use std::sync::Arc;
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_txns_growth() {
-        let chart = TxnsGrowth::new(Cache::default());
+        let chart = TxnsGrowth::new(Arc::new(NewTxns::default()));
         simple_test_chart(
             "update_txns_growth",
             chart,

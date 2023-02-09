@@ -106,7 +106,7 @@ impl Charts {
 
     fn all_charts() -> Vec<ArcChart> {
         let accounts_cache = Cache::default();
-        let transactions_cache = Cache::default();
+        let new_txns = Arc::new(lines::NewTxns::default());
         let new_native_coin_transfers = Arc::new(lines::NewNativeCoinTransfers::default());
         vec![
             // finished counters
@@ -125,8 +125,8 @@ impl Charts {
             Arc::new(lines::ActiveAccounts::default()),
             Arc::new(lines::AccountsGrowth::new(accounts_cache)),
             Arc::new(lines::TxnsFee::default()),
-            Arc::new(lines::NewTxns::new(transactions_cache.clone())),
-            Arc::new(lines::TxnsGrowth::new(transactions_cache)),
+            Arc::new(lines::TxnsGrowth::new(new_txns.clone())),
+            new_txns,
             Arc::new(lines::AverageBlockSize::default()),
             Arc::new(lines::AverageGasLimit::default()),
             Arc::new(lines::GasUsedGrowth::default()),
