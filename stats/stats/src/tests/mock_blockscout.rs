@@ -138,6 +138,7 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
                 .map(|account| account.hash.as_ref().to_vec()),
         )
         .collect();
+
     let addr_balance_daily: Vec<_> = ["2022-11-09", "2022-11-10", "2022-11-11"]
         .into_iter()
         .map(|d| NaiveDate::from_str(d).unwrap())
@@ -166,6 +167,7 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
                 .map(|(addr, day, value)| mock_address_coin_balance_daily(addr, day, value))
         })
         .collect();
+
     address_coin_balances_daily::Entity::insert_many(addr_balance_daily)
         .exec(blockscout)
         .await
