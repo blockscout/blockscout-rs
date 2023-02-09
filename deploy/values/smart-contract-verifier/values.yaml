@@ -74,6 +74,11 @@ scVerifier:
   environment:
     SMART_CONTRACT_VERIFIER__SERVER__HTTP__ADDR:
       _default: 0.0.0.0:8050
+    SMART_CONTRACT_VERIFIER__SERVER__HTTP__MAX_BODY_SIZE:
+      _default: 10485760 # 10 Mb
+
+    SMART_CONTRACT_VERIFIER__SERVER__GRPC__ENABLED:
+      _default: true
     SMART_CONTRACT_VERIFIER__SERVER__GRPC__ADDR:
       _default: 0.0.0.0:8051
 
