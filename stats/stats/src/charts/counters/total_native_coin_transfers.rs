@@ -32,7 +32,7 @@ impl TotalNativeCoinTransfers {
         tracing::info!(
             chart_name = self.name(),
             parent_chart_name = self.parent.name(),
-            "update parent"
+            "updating parent"
         );
         self.parent.update(db, blockscout, full).await?;
         let data = get_chart_data(db, self.parent.name(), None, None).await?;
@@ -86,7 +86,7 @@ impl crate::Chart for TotalNativeCoinTransfers {
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
                 UpdateError::Internal(format!(
-                    "chart {} has invalid data: {}",
+                    "failed to parse values to int in chart '{}': {}",
                     self.parent.name(),
                     e
                 ))

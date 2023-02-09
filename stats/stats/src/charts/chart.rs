@@ -1,9 +1,8 @@
+use crate::ReadError;
 use async_trait::async_trait;
 use entity::{charts, sea_orm_active_enums::ChartType};
 use sea_orm::{prelude::*, sea_query, FromQueryResult, QuerySelect, Set};
 use thiserror::Error;
-
-use crate::ReadError;
 
 #[derive(Error, Debug)]
 pub enum UpdateError {
