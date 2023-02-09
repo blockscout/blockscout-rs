@@ -3,6 +3,8 @@ use entity::{charts, sea_orm_active_enums::ChartType};
 use sea_orm::{prelude::*, sea_query, FromQueryResult, QuerySelect, Set};
 use thiserror::Error;
 
+use crate::ReadError;
+
 #[derive(Error, Debug)]
 pub enum UpdateError {
     #[error("blockscout database error: {0}")]
@@ -13,6 +15,15 @@ pub enum UpdateError {
     NotFound(String),
     #[error("internal error: {0}")]
     Internal(String),
+}
+
+impl From<ReadError> for UpdateError {
+    fn from(read: ReadError) -> Self {
+        match read {
+            ReadError::DB(db) => UpdateError::StatsDB(db),
+            ReadError::NotFound(err) => UpdateError::NotFound(err),
+        }
+    }
 }
 
 #[async_trait]

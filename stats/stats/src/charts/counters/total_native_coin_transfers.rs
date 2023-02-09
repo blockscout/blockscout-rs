@@ -1,27 +1,43 @@
 use crate::{
     charts::{
-        cache::Cache,
         find_chart,
         insert::{insert_data_many, DateValue},
         updater::get_min_block_blockscout,
     },
+    get_chart_data,
     lines::NewNativeCoinTransfers,
-    UpdateError,
+    Chart, Point, UpdateError,
 };
 use async_trait::async_trait;
-use entity::{chart_data, sea_orm_active_enums::ChartType};
-use sea_orm::{prelude::*, QueryOrder, QuerySelect};
-use tokio::sync::Mutex;
+use entity::sea_orm_active_enums::ChartType;
+use sea_orm::prelude::*;
+use std::sync::Arc;
 
+#[derive(Default)]
 pub struct TotalNativeCoinTransfers {
-    cache: Mutex<Cache<Vec<DateValue>>>,
+    parent: Arc<NewNativeCoinTransfers>,
 }
 
 impl TotalNativeCoinTransfers {
-    pub fn new(cache: Cache<Vec<DateValue>>) -> Self {
-        Self {
-            cache: Mutex::new(cache),
-        }
+    pub fn new(parent: Arc<NewNativeCoinTransfers>) -> Self {
+        Self { parent }
+    }
+
+    async fn get_parent_data(
+        &self,
+        db: &DatabaseConnection,
+        blockscout: &DatabaseConnection,
+        full: bool,
+    ) -> Result<Vec<Point>, UpdateError> {
+        tracing::info!(
+            chart_name = self.name(),
+            parent_chart_name = self.parent.name(),
+            "create and update parent"
+        );
+        self.parent.create(db).await.map_err(UpdateError::StatsDB)?;
+        self.parent.update(db, blockscout, full).await?;
+        let data = get_chart_data(db, self.parent.name(), None, None).await?;
+        Ok(data)
     }
 }
 
@@ -39,7 +55,7 @@ impl crate::Chart for TotalNativeCoinTransfers {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
-        _full: bool,
+        full: bool,
     ) -> Result<(), UpdateError> {
         let chart_id = find_chart(db, self.name())
             .await
@@ -48,60 +64,34 @@ impl crate::Chart for TotalNativeCoinTransfers {
         let min_blockscout_block = get_min_block_blockscout(blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?;
-        let mut data = {
-            let mut cache = self.cache.lock().await;
-            cache
-                .get_or_update(async move {
-                    NewNativeCoinTransfers::read_values(blockscout, None).await
-                })
-                .await?
-        };
-        data.sort_unstable();
-        let min_date = data.first().map(|v| v.date);
-        let max_date = data.last().map(|v| v.date);
-        let (min_date, max_date) = match (min_date, max_date) {
-            (Some(min), Some(max)) => (min, max),
-            _ => {
-                tracing::warn!("new txns returned empty array");
+        let new_transfers_per_day = self.get_parent_data(db, blockscout, full).await?;
+        let max_date = match new_transfers_per_day.iter().max() {
+            Some(max_date) => max_date.date,
+            None => {
+                tracing::warn!(
+                    chart_name = self.name(),
+                    parent_chart_name = self.parent.name(),
+                    "parent doesn't have any data after update"
+                );
                 return Ok(());
             }
         };
-
-        let last_data: Option<DateValue> = chart_data::Entity::find()
-            .column(chart_data::Column::Date)
-            .column(chart_data::Column::Value)
-            .filter(chart_data::Column::ChartId.eq(chart_id))
-            .filter(chart_data::Column::Date.lt(min_date))
-            .order_by_desc(chart_data::Column::Date)
-            .into_model()
-            .one(db)
-            .await
-            .map_err(UpdateError::StatsDB)?;
-        let prev_total = match last_data {
-            Some(last_data) => last_data
-                .value
-                .parse::<i64>()
-                .map_err(|e| UpdateError::Internal(e.to_string()))?,
-            None => {
-                tracing::info!(
-                    chart_name = self.name(),
-                    "calculating total counter from 0, because no old data was found"
-                );
-                0
-            }
-        };
-        let data_sum: i64 = data
-            .iter()
-            .map(|v| v.value.parse::<i64>())
+        let total_transfers: i64 = new_transfers_per_day
+            .into_iter()
+            .map(|p| p.value.parse::<i64>())
             .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| UpdateError::Internal(e.to_string()))?
+            .map_err(|e| {
+                UpdateError::Internal(format!(
+                    "chart {} has invalid data: {}",
+                    self.parent.name(),
+                    e
+                ))
+            })?
             .into_iter()
             .sum();
-        let value = data_sum + prev_total;
-
         let point = DateValue {
             date: max_date,
-            value: value.to_string(),
+            value: total_transfers.to_string(),
         }
         .active_model(chart_id, Some(min_blockscout_block));
         insert_data_many(db, std::iter::once(point))
@@ -119,7 +109,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_total_native_coin_transfers() {
-        let counter = TotalNativeCoinTransfers::new(Cache::default());
+        let counter = TotalNativeCoinTransfers::default();
         simple_test_counter("update_total_native_coin_transfers", counter, "11").await;
     }
 }
