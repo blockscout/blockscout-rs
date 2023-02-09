@@ -61,10 +61,10 @@ scVerifier:
     # probes
     livenessProbe:
       enabled: true
-      path: /health
+      path: /health?service=
     readinessProbe:
       enabled: true
-      path: /health
+      path: /health?service=
 
   hpa:
     minReplicas: 1
