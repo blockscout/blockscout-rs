@@ -54,4 +54,4 @@ message LineChartSection {
   repeated LineChartInfo charts = 3;
 }
 
-message LineCharts {  repeated LineChartSection sections = 1; }
+message LineCharts { repeated LineChartSection sections = 1; }

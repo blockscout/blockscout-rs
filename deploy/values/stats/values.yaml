@@ -143,11 +143,11 @@ stats:
         description = "New token transfers number for the period"
         update_schedule = "0 0 1 * * * *"
 
-        # [[lines.sections.charts]]
-        # id = "nativeCoinSupply"
-        # title = "Native coin circulating supply"
-        # description = "Amount of token circulating supply for the period"
-        # units = "eth"
+        [[lines.sections.charts]]
+        id = "nativeCoinSupply"
+        title = "Native coin circulating supply"
+        description = "Amount of token circulating supply for the period"
+        units = "eth"
 
         [[lines.sections]]
         id = "gas"
