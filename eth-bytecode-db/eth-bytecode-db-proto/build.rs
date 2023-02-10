@@ -23,6 +23,10 @@ fn compile(
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // We need to rebuild proto lib only if any of proto definitions
+    // (or corresponding http mapping) has been changed.
+    println!("cargo:rerun-if-changed=proto/");
+
     std::fs::create_dir_all("./swagger/v2").unwrap();
     let gens = Box::new(GeneratorList::new(vec![
         tonic_build::configure().service_generator(),
