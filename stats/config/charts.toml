@@ -63,6 +63,7 @@ description = "The average amount in USD spent per transaction"
 id = "txnsFee"
 title = "Transactions fees"
 description = "Amount of tokens paid as fees"
+units = "eth"
 
 [[lines.sections.charts]]
 id = "newTxns"
@@ -90,6 +91,7 @@ description = "New blocks number"
 id = "averageBlockSize"
 title = "Average block size"
 description = "Average size of blocks in bytes"
+units = "bytes"
 
 
 [[lines.sections]]
@@ -111,7 +113,7 @@ update_schedule = "0 0 1 * * * *"
 id = "nativeCoinSupply"
 title = "Native coin circulating supply"
 description = "Amount of token circulating supply for the period"
-
+units = "eth"
 
 [[lines.sections]]
 id = "gas"
@@ -131,3 +133,4 @@ description = "Cumulative gas used for the period"
 id = "averageGasPrice"
 title = "Average gas price"
 description = "Average gas price for the period (Gwei)"
+units = "Gwei"

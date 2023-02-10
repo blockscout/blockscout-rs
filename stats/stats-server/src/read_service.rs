@@ -50,7 +50,7 @@ impl StatsService for ReadService {
                     id: info.id.clone(),
                     value,
                     title: info.title.clone(),
-                    units: info.units.clone(),
+                    units: info.settings.units.clone(),
                 })
             })
             .collect();
@@ -63,12 +63,15 @@ impl StatsService for ReadService {
         request: Request<GetLineChartRequest>,
     ) -> Result<Response<LineChart>, Status> {
         let request = request.into_inner();
-        if !self.charts.lines_filter.contains(&request.name) {
-            return Err(tonic::Status::not_found(format!(
-                "chart {} not found",
-                request.name
-            )));
-        }
+        let line_settings = match self.charts.settings.get(&request.name) {
+            Some(line_config) => line_config,
+            None => {
+                return Err(tonic::Status::not_found(format!(
+                    "chart {} not found",
+                    request.name
+                )))
+            }
+        };
         let from = request
             .from
             .and_then(|date| NaiveDate::from_str(&date).ok());
@@ -85,7 +88,10 @@ impl StatsService for ReadService {
 
         // remove last data point, because it can be partially updated
         data.pop();
-        Ok(Response::new(LineChart { chart: data }))
+        Ok(Response::new(LineChart {
+            chart: data,
+            units: line_settings.units.clone(),
+        }))
     }
 
     async fn get_line_charts(
