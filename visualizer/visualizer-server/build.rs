@@ -31,7 +31,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-changed=proto/");
 
     std::fs::create_dir_all("./swagger").unwrap();
-
     let gens = Box::new(GeneratorList::new(vec![
         tonic_build::configure().service_generator(),
         Box::new(ActixGenerator::new("proto/api_config_http.yaml").unwrap()),
