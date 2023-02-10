@@ -285,7 +285,7 @@ fn mock_address_coin_balance_daily(
     address_coin_balances_daily::ActiveModel {
         address_hash: Set(addr),
         day: Set(day),
-        value: Set(value.map(|v| Decimal::from(v))),
+        value: Set(value.map(Decimal::from)),
         inserted_at: Set(Default::default()),
         updated_at: Set(Default::default()),
     }
