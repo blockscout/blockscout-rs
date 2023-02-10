@@ -1,15 +1,23 @@
-use blockscout_db::entity::{addresses, blocks, tokens, transactions};
+use blockscout_db::entity::{address_coin_balances_daily, addresses, blocks, tokens, transactions};
 use chrono::{NaiveDate, NaiveDateTime};
 use sea_orm::{prelude::Decimal, DatabaseConnection, EntityTrait, Set};
 use std::str::FromStr;
 
 pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date: &str) {
-    addresses::Entity::insert(addresses::ActiveModel {
-        hash: Set(vec![]),
-        inserted_at: Set(Default::default()),
-        updated_at: Set(Default::default()),
-        ..Default::default()
-    })
+    addresses::Entity::insert_many([
+        addresses::ActiveModel {
+            hash: Set(vec![]),
+            inserted_at: Set(Default::default()),
+            updated_at: Set(Default::default()),
+            ..Default::default()
+        },
+        addresses::ActiveModel {
+            hash: Set(vec![0; 20]),
+            inserted_at: Set(Default::default()),
+            updated_at: Set(Default::default()),
+            ..Default::default()
+        },
+    ])
     .exec(blockscout)
     .await
     .unwrap();
@@ -120,6 +128,50 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
         .exec(blockscout)
         .await
         .unwrap();
+
+    // 10000 eth
+    let sum = 10_000_000_000_000_000_000_000_i128;
+    let addrs: Vec<_> = std::iter::once(vec![0; 20])
+        .chain(
+            accounts
+                .iter()
+                .map(|account| account.hash.as_ref().to_vec()),
+        )
+        .collect();
+
+    let addr_balance_daily: Vec<_> = ["2022-11-09", "2022-11-10", "2022-11-11"]
+        .into_iter()
+        .map(|d| NaiveDate::from_str(d).unwrap())
+        .enumerate()
+        .flat_map(|(i, day)| {
+            let mut cur_sum = sum;
+            let values: Vec<_> = addrs
+                .clone()
+                .into_iter()
+                .enumerate()
+                .map(|(j, addr)| {
+                    let value = if j == addrs.len() - 1 {
+                        Some(cur_sum)
+                    } else if (i + j) % 5 != 0 {
+                        let value = cur_sum / (7 - i as i128);
+                        cur_sum -= value;
+                        Some(value)
+                    } else {
+                        None
+                    };
+                    (addr, day, value)
+                })
+                .collect();
+            values
+                .into_iter()
+                .map(|(addr, day, value)| mock_address_coin_balance_daily(addr, day, value))
+        })
+        .collect();
+
+    address_coin_balances_daily::Entity::insert_many(addr_balance_daily)
+        .exec(blockscout)
+        .await
+        .unwrap();
 }
 
 fn mock_block(index: i64, ts: &str, consensus: bool) -> blocks::ActiveModel {
@@ -222,6 +274,20 @@ fn mock_failed_transaction(
         updated_at: Set(Default::default()),
         from_address_hash: Set(vec![]),
         ..Default::default()
+    }
+}
+
+fn mock_address_coin_balance_daily(
+    addr: Vec<u8>,
+    day: NaiveDate,
+    value: Option<i128>,
+) -> address_coin_balances_daily::ActiveModel {
+    address_coin_balances_daily::ActiveModel {
+        address_hash: Set(addr),
+        day: Set(day),
+        value: Set(value.map(Decimal::from)),
+        inserted_at: Set(Default::default()),
+        updated_at: Set(Default::default()),
     }
 }
 
