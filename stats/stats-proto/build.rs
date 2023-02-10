@@ -18,17 +18,15 @@ fn compile(
         .bytes(["."])
         .type_attribute(".", "#[actix_prost_macros::serde]");
 
-    for path in protos.iter() {
-        println!("cargo:rerun-if-changed={}", path.as_ref().display())
-    }
-    for path in includes.iter() {
-        println!("cargo:rerun-if-changed={}", path.as_ref().display())
-    }
     config.compile_protos(protos, includes)?;
     Ok(())
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // We need to rebuild proto lib only if any of proto definitions
+    // (or corresponding http mapping) has been changed.
+    println!("cargo:rerun-if-changed=proto/");
+
     std::fs::create_dir_all("./swagger").unwrap();
     let gens = Box::new(GeneratorList::new(vec![
         tonic_build::configure().service_generator(),
