@@ -1,10 +1,14 @@
-use super::insert::{insert_data_many, DateValue};
-use crate::{metrics, Chart, UpdateError};
+use super::{
+    find_chart,
+    insert::{insert_data_many, DateValue},
+};
+use crate::{get_chart_data, metrics, Chart, UpdateError};
 use async_trait::async_trait;
 use blockscout_db::entity::blocks;
 use chrono::NaiveDate;
 use entity::chart_data;
 use sea_orm::{prelude::*, sea_query, FromQueryResult, QueryOrder, QuerySelect};
+use std::sync::Arc;
 
 #[async_trait]
 pub trait ChartFullUpdater: Chart {
@@ -103,6 +107,57 @@ pub trait ChartUpdater: Chart {
             .await
             .map_err(UpdateError::StatsDB)?;
         Ok(())
+    }
+}
+
+#[async_trait]
+pub trait ChartDependentUpdate<P>: Chart
+where
+    P: Chart + Send,
+{
+    fn parent(&self) -> Arc<P>;
+
+    async fn get_values(&self, parent_data: Vec<DateValue>) -> Result<Vec<DateValue>, UpdateError>;
+
+    async fn get_parent_data(
+        &self,
+        db: &DatabaseConnection,
+        blockscout: &DatabaseConnection,
+        force_full: bool,
+    ) -> Result<Vec<DateValue>, UpdateError> {
+        let parent = self.parent();
+        tracing::info!(
+            chart_name = self.name(),
+            parent_chart_name = parent.name(),
+            "updating parent"
+        );
+        parent.update(db, blockscout, force_full).await?;
+        let data = get_chart_data(db, parent.name(), None, None).await?;
+        Ok(data)
+    }
+
+    async fn update_with_values(
+        &self,
+        db: &DatabaseConnection,
+        blockscout: &DatabaseConnection,
+        force_full: bool,
+    ) -> Result<(), UpdateError> {
+        let chart_id = find_chart(db, self.name())
+            .await
+            .map_err(UpdateError::StatsDB)?
+            .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
+        let min_blockscout_block = get_min_block_blockscout(blockscout)
+            .await
+            .map_err(UpdateError::BlockscoutDB)?;
+        let parent_data = self.get_parent_data(db, blockscout, force_full).await?;
+        let values = self
+            .get_values(parent_data)
+            .await?
+            .into_iter()
+            .map(|v| v.active_model(chart_id, Some(min_blockscout_block)));
+        insert_data_many(db, values)
+            .await
+            .map_err(UpdateError::StatsDB)
     }
 }
 
