@@ -99,6 +99,7 @@ stats:
         id = "txnsFee"
         title = "Transactions fees"
         description = "Amount of tokens paid as fees"
+        units = "eth"
 
         [[lines.sections.charts]]
         id = "newTxns"
@@ -125,6 +126,7 @@ stats:
         id = "averageBlockSize"
         title = "Average block size"
         description = "Average size of blocks in bytes"
+        units = "bytes"
 
         [[lines.sections]]
         id = "tokens"
@@ -145,6 +147,7 @@ stats:
         # id = "nativeCoinSupply"
         # title = "Native coin circulating supply"
         # description = "Amount of token circulating supply for the period"
+        # units = "eth"
 
         [[lines.sections]]
         id = "gas"
@@ -164,6 +167,7 @@ stats:
         id = "averageGasPrice"
         title = "Average gas price"
         description = "Average gas price for the period (Gwei)"
+        units = "gwei"
     mountPath: /app/config
 
   resources:
