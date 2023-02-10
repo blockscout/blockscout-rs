@@ -94,8 +94,13 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         service_name: "eth_bytecode_db".to_owned(),
         server: settings.server,
         metrics: settings.metrics,
-        tracing: settings.tracing,
-        jaeger: settings.jaeger,
     };
+
+    blockscout_service_launcher::init_logs(
+        &launch_settings.service_name,
+        &settings.tracing,
+        &settings.jaeger,
+    )?;
+
     blockscout_service_launcher::launch(&launch_settings, http_router, grpc_router).await
 }
