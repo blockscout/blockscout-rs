@@ -8,7 +8,66 @@ use blockscout_db::entity::blocks;
 use chrono::NaiveDate;
 use entity::chart_data;
 use sea_orm::{prelude::*, sea_query, FromQueryResult, QueryOrder, QuerySelect};
-use std::sync::Arc;
+use std::{fmt::Display, iter::Sum, ops::AddAssign, str::FromStr, sync::Arc};
+
+pub fn parse_and_growth<T>(
+    mut data: Vec<DateValue>,
+    parent_name: &str,
+) -> Result<Vec<DateValue>, UpdateError>
+where
+    T: AddAssign + FromStr + Default + Display,
+    T::Err: Display,
+{
+    let mut prev_sum = T::default();
+    for item in data.iter_mut() {
+        let value = item.value.parse::<T>().map_err(|e| {
+            UpdateError::Internal(format!(
+                "failed to parse values in chart '{parent_name}': {e}",
+            ))
+        })?;
+        prev_sum += value;
+        item.value = prev_sum.to_string();
+    }
+    Ok(data)
+}
+
+pub fn parse_and_sum<T>(
+    data: Vec<DateValue>,
+    chart_name: &str,
+    parent_name: &str,
+) -> Result<Vec<DateValue>, UpdateError>
+where
+    T: Sum + FromStr + Default + Display,
+    T::Err: Display,
+{
+    let max_date = match data.iter().max() {
+        Some(max_date) => max_date.date,
+        None => {
+            tracing::warn!(
+                chart_name = chart_name,
+                parent_chart_name = parent_name,
+                "parent doesn't have any data after update"
+            );
+            return Ok(vec![]);
+        }
+    };
+    let total: T = data
+        .into_iter()
+        .map(|p| p.value.parse::<T>())
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| {
+            UpdateError::Internal(format!(
+                "failed to parse values in chart '{parent_name}': {e}",
+            ))
+        })?
+        .into_iter()
+        .sum();
+    let point = DateValue {
+        date: max_date,
+        value: total.to_string(),
+    };
+    Ok(vec![point])
+}
 
 #[async_trait]
 pub trait ChartFullUpdater: Chart {
