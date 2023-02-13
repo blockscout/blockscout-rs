@@ -1,7 +1,7 @@
 use crate::{
     charts::{
         insert::{DateValue, DateValueDouble},
-        updater::ChartUpdater,
+        updater::ChartPartialUpdater,
     },
     UpdateError,
 };
@@ -15,7 +15,7 @@ pub struct AverageGasPrice {}
 const GWEI: i64 = 1_000_000_000;
 
 #[async_trait]
-impl ChartUpdater for AverageGasPrice {
+impl ChartPartialUpdater for AverageGasPrice {
     async fn get_values(
         &self,
         blockscout: &DatabaseConnection,

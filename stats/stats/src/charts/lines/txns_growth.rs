@@ -4,7 +4,7 @@ use crate::{
         chart::Chart,
         create_chart,
         insert::DateValue,
-        updater::{parse_and_growth, ChartDependentUpdate},
+        updater::{parse_and_growth, ChartDependentUpdater},
     },
     UpdateError,
 };
@@ -25,7 +25,7 @@ impl TxnsGrowth {
 }
 
 #[async_trait]
-impl ChartDependentUpdate<NewTxns> for TxnsGrowth {
+impl ChartDependentUpdater<NewTxns> for TxnsGrowth {
     fn parent(&self) -> Arc<NewTxns> {
         self.parent.clone()
     }

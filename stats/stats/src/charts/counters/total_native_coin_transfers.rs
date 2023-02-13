@@ -2,7 +2,7 @@ use crate::{
     charts::{
         create_chart,
         insert::DateValue,
-        updater::{parse_and_sum, ChartDependentUpdate},
+        updater::{parse_and_sum, ChartDependentUpdater},
     },
     lines::NewNativeCoinTransfers,
     Chart, UpdateError,
@@ -24,7 +24,7 @@ impl TotalNativeCoinTransfers {
 }
 
 #[async_trait]
-impl ChartDependentUpdate<NewNativeCoinTransfers> for TotalNativeCoinTransfers {
+impl ChartDependentUpdater<NewNativeCoinTransfers> for TotalNativeCoinTransfers {
     fn parent(&self) -> Arc<NewNativeCoinTransfers> {
         self.parent.clone()
     }

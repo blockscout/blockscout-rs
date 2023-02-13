@@ -2,7 +2,7 @@ use crate::{
     charts::{
         create_chart,
         insert::DateValue,
-        updater::{parse_and_sum, ChartDependentUpdate},
+        updater::{parse_and_sum, ChartDependentUpdater},
     },
     lines::NewTxns,
     Chart, UpdateError,
@@ -24,7 +24,7 @@ impl TotalTxns {
 }
 
 #[async_trait]
-impl ChartDependentUpdate<NewTxns> for TotalTxns {
+impl ChartDependentUpdater<NewTxns> for TotalTxns {
     fn parent(&self) -> Arc<NewTxns> {
         self.parent.clone()
     }
