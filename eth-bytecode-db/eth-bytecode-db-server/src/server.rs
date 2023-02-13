@@ -17,6 +17,8 @@ use blockscout_service_launcher::LaunchSettings;
 use eth_bytecode_db::verification::Client;
 use std::sync::Arc;
 
+const SERVICE_NAME: &str = "eth_bytecode_db";
+
 #[derive(Clone)]
 struct Router {
     database: Option<Arc<DatabaseService>>,
@@ -69,6 +71,8 @@ impl blockscout_service_launcher::HttpRouter for Router {
 }
 
 pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
+    blockscout_service_launcher::init_logs(SERVICE_NAME, &settings.tracing, &settings.jaeger)?;
+
     let health = Arc::new(HealthService::default());
 
     let db_connection = Arc::new(sea_orm::Database::connect(settings.database.url).await?);
@@ -91,16 +95,10 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let http_router = router;
 
     let launch_settings = LaunchSettings {
-        service_name: "eth_bytecode_db".to_owned(),
+        service_name: SERVICE_NAME.to_string(),
         server: settings.server,
         metrics: settings.metrics,
     };
-
-    blockscout_service_launcher::init_logs(
-        &launch_settings.service_name,
-        &settings.tracing,
-        &settings.jaeger,
-    )?;
 
     blockscout_service_launcher::launch(&launch_settings, http_router, grpc_router).await
 }
