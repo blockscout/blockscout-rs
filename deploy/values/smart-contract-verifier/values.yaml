@@ -44,12 +44,12 @@ scVerifier:
   resources:
     limits:
       memory:
-        _default: "0.15Gi"
+        _default: "0.25Gi"
       cpu:
         _default: "0.3"
     requests:
       memory:
-        _default: "0.15Gi"
+        _default: "0.25Gi"
       cpu:
         _default: "0.3"
 
