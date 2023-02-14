@@ -1,6 +1,11 @@
 use super::NewTxns;
 use crate::{
-    charts::{chart::Chart, create_chart, insert::DateValue, updater::ChartDependentUpdate},
+    charts::{
+        chart::Chart,
+        create_chart,
+        insert::DateValue,
+        updater::{parse_and_growth, ChartDependentUpdater},
+    },
     UpdateError,
 };
 use async_trait::async_trait;
@@ -20,28 +25,13 @@ impl TxnsGrowth {
 }
 
 #[async_trait]
-impl ChartDependentUpdate<NewTxns> for TxnsGrowth {
+impl ChartDependentUpdater<NewTxns> for TxnsGrowth {
     fn parent(&self) -> Arc<NewTxns> {
         self.parent.clone()
     }
 
-    async fn get_values(
-        &self,
-        mut parent_data: Vec<DateValue>,
-    ) -> Result<Vec<DateValue>, UpdateError> {
-        let mut prev_sum = 0;
-        for item in parent_data.iter_mut() {
-            let value = item.value.parse::<i64>().map_err(|e| {
-                UpdateError::Internal(format!(
-                    "failed to parse values to int in chart '{}': {}",
-                    self.parent.name(),
-                    e
-                ))
-            })?;
-            item.value = (value + prev_sum).to_string();
-            prev_sum += value;
-        }
-        Ok(parent_data)
+    async fn get_values(&self, parent_data: Vec<DateValue>) -> Result<Vec<DateValue>, UpdateError> {
+        parse_and_growth::<i64>(parent_data, self.parent.name())
     }
 }
 

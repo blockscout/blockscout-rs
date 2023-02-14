@@ -1,5 +1,9 @@
 use crate::{
-    charts::{create_chart, insert::DateValue, updater::ChartDependentUpdate},
+    charts::{
+        create_chart,
+        insert::DateValue,
+        updater::{parse_and_sum, ChartDependentUpdater},
+    },
     lines::NewNativeCoinTransfers,
     Chart, UpdateError,
 };
@@ -20,41 +24,13 @@ impl TotalNativeCoinTransfers {
 }
 
 #[async_trait]
-impl ChartDependentUpdate<NewNativeCoinTransfers> for TotalNativeCoinTransfers {
+impl ChartDependentUpdater<NewNativeCoinTransfers> for TotalNativeCoinTransfers {
     fn parent(&self) -> Arc<NewNativeCoinTransfers> {
         self.parent.clone()
     }
 
     async fn get_values(&self, parent_data: Vec<DateValue>) -> Result<Vec<DateValue>, UpdateError> {
-        let max_date = match parent_data.iter().max() {
-            Some(max_date) => max_date.date,
-            None => {
-                tracing::warn!(
-                    chart_name = self.name(),
-                    parent_chart_name = self.parent.name(),
-                    "parent doesn't have any data after update"
-                );
-                return Ok(vec![]);
-            }
-        };
-        let total_transfers: i64 = parent_data
-            .into_iter()
-            .map(|p| p.value.parse::<i64>())
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| {
-                UpdateError::Internal(format!(
-                    "failed to parse values to int in chart '{}': {}",
-                    self.parent.name(),
-                    e
-                ))
-            })?
-            .into_iter()
-            .sum();
-        let point = DateValue {
-            date: max_date,
-            value: total_transfers.to_string(),
-        };
-        Ok(vec![point])
+        parse_and_sum::<i64>(parent_data, self.name(), self.parent.name())
     }
 }
 

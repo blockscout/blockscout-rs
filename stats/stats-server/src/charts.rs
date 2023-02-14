@@ -112,7 +112,7 @@ impl Charts {
             // finished counters
             Arc::new(counters::TotalBlocks::default()),
             Arc::new(counters::AverageBlockTime::default()),
-            Arc::new(counters::TotalTxns::default()),
+            Arc::new(counters::TotalTxns::new(new_txns.clone())),
             Arc::new(counters::TotalTokens::default()),
             Arc::new(counters::CompletedTxns::default()),
             Arc::new(counters::TotalAccounts::new(accounts_cache.clone())),

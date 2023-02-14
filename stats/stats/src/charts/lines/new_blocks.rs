@@ -1,5 +1,5 @@
 use crate::{
-    charts::{insert::DateValue, updater::ChartUpdater},
+    charts::{insert::DateValue, updater::ChartPartialUpdater},
     UpdateError,
 };
 use async_trait::async_trait;
@@ -10,7 +10,7 @@ use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 pub struct NewBlocks {}
 
 #[async_trait]
-impl ChartUpdater for NewBlocks {
+impl ChartPartialUpdater for NewBlocks {
     async fn get_values(
         &self,
         blockscout: &DatabaseConnection,

@@ -1,7 +1,7 @@
 use crate::{
     charts::{
         insert::{DateValue, DateValueDouble},
-        updater::ChartUpdater,
+        updater::ChartPartialUpdater,
     },
     UpdateError,
 };
@@ -15,7 +15,7 @@ const ETH: i64 = 1_000_000_000_000_000_000;
 pub struct NativeCoinSupply {}
 
 #[async_trait]
-impl ChartUpdater for NativeCoinSupply {
+impl ChartPartialUpdater for NativeCoinSupply {
     async fn get_values(
         &self,
         blockscout: &DatabaseConnection,
