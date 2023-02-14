@@ -44,14 +44,14 @@ scVerifier:
   resources:
     limits:
       memory:
-        _default: "0.4Gi"
+        _default: "0.5Gi"
       cpu:
-        _default: "0.1"
+        _default: "0.3"
     requests:
       memory:
-        _default: "0.4Gi"
+        _default: "0.5Gi"
       cpu:
-        _default: "0.1"
+        _default: "0.3"
 
   # node label
   nodeSelector:
