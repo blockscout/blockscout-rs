@@ -58,6 +58,7 @@ title = "Transactions"
 id = "averageTxnFee"
 title = "Average transaction fee"
 description = "The average amount in USD spent per transaction"
+units = "USD"
 
 [[lines.sections.charts]]
 id = "txnsFee"
