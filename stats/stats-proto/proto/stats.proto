@@ -35,10 +35,7 @@ message Point {
   string value = 2;
 }
 
-message LineChart { 
-  repeated Point chart = 1;
-  optional string units = 2;
-}
+message LineChart { repeated Point chart = 1; }
 
 message GetLineChartsRequest {}
 
@@ -46,6 +43,7 @@ message LineChartInfo {
   string id = 1;
   string title = 2;
   string description = 3;
+  optional string units = 4;
 }
 
 message LineChartSection {

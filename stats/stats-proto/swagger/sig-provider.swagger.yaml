@@ -146,8 +146,6 @@ definitions:
         type: array
         items:
           $ref: '#/definitions/v1Point'
-      units:
-        type: string
   v1LineChartInfo:
     type: object
     properties:
@@ -156,6 +154,8 @@ definitions:
       id:
         type: string
       title:
+        type: string
+      units:
         type: string
   v1LineChartSection:
     type: object

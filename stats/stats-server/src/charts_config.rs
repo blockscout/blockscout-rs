@@ -34,6 +34,7 @@ impl From<LineChartInfo> for proto::LineChartInfo {
             id: value.id,
             title: value.title,
             description: value.description,
+            units: value.settings.units,
         }
     }
 }
