@@ -8,13 +8,13 @@ use stats_proto::blockscout::stats::v1 as proto;
 pub struct ChartSettings {
     #[serde_as(as = "Option<DisplayFromStr>")]
     pub update_schedule: Option<Schedule>,
+    pub units: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct CounterInfo {
     pub id: String,
     pub title: String,
-    pub units: Option<String>,
     #[serde(flatten)]
     pub settings: ChartSettings,
 }
@@ -34,6 +34,7 @@ impl From<LineChartInfo> for proto::LineChartInfo {
             id: value.id,
             title: value.title,
             description: value.description,
+            units: value.settings.units,
         }
     }
 }
