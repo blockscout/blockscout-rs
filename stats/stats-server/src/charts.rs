@@ -108,6 +108,7 @@ impl Charts {
         let accounts_cache = Cache::default();
         let new_txns = Arc::new(lines::NewTxns::default());
         let new_native_coin_transfers = Arc::new(lines::NewNativeCoinTransfers::default());
+        let native_coin_holders_growth = Arc::new(lines::NativeCoinHoldersGrowth::default());
         vec![
             // finished counters
             Arc::new(counters::TotalBlocks::default()),
@@ -118,6 +119,9 @@ impl Charts {
             Arc::new(counters::TotalAccounts::new(accounts_cache.clone())),
             Arc::new(counters::TotalNativeCoinTransfers::new(
                 new_native_coin_transfers.clone(),
+            )),
+            Arc::new(counters::TotalNativeCoinHolders::new(
+                native_coin_holders_growth.clone(),
             )),
             // finished lines
             Arc::new(lines::NewBlocks::default()),
@@ -133,12 +137,8 @@ impl Charts {
             Arc::new(lines::NativeCoinSupply::default()),
             Arc::new(lines::NativeCoinHoldersGrowth::default()),
             Arc::new(lines::AverageTxnFee::default()),
+            native_coin_holders_growth,
             new_native_coin_transfers,
-            // mock counters
-            Arc::new(counters::MockCounter::new(
-                "totalNativeCoinHolders".into(),
-                "409559".into(),
-            )),
         ]
     }
 }
