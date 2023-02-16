@@ -7,10 +7,10 @@ use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 
 #[derive(Default, Debug)]
-pub struct NewNativeCoinTransfers {}
+pub struct NativeCoinHoldersGrowth {}
 
 #[async_trait]
-impl ChartPartialUpdater for NewNativeCoinTransfers {
+impl ChartPartialUpdater for NativeCoinHoldersGrowth {
     async fn get_values(
         &self,
         blockscout: &DatabaseConnection,
@@ -20,34 +20,25 @@ impl ChartPartialUpdater for NewNativeCoinTransfers {
             Some(row) => Statement::from_sql_and_values(
                 DbBackend::Postgres,
                 r#"
-                SELECT 
-                    DATE(b.timestamp) as date,
-                    COUNT(*)::TEXT as value
-                FROM transactions t
-                JOIN blocks       b ON t.block_hash = b.hash
-                WHERE
-                    DATE(b.timestamp) > $1 AND
-                    b.consensus = true AND
-                    LENGTH(t.input) = 0 AND
-                    t.value >= 0
-                GROUP BY date
-                "#,
+                        SELECT 
+                            day as date,
+                            count(*)::TEXT as value
+                        FROM address_coin_balances_daily
+                        WHERE value != 0 AND day > $1
+                        GROUP BY day;
+                    "#,
                 vec![row.date.into()],
             ),
             None => Statement::from_sql_and_values(
                 DbBackend::Postgres,
                 r#"
-                SELECT 
-                    DATE(b.timestamp) as date,
-                    COUNT(*)::TEXT as value
-                FROM transactions t
-                JOIN blocks       b ON t.block_hash = b.hash
-                WHERE
-                    b.consensus = true AND
-                    LENGTH(t.input) = 0 AND
-                    t.value >= 0
-                GROUP BY date
-                "#,
+                        SELECT 
+                            day as date,
+                            count(*)::TEXT as value
+                        FROM address_coin_balances_daily
+                        WHERE value != 0
+                        GROUP BY day;
+                    "#,
                 vec![],
             ),
         };
@@ -61,9 +52,9 @@ impl ChartPartialUpdater for NewNativeCoinTransfers {
 }
 
 #[async_trait]
-impl crate::Chart for NewNativeCoinTransfers {
+impl crate::Chart for NativeCoinHoldersGrowth {
     fn name(&self) -> &str {
-        "newNativeCoinTransfers"
+        "nativeCoinHoldersGrowth"
     }
 
     fn chart_type(&self) -> ChartType {
@@ -74,29 +65,29 @@ impl crate::Chart for NewNativeCoinTransfers {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
-        full: bool,
+        force_full: bool,
     ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, full).await
+        self.update_with_values(db, blockscout, force_full).await
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::NewNativeCoinTransfers;
+    use super::*;
     use crate::tests::simple_test::simple_test_chart;
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn update_native_coins_transfers() {
-        let chart = NewNativeCoinTransfers::default();
+    async fn update_native_coin_holders_growth() {
+        let chart = NativeCoinHoldersGrowth::default();
+
         simple_test_chart(
-            "update_native_coins_transfers",
+            "update_native_coin_holders_growth",
             chart,
             vec![
-                ("2022-11-09", "2"),
-                ("2022-11-10", "4"),
-                ("2022-11-11", "4"),
-                ("2022-11-12", "1"),
+                ("2022-11-09", "7"),
+                ("2022-11-10", "8"),
+                ("2022-11-11", "8"),
             ],
         )
         .await;

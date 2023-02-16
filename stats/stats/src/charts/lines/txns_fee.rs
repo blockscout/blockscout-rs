@@ -1,7 +1,7 @@
 use crate::{
     charts::{
         insert::{DateValue, DateValueDouble},
-        updater::ChartUpdater,
+        updater::ChartPartialUpdater,
     },
     UpdateError,
 };
@@ -15,7 +15,7 @@ pub struct TxnsFee {}
 const ETHER: i64 = i64::pow(10, 18);
 
 #[async_trait]
-impl ChartUpdater for TxnsFee {
+impl ChartPartialUpdater for TxnsFee {
     async fn get_values(
         &self,
         blockscout: &DatabaseConnection,

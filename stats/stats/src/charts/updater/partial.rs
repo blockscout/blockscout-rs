@@ -1,75 +1,18 @@
-use super::insert::{insert_data_many, DateValue};
-use crate::{metrics, Chart, UpdateError};
+use super::get_min_block_blockscout;
+use crate::{
+    charts::{
+        find_chart,
+        insert::{insert_data_many, DateValue},
+    },
+    metrics, Chart, UpdateError,
+};
 use async_trait::async_trait;
-use blockscout_db::entity::blocks;
 use chrono::NaiveDate;
 use entity::chart_data;
-use sea_orm::{prelude::*, sea_query, FromQueryResult, QueryOrder, QuerySelect};
+use sea_orm::{prelude::*, FromQueryResult, QueryOrder, QuerySelect};
 
 #[async_trait]
-pub trait ChartFullUpdater: Chart {
-    async fn get_values(
-        &self,
-        blockscout: &DatabaseConnection,
-    ) -> Result<Vec<DateValue>, UpdateError>;
-
-    async fn update_with_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        _force_full: bool,
-    ) -> Result<(), UpdateError> {
-        let chart_id = super::find_chart(db, self.name())
-            .await
-            .map_err(UpdateError::StatsDB)?
-            .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
-        let values = {
-            let _timer = metrics::CHART_FETCH_NEW_DATA_TIME
-                .with_label_values(&[self.name()])
-                .start_timer();
-            self.get_values(blockscout)
-                .await?
-                .into_iter()
-                .map(|value| value.active_model(chart_id, None))
-        };
-        insert_data_many(db, values)
-            .await
-            .map_err(UpdateError::BlockscoutDB)?;
-        Ok(())
-    }
-}
-
-#[derive(Debug, FromQueryResult)]
-struct SyncInfo {
-    pub date: NaiveDate,
-    pub value: String,
-    pub min_blockscout_block: Option<i64>,
-}
-
-#[derive(FromQueryResult)]
-struct MinBlock {
-    min_block: i64,
-}
-
-pub async fn get_min_block_blockscout(blockscout: &DatabaseConnection) -> Result<i64, DbErr> {
-    let min_block = blocks::Entity::find()
-        .select_only()
-        .column_as(
-            sea_query::Expr::col(blocks::Column::Number).min(),
-            "min_block",
-        )
-        .filter(blocks::Column::Consensus.eq(true))
-        .into_model::<MinBlock>()
-        .one(blockscout)
-        .await?;
-
-    min_block
-        .map(|r| r.min_block)
-        .ok_or_else(|| DbErr::RecordNotFound("no blocks found in blockscout database".into()))
-}
-
-#[async_trait]
-pub trait ChartUpdater: Chart {
+pub trait ChartPartialUpdater: Chart {
     async fn get_values(
         &self,
         blockscout: &DatabaseConnection,
@@ -82,7 +25,7 @@ pub trait ChartUpdater: Chart {
         blockscout: &DatabaseConnection,
         force_full: bool,
     ) -> Result<(), UpdateError> {
-        let chart_id = super::find_chart(db, self.name())
+        let chart_id = find_chart(db, self.name())
             .await
             .map_err(UpdateError::StatsDB)?
             .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
@@ -104,6 +47,13 @@ pub trait ChartUpdater: Chart {
             .map_err(UpdateError::StatsDB)?;
         Ok(())
     }
+}
+
+#[derive(Debug, FromQueryResult)]
+struct SyncInfo {
+    pub date: NaiveDate,
+    pub value: String,
+    pub min_blockscout_block: Option<i64>,
 }
 
 async fn get_last_row<C>(

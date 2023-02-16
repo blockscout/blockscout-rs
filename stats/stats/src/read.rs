@@ -46,18 +46,12 @@ pub async fn get_counters(db: &DatabaseConnection) -> Result<HashMap<String, Str
     Ok(counters)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Point {
-    pub date: NaiveDate,
-    pub value: String,
-}
-
 pub async fn get_chart_data(
     db: &DatabaseConnection,
     name: &str,
     from: Option<NaiveDate>,
     to: Option<NaiveDate>,
-) -> Result<Vec<Point>, ReadError> {
+) -> Result<Vec<DateValue>, ReadError> {
     let chart = charts::Entity::find()
         .column(charts::Column::Id)
         .filter(charts::Column::Name.eq(name))
@@ -65,14 +59,7 @@ pub async fn get_chart_data(
         .await?
         .ok_or_else(|| ReadError::NotFound(name.into()))?;
 
-    let chart = get_chart(db, chart.id, from, to)
-        .await?
-        .into_iter()
-        .map(|row| Point {
-            date: row.date,
-            value: row.value,
-        })
-        .collect();
+    let chart = get_chart(db, chart.id, from, to).await?;
     Ok(chart)
 }
 
@@ -174,15 +161,15 @@ mod tests {
             .unwrap();
         assert_eq!(
             vec![
-                Point {
+                DateValue {
                     date: NaiveDate::from_str("2022-11-10").unwrap(),
                     value: "100".into(),
                 },
-                Point {
+                DateValue {
                     date: NaiveDate::from_str("2022-11-11").unwrap(),
                     value: "150".into(),
                 },
-                Point {
+                DateValue {
                     date: NaiveDate::from_str("2022-11-12").unwrap(),
                     value: "200".into(),
                 },

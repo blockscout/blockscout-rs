@@ -1,42 +1,36 @@
 use crate::{
-    charts::{insert::DateValue, updater::ChartFullUpdater},
-    UpdateError,
+    charts::{
+        create_chart,
+        insert::DateValue,
+        updater::{parse_and_sum, ChartDependentUpdater},
+    },
+    lines::NewTxns,
+    Chart, UpdateError,
 };
 use async_trait::async_trait;
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
+use sea_orm::prelude::*;
+use std::sync::Arc;
 
-#[derive(Default, Debug)]
-pub struct TotalTxns {}
+#[derive(Debug)]
+pub struct TotalTxns {
+    parent: Arc<NewTxns>,
+}
+
+impl TotalTxns {
+    pub fn new(parent: Arc<NewTxns>) -> Self {
+        Self { parent }
+    }
+}
 
 #[async_trait]
-impl ChartFullUpdater for TotalTxns {
-    async fn get_values(
-        &self,
-        blockscout: &DatabaseConnection,
-    ) -> Result<Vec<DateValue>, UpdateError> {
-        let data = DateValue::find_by_statement(Statement::from_string(
-            DbBackend::Postgres,
-            r#"
-            SELECT 
-                (
-                    SELECT count(*)::text
-                        FROM transactions
-                ) AS "value",
-                (
-                    SELECT max(timestamp)::date as "date" 
-                        FROM blocks
-                        WHERE blocks.consensus = true
-                ) AS "date"
-            "#
-            .into(),
-        ))
-        .one(blockscout)
-        .await
-        .map_err(UpdateError::BlockscoutDB)?
-        .ok_or_else(|| UpdateError::Internal("query returned nothing".into()))?;
+impl ChartDependentUpdater<NewTxns> for TotalTxns {
+    fn parent(&self) -> Arc<NewTxns> {
+        self.parent.clone()
+    }
 
-        Ok(vec![data])
+    async fn get_values(&self, parent_data: Vec<DateValue>) -> Result<Vec<DateValue>, UpdateError> {
+        parse_and_sum::<i64>(parent_data, self.name(), self.parent.name())
     }
 }
 
@@ -48,6 +42,11 @@ impl crate::Chart for TotalTxns {
 
     fn chart_type(&self) -> ChartType {
         ChartType::Counter
+    }
+
+    async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
+        self.parent.create(db).await?;
+        create_chart(db, self.name().into(), self.chart_type()).await
     }
 
     async fn update(
@@ -68,7 +67,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_total_txns() {
-        let counter = TotalTxns::default();
-        simple_test_counter("update_total_txns", counter, "17").await;
+        let counter = TotalTxns::new(Default::default());
+        simple_test_counter("update_total_txns", counter, "16").await;
     }
 }

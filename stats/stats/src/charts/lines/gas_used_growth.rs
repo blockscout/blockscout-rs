@@ -1,7 +1,7 @@
 use crate::{
     charts::{
         insert::{DateValue, DateValueDecimal},
-        updater::ChartUpdater,
+        updater::ChartPartialUpdater,
     },
     UpdateError,
 };
@@ -13,7 +13,7 @@ use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 pub struct GasUsedGrowth {}
 
 #[async_trait]
-impl ChartUpdater for GasUsedGrowth {
+impl ChartPartialUpdater for GasUsedGrowth {
     async fn get_values(
         &self,
         blockscout: &DatabaseConnection,
