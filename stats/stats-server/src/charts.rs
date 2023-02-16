@@ -135,10 +135,10 @@ impl Charts {
             Arc::new(lines::AverageGasLimit::default()),
             Arc::new(lines::GasUsedGrowth::default()),
             Arc::new(lines::NativeCoinSupply::default()),
+            Arc::new(lines::NativeCoinHoldersGrowth::default()),
+            Arc::new(lines::AverageTxnFee::default()),
             native_coin_holders_growth,
             new_native_coin_transfers,
-            // mock lines
-            Arc::new(lines::MockLine::new("averageTxnFee".into(), 0.0001..0.01)),
         ]
     }
 }
