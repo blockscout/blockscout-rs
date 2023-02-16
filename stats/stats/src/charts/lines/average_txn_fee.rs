@@ -66,7 +66,7 @@ impl ChartPartialUpdater for AverageTxnFee {
 #[async_trait]
 impl crate::Chart for AverageTxnFee {
     fn name(&self) -> &str {
-        "txnsFee"
+        "averageTxnFee"
     }
 
     fn chart_type(&self) -> ChartType {
