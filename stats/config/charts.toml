@@ -7,6 +7,7 @@ update_schedule = "0 0 */3 * * * *"
 id = "averageBlockTime"
 title = "Average Block Time"
 units = "s"
+update_schedule = "0 0 15 * * * *"
 
 [[counters]]
 id = "completedTxns"
@@ -16,10 +17,12 @@ update_schedule = "0 0 */3 * * * *"
 [[counters]]
 id = "totalAccounts"
 title = "Total Accounts"
+update_schedule = "0 0 16 * * * *"
 
 [[counters]]
 id = "totalNativeCoinHolders"
 title = "Total Native Coin Holders"
+update_schedule = "0 0 17 * * * *"
 
 [[counters]]
 id = "totalNativeCoinTransfers"
@@ -29,6 +32,7 @@ update_schedule = "0 0 13 * * * *"
 [[counters]]
 id = "totalTokens"
 title = "Total Tokens"
+update_schedule = "0 0 18 * * * *"
 
 [[counters]]
 id = "totalTxns"
@@ -44,11 +48,14 @@ title = "Accounts"
 id = "activeAccounts"
 title = "Active accounts"
 description = "Active accounts number per period"
+update_schedule = "0 0 4 * * * *"
 
 [[lines.sections.charts]]
 id = "accountsGrowth"
 title = "Accounts growth"
 description = "Cumulative accounts number per period"
+update_schedule = "0 0 5 * * * *"
+
 
 [[lines.sections]]
 id = "transactions"
@@ -59,12 +66,14 @@ id = "averageTxnFee"
 title = "Average transaction fee"
 description = "The average amount in ETH spent per transaction"
 units = "eth"
+update_schedule = "0 0 6 * * * *"
 
 [[lines.sections.charts]]
 id = "txnsFee"
 title = "Transactions fees"
 description = "Amount of tokens paid as fees"
 units = "eth"
+update_schedule = "0 0 7 * * * *"
 
 [[lines.sections.charts]]
 id = "newTxns"
@@ -87,12 +96,14 @@ title = "Blocks"
 id = "newBlocks"
 title = "New blocks"
 description = "New blocks number"
+update_schedule = "0 0 8 * * * *"
 
 [[lines.sections.charts]]
 id = "averageBlockSize"
 title = "Average block size"
 description = "Average size of blocks in bytes"
 units = "bytes"
+update_schedule = "0 0 9 * * * *"
 
 
 [[lines.sections]]
@@ -103,18 +114,21 @@ title = "Tokens"
 id = "nativeCoinHoldersGrowth"
 title = "Native coin holders growth"
 description = "Cumulative token holders number for the period"
+update_schedule = "0 0 10 * * * *"
 
 [[lines.sections.charts]]
 id = "newNativeCoinTransfers"
 title = "New native coins transfers"
 description = "New token transfers number for the period"
-update_schedule = "0 0 1 * * * *"
+update_schedule = "0 0 3 * * * *"
 
 [[lines.sections.charts]]
 id = "nativeCoinSupply"
 title = "Native coin circulating supply"
 description = "Amount of token circulating supply for the period"
 units = "eth"
+update_schedule = "0 0 11 * * * *"
+
 
 [[lines.sections]]
 id = "gas"
@@ -124,14 +138,17 @@ title = "Gas"
 id = "averageGasLimit"
 title = "Average gas limit"
 description = "Average gas limit per block for the period"
+update_schedule = "0 0 12 * * * *"
 
 [[lines.sections.charts]]
 id = "gasUsedGrowth"
 title = "Gas used growth"
 description = "Cumulative gas used for the period"
+update_schedule = "0 0 13 * * * *"
 
 [[lines.sections.charts]]
 id = "averageGasPrice"
 title = "Average gas price"
 description = "Average gas price for the period (Gwei)"
 units = "gwei"
+update_schedule = "0 0 14 * * * *"

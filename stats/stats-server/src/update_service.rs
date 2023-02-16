@@ -33,13 +33,21 @@ impl UpdateService {
         })
     }
 
-    pub async fn force_update_all(self: Arc<Self>, force_full: bool) {
+    pub async fn force_update_all_concurrent(self: Arc<Self>, force_full: bool) {
         let tasks = self.charts.charts.iter().map(|chart| {
             let this = self.clone();
             let chart = chart.clone();
             tokio::spawn(async move { this.update(chart, force_full).await })
         });
         futures::future::join_all(tasks).await;
+    }
+
+    pub async fn force_update_all_in_series(self: Arc<Self>, force_full: bool) {
+        for chart in self.charts.charts.iter() {
+            let this = self.clone();
+            let chart_other = chart.clone();
+            let _ = tokio::spawn(async move { this.update(chart_other, force_full).await }).await;
+        }
     }
 
     pub fn run(self: Arc<Self>, default_schedule: Schedule) {
