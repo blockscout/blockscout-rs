@@ -50,7 +50,7 @@ impl StatsService for ReadService {
                     id: info.id.clone(),
                     value,
                     title: info.title.clone(),
-                    units: info.units.clone(),
+                    units: info.settings.units.clone(),
                 })
             })
             .collect();

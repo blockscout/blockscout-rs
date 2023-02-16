@@ -43,6 +43,7 @@ message LineChartInfo {
   string id = 1;
   string title = 2;
   string description = 3;
+  optional string units = 4;
 }
 
 message LineChartSection {
