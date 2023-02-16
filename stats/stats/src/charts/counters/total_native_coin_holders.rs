@@ -25,11 +25,8 @@ impl ChartDependentUpdater<NativeCoinHoldersGrowth> for TotalNativeCoinHolders {
         self.parent.clone()
     }
 
-    async fn get_values(
-        &self,
-        mut parent_data: Vec<DateValue>,
-    ) -> Result<Vec<DateValue>, UpdateError> {
-        Ok(parent_data.pop().into_iter().collect())
+    async fn get_values(&self, parent_data: Vec<DateValue>) -> Result<Vec<DateValue>, UpdateError> {
+        Ok(parent_data.into_iter().max().into_iter().collect())
     }
 }
 
