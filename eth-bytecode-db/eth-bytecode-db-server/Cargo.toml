@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 eth-bytecode-db-proto = { path = "../eth-bytecode-db-proto" }
 eth-bytecode-db = { path = "../eth-bytecode-db" }
+migration = { path = "../eth-bytecode-db/migration" }
 
 actix-web = "4.2"
 amplify = { version = "3.13.0", features = ["derive"] }
@@ -23,7 +24,6 @@ tokio = { version = "1.23", features = [ "rt-multi-thread", "macros" ] }
 tonic = "0.8"
 
 [dev-dependencies]
-migration = { path = "../eth-bytecode-db/migration" }
 smart-contract-verifier-proto = { path = "../../smart-contract-verifier/smart-contract-verifier-proto" }
 
 mockall = "0.11"
