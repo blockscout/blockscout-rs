@@ -45,6 +45,7 @@ pub struct Settings {
 #[serde(deny_unknown_fields)]
 pub struct DatabaseSettings {
     pub url: String,
+    pub run_migrations: bool,
 }
 
 #[serde_as]
@@ -78,7 +79,10 @@ impl Settings {
             metrics: Default::default(),
             tracing: Default::default(),
             jaeger: Default::default(),
-            database: DatabaseSettings { url: database_url },
+            database: DatabaseSettings {
+                url: database_url,
+                run_migrations: false,
+            },
             verifier: VerifierSettings { uri: verifier_uri },
             config_path: Default::default(),
         }

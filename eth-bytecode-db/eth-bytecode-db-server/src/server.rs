@@ -15,6 +15,7 @@ use crate::{
 };
 use blockscout_service_launcher::LaunchSettings;
 use eth_bytecode_db::verification::Client;
+use migration::{Migrator, MigratorTrait};
 use std::sync::Arc;
 
 const SERVICE_NAME: &str = "eth_bytecode_db";
@@ -76,6 +77,10 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let health = Arc::new(HealthService::default());
 
     let db_connection = Arc::new(sea_orm::Database::connect(settings.database.url).await?);
+    if settings.database.run_migrations {
+        Migrator::up(&db_connection, None).await?;
+    }
+
     let client = Client::new_arc(db_connection.clone(), settings.verifier.uri).await?;
 
     let database = Arc::new(DatabaseService::new_arc(db_connection));
