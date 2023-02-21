@@ -1,0 +1,28 @@
+[server.http]
+enabled = true
+addr = "0.0.0.0:8050"
+max_body_size = 2097152
+
+[server.grpc]
+enabled = false
+addr = "0.0.0.0:8051"
+
+[database]
+url = "" # (required) no default value available
+run_migrations = false
+
+[verifier]
+uri = "" # (required) no default value available
+
+[metrics]
+enabled = false
+addr = "0.0.0.0:6060"
+route = "/metrics"
+
+[jaeger]
+enabled = false
+agent_endpoint = "localhost:6831"
+
+[tracing]
+enabled = true
+format = "default"
