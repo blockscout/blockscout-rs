@@ -65,14 +65,14 @@ CREATE TABLE "bytecodes" (
   "created_at" timestamp NOT NULL DEFAULT (now()),
   "updated_at" timestamp NOT NULL DEFAULT (now()),
   "source_id" bigserial NOT NULL,
-  "type" bytecode_type NOT NULL
+  "bytecode_type" bytecode_type NOT NULL
 );
 
 CREATE TABLE "parts" (
   "id" BIGSERIAL PRIMARY KEY,
   "created_at" timestamp NOT NULL DEFAULT (now()),
   "updated_at" timestamp NOT NULL DEFAULT (now()),
-  "type" part_type NOT NULL,
+  "part_type" part_type NOT NULL,
   "data" bytea NOT NULL
 );
 
@@ -96,7 +96,7 @@ CREATE TABLE "verified_contracts" (
   "verification_type" verification_type NOT NULL
 );
 
-CREATE UNIQUE INDEX ON "parts" ("type", "data");
+CREATE UNIQUE INDEX ON "parts" ("part_type", "data");
 
 COMMENT ON TABLE "sources" IS 'The main table that contains details of source files compilations';
 
