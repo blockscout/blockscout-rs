@@ -9,13 +9,10 @@ services:
       POSTGRES_USER: 'postgres'
       POSTGRES_HOST_AUTH_METHOD: 'trust'
       POSTGRES_DB: 'eth_bytecode_db'
-  #    ports:
-#      - "7432:5432"
   smart-contract-verifier:
     image: ghcr.io/blockscout/smart-contract-verifier:${SMART_CONTRACT_VERIFIER_DOCKER_TAG:-main}
     container_name: 'eth-bytecode-db-verifier'
     restart: always
-#    pull_policy: always
     environment:
       SMART_CONTRACT_VERIFIER__SERVER__HTTP__ENABLED: false
       SMART_CONTRACT_VERIFIER__SERVER__GRPC__ENABLED: true
