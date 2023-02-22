@@ -78,7 +78,17 @@ ethBytecodeDb:
     endpoint:
       _default: <endpoint>.<region>.rds.amazonaws.com
 
-  environment: {}
+  environment: 
+    ETH_BYTECODE_DB__SERVER__HTTP__MAX_BODY_SIZE:
+      _default: '10485760' # 10 Mb
+    ETH_BYTECODE_DB__VERIFIER__URI:
+      _default: grpc.sc-verifier-test.aws-k8s.blockscout.com
+    ETH_BYTECODE_DB__DATABASE__RUN_MIGRATIONS:
+      _default: true
+    ETH_BYTECODE_DB__TRACING__FORMAT:
+      _default: json
+    ETH_BYTECODE_DB__METRICS__ENABLED:
+      _default: true
     # ENV:
     #   _default: 'true'
     ########### just example
@@ -90,7 +100,7 @@ ethBytecodeDb:
     #   _default: postgresql://<user>:<pass>@db-eth-bytecode-db-svc:5432/<db>
 
 postgres:
-  enabled: false
+  enabled: true
   image: postgres:13.8
   port: 5432
 
@@ -100,16 +110,16 @@ postgres:
   # strategy: Recreate
 
   persistence: true
-  storage: 20Gi
+  storage: 1Gi
 
   resources:
     limits:
       memory:
-        _default: "4Gi"
+        _default: "1Gi"
       cpu:
-        _default: "2"
+        _default: "0.5"
     requests:
       memory:
-        _default: "4Gi"
+        _default: "1Gi"
       cpu:
-        _default: "2"
+        _default: "0.5"
