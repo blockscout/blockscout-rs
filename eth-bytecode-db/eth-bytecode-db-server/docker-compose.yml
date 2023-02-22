@@ -2,8 +2,8 @@ version: "3"
 services:
   database:
     image: postgres:15
-#    restart: always
-    container_name: 'eth_bytecode_db_postgres'
+    restart: always
+    container_name: 'eth-bytecode-db-postgres'
     environment:
       POSTGRES_PASSWORD: ''
       POSTGRES_USER: 'postgres'
@@ -13,8 +13,9 @@ services:
 #      - "7432:5432"
   smart-contract-verifier:
     image: ghcr.io/blockscout/smart-contract-verifier:${SMART_CONTRACT_VERIFIER_DOCKER_TAG:-main}
+    container_name: 'eth-bytecode-db-verifier'
+    restart: always
 #    pull_policy: always
-#    restart: always
     environment:
       SMART_CONTRACT_VERIFIER__SERVER__HTTP__ENABLED: false
       SMART_CONTRACT_VERIFIER__SERVER__GRPC__ENABLED: true
@@ -25,6 +26,8 @@ services:
     build:
       context: ..
       dockerfile: ./eth-bytecode-db-server/Dockerfile
+    container_name: 'eth-bytecode-db'
+    restart: always
     depends_on:
       - database
       - smart-contract-verifier
