@@ -7,14 +7,14 @@ pub struct Migration;
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let sql = r#"
-        CREATE UNIQUE INDEX unique_files_name_and_content_index ON files (name, (md5(content)::uuid));
+            CREATE UNIQUE INDEX unique_files_name_and_content_index ON files (name, (md5(content)::uuid));
         "#;
         crate::from_sql(manager, sql).await
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let sql = r#"
-        DROP INDEX unique_files_name_and_content_index;
+            DROP INDEX unique_files_name_and_content_index;
         "#;
         crate::from_sql(manager, sql).await
     }

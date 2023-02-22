@@ -7,16 +7,14 @@ pub struct Migration;
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let sql = r#"
-        ALTER TABLE bytecodes RENAME COLUMN type TO bytecode_type;
-        ALTER TABLE parts RENAME COLUMN type TO part_type;
+            CREATE UNIQUE INDEX unique_parts_type_and_data_index ON "parts" ("part_type", (md5("data")::uuid));
         "#;
         crate::from_sql(manager, sql).await
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let sql = r#"
-        ALTER TABLE bytecodes RENAME COLUMN bytecode_type TO type;
-        ALTER TABLE parts RENAME COLUMN part_type TO type;
+            DROP INDEX unique_parts_type_and_data_index;
         "#;
         crate::from_sql(manager, sql).await
     }
