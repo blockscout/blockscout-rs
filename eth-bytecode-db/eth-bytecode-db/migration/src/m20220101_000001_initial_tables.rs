@@ -121,4 +121,24 @@ impl MigrationTrait for Migration {
         "#;
         crate::from_sql(manager, sql).await
     }
+
+    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        let sql = r#"
+            DROP TABLE "verified_contracts";
+            DROP TABLE "bytecode_parts";
+            DROP TABLE "parts";
+            DROP TABLE "bytecodes";
+            DROP TABLE "source_files";
+            DROP TABLE "files";
+            DROP TABLE "sources";
+
+            DROP TYPE "verification_type";
+            DROP TYPE "part_type";
+            DROP TYPE "bytecode_type";
+            DROP TYPE "source_type";
+        "#;
+    
+        crate::from_sql(manager, sql).await
+    }
 }
+
