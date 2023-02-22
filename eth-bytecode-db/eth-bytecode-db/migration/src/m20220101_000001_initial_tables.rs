@@ -137,8 +137,7 @@ impl MigrationTrait for Migration {
             DROP TYPE "bytecode_type";
             DROP TYPE "source_type";
         "#;
-    
+
         crate::from_sql(manager, sql).await
     }
 }
-
