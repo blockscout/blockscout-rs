@@ -152,12 +152,12 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # deploy_main:
-  #   if: ${{ github.ref_type == 'branch' && github.ref_name == 'main' }}
-  #   name: Deploy eth-bytecode-db
-  #   needs: push
-  #   uses: blockscout/blockscout-ci-cd/.github/workflows/deploy.yaml@master
-  #   with:
-  #     env_vars: VALUES_DIR=deploy/values/eth-bytecode-db,APP_NAME=bs-stack
-  #     appNamespace: eth-bytecode-db-testing
-  #   secrets: inherit
+  deploy_main:
+     if: ${{ github.ref_type == 'branch' && github.ref_name == 'main' }}
+     name: Deploy eth-bytecode-db
+     needs: push
+     uses: blockscout/blockscout-ci-cd/.github/workflows/deploy.yaml@master
+     with:
+       env_vars: VALUES_DIR=deploy/values/eth-bytecode-db,APP_NAME=bs-stack
+       appNamespace: eth-bytecode-db-testing
+     secrets: inherit
