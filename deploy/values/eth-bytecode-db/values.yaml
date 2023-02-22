@@ -82,7 +82,7 @@ ethBytecodeDb:
     ETH_BYTECODE_DB__SERVER__HTTP__MAX_BODY_SIZE:
       _default: '10485760' # 10 Mb
     ETH_BYTECODE_DB__VERIFIER__URI:
-      _default: grpc.sc-verifier-test.aws-k8s.blockscout.com
+      _default: https://grpc.sc-verifier-test.aws-k8s.blockscout.com
     ETH_BYTECODE_DB__DATABASE__RUN_MIGRATIONS:
       _default: true
     ETH_BYTECODE_DB__TRACING__FORMAT:
