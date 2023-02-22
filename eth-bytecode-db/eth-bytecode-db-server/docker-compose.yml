@@ -33,13 +33,13 @@ services:
       - "8051:8051"
     environment:
       ## optional: if provided, would be used as a configuration file
-#      ETH_BYTECODE_DB__CONFIG: /app/config.toml
+      ETH_BYTECODE_DB__CONFIG: /app/config.toml
       ETH_BYTECODE_DB__VERIFIER__URI: http://smart-contract-verifier:8044
       ETH_BYTECODE_DB__DATABASE__URL: postgres://postgres:@database:5432/eth_bytecode_db
       ETH_BYTECODE_DB__DATABASE__RUN_MIGRATIONS: true
-#    env_file:
-#      ## optional: if provided, would overwrite values from configuration file
-#      - ./config/base.env
-#    volumes:
-#      ## optional: you can use default config or provide custom via file
-#      - ./config/base.toml:/app/config.toml
+    env_file:
+      ## optional: if provided, would overwrite values from configuration file
+      - ./config/base.env
+    volumes:
+      ## optional: you can use default config or provide custom via file
+      - ./config/base.toml:/app/config.toml
