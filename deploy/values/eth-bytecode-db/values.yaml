@@ -1,0 +1,125 @@
+global:
+  env: testing
+
+# enable eth-bytecode-db deploy
+ethBytecodeDb:
+  enabled: true
+  image:
+    _default: ghcr.io/blockscout/eth-bytecode-db:main
+
+  replicas:
+    app: 1
+  docker:
+    port: 80
+    targetPort: 8050
+    metricsPort: 6060
+
+  strategy: RollingUpdate
+
+  service:
+    # ClusterIP, NodePort or LoadBalancer
+    type: ClusterIP
+
+  # enable ingress
+  ingress:
+    enabled: true
+    annotations: {}
+    host:
+      _default: eth-bytecode-db-test.aws-k8s.blockscout.com
+    # enable https
+    tls:
+      enabled: true
+      createSecret: false
+
+  resources:
+    limits:
+      memory:
+        _default: "0.5Gi"
+      cpu:
+        _default: "0.25"
+    requests:
+      memory:
+        _default: "0.5Gi"
+      cpu:
+        _default: "0.25"
+
+  # node label
+  nodeSelector:
+    enabled: true
+    labels:
+      _default:
+        app: blockscout
+
+  # probes
+  livenessProbe:
+    enabled: true
+    path: /health
+    params:
+      initialDelaySeconds: 100
+      periodSeconds: 100
+  readinessProbe:
+    enabled: true
+    path: /health
+    params:
+      initialDelaySeconds: 60
+      periodSeconds: 10
+      timeoutSeconds: 60
+
+  # enable Horizontal Pod Autoscaler
+  hpa:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 10
+    cpuTarget: 90
+
+  # enable service to connect to RDS
+  rds:
+    enabled: false
+    endpoint:
+      _default: <endpoint>.<region>.rds.amazonaws.com
+
+  environment: 
+    ETH_BYTECODE_DB__SERVER__HTTP__MAX_BODY_SIZE:
+      _default: '10485760' # 10 Mb
+    ETH_BYTECODE_DB__VERIFIER__URI:
+      _default: grpc.sc-verifier-test.aws-k8s.blockscout.com
+    ETH_BYTECODE_DB__DATABASE__RUN_MIGRATIONS:
+      _default: true
+    ETH_BYTECODE_DB__TRACING__FORMAT:
+      _default: json
+    ETH_BYTECODE_DB__METRICS__ENABLED:
+      _default: true
+    # ENV:
+    #   _default: 'true'
+    ########### just example
+    ########### put DATABASE envs in secrets.yaml under ethBytecodeDb.environment
+    # DATABASE_URL:
+    # # postgres pod
+    #   _default: postgresql://<user>:<pass>@postgres:5432/<db>
+    # # RDS
+    #   _default: postgresql://<user>:<pass>@db-eth-bytecode-db-svc:5432/<db>
+
+postgres:
+  enabled: true
+  image: postgres:13.8
+  port: 5432
+
+  command: '["docker-entrypoint.sh", "-c"]'
+  args: '["max_connections=200"]'
+
+  # strategy: Recreate
+
+  persistence: true
+  storage: 1Gi
+
+  resources:
+    limits:
+      memory:
+        _default: "1Gi"
+      cpu:
+        _default: "0.5"
+    requests:
+      memory:
+        _default: "1Gi"
+      cpu:
+        _default: "0.5"
