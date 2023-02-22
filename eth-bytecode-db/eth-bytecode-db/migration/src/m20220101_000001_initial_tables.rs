@@ -96,8 +96,6 @@ impl MigrationTrait for Migration {
               "verification_type" verification_type NOT NULL
             );
 
-            CREATE UNIQUE INDEX ON "parts" ("part_type", "data");
-
             COMMENT ON TABLE "sources" IS 'The main table that contains details of source files compilations';
 
             COMMENT ON COLUMN "sources"."abi" IS 'May be null if source type is "Yul"';
