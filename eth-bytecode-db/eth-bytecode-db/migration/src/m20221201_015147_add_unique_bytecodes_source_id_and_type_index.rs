@@ -7,14 +7,14 @@ pub struct Migration;
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let sql = r#"
-        CREATE UNIQUE INDEX unique_bytecodes_source_id_and_type_index ON bytecodes (source_id, bytecode_type);
+            CREATE UNIQUE INDEX unique_bytecodes_source_id_and_type_index ON bytecodes (source_id, bytecode_type);
         "#;
         crate::from_sql(manager, sql).await
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let sql = r#"
-        DROP INDEX unique_bytecodes_source_id_and_type_index;
+            DROP INDEX unique_bytecodes_source_id_and_type_index;
         "#;
         crate::from_sql(manager, sql).await
     }
