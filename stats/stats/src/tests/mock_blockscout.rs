@@ -139,7 +139,7 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
         )
         .collect();
 
-    let addr_balance_daily: Vec<_> = ["2022-11-09", "2022-11-10", "2022-11-11"]
+    let addr_balance_daily: Vec<_> = ["2022-11-08", "2022-11-09", "2022-11-10", "2022-11-11"]
         .into_iter()
         .map(|d| NaiveDate::from_str(d).unwrap())
         .enumerate()
@@ -150,7 +150,9 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
                 .into_iter()
                 .enumerate()
                 .map(|(j, addr)| {
-                    let value = if j == addrs.len() - 1 {
+                    let value = if i == 0 {
+                        None
+                    } else if j == addrs.len() - 1 {
                         Some(cur_sum)
                     } else if (i + j) % 5 != 0 {
                         let value = cur_sum / (7 - i as i128);

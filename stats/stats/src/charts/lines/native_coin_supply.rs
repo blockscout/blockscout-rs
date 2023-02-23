@@ -25,33 +25,41 @@ impl ChartPartialUpdater for NativeCoinSupply {
             Some(row) => Statement::from_sql_and_values(
                 DbBackend::Postgres,
                 r#"
-                    SELECT
-                        day as date,
-                        (sum(
-                            CASE 
-                                WHEN address_hash = '\x0000000000000000000000000000000000000000' THEN -value
-                                ELSE value
-                            END
-                        ) / $1)::float AS value
-                    FROM address_coin_balances_daily
-                    WHERE day > $2
-                    GROUP BY day;
+                    SELECT date, value FROM 
+                    (
+                        SELECT
+                            day as date,
+                            (sum(
+                                CASE 
+                                    WHEN address_hash = '\x0000000000000000000000000000000000000000' THEN -value
+                                    ELSE value
+                                END
+                            ) / $1)::float AS value
+                        FROM address_coin_balances_daily
+                        WHERE day > $2
+                        GROUP BY day
+                    ) as intermediate
+                    WHERE value is not NULL;
                 "#,
                 vec![ETH.into(), row.date.into()],
             ),
             None => Statement::from_sql_and_values(
                 DbBackend::Postgres,
                 r#"
-                    SELECT
-                        day as date,
-                        (sum(
-                            CASE 
-                                WHEN address_hash = '\x0000000000000000000000000000000000000000' THEN -value
-                                ELSE value
-                            END
-                        ) / $1)::float AS value
-                    FROM address_coin_balances_daily
-                    GROUP BY day;
+                    SELECT date, value FROM 
+                    (
+                        SELECT
+                            day as date,
+                            (sum(
+                                CASE 
+                                    WHEN address_hash = '\x0000000000000000000000000000000000000000' THEN -value
+                                    ELSE value
+                                END
+                            ) / $1)::float AS value
+                        FROM address_coin_balances_daily
+                        GROUP BY day
+                    ) as intermediate
+                    WHERE value is not NULL;
                 "#,
                 vec![ETH.into()],
             ),
@@ -100,9 +108,9 @@ mod tests {
             "update_native_coin_supply",
             chart,
             vec![
-                ("2022-11-09", "10000"),
-                ("2022-11-10", "6666.666666666667"),
-                ("2022-11-11", "6000"),
+                ("2022-11-09", "6666.666666666667"),
+                ("2022-11-10", "6000"),
+                ("2022-11-11", "5000"),
             ],
         )
         .await;
