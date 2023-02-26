@@ -6,32 +6,6 @@ scVerifier:
   image:
     _default: ghcr.io/blockscout/smart-contract-verifier:main
 
-  replicas:
-    app: 1
-  ports:
-    http:
-      number: 8050
-      protocol: TCP
-      host: 'http.'
-      path: "/"
-      pathType: Prefix
-    grpc:
-      number: 8051
-      protocol: TCP
-      host: 'grpc.'
-      path: "/"
-      pathType: Prefix
-    metrics:
-      number: 6060
-      protocol: TCP
-      host: "metrics."
-      path: "/metrics"
-      pathType: Exact
-
-  service:
-    # ClusterIP, NodePort or LoadBalancer
-    type: ClusterIP
-
   # enable ingress
   ingress:
     enabled: true
@@ -52,24 +26,6 @@ scVerifier:
         _default: "0.25Gi"
       cpu:
         _default: "0.3"
-
-  # node label
-  nodeSelector:
-    enabled: true
-    app: blockscout
-
-  # probes
-  livenessProbe:
-    enabled: true
-    path: /health?service=
-  readinessProbe:
-    enabled: true
-    path: /health?service=
-
-  hpa:
-    minReplicas: 1
-    maxReplicas: 10
-    cpuTarget: 90
 
   environment:
     SMART_CONTRACT_VERIFIER__SERVER__HTTP__ADDR:
