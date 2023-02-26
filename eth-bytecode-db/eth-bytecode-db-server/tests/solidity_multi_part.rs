@@ -83,3 +83,28 @@ async fn test_verify_then_search(service: MockSolidityVerifierService) {
     )
     .await;
 }
+
+#[rstest]
+#[tokio::test]
+#[timeout(std::time::Duration::from_secs(60))]
+#[ignore = "Needs database to run"]
+async fn test_verify_same_source_twice(service: MockSolidityVerifierService) {
+    let default_request = VerifySolidityMultiPartRequest {
+        bytecode: "".to_string(),
+        bytecode_type: BytecodeType::CreationInput.into(),
+        compiler_version: "".to_string(),
+        evm_version: None,
+        optimization_runs: None,
+        source_files: Default::default(),
+        libraries: Default::default(),
+    };
+    let source_type = verification::SourceType::Solidity;
+    test_cases::test_verify_same_source_twice(
+        TEST_SUITE_NAME,
+        service,
+        ROUTE,
+        default_request,
+        source_type,
+    )
+    .await;
+}

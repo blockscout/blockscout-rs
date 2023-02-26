@@ -242,4 +242,93 @@ pub mod test_cases {
             "Sources returned on verification and search differ"
         );
     }
+
+    pub async fn test_verify_same_source_twice<Service, Request>(
+        test_suite_name: &str,
+        service: Service,
+        route: &str,
+        verification_request: Request,
+        source_type: SourceType,
+    ) where
+        Service: VerifierService<smart_contract_verifier_v2::VerifyResponse>,
+        Request: Serialize,
+    {
+        let db = init_db(test_suite_name, "test_verify_then_search").await;
+
+        let test_data = test_input_data::basic(source_type, MatchType::Full);
+        let creation_input = test_data.creation_input().unwrap();
+
+        let db_url = db.db_url();
+        let verifier_addr = init_verifier_server(service, test_data.verifier_response).await;
+
+        let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
+
+        let response = reqwest::Client::new()
+            .post(eth_bytecode_db_base.join(route).unwrap())
+            .json(&verification_request)
+            .send()
+            .await
+            .expect("Failed to send verification request");
+
+        let verification_response: eth_bytecode_db_v2::VerifyResponse = response
+            .json()
+            .await
+            .expect("Verification response deserialization failed");
+
+        let response_2 = reqwest::Client::new()
+            .post(eth_bytecode_db_base.join(route).unwrap())
+            .json(&verification_request)
+            .send()
+            .await
+            .expect("Failed to send verification request");
+
+        let verification_response_2: eth_bytecode_db_v2::VerifyResponse = response_2
+            .json()
+            .await
+            .expect("Verification response deserialization failed");
+
+        assert_eq!(
+            verification_response, verification_response_2,
+            "Verification responses are different"
+        );
+
+        let creation_input_search_response: eth_bytecode_db_v2::SearchSourcesResponse = {
+            let request = {
+                eth_bytecode_db_v2::SearchSourcesRequest {
+                    bytecode: creation_input,
+                    bytecode_type: eth_bytecode_db_v2::BytecodeType::CreationInput.into(),
+                }
+            };
+
+            let response = reqwest::Client::new()
+                .post(eth_bytecode_db_base.join(DB_SEARCH_ROUTE).unwrap())
+                .json(&request)
+                .send()
+                .await
+                .expect("Failed to send creation input search request");
+            // Assert that status code is success
+            if !response.status().is_success() {
+                let status = response.status();
+                let message = response.text().await.expect("Read body as text");
+                panic!(
+                    "Creation input search: invalid status code (success expected). Status: {status}. Message: {message}"
+                )
+            }
+            response
+                .json()
+                .await
+                .expect("Creation input search response deserialization failed")
+        };
+
+        assert_eq!(
+            1,
+            creation_input_search_response.sources.len(),
+            "Invalid number of sources returned"
+        );
+        assert_eq!(
+            verification_response.source.unwrap(),
+            creation_input_search_response.sources[0],
+            "Sources returned on verification and search differ"
+        );
+    }
 }
