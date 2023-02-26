@@ -79,4 +79,3 @@ jobs:
 
       - name: cargo clippy
         run: cargo clippy --all --all-targets --all-features -- -D warnings
-
