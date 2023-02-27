@@ -6,7 +6,8 @@ use entity::{
 };
 use sea_orm::{
     entity::prelude::ColumnTrait, sea_query::OnConflict, ActiveModelTrait, ActiveValue::Set,
-    DatabaseConnection, DatabaseTransaction, EntityTrait, QueryFilter, TransactionTrait,
+    ConnectionTrait, DatabaseBackend, DatabaseConnection, DatabaseTransaction, DbErr, EntityTrait,
+    QueryFilter, Statement, TransactionTrait,
 };
 use std::collections::BTreeMap;
 
@@ -23,11 +24,14 @@ pub(crate) async fn insert_data(
     let creation_input_parts = source_response.creation_input_parts.clone();
     let deployed_bytecode_parts = source_response.deployed_bytecode_parts.clone();
 
-    let source = insert_source_details(&txn, source_response)
+    let files = insert_files(&txn, source_files.clone())
+        .await
+        .context("insert files")?;
+    let source = insert_source_details(&txn, source_response, files.as_ref())
         .await
         .context("insert source details")?;
 
-    insert_source_files(&txn, &source, source_files)
+    insert_source_files(&txn, &source, files.as_ref())
         .await
         .context("insert source files")?;
 
@@ -78,39 +82,12 @@ pub(crate) async fn insert_verified_contract_data(
     Ok(())
 }
 
-async fn insert_source_details(
+async fn insert_files(
     txn: &DatabaseTransaction,
-    source: types::Source,
-) -> Result<sources::Model, anyhow::Error> {
-    let abi = match source.abi {
-        None => None,
-        Some(abi) => serde_json::from_str(&abi).context("deserialize abi")?,
-    };
-    let source = sources::ActiveModel {
-        source_type: Set(source.source_type.into()),
-        compiler_version: Set(source.compiler_version),
-        compiler_settings: Set(serde_json::from_str(&source.compiler_settings)
-            .context("deserialize compiler settings")?),
-        file_name: Set(source.file_name),
-        contract_name: Set(source.contract_name),
-        raw_creation_input: Set(source.raw_creation_input),
-        raw_deployed_bytecode: Set(source.raw_deployed_bytecode),
-        abi: Set(abi),
-        ..Default::default()
-    }
-    .insert(txn)
-    .await
-    .context("insert into \"sources\"")?;
-
-    Ok(source)
-}
-
-async fn insert_source_files(
-    txn: &DatabaseTransaction,
-    source_model: &sources::Model,
-    source_files: BTreeMap<String, String>,
-) -> Result<(), anyhow::Error> {
-    for (name, content) in source_files {
+    files: BTreeMap<String, String>,
+) -> Result<Vec<files::Model>, anyhow::Error> {
+    let mut result = Vec::new();
+    for (name, content) in files {
         let file = {
             let file = files::Entity::find()
                 .filter(files::Column::Name.eq(name.clone()))
@@ -131,21 +108,113 @@ async fn insert_source_files(
                 .context("insert into \"files\"")?,
             }
         };
+        result.push(file);
+    }
 
+    Ok(result)
+}
+
+async fn insert_source_details(
+    txn: &DatabaseTransaction,
+    source: types::Source,
+    file_models: &[files::Model],
+) -> Result<sources::Model, anyhow::Error> {
+    let abi = match source.abi {
+        None => None,
+        Some(abi) => serde_json::from_str(&abi).context("deserialize abi")?,
+    };
+
+    let file_ids = {
+        let mut file_ids = file_models.iter().map(|file| file.id).collect::<Vec<_>>();
+        file_ids.sort();
+        file_ids.dedup();
+        file_ids
+    };
+    // Results in `SELECT md5(array_agg(x)::text) FROM (VALUES (1), (2), (3)) t(x).
+    // Without t() `array_agg(x)::text` results in {(1),(2),(3)} instead of {1,2,3}.
+    let file_ids_hash_query = format!(
+        "SELECT md5(array_agg(x)::text)::uuid FROM (VALUES {}) t(x)",
+        file_ids
+            .iter()
+            .map(|i| format!("({i})"))
+            .collect::<Vec<_>>()
+            .join(",")
+    );
+    let file_ids_hash: sea_orm::prelude::Uuid = txn
+        .query_one(Statement::from_string(
+            DatabaseBackend::Postgres,
+            file_ids_hash_query,
+        ))
+        .await
+        .context("calculate hash of file ids")?
+        .ok_or(anyhow::anyhow!(
+            "selection of file ids resulted in empty result"
+        ))
+        .context("calculate hash of file ids")?
+        .try_get("", "md5")
+        .context("calculate hash of file ids")?;
+
+    let source = {
+        let compiler_settings: sea_orm::prelude::Json =
+            serde_json::from_str(&source.compiler_settings)
+                .context("deserialize compiler settings")?;
+
+        let db_source = sources::Entity::find()
+            .filter(sources::Column::CompilerVersion.eq(source.compiler_version.clone()))
+            .filter(sources::Column::CompilerSettings.eq(compiler_settings.clone()))
+            .filter(sources::Column::FileName.eq(source.file_name.clone()))
+            .filter(sources::Column::ContractName.eq(source.contract_name.clone()))
+            .filter(sources::Column::FileIdsHash.eq(file_ids_hash))
+            .one(txn)
+            .await
+            .context("select from \"sources\" by \"compiler_version\", \"compiler_settings\", \"file_name\", \"contract_name\", and \"file_ids_hash\"")?;
+
+        match db_source {
+            Some(source) => source,
+            None => sources::ActiveModel {
+                source_type: Set(source.source_type.into()),
+                compiler_version: Set(source.compiler_version),
+                compiler_settings: Set(compiler_settings),
+                file_name: Set(source.file_name),
+                contract_name: Set(source.contract_name),
+                raw_creation_input: Set(source.raw_creation_input),
+                raw_deployed_bytecode: Set(source.raw_deployed_bytecode),
+                abi: Set(abi),
+                file_ids_hash: Set(file_ids_hash),
+                ..Default::default()
+            }
+            .insert(txn)
+            .await
+            .context("insert into \"sources\"")?,
+        }
+    };
+
+    Ok(source)
+}
+
+async fn insert_source_files(
+    txn: &DatabaseTransaction,
+    source_model: &sources::Model,
+    file_models: &[files::Model],
+) -> Result<(), anyhow::Error> {
+    for file in file_models {
         let source_file = source_files::ActiveModel {
             source_id: Set(source_model.id),
             file_id: Set(file.id),
             ..Default::default()
         };
-        source_files::Entity::insert(source_file)
+        let result = source_files::Entity::insert(source_file)
             .on_conflict(
                 OnConflict::columns([source_files::Column::SourceId, source_files::Column::FileId])
                     .do_nothing()
                     .to_owned(),
             )
             .exec(txn)
-            .await
-            .context("insert into \"source_files\"")?;
+            .await;
+        match result {
+            Ok(_) | Err(DbErr::RecordNotInserted) => (),
+            Err(err) => return Err(err).context("insert into \"source_files\""),
+        }
     }
 
     Ok(())
@@ -202,15 +271,27 @@ async fn insert_bytecodes(
             }
         };
 
-        bytecode_parts::ActiveModel {
+        let bytecode_part = bytecode_parts::ActiveModel {
             bytecode_id: Set(bytecode.id),
             order: Set(order as i64),
             part_id: Set(part.id),
             ..Default::default()
+        };
+        let result = bytecode_parts::Entity::insert(bytecode_part)
+            .on_conflict(
+                OnConflict::columns([
+                    bytecode_parts::Column::BytecodeId,
+                    bytecode_parts::Column::Order,
+                ])
+                .do_nothing()
+                .to_owned(),
+            )
+            .exec(txn)
+            .await;
+        match result {
+            Ok(_) | Err(DbErr::RecordNotInserted) => (),
+            Err(err) => return Err(err).context("insert into \"bytecode_parts\""),
         }
-        .insert(txn)
-        .await
-        .context("insert into \"bytecode_parts\"")?;
     }
 
     Ok(())

@@ -41,7 +41,8 @@ impl MigrationTrait for Migration {
               "contract_name" varchar NOT NULL,
               "abi" jsonb,
               "raw_creation_input" bytea NOT NULL,
-              "raw_deployed_bytecode" bytea NOT NULL
+              "raw_deployed_bytecode" bytea NOT NULL,
+              "file_ids_hash" uuid NOT NULL
             );
 
             CREATE TABLE "files" (
