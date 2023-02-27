@@ -33,9 +33,10 @@ jobs:
           override: true
 
       - name: Rust cache
-        uses: Swatinem/rust-cache@v1
+        uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
+          workspaces: libs -> target
 
       - name: Unit tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --workspace --all-features --lib --bins -- --nocapture
@@ -68,13 +69,13 @@ jobs:
           components: rustfmt, clippy
           override: true
 
-      - uses: Swatinem/rust-cache@v1
+      - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
+          workspaces: libs -> target
 
       - name: cargo fmt
         run: cargo fmt --all -- --check --config imports_granularity=Crate
 
       - name: cargo clippy
         run: cargo clippy --all --all-targets --all-features -- -D warnings
-
