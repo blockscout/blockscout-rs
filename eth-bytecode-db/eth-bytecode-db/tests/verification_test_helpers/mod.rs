@@ -458,3 +458,115 @@ pub async fn test_historical_data_is_added_into_database<Service, Request>(
         "Invalid verification type"
     );
 }
+
+pub async fn test_verification_of_same_source_results_stored_once<Service, Request>(
+    db_prefix: &str,
+    service: Service,
+) where
+    Request: Clone,
+    Service: VerifierService<Request>,
+{
+    let source_type = service.source_type();
+    let db = init_db(
+        db_prefix,
+        "test_verification_of_same_source_results_stored_once",
+    )
+    .await;
+    let input_data = test_input_data::input_data_1(service.generate_request(1), source_type);
+    let client =
+        start_server_and_init_client(db.client().clone(), service, vec![input_data.clone()]).await;
+
+    let source = Service::verify(client.clone(), input_data.request.clone())
+        .await
+        .expect("Verification failed");
+
+    let source_2 = Service::verify(client, input_data.request)
+        .await
+        .expect("Duplicative verification failed");
+
+    assert_eq!(
+        source, source_2,
+        "The same requests must return the same responses"
+    );
+
+    let db_client = db.client();
+    let db_client = db_client.as_ref();
+
+    /* Assert inserted into "sources" */
+
+    let sources = sources::Entity::find()
+        .all(db_client)
+        .await
+        .expect("Error while reading source");
+    assert_eq!(
+        1,
+        sources.len(),
+        "Invalid number of sources returned. Expected 1, actual {}",
+        sources.len()
+    );
+
+    /* Assert inserted into "files" */
+
+    let files = files::Entity::find()
+        .all(db_client)
+        .await
+        .expect("Error while reading files");
+    assert_eq!(
+        2,
+        files.len(),
+        "Invalid number of files returned. Expected 2, actual {}",
+        files.len()
+    );
+
+    /* Assert inserted into "source_files" */
+
+    let source_files = source_files::Entity::find()
+        .all(db_client)
+        .await
+        .expect("Error while reading source files");
+    assert_eq!(
+        2,
+        source_files.len(),
+        "Invalid number of source files returned. Expected 2, actual {}",
+        source_files.len()
+    );
+
+    /* Assert inserted into "bytecodes" */
+
+    let bytecodes = bytecodes::Entity::find()
+        .all(db_client)
+        .await
+        .expect("Error while reading bytecodes");
+    assert_eq!(
+        2,
+        bytecodes.len(),
+        "Invalid number of bytecodes returned. Expected 2, actual {}",
+        bytecodes.len()
+    );
+
+    /* Assert inserted into parts */
+
+    let parts = parts::Entity::find()
+        .all(db_client)
+        .await
+        .expect("Error while reading parts");
+    assert_eq!(
+        4,
+        parts.len(),
+        "Invalid number of parts returned. Expected 4, actual {}",
+        parts.len()
+    );
+
+    /* Assert inserted into bytecode_parts */
+
+    let bytecode_parts = bytecode_parts::Entity::find()
+        .all(db_client)
+        .await
+        .expect("Error while reading bytecode parts");
+    assert_eq!(
+        4,
+        bytecode_parts.len(),
+        "Invalid number of bytecode parts returned. Expected 4, actual {}",
+        bytecode_parts.len()
+    );
+}
