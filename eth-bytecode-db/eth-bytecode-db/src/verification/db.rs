@@ -27,30 +27,33 @@ pub(crate) async fn insert_data(
     let files = insert_files(&txn, source_files.clone())
         .await
         .context("insert files")?;
-    let source = insert_source_details(&txn, source_response, files.as_ref())
+    let (source, inserted) = insert_source_details(&txn, source_response, files.as_ref())
         .await
         .context("insert source details")?;
 
-    insert_source_files(&txn, &source, files.as_ref())
-        .await
-        .context("insert source files")?;
+    // If no new source has been inserted, no new source_files or bytecodes to be added.
+    if inserted {
+        insert_source_files(&txn, &source, files.as_ref())
+            .await
+            .context("insert source files")?;
 
-    insert_bytecodes(
-        &txn,
-        source.id,
-        creation_input_parts,
-        types::BytecodeType::CreationInput,
-    )
-    .await
-    .context("insert creation input")?;
-    insert_bytecodes(
-        &txn,
-        source.id,
-        deployed_bytecode_parts,
-        types::BytecodeType::DeployedBytecode,
-    )
-    .await
-    .context("insert deployed bytecode")?;
+        insert_bytecodes(
+            &txn,
+            source.id,
+            creation_input_parts,
+            types::BytecodeType::CreationInput,
+        )
+        .await
+        .context("insert creation input")?;
+        insert_bytecodes(
+            &txn,
+            source.id,
+            deployed_bytecode_parts,
+            types::BytecodeType::DeployedBytecode,
+        )
+        .await
+        .context("insert deployed bytecode")?;
+    }
 
     txn.commit().await.context("commit transaction")?;
 
@@ -118,7 +121,7 @@ async fn insert_source_details(
     txn: &DatabaseTransaction,
     source: types::Source,
     file_models: &[files::Model],
-) -> Result<sources::Model, anyhow::Error> {
+) -> Result<(sources::Model, bool), anyhow::Error> {
     let abi = match source.abi {
         None => None,
         Some(abi) => serde_json::from_str(&abi).context("deserialize abi")?,
@@ -154,7 +157,7 @@ async fn insert_source_details(
         .try_get("", "md5")
         .context("calculate hash of file ids")?;
 
-    let source = {
+    let (source, inserted) = {
         let compiler_settings: sea_orm::prelude::Json =
             serde_json::from_str(&source.compiler_settings)
                 .context("deserialize compiler settings")?;
@@ -170,26 +173,29 @@ async fn insert_source_details(
             .context("select from \"sources\" by \"compiler_version\", \"compiler_settings\", \"file_name\", \"contract_name\", and \"file_ids_hash\"")?;
 
         match db_source {
-            Some(source) => source,
-            None => sources::ActiveModel {
-                source_type: Set(source.source_type.into()),
-                compiler_version: Set(source.compiler_version),
-                compiler_settings: Set(compiler_settings),
-                file_name: Set(source.file_name),
-                contract_name: Set(source.contract_name),
-                raw_creation_input: Set(source.raw_creation_input),
-                raw_deployed_bytecode: Set(source.raw_deployed_bytecode),
-                abi: Set(abi),
-                file_ids_hash: Set(file_ids_hash),
-                ..Default::default()
+            Some(source) => (source, false),
+            None => {
+                let source = sources::ActiveModel {
+                    source_type: Set(source.source_type.into()),
+                    compiler_version: Set(source.compiler_version),
+                    compiler_settings: Set(compiler_settings),
+                    file_name: Set(source.file_name),
+                    contract_name: Set(source.contract_name),
+                    raw_creation_input: Set(source.raw_creation_input),
+                    raw_deployed_bytecode: Set(source.raw_deployed_bytecode),
+                    abi: Set(abi),
+                    file_ids_hash: Set(file_ids_hash),
+                    ..Default::default()
+                }
+                .insert(txn)
+                .await
+                .context("insert into \"sources\"")?;
+                (source, true)
             }
-            .insert(txn)
-            .await
-            .context("insert into \"sources\"")?,
         }
     };
 
-    Ok(source)
+    Ok((source, inserted))
 }
 
 async fn insert_source_files(
