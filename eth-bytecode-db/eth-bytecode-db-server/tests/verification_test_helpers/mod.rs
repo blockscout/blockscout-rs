@@ -253,7 +253,7 @@ pub mod test_cases {
         Service: VerifierService<smart_contract_verifier_v2::VerifyResponse>,
         Request: Serialize,
     {
-        let db = init_db(test_suite_name, "test_verify_then_search").await;
+        let db = init_db(test_suite_name, "test_verify_same_source_twice").await;
 
         let test_data = test_input_data::basic(source_type, MatchType::Full);
         let creation_input = test_data.creation_input().unwrap();
