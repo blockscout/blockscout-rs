@@ -7,7 +7,7 @@ use entity::{
 use sea_orm::{
     entity::prelude::ColumnTrait,
     prelude::{Json, Uuid},
-    sea_query::{ArrayType, OnConflict},
+    sea_query::OnConflict,
     ActiveModelTrait,
     ActiveValue::Set,
     ConnectionTrait, DatabaseBackend, DatabaseConnection, DatabaseTransaction, DbErr, EntityTrait,
@@ -131,20 +131,15 @@ async fn insert_source_details(
         .map(|abi| serde_json::from_str(&abi).context("deserialize abi"))
         .transpose()?;
 
+    // To ensure uniqueness and ordering properties
     let file_ids: BTreeSet<_> = file_models.iter().map(|file| file.id).collect();
 
     // Results in `SELECT md5({1,2,3}::text)
     let file_ids_hash_query = Statement::from_sql_and_values(
         DatabaseBackend::Postgres,
         "SELECT md5($1::text)::uuid",
-        [sea_orm::Value::Array(
-            ArrayType::BigInt,
-            Some(Box::new(
-                file_ids
-                    .into_iter()
-                    .map(|i| sea_orm::Value::BigInt(Some(i)))
-                    .collect(),
-            )),
+        [sea_orm::Value::from(
+            file_ids.into_iter().collect::<Vec<_>>(),
         )],
     );
     let file_ids_hash: Uuid = txn
@@ -203,24 +198,25 @@ async fn insert_source_files(
     source_model: &sources::Model,
     file_models: &[files::Model],
 ) -> Result<(), anyhow::Error> {
-    for file in file_models {
-        let source_file = source_files::ActiveModel {
+    let active_models = file_models
+        .iter()
+        .map(|file| source_files::ActiveModel {
             source_id: Set(source_model.id),
             file_id: Set(file.id),
             ..Default::default()
-        };
-        let result = source_files::Entity::insert(source_file)
-            .on_conflict(
-                OnConflict::columns([source_files::Column::SourceId, source_files::Column::FileId])
-                    .do_nothing()
-                    .to_owned(),
-            )
-            .exec(txn)
-            .await;
-        match result {
-            Ok(_) | Err(DbErr::RecordNotInserted) => (),
-            Err(err) => return Err(err).context("insert into \"source_files\""),
-        }
+        })
+        .collect::<Vec<_>>();
+    let result = source_files::Entity::insert_many(active_models)
+        .on_conflict(
+            OnConflict::columns([source_files::Column::SourceId, source_files::Column::FileId])
+                .do_nothing()
+                .to_owned(),
+        )
+        .exec(txn)
+        .await;
+    match result {
+        Ok(_) | Err(DbErr::RecordNotInserted) => (),
+        Err(err) => return Err(err).context("insert into \"source_files\""),
     }
 
     Ok(())
