@@ -18,6 +18,7 @@ pub struct Model {
     pub abi: Option<Json>,
     pub raw_creation_input: Vec<u8>,
     pub raw_deployed_bytecode: Vec<u8>,
+    pub file_ids_hash: Uuid,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

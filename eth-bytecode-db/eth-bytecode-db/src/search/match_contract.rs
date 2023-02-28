@@ -146,6 +146,7 @@ mod tests {
                 .unwrap(),
             created_at: Default::default(),
             updated_at: Default::default(),
+            file_ids_hash: Default::default(),
         }
     }
 

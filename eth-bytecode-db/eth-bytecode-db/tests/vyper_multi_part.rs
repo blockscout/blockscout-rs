@@ -97,3 +97,13 @@ async fn test_historical_data_is_added_into_database(service: MockVyperVerifierS
     )
     .await;
 }
+
+#[rstest]
+#[tokio::test]
+#[ignore = "Needs database to run"]
+async fn test_verification_of_same_source_results_stored_once(service: MockVyperVerifierService) {
+    verification_test_helpers::test_verification_of_same_source_results_stored_once(
+        DB_PREFIX, service,
+    )
+    .await;
+}
