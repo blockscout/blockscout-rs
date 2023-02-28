@@ -19,6 +19,7 @@ sea-orm = { version = "0.11", features = [
     "sqlx-postgres",
     "runtime-tokio-rustls",
     "macros",
+    "postgres-array",
 ] }
 futures = "0.3"
 semver = "1.0"

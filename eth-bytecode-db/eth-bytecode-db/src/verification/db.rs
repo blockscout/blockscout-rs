@@ -5,11 +5,15 @@ use entity::{
     verified_contracts,
 };
 use sea_orm::{
-    entity::prelude::ColumnTrait, sea_query::OnConflict, ActiveModelTrait, ActiveValue::Set,
+    entity::prelude::ColumnTrait,
+    prelude::{Json, Uuid},
+    sea_query::{ArrayType, OnConflict},
+    ActiveModelTrait,
+    ActiveValue::Set,
     ConnectionTrait, DatabaseBackend, DatabaseConnection, DatabaseTransaction, DbErr, EntityTrait,
     QueryFilter, Statement, TransactionTrait,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 pub(crate) async fn insert_data(
     db_client: &DatabaseConnection,
@@ -122,32 +126,29 @@ async fn insert_source_details(
     source: types::Source,
     file_models: &[files::Model],
 ) -> Result<(sources::Model, bool), anyhow::Error> {
-    let abi = match source.abi {
-        None => None,
-        Some(abi) => serde_json::from_str(&abi).context("deserialize abi")?,
-    };
+    let abi = source
+        .abi
+        .map(|abi| serde_json::from_str(&abi).context("deserialize abi"))
+        .transpose()?;
 
-    let file_ids = {
-        let mut file_ids = file_models.iter().map(|file| file.id).collect::<Vec<_>>();
-        file_ids.sort();
-        file_ids.dedup();
-        file_ids
-    };
-    // Results in `SELECT md5(array_agg(x)::text) FROM (VALUES (1), (2), (3)) t(x).
-    // Without t() `array_agg(x)::text` results in {(1),(2),(3)} instead of {1,2,3}.
-    let file_ids_hash_query = format!(
-        "SELECT md5(array_agg(x)::text)::uuid FROM (VALUES {}) t(x)",
-        file_ids
-            .iter()
-            .map(|i| format!("({i})"))
-            .collect::<Vec<_>>()
-            .join(",")
+    let file_ids: BTreeSet<_> = file_models.iter().map(|file| file.id).collect();
+
+    // Results in `SELECT md5({1,2,3}::text)
+    let file_ids_hash_query = Statement::from_sql_and_values(
+        DatabaseBackend::Postgres,
+        "SELECT md5($1::text)::uuid",
+        [sea_orm::Value::Array(
+            ArrayType::BigInt,
+            Some(Box::new(
+                file_ids
+                    .into_iter()
+                    .map(|i| sea_orm::Value::BigInt(Some(i)))
+                    .collect(),
+            )),
+        )],
     );
-    let file_ids_hash: sea_orm::prelude::Uuid = txn
-        .query_one(Statement::from_string(
-            DatabaseBackend::Postgres,
-            file_ids_hash_query,
-        ))
+    let file_ids_hash: Uuid = txn
+        .query_one(file_ids_hash_query)
         .await
         .context("calculate hash of file ids")?
         .ok_or(anyhow::anyhow!(
@@ -158,9 +159,8 @@ async fn insert_source_details(
         .context("calculate hash of file ids")?;
 
     let (source, inserted) = {
-        let compiler_settings: sea_orm::prelude::Json =
-            serde_json::from_str(&source.compiler_settings)
-                .context("deserialize compiler settings")?;
+        let compiler_settings: Json = serde_json::from_str(&source.compiler_settings)
+            .context("deserialize compiler settings")?;
 
         let db_source = sources::Entity::find()
             .filter(sources::Column::CompilerVersion.eq(source.compiler_version.clone()))
