@@ -78,7 +78,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let db_connection = Arc::new(sea_orm::Database::connect(settings.database.url).await?);
     if settings.database.run_migrations {
-        Migrator::up(&db_connection, None).await?;
+        Migrator::up(db_connection.as_ref(), None).await?;
     }
 
     let client = Client::new_arc(db_connection.clone(), settings.verifier.uri).await?;

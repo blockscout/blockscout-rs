@@ -17,7 +17,7 @@ async-trait = "0.1"
 blockscout-display-bytes = "1.0"
 blockscout-service-launcher = "0.6"
 config = "0.13"
-sea-orm = "0.10"
+sea-orm = "0.11"
 serde = "1.0"
 serde_with = "2.1"
 tokio = { version = "1.23", features = [ "rt-multi-thread", "macros" ] }
