@@ -101,11 +101,7 @@ async fn insert_files(
             ..Default::default()
         });
         match files::Entity::insert_many(active_models)
-            .on_conflict(
-                OnConflict::columns([files::Column::Name, files::Column::Content])
-                    .do_nothing()
-                    .to_owned(),
-            )
+            .on_conflict(OnConflict::new().do_nothing().to_owned())
             .exec(txn)
             .await
         {
@@ -178,14 +174,7 @@ async fn insert_source_details(
             ..Default::default()
         };
         let result = sources::Entity::insert(active_model)
-            .on_conflict(
-                OnConflict::columns([
-                    sources::Column::CompilerVersion,
-                    // sources::Column::CompilerSettings, sources::Column::FileName, sources::Column::ContractName, sources::Column::FileIdsHash
-                ])
-                .do_nothing()
-                .to_owned(),
-            )
+            .on_conflict(OnConflict::new().do_nothing().to_owned())
             .exec(txn)
             .await;
 
@@ -234,11 +223,7 @@ async fn insert_source_files(
         ..Default::default()
     });
     let result = source_files::Entity::insert_many(active_models)
-        .on_conflict(
-            OnConflict::columns([source_files::Column::SourceId, source_files::Column::FileId])
-                .do_nothing()
-                .to_owned(),
-        )
+        .on_conflict(OnConflict::new().do_nothing().to_owned())
         .exec(txn)
         .await;
     match result {
@@ -263,11 +248,7 @@ async fn insert_bytecodes(
             ..Default::default()
         };
         match bytecodes::Entity::insert(active_model)
-            .on_conflict(
-                OnConflict::columns([bytecodes::Column::SourceId, bytecodes::Column::BytecodeType])
-                    .do_nothing()
-                    .to_owned(),
-            )
+            .on_conflict(OnConflict::new().do_nothing().to_owned())
             .exec(txn)
             .await
         {
@@ -301,11 +282,7 @@ async fn insert_bytecodes(
                 ..Default::default()
             };
             match parts::Entity::insert(active_model)
-                .on_conflict(
-                    OnConflict::columns([parts::Column::Data, parts::Column::PartType])
-                        .do_nothing()
-                        .to_owned(),
-                )
+                .on_conflict(OnConflict::new().do_nothing().to_owned())
                 .exec(txn)
                 .await
             {
@@ -336,14 +313,7 @@ async fn insert_bytecodes(
             ..Default::default()
         };
         let result = bytecode_parts::Entity::insert(bytecode_part)
-            .on_conflict(
-                OnConflict::columns([
-                    bytecode_parts::Column::BytecodeId,
-                    bytecode_parts::Column::Order,
-                ])
-                .do_nothing()
-                .to_owned(),
-            )
+            .on_conflict(OnConflict::new().do_nothing().to_owned())
             .exec(txn)
             .await;
         match result {
