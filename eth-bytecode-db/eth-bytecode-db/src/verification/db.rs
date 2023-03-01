@@ -228,14 +228,11 @@ async fn insert_source_files(
     source_model: &sources::Model,
     file_models: &[files::Model],
 ) -> Result<(), anyhow::Error> {
-    let active_models = file_models
-        .iter()
-        .map(|file| source_files::ActiveModel {
-            source_id: Set(source_model.id),
-            file_id: Set(file.id),
-            ..Default::default()
-        })
-        .collect::<Vec<_>>();
+    let active_models = file_models.iter().map(|file| source_files::ActiveModel {
+        source_id: Set(source_model.id),
+        file_id: Set(file.id),
+        ..Default::default()
+    });
     let result = source_files::Entity::insert_many(active_models)
         .on_conflict(
             OnConflict::columns([source_files::Column::SourceId, source_files::Column::FileId])
