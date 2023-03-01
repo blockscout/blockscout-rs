@@ -15,6 +15,46 @@ use sea_orm::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
+macro_rules! insert_then_select {
+    ( $txn:expr, $entity_module:ident, $active_model:expr, [ $( ($column:ident, $value:expr) ),+ $(,)?] ) => {
+        {
+            let result = $entity_module::Entity::insert($active_model)
+                .on_conflict(OnConflict::new().do_nothing().to_owned())
+                .exec($txn)
+                .await;
+
+            match result {
+                Ok(res) => {
+                    let model = $entity_module::Entity::find_by_id(res.last_insert_id)
+                        .one($txn)
+                        .await
+                        .context(format!("select from \"{}\" by \"id\"", stringify!($entity_module)))?
+                        .ok_or(anyhow::anyhow!(
+                            "select from \"{}\" by \"id\"={} returned no data",
+                            stringify!($entity_module),
+                            res.last_insert_id
+                        ))?;
+
+                    Ok((model, true))
+                }
+                Err(DbErr::RecordNotInserted) => {
+                    let model = $entity_module::Entity::find()
+                        $(
+                            .filter($entity_module::Column::$column.eq($value))
+                        )*
+                        .one($txn)
+                        .await
+                        .context(format!("select from \"{}\" by unique columns", stringify!($entity_module)))?
+                        .ok_or(anyhow::anyhow!("select from \"{}\" by unique columns returned no data", stringify!($entity_module)))?;
+
+                    Ok((model, false))
+                }
+                Err(err) => return Err(err).context(format!("insert into \"{}\"", stringify!($entity_module))),
+            }
+        }
+    };
+}
+
 pub(crate) async fn insert_data(
     db_client: &DatabaseConnection,
     source_response: types::Source,
@@ -173,42 +213,56 @@ async fn insert_source_details(
             file_ids_hash: Set(file_ids_hash),
             ..Default::default()
         };
-        let result = sources::Entity::insert(active_model)
-            .on_conflict(OnConflict::new().do_nothing().to_owned())
-            .exec(txn)
-            .await;
 
-        let (source, inserted) = match result {
-            Ok(res) => {
-                let source = sources::Entity::find_by_id(res.last_insert_id)
-                    .one(txn)
-                    .await
-                    .context("select from \"sources\" by \"id\"")?
-                    .ok_or(anyhow::anyhow!(
-                        "select from \"sources\" by \"id\"={} returned no data",
-                        res.last_insert_id
-                    ))?;
+        insert_then_select!(
+            txn,
+            sources,
+            active_model,
+            [
+                (CompilerVersion, source.compiler_version.clone()),
+                (CompilerSettings, compiler_settings.clone()),
+                (FileName, source.file_name.clone()),
+                (ContractName, source.contract_name.clone()),
+                (FileIdsHash, file_ids_hash),
+            ]
+        )
 
-                (source, true)
-            }
-            Err(DbErr::RecordNotInserted) => {
-                let source = sources::Entity::find()
-                    .filter(sources::Column::CompilerVersion.eq(source.compiler_version.clone()))
-                    .filter(sources::Column::CompilerSettings.eq(compiler_settings.clone()))
-                    .filter(sources::Column::FileName.eq(source.file_name.clone()))
-                    .filter(sources::Column::ContractName.eq(source.contract_name.clone()))
-                    .filter(sources::Column::FileIdsHash.eq(file_ids_hash))
-                    .one(txn)
-                    .await
-                    .context("select from \"sources\" by \"compiler_version\", \"compiler_settings\", \"file_name\", \"contract_name\", and \"file_ids_hash\"")?
-                    .ok_or(anyhow::anyhow!("select from \"sources\" by \"compiler_version\", \"compiler_settings\", \"file_name\", \"contract_name\", and \"file_ids_hash\" returned no data"))?;
-
-                (source, false)
-            }
-            Err(err) => return Err(err).context("insert into \"sources\""),
-        };
-
-        Ok((source, inserted))
+        // let result = sources::Entity::insert(active_model)
+        //     .on_conflict(OnConflict::new().do_nothing().to_owned())
+        //     .exec(txn)
+        //     .await;
+        //
+        // let (source, inserted) = match result {
+        //     Ok(res) => {
+        //         let source = sources::Entity::find_by_id(res.last_insert_id)
+        //             .one(txn)
+        //             .await
+        //             .context("select from \"sources\" by \"id\"")?
+        //             .ok_or(anyhow::anyhow!(
+        //                 "select from \"sources\" by \"id\"={} returned no data",
+        //                 res.last_insert_id
+        //             ))?;
+        //
+        //         (source, true)
+        //     }
+        //     Err(DbErr::RecordNotInserted) => {
+        //         let source = sources::Entity::find()
+        //             .filter(sources::Column::CompilerVersion.eq(source.compiler_version.clone()))
+        //             .filter(sources::Column::CompilerSettings.eq(compiler_settings.clone()))
+        //             .filter(sources::Column::FileName.eq(source.file_name.clone()))
+        //             .filter(sources::Column::ContractName.eq(source.contract_name.clone()))
+        //             .filter(sources::Column::FileIdsHash.eq(file_ids_hash))
+        //             .one(txn)
+        //             .await
+        //             .context("select from \"sources\" by \"compiler_version\", \"compiler_settings\", \"file_name\", \"contract_name\", and \"file_ids_hash\"")?
+        //             .ok_or(anyhow::anyhow!("select from \"sources\" by \"compiler_version\", \"compiler_settings\", \"file_name\", \"contract_name\", and \"file_ids_hash\" returned no data"))?;
+        //
+        //         (source, false)
+        //     }
+        //     Err(err) => return Err(err).context("insert into \"sources\""),
+        // };
+        //
+        // Ok((source, inserted))
     }
 }
 
