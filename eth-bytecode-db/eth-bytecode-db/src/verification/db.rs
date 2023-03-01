@@ -122,7 +122,7 @@ async fn insert_files(
             .one(txn)
             .await
             .context("select from \"files\" by \"name\" and \"content\"")?
-            .ok_or(anyhow::anyhow!("select from \"files\" by \"name={name}\" and \"content\"={content} returned nothing"))?;
+            .ok_or(anyhow::anyhow!("select from \"files\" by \"name={name}\" and \"content\"={content} returned no data"))?;
         result.push(file);
     }
 
@@ -161,44 +161,66 @@ async fn insert_source_details(
         .try_get("", "md5")
         .context("calculate hash of file ids")?;
 
-    let (source, inserted) = {
-        let compiler_settings: Json = serde_json::from_str(&source.compiler_settings)
-            .context("deserialize compiler settings")?;
+    let compiler_settings: Json =
+        serde_json::from_str(&source.compiler_settings).context("deserialize compiler settings")?;
 
-        let db_source = sources::Entity::find()
-            .filter(sources::Column::CompilerVersion.eq(source.compiler_version.clone()))
-            .filter(sources::Column::CompilerSettings.eq(compiler_settings.clone()))
-            .filter(sources::Column::FileName.eq(source.file_name.clone()))
-            .filter(sources::Column::ContractName.eq(source.contract_name.clone()))
-            .filter(sources::Column::FileIdsHash.eq(file_ids_hash))
-            .one(txn)
-            .await
-            .context("select from \"sources\" by \"compiler_version\", \"compiler_settings\", \"file_name\", \"contract_name\", and \"file_ids_hash\"")?;
+    {
+        let active_model = sources::ActiveModel {
+            source_type: Set(source.source_type.into()),
+            compiler_version: Set(source.compiler_version.clone()),
+            compiler_settings: Set(compiler_settings.clone()),
+            file_name: Set(source.file_name.clone()),
+            contract_name: Set(source.contract_name.clone()),
+            raw_creation_input: Set(source.raw_creation_input.clone()),
+            raw_deployed_bytecode: Set(source.raw_deployed_bytecode.clone()),
+            abi: Set(abi.clone()),
+            file_ids_hash: Set(file_ids_hash),
+            ..Default::default()
+        };
+        let result = sources::Entity::insert(active_model)
+            .on_conflict(
+                OnConflict::columns([
+                    sources::Column::CompilerVersion,
+                    // sources::Column::CompilerSettings, sources::Column::FileName, sources::Column::ContractName, sources::Column::FileIdsHash
+                ])
+                .do_nothing()
+                .to_owned(),
+            )
+            .exec(txn)
+            .await;
 
-        match db_source {
-            Some(source) => (source, false),
-            None => {
-                let source = sources::ActiveModel {
-                    source_type: Set(source.source_type.into()),
-                    compiler_version: Set(source.compiler_version),
-                    compiler_settings: Set(compiler_settings),
-                    file_name: Set(source.file_name),
-                    contract_name: Set(source.contract_name),
-                    raw_creation_input: Set(source.raw_creation_input),
-                    raw_deployed_bytecode: Set(source.raw_deployed_bytecode),
-                    abi: Set(abi),
-                    file_ids_hash: Set(file_ids_hash),
-                    ..Default::default()
-                }
-                .insert(txn)
-                .await
-                .context("insert into \"sources\"")?;
+        let (source, inserted) = match result {
+            Ok(res) => {
+                let source = sources::Entity::find_by_id(res.last_insert_id)
+                    .one(txn)
+                    .await
+                    .context("select from \"sources\" by \"id\"")?
+                    .ok_or(anyhow::anyhow!(
+                        "select from \"sources\" by \"id\"={} returned no data",
+                        res.last_insert_id
+                    ))?;
+
                 (source, true)
             }
-        }
-    };
+            Err(DbErr::RecordNotInserted) => {
+                let source = sources::Entity::find()
+                    .filter(sources::Column::CompilerVersion.eq(source.compiler_version.clone()))
+                    .filter(sources::Column::CompilerSettings.eq(compiler_settings.clone()))
+                    .filter(sources::Column::FileName.eq(source.file_name.clone()))
+                    .filter(sources::Column::ContractName.eq(source.contract_name.clone()))
+                    .filter(sources::Column::FileIdsHash.eq(file_ids_hash))
+                    .one(txn)
+                    .await
+                    .context("select from \"sources\" by \"compiler_version\", \"compiler_settings\", \"file_name\", \"contract_name\", and \"file_ids_hash\"")?
+                    .ok_or(anyhow::anyhow!("select from \"sources\" by \"compiler_version\", \"compiler_settings\", \"file_name\", \"contract_name\", and \"file_ids_hash\" returned no data"))?;
 
-    Ok((source, inserted))
+                (source, false)
+            }
+            Err(err) => return Err(err).context("insert into \"sources\""),
+        };
+
+        Ok((source, inserted))
+    }
 }
 
 async fn insert_source_files(
