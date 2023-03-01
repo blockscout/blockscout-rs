@@ -253,50 +253,79 @@ async fn insert_bytecodes(
     txn: &DatabaseTransaction,
     source_id: i64,
     bytecode_parts: Vec<types::BytecodePart>,
-    bytecode_type: types::BytecodeType,
+    bytecode_type: BytecodeType,
 ) -> Result<(), anyhow::Error> {
     let bytecode = {
         let bytecode_type = sea_orm_active_enums::BytecodeType::from(bytecode_type);
-        let bytecode = bytecodes::Entity::find()
-            .filter(bytecodes::Column::SourceId.eq(source_id))
-            .filter(bytecodes::Column::BytecodeType.eq(bytecode_type.clone()))
-            .one(txn)
+        let active_model = bytecodes::ActiveModel {
+            source_id: Set(source_id),
+            bytecode_type: Set(bytecode_type.clone()),
+            ..Default::default()
+        };
+        match bytecodes::Entity::insert(active_model)
+            .on_conflict(
+                OnConflict::columns([bytecodes::Column::SourceId, bytecodes::Column::BytecodeType])
+                    .do_nothing()
+                    .to_owned(),
+            )
+            .exec(txn)
             .await
-            .context("select from \"bytecodes\" by \"source_id\" \"bytecode_type\"")?;
-
-        match bytecode {
-            Some(bytecode) => bytecode,
-            None => bytecodes::ActiveModel {
-                source_id: Set(source_id),
-                bytecode_type: Set(bytecode_type),
-                ..Default::default()
-            }
-            .insert(txn)
-            .await
-            .context("insert into \"bytecodes\"")?,
+        {
+            Ok(res) => bytecodes::Entity::find_by_id(res.last_insert_id)
+                .one(txn)
+                .await
+                .context("select from \"bytecodes\" by \"id\"")?
+                .ok_or(anyhow::anyhow!(
+                    "select from \"bytecodes\" by \"id\"={} returned no data",
+                    res.last_insert_id
+                ))?,
+            Err(DbErr::RecordNotInserted) => bytecodes::Entity::find()
+                .filter(bytecodes::Column::SourceId.eq(source_id))
+                .filter(bytecodes::Column::BytecodeType.eq(bytecode_type.clone()))
+                .one(txn)
+                .await
+                .context("select from \"bytecodes\" by \"source_id\" \"bytecode_type\"")?
+                .ok_or(anyhow::anyhow!(
+                    "select from \"bytecodes\" by \"source_id\" \"bytecode_type\" returned no data"
+                ))?,
+            Err(err) => return Err(err).context("insert into \"bytecodes\""),
         }
     };
 
     for (order, part) in bytecode_parts.into_iter().enumerate() {
         let part = {
             let part_type = sea_orm_active_enums::PartType::from(&part);
-            let part_model = parts::Entity::find()
-                .filter(parts::Column::Data.eq(part.data()))
-                .filter(parts::Column::PartType.eq(part_type.clone()))
-                .one(txn)
+            let active_model = parts::ActiveModel {
+                data: Set(part.data().to_vec()),
+                part_type: Set(part_type.clone()),
+                ..Default::default()
+            };
+            match parts::Entity::insert(active_model)
+                .on_conflict(
+                    OnConflict::columns([parts::Column::Data, parts::Column::PartType])
+                        .do_nothing()
+                        .to_owned(),
+                )
+                .exec(txn)
                 .await
-                .context("select from \"parts\" by \"data\" and \"part_type\"")?;
-
-            match part_model {
-                Some(part_model) => part_model,
-                None => parts::ActiveModel {
-                    data: Set(part.data_owned()),
-                    part_type: Set(part_type),
-                    ..Default::default()
-                }
-                .insert(txn)
-                .await
-                .context("insert into \"parts\"")?,
+            {
+                Ok(res) => parts::Entity::find_by_id(res.last_insert_id)
+                    .one(txn)
+                    .await
+                    .context("select from \"parts\" by \"id\"")?
+                    .ok_or(anyhow::anyhow!(
+                        "select from \"parts\" by \"id\" returned no data"
+                    ))?,
+                Err(DbErr::RecordNotInserted) => parts::Entity::find()
+                    .filter(parts::Column::Data.eq(part.data()))
+                    .filter(parts::Column::PartType.eq(part_type.clone()))
+                    .one(txn)
+                    .await
+                    .context("select from \"parts\" by \"data\" and \"part_type\"")?
+                    .ok_or(anyhow::anyhow!(
+                        "select from \"parts\" by \"data\" and \"part_type\" returned no data"
+                    ))?,
+                Err(err) => return Err(err).context("insert into \"parts\""),
             }
         };
 
