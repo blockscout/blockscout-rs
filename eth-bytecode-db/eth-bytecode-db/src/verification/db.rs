@@ -93,28 +93,36 @@ async fn insert_files(
     txn: &DatabaseTransaction,
     files: BTreeMap<String, String>,
 ) -> Result<Vec<files::Model>, anyhow::Error> {
+    // Insert non-existed files
+    {
+        let active_models = files.iter().map(|(name, content)| files::ActiveModel {
+            name: Set(name.clone()),
+            content: Set(content.clone()),
+            ..Default::default()
+        });
+        match files::Entity::insert_many(active_models)
+            .on_conflict(
+                OnConflict::columns([files::Column::Name, files::Column::Content])
+                    .do_nothing()
+                    .to_owned(),
+            )
+            .exec(txn)
+            .await
+        {
+            Ok(_) | Err(DbErr::RecordNotInserted) => (),
+            Err(err) => return Err(err).context("insert into \"files\""),
+        }
+    }
+
     let mut result = Vec::new();
     for (name, content) in files {
-        let file = {
-            let file = files::Entity::find()
-                .filter(files::Column::Name.eq(name.clone()))
-                .filter(files::Column::Content.eq(content.clone())) // TODO: I believe it is quite expensive to search by the content
-                .one(txn)
-                .await
-                .context("select from \"files\" by \"name\" and \"content\"")?;
-
-            match file {
-                Some(file) => file,
-                None => files::ActiveModel {
-                    name: Set(name),
-                    content: Set(content),
-                    ..Default::default()
-                }
-                .insert(txn)
-                .await
-                .context("insert into \"files\"")?,
-            }
-        };
+        let file = files::Entity::find()
+            .filter(files::Column::Name.eq(name.clone()))
+            .filter(files::Column::Content.eq(content.clone())) // TODO: Is it expensive to search by the content?
+            .one(txn)
+            .await
+            .context("select from \"files\" by \"name\" and \"content\"")?
+            .ok_or(anyhow::anyhow!("select from \"files\" by \"name={name}\" and \"content\"={content} returned nothing"))?;
         result.push(file);
     }
 
