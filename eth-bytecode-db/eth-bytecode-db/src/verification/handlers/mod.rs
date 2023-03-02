@@ -95,32 +95,40 @@ async fn process_verify_response(
         deployed_bytecode_parts,
     };
 
-    match action {
-        ProcessResponseAction::IgnoreDb => {}
-        ProcessResponseAction::SaveData {
-            bytecode_type,
-            raw_request_bytecode,
-            verification_settings,
-            verification_type,
-        } => {
-            let source_id = db::insert_data(db_client, source.clone())
-                .await
-                .context("Insert data into database")
-                .map_err(Error::Internal)?;
-
-            // For historical data we just log any errors but do not propagate them further
-            let _ = db::insert_verified_contract_data(
-                db_client,
-                source_id,
-                raw_request_bytecode,
+    let process_database_insertion = || async {
+        match action {
+            ProcessResponseAction::IgnoreDb => {}
+            ProcessResponseAction::SaveData {
                 bytecode_type,
+                raw_request_bytecode,
                 verification_settings,
                 verification_type,
-            )
-            .await
-            .map_err(|err| tracing::warn!("Error while inserting verified contract data: {}", err));
-        }
-    }
+            } => {
+                let source_id = db::insert_data(db_client, source.clone())
+                    .await
+                    .context("Insert data into database")?;
+
+                // For historical data we just log any errors but do not propagate them further
+                db::insert_verified_contract_data(
+                    db_client,
+                    source_id,
+                    raw_request_bytecode,
+                    bytecode_type,
+                    verification_settings,
+                    verification_type,
+                )
+                .await
+                .context("Insert verified contract data")?;
+            }
+        };
+        Ok(())
+    };
+
+    let _ = process_database_insertion()
+        .await
+        .map_err(|err: anyhow::Error| {
+            tracing::error!("Error while inserting contract data into database: {err:#}")
+        });
 
     Ok(source)
 }
