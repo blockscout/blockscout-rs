@@ -16,7 +16,7 @@ use sea_orm::{
 use std::collections::{BTreeMap, BTreeSet};
 
 macro_rules! insert_then_select {
-    ( $txn:expr, $entity_module:ident, $active_model:expr, [ $( ($column:ident, $value:expr) ),+ $(,)?] ) => {
+    ( $txn:expr, $entity_module:ident, $active_model:expr, [ $( ($column:ident, $value:expr) ),+ $(,)? ] ) => {
         {
             let result: Result<_, DbErr> = $entity_module::Entity::insert($active_model)
                 .on_conflict(OnConflict::new().do_nothing().to_owned())
