@@ -18,11 +18,12 @@ use std::collections::{BTreeMap, BTreeSet};
 macro_rules! insert_then_select {
     ( $txn:expr, $entity_module:ident, $active_model:expr, [ $( ($column:ident, $value:expr) ),+ $(,)?] ) => {
         {
-            let result = $entity_module::Entity::insert($active_model)
+            let result: Result<_, DbErr> = $entity_module::Entity::insert($active_model)
                 .on_conflict(OnConflict::new().do_nothing().to_owned())
                 .exec($txn)
                 .await;
 
+            // Returns the model and the bool flag showing whether the model was actually inserted.
             match result {
                 Ok(res) => {
                     let model = $entity_module::Entity::find_by_id(res.last_insert_id)
@@ -49,7 +50,7 @@ macro_rules! insert_then_select {
 
                     Ok((model, false))
                 }
-                Err(err) => return Err(err).context(format!("insert into \"{}\"", stringify!($entity_module))),
+                Err(err) => Err(err).context(format!("insert into \"{}\"", stringify!($entity_module))),
             }
         }
     };
@@ -133,32 +134,16 @@ async fn insert_files(
     txn: &DatabaseTransaction,
     files: BTreeMap<String, String>,
 ) -> Result<Vec<files::Model>, anyhow::Error> {
-    // Insert non-existed files
-    {
-        let active_models = files.iter().map(|(name, content)| files::ActiveModel {
+    let mut result = Vec::new();
+    for (name, content) in files {
+        let active_model = files::ActiveModel {
             name: Set(name.clone()),
             content: Set(content.clone()),
             ..Default::default()
-        });
-        match files::Entity::insert_many(active_models)
-            .on_conflict(OnConflict::new().do_nothing().to_owned())
-            .exec(txn)
-            .await
-        {
-            Ok(_) | Err(DbErr::RecordNotInserted) => (),
-            Err(err) => return Err(err).context("insert into \"files\""),
-        }
-    }
+        };
+        let (file, _inserted) =
+            insert_then_select!(txn, files, active_model, [(Name, name), (Content, content)])?;
 
-    let mut result = Vec::new();
-    for (name, content) in files {
-        let file = files::Entity::find()
-            .filter(files::Column::Name.eq(name.clone()))
-            .filter(files::Column::Content.eq(content.clone())) // TODO: Is it expensive to search by the content?
-            .one(txn)
-            .await
-            .context("select from \"files\" by \"name\" and \"content\"")?
-            .ok_or(anyhow::anyhow!("select from \"files\" by \"name={name}\" and \"content\"={content} returned no data"))?;
         result.push(file);
     }
 
@@ -200,70 +185,30 @@ async fn insert_source_details(
     let compiler_settings: Json =
         serde_json::from_str(&source.compiler_settings).context("deserialize compiler settings")?;
 
-    {
-        let active_model = sources::ActiveModel {
-            source_type: Set(source.source_type.into()),
-            compiler_version: Set(source.compiler_version.clone()),
-            compiler_settings: Set(compiler_settings.clone()),
-            file_name: Set(source.file_name.clone()),
-            contract_name: Set(source.contract_name.clone()),
-            raw_creation_input: Set(source.raw_creation_input.clone()),
-            raw_deployed_bytecode: Set(source.raw_deployed_bytecode.clone()),
-            abi: Set(abi.clone()),
-            file_ids_hash: Set(file_ids_hash),
-            ..Default::default()
-        };
-
-        insert_then_select!(
-            txn,
-            sources,
-            active_model,
-            [
-                (CompilerVersion, source.compiler_version.clone()),
-                (CompilerSettings, compiler_settings.clone()),
-                (FileName, source.file_name.clone()),
-                (ContractName, source.contract_name.clone()),
-                (FileIdsHash, file_ids_hash),
-            ]
-        )
-
-        // let result = sources::Entity::insert(active_model)
-        //     .on_conflict(OnConflict::new().do_nothing().to_owned())
-        //     .exec(txn)
-        //     .await;
-        //
-        // let (source, inserted) = match result {
-        //     Ok(res) => {
-        //         let source = sources::Entity::find_by_id(res.last_insert_id)
-        //             .one(txn)
-        //             .await
-        //             .context("select from \"sources\" by \"id\"")?
-        //             .ok_or(anyhow::anyhow!(
-        //                 "select from \"sources\" by \"id\"={} returned no data",
-        //                 res.last_insert_id
-        //             ))?;
-        //
-        //         (source, true)
-        //     }
-        //     Err(DbErr::RecordNotInserted) => {
-        //         let source = sources::Entity::find()
-        //             .filter(sources::Column::CompilerVersion.eq(source.compiler_version.clone()))
-        //             .filter(sources::Column::CompilerSettings.eq(compiler_settings.clone()))
-        //             .filter(sources::Column::FileName.eq(source.file_name.clone()))
-        //             .filter(sources::Column::ContractName.eq(source.contract_name.clone()))
-        //             .filter(sources::Column::FileIdsHash.eq(file_ids_hash))
-        //             .one(txn)
-        //             .await
-        //             .context("select from \"sources\" by \"compiler_version\", \"compiler_settings\", \"file_name\", \"contract_name\", and \"file_ids_hash\"")?
-        //             .ok_or(anyhow::anyhow!("select from \"sources\" by \"compiler_version\", \"compiler_settings\", \"file_name\", \"contract_name\", and \"file_ids_hash\" returned no data"))?;
-        //
-        //         (source, false)
-        //     }
-        //     Err(err) => return Err(err).context("insert into \"sources\""),
-        // };
-        //
-        // Ok((source, inserted))
-    }
+    let active_model = sources::ActiveModel {
+        source_type: Set(source.source_type.into()),
+        compiler_version: Set(source.compiler_version.clone()),
+        compiler_settings: Set(compiler_settings.clone()),
+        file_name: Set(source.file_name.clone()),
+        contract_name: Set(source.contract_name.clone()),
+        raw_creation_input: Set(source.raw_creation_input.clone()),
+        raw_deployed_bytecode: Set(source.raw_deployed_bytecode.clone()),
+        abi: Set(abi.clone()),
+        file_ids_hash: Set(file_ids_hash),
+        ..Default::default()
+    };
+    insert_then_select!(
+        txn,
+        sources,
+        active_model,
+        [
+            (CompilerVersion, source.compiler_version),
+            (CompilerSettings, compiler_settings),
+            (FileName, source.file_name),
+            (ContractName, source.contract_name),
+            (FileIdsHash, file_ids_hash)
+        ]
+    )
 }
 
 async fn insert_source_files(
@@ -301,30 +246,13 @@ async fn insert_bytecodes(
             bytecode_type: Set(bytecode_type.clone()),
             ..Default::default()
         };
-        match bytecodes::Entity::insert(active_model)
-            .on_conflict(OnConflict::new().do_nothing().to_owned())
-            .exec(txn)
-            .await
-        {
-            Ok(res) => bytecodes::Entity::find_by_id(res.last_insert_id)
-                .one(txn)
-                .await
-                .context("select from \"bytecodes\" by \"id\"")?
-                .ok_or(anyhow::anyhow!(
-                    "select from \"bytecodes\" by \"id\"={} returned no data",
-                    res.last_insert_id
-                ))?,
-            Err(DbErr::RecordNotInserted) => bytecodes::Entity::find()
-                .filter(bytecodes::Column::SourceId.eq(source_id))
-                .filter(bytecodes::Column::BytecodeType.eq(bytecode_type.clone()))
-                .one(txn)
-                .await
-                .context("select from \"bytecodes\" by \"source_id\" \"bytecode_type\"")?
-                .ok_or(anyhow::anyhow!(
-                    "select from \"bytecodes\" by \"source_id\" \"bytecode_type\" returned no data"
-                ))?,
-            Err(err) => return Err(err).context("insert into \"bytecodes\""),
-        }
+        let (bytecode, _inserted) = insert_then_select!(
+            txn,
+            bytecodes,
+            active_model,
+            [(SourceId, source_id), (BytecodeType, bytecode_type)]
+        )?;
+        bytecode
     };
 
     for (order, part) in bytecode_parts.into_iter().enumerate() {
@@ -335,29 +263,13 @@ async fn insert_bytecodes(
                 part_type: Set(part_type.clone()),
                 ..Default::default()
             };
-            match parts::Entity::insert(active_model)
-                .on_conflict(OnConflict::new().do_nothing().to_owned())
-                .exec(txn)
-                .await
-            {
-                Ok(res) => parts::Entity::find_by_id(res.last_insert_id)
-                    .one(txn)
-                    .await
-                    .context("select from \"parts\" by \"id\"")?
-                    .ok_or(anyhow::anyhow!(
-                        "select from \"parts\" by \"id\" returned no data"
-                    ))?,
-                Err(DbErr::RecordNotInserted) => parts::Entity::find()
-                    .filter(parts::Column::Data.eq(part.data()))
-                    .filter(parts::Column::PartType.eq(part_type.clone()))
-                    .one(txn)
-                    .await
-                    .context("select from \"parts\" by \"data\" and \"part_type\"")?
-                    .ok_or(anyhow::anyhow!(
-                        "select from \"parts\" by \"data\" and \"part_type\" returned no data"
-                    ))?,
-                Err(err) => return Err(err).context("insert into \"parts\""),
-            }
+            let (part, _inserted) = insert_then_select!(
+                txn,
+                parts,
+                active_model,
+                [(Data, part.data()), (PartType, part_type)]
+            )?;
+            part
         };
 
         let bytecode_part = bytecode_parts::ActiveModel {
