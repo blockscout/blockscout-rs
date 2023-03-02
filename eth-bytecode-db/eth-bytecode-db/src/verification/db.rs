@@ -15,6 +15,47 @@ use sea_orm::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
+macro_rules! insert_then_select {
+    ( $txn:expr, $entity_module:ident, $active_model:expr, [ $( ($column:ident, $value:expr) ),+ $(,)? ] ) => {
+        {
+            let result: Result<_, DbErr> = $entity_module::Entity::insert($active_model)
+                .on_conflict(OnConflict::new().do_nothing().to_owned())
+                .exec($txn)
+                .await;
+
+            // Returns the model and the bool flag showing whether the model was actually inserted.
+            match result {
+                Ok(res) => {
+                    let model = $entity_module::Entity::find_by_id(res.last_insert_id)
+                        .one($txn)
+                        .await
+                        .context(format!("select from \"{}\" by \"id\"", stringify!($entity_module)))?
+                        .ok_or(anyhow::anyhow!(
+                            "select from \"{}\" by \"id\"={} returned no data",
+                            stringify!($entity_module),
+                            res.last_insert_id
+                        ))?;
+
+                    Ok((model, true))
+                }
+                Err(DbErr::RecordNotInserted) => {
+                    let model = $entity_module::Entity::find()
+                        $(
+                            .filter($entity_module::Column::$column.eq($value))
+                        )*
+                        .one($txn)
+                        .await
+                        .context(format!("select from \"{}\" by unique columns", stringify!($entity_module)))?
+                        .ok_or(anyhow::anyhow!("select from \"{}\" by unique columns returned no data", stringify!($entity_module)))?;
+
+                    Ok((model, false))
+                }
+                Err(err) => Err(err).context(format!("insert into \"{}\"", stringify!($entity_module))),
+            }
+        }
+    };
+}
+
 pub(crate) async fn insert_data(
     db_client: &DatabaseConnection,
     source_response: types::Source,
@@ -95,26 +136,14 @@ async fn insert_files(
 ) -> Result<Vec<files::Model>, anyhow::Error> {
     let mut result = Vec::new();
     for (name, content) in files {
-        let file = {
-            let file = files::Entity::find()
-                .filter(files::Column::Name.eq(name.clone()))
-                .filter(files::Column::Content.eq(content.clone())) // TODO: I believe it is quite expensive to search by the content
-                .one(txn)
-                .await
-                .context("select from \"files\" by \"name\" and \"content\"")?;
-
-            match file {
-                Some(file) => file,
-                None => files::ActiveModel {
-                    name: Set(name),
-                    content: Set(content),
-                    ..Default::default()
-                }
-                .insert(txn)
-                .await
-                .context("insert into \"files\"")?,
-            }
+        let active_model = files::ActiveModel {
+            name: Set(name.clone()),
+            content: Set(content.clone()),
+            ..Default::default()
         };
+        let (file, _inserted) =
+            insert_then_select!(txn, files, active_model, [(Name, name), (Content, content)])?;
+
         result.push(file);
     }
 
@@ -153,44 +182,33 @@ async fn insert_source_details(
         .try_get("", "md5")
         .context("calculate hash of file ids")?;
 
-    let (source, inserted) = {
-        let compiler_settings: Json = serde_json::from_str(&source.compiler_settings)
-            .context("deserialize compiler settings")?;
+    let compiler_settings: Json =
+        serde_json::from_str(&source.compiler_settings).context("deserialize compiler settings")?;
 
-        let db_source = sources::Entity::find()
-            .filter(sources::Column::CompilerVersion.eq(source.compiler_version.clone()))
-            .filter(sources::Column::CompilerSettings.eq(compiler_settings.clone()))
-            .filter(sources::Column::FileName.eq(source.file_name.clone()))
-            .filter(sources::Column::ContractName.eq(source.contract_name.clone()))
-            .filter(sources::Column::FileIdsHash.eq(file_ids_hash))
-            .one(txn)
-            .await
-            .context("select from \"sources\" by \"compiler_version\", \"compiler_settings\", \"file_name\", \"contract_name\", and \"file_ids_hash\"")?;
-
-        match db_source {
-            Some(source) => (source, false),
-            None => {
-                let source = sources::ActiveModel {
-                    source_type: Set(source.source_type.into()),
-                    compiler_version: Set(source.compiler_version),
-                    compiler_settings: Set(compiler_settings),
-                    file_name: Set(source.file_name),
-                    contract_name: Set(source.contract_name),
-                    raw_creation_input: Set(source.raw_creation_input),
-                    raw_deployed_bytecode: Set(source.raw_deployed_bytecode),
-                    abi: Set(abi),
-                    file_ids_hash: Set(file_ids_hash),
-                    ..Default::default()
-                }
-                .insert(txn)
-                .await
-                .context("insert into \"sources\"")?;
-                (source, true)
-            }
-        }
+    let active_model = sources::ActiveModel {
+        source_type: Set(source.source_type.into()),
+        compiler_version: Set(source.compiler_version.clone()),
+        compiler_settings: Set(compiler_settings.clone()),
+        file_name: Set(source.file_name.clone()),
+        contract_name: Set(source.contract_name.clone()),
+        raw_creation_input: Set(source.raw_creation_input.clone()),
+        raw_deployed_bytecode: Set(source.raw_deployed_bytecode.clone()),
+        abi: Set(abi.clone()),
+        file_ids_hash: Set(file_ids_hash),
+        ..Default::default()
     };
-
-    Ok((source, inserted))
+    insert_then_select!(
+        txn,
+        sources,
+        active_model,
+        [
+            (CompilerVersion, source.compiler_version),
+            (CompilerSettings, compiler_settings),
+            (FileName, source.file_name),
+            (ContractName, source.contract_name),
+            (FileIdsHash, file_ids_hash)
+        ]
+    )
 }
 
 async fn insert_source_files(
@@ -198,20 +216,13 @@ async fn insert_source_files(
     source_model: &sources::Model,
     file_models: &[files::Model],
 ) -> Result<(), anyhow::Error> {
-    let active_models = file_models
-        .iter()
-        .map(|file| source_files::ActiveModel {
-            source_id: Set(source_model.id),
-            file_id: Set(file.id),
-            ..Default::default()
-        })
-        .collect::<Vec<_>>();
+    let active_models = file_models.iter().map(|file| source_files::ActiveModel {
+        source_id: Set(source_model.id),
+        file_id: Set(file.id),
+        ..Default::default()
+    });
     let result = source_files::Entity::insert_many(active_models)
-        .on_conflict(
-            OnConflict::columns([source_files::Column::SourceId, source_files::Column::FileId])
-                .do_nothing()
-                .to_owned(),
-        )
+        .on_conflict(OnConflict::new().do_nothing().to_owned())
         .exec(txn)
         .await;
     match result {
@@ -226,51 +237,39 @@ async fn insert_bytecodes(
     txn: &DatabaseTransaction,
     source_id: i64,
     bytecode_parts: Vec<types::BytecodePart>,
-    bytecode_type: types::BytecodeType,
+    bytecode_type: BytecodeType,
 ) -> Result<(), anyhow::Error> {
     let bytecode = {
         let bytecode_type = sea_orm_active_enums::BytecodeType::from(bytecode_type);
-        let bytecode = bytecodes::Entity::find()
-            .filter(bytecodes::Column::SourceId.eq(source_id))
-            .filter(bytecodes::Column::BytecodeType.eq(bytecode_type.clone()))
-            .one(txn)
-            .await
-            .context("select from \"bytecodes\" by \"source_id\" \"bytecode_type\"")?;
-
-        match bytecode {
-            Some(bytecode) => bytecode,
-            None => bytecodes::ActiveModel {
-                source_id: Set(source_id),
-                bytecode_type: Set(bytecode_type),
-                ..Default::default()
-            }
-            .insert(txn)
-            .await
-            .context("insert into \"bytecodes\"")?,
-        }
+        let active_model = bytecodes::ActiveModel {
+            source_id: Set(source_id),
+            bytecode_type: Set(bytecode_type.clone()),
+            ..Default::default()
+        };
+        let (bytecode, _inserted) = insert_then_select!(
+            txn,
+            bytecodes,
+            active_model,
+            [(SourceId, source_id), (BytecodeType, bytecode_type)]
+        )?;
+        bytecode
     };
 
     for (order, part) in bytecode_parts.into_iter().enumerate() {
         let part = {
             let part_type = sea_orm_active_enums::PartType::from(&part);
-            let part_model = parts::Entity::find()
-                .filter(parts::Column::Data.eq(part.data()))
-                .filter(parts::Column::PartType.eq(part_type.clone()))
-                .one(txn)
-                .await
-                .context("select from \"parts\" by \"data\" and \"part_type\"")?;
-
-            match part_model {
-                Some(part_model) => part_model,
-                None => parts::ActiveModel {
-                    data: Set(part.data_owned()),
-                    part_type: Set(part_type),
-                    ..Default::default()
-                }
-                .insert(txn)
-                .await
-                .context("insert into \"parts\"")?,
-            }
+            let active_model = parts::ActiveModel {
+                data: Set(part.data().to_vec()),
+                part_type: Set(part_type.clone()),
+                ..Default::default()
+            };
+            let (part, _inserted) = insert_then_select!(
+                txn,
+                parts,
+                active_model,
+                [(Data, part.data()), (PartType, part_type)]
+            )?;
+            part
         };
 
         let bytecode_part = bytecode_parts::ActiveModel {
@@ -280,14 +279,7 @@ async fn insert_bytecodes(
             ..Default::default()
         };
         let result = bytecode_parts::Entity::insert(bytecode_part)
-            .on_conflict(
-                OnConflict::columns([
-                    bytecode_parts::Column::BytecodeId,
-                    bytecode_parts::Column::Order,
-                ])
-                .do_nothing()
-                .to_owned(),
-            )
+            .on_conflict(OnConflict::new().do_nothing().to_owned())
             .exec(txn)
             .await;
         match result {
