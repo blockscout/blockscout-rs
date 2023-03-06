@@ -176,7 +176,12 @@ async fn test_success(dir: &'static str, mut input: TestInput) {
     let sources: BTreeMap<_, _> = standard_input
         .sources
         .into_iter()
-        .map(|(path, source)| (path.to_str().unwrap().to_string(), source.content))
+        .map(|(path, source)| {
+            (
+                path.to_str().unwrap().to_string(),
+                (*source.content).clone(),
+            )
+        })
         .collect();
     assert_eq!(verification_result.sources, sources, "Invalid source");
 }

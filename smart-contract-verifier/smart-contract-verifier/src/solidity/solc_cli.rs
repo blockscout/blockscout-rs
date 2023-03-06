@@ -487,12 +487,7 @@ mod tests {
     }
 
     fn source(file: &str, content: &str) -> (PathBuf, Source) {
-        (
-            file.into(),
-            Source {
-                content: content.to_string(),
-            },
-        )
+        (file.into(), Source::new(content))
     }
 
     #[tokio::test]
