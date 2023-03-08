@@ -1,11 +1,9 @@
 use cookie::Cookie;
-use serde::Serialize;
 use std::collections::HashMap;
 use thiserror::Error;
-use tonic::{codegen::http::header::COOKIE, metadata::MetadataMap, Request};
+use tonic::{codegen::http::header::COOKIE, metadata::MetadataMap};
 
 const JWT_TOKEN_NAME: &str = "_explorer_key";
-const CSRF_TOKEN_NAME: &str = "_csrf_token";
 
 #[derive(Debug)]
 pub struct AuthSuccess {
@@ -14,24 +12,23 @@ pub struct AuthSuccess {
 
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum Error {
-    #[error("invalid data: {0}")]
-    InvalidData(String),
+    #[error("invalid jwt token: {0}")]
+    InvalidJwt(String),
+    #[error("invalid cstf token: {0}")]
+    InvalidCsrf(String),
     #[error("user is unauthorized: {0}")]
     Unauthorized(String),
     #[error("blockscout invalid response: {0}")]
-    BlockscoutApiError(String),
+    BlockscoutApi(String),
 }
 
-pub async fn auth_from_tonic<T: Serialize>(
-    request: Request<T>,
+pub async fn auth_from_tonic(
+    metadata: &MetadataMap,
+    csrf_token: Option<&str>,
     blockscout_host: &str,
 ) -> Result<AuthSuccess, Error> {
-    let jwt = extract_jwt(request.metadata())?;
-    let csrf_token = serde_json::to_value(request.into_inner())
-        .map_err(|e| Error::InvalidData(format!("invalid request payload: {e}")))?
-        .get(CSRF_TOKEN_NAME)
-        .and_then(|token| token.as_str().map(|s| s.to_string()));
-    auth_from_tokens(jwt.as_ref(), csrf_token.as_deref(), blockscout_host).await
+    let jwt = extract_jwt(metadata)?;
+    auth_from_tokens(jwt.as_ref(), csrf_token, blockscout_host).await
 }
 
 pub async fn auth_from_tokens(
@@ -52,31 +49,32 @@ fn extract_jwt(metadata: &MetadataMap) -> Result<String, Error> {
     let token = cookies
         .get(JWT_TOKEN_NAME)
         .map(|cookie| cookie.value())
-        .ok_or_else(|| Error::InvalidData(format!("'{JWT_TOKEN_NAME}' not found in request")))?;
+        .ok_or_else(|| Error::InvalidJwt(format!("'{JWT_TOKEN_NAME}' not found in request")))?;
     Ok(token.to_string())
 }
 
 fn get_cookies(metadata: &MetadataMap) -> Result<HashMap<String, Cookie>, Error> {
     let cookies_raw = metadata
         .get(COOKIE.as_str())
-        .map(|value| value.to_str())
-        .ok_or_else(|| Error::InvalidData("no cookies were provided".to_string()))?
-        .map_err(|e| Error::InvalidData(format!("invalid cookie format: {e}")))?;
+        .ok_or_else(|| Error::InvalidJwt("no cookies were provided".to_string()))?
+        .to_str()
+        .map_err(|e| Error::InvalidJwt(format!("invalid cookie format: {e}")))?;
     let cookies = Cookie::split_parse_encoded(cookies_raw)
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| Error::InvalidData(format!("cannot parse cookie: {e}")))?
-        .into_iter()
-        .map(|c| (c.name().to_string(), c))
-        .collect();
+        .map(|val| {
+            val.map(|c| (c.name().to_string(), c))
+                .map_err(|e| Error::InvalidJwt(format!("cannot parse cookie: {e}")))
+        })
+        .collect::<Result<_, _>>()?;
     Ok(cookies)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde::Serialize;
     use tonic::{
         codegen::http::{header::CONTENT_TYPE, HeaderMap},
-        Extensions,
+        Extensions, Request,
     };
 
     fn build_headers(jwt: &str) -> HeaderMap {
@@ -93,7 +91,7 @@ mod tests {
         headers
     }
 
-    fn build_request(jwt: &str, data: serde_json::Value) -> Request<serde_json::Value> {
+    fn build_request<T: Serialize>(jwt: &str, data: T) -> Request<T> {
         let meta = tonic::metadata::MetadataMap::from_headers(build_headers(jwt));
         Request::from_parts(meta, Extensions::default(), data)
     }
@@ -107,33 +105,46 @@ mod tests {
         assert_eq!(token, jwt);
     }
 
+    #[derive(Debug, Serialize)]
+    struct GetBody {}
+
+    #[derive(Debug, Serialize)]
+    struct PostBody {
+        name: String,
+        _csrf_token: String,
+    }
+
     #[tokio::test]
     async fn auth_works() {
         let jwt = "VALID_JWT_TOKEN";
-        let request = build_request(
-            jwt,
-            serde_json::json!({
-                "data": "nothing"
-            }),
-        );
+        let request = build_request(jwt, GetBody {});
         // TODO: replace with blockscout api mock
-        let success = auth_from_tonic(request, "").await.expect("failed to auth");
+        let metadata = request.metadata().clone();
+        let success = auth_from_tonic(&metadata, None, "")
+            .await
+            .expect("failed to auth");
         assert_eq!(success.user_id, jwt);
 
         let jwt = "VALID_JWT_TOKEN";
         let csrf = "_PLUS_CSRF";
         let request = build_request(
             jwt,
-            serde_json::json!({
-                "name": "lev",
-                "_csrf_token": csrf
-            }),
+            PostBody {
+                name: "lev".to_string(),
+                _csrf_token: csrf.to_string(),
+            },
         );
-        let success = auth_from_tonic(request, "").await.expect("failed to auth");
+        let metadata = request.metadata().clone();
+        let payload = request.into_inner();
+        let success = auth_from_tonic(&metadata, Some(&payload._csrf_token), "")
+            .await
+            .expect("failed to auth");
         assert_eq!(success.user_id, format!("{jwt}{csrf}"));
 
-        let request = Request::new(serde_json::json!({}));
-        auth_from_tonic(request, "")
+        let request = Request::new(GetBody {});
+        let metadata = request.metadata().clone();
+
+        auth_from_tonic(&metadata, None, "")
             .await
             .expect_err("success response for empty request");
     }
