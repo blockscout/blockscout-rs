@@ -14,8 +14,8 @@ pub struct AuthSuccess {
 pub enum Error {
     #[error("invalid jwt token: {0}")]
     InvalidJwt(String),
-    #[error("invalid cstf token: {0}")]
-    InvalidCsrf(String),
+    #[error("invalid csrf token: {0}")]
+    InvalidCsrfToken(String),
     #[error("user is unauthorized: {0}")]
     Unauthorized(String),
     #[error("blockscout invalid response: {0}")]
@@ -37,11 +37,8 @@ pub async fn auth_from_jwt(
     _blockscout_host: &str,
 ) -> Result<AuthSuccess, Error> {
     // TODO: replace with actual blockscout api call
-    let mut jwt = jwt.to_string();
-    if let Some(cstf_token) = csrf_token {
-        jwt.push_str(cstf_token)
-    }
-    Ok(AuthSuccess { user_id: jwt })
+    let user_id = format!("{jwt}{}", csrf_token.unwrap_or_default());
+    Ok(AuthSuccess { user_id })
 }
 
 fn extract_jwt(metadata: &MetadataMap) -> Result<String, Error> {
