@@ -22,16 +22,16 @@ pub enum Error {
     BlockscoutApi(String),
 }
 
-pub async fn auth_from_tonic(
+pub async fn auth_from_metadata(
     metadata: &MetadataMap,
     csrf_token: Option<&str>,
     blockscout_host: &str,
 ) -> Result<AuthSuccess, Error> {
     let jwt = extract_jwt(metadata)?;
-    auth_from_tokens(jwt.as_ref(), csrf_token, blockscout_host).await
+    auth_from_jwt(jwt.as_ref(), csrf_token, blockscout_host).await
 }
 
-pub async fn auth_from_tokens(
+pub async fn auth_from_jwt(
     jwt: &str,
     csrf_token: Option<&str>,
     _blockscout_host: &str,
@@ -120,7 +120,7 @@ mod tests {
         let request = build_request(jwt, GetBody {});
         // TODO: replace with blockscout api mock
         let metadata = request.metadata().clone();
-        let success = auth_from_tonic(&metadata, None, "")
+        let success = auth_from_metadata(&metadata, None, "")
             .await
             .expect("failed to auth");
         assert_eq!(success.user_id, jwt);
@@ -136,7 +136,7 @@ mod tests {
         );
         let metadata = request.metadata().clone();
         let payload = request.into_inner();
-        let success = auth_from_tonic(&metadata, Some(&payload._csrf_token), "")
+        let success = auth_from_metadata(&metadata, Some(&payload._csrf_token), "")
             .await
             .expect("failed to auth");
         assert_eq!(success.user_id, format!("{jwt}{csrf}"));
@@ -144,7 +144,7 @@ mod tests {
         let request = Request::new(GetBody {});
         let metadata = request.metadata().clone();
 
-        auth_from_tonic(&metadata, None, "")
+        auth_from_metadata(&metadata, None, "")
             .await
             .expect_err("success response for empty request");
     }
