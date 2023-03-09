@@ -82,9 +82,7 @@ impl DownloadCache {
     }
 
     fn read_dir_paths(dir: &PathBuf) -> std::io::Result<impl Iterator<Item = PathBuf>> {
-        let paths = std::fs::read_dir(dir)?
-            .into_iter()
-            .filter_map(|r| r.ok().map(|e| e.path()));
+        let paths = std::fs::read_dir(dir)?.filter_map(|r| r.ok().map(|e| e.path()));
         Ok(paths)
     }
 
