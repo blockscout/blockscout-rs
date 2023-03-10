@@ -4,7 +4,7 @@ use thiserror::Error;
 use tonic::{codegen::http::header::COOKIE, metadata::MetadataMap};
 
 const JWT_TOKEN_NAME: &str = "_explorer_key";
-const CSRF_TOKEN_NAME: &str = "_csrf_token";
+const CSRF_TOKEN_NAME: &str = "x-csrf-token";
 
 #[derive(Debug)]
 pub struct AuthSuccess {
@@ -103,7 +103,7 @@ mod tests {
         headers.insert(CONTENT_TYPE, "application/json".parse().unwrap());
         if let Some(csrf_token) = csrf_token {
             headers.insert(
-                HeaderName::from_lowercase(b"_csrf_token").unwrap(),
+                HeaderName::from_lowercase(b"x-csrf-token").unwrap(),
                 csrf_token.parse().unwrap(),
             );
         };
