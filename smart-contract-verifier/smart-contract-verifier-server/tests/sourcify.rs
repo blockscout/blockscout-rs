@@ -18,8 +18,8 @@ async fn init_service() -> Arc<SourcifyVerifierService> {
 }
 
 #[rstest::rstest]
-#[case("0xe94dD562dB27e3FC6FA701739Da7b3149CE983E1", "FULL")]
-#[case("0x49c1d710CEF4eD5Cb4c1970aB6EEfdC2F95BF054", "PARTIAL")]
+#[case("0x6da5E8Cd88641dd371F3ED7737664ea86B3C3ec8", "FULL")]
+#[case("0xdb3b8b0001D2B22502dcEA7b839f10b55A3E43c3", "PARTIAL")]
 #[tokio::test]
 async fn should_return_200(#[case] address: String, #[case] match_type: String) {
     let service = init_service().await;
@@ -31,10 +31,10 @@ async fn should_return_200(#[case] address: String, #[case] match_type: String) 
     let metadata = include_str!("contracts/storage/metadata.json");
     let source = include_str!("contracts/storage/source.sol");
     let request_body = json!({
-        // relies on the fact that the POA Network Core has this contract
-        // https://blockscout.com/poa/core/address/0xe94dD562dB27e3FC6FA701739Da7b3149CE983E1
+        // relies on the fact that the Ethereum Testnet Goerli has this contract
+        // https://eth-goerli.blockscout.com/address/0x6da5E8Cd88641dd371F3ED7737664ea86B3C3ec8
         "address": address,
-        "chain": "99",
+        "chain": "5",
         "files": {
             "source.sol": source,
             "metadata.json": metadata,
@@ -93,30 +93,30 @@ async fn invalid_contracts() {
     for (request_body, error_message) in [
         (
             json!({
-                // relies on fact that the POA Network Core HASN'T any contract with this address
+                // relies on fact that the Ethereum Testnet Goerli HASN'T any contract with this address
                 "address": "0x1234567890123456789012345678901234567890",
-                "chain": "99",
+                "chain": "5",
                 "files": {
                     "metadata.json": metadata_content,
                     "contracts/1_Storage.sol": source,
                 },
             }),
-            "POA Network Core does not have a contract",
+            "Goerli does not have a contract",
         ),
         (
             json!({
                 "address": "0x1234567890123456789012345678901234567890",
-                "chain": "99",
+                "chain": "5",
                 "files": {},
             }),
             "Metadata file not found",
         ),
         (
             json!({
-                // relies on fact that POA Network Core has some contract, but it is not verified in
+                // relies on fact that Ethereum Testnet Goerli has some contract, but it is not verified in
                 // sourcify and `source` contains wrong source code
-                "address": "0xAb2f2Dd3120dE530d38936EE09A74a6d17e3Da44",
-                "chain": "99",
+                "address": "0xD3F4730068b57d11a5Cd4252D8a9012A188C5D3B",
+                "chain": "5",
                 "files": {
                     "metadata.json": metadata_content,
                     "contracts/1_Storage.sol": source,
