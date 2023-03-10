@@ -1,6 +1,7 @@
 use crate::proto::{source, Source};
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use smart_contract_verifier::{MatchType, SourcifySuccess, VerificationSuccess};
+use std::sync::Arc;
 
 pub fn from_verification_success(value: VerificationSuccess) -> Source {
     let compiler_input = value.compiler_input;
@@ -28,7 +29,12 @@ pub fn from_verification_success(value: VerificationSuccess) -> Source {
         source_files: compiler_input
             .sources
             .into_iter()
-            .map(|(path, source)| (path.to_string_lossy().to_string(), source.content))
+            .map(|(path, source)| {
+                // Similar to `unwrap_or_clone` which is still nightly-only feature.
+                let content =
+                    Arc::try_unwrap(source.content).unwrap_or_else(|content| (*content).clone());
+                (path.to_string_lossy().to_string(), content)
+            })
             .collect(),
         abi: value.abi.as_ref().map(|abi| {
             serde_json::to_string(abi)
@@ -91,12 +97,7 @@ mod tests {
         let verification_success = VerificationSuccess {
             compiler_input: CompilerInput {
                 language: "Solidity".to_string(),
-                sources: BTreeMap::from([(
-                    "file_name".into(),
-                    artifacts::Source {
-                        content: "content".into(),
-                    },
-                )]),
+                sources: BTreeMap::from([("file_name".into(), artifacts::Source::new("content"))]),
                 settings: compiler_settings.clone(),
             },
             compiler_output: Default::default(),
