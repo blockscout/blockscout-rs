@@ -19,7 +19,7 @@ async fn init_service() -> Arc<SourcifyVerifierService> {
 
 #[rstest::rstest]
 #[case("0x6da5E8Cd88641dd371F3ED7737664ea86B3C3ec8", "FULL")]
-#[case("0x9eAAde33A4881383C03bf12A5D8BfE0B15b6EeC3", "PARTIAL")]
+#[case("0xdb3b8b0001D2B22502dcEA7b839f10b55A3E43c3", "PARTIAL")]
 #[tokio::test]
 async fn should_return_200(#[case] address: String, #[case] match_type: String) {
     let service = init_service().await;
