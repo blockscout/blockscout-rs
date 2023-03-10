@@ -45,7 +45,7 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
         .await
         .unwrap();
 
-    let accounts = (1..9).into_iter().map(mock_address).collect::<Vec<_>>();
+    let accounts = (1..9).map(mock_address).collect::<Vec<_>>();
     addresses::Entity::insert_many(accounts.clone())
         .exec(blockscout)
         .await
