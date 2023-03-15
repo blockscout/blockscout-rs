@@ -47,6 +47,7 @@ async fn test_returns_valid_source(service: MockSolidityVerifierService) {
         optimization_runs: None,
         source_files: Default::default(),
         libraries: Default::default(),
+        metadata: None,
     };
     let source_type = verification::SourceType::Solidity;
     test_cases::test_returns_valid_source(
@@ -72,6 +73,7 @@ async fn test_verify_then_search(service: MockSolidityVerifierService) {
         optimization_runs: None,
         source_files: Default::default(),
         libraries: Default::default(),
+        metadata: None,
     };
     let source_type = verification::SourceType::Solidity;
     test_cases::test_verify_then_search(
@@ -97,6 +99,7 @@ async fn test_verify_same_source_twice(service: MockSolidityVerifierService) {
         optimization_runs: None,
         source_files: Default::default(),
         libraries: Default::default(),
+        metadata: None,
     };
     let source_type = verification::SourceType::Solidity;
     test_cases::test_verify_same_source_twice(

@@ -46,6 +46,7 @@ async fn test_returns_valid_source(service: MockVyperVerifierService) {
         evm_version: None,
         source_files: Default::default(),
         optimizations: None,
+        metadata: None,
     };
     let source_type = verification::SourceType::Vyper;
     test_cases::test_returns_valid_source(
@@ -70,6 +71,7 @@ async fn test_verify_then_search(service: MockVyperVerifierService) {
         evm_version: None,
         source_files: Default::default(),
         optimizations: None,
+        metadata: None,
     };
     let source_type = verification::SourceType::Vyper;
     test_cases::test_verify_then_search(
@@ -94,6 +96,7 @@ async fn test_verify_same_source_twice(service: MockVyperVerifierService) {
         evm_version: None,
         source_files: Default::default(),
         optimizations: None,
+        metadata: None,
     };
     let source_type = verification::SourceType::Vyper;
     test_cases::test_verify_same_source_twice(
