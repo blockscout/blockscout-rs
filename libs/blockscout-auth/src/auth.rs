@@ -1,5 +1,8 @@
 use cookie::Cookie;
-use reqwest::header::{HeaderMap, HeaderValue};
+use reqwest::{
+    header::{HeaderMap, HeaderValue},
+    StatusCode,
+};
 use serde::Deserialize;
 use std::collections::HashMap;
 use thiserror::Error;
@@ -110,17 +113,33 @@ pub async fn auth_from_tokens(
         .text()
         .await
         .map_err(|e| Error::BlockscoutApi(e.to_string()))?;
-    if [200, 401].contains(&status.as_u16()) {
-        let response: BlockscoutAuthResponse = serde_json::from_str(&response_raw)
-            .map_err(|e| Error::BlockscoutApi(format!("invalid body: {e}")))?;
-        match response {
-            BlockscoutAuthResponse::Success(resp) => Ok(resp.into()),
-            BlockscoutAuthResponse::Error(err) => Err(Error::Unauthorized(err.message)),
+
+    match status {
+        StatusCode::OK | StatusCode::UNAUTHORIZED => {
+            let response: BlockscoutAuthResponse =
+                serde_json::from_str(&response_raw).map_err(|error| {
+                    tracing::warn!(
+                        error = ?error,
+                        body = ?response_raw,
+                        "failed to parse blockscout response body"
+                    );
+                    Error::BlockscoutApi(format!("invalid body: {error}"))
+                })?;
+            match response {
+                BlockscoutAuthResponse::Success(resp) => Ok(resp.into()),
+                BlockscoutAuthResponse::Error(err) => Err(Error::Unauthorized(err.message)),
+            }
         }
-    } else {
-        Err(Error::BlockscoutApi(format!(
-            "blockscout responded with {status}",
-        )))
+        _ => {
+            tracing::warn!(
+                status = ?status,
+                body = ?response_raw,
+                "invalid response status from blockscout"
+            );
+            Err(Error::BlockscoutApi(format!(
+                "blockscout responded with {status}",
+            )))
+        }
     }
 }
 
@@ -182,10 +201,7 @@ mod tests {
     use crate::{init_mocked_blockscout_auth_service, MockUser};
     use reqwest::header::HeaderName;
     use serde::Serialize;
-    use tonic::{
-        codegen::http::{header::CONTENT_TYPE, HeaderMap},
-        Extensions, Request,
-    };
+    use tonic::{codegen::http::header::CONTENT_TYPE, Extensions, Request};
 
     fn build_headers(jwt: &str, csrf_token: Option<&str>) -> HeaderMap {
         let cookies = format!(
