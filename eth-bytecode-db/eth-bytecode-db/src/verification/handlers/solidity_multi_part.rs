@@ -82,6 +82,7 @@ mod tests {
                 optimization_runs: Some(200),
                 libraries: BTreeMap::from([("lib1".into(), "0xcafe".into())]),
             },
+            metadata: None,
         };
         let expected = VerifySolidityMultiPartRequest {
             bytecode: "0x1234".to_string(),
@@ -117,6 +118,7 @@ mod tests {
                 optimization_runs: Some(200),
                 libraries: BTreeMap::from([("lib1".into(), "0xcafe".into())]),
             },
+            metadata: None,
         };
         let expected = VerifySolidityMultiPartRequest {
             bytecode: "0x1234".to_string(),

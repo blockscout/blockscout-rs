@@ -4,7 +4,7 @@ use crate::{
         vyper_verifier_server, ListCompilerVersionsRequest, ListCompilerVersionsResponse,
         VerifyResponse, VerifyVyperMultiPartRequest,
     },
-    types::BytecodeTypeWrapper,
+    types::{BytecodeTypeWrapper, VerificationMetadataWrapper},
 };
 use amplify::Wrapper;
 use async_trait::async_trait;
@@ -40,6 +40,10 @@ impl vyper_verifier_server::VyperVerifier for VyperVerifierService {
                 evm_version: request.evm_version,
                 optimizations: request.optimizations,
             },
+            metadata: request
+                .metadata
+                .map(|metadata| VerificationMetadataWrapper::from_inner(metadata).try_into())
+                .transpose()?,
         };
         let result = vyper_multi_part::verify(self.client.clone(), verification_request).await;
 

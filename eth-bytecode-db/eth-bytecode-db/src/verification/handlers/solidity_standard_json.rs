@@ -69,6 +69,7 @@ mod tests {
             content: StandardJson {
                 input: "standard_json_input".to_string(),
             },
+            metadata: None,
         };
         let expected = VerifySolidityStandardJsonRequest {
             bytecode: "0x1234".to_string(),
@@ -92,6 +93,7 @@ mod tests {
             content: StandardJson {
                 input: "standard_json_input".to_string(),
             },
+            metadata: None,
         };
         let expected = VerifySolidityStandardJsonRequest {
             bytecode: "0x1234".to_string(),

@@ -79,6 +79,7 @@ mod tests {
                     ("source_file2".into(), "content2".into()),
                 ]),
             },
+            metadata: None,
         };
         let expected = VerifyVyperMultiPartRequest {
             bytecode: "0x1234".to_string(),
@@ -112,6 +113,7 @@ mod tests {
                     ("source_file2".into(), "content2".into()),
                 ]),
             },
+            metadata: None,
         };
         let expected = VerifyVyperMultiPartRequest {
             bytecode: "0x1234".to_string(),

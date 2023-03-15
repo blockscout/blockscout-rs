@@ -173,12 +173,19 @@ pub struct Source {
 /********** Verification Request **********/
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VerificationMetadata {
+    pub chain_id: i64,
+    pub contract_address: bytes::Bytes,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VerificationRequest<T> {
     pub bytecode: String,
     pub bytecode_type: BytecodeType,
     pub compiler_version: String,
     #[serde(flatten)]
     pub content: T,
+    pub metadata: Option<VerificationMetadata>,
 }
 
 /********** Verification Type **********/

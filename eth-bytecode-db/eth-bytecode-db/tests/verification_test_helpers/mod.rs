@@ -43,6 +43,7 @@ pub fn generate_verification_request<T>(id: u8, content: T) -> VerificationReque
         bytecode_type: BytecodeType::CreationInput,
         compiler_version: "compiler_version".to_string(),
         content,
+        metadata: None,
     }
 }
 
