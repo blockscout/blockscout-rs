@@ -15,6 +15,8 @@ pub struct Model {
     pub bytecode_type: BytecodeType,
     pub verification_settings: Json,
     pub verification_type: VerificationType,
+    pub chain_id: Option<i64>,
+    pub contract_address: Option<Vec<u8>>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
