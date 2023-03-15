@@ -83,8 +83,14 @@ impl StatsService for ReadService {
             })
             .collect();
 
-        // remove last data point, because it can be partially updated
-        data.pop();
+        let settings =
+            self.charts.settings.get(&request.name).ok_or_else(|| {
+                tonic::Status::not_found(format!("chart {} not found", request.name))
+            })?;
+        if settings.drop_last_point {
+            // remove last data point, because it can be partially updated
+            data.pop();
+        }
         Ok(Response::new(LineChart { chart: data }))
     }
 

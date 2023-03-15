@@ -9,6 +9,8 @@ pub struct ChartSettings {
     #[serde_as(as = "Option<DisplayFromStr>")]
     pub update_schedule: Option<Schedule>,
     pub units: Option<String>,
+    #[serde(default)]
+    pub drop_last_point: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
