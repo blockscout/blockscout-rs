@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use entity::sea_orm_active_enums;
 use eth_bytecode_db::verification::{
     vyper_multi_part, vyper_multi_part::MultiPartFiles, Client, Error, Source, SourceType,
-    VerificationRequest,
+    VerificationMetadata, VerificationRequest,
 };
 use rstest::{fixture, rstest};
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
@@ -41,8 +41,12 @@ impl VerifierService<VerificationRequest<MultiPartFiles>> for MockVyperVerifierS
         SmartContractVerifierServer::new().vyper_service(self)
     }
 
-    fn generate_request(&self, id: u8) -> VerificationRequest<MultiPartFiles> {
-        generate_verification_request(id, default_request_content())
+    fn generate_request(
+        &self,
+        id: u8,
+        metadata: Option<VerificationMetadata>,
+    ) -> VerificationRequest<MultiPartFiles> {
+        generate_verification_request(id, default_request_content(), metadata)
     }
 
     fn source_type(&self) -> SourceType {
@@ -94,6 +98,18 @@ async fn test_historical_data_is_added_into_database(service: MockVyperVerifierS
         service,
         verification_settings,
         verification_type,
+    )
+    .await;
+}
+
+#[rstest]
+#[tokio::test]
+#[ignore = "Needs database to run"]
+async fn test_historical_data_saves_chain_id_and_contract_address(
+    service: MockVyperVerifierService,
+) {
+    verification_test_helpers::test_historical_data_saves_chain_id_and_contract_address(
+        DB_PREFIX, service,
     )
     .await;
 }

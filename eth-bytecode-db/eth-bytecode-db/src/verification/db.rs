@@ -1,4 +1,5 @@
 use super::{types, BytecodeType};
+use crate::verification::VerificationMetadata;
 use anyhow::Context;
 use entity::{
     bytecode_parts, bytecodes, files, parts, sea_orm_active_enums, source_files, sources,
@@ -112,7 +113,15 @@ pub(crate) async fn insert_verified_contract_data(
     bytecode_type: BytecodeType,
     verification_settings: serde_json::Value,
     verification_type: types::VerificationType,
+    verification_metadata: Option<VerificationMetadata>,
 ) -> Result<(), anyhow::Error> {
+    let (chain_id, contract_address) = match verification_metadata {
+        None => (None, None),
+        Some(metadata) => (
+            Some(metadata.chain_id),
+            Some(metadata.contract_address.to_vec()),
+        ),
+    };
     verified_contracts::ActiveModel {
         source_id: Set(source_id),
         raw_bytecode: Set(raw_bytecode),
@@ -121,6 +130,8 @@ pub(crate) async fn insert_verified_contract_data(
         verification_type: Set(sea_orm_active_enums::VerificationType::from(
             verification_type,
         )),
+        chain_id: Set(chain_id),
+        contract_address: Set(contract_address),
         ..Default::default()
     }
     .insert(db_client)

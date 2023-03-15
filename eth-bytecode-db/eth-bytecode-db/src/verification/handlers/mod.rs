@@ -104,7 +104,7 @@ async fn process_verify_response(
                 raw_request_bytecode,
                 verification_settings,
                 verification_type,
-                verification_metadata: _verification_metadata,
+                verification_metadata,
             } => {
                 let source_id = db::insert_data(db_client, source.clone())
                     .await
@@ -118,6 +118,7 @@ async fn process_verify_response(
                     bytecode_type,
                     verification_settings,
                     verification_type,
+                    verification_metadata,
                 )
                 .await
                 .context("Insert verified contract data")?;

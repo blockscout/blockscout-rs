@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use entity::sea_orm_active_enums;
 use eth_bytecode_db::verification::{
     solidity_standard_json, solidity_standard_json::StandardJson, Client, Error, Source,
-    SourceType, VerificationRequest,
+    SourceType, VerificationMetadata, VerificationRequest,
 };
 use rstest::{fixture, rstest};
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
@@ -43,8 +43,12 @@ impl VerifierService<VerificationRequest<StandardJson>> for MockSolidityVerifier
         SmartContractVerifierServer::new().solidity_service(self)
     }
 
-    fn generate_request(&self, id: u8) -> VerificationRequest<StandardJson> {
-        generate_verification_request(id, default_request_content())
+    fn generate_request(
+        &self,
+        id: u8,
+        metadata: Option<VerificationMetadata>,
+    ) -> VerificationRequest<StandardJson> {
+        generate_verification_request(id, default_request_content(), metadata)
     }
 
     fn source_type(&self) -> SourceType {
@@ -94,6 +98,18 @@ async fn test_historical_data_is_added_into_database(service: MockSolidityVerifi
         service,
         verification_settings,
         verification_type,
+    )
+    .await;
+}
+
+#[rstest]
+#[tokio::test]
+#[ignore = "Needs database to run"]
+async fn test_historical_data_saves_chain_id_and_contract_address(
+    service: MockSolidityVerifierService,
+) {
+    verification_test_helpers::test_historical_data_saves_chain_id_and_contract_address(
+        DB_PREFIX, service,
     )
     .await;
 }
