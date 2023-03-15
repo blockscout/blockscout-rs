@@ -10,7 +10,7 @@ use super::{
     db,
     errors::Error,
     smart_contract_verifier,
-    types::{BytecodePart, BytecodeType, Source, VerificationType},
+    types::{BytecodePart, BytecodeType, Source, VerificationMetadata, VerificationType},
 };
 use anyhow::Context;
 use sea_orm::DatabaseConnection;
@@ -22,6 +22,7 @@ enum ProcessResponseAction {
         raw_request_bytecode: Vec<u8>,
         verification_settings: serde_json::Value,
         verification_type: VerificationType,
+        verification_metadata: Option<VerificationMetadata>,
     },
 }
 
@@ -103,6 +104,7 @@ async fn process_verify_response(
                 raw_request_bytecode,
                 verification_settings,
                 verification_type,
+                verification_metadata: _verification_metadata,
             } => {
                 let source_id = db::insert_data(db_client, source.clone())
                     .await

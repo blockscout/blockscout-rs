@@ -33,6 +33,7 @@ pub async fn verify(
     let raw_request_bytecode = hex::decode(request.bytecode.clone().trim_start_matches("0x"))
         .map_err(|err| Error::InvalidArgument(format!("invalid bytecode: {err}")))?;
     let verification_settings = serde_json::json!(&request);
+    let verification_metadata = request.metadata.clone();
 
     let request: VerifySolidityStandardJsonRequest = request.into();
     let response = client
@@ -50,6 +51,7 @@ pub async fn verify(
             raw_request_bytecode,
             verification_settings,
             verification_type: VerificationType::StandardJson,
+            verification_metadata,
         },
     )
     .await
