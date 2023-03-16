@@ -5,7 +5,7 @@ use wiremock::{
 };
 
 pub struct MockUser {
-    pub id: String,
+    pub id: i64,
     pub chain_id: i64,
     pub jwt: String,
     pub csrf_token: String,
@@ -48,14 +48,13 @@ pub async fn init_mocked_blockscout_auth_service(
 }
 
 fn respond(user: &MockUser) -> ResponseTemplate {
-    let id: i64 = user.id.parse().expect("user_id has to be valid i64");
     ResponseTemplate::new(200).set_body_json(json!({
         "avatar": "https://lh3.googleusercontent.com/a/image",
         "email": "user@gmail.com",
-        "id": id,
+        "id": user.id,
         "name": "User",
         "nickname": "username",
         "uid": "google-oauth2|10238912614929394",
-        "watchlist_id": id,
+        "watchlist_id": user.id,
     }))
 }

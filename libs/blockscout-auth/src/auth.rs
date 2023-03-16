@@ -13,41 +13,20 @@ const JWT_TOKEN_NAME: &str = "_explorer_key";
 const CSRF_TOKEN_NAME: &str = "x-csrf-token";
 const API_KEY_NAME: &str = "api_key";
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct AuthSuccess {
-    pub user_id: String,
+    pub avatar: String,
+    pub email: String,
+    pub id: i64,
+    pub name: String,
+    pub nickname: String,
+    pub uid: String,
+    pub watchlist_id: i64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-#[serde(untagged)]
-enum BlockscoutAuthResponse {
-    Success(BlockscoutAuthSuccessResponse),
-    Error(BlockscoutAuthErrorResponse),
-}
-
-#[derive(Debug, Clone, Deserialize)]
-struct BlockscoutAuthErrorResponse {
+struct AuthFalied {
     message: String,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Clone, Deserialize)]
-struct BlockscoutAuthSuccessResponse {
-    avatar: String,
-    email: String,
-    id: i64,
-    name: String,
-    nickname: String,
-    uid: String,
-    watchlist_id: i64,
-}
-
-impl From<BlockscoutAuthSuccessResponse> for AuthSuccess {
-    fn from(value: BlockscoutAuthSuccessResponse) -> Self {
-        Self {
-            user_id: value.id.to_string(),
-        }
-    }
 }
 
 #[derive(Error, Debug)]
@@ -85,11 +64,6 @@ pub async fn auth_from_tokens(
     blockscout_host: &Url,
     blockscout_api_key: Option<&str>,
 ) -> Result<AuthSuccess, Error> {
-    let headers = build_http_headers(jwt, csrf_token)?;
-    let client = reqwest::ClientBuilder::new()
-        .default_headers(headers)
-        .build()
-        .map_err(|e| Error::InternalError(e.to_string()))?;
     let mut url = blockscout_host
         .join("/api/account/v1/authenticate")
         .expect("should be valid url");
@@ -98,12 +72,14 @@ pub async fn auth_from_tokens(
             .map(|api_key| format!("{API_KEY_NAME}={api_key}"))
             .as_deref(),
     );
-
+    let headers = build_http_headers(jwt, csrf_token)?;
+    let client = reqwest::Client::new();
     let response = if csrf_token.is_some() {
         client.post(url)
     } else {
         client.get(url)
     }
+    .headers(headers)
     .send()
     .await
     .map_err(|_| Error::BlockscoutApi("failed to connect".to_string()))?;
@@ -115,20 +91,27 @@ pub async fn auth_from_tokens(
         .map_err(|e| Error::BlockscoutApi(e.to_string()))?;
 
     match status {
-        StatusCode::OK | StatusCode::UNAUTHORIZED => {
-            let response: BlockscoutAuthResponse =
-                serde_json::from_str(&response_raw).map_err(|error| {
-                    tracing::warn!(
-                        error = ?error,
-                        body = ?response_raw,
-                        "failed to parse blockscout response body"
-                    );
-                    Error::BlockscoutApi(format!("invalid body: {error}"))
-                })?;
-            match response {
-                BlockscoutAuthResponse::Success(resp) => Ok(resp.into()),
-                BlockscoutAuthResponse::Error(err) => Err(Error::Unauthorized(err.message)),
-            }
+        StatusCode::OK => {
+            let success: AuthSuccess = serde_json::from_str(&response_raw).map_err(|error| {
+                tracing::warn!(
+                    error = ?error,
+                    body = ?response_raw,
+                    "failed to parse blockscout response body"
+                );
+                Error::BlockscoutApi(format!("invalid body: {error}"))
+            })?;
+            Ok(success)
+        }
+        StatusCode::UNAUTHORIZED => {
+            let failed: AuthFalied = serde_json::from_str(&response_raw).map_err(|error| {
+                tracing::warn!(
+                    error = ?error,
+                    body = ?response_raw,
+                    "failed to parse blockscout response body"
+                );
+                Error::BlockscoutApi(format!("invalid body: {error}"))
+            })?;
+            Err(Error::Unauthorized(failed.message))
         }
         _ => {
             tracing::warn!(
@@ -257,7 +240,7 @@ mod tests {
     #[tokio::test]
     async fn auth_works() {
         let users = [MockUser {
-            id: "1".into(),
+            id: 1,
             chain_id: 1,
             jwt: "jwt1".into(),
             csrf_token: "csrf1".into(),
@@ -275,7 +258,7 @@ mod tests {
         )
         .await
         .expect("failed to auth get request");
-        assert_eq!(success.user_id, "1");
+        assert_eq!(success.id, 1);
 
         let request = build_request(
             "jwt1",
@@ -292,7 +275,7 @@ mod tests {
         )
         .await
         .expect("failed to auth post request");
-        assert_eq!(success.user_id, "1");
+        assert_eq!(success.id, 1);
 
         let request = build_request(
             "jwt1",
@@ -324,7 +307,7 @@ mod tests {
     #[tokio::test]
     async fn auth_works_no_api_key() {
         let users = [MockUser {
-            id: "1".into(),
+            id: 1,
             chain_id: 1,
             jwt: "jwt1".into(),
             csrf_token: "csrf1".into(),
@@ -342,6 +325,6 @@ mod tests {
         )
         .await
         .expect("failed to auth get request without api_key");
-        assert_eq!(success.user_id, "1");
+        assert_eq!(success.id, 1);
     }
 }
