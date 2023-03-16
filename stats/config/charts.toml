@@ -91,6 +91,12 @@ title = "Transactions growth"
 description = "Cumulative transactions number"
 update_schedule = "0 0 2 * * * *"
 
+[[lines.sections.charts]]
+id = "txnsSuccessRate"
+title = "Transactions success rate"
+description = "Successful transactions rate per day"
+update_schedule = "0 0 19 * * * *"
+
 
 [[lines.sections]]
 id = "blocks"
