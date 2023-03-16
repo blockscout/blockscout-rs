@@ -69,6 +69,11 @@ impl StatsService for ReadService {
                 request.name
             )));
         }
+        let settings =
+            self.charts.settings.get(&request.name).ok_or_else(|| {
+                tonic::Status::not_found(format!("chart {} not found", request.name))
+            })?;
+
         let from = request
             .from
             .and_then(|date| NaiveDate::from_str(&date).ok());
@@ -83,10 +88,6 @@ impl StatsService for ReadService {
             })
             .collect();
 
-        let settings =
-            self.charts.settings.get(&request.name).ok_or_else(|| {
-                tonic::Status::not_found(format!("chart {} not found", request.name))
-            })?;
         if settings.drop_last_point {
             // remove last data point, because it can be partially updated
             data.pop();
