@@ -4,7 +4,7 @@ use crate::{
         solidity_verifier_server, ListCompilerVersionsRequest, ListCompilerVersionsResponse,
         VerifyResponse, VerifySolidityMultiPartRequest, VerifySolidityStandardJsonRequest,
     },
-    types::BytecodeTypeWrapper,
+    types::{BytecodeTypeWrapper, VerificationMetadataWrapper},
 };
 use amplify::Wrapper;
 use async_trait::async_trait;
@@ -41,6 +41,10 @@ impl solidity_verifier_server::SolidityVerifier for SolidityVerifierService {
                 optimization_runs: request.optimization_runs,
                 libraries: request.libraries,
             },
+            metadata: request
+                .metadata
+                .map(|metadata| VerificationMetadataWrapper::from_inner(metadata).try_into())
+                .transpose()?,
         };
         let result = solidity_multi_part::verify(self.client.clone(), verification_request).await;
 
@@ -61,6 +65,10 @@ impl solidity_verifier_server::SolidityVerifier for SolidityVerifierService {
             content: solidity_standard_json::StandardJson {
                 input: request.input,
             },
+            metadata: request
+                .metadata
+                .map(|metadata| VerificationMetadataWrapper::from_inner(metadata).try_into())
+                .transpose()?,
         };
         let result =
             solidity_standard_json::verify(self.client.clone(), verification_request).await;

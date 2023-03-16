@@ -3,6 +3,7 @@ mod verification_test_helpers;
 use async_trait::async_trait;
 use eth_bytecode_db::verification::{
     sourcify, sourcify::VerificationRequest, Client, Error, Source, SourceType,
+    VerificationMetadata,
 };
 use rstest::{fixture, rstest};
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
@@ -30,7 +31,11 @@ impl VerifierService<VerificationRequest> for MockSourcifyVerifierService {
         SmartContractVerifierServer::new().sourcify_service(self)
     }
 
-    fn generate_request(&self, id: u8) -> VerificationRequest {
+    fn generate_request(
+        &self,
+        id: u8,
+        _metadata: Option<VerificationMetadata>,
+    ) -> VerificationRequest {
         VerificationRequest {
             address: "0x1234".to_string(),
             chain: "77".to_string(),

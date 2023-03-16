@@ -44,6 +44,7 @@ async fn test_returns_valid_source(service: MockSolidityVerifierService) {
         bytecode_type: BytecodeType::CreationInput.into(),
         compiler_version: "".to_string(),
         input: "".to_string(),
+        metadata: None,
     };
     let source_type = verification::SourceType::Solidity;
     test_cases::test_returns_valid_source(
@@ -66,6 +67,7 @@ async fn test_verify_then_search(service: MockSolidityVerifierService) {
         bytecode_type: BytecodeType::CreationInput.into(),
         compiler_version: "".to_string(),
         input: "".to_string(),
+        metadata: None,
     };
     let source_type = verification::SourceType::Solidity;
     test_cases::test_verify_then_search(
@@ -88,6 +90,7 @@ async fn test_verify_same_source_twice(service: MockSolidityVerifierService) {
         bytecode_type: BytecodeType::CreationInput.into(),
         compiler_version: "".to_string(),
         input: "".to_string(),
+        metadata: None,
     };
     let source_type = verification::SourceType::Solidity;
     test_cases::test_verify_same_source_twice(

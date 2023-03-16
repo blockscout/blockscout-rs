@@ -38,6 +38,7 @@ pub async fn verify(
     let raw_request_bytecode = hex::decode(request.bytecode.clone().trim_start_matches("0x"))
         .map_err(|err| Error::InvalidArgument(format!("invalid bytecode: {err}")))?;
     let verification_settings = serde_json::json!(&request);
+    let verification_metadata = request.metadata.clone();
 
     let request: VerifyVyperMultiPartRequest = request.into();
     let response = client
@@ -55,6 +56,7 @@ pub async fn verify(
             raw_request_bytecode,
             verification_settings,
             verification_type: VerificationType::MultiPartFiles,
+            verification_metadata,
         },
     )
     .await
@@ -79,6 +81,7 @@ mod tests {
                     ("source_file2".into(), "content2".into()),
                 ]),
             },
+            metadata: None,
         };
         let expected = VerifyVyperMultiPartRequest {
             bytecode: "0x1234".to_string(),
@@ -112,6 +115,7 @@ mod tests {
                     ("source_file2".into(), "content2".into()),
                 ]),
             },
+            metadata: None,
         };
         let expected = VerifyVyperMultiPartRequest {
             bytecode: "0x1234".to_string(),

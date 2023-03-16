@@ -279,6 +279,15 @@ definitions:
           type: string
       sourceType:
         $ref: '#/definitions/SourceSourceType'
+  v2VerificationMetadata:
+    type: object
+    properties:
+      chainId:
+        type: string
+        title: / Id of the chain the contract is verified on
+      contractAddress:
+        type: string
+        title: / The address of the contract to be verified
   v2VerifyResponse:
     type: object
     properties:
@@ -315,6 +324,9 @@ definitions:
         additionalProperties:
           type: string
         title: / Map from a library name to its address
+      metadata:
+        $ref: '#/definitions/v2VerificationMetadata'
+        title: / An optional field to be filled by explorers
       optimizationRuns:
         type: integer
         format: int32
@@ -341,6 +353,9 @@ definitions:
       input:
         type: string
         title: / https://docs.soliditylang.org/en/latest/using-the-compiler.html#input-description
+      metadata:
+        $ref: '#/definitions/v2VerificationMetadata'
+        title: / An optional field to be filled by explorers
   v2VerifySourcifyRequest:
     type: object
     properties:
@@ -379,6 +394,9 @@ definitions:
       evmVersion:
         type: string
         title: / Version of the EVM to compile for. If absent results in default EVM version
+      metadata:
+        $ref: '#/definitions/v2VerificationMetadata'
+        title: / An optional field to be filled by explorers
       optimizations:
         type: boolean
         title: / Flag enabling optimizations. If absent, default value is `true`

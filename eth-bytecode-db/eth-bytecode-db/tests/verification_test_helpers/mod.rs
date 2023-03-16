@@ -12,10 +12,10 @@ use entity::{
     verified_contracts,
 };
 use eth_bytecode_db::verification::{
-    BytecodeType, Client, Error, Source, SourceType, VerificationRequest,
+    BytecodeType, Client, Error, Source, SourceType, VerificationMetadata, VerificationRequest,
 };
 use pretty_assertions::assert_eq;
-use sea_orm::{DatabaseConnection, EntityTrait};
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::VerifyResponse;
 use smart_contract_veriifer_mock::SmartContractVerifierServer;
 use std::{collections::HashSet, str::FromStr, sync::Arc};
@@ -30,19 +30,28 @@ pub trait VerifierService<Request> {
 
     fn build_server(self) -> SmartContractVerifierServer;
 
-    fn generate_request(&self, id: u8) -> Request;
+    fn generate_request(
+        &self,
+        id: u8,
+        verification_metadata: Option<VerificationMetadata>,
+    ) -> Request;
 
     fn source_type(&self) -> SourceType;
 
     async fn verify(client: Client, request: Request) -> Result<Source, Error>;
 }
 
-pub fn generate_verification_request<T>(id: u8, content: T) -> VerificationRequest<T> {
+pub fn generate_verification_request<T>(
+    id: u8,
+    content: T,
+    metadata: Option<VerificationMetadata>,
+) -> VerificationRequest<T> {
     VerificationRequest {
         bytecode: DisplayBytes::from([id]).to_string(),
         bytecode_type: BytecodeType::CreationInput,
         compiler_version: "compiler_version".to_string(),
         content,
+        metadata,
     }
 }
 
@@ -86,7 +95,7 @@ where
 {
     let db = init_db(db_prefix, "test_returns_valid_source").await;
     let input_data =
-        test_input_data::input_data_1(service.generate_request(1), service.source_type());
+        test_input_data::input_data_1(service.generate_request(1, None), service.source_type());
     let client =
         start_server_and_init_client(db.client().clone(), service, vec![input_data.clone()]).await;
 
@@ -104,7 +113,7 @@ where
 {
     let source_type = service.source_type();
     let db = init_db(db_prefix, "test_data_is_added_into_database").await;
-    let input_data = test_input_data::input_data_1(service.generate_request(1), source_type);
+    let input_data = test_input_data::input_data_1(service.generate_request(1, None), source_type);
     let client =
         start_server_and_init_client(db.client().clone(), service, vec![input_data.clone()]).await;
 
@@ -396,7 +405,7 @@ where
 pub async fn test_historical_data_is_added_into_database<Service, Request>(
     db_prefix: &str,
     service: Service,
-    verification_settings: serde_json::Value,
+    mut verification_settings: serde_json::Value,
     verification_type: sea_orm_active_enums::VerificationType,
 ) where
     Request: Clone,
@@ -404,7 +413,7 @@ pub async fn test_historical_data_is_added_into_database<Service, Request>(
 {
     let source_type = service.source_type();
     let db = init_db(db_prefix, "test_historical_data_is_added_into_database").await;
-    let input_data = test_input_data::input_data_1(service.generate_request(1), source_type);
+    let input_data = test_input_data::input_data_1(service.generate_request(1, None), source_type);
     let client =
         start_server_and_init_client(db.client().clone(), service, vec![input_data.clone()]).await;
 
@@ -445,17 +454,78 @@ pub async fn test_historical_data_is_added_into_database<Service, Request>(
         verified_contract.bytecode_type,
         "Invalid bytecode type"
     );
-    println!(
-        "{}",
-        serde_json::to_string(&verified_contract.verification_settings).unwrap()
-    );
+    verification_settings
+        .as_object_mut()
+        .expect("Verification settings is not a map")
+        .insert("metadata".into(), serde_json::Value::Null);
     assert_eq!(
         verification_settings, verified_contract.verification_settings,
-        "Invalid verificaiton settings"
+        "Invalid verification settings"
     );
     assert_eq!(
         verification_type, verified_contract.verification_type,
         "Invalid verification type"
+    );
+}
+
+pub async fn test_historical_data_saves_chain_id_and_contract_address<Service, Request>(
+    db_prefix: &str,
+    service: Service,
+) where
+    Request: Clone,
+    Service: VerifierService<Request>,
+{
+    let source_type = service.source_type();
+    let db = init_db(
+        db_prefix,
+        "test_historical_data_saves_chain_id_and_contract_address",
+    )
+    .await;
+    let chain_id = 1;
+    let contract_address = bytes::Bytes::from([10u8; 20].as_ref());
+    let input_data = test_input_data::input_data_1(
+        service.generate_request(
+            1,
+            Some(VerificationMetadata {
+                chain_id,
+                contract_address: contract_address.clone(),
+            }),
+        ),
+        source_type,
+    );
+    let client =
+        start_server_and_init_client(db.client().clone(), service, vec![input_data.clone()]).await;
+
+    let _source = Service::verify(client, input_data.request)
+        .await
+        .expect("Verification failed");
+
+    let db_client = db.client();
+    let db_client = db_client.as_ref();
+
+    let source_id = sources::Entity::find()
+        .one(db_client)
+        .await
+        .expect("Error while reading source")
+        .unwrap()
+        .id;
+
+    let verified_contract = verified_contracts::Entity::find()
+        .filter(verified_contracts::Column::SourceId.eq(source_id))
+        .one(db_client)
+        .await
+        .expect("Error while reading verified contracts")
+        .expect("No contract was found");
+
+    assert_eq!(
+        Some(chain_id),
+        verified_contract.chain_id,
+        "Invalid chain id saved"
+    );
+    assert_eq!(
+        Some(contract_address.to_vec()),
+        verified_contract.contract_address,
+        "Invalid contract address saved"
     );
 }
 
@@ -472,7 +542,7 @@ pub async fn test_verification_of_same_source_results_stored_once<Service, Reque
         "test_verification_of_same_source_results_stored_once",
     )
     .await;
-    let input_data = test_input_data::input_data_1(service.generate_request(1), source_type);
+    let input_data = test_input_data::input_data_1(service.generate_request(1, None), source_type);
     let client =
         start_server_and_init_client(db.client().clone(), service, vec![input_data.clone()]).await;
 
