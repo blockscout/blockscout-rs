@@ -49,6 +49,7 @@ id = "activeAccounts"
 title = "Active accounts"
 description = "Active accounts number per period"
 update_schedule = "0 0 4 * * * *"
+drop_last_point = true
 
 [[lines.sections.charts]]
 id = "accountsGrowth"
@@ -67,6 +68,7 @@ title = "Average transaction fee"
 description = "The average amount in ETH spent per transaction"
 units = "ETH"
 update_schedule = "0 0 6 * * * *"
+drop_last_point = true
 
 [[lines.sections.charts]]
 id = "txnsFee"
@@ -74,12 +76,14 @@ title = "Transactions fees"
 description = "Amount of tokens paid as fees"
 units = "ETH"
 update_schedule = "0 0 7 * * * *"
+drop_last_point = true
 
 [[lines.sections.charts]]
 id = "newTxns"
 title = "New transactions"
 description = "New transactions number"
 update_schedule = "0 0 1 * * * *"
+drop_last_point = true
 
 [[lines.sections.charts]]
 id = "txnsGrowth"
@@ -97,6 +101,7 @@ id = "newBlocks"
 title = "New blocks"
 description = "New blocks number"
 update_schedule = "0 0 8 * * * *"
+drop_last_point = true
 
 [[lines.sections.charts]]
 id = "averageBlockSize"
@@ -104,6 +109,7 @@ title = "Average block size"
 description = "Average size of blocks in bytes"
 units = "Bytes"
 update_schedule = "0 0 9 * * * *"
+drop_last_point = true
 
 
 [[lines.sections]]
@@ -121,6 +127,7 @@ id = "newNativeCoinTransfers"
 title = "New native coins transfers"
 description = "New token transfers number for the period"
 update_schedule = "0 0 3 * * * *"
+drop_last_point = true
 
 [[lines.sections.charts]]
 id = "nativeCoinSupply"
@@ -128,6 +135,7 @@ title = "Native coin circulating supply"
 description = "Amount of token circulating supply for the period"
 units = "ETH"
 update_schedule = "0 0 11 * * * *"
+drop_last_point = true
 
 
 [[lines.sections]]
@@ -139,6 +147,7 @@ id = "averageGasLimit"
 title = "Average gas limit"
 description = "Average gas limit per block for the period"
 update_schedule = "0 0 12 * * * *"
+drop_last_point = true
 
 [[lines.sections.charts]]
 id = "gasUsedGrowth"
@@ -152,3 +161,4 @@ title = "Average gas price"
 description = "Average gas price for the period (Gwei)"
 units = "Gwei"
 update_schedule = "0 0 14 * * * *"
+drop_last_point = true
