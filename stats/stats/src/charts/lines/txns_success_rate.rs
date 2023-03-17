@@ -12,8 +12,6 @@ use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 #[derive(Default, Debug)]
 pub struct TxnsSuccessRate {}
 
-const ETHER: i64 = i64::pow(10, 18);
-
 #[async_trait]
 impl ChartPartialUpdater for TxnsSuccessRate {
     async fn get_values(
@@ -32,11 +30,11 @@ impl ChartPartialUpdater for TxnsSuccessRate {
                 FROM transactions t
                 JOIN blocks       b ON t.block_hash = b.hash
                 WHERE
-                    DATE(b.timestamp) > $2 AND
+                    DATE(b.timestamp) > $1 AND
                     b.consensus = true
                 GROUP BY DATE(b.timestamp)
                 "#,
-                vec![ETHER.into(), row.date.into()],
+                vec![row.date.into()],
             ),
             None => Statement::from_sql_and_values(
                 DbBackend::Postgres,
@@ -50,7 +48,7 @@ impl ChartPartialUpdater for TxnsSuccessRate {
                 WHERE b.consensus = true
                 GROUP BY DATE(b.timestamp)
                 "#,
-                vec![ETHER.into()],
+                vec![],
             ),
         };
 
