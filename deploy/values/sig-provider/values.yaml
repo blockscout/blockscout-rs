@@ -13,12 +13,6 @@ sigProvider:
     targetPort: 8043
     metricsPort: 6060
 
-  strategy: RollingUpdate
-
-  service:
-    # ClusterIP, NodePort or LoadBalancer
-    type: ClusterIP
-
   # enable ingress
   ingress:
     enabled: true
@@ -28,7 +22,6 @@ sigProvider:
     # enable https
     tls:
       enabled: true
-      createSecret: false
 
   resources:
     limits:
@@ -41,35 +34,6 @@ sigProvider:
         _default: "0.05Gi"
       cpu:
         _default: "0.05"
-
-  # node label
-  nodeSelector:
-    enabled: true
-    labels:
-      _default:
-        app: blockscout
-
-  # probes
-  livenessProbe:
-    enabled: false
-    path: /health
-    params:
-      initialDelaySeconds: 100
-      periodSeconds: 100
-  readinessProbe:
-    enabled: false
-    path: /health
-    params:
-      initialDelaySeconds: 60
-      periodSeconds: 10
-      timeoutSeconds: 60
-
-  # enable Horizontal Pod Autoscaler
-  hpa:
-    enabled: false
-    minReplicas: 1
-    maxReplicas: 10
-    cpuTarget: 90
 
   environment:
     SIG_PROVIDER__METRICS__ENABLED:
