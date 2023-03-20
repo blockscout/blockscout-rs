@@ -148,4 +148,3 @@ jobs:
       env_vars: VALUES_DIR=deploy/values/sig-provider,APP_NAME=bs-stack
       appNamespace: sig-provider-testing
     secrets: inherit
-
