@@ -138,6 +138,7 @@ impl Charts {
             Arc::new(lines::NativeCoinHoldersGrowth::default()),
             Arc::new(lines::AverageTxnFee::default()),
             Arc::new(lines::TxnsSuccessRate::default()),
+            Arc::new(lines::AverageBlockRewards::default()),
             native_coin_holders_growth,
             new_native_coin_transfers,
         ]

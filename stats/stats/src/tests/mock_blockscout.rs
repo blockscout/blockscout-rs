@@ -1,4 +1,6 @@
-use blockscout_db::entity::{address_coin_balances_daily, addresses, blocks, tokens, transactions};
+use blockscout_db::entity::{
+    address_coin_balances_daily, addresses, block_rewards, blocks, tokens, transactions,
+};
 use chrono::{NaiveDate, NaiveDateTime};
 use sea_orm::{prelude::Decimal, DatabaseConnection, EntityTrait, Set};
 use std::str::FromStr;
@@ -174,6 +176,23 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
         .exec(blockscout)
         .await
         .unwrap();
+
+    let rewards = blocks.iter().enumerate().map(|(i, block)| {
+        mock_block_rewards(
+            accounts
+                .get(i % (accounts.len() / 2))
+                .unwrap()
+                .hash
+                .as_ref()
+                .to_vec(),
+            block.hash.as_ref().to_vec(),
+            Some(Decimal::from(i % 5) * Decimal::try_from(1e18).unwrap()),
+        )
+    });
+    block_rewards::Entity::insert_many(rewards)
+        .exec(blockscout)
+        .await
+        .unwrap();
 }
 
 fn mock_block(index: i64, ts: &str, consensus: bool) -> blocks::ActiveModel {
@@ -300,5 +319,20 @@ fn mock_token(hash: Vec<u8>) -> tokens::ActiveModel {
         inserted_at: Set(Default::default()),
         updated_at: Set(Default::default()),
         ..Default::default()
+    }
+}
+
+fn mock_block_rewards(
+    address: Vec<u8>,
+    block_hash: Vec<u8>,
+    reward: Option<Decimal>,
+) -> block_rewards::ActiveModel {
+    block_rewards::ActiveModel {
+        address_hash: Set(address),
+        address_type: Set("".into()),
+        block_hash: Set(block_hash),
+        reward: Set(reward),
+        inserted_at: Set(Default::default()),
+        updated_at: Set(Default::default()),
     }
 }
