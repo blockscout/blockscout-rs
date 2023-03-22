@@ -1,12 +1,14 @@
 use crate::{
-    charts::Charts, charts_config, read_service::ReadService, settings::Settings,
-    update_service::UpdateService,
+    charts::Charts, charts_config, health::HealthService, read_service::ReadService,
+    settings::Settings, update_service::UpdateService,
 };
 use actix_web::web::ServiceConfig;
 use blockscout_service_launcher::LaunchSettings;
 use sea_orm::{ConnectOptions, Database};
 use stats::migration::MigratorTrait;
 use stats_proto::blockscout::stats::v1::{
+    health_actix::route_health,
+    health_server::HealthServer,
     stats_service_actix::route_stats_service,
     stats_service_server::{StatsService, StatsServiceServer},
 };
@@ -19,16 +21,24 @@ pub fn http_configure(config: &mut ServiceConfig, s: Arc<impl StatsService>) {
 #[derive(Clone)]
 struct HttpRouter<S: StatsService> {
     stats: Arc<S>,
+    health: Arc<HealthService>,
 }
 
 impl<S: StatsService> blockscout_service_launcher::HttpRouter for HttpRouter<S> {
     fn register_routes(&self, service_config: &mut actix_web::web::ServiceConfig) {
-        service_config.configure(|config| http_configure(config, self.stats.clone()));
+        service_config
+            .configure(|config| route_health(config, self.health.clone()))
+            .configure(|config| http_configure(config, self.stats.clone()));
     }
 }
 
-fn grpc_router<S: StatsService>(stats: Arc<S>) -> tonic::transport::server::Router {
-    tonic::transport::Server::builder().add_service(StatsServiceServer::from_arc(stats))
+fn grpc_router<S: StatsService>(
+    stats: Arc<S>,
+    health: Arc<HealthService>,
+) -> tonic::transport::server::Router {
+    tonic::transport::Server::builder()
+        .add_service(HealthServer::from_arc(health))
+        .add_service(StatsServiceServer::from_arc(stats))
 }
 
 pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
@@ -81,10 +91,12 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
     });
 
     let read_service = Arc::new(ReadService::new(db, charts).await?);
+    let health = Arc::new(HealthService::default());
 
-    let grpc_router = grpc_router(read_service.clone());
+    let grpc_router = grpc_router(read_service.clone(), health.clone());
     let http_router = HttpRouter {
         stats: read_service,
+        health: health.clone(),
     };
 
     blockscout_service_launcher::launch(&launch_settings, http_router, grpc_router).await
