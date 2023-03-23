@@ -45,6 +45,7 @@ async fn test_lines_ok() {
         "activeAccounts",
         "averageBlockSize",
         "averageBlockRewards",
+        "newAccounts",
         "averageGasLimit",
         "averageGasPrice",
         "averageTxnFee",

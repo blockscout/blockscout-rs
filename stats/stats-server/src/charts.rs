@@ -127,7 +127,7 @@ impl Charts {
             Arc::new(lines::NewBlocks::default()),
             Arc::new(lines::AverageGasPrice::default()),
             Arc::new(lines::ActiveAccounts::default()),
-            Arc::new(lines::AccountsGrowth::new(accounts_cache)),
+            Arc::new(lines::AccountsGrowth::new(accounts_cache.clone())),
             Arc::new(lines::TxnsFee::default()),
             Arc::new(lines::TxnsGrowth::new(new_txns.clone())),
             new_txns,
@@ -139,6 +139,7 @@ impl Charts {
             Arc::new(lines::AverageTxnFee::default()),
             Arc::new(lines::TxnsSuccessRate::default()),
             Arc::new(lines::AverageBlockRewards::default()),
+            Arc::new(lines::NewAccounts::new(accounts_cache)),
             native_coin_holders_growth,
             new_native_coin_transfers,
         ]

@@ -2,7 +2,7 @@ use chrono::NaiveDate;
 use entity::chart_data;
 use sea_orm::{prelude::*, sea_query, ConnectionTrait, FromQueryResult, Set};
 
-#[derive(FromQueryResult)]
+#[derive(FromQueryResult, Debug, Clone)]
 pub struct DateValueInt {
     pub date: NaiveDate,
     pub value: i64,
@@ -17,7 +17,7 @@ impl From<DateValueInt> for DateValue {
     }
 }
 
-#[derive(FromQueryResult)]
+#[derive(FromQueryResult, Debug, Clone)]
 pub struct DateValueDouble {
     pub date: NaiveDate,
     pub value: f64,
@@ -32,7 +32,7 @@ impl From<DateValueDouble> for DateValue {
     }
 }
 
-#[derive(FromQueryResult)]
+#[derive(FromQueryResult, Debug, Clone)]
 pub struct DateValueDecimal {
     pub date: NaiveDate,
     pub value: Decimal,
