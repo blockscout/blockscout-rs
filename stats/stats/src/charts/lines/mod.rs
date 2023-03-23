@@ -2,6 +2,7 @@ mod mock;
 
 mod accounts_growth;
 mod active_accounts;
+mod average_block_rewards;
 mod average_block_size;
 mod average_gas_limit;
 mod average_gas_price;
@@ -18,6 +19,7 @@ mod txns_success_rate;
 
 pub use accounts_growth::AccountsGrowth;
 pub use active_accounts::ActiveAccounts;
+pub use average_block_rewards::AverageBlockRewards;
 pub use average_block_size::AverageBlockSize;
 pub use average_gas_limit::AverageGasLimit;
 pub use average_gas_price::AverageGasPrice;

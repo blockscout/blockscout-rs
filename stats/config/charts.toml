@@ -96,6 +96,7 @@ id = "txnsSuccessRate"
 title = "Transactions success rate"
 description = "Successful transactions rate per day"
 update_schedule = "0 0 19 * * * *"
+drop_last_point = true
 
 
 [[lines.sections]]
@@ -115,6 +116,14 @@ title = "Average block size"
 description = "Average size of blocks in bytes"
 units = "Bytes"
 update_schedule = "0 0 9 * * * *"
+drop_last_point = true
+
+[[lines.sections.charts]]
+id = "averageBlockRewards"
+title = "Average block rewards"
+description = "Average amount of distributed reward in tokens per day"
+units = "ETH"
+update_schedule = "0 0 20 * * * *"
 drop_last_point = true
 
 
