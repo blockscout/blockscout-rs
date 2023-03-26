@@ -24,6 +24,22 @@ Alternatively, you can use docker images from our [registry](https://github.com/
 
 Install rustup from rustup.rs.
 
+Make sure that openssl is installed:
+
+macOS
+`$ brew install openssl@1.1`
+
+Arch Linux
+`$ sudo pacman -S pkg-config openssl`
+
+Debian and Ubuntu
+`$ sudo apt-get install pkg-config libssl-dev`
+
+Fedora
+`$ sudo dnf install pkg-config openssl-devel`
+
+Build blockscout smart-contract-verifier:
+
 ```console
 git clone git@github.com:blockscout/blockscout-rs.git
 cd blockscout-rs/smart-contract-verifier
