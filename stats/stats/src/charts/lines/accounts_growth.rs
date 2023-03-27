@@ -1,50 +1,39 @@
+use super::NewAccounts;
 use crate::{
-    charts::{cache::Cache, insert::DateValue, updater::ChartFullUpdater},
+    charts::{
+        cache::Cache,
+        insert::{DateValue, DateValueInt},
+        updater::ChartFullUpdater,
+    },
     UpdateError,
 };
 use async_trait::async_trait;
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
+use sea_orm::prelude::*;
 use tokio::sync::Mutex;
 
 pub struct AccountsGrowth {
-    cache: Mutex<Cache<Vec<DateValue>>>,
+    cache: Mutex<Cache<Vec<DateValueInt>>>,
 }
 
 impl AccountsGrowth {
-    pub fn new(cache: Cache<Vec<DateValue>>) -> Self {
+    pub fn new(cache: Cache<Vec<DateValueInt>>) -> Self {
         Self {
             cache: Mutex::new(cache),
         }
     }
 
-    pub async fn read_values(
-        blockscout: &DatabaseConnection,
-    ) -> Result<Vec<DateValue>, UpdateError> {
-        let stmnt = Statement::from_sql_and_values(
-            DbBackend::Postgres,
-            r#"
-                SELECT 
-                    first_tx.date as date,
-                    (sum(count(*)) OVER (ORDER BY first_tx.date))::TEXT as value
-                FROM (
-                    SELECT DISTINCT ON (t.from_address_hash)
-                        b.timestamp::date as date
-                    FROM transactions  t
-                    JOIN blocks        b ON t.block_hash = b.hash
-                    WHERE b.consensus = true
-                    ORDER BY t.from_address_hash, b.timestamp
-                ) first_tx
-                GROUP BY first_tx.date;
-                "#,
-            vec![],
-        );
-
-        let data = DateValue::find_by_statement(stmnt)
-            .all(blockscout)
-            .await
-            .map_err(UpdateError::BlockscoutDB)?;
-        Ok(data)
+    pub fn sum_new<I: IntoIterator<Item = DateValueInt>>(
+        values: I,
+    ) -> impl IntoIterator<Item = DateValue> {
+        values
+            .into_iter()
+            .scan(0i64, |acc, mut value| {
+                *acc += value.value;
+                value.value = *acc;
+                Some(value)
+            })
+            .map(DateValue::from)
     }
 }
 
@@ -55,9 +44,10 @@ impl ChartFullUpdater for AccountsGrowth {
         blockscout: &DatabaseConnection,
     ) -> Result<Vec<DateValue>, UpdateError> {
         let mut cache = self.cache.lock().await;
-        cache
-            .get_or_update(async move { Self::read_values(blockscout).await })
-            .await
+        let data = cache
+            .get_or_update(async move { NewAccounts::read_values(blockscout).await })
+            .await?;
+        Ok(Self::sum_new(data).into_iter().collect())
     }
 }
 

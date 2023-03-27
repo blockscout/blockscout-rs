@@ -57,6 +57,13 @@ title = "Accounts growth"
 description = "Cumulative accounts number per period"
 update_schedule = "0 0 5 * * * *"
 
+[[lines.sections.charts]]
+id = "newAccounts"
+title = "New accounts"
+description = "New accounts number per day"
+update_schedule = "0 0 21 * * * *"
+drop_last_point = true
+
 
 [[lines.sections]]
 id = "transactions"
