@@ -20,25 +20,25 @@ impl ChartPartialUpdater for NativeCoinHoldersGrowth {
             Some(row) => Statement::from_sql_and_values(
                 DbBackend::Postgres,
                 r#"
-                        SELECT 
-                            day as date,
-                            count(*)::TEXT as value
-                        FROM address_coin_balances_daily
-                        WHERE value != 0 AND day > $1
-                        GROUP BY day;
-                    "#,
+                    SELECT 
+                        day as date,
+                        count(*)::TEXT as value
+                    FROM address_coin_balances_daily
+                    WHERE value != 0 AND day > $1
+                    GROUP BY day;
+                "#,
                 vec![row.date.into()],
             ),
             None => Statement::from_sql_and_values(
                 DbBackend::Postgres,
                 r#"
-                        SELECT 
-                            day as date,
-                            count(*)::TEXT as value
-                        FROM address_coin_balances_daily
-                        WHERE value != 0
-                        GROUP BY day;
-                    "#,
+                    SELECT 
+                        day as date,
+                        count(*)::TEXT as value
+                    FROM address_coin_balances_daily
+                    WHERE value != 0
+                    GROUP BY day;
+                "#,
                 vec![],
             ),
         };

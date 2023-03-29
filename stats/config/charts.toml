@@ -145,6 +145,13 @@ description = "Cumulative token holders number for the period"
 update_schedule = "0 0 10 * * * *"
 
 [[lines.sections.charts]]
+id = "newNativeCoinHolders"
+title = "New native coin holders"
+description = "New token holders number per day"
+update_schedule = "0 0 22 * * * *"
+drop_last_point = true
+
+[[lines.sections.charts]]
 id = "newNativeCoinTransfers"
 title = "New native coins transfers"
 description = "New token transfers number for the period"

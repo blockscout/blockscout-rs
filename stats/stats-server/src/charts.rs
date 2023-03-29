@@ -140,6 +140,9 @@ impl Charts {
             Arc::new(lines::TxnsSuccessRate::default()),
             Arc::new(lines::AverageBlockRewards::default()),
             Arc::new(lines::NewAccounts::new(accounts_cache)),
+            Arc::new(lines::NewNativeCoinHolders::new(
+                native_coin_holders_growth.clone(),
+            )),
             native_coin_holders_growth,
             new_native_coin_transfers,
         ]
