@@ -1,3 +1,5 @@
+use std::num::ParseIntError;
+
 use chrono::NaiveDate;
 use entity::chart_data;
 use sea_orm::{prelude::*, sea_query, ConnectionTrait, FromQueryResult, Set};
@@ -14,6 +16,17 @@ impl From<DateValueInt> for DateValue {
             date: value.date,
             value: value.value.to_string(),
         }
+    }
+}
+
+impl TryFrom<DateValue> for DateValueInt {
+    type Error = ParseIntError;
+
+    fn try_from(value: DateValue) -> Result<Self, Self::Error> {
+        Ok(Self {
+            date: value.date,
+            value: value.value.parse()?,
+        })
     }
 }
 

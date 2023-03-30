@@ -52,6 +52,7 @@ async fn test_lines_ok() {
         "gasUsedGrowth",
         "nativeCoinHoldersGrowth",
         "nativeCoinSupply",
+        "newNativeCoinHolders",
         "newBlocks",
         "newNativeCoinTransfers",
         "newTxns",
