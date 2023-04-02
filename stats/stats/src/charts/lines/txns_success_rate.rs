@@ -25,13 +25,14 @@ impl ChartPartialUpdater for TxnsSuccessRate {
                 r#"
                 SELECT 
                     DATE(b.timestamp) as date, 
-                    COUNT(CASE WHEN t.block_hash IS NOT NULL AND (t.error IS NULL OR t.error::text != 'dropped/replaced') THEN 1 END)::FLOAT 
+                    COUNT(CASE WHEN t.error IS NULL THEN 1 END)::FLOAT
                         / COUNT(*)::FLOAT as value
                 FROM transactions t
                 JOIN blocks       b ON t.block_hash = b.hash
-                WHERE
-                    DATE(b.timestamp) > $1 AND
-                    b.consensus = true
+                WHERE b.consensus = true 
+                    AND t.block_hash IS NOT NULL 
+                    AND (t.error IS NULL OR t.error::text != 'dropped/replaced')
+                    AND DATE(b.timestamp) > $1
                 GROUP BY DATE(b.timestamp)
                 "#,
                 vec![row.date.into()],
@@ -41,11 +42,13 @@ impl ChartPartialUpdater for TxnsSuccessRate {
                 r#"
                 SELECT 
                     DATE(b.timestamp) as date, 
-                    COUNT(CASE WHEN t.block_hash IS NOT NULL AND (t.error IS NULL OR t.error::text != 'dropped/replaced') THEN 1 END)::FLOAT
+                    COUNT(CASE WHEN t.error IS NULL THEN 1 END)::FLOAT
                         / COUNT(*)::FLOAT as value
                 FROM transactions t
                 JOIN blocks       b ON t.block_hash = b.hash
-                WHERE b.consensus = true
+                WHERE b.consensus = true 
+                    AND t.block_hash IS NOT NULL 
+                    AND (t.error IS NULL OR t.error::text != 'dropped/replaced')
                 GROUP BY DATE(b.timestamp)
                 "#,
                 vec![],
@@ -99,7 +102,6 @@ mod tests {
                 ("2022-11-09", "1"),
                 ("2022-11-10", "1"),
                 ("2022-11-11", "1"),
-                ("2022-11-12", "0"),
             ],
         )
         .await;
