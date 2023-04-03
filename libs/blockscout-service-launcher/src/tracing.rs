@@ -5,7 +5,9 @@ use opentelemetry::{
     trace::TraceError,
 };
 use std::marker::Send;
-use tracing_subscriber::{filter::LevelFilter, layer::SubscriberExt, prelude::*, Layer, Registry};
+use tracing_subscriber::{
+    filter::LevelFilter, fmt::format::FmtSpan, layer::SubscriberExt, prelude::*, Layer, Registry,
+};
 
 pub fn init_logs(
     service_name: &str,
@@ -19,18 +21,23 @@ pub fn init_logs(
 
     let stdout: Box<(dyn Layer<Registry> + Sync + Send + 'static)> = match tracing_settings.format {
         TracingFormat::Default => Box::new(
-            tracing_subscriber::fmt::layer().with_filter(
-                tracing_subscriber::EnvFilter::builder()
-                    .with_default_directive(LevelFilter::INFO.into())
-                    .from_env_lossy(),
-            ),
+            tracing_subscriber::fmt::layer()
+                .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
+                .with_filter(
+                    tracing_subscriber::EnvFilter::builder()
+                        .with_default_directive(LevelFilter::INFO.into())
+                        .from_env_lossy(),
+                ),
         ),
         TracingFormat::Json => Box::new(
-            tracing_subscriber::fmt::layer().json().with_filter(
-                tracing_subscriber::EnvFilter::builder()
-                    .with_default_directive(LevelFilter::INFO.into())
-                    .from_env_lossy(),
-            ),
+            tracing_subscriber::fmt::layer()
+                .json()
+                .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
+                .with_filter(
+                    tracing_subscriber::EnvFilter::builder()
+                        .with_default_directive(LevelFilter::INFO.into())
+                        .from_env_lossy(),
+                ),
         ),
     };
 
