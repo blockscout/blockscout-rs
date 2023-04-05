@@ -101,3 +101,6 @@ postgres:
         _default: "1Gi"
       cpu:
         _default: "0.5"
+
+  customShm:
+    enabled: false
