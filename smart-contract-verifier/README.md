@@ -5,18 +5,18 @@
 The service consists of 2 parts, a verification library and a transport layer that serves requests:
 
 + [smart-contract-verifier](./smart-contract-verifier) - implements actual verification logic as a library and exposes an interface to be used by the transport layer;
-+ A transport layer that implements some APIs over the service ([smart-contract-verifier-http](./smart-contract-verifier-http/)).
++ A transport layer that implements some APIs over the service ([smart-contract-verifier-server](./smart-contract-verifier-server/)).
 
-For now, only REST API over HTTP is available as the transport layer. However, the transport protocol is not limited to our implementation, and you could implement your own APIs using the library crate.
+For now, GRPC and REST API over HTTP services are available as the transport layer. However, the transport protocol is not limited to our implementation, and you could implement your own APIs using the library crate.
 
 ## Build
 There are several ways to run the service discussed below.
 
-**Note:** as we have only the HTTP server, we use it for descriptive purposes; in case of a custom API implementation, you should change `smart-contract-verifier-http` to the corresponding values.
+**Note:** for our description we will use an HTTP/GRPC server implementation; in case of a custom API implementation, you should change `smart-contract-verifier-server` to your values.
 
 
 ### Using docker
-You can build the provided sources using [Dockerfile](./Dockerfile) or [docker-compose](./docker-compose.yaml) files.
+You can build the provided sources using [Dockerfile](./smart-contract-verifier-server/Dockerfile) or [docker-compose](./smart-contract-verifier-server/docker-compose.yml) files.
 
 Alternatively, you can use docker images from our [registry](https://github.com/blockscout/blockscout-rs/pkgs/container/smart-contract-verifier)
 
@@ -43,7 +43,7 @@ Build blockscout smart-contract-verifier:
 ```console
 git clone git@github.com:blockscout/blockscout-rs.git
 cd blockscout-rs/smart-contract-verifier
-cargo build --release --bin smart-contract-verifier-http
+cargo build --release --bin smart-contract-verifier-server
 ```
 
 You can find the built binary in `target/release/` folder.
@@ -53,12 +53,12 @@ You can find the built binary in `target/release/` folder.
 Another way to install the binary without cloning the repository is to use cargo straightway:
 
 ```console
-cargo install --git https://github.com/blockscout/blockscout-rs smart-contract-verifier-http
+cargo install --git https://github.com/blockscout/blockscout-rs smart-contract-verifier-server
 ```
 
-In that case, you can run the binary using just `smart-contract-verifier-http`.
+In that case, you can run the binary using just `smart-contract-verifier-server`.
 
 ## Start
 For the details of how to run the service, go into corresponding
 transport protocol layer description:
-- [smart-contract-verifier-http](./smart-contract-verifier-http/README.md)
+- [smart-contract-verifier-server](./smart-contract-verifier-server/README.md)

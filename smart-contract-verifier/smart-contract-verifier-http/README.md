@@ -1,4 +1,12 @@
-# <h1 align="center"> Smart-contract Verifier (HTTP Server) </h1>
+# <h1 align="center"> Smart-contract Verifier (HTTP Server) - DEPRECATED</h1>
+
+**The HTTP server implementation is deprecated and was 
+replaced by combined HTTP and GRPC server. Use this version 
+only if you require current version of API.**
+
+**See [smart-contract-verifier-server](../smart-contract-verifier-server)**
+
+----------
 
 Smart-contract verification service. Runs as an HTTP server and allows
 making verification requests through REST API. It is stateless
