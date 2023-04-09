@@ -126,7 +126,7 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
         .enumerate()
         .map(|(i, contract)| {
             mock_transaction(
-                &blocks[0],
+                &blocks[i % (blocks.len() - 1)],
                 21_000,
                 1_123_456_789,
                 &accounts,

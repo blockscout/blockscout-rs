@@ -90,7 +90,7 @@ mod tests {
         simple_test_chart(
             "update_new_verified_contracts",
             chart,
-            vec![("2022-11-09", "3")],
+            vec![("2022-11-10", "1"), ("2022-11-11", "2")],
         )
         .await;
     }
