@@ -1,28 +1,33 @@
-# just is like `make` but better https://github.com/casey/just
-
-# list all recipes
 default:
     just --list --unsorted
 
+db-host := env_var_or_default('DB_HOST', "localhost")
+db-port := env_var_or_default('DB_PORT', "5432")
+db-user := env_var_or_default('DB_USER', "postgres")
+db-password := env_var_or_default('DB_PASSWORD', "admin")
+db-name := env_var_or_default('DB_NAME', "stats")
+export DATABASE_URL := "postgres://" + db-user + ":" + db-password + "@" + db-host + ":" + db-port + "/" + db-name
+
+docker-name := env_var_or_default('DOCKER_NAME', "stats-postgres")
+test-db-port := env_var_or_default('TEST_DB_PORT', "9433")
+
 start-postgres:
     # we run it in --rm mode, so all data will be deleted after stopping
-    docker run -p 5432:5432 --name stats-postgres -e POSTGRES_PASSWORD=admin --rm -d postgres:13.8 -N 500
-    # wait for postgres to start
+    docker run -p {{db-port}}:5432 --name {{docker-name}} -e POSTGRES_PASSWORD={{db-password}} -e POSTGRES_USER={{db-user}} --rm -d postgres -N 500
     sleep 3
-    docker exec -it stats-postgres psql -U postgres -c 'create database stats;'
+    # wait for postgres to start, but only if db_name is not empty
+    $SHELL -c '[[ -z "{{db-name}}" ]] || docker exec -it {{docker-name}} psql -U postgres -c "create database {{db-name}};"'
 
 stop-postgres:
-    docker kill stats-postgres
+    docker kill {{docker-name}}
 
-restart-postgres:
-    just stop-postgres || true
-    just start-postgres
+test *args:
+    cargo test {{args}} -- --include-ignored
 
-test database_url *args:
-    DATABASE_URL={{database_url}} cargo test {{args}}
-
-# runs with default database_url
-test-default *args: (test "postgres://postgres:admin@localhost:5432/" args)
+test-with-db *args:
+    just db-port="{{test-db-port}}" db-name="" docker-name="{{docker-name}}-test" start-postgres
+    just db-port="{{test-db-port}}" db-name=""                                    test {{args}}
+    just                            docker-name="{{docker-name}}-test" stop-postgres
 
 restart-generate-entities: 
     just restart-postgres

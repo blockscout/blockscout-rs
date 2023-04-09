@@ -7,10 +7,10 @@ use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 
 #[derive(Default, Debug)]
-pub struct NewTxns {}
+pub struct NewVerifiedContracts {}
 
 #[async_trait]
-impl ChartPartialUpdater for NewTxns {
+impl ChartPartialUpdater for NewVerifiedContracts {
     async fn get_values(
         &self,
         blockscout: &DatabaseConnection,
@@ -19,30 +19,33 @@ impl ChartPartialUpdater for NewTxns {
         let stmnt = match last_row {
             Some(row) => Statement::from_sql_and_values(
                 DbBackend::Postgres,
-                r#"
-                SELECT 
-                    date(b.timestamp) as date, 
+                r#"SELECT
+                    DATE(b.timestamp) as date,
                     COUNT(*)::TEXT as value
                 FROM transactions t
-                JOIN blocks       b ON t.block_hash = b.hash
-                WHERE 
-                    date(b.timestamp) > $1 AND 
-                    b.consensus = true
-                GROUP BY date;
-                "#,
+                JOIN blocks       b ON b.hash = t.block_hash
+                JOIN addresses    a ON t.created_contract_address_hash = a.hash
+                WHERE
+                    LENGTH(t.created_contract_address_hash) > 0 AND
+                    b.consensus = true AND
+                    a.verified = true AND
+                    DATE(b.timestamp) > $1
+                GROUP BY DATE(b.timestamp)"#,
                 vec![row.date.into()],
             ),
             None => Statement::from_sql_and_values(
                 DbBackend::Postgres,
-                r#"
-                SELECT 
-                    date(b.timestamp) as date, 
+                r#"SELECT
+                    DATE(b.timestamp) as date,
                     COUNT(*)::TEXT as value
                 FROM transactions t
-                JOIN blocks       b ON t.block_hash = b.hash
-                WHERE b.consensus = true
-                GROUP BY date;
-                "#,
+                JOIN blocks       b ON b.hash = t.block_hash
+                JOIN addresses    a ON t.created_contract_address_hash = a.hash
+                WHERE
+                    LENGTH(t.created_contract_address_hash) > 0 AND
+                    b.consensus = true AND
+                    a.verified = true
+                GROUP BY DATE(b.timestamp)"#,
                 vec![],
             ),
         };
@@ -56,9 +59,9 @@ impl ChartPartialUpdater for NewTxns {
 }
 
 #[async_trait]
-impl crate::Chart for NewTxns {
+impl crate::Chart for NewVerifiedContracts {
     fn name(&self) -> &str {
-        "newTxns"
+        "newVerifiedContracts"
     }
 
     fn chart_type(&self) -> ChartType {
@@ -77,22 +80,17 @@ impl crate::Chart for NewTxns {
 
 #[cfg(test)]
 mod tests {
-    use super::NewTxns;
+    use super::NewVerifiedContracts;
     use crate::tests::simple_test::simple_test_chart;
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn update_new_txns() {
-        let chart = NewTxns::default();
+    async fn update_new_verified_contracts() {
+        let chart = NewVerifiedContracts::default();
         simple_test_chart(
-            "update_new_txns",
+            "update_new_verified_contracts",
             chart,
-            vec![
-                ("2022-11-09", "9"),
-                ("2022-11-10", "6"),
-                ("2022-11-11", "6"),
-                ("2022-11-12", "1"),
-            ],
+            vec![("2022-11-09", "3")],
         )
         .await;
     }

@@ -21,6 +21,7 @@ impl ChartPartialUpdater for AverageBlockRewards {
         blockscout: &DatabaseConnection,
         last_row: Option<DateValue>,
     ) -> Result<Vec<DateValue>, UpdateError> {
+        println!("DEBUG");
         let stmnt = match last_row {
             Some(row) => Statement::from_sql_and_values(
                 DbBackend::Postgres,
@@ -55,6 +56,7 @@ impl ChartPartialUpdater for AverageBlockRewards {
             .await
             .map_err(UpdateError::BlockscoutDB)?;
         let data = data.into_iter().map(DateValue::from).collect();
+        println!("DATA: {data:?}");
         Ok(data)
     }
 }
