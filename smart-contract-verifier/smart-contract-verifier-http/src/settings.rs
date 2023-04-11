@@ -165,7 +165,7 @@ impl Default for SourcifySettings {
             enabled: true,
             api_url: Url::try_from(DEFAULT_SOURCIFY_HOST).expect("valid url"),
             verification_attempts: NonZeroU32::new(3).expect("Is not zero"),
-            request_timeout: 10,
+            request_timeout: 15,
         }
     }
 }

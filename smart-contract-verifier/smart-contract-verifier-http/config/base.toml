@@ -35,7 +35,7 @@ list_url = "https://raw.githubusercontent.com/blockscout/solc-bin/main/vyper.lis
 enabled = true
 api_url = "https://sourcify.dev/server/"
 verification_attempts = 3
-request_timeout = 10
+request_timeout = 15
 
 # [extensions.solidity.sig_provider]
 # url = "http://127.0.0.1:8051/"
