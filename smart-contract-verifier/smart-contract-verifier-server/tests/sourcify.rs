@@ -101,7 +101,7 @@ async fn invalid_contracts() {
                     "contracts/1_Storage.sol": source,
                 },
             }),
-            "Goerli does not have a contract",
+            "does not have a contract",
         ),
         (
             json!({

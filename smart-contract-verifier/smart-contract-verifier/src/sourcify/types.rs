@@ -64,9 +64,10 @@ pub(super) enum ApiVerificationResponse {
 #[derive(Deserialize, Serialize)]
 pub(super) struct ResultItem {
     pub address: String,
-    pub status: String,
+    pub status: Option<String>,
     #[serde(rename = "storageTimestamp")]
     pub storage_timestamp: Option<String>,
+    pub message: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Serialize)]
