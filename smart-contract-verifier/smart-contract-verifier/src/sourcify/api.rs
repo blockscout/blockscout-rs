@@ -43,6 +43,8 @@ pub async fn verify(
 
     match response {
         ApiVerificationResponse::Verified { result } => {
+            let match_type = validate_verification_result(result)?;
+
             let api_files_response = sourcify_client
                 .source_files_request(&params)
                 .await
@@ -56,7 +58,6 @@ pub async fn verify(
             let files = Files::try_from((api_files_response, &params.chain, &params.address))
                 .map_err(|err| anyhow!("error while parsing Sourcify files response: {}", err))
                 .map_err(Error::Internal)?;
-            let match_type = match_type_from_verification_result(result)?;
             let success = Success::try_from((files, match_type))
                 .map_err(|err| Error::Validation(err.to_string()))?;
 
@@ -74,18 +75,20 @@ pub async fn verify(
     }
 }
 
-fn match_type_from_verification_result(result: Vec<ResultItem>) -> Result<MatchType, Error> {
+/// Validates verification result.
+/// In case of success returns corresponding match type.
+fn validate_verification_result(result: Vec<ResultItem>) -> Result<MatchType, Error> {
     let item = result
         .get(0)
         .ok_or_else(|| {
             anyhow::anyhow!("invalid number of result items returned while verification succeeded")
         })
         .map_err(Error::Internal)?;
-    match item.status.as_str() {
-        "partial" => Ok(MatchType::Partial),
-        "perfect" => Ok(MatchType::Full),
-        _ => Err(Error::Internal(anyhow::anyhow!(
-            "invalid match type status returned by the Sourcify instance"
-        ))),
+    match item.status.as_deref() {
+        Some("partial") => Ok(MatchType::Partial),
+        Some("perfect") => Ok(MatchType::Full),
+        _ => Err(Error::Verification(
+            item.message.clone().unwrap_or_default(),
+        )),
     }
 }
