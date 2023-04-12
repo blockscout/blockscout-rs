@@ -12,7 +12,6 @@ use anyhow::anyhow;
 use bytes::Bytes;
 use ethers_solc::{CompilerInput, CompilerOutput};
 use mismatch::Mismatch;
-use std::{ops::Add, path::PathBuf};
 use thiserror::Error;
 use tracing::instrument;
 
@@ -99,22 +98,15 @@ impl<'a, T: EvmCompiler> ContractVerifier<'a, T> {
             .await?;
         let compiler_output_modified = {
             let mut compiler_input = compiler_input.clone();
-            let entry = compiler_input
-                .settings
-                .libraries
-                .libs
-                .entry(PathBuf::from("SOME_TEXT_USED_AS_FILE_NAME"))
-                .or_default();
-            let non_used_contract_name = entry
-                .keys()
-                .map(|key| key.chars().next().unwrap_or_default().to_string())
-                .collect::<Vec<_>>()
-                .join("_")
-                .add("_");
-            entry.insert(
-                non_used_contract_name,
-                "0xcafecafecafecafecafecafecafecafecafecafe".into(),
-            );
+            // TODO: could we update some other field to avoid copying strings?
+            compiler_input
+                .sources
+                .iter_mut()
+                .for_each(|(_file, source)| {
+                    let mut modified_content = source.content.as_ref().clone();
+                    modified_content.push(' ');
+                    source.content = std::sync::Arc::new(modified_content);
+                });
             self.compilers
                 .compile(self.compiler_version, &compiler_input)
                 .await?
