@@ -191,3 +191,15 @@ description = "Average gas price for the period (Gwei)"
 units = "Gwei"
 update_schedule = "0 0 14 * * * *"
 drop_last_point = true
+
+
+[[lines.sections]]
+id = "contracts"
+title = "Contracts"
+
+[[lines.sections.charts]]
+id = "newVerifiedContracts"
+title = "New verified contracts"
+description = "New verified contracts number for the period"
+update_schedule = "0 0 15 * * * *"
+drop_last_point = true

@@ -72,6 +72,6 @@ mod tests {
     #[ignore = "needs database to run"]
     async fn update_total_accounts() {
         let counter = TotalAccounts::new(Cache::default());
-        simple_test_counter("update_total_accounts", counter, "6").await;
+        simple_test_counter("update_total_accounts", counter, "8").await;
     }
 }

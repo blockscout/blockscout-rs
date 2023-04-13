@@ -70,6 +70,6 @@ mod tests {
     #[ignore = "needs database to run"]
     async fn update_completed_txns() {
         let counter = CompletedTxns::default();
-        simple_test_counter("update_completed_txns", counter, "15").await;
+        simple_test_counter("update_completed_txns", counter, "21").await;
     }
 }

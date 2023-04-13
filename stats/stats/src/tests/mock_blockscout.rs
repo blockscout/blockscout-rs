@@ -47,8 +47,26 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
         .await
         .unwrap();
 
-    let accounts = (1..9).map(mock_address).collect::<Vec<_>>();
+    let accounts = (1..9)
+        .map(|seed| mock_address(seed, false, false))
+        .collect::<Vec<_>>();
     addresses::Entity::insert_many(accounts.clone())
+        .exec(blockscout)
+        .await
+        .unwrap();
+
+    let contracts = (21..24)
+        .map(|seed| mock_address(seed, true, false))
+        .collect::<Vec<_>>();
+    addresses::Entity::insert_many(contracts.clone())
+        .exec(blockscout)
+        .await
+        .unwrap();
+
+    let verified_contracts = (31..34)
+        .map(|seed| mock_address(seed, true, true))
+        .collect::<Vec<_>>();
+    addresses::Entity::insert_many(verified_contracts.clone())
         .exec(blockscout)
         .await
         .unwrap();
@@ -77,7 +95,7 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
                     (b.number.as_ref() * 1_123_456_789) % 70_000_000_000,
                     &accounts,
                     0,
-                    false,
+                    TxType::Transfer,
                 ),
                 mock_transaction(
                     b,
@@ -85,7 +103,7 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
                     (b.number.as_ref() * 1_123_456_789) % 70_000_000_000,
                     &accounts,
                     1,
-                    false,
+                    TxType::Transfer,
                 ),
                 mock_transaction(
                     b,
@@ -93,11 +111,30 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
                     (b.number.as_ref() * 1_123_456_789) % 70_000_000_000,
                     &accounts,
                     2,
-                    true,
+                    TxType::ContractCall,
                 ),
             ]
         });
     transactions::Entity::insert_many(txns)
+        .exec(blockscout)
+        .await
+        .unwrap();
+
+    let contract_creation_txns = contracts
+        .into_iter()
+        .chain(verified_contracts.into_iter())
+        .enumerate()
+        .map(|(i, contract)| {
+            mock_transaction(
+                &blocks[i % (blocks.len() - 1)],
+                21_000,
+                1_123_456_789,
+                &accounts,
+                (3 + i) as i32,
+                TxType::ContractCreation(contract.hash.as_ref().clone()),
+            )
+        });
+    transactions::Entity::insert_many(contract_creation_txns)
         .exec(blockscout)
         .await
         .unwrap();
@@ -215,13 +252,34 @@ fn mock_block(index: i64, ts: &str, consensus: bool) -> blocks::ActiveModel {
     }
 }
 
-fn mock_address(seed: u8) -> addresses::ActiveModel {
-    let hash = std::iter::repeat(seed).take(20).collect();
+fn mock_address(seed: i64, is_contract: bool, is_verified: bool) -> addresses::ActiveModel {
+    let mut hash = seed.to_le_bytes().to_vec();
+    hash.extend(std::iter::repeat(0).take(32 - hash.len()));
+    let contract_code = is_contract.then(|| vec![60u8, 80u8]);
+    let verified = is_contract.then_some(is_verified);
     addresses::ActiveModel {
         hash: Set(hash),
+        contract_code: Set(contract_code),
+        verified: Set(verified),
         inserted_at: Set(Default::default()),
         updated_at: Set(Default::default()),
         ..Default::default()
+    }
+}
+
+#[derive(Debug, Clone)]
+enum TxType {
+    Transfer,
+    ContractCall,
+    ContractCreation(Vec<u8>),
+}
+
+impl TxType {
+    fn needs_input(&self) -> bool {
+        matches!(self, TxType::ContractCall | TxType::ContractCreation(_))
+    }
+    fn needs_value(&self) -> bool {
+        matches!(self, TxType::Transfer)
     }
 }
 
@@ -231,7 +289,7 @@ fn mock_transaction(
     gas_price: i64,
     address_list: &Vec<addresses::ActiveModel>,
     index: i32,
-    is_contract_call: bool,
+    tx_type: TxType,
 ) -> transactions::ActiveModel {
     let block_number = block.number.as_ref().to_owned() as i32;
     let hash = vec![0, 0, 0, 0, block_number as u8, index as u8];
@@ -239,12 +297,17 @@ fn mock_transaction(
     let from_address_hash = address_list[address_index].hash.as_ref().to_vec();
     let address_index = (block_number as usize + 1) % address_list.len();
     let to_address_hash = address_list[address_index].hash.as_ref().to_vec();
-    let input = is_contract_call
+    let input = tx_type
+        .needs_input()
         .then(|| vec![60u8, 80u8])
         .unwrap_or_default();
-    let value = (!is_contract_call)
+    let value = (tx_type.needs_value())
         .then_some(1_000_000_000_000)
         .unwrap_or_default();
+    let created_contract_address_hash = match tx_type {
+        TxType::ContractCreation(contract_address) => Some(contract_address),
+        _ => None,
+    };
 
     transactions::ActiveModel {
         block_number: Set(Some(block_number)),
@@ -265,6 +328,7 @@ fn mock_transaction(
         cumulative_gas_used: Set(Some(Default::default())),
         gas_used: Set(Some(Decimal::new(gas, 0))),
         index: Set(Some(index)),
+        created_contract_address_hash: Set(created_contract_address_hash),
         ..Default::default()
     }
 }
