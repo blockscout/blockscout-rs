@@ -689,11 +689,13 @@ dependencies = [
 [[package]]
 name = "blockscout-service-launcher"
 version = "0.7.0"
-source = "git+https://github.com/blockscout/blockscout-rs#a65775da02376aa50cc57fb0888bf83377acb8cc"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21cd760bfb6e4acc1c6c679802ba6516476208e66b949d1193ed05beaa65bb27"
 dependencies = [
  "actix-web",
  "actix-web-prom",
  "anyhow",
+ "cfg-if",
  "futures",
  "opentelemetry",
  "opentelemetry-jaeger",
