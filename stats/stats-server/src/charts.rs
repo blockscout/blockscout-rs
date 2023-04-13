@@ -144,6 +144,7 @@ impl Charts {
                 native_coin_holders_growth.clone(),
             )),
             Arc::new(lines::NewVerifiedContracts::default()),
+            Arc::new(lines::NewContracts::default()),
             native_coin_holders_growth,
             new_native_coin_transfers,
         ]

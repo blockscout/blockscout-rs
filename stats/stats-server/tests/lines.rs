@@ -60,6 +60,7 @@ async fn test_lines_ok() {
         "txnsGrowth",
         "txnsSuccessRate",
         "newVerifiedContracts",
+        "newContracts",
     ] {
         let resp = client
             .get(format!("{base}/api/v1/lines/{line_name}"))
