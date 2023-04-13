@@ -6,6 +6,3 @@ members = [
     "eth-bytecode-db-server",
     "eth-bytecode-db-proto"
 ]
-
-[patch.crates-io]
-blockscout-service-launcher = { git = "https://github.com/blockscout/blockscout-rs", version = "0.7.0" }
