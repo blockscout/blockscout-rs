@@ -2,10 +2,8 @@ use crate::{
     charts::Charts, charts_config, health::HealthService, read_service::ReadService,
     settings::Settings, update_service::UpdateService,
 };
-use actix_web::web::ServiceConfig;
 use blockscout_service_launcher::LaunchSettings;
 use sea_orm::{ConnectOptions, Database};
-use stats::migration::MigratorTrait;
 use stats_proto::blockscout::stats::v1::{
     health_actix::route_health,
     health_server::HealthServer,
@@ -14,9 +12,7 @@ use stats_proto::blockscout::stats::v1::{
 };
 use std::sync::Arc;
 
-pub fn http_configure(config: &mut ServiceConfig, s: Arc<impl StatsService>) {
-    route_stats_service(config, s);
-}
+const SERVICE_NAME: &str = "stats";
 
 #[derive(Clone)]
 struct HttpRouter<S: StatsService> {
@@ -28,7 +24,7 @@ impl<S: StatsService> blockscout_service_launcher::HttpRouter for HttpRouter<S> 
     fn register_routes(&self, service_config: &mut actix_web::web::ServiceConfig) {
         service_config
             .configure(|config| route_health(config, self.health.clone()))
-            .configure(|config| http_configure(config, self.stats.clone()));
+            .configure(|config| route_stats_service(config, self.stats.clone()));
     }
 }
 
@@ -42,33 +38,26 @@ fn grpc_router<S: StatsService>(
 }
 
 pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
-    let launch_settings = LaunchSettings {
-        service_name: "stats".to_owned(),
-        server: settings.server,
-        metrics: settings.metrics,
-        tracing: settings.tracing,
-        jaeger: settings.jaeger,
-    };
-    blockscout_service_launcher::init_logs(
-        &launch_settings.service_name,
-        &launch_settings.tracing,
-        &launch_settings.jaeger,
-    )?;
+    blockscout_service_launcher::init_logs(SERVICE_NAME, &settings.tracing, &settings.jaeger)?;
 
     let charts_config = std::fs::read(settings.charts_config)?;
     let charts_config: charts_config::Config = toml::from_slice(&charts_config)?;
 
     let mut opt = ConnectOptions::new(settings.db_url.clone());
     opt.sqlx_logging_level(tracing::log::LevelFilter::Debug);
+    if settings.run_migrations {
+        blockscout_service_launcher::database::initialize_postgres::<stats::migration::Migrator>(
+            opt.clone(),
+            true,
+            true,
+        )
+        .await?;
+    }
     let db = Arc::new(Database::connect(opt).await?);
 
     let mut opt = ConnectOptions::new(settings.blockscout_db_url.clone());
     opt.sqlx_logging_level(tracing::log::LevelFilter::Debug);
     let blockscout = Arc::new(Database::connect(opt).await?);
-
-    if settings.run_migrations {
-        stats::migration::Migrator::up(&db, None).await?;
-    }
 
     let charts = Arc::new(Charts::new(charts_config)?);
 
@@ -97,6 +86,12 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
     let http_router = HttpRouter {
         stats: read_service,
         health: health.clone(),
+    };
+
+    let launch_settings = LaunchSettings {
+        service_name: SERVICE_NAME.to_string(),
+        server: settings.server,
+        metrics: settings.metrics,
     };
 
     blockscout_service_launcher::launch(&launch_settings, http_router, grpc_router).await
