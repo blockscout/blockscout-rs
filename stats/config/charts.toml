@@ -204,6 +204,13 @@ description = "New verified contracts number for the period"
 update_schedule = "0 0 15 * * * *"
 drop_last_point = true
 
+[[lines.sections.charts]]
+id = "verifiedContractsGrowth"
+title = "Verified contracts growth"
+description = "Cumulative number verified contracts for the period"
+update_schedule = "0 0 7 * * * *"
+drop_last_point = false
+
 
 [[lines.sections.charts]]
 id = "newContracts"
@@ -211,3 +218,10 @@ title = "New contracts"
 description = "New contracts number for the period"
 update_schedule = "0 0 16 * * * *"
 drop_last_point = true
+
+[[lines.sections.charts]]
+id = "contractsGrowth"
+title = "Contracts growth"
+description = "Cumulative number of contracts for the period"
+update_schedule = "0 0 8 * * * *"
+drop_last_point = false
