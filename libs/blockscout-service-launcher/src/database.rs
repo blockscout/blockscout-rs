@@ -1,7 +1,20 @@
 use anyhow::Context;
-use sea_orm::{ConnectOptions, ConnectionTrait};
-use sea_orm_migration::MigratorTrait;
 use std::str::FromStr;
+
+cfg_if::cfg_if! {
+    if #[cfg(feature = "database-0_11")] {
+        use sea_orm_0_11::{ConnectOptions, ConnectionTrait, Database, DatabaseBackend, Statement};
+        use sea_orm_migration_0_11::MigratorTrait;
+    } else if #[cfg(feature = "database-0_10")] {
+        use sea_orm_0_10::{ConnectOptions, ConnectionTrait, Database, DatabaseBackend, Statement};
+        use sea_orm_migration_0_10::MigratorTrait;
+    } else {
+        compile_error!(
+            "one of the features ['database-0_11', 'database-0_10'] \
+             must be enabled"
+        );
+    }
+}
 
 pub async fn initialize_postgres<Migrator: MigratorTrait>(
     connect_options: impl Into<ConnectOptions>,
@@ -28,26 +41,33 @@ pub async fn initialize_postgres<Migrator: MigratorTrait>(
         };
 
         let create_database_options = with_connect_options(db_base_url, &connect_options);
-        let db = sea_orm::Database::connect(create_database_options).await?;
+        let db = Database::connect(create_database_options).await?;
         // The problem is that PostgreSQL does not have `CREATE DATABASE IF NOT EXISTS` statement.
         // To create database only if it does not exist, we've used the following answer:
         // https://stackoverflow.com/a/55950456
+        let create_extension_statement = "CREATE EXTENSION IF NOT EXISTS dblink;";
         let create_database_statement = format!(
             r#"
-            CREATE EXTENSION IF NOT EXISTS dblink;
-
             DO $$
             BEGIN
-                PERFORM dblink_exec('', 'CREATE DATABASE {db_name}');
+                PERFORM dblink_exec('', 'CREATE DATABASE "{db_name}"');
                 EXCEPTION WHEN duplicate_database THEN RAISE NOTICE '%, skipping', SQLERRM USING ERRCODE = SQLSTATE;
             END$$;
         "#
         );
-        db.execute_unprepared(create_database_statement.as_str())
-            .await?;
+        db.execute(Statement::from_string(
+            DatabaseBackend::Postgres,
+            create_extension_statement.into(),
+        ))
+        .await?;
+        db.execute(Statement::from_string(
+            DatabaseBackend::Postgres,
+            create_database_statement,
+        ))
+        .await?;
     }
 
-    let db = sea_orm::Database::connect(connect_options).await?;
+    let db = Database::connect(connect_options).await?;
     if run_migrations {
         Migrator::up(&db, None).await?;
     }
