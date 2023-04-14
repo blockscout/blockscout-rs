@@ -51,3 +51,11 @@ async fn get_counter_and_assert_eq(db: &DatabaseConnection, counter: &impl Chart
     let data = &data[counter.name()];
     assert_eq!(expected, data);
 }
+
+pub async fn empty_db_test_count(test_name: &str, counter: impl Chart, expected: &str) {
+    let _ = tracing_subscriber::fmt::try_init();
+    let (db, blockscout) = init_db_all(test_name, None).await;
+    counter.create(&db).await.unwrap();
+    counter.update(&db, &blockscout, true).await.unwrap();
+    get_counter_and_assert_eq(&db, &counter, expected).await;
+}

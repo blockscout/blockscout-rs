@@ -1,5 +1,6 @@
 mod average_block_time;
 mod completed_txns;
+mod last_new_contracts;
 mod mock;
 mod total_accounts;
 mod total_blocks;

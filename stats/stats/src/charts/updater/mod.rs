@@ -4,7 +4,9 @@ use sea_orm::{prelude::*, sea_query, FromQueryResult, QuerySelect};
 mod dependent;
 mod full;
 mod partial;
-pub use dependent::{parse_and_growth, parse_and_sum, ChartDependentUpdater};
+pub use dependent::{
+    last_point, parse_and_growth, parse_and_sum, unwrap_point_or_default, ChartDependentUpdater,
+};
 pub use full::ChartFullUpdater;
 pub use partial::ChartPartialUpdater;
 

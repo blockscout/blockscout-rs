@@ -81,6 +81,13 @@ impl DateValue {
             min_blockscout_block: Set(min_blockscout_block),
         }
     }
+
+    pub fn zero(date: NaiveDate) -> Self {
+        Self {
+            date,
+            value: "0".to_string(),
+        }
+    }
 }
 
 pub async fn insert_data_many<C, D>(db: &C, data: D) -> Result<(), DbErr>
