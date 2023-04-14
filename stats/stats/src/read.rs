@@ -19,14 +19,17 @@ pub enum ReadError {
 #[derive(Debug, FromQueryResult)]
 struct CounterData {
     name: String,
+    date: NaiveDate,
     value: String,
 }
 
-pub async fn get_counters(db: &DatabaseConnection) -> Result<HashMap<String, String>, ReadError> {
+pub async fn get_counters(
+    db: &DatabaseConnection,
+) -> Result<HashMap<String, DateValue>, ReadError> {
     let data = CounterData::find_by_statement(Statement::from_string(
         DbBackend::Postgres,
         r#"
-            SELECT distinct on (charts.id) charts.name, data.value
+            SELECT distinct on (charts.id) charts.name, data.date, data.value
             FROM "chart_data" "data"
             INNER JOIN "charts"
                 ON data.chart_id = charts.id
@@ -40,7 +43,15 @@ pub async fn get_counters(db: &DatabaseConnection) -> Result<HashMap<String, Str
 
     let counters: HashMap<_, _> = data
         .into_iter()
-        .map(|data| (data.name, data.value))
+        .map(|data| {
+            (
+                data.name,
+                DateValue {
+                    date: data.date,
+                    value: data.value,
+                },
+            )
+        })
         .collect();
 
     Ok(counters)
@@ -135,6 +146,13 @@ mod tests {
         .unwrap();
     }
 
+    fn value(date: &str, value: &str) -> DateValue {
+        DateValue {
+            date: NaiveDate::from_str(date).unwrap(),
+            value: value.to_string(),
+        }
+    }
+
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn get_counters_mock() {
@@ -144,7 +162,7 @@ mod tests {
         insert_mock_data(&db).await;
         let counters = get_counters(&db).await.unwrap();
         assert_eq!(
-            HashMap::from_iter([("totalBlocks".into(), "1350".into())]),
+            HashMap::from_iter([("totalBlocks".into(), value("2022-11-12", "1350"))]),
             counters
         );
     }

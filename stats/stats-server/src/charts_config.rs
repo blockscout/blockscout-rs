@@ -11,6 +11,8 @@ pub struct ChartSettings {
     pub units: Option<String>,
     #[serde(default)]
     pub drop_last_point: bool,
+    #[serde(default)]
+    pub relevant_or_zero: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]

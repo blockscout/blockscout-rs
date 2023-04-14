@@ -127,6 +127,7 @@ impl Charts {
             Arc::new(counters::TotalNativeCoinHolders::new(
                 native_coin_holders_growth.clone(),
             )),
+            Arc::new(counters::LastNewContracts::new(new_contracts.clone())),
             // finished lines
             Arc::new(lines::NewBlocks::default()),
             Arc::new(lines::AverageGasPrice::default()),

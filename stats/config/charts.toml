@@ -39,6 +39,12 @@ id = "totalTxns"
 title = "Total Txns"
 update_schedule = "0 0 */3 * * * *"
 
+[[counters]]
+id = "lastNewContracts"
+title = "New deployed contracts in 24H"
+update_schedule = "0 0 */3 * * * *"
+relevant_or_zero = true
+
 
 [[lines.sections]]
 id = "accounts"

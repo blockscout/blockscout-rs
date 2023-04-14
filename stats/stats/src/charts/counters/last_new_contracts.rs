@@ -2,7 +2,7 @@ use crate::{
     charts::{
         create_chart,
         insert::DateValue,
-        updater::{last_point, unwrap_point_or_default, ChartDependentUpdater},
+        updater::{last_point, ChartDependentUpdater},
     },
     lines::NewContracts,
     UpdateError,
@@ -31,7 +31,7 @@ impl ChartDependentUpdater<NewContracts> for LastNewContracts {
 
     async fn get_values(&self, parent_data: Vec<DateValue>) -> Result<Vec<DateValue>, UpdateError> {
         let last = last_point(parent_data);
-        Ok(vec![unwrap_point_or_default(last)])
+        Ok(last.into_iter().collect())
     }
 }
 
@@ -63,19 +63,12 @@ impl crate::Chart for LastNewContracts {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::simple_test::{empty_db_test_count, simple_test_counter};
+    use crate::tests::simple_test::simple_test_counter;
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_last_new_contracts() {
         let counter = LastNewContracts::default();
         simple_test_counter("update_last_new_contracts", counter, "2").await;
-    }
-
-    #[tokio::test]
-    #[ignore = "needs database to run"]
-    async fn update_last_new_contracts_empty() {
-        let counter = LastNewContracts::default();
-        empty_db_test_count("update_last_new_contracts_empty", counter, "0").await;
     }
 }

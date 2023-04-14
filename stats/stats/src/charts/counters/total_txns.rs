@@ -2,7 +2,7 @@ use crate::{
     charts::{
         create_chart,
         insert::DateValue,
-        updater::{parse_and_sum, unwrap_point_or_default, ChartDependentUpdater},
+        updater::{parse_and_sum, ChartDependentUpdater},
     },
     lines::NewTxns,
     Chart, UpdateError,
@@ -31,7 +31,7 @@ impl ChartDependentUpdater<NewTxns> for TotalTxns {
 
     async fn get_values(&self, parent_data: Vec<DateValue>) -> Result<Vec<DateValue>, UpdateError> {
         let sum = parse_and_sum::<i64>(parent_data, self.name(), self.parent.name())?;
-        Ok(vec![unwrap_point_or_default(sum)])
+        Ok(sum.into_iter().collect())
     }
 }
 

@@ -7,7 +7,6 @@ use crate::{
     get_chart_data, Chart, UpdateError,
 };
 use async_trait::async_trait;
-use chrono::Utc;
 use sea_orm::prelude::*;
 use std::{fmt::Display, iter::Sum, ops::AddAssign, str::FromStr, sync::Arc};
 
@@ -123,17 +122,4 @@ where
 
 pub fn last_point(data: Vec<DateValue>) -> Option<DateValue> {
     data.into_iter().max()
-}
-
-pub fn unwrap_point_or_default(point: Option<DateValue>) -> DateValue {
-    let default = DateValue::zero(Utc::now().date_naive());
-    if let Some(point) = point {
-        if point.date < default.date {
-            default
-        } else {
-            point
-        }
-    } else {
-        default
-    }
 }
