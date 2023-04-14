@@ -605,23 +605,27 @@ dependencies = [
 
 [[package]]
 name = "blockscout-service-launcher"
-version = "0.5.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57cff94bdacb9bd9ae59ca181aa0b1726682bbc78f037e3299cd677d5a59df60"
+checksum = "21cd760bfb6e4acc1c6c679802ba6516476208e66b949d1193ed05beaa65bb27"
 dependencies = [
  "actix-web",
  "actix-web-prom",
  "anyhow",
+ "cfg-if",
  "futures",
  "opentelemetry",
  "opentelemetry-jaeger",
  "prometheus",
+ "sea-orm",
+ "sea-orm-migration",
  "serde",
  "tokio",
  "tonic",
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]

@@ -53,6 +53,7 @@ impl Default for Settings {
                 http: HttpServerSettings {
                     enabled: true,
                     addr: SocketAddr::from_str("0.0.0.0:8050").unwrap(),
+                    max_body_size: 2 * 1024 * 1024, // 2 Mb - default Actix value
                 },
                 grpc: GrpcServerSettings {
                     enabled: false,
