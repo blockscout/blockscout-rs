@@ -16,6 +16,8 @@ cfg_if::cfg_if! {
     }
 }
 
+const DEFAULT_DB: &str = "postgres";
+
 pub async fn initialize_postgres<Migrator: MigratorTrait>(
     connect_options: impl Into<ConnectOptions>,
     create_database: bool,
@@ -39,32 +41,28 @@ pub async fn initialize_postgres<Migrator: MigratorTrait>(
             }
             (db_url, db_name)
         };
+        tracing::info!("creating database '{db_name}'");
+        let db_base_url = format!("{db_base_url}/{DEFAULT_DB}");
 
         let create_database_options = with_connect_options(db_base_url, &connect_options);
         let db = Database::connect(create_database_options).await?;
-        // The problem is that PostgreSQL does not have `CREATE DATABASE IF NOT EXISTS` statement.
-        // To create database only if it does not exist, we've used the following answer:
-        // https://stackoverflow.com/a/55950456
-        let create_extension_statement = "CREATE EXTENSION IF NOT EXISTS dblink;";
-        let create_database_statement = format!(
-            r#"
-            DO $$
-            BEGIN
-                PERFORM dblink_exec('', 'CREATE DATABASE "{db_name}"');
-                EXCEPTION WHEN duplicate_database THEN RAISE NOTICE '%, skipping', SQLERRM USING ERRCODE = SQLSTATE;
-            END$$;
-        "#
-        );
-        db.execute(Statement::from_string(
-            DatabaseBackend::Postgres,
-            create_extension_statement.into(),
-        ))
-        .await?;
-        db.execute(Statement::from_string(
-            DatabaseBackend::Postgres,
-            create_database_statement,
-        ))
-        .await?;
+
+        let result = db
+            .execute(Statement::from_string(
+                DatabaseBackend::Postgres,
+                format!(r#"CREATE DATABASE "{db_name}""#),
+            ))
+            .await;
+        match result {
+            Ok(_) => {}
+            Err(e) => {
+                if e.to_string().contains("already exists") {
+                    tracing::warn!("database '{db_name}' already exists");
+                } else {
+                    return Err(anyhow::anyhow!(e));
+                }
+            }
+        };
     }
 
     let db = Database::connect(connect_options).await?;
