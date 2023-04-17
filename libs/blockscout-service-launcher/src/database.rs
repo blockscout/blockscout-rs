@@ -54,10 +54,12 @@ pub async fn initialize_postgres<Migrator: MigratorTrait>(
             ))
             .await;
         match result {
-            Ok(_) => {}
+            Ok(_) => {
+                tracing::info!("database '{db_name}' created");
+            }
             Err(e) => {
                 if e.to_string().contains("already exists") {
-                    tracing::warn!("database '{db_name}' already exists");
+                    tracing::info!("database '{db_name}' already exists");
                 } else {
                     return Err(anyhow::anyhow!(e));
                 }
