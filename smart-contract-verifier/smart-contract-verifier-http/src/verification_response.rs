@@ -1,7 +1,7 @@
 use crate::DisplayBytes;
 use serde::{Deserialize, Serialize};
 use smart_contract_verifier::{SourcifySuccess, VerificationSuccess};
-use std::{collections::BTreeMap, fmt::Display, sync::Arc};
+use std::{collections::BTreeMap, fmt::Display};
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct VerificationResponse {
@@ -80,12 +80,7 @@ impl From<VerificationSuccess> for VerificationResult {
             sources: compiler_input
                 .sources
                 .into_iter()
-                .map(|(path, source)| {
-                    // Similar to `unwrap_or_clone` which is still nightly-only feature.
-                    let content = Arc::try_unwrap(source.content)
-                        .unwrap_or_else(|content| (*content).clone());
-                    (path.to_string_lossy().to_string(), content)
-                })
+                .map(|(path, source)| (path.to_string_lossy().to_string(), source.content))
                 .collect(),
             compiler_settings,
 

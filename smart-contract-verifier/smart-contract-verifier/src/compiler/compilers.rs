@@ -181,7 +181,12 @@ mod tests {
         fn from(input: Input) -> Self {
             let mut compiler_input = CompilerInput {
                 language: "Solidity".to_string(),
-                sources: Sources::from([("source.sol".into(), Source::new(input.source_code))]),
+                sources: Sources::from([(
+                    "source.sol".into(),
+                    Source {
+                        content: input.source_code,
+                    },
+                )]),
                 settings: Default::default(),
             };
             compiler_input.settings.evm_version = None;

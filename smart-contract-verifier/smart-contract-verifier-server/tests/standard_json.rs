@@ -176,12 +176,7 @@ async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse
     let expected_sources: BTreeMap<_, _> = standard_input
         .sources
         .into_iter()
-        .map(|(path, source)| {
-            (
-                path.to_str().unwrap().to_string(),
-                (*source.content).clone(),
-            )
-        })
+        .map(|(path, source)| (path.to_str().unwrap().to_string(), source.content))
         .collect();
     assert_eq!(
         verification_result.source_files, expected_sources,
