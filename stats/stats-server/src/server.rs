@@ -48,7 +48,7 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
     if settings.run_migrations {
         blockscout_service_launcher::database::initialize_postgres::<stats::migration::Migrator>(
             opt.clone(),
-            false,
+            true,
             true,
         )
         .await?;
