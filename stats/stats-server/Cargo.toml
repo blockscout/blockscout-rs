@@ -24,7 +24,7 @@ sea-orm = { version = "0.10", features = [
     "runtime-tokio-rustls",
 ] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-blockscout-service-launcher = { version = "0.7.0", features = [ "database-0_10" ] }
+blockscout-service-launcher = { version = "0.7.1", features = [ "database-0_10" ] }
 cron = "0.12"
 
 
