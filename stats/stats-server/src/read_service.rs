@@ -85,21 +85,29 @@ impl StatsService for ReadService {
             .from
             .and_then(|date| NaiveDate::from_str(&date).ok());
         let to = request.to.and_then(|date| NaiveDate::from_str(&date).ok());
-        let mut data: Vec<_> = stats::get_chart_data(&self.db, &request.name, from, to)
+        let mut data = stats::get_chart_data(&self.db, &request.name, from, to)
             .await
-            .map_err(map_read_error)?
+            .map_err(map_read_error)?;
+
+        if settings.drop_last_point {
+            // remove last data point, because it can be partially updated
+            if let Some(last) = data.last() {
+                if last.can_be_partial() {
+                    data.pop();
+                }
+            }
+        }
+
+        let serialized_chart: Vec<_> = data
             .into_iter()
             .map(|point| Point {
                 date: point.date.to_string(),
                 value: point.value,
             })
             .collect();
-
-        if settings.drop_last_point {
-            // remove last data point, because it can be partially updated
-            data.pop();
-        }
-        Ok(Response::new(LineChart { chart: data }))
+        Ok(Response::new(LineChart {
+            chart: serialized_chart,
+        }))
     }
 
     async fn get_line_charts(

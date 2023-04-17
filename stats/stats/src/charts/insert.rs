@@ -97,6 +97,11 @@ impl DateValue {
             self
         }
     }
+
+    pub fn can_be_partial(&self) -> bool {
+        let today = Utc::now().date_naive();
+        self.date >= today
+    }
 }
 
 pub async fn insert_data_many<C, D>(db: &C, data: D) -> Result<(), DbErr>
