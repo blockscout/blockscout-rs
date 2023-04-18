@@ -98,7 +98,7 @@ impl DateValue {
         }
     }
 
-    pub fn can_be_partial(&self) -> bool {
+    pub fn is_partial(&self) -> bool {
         let today = Utc::now().date_naive();
         self.date >= today
     }

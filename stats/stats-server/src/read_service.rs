@@ -92,7 +92,7 @@ impl StatsService for ReadService {
         if settings.drop_last_point {
             // remove last data point, because it can be partially updated
             if let Some(last) = data.last() {
-                if last.can_be_partial() {
+                if last.is_partial() {
                     data.pop();
                 }
             }
