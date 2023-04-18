@@ -12,7 +12,7 @@ update_schedule = "0 0 15 * * * *"
 [[counters]]
 id = "completedTxns"
 title = "Completed Txns"
-update_schedule = "0 0 */3 * * * *"
+update_schedule = "0 5 */3 * * * *"
 
 [[counters]]
 id = "totalAccounts"
@@ -37,29 +37,29 @@ update_schedule = "0 0 18 * * * *"
 [[counters]]
 id = "totalTxns"
 title = "Total Txns"
-update_schedule = "0 0 */3 * * * *"
+update_schedule = "0 10 */3 * * * *"
 
 [[counters]]
 id = "lastNewContracts"
 title = "Number of deployed contracts today"
-update_schedule = "0 0 */3 * * * *"
+update_schedule = "0 15 */3 * * * *"
 relevant_or_zero = true
 
 [[counters]]
 id = "totalContracts"
 title = "Total contracts"
-update_schedule = "0 0 */3 * * * *"
+update_schedule = "0 20 */3 * * * *"
 
 [[counters]]
 id = "lastNewVerifiedContracts"
 title = "Number of verified contracts today"
-update_schedule = "0 0 */3 * * * *"
+update_schedule = "0 25 */3 * * * *"
 relevant_or_zero = true
 
 [[counters]]
 id = "totalVerifiedContracts"
 title = "Total verified contracts"
-update_schedule = "0 0 */3 * * * *"
+update_schedule = "0 30 */3 * * * *"
 
 
 [[lines.sections]]
