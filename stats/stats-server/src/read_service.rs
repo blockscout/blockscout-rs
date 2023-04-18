@@ -46,11 +46,18 @@ impl StatsService for ReadService {
             .counters
             .iter()
             .filter_map(|info| {
-                data.remove(&info.id).map(|value| Counter {
-                    id: info.id.clone(),
-                    value,
-                    title: info.title.clone(),
-                    units: info.settings.units.clone(),
+                data.remove(&info.id).map(|point| {
+                    let point = if info.settings.relevant_or_zero {
+                        point.relevant_or_zero()
+                    } else {
+                        point
+                    };
+                    Counter {
+                        id: info.id.clone(),
+                        value: point.value,
+                        title: info.title.clone(),
+                        units: info.settings.units.clone(),
+                    }
                 })
             })
             .collect();

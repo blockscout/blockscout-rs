@@ -1,5 +1,9 @@
 use crate::{
-    charts::{create_chart, insert::DateValue, updater::ChartDependentUpdater},
+    charts::{
+        create_chart,
+        insert::DateValue,
+        updater::{last_point, ChartDependentUpdater},
+    },
     lines::NativeCoinHoldersGrowth,
     UpdateError,
 };
@@ -26,7 +30,8 @@ impl ChartDependentUpdater<NativeCoinHoldersGrowth> for TotalNativeCoinHolders {
     }
 
     async fn get_values(&self, parent_data: Vec<DateValue>) -> Result<Vec<DateValue>, UpdateError> {
-        Ok(parent_data.into_iter().max().into_iter().collect())
+        let last = last_point(parent_data);
+        Ok(last.into_iter().collect())
     }
 }
 

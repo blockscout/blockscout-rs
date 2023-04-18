@@ -1,5 +1,6 @@
 mod average_block_time;
 mod completed_txns;
+mod last_new_contracts;
 mod mock;
 mod total_accounts;
 mod total_blocks;
@@ -10,6 +11,7 @@ mod total_txns;
 
 pub use average_block_time::AverageBlockTime;
 pub use completed_txns::CompletedTxns;
+pub use last_new_contracts::LastNewContracts;
 pub use mock::MockCounter;
 pub use total_accounts::TotalAccounts;
 pub use total_blocks::TotalBlocks;

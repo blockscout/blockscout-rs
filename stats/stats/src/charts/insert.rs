@@ -1,6 +1,6 @@
 use std::num::ParseIntError;
 
-use chrono::NaiveDate;
+use chrono::{NaiveDate, Utc};
 use entity::chart_data;
 use sea_orm::{prelude::*, sea_query, ConnectionTrait, FromQueryResult, Set};
 
@@ -79,6 +79,22 @@ impl DateValue {
             value: Set(self.value.clone()),
             created_at: Default::default(),
             min_blockscout_block: Set(min_blockscout_block),
+        }
+    }
+
+    pub fn zero(date: NaiveDate) -> Self {
+        Self {
+            date,
+            value: "0".to_string(),
+        }
+    }
+
+    pub fn relevant_or_zero(self) -> DateValue {
+        let today = Utc::now().date_naive();
+        if self.date < today {
+            DateValue::zero(today)
+        } else {
+            self
         }
     }
 }

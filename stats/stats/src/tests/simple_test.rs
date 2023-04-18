@@ -49,5 +49,6 @@ pub async fn simple_test_counter(test_name: &str, counter: impl Chart, expected:
 async fn get_counter_and_assert_eq(db: &DatabaseConnection, counter: &impl Chart, expected: &str) {
     let data = get_counters(db).await.unwrap();
     let data = &data[counter.name()];
-    assert_eq!(expected, data);
+    let value = &data.value;
+    assert_eq!(expected, value);
 }

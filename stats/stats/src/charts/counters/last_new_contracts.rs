@@ -2,10 +2,10 @@ use crate::{
     charts::{
         create_chart,
         insert::DateValue,
-        updater::{parse_and_sum, ChartDependentUpdater},
+        updater::{last_point, ChartDependentUpdater},
     },
-    lines::NewNativeCoinTransfers,
-    Chart, UpdateError,
+    lines::NewContracts,
+    UpdateError,
 };
 use async_trait::async_trait;
 use entity::sea_orm_active_enums::ChartType;
@@ -13,32 +13,32 @@ use sea_orm::prelude::*;
 use std::sync::Arc;
 
 #[derive(Default)]
-pub struct TotalNativeCoinTransfers {
-    parent: Arc<NewNativeCoinTransfers>,
+pub struct LastNewContracts {
+    parent: Arc<NewContracts>,
 }
 
-impl TotalNativeCoinTransfers {
-    pub fn new(parent: Arc<NewNativeCoinTransfers>) -> Self {
+impl LastNewContracts {
+    pub fn new(parent: Arc<NewContracts>) -> Self {
         Self { parent }
     }
 }
 
 #[async_trait]
-impl ChartDependentUpdater<NewNativeCoinTransfers> for TotalNativeCoinTransfers {
-    fn parent(&self) -> Arc<NewNativeCoinTransfers> {
+impl ChartDependentUpdater<NewContracts> for LastNewContracts {
+    fn parent(&self) -> Arc<NewContracts> {
         self.parent.clone()
     }
 
     async fn get_values(&self, parent_data: Vec<DateValue>) -> Result<Vec<DateValue>, UpdateError> {
-        let sum = parse_and_sum::<i64>(parent_data, self.name(), self.parent.name())?;
-        Ok(sum.into_iter().collect())
+        let last = last_point(parent_data);
+        Ok(last.into_iter().collect())
     }
 }
 
 #[async_trait]
-impl crate::Chart for TotalNativeCoinTransfers {
+impl crate::Chart for LastNewContracts {
     fn name(&self) -> &str {
-        "totalNativeCoinTransfers"
+        "lastNewContracts"
     }
 
     fn chart_type(&self) -> ChartType {
@@ -67,8 +67,8 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn update_total_native_coin_transfers() {
-        let counter = TotalNativeCoinTransfers::default();
-        simple_test_counter("update_total_native_coin_transfers", counter, "11").await;
+    async fn update_last_new_contracts() {
+        let counter = LastNewContracts::default();
+        simple_test_counter("update_last_new_contracts", counter, "2").await;
     }
 }
