@@ -12,10 +12,12 @@ impl MigrationTrait for Migration {
                     .table(Metadata::Table)
                     .if_not_exists()
                     .col(
-                        ColumnDef::new(Metadata::LastListContractsRun)
-                            .timestamp()
-                            .not_null(),
+                        ColumnDef::new(Metadata::Id)
+                            .integer()
+                            .auto_increment()
+                            .primary_key(),
                     )
+                    .col(ColumnDef::new(Metadata::LastListContractsRun).timestamp())
                     .to_owned(),
             )
             .await
@@ -32,5 +34,6 @@ impl MigrationTrait for Migration {
 #[derive(Iden)]
 enum Metadata {
     Table,
+    Id,
     LastListContractsRun,
 }
