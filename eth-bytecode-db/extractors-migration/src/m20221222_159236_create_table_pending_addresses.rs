@@ -1,4 +1,3 @@
-use super::m20221222_155714_create_table_bytecode_types::BytecodeTypes;
 use sea_orm_migration::prelude::*;
 
 #[derive(DeriveMigrationName)]
@@ -10,32 +9,25 @@ impl MigrationTrait for Migration {
         manager
             .create_table(
                 Table::create()
-                    .table(Failures::Table)
+                    .table(PendingAddresses::Table)
                     .if_not_exists()
                     .col(
-                        ColumnDef::new(Failures::Address)
+                        ColumnDef::new(PendingAddresses::Address)
                             .binary()
                             .not_null()
                             .primary_key(),
                     )
                     .col(
-                        ColumnDef::new(Failures::CreatedAt)
+                        ColumnDef::new(PendingAddresses::CreatedAt)
                             .timestamp()
                             .not_null()
                             .default(SimpleExpr::Custom("CURRENT_TIMESTAMP".into())),
                     )
                     .col(
-                        ColumnDef::new(Failures::SourceData)
-                            .json_binary()
-                            .not_null(),
-                    )
-                    .col(ColumnDef::new(Failures::Bytecode).binary().not_null())
-                    .col(ColumnDef::new(Failures::BytecodeType).text().not_null())
-                    .col(ColumnDef::new(Failures::Error).text())
-                    .foreign_key(
-                        ForeignKey::create()
-                            .from_col(Failures::BytecodeType)
-                            .to(BytecodeTypes::Table, BytecodeTypes::BytecodeType),
+                        ColumnDef::new(PendingAddresses::InProcess)
+                            .boolean()
+                            .not_null()
+                            .default(false),
                     )
                     .to_owned(),
             )
@@ -44,19 +36,16 @@ impl MigrationTrait for Migration {
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
-            .drop_table(Table::drop().table(Failures::Table).to_owned())
+            .drop_table(Table::drop().table(PendingAddresses::Table).to_owned())
             .await
     }
 }
 
 /// Learn more at https://docs.rs/sea-query#iden
 #[derive(Iden)]
-enum Failures {
+enum PendingAddresses {
     Table,
     Address,
     CreatedAt,
-    SourceData,
-    Bytecode,
-    BytecodeType,
-    Error,
+    InProcess,
 }

@@ -13,11 +13,11 @@ impl MigrationTrait for Migration {
                     .table(PendingTasks::Table)
                     .if_not_exists()
                     .col(
-                        ColumnDef::new(PendingTasks::ChainId)
-                            .big_integer()
-                            .not_null(),
+                        ColumnDef::new(PendingTasks::Address)
+                            .binary()
+                            .not_null()
+                            .primary_key(),
                     )
-                    .col(ColumnDef::new(PendingTasks::Address).binary().not_null())
                     .col(
                         ColumnDef::new(PendingTasks::CreatedAt)
                             .timestamp()
@@ -36,11 +36,6 @@ impl MigrationTrait for Migration {
                             .boolean()
                             .not_null()
                             .default(SimpleExpr::Constant(Value::Bool(Some(false)))),
-                    )
-                    .primary_key(
-                        Index::create()
-                            .col(PendingTasks::ChainId)
-                            .col(PendingTasks::Address),
                     )
                     .foreign_key(
                         ForeignKey::create()
@@ -63,7 +58,6 @@ impl MigrationTrait for Migration {
 #[derive(Iden)]
 enum PendingTasks {
     Table,
-    ChainId,
     Address,
     CreatedAt,
     SourceData,
@@ -82,11 +76,11 @@ mod tests {
             .table(PendingTasks::Table)
             .if_not_exists()
             .col(
-                ColumnDef::new(PendingTasks::ChainId)
-                    .big_integer()
-                    .not_null(),
+                ColumnDef::new(PendingTasks::Address)
+                    .binary()
+                    .not_null()
+                    .primary_key(),
             )
-            .col(ColumnDef::new(PendingTasks::Address).binary().not_null())
             .col(
                 ColumnDef::new(PendingTasks::CreatedAt)
                     .timestamp()
@@ -105,11 +99,6 @@ mod tests {
                     .boolean()
                     .not_null()
                     .default(SimpleExpr::Constant(Value::Bool(Some(false)))),
-            )
-            .primary_key(
-                Index::create()
-                    .col(PendingTasks::ChainId)
-                    .col(PendingTasks::Address),
             )
             .foreign_key(
                 ForeignKey::create()

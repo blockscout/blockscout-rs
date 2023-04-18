@@ -13,14 +13,10 @@ impl MigrationTrait for Migration {
                     .table(VerifiedContracts::Table)
                     .if_not_exists()
                     .col(
-                        ColumnDef::new(VerifiedContracts::ChainId)
-                            .big_integer()
-                            .not_null(),
-                    )
-                    .col(
                         ColumnDef::new(VerifiedContracts::Address)
                             .binary()
-                            .not_null(),
+                            .not_null()
+                            .primary_key(),
                     )
                     .col(
                         ColumnDef::new(VerifiedContracts::CreatedAt)
@@ -43,11 +39,6 @@ impl MigrationTrait for Migration {
                             .text()
                             .not_null(),
                     )
-                    .primary_key(
-                        Index::create()
-                            .col(VerifiedContracts::ChainId)
-                            .col(VerifiedContracts::Address),
-                    )
                     .foreign_key(
                         ForeignKey::create()
                             .from_col(VerifiedContracts::BytecodeType)
@@ -69,7 +60,6 @@ impl MigrationTrait for Migration {
 #[derive(Iden)]
 enum VerifiedContracts {
     Table,
-    ChainId,
     Address,
     CreatedAt,
     SourceData,
