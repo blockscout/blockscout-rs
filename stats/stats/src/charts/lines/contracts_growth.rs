@@ -13,7 +13,7 @@ use entity::sea_orm_active_enums::ChartType;
 use sea_orm::prelude::*;
 use std::sync::Arc;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ContractsGrowth {
     parent: Arc<NewContracts>,
 }
@@ -65,12 +65,11 @@ impl crate::Chart for ContractsGrowth {
 mod tests {
     use super::*;
     use crate::tests::simple_test::simple_test_chart;
-    use std::sync::Arc;
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_contracts_growth() {
-        let chart = ContractsGrowth::new(Arc::new(NewContracts::default()));
+        let chart = ContractsGrowth::default();
         simple_test_chart(
             "update_contracts_growth",
             chart,

@@ -64,6 +64,8 @@ async fn test_counters_ok() {
         "totalNativeCoinTransfers",
         "lastNewContracts",
         "lastNewVerifiedContracts",
+        "totalContracts",
+        "totalVerifiedContracts",
     ]
     .into_iter()
     .collect();

@@ -41,15 +41,25 @@ update_schedule = "0 0 */3 * * * *"
 
 [[counters]]
 id = "lastNewContracts"
-title = "New deployed contracts in 24H"
+title = "Number of deployed contracts today"
 update_schedule = "0 0 */3 * * * *"
 relevant_or_zero = true
 
 [[counters]]
+id = "totalContracts"
+title = "Total contracts"
+update_schedule = "0 0 */3 * * * *"
+
+[[counters]]
 id = "lastNewVerifiedContracts"
-title = "New verified contracts in 24H"
+title = "Number of verified contracts today"
 update_schedule = "0 0 */3 * * * *"
 relevant_or_zero = true
+
+[[counters]]
+id = "totalVerifiedContracts"
+title = "Total verified contracts"
+update_schedule = "0 0 */3 * * * *"
 
 
 [[lines.sections]]

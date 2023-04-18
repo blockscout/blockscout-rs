@@ -111,7 +111,11 @@ impl Charts {
         let native_coin_holders_growth = Arc::new(lines::NativeCoinHoldersGrowth::default());
 
         let new_verified_contracts = Arc::new(lines::NewVerifiedContracts::default());
+        let verified_contracts_growth = Arc::new(lines::VerifiedContractsGrowth::new(
+            new_verified_contracts.clone(),
+        ));
         let new_contracts = Arc::new(lines::NewContracts::default());
+        let contracts_growth = Arc::new(lines::ContractsGrowth::new(new_contracts.clone()));
 
         vec![
             // finished counters
@@ -130,6 +134,10 @@ impl Charts {
             Arc::new(counters::LastNewContracts::new(new_contracts.clone())),
             Arc::new(counters::LastNewVerifiedContracts::new(
                 new_verified_contracts.clone(),
+            )),
+            Arc::new(counters::TotalContracts::new(contracts_growth.clone())),
+            Arc::new(counters::TotalVerifiedContracts::new(
+                verified_contracts_growth.clone(),
             )),
             // finished lines
             Arc::new(lines::NewBlocks::default()),
@@ -153,10 +161,8 @@ impl Charts {
             )),
             native_coin_holders_growth,
             new_native_coin_transfers,
-            Arc::new(lines::VerifiedContractsGrowth::new(
-                new_verified_contracts.clone(),
-            )),
-            Arc::new(lines::ContractsGrowth::new(new_contracts.clone())),
+            verified_contracts_growth,
+            contracts_growth,
             new_verified_contracts,
             new_contracts,
         ]
