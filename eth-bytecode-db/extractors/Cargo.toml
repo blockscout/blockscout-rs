@@ -6,3 +6,19 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+extractors-migration = { path = "../extractors-migration" }
+extractors-entity = { path = "../extractors-entity" }
+
+anyhow = "1.0.70"
+blockscout-service-launcher = { version = "0.7.1", features = ["database-0_11"] }
+blockscout-display-bytes = "1.0.0"
+chrono = "0.4.24"
+sea-orm = "0.11.0"
+serde = "1.0.160"
+serde_json = "1.0.96"
+reqwest = { version = "0.11.0", features = ["json"] }
+reqwest-middleware = "0.2.0"
+reqwest-retry = "0.2.0"
+tokio = { version = "1.27.0", features = ["macros"] }
+tracing = "0.1.37"
+url = "2.3.1"
