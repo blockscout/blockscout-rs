@@ -45,6 +45,12 @@ title = "New deployed contracts in 24H"
 update_schedule = "0 0 */3 * * * *"
 relevant_or_zero = true
 
+[[counters]]
+id = "lastNewVerifiedContracts"
+title = "New verified contracts in 24H"
+update_schedule = "0 0 */3 * * * *"
+relevant_or_zero = true
+
 
 [[lines.sections]]
 id = "accounts"
