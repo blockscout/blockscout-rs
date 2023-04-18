@@ -2,6 +2,7 @@
 
 pub use super::bytecode_types::Entity as BytecodeTypes;
 pub use super::failures::Entity as Failures;
+pub use super::metadata::Entity as Metadata;
 pub use super::pending_addresses::Entity as PendingAddresses;
 pub use super::pending_tasks::Entity as PendingTasks;
 pub use super::verified_contracts::Entity as VerifiedContracts;

@@ -4,6 +4,7 @@ pub mod prelude;
 
 pub mod bytecode_types;
 pub mod failures;
+pub mod metadata;
 pub mod pending_addresses;
 pub mod pending_tasks;
 pub mod verified_contracts;
