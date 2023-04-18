@@ -116,7 +116,7 @@ mod tests {
             language: "Vyper".to_string(),
             sources: sources
                 .into_iter()
-                .map(|(name, content)| (name, Source::new(content)))
+                .map(|(name, content)| (name, Source { content }))
                 .collect(),
             settings: Default::default(),
         };

@@ -103,9 +103,7 @@ impl<'a, T: EvmCompiler> ContractVerifier<'a, T> {
                 .sources
                 .iter_mut()
                 .for_each(|(_file, source)| {
-                    let mut modified_content = source.content.as_ref().clone();
-                    modified_content.push(' ');
-                    source.content = std::sync::Arc::new(modified_content);
+                    source.content.push(' ');
                 });
             self.compilers
                 .compile(self.compiler_version, &compiler_input)
