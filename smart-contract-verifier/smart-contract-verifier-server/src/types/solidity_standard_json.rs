@@ -71,6 +71,7 @@ impl TryFrom<VerifySolidityStandardJsonRequestWrapper> for VerificationRequest {
             creation_bytecode,
             compiler_version,
             content: StandardJsonContent { input },
+            chain_id: request.metadata.unwrap_or_default().chain_id,
         })
     }
 }
@@ -78,6 +79,7 @@ impl TryFrom<VerifySolidityStandardJsonRequestWrapper> for VerificationRequest {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::proto::VerificationMetadata;
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -89,7 +91,10 @@ mod tests {
             bytecode_type: BytecodeType::CreationInput.into(),
             compiler_version: "v0.8.17+commit.8df45f5f".to_string(),
             input: "{\"language\": \"Solidity\", \"sources\": {\"./src/contracts/Foo.sol\": {\"content\": \"pragma solidity ^0.8.2;\\n\\ncontract Foo {\\n    function bar() external pure returns (uint256) {\\n        return 42;\\n    }\\n}\\n\"}}, \"settings\": {\"metadata\": {\"useLiteralContent\": true}, \"optimizer\": {\"enabled\": true, \"runs\": 200}, \"outputSelection\": {\"*\": {\"*\": [\"abi\", \"evm.bytecode\", \"evm.deployedBytecode\", \"evm.methodIdentifiers\"], \"\": [\"id\", \"ast\"]}}}}".to_string(),
-            metadata: None,
+            metadata: Some(VerificationMetadata {
+                chain_id: "1".into(),
+                contract_address: "0xcafecafecafecafecafecafecafecafecafecafe".into()
+            }),
         };
         let input: CompilerInput = serde_json::from_str(&request.input).unwrap();
 
@@ -103,6 +108,7 @@ mod tests {
             deployed_bytecode: DisplayBytes::from_str("").unwrap().0,
             compiler_version: Version::from_str("v0.8.17+commit.8df45f5f").unwrap(),
             content: StandardJsonContent { input },
+            chain_id: "1".into(),
         };
 
         // We cannot compare requests directly, as CompilerInput does not implement PartialEq
@@ -141,5 +147,27 @@ mod tests {
             expected.deployed_bytecode, verification_request.deployed_bytecode,
             "Invalid deployed bytecode when deployed bytecode provided"
         );
+    }
+
+    #[test]
+    // Chain id should result in empty string if metadata is missed
+    fn empty_metadata() {
+        let request = VerifySolidityStandardJsonRequest {
+            bytecode: "".to_string(),
+            bytecode_type: BytecodeType::CreationInput.into(),
+            compiler_version: "v0.8.17+commit.8df45f5f".to_string(),
+            input: "".to_string(),
+            metadata: None,
+        };
+
+        let verification_request: VerificationRequest =
+            <VerifySolidityStandardJsonRequestWrapper>::from(request)
+                .try_into()
+                .expect("Try_into verification request failed");
+
+        assert_eq!(
+            "", verification_request.chain_id,
+            "Absent verification metadata should result in empty string chain id"
+        )
     }
 }

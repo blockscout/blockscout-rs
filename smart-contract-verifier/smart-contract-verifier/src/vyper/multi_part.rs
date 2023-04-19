@@ -17,6 +17,10 @@ pub struct VerificationRequest {
     pub compiler_version: Version,
 
     pub content: MultiFileContent,
+
+    // Required for the metrics. Has no functional meaning.
+    // In case if chain_id has not been provided, results in empty string.
+    pub chain_id: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

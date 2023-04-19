@@ -53,6 +53,7 @@ impl TryFrom<VerificationRequest> for solidity::standard_json::VerificationReque
             creation_bytecode,
             compiler_version,
             content: value.content.try_into()?,
+            chain_id: Default::default(),
         })
     }
 }

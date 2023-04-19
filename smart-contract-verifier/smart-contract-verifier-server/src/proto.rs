@@ -3,6 +3,6 @@ pub use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::
     solidity_verifier_server, source, sourcify_verifier_actix, sourcify_verifier_server,
     verify_response, vyper_verifier_actix, vyper_verifier_server, BytecodeType, HealthCheckRequest,
     HealthCheckResponse, ListCompilerVersionsRequest, ListCompilerVersionsResponse, Source,
-    VerifyResponse, VerifySolidityMultiPartRequest, VerifySolidityStandardJsonRequest,
-    VerifySourcifyRequest, VerifyVyperMultiPartRequest,
+    VerificationMetadata, VerifyResponse, VerifySolidityMultiPartRequest,
+    VerifySolidityStandardJsonRequest, VerifySourcifyRequest, VerifyVyperMultiPartRequest,
 };

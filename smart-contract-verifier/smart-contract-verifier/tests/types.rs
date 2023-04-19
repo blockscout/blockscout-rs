@@ -66,6 +66,7 @@ pub mod solidity {
                     optimization_runs: source.optimization_runs,
                     contract_libraries: source.contract_libraries,
                 },
+                chain_id: Default::default(),
             }
         }
     }
@@ -85,6 +86,7 @@ pub mod solidity {
                 creation_bytecode: multi_part_request.creation_bytecode,
                 compiler_version: multi_part_request.compiler_version,
                 content: standard_json::StandardJsonContent { input },
+                chain_id: Default::default(),
             }
         }
     }
@@ -147,6 +149,7 @@ pub mod vyper {
                     sources: source.sources,
                     evm_version: source.evm_version,
                 },
+                chain_id: Default::default(),
             }
         }
     }

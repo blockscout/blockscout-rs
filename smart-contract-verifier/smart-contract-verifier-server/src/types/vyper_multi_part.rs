@@ -84,6 +84,7 @@ impl TryFrom<VerifyVyperMultiPartRequestWrapper> for VerificationRequest {
                 sources,
                 evm_version,
             },
+            chain_id: request.metadata.unwrap_or_default().chain_id,
         })
     }
 }
@@ -91,6 +92,7 @@ impl TryFrom<VerifyVyperMultiPartRequestWrapper> for VerificationRequest {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::proto::VerificationMetadata;
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -102,7 +104,10 @@ mod tests {
             source_files: BTreeMap::from([("source_path".into(), "source_content".into())]),
             evm_version: Some("byzantium".to_string()),
             optimizations: None,
-            metadata: None,
+            metadata: Some(VerificationMetadata {
+                chain_id: "1".into(),
+                contract_address: "0xcafecafecafecafecafecafecafecafecafecafe".into(),
+            }),
         };
 
         let verification_request: VerificationRequest =
@@ -118,6 +123,7 @@ mod tests {
                 sources: BTreeMap::from([("source_path".into(), "source_content".into())]),
                 evm_version: Some(EvmVersion::Byzantium),
             },
+            chain_id: "1".into(),
         };
 
         assert_eq!(expected, verification_request);
@@ -170,6 +176,30 @@ mod tests {
             Some(EvmVersion::Istanbul),
             verification_request.content.evm_version,
             "Absent evm_version should result in 'EvmVersion::Istanbul'"
+        )
+    }
+
+    #[test]
+    // Chain id should result in empty string if metadata is missed
+    fn empty_metadata() {
+        let request = VerifyVyperMultiPartRequest {
+            bytecode: "".to_string(),
+            bytecode_type: BytecodeType::CreationInput.into(),
+            compiler_version: "v0.8.17+commit.8df45f5f".to_string(),
+            source_files: Default::default(),
+            evm_version: None,
+            optimizations: None,
+            metadata: None,
+        };
+
+        let verification_request: VerificationRequest =
+            <VerifyVyperMultiPartRequestWrapper>::from(request)
+                .try_into()
+                .expect("Try_into verification request failed");
+
+        assert_eq!(
+            "", verification_request.chain_id,
+            "Absent verification metadata should result in empty string chain id"
         )
     }
 }
