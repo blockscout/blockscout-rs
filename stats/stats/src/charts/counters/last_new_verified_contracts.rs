@@ -69,6 +69,6 @@ mod tests {
     #[ignore = "needs database to run"]
     async fn update_last_new_verified_contracts() {
         let counter = LastNewVerifiedContracts::default();
-        simple_test_counter("update_last_new_verified_contracts", counter, "2").await;
+        simple_test_counter("update_last_new_verified_contracts", counter, "1").await;
     }
 }
