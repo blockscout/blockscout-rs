@@ -16,7 +16,7 @@ pub struct VerificationRequest {
 
     // Required for the metrics. Has no functional meaning.
     // In case if chain_id has not been provided, results in empty string.
-    pub chain_id: String,
+    pub chain_id: Option<String>,
 }
 
 pub struct StandardJsonContent {

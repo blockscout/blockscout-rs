@@ -84,7 +84,7 @@ impl TryFrom<VerifyVyperMultiPartRequestWrapper> for VerificationRequest {
                 sources,
                 evm_version,
             },
-            chain_id: request.metadata.unwrap_or_default().chain_id,
+            chain_id: request.metadata.map(|metadata| metadata.chain_id),
         })
     }
 }
@@ -123,7 +123,7 @@ mod tests {
                 sources: BTreeMap::from([("source_path".into(), "source_content".into())]),
                 evm_version: Some(EvmVersion::Byzantium),
             },
-            chain_id: "1".into(),
+            chain_id: Some("1".into()),
         };
 
         assert_eq!(expected, verification_request);
@@ -198,7 +198,7 @@ mod tests {
                 .expect("Try_into verification request failed");
 
         assert_eq!(
-            "", verification_request.chain_id,
+            None, verification_request.chain_id,
             "Absent verification metadata should result in empty string chain id"
         )
     }

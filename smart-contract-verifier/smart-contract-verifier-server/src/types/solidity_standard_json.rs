@@ -71,7 +71,7 @@ impl TryFrom<VerifySolidityStandardJsonRequestWrapper> for VerificationRequest {
             creation_bytecode,
             compiler_version,
             content: StandardJsonContent { input },
-            chain_id: request.metadata.unwrap_or_default().chain_id,
+            chain_id: request.metadata.map(|metadata| metadata.chain_id),
         })
     }
 }
@@ -108,7 +108,7 @@ mod tests {
             deployed_bytecode: DisplayBytes::from_str("").unwrap().0,
             compiler_version: Version::from_str("v0.8.17+commit.8df45f5f").unwrap(),
             content: StandardJsonContent { input },
-            chain_id: "1".into(),
+            chain_id: Some("1".into()),
         };
 
         // We cannot compare requests directly, as CompilerInput does not implement PartialEq
@@ -166,7 +166,7 @@ mod tests {
                 .expect("Try_into verification request failed");
 
         assert_eq!(
-            "", verification_request.chain_id,
+            None, verification_request.chain_id,
             "Absent verification metadata should result in empty string chain id"
         )
     }

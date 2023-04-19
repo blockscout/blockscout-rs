@@ -84,7 +84,7 @@ impl TryFrom<VerifySolidityMultiPartRequestWrapper> for VerificationRequest {
                 optimization_runs: request.optimization_runs.map(|i| i as usize),
                 contract_libraries: Some(request.libraries.into_iter().collect()),
             },
-            chain_id: request.metadata.unwrap_or_default().chain_id,
+            chain_id: request.metadata.map(|metadata| metadata.chain_id),
         })
     }
 }
@@ -123,7 +123,7 @@ mod tests {
                 optimization_runs: Some(200),
                 contract_libraries: Some(BTreeMap::from([("Lib".into(), "0xcafe".into())])),
             },
-            chain_id: "1".into(),
+            chain_id: Some("1".into()),
         };
 
         let verification_request: VerificationRequest =
@@ -214,7 +214,7 @@ mod tests {
                 .expect("Try_into verification request failed");
 
         assert_eq!(
-            "", verification_request.chain_id,
+            None, verification_request.chain_id,
             "Absent verification metadata should result in empty string chain id"
         )
     }
