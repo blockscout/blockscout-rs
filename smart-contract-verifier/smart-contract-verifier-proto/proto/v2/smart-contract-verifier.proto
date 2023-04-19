@@ -71,6 +71,13 @@ enum BytecodeType {
   DEPLOYED_BYTECODE = 2;
 }
 
+message VerificationMetadata {
+  /// Id of the chain the contract is verified on
+  string chain_id = 1;
+  /// The address of the contract to be verified
+  string contract_address = 2;
+}
+
 message VerifySolidityMultiPartRequest {
   /// Bytecode to compare local compilation result with
   string bytecode = 1;
@@ -87,6 +94,9 @@ message VerifySolidityMultiPartRequest {
   map<string, string> source_files = 6;
   /// Map from a library name to its address
   map<string, string> libraries = 7;
+
+  /// An optional field to be filled by explorers
+  optional VerificationMetadata metadata = 8;
 }
 
 message VerifySolidityStandardJsonRequest {
@@ -98,6 +108,9 @@ message VerifySolidityStandardJsonRequest {
   string compiler_version = 3;
   /// https://docs.soliditylang.org/en/latest/using-the-compiler.html#input-description
   string input = 4;
+
+  /// An optional field to be filled by explorers
+  optional VerificationMetadata metadata = 5;
 }
 
 message VerifyVyperMultiPartRequest {
@@ -113,6 +126,9 @@ message VerifyVyperMultiPartRequest {
   optional bool optimizations = 5;
   /// Source file name to the actual source code
   map<string, string> source_files = 6;
+
+  /// An optional field to be filled by explorers
+  optional VerificationMetadata metadata = 7;
 }
 
 message VerifyResponse {
