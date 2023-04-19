@@ -97,7 +97,7 @@ impl<'a, T: EvmCompiler> ContractVerifier<'a, T> {
     pub async fn verify(&self, compiler_input: &CompilerInput) -> Result<Success, Error> {
         let compiler_output = self
             .compilers
-            .compile(self.compiler_version, compiler_input, "")
+            .compile(self.compiler_version, compiler_input, &self.chain_id)
             .await?;
         let compiler_output_modified = {
             let mut compiler_input = compiler_input.clone();
