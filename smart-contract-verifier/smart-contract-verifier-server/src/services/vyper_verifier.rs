@@ -68,11 +68,17 @@ impl VyperVerifier for VyperVerifierService {
         request: Request<VerifyVyperMultiPartRequest>,
     ) -> Result<Response<VerifyResponse>, Status> {
         let request: VerifyVyperMultiPartRequestWrapper = request.into_inner().into();
+        let chain_id = request.metadata.clone().unwrap_or_default().chain_id;
         let result = vyper::multi_part::verify(self.client.clone(), request.try_into()?).await;
 
         if let Ok(verification_success) = result {
             let response = VerifyResponseWrapper::ok(verification_success);
-            metrics::count_verify_contract("vyper", response.status().as_str_name(), "multi-part");
+            metrics::count_verify_contract(
+                chain_id.as_ref(),
+                "vyper",
+                response.status().as_str_name(),
+                "multi-part",
+            );
             return Ok(Response::new(response.into_inner()));
         }
 

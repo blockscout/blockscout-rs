@@ -48,6 +48,7 @@ impl SourcifyVerifier for SourcifyVerifierService {
         request: Request<VerifySourcifyRequest>,
     ) -> Result<Response<VerifyResponse>, Status> {
         let request: VerifySourcifyRequestWrapper = request.into_inner().into();
+        let chain_id = request.chain.clone();
         let response = sourcify::api::verify(self.client.clone(), request.try_into()?).await;
 
         let result = match response {
@@ -59,7 +60,12 @@ impl SourcifyVerifier for SourcifyVerifierService {
             },
         }?;
 
-        metrics::count_verify_contract("solidity", result.status().as_str_name(), "sourcify");
+        metrics::count_verify_contract(
+            chain_id.as_ref(),
+            "solidity",
+            result.status().as_str_name(),
+            "sourcify",
+        );
         return Ok(Response::new(result.into_inner()));
     }
 }

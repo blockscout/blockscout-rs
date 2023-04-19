@@ -105,6 +105,7 @@ mod tests {
             evm_version: Some("london".to_string()),
             optimization_runs: Some(200),
             libraries: BTreeMap::from([("Lib".into(), "0xcafe".into())]),
+            metadata: None,
         };
 
         let mut expected = VerificationRequest {
@@ -148,6 +149,7 @@ mod tests {
             evm_version: Some("default".to_string()),
             optimization_runs: None,
             libraries: Default::default(),
+            metadata: None,
         };
 
         let verification_request: VerificationRequest =
@@ -172,6 +174,7 @@ mod tests {
             evm_version: None,
             optimization_runs: None,
             libraries: Default::default(),
+            metadata: None,
         };
 
         let verification_request: VerificationRequest =

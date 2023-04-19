@@ -102,6 +102,7 @@ mod tests {
             source_files: BTreeMap::from([("source_path".into(), "source_content".into())]),
             evm_version: Some("byzantium".to_string()),
             optimizations: None,
+            metadata: None,
         };
 
         let verification_request: VerificationRequest =
@@ -132,6 +133,7 @@ mod tests {
             source_files: Default::default(),
             evm_version: Some("default".to_string()),
             optimizations: None,
+            metadata: None,
         };
 
         let verification_request: VerificationRequest =
@@ -156,6 +158,7 @@ mod tests {
             source_files: Default::default(),
             evm_version: None,
             optimizations: None,
+            metadata: None,
         };
 
         let verification_request: VerificationRequest =

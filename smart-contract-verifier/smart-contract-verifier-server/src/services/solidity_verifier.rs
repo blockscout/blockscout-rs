@@ -85,11 +85,13 @@ impl SolidityVerifier for SolidityVerifierService {
         request: Request<VerifySolidityMultiPartRequest>,
     ) -> Result<Response<VerifyResponse>, Status> {
         let request: VerifySolidityMultiPartRequestWrapper = request.into_inner().into();
+        let chain_id = request.metadata.clone().unwrap_or_default().chain_id;
         let result = solidity::multi_part::verify(self.client.clone(), request.try_into()?).await;
 
         if let Ok(verification_success) = result {
             let response = VerifyResponseWrapper::ok(verification_success);
             metrics::count_verify_contract(
+                chain_id.as_ref(),
                 "solidity",
                 response.status().as_str_name(),
                 "multi-part",
@@ -116,6 +118,7 @@ impl SolidityVerifier for SolidityVerifierService {
         request: Request<VerifySolidityStandardJsonRequest>,
     ) -> Result<Response<VerifyResponse>, Status> {
         let request: VerifySolidityStandardJsonRequestWrapper = request.into_inner().into();
+        let chain_id = request.metadata.clone().unwrap_or_default().chain_id;
         let verification_request = {
             let request: Result<_, StandardJsonParseError> = request.try_into();
             if let Err(err) = request {
@@ -136,6 +139,7 @@ impl SolidityVerifier for SolidityVerifierService {
         if let Ok(verification_success) = result {
             let response = VerifyResponseWrapper::ok(verification_success);
             metrics::count_verify_contract(
+                chain_id.as_ref(),
                 "solidity",
                 response.status().as_str_name(),
                 "multi-part",
