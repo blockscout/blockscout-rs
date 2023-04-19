@@ -43,6 +43,7 @@ pub async fn verify(client: Arc<Client>, request: VerificationRequest) -> Result
         &request.compiler_version,
         request.creation_bytecode,
         request.deployed_bytecode,
+        request.chain_id,
     )?;
     let result = verifier.verify(&compiler_input).await;
 

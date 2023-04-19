@@ -61,6 +61,7 @@ pub async fn verify(client: Arc<Client>, request: VerificationRequest) -> Result
         &request.compiler_version,
         request.creation_bytecode,
         request.deployed_bytecode,
+        request.chain_id,
     )?;
 
     // If case of success, we allow middlewares to process success and only then return it to the caller;

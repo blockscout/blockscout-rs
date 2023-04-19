@@ -66,6 +66,7 @@ where
         &self,
         compiler_version: &Version,
         input: &CompilerInput,
+        chain_id: &str,
     ) -> Result<CompilerOutput, Error> {
         let path_result = {
             self.cache
@@ -88,7 +89,9 @@ where
                 let _wait_gauge_guard = metrics::COMPILATIONS_IN_QUEUE.guarded_inc();
                 self.threads_semaphore.acquire().await?
             };
-            let _compile_timer_guard = metrics::COMPILE_TIME.start_timer();
+            let _compile_timer_guard = metrics::COMPILE_TIME
+                .with_label_values(&[chain_id])
+                .start_timer();
             let _compile_gauge_guard = metrics::COMPILATIONS_IN_FLIGHT.guarded_inc();
             self.evm_compiler
                 .compile(&path, compiler_version, input)
@@ -217,7 +220,7 @@ mod tests {
         let version = Version::from_str("v0.8.10+commit.fc410830").expect("Compiler version");
 
         let result = compilers
-            .compile(&version, &input)
+            .compile(&version, &input, "")
             .await
             .expect("Compilation failed");
         assert!(
@@ -235,7 +238,7 @@ mod tests {
         let version = Version::from_str("v0.5.9+commit.c68bc34e").expect("Compiler version");
 
         let result = compilers
-            .compile(&version, &input)
+            .compile(&version, &input, "")
             .await
             .expect("Compilation failed");
         assert!(
@@ -253,7 +256,7 @@ mod tests {
         let version = Version::from_str("v0.8.10+commit.fc410830").expect("Compiler version");
 
         let result = compilers
-            .compile(&version, &input)
+            .compile(&version, &input, "")
             .await
             .expect_err("Compilation should fail");
         match result {

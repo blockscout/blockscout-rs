@@ -65,6 +65,7 @@ pub struct ContractVerifier<'a, T> {
     compilers: &'a Compilers<T>,
     compiler_version: &'a compiler::Version,
     verifier: Box<dyn base::Verifier<Input = (CompilerOutput, CompilerOutput)>>,
+    chain_id: String,
 }
 
 impl<'a, T: EvmCompiler> ContractVerifier<'a, T> {
@@ -73,6 +74,7 @@ impl<'a, T: EvmCompiler> ContractVerifier<'a, T> {
         compiler_version: &'a compiler::Version,
         creation_tx_input: Option<Bytes>,
         deployed_bytecode: Bytes,
+        chain_id: String,
     ) -> Result<Self, Error> {
         let verifier: Box<dyn base::Verifier<Input = (CompilerOutput, CompilerOutput)>> =
             match creation_tx_input {
@@ -87,6 +89,7 @@ impl<'a, T: EvmCompiler> ContractVerifier<'a, T> {
             compilers,
             compiler_version,
             verifier,
+            chain_id,
         })
     }
 
@@ -94,7 +97,7 @@ impl<'a, T: EvmCompiler> ContractVerifier<'a, T> {
     pub async fn verify(&self, compiler_input: &CompilerInput) -> Result<Success, Error> {
         let compiler_output = self
             .compilers
-            .compile(self.compiler_version, compiler_input)
+            .compile(self.compiler_version, compiler_input, "")
             .await?;
         let compiler_output_modified = {
             let mut compiler_input = compiler_input.clone();
@@ -106,7 +109,7 @@ impl<'a, T: EvmCompiler> ContractVerifier<'a, T> {
                     source.content.push(' ');
                 });
             self.compilers
-                .compile(self.compiler_version, &compiler_input)
+                .compile(self.compiler_version, &compiler_input, &self.chain_id)
                 .await?
         };
 
