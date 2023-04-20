@@ -20,32 +20,20 @@ impl ChartPartialUpdater for NewVerifiedContracts {
             Some(row) => Statement::from_sql_and_values(
                 DbBackend::Postgres,
                 r#"SELECT
-                    DATE(b.timestamp) as date,
+                    DATE(smart_contracts.inserted_at) as date,
                     COUNT(*)::TEXT as value
-                FROM transactions t
-                JOIN blocks       b ON b.hash = t.block_hash
-                JOIN addresses    a ON t.created_contract_address_hash = a.hash
-                WHERE
-                    LENGTH(t.created_contract_address_hash) > 0 AND
-                    b.consensus = true AND
-                    a.verified = true AND
-                    DATE(b.timestamp) > $1
-                GROUP BY DATE(b.timestamp)"#,
+                FROM smart_contracts
+                WHERE DATE(smart_contracts.inserted_at) > $1
+                GROUP BY DATE(smart_contracts.inserted_at)"#,
                 vec![row.date.into()],
             ),
             None => Statement::from_sql_and_values(
                 DbBackend::Postgres,
                 r#"SELECT
-                    DATE(b.timestamp) as date,
+                    DATE(smart_contracts.inserted_at) as date,
                     COUNT(*)::TEXT as value
-                FROM transactions t
-                JOIN blocks       b ON b.hash = t.block_hash
-                JOIN addresses    a ON t.created_contract_address_hash = a.hash
-                WHERE
-                    LENGTH(t.created_contract_address_hash) > 0 AND
-                    b.consensus = true AND
-                    a.verified = true
-                GROUP BY DATE(b.timestamp)"#,
+                FROM smart_contracts
+                GROUP BY DATE(smart_contracts.inserted_at)"#,
                 vec![],
             ),
         };
@@ -90,7 +78,11 @@ mod tests {
         simple_test_chart(
             "update_new_verified_contracts",
             chart,
-            vec![("2022-11-10", "1"), ("2022-11-11", "2")],
+            vec![
+                ("2022-11-14", "1"),
+                ("2022-11-15", "1"),
+                ("2022-11-16", "1"),
+            ],
         )
         .await;
     }

@@ -1,5 +1,6 @@
 use blockscout_db::entity::{
-    address_coin_balances_daily, addresses, block_rewards, blocks, tokens, transactions,
+    address_coin_balances_daily, addresses, block_rewards, blocks, smart_contracts, tokens,
+    transactions,
 };
 use chrono::{NaiveDate, NaiveDateTime};
 use sea_orm::{prelude::Decimal, DatabaseConnection, EntityTrait, Set};
@@ -121,8 +122,8 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
         .unwrap();
 
     let contract_creation_txns = contracts
-        .into_iter()
-        .chain(verified_contracts.into_iter())
+        .iter()
+        .chain(verified_contracts.iter())
         .enumerate()
         .map(|(i, contract)| {
             mock_transaction(
@@ -139,6 +140,23 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
         .await
         .unwrap();
 
+    let verified_date = vec![
+        "2022-11-14T12:00:00",
+        "2022-11-15T15:00:00",
+        "2022-11-16T23:59:59",
+        "2022-11-17T00:00:00",
+    ]
+    .into_iter()
+    .map(|val| NaiveDateTime::from_str(val).unwrap());
+    assert!(verified_date.len() >= verified_contracts.len());
+    let smart_contracts = verified_contracts
+        .iter()
+        .zip(verified_date)
+        .map(|(contract, verified_at)| mock_smart_contract(contract, verified_at));
+    smart_contracts::Entity::insert_many(smart_contracts)
+        .exec(blockscout)
+        .await
+        .unwrap();
     let failed_txns = vec![
         mock_failed_transaction(vec![123, 21], None, None),
         mock_failed_transaction(
@@ -398,5 +416,23 @@ fn mock_block_rewards(
         reward: Set(reward),
         inserted_at: Set(Default::default()),
         updated_at: Set(Default::default()),
+    }
+}
+
+fn mock_smart_contract(
+    contract: &addresses::ActiveModel,
+    verified_at: NaiveDateTime,
+) -> smart_contracts::ActiveModel {
+    smart_contracts::ActiveModel {
+        address_hash: Set(contract.hash.as_ref().clone()),
+        name: Set(Default::default()),
+        compiler_version: Set(Default::default()),
+        contract_source_code: Set(Default::default()),
+        abi: Set(Default::default()),
+        contract_code_md5: Set(Default::default()),
+        inserted_at: Set(verified_at),
+        updated_at: Set(Default::default()),
+        optimization: Set(false),
+        ..Default::default()
     }
 }
