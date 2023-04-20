@@ -88,29 +88,28 @@ impl SolidityVerifier for SolidityVerifierService {
         let chain_id = request.metadata.clone().unwrap_or_default().chain_id;
         let result = solidity::multi_part::verify(self.client.clone(), request.try_into()?).await;
 
-        if let Ok(verification_success) = result {
-            let response = VerifyResponseWrapper::ok(verification_success);
-            metrics::count_verify_contract(
-                chain_id.as_ref(),
-                "solidity",
-                response.status().as_str_name(),
-                "multi-part",
-            );
-            return Ok(Response::new(response.into_inner()));
-        }
+        let response = if let Ok(verification_success) = result {
+            VerifyResponseWrapper::ok(verification_success)
+        } else {
+            let err = result.unwrap_err();
+            match err {
+                VerificationError::Compilation(_)
+                | VerificationError::NoMatchingContracts
+                | VerificationError::CompilerVersionMismatch(_) => VerifyResponseWrapper::err(err),
+                VerificationError::Initialization(_) | VerificationError::VersionNotFound(_) => {
+                    return Err(Status::invalid_argument(err.to_string()))
+                }
+                VerificationError::Internal(_) => return Err(Status::internal(err.to_string())),
+            }
+        };
 
-        let err = result.unwrap_err();
-        match err {
-            VerificationError::Compilation(_)
-            | VerificationError::NoMatchingContracts
-            | VerificationError::CompilerVersionMismatch(_) => {
-                Ok(Response::new(VerifyResponseWrapper::err(err).into_inner()))
-            }
-            VerificationError::Initialization(_) | VerificationError::VersionNotFound(_) => {
-                Err(Status::invalid_argument(err.to_string()))
-            }
-            VerificationError::Internal(_) => Err(Status::internal(err.to_string())),
-        }
+        metrics::count_verify_contract(
+            chain_id.as_ref(),
+            "solidity",
+            response.status().as_str_name(),
+            "multi-part",
+        );
+        Ok(Response::new(response.into_inner()))
     }
 
     async fn verify_standard_json(
@@ -136,29 +135,28 @@ impl SolidityVerifier for SolidityVerifierService {
         let result =
             solidity::standard_json::verify(self.client.clone(), verification_request).await;
 
-        if let Ok(verification_success) = result {
-            let response = VerifyResponseWrapper::ok(verification_success);
-            metrics::count_verify_contract(
-                chain_id.as_ref(),
-                "solidity",
-                response.status().as_str_name(),
-                "multi-part",
-            );
-            return Ok(Response::new(response.into_inner()));
-        }
+        let response = if let Ok(verification_success) = result {
+            VerifyResponseWrapper::ok(verification_success)
+        } else {
+            let err = result.unwrap_err();
+            match err {
+                VerificationError::Compilation(_)
+                | VerificationError::NoMatchingContracts
+                | VerificationError::CompilerVersionMismatch(_) => VerifyResponseWrapper::err(err),
+                VerificationError::Initialization(_) | VerificationError::VersionNotFound(_) => {
+                    return Err(Status::invalid_argument(err.to_string()))
+                }
+                VerificationError::Internal(_) => return Err(Status::internal(err.to_string())),
+            }
+        };
 
-        let err = result.unwrap_err();
-        match err {
-            VerificationError::Compilation(_)
-            | VerificationError::NoMatchingContracts
-            | VerificationError::CompilerVersionMismatch(_) => {
-                Ok(Response::new(VerifyResponseWrapper::err(err).into_inner()))
-            }
-            VerificationError::Initialization(_) | VerificationError::VersionNotFound(_) => {
-                Err(Status::invalid_argument(err.to_string()))
-            }
-            VerificationError::Internal(_) => Err(Status::internal(err.to_string())),
-        }
+        metrics::count_verify_contract(
+            chain_id.as_ref(),
+            "solidity",
+            response.status().as_str_name(),
+            "standard-json",
+        );
+        Ok(Response::new(response.into_inner()))
     }
 
     async fn list_compiler_versions(
