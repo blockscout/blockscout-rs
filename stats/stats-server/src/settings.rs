@@ -27,6 +27,7 @@ impl Eq for IgnoredAny {}
 #[serde(default, deny_unknown_fields)]
 pub struct Settings {
     pub db_url: String,
+    pub create_database: bool,
     pub run_migrations: bool,
     pub blockscout_db_url: String,
     #[serde_as(as = "DisplayFromStr")]
@@ -65,6 +66,7 @@ impl Default for Settings {
             force_update_on_start: Some(false),
             charts_config: PathBuf::from_str("config/charts.toml").unwrap(),
             blockscout_db_url: Default::default(),
+            create_database: Default::default(),
             run_migrations: Default::default(),
             metrics: Default::default(),
             jaeger: Default::default(),
