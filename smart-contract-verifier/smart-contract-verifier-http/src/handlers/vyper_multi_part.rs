@@ -46,6 +46,7 @@ impl TryFrom<VerificationRequest> for vyper::multi_part::VerificationRequest {
             creation_bytecode,
             compiler_version,
             content: value.content.try_into()?,
+            chain_id: Default::default(),
         })
     }
 }

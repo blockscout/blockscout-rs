@@ -151,7 +151,7 @@ def getUserName() -> String[100]:
             compiler::Version::from_str("0.3.6+commit.4a2124d0").expect("Compiler version");
 
         let result = compilers
-            .compile(&version, &input)
+            .compile(&version, &input, None)
             .await
             .expect("Compilation failed");
         let contracts: HashSet<String> =
@@ -178,7 +178,7 @@ def getUserName() -> String[100]:
         ] {
             let input = input_with_sources(sources);
             let _ = compilers
-                .compile(&version, &input)
+                .compile(&version, &input, None)
                 .await
                 .expect_err("Compilation should fail");
         }

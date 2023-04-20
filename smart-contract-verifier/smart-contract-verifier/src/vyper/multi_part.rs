@@ -17,6 +17,10 @@ pub struct VerificationRequest {
     pub compiler_version: Version,
 
     pub content: MultiFileContent,
+
+    // Required for the metrics. Has no functional meaning.
+    // In case if chain_id has not been provided, results in empty string.
+    pub chain_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -57,6 +61,7 @@ pub async fn verify(client: Arc<Client>, request: VerificationRequest) -> Result
         &request.compiler_version,
         request.creation_bytecode,
         request.deployed_bytecode,
+        request.chain_id,
     )?;
 
     // If case of success, we allow middlewares to process success and only then return it to the caller;

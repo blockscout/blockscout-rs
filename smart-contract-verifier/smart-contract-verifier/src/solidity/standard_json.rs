@@ -13,6 +13,10 @@ pub struct VerificationRequest {
     pub compiler_version: Version,
 
     pub content: StandardJsonContent,
+
+    // Required for the metrics. Has no functional meaning.
+    // In case if chain_id has not been provided, results in empty string.
+    pub chain_id: Option<String>,
 }
 
 pub struct StandardJsonContent {
@@ -39,6 +43,7 @@ pub async fn verify(client: Arc<Client>, request: VerificationRequest) -> Result
         &request.compiler_version,
         request.creation_bytecode,
         request.deployed_bytecode,
+        request.chain_id,
     )?;
     let result = verifier.verify(&compiler_input).await;
 
