@@ -45,14 +45,12 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
 
     let mut opt = ConnectOptions::new(settings.db_url.clone());
     opt.sqlx_logging_level(tracing::log::LevelFilter::Debug);
-    if settings.run_migrations {
-        blockscout_service_launcher::database::initialize_postgres::<stats::migration::Migrator>(
-            opt.clone(),
-            true,
-            true,
-        )
-        .await?;
-    }
+    blockscout_service_launcher::database::initialize_postgres::<stats::migration::Migrator>(
+        opt.clone(),
+        settings.create_database,
+        settings.run_migrations,
+    )
+    .await?;
     let db = Arc::new(Database::connect(opt).await?);
 
     let mut opt = ConnectOptions::new(settings.blockscout_db_url.clone());
