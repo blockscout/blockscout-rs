@@ -76,14 +76,12 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let health = Arc::new(HealthService::default());
 
-    if settings.database.run_migrations {
-        blockscout_service_launcher::database::initialize_postgres::<Migrator>(
-            &settings.database.url,
-            true,
-            true,
-        )
-        .await?;
-    }
+    blockscout_service_launcher::database::initialize_postgres::<Migrator>(
+        &settings.database.url,
+        settings.database.create_database,
+        settings.database.run_migrations,
+    )
+    .await?;
 
     let db_connection = Arc::new(sea_orm::Database::connect(settings.database.url).await?);
     let client = Client::new_arc(db_connection.clone(), settings.verifier.uri).await?;

@@ -45,6 +45,7 @@ pub struct Settings {
 #[serde(deny_unknown_fields)]
 pub struct DatabaseSettings {
     pub url: String,
+    pub create_database: bool,
     pub run_migrations: bool,
 }
 
@@ -81,6 +82,7 @@ impl Settings {
             jaeger: Default::default(),
             database: DatabaseSettings {
                 url: database_url,
+                create_database: false,
                 run_migrations: false,
             },
             verifier: VerifierSettings { uri: verifier_uri },
