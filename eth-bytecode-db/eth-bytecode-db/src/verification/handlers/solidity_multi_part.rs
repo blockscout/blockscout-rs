@@ -28,6 +28,7 @@ impl From<VerificationRequest<MultiPartFiles>> for VerifySolidityMultiPartReques
             evm_version: request.content.evm_version,
             optimization_runs: request.content.optimization_runs,
             libraries: request.content.libraries,
+            metadata: request.metadata.map(|metadata| metadata.into()),
         }
     }
 }
@@ -66,7 +67,10 @@ pub async fn verify(
 
 #[cfg(test)]
 mod tests {
-    use super::{super::super::types, *};
+    use super::{
+        super::super::{smart_contract_verifier, types},
+        *,
+    };
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -84,7 +88,10 @@ mod tests {
                 optimization_runs: Some(200),
                 libraries: BTreeMap::from([("lib1".into(), "0xcafe".into())]),
             },
-            metadata: None,
+            metadata: Some(types::VerificationMetadata {
+                chain_id: 1,
+                contract_address: bytes::Bytes::from_static(&[1u8; 20]),
+            }),
         };
         let expected = VerifySolidityMultiPartRequest {
             bytecode: "0x1234".to_string(),
@@ -97,6 +104,10 @@ mod tests {
             evm_version: Some("london".to_string()),
             optimization_runs: Some(200),
             libraries: BTreeMap::from([("lib1".into(), "0xcafe".into())]),
+            metadata: Some(smart_contract_verifier::VerificationMetadata {
+                chain_id: "1".to_string(),
+                contract_address: "0x0101010101010101010101010101010101010101".to_string(),
+            }),
         };
         assert_eq!(
             expected,
@@ -120,7 +131,10 @@ mod tests {
                 optimization_runs: Some(200),
                 libraries: BTreeMap::from([("lib1".into(), "0xcafe".into())]),
             },
-            metadata: None,
+            metadata: Some(types::VerificationMetadata {
+                chain_id: 1,
+                contract_address: bytes::Bytes::from_static(&[1u8; 20]),
+            }),
         };
         let expected = VerifySolidityMultiPartRequest {
             bytecode: "0x1234".to_string(),
@@ -133,6 +147,10 @@ mod tests {
             evm_version: Some("london".to_string()),
             optimization_runs: Some(200),
             libraries: BTreeMap::from([("lib1".into(), "0xcafe".into())]),
+            metadata: Some(smart_contract_verifier::VerificationMetadata {
+                chain_id: "1".to_string(),
+                contract_address: "0x0101010101010101010101010101010101010101".to_string(),
+            }),
         };
         assert_eq!(
             expected,
