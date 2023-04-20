@@ -178,6 +178,16 @@ pub struct VerificationMetadata {
     pub contract_address: bytes::Bytes,
 }
 
+impl From<VerificationMetadata> for smart_contract_verifier::VerificationMetadata {
+    fn from(value: VerificationMetadata) -> Self {
+        Self {
+            chain_id: format!("{}", value.chain_id),
+            contract_address: blockscout_display_bytes::Bytes::from(value.contract_address)
+                .to_string(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VerificationRequest<T> {
     pub bytecode: String,

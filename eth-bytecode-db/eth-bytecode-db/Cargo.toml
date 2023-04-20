@@ -25,7 +25,7 @@ futures = "0.3"
 semver = "1.0"
 serde = "1.0"
 serde_json = "1.0"
-smart-contract-verifier-proto = { git = "https://github.com/blockscout/blockscout-rs", rev = "3c20b5a" }
+smart-contract-verifier-proto = { git = "https://github.com/blockscout/blockscout-rs", rev = "95e4f0b7" }
 solidity-metadata = "1.0"
 thiserror = "1.0"
 tokio = "1.22"

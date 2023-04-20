@@ -26,6 +26,7 @@ impl From<VerificationRequest<MultiPartFiles>> for VerifyVyperMultiPartRequest {
             source_files: request.content.source_files,
             evm_version: request.content.evm_version,
             optimizations: request.content.optimizations,
+            metadata: request.metadata.map(|metadata| metadata.into()),
         }
     }
 }
@@ -64,7 +65,10 @@ pub async fn verify(
 
 #[cfg(test)]
 mod tests {
-    use super::{super::super::types, *};
+    use super::{
+        super::super::{smart_contract_verifier, types},
+        *,
+    };
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -81,7 +85,10 @@ mod tests {
                     ("source_file2".into(), "content2".into()),
                 ]),
             },
-            metadata: None,
+            metadata: Some(types::VerificationMetadata {
+                chain_id: 1,
+                contract_address: bytes::Bytes::from_static(&[1u8; 20]),
+            }),
         };
         let expected = VerifyVyperMultiPartRequest {
             bytecode: "0x1234".to_string(),
@@ -93,6 +100,10 @@ mod tests {
             ]),
             evm_version: Some("istanbul".to_string()),
             optimizations: Some(true),
+            metadata: Some(smart_contract_verifier::VerificationMetadata {
+                chain_id: "1".to_string(),
+                contract_address: "0x0101010101010101010101010101010101010101".to_string(),
+            }),
         };
         assert_eq!(
             expected,
@@ -115,7 +126,10 @@ mod tests {
                     ("source_file2".into(), "content2".into()),
                 ]),
             },
-            metadata: None,
+            metadata: Some(types::VerificationMetadata {
+                chain_id: 1,
+                contract_address: bytes::Bytes::from_static(&[1u8; 20]),
+            }),
         };
         let expected = VerifyVyperMultiPartRequest {
             bytecode: "0x1234".to_string(),
@@ -127,6 +141,10 @@ mod tests {
             ]),
             evm_version: Some("istanbul".to_string()),
             optimizations: Some(true),
+            metadata: Some(smart_contract_verifier::VerificationMetadata {
+                chain_id: "1".to_string(),
+                contract_address: "0x0101010101010101010101010101010101010101".to_string(),
+            }),
         };
         assert_eq!(
             expected,
