@@ -150,13 +150,12 @@ mod tests {
     }
 
     #[test]
-    // Chain id should result in empty string if metadata is missed
     fn empty_metadata() {
         let request = VerifySolidityStandardJsonRequest {
             bytecode: "".to_string(),
             bytecode_type: BytecodeType::CreationInput.into(),
             compiler_version: "v0.8.17+commit.8df45f5f".to_string(),
-            input: "".to_string(),
+            input: "{\"language\": \"Solidity\", \"sources\": {\"./src/contracts/Foo.sol\": {\"content\": \"pragma solidity ^0.8.2;\\n\\ncontract Foo {\\n    function bar() external pure returns (uint256) {\\n        return 42;\\n    }\\n}\\n\"}}, \"settings\": {\"metadata\": {\"useLiteralContent\": true}, \"optimizer\": {\"enabled\": true, \"runs\": 200}, \"outputSelection\": {\"*\": {\"*\": [\"abi\", \"evm.bytecode\", \"evm.deployedBytecode\", \"evm.methodIdentifiers\"], \"\": [\"id\", \"ast\"]}}}}".to_string(),
             metadata: None,
         };
 
@@ -167,7 +166,7 @@ mod tests {
 
         assert_eq!(
             None, verification_request.chain_id,
-            "Absent verification metadata should result in empty string chain id"
+            "Absent verification metadata should result in absent chain id"
         )
     }
 }

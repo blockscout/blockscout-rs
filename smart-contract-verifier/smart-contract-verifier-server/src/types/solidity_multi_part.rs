@@ -195,7 +195,6 @@ mod tests {
     }
 
     #[test]
-    // Chain id should result in empty string if metadata is missed
     fn empty_metadata() {
         let request = VerifySolidityMultiPartRequest {
             bytecode: "".to_string(),
@@ -215,7 +214,7 @@ mod tests {
 
         assert_eq!(
             None, verification_request.chain_id,
-            "Absent verification metadata should result in empty string chain id"
+            "Absent verification metadata should result in chain_id=None"
         )
     }
 }
