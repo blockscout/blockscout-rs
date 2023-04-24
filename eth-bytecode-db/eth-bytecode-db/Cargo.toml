@@ -12,7 +12,7 @@ anyhow = "1.0"
 blockscout-display-bytes = "1.0"
 bytes = "1.2"
 ethabi = "18.0"
-ethers-core = "1.0"
+ethers-core = "2.0.0"
 hex = "0.4"
 mismatch = "1.0"
 sea-orm = { version = "0.11", features = [
