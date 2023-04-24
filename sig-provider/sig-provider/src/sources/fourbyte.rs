@@ -4,6 +4,7 @@ use reqwest_middleware::ClientWithMiddleware;
 pub struct Source {
     host: url::Url,
     client: ClientWithMiddleware,
+    n_retries: usize,
 }
 
 impl Source {
@@ -11,21 +12,21 @@ impl Source {
         Source {
             host,
             client: super::new_client(),
+            n_retries: 3,
         }
+    }
+
+    #[cfg(test)]
+    pub fn n_retries(mut self, n_retries: usize) -> Source {
+        self.n_retries = n_retries;
+        self
     }
 
     async fn fetch(&self, mut path: String) -> Result<Vec<String>, anyhow::Error> {
         let mut signatures = Vec::default();
+
         loop {
-            let resp: json::GetResponse = self
-                .client
-                .get(self.host.join(&path).unwrap())
-                .send()
-                .await
-                .map_err(anyhow::Error::msg)?
-                .json()
-                .await
-                .map_err(anyhow::Error::msg)?;
+            let resp: json::GetResponse = self.try_make_request(&path, self.n_retries).await?;
             signatures.extend(resp.results.into_iter().map(|sig| sig.text_signature));
             if let Some(next) = resp.next {
                 path = next;
@@ -35,6 +36,24 @@ impl Source {
         }
         // TODO: sort using "id" field
         Ok(signatures)
+    }
+
+    #[async_recursion::async_recursion]
+    async fn try_make_request(&self, path: &str, n: usize) -> anyhow::Result<json::GetResponse> {
+        let response = self
+            .client
+            .get(self.host.join(path).unwrap())
+            .send()
+            .await
+            .map_err(anyhow::Error::msg)?;
+        match response.status() {
+            reqwest::StatusCode::OK => Ok(response.json::<json::GetResponse>().await?),
+            reqwest::StatusCode::BAD_GATEWAY if n > 0 => self.try_make_request(path, n - 1).await,
+            status => Err(anyhow::anyhow!(
+                "invalid status code got as a result: {}",
+                status
+            )),
+        }
     }
 }
 
@@ -95,7 +114,7 @@ mod tests {
     #[rstest::fixture]
     fn source() -> Source {
         let host = url::Url::from_str(DEFAULT_HOST).expect("default host is not an url");
-        Source::new(host)
+        Source::new(host).n_retries(6) // We increase n_retries to avoid most blinking tests
     }
 
     #[rstest::rstest]
