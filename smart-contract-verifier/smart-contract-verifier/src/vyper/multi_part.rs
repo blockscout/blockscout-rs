@@ -44,7 +44,7 @@ impl From<MultiFileContent> for CompilerInput {
         let sources: Sources = content
             .sources
             .into_iter()
-            .map(|(name, content)| (name, Source { content }))
+            .map(|(name, content)| (name, Source::new(content)))
             .collect();
         CompilerInput {
             language: "Vyper".to_string(),
