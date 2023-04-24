@@ -4,7 +4,7 @@ pub mod sigeth;
 use async_trait::async_trait;
 use mockall::automock;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
-use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
+use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware, Retryable};
 use std::time::Duration;
 
 #[automock]
@@ -21,13 +21,9 @@ pub trait SignatureSource {
 }
 
 pub fn new_client() -> ClientWithMiddleware {
-    let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
-    ClientBuilder::new(
-        reqwest::Client::builder()
-            .timeout(Duration::from_secs(10))
-            .build()
-            .unwrap(),
-    )
-    .with(RetryTransientMiddleware::new_with_policy(retry_policy))
-    .build()
+    let retry_policy =
+        ExponentialBackoff::builder().build_with_total_retry_duration(Duration::from_secs(10));
+    ClientBuilder::new(reqwest::Client::builder().build().unwrap())
+        .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+        .build()
 }
