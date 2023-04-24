@@ -52,7 +52,7 @@ impl From<MultiFileContent> for Vec<CompilerInput> {
         let sources: Sources = content
             .sources
             .into_iter()
-            .map(|(name, content)| (name, Source { content }))
+            .map(|(name, content)| (name, Source::new(content)))
             .collect();
         let inputs: Vec<_> = CompilerInput::with_sources(sources)
             .into_iter()
