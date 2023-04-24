@@ -4,7 +4,7 @@ pub mod sigeth;
 use async_trait::async_trait;
 use mockall::automock;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
-use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware, Retryable};
+use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use std::time::Duration;
 
 #[automock]
