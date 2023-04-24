@@ -23,14 +23,19 @@ impl Source {
     }
 
     async fn fetch(&self, path: &str) -> Result<json::GetResponse, anyhow::Error> {
-        self.client
+        let response = self
+            .client
             .get(self.host.join(path).unwrap())
             .send()
             .await
-            .map_err(anyhow::Error::msg)?
-            .json()
-            .await
-            .map_err(anyhow::Error::msg)
+            .map_err(anyhow::Error::msg)?;
+        match response.status() {
+            reqwest::StatusCode::OK => Ok(response.json().await?),
+            status => Err(anyhow::anyhow!(
+                "invalid status code got as a result: {}",
+                status
+            )),
+        }
     }
 
     fn convert(sigs: Option<json::SigMap>, hash: &str) -> Vec<String> {
