@@ -54,7 +54,7 @@ impl From<MultiFileContent> for Vec<CompilerInput> {
             .into_iter()
             .map(|(name, content)| (name, Source::new(content)))
             .collect();
-        let inputs: Vec<_> = CompilerInput::with_sources(sources)
+        let inputs: Vec<_> = input_from_sources(sources)
             .into_iter()
             .map(|input| input.settings(settings.clone()))
             .collect();
@@ -122,6 +122,37 @@ fn settings_metadata(compiler_version: &Version) -> Vec<Option<SettingsMetadata>
     }
 }
 
+const SOLIDITY: &str = "Solidity";
+const YUL: &str = "Yul";
+
+fn input_from_sources(sources: Sources) -> Vec<CompilerInput> {
+    let mut solidity_sources = BTreeMap::new();
+    let mut yul_sources = BTreeMap::new();
+    for (path, source) in sources {
+        if path.to_str().unwrap_or_default().ends_with(".yul") {
+            yul_sources.insert(path, source);
+        } else {
+            solidity_sources.insert(path, source);
+        }
+    }
+    let mut res = Vec::new();
+    if !solidity_sources.is_empty() {
+        res.push(CompilerInput {
+            language: SOLIDITY.to_string(),
+            sources: solidity_sources,
+            settings: Default::default(),
+        });
+    }
+    if !yul_sources.is_empty() {
+        res.push(CompilerInput {
+            language: YUL.to_string(),
+            sources: yul_sources,
+            settings: Default::default(),
+        });
+    }
+    res
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -174,13 +205,17 @@ mod tests {
     #[test]
     fn yul_and_solidity_to_inputs() {
         let multi_part = MultiFileContent {
-            sources: sources(&[("source.sol", "pragma"), ("source2.yul", "object \"A\" {}")]),
+            sources: sources(&[
+                ("source.sol", "pragma"),
+                ("source2.yul", "object \"A\" {}"),
+                (".yul", "object \"A\" {}"),
+            ]),
             evm_version: Some(EvmVersion::London),
             optimization_runs: Some(200),
             contract_libraries: None,
         };
         let expected_solidity = r#"{"language":"Solidity","sources":{"source.sol":{"content":"pragma"}},"settings":{"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"london","libraries":{}}}"#;
-        let expected_yul = r#"{"language":"Yul","sources":{"source2.yul":{"content":"object \"A\" {}"}},"settings":{"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"london","libraries":{}}}"#;
+        let expected_yul = r#"{"language":"Yul","sources":{".yul":{"content":"object \"A\" {}"},"source2.yul":{"content":"object \"A\" {}"}},"settings":{"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"london","libraries":{}}}"#;
         test_to_input(multi_part, vec![expected_solidity, expected_yul]);
     }
 }
