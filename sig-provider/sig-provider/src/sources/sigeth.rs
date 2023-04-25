@@ -23,14 +23,19 @@ impl Source {
     }
 
     async fn fetch(&self, path: &str) -> Result<json::GetResponse, anyhow::Error> {
-        self.client
+        let response = self
+            .client
             .get(self.host.join(path).unwrap())
             .send()
             .await
-            .map_err(anyhow::Error::msg)?
-            .json()
-            .await
-            .map_err(anyhow::Error::msg)
+            .map_err(anyhow::Error::msg)?;
+        match response.status() {
+            reqwest::StatusCode::OK => Ok(response.json().await?),
+            status => Err(anyhow::anyhow!(
+                "invalid status code got as a result: {}",
+                status
+            )),
+        }
     }
 
     fn convert(sigs: Option<json::SigMap>, hash: &str) -> Vec<String> {
@@ -111,5 +116,54 @@ mod json {
     #[derive(Debug, Deserialize)]
     pub struct GetResponse {
         pub result: SigTypes,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    const DEFAULT_HOST: &str = "https://sig.eth.samczsun.com/";
+
+    #[rstest::fixture]
+    fn source() -> Source {
+        let host = url::Url::from_str(DEFAULT_HOST).expect("default host is not an url");
+        Source::new(host)
+    }
+
+    #[rstest::rstest]
+    #[tokio::test]
+    async fn create(source: Source) {
+        let abi = r#"[{"constant":false,"inputs":[],"name":"f","outputs":[],"type":"function"},{"inputs":[],"type":"constructor"},{"anonymous":false,"inputs":[{"name":"","type":"string","indexed":true}],"name":"E","type":"event"}]"#;
+        source
+            .create_signatures(abi)
+            .await
+            .expect("error while submitting a new signature");
+    }
+
+    #[rstest::rstest]
+    #[tokio::test]
+    async fn get_function_signatures(source: Source) {
+        let (signature, hex) = ("f()", "0x26121ff0");
+        let result = source
+            .get_function_signatures(hex)
+            .await
+            .expect("error while getting function signature");
+        assert!(result.contains(&signature.into()))
+    }
+
+    #[rstest::rstest]
+    #[tokio::test]
+    async fn get_event_signatures(source: Source) {
+        let (signature, hex) = (
+            "E(string)",
+            "0x3e9992c940c54ea252d3a34557cc3d3014281525c43d694f89d5f3dfd820b07d",
+        );
+        let result = source
+            .get_event_signatures(hex)
+            .await
+            .expect("error while getting event signature");
+        assert!(result.contains(&signature.into()))
     }
 }

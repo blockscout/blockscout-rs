@@ -21,7 +21,7 @@ pub trait SignatureSource {
 }
 
 pub fn new_client() -> ClientWithMiddleware {
-    let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
+    let retry_policy = ExponentialBackoff::builder().build_with_max_retries(1);
     ClientBuilder::new(
         reqwest::Client::builder()
             .timeout(Duration::from_secs(10))
