@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "smart-contract-fiesta",
+    "smart-contract-fiesta-entity",
+    "smart-contract-fiesta-migration",
+]
