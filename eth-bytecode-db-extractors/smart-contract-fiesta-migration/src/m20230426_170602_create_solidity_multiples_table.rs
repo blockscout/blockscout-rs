@@ -12,7 +12,7 @@ impl MigrationTrait for Migration {
               "contract_name" varchar NOT NULL,
               "compiler_version" varchar NOT NULL,
               "optimizations" bool NOT NULL,
-              "optimization_runs" integer NOT NULL,
+              "optimization_runs" bigint NOT NULL,
               "sources" jsonb NOT NULL
             );
 

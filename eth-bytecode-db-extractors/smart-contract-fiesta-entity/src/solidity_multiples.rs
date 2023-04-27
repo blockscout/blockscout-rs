@@ -14,7 +14,7 @@ pub struct Model {
     pub contract_name: String,
     pub compiler_version: String,
     pub optimizations: bool,
-    pub optimization_runs: i32,
+    pub optimization_runs: i64,
     #[sea_orm(column_type = "JsonBinary")]
     pub sources: Json,
 }
