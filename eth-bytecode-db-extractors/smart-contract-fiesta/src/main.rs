@@ -1,9 +1,9 @@
 use anyhow::Context;
 use migration::Migrator;
-use smart_contract_fiesta::{database, dataset, Settings};
+use smart_contract_fiesta::{database, dataset, Settings, VerificationClient};
 use std::sync::Arc;
 
-const SERVICE_NAME: &str = "smart-contract-fiesta-extractor";
+const _SERVICE_NAME: &str = "smart-contract-fiesta-extractor";
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -19,7 +19,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     if settings.import_dataset {
         dataset::import_dataset(
-            db_connection,
+            db_connection.clone(),
             settings
                 .dataset
                 .expect("validated in settings initialization"),
@@ -27,6 +27,14 @@ async fn main() -> Result<(), anyhow::Error> {
         .await
         .context("dataset import")?;
     }
+
+    let client = VerificationClient::try_new_arc(db_connection, settings.blockscout_url)
+        .context("verification client initialization")?;
+
+    client
+        .verify_contracts()
+        .await
+        .context("verify contracts")?;
 
     Ok(())
 }

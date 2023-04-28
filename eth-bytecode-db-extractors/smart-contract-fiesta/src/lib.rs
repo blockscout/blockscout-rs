@@ -2,8 +2,8 @@ pub mod database;
 pub mod dataset;
 
 mod blockscout;
-mod client;
 mod settings;
+mod verification;
 
-pub use client::Client;
 pub use settings::Settings;
+pub use verification::Client as VerificationClient;

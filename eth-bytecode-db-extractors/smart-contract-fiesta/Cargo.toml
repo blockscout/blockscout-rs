@@ -12,10 +12,11 @@ smart-contract-fiesta-migration = { path = "../smart-contract-fiesta-migration" 
 anyhow = "1.0.70"
 blockscout-display-bytes = "1.0.0"
 config = "0.13.3"
-sea-orm = "0.11.3"
+sea-orm = { version = "0.11.3", features = ["sea-orm-internal"] }
 sea-orm-migration = "0.11.3"
 serde = "1.0.160"
 serde_json = "1.0.96"
+sqlx = { version = "^0", default-features = false }
 tokio = { version = "1", features = [ "rt-multi-thread", "macros", "fs" ] }
 tracing = "0.1.38"
 url = "2.3.1"

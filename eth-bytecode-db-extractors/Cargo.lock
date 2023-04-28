@@ -1864,6 +1864,7 @@ dependencies = [
  "serde_json",
  "smart-contract-fiesta-entity",
  "smart-contract-fiesta-migration",
+ "sqlx",
  "tokio",
  "tracing",
  "url",
