@@ -1,9 +1,9 @@
 use blockscout_db::entity::{
-    address_coin_balances_daily, addresses, block_rewards, blocks, smart_contracts, tokens,
-    transactions,
+    address_coin_balances_daily, addresses, block_rewards, blocks, internal_transactions,
+    smart_contracts, tokens, transactions,
 };
 use chrono::{NaiveDate, NaiveDateTime};
-use sea_orm::{prelude::Decimal, DatabaseConnection, EntityTrait, Set};
+use sea_orm::{prelude::Decimal, ActiveValue::NotSet, DatabaseConnection, EntityTrait, Set};
 use std::str::FromStr;
 
 pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date: &str) {
@@ -134,11 +134,30 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
                 (3 + i) as i32,
                 TxType::ContractCreation(contract.hash.as_ref().clone()),
             )
-        });
-    transactions::Entity::insert_many(contract_creation_txns)
+        })
+        .collect::<Vec<_>>();
+    transactions::Entity::insert_many(contract_creation_txns.clone())
         .exec(blockscout)
         .await
         .unwrap();
+
+    // contract created during internal transaction
+    {
+        let contract_in_internal_txn = mock_address(100, true, true);
+        addresses::Entity::insert(contract_in_internal_txn.clone())
+            .exec(blockscout)
+            .await
+            .unwrap();
+        let internal_txn = mock_internal_transaction(
+            &contract_creation_txns[0],
+            0,
+            Some(&contract_in_internal_txn),
+        );
+        internal_transactions::Entity::insert(internal_txn)
+            .exec(blockscout)
+            .await
+            .unwrap();
+    }
 
     let verified_date = vec![
         "2022-11-14T12:00:00",
@@ -433,6 +452,31 @@ fn mock_smart_contract(
         inserted_at: Set(verified_at),
         updated_at: Set(Default::default()),
         optimization: Set(false),
+        ..Default::default()
+    }
+}
+
+fn mock_internal_transaction(
+    tx: &transactions::ActiveModel,
+    index: i32,
+    contract: Option<&addresses::ActiveModel>,
+) -> internal_transactions::ActiveModel {
+    let created_contract_address_hash = match contract {
+        Some(contract) => Set(Some(contract.hash.as_ref().clone())),
+        None => NotSet,
+    };
+
+    internal_transactions::ActiveModel {
+        index: Set(index),
+        transaction_hash: Set(tx.hash.as_ref().clone()),
+        created_contract_address_hash,
+        trace_address: Set(Default::default()),
+        r#type: Set(Default::default()),
+        value: Set(Default::default()),
+        inserted_at: Set(Default::default()),
+        updated_at: Set(Default::default()),
+        block_hash: Set(tx.block_hash.as_ref().clone().unwrap()),
+        block_index: Set((*tx.index.as_ref()).unwrap()),
         ..Default::default()
     }
 }

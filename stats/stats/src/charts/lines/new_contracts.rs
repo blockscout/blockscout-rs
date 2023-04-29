@@ -20,28 +20,32 @@ impl ChartPartialUpdater for NewContracts {
             Some(row) => Statement::from_sql_and_values(
                 DbBackend::Postgres,
                 r#"SELECT
-                    DATE(b.timestamp) as date,
+                    DATE(b."timestamp") as date,
                     COUNT(*)::TEXT as value
-                FROM transactions t
-                JOIN blocks       b ON b.hash = t.block_hash
+                FROM addresses a
+                    LEFT JOIN transactions t ON a.hash = t.created_contract_address_hash
+                    LEFT JOIN internal_transactions it ON a.hash = it.created_contract_address_hash
+                    JOIN blocks b ON b.hash = it.block_hash OR b.hash = t.block_hash
                 WHERE
-                    LENGTH(t.created_contract_address_hash) > 0 AND
+                    a.contract_code NOTNULL AND
                     b.consensus = true AND
                     DATE(b.timestamp) > $1
-                GROUP BY DATE(b.timestamp)"#,
+                GROUP BY DATE(b."timestamp")"#,
                 vec![row.date.into()],
             ),
             None => Statement::from_sql_and_values(
                 DbBackend::Postgres,
                 r#"SELECT
-                    DATE(b.timestamp) as date,
+                    DATE(b."timestamp") as date,
                     COUNT(*)::TEXT as value
-                FROM transactions t
-                JOIN blocks       b ON b.hash = t.block_hash
+                FROM addresses a
+                    LEFT JOIN transactions t ON a.hash = t.created_contract_address_hash
+                    LEFT JOIN internal_transactions it ON a.hash = it.created_contract_address_hash
+                    JOIN blocks b ON b.hash = it.block_hash OR b.hash = t.block_hash
                 WHERE
-                    LENGTH(t.created_contract_address_hash) > 0 AND
+                    a.contract_code NOTNULL AND
                     b.consensus = true
-                GROUP BY DATE(b.timestamp)"#,
+                GROUP BY DATE(b."timestamp")"#,
                 vec![],
             ),
         };
@@ -87,7 +91,7 @@ mod tests {
             "update_new_contracts",
             chart,
             vec![
-                ("2022-11-09", "1"),
+                ("2022-11-09", "2"),
                 ("2022-11-10", "3"),
                 ("2022-11-11", "2"),
             ],
