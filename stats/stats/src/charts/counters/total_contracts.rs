@@ -69,6 +69,6 @@ mod tests {
     #[ignore = "needs database to run"]
     async fn update_total_contracts() {
         let counter = TotalContracts::default();
-        simple_test_counter("update_total_contracts", counter, "6").await;
+        simple_test_counter("update_total_contracts", counter, "7").await;
     }
 }

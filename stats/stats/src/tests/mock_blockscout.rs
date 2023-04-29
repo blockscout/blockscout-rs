@@ -143,7 +143,7 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
 
     // contract created during internal transaction
     {
-        let contract_in_internal_txn = mock_address(100, true, true);
+        let contract_in_internal_txn = mock_address(100, true, false);
         addresses::Entity::insert(contract_in_internal_txn.clone())
             .exec(blockscout)
             .await
