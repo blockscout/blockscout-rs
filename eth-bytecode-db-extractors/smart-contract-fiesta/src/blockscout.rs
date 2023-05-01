@@ -1,10 +1,12 @@
+use crate::rate_limiter_middleware::RateLimiterMiddleware;
 use anyhow::Context;
 use blockscout_display_bytes::Bytes;
+use governor::{Quota, RateLimiter};
 use reqwest::Response;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use serde::Deserialize;
-use std::{str::FromStr, time::Duration};
+use std::{num::NonZeroU32, str::FromStr, time::Duration};
 use url::Url;
 
 #[derive(Clone)]
@@ -20,16 +22,22 @@ impl Client {
         blockscout_base_url: String,
         etherscan_base_url: String,
         etherscan_api_key: String,
+        etherscan_limit_requests_per_second: u32,
     ) -> anyhow::Result<Self> {
         let blockscout_base_url =
             Url::from_str(&blockscout_base_url).context("invalid blockscout base url")?;
         let etherscan_base_url =
             Url::from_str(&etherscan_base_url).context("invalid etherscan base url")?;
+        let max_burst = NonZeroU32::new(etherscan_limit_requests_per_second)
+            .ok_or_else(|| anyhow::anyhow!("invalid etherscan limit requests per second"))?;
+
+        let rate_limiter = RateLimiter::direct(Quota::per_second(max_burst));
 
         let retry_policy =
             ExponentialBackoff::builder().build_with_total_retry_duration(Duration::from_secs(20));
         let client = ClientBuilder::new(reqwest::Client::new())
             .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+            .with(RateLimiterMiddleware::new(rate_limiter))
             .build();
 
         Ok(Self {

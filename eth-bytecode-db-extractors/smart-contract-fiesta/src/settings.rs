@@ -36,6 +36,8 @@ pub struct Settings {
     #[serde(default = "default_etherscan_url")]
     pub etherscan_url: String,
     pub etherscan_api_key: String,
+    #[serde(default = "default_etherscan_limit_requests_per_second")]
+    pub etherscan_limit_requests_per_second: u32,
 
     pub eth_bytecode_db_url: String,
 
@@ -55,6 +57,11 @@ fn default_blockscout_url() -> String {
 
 fn default_etherscan_url() -> String {
     "https://api.etherscan.io".to_string()
+}
+
+/// Default value for the basic (free) plan
+fn default_etherscan_limit_requests_per_second() -> u32 {
+    5
 }
 
 fn default_n_threads() -> usize {

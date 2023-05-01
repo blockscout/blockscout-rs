@@ -35,6 +35,7 @@ async fn main() -> Result<(), anyhow::Error> {
         settings.blockscout_url,
         settings.etherscan_url,
         settings.etherscan_api_key,
+        settings.etherscan_limit_requests_per_second,
         settings.eth_bytecode_db_url,
     )
     .await

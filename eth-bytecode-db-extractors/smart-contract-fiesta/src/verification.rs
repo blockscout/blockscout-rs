@@ -141,10 +141,15 @@ impl Client {
         blockscout_url: String,
         etherscan_url: String,
         etherscan_api_key: String,
+        etherscan_limit_requests_per_second: u32,
         eth_bytecode_db_url: String,
     ) -> anyhow::Result<Self> {
-        let blockscout_client =
-            blockscout::Client::try_new(blockscout_url, etherscan_url, etherscan_api_key)?;
+        let blockscout_client = blockscout::Client::try_new(
+            blockscout_url,
+            etherscan_url,
+            etherscan_api_key,
+            etherscan_limit_requests_per_second,
+        )?;
 
         let eth_bytecode_db_client = eth_bytecode_db::Client::try_new(eth_bytecode_db_url)?;
 
