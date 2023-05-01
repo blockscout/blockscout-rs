@@ -31,6 +31,12 @@ pub struct Settings {
     pub import_dataset: bool,
 
     pub blockscout_url: String,
+    pub etherscan_url: String,
+    pub etherscan_api_key: String,
+
+    pub eth_bytecode_db_url: String,
+
+    pub n_threads: usize,
 
     // Is required as we deny unknown fields, but allow users provide
     // path to config through PREFIX__CONFIG env variable. If removed,
@@ -61,7 +67,7 @@ impl Settings {
     fn validate(&self) -> anyhow::Result<()> {
         if self.import_dataset && self.dataset.is_none() {
             return Err(anyhow::anyhow!(
-                "dataset` path should be specified if `import_dataset` is enabled"
+                "`dataset` path should be specified if `import_dataset` is enabled"
             ));
         }
 

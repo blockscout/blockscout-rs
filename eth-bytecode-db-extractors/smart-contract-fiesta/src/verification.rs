@@ -1,15 +1,24 @@
-use crate::blockscout;
+use crate::{blockscout, eth_bytecode_db};
 use anyhow::Context;
+use blockscout_display_bytes::Bytes;
 use entity::{
-    contract_addresses, sea_orm_active_enums::VerificationMethod, solidity_multiples,
-    solidity_singles, solidity_standards, vyper_singles,
+    contract_addresses,
+    sea_orm_active_enums::{Status, VerificationMethod},
+    solidity_multiples, solidity_singles, solidity_standards, vyper_singles,
 };
-use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, EntityTrait, Statement};
-use std::sync::Arc;
+use sea_orm::{
+    ActiveModelTrait, ActiveValue::Set, ConnectionTrait, DatabaseBackend, DatabaseConnection,
+    EntityTrait, Statement,
+};
+use std::{collections::BTreeMap, str::FromStr, sync::Arc};
+use tonic::transport::{Channel, Uri};
 
+#[derive(Clone)]
 pub struct Client {
     pub db_client: Arc<DatabaseConnection>,
     pub blockscout_client: blockscout::Client,
+    pub eth_bytecode_db_solidity_client: eth_bytecode_db::SolidityVerifierClient<Channel>,
+    pub eth_bytecode_db_vyper_client: eth_bytecode_db::VyperVerifierClient<Channel>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -20,22 +29,180 @@ enum VerifiableContract {
     VyperSingle(vyper_singles::Model),
 }
 
+impl VerifiableContract {
+    pub fn contract_address(&self) -> Bytes {
+        match self {
+            VerifiableContract::SoliditySingle(model) => {
+                Bytes::from(model.contract_address.clone())
+            }
+            VerifiableContract::SolidityMultiple(model) => {
+                Bytes::from(model.contract_address.clone())
+            }
+            VerifiableContract::SolidityStandard(model) => {
+                Bytes::from(model.contract_address.clone())
+            }
+            VerifiableContract::VyperSingle(model) => Bytes::from(model.contract_address.clone()),
+        }
+    }
+}
+
+enum EthBytecodeDbRequest {
+    SolidityMultiple(eth_bytecode_db::VerifySolidityMultiPartRequest),
+    SolidityStandard(eth_bytecode_db::VerifySolidityStandardJsonRequest),
+    #[allow(dead_code)]
+    VyperMultiple(eth_bytecode_db::VerifyVyperMultiPartRequest),
+}
+
+impl EthBytecodeDbRequest {
+    pub fn new(contract: VerifiableContract, creation_input: Bytes) -> anyhow::Result<Self> {
+        let verification_metadata =
+            |contract_address: Vec<u8>| eth_bytecode_db::VerificationMetadata {
+                chain_id: "1".to_string(),
+                contract_address: Bytes::from(contract_address).to_string(),
+            };
+
+        let request = match contract {
+            VerifiableContract::SoliditySingle(model) => {
+                EthBytecodeDbRequest::SolidityMultiple(eth_bytecode_db::VerifySolidityMultiPartRequest {
+                    bytecode: creation_input.to_string(),
+                    bytecode_type: eth_bytecode_db::BytecodeType::CreationInput.into(),
+                    compiler_version: model.compiler_version,
+                    evm_version: None,
+                    optimization_runs: model.optimizations.then_some(model.optimization_runs as i32),
+                    source_files: BTreeMap::from([("main.sol".to_string(), model.source_code)]),
+                    libraries: Default::default(),
+                    metadata: Some(verification_metadata(model.contract_address)),
+                })
+            }
+            VerifiableContract::SolidityMultiple(model) => {
+                EthBytecodeDbRequest::SolidityMultiple(eth_bytecode_db::VerifySolidityMultiPartRequest {
+                    bytecode: creation_input.to_string(),
+                    bytecode_type: eth_bytecode_db::BytecodeType::CreationInput.into(),
+                    compiler_version: model.compiler_version,
+                    evm_version: None,
+                    optimization_runs: model.optimizations.then_some(model.optimization_runs as i32),
+                    source_files: serde_json::from_value(model.sources)
+                        .context("solidity multiple model (conversion to request) source files deserialization failed")?,
+                    libraries: Default::default(),
+                    metadata: Some(verification_metadata(model.contract_address)),
+                })
+            }
+            VerifiableContract::SolidityStandard(model) => {
+                EthBytecodeDbRequest::SolidityStandard(eth_bytecode_db::VerifySolidityStandardJsonRequest {
+                    bytecode: creation_input.to_string(),
+                    bytecode_type: eth_bytecode_db::BytecodeType::CreationInput.into(),
+                    compiler_version: model.compiler_version,
+                    input: model.standard_json.to_string(),
+                    metadata: Some(verification_metadata(model.contract_address)),
+                })
+            }
+            VerifiableContract::VyperSingle(_model) => {
+                return Err(anyhow::anyhow!("vyper contracts cannot be processed yet"))
+            }
+        };
+
+        Ok(request)
+    }
+
+    pub async fn verify(self, client: &mut Client) -> anyhow::Result<eth_bytecode_db::Source> {
+        let response = match self {
+            EthBytecodeDbRequest::SolidityMultiple(request) => client
+                .eth_bytecode_db_solidity_client
+                .verify_multi_part(request)
+                .await
+                .context("sending verification request failed")?,
+            EthBytecodeDbRequest::SolidityStandard(request) => client
+                .eth_bytecode_db_solidity_client
+                .verify_standard_json(request)
+                .await
+                .context("sending verification request failed")?,
+            EthBytecodeDbRequest::VyperMultiple(request) => client
+                .eth_bytecode_db_vyper_client
+                .verify_multi_part(request)
+                .await
+                .context("sending verification request failed")?,
+        }
+        .into_inner();
+        if let eth_bytecode_db::verify_response::Status::Success = response.status() {
+            Ok(response.source.unwrap())
+        } else {
+            Err(anyhow::anyhow!(
+                "contract verification failed with message: {}",
+                response.message
+            ))
+        }
+    }
+}
+
 impl Client {
-    pub fn try_new_arc(
+    pub async fn try_new_arc(
         db: Arc<DatabaseConnection>,
         blockscout_url: String,
+        etherscan_url: String,
+        etherscan_api_key: String,
+        eth_bytecode_db_url: String,
     ) -> anyhow::Result<Self> {
-        let blockscout_client = blockscout::Client::try_new(blockscout_url)?;
+        let blockscout_client =
+            blockscout::Client::try_new(blockscout_url, etherscan_url, etherscan_api_key)?;
+
+        let eth_bytecode_db_url = Uri::from_str(&eth_bytecode_db_url)
+            .context("converting eth_bytecode_db_url into uri failed")?;
+        let channel = Channel::builder(eth_bytecode_db_url)
+            .connect()
+            .await
+            .map_err(anyhow::Error::new)?;
+        let eth_bytecode_db_solidity_client =
+            eth_bytecode_db::SolidityVerifierClient::new(channel.clone());
+        let eth_bytecode_db_vyper_client = eth_bytecode_db::VyperVerifierClient::new(channel);
 
         Ok(Self {
             db_client: db,
             blockscout_client,
+            eth_bytecode_db_solidity_client,
+            eth_bytecode_db_vyper_client,
         })
     }
 
-    pub async fn verify_contracts(&self) -> anyhow::Result<()> {
-        while let Some(_next_contract) = self.next_contract().await? {}
+    pub async fn verify_contracts(mut self) -> anyhow::Result<()> {
+        macro_rules! process_result {
+            ( $result:expr, $contract_address:expr ) => {
+                match $result {
+                    Ok(res) => res,
+                    Err(err) => {
+                        contract_addresses::ActiveModel {
+                            contract_address: Set($contract_address.to_vec()),
+                            status: Set(Status::Error),
+                            log: Set(Some(format!("{:#?}", err))),
+                            ..Default::default()
+                        }
+                        .update(self.db_client.as_ref())
+                        .await
+                        .context(format!(
+                            "saving error details failed for the contract {}",
+                            $contract_address,
+                        ))?;
 
+                        continue;
+                    }
+                }
+            };
+        }
+
+        while let Some(next_contract) = self.next_contract().await? {
+            let contract_address = next_contract.contract_address();
+
+            let creation_input = process_result!(
+                self.extract_creation_input(contract_address.clone()).await,
+                contract_address.clone()
+            );
+
+            let request = process_result!(
+                EthBytecodeDbRequest::new(next_contract, creation_input),
+                contract_address.clone()
+            );
+            let source = process_result!(request.verify(&mut self).await, contract_address.clone());
+            self.mark_as_success(contract_address, source).await?;
+        }
         Ok(())
     }
 
@@ -112,5 +279,67 @@ impl Client {
         }
 
         Ok(None)
+    }
+
+    async fn extract_creation_input(&self, contract_address: Bytes) -> anyhow::Result<Bytes> {
+        let creation_input_opt = contract_addresses::Entity::find_by_id(contract_address.to_vec())
+            .one(self.db_client.as_ref())
+            .await
+            .context("querying contract_address model")?
+            .unwrap()
+            .creation_input;
+
+        if let Some(creation_input) = creation_input_opt {
+            return Ok(Bytes::from(creation_input));
+        }
+
+        let creation_tx_hash = self
+            .blockscout_client
+            .get_contract_creation_transaction(contract_address.clone())
+            .await
+            .context(format!(
+                "get_contract_creation_transaction({})",
+                contract_address
+            ))?;
+        let creation_input = self
+            .blockscout_client
+            .get_transaction_input(creation_tx_hash.clone())
+            .await
+            .context(format!("get_transaction_input({})", creation_tx_hash))?;
+
+        contract_addresses::ActiveModel {
+            contract_address: Set(contract_address.to_vec()),
+            creation_input: Set(Some(creation_input.to_vec())),
+            ..Default::default()
+        }
+        .update(self.db_client.as_ref())
+        .await
+        .context("updating contract_address model to insert creation input")?;
+
+        Ok(creation_input)
+    }
+
+    pub async fn mark_as_success(
+        &self,
+        contract_address: Bytes,
+        source: eth_bytecode_db::Source,
+    ) -> anyhow::Result<()> {
+        contract_addresses::ActiveModel {
+            contract_address: Set(contract_address.to_vec()),
+            status: Set(Status::Success),
+            log: Set(Some(
+                serde_json::to_string(&source)
+                    .context("serializing success result (source) failed")?,
+            )),
+            ..Default::default()
+        }
+        .update(self.db_client.as_ref())
+        .await
+        .context(format!(
+            "saving success details failed for the contract {}",
+            contract_address,
+        ))?;
+
+        Ok(())
     }
 }

@@ -2,6 +2,7 @@ pub mod database;
 pub mod dataset;
 
 mod blockscout;
+mod eth_bytecode_db;
 mod settings;
 mod verification;
 

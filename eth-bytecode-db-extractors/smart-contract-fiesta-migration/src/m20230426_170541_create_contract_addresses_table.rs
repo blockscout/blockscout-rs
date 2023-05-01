@@ -11,7 +11,8 @@ impl MigrationTrait for Migration {
               "contract_address" bytea PRIMARY KEY NOT NULL,
               "verification_method" verification_method NOT NULL,
               "status" status NOT NULL DEFAULT 'waiting',
-              "log" varchar
+              "log" varchar,
+              "creation_input" bytea
             );
         "#;
 

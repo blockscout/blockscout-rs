@@ -26,15 +26,29 @@ async fn main() -> Result<(), anyhow::Error> {
         )
         .await
         .context("dataset import")?;
+
+        return Ok(());
     }
 
-    let client = VerificationClient::try_new_arc(db_connection, settings.blockscout_url)
-        .context("verification client initialization")?;
+    let client = VerificationClient::try_new_arc(
+        db_connection,
+        settings.blockscout_url,
+        settings.etherscan_url,
+        settings.etherscan_api_key,
+        settings.eth_bytecode_db_url,
+    )
+    .await
+    .context("verification client initialization")?;
 
-    client
-        .verify_contracts()
-        .await
-        .context("verify contracts")?;
+    let mut handles = Vec::with_capacity(settings.n_threads);
+    for _ in 0..settings.n_threads {
+        let client = client.clone();
+        let handle = tokio::spawn(client.verify_contracts());
+        handles.push(handle);
+    }
+    for result in futures::future::join_all(handles).await {
+        result.context("join handle")?.context("verify contracts")?;
+    }
 
     Ok(())
 }

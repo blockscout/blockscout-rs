@@ -15,6 +15,8 @@ pub struct Model {
     pub verification_method: VerificationMethod,
     pub status: Status,
     pub log: Option<String>,
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
+    pub creation_input: Option<Vec<u8>>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
