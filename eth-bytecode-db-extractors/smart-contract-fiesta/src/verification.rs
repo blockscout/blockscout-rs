@@ -7,18 +7,16 @@ use entity::{
     solidity_multiples, solidity_singles, solidity_standards, vyper_singles,
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ConnectionTrait, DatabaseBackend, DatabaseConnection,
-    EntityTrait, Statement,
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, ConnectionTrait, DatabaseBackend,
+    DatabaseConnection, EntityTrait, QueryFilter, Statement,
 };
-use std::{collections::BTreeMap, str::FromStr, sync::Arc};
-use tonic::transport::{Channel, Uri};
+use std::{collections::BTreeMap, sync::Arc};
 
 #[derive(Clone)]
 pub struct Client {
     pub db_client: Arc<DatabaseConnection>,
     pub blockscout_client: blockscout::Client,
-    pub eth_bytecode_db_solidity_client: eth_bytecode_db::SolidityVerifierClient<Channel>,
-    pub eth_bytecode_db_vyper_client: eth_bytecode_db::VyperVerifierClient<Channel>,
+    pub eth_bytecode_db_client: eth_bytecode_db::Client,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -106,23 +104,26 @@ impl EthBytecodeDbRequest {
 
     pub async fn verify(self, client: &mut Client) -> anyhow::Result<eth_bytecode_db::Source> {
         let response = match self {
-            EthBytecodeDbRequest::SolidityMultiple(request) => client
-                .eth_bytecode_db_solidity_client
-                .verify_multi_part(request)
-                .await
-                .context("sending verification request failed")?,
-            EthBytecodeDbRequest::SolidityStandard(request) => client
-                .eth_bytecode_db_solidity_client
-                .verify_standard_json(request)
-                .await
-                .context("sending verification request failed")?,
-            EthBytecodeDbRequest::VyperMultiple(request) => client
-                .eth_bytecode_db_vyper_client
-                .verify_multi_part(request)
-                .await
-                .context("sending verification request failed")?,
+            EthBytecodeDbRequest::SolidityMultiple(request) => {
+                client
+                    .eth_bytecode_db_client
+                    .verify_solidity_multi_part(request)
+                    .await
+            }
+            EthBytecodeDbRequest::SolidityStandard(request) => {
+                client
+                    .eth_bytecode_db_client
+                    .verify_solidity_standard_json(request)
+                    .await
+            }
+            EthBytecodeDbRequest::VyperMultiple(request) => {
+                client
+                    .eth_bytecode_db_client
+                    .verify_vyper_multi_part(request)
+                    .await
+            }
         }
-        .into_inner();
+        .context("sending verification request failed")?;
         if let eth_bytecode_db::verify_response::Status::Success = response.status() {
             Ok(response.source.unwrap())
         } else {
@@ -145,22 +146,16 @@ impl Client {
         let blockscout_client =
             blockscout::Client::try_new(blockscout_url, etherscan_url, etherscan_api_key)?;
 
-        let eth_bytecode_db_url = Uri::from_str(&eth_bytecode_db_url)
-            .context("converting eth_bytecode_db_url into uri failed")?;
-        let channel = Channel::builder(eth_bytecode_db_url)
-            .connect()
-            .await
-            .map_err(anyhow::Error::new)?;
-        let eth_bytecode_db_solidity_client =
-            eth_bytecode_db::SolidityVerifierClient::new(channel.clone());
-        let eth_bytecode_db_vyper_client = eth_bytecode_db::VyperVerifierClient::new(channel);
+        let eth_bytecode_db_client = eth_bytecode_db::Client::try_new(eth_bytecode_db_url)?;
 
-        Ok(Self {
+        let client = Self {
             db_client: db,
             blockscout_client,
-            eth_bytecode_db_solidity_client,
-            eth_bytecode_db_vyper_client,
-        })
+            eth_bytecode_db_client,
+        };
+        client.reset_database().await?;
+
+        Ok(client)
     }
 
     pub async fn verify_contracts(mut self) -> anyhow::Result<()> {
@@ -203,6 +198,24 @@ impl Client {
             let source = process_result!(request.verify(&mut self).await, contract_address.clone());
             self.mark_as_success(contract_address, source).await?;
         }
+        Ok(())
+    }
+
+    /// Reset all `in_process` contracts back to the `waiting` state.
+    /// Should be called on the client initialization in order to reset
+    /// previously non-finished tasks back to the state where they can be processed again.
+    async fn reset_database(&self) -> anyhow::Result<()> {
+        let active_model = contract_addresses::ActiveModel {
+            status: Set(Status::Waiting),
+            ..Default::default()
+        };
+        contract_addresses::Entity::update_many()
+            .filter(contract_addresses::Column::Status.eq(Status::InProcess))
+            .set(active_model)
+            .exec(self.db_client.as_ref())
+            .await
+            .context("resetting database failed")?;
+
         Ok(())
     }
 

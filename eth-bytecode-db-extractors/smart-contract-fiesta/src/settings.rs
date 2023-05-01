@@ -30,12 +30,16 @@ pub struct Settings {
     #[serde(default)]
     pub import_dataset: bool,
 
+    #[serde(default = "default_blockscout_url")]
     pub blockscout_url: String,
+
+    #[serde(default = "default_etherscan_url")]
     pub etherscan_url: String,
     pub etherscan_api_key: String,
 
     pub eth_bytecode_db_url: String,
 
+    #[serde(default = "default_n_threads")]
     pub n_threads: usize,
 
     // Is required as we deny unknown fields, but allow users provide
@@ -43,6 +47,18 @@ pub struct Settings {
     // the setup would fail with `unknown field `config`, expected one of...`
     #[serde(default, rename = "config")]
     config_path: IgnoredAny,
+}
+
+fn default_blockscout_url() -> String {
+    "https://blockscout.com/eth/mainnet".to_string()
+}
+
+fn default_etherscan_url() -> String {
+    "https://api.etherscan.io".to_string()
+}
+
+fn default_n_threads() -> usize {
+    4
 }
 
 impl Settings {

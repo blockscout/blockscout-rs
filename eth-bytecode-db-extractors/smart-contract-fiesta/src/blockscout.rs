@@ -41,25 +41,26 @@ impl Client {
     }
 
     pub async fn get_transaction_input(&self, transaction_hash: Bytes) -> anyhow::Result<Bytes> {
-        #[derive(Deserialize)]
+        #[derive(Deserialize, Debug)]
         struct Result {
             input: Bytes,
         }
 
-        #[derive(Deserialize)]
+        #[derive(Deserialize, Debug)]
         struct Response {
             result: Result,
         }
 
         let url = {
-            let path = format!("{}/api", self.blockscout_base_url.path());
-            let mut url = self.blockscout_base_url.clone();
-            url.set_path(&path);
+            let mut url = self.etherscan_base_url.clone();
+            url.set_path("api");
             url.set_query(Some(&format!(
-                "module=transaction&action=gettxinfo&txhash={transaction_hash}"
+                "module=proxy&action=eth_getTransactionByHash&txhash={transaction_hash}&apikey={}",
+                self.etherscan_api_key
             )));
             url
         };
+
         let response = self
             .send_request(url)
             .await?
@@ -109,6 +110,39 @@ impl Client {
             .clone();
 
         Ok(tx_hash)
+    }
+
+    pub async fn get_transaction_input_blockscout(
+        &self,
+        transaction_hash: Bytes,
+    ) -> anyhow::Result<Bytes> {
+        #[derive(Deserialize)]
+        struct Result {
+            input: Bytes,
+        }
+
+        #[derive(Deserialize)]
+        struct Response {
+            result: Result,
+        }
+
+        let url = {
+            let path = format!("{}/api", self.blockscout_base_url.path());
+            let mut url = self.blockscout_base_url.clone();
+            url.set_path(&path);
+            url.set_query(Some(&format!(
+                "module=transaction&action=gettxinfo&txhash={transaction_hash}"
+            )));
+            url
+        };
+        let response = self
+            .send_request(url)
+            .await?
+            .json::<Response>()
+            .await
+            .context("deserializing response failed")?;
+
+        Ok(response.result.input)
     }
 
     pub async fn get_contract_creation_transaction_blockscout(

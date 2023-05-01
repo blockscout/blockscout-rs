@@ -93,6 +93,7 @@ def construct_solidity_multiple_data(contract_address: str, directory: bytes) ->
 
     sources = dict()
     for source_name in os.listdir(directory):
+        if source_name == "metadata.json": continue
         with open(os.path.join(directory, source_name), 'r') as source_file:
             source = source_file.read()
             sources[source_name] = source
