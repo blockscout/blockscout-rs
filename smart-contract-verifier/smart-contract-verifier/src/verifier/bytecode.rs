@@ -260,6 +260,22 @@ impl<T> LocalBytecode<T> {
 
         // There is some non-matching byte - part of the metadata part byte.
         if let Some(mut i) = index {
+            let is_metadata_length_valid = |metadata_length: usize, i: usize| {
+                if len < i + metadata_length + 2 {
+                    return false;
+                }
+
+                // Decode length of metadata hash representation
+                let mut metadata_length_raw =
+                    raw.slice((i + metadata_length)..(i + metadata_length + 2));
+                let encoded_metadata_length = metadata_length_raw.get_u16() as usize;
+                if encoded_metadata_length != metadata_length {
+                    return false;
+                }
+
+                true
+            };
+
             // `i` is the first different byte. The metadata hash itself started somewhere earlier
             // (at least for "a1"/"a2" indicating number of elements in cbor mapping).
             // Next steps are trying to find that beginning.
@@ -280,23 +296,11 @@ impl<T> LocalBytecode<T> {
 
                 let (metadata, metadata_length) = result.unwrap();
 
-                if len < i + metadata_length + 2 {
-                    // Continue to the next iteration of the outer loop
-                    i -= 1;
-                    continue;
+                if is_metadata_length_valid(metadata_length, i) {
+                    break (metadata, metadata_length);
                 }
 
-                // Decode length of metadata hash representation
-                let mut metadata_length_raw =
-                    raw.slice((i + metadata_length)..(i + metadata_length + 2));
-                let encoded_metadata_length = metadata_length_raw.get_u16() as usize;
-                if encoded_metadata_length != metadata_length {
-                    // Continue to the next iteration of the outer loop
-                    i -= 1;
-                    continue;
-                }
-
-                break (metadata, metadata_length);
+                i -= 1;
             };
 
             parts.push(BytecodePart::Metadata {
