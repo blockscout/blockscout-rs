@@ -264,36 +264,40 @@ impl<T> LocalBytecode<T> {
             // (at least for "a1"/"a2" indicating number of elements in cbor mapping).
             // Next steps are trying to find that beginning.
 
-            let mut result = MetadataHash::from_cbor(&raw[i..]);
-            while result.is_err() {
-                // It is the beginning of the bytecode segment but no metadata hash has been parsed
-                if i == 0 {
-                    return Err(VerificationErrorKind::InternalError(
-                        "failed to parse bytecode part".into(),
-                    ));
+            let (metadata, metadata_length) = loop {
+                let mut result = MetadataHash::from_cbor(&raw[i..]);
+                while result.is_err() {
+                    // It is the beginning of the bytecode segment but no metadata hash has been parsed
+                    if i == 0 {
+                        return Err(VerificationErrorKind::InternalError(
+                            "failed to parse bytecode part".into(),
+                        ));
+                    }
+                    i -= 1;
+
+                    result = MetadataHash::from_cbor(&raw[i..]);
                 }
-                i -= 1;
 
-                result = MetadataHash::from_cbor(&raw[i..]);
-            }
+                let (metadata, metadata_length) = result.unwrap();
 
-            let (metadata, metadata_length) = result.unwrap();
+                if len < i + metadata_length + 2 {
+                    // Continue to the next iteration of the outer loop
+                    i -= 1;
+                    continue;
+                }
 
-            if len < i + metadata_length + 2 {
-                return Err(VerificationErrorKind::InternalError(
-                    "failed to parse metadata length".into(),
-                ));
-            }
-            // Decode length of metadata hash representation
-            let mut metadata_length_raw =
-                raw.slice((i + metadata_length)..(i + metadata_length + 2));
-            let encoded_metadata_length = metadata_length_raw.get_u16() as usize;
-            if encoded_metadata_length != metadata_length {
-                return Err(VerificationErrorKind::InternalError(format!(
-                    "encoded metadata length does not correspond to actual metadata length: {}",
-                    Mismatch::new(metadata_length, encoded_metadata_length)
-                )));
-            }
+                // Decode length of metadata hash representation
+                let mut metadata_length_raw =
+                    raw.slice((i + metadata_length)..(i + metadata_length + 2));
+                let encoded_metadata_length = metadata_length_raw.get_u16() as usize;
+                if encoded_metadata_length != metadata_length {
+                    // Continue to the next iteration of the outer loop
+                    i -= 1;
+                    continue;
+                }
+
+                break (metadata, metadata_length);
+            };
 
             parts.push(BytecodePart::Metadata {
                 raw: raw.slice(i..(i + metadata_length + 2)),
@@ -491,7 +495,7 @@ mod local_bytecode_initialization_tests {
             assert_eq!(
                 &vec![
                     main_bytecode_part(CREATION_TX_INPUT_MAIN_PART_1),
-                    metadata_bytecode_part(METADATA_PART_1)
+                    metadata_bytecode_part(METADATA_PART_1),
                 ],
                 local_bytecode.bytecode_parts(),
                 "Invalid bytecode parts"
@@ -520,7 +524,7 @@ mod local_bytecode_initialization_tests {
             assert_eq!(
                 &vec![
                     main_bytecode_part(DEPLOYED_BYTECODE_MAIN_PART_1),
-                    metadata_bytecode_part(METADATA_PART_1)
+                    metadata_bytecode_part(METADATA_PART_1),
                 ],
                 local_bytecode.bytecode_parts(),
                 "Invalid bytecode parts"
@@ -820,13 +824,40 @@ mod local_bytecode_initialization_tests {
         match local_bytecode.unwrap_err() {
             VerificationErrorKind::InternalError(error) => {
                 assert!(
-                    error.contains(
-                        "encoded metadata length does not correspond to actual metadata length"
-                    ),
+                    error.contains("failed to parse bytecode part"),
                     "Invalid error message: {error}"
                 )
             }
             _ => panic!("failed to parse metadata length"),
         }
+    }
+
+    #[test]
+    fn first_different_byte_is_valid_empty_map() {
+        let creation_tx_input_str = "0x60556023600b82828239805160001a607314601657fe5b30600052607381538281f3fe73000000000000000000000000000000000000000030146080604052600080fdfea265627a7a72315820a05da1b258d199a6f4a643b2f9b479cb306c26c244caded90a94d976be7414d564736f6c63430006090032";
+        let creation_tx_input_modified_str =
+            "0x60556023600b82828239805160001a607314601657fe5b30600052607381538281f3fe73000000000000000000000000000000000000000030146080604052600080fdfea265627a7a723158207db4a5b2d2f40cb6d26365a00db0bb1c088df136323cb18502340fa1f41121ae64736f6c63430006090032";
+
+        let deployed_bytecode_str = "0x60556023600b82828239805160001a607314601657fe5b30600052607381538281f3fe73000000000000000000000000000000000000000030146080604052600080fdfea265627a7a72315820a05da1b258d199a6f4a643b2f9b479cb306c26c244caded90a94d976be7414d564736f6c63430006090032";
+        let deployed_bytecode_modified_str =
+            "0x60556023600b82828239805160001a607314601657fe5b30600052607381538281f3fe73000000000000000000000000000000000000000030146080604052600080fdfea265627a7a723158207db4a5b2d2f40cb6d26365a00db0bb1c088df136323cb18502340fa1f41121ae64736f6c63430006090032";
+
+        let Bytecodes {
+            local_bytecode,
+            creation_tx_input,
+            ..
+        }: Bytecodes<CreationTxInput> = new_local_bytecode(
+            (creation_tx_input_str, deployed_bytecode_str),
+            (
+                creation_tx_input_modified_str,
+                deployed_bytecode_modified_str,
+            ),
+        )
+        .expect("Initialization of local bytecode failed");
+        assert_eq!(
+            creation_tx_input.bytecode(),
+            local_bytecode.bytecode(),
+            "Invalid bytecode"
+        );
     }
 }
