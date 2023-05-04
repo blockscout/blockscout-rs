@@ -39,16 +39,16 @@ id = "totalTxns"
 title = "Total Txns"
 update_schedule = "0 10 */3 * * * *"
 
-[[counters]]
-id = "lastNewContracts"
-title = "Number of deployed contracts today"
-update_schedule = "0 15 */3 * * * *"
-relevant_or_zero = true
+# [[counters]]
+# id = "lastNewContracts"
+# title = "Number of deployed contracts today"
+# update_schedule = "0 15 */3 * * * *"
+# relevant_or_zero = true
 
-[[counters]]
-id = "totalContracts"
-title = "Total contracts"
-update_schedule = "0 20 */3 * * * *"
+# [[counters]]
+# id = "totalContracts"
+# title = "Total contracts"
+# update_schedule = "0 20 */3 * * * *"
 
 [[counters]]
 id = "lastNewVerifiedContracts"
@@ -234,16 +234,16 @@ update_schedule = "0 0 7 * * * *"
 drop_last_point = false
 
 
-[[lines.sections.charts]]
-id = "newContracts"
-title = "New contracts"
-description = "New contracts number for the period"
-update_schedule = "0 0 16 * * * *"
-drop_last_point = true
+# [[lines.sections.charts]]
+# id = "newContracts"
+# title = "New contracts"
+# description = "New contracts number for the period"
+# update_schedule = "0 0 16 * * * *"
+# drop_last_point = true
 
-[[lines.sections.charts]]
-id = "contractsGrowth"
-title = "Contracts growth"
-description = "Cumulative number of contracts for the period"
-update_schedule = "0 0 8 * * * *"
-drop_last_point = false
+# [[lines.sections.charts]]
+# id = "contractsGrowth"
+# title = "Contracts growth"
+# description = "Cumulative number of contracts for the period"
+# update_schedule = "0 0 8 * * * *"
+# drop_last_point = false
