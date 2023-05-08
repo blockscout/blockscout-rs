@@ -286,7 +286,8 @@ where
             .collect::<HashSet<_>>(),
         "Invalid data returned for main parts"
     );
-    let expected_main_parts_data_text = HashSet::from([Some("0123".to_string()), Some("89ab".to_string())]);
+    let expected_main_parts_data_text =
+        HashSet::from([Some("0123".to_string()), Some("89ab".to_string())]);
     assert_eq!(
         expected_main_parts_data_text,
         parts
@@ -306,7 +307,8 @@ where
             .collect::<HashSet<_>>(),
         "Invalid data returned for meta parts"
     );
-    let expected_meta_parts_data_text = HashSet::from([Some("4567".to_string()), Some("cdef".to_string())]);
+    let expected_meta_parts_data_text =
+        HashSet::from([Some("4567".to_string()), Some("cdef".to_string())]);
     assert_eq!(
         expected_meta_parts_data_text,
         parts
