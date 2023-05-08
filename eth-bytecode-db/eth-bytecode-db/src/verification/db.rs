@@ -206,6 +206,8 @@ async fn insert_source_details(
         raw_deployed_bytecode: Set(source.raw_deployed_bytecode.clone()),
         abi: Set(abi.clone()),
         file_ids_hash: Set(file_ids_hash),
+        raw_creation_input_text: Set(Some(hex::encode(source.raw_creation_input))),
+        raw_deployed_bytecode_text: Set(Some(hex::encode(source.raw_deployed_bytecode))),
         ..Default::default()
     };
     insert_then_select!(
@@ -272,6 +274,7 @@ async fn insert_bytecodes(
             let active_model = parts::ActiveModel {
                 data: Set(part.data().to_vec()),
                 part_type: Set(part_type.clone()),
+                data_text: Set(Some(hex::encode(part.data()))),
                 ..Default::default()
             };
             let (part, _inserted) = insert_then_select!(

@@ -167,9 +167,19 @@ where
         "Invalid raw creation input"
     );
     assert_eq!(
+        Some("01234567".to_string()),
+        db_source.raw_creation_input_text,
+        "Invalid raw creation input text"
+    );
+    assert_eq!(
         vec![0x89u8, 0xabu8, 0xcdu8, 0xefu8],
         db_source.raw_deployed_bytecode,
         "Invalid raw deployed bytecode"
+    );
+    assert_eq!(
+        Some("89abcdef".to_string()),
+        db_source.raw_deployed_bytecode_text,
+        "Invalid raw deployed bytecode text"
     );
 
     /* Assert inserted into "files" */
@@ -276,6 +286,16 @@ where
             .collect::<HashSet<_>>(),
         "Invalid data returned for main parts"
     );
+    let expected_main_parts_data_text = HashSet::from([Some("0123".to_string()), Some("89ab".to_string())]);
+    assert_eq!(
+        expected_main_parts_data_text,
+        parts
+            .iter()
+            .filter(|part| part.part_type == sea_orm_active_enums::PartType::Main)
+            .map(|part| part.data_text.clone())
+            .collect::<HashSet<_>>(),
+        "Invalid data text returned for main parts"
+    );
     let expected_meta_parts_data = HashSet::from([vec![0x45u8, 0x67u8], vec![0xcdu8, 0xefu8]]);
     assert_eq!(
         expected_meta_parts_data,
@@ -285,6 +305,16 @@ where
             .map(|part| part.data.clone())
             .collect::<HashSet<_>>(),
         "Invalid data returned for meta parts"
+    );
+    let expected_meta_parts_data_text = HashSet::from([Some("4567".to_string()), Some("cdef".to_string())]);
+    assert_eq!(
+        expected_meta_parts_data_text,
+        parts
+            .iter()
+            .filter(|part| part.part_type == sea_orm_active_enums::PartType::Metadata)
+            .map(|part| part.data_text.clone())
+            .collect::<HashSet<_>>(),
+        "Invalid data text returned for meta parts"
     );
 
     /* Assert inserted into bytecode_parts */
@@ -300,26 +330,6 @@ where
         bytecode_parts.len()
     );
 
-    let expected_main_parts_data = HashSet::from([vec![0x01u8, 0x23u8], vec![0x89u8, 0xabu8]]);
-    assert_eq!(
-        expected_main_parts_data,
-        parts
-            .iter()
-            .filter(|part| part.part_type == sea_orm_active_enums::PartType::Main)
-            .map(|part| part.data.clone())
-            .collect::<HashSet<_>>(),
-        "Invalid data returned for main parts"
-    );
-    let expected_meta_parts_data = HashSet::from([vec![0x45u8, 0x67u8], vec![0xcdu8, 0xefu8]]);
-    assert_eq!(
-        expected_meta_parts_data,
-        parts
-            .iter()
-            .filter(|part| part.part_type == sea_orm_active_enums::PartType::Metadata)
-            .map(|part| part.data.clone())
-            .collect::<HashSet<_>>(),
-        "Invalid data returned for meta parts"
-    );
     let creation_bytecode_id = bytecodes
         .iter()
         .filter(|bytecode| {
