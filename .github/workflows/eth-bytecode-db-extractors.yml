@@ -1,0 +1,44 @@
+on:
+  push:
+    branches:
+      - 'main'
+  pull_request:
+    paths:
+      - eth-bytecode-db-extractors/**
+      - .github/workflows/eth-bytecode-db-extractors.yml
+
+name: Lint (eth-bytecode-db-extractors)
+
+defaults:
+  run:
+    working-directory: eth-bytecode-db-extractors
+
+jobs:
+  lint:
+    name: Linting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Install deps
+        uses: ./.github/actions/deps
+
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          components: rustfmt, clippy
+          override: true
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          workspaces: eth-bytecode-db-extractors -> target
+
+      - name: cargo fmt
+        run: cargo fmt --all -- --check --config imports_granularity=Crate
+
+      - name: cargo clippy
+        run: cargo clippy --all --all-targets --all-features -- -D warnings
