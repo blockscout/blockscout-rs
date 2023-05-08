@@ -13,6 +13,21 @@ impl MigrationTrait for Migration {
 
             ALTER TABLE "parts"
             ADD COLUMN "data_text" text;
+
+            ALTER TABLE "sources"
+                ADD CONSTRAINT valid_hex_sources_raw_creation_input_text CHECK (regexp_like("raw_creation_input_text", '^[0-9a-f]+$'));
+            ALTER TABLE "sources"
+                ADD CONSTRAINT valid_length_sources_raw_creation_input_text CHECK (length("raw_creation_input_text") % 2 = 0);
+
+            ALTER TABLE "sources"
+                ADD CONSTRAINT valid_hex_sources_raw_deployed_bytecode_text CHECK (regexp_like("raw_deployed_bytecode_text", '^[0-9a-f]+$'));
+            ALTER TABLE "sources"
+                ADD CONSTRAINT valid_length_sources_raw_deployed_bytecode_text CHECK (length("raw_deployed_bytecode_text") % 2 = 0);
+
+            ALTER TABLE "parts"
+                ADD CONSTRAINT valid_hex_parts_data_text CHECK (regexp_like("data_text", '^[0-9a-f]+$'));
+            ALTER TABLE "parts"
+                ADD CONSTRAINT valid_length_parts_data_text CHECK (length("data_text") % 2 = 0);
         "#;
         crate::from_sql(manager, sql).await
     }
