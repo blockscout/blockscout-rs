@@ -53,7 +53,6 @@ where
         next: Next<'_>,
     ) -> reqwest_middleware::Result<Response> {
         self.rate_limiter.until_ready().await;
-        let res = next.run(req, extensions).await;
-        res
+        next.run(req, extensions).await
     }
 }
