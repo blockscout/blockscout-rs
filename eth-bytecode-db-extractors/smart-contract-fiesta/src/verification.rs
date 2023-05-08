@@ -206,6 +206,50 @@ impl Client {
         Ok(())
     }
 
+    pub async fn search_contracts(self) -> anyhow::Result<()> {
+        loop {
+            let sql = r#"
+            SELECT contract_address, creation_input
+            FROM contract_addresses
+            WHERE status = 'success'
+            ORDER BY random()
+            LIMIT 1;
+        "#;
+            let stmt = Statement::from_string(DatabaseBackend::Postgres, sql.to_string());
+            let result = self
+                .db_client
+                .as_ref()
+                .query_one(stmt)
+                .await
+                .context("querying for the success contract address and creation input")?
+                .map(|query_result| {
+                    let contract_address = query_result
+                        .try_get_by::<Vec<u8>, _>("contract_address")
+                        .expect("error while try_get_by contract_address");
+                    let creation_input = query_result
+                        .try_get_by::<Option<Vec<u8>>, _>("creation_input")
+                        .expect("error while try_get_by creation_input");
+                    (contract_address, creation_input)
+                });
+
+            if let Some((contract_address, creation_input)) = result {
+                println!(
+                    "search contract_address: {}",
+                    Bytes::from(contract_address.clone())
+                );
+                let request = eth_bytecode_db::SearchSourcesRequest {
+                    bytecode: Bytes::from(creation_input.unwrap()).to_string(),
+                    bytecode_type: eth_bytecode_db::BytecodeType::CreationInput.into(),
+                };
+                let search_result = self.eth_bytecode_db_client.search_sources(request).await;
+                if let Err(err) = search_result {
+                    println!("{err:#?}")
+                }
+            }
+            // tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        }
+    }
+
     /// Reset all `in_process` contracts back to the `waiting` state.
     /// Should be called on the client initialization in order to reset
     /// previously non-finished tasks back to the state where they can be processed again.

@@ -1,12 +1,12 @@
 pub use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2::{
     solidity_verifier_client::SolidityVerifierClient, verify_response,
-    vyper_verifier_client::VyperVerifierClient, BytecodeType, Source, VerificationMetadata,
-    VerifyResponse, VerifySolidityMultiPartRequest, VerifySolidityStandardJsonRequest,
-    VerifyVyperMultiPartRequest,
+    vyper_verifier_client::VyperVerifierClient, BytecodeType, SearchSourcesRequest,
+    SearchSourcesResponse, Source, VerificationMetadata, VerifyResponse,
+    VerifySolidityMultiPartRequest, VerifySolidityStandardJsonRequest, VerifyVyperMultiPartRequest,
 };
 
 use anyhow::Context;
-use serde::Serialize;
+use serde::{de::DeserializeOwned, Serialize};
 use std::{str::FromStr, time::Duration};
 use url::Url;
 
@@ -56,11 +56,19 @@ impl Client {
         self.send_request(path, request).await
     }
 
-    async fn send_request<Request: Serialize>(
+    pub async fn search_sources(
+        &self,
+        request: SearchSourcesRequest,
+    ) -> anyhow::Result<SearchSourcesResponse> {
+        let path = "/api/v2/bytecodes/sources:search";
+        self.send_request(path, request).await
+    }
+
+    async fn send_request<Request: Serialize, Response: DeserializeOwned>(
         &self,
         path: &str,
         request: Request,
-    ) -> anyhow::Result<VerifyResponse> {
+    ) -> anyhow::Result<Response> {
         let url = {
             let mut url = self.url.clone();
             url.set_path(path);
@@ -83,7 +91,7 @@ impl Client {
         }
 
         response
-            .json::<VerifyResponse>()
+            .json::<Response>()
             .await
             .context("verify response deserialization failed")
     }

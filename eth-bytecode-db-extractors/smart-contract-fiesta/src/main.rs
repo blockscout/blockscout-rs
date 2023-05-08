@@ -41,6 +41,13 @@ async fn main() -> Result<(), anyhow::Error> {
     .await
     .context("verification client initialization")?;
 
+    if settings.search_enabled {
+        for _ in 0..settings.search_n_threads {
+            let client = client.clone();
+            tokio::spawn(client.search_contracts());
+        }
+    }
+
     let mut handles = Vec::with_capacity(settings.n_threads);
     for _ in 0..settings.n_threads {
         let client = client.clone();

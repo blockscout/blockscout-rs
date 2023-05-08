@@ -44,6 +44,11 @@ pub struct Settings {
     #[serde(default = "default_n_threads")]
     pub n_threads: usize,
 
+    #[serde(default)]
+    pub search_enabled: bool,
+    #[serde(default = "default_search_n_threads")]
+    pub search_n_threads: usize,
+
     // Is required as we deny unknown fields, but allow users provide
     // path to config through PREFIX__CONFIG env variable. If removed,
     // the setup would fail with `unknown field `config`, expected one of...`
@@ -66,6 +71,10 @@ fn default_etherscan_limit_requests_per_second() -> u32 {
 
 fn default_n_threads() -> usize {
     4
+}
+
+fn default_search_n_threads() -> usize {
+    1
 }
 
 impl Settings {
