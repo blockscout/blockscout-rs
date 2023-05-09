@@ -1,7 +1,7 @@
 use cookie::Cookie;
 use reqwest::{
     header::{HeaderMap, HeaderValue},
-    StatusCode,
+    RequestBuilder, StatusCode,
 };
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -43,6 +43,18 @@ pub enum Error {
     InternalError(String),
 }
 
+pub async fn send_request_with_api_key(
+    request: RequestBuilder,
+    blockscout_api_key: Option<&str>,
+) -> Result<reqwest::Response, reqwest::Error> {
+    let request = if let Some(api_key) = blockscout_api_key {
+        request.query(&[API_KEY_NAME, api_key])
+    } else {
+        request
+    };
+    request.send().await
+}
+
 pub async fn auth_from_metadata(
     metadata: &MetadataMap,
     is_safe_http_method: bool,
@@ -64,25 +76,21 @@ pub async fn auth_from_tokens(
     blockscout_host: &Url,
     blockscout_api_key: Option<&str>,
 ) -> Result<AuthSuccess, Error> {
-    let mut url = blockscout_host
+    let url = blockscout_host
         .join("/api/account/v1/authenticate")
         .expect("should be valid url");
-    url.set_query(
-        blockscout_api_key
-            .map(|api_key| format!("{API_KEY_NAME}={api_key}"))
-            .as_deref(),
-    );
     let headers = build_http_headers(jwt, csrf_token)?;
     let client = reqwest::Client::new();
-    let response = if csrf_token.is_some() {
+    let request = if csrf_token.is_some() {
         client.post(url)
     } else {
         client.get(url)
     }
-    .headers(headers)
-    .send()
-    .await
-    .map_err(|_| Error::BlockscoutApi("failed to connect".to_string()))?;
+    .headers(headers);
+
+    let response = send_request_with_api_key(request, blockscout_api_key)
+        .await
+        .map_err(|_| Error::BlockscoutApi("failed to connect".to_string()))?;
 
     let status = response.status();
     let response_raw = response
