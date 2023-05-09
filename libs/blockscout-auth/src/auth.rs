@@ -48,7 +48,7 @@ pub async fn send_request_with_api_key(
     blockscout_api_key: Option<&str>,
 ) -> Result<reqwest::Response, reqwest::Error> {
     let request = if let Some(api_key) = blockscout_api_key {
-        request.query(&[API_KEY_NAME, api_key])
+        request.query(&[(API_KEY_NAME, api_key)])
     } else {
         request
     };
@@ -90,7 +90,7 @@ pub async fn auth_from_tokens(
 
     let response = send_request_with_api_key(request, blockscout_api_key)
         .await
-        .map_err(|_| Error::BlockscoutApi("failed to connect".to_string()))?;
+        .map_err(|e| Error::BlockscoutApi(format!("failed to connect: {e}")))?;
 
     let status = response.status();
     let response_raw = response
