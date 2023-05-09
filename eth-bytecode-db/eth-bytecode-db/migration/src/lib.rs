@@ -9,6 +9,8 @@ mod m20230222_194726_add_unique_parts_type_and_data_index;
 mod m20230227_014110_add_unique_source_index;
 mod m20230316_020341_verified_contracts_add_chain_id_contract_address_columns;
 mod m20230508_114425_update_raw_bytecode_columns_to_have_text_duplicates;
+mod m20230509_103937_add_trigger_sources_convert_bytecode_to_text_value;
+mod m20230509_103951_add_trigger_parts_convert_data_to_text_value;
 
 pub struct Migrator;
 
@@ -23,15 +25,23 @@ impl MigratorTrait for Migrator {
             Box::new(m20230222_194726_add_unique_parts_type_and_data_index::Migration),
             Box::new(m20230227_014110_add_unique_source_index::Migration),
             Box::new(m20230316_020341_verified_contracts_add_chain_id_contract_address_columns::Migration),
-            Box::new(m20230508_114425_update_raw_bytecode_columns_to_have_text_duplicates::Migration)
+            Box::new(m20230508_114425_update_raw_bytecode_columns_to_have_text_duplicates::Migration),
+            Box::new(m20230509_103937_add_trigger_sources_convert_bytecode_to_text_value::Migration),
+            Box::new(m20230509_103951_add_trigger_parts_convert_data_to_text_value::Migration),
         ]
     }
 }
 
 pub async fn from_sql(manager: &SchemaManager<'_>, content: &str) -> Result<(), DbErr> {
-    let stmnts: Vec<&str> = content.split(';').collect();
+    exec_stmts(manager, content.split(';')).await
+}
+
+pub async fn exec_stmts(
+    manager: &SchemaManager<'_>,
+    stmts: impl IntoIterator<Item = &str>,
+) -> Result<(), DbErr> {
     let txn = manager.get_connection().begin().await?;
-    for st in stmnts.into_iter() {
+    for st in stmts {
         txn.execute(Statement::from_string(
             manager.get_database_backend(),
             st.to_string(),
