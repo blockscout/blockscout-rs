@@ -39,8 +39,8 @@ where
     let data = hex::encode(&remote.data);
     let bytecode_type = remote.bytecode_type.clone();
     let bytecode_column = match bytecode_type {
-        BytecodeType::CreationInput => sources::Column::RawCreationInput,
-        BytecodeType::DeployedBytecode => sources::Column::RawDeployedBytecode,
+        BytecodeType::CreationInput => sources::Column::RawCreationInputText,
+        BytecodeType::DeployedBytecode => sources::Column::RawDeployedBytecodeText,
     }
     .to_string();
 
@@ -49,7 +49,7 @@ where
         SELECT "sources"."id"
         FROM "sources"
         WHERE
-        $1 LIKE encode("sources"."{bytecode_column}", 'hex') || '%'
+        $1 LIKE "sources"."{bytecode_column}" || '%'
         ;"#
     );
     SourceCandidate::find_by_statement(Statement::from_sql_and_values(
