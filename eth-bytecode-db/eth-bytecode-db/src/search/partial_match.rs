@@ -81,15 +81,23 @@ async fn find_part_id_candidates<C>(db: &C, data: &str) -> Result<Vec<i64>, DbEr
 where
     C: ConnectionTrait,
 {
+    // Here we make use of the index we have on the first 500 symbols of the "data_text" column
     let part_ids = PartCandidate::find_by_statement(Statement::from_sql_and_values(
         db.get_database_backend(),
         r#"
-        SELECT *
-        FROM parts
-        WHERE 
-        $1
-        LIKE "data_text" || '%'
-        AND parts.part_type = 'main';"#,
+            SELECT "parts"."id"
+            FROM parts
+            WHERE LENGTH("data_text") >= 500
+              AND LEFT($1, 500) = LEFT("data_text", 500)
+              AND "part_type" = 'main'
+              AND $1 LIKE "data_text" || '%'
+            UNION
+            SELECT "parts"."id"
+            FROM parts
+            WHERE LENGTH("data_text") < 500
+              AND $1 LIKE "data_text" || '%'
+              AND "part_type" = 'main';
+        "#,
         vec![data.into()],
     ))
     .all(db)

@@ -14,6 +14,7 @@ mod m20230509_103951_add_trigger_parts_convert_data_to_text_value;
 mod m20230509_123554_duplicate_sources_existing_bytecode_to_text_columns;
 mod m20230509_123604_duplicate_parts_existing_data_to_text_column;
 mod m20230509_132647_add_non_null_sources_and_parts_raw_bytecode_text_columns;
+mod m20230510_151046_add_indexes_on_parts_sources_to_search_speedup;
 
 pub struct Migrator;
 
@@ -34,6 +35,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20230509_123554_duplicate_sources_existing_bytecode_to_text_columns::Migration),
             Box::new(m20230509_123604_duplicate_parts_existing_data_to_text_column::Migration),
             Box::new(m20230509_132647_add_non_null_sources_and_parts_raw_bytecode_text_columns::Migration),
+            Box::new(m20230510_151046_add_indexes_on_parts_sources_to_search_speedup::Migration),
         ]
     }
 }
