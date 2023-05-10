@@ -69,7 +69,7 @@ pub fn basic(source_type: SourceType, match_type: MatchType) -> TestInputData {
                     },
                     smart_contract_verifier_proto_v2::verify_response::extra_data::BytecodePart {
                         r#type: "meta".to_string(),
-                        data: "0x4567".to_string(),
+                        data: "0xa2646970667358221220ad5a5e9ea0429c6665dc23af78b0acca8d56235be9dc3573672141811ea4a0da64736f6c63430008070033".to_string(),
                     },
                 ],
                 local_deployed_bytecode_parts: vec![
@@ -79,7 +79,7 @@ pub fn basic(source_type: SourceType, match_type: MatchType) -> TestInputData {
                     },
                     smart_contract_verifier_proto_v2::verify_response::extra_data::BytecodePart {
                         r#type: "meta".to_string(),
-                        data: "0xcdef".to_string(),
+                        data: "0xa2646970667358221220ad5a5e9ea0429c6665dc23af78b0acca8d56235be9dc3573672141811ea4a0da64736f6c63430008070033".to_string(),
                     },
                 ],
             },

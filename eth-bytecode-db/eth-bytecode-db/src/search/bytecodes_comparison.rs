@@ -1,5 +1,6 @@
 // TODO: try move to common crate since code is copipasted from smart-contract-verifier
 
+use crate::verification::MatchType;
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use bytes::Bytes;
 use entity::{parts, sea_orm_active_enums::PartType};
@@ -94,8 +95,14 @@ pub enum CompareError {
     InvalidConstructorArguments(DisplayBytes),
 }
 
-pub fn compare(remote_bytecode: &Bytes, local: &LocalBytecode) -> Result<(), CompareError> {
+pub fn compare(remote_bytecode: &Bytes, local: &LocalBytecode) -> Result<MatchType, CompareError> {
     let local_bytecode = &local.raw_bytecode();
+
+    if remote_bytecode.starts_with(local_bytecode) {
+        // If local compilation bytecode is prefix of remote one,
+        // metadata parts are the same and we do not need to compare bytecode parts.
+        return Ok(MatchType::Full);
+    }
 
     if remote_bytecode.len() < local_bytecode.len() {
         return Err(CompareError::BytecodeLengthMismatch {
@@ -106,7 +113,9 @@ pub fn compare(remote_bytecode: &Bytes, local: &LocalBytecode) -> Result<(), Com
             ),
         });
     }
-    compare_bytecode_parts(remote_bytecode, local_bytecode, &local.parts)
+    compare_bytecode_parts(remote_bytecode, local_bytecode, &local.parts)?;
+
+    Ok(MatchType::Partial)
 }
 
 pub fn extract_constructor_args(
