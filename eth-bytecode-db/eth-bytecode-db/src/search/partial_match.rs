@@ -88,7 +88,7 @@ where
         FROM parts
         WHERE 
         $1
-        LIKE encode("data", 'hex') || '%'
+        LIKE "data_text" || '%'
         AND parts.part_type = 'main';"#,
         vec![data.into()],
     ))
