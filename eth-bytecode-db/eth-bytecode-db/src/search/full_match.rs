@@ -46,16 +46,22 @@ where
 
     let sql = format!(
         r#"
-        SELECT "sources"."id"
-        FROM "sources"
-        WHERE
-        $1 LIKE "sources"."{bytecode_column}" || '%'
-        ;"#
+            SELECT "sources"."id"
+            FROM "sources"
+            WHERE LENGTH("sources"."{bytecode_column}") >= 500
+              AND LEFT($1, 500) = LEFT("sources"."{bytecode_column}", 500)
+              AND $1 LIKE "sources"."{bytecode_column}" || '%'
+            UNION
+            SELECT "sources"."id"
+            FROM "sources"
+            WHERE LENGTH("sources"."{bytecode_column}") < 500
+              AND $1 LIKE "sources"."{bytecode_column}" || '%';
+        "#
     );
     SourceCandidate::find_by_statement(Statement::from_sql_and_values(
         db.get_database_backend(),
         &sql,
-        vec![data.into(), bytecode_type.into()],
+        vec![data.into()],
     ))
     .all(db)
     .await
