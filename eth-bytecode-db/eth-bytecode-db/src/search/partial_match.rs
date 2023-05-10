@@ -85,14 +85,14 @@ where
     let part_ids = PartCandidate::find_by_statement(Statement::from_sql_and_values(
         db.get_database_backend(),
         r#"
-            SELECT *
+            SELECT "parts"."id"
             FROM parts
             WHERE LENGTH("data_text") >= 500
               AND LEFT($1, 500) = LEFT("data_text", 500)
               AND "part_type" = 'main'
               AND $1 LIKE "data_text" || '%'
             UNION
-            SELECT *
+            SELECT "parts"."id"
             FROM parts
             WHERE LENGTH("data_text") < 500
               AND $1 LIKE "data_text" || '%'
