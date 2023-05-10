@@ -44,6 +44,8 @@ where
     }
     .to_string();
 
+    // Here we make use of the index we have on the first 500 symbols
+    // of the "raw_creation_input_text" and "raw_deployed_bytecode_text" columns
     let sql = format!(
         r#"
             SELECT "sources"."id"
