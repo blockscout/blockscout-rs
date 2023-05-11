@@ -17,18 +17,14 @@ impl ChartFullUpdater for CompletedTxns {
     ) -> Result<Vec<DateValue>, UpdateError> {
         let data = DateValue::find_by_statement(Statement::from_string(
             DbBackend::Postgres,
-            r#"
-            SELECT 
-                (
-                    SELECT count(*)::text
-                        FROM transactions
-                        WHERE block_hash IS NOT NULL AND (error IS NULL OR error::text != 'dropped/replaced')
-                ) AS "value",
-                (
-                    SELECT max(timestamp)::date as "date" 
-                        FROM blocks
-                        WHERE blocks.consensus = true
-                ) AS "date"
+            r#"SELECT 
+                COUNT(*)::TEXT as value, 
+                MAX(b.timestamp)::DATE as date
+            FROM transactions t
+            JOIN blocks b ON t.block_hash = b.hash
+            WHERE t.block_hash IS NOT NULL AND
+                (error IS NULL OR error::text != 'dropped/replaced') AND
+                b.consensus = true
             "#
             .into(),
         ))
