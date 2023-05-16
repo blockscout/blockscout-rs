@@ -241,6 +241,7 @@ mod tests {
     async fn auth_works() {
         let users = [MockUser {
             id: 1,
+            email: "user@gmail.com".into(),
             chain_id: 1,
             jwt: "jwt1".into(),
             csrf_token: "csrf1".into(),
@@ -308,6 +309,7 @@ mod tests {
     async fn auth_works_no_api_key() {
         let users = [MockUser {
             id: 1,
+            email: "user@gmail.com".into(),
             chain_id: 1,
             jwt: "jwt1".into(),
             csrf_token: "csrf1".into(),
