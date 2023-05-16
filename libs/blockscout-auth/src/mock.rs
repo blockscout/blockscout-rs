@@ -57,5 +57,6 @@ fn respond(user: &MockUser) -> ResponseTemplate {
         "nickname": "username",
         "uid": "google-oauth2|10238912614929394",
         "watchlist_id": user.id,
+        "email_verified": true
     }))
 }

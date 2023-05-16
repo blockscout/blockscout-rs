@@ -22,6 +22,7 @@ pub struct AuthSuccess {
     pub nickname: String,
     pub uid: String,
     pub watchlist_id: i64,
+    pub email_verified: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -37,6 +38,8 @@ pub enum Error {
     InvalidCsrfToken(String),
     #[error("user is unauthorized: {0}")]
     Unauthorized(String),
+    #[error("forbidden: {0}")]
+    Forbidden(String),
     #[error("blockscout invalid response: {0}")]
     BlockscoutApi(String),
     #[error("internal error: {0}")]
@@ -102,7 +105,7 @@ pub async fn auth_from_tokens(
             })?;
             Ok(success)
         }
-        StatusCode::UNAUTHORIZED => {
+        StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => {
             let failed: AuthFalied = serde_json::from_str(&response_raw).map_err(|error| {
                 tracing::warn!(
                     error = ?error,
@@ -111,7 +114,11 @@ pub async fn auth_from_tokens(
                 );
                 Error::BlockscoutApi(format!("invalid body: {error}"))
             })?;
-            Err(Error::Unauthorized(failed.message))
+            if status == StatusCode::UNAUTHORIZED {
+                Err(Error::Unauthorized(failed.message))
+            } else {
+                Err(Error::Forbidden(failed.message))
+            }
         }
         _ => {
             tracing::warn!(
