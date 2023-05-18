@@ -15,18 +15,34 @@ impl ChartFullUpdater for CompletedTxns {
         &self,
         blockscout: &DatabaseConnection,
     ) -> Result<Vec<DateValue>, UpdateError> {
+        // here we split query into 3 parts due to perfomance.
+        //
+        // joining transactions and blocks with filtering on (t.status = 1 and b.consensus = true) is super long.
+        // so we count amount of success transactions without joinging,
+        // and then subtract amount of dropped transactions.
+        // since amount of dropped txns (b.consensus = false) is very small,
+        // the second query will execute very quickly.
+        // also we need last date of block, that's why 3rd query is needed
         let data = DateValue::find_by_statement(Statement::from_string(
             DbBackend::Postgres,
-            r#"SELECT 
-                COUNT(*)::TEXT as value, 
-                MAX(b.timestamp)::DATE as date
-            FROM transactions t
-            JOIN blocks b ON t.block_hash = b.hash
-            WHERE t.block_hash IS NOT NULL AND
-                (error IS NULL OR error::text != 'dropped/replaced') AND
-                b.consensus = true
-            "#
-            .into(),
+            r#"SELECT (all_success - all_success_dropped)::TEXT AS value, last_block_date AS date 
+            FROM (
+                SELECT (
+                    SELECT COUNT(*) AS all_success
+                    FROM transactions t
+                    WHERE t.status = 1
+                ), (
+                    SELECT COUNT(*) as all_success_dropped
+                    FROM transactions t
+                    JOIN blocks b ON t.block_hash = b.hash
+                    WHERE t.status = 1 AND b.consensus = false
+                ), (
+                    SELECT MAX(b.timestamp)::DATE AS last_block_date
+                    FROM blocks b
+                    WHERE b.consensus = true
+                )
+            ) AS sub"#
+                .into(),
         ))
         .one(blockscout)
         .await

@@ -365,6 +365,7 @@ fn mock_transaction(
         cumulative_gas_used: Set(Some(Default::default())),
         gas_used: Set(Some(Decimal::new(gas, 0))),
         index: Set(Some(index)),
+        status: Set(Some(1)),
         created_contract_address_hash: Set(created_contract_address_hash),
         ..Default::default()
     }
@@ -395,6 +396,7 @@ fn mock_failed_transaction(
         inserted_at: Set(Default::default()),
         updated_at: Set(Default::default()),
         from_address_hash: Set(vec![]),
+        status: Set(Some(0)),
         ..Default::default()
     }
 }
