@@ -1,0 +1,2697 @@
+basePath: /poa/core/api/v2/
+definitions:
+  Address:
+    properties:
+      block_number_balance_updated_at:
+        example: 27656552
+        type: integer
+      coin_balance:
+        example: '10000000'
+        type: string
+      creation_tx_hash:
+        example: '0x1f610ff9c1efad6b5a8bb6afcc0786cd7343f03f9a61e2544fcff908cedee924'
+        type: string
+      creator_address_hash:
+        example: '0xEb533ee5687044E622C69c58B1B12329F56eD9ad'
+        type: string
+      exchange_rate:
+        example: '1.01'
+        type: string
+      hash:
+        example: '0xEb533ee5687044E622C69c58B1B12329F56eD9ad'
+        type: string
+      implementation_address:
+        example: '0xEb533ee5687044E622C69c58B1B12329F56eD9ad'
+        type: string
+      implementation_name:
+        example: implementationName
+        type: string
+      is_contract:
+        type: boolean
+      is_verified:
+        type: boolean
+      name:
+        example: contractName
+        type: string
+      private_tags:
+        items:
+          $ref: '#/definitions/AddressTag'
+        type: array
+      public_tags:
+        items:
+          $ref: '#/definitions/AddressTag'
+        type: array
+      token:
+        $ref: '#/definitions/TokenInfo'
+      watchlist_names:
+        items:
+          $ref: '#/definitions/WatchlistName'
+        type: array
+    required:
+      - hash
+    type: object
+  AddressCounters:
+    properties:
+      gas_usage_count:
+        example: '0'
+        type: string
+      token_transfers_count:
+        example: '0'
+        type: string
+      transactions_count:
+        example: '0'
+        type: string
+      validations_count:
+        example: '0'
+        type: string
+    required:
+      - transactions_count
+      - token_transfers_count
+      - gas_usage_count
+      - validations_count
+    type: object
+  AddressParam:
+    properties:
+      hash:
+        example: '0xEb533ee5687044E622C69c58B1B12329F56eD9ad'
+        type: string
+      implementation_name:
+        example: implementationName
+        type: string
+      is_contract:
+        type: boolean
+      is_verified:
+        type: boolean
+      name:
+        example: contractName
+        type: string
+      private_tags:
+        items:
+          $ref: '#/definitions/AddressTag'
+        type: array
+      public_tags:
+        items:
+          $ref: '#/definitions/AddressTag'
+        type: array
+      watchlist_names:
+        items:
+          $ref: '#/definitions/WatchlistName'
+        type: array
+    required:
+      - hash
+    type: object
+  AddressTag:
+    properties:
+      address_hash:
+        example: '0xEb533ee5687044E622C69c58B1B12329F56eD9ad'
+        type: string
+      display_name:
+        example: name to show
+        type: string
+      label:
+        example: label
+        type: string
+    required:
+      - address_hash
+      - display_name
+      - label
+    type: object
+  AddressWithTxCount:
+    allOf:
+      - $ref: '#/definitions/Address'
+      - properties:
+          tx_count:
+            example: '1234'
+            type: string
+        required:
+          - tx_count
+        type: object
+  Argument:
+    properties:
+      name:
+        type: string
+      type:
+        example: uint256
+        type: string
+      value:
+        example: '100000'
+        type: string
+  Block:
+    properties:
+      base_fee_per_gas:
+        type: integer
+      burnt_fees:
+        type: integer
+      burnt_fees_percentage:
+        example: 50.54
+        type: number
+      difficulty:
+        example: 3.402823669209385e+38
+        type: integer
+      extra_data:
+        example: 'speth03g�� (Hex:0x7370657468303367c18300)'
+        type: string
+      gas_limit:
+        type: integer
+      gas_target_percentage:
+        example: -30
+        type: number
+      gas_used:
+        type: integer
+      gas_used_percentage:
+        type: number
+      hash:
+        example: '0xd2c092969530414df86c6935ebe039224faabe4e80ff51ffa02dc08881e6259a'
+        type: string
+      height:
+        type: integer
+      miner:
+        $ref: '#/definitions/AddressParam'
+      nonce:
+        example: '0x0102034'
+        type: string
+      parent_hash:
+        example: '0x3222fd68f89f621ba0fdb0e4fd7d749f40a252174a7808a5d0ad8e6503badd9c'
+        type: string
+      priority_fee:
+        type: integer
+      rewards:
+        items:
+          $ref: '#/definitions/Reward'
+        type: array
+      size:
+        type: integer
+      state_root:
+        example: '0x434fb3f234c8cffc1d915ad26ea360b0261d183ad37af89e31b839df4dd0b00f'
+        type: string
+      timestamp:
+        example: '2022-08-02T07:43:10.000000Z'
+        type: string
+      total_difficulty:
+        example: 7.340282366920939e+45
+        type: integer
+      tx_count:
+        type: integer
+      tx_fees:
+        type: integer
+      type:
+        example: block | reorg | uncle
+        type: string
+      uncles_hashes:
+        example:
+          - '0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347'
+        type: object
+    required:
+      - height
+      - timestamp
+      - tx_count
+      - miner
+      - size
+      - hash
+      - parent_hash
+      - difficulty
+      - total_difficulty
+      - gas_used
+      - gas_limit
+      - nonce
+    type: object
+  CodeAndMessage:
+    properties:
+      code:
+        type: integer
+      message:
+        example: Reverted
+        type: string
+    required:
+      - code
+      - message
+  CoinBalanceHistoryByDaysEntry:
+    properties:
+      date:
+        example: '2022-08-02'
+        type: string
+      value:
+        example: '100232323'
+        type: number
+    required:
+      - date
+      - value
+    type: object
+  CoinBalanceHistoryEntry:
+    properties:
+      block_number:
+        example: 1584930
+        type: integer
+      block_timestamp:
+        example: '2022-08-02T07:18:05.000000Z'
+        type: string
+      delta:
+        example: '-234959404'
+        type: string
+      transaction_hash:
+        example: '0x1f610ff9c1efad6b5a8bb6afcc0786cd7343f03f9a61e2544fcff908cedee924'
+        type: string
+      value:
+        example: '100232323'
+        type: string
+    required:
+      - block_number
+      - block_timestamp
+      - delta
+      - value
+    type: object
+  ConstructorArguments:
+    example:
+      - '0x2a3885b3f0c98f3e36334d4fa7beda53cb0ae095'
+      - internalType: address
+        name: _logic
+        type: address
+    type: object
+  ContractSource:
+    properties:
+      file_path:
+        example: contracts/erc-20.sol
+        type: string
+      source_code:
+        example: 'pragma solidity ^0.8.0; \n contract A {}'
+        type: string
+  DecodedInput:
+    properties:
+      method_call:
+        example: 'transferFrom(address _from, address _to, uint256 _value)'
+        type: string
+      method_id:
+        example: 23b872dd
+        type: string
+      parameters:
+        items:
+          $ref: '#/definitions/DecodedInputParameter'
+        type: array
+    required:
+      - method_call
+      - method_id
+      - parameters
+    type: object
+  DecodedInputLog:
+    properties:
+      method_call:
+        example: 'transferFrom(address _from, address _to, uint256 _value)'
+        type: string
+      method_id:
+        example: 23b872dd
+        type: string
+      parameters:
+        items:
+          $ref: '#/definitions/DecodedInputLogParameter'
+        type: array
+    required:
+      - method_call
+      - method_id
+      - parameters
+    type: object
+  DecodedInputLogParameter:
+    properties:
+      indexed?:
+        type: boolean
+      name:
+        example: signature
+        type: string
+      type:
+        example: bytes
+        type: string
+      value:
+        example: '0x0'
+        type: string
+    required:
+      - name
+      - type
+      - value
+      - indexed?
+    type: object
+  DecodedInputParameter:
+    properties:
+      name:
+        example: signature
+        type: string
+      type:
+        example: bytes
+        type: string
+      value:
+        example: '0x0'
+        type: string
+    required:
+      - name
+      - type
+      - value
+    type: object
+  ERC20OrCoinChange:
+    example: '-10000000'
+    type: string
+  Error:
+    properties:
+      error:
+        example: Some error
+        type: string
+    required:
+      - error
+  ExtendedRevertReasonAsMap:
+    properties:
+      code:
+        type: integer
+      message:
+        example: Reverted
+        type: string
+      raw:
+        example: >-
+          4b415032303a207472616e7366657220616d6f756e74206578636565647320616c6c6f77616e6365
+        type: string
+    required:
+      - raw
+      - code
+      - message
+    type: object
+  ExternalLibrary:
+    properties:
+      address_hash:
+        example: '0xF61f5c4a3664501F499A9289AaEe76a709CE536e'
+        type: string
+      name:
+        example: MathLib
+        type: string
+    required:
+      - name
+      - address_hash
+  Fee:
+    properties:
+      type:
+        example: maximum | actual
+        type: string
+      value:
+        example: '9853224000000000'
+        type: string
+    required:
+      - type
+      - value
+    type: object
+  Holder:
+    properties:
+      address:
+        $ref: '#/definitions/AddressParam'
+      token:
+        $ref: '#/definitions/TokenInfo'
+      token_id:
+        example: '10000'
+        type: string
+      value:
+        example: '10000'
+        type: string
+    required:
+      - address
+      - value
+      - token
+  IndexingStatus:
+    properties:
+      finished_indexing:
+        type: boolean
+      finished_indexing_blocks:
+        type: boolean
+      indexed_blocks_ratio:
+        example: '1.0'
+        type: string
+      indexed_inernal_transactions_ratio:
+        example: '1.0'
+        type: string
+    required:
+      - finished_indexing
+      - finished_indexing_blocks
+      - indexed_blocks_ratio
+      - indexed_inernal_transactions_ratio
+  InternalTransaction:
+    properties:
+      block:
+        type: integer
+      created_contract:
+        $ref: '#/definitions/AddressParam'
+      error:
+        example: reverted
+        type: string
+      from:
+        $ref: '#/definitions/AddressParam'
+      index:
+        type: integer
+      success:
+        example: false
+        type: boolean
+      timestamp:
+        example: '2022-08-02T07:18:05.000000Z'
+        type: string
+      to:
+        $ref: '#/definitions/AddressParam'
+      transaction_hash:
+        example: '0x323177407d08e4dced8c0c5a397b7cf9af50313ae2d98d69f84d65bd4152d6d9'
+        type: string
+      type:
+        example: delegate call
+        type: string
+      value:
+        type: integer
+    required:
+      - type
+      - success
+      - transaction_hash
+      - from
+      - to
+      - created_contract
+      - value
+      - block
+      - timestamp
+      - index
+    type: object
+  Log:
+    properties:
+      address:
+        $ref: '#/definitions/AddressParam'
+      data:
+        example: '0x0'
+        type: string
+      decoded:
+        $ref: '#/definitions/DecodedInputLog'
+        example:
+          method_call: 'Transfer(address indexed from, address indexed to, uint256 tokens)'
+          method_id: '0x630cea8e'
+          parameters:
+            - indexed?: true
+              name: signature
+              type: bytes
+              value: '0x0'
+            - indexed?: false
+              name: message
+              type: bytes
+              value: '0x01'
+      index:
+        type: integer
+      topics:
+        items:
+          example: '0x66753cd2356569ee081232e3be8909b950e0a76c1f8460c3a5e3c2be32b11bed'
+          type: string
+        type: array
+      tx_hash:
+        example: '0xfb2d87565f230fc6dcbe7c3af45df6d2a9586d08aa5be5491d83216d7e83fc1e'
+        type: string
+    required:
+      - address
+      - topics
+      - data
+      - index
+      - tx_hash
+    type: object
+  MarketChartItem:
+    properties:
+      closing_price:
+        example: '0.00254915'
+        type: string
+      date:
+        example: '2022-10-31'
+        type: string
+    required:
+      - date
+      - closing_price
+  NFTChange:
+    properties:
+      direction:
+        example: from | to
+        type: string
+      total:
+        oneOf:
+          - $ref: '#/definitions/TotalERC721'
+          - $ref: '#/definitions/TotalERC1155'
+          - $ref: '#/definitions/TotalERC1155Batch'
+    required:
+      - direction
+      - total
+  NFTChangesArray:
+    items:
+      $ref: '#/definitions/NFTChange'
+    type: array
+  NFTInstance:
+    properties:
+      animation_url:
+        example: example.com/video.mp4
+        type: string
+      external_app_url:
+        example: d-app.com
+        type: string
+      holder_address_hash:
+        example: '0x394c399dbA25B99Ab7708EdB505d755B3aa29997'
+        type: string
+      id:
+        example: '431'
+        type: string
+      image_url:
+        example: example.com/picture.png
+        type: string
+      is_unique:
+        type: boolean
+      metadata:
+        example:
+          attributes:
+            - trait_type: startDate
+              value: 01-Feb-2023
+            - trait_type: endDate
+              value: 01-Feb-2023
+            - trait_type: virtualEvent
+              value: 'false'
+            - trait_type: city
+              value: Paris
+            - trait_type: country
+              value: France
+            - trait_type: eventURL
+              value: 'https://www.chanel.com'
+          description: >-
+            This is the POAP for attendees of the second Social Listening
+            Committee.
+          external_url: 'https://api.poap.tech/metadata/99010/6292128'
+          home_url: 'https://app.poap.xyz/token/6292128'
+          image_url: 'https://assets.poap.xyz/chanel-poap-4c-2023-logo-1675083420470.png'
+          name: 'Social Listening Committee #2 Attendees'
+          tags:
+            - poap
+            - event
+          year: 2023
+        type: object
+      owner:
+        $ref: '#/definitions/AddressParam'
+      token:
+        $ref: '#/definitions/TokenInfo'
+    required:
+      - is_unique
+      - id
+      - token
+      - owner
+  OutputAndNames:
+    properties:
+      names:
+        example:
+          - null
+        type: array
+      output:
+        example:
+          - type: uint256
+            value: 0
+        type: array
+    required:
+      - output
+      - names
+  RawTrace:
+    example:
+      action:
+        callType: call
+        from: '0xf57b55b01b831e602e09674a4e5d69cbcf343f98'
+        gas: '0x25D3FC'
+        input: >-
+          0x630cea8e000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000041c25b36779231e71769118210c3eb64c0a9c7577b925b309af3183e13acc7cf30210493d13c8c6c3c0bd337d5e39e454fece0c301f0aedb6c43c7a37650ac83e71c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000019500050000f0add9e5dc02faeca12e9669f045685449d6b80a000000000000744359447362798334d3485c64d1e4870fde2ddc0d75f0b456250dc9990662a6f25808cc74a6d1131ea9000927c001018064382ae87cdd000000000000000000000000bab3cbdcbcc578445480a79ed80269c50bb5b71800000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000012000000000000000000000000351af1631aa5ea1ca62ad8a4e3cd87128d4d910800000000000000000000000000000000000000000000005b8decde02914ce837000000000000000000000000000000000000000000000000000000000000001e4d45444f4f5a412045636f73797374656d2076322e30206f6e2078446169000000000000000000000000000000000000000000000000000000000000000000044d445a41000000000000000000000000000000000000000000000000000000000000000000000000000000
+        to: '0x162e898bd0aacb578c8d5f8d6ca588c13d2a383f'
+        value: '0x0'
+      error: Reverted
+      subtraces: 1
+      traceAddress: []
+      type: call
+    type: object
+  ReadMethodQueryBody:
+    properties:
+      args:
+        example:
+          - 1123
+          - '0xBb36c792B9B45Aaf8b848A1392B0d6559202729E'
+        type: array
+      contract_type:
+        example: proxy | regular
+        type: string
+      from:
+        example: '0xBb36c792B9B45Aaf8b848A1392B0d6559202729E'
+        type: string
+      method_id:
+        example: ab470f05
+        type: string
+    required:
+      - args
+      - method_id
+  ReadMethodResponse:
+    properties:
+      is_error:
+        type: boolean
+      result:
+        oneOf:
+          - $ref: '#/definitions/ExtendedRevertReasonAsMap'
+          - $ref: '#/definitions/DecodedInput'
+          - $ref: '#/definitions/CodeAndMessage'
+          - $ref: '#/definitions/OutputAndNames'
+    required:
+      - result
+      - is_error
+  ReadMethodWithValue:
+    example:
+      inputs: []
+      method_id: 2e64cec1
+      name: retrieve
+      outputs:
+        - internalType: uint256
+          name: ''
+          type: uint256
+          value: 0
+      stateMutability: view
+      type: function
+    type: object
+  ReadMethodWithoutValue:
+    example:
+      inputs: []
+      method_id: f851a440
+      name: admin
+      outputs:
+        - internalType: address
+          name: admin_
+          type: address
+      stateMutability: nonpayable
+      type: function
+    type: object
+  RevertReasonAsMap:
+    properties:
+      raw:
+        example: >-
+          4b415032303a207472616e7366657220616d6f756e74206578636565647320616c6c6f77616e6365
+        type: string
+    required:
+      - raw
+    type: object
+  Reward:
+    properties:
+      reward:
+        type: integer
+      type:
+        example: Miner Reward | Emission Reward | Chore Reward | Uncle Reward
+        type: string
+    required:
+      - reward
+      - type
+    type: object
+  SearchResultAddressOrContract:
+    properties:
+      address:
+        example: '0xe2FBdeADC82c71C1b8bFf9CA4f9E7666224A362c'
+        type: string
+      name:
+        example: Name
+        type: string
+      type:
+        example: address|contract
+        type: string
+      url:
+        example: /xdai/mainnet/address/0xc1c1031e4A44B98707203480029e6576CB3267e3
+        type: string
+    required:
+      - type
+      - address
+      - url
+  SearchResultBlock:
+    properties:
+      block_hash:
+        example: '0xba83e9ba0b43e8d112a07fdab08d53f473d2b7fb0e585bd437ae739933db203e'
+        type: string
+      block_number:
+        example: 24816691
+        type: integer
+      type:
+        example: block
+        type: string
+      url:
+        example: >-
+          /xdai/mainnet/block/0xba83e9ba0b43e8d112a07fdab08d53f473d2b7fb0e585bd437ae739933db203e
+        type: string
+    required:
+      - type
+      - block_number
+      - block_hash
+      - url
+  SearchResultRedirect:
+    properties:
+      parameter:
+        example: '0xEb533ee5687044E622C69c58B1B12329F56eD9ad'
+        type: string
+      redirect:
+        type: boolean
+      type:
+        example: address | block | transaction
+        type: string
+    required:
+      - redirect
+  SearchResultToken:
+    properties:
+      address:
+        example: '0xe2FBdeADC82c71C1b8bFf9CA4f9E7666224A362c'
+        type: string
+      address_url:
+        example: /xdai/mainnet/address/0xc1c1031e4A44B98707203480029e6576CB3267e3
+        type: string
+      name:
+        example: Tether USD
+        type: string
+      symbol:
+        example: USDT
+        type: string
+      token_url:
+        example: /xdai/mainnet/token/0xc1c1031e4A44B98707203480029e6576CB3267e3
+        type: string
+      type:
+        example: token
+        type: string
+    required:
+      - type
+      - name
+      - symbol
+      - address
+      - token_url
+      - address_url
+  SearchResultTransaction:
+    properties:
+      tx_hash:
+        example: '0xe38c6772f33edfbd218f59853befe18391cb786f911fb6c0b00ed6dd72ef6e69'
+        type: string
+      type:
+        example: transaction
+        type: string
+      url:
+        example: >-
+          /xdai/mainnet/tx/0xe38c6772f33edfbd218f59853befe18391cb786f911fb6c0b00ed6dd72ef6e69
+        type: string
+    required:
+      - type
+      - tx_hash
+      - url
+  SmartContract:
+    properties:
+      abi:
+        example: >-
+          [{"type":"constructor","stateMutability":"nonpayable","inputs":[{"type":"address","name":"_bridgeDataAddress","internalType":"address"},{"type":"uint256","name":"_finalSupply","internalType":"uint256"},{"type":"uint256[5]","name":"_totalColorSupply","internalType":"uint256[5]"}]}]
+        type: string
+      additional_sources:
+        items:
+          $ref: '#/definitions/ContractSource'
+        type: array
+      can_be_visualized_via_sol2uml:
+        type: boolean
+      compiler_settings:
+        example: {}
+        type: object
+      compiler_version:
+        example: v0.8.4+commit.c7e474f2
+        type: string
+      constructor_args:
+        example: '0x01'
+        type: string
+      creation_bytecode:
+        example: '0x02'
+        type: string
+      decoded_constructor_args:
+        items:
+          $ref: '#/definitions/ConstructorArguments'
+        type: array
+      deployed_bytecode:
+        example: '0x01'
+        type: string
+      evm_version:
+        example: default
+        type: string
+      external_libraries:
+        items:
+          $ref: '#/definitions/ExternalLibrary'
+        type: array
+      file_path:
+        example: contract.sol
+        type: string
+      is_changed_bytecode:
+        type: boolean
+      is_fully_verified:
+        type: boolean
+      is_partially_verified:
+        type: boolean
+      is_self_destructed:
+        type: boolean
+      is_verified:
+        type: boolean
+      is_verified_via_sourcify:
+        type: boolean
+      is_vyper_contract:
+        type: boolean
+      minimal_proxy_address_hash:
+        example: '0x394c399dbA25B99Ab7708EdB505d755B3aa29997'
+        type: string
+      name:
+        example: Cryptostamp3L2
+        type: string
+      optimization_enabled:
+        example: false
+        type: boolean
+      optimizations_runs:
+        example: 200
+        type: integer
+      source_code:
+        example: 'contract A {}'
+        type: string
+      sourcify_repo_url:
+        example: 'https://sourcify.repo.com/100/link_to_a_contract_at_sourcify'
+        type: string
+      verified_at:
+        example: '2021-06-02T17:54:17.116055Z'
+        type: string
+      verified_twin_address_hash:
+        example: '0x394c399dbA25B99Ab7708EdB505d755B3aa29997'
+        type: string
+  SmartContractForList:
+    properties:
+      address:
+        $ref: '#/definitions/AddressParam'
+      coin_balance:
+        example: '10000'
+        type: string
+      compiler_version:
+        example: v0.5.10+commit.5a6ea5b1
+        type: string
+      has_constructor_args:
+        type: boolean
+      language:
+        example: vyper | yul | solidity
+        type: string
+      market_cap:
+        example: 1000000000.0001
+        type: number
+      optimization_enabled:
+        type: boolean
+      tx_count:
+        type: integer
+      verified_at:
+        example: '2022-03-05T11:40:29.087000Z'
+        type: string
+    required:
+      - address
+      - coin_balance
+      - compiler_version
+      - has_constructor_args
+      - language
+      - optimization_enabled
+      - tx_count
+      - verified_at
+  StateChange:
+    properties:
+      address:
+        $ref: '#/definitions/AddressParam'
+      balance_after:
+        example: '100000000'
+        type: string
+      balance_before:
+        example: '100000000'
+        type: string
+      change:
+        oneOf:
+          - $ref: '#/definitions/NFTChangesArray'
+          - $ref: '#/definitions/ERC20OrCoinChange'
+      is_miner:
+        type: boolean
+      token:
+        $ref: '#/definitions/TokenInfo'
+      type:
+        example: coin | token
+        type: string
+    required:
+      - address
+      - is_miner
+      - type
+  StatsResponse:
+    properties:
+      average_block_time:
+        example: 25000
+        type: number
+      coin_price:
+        example: '0.00254957'
+        type: string
+      gas_prices:
+        example:
+          average: 10
+          fast: 10
+          slow: 10
+        type: object
+      gas_used_today:
+        example: '49063630'
+        type: string
+      market_cap:
+        example: '420471.10604559750644'
+        type: string
+      network_utilization_percentage:
+        example: 40.2142
+        type: number
+      static_gas_price:
+        example: '10.1'
+        type: string
+      total_addresses:
+        example: '982340'
+        type: string
+      total_blocks:
+        example: '508700'
+        type: string
+      total_gas_used:
+        example: '0'
+        type: string
+      total_transactions:
+        example: '1699427'
+        type: string
+      transactions_today:
+        example: '622'
+        type: string
+    required:
+      - total_blocks
+      - total_addresses
+      - total_transactions
+      - average_block_time
+      - coin_price
+      - total_gas_used
+      - transactions_today
+      - gas_used_today
+      - market_cap
+      - network_utilization_percentage
+  Token:
+    properties:
+      address:
+        example: '0x394c399dbA25B99Ab7708EdB505d755B3aa29997'
+        type: string
+      decimals:
+        example: '16'
+        type: string
+      exchange_rate:
+        example: '0.99'
+        type: string
+      holders:
+        example: 837494234523
+        type: integer
+      name:
+        example: Tether USD
+        type: string
+      symbol:
+        example: USDT
+        type: string
+      total_supply:
+        example: '10000000'
+        type: string
+      type:
+        example: ERC-20
+        type: string
+    required:
+      - address
+      - symbol
+      - name
+      - decimals
+      - type
+      - holders
+      - exchange_rate
+      - total_supply
+    type: object
+  TokenBalance:
+    properties:
+      token:
+        $ref: '#/definitions/Token'
+      token_id:
+        example: '123'
+        type: string
+      value:
+        example: '10000'
+        type: string
+    required:
+      - value
+      - token
+      - token_id
+    type: object
+  TokenCounters:
+    properties:
+      token_holders_count:
+        example: '100'
+        type: string
+      transfers_count:
+        example: '1000'
+        type: string
+    required:
+      - token_holders_count
+      - transfers_count
+  TokenInfo:
+    properties:
+      address:
+        example: '0xEb533ee5687044E622C69c58B1B12329F56eD9ad'
+        type: string
+      decimals:
+        example: '18'
+        type: string
+      exchange_rate:
+        example: '0.001'
+        type: string
+      holders:
+        example: '100'
+        type: string
+      name:
+        example: Tether USD
+        type: string
+      symbol:
+        example: USDT
+        type: string
+      total_supply:
+        example: '1000000'
+        type: string
+      type:
+        example: ERC-20
+        type: string
+    required:
+      - address
+      - type
+  TokenInstance:
+    properties:
+      id:
+        example: 431
+        type: integer
+      media_url:
+        example: example.com/picture.png
+        type: string
+      token_address_hash:
+        example: '0x394c399dbA25B99Ab7708EdB505d755B3aa29997'
+        type: string
+      token_name:
+        example: New NFT
+        type: string
+      token_type:
+        example: ERC-721
+        type: string
+      transfers_count:
+        example: 10
+        type: integer
+    required:
+      - id
+      - token_name
+      - token_type
+      - token_address_hash
+      - transfers_count
+  TokenTransfer:
+    properties:
+      block_hash:
+        example: '0xa45ac09015352df65cd4d1314de87419dd7589b033a874a5ef7f2654b342babe'
+        type: string
+      from:
+        $ref: '#/definitions/AddressParam'
+      method:
+        example: mint
+        type: string
+      timestamp:
+        example: '2022-11-05T19:20:20.000000Z'
+        type: string
+      to:
+        $ref: '#/definitions/AddressParam'
+      token:
+        $ref: '#/definitions/TokenInfo'
+      total: {}
+      tx_hash:
+        example: '0x655a2304c3f69b0ce52a6dd25bf4377ffddcdde6397aa53d47b13c49af0ac5c8'
+        type: string
+      type:
+        example: token_transfer
+        type: string
+    required:
+      - tx_hash
+      - type
+      - from
+      - to
+      - total
+      - token
+    type: object
+  TotalERC1155:
+    properties:
+      decimals:
+        example: null
+        type: string
+      token_id:
+        example: '1'
+        type: string
+      value:
+        example: '1000'
+        type: string
+    required:
+      - token_id
+      - value
+  TotalERC1155Batch:
+    items:
+      $ref: '#/definitions/TotalERC1155'
+    type: array
+  TotalERC20:
+    properties:
+      decimals:
+        example: '18'
+        type: string
+      value:
+        example: '1000'
+        type: string
+    required:
+      - value
+  TotalERC721:
+    properties:
+      token_id:
+        example: '1'
+        type: string
+    required:
+      - token_id
+  Transaction:
+    properties:
+      base_fee_per_gas:
+        type: integer
+      block:
+        example: 23484035
+        format: int32
+        type: integer
+      confirmation_duration:
+        example:
+          - 0
+          - 17479
+        type: object
+      confirmations:
+        example: 1035
+        type: integer
+      created_contract:
+        $ref: '#/definitions/AddressParam'
+      decoded_input:
+        $ref: '#/definitions/DecodedInput'
+      exchange_rate:
+        type: number
+      fee:
+        $ref: '#/definitions/Fee'
+      from:
+        $ref: '#/definitions/AddressParam'
+      gas_limit:
+        type: integer
+      gas_price:
+        type: integer
+      gas_used:
+        type: integer
+      hash:
+        example: '0x5d90a9da2b8da402b11bc92c8011ec8a62a2d59da5c7ac4ae0f73ec51bb73368'
+        type: string
+      max_fee_per_gas:
+        type: integer
+      max_priority_fee_per_gas:
+        type: integer
+      method:
+        example: transferFrom
+        type: string
+      nonce:
+        type: integer
+      position:
+        type: integer
+      priority_fee:
+        type: integer
+      raw_input:
+        example: '0x630cea8e0000000000000000000000000000001'
+        type: string
+      result:
+        example: 'Error: (Awaiting internal transactions for reason)'
+        type: string
+      revert_reason: {}
+      status:
+        example: ok | error
+        type: string
+      timestamp:
+        example: '2022-08-02T07:18:05.000000Z'
+        type: string
+      to:
+        $ref: '#/definitions/AddressParam'
+      token_transfers:
+        items:
+          $ref: '#/definitions/TokenTransfer'
+        type: array
+      token_transfers_overflow:
+        type: boolean
+      tx_burnt_fee:
+        type: integer
+      tx_tag:
+        example: private_tx_tag
+        type: string
+      tx_types:
+        example:
+          - token_transfer
+          - contract_creation
+          - contract_call
+          - token_creation
+          - coin_transfer
+        items:
+          type: string
+        type: array
+      type:
+        type: integer
+      value:
+        example: 100234
+        type: integer
+    required:
+      - hash
+      - result
+      - from
+      - to
+      - created_contract
+      - confirmations
+      - confirmation_duration
+      - value
+      - fee
+      - gas_price
+      - gas_limit
+      - nonce
+      - raw_input
+      - tx_types
+    type: object
+  TransactionChartItem:
+    properties:
+      date:
+        example: '2022-10-31'
+        type: string
+      tx_count:
+        example: 622
+        type: integer
+    required:
+      - date
+      - tx_count
+  TransactionReward:
+    properties:
+      block_hash:
+        example: '0x3169a7e9c513462403abb40eaa4fa51c5fbe1b908606e6eeef16232e308cb464'
+        type: string
+      emission_reward:
+        example: '500000000000000000'
+        type: string
+      from:
+        $ref: '#/definitions/AddressParam'
+      to:
+        $ref: '#/definitions/AddressParam'
+      types:
+        example:
+          - reward
+        type: object
+    required:
+      - emission_reward
+      - block_hash
+      - from
+      - to
+      - types
+    type: object
+  WatchlistName:
+    properties:
+      display_name:
+        example: name to show
+        type: string
+      label:
+        example: label
+        type: string
+    required:
+      - display_name
+      - label
+    type: object
+  WriteMethod:
+    example:
+      inputs:
+        - internalType: uint256
+          name: num
+          type: uint256
+      name: store
+      outputs: []
+      stateMutability: nonpayable
+      type: function
+    type: object
+host: blockscout.com
+info:
+  contact:
+    email: you@your-company.com
+  description: API for BlockScout web app
+  license:
+    name: Apache 2.0
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+  title: BlockScout API
+  version: 1.0.0
+paths:
+  /addresses:
+    get:
+      operationId: get_addresses
+      parameters: []
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: token
+          schema:
+            properties:
+              exchange_rate:
+                example: '0.01'
+                type: string
+              items:
+                items:
+                  $ref: '#/definitions/AddressWithTxCount'
+                type: array
+              next_page_params:
+                example:
+                  fetched_coin_balance: '269536604956070000000'
+                  hash: '0xf74769d9ffe1cd17f20b283995cf9e7fa2a262ed'
+                  items_count: 50
+                type: object
+              total_supply:
+                example: '100000000'
+                type: string
+            required:
+              - exchange_rate
+              - total_supply
+              - items
+              - next_page_params
+            type: object
+        '400':
+          description: bad input parameter
+      summary: get native coin holders list
+  '/addresses/{address_hash}':
+    get:
+      operationId: get_address
+      parameters:
+        - description: Address hash
+          in: path
+          name: address_hash
+          pattern: '^0x([A-Fa-f0-9]{40})$'
+          required: true
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: address
+          schema:
+            $ref: '#/definitions/Address'
+        '400':
+          description: bad input parameter
+      summary: get address info
+  '/addresses/{address_hash}/blocks-validated':
+    get:
+      operationId: get_address_blocks_validated
+      parameters:
+        - description: Address hash
+          in: path
+          name: address_hash
+          pattern: '^0x([A-Fa-f0-9]{40})$'
+          required: true
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: address
+          schema:
+            properties:
+              items:
+                items:
+                  $ref: '#/definitions/Block'
+                type: array
+              next_page_params:
+                example:
+                  block_number: 27736955
+                  items_count: 50
+                type: object
+            required:
+              - items
+              - next_page_params
+            type: object
+        '400':
+          description: bad input parameter
+      summary: get blocks validated by address
+  '/addresses/{address_hash}/coin-balance-history':
+    get:
+      operationId: get_address_coin_balance_history
+      parameters:
+        - description: Address hash
+          in: path
+          name: address_hash
+          pattern: '^0x([A-Fa-f0-9]{40})$'
+          required: true
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: address
+          schema:
+            properties:
+              items:
+                items:
+                  $ref: '#/definitions/CoinBalanceHistoryEntry'
+                type: array
+              next_page_params:
+                example:
+                  block_number: 27736955
+                  items_count: 50
+                type: object
+            required:
+              - items
+              - next_page_params
+            type: object
+        '400':
+          description: bad input parameter
+      summary: get address coin balance history
+  '/addresses/{address_hash}/coin-balance-history-by-day':
+    get:
+      operationId: get_address_coin_balance_history_by_day
+      parameters:
+        - description: Address hash
+          in: path
+          name: address_hash
+          pattern: '^0x([A-Fa-f0-9]{40})$'
+          required: true
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: address
+          schema:
+            items:
+              $ref: '#/definitions/CoinBalanceHistoryByDaysEntry'
+            type: array
+        '400':
+          description: bad input parameter
+      summary: get address coin balance history by day
+  '/addresses/{address_hash}/counters':
+    get:
+      operationId: get_address_counters
+      parameters:
+        - description: Address hash
+          in: path
+          name: address_hash
+          pattern: '^0x([A-Fa-f0-9]{40})$'
+          required: true
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: address
+          schema:
+            $ref: '#/definitions/AddressCounters'
+        '400':
+          description: bad input parameter
+      summary: get address counters
+  '/addresses/{address_hash}/internal-transactions':
+    get:
+      operationId: get_address_internal_txs
+      parameters:
+        - description: Address hash
+          in: path
+          name: address_hash
+          pattern: '^0x([A-Fa-f0-9]{40})$'
+          required: true
+          type: string
+        - in: query
+          name: filter
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: address
+          schema:
+            properties:
+              items:
+                items:
+                  $ref: '#/definitions/InternalTransaction'
+                type: array
+              next_page_params:
+                example:
+                  block_number: 27625575
+                  index: 0
+                  items_count: 50
+                  transaction_index: 0
+                type: object
+            required:
+              - items
+              - next_page_params
+            type: object
+        '400':
+          description: bad input parameter
+      summary: get address internal txs
+  '/addresses/{address_hash}/logs':
+    get:
+      operationId: get_address_logs
+      parameters:
+        - description: Address hash
+          in: path
+          name: address_hash
+          pattern: '^0x([A-Fa-f0-9]{40})$'
+          required: true
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: address
+          schema:
+            properties:
+              items:
+                items:
+                  $ref: '#/definitions/Log'
+                type: array
+              next_page_params:
+                example:
+                  block_number: 27736955
+                  index: 68
+                  items_count: 50
+                  transaction_index: 9
+                type: object
+            required:
+              - items
+              - next_page_params
+            type: object
+        '400':
+          description: bad input parameter
+      summary: get address logs
+  '/addresses/{address_hash}/token-balances':
+    get:
+      operationId: get_address_token_balances
+      parameters:
+        - description: Address hash
+          in: path
+          name: address_hash
+          pattern: '^0x([A-Fa-f0-9]{40})$'
+          required: true
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: address
+          schema:
+            items:
+              $ref: '#/definitions/TokenBalance'
+            type: array
+        '400':
+          description: bad input parameter
+      summary: get blocks validated by address
+  '/addresses/{address_hash}/token-transfers':
+    get:
+      operationId: get_address_token_transfers
+      parameters:
+        - description: Address hash
+          in: path
+          name: address_hash
+          pattern: '^0x([A-Fa-f0-9]{40})$'
+          required: true
+          type: string
+        - in: query
+          name: type
+          type: string
+        - in: query
+          name: filter
+          type: string
+        - in: query
+          name: token
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: address
+          schema:
+            properties:
+              items:
+                items:
+                  $ref: '#/definitions/TokenTransfer'
+                type: array
+              next_page_params:
+                example:
+                  block_number: 27736955
+                  index: 4
+                  items_count: 50
+                type: object
+            required:
+              - items
+              - next_page_params
+            type: object
+        '400':
+          description: bad input parameter
+      summary: get address token transfers
+  '/addresses/{address_hash}/tokens':
+    get:
+      operationId: get_address_tokens
+      parameters:
+        - description: Address hash
+          in: path
+          name: address_hash
+          pattern: '^0x([A-Fa-f0-9]{40})$'
+          required: true
+          type: string
+        - in: query
+          name: type
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: address
+          schema:
+            properties:
+              items:
+                items:
+                  $ref: '#/definitions/TokenBalance'
+                type: array
+              next_page_params:
+                example:
+                  items_count: 50
+                  token_name: null
+                  token_type: ERC-1155
+                  value: 14
+                type: object
+            required:
+              - items
+              - next_page_params
+            type: object
+        '400':
+          description: bad input parameter
+      summary: get blocks validated by address
+  '/addresses/{address_hash}/transactions':
+    get:
+      operationId: get_address_txs
+      parameters:
+        - description: Address hash
+          in: path
+          name: address_hash
+          pattern: '^0x([A-Fa-f0-9]{40})$'
+          required: true
+          type: string
+        - in: query
+          name: filter
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: address
+          schema:
+            properties:
+              items:
+                items: {}
+                type: array
+              next_page_params:
+                example:
+                  hash: >-
+                    0x5b432d185e0f08f31cf182a89305eb7ec05ed94395f1e47400dc7934850435ba
+                  inserted_at: '2021-11-13T11:06:00.800000Z'
+                  items_count: 50
+                type: object
+            required:
+              - items
+              - next_page_params
+            type: object
+        '400':
+          description: bad input parameter
+      summary: get address txs
+  /blocks:
+    get:
+      operationId: get_blocks
+      parameters:
+        - in: query
+          name: type
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: block
+          schema:
+            properties:
+              items:
+                items:
+                  $ref: '#/definitions/Block'
+                type: array
+              next_page_params:
+                example:
+                  block_number: 27729304
+                  items_count: 50
+                type: object
+            required:
+              - items
+              - next_page_params
+            type: object
+        '400':
+          description: bad input parameter
+      summary: get blocks
+  '/blocks/{block_number_or_hash}':
+    get:
+      operationId: get_block
+      parameters:
+        - description: Block number or hash
+          in: path
+          name: block_number_or_hash
+          required: true
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: block
+          schema:
+            $ref: '#/definitions/Block'
+        '400':
+          description: bad input parameter
+      summary: get block info
+  '/blocks/{block_number_or_hash}/transactions':
+    get:
+      operationId: get_block_txs
+      parameters:
+        - description: Block number or hash
+          in: path
+          name: block_number_or_hash
+          required: true
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: block
+          schema:
+            properties:
+              items:
+                items:
+                  $ref: '#/definitions/Transaction'
+                type: array
+              next_page_params:
+                example:
+                  block_number: 27736955
+                  index: 4
+                  items_count: 50
+                type: object
+            required:
+              - items
+              - next_page_params
+            type: object
+        '400':
+          description: bad input parameter
+      summary: get block txs
+  /config/json-rpc-url:
+    get:
+      operationId: get_json_rpc_url
+      parameters: []
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: json rpc url
+          schema:
+            properties:
+              json_rpc_url:
+                example: 'https://core.poa.network'
+                type: string
+            required:
+              - json_rpc_url
+            type: object
+      summary: get json rpc url
+  /main-page/blocks:
+    get:
+      operationId: get_main_page_tokens
+      parameters: []
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: blocks
+          schema:
+            items:
+              $ref: '#/definitions/Block'
+            type: array
+      summary: get main page blocks
+  /main-page/indexing-status:
+    get:
+      operationId: get_indexing_status
+      parameters: []
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: indexing status
+          schema:
+            $ref: '#/definitions/IndexingStatus'
+      summary: get indexing status
+  /main-page/transactions:
+    get:
+      operationId: get_main_page_txs
+      parameters: []
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: txs
+          schema:
+            items:
+              $ref: '#/definitions/Transaction'
+            type: array
+      summary: get main page txs
+  /search:
+    get:
+      operationId: search
+      parameters:
+        - in: query
+          name: q
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: search response
+          schema:
+            properties:
+              items:
+                items: {}
+                type: array
+              next_page_params:
+                example:
+                  address_hash: '0x052Ad78E3aA0b0F2D3912FD3b50a9a289CF2f7Aa'
+                  block_hash: null
+                  holder_count: 548
+                  inserted_at: '2021-12-07T08:39:01.062253Z'
+                  item_type: token
+                  items_count: 50
+                  name: RealToken S 13245 Monica St Detroit MI
+                  q: '1'
+                  tx_hash: null
+                type: object
+            required:
+              - items
+              - next_page_params
+            type: object
+        '400':
+          description: bad input parameter
+      summary: search
+  /search/check-redirect:
+    get:
+      operationId: search redirect
+      parameters:
+        - in: query
+          name: q
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: search response
+          schema:
+            $ref: '#/definitions/SearchResultRedirect'
+        '400':
+          description: bad input parameter
+      summary: search redirect
+  /smart-contracts:
+    get:
+      operationId: get_smart_contracts
+      parameters:
+        - in: query
+          name: q
+          type: string
+        - in: query
+          name: filter
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: smart contract
+          schema:
+            properties:
+              items:
+                items:
+                  $ref: '#/definitions/SmartContractForList'
+                type: array
+              next_page_params:
+                example:
+                  items_count: 50
+                  smart_contract_id: 46
+                type: object
+            required:
+              - items
+              - next_page_params
+            type: object
+        '400':
+          description: bad input parameter
+      summary: get verified smart contracts
+  /smart-contracts/counters:
+    get:
+      operationId: get_smart_contracts_counters
+      parameters: []
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: smart contracts counters
+          schema:
+            properties:
+              new_smart_contracts_24h:
+                example: '12'
+                type: string
+              new_verified_smart_contracts_24h:
+                example: '11'
+                type: string
+              smart_contracts:
+                example: '20'
+                type: string
+              verified_smart_contracts:
+                example: '15'
+                type: string
+            required:
+              - new_smart_contracts_24h
+              - new_verified_smart_contracts_24h
+              - smart_contracts
+              - verified_smart_contracts
+            type: object
+        '400':
+          description: bad input parameter
+      summary: get verified smart contracts counters
+  '/smart-contracts/{address_hash}':
+    get:
+      operationId: get_smart_contract
+      parameters:
+        - description: Address hash
+          in: path
+          name: address_hash
+          pattern: '^0x([A-Fa-f0-9]{40})$'
+          required: true
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: smart contract
+          schema:
+            $ref: '#/definitions/SmartContract'
+        '400':
+          description: bad input parameter
+      summary: get smart contract
+  '/smart-contracts/{address_hash}/methods-read':
+    get:
+      operationId: get_read_methods
+      parameters:
+        - description: Address hash
+          in: path
+          name: address_hash
+          pattern: '^0x([A-Fa-f0-9]{40})$'
+          required: true
+          type: string
+        - in: query
+          name: is_custom_abi
+          type: string
+        - in: query
+          name: from
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: smart contract
+          schema:
+            items: {}
+            type: array
+        '400':
+          description: bad input parameter
+      summary: get read methods
+  '/smart-contracts/{address_hash}/methods-read-proxy':
+    get:
+      operationId: get_read_methods_proxy
+      parameters:
+        - description: Address hash
+          in: path
+          name: address_hash
+          pattern: '^0x([A-Fa-f0-9]{40})$'
+          required: true
+          type: string
+        - in: query
+          name: is_custom_abi
+          type: string
+        - in: query
+          name: from
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: smart contract
+          schema:
+            items: {}
+            type: array
+      summary: get read methods proxy
+  '/smart-contracts/{address_hash}/methods-write':
+    get:
+      operationId: get_write_methods
+      parameters:
+        - description: Address hash
+          in: path
+          name: address_hash
+          pattern: '^0x([A-Fa-f0-9]{40})$'
+          required: true
+          type: string
+        - in: query
+          name: is_custom_abi
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: smart contract
+          schema:
+            items: {}
+            type: array
+        '400':
+          description: bad input parameter
+      summary: get write methods
+  '/smart-contracts/{address_hash}/methods-write-proxy':
+    get:
+      operationId: get_write_methods_proxy
+      parameters:
+        - description: Address hash
+          in: path
+          name: address_hash
+          pattern: '^0x([A-Fa-f0-9]{40})$'
+          required: true
+          type: string
+        - in: query
+          name: is_custom_abi
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: smart contract
+          schema:
+            items: {}
+            type: array
+        '400':
+          description: bad input parameter
+      summary: get write methods proxy
+  '/smart-contracts/{address_hash}/query-read-method':
+    post:
+      consumes:
+        - application/json
+      operationId: query_read_method
+      parameters:
+        - description: Address hash
+          in: path
+          name: address_hash
+          pattern: '^0x([A-Fa-f0-9]{40})$'
+          required: true
+          type: string
+        - in: body
+          name: body
+          required: true
+          schema:
+            $ref: '#/definitions/ReadMethodQueryBody'
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: smart contract
+          schema:
+            items: {}
+            type: array
+        '400':
+          description: bad input parameter
+      summary: query read method
+  /stats:
+    get:
+      operationId: get_stats
+      parameters: []
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: stats
+          schema:
+            $ref: '#/definitions/StatsResponse'
+      summary: get stats counters
+  /stats/charts/market:
+    get:
+      operationId: get_market_chart
+      parameters: []
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: market chart
+          schema:
+            properties:
+              available_supply:
+                example: '164918857.718061'
+                type: string
+              chart_data:
+                items:
+                  $ref: '#/definitions/MarketChartItem'
+                type: array
+            required:
+              - chart_data
+              - available_supply
+            type: object
+      summary: get market chart
+  /stats/charts/transactions:
+    get:
+      operationId: get_txs_chart
+      parameters: []
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: tx chart
+          schema:
+            properties:
+              chart_data:
+                items:
+                  $ref: '#/definitions/TransactionChartItem'
+                type: array
+            required:
+              - chart_data
+            type: object
+      summary: get txs chart
+  /tokens:
+    get:
+      operationId: get_tokens_list
+      parameters:
+        - in: query
+          name: q
+          type: string
+        - in: query
+          name: type
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: token
+          schema:
+            properties:
+              items:
+                items:
+                  $ref: '#/definitions/TokenInfo'
+                type: array
+              next_page_params:
+                example:
+                  holder_count: 2
+                  items_count: 50
+                  name: Apocryph
+                type: object
+            required:
+              - items
+              - next_page_params
+            type: object
+        '400':
+          description: bad input parameter
+      summary: get tokens list
+  '/tokens/{address_hash}':
+    get:
+      operationId: get_token
+      parameters:
+        - description: Address hash
+          in: path
+          name: address_hash
+          pattern: '^0x([A-Fa-f0-9]{40})$'
+          required: true
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: token
+          schema:
+            $ref: '#/definitions/TokenInfo'
+        '400':
+          description: bad input parameter
+      summary: get token info
+  '/tokens/{address_hash}/counters':
+    get:
+      operationId: get_token_counters
+      parameters:
+        - description: Address hash
+          in: path
+          name: address_hash
+          pattern: '^0x([A-Fa-f0-9]{40})$'
+          required: true
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: token
+          schema:
+            $ref: '#/definitions/TokenCounters'
+        '400':
+          description: bad input parameter
+      summary: get token holders
+  '/tokens/{address_hash}/holders':
+    get:
+      operationId: get_token_holders
+      parameters:
+        - description: Address hash
+          in: path
+          name: address_hash
+          pattern: '^0x([A-Fa-f0-9]{40})$'
+          required: true
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: token
+          schema:
+            properties:
+              items:
+                items:
+                  $ref: '#/definitions/Holder'
+                type: array
+              next_page_params:
+                example:
+                  items_count: 2
+                  value: 7900123123
+                type: object
+            required:
+              - items
+              - next_page_params
+            type: object
+        '400':
+          description: bad input parameter
+      summary: get token holders
+  '/tokens/{address_hash}/instances':
+    get:
+      operationId: get_nft_instances
+      parameters:
+        - description: Address hash
+          in: path
+          name: address_hash
+          pattern: '^0x([A-Fa-f0-9]{40})$'
+          required: true
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: token
+          schema:
+            properties:
+              items:
+                items:
+                  $ref: '#/definitions/NFTInstance'
+                type: array
+              next_page_params:
+                example:
+                  unique_token: 97464
+                type: object
+            required:
+              - items
+              - next_page_params
+            type: object
+        '400':
+          description: bad input parameter
+      summary: get NFT instances
+  '/tokens/{address_hash}/instances/{id}':
+    get:
+      operationId: get_nft_instance
+      parameters:
+        - description: Address hash
+          in: path
+          name: address_hash
+          pattern: '^0x([A-Fa-f0-9]{40})$'
+          required: true
+          type: string
+        - description: integer id
+          in: path
+          name: id
+          required: true
+          type: integer
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: token
+          schema:
+            $ref: '#/definitions/NFTInstance'
+        '400':
+          description: bad input parameter
+      summary: get NFT instance by id
+  '/tokens/{address_hash}/instances/{id}/transfers':
+    get:
+      operationId: get_nft_instance_transfers
+      parameters:
+        - description: Address hash
+          in: path
+          name: address_hash
+          pattern: '^0x([A-Fa-f0-9]{40})$'
+          required: true
+          type: string
+        - description: integer id
+          in: path
+          name: id
+          required: true
+          type: integer
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: token
+          schema:
+            properties:
+              items:
+                items:
+                  $ref: '#/definitions/TokenTransfer'
+                type: array
+              next_page_params:
+                example:
+                  block_number: 27736955
+                  index: 61
+                  items_count: 2
+                type: object
+            required:
+              - items
+              - next_page_params
+            type: object
+        '400':
+          description: bad input parameter
+      summary: get transfers of NFT instance
+  '/tokens/{address_hash}/instances/{id}/transfers-count':
+    get:
+      operationId: get_nft_instance_transfers_count
+      parameters:
+        - description: Address hash
+          in: path
+          name: address_hash
+          pattern: '^0x([A-Fa-f0-9]{40})$'
+          required: true
+          type: string
+        - description: integer id
+          in: path
+          name: id
+          required: true
+          type: integer
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: token
+          schema:
+            properties:
+              transfers_count:
+                example: 10
+                items:
+                  $ref: '#/definitions/TokenTransfer'
+                type: integer
+            required:
+              - transfers_count
+            type: object
+        '400':
+          description: bad input parameter
+      summary: get transfers count of NFT instance
+  '/tokens/{address_hash}/token-transfers':
+    get:
+      operationId: get_token_token_transfers
+      parameters:
+        - description: Address hash
+          in: path
+          name: address_hash
+          pattern: '^0x([A-Fa-f0-9]{40})$'
+          required: true
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: token
+          schema:
+            properties:
+              items:
+                items:
+                  $ref: '#/definitions/TokenTransfer'
+                type: array
+              next_page_params:
+                example:
+                  block_number: 27736955
+                  index: 61
+                  items_count: 2
+                type: object
+            required:
+              - items
+              - next_page_params
+            type: object
+        '400':
+          description: bad input parameter
+      summary: get token token transfers
+  /transactions:
+    get:
+      operationId: get_txs
+      parameters:
+        - in: query
+          name: filter
+          type: string
+        - in: query
+          name: type
+          type: string
+        - in: query
+          name: method
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: block
+          schema:
+            properties:
+              items:
+                items:
+                  $ref: '#/definitions/Transaction'
+                type: array
+              next_page_params:
+                example:
+                  block_number: 27170298
+                  filter: validated
+                  index: 0
+                  items_count: 50
+                  type: token_transfer
+                type: object
+            required:
+              - items
+              - next_page_params
+            type: object
+        '400':
+          description: bad input parameter
+      summary: get txs
+  '/transactions/{transaction_hash}':
+    get:
+      operationId: get_tx
+      parameters:
+        - description: Transaction hash
+          in: path
+          name: transaction_hash
+          pattern: '^0x([A-Fa-f0-9]{64})$'
+          required: true
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: tx info
+          schema:
+            $ref: '#/definitions/Transaction'
+        '400':
+          description: bad input parameter
+      summary: get tx info
+  '/transactions/{transaction_hash}/internal-transactions':
+    get:
+      operationId: get_internal_txs
+      parameters:
+        - description: Transaction hash
+          in: path
+          name: transaction_hash
+          pattern: '^0x([A-Fa-f0-9]{64})$'
+          required: true
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: internal txs
+          schema:
+            properties:
+              items:
+                items:
+                  $ref: '#/definitions/InternalTransaction'
+                type: array
+              next_page_params:
+                example:
+                  block_number: 27350206
+                  index: 1
+                  items_count: 50
+                  transaction_hash: >-
+                    0xa3b401d6f3124c9d1528cd8d4b692f523d86fd88e48c391ffe9c67e4436ae5ca
+                  transaction_index: 0
+                type: object
+            required:
+              - items
+              - next_page_params
+            type: object
+        '400':
+          description: bad input parameter
+      summary: get internal txs
+  '/transactions/{transaction_hash}/logs':
+    get:
+      operationId: get_logs
+      parameters:
+        - description: Transaction hash
+          in: path
+          name: transaction_hash
+          pattern: '^0x([A-Fa-f0-9]{64})$'
+          required: true
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: internal txs
+          schema:
+            properties:
+              items:
+                items:
+                  $ref: '#/definitions/Log'
+                type: array
+              next_page_params:
+                example:
+                  index: 0
+                  items_count: 50
+                  transaction_hash: >-
+                    0xa3b401d6f3124c9d1528cd8d4b692f523d86fd88e48c391ffe9c67e4436ae5ca
+                type: object
+            required:
+              - items
+              - next_page_params
+            type: object
+        '400':
+          description: bad input parameter
+      summary: get logs
+  '/transactions/{transaction_hash}/raw-trace':
+    get:
+      operationId: get_raw_trace
+      parameters:
+        - description: Transaction hash
+          in: path
+          name: transaction_hash
+          pattern: '^0x([A-Fa-f0-9]{64})$'
+          required: true
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: raw trace
+          schema:
+            items:
+              $ref: '#/definitions/RawTrace'
+            type: array
+        '400':
+          description: bad input parameter
+      summary: get raw trace
+  '/transactions/{transaction_hash}/state-changes':
+    get:
+      operationId: get_state_changes
+      parameters:
+        - description: Transaction hash
+          in: path
+          name: transaction_hash
+          pattern: '^0x([A-Fa-f0-9]{64})$'
+          required: true
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: state changes
+          schema:
+            items:
+              $ref: '#/definitions/StateChange'
+            type: array
+        '400':
+          description: bad input parameter
+      summary: get state changes
+  '/transactions/{transaction_hash}/token-transfers':
+    get:
+      operationId: get_token_transfers
+      parameters:
+        - description: Transaction hash
+          in: path
+          name: transaction_hash
+          pattern: '^0x([A-Fa-f0-9]{64})$'
+          required: true
+          type: string
+        - in: query
+          name: type
+          type: string
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: token transfers
+          schema:
+            properties:
+              items:
+                items:
+                  $ref: '#/definitions/TokenTransfer'
+                type: array
+              next_page_params:
+                example:
+                  block_number: 27350206
+                  index: 1
+                  items_count: 50
+                  transaction_hash: >-
+                    0xa3b401d6f3124c9d1528cd8d4b692f523d86fd88e48c391ffe9c67e4436ae5ca
+                type: object
+            required:
+              - items
+              - next_page_params
+            type: object
+        '400':
+          description: bad input parameter
+      summary: get token transfers
+schemes:
+  - http
+swagger: '2.0'
+x-components:
+  parameters:
+    addressHash:
+      description: Address hash
+      in: path
+      name: address_hash
+      pattern: '^0x([A-Fa-f0-9]{40})$'
+      required: true
+      type: string
+    addressName:
+      description: the name of address in watchlist
+      in: query
+      name: address_name
+      required: true
+      schema:
+        maxLength: 256
+        type: string
+    blockNumberOrHash:
+      description: Block number or hash
+      in: path
+      name: block_number_or_hash
+      required: true
+      type: string
+    id:
+      description: integer id
+      in: path
+      name: id
+      required: true
+      type: integer
+    transactionHash:
+      description: Transaction hash
+      in: path
+      name: transaction_hash
+      pattern: '^0x([A-Fa-f0-9]{64})$'
+      required: true
+      type: string
+

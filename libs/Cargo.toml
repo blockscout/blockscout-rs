@@ -6,4 +6,5 @@ members = [
     "display-bytes",
     "mismatch",
     "solidity-metadata",
+    "blockscout-client",
 ]
