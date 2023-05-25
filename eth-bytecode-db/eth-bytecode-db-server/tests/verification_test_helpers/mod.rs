@@ -348,16 +348,16 @@ pub mod test_cases {
         .await;
 
         let (full_match_test_data, partial_match_test_data) = {
-            let mut test_data = test_input_data::basic(source_type, MatchType::Partial);
-            let partial_match_test_data = test_data.clone();
-            test_data.set_creation_input_metadata_hash(
+            let partial_match_test_data = test_input_data::basic(source_type, MatchType::Partial);
+            let mut full_match_test_data = test_input_data::basic(source_type, MatchType::Full);
+            full_match_test_data.set_creation_input_metadata_hash(
                 "12345678901234567890123456789012345678901234567890123456789012345678",
             );
-            test_data.add_source_file(
+            full_match_test_data.add_source_file(
                 "additional_file".to_string(),
                 "additional_content".to_string(),
             );
-            (test_data, partial_match_test_data)
+            (full_match_test_data, partial_match_test_data)
         };
         let full_match_creation_input = full_match_test_data.creation_input().unwrap();
 

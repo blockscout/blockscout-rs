@@ -8,7 +8,7 @@ use sea_orm::{
     entity::prelude::*, ConnectionTrait, FromQueryResult, QueryOrder, QuerySelect, Statement,
 };
 
-pub async fn find_partial_match_contracts<C>(
+pub async fn find_match_contracts<C>(
     db: &C,
     remote: &BytecodeRemote,
 ) -> Result<Vec<MatchContract>, anyhow::Error>

@@ -1,4 +1,5 @@
-use super::{find_partial_match_contracts, BytecodeRemote, MatchContract};
+use super::{matches::find_match_contracts, BytecodeRemote, MatchContract};
+use crate::verification::MatchType;
 use sea_orm::ConnectionTrait;
 
 pub async fn find_contract<C>(
@@ -8,15 +9,14 @@ pub async fn find_contract<C>(
 where
     C: ConnectionTrait,
 {
-    // let full_matches = find_full_match_contract(db, remote).await?;
-    // if !full_matches.is_empty() {
-    //     return Ok(full_matches);
-    // };
+    let mut matches = find_match_contracts(db, remote).await?;
+    // If there is at least full match, we do not return any partially matched contract.
+    if matches
+        .iter()
+        .any(|source| source.match_type == MatchType::Full)
+    {
+        matches.retain(|source| source.match_type == MatchType::Full);
+    }
 
-    let partial_matches = find_partial_match_contracts(db, remote).await?;
-    if !partial_matches.is_empty() {
-        return Ok(partial_matches);
-    };
-
-    Ok(vec![])
+    Ok(matches)
 }
