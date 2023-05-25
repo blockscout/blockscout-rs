@@ -102,3 +102,25 @@ async fn test_verify_same_source_twice(service: MockSolidityVerifierService) {
     )
     .await;
 }
+
+#[rstest]
+#[tokio::test]
+#[timeout(std::time::Duration::from_secs(60))]
+#[ignore = "Needs database to run"]
+async fn test_search_returns_full_matches_only_if_any() {
+    let default_request = VerifySolidityStandardJsonRequest {
+        bytecode: "".to_string(),
+        bytecode_type: BytecodeType::CreationInput.into(),
+        compiler_version: "".to_string(),
+        input: "".to_string(),
+        metadata: None,
+    };
+    let source_type = verification::SourceType::Solidity;
+    test_cases::test_search_returns_full_matches_only_if_any::<MockSolidityVerifierService, _>(
+        TEST_SUITE_NAME,
+        ROUTE,
+        default_request,
+        source_type,
+    )
+    .await;
+}

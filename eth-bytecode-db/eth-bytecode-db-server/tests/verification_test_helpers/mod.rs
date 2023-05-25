@@ -331,4 +331,107 @@ pub mod test_cases {
             "Sources returned on verification and search differ"
         );
     }
+
+    pub async fn test_search_returns_full_matches_only_if_any<Service, Request>(
+        test_suite_name: &str,
+        route: &str,
+        verification_request: Request,
+        source_type: SourceType,
+    ) where
+        Service: Default + VerifierService<smart_contract_verifier_v2::VerifyResponse>,
+        Request: Serialize,
+    {
+        let db = init_db(
+            test_suite_name,
+            "test_search_returns_full_matches_only_if_any",
+        )
+        .await;
+
+        let (full_match_test_data, partial_match_test_data) = {
+            let mut test_data = test_input_data::basic(source_type, MatchType::Partial);
+            let partial_match_test_data = test_data.clone();
+            test_data.set_creation_input_metadata_hash(
+                "12345678901234567890123456789012345678901234567890123456789012345678",
+            );
+            test_data.add_source_file(
+                "additional_file".to_string(),
+                "additional_content".to_string(),
+            );
+            (test_data, partial_match_test_data)
+        };
+        let full_match_creation_input = full_match_test_data.creation_input().unwrap();
+
+        let db_url = db.db_url();
+
+        let verifier_addr =
+            init_verifier_server(Service::default(), full_match_test_data.verifier_response).await;
+        let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
+        let _response: eth_bytecode_db_v2::VerifyResponse = reqwest::Client::new()
+            .post(eth_bytecode_db_base.join(route).unwrap())
+            .json(&verification_request)
+            .send()
+            .await
+            .expect("Failed to send verification request")
+            .json()
+            .await
+            .expect("Verification response deserialization failed");
+
+        let verifier_addr = init_verifier_server(
+            Service::default(),
+            partial_match_test_data.verifier_response,
+        )
+        .await;
+        let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
+        let _response: eth_bytecode_db_v2::VerifyResponse = reqwest::Client::new()
+            .post(eth_bytecode_db_base.join(route).unwrap())
+            .json(&verification_request)
+            .send()
+            .await
+            .expect("Failed to send verification request")
+            .json()
+            .await
+            .expect("Verification response deserialization failed");
+
+        let creation_input_search_response: eth_bytecode_db_v2::SearchSourcesResponse = {
+            let request = {
+                eth_bytecode_db_v2::SearchSourcesRequest {
+                    bytecode: full_match_creation_input,
+                    bytecode_type: eth_bytecode_db_v2::BytecodeType::CreationInput.into(),
+                }
+            };
+
+            let response = reqwest::Client::new()
+                .post(eth_bytecode_db_base.join(DB_SEARCH_ROUTE).unwrap())
+                .json(&request)
+                .send()
+                .await
+                .expect("Failed to send creation input search request");
+            // Assert that status code is success
+            if !response.status().is_success() {
+                let status = response.status();
+                let message = response.text().await.expect("Read body as text");
+                panic!(
+                    "Creation input search: invalid status code (success expected). Status: {status}. Message: {message}"
+                )
+            }
+            response
+                .json()
+                .await
+                .expect("Creation input search response deserialization failed")
+        };
+
+        assert_eq!(
+            1,
+            creation_input_search_response.sources.len(),
+            "Invalid number of sources returned"
+        );
+        assert_eq!(
+            full_match_test_data
+                .eth_bytecode_db_response
+                .source
+                .unwrap(),
+            creation_input_search_response.sources[0],
+            "Sources returned on verification and search differ"
+        );
+    }
 }
