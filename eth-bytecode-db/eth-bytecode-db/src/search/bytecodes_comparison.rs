@@ -254,7 +254,7 @@ mod tests {
             id: 0,
             part_type: PartType::Main,
             data: hex::decode(DEFAULT_MAIN).unwrap(),
-            data_text: None,
+            data_text: DEFAULT_MAIN.to_string(),
             created_at: Default::default(),
             updated_at: Default::default(),
         };
@@ -271,7 +271,7 @@ mod tests {
             id: 0,
             part_type: PartType::Metadata,
             data: hex::decode(DEFAULT_META).unwrap(),
-            data_text: None,
+            data_text: DEFAULT_META.to_string(),
             created_at: Default::default(),
             updated_at: Default::default(),
         };
@@ -312,7 +312,7 @@ mod tests {
                     id: i as i64,
                     part_type,
                     data: hex::decode(bytecode).unwrap(),
-                    data_text: None,
+                    data_text: bytecode.to_string(),
                     created_at: Default::default(),
                     updated_at: Default::default(),
                 }
