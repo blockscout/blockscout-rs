@@ -7,12 +7,6 @@ pub struct Migration;
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let sql = r#"
-            ALTER TABLE "sources"
-            ALTER COLUMN "raw_creation_input_text" SET NOT NULL;
-
-            ALTER TABLE "sources"
-            ALTER COLUMN "raw_deployed_bytecode_text" SET NOT NULL;
-
             ALTER TABLE "parts"
             ALTER COLUMN "data_text" SET NOT NULL;
         "#;
@@ -21,12 +15,6 @@ impl MigrationTrait for Migration {
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let sql = r#"
-            ALTER TABLE "sources"
-            ALTER COLUMN "raw_creation_input_text" DROP NOT NULL;
-
-            ALTER TABLE "sources"
-            ALTER COLUMN "raw_deployed_bytecode_text" DROP NOT NULL;
-
             ALTER TABLE "parts"
             ALTER COLUMN "data_text" DROP NOT NULL;
         "#;

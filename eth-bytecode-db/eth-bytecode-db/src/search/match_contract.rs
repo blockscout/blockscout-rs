@@ -144,8 +144,6 @@ mod tests {
                 .unwrap(),
             raw_deployed_bytecode: hex::decode(format!("{NUMBER_MAIN_PART}{NUMBER_META_PART}"))
                 .unwrap(),
-            raw_creation_input_text: None,
-            raw_deployed_bytecode_text: None,
             created_at: Default::default(),
             updated_at: Default::default(),
             file_ids_hash: Default::default(),

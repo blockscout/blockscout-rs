@@ -23,10 +23,6 @@ pub struct Model {
     #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
     pub raw_deployed_bytecode: Vec<u8>,
     pub file_ids_hash: Uuid,
-    #[sea_orm(column_type = "Text", nullable)]
-    pub raw_creation_input_text: Option<String>,
-    #[sea_orm(column_type = "Text", nullable)]
-    pub raw_deployed_bytecode_text: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
