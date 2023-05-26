@@ -34,6 +34,36 @@ impl TestInputData {
             .collect::<Vec<_>>();
         Some(DisplayBytes::from(bytes).to_string())
     }
+
+    pub fn set_creation_input_metadata_hash(&mut self, metadata_hash: &str) {
+        let in_bytes = hex::decode(metadata_hash).expect("Invalid metadata hash");
+        assert_eq!(34, in_bytes.len(), "Invalid metadata hash length");
+        self.verifier_response
+            .extra_data
+            .as_mut()
+            .expect("creation input is missing")
+            .local_creation_input_parts
+            .iter_mut()
+            .for_each(|part| {
+                (part.r#type == "meta")
+                    .then(|| part.data.replace_range(18..18 + 68, metadata_hash));
+            });
+    }
+
+    pub fn add_source_file(&mut self, file_name: String, content: String) {
+        self.verifier_response
+            .source
+            .as_mut()
+            .unwrap()
+            .source_files
+            .insert(file_name.clone(), content.clone());
+        self.eth_bytecode_db_response
+            .source
+            .as_mut()
+            .unwrap()
+            .source_files
+            .insert(file_name, content);
+    }
 }
 
 pub fn basic(source_type: SourceType, match_type: MatchType) -> TestInputData {

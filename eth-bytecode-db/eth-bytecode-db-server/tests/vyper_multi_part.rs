@@ -108,3 +108,27 @@ async fn test_verify_same_source_twice(service: MockVyperVerifierService) {
     )
     .await;
 }
+
+#[rstest]
+#[tokio::test]
+#[timeout(std::time::Duration::from_secs(60))]
+#[ignore = "Needs database to run"]
+async fn test_search_returns_full_matches_only_if_any() {
+    let default_request = VerifyVyperMultiPartRequest {
+        bytecode: "".to_string(),
+        bytecode_type: BytecodeType::CreationInput.into(),
+        compiler_version: "".to_string(),
+        evm_version: None,
+        source_files: Default::default(),
+        optimizations: None,
+        metadata: None,
+    };
+    let source_type = verification::SourceType::Vyper;
+    test_cases::test_search_returns_full_matches_only_if_any::<MockVyperVerifierService, _>(
+        TEST_SUITE_NAME,
+        ROUTE,
+        default_request,
+        source_type,
+    )
+    .await;
+}
