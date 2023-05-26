@@ -91,6 +91,7 @@ mod tests {
     use ethers_solc::{artifacts::Source, CompilerInput};
     use std::{
         collections::{BTreeMap, HashSet},
+        env::temp_dir,
         path::PathBuf,
         str::FromStr,
         sync::Arc,
@@ -102,7 +103,7 @@ mod tests {
         COMPILERS
             .get_or_init(|| async {
                 let url = DEFAULT_VYPER_COMPILER_LIST.try_into().expect("Getting url");
-                let fetcher = ListFetcher::new(url, PathBuf::from("compilers"), None, None)
+                let fetcher = ListFetcher::new(url, temp_dir(), None, None)
                     .await
                     .expect("Fetch releases");
                 let threads_semaphore = Arc::new(Semaphore::new(4));
