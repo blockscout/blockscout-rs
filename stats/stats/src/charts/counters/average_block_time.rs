@@ -76,6 +76,6 @@ mod tests {
     #[ignore = "needs database to run"]
     async fn update_average_block_time() {
         let counter = AverageBlockTime::default();
-        simple_test_counter("update_average_block_time", counter, "21600.125").await;
+        simple_test_counter("update_average_block_time", counter, "802200.0833333334").await;
     }
 }

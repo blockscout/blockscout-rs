@@ -1,10 +1,14 @@
 use crate::{
-    charts::{insert::DateValue, updater::ChartPartialUpdater},
+    charts::{
+        insert::DateValue,
+        updater::{split_update, ChartPartialUpdater},
+    },
     UpdateError,
 };
 use async_trait::async_trait;
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
+use sea_orm::{prelude::*, DbBackend, Statement};
 
 #[derive(Default, Debug)]
 pub struct NewContracts {}
@@ -16,45 +20,45 @@ impl ChartPartialUpdater for NewContracts {
         blockscout: &DatabaseConnection,
         last_row: Option<DateValue>,
     ) -> Result<Vec<DateValue>, UpdateError> {
-        let stmnt = match last_row {
-            Some(row) => Statement::from_sql_and_values(
+        let query_maker = |from_: NaiveDate, to_: NaiveDate| {
+            Statement::from_sql_and_values(
                 DbBackend::Postgres,
-                r#"SELECT
-                    DATE(b."timestamp") as date,
-                    COUNT(*)::TEXT as value
-                FROM addresses a
-                    LEFT JOIN transactions t ON a.hash = t.created_contract_address_hash
-                    LEFT JOIN internal_transactions it ON a.hash = it.created_contract_address_hash
-                    JOIN blocks b ON b.hash = it.block_hash OR b.hash = t.block_hash
-                WHERE
-                    a.contract_code NOTNULL AND
-                    b.consensus = true AND
-                    DATE(b.timestamp) > $1
-                GROUP BY DATE(b."timestamp")"#,
-                vec![row.date.into()],
-            ),
-            None => Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"SELECT
-                    DATE(b."timestamp") as date,
-                    COUNT(*)::TEXT as value
-                FROM addresses a
-                    LEFT JOIN transactions t ON a.hash = t.created_contract_address_hash
-                    LEFT JOIN internal_transactions it ON a.hash = it.created_contract_address_hash
-                    JOIN blocks b ON b.hash = it.block_hash OR b.hash = t.block_hash
-                WHERE
-                    a.contract_code NOTNULL AND
-                    b.consensus = true
-                GROUP BY DATE(b."timestamp")"#,
-                vec![],
-            ),
+                r#"select day as date, count(*)::text as value
+                from (
+                    select 
+                        distinct txns_plus_internal_txns.hash,
+                        txns_plus_internal_txns.day
+                    from (
+                        select
+                            t.created_contract_address_hash as hash,
+                            b.timestamp::date as day
+                        FROM transactions t
+                            JOIN blocks b ON b.hash = t.block_hash
+                        where
+                            t.created_contract_address_hash notnull and
+                            b.consensus = true and
+                            b.timestamp::date < $2 and
+                            b.timestamp::date >= $1
+                        union
+                        select
+                            it.created_contract_address_hash as hash,
+                            b.timestamp::date as day
+                        FROM internal_transactions it
+                            JOIN blocks b ON b.hash = it.block_hash
+                        where
+                            it.created_contract_address_hash notnull and
+                            b.consensus = true and
+                            b.timestamp::date < $2 and
+                            b.timestamp::date >= $1
+                    ) txns_plus_internal_txns
+                ) sub
+                group by sub.day;
+                "#,
+                vec![from_.into(), to_.into()],
+            )
         };
 
-        let data = DateValue::find_by_statement(stmnt)
-            .all(blockscout)
-            .await
-            .map_err(UpdateError::BlockscoutDB)?;
-        Ok(data)
+        split_update(blockscout, last_row, query_maker).await
     }
 }
 
@@ -91,9 +95,13 @@ mod tests {
             "update_new_contracts",
             chart,
             vec![
-                ("2022-11-09", "2"),
-                ("2022-11-10", "3"),
-                ("2022-11-11", "2"),
+                ("2022-11-09", "3"),
+                ("2022-11-10", "6"),
+                ("2022-11-11", "8"),
+                ("2022-11-12", "2"),
+                ("2022-12-01", "2"),
+                ("2023-01-01", "1"),
+                ("2023-02-01", "1"),
             ],
         )
         .await;

@@ -69,6 +69,6 @@ mod tests {
     #[ignore = "needs database to run"]
     async fn update_total_txns() {
         let counter = TotalTxns::new(Default::default());
-        simple_test_counter("update_total_txns", counter, "22").await;
+        simple_test_counter("update_total_txns", counter, "47").await;
     }
 }

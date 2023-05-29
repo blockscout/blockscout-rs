@@ -7,7 +7,7 @@ pub async fn simple_test_chart(test_name: &str, chart: impl Chart, expected: Vec
     let _ = tracing_subscriber::fmt::try_init();
     let (db, blockscout) = init_db_all(test_name, None).await;
     chart.create(&db).await.unwrap();
-    fill_mock_blockscout_data(&blockscout, "2022-11-12").await;
+    fill_mock_blockscout_data(&blockscout, "2023-03-01").await;
 
     chart.update(&db, &blockscout, true).await.unwrap();
     get_chart_and_assert_eq(&db, &chart, &expected).await;
@@ -37,7 +37,7 @@ pub async fn simple_test_counter(test_name: &str, counter: impl Chart, expected:
     let _ = tracing_subscriber::fmt::try_init();
     let (db, blockscout) = init_db_all(test_name, None).await;
     counter.create(&db).await.unwrap();
-    fill_mock_blockscout_data(&blockscout, "2022-11-12").await;
+    fill_mock_blockscout_data(&blockscout, "2023-03-01").await;
 
     counter.update(&db, &blockscout, true).await.unwrap();
     get_counter_and_assert_eq(&db, &counter, expected).await;

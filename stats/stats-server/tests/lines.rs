@@ -19,7 +19,7 @@ async fn test_lines_ok() {
     let (_stats, blockscout) = init_db_all("test_lines_ok", Some(db_url.clone())).await;
     let stats_db_url = format!("{db_url}/test_lines_ok",);
     let blockscout_db_url = format!("{db_url}/test_lines_ok_blockscout",);
-    fill_mock_blockscout_data(&blockscout, "2022-11-11").await;
+    fill_mock_blockscout_data(&blockscout, "2023-03-01").await;
 
     let mut settings = Settings::default();
     settings.charts_config = PathBuf::from_str("../config/charts.toml").unwrap();
@@ -60,9 +60,9 @@ async fn test_lines_ok() {
         "txnsGrowth",
         "txnsSuccessRate",
         "newVerifiedContracts",
-        //"newContracts",
+        "newContracts",
         "verifiedContractsGrowth",
-        //"contractsGrowth",
+        "contractsGrowth",
     ] {
         let resp = client
             .get(format!("{base}/api/v1/lines/{line_name}"))
