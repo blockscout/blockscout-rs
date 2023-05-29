@@ -1,6 +1,6 @@
 use blockscout_db::entity::blocks;
 use chrono::NaiveDateTime;
-use sea_orm::{prelude::*, sea_query, ConnectionTrait, FromQueryResult, QuerySelect};
+use sea_orm::{prelude::*, sea_query, ConnectionTrait, FromQueryResult, QueryOrder, QuerySelect};
 mod dependent;
 mod full;
 mod partial;
@@ -50,6 +50,7 @@ where
         // however first block on Goerli for example has valid timestamp.
         // Therefore we filter on zero timestamp
         .filter(blocks::Column::Timestamp.ne(NaiveDateTime::default()))
+        .order_by_asc(blocks::Column::Number)
         .limit(1)
         .into_model::<MinDate>()
         .one(blockscout)
