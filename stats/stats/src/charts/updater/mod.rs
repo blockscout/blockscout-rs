@@ -51,7 +51,6 @@ where
         // Therefore we filter on zero timestamp
         .filter(blocks::Column::Timestamp.ne(NaiveDateTime::default()))
         .order_by_asc(blocks::Column::Number)
-        .limit(1)
         .into_model::<MinDate>()
         .one(blockscout)
         .await?;

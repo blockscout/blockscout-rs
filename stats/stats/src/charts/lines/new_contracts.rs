@@ -23,36 +23,36 @@ impl ChartPartialUpdater for NewContracts {
         let query_maker = |from_: NaiveDate, to_: NaiveDate| {
             Statement::from_sql_and_values(
                 DbBackend::Postgres,
-                r#"select day as date, count(*)::text as value
-                from (
-                    select 
-                        distinct txns_plus_internal_txns.hash,
+                r#"SELECT day AS date, COUNT(*)::text AS value
+                FROM (
+                    SELECT 
+                        DISTINCT ON (txns_plus_internal_txns.hash)
                         txns_plus_internal_txns.day
-                    from (
-                        select
-                            t.created_contract_address_hash as hash,
-                            b.timestamp::date as day
+                    FROM (
+                        SELECT
+                            t.created_contract_address_hash AS hash,
+                            b.timestamp::date AS day
                         FROM transactions t
                             JOIN blocks b ON b.hash = t.block_hash
-                        where
-                            t.created_contract_address_hash notnull and
-                            b.consensus = true and
-                            b.timestamp::date < $2 and
+                        WHERE
+                            t.created_contract_address_hash NOTNULL AND
+                            b.consensus = TRUE AND
+                            b.timestamp::date < $2 AND
                             b.timestamp::date >= $1
-                        union
-                        select
-                            it.created_contract_address_hash as hash,
-                            b.timestamp::date as day
+                        UNION
+                        SELECT
+                            it.created_contract_address_hash AS hash,
+                            b.timestamp::date AS day
                         FROM internal_transactions it
                             JOIN blocks b ON b.hash = it.block_hash
-                        where
-                            it.created_contract_address_hash notnull and
-                            b.consensus = true and
-                            b.timestamp::date < $2 and
+                        WHERE
+                            it.created_contract_address_hash NOTNULL AND
+                            b.consensus = TRUE AND
+                            b.timestamp::date < $2 AND
                             b.timestamp::date >= $1
                     ) txns_plus_internal_txns
                 ) sub
-                group by sub.day;
+                GROUP BY sub.day;
                 "#,
                 vec![from_.into(), to_.into()],
             )
