@@ -3,6 +3,7 @@ use super::{
     types::BytecodeRemote,
     MatchContract,
 };
+use crate::metrics;
 use entity::{bytecode_parts, bytecodes, parts};
 use sea_orm::{
     entity::prelude::*, ConnectionTrait, FromQueryResult, QueryOrder, QuerySelect, Statement,
@@ -15,9 +16,17 @@ pub async fn find_match_contracts<C>(
 where
     C: ConnectionTrait,
 {
+    let bytecode_type = remote.bytecode_type.to_string();
+    let label_values = &[bytecode_type.as_str()];
+
     let candidates = {
         let now = std::time::Instant::now();
-        let candidates = find_bytecode_candidates(db, remote).await?;
+        let candidates = {
+            let _timer = metrics::BYTECODE_CANDIDATES_SEARCH_TIME
+                .with_label_values(label_values)
+                .start_timer();
+            find_bytecode_candidates(db, remote).await?
+        };
         tracing::debug!(
             candidates_len = candidates.len(),
             elapsed = now.elapsed().as_secs_f64(),
@@ -25,7 +34,17 @@ where
         );
         candidates
     };
-    get_matches_by_candidates(db, candidates, remote).await
+    metrics::BYTECODE_CANDIDATES_COUNT
+        .with_label_values(label_values)
+        .observe(candidates.len() as f64);
+
+    let matches = {
+        let _timer = metrics::MATCHES_BY_CANDIDATES_GET_TIME
+            .with_label_values(label_values)
+            .start_timer();
+        get_matches_by_candidates(db, candidates, remote).await?
+    };
+    Ok(matches)
 }
 
 #[derive(Debug, FromQueryResult)]
