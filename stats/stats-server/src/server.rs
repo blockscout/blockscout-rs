@@ -68,13 +68,10 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
         Arc::new(UpdateService::new(db.clone(), blockscout, charts.clone()).await?);
 
     tokio::spawn(async move {
-        if let Some(force_update) = settings.force_update_on_start {
-            update_service
-                .clone()
-                .force_update_all_in_series(force_update)
-                .await;
-        }
-        update_service.run(settings.default_schedule);
+        let force_full = settings.force_update_on_start.unwrap_or_default();
+        update_service
+            .force_async_update_and_run(3, settings.default_schedule, force_full)
+            .await;
     });
 
     let read_service = Arc::new(ReadService::new(db, charts).await?);
