@@ -12,6 +12,7 @@ mod m20230508_114425_add_parts_data_text_column;
 mod m20230509_103951_add_trigger_parts_convert_data_to_text_value;
 mod m20230509_123604_duplicate_parts_existing_data_to_text_column;
 mod m20230509_132647_add_non_null_parts_data_text_column;
+mod m20230509_132648_add_parts_data_text_length_generated_column;
 mod m20230510_151046_add_search_speedup_indexes_on_parts_data_text;
 
 pub struct Migrator;
@@ -31,6 +32,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20230509_103951_add_trigger_parts_convert_data_to_text_value::Migration),
             Box::new(m20230509_123604_duplicate_parts_existing_data_to_text_column::Migration),
             Box::new(m20230509_132647_add_non_null_parts_data_text_column::Migration),
+            Box::new(m20230509_132648_add_parts_data_text_length_generated_column::Migration),
             Box::new(m20230510_151046_add_search_speedup_indexes_on_parts_data_text::Migration),
         ]
     }
