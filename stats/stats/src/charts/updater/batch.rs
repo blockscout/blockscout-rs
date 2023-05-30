@@ -1,4 +1,4 @@
-use super::{get_min_block_blockscout, get_min_date_blockscout, partial::get_last_row};
+use super::{get_last_row, get_min_block_blockscout, get_min_date_blockscout};
 use crate::{
     charts::{find_chart, insert::insert_data_many},
     Chart, DateValue, UpdateError,
@@ -9,9 +9,11 @@ use sea_orm::{DatabaseConnection, FromQueryResult, Statement, TransactionTrait};
 use std::time::Instant;
 
 #[async_trait]
-pub trait ChartSplitUpdater: Chart {
-    fn make_range_query(&self, from_: NaiveDate, to_: NaiveDate) -> Statement;
-    fn step_duration(&self) -> chrono::Duration;
+pub trait ChartBatchUpdater: Chart {
+    fn get_query(&self, from: NaiveDate, to: NaiveDate) -> Statement;
+    fn step_duration(&self) -> chrono::Duration {
+        chrono::Duration::days(30)
+    }
 
     async fn update_with_values(
         &self,
@@ -28,11 +30,11 @@ pub trait ChartSplitUpdater: Chart {
             .map_err(UpdateError::BlockscoutDB)?;
         let last_row = get_last_row(self, chart_id, min_blockscout_block, db, force_full).await?;
 
-        self.split_update(db, blockscout, last_row, chart_id, min_blockscout_block)
+        self.batch_update(db, blockscout, last_row, chart_id, min_blockscout_block)
             .await
     }
 
-    async fn split_update(
+    async fn batch_update(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
@@ -56,9 +58,9 @@ pub trait ChartSplitUpdater: Chart {
         let steps = generate_date_ranges(first_date, last_date, self.step_duration());
         let n = steps.len();
 
-        for (i, (from_, to_)) in steps.into_iter().enumerate() {
-            tracing::info!(from =? from_, to =? to_ , "run {}/{} step of split update", i + 1, n);
-            let query = self.make_range_query(from_, to_);
+        for (i, (from, to)) in steps.into_iter().enumerate() {
+            tracing::info!(from =? from, to =? to , "run {}/{} step of split update", i + 1, n);
+            let query = self.get_query(from, to);
             let now = Instant::now();
             let values = DateValue::find_by_statement(query)
                 .all(blockscout)

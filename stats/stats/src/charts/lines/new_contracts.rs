@@ -1,4 +1,4 @@
-use crate::{charts::updater::ChartSplitUpdater, UpdateError};
+use crate::{charts::updater::ChartBatchUpdater, UpdateError};
 use async_trait::async_trait;
 use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
@@ -8,12 +8,8 @@ use sea_orm::{prelude::*, DbBackend, Statement};
 pub struct NewContracts {}
 
 #[async_trait]
-impl ChartSplitUpdater for NewContracts {
-    fn step_duration(&self) -> chrono::Duration {
-        chrono::Duration::days(30)
-    }
-
-    fn make_range_query(&self, from_: NaiveDate, to_: NaiveDate) -> Statement {
+impl ChartBatchUpdater for NewContracts {
+    fn get_query(&self, from: NaiveDate, to: NaiveDate) -> Statement {
         Statement::from_sql_and_values(
             DbBackend::Postgres,
             r#"SELECT day AS date, COUNT(*)::text AS value
@@ -47,7 +43,7 @@ impl ChartSplitUpdater for NewContracts {
                 ) sub
                 GROUP BY sub.day;
                 "#,
-            vec![from_.into(), to_.into()],
+            vec![from.into(), to.into()],
         )
     }
 }
