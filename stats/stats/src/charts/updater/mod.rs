@@ -9,7 +9,7 @@ mod split;
 pub use dependent::{last_point, parse_and_growth, parse_and_sum, ChartDependentUpdater};
 pub use full::ChartFullUpdater;
 pub use partial::ChartPartialUpdater;
-pub use split::split_update;
+pub use split::ChartSplitUpdater;
 
 #[derive(FromQueryResult)]
 struct MinBlock {

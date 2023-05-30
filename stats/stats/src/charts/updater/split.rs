@@ -1,55 +1,92 @@
-use super::get_min_date_blockscout;
-use crate::{DateValue, UpdateError};
+use super::{get_min_block_blockscout, get_min_date_blockscout, partial::get_last_row};
+use crate::{
+    charts::{find_chart, insert::insert_data_many},
+    Chart, DateValue, UpdateError,
+};
+use async_trait::async_trait;
 use chrono::{Duration, NaiveDate, Utc};
 use sea_orm::{DatabaseConnection, FromQueryResult, Statement, TransactionTrait};
 use std::time::Instant;
 
-pub async fn split_update<F>(
-    blockscout: &DatabaseConnection,
-    last_row: Option<DateValue>,
-    query_maker: F,
-) -> Result<Vec<DateValue>, UpdateError>
-where
-    F: Fn(NaiveDate, NaiveDate) -> Statement,
-{
-    let txn = blockscout
-        .begin()
-        .await
-        .map_err(UpdateError::BlockscoutDB)?;
-    let first_date = match last_row {
-        Some(last_row) => last_row.date,
-        None => get_min_date_blockscout(&txn)
+#[async_trait]
+pub trait ChartSplitUpdater: Chart {
+    fn make_range_query(&self, from_: NaiveDate, to_: NaiveDate) -> Statement;
+    fn step_duration(&self) -> chrono::Duration;
+
+    async fn update_with_values(
+        &self,
+        db: &DatabaseConnection,
+        blockscout: &DatabaseConnection,
+        force_full: bool,
+    ) -> Result<(), UpdateError> {
+        let chart_id = find_chart(db, self.name())
             .await
-            .map(|time| time.date())
-            .map_err(UpdateError::BlockscoutDB)?,
-    };
-    let last_date = Utc::now().date_naive();
-
-    let steps = generate_date_ranges(first_date, last_date);
-    let n = steps.len();
-    let mut results = vec![];
-
-    for (i, (from_, to_)) in steps.into_iter().enumerate() {
-        tracing::info!(from =? from_, to =? to_ , "run {}/{} step of split update", i + 1, n);
-        let query = query_maker(from_, to_);
-        let now = Instant::now();
-        let data = DateValue::find_by_statement(query)
-            .all(blockscout)
+            .map_err(UpdateError::StatsDB)?
+            .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
+        let min_blockscout_block = get_min_block_blockscout(blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?;
-        results.extend(data);
-        let elapsed = now.elapsed();
-        tracing::info!(elapsed =? elapsed, "{}/{} step of split done", i + 1, n);
+        let last_row = get_last_row(self, chart_id, min_blockscout_block, db, force_full).await?;
+
+        self.split_update(db, blockscout, last_row, chart_id, min_blockscout_block)
+            .await
     }
-    Ok(results)
+
+    async fn split_update(
+        &self,
+        db: &DatabaseConnection,
+        blockscout: &DatabaseConnection,
+        last_row: Option<DateValue>,
+        chart_id: i32,
+        min_blockscout_block: i64,
+    ) -> Result<(), UpdateError> {
+        let txn = blockscout
+            .begin()
+            .await
+            .map_err(UpdateError::BlockscoutDB)?;
+        let first_date = match last_row {
+            Some(last_row) => last_row.date,
+            None => get_min_date_blockscout(&txn)
+                .await
+                .map(|time| time.date())
+                .map_err(UpdateError::BlockscoutDB)?,
+        };
+        let last_date = Utc::now().date_naive();
+
+        let steps = generate_date_ranges(first_date, last_date, self.step_duration());
+        let n = steps.len();
+
+        for (i, (from_, to_)) in steps.into_iter().enumerate() {
+            tracing::info!(from =? from_, to =? to_ , "run {}/{} step of split update", i + 1, n);
+            let query = self.make_range_query(from_, to_);
+            let now = Instant::now();
+            let values = DateValue::find_by_statement(query)
+                .all(blockscout)
+                .await
+                .map_err(UpdateError::BlockscoutDB)?
+                .into_iter()
+                .map(|value| value.active_model(chart_id, Some(min_blockscout_block)));
+            let elapsed = now.elapsed();
+            let found = values.len();
+            tracing::info!(found =? found, elapsed =? elapsed, "{}/{} step of split done", i + 1, n);
+            insert_data_many(db, values)
+                .await
+                .map_err(UpdateError::StatsDB)?;
+        }
+        Ok(())
+    }
 }
 
-fn generate_date_ranges(start: NaiveDate, end: NaiveDate) -> Vec<(NaiveDate, NaiveDate)> {
+fn generate_date_ranges(
+    start: NaiveDate,
+    end: NaiveDate,
+    step: Duration,
+) -> Vec<(NaiveDate, NaiveDate)> {
     let mut date_range = Vec::new();
     let mut current_date = start;
 
     while current_date < end {
-        let next_date = current_date + Duration::days(30);
+        let next_date = current_date + step;
         date_range.push((current_date, next_date));
         current_date = next_date;
     }
@@ -91,7 +128,7 @@ mod tests {
                 ],
             ),
         ] {
-            let actual = generate_date_ranges(from, to);
+            let actual = generate_date_ranges(from, to, Duration::days(30));
             assert_eq!(expected, actual);
         }
     }

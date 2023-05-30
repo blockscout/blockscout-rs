@@ -109,13 +109,19 @@ where
     C: ConnectionTrait,
     D: IntoIterator<Item = chart_data::ActiveModel> + Send + Sync,
 {
-    chart_data::Entity::insert_many(data)
-        .on_conflict(
-            sea_query::OnConflict::columns([chart_data::Column::ChartId, chart_data::Column::Date])
+    let mut data = data.into_iter().peekable();
+    if data.peek().is_some() {
+        chart_data::Entity::insert_many(data)
+            .on_conflict(
+                sea_query::OnConflict::columns([
+                    chart_data::Column::ChartId,
+                    chart_data::Column::Date,
+                ])
                 .update_column(chart_data::Column::Value)
                 .to_owned(),
-        )
-        .exec(db)
-        .await?;
+            )
+            .exec(db)
+            .await?;
+    }
     Ok(())
 }

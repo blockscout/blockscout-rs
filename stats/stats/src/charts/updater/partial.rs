@@ -56,7 +56,7 @@ struct SyncInfo {
     pub min_blockscout_block: Option<i64>,
 }
 
-async fn get_last_row<C>(
+pub async fn get_last_row<C>(
     chart: &C,
     chart_id: i32,
     min_blockscout_block: i64,

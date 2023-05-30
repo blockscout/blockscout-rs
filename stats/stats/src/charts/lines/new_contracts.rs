@@ -1,10 +1,4 @@
-use crate::{
-    charts::{
-        insert::DateValue,
-        updater::{split_update, ChartPartialUpdater},
-    },
-    UpdateError,
-};
+use crate::{charts::updater::ChartSplitUpdater, UpdateError};
 use async_trait::async_trait;
 use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
@@ -14,16 +8,15 @@ use sea_orm::{prelude::*, DbBackend, Statement};
 pub struct NewContracts {}
 
 #[async_trait]
-impl ChartPartialUpdater for NewContracts {
-    async fn get_values(
-        &self,
-        blockscout: &DatabaseConnection,
-        last_row: Option<DateValue>,
-    ) -> Result<Vec<DateValue>, UpdateError> {
-        let query_maker = |from_: NaiveDate, to_: NaiveDate| {
-            Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"SELECT day AS date, COUNT(*)::text AS value
+impl ChartSplitUpdater for NewContracts {
+    fn step_duration(&self) -> chrono::Duration {
+        chrono::Duration::days(30)
+    }
+
+    fn make_range_query(&self, from_: NaiveDate, to_: NaiveDate) -> Statement {
+        Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            r#"SELECT day AS date, COUNT(*)::text AS value
                 FROM (
                     SELECT 
                         DISTINCT ON (txns_plus_internal_txns.hash)
@@ -54,11 +47,8 @@ impl ChartPartialUpdater for NewContracts {
                 ) sub
                 GROUP BY sub.day;
                 "#,
-                vec![from_.into(), to_.into()],
-            )
-        };
-
-        split_update(blockscout, last_row, query_maker).await
+            vec![from_.into(), to_.into()],
+        )
     }
 }
 
