@@ -35,6 +35,10 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
         "2022-11-11T15:00:00",
         "2022-11-11T23:59:59",
         "2022-11-12T00:00:00",
+        "2022-12-01T10:00:00",
+        "2023-01-01T10:00:00",
+        "2023-02-01T10:00:00",
+        "2023-03-01T10:00:00",
     ]
     .into_iter()
     .filter(|val| {
@@ -56,7 +60,7 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
         .await
         .unwrap();
 
-    let contracts = (21..24)
+    let contracts = (21..40)
         .map(|seed| mock_address(seed, true, false))
         .collect::<Vec<_>>();
     addresses::Entity::insert_many(contracts.clone())
@@ -64,7 +68,7 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
         .await
         .unwrap();
 
-    let verified_contracts = (31..34)
+    let verified_contracts = (41..44)
         .map(|seed| mock_address(seed, true, true))
         .collect::<Vec<_>>();
     addresses::Entity::insert_many(verified_contracts.clone())

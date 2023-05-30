@@ -69,6 +69,6 @@ mod tests {
     #[ignore = "needs database to run"]
     async fn update_total_native_coin_transfers() {
         let counter = TotalNativeCoinTransfers::default();
-        simple_test_counter("update_total_native_coin_transfers", counter, "11").await;
+        simple_test_counter("update_total_native_coin_transfers", counter, "17").await;
     }
 }

@@ -95,11 +95,11 @@ mod tests {
         .await
         .unwrap();
 
-        fill_mock_blockscout_data(&blockscout, "2022-11-11").await;
+        fill_mock_blockscout_data(&blockscout, "2023-03-01").await;
 
         updater.update(&db, &blockscout, true).await.unwrap();
         let data = get_counters(&db).await.unwrap();
-        assert_eq!("8", data[updater.name()].value);
+        assert_eq!("13", data[updater.name()].value);
     }
 
     #[tokio::test]
@@ -137,10 +137,10 @@ mod tests {
         .await
         .unwrap();
 
-        fill_mock_blockscout_data(&blockscout, "2022-11-11").await;
+        fill_mock_blockscout_data(&blockscout, "2023-03-01").await;
 
         updater.update(&db, &blockscout, true).await.unwrap();
         let data = get_counters(&db).await.unwrap();
-        assert_eq!("8", data[updater.name()].value);
+        assert_eq!("13", data[updater.name()].value);
     }
 }
