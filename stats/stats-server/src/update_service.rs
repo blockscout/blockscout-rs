@@ -36,7 +36,7 @@ impl UpdateService {
         self: Arc<Self>,
         concurrent_tasks: usize,
         default_schedule: Schedule,
-        force_full: bool,
+        force_update_on_start: Option<bool>,
     ) {
         let semaphore = Arc::new(tokio::sync::Semaphore::new(concurrent_tasks));
         let tasks = self
@@ -45,41 +45,20 @@ impl UpdateService {
             .iter()
             .map(|chart| {
                 let this = self.clone();
+                let chart = chart.clone();
                 let default_schedule = default_schedule.clone();
                 let sema = semaphore.clone();
-                let task = self.clone().update(chart.clone(), force_full);
                 async move {
                     let _permit = sema.acquire().await.expect("failed to acquire permit");
-                    task.await;
-                    this.spawn_chart_updater(chart.clone(), &default_schedule);
+                    if let Some(force_full) = force_update_on_start {
+                        this.clone().update(chart.clone(), force_full).await
+                    };
+                    this.spawn_chart_updater(chart, &default_schedule);
                 }
             })
             .collect::<Vec<_>>();
         futures::future::join_all(tasks).await;
         tracing::info!("initial updating is done");
-    }
-
-    // pub async fn force_update_all_concurrent(self: Arc<Self>, force_full: bool) {
-    //     let tasks = self.charts.charts.iter().map(|chart| {
-    //         let this = self.clone();
-    //         let chart = chart.clone();
-    //         tokio::spawn(async move { this.update(chart, force_full).await })
-    //     });
-    //     futures::future::join_all(tasks).await;
-    // }
-
-    // pub async fn force_update_all_in_series(self: Arc<Self>, force_full: bool) {
-    //     for chart in self.charts.charts.iter() {
-    //         let this = self.clone();
-    //         let chart_other = chart.clone();
-    //         let _ = tokio::spawn(async move { this.update(chart_other, force_full).await }).await;
-    //     }
-    // }
-
-    pub fn run(self: Arc<Self>, default_schedule: Schedule) {
-        for chart in self.charts.charts.iter() {
-            self.spawn_chart_updater(chart.to_owned(), &default_schedule)
-        }
     }
 
     fn spawn_chart_updater(self: &Arc<Self>, chart: ArcChart, default_schedule: &Schedule) {
