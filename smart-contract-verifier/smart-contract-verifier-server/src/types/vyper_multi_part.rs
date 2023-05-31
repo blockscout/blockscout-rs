@@ -70,10 +70,7 @@ impl TryFrom<VerifyVyperMultiPartRequestWrapper> for VerificationRequest {
             Some(version) if version != "default" => {
                 Some(EvmVersion::from_str(&version).map_err(tonic::Status::invalid_argument)?)
             }
-            _ => {
-                // default evm version for vyper
-                Some(EvmVersion::Istanbul)
-            }
+            _ => None,
         };
 
         Ok(Self {
@@ -130,7 +127,7 @@ mod tests {
     }
 
     #[test]
-    // 'default' should result in "EvmVersion::Istanbul"
+    // 'default' should result in None
     fn default_evm_version() {
         let request = VerifyVyperMultiPartRequest {
             bytecode: "".to_string(),
@@ -148,9 +145,8 @@ mod tests {
                 .expect("Try_into verification request failed");
 
         assert_eq!(
-            Some(EvmVersion::Istanbul),
-            verification_request.content.evm_version,
-            "'default' should result in 'EvmVersion::Istanbul'"
+            None, verification_request.content.evm_version,
+            "'default' should result in 'None'"
         )
     }
 
@@ -173,9 +169,9 @@ mod tests {
                 .expect("Try_into verification request failed");
 
         assert_eq!(
-            Some(EvmVersion::Istanbul),
+            None,
             verification_request.content.evm_version,
-            "Absent evm_version should result in 'EvmVersion::Istanbul'"
+            "Absent evm_version should result in 'None'"
         )
     }
 
