@@ -8,7 +8,7 @@ impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let sql = r#"
             DROP INDEX IF EXISTS "idx_parts_data_text_prefix";
-            CREATE INDEX IF NOT EXISTS "idx_parts_data_text_prefix" ON "parts" (LEFT("data_text", 150) text_pattern_ops);
+            CREATE INDEX "idx_parts_data_text_prefix" ON "parts" (LEFT("data_text", 150) text_pattern_ops);
         "#;
         crate::from_sql(manager, sql).await
     }
@@ -16,7 +16,7 @@ impl MigrationTrait for Migration {
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let sql = r#"
             DROP INDEX IF EXISTS "idx_parts_data_text_prefix";
-            CREATE INDEX IF NOT EXISTS "idx_parts_data_text_prefix" ON "parts" (LEFT("data_text", 500) text_pattern_ops);
+            CREATE INDEX "idx_parts_data_text_prefix" ON "parts" (LEFT("data_text", 500) text_pattern_ops);
         "#;
         crate::from_sql(manager, sql).await
     }
