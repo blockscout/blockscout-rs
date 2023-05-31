@@ -97,9 +97,13 @@ impl SolidityVerifier for SolidityVerifierService {
                 | VerificationError::NoMatchingContracts
                 | VerificationError::CompilerVersionMismatch(_) => VerifyResponseWrapper::err(err),
                 VerificationError::Initialization(_) | VerificationError::VersionNotFound(_) => {
-                    return Err(Status::invalid_argument(err.to_string()))
+                    tracing::debug!("invalid argument: {err:#?}");
+                    return Err(Status::invalid_argument(err.to_string()));
                 }
-                VerificationError::Internal(_) => return Err(Status::internal(err.to_string())),
+                VerificationError::Internal(err) => {
+                    tracing::error!("internal error: {err:#?}");
+                    return Err(Status::internal(err.to_string()));
+                }
             }
         };
 
@@ -144,9 +148,13 @@ impl SolidityVerifier for SolidityVerifierService {
                 | VerificationError::NoMatchingContracts
                 | VerificationError::CompilerVersionMismatch(_) => VerifyResponseWrapper::err(err),
                 VerificationError::Initialization(_) | VerificationError::VersionNotFound(_) => {
-                    return Err(Status::invalid_argument(err.to_string()))
+                    tracing::debug!("invalid argument: {err:#?}");
+                    return Err(Status::invalid_argument(err.to_string()));
                 }
-                VerificationError::Internal(_) => return Err(Status::internal(err.to_string())),
+                VerificationError::Internal(err) => {
+                    tracing::error!("internal error: {err:#?}");
+                    return Err(Status::internal(err.to_string()));
+                }
             }
         };
 

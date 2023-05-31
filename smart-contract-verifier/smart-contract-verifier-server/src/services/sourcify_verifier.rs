@@ -54,9 +54,15 @@ impl SourcifyVerifier for SourcifyVerifierService {
         let result = match response {
             Ok(verification_success) => Ok(VerifyResponseWrapper::ok(verification_success)),
             Err(err) => match err {
-                Error::Internal(err) => Err(Status::internal(err.to_string())),
+                Error::Internal(err) => {
+                    tracing::error!("internal error: {err:#?}");
+                    Err(Status::internal(err.to_string()))
+                }
                 Error::Verification(err) => Ok(VerifyResponseWrapper::err(err)),
-                Error::Validation(err) => Err(Status::invalid_argument(err)),
+                Error::Validation(err) => {
+                    tracing::debug!("invalid argument: {err:#?}");
+                    Err(Status::invalid_argument(err))
+                }
             },
         }?;
 
