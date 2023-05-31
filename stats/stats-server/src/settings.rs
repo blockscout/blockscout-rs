@@ -33,6 +33,7 @@ pub struct Settings {
     #[serde_as(as = "DisplayFromStr")]
     pub default_schedule: Schedule,
     pub force_update_on_start: Option<bool>, // None = no update
+    pub concurrent_start_updates: usize,
     pub charts_config: PathBuf,
 
     pub server: ServerSettings,
@@ -64,6 +65,7 @@ impl Default for Settings {
             db_url: Default::default(),
             default_schedule: Schedule::from_str("0 0 1 * * * *").unwrap(),
             force_update_on_start: Some(false),
+            concurrent_start_updates: 3,
             charts_config: PathBuf::from_str("config/charts.toml").unwrap(),
             blockscout_db_url: Default::default(),
             create_database: Default::default(),
