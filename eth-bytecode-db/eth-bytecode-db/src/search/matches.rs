@@ -7,6 +7,7 @@ use crate::metrics;
 use entity::{bytecode_parts, bytecodes, parts};
 use sea_orm::{
     entity::prelude::*, ConnectionTrait, FromQueryResult, QueryOrder, QuerySelect, Statement,
+    TransactionTrait,
 };
 
 pub async fn find_match_contracts<C>(
@@ -14,7 +15,7 @@ pub async fn find_match_contracts<C>(
     remote: &BytecodeRemote,
 ) -> Result<Vec<MatchContract>, anyhow::Error>
 where
-    C: ConnectionTrait,
+    C: ConnectionTrait + TransactionTrait,
 {
     let bytecode_type = remote.bytecode_type.to_string();
     let label_values = &[bytecode_type.as_str()];
@@ -62,7 +63,7 @@ async fn find_bytecode_candidates<C>(
     remote: &BytecodeRemote,
 ) -> Result<Vec<BytecodeCandidate>, DbErr>
 where
-    C: ConnectionTrait,
+    C: ConnectionTrait + TransactionTrait,
 {
     let data = hex::encode(&remote.data);
     let r#type = remote.bytecode_type.clone();
@@ -98,28 +99,34 @@ where
 
 async fn find_part_id_candidates<C>(db: &C, data: &str) -> Result<Vec<i64>, DbErr>
 where
-    C: ConnectionTrait,
+    C: ConnectionTrait + TransactionTrait,
 {
-    // Here we make use of the index we have on the first 500 symbols of the "data_text" column
+    let txn = db.begin().await?;
+
+    // Without that the database tends to scan tables sequentially instead of using indexes, for some reason.
+    txn.execute_unprepared("SET LOCAL enable_seqscan = OFF;")
+        .await?;
+
+    // Here we make use of the index we have on the first 150 symbols of the "data_text" column
     let part_ids = PartCandidate::find_by_statement(Statement::from_sql_and_values(
         db.get_database_backend(),
         r#"
             SELECT "parts"."id"
             FROM parts
-            WHERE LENGTH("data_text") >= 500
-              AND LEFT($1, 500) = LEFT("data_text", 500)
+            WHERE LENGTH("data_text") >= 150
+              AND LEFT($1, 150) = LEFT("data_text", 150)
               AND "part_type" = 'main'
               AND $1 LIKE "data_text" || '%'
             UNION
             SELECT "parts"."id"
             FROM parts
-            WHERE LENGTH("data_text") < 500
+            WHERE LENGTH("data_text") < 150
               AND $1 LIKE "data_text" || '%'
               AND "part_type" = 'main';
         "#,
         vec![data.into()],
     ))
-    .all(db)
+    .all(&txn)
     .await?
     .into_iter()
     .map(|p| p.id)
