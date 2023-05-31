@@ -70,9 +70,9 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
     tokio::spawn(async move {
         update_service
             .force_async_update_and_run(
-                settings.on_start.concurrent_updates,
+                settings.concurrent_start_updates,
                 settings.default_schedule,
-                settings.on_start.force_update,
+                settings.force_update_on_start,
             )
             .await;
     });

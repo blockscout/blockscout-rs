@@ -32,7 +32,8 @@ pub struct Settings {
     pub blockscout_db_url: String,
     #[serde_as(as = "DisplayFromStr")]
     pub default_schedule: Schedule,
-    pub on_start: OnStartSettings,
+    pub force_update_on_start: Option<bool>, // None = no update
+    pub concurrent_start_updates: usize,
     pub charts_config: PathBuf,
 
     pub server: ServerSettings,
@@ -63,7 +64,8 @@ impl Default for Settings {
             },
             db_url: Default::default(),
             default_schedule: Schedule::from_str("0 0 1 * * * *").unwrap(),
-            on_start: Default::default(),
+            force_update_on_start: Some(false),
+            concurrent_start_updates: 3,
             charts_config: PathBuf::from_str("config/charts.toml").unwrap(),
             blockscout_db_url: Default::default(),
             create_database: Default::default(),
@@ -72,23 +74,6 @@ impl Default for Settings {
             jaeger: Default::default(),
             tracing: Default::default(),
             config_path: Default::default(),
-        }
-    }
-}
-
-#[serde_as]
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(default, deny_unknown_fields)]
-pub struct OnStartSettings {
-    pub force_update: Option<bool>, // None = no update
-    pub concurrent_updates: usize,
-}
-
-impl Default for OnStartSettings {
-    fn default() -> Self {
-        Self {
-            force_update: Some(false),
-            concurrent_updates: 3,
         }
     }
 }
