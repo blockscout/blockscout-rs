@@ -118,53 +118,50 @@ impl Charts {
         let contracts_growth = Arc::new(lines::ContractsGrowth::new(new_contracts.clone()));
 
         vec![
-            // finished counters
-            Arc::new(counters::TotalBlocks::default()),
-            Arc::new(counters::AverageBlockTime::default()),
-            Arc::new(counters::TotalTxns::new(new_txns.clone())),
-            Arc::new(counters::TotalTokens::default()),
-            Arc::new(counters::CompletedTxns::default()),
-            Arc::new(counters::TotalAccounts::new(accounts_cache.clone())),
-            Arc::new(counters::TotalNativeCoinTransfers::new(
-                new_native_coin_transfers.clone(),
-            )),
-            Arc::new(counters::TotalNativeCoinHolders::new(
-                native_coin_holders_growth.clone(),
-            )),
-            Arc::new(counters::LastNewContracts::new(new_contracts.clone())),
-            Arc::new(counters::LastNewVerifiedContracts::new(
-                new_verified_contracts.clone(),
-            )),
-            Arc::new(counters::TotalContracts::new(contracts_growth.clone())),
-            Arc::new(counters::TotalVerifiedContracts::new(
-                verified_contracts_growth.clone(),
-            )),
-            // finished lines
-            Arc::new(lines::NewBlocks::default()),
-            Arc::new(lines::AverageGasPrice::default()),
-            Arc::new(lines::ActiveAccounts::default()),
-            Arc::new(lines::AccountsGrowth::new(accounts_cache.clone())),
-            Arc::new(lines::TxnsFee::default()),
-            Arc::new(lines::TxnsGrowth::new(new_txns.clone())),
-            new_txns,
-            Arc::new(lines::AverageBlockSize::default()),
-            Arc::new(lines::AverageGasLimit::default()),
-            Arc::new(lines::GasUsedGrowth::default()),
-            Arc::new(lines::NativeCoinSupply::default()),
-            Arc::new(lines::NativeCoinHoldersGrowth::default()),
-            Arc::new(lines::AverageTxnFee::default()),
-            Arc::new(lines::TxnsSuccessRate::default()),
             Arc::new(lines::AverageBlockRewards::default()),
-            Arc::new(lines::NewAccounts::new(accounts_cache)),
+            Arc::new(counters::TotalTokens::default()),
+            Arc::new(lines::NativeCoinSupply::default()),
+            native_coin_holders_growth.clone(),
+            new_txns.clone(),
+            Arc::new(lines::NewAccounts::new(accounts_cache.clone())),
+            new_verified_contracts.clone(),
+            new_contracts.clone(),
+            Arc::new(lines::NewBlocks::default()),
+            Arc::new(lines::GasUsedGrowth::default()),
+            Arc::new(lines::AverageBlockSize::default()),
+            Arc::new(counters::LastNewContracts::new(new_contracts)),
+            Arc::new(counters::TotalBlocks::default()),
+            Arc::new(lines::TxnsFee::default()),
             Arc::new(lines::NewNativeCoinHolders::new(
                 native_coin_holders_growth.clone(),
             )),
-            native_coin_holders_growth,
-            new_native_coin_transfers,
-            verified_contracts_growth,
-            contracts_growth,
-            new_verified_contracts,
-            new_contracts,
+            Arc::new(counters::LastNewVerifiedContracts::new(
+                new_verified_contracts,
+            )),
+            Arc::new(lines::ActiveAccounts::default()),
+            new_native_coin_transfers.clone(),
+            Arc::new(lines::AverageGasPrice::default()),
+            Arc::new(lines::AverageTxnFee::default()),
+            Arc::new(lines::TxnsSuccessRate::default()),
+            contracts_growth.clone(),
+            Arc::new(counters::TotalNativeCoinTransfers::new(
+                new_native_coin_transfers,
+            )),
+            Arc::new(counters::TotalTxns::new(new_txns.clone())),
+            Arc::new(counters::CompletedTxns::default()),
+            Arc::new(counters::TotalNativeCoinHolders::new(
+                native_coin_holders_growth,
+            )),
+            verified_contracts_growth.clone(),
+            Arc::new(lines::TxnsGrowth::new(new_txns)),
+            Arc::new(lines::AverageGasLimit::default()),
+            Arc::new(lines::AccountsGrowth::new(accounts_cache.clone())),
+            Arc::new(counters::AverageBlockTime::default()),
+            Arc::new(counters::TotalVerifiedContracts::new(
+                verified_contracts_growth,
+            )),
+            Arc::new(counters::TotalContracts::new(contracts_growth)),
+            Arc::new(counters::TotalAccounts::new(accounts_cache)),
         ]
     }
 }
