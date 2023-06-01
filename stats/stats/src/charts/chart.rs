@@ -49,7 +49,9 @@ pub trait Chart: Sync {
         force_full: bool,
     ) -> Result<(), UpdateError> {
         let name = self.name();
+        println!("start {name}");
         let mutex = get_global_update_mutex(name).await;
+        println!("got {name}");
         let _permit = {
             match mutex.try_lock() {
                 Ok(v) => v,
@@ -62,7 +64,8 @@ pub trait Chart: Sync {
                 }
             }
         };
-        self.update(db, blockscout, force_full).await
+        let r = self.update(db, blockscout, force_full).await;
+        r
     }
 }
 
