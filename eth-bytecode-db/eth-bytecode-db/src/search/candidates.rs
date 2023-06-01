@@ -51,9 +51,11 @@ where
     }
     let mut matches = vec![];
     for (bytecode, match_type) in filtered_bytecodes.iter() {
-        let contract_match =
-            MatchContract::build(db, bytecode.bytecode.source_id, remote, *match_type).await?;
-        matches.push(contract_match);
+        if let Ok(contract_match) =
+            MatchContract::build(db, bytecode.bytecode.source_id, remote, *match_type).await
+        {
+            matches.push(contract_match);
+        }
     }
     Ok(matches)
 }
