@@ -48,12 +48,16 @@ pub trait Chart: Sync {
         blockscout: &DatabaseConnection,
         force_full: bool,
     ) -> Result<(), UpdateError> {
-        let mutex = get_global_update_mutex(self.name()).await;
+        let name = self.name();
+        let mutex = get_global_update_mutex(name).await;
         let _permit = {
             match mutex.try_lock() {
                 Ok(v) => v,
                 Err(_) => {
-                    tracing::warn!("found locked update mutex, waiting for unlock");
+                    tracing::warn!(
+                        chart_name = name,
+                        "found locked update mutex, waiting for unlock"
+                    );
                     mutex.lock().await
                 }
             }

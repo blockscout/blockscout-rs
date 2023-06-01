@@ -1,18 +1,18 @@
 use lazy_static::lazy_static;
 use std::{collections::HashMap, sync::Arc};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 
 lazy_static! {
-    pub static ref UPDATE_MUTEX: Mutex<HashMap<String, Arc<Mutex<()>>>> = Default::default();
+    pub static ref UPDATE_MUTEX: RwLock<HashMap<String, Arc<Mutex<()>>>> = Default::default();
 }
 
 pub async fn get_global_update_mutex(key: &str) -> Arc<Mutex<()>> {
-    let mut map = UPDATE_MUTEX.lock().await;
-    if let Some(mutex) = map.get(key) {
+    if let Some(mutex) = UPDATE_MUTEX.read().await.get(key) {
         Arc::clone(mutex)
     } else {
-        let mutex = Arc::new(Mutex::new(()));
-        map.insert(key.to_owned(), Arc::clone(&mutex));
+        let mut map = UPDATE_MUTEX.write().await;
+        let mutex = Arc::new(Mutex::default());
+        map.insert(key.to_owned(), mutex.clone());
         mutex
     }
 }
