@@ -132,7 +132,7 @@ mod tests {
         let verification_success = SourcifySuccess {
             file_name: "file_name".to_string(),
             compiler_version: "v0.8.17+commit.8df45f5f".to_string(),
-            evm_version: "london".to_string(),
+            evm_version: Some("london".to_string()),
             optimization: Some(true),
             optimization_runs: Some(200),
             constructor_arguments: Some(DisplayBytes::from_str("0x123456").unwrap().0),

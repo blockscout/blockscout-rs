@@ -1,6 +1,5 @@
 use super::types::{Files, Success};
 use crate::MatchType;
-use ethers_solc::EvmVersion;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
@@ -27,8 +26,7 @@ pub struct MetadataSettings {
     pub compilation_target: BTreeMap<String, String>,
     pub optimizer: Optimizer,
     pub libraries: BTreeMap<String, String>,
-    #[serde(rename = "camelCase")]
-    pub evm_version: Option<EvmVersion>,
+    pub evm_version: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Eq, Deserialize)]
@@ -89,11 +87,7 @@ impl TryFrom<(Files, MatchType)> for Success {
             .into_iter()
             .next()
             .ok_or_else(|| anyhow::Error::msg("compilation target not found"))?;
-        let evm_version = metadata
-            .settings
-            .evm_version
-            .unwrap_or_default()
-            .to_string();
+        let evm_version = metadata.settings.evm_version;
         let optimization = metadata.settings.optimizer.enabled;
         let optimization_runs = metadata.settings.optimizer.runs;
         let contract_libraries: BTreeMap<String, String> = metadata.settings.libraries;
@@ -152,10 +146,24 @@ mod tests {
         ]));
         let result = files.extract_metadata_and_source_files();
 
-        let (_, files) = result.expect("parse metadata from files failed");
+        let (metadata, files) = result.expect("parse metadata from files failed");
         assert_eq!(
             files,
             BTreeMap::from([("source.sol".into(), "content".into())]),
+        );
+        assert_eq!(
+            metadata,
+            Metadata {
+                settings: MetadataSettings {
+                    compilation_target: BTreeMap::from([("example.sol".into(), "Example".into())]),
+                    optimizer: Optimizer { enabled: Some(false), runs: Some(200) },
+                    libraries: BTreeMap::from([("SafeMath".into(), "0xFBe36e5cAD207d5fDee40E6568bb276a351f6713".into())]),
+                    evm_version: Some("london".into()),
+                },
+                compiler: Compiler { version: "0.8.14+commit.80d49f37".to_string() },
+                output: Output { abi: serde_json::json!([{"inputs":[],"name":"retrieve","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}]) },
+                raw_settings: "{\"compilationTarget\":{\"example.sol\":\"Example\"},\"evmVersion\":\"london\",\"libraries\":{\"SafeMath\":\"0xFBe36e5cAD207d5fDee40E6568bb276a351f6713\"},\"optimizer\":{\"enabled\":false,\"runs\":200}}".to_string(),
+            }
         );
 
         let files = Files(BTreeMap::from([(
@@ -183,7 +191,7 @@ mod tests {
                 file_name: "example.sol".into(),
                 contract_name: "Example".into(),
                 compiler_version: "0.8.14+commit.80d49f37".into(),
-                evm_version: "london".into(),
+                evm_version: Some("london".into()),
                 constructor_arguments: None,
                 contract_libraries: BTreeMap::from([("SafeMath".into(), "0xFBe36e5cAD207d5fDee40E6568bb276a351f6713".into())]),
                 optimization: Some(false),
