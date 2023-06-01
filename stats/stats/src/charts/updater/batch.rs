@@ -1,7 +1,7 @@
 use super::{get_last_row, get_min_block_blockscout, get_min_date_blockscout};
 use crate::{
     charts::{find_chart, insert::insert_data_many},
-    Chart, DateValue, UpdateError,
+    metrics, Chart, DateValue, UpdateError,
 };
 use async_trait::async_trait;
 use chrono::{Duration, NaiveDate, Utc};
@@ -30,6 +30,10 @@ pub trait ChartBatchUpdater: Chart {
             .map_err(UpdateError::BlockscoutDB)?;
         let last_row = get_last_row(self, chart_id, min_blockscout_block, db, force_full).await?;
 
+        let _timer = metrics::CHART_FETCH_NEW_DATA_TIME
+            .with_label_values(&[self.name()])
+            .start_timer();
+        tracing::info!(last_row =? last_row, "start batch update");
         self.batch_update(db, blockscout, last_row, chart_id, min_blockscout_block)
             .await
     }
@@ -59,18 +63,18 @@ pub trait ChartBatchUpdater: Chart {
         let n = steps.len();
 
         for (i, (from, to)) in steps.into_iter().enumerate() {
-            tracing::info!(from =? from, to =? to , "run {}/{} step of split update", i + 1, n);
+            tracing::info!(from =? from, to =? to , "run {}/{} step of batch update", i + 1, n);
             let query = self.get_query(from, to);
             let now = Instant::now();
             let values = DateValue::find_by_statement(query)
-                .all(blockscout)
+                .all(&txn)
                 .await
                 .map_err(UpdateError::BlockscoutDB)?
                 .into_iter()
                 .map(|value| value.active_model(chart_id, Some(min_blockscout_block)));
             let elapsed = now.elapsed();
             let found = values.len();
-            tracing::info!(found =? found, elapsed =? elapsed, "{}/{} step of split done", i + 1, n);
+            tracing::info!(found =? found, elapsed =? elapsed, "{}/{} step of batch done", i + 1, n);
             insert_data_many(db, values)
                 .await
                 .map_err(UpdateError::StatsDB)?;
