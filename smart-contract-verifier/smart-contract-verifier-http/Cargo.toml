@@ -15,7 +15,7 @@ anyhow = "1.0"
 blockscout-display-bytes = { version = "1.0" }
 config = "0.13"
 cron = "0.11"
-ethers-solc = { version = "2.0.0", features = ["svm-solc"] }
+ethers-solc = { version = "2.0.6", features = ["svm-solc"] }
 futures = "0.3"
 lazy_static = "1"
 opentelemetry = { version = "0.17", features = ["rt-tokio"] }

@@ -115,7 +115,9 @@ impl From<SourcifySuccess> for VerificationResult {
             file_name: sourcify_success.file_name,
             contract_name: sourcify_success.contract_name,
             compiler_version: sourcify_success.compiler_version,
-            evm_version: sourcify_success.evm_version,
+            evm_version: sourcify_success
+                .evm_version
+                .unwrap_or_else(|| "default".to_string()),
             constructor_arguments: sourcify_success
                 .constructor_arguments
                 .map(DisplayBytes::from),
