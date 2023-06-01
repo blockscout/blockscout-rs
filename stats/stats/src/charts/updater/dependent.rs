@@ -31,7 +31,7 @@ where
             parent_chart_name = parent.name(),
             "updating parent"
         );
-        parent.update(db, blockscout, force_full).await?;
+        parent.update_with_mutex(db, blockscout, force_full).await?;
         let data = get_chart_data(db, parent.name(), None, None).await?;
         Ok(data)
     }

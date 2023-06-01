@@ -83,7 +83,9 @@ impl UpdateService {
             let _timer = stats::metrics::CHART_UPDATE_TIME
                 .with_label_values(&[chart.name()])
                 .start_timer();
-            chart.update(&self.db, &self.blockscout, force_full).await
+            chart
+                .update_with_mutex(&self.db, &self.blockscout, force_full)
+                .await
         };
         if let Err(err) = result {
             stats::metrics::UPDATE_ERRORS
