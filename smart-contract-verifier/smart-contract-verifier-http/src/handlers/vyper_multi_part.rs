@@ -64,8 +64,7 @@ impl TryFrom<MultiPartFiles> for vyper::multi_part::MultiFileContent {
         let evm_version = if let Some(version) = value.evm_version {
             Some(EvmVersion::from_str(&version).map_err(error::ErrorBadRequest)?)
         } else {
-            // default evm version for vyper
-            Some(EvmVersion::Istanbul)
+            None
         };
 
         Ok(Self {
