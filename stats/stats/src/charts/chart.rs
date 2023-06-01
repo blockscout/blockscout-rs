@@ -62,8 +62,7 @@ pub trait Chart: Sync {
                 }
             }
         };
-        let r = self.update(db, blockscout, force_full).await;
-        r
+        self.update(db, blockscout, force_full).await
     }
 }
 
