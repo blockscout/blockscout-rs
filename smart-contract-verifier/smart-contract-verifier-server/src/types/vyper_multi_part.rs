@@ -169,8 +169,7 @@ mod tests {
                 .expect("Try_into verification request failed");
 
         assert_eq!(
-            None,
-            verification_request.content.evm_version,
+            None, verification_request.content.evm_version,
             "Absent evm_version should result in 'None'"
         )
     }
