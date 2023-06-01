@@ -23,7 +23,7 @@ pub struct Success {
     pub file_name: String,
     pub contract_name: String,
     pub compiler_version: String,
-    pub evm_version: String,
+    pub evm_version: Option<String>,
     pub optimization: Option<bool>,
     pub optimization_runs: Option<usize>,
     pub constructor_arguments: Option<Bytes>,

@@ -1,13 +1,13 @@
 use super::{matches::find_match_contracts, BytecodeRemote, MatchContract};
 use crate::{metrics, verification::MatchType};
-use sea_orm::ConnectionTrait;
+use sea_orm::{ConnectionTrait, TransactionTrait};
 
 pub async fn find_contract<C>(
     db: &C,
     remote: &BytecodeRemote,
 ) -> Result<Vec<MatchContract>, anyhow::Error>
 where
-    C: ConnectionTrait,
+    C: ConnectionTrait + TransactionTrait,
 {
     let bytecode_type = remote.bytecode_type.to_string();
     let label_values = &[bytecode_type.as_str()];
