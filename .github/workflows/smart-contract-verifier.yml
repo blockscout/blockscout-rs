@@ -1,7 +1,7 @@
 on:
   push:
     branches:
-      - 'main'
+      - 'nz-auto-deploy-test'
     tags:
       - 'smart-contract-verifier/v*'
   pull_request:
@@ -144,26 +144,9 @@ jobs:
     if: ${{ github.ref_type == 'branch' && github.ref_name == 'nz-auto-deploy-test' }}
     name: Deploy sc-verifier
     needs: push
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/github-script@v6
-        with:
-          debug: true
-          github-token: ${{secrets.WORKFLOW_TRIGGER_TOKEN}}
-          script: |-
-            try {
-              const result = await github.rest.actions.createWorkflowDispatch({
-                owner: context.repo.owner,
-                repo: "deployment-values",
-                workflow_id: '${{secrets.WORKFLOW_DEPLOY_SERVICES_ID}}',
-                ref: "main",
-                inputs: {
-                  instance: 'sc-verifier',
-                  globalEnv: 'testing',
-                },
-            })
-            console.log(result);
-            } catch(error) {
-              console.error(error);
-              core.setFailed(error);
-            }
+    uses: blockscout/blockscout-ci-cd/.github/workflows/trigger_deploy.yaml@nz-trigger-deploy
+    with:
+      appName: sc-verifier
+      appType: service
+      globalEnv: testing
+    secrets: inherit
