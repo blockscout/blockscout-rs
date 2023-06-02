@@ -1,7 +1,7 @@
 on:
   push:
     branches:
-      - 'nz-auto-deploy-test'
+      - 'main'
     tags:
       - 'eth-bytecode-db/v*'
   pull_request:
@@ -154,10 +154,10 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
   deploy_main:
-    if: ${{ github.ref_type == 'branch' && github.ref_name == 'nz-auto-deploy-test' }}
+    if: ${{ github.ref_type == 'branch' && github.ref_name == 'main' }}
     name: Deploy eth-bytecode-db
     needs: push
-    uses: blockscout/blockscout-ci-cd/.github/workflows/trigger_deploy.yaml@nz-trigger-deploy
+    uses: blockscout/blockscout-ci-cd/.github/workflows/trigger_deploy.yaml@master
     with:
       appName: eth-bytecode-db
       appType: service

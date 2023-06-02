@@ -1,7 +1,7 @@
 on:
   push:
     branches:
-      - 'nz-auto-deploy-test'
+      - 'main'
     tags:
       - 'visualizer/v*'
   pull_request:
@@ -150,10 +150,10 @@ jobs:
           cache-to: type=gha,mode=max
 
   deploy_main:
-    if: ${{ github.ref_type == 'branch' && github.ref_name == 'nz-auto-deploy-test' }}
+    if: ${{ github.ref_type == 'branch' && github.ref_name == 'main' }}
     name: Deploy visualizer
     needs: push
-    uses: blockscout/blockscout-ci-cd/.github/workflows/trigger_deploy.yaml@nz-trigger-deploy
+    uses: blockscout/blockscout-ci-cd/.github/workflows/trigger_deploy.yaml@master
     with:
       appName: visualizer
       appType: service
