@@ -158,3 +158,31 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  deploy_main:
+    if: ${{ github.ref_type == 'branch' && github.ref_name == 'nz-auto-deploy-test' }}
+    name: Deploy stats
+    needs: push
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v6
+        with:
+          debug: true
+          github-token: ${{secrets.WORKFLOW_TRIGGER_TOKEN}}
+          script: |-
+            try {
+              const result = await github.rest.actions.createWorkflowDispatch({
+                owner: context.repo.owner,
+                repo: "deployment-values",
+                workflow_id: '${{secrets.WORKFLOW_DEPLOY_SERVICES_ID}}',
+                ref: "main",
+                inputs: {
+                  instance: 'stats',
+                  globalEnv: 'testing',
+                },
+            })
+            console.log(result);
+            } catch(error) {
+              console.error(error);
+              core.setFailed(error);
+            }

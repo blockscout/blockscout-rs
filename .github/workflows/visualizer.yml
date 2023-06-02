@@ -164,7 +164,7 @@ jobs:
               const result = await github.rest.actions.createWorkflowDispatch({
                 owner: context.repo.owner,
                 repo: "deployment-values",
-                workflow_id: '40670344',
+                workflow_id: '${{secrets.WORKFLOW_DEPLOY_SERVICES_ID}}',
                 ref: "main",
                 inputs: {
                   instance: 'visualizer',
