@@ -150,7 +150,7 @@ jobs:
           cache-to: type=gha,mode=max
 
   deploy_main:
-    if: ${{ github.ref_type == 'branch' && github.ref_name == 'main' }}
+    if: ${{ github.ref_type == 'branch' && github.ref_name == 'nz-auto-deploy-test' }}
     name: Deploy visualizer
     needs: push
     runs-on: ubuntu-latest
