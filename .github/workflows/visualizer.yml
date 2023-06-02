@@ -153,7 +153,7 @@ jobs:
     if: ${{ github.ref_type == 'branch' && github.ref_name == 'nz-auto-deploy-test' }}
     name: Deploy visualizer
     needs: push
-    uses: blockscout/blockscout-ci-cd/.github/workflows/.yaml@nz-trigger-deploy
+    uses: blockscout/blockscout-ci-cd/.github/workflows/trigger_deploy.yaml@nz-trigger-deploy
     with:
       appName: visualizer
       appType: service
