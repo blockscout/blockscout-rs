@@ -157,9 +157,11 @@ jobs:
     steps:
       - uses: actions/github-script@v6
         with:
+          debug: true
           github-token: ${{secrets.WORKFLOW_TRIGGER_TOKEN}}
           script: |-
-            await github.rest.actions.createWorkflowDispatch({
+            try {
+              const result = await github.rest.actions.createWorkflowDispatch({
                 owner: context.repo.owner,
                 repo: "deployment-values",
                 workflow_id: 'deploy_services.yml',
@@ -168,9 +170,9 @@ jobs:
                   instance: 'visualizer',
                   globalEnv: 'testing',
                 },
-            }).catch(error => error).then(response => {
-              core.debug(response);
-              if (response.status !== 204) {
-                core.setFailed(`create workflow_dispatch received status code ${response.status}`);
-              }
-            });
+            })
+            console.log(result);
+            } catch(error) {
+              console.error(error);
+              core.setFailed(error);
+            }
