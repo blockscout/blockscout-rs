@@ -10,6 +10,7 @@ use crate::{
 use smart_contract_verifier::{
     vyper, Compilers, ListFetcher, VerificationError, VyperClient, VyperCompiler,
 };
+use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::VerifyVyperStandardJsonRequest;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 use tonic::{Request, Response, Status};
@@ -97,6 +98,15 @@ impl VyperVerifier for VyperVerifierService {
             "multi-part",
         );
         return Ok(Response::new(response.into_inner()));
+    }
+
+    async fn verify_standard_json(
+        &self,
+        _request: Request<VerifyVyperStandardJsonRequest>,
+    ) -> Result<Response<VerifyResponse>, Status> {
+        Err(Status::unimplemented(
+            "Vyper standard-json verification is not implemented yet",
+        ))
     }
 
     async fn list_compiler_versions(
