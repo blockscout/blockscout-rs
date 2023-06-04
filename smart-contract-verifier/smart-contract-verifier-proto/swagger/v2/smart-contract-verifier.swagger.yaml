@@ -407,7 +407,9 @@ definitions:
         type: object
         additionalProperties:
           type: string
-        title: / Map from an interface names to the actual interfaces
+        description: |-
+          / Map from an interface names to the actual interfaces.
+          / If non-specified, no interfaces are considered.
       metadata:
         $ref: '#/definitions/v2VerificationMetadata'
         title: / An optional field to be filled by explorers

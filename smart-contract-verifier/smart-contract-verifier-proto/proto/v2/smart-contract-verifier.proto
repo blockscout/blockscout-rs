@@ -128,7 +128,8 @@ message VerifyVyperMultiPartRequest {
   optional bool optimizations = 5;
   /// Map from a source file name to the actual source code
   map<string, string> source_files = 6;
-  /// Map from an interface names to the actual interfaces
+  /// Map from an interface names to the actual interfaces.
+  /// If non-specified, no interfaces are considered.
   map<string, string> interfaces = 8;
 
   /// An optional field to be filled by explorers
