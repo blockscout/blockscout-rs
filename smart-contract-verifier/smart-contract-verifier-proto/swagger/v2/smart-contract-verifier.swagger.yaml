@@ -383,6 +383,11 @@ definitions:
       evmVersion:
         type: string
         title: / Version of the EVM to compile for. If absent results in default EVM version
+      interfaces:
+        type: object
+        additionalProperties:
+          type: string
+        title: / Map from an interface names to the actual interfaces
       metadata:
         $ref: '#/definitions/v2VerificationMetadata'
         title: / An optional field to be filled by explorers
@@ -393,4 +398,4 @@ definitions:
         type: object
         additionalProperties:
           type: string
-        title: / Source file name to the actual source code
+        title: / Map from a source file name to the actual source code

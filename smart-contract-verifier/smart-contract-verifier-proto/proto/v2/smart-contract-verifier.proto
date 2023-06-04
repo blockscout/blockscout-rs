@@ -124,8 +124,10 @@ message VerifyVyperMultiPartRequest {
   optional string evm_version = 4;
   /// Flag enabling optimizations. If absent, default value is `true`
   optional bool optimizations = 5;
-  /// Source file name to the actual source code
+  /// Map from a source file name to the actual source code
   map<string, string> source_files = 6;
+  /// Map from an interface names to the actual interfaces
+  map<string, string> interfaces = 8;
 
   /// An optional field to be filled by explorers
   optional VerificationMetadata metadata = 7;
