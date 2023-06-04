@@ -32,7 +32,7 @@ pub async fn run(settings: Settings) -> std::io::Result<()> {
         .bind(socket_addr)?
         .run()
     };
-    let mut futures = vec![tokio::spawn(async move { server_future.await })];
+    let mut futures = vec![tokio::spawn(server_future)];
     if metrics_enabled {
         futures.push(tokio::spawn(async move {
             metrics.run_server(metrics_addr).await
