@@ -6,6 +6,7 @@ use crate::{
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use ethers_solc::CompilerOutput;
 
+#[derive(Clone, Debug)]
 pub struct Success {
     pub compiler_input: ethers_solc::CompilerInput,
     pub compiler_output: CompilerOutput,
