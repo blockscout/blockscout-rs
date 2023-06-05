@@ -62,16 +62,16 @@ pub struct Success {
     pub match_type: MatchType,
 }
 
-pub struct ContractVerifier<'a, T> {
-    compilers: &'a Compilers<T>,
+pub struct ContractVerifier<'a, C> {
+    compilers: &'a Compilers<C>,
     compiler_version: &'a compiler::Version,
     verifier: Box<dyn base::Verifier<Input = (CompilerOutput, CompilerOutput)>>,
     chain_id: Option<String>,
 }
 
-impl<'a, CI: CompilerInput, T: EvmCompiler<CompilerInput = CI>> ContractVerifier<'a, T> {
+impl<'a, C: EvmCompiler> ContractVerifier<'a, C> {
     pub fn new(
-        compilers: &'a Compilers<T>,
+        compilers: &'a Compilers<C>,
         compiler_version: &'a compiler::Version,
         creation_tx_input: Option<Bytes>,
         deployed_bytecode: Bytes,
@@ -95,9 +95,9 @@ impl<'a, CI: CompilerInput, T: EvmCompiler<CompilerInput = CI>> ContractVerifier
     }
 
     #[instrument(skip(self, compiler_input), level = "debug")]
-    pub async fn verify(&self, compiler_input: &CI) -> Result<Success, Error>
+    pub async fn verify(&self, compiler_input: &C::CompilerInput) -> Result<Success, Error>
     where
-        CI: Serialize + Clone,
+        C::CompilerInput: CompilerInput + Serialize + Clone,
     {
         let compiler_output = self
             .compilers
