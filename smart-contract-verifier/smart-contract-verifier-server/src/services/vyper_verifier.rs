@@ -11,7 +11,6 @@ use crate::{
 use smart_contract_verifier::{
     vyper, Compilers, ListFetcher, VerificationError, VyperClient, VyperCompiler,
 };
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::VerifyVyperStandardJsonRequest;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 use tonic::{Request, Response, Status};
