@@ -2,7 +2,7 @@ use super::verifier_base;
 use crate::{
     proto::{
         vyper_verifier_server, ListCompilerVersionsRequest, ListCompilerVersionsResponse,
-        VerifyResponse, VerifyVyperMultiPartRequest,
+        VerifyResponse, VerifyVyperMultiPartRequest, VerifyVyperStandardJsonRequest,
     },
     types::{BytecodeTypeWrapper, VerificationMetadataWrapper},
 };
@@ -48,6 +48,15 @@ impl vyper_verifier_server::VyperVerifier for VyperVerifierService {
         let result = vyper_multi_part::verify(self.client.clone(), verification_request).await;
 
         verifier_base::process_verification_result(result)
+    }
+
+    async fn verify_standard_json(
+        &self,
+        _request: tonic::Request<VerifyVyperStandardJsonRequest>,
+    ) -> Result<tonic::Response<VerifyResponse>, tonic::Status> {
+        Err(tonic::Status::unimplemented(
+            "Vyper standard-json verification is not implemented yet",
+        ))
     }
 
     async fn list_compiler_versions(

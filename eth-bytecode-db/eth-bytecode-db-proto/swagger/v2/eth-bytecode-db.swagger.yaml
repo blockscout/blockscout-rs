@@ -127,6 +127,26 @@ paths:
             $ref: '#/definitions/v2VerifyVyperMultiPartRequest'
       tags:
         - VyperVerifier
+  /api/v2/verifier/vyper/sources:verify-standard-json:
+    post:
+      operationId: VyperVerifier_VerifyStandardJson
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v2VerifyResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v2VerifyVyperStandardJsonRequest'
+      tags:
+        - VyperVerifier
   /api/v2/verifier/vyper/versions:
     get:
       operationId: VyperVerifier_ListCompilerVersions
@@ -412,3 +432,21 @@ definitions:
         additionalProperties:
           type: string
         title: / Map from a source file name to the actual source code
+  v2VerifyVyperStandardJsonRequest:
+    type: object
+    properties:
+      bytecode:
+        type: string
+        title: / Bytecode to compare local compilation result with
+      bytecodeType:
+        $ref: '#/definitions/v2BytecodeType'
+        title: / Either CREATION_INPUT or DEPLOYED_BYTECODE, depending on what should be verified
+      compilerVersion:
+        type: string
+        title: / Compiler version used to compile the contract
+      input:
+        type: string
+        title: / https://docs.vyperlang.org/en/stable/compiling-a-contract.html#input-json-description
+      metadata:
+        $ref: '#/definitions/v2VerificationMetadata'
+        title: / An optional field to be filled by explorers
