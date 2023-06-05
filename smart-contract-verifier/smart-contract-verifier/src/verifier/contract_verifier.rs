@@ -3,6 +3,7 @@ use super::{
     base::LocalBytecodeParts,
     bytecode::{CreationTxInput, DeployedBytecode},
     errors::{BytecodeInitError, VerificationError, VerificationErrorKind},
+    CompilerInput,
 };
 use crate::{
     compiler::{self, Compilers, EvmCompiler},
@@ -10,8 +11,9 @@ use crate::{
 };
 use anyhow::anyhow;
 use bytes::Bytes;
-use ethers_solc::{CompilerInput, CompilerOutput};
+use ethers_solc::CompilerOutput;
 use mismatch::Mismatch;
+use serde::Serialize;
 use thiserror::Error;
 use tracing::instrument;
 
@@ -50,7 +52,7 @@ impl From<compiler::Error> for Error {
 /// The public structure returned as a result when verification succeeds.
 #[derive(Clone, Debug)]
 pub struct Success {
-    pub compiler_input: CompilerInput,
+    pub compiler_input: serde_json::Value,
     pub compiler_output: CompilerOutput,
     pub compiler_version: compiler::Version,
     pub file_path: String,
@@ -68,7 +70,7 @@ pub struct ContractVerifier<'a, T> {
     chain_id: Option<String>,
 }
 
-impl<'a, T: EvmCompiler> ContractVerifier<'a, T> {
+impl<'a, CI: CompilerInput, T: EvmCompiler<CompilerInput = CI>> ContractVerifier<'a, T> {
     pub fn new(
         compilers: &'a Compilers<T>,
         compiler_version: &'a compiler::Version,
@@ -94,7 +96,10 @@ impl<'a, T: EvmCompiler> ContractVerifier<'a, T> {
     }
 
     #[instrument(skip(self, compiler_input), level = "debug")]
-    pub async fn verify(&self, compiler_input: &CompilerInput) -> Result<Success, Error> {
+    pub async fn verify(&self, compiler_input: &CI) -> Result<Success, Error>
+    where
+        CI: Serialize + Clone,
+    {
         let compiler_output = self
             .compilers
             .compile(
@@ -104,16 +109,7 @@ impl<'a, T: EvmCompiler> ContractVerifier<'a, T> {
             )
             .await?;
         let compiler_output_modified = {
-            let mut compiler_input = compiler_input.clone();
-            // TODO: could we update some other field to avoid copying strings?
-            compiler_input
-                .sources
-                .iter_mut()
-                .for_each(|(_file, source)| {
-                    let mut modified_content = source.content.as_ref().clone();
-                    modified_content.push(' ');
-                    source.content = std::sync::Arc::new(modified_content);
-                });
+            let compiler_input = compiler_input.clone().modify();
             self.compilers
                 .compile(
                     self.compiler_version,
@@ -158,7 +154,7 @@ impl<'a, T: EvmCompiler> ContractVerifier<'a, T> {
         // avoid their cloning if verification fails.
         // In case of success, they will be cloned exactly once.
         Ok(Success {
-            compiler_input: compiler_input.clone(),
+            compiler_input: serde_json::to_value(compiler_input).expect("Must be serializable"),
             compiler_output,
             compiler_version: self.compiler_version.clone(),
             file_path: verification_success.file_path,

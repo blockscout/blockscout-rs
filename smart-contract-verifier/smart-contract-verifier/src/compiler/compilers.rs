@@ -4,7 +4,7 @@ use super::{
     version::Version,
 };
 use crate::metrics::{self, GuardedGauge};
-use ethers_solc::{artifacts::Severity, error::SolcError, CompilerInput, CompilerOutput};
+use ethers_solc::{artifacts::Severity, error::SolcError, CompilerOutput};
 use std::{
     fmt::Debug,
     path::{Path, PathBuf},
@@ -30,11 +30,13 @@ pub enum Error {
 
 #[async_trait::async_trait]
 pub trait EvmCompiler {
+    type CompilerInput;
+
     async fn compile(
         &self,
         path: &Path,
         ver: &Version,
-        input: &CompilerInput,
+        input: &Self::CompilerInput,
     ) -> Result<CompilerOutput, SolcError>;
 }
 
@@ -45,9 +47,9 @@ pub struct Compilers<C> {
     threads_semaphore: Arc<Semaphore>,
 }
 
-impl<C> Compilers<C>
+impl<C, CompilerInput> Compilers<C>
 where
-    C: EvmCompiler,
+    C: EvmCompiler<CompilerInput = CompilerInput>,
 {
     pub fn new(
         fetcher: Arc<dyn Fetcher>,
