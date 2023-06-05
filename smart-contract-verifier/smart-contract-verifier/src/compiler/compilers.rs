@@ -47,9 +47,9 @@ pub struct Compilers<C> {
     threads_semaphore: Arc<Semaphore>,
 }
 
-impl<C, CompilerInput> Compilers<C>
+impl<C, CI> Compilers<C>
 where
-    C: EvmCompiler<CompilerInput = CompilerInput>,
+    C: EvmCompiler<CompilerInput = CI>,
 {
     pub fn new(
         fetcher: Arc<dyn Fetcher>,
@@ -67,7 +67,7 @@ where
     pub async fn compile(
         &self,
         compiler_version: &Version,
-        input: &CompilerInput,
+        input: &C::CompilerInput,
         chain_id: Option<&str>,
     ) -> Result<CompilerOutput, Error> {
         let path_result = {
