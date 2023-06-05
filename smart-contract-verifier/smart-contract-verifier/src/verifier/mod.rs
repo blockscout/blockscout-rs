@@ -7,6 +7,7 @@ mod errors;
 mod compiler_input;
 mod contract_verifier;
 
+pub use base::LocalBytecodeParts;
 pub use bytecode::BytecodePart;
 pub use compiler_input::CompilerInput;
 pub use contract_verifier::{ContractVerifier, Error, Success};

@@ -52,7 +52,6 @@ impl From<compiler::Error> for Error {
 /// The public structure returned as a result when verification succeeds.
 #[derive(Clone, Debug)]
 pub struct Success {
-    pub compiler_input: serde_json::Value,
     pub compiler_output: CompilerOutput,
     pub compiler_version: compiler::Version,
     pub file_path: String,
@@ -154,7 +153,6 @@ impl<'a, CI: CompilerInput, T: EvmCompiler<CompilerInput = CI>> ContractVerifier
         // avoid their cloning if verification fails.
         // In case of success, they will be cloned exactly once.
         Ok(Success {
-            compiler_input: serde_json::to_value(compiler_input).expect("Must be serializable"),
             compiler_output,
             compiler_version: self.compiler_version.clone(),
             file_path: verification_success.file_path,

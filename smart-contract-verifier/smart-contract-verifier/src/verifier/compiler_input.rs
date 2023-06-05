@@ -2,6 +2,8 @@ pub trait CompilerInput {
     /// Modifies input so that the corresponding bytecode
     /// should have modified metadata hash, if any.
     fn modify(self) -> Self;
+
+    // fn sources(&self) ->
 }
 
 impl CompilerInput for ethers_solc::CompilerInput {

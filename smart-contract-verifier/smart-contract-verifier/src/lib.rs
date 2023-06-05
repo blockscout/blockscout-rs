@@ -24,9 +24,11 @@ pub use middleware::Middleware;
 
 pub use common_types::MatchType;
 pub use compiler::{Compilers, Fetcher, ListFetcher, S3Fetcher, Version};
-pub use sourcify::{Error as SourcifyError, Success as SourcifySuccess};
-pub use verifier::{BytecodePart, Error as VerificationError, Success as VerificationSuccess};
+pub use sourcify::Error as SourcifyError;
+pub use verifier::{BytecodePart, Error as VerificationError};
 
-pub use solidity::{Client as SolidityClient, SolcValidator, SolidityCompiler};
-pub use sourcify::SourcifyApiClient;
-pub use vyper::{Client as VyperClient, VyperCompiler};
+pub use solidity::{
+    Client as SolidityClient, SolcValidator, SolidityCompiler, Success as SoliditySuccess,
+};
+pub use sourcify::{SourcifyApiClient, Success as SourcifySuccess};
+pub use vyper::{Client as VyperClient, Success as VyperSuccess, VyperCompiler};

@@ -1,7 +1,7 @@
-use super::client::Client;
+use super::{client::Client, types::Success};
 use crate::{
     compiler::Version,
-    verifier::{ContractVerifier, Error, Success},
+    verifier::{ContractVerifier, Error},
 };
 use bytes::Bytes;
 use ethers_solc::{
@@ -90,7 +90,8 @@ pub async fn verify(client: Arc<Client>, request: VerificationRequest) -> Result
             if let Some(middleware) = client.middleware() {
                 middleware.call(&success).await;
             }
-            return Ok(success);
+
+            return Ok(Success::from((compiler_input, success)));
         }
     }
 
