@@ -148,3 +148,14 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  deploy_main:
+    if: ${{ github.ref_type == 'branch' && github.ref_name == 'main' }}
+    name: Deploy visualizer
+    needs: push
+    uses: blockscout/blockscout-ci-cd/.github/workflows/trigger_deploy.yaml@master
+    with:
+      appName: visualizer
+      appType: service
+      globalEnv: testing
+    secrets: inherit
