@@ -1,5 +1,6 @@
 mod client;
 mod compiler;
+mod compiler_input;
 mod types;
 
 pub mod multi_part;
