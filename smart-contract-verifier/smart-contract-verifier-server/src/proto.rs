@@ -5,4 +5,5 @@ pub use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::
     HealthCheckResponse, ListCompilerVersionsRequest, ListCompilerVersionsResponse, Source,
     VerificationMetadata, VerifyResponse, VerifySolidityMultiPartRequest,
     VerifySolidityStandardJsonRequest, VerifySourcifyRequest, VerifyVyperMultiPartRequest,
+    VerifyVyperStandardJsonRequest,
 };

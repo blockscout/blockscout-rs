@@ -45,6 +45,7 @@ async fn test_returns_valid_source(service: MockVyperVerifierService) {
         compiler_version: "".to_string(),
         evm_version: None,
         source_files: Default::default(),
+        interfaces: Default::default(),
         optimizations: None,
         metadata: None,
     };
@@ -70,6 +71,7 @@ async fn test_verify_then_search(service: MockVyperVerifierService) {
         compiler_version: "".to_string(),
         evm_version: None,
         source_files: Default::default(),
+        interfaces: Default::default(),
         optimizations: None,
         metadata: None,
     };
@@ -95,6 +97,7 @@ async fn test_verify_same_source_twice(service: MockVyperVerifierService) {
         compiler_version: "".to_string(),
         evm_version: None,
         source_files: Default::default(),
+        interfaces: Default::default(),
         optimizations: None,
         metadata: None,
     };
@@ -120,6 +123,7 @@ async fn test_search_returns_full_matches_only_if_any() {
         compiler_version: "".to_string(),
         evm_version: None,
         source_files: Default::default(),
+        interfaces: Default::default(),
         optimizations: None,
         metadata: None,
     };

@@ -19,6 +19,8 @@ service SolidityVerifier {
 service VyperVerifier {
   rpc VerifyMultiPart(VerifyVyperMultiPartRequest) returns (VerifyResponse) {}
 
+  rpc VerifyStandardJson(VerifyVyperStandardJsonRequest) returns (VerifyResponse) {}
+
   rpc ListCompilerVersions(ListCompilerVersionsRequest) returns (ListCompilerVersionsResponse) {}
 }
 
@@ -128,11 +130,28 @@ message VerifyVyperMultiPartRequest {
   optional string evm_version = 4;
   /// Flag enabling optimizations. If absent, default value is `true`
   optional bool optimizations = 5;
-  /// Source file name to the actual source code
+  /// Map from a source file name to the actual source code
   map<string, string> source_files = 6;
+  /// Map from an interface names to the actual interfaces.
+  /// If non-specified, no interfaces are considered.
+  map<string, string> interfaces = 8;
 
   /// An optional field to be filled by explorers
   optional VerificationMetadata metadata = 7;
+}
+
+message VerifyVyperStandardJsonRequest {
+  /// Bytecode to compare local compilation result with
+  string bytecode = 1;
+  /// Either CREATION_INPUT or DEPLOYED_BYTECODE, depending on what should be verified
+  BytecodeType bytecode_type = 2;
+  /// Compiler version used to compile the contract
+  string compiler_version = 3;
+  /// https://docs.vyperlang.org/en/stable/compiling-a-contract.html#input-json-description
+  string input = 4;
+
+  /// An optional field to be filled by explorers
+  optional VerificationMetadata metadata = 5;
 }
 
 message VerifyResponse {

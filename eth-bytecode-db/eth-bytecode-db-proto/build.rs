@@ -17,7 +17,11 @@ fn compile(
         .protoc_arg("grpc_api_configuration=proto/v2/api_config_http.yaml,output_format=yaml,allow_merge=true,merge_file_name=eth-bytecode-db")
         .bytes(["."])
         .btree_map(["."])
-        .type_attribute(".", "#[actix_prost_macros::serde]");
+        .type_attribute(".", "#[actix_prost_macros::serde]")
+        .field_attribute(
+            ".blockscout.ethBytecodeDb.v2.VerifyVyperMultiPartRequest.interfaces",
+            "#[serde(default)]"
+        );
     config.compile_protos(protos, includes)?;
     Ok(())
 }
