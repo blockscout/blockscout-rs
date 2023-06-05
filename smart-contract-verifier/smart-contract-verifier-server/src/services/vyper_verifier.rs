@@ -3,6 +3,7 @@ use crate::{
     proto::{
         vyper_verifier_server::VyperVerifier, ListCompilerVersionsRequest,
         ListCompilerVersionsResponse, VerifyResponse, VerifyVyperMultiPartRequest,
+        VerifyVyperStandardJsonRequest,
     },
     settings::{Extensions, FetcherSettings, VyperSettings},
     types::{VerifyResponseWrapper, VerifyVyperMultiPartRequestWrapper},
@@ -10,7 +11,6 @@ use crate::{
 use smart_contract_verifier::{
     vyper, Compilers, ListFetcher, VerificationError, VyperClient, VyperCompiler,
 };
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::VerifyVyperStandardJsonRequest;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 use tonic::{Request, Response, Status};
