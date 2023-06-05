@@ -12,6 +12,7 @@ pub type Interfaces = BTreeMap<PathBuf, Interface>;
 pub struct CompilerInput {
     pub language: String,
     pub sources: ethers_solc::artifacts::Sources,
+    #[serde(default)]
     pub interfaces: Interfaces,
     #[serde(default)]
     pub settings: Settings,
