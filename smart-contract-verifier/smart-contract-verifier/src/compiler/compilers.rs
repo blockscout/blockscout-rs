@@ -47,9 +47,9 @@ pub struct Compilers<C> {
     threads_semaphore: Arc<Semaphore>,
 }
 
-impl<C, CI> Compilers<C>
+impl<C> Compilers<C>
 where
-    C: EvmCompiler<CompilerInput = CI>,
+    C: EvmCompiler,
 {
     pub fn new(
         fetcher: Arc<dyn Fetcher>,
