@@ -148,7 +148,10 @@ where
 mod tests {
     use super::{super::list_fetcher::ListFetcher, *};
     use crate::{consts::DEFAULT_SOLIDITY_COMPILER_LIST, solidity::SolidityCompiler};
-    use ethers_solc::artifacts::{Source, Sources};
+    use ethers_solc::{
+        artifacts::{Source, Sources},
+        CompilerInput,
+    };
     use std::{default::Default, env::temp_dir, str::FromStr};
     use tokio::sync::{OnceCell, Semaphore};
 

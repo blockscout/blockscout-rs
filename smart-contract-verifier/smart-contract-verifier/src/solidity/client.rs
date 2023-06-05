@@ -1,5 +1,5 @@
 use super::compiler::SolidityCompiler;
-use crate::{compiler::Compilers, middleware::Middleware, verifier::Success};
+use crate::{compiler::Compilers, middleware::Middleware, solidity::Success};
 use std::sync::Arc;
 
 pub struct Client {
