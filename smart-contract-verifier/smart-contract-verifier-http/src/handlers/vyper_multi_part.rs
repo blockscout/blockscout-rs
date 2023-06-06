@@ -69,6 +69,7 @@ impl TryFrom<MultiPartFiles> for vyper::multi_part::MultiFileContent {
 
         Ok(Self {
             sources,
+            interfaces: Default::default(),
             evm_version,
         })
     }

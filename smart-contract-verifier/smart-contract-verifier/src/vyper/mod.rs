@@ -1,8 +1,8 @@
 mod client;
 mod compiler;
-mod compiler_input;
 mod types;
 
+pub mod artifacts;
 pub mod multi_part;
 
 pub use client::Client;

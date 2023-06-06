@@ -1,3 +1,4 @@
+use super::artifacts::CompilerInput;
 use crate::compiler::{EvmCompiler, Version};
 use ethers_solc::{error::SolcError, CompilerOutput, Solc};
 use std::path::Path;
@@ -13,7 +14,7 @@ impl VyperCompiler {
 
 #[async_trait::async_trait]
 impl EvmCompiler for VyperCompiler {
-    type CompilerInput = ethers_solc::CompilerInput;
+    type CompilerInput = CompilerInput;
 
     async fn compile(
         &self,
@@ -90,7 +91,7 @@ mod tests {
         compiler::{self, Compilers, ListFetcher},
         consts::DEFAULT_VYPER_COMPILER_LIST,
     };
-    use ethers_solc::{artifacts::Source, CompilerInput};
+    use ethers_solc::artifacts::Source;
     use std::{
         collections::{BTreeMap, HashSet},
         env::temp_dir,
@@ -121,6 +122,7 @@ mod tests {
                 .into_iter()
                 .map(|(name, content)| (name, Source::new(content)))
                 .collect(),
+            interfaces: Default::default(),
             settings: Default::default(),
         };
         compiler_input.settings.evm_version = None;

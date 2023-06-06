@@ -1,3 +1,4 @@
+use super::artifacts::CompilerInput;
 use crate::{
     compiler,
     verifier::{self, LocalBytecodeParts},
@@ -8,7 +9,7 @@ use ethers_solc::CompilerOutput;
 
 #[derive(Clone, Debug)]
 pub struct Success {
-    pub compiler_input: ethers_solc::CompilerInput,
+    pub compiler_input: CompilerInput,
     pub compiler_output: CompilerOutput,
     pub compiler_version: compiler::Version,
     pub file_path: String,
@@ -19,8 +20,8 @@ pub struct Success {
     pub match_type: MatchType,
 }
 
-impl From<(ethers_solc::CompilerInput, verifier::Success)> for Success {
-    fn from((compiler_input, success): (ethers_solc::CompilerInput, verifier::Success)) -> Self {
+impl From<(CompilerInput, verifier::Success)> for Success {
+    fn from((compiler_input, success): (CompilerInput, verifier::Success)) -> Self {
         Self {
             compiler_input,
             compiler_output: success.compiler_output,
