@@ -9,7 +9,8 @@ use thiserror::Error;
 use tonic::{codegen::http::header::COOKIE, metadata::MetadataMap};
 use url::Url;
 
-const JWT_TOKEN_NAME: &str = "_explorer_key";
+const HEADER_JWT_TOKEN_NAME: &str = "authorization";
+const COOKIE_JWT_TOKEN_NAME: &str = "_explorer_key";
 const CSRF_TOKEN_NAME: &str = "x-csrf-token";
 const API_KEY_NAME: &str = "api_key";
 
@@ -135,10 +136,18 @@ pub async fn auth_from_tokens(
 
 fn extract_jwt(metadata: &MetadataMap) -> Result<String, Error> {
     let cookies = get_cookies(metadata)?;
-    let token = cookies
-        .get(JWT_TOKEN_NAME)
-        .map(|cookie| cookie.value())
-        .ok_or_else(|| Error::InvalidJwt(format!("'{JWT_TOKEN_NAME}' not found in request")))?;
+    let maybe_cookie_jwt = cookies
+        .get(COOKIE_JWT_TOKEN_NAME)
+        .map(|cookie| cookie.value());
+    let maybe_header_jwt = metadata
+        .get(HEADER_JWT_TOKEN_NAME)
+        .map(|v| v.to_str())
+        .transpose()
+        .map_err(|e| Error::InvalidJwt(format!("invalid header format: {e}")))?;
+
+    let token = maybe_header_jwt
+        .or(maybe_cookie_jwt)
+        .ok_or_else(|| Error::InvalidJwt("jwt not found in request".to_string()))?;
     Ok(token.to_string())
 }
 
@@ -152,11 +161,13 @@ fn extract_csrf_token(metadata: &MetadataMap) -> Result<&str, Error> {
 }
 
 fn get_cookies(metadata: &MetadataMap) -> Result<HashMap<String, Cookie>, Error> {
-    let cookies_raw = metadata
-        .get(COOKIE.as_str())
-        .ok_or_else(|| Error::InvalidJwt("no cookies were provided".to_string()))?
-        .to_str()
-        .map_err(|e| Error::InvalidJwt(format!("invalid cookie format: {e}")))?;
+    let cookies_raw = match metadata.get(COOKIE.as_str()) {
+        Some(cookie) => cookie
+            .to_str()
+            .map_err(|e| Error::InvalidJwt(format!("invalid cookie format: {e}")))?
+            .to_string(),
+        None => "".to_string(),
+    };
     let cookies = Cookie::split_parse_encoded(cookies_raw)
         .map(|val| {
             val.map(|c| (c.name().to_string(), c))
@@ -170,7 +181,7 @@ fn build_http_headers(jwt: &str, csrf_token: Option<&str>) -> Result<HeaderMap, 
     let mut map = HeaderMap::new();
     map.insert(
         COOKIE,
-        HeaderValue::from_str(&format!("{JWT_TOKEN_NAME}={jwt}"))
+        HeaderValue::from_str(&format!("{COOKIE_JWT_TOKEN_NAME}={jwt}"))
             .map_err(|e| Error::InvalidJwt(e.to_string()))?,
     );
     if let Some(csrf_token) = csrf_token {
@@ -193,16 +204,20 @@ mod tests {
     use serde::Serialize;
     use tonic::{codegen::http::header::CONTENT_TYPE, Extensions, Request};
 
-    fn build_headers(jwt: &str, csrf_token: Option<&str>) -> HeaderMap {
-        let cookies = format!(
-            "intercom-id-gsgyurk3=2380c963-677d-4899-b130-01b29609f8ca; \
-            intercom-session-gsgyurk3=; intercom-device-id-gsgyurk3=2fa296b4-a133-4922-b754-e3a5e446bb8e; \
-            chakra-ui-color-mode=light; __cuid=0a2ad6cf04a343c0812f65aff55f0f56; \
-            amp_fef1e8=3f4a1e5a-ca9c-4092-9b66-0705e0e44a21R...1gqhd6tvp.1gqhd6tvq.4.1.5; \
-            adblock_detected=true; indexing_alert=false; _explorer_key={jwt}"
-        );
+    fn build_headers(jwt: &str, csrf_token: Option<&str>, in_cookie: bool) -> HeaderMap {
         let mut headers = HeaderMap::new();
-        headers.insert(COOKIE, cookies.parse().unwrap());
+        if in_cookie {
+            let cookies = format!(
+                "intercom-id-gsgyurk3=2380c963-677d-4899-b130-01b29609f8ca; \
+                intercom-session-gsgyurk3=; intercom-device-id-gsgyurk3=2fa296b4-a133-4922-b754-e3a5e446bb8e; \
+                chakra-ui-color-mode=light; __cuid=0a2ad6cf04a343c0812f65aff55f0f56; \
+                amp_fef1e8=3f4a1e5a-ca9c-4092-9b66-0705e0e44a21R...1gqhd6tvp.1gqhd6tvq.4.1.5; \
+                adblock_detected=true; indexing_alert=false; _explorer_key={jwt}"
+            );
+            headers.insert(COOKIE, cookies.parse().unwrap());
+        } else {
+            headers.insert(HEADER_JWT_TOKEN_NAME, jwt.parse().unwrap());
+        };
         headers.insert(CONTENT_TYPE, "application/json".parse().unwrap());
         if let Some(csrf_token) = csrf_token {
             headers.insert(
@@ -214,23 +229,30 @@ mod tests {
     }
 
     fn build_request<T: Serialize>(jwt: &str, csrf_token: Option<&str>, data: T) -> Request<T> {
-        let meta = tonic::metadata::MetadataMap::from_headers(build_headers(jwt, csrf_token));
+        let meta =
+            tonic::metadata::MetadataMap::from_headers(build_headers(jwt, csrf_token, false));
         Request::from_parts(meta, Extensions::default(), data)
     }
 
     #[test]
     fn extract_jwt_works() {
         let jwt = "VALID_JWT_TOKEN";
-        let meta = tonic::metadata::MetadataMap::from_headers(build_headers(jwt, None));
+        let meta = tonic::metadata::MetadataMap::from_headers(build_headers(jwt, None, true));
 
-        let token = extract_jwt(&meta).expect("failed to extract metadata");
-        assert_eq!(token, jwt);
+        let cookie_token = extract_jwt(&meta).expect("failed to extract token from cookie");
+        assert_eq!(cookie_token, jwt);
+
+        let meta = tonic::metadata::MetadataMap::from_headers(build_headers(jwt, None, false));
+
+        let header_token = extract_jwt(&meta).expect("failed to extract token from header");
+        assert_eq!(header_token, jwt);
     }
 
     #[test]
     fn extract_csrf_token_works() {
         let csrf_token = "VALID_CSRF_TOKEN";
-        let meta = tonic::metadata::MetadataMap::from_headers(build_headers("", Some(csrf_token)));
+        let meta =
+            tonic::metadata::MetadataMap::from_headers(build_headers("", Some(csrf_token), true));
 
         let token = extract_csrf_token(&meta).expect("failed to extract metadata");
         assert_eq!(token, csrf_token);
