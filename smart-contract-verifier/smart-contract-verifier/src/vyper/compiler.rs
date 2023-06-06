@@ -1,5 +1,5 @@
 use crate::compiler::{EvmCompiler, Version};
-use ethers_solc::{error::SolcError, CompilerInput, CompilerOutput, Solc};
+use ethers_solc::{error::SolcError, CompilerOutput, Solc};
 use std::path::Path;
 
 #[derive(Default)]
@@ -13,11 +13,13 @@ impl VyperCompiler {
 
 #[async_trait::async_trait]
 impl EvmCompiler for VyperCompiler {
+    type CompilerInput = ethers_solc::CompilerInput;
+
     async fn compile(
         &self,
         path: &Path,
         _ver: &Version,
-        input: &CompilerInput,
+        input: &Self::CompilerInput,
     ) -> Result<CompilerOutput, SolcError> {
         let vyper_output: types::VyperCompilerOutput = Solc::from(path).compile_as(input)?;
         Ok(CompilerOutput::from(vyper_output))

@@ -14,11 +14,13 @@ impl SolidityCompiler {
 
 #[async_trait::async_trait]
 impl EvmCompiler for SolidityCompiler {
+    type CompilerInput = ethers_solc::CompilerInput;
+
     async fn compile(
         &self,
         path: &Path,
         ver: &Version,
-        input: &ethers_solc::CompilerInput,
+        input: &Self::CompilerInput,
     ) -> Result<CompilerOutput, SolcError> {
         if ver.version() < &semver::Version::new(0, 4, 11) {
             solc_cli::compile_using_cli(path, input).await

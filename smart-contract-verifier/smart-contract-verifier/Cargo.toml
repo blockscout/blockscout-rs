@@ -48,4 +48,5 @@ quick-xml = { version = "0.24", features = ["serialize"] }
 rand = "0.8"
 rstest = "0.15"
 tempfile = "3.3"
+tokio = { version = "*", features = ["sync", "parking_lot"] }
 wiremock = "0.5"

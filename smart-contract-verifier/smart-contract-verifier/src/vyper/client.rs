@@ -1,5 +1,5 @@
 use super::compiler::VyperCompiler;
-use crate::{compiler::Compilers, middleware::Middleware, verifier::Success};
+use crate::{compiler::Compilers, middleware::Middleware, vyper::Success};
 use std::sync::Arc;
 
 pub struct Client {

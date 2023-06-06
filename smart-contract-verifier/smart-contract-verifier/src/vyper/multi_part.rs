@@ -1,7 +1,7 @@
-use super::client::Client;
+use super::{client::Client, types::Success};
 use crate::{
     compiler::Version,
-    verifier::{ContractVerifier, Error, Success},
+    verifier::{ContractVerifier, Error},
 };
 use bytes::Bytes;
 use ethers_solc::{
@@ -58,12 +58,14 @@ pub async fn verify(client: Arc<Client>, request: VerificationRequest) -> Result
         request.deployed_bytecode,
         request.chain_id,
     )?;
+    let result = verifier.verify(&compiler_input).await?;
 
     // If case of success, we allow middlewares to process success and only then return it to the caller;
     // Otherwise, we just return an error
-    let success = verifier.verify(&compiler_input).await?;
+    let success = Success::from((compiler_input, result));
     if let Some(middleware) = client.middleware() {
         middleware.call(&success).await;
     }
+
     Ok(success)
 }

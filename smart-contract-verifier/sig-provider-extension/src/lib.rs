@@ -4,7 +4,7 @@ use serde_with::{serde_as, DisplayFromStr};
 use sig_provider_proto::blockscout::sig_provider::v1::{
     signature_service_client::SignatureServiceClient, CreateSignaturesRequest,
 };
-use smart_contract_verifier::{Middleware, SourcifySuccess, VerificationSuccess};
+use smart_contract_verifier::{Middleware, SoliditySuccess, SourcifySuccess, VyperSuccess};
 use std::sync::Arc;
 use tonic::transport::Channel;
 
@@ -43,8 +43,24 @@ impl SigProviderImpl {
 }
 
 #[async_trait::async_trait]
-impl Middleware<VerificationSuccess> for SigProvider {
-    async fn call(&self, output: &VerificationSuccess) {
+impl Middleware<SoliditySuccess> for SigProvider {
+    async fn call(&self, output: &SoliditySuccess) {
+        let abi = output
+            .abi
+            .as_ref()
+            .and_then(|abi| serde_json::to_string(abi).ok());
+        if let Some(abi) = abi {
+            let inner = self.inner.clone();
+            tokio::spawn(async move {
+                inner.create_signatures(abi).await;
+            });
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl Middleware<VyperSuccess> for SigProvider {
+    async fn call(&self, output: &VyperSuccess) {
         let abi = output
             .abi
             .as_ref()
