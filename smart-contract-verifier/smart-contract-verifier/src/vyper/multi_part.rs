@@ -38,8 +38,10 @@ impl TryFrom<MultiFileContent> for CompilerInput {
     type Error = Error;
 
     fn try_from(content: MultiFileContent) -> Result<Self, Self::Error> {
-        let mut settings = Settings::default();
-        settings.evm_version = content.evm_version;
+        let settings = Settings {
+            evm_version: content.evm_version,
+            ..Default::default()
+        };
 
         let sources: Sources = content
             .sources
@@ -53,7 +55,7 @@ impl TryFrom<MultiFileContent> for CompilerInput {
                 Interface::try_new(path.as_path(), content).map(|interface| (path, interface))
             })
             .collect::<Result<Interfaces, _>>()
-            .map_err(|err| Error::Initialization(err))?;
+            .map_err(Error::Initialization)?;
 
         Ok(CompilerInput {
             language: "Vyper".to_string(),
