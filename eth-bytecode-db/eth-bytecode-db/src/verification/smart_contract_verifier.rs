@@ -6,4 +6,5 @@ pub use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::
     vyper_verifier_client, BytecodeType, ListCompilerVersionsRequest, ListCompilerVersionsResponse,
     VerificationMetadata, VerifyResponse, VerifySolidityMultiPartRequest,
     VerifySolidityStandardJsonRequest, VerifySourcifyRequest, VerifyVyperMultiPartRequest,
+    VerifyVyperStandardJsonRequest,
 };

@@ -9,6 +9,7 @@ pub use client::Client;
 pub use errors::Error;
 pub use handlers::{
     compiler_versions, solidity_multi_part, solidity_standard_json, sourcify, vyper_multi_part,
+    vyper_standard_json,
 };
 pub use types::{
     BytecodePart, BytecodeType, MatchType, Source, SourceType, VerificationMetadata,
