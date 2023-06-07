@@ -50,7 +50,7 @@ pub async fn verify(
             bytecode_type,
             raw_request_bytecode,
             verification_settings,
-            verification_type: VerificationType::MultiPartFiles,
+            verification_type: VerificationType::StandardJson,
             verification_metadata,
         },
     )
