@@ -91,7 +91,8 @@ async fn test_historical_data_is_added_into_database(service: MockVyperVerifierS
         "compiler_version": "compiler_version",
         "evm_version": "london",
         "optimizations": false,
-        "source_files": {}
+        "source_files": {},
+        "interfaces": {}
     });
     let verification_type = sea_orm_active_enums::VerificationType::MultiPartFiles;
     verification_test_helpers::test_historical_data_is_added_into_database(
