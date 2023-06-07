@@ -96,10 +96,13 @@ pub enum Interface {
 
 impl Interface {
     pub fn try_new(path: &Path, content: String) -> Result<Self, anyhow::Error> {
-        // Adapted from: https://github.com/vyperlang/vyper/blob/v0.3.9/vyper/cli/vyper_compile.py#L221
+        // Adapted from: https://github.com/vyperlang/vyper/blob/v0.3.9/vyper/cli/vyper_compile.py#L217-L246
         if path.extension() == Some(std::ffi::OsStr::new("json")) {
-            let content: serde_json::Value = serde_json::from_str(&content)
-                .map_err(|err| anyhow::anyhow!("couldn't parse content as a json value: {err}"))?;
+            let content: serde_json::Value = serde_json::from_str(&content).map_err(|err| {
+                anyhow::anyhow!(
+                    "couldn't parse the content of an interface as a json value: {path:?} - {err}"
+                )
+            })?;
             match content {
                 serde_json::Value::Object(map) if map.contains_key("contractTypes") => {
                     let contract_types = map.get("contractTypes").unwrap().clone();
