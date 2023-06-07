@@ -1,12 +1,16 @@
-use super::{client::Client, types::Success};
+use super::{
+    artifacts::{CompilerInput, Interface, Interfaces, Settings},
+    client::Client,
+    types::Success,
+};
 use crate::{
     compiler::Version,
     verifier::{ContractVerifier, Error},
 };
 use bytes::Bytes;
 use ethers_solc::{
-    artifacts::{Settings, Source, Sources},
-    CompilerInput, EvmVersion,
+    artifacts::{Source, Sources},
+    EvmVersion,
 };
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
@@ -26,31 +30,44 @@ pub struct VerificationRequest {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MultiFileContent {
     pub sources: BTreeMap<PathBuf, String>,
+    pub interfaces: BTreeMap<PathBuf, String>,
     pub evm_version: Option<EvmVersion>,
 }
 
-impl From<MultiFileContent> for CompilerInput {
-    fn from(content: MultiFileContent) -> Self {
-        let mut settings = Settings::default();
-        settings.optimizer.enabled = None;
-        settings.optimizer.runs = None;
-        settings.evm_version = content.evm_version;
+impl TryFrom<MultiFileContent> for CompilerInput {
+    type Error = Error;
+
+    fn try_from(content: MultiFileContent) -> Result<Self, Self::Error> {
+        let settings = Settings {
+            evm_version: content.evm_version,
+            ..Default::default()
+        };
 
         let sources: Sources = content
             .sources
             .into_iter()
-            .map(|(name, content)| (name, Source::new(content)))
+            .map(|(path, content)| (path, Source::new(content)))
             .collect();
-        CompilerInput {
+        let interfaces = content
+            .interfaces
+            .into_iter()
+            .map(|(path, content)| {
+                Interface::try_new(path.as_path(), content).map(|interface| (path, interface))
+            })
+            .collect::<Result<Interfaces, _>>()
+            .map_err(Error::Initialization)?;
+
+        Ok(CompilerInput {
             language: "Vyper".to_string(),
             sources,
+            interfaces,
             settings,
-        }
+        })
     }
 }
 
 pub async fn verify(client: Arc<Client>, request: VerificationRequest) -> Result<Success, Error> {
-    let compiler_input = CompilerInput::from(request.content);
+    let compiler_input = CompilerInput::try_from(request.content)?;
     let verifier = ContractVerifier::new(
         client.compilers(),
         &request.compiler_version,

@@ -1,10 +1,10 @@
 use crate::proto::{source, Source};
 use blockscout_display_bytes::Bytes as DisplayBytes;
-use smart_contract_verifier::{MatchType, SoliditySuccess, SourcifySuccess, VyperSuccess};
+use smart_contract_verifier::{vyper, MatchType, SoliditySuccess, SourcifySuccess, VyperSuccess};
 use std::sync::Arc;
 
 macro_rules! from_success {
-    ( $value:expr, $source_type:expr ) => {{
+    ( $value:expr, $source_type:expr, $extract_source_files:expr ) => {{
         let compiler_input = $value.compiler_input;
         let compiler_settings = serde_json::to_string(&compiler_input.settings)
             .expect("Is result of local compilation and, thus, should be always valid");
@@ -20,16 +20,7 @@ macro_rules! from_success {
             compiler_version: $value.compiler_version.to_string(),
             compiler_settings,
             source_type: $source_type.into(),
-            source_files: compiler_input
-                .sources
-                .into_iter()
-                .map(|(path, source)| {
-                    // Similar to `unwrap_or_clone` which is still nightly-only feature.
-                    let content = Arc::try_unwrap(source.content)
-                        .unwrap_or_else(|content| (*content).clone());
-                    (path.to_string_lossy().to_string(), content)
-                })
-                .collect(),
+            source_files: $extract_source_files(compiler_input),
             abi: $value.abi.as_ref().map(|abi| {
                 serde_json::to_string(abi)
                     .expect("Is result of local compilation and, thus, should be always valid")
@@ -46,11 +37,39 @@ pub fn from_solidity_success(value: SoliditySuccess) -> Source {
         "Yul" => source::SourceType::Yul,
         _ => source::SourceType::Unspecified,
     };
-    from_success!(value, source_type)
+    let extract_source_files = |compiler_input: ethers_solc::CompilerInput| {
+        compiler_input
+            .sources
+            .into_iter()
+            .map(|(path, source)| {
+                // Similar to `unwrap_or_clone` which is still nightly-only feature.
+                let content =
+                    Arc::try_unwrap(source.content).unwrap_or_else(|content| (*content).clone());
+                (path.to_string_lossy().to_string(), content)
+            })
+            .collect()
+    };
+    from_success!(value, source_type, extract_source_files)
 }
 
 pub fn from_vyper_success(value: VyperSuccess) -> Source {
-    from_success!(value, source::SourceType::Vyper)
+    let extract_source_files = |compiler_input: vyper::artifacts::CompilerInput| {
+        let sources = compiler_input.sources.into_iter().map(|(path, source)| {
+            // Similar to `unwrap_or_clone` which is still nightly-only feature.
+            let content =
+                Arc::try_unwrap(source.content).unwrap_or_else(|content| (*content).clone());
+            (path.to_string_lossy().to_string(), content)
+        });
+        let interfaces = compiler_input
+            .interfaces
+            .into_iter()
+            .map(|(path, interface)| {
+                let content = interface.content();
+                (path.to_string_lossy().to_string(), content)
+            });
+        sources.chain(interfaces).collect()
+    };
+    from_success!(value, source::SourceType::Vyper, extract_source_files)
 }
 
 pub fn from_sourcify_success(value: SourcifySuccess) -> Source {
@@ -78,16 +97,16 @@ pub fn from_sourcify_success(value: SourcifySuccess) -> Source {
 mod tests {
     use super::*;
     use ethers_solc::{
-        artifacts::{self, Libraries, Optimizer, Settings},
-        CompilerInput, EvmVersion,
+        artifacts::{self, Libraries, Optimizer},
+        EvmVersion,
     };
     use pretty_assertions::assert_eq;
-    use smart_contract_verifier::Version;
+    use smart_contract_verifier::{vyper, Version};
     use std::{collections::BTreeMap, str::FromStr};
 
     #[test]
     fn test_from_solidity_success() {
-        let compiler_settings = Settings {
+        let compiler_settings = ethers_solc::artifacts::Settings {
             optimizer: Optimizer {
                 enabled: Some(true),
                 runs: Some(200),
@@ -103,7 +122,7 @@ mod tests {
             ..Default::default()
         };
         let verification_success = SoliditySuccess {
-            compiler_input: CompilerInput {
+            compiler_input: ethers_solc::CompilerInput {
                 language: "Solidity".to_string(),
                 sources: BTreeMap::from([("file_name".into(), artifacts::Source::new("content"))]),
                 settings: compiler_settings.clone(),
@@ -137,25 +156,20 @@ mod tests {
 
     #[test]
     fn test_from_vyper_success() {
-        let compiler_settings = Settings {
-            optimizer: Optimizer {
-                enabled: Some(true),
-                runs: Some(200),
-                ..Default::default()
-            },
+        let compiler_settings = vyper::artifacts::Settings {
+            optimize: Some(false),
+            bytecode_metadata: Some(true),
             evm_version: Some(EvmVersion::London),
-            libraries: Libraries {
-                libs: BTreeMap::from([(
-                    "lib_path".into(),
-                    BTreeMap::from([("lib_name".into(), "lib_address".into())]),
-                )]),
-            },
             ..Default::default()
         };
         let verification_success = VyperSuccess {
-            compiler_input: CompilerInput {
+            compiler_input: vyper::artifacts::CompilerInput {
                 language: "Vyper".to_string(),
                 sources: BTreeMap::from([("file_name".into(), artifacts::Source::new("content"))]),
+                interfaces: BTreeMap::from([(
+                    "interface_name.vy".into(),
+                    vyper::artifacts::Interface::Vyper(artifacts::Source::new("interface_content")),
+                )]),
                 settings: compiler_settings.clone(),
             },
             compiler_output: Default::default(),
@@ -176,7 +190,10 @@ mod tests {
             compiler_version: "v0.3.9+commit.66b96705".to_string(),
             compiler_settings: serde_json::to_string(&compiler_settings).unwrap(),
             source_type: source::SourceType::Vyper.into(),
-            source_files: BTreeMap::from([("file_name".into(), "content".into())]),
+            source_files: BTreeMap::from([
+                ("file_name".into(), "content".into()),
+                ("interface_name.vy".into(), "interface_content".into()),
+            ]),
             constructor_arguments: Some("0x123456".into()),
             abi: Some(serde_json::to_string(&ethabi::Contract::default()).unwrap()),
             match_type: source::MatchType::Partial.into(),

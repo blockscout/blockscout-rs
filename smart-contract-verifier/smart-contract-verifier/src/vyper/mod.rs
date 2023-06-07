@@ -2,6 +2,7 @@ mod client;
 mod compiler;
 mod types;
 
+pub mod artifacts;
 pub mod multi_part;
 
 pub use client::Client;
