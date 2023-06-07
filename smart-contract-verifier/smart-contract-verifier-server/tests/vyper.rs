@@ -8,6 +8,7 @@ use actix_web::{
     App,
 };
 use blockscout_display_bytes::Bytes as DisplayBytes;
+use pretty_assertions::assert_eq;
 use serde::Deserialize;
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
     source::SourceType, verify_response::Status, vyper_verifier_actix::route_vyper_verifier,
@@ -20,8 +21,6 @@ use std::{
 };
 use tokio::sync::{OnceCell, Semaphore};
 use vyper_types::TestCase;
-
-const ROUTE: &str = "/api/v2/verifier/vyper/sources:verify-multi-part";
 
 async fn global_service() -> &'static Arc<VyperVerifierService> {
     static SERVICE: OnceCell<Arc<VyperVerifierService>> = OnceCell::const_new();
@@ -41,7 +40,7 @@ async fn global_service() -> &'static Arc<VyperVerifierService> {
         .await
 }
 
-async fn test_setup(test_case: &impl TestCase) -> ServiceResponse {
+async fn test_setup<T: TestCase>(test_case: &T) -> ServiceResponse {
     let service = global_service().await;
     let app = test::init_service(
         App::new().configure(|config| route_vyper_verifier(config, service.clone())),
@@ -51,7 +50,7 @@ async fn test_setup(test_case: &impl TestCase) -> ServiceResponse {
     let request = test_case.to_request();
 
     TestRequest::post()
-        .uri(ROUTE)
+        .uri(T::route())
         .set_json(&request)
         .send_request(&app)
         .await
@@ -263,6 +262,19 @@ mod multi_part {
     async fn verify_success() {
         for test_case_name in &["with_interfaces"] {
             let test_case = vyper_types::from_file::<MultiPart>(test_case_name);
+            test_success(test_case).await;
+        }
+    }
+}
+
+mod standard_json {
+    use super::{test_success, vyper_types};
+    use vyper_types::StandardJson;
+
+    #[tokio::test]
+    async fn verify_success() {
+        for test_case_name in &["standard_json_with_interfaces"] {
+            let test_case = vyper_types::from_file::<StandardJson>(test_case_name);
             test_success(test_case).await;
         }
     }
