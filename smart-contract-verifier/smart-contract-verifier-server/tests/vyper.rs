@@ -19,7 +19,7 @@ use std::{
     sync::Arc,
 };
 use tokio::sync::{OnceCell, Semaphore};
-use vyper_types::{Flattened, TestCase};
+use vyper_types::TestCase;
 
 const ROUTE: &str = "/api/v2/verifier/vyper/sources:verify-multi-part";
 
@@ -86,6 +86,11 @@ async fn test_success(test_case: impl TestCase) {
         .abi
         .as_ref()
         .map(|abi| serde_json::from_str(abi));
+    assert_eq!(
+        verification_result.file_name,
+        test_case.file_name(),
+        "Invalid file name"
+    );
     assert_eq!(
         verification_result.contract_name,
         test_case.contract_name(),
@@ -199,48 +204,66 @@ async fn test_error(test_case: impl TestCase, expected_status: StatusCode, expec
         "Invalid message: {message}"
     );
 }
+mod flattened {
+    use super::{test_error, test_failure, test_success, vyper_types};
+    use actix_web::http::StatusCode;
+    use vyper_types::Flattened;
 
-#[tokio::test]
-async fn vyper_verify_flattened_success() {
-    for test_case_name in &["simple", "arguments", "erc20", "erc667"] {
-        let test_case = vyper_types::from_file::<Flattened>(test_case_name);
-        test_success(test_case).await;
+    #[tokio::test]
+    async fn verify_success() {
+        for test_case_name in &["simple", "arguments", "erc20", "erc667"] {
+            let test_case = vyper_types::from_file::<Flattened>(test_case_name);
+            test_success(test_case).await;
+        }
+    }
+
+    #[tokio::test]
+    async fn verify_fail() {
+        let mut test_case = vyper_types::from_file::<Flattened>("arguments");
+        test_case.source_code =
+            "count: public(uint256)\n@external\ndef __init__():\n    self.count = 345678765"
+                .to_string();
+        test_failure(
+            test_case,
+            "No contract could be verified with provided data",
+        )
+        .await;
+
+        let mut test_case = vyper_types::from_file::<Flattened>("erc20");
+        test_case.creation_bytecode = "0x60".to_string();
+        test_failure(
+            test_case,
+            "No contract could be verified with provided data",
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn verify_error() {
+        let mut test_case = vyper_types::from_file::<Flattened>("simple");
+        test_case.compiler_version = "v0.1.400+commit.e67f0147".to_string();
+        test_error(
+            test_case.clone(),
+            StatusCode::BAD_REQUEST,
+            "Compiler version not found: ",
+        )
+        .await;
+
+        let mut test_case = vyper_types::from_file::<Flattened>("simple");
+        test_case.creation_bytecode = "0xkeklol".to_string();
+        test_error(test_case, StatusCode::BAD_REQUEST, "Invalid bytecode: ").await;
     }
 }
 
-#[tokio::test]
-async fn vyper_verify_flattened_fail() {
-    let mut test_case = vyper_types::from_file::<Flattened>("arguments");
-    test_case.source_code =
-        "count: public(uint256)\n@external\ndef __init__():\n    self.count = 345678765"
-            .to_string();
-    test_failure(
-        test_case,
-        "No contract could be verified with provided data",
-    )
-    .await;
+mod multi_part {
+    use super::{test_success, vyper_types};
+    use vyper_types::MultiPart;
 
-    let mut test_case = vyper_types::from_file::<Flattened>("erc20");
-    test_case.creation_bytecode = "0x60".to_string();
-    test_failure(
-        test_case,
-        "No contract could be verified with provided data",
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn vyper_verify_flattened_error() {
-    let mut test_case = vyper_types::from_file::<Flattened>("simple");
-    test_case.compiler_version = "v0.1.400+commit.e67f0147".to_string();
-    test_error(
-        test_case.clone(),
-        StatusCode::BAD_REQUEST,
-        "Compiler version not found: ",
-    )
-    .await;
-
-    let mut test_case = vyper_types::from_file::<Flattened>("simple");
-    test_case.creation_bytecode = "0xkeklol".to_string();
-    test_error(test_case, StatusCode::BAD_REQUEST, "Invalid bytecode: ").await;
+    #[tokio::test]
+    async fn verify_success() {
+        for test_case_name in &["with_interfaces"] {
+            let test_case = vyper_types::from_file::<MultiPart>(test_case_name);
+            test_success(test_case).await;
+        }
+    }
 }
