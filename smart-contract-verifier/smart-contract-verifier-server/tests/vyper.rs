@@ -13,7 +13,6 @@ use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
 };
 use smart_contract_verifier_server::{Settings, VyperVerifierService};
 use std::{
-    collections::BTreeMap,
     fs,
     str::{from_utf8, FromStr},
     sync::Arc,
@@ -105,15 +104,13 @@ async fn test_success(test_case: TestCase) {
     );
 
     assert!(
-        verification_response.source.is_some(),
-        "Verification source is not Some"
-    );
-    assert!(
         verification_response.extra_data.is_some(),
-        "Verification extra_data is not Some"
+        "Verification extra_data is absent"
     );
 
-    let verification_result = verification_response.source.expect("Checked above");
+    let verification_result = verification_response
+        .source
+        .expect("Verification source is absent");
 
     let abi: Option<Result<ethabi::Contract, _>> = verification_result
         .abi
@@ -146,23 +143,12 @@ async fn test_success(test_case: TestCase) {
         "Invalid compiler version"
     );
 
-    mod compiler_settings {
-        use serde::Deserialize;
-
-        #[derive(Default, Deserialize)]
-        #[serde(rename_all = "camelCase")]
-        pub struct Optimizer {
-            pub enabled: Option<bool>,
-            pub runs: Option<i32>,
-        }
-    }
-
     #[derive(Deserialize)]
     #[serde(rename_all = "camelCase")]
     struct CompilerSettings {
-        pub libraries: BTreeMap<String, BTreeMap<String, String>>,
-        #[serde(default)]
-        pub optimizer: compiler_settings::Optimizer,
+        pub evm_version: Option<String>,
+        pub optimize: Option<bool>,
+        pub bytecode_metadata: Option<bool>,
     }
     let compiler_settings: CompilerSettings =
         serde_json::from_str(&verification_result.compiler_settings).unwrap_or_else(|_| {
@@ -171,18 +157,11 @@ async fn test_success(test_case: TestCase) {
                 &verification_result.compiler_settings
             )
         });
+    assert_eq!(compiler_settings.evm_version, None, "Invalid evm version");
+    assert_eq!(compiler_settings.optimize, None, "Invalid optimize setting");
     assert_eq!(
-        compiler_settings.libraries,
-        BTreeMap::new(),
-        "Invalid contract libraries"
-    );
-    assert_eq!(
-        compiler_settings.optimizer.enabled, None,
-        "Invalid optimization"
-    );
-    assert_eq!(
-        compiler_settings.optimizer.runs, None,
-        "Invalid optimization runs"
+        compiler_settings.bytecode_metadata, None,
+        "Invalid bytecode metadata settings"
     );
     assert_eq!(
         verification_result.source_files.len(),
