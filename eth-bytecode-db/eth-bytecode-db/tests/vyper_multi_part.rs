@@ -22,6 +22,7 @@ const DB_PREFIX: &str = "vyper_multi_part";
 fn default_request_content() -> MultiPartFiles {
     MultiPartFiles {
         source_files: Default::default(),
+        interfaces: Default::default(),
         evm_version: Some("london".to_string()),
         optimizations: Some(false),
     }

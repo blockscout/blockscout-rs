@@ -3902,7 +3902,7 @@ checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
 [[package]]
 name = "smart-contract-verifier-proto"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs?rev=95e4f0b7#95e4f0b74d11c2b5d316bd14c8576510c8dff5f5"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=d393fa3#d393fa3e84d01eecd5143cb1f2cda999a4c4f00b"
 dependencies = [
  "actix-prost",
  "actix-prost-build",

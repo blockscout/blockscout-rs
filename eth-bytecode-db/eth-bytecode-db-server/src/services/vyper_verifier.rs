@@ -37,6 +37,7 @@ impl vyper_verifier_server::VyperVerifier for VyperVerifierService {
             compiler_version: request.compiler_version,
             content: vyper_multi_part::MultiPartFiles {
                 source_files: request.source_files,
+                interfaces: request.interfaces,
                 evm_version: request.evm_version,
                 optimizations: request.optimizations,
             },

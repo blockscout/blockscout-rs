@@ -15,6 +15,7 @@ pub struct MultiPartFiles {
     pub evm_version: Option<String>,
     pub optimizations: Option<bool>,
     pub source_files: BTreeMap<String, String>,
+    pub interfaces: BTreeMap<String, String>,
 }
 
 impl From<VerificationRequest<MultiPartFiles>> for VerifyVyperMultiPartRequest {
@@ -24,6 +25,7 @@ impl From<VerificationRequest<MultiPartFiles>> for VerifyVyperMultiPartRequest {
             bytecode_type: BytecodeType::from(request.bytecode_type).into(),
             compiler_version: request.compiler_version,
             source_files: request.content.source_files,
+            interfaces: request.content.interfaces,
             evm_version: request.content.evm_version,
             optimizations: request.content.optimizations,
             metadata: request.metadata.map(|metadata| metadata.into()),
@@ -84,6 +86,10 @@ mod tests {
                     ("source_file1".into(), "content1".into()),
                     ("source_file2".into(), "content2".into()),
                 ]),
+                interfaces: BTreeMap::from([
+                    ("interface1".into(), "interface_content1".into()),
+                    ("interface2".into(), "interface_content2".into()),
+                ]),
             },
             metadata: Some(types::VerificationMetadata {
                 chain_id: 1,
@@ -97,6 +103,10 @@ mod tests {
             source_files: BTreeMap::from([
                 ("source_file1".into(), "content1".into()),
                 ("source_file2".into(), "content2".into()),
+            ]),
+            interfaces: BTreeMap::from([
+                ("interface1".into(), "interface_content1".into()),
+                ("interface2".into(), "interface_content2".into()),
             ]),
             evm_version: Some("istanbul".to_string()),
             optimizations: Some(true),
@@ -125,6 +135,10 @@ mod tests {
                     ("source_file1".into(), "content1".into()),
                     ("source_file2".into(), "content2".into()),
                 ]),
+                interfaces: BTreeMap::from([
+                    ("interface1".into(), "interface_content1".into()),
+                    ("interface2".into(), "interface_content2".into()),
+                ]),
             },
             metadata: Some(types::VerificationMetadata {
                 chain_id: 1,
@@ -138,6 +152,10 @@ mod tests {
             source_files: BTreeMap::from([
                 ("source_file1".into(), "content1".into()),
                 ("source_file2".into(), "content2".into()),
+            ]),
+            interfaces: BTreeMap::from([
+                ("interface1".into(), "interface_content1".into()),
+                ("interface2".into(), "interface_content2".into()),
             ]),
             evm_version: Some("istanbul".to_string()),
             optimizations: Some(true),
