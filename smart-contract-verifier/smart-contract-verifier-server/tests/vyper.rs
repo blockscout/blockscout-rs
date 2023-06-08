@@ -203,6 +203,7 @@ async fn test_error(test_case: impl TestCase, expected_status: StatusCode, expec
         "Invalid message: {message}"
     );
 }
+
 mod flattened {
     use super::{test_error, test_failure, test_success, vyper_types};
     use actix_web::http::StatusCode;
