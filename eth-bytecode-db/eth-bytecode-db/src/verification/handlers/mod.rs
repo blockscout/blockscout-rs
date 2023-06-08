@@ -3,6 +3,7 @@ pub mod solidity_multi_part;
 pub mod solidity_standard_json;
 pub mod sourcify;
 pub mod vyper_multi_part;
+pub mod vyper_standard_json;
 
 ////////////////////////////////////////////////////////////////////////////////////////////
 

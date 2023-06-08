@@ -3,12 +3,12 @@ mod verification_test_helpers;
 use async_trait::async_trait;
 use entity::sea_orm_active_enums;
 use eth_bytecode_db::verification::{
-    vyper_multi_part, vyper_multi_part::MultiPartFiles, Client, Error, Source, SourceType,
+    vyper_standard_json, vyper_standard_json::StandardJson, Client, Error, Source, SourceType,
     VerificationMetadata, VerificationRequest,
 };
 use rstest::{fixture, rstest};
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
-    VerifyResponse, VerifyVyperMultiPartRequest,
+    VerifyResponse, VerifyVyperStandardJsonRequest,
 };
 use tonic::Response;
 use verification_test_helpers::{
@@ -17,23 +17,24 @@ use verification_test_helpers::{
     VerifierService,
 };
 
-const DB_PREFIX: &str = "vyper_multi_part";
+const DB_PREFIX: &str = "vyper_standard_json";
 
-fn default_request_content() -> MultiPartFiles {
-    MultiPartFiles {
-        source_files: Default::default(),
-        interfaces: Default::default(),
-        evm_version: Some("london".to_string()),
-        optimizations: Some(false),
+fn default_request_content() -> StandardJson {
+    StandardJson {
+        input: "".to_string(),
     }
 }
 
 #[async_trait]
-impl VerifierService<VerificationRequest<MultiPartFiles>> for MockVyperVerifierService {
-    type GrpcT = VerifyVyperMultiPartRequest;
+impl VerifierService<VerificationRequest<StandardJson>> for MockVyperVerifierService {
+    type GrpcT = VerifyVyperStandardJsonRequest;
 
-    fn add_into_service(&mut self, request: VerifyVyperMultiPartRequest, response: VerifyResponse) {
-        self.expect_verify_multi_part()
+    fn add_into_service(
+        &mut self,
+        request: VerifyVyperStandardJsonRequest,
+        response: VerifyResponse,
+    ) {
+        self.expect_verify_standard_json()
             .withf(move |arg| arg.get_ref() == &request)
             .returning(move |_| Ok(Response::new(response.clone())));
     }
@@ -46,7 +47,7 @@ impl VerifierService<VerificationRequest<MultiPartFiles>> for MockVyperVerifierS
         &self,
         id: u8,
         metadata: Option<VerificationMetadata>,
-    ) -> VerificationRequest<MultiPartFiles> {
+    ) -> VerificationRequest<StandardJson> {
         generate_verification_request(id, default_request_content(), metadata)
     }
 
@@ -56,9 +57,9 @@ impl VerifierService<VerificationRequest<MultiPartFiles>> for MockVyperVerifierS
 
     async fn verify(
         client: Client,
-        request: VerificationRequest<MultiPartFiles>,
+        request: VerificationRequest<StandardJson>,
     ) -> Result<Source, Error> {
-        vyper_multi_part::verify(client, request).await
+        vyper_standard_json::verify(client, request).await
     }
 }
 
@@ -89,12 +90,9 @@ async fn test_historical_data_is_added_into_database(service: MockVyperVerifierS
         "bytecode": "0x01",
         "bytecode_type": "CreationInput",
         "compiler_version": "compiler_version",
-        "evm_version": "london",
-        "optimizations": false,
-        "source_files": {},
-        "interfaces": {}
+        "input": ""
     });
-    let verification_type = sea_orm_active_enums::VerificationType::MultiPartFiles;
+    let verification_type = sea_orm_active_enums::VerificationType::StandardJson;
     verification_test_helpers::test_historical_data_is_added_into_database(
         DB_PREFIX,
         service,
