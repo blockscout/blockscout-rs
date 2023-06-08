@@ -56,7 +56,7 @@ pub struct Success {
     pub compiler_version: compiler::Version,
     pub file_path: String,
     pub contract_name: String,
-    pub abi: Option<ethabi::Contract>,
+    pub abi: Option<serde_json::Value>,
     pub constructor_args: Option<DisplayBytes>,
     pub local_bytecode_parts: LocalBytecodeParts,
     pub match_type: MatchType,

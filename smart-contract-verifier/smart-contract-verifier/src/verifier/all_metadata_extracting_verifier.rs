@@ -190,7 +190,7 @@ impl<T: Source> Verifier<T> {
         )?;
 
         Ok(ComparisonSuccess {
-            abi,
+            abi: contract.abi.clone().map(|abi| abi.abi_value),
             constructor_args,
             local_bytecode,
             match_type,
@@ -359,7 +359,7 @@ impl<T: Source> Verifier<T> {
 }
 
 struct ComparisonSuccess<T> {
-    pub abi: Option<ethabi::Contract>,
+    pub abi: Option<serde_json::Value>,
     pub constructor_args: Option<Bytes>,
     pub local_bytecode: LocalBytecode<T>,
     pub match_type: MatchType,

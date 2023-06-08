@@ -6,6 +6,7 @@ pub struct TestInput {
     pub has_constructor_args: bool,
     pub is_yul: bool,
     pub ignore_creation_tx_input: bool,
+    pub abi: Option<serde_json::Value>,
 
     /// If None, the input would be read from the corresponding file
     pub standard_input: Option<String>,
@@ -23,6 +24,7 @@ impl TestInput {
             has_constructor_args: false,
             is_yul: false,
             ignore_creation_tx_input: false,
+            abi: None,
 
             standard_input: None,
             creation_tx_input: None,

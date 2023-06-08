@@ -19,6 +19,7 @@ use solidity_multiple_types::TestInput;
 use std::{
     collections::BTreeMap,
     fs,
+    path::PathBuf,
     str::{from_utf8, FromStr},
     sync::Arc,
 };
@@ -45,7 +46,10 @@ async fn global_service() -> &'static Arc<SolidityVerifierService> {
         .await
 }
 
-async fn test_setup(dir: &str, input: &mut TestInput) -> (ServiceResponse, Option<String>) {
+async fn test_setup(
+    dir: &str,
+    input: &mut TestInput,
+) -> (ServiceResponse, Option<String>, Option<serde_json::Value>) {
     let service = global_service().await;
     let app = test::init_service(
         App::new().configure(|config| route_solidity_verifier(config, service.clone())),
@@ -75,6 +79,14 @@ async fn test_setup(dir: &str, input: &mut TestInput) -> (ServiceResponse, Optio
             .expect("Error while reading constructor_arguments")
     });
 
+    let abi = {
+        let path = PathBuf::from(format!("{prefix}/abi.json"));
+        path.is_file().then(|| {
+            let content = fs::read_to_string(path).expect("Error while reading abi");
+            serde_json::Value::from_str(&content).expect("Error while deserializing abi")
+        })
+    };
+
     let (bytecode, bytecode_type) = if !input.ignore_creation_tx_input {
         (input.creation_tx_input.as_ref().unwrap(), "CREATION_INPUT")
     } else {
@@ -99,11 +111,11 @@ async fn test_setup(dir: &str, input: &mut TestInput) -> (ServiceResponse, Optio
         .send_request(&app)
         .await;
 
-    (response, expected_constructor_argument)
+    (response, expected_constructor_argument, abi)
 }
 
 async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse {
-    let (response, expected_constructor_argument) = test_setup(dir, &mut input).await;
+    let (response, expected_constructor_argument, expected_abi) = test_setup(dir, &mut input).await;
 
     // Assert that status code is success
     if !response.status().is_success() {
@@ -133,7 +145,7 @@ async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse
     );
 
     let result_source = verification_response.source.expect("Checked above");
-    let abi: Option<Result<ethabi::Contract, _>> = result_source
+    let abi: Option<Result<serde_json::Value, _>> = result_source
         .abi
         .as_ref()
         .map(|abi| serde_json::from_str(abi));
@@ -148,6 +160,13 @@ async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse
             "Abi deserialization failed: {}",
             abi.unwrap().as_ref().unwrap_err()
         );
+        if let Some(expected_abi) = expected_abi {
+            assert_eq!(
+                &expected_abi,
+                abi.as_ref().unwrap().as_ref().unwrap(),
+                "Invalid abi"
+            )
+        }
         assert_eq!(
             result_source.source_type().as_str_name(),
             "SOLIDITY",
@@ -240,7 +259,7 @@ async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse
 
 /// Test verification failures (note: do not handle 400 BadRequest responses)
 async fn test_failure(dir: &str, mut input: TestInput, expected_message: &str) {
-    let (response, _expected_constructor_argument) = test_setup(dir, &mut input).await;
+    let (response, _expected_constructor_argument, _abi) = test_setup(dir, &mut input).await;
 
     assert!(
         response.status().is_success(),
@@ -280,7 +299,7 @@ async fn test_error(
     expected_status: StatusCode,
     expected_message: Option<&str>,
 ) {
-    let (response, _expected_constructor_argument) = test_setup(dir, &mut input).await;
+    let (response, _expected_constructor_argument, _abi) = test_setup(dir, &mut input).await;
 
     let status = response.status();
 
