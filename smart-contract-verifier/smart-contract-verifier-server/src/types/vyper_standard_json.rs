@@ -1,46 +1,48 @@
 use super::StandardJsonParseError;
-use crate::proto::{BytecodeType, VerifySolidityStandardJsonRequest};
+use crate::proto::{BytecodeType, VerifyVyperStandardJsonRequest};
 use anyhow::anyhow;
 use blockscout_display_bytes::Bytes as DisplayBytes;
-use ethers_solc::CompilerInput;
 use serde::{Deserialize, Serialize};
 use smart_contract_verifier::{
-    solidity::standard_json::{StandardJsonContent, VerificationRequest},
+    vyper::{
+        artifacts::CompilerInput,
+        standard_json::{StandardJsonContent, VerificationRequest},
+    },
     Version,
 };
 use std::{ops::Deref, str::FromStr};
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
-pub struct VerifySolidityStandardJsonRequestWrapper(VerifySolidityStandardJsonRequest);
+pub struct VerifyVyperStandardJsonRequestWrapper(VerifyVyperStandardJsonRequest);
 
-impl From<VerifySolidityStandardJsonRequest> for VerifySolidityStandardJsonRequestWrapper {
-    fn from(inner: VerifySolidityStandardJsonRequest) -> Self {
+impl From<VerifyVyperStandardJsonRequest> for VerifyVyperStandardJsonRequestWrapper {
+    fn from(inner: VerifyVyperStandardJsonRequest) -> Self {
         Self(inner)
     }
 }
 
-impl Deref for VerifySolidityStandardJsonRequestWrapper {
-    type Target = VerifySolidityStandardJsonRequest;
+impl Deref for VerifyVyperStandardJsonRequestWrapper {
+    type Target = VerifyVyperStandardJsonRequest;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl VerifySolidityStandardJsonRequestWrapper {
-    pub fn new(inner: VerifySolidityStandardJsonRequest) -> Self {
+impl VerifyVyperStandardJsonRequestWrapper {
+    pub fn new(inner: VerifyVyperStandardJsonRequest) -> Self {
         Self(inner)
     }
 
-    pub fn into_inner(self) -> VerifySolidityStandardJsonRequest {
+    pub fn into_inner(self) -> VerifyVyperStandardJsonRequest {
         self.0
     }
 }
 
-impl TryFrom<VerifySolidityStandardJsonRequestWrapper> for VerificationRequest {
+impl TryFrom<VerifyVyperStandardJsonRequestWrapper> for VerificationRequest {
     type Error = StandardJsonParseError;
 
-    fn try_from(request: VerifySolidityStandardJsonRequestWrapper) -> Result<Self, Self::Error> {
+    fn try_from(request: VerifyVyperStandardJsonRequestWrapper) -> Result<Self, Self::Error> {
         let request = request.into_inner();
 
         let bytecode = DisplayBytes::from_str(&request.bytecode)
@@ -78,11 +80,11 @@ mod tests {
     fn try_into_verification_request() {
         /********** Creation Input **********/
 
-        let mut request = VerifySolidityStandardJsonRequest {
+        let mut request = VerifyVyperStandardJsonRequest {
             bytecode: "0x1234".to_string(),
             bytecode_type: BytecodeType::CreationInput.into(),
-            compiler_version: "v0.8.17+commit.8df45f5f".to_string(),
-            input: "{\"language\": \"Solidity\", \"sources\": {\"./src/contracts/Foo.sol\": {\"content\": \"pragma solidity ^0.8.2;\\n\\ncontract Foo {\\n    function bar() external pure returns (uint256) {\\n        return 42;\\n    }\\n}\\n\"}}, \"settings\": {\"metadata\": {\"useLiteralContent\": true}, \"optimizer\": {\"enabled\": true, \"runs\": 200}, \"outputSelection\": {\"*\": {\"*\": [\"abi\", \"evm.bytecode\", \"evm.deployedBytecode\", \"evm.methodIdentifiers\"], \"\": [\"id\", \"ast\"]}}}}".to_string(),
+            compiler_version: "v0.3.7+commit.6020b8bb".to_string(),
+            input: "{\"language\":\"Vyper\",\"sources\":{\"Contract.vy\":{\"content\":\"stored: address\\r\\n\\r\\nevent SingleVyper17: pass\\r\\n\\r\\n@internal\\r\\ndef extract(temp: address) -> address:\\r\\n  ret: address = self.stored\\r\\n  self.stored = temp\\r\\n  return ret\\r\\n\\r\\n@external\\r\\ndef identity(x: address) -> address:\\r\\n  log SingleVyper17()\\r\\n  temp: address = self.stored\\r\\n  self.stored = x\\r\\n  return self.extract(temp)\"}},\"settings\":{\"outputSelection\":{\"*\":[\"evm\"]}}}".to_string(),
             metadata: Some(VerificationMetadata {
                 chain_id: "1".into(),
                 contract_address: "0xcafecafecafecafecafecafecafecafecafecafe".into()
@@ -91,14 +93,14 @@ mod tests {
         let input: CompilerInput = serde_json::from_str(&request.input).unwrap();
 
         let verification_request: VerificationRequest =
-            <VerifySolidityStandardJsonRequestWrapper>::from(request.clone())
+            <VerifyVyperStandardJsonRequestWrapper>::from(request.clone())
                 .try_into()
                 .expect("Try_into verification request failed");
 
         let mut expected = VerificationRequest {
             creation_bytecode: Some(DisplayBytes::from_str("0x1234").unwrap().0),
             deployed_bytecode: DisplayBytes::from_str("").unwrap().0,
-            compiler_version: Version::from_str("v0.8.17+commit.8df45f5f").unwrap(),
+            compiler_version: Version::from_str("v0.3.7+commit.6020b8bb").unwrap(),
             content: StandardJsonContent { input },
             chain_id: Some("1".into()),
         };
@@ -128,7 +130,7 @@ mod tests {
         expected.deployed_bytecode = expected.creation_bytecode.take().unwrap();
 
         let verification_request: VerificationRequest =
-            <VerifySolidityStandardJsonRequestWrapper>::from(request)
+            <VerifyVyperStandardJsonRequestWrapper>::from(request)
                 .try_into()
                 .expect("Deployed bytecode: try_into verification request failed");
         assert_eq!(
@@ -143,16 +145,16 @@ mod tests {
 
     #[test]
     fn empty_metadata() {
-        let request = VerifySolidityStandardJsonRequest {
+        let request = VerifyVyperStandardJsonRequest {
             bytecode: "".to_string(),
             bytecode_type: BytecodeType::CreationInput.into(),
-            compiler_version: "v0.8.17+commit.8df45f5f".to_string(),
-            input: "{\"language\": \"Solidity\", \"sources\": {\"./src/contracts/Foo.sol\": {\"content\": \"pragma solidity ^0.8.2;\\n\\ncontract Foo {\\n    function bar() external pure returns (uint256) {\\n        return 42;\\n    }\\n}\\n\"}}, \"settings\": {\"metadata\": {\"useLiteralContent\": true}, \"optimizer\": {\"enabled\": true, \"runs\": 200}, \"outputSelection\": {\"*\": {\"*\": [\"abi\", \"evm.bytecode\", \"evm.deployedBytecode\", \"evm.methodIdentifiers\"], \"\": [\"id\", \"ast\"]}}}}".to_string(),
+            compiler_version: "v0.3.7+commit.6020b8bb".to_string(),
+            input: "{\"language\":\"Vyper\",\"sources\":{\"Contract.vy\":{\"content\":\"stored: address\\r\\n\\r\\nevent SingleVyper17: pass\\r\\n\\r\\n@internal\\r\\ndef extract(temp: address) -> address:\\r\\n  ret: address = self.stored\\r\\n  self.stored = temp\\r\\n  return ret\\r\\n\\r\\n@external\\r\\ndef identity(x: address) -> address:\\r\\n  log SingleVyper17()\\r\\n  temp: address = self.stored\\r\\n  self.stored = x\\r\\n  return self.extract(temp)\"}},\"settings\":{\"outputSelection\":{\"*\":[\"evm\"]}}}".to_string(),
             metadata: None,
         };
 
         let verification_request: VerificationRequest =
-            <VerifySolidityStandardJsonRequestWrapper>::from(request)
+            <VerifyVyperStandardJsonRequestWrapper>::from(request)
                 .try_into()
                 .expect("Try_into verification request failed");
 
