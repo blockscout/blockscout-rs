@@ -131,7 +131,7 @@ mod tests {
             compiler_version: Version::from_str("v0.8.17+commit.8df45f5f").unwrap(),
             file_path: "file_name".to_string(),
             contract_name: "contract_name".to_string(),
-            abi: Some(Default::default()),
+            abi: Some(serde_json::Value::Object(Default::default())),
             constructor_args: Some(DisplayBytes::from_str("0x123456").unwrap()),
             local_bytecode_parts: Default::default(),
             match_type: MatchType::Partial,
@@ -147,7 +147,7 @@ mod tests {
             source_type: source::SourceType::Solidity.into(),
             source_files: BTreeMap::from([("file_name".into(), "content".into())]),
             constructor_arguments: Some("0x123456".into()),
-            abi: Some(serde_json::to_string(&ethabi::Contract::default()).unwrap()),
+            abi: Some("{}".to_string()),
             match_type: source::MatchType::Partial.into(),
         };
 
@@ -176,7 +176,7 @@ mod tests {
             compiler_version: Version::from_str("v0.3.9+commit.66b96705").unwrap(),
             file_path: "file_name".to_string(),
             contract_name: "contract_name".to_string(),
-            abi: Some(Default::default()),
+            abi: Some(serde_json::Value::Object(Default::default())),
             constructor_args: Some(DisplayBytes::from_str("0x123456").unwrap()),
             local_bytecode_parts: Default::default(),
             match_type: MatchType::Partial,
@@ -195,7 +195,7 @@ mod tests {
                 ("interface_name.vy".into(), "interface_content".into()),
             ]),
             constructor_arguments: Some("0x123456".into()),
-            abi: Some(serde_json::to_string(&ethabi::Contract::default()).unwrap()),
+            abi: Some("{}".to_string()),
             match_type: source::MatchType::Partial.into(),
         };
 
