@@ -238,7 +238,7 @@ async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse
 
 /// Test verification failures (note: do not handle 400 BadRequest responses)
 async fn test_failure(dir: &str, mut input: TestInput, expected_message: &str) {
-    let (response, _expected_constructor_argument) = test_setup(dir, &mut input).await;
+    let (response, _expected_constructor_argument, _abi) = test_setup(dir, &mut input).await;
 
     assert!(
         response.status().is_success(),
@@ -278,7 +278,7 @@ async fn test_error(
     expected_status: StatusCode,
     expected_message: Option<&str>,
 ) {
-    let (response, _expected_constructor_argument) = test_setup(dir, &mut input).await;
+    let (response, _expected_constructor_argument, _abi) = test_setup(dir, &mut input).await;
 
     let status = response.status();
 
