@@ -89,7 +89,6 @@ async fn test_historical_data_is_added_into_database(service: MockVyperVerifierS
         "bytecode_type": "CreationInput",
         "compiler_version": "compiler_version",
         "evm_version": "london",
-        "optimizations": false,
         "source_files": {},
         "interfaces": {}
     });
