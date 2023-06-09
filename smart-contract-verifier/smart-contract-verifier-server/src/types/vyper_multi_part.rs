@@ -108,7 +108,6 @@ mod tests {
             source_files: BTreeMap::from([("source_path".into(), "source_content".into())]),
             interfaces: BTreeMap::from([("interface_path".into(), "interface_content".into())]),
             evm_version: Some("byzantium".to_string()),
-            optimizations: None,
             metadata: Some(VerificationMetadata {
                 chain_id: "1".into(),
                 contract_address: "0xcafecafecafecafecafecafecafecafecafecafe".into(),
@@ -145,7 +144,6 @@ mod tests {
             source_files: Default::default(),
             interfaces: Default::default(),
             evm_version: Some("default".to_string()),
-            optimizations: None,
             metadata: None,
         };
 
@@ -170,7 +168,6 @@ mod tests {
             source_files: Default::default(),
             interfaces: Default::default(),
             evm_version: None,
-            optimizations: None,
             metadata: None,
         };
 
@@ -194,7 +191,6 @@ mod tests {
             source_files: Default::default(),
             interfaces: Default::default(),
             evm_version: None,
-            optimizations: None,
             metadata: None,
         };
 
