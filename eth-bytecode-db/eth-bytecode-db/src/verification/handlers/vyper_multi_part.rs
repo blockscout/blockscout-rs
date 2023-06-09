@@ -27,7 +27,6 @@ impl From<VerificationRequest<MultiPartFiles>> for VerifyVyperMultiPartRequest {
             source_files: request.content.source_files,
             interfaces: request.content.interfaces,
             evm_version: request.content.evm_version,
-            optimizations: request.content.optimizations,
             metadata: request.metadata.map(|metadata| metadata.into()),
         }
     }
@@ -109,7 +108,6 @@ mod tests {
                 ("interface2".into(), "interface_content2".into()),
             ]),
             evm_version: Some("istanbul".to_string()),
-            optimizations: Some(true),
             metadata: Some(smart_contract_verifier::VerificationMetadata {
                 chain_id: "1".to_string(),
                 contract_address: "0x0101010101010101010101010101010101010101".to_string(),
@@ -158,7 +156,6 @@ mod tests {
                 ("interface2".into(), "interface_content2".into()),
             ]),
             evm_version: Some("istanbul".to_string()),
-            optimizations: Some(true),
             metadata: Some(smart_contract_verifier::VerificationMetadata {
                 chain_id: "1".to_string(),
                 contract_address: "0x0101010101010101010101010101010101010101".to_string(),
