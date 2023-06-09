@@ -424,9 +424,6 @@ definitions:
       metadata:
         $ref: '#/definitions/v2VerificationMetadata'
         title: / An optional field to be filled by explorers
-      optimizations:
-        type: boolean
-        title: / Flag enabling optimizations. If absent, default value is `true`
       sourceFiles:
         type: object
         additionalProperties:
