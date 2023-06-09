@@ -36,6 +36,7 @@ impl SourceAggregator {
     // You should provide sources in priority descending order (first - max priority)
     pub fn new(sources: Vec<Arc<dyn SignatureSource + Send + Sync + 'static>>) -> SourceAggregator {
         SourceAggregator { sources }
+        // Just for the workflow testing purposes: some change inside the code
     }
 
     fn merge_signatures<I: IntoIterator<Item = String>, II: IntoIterator<Item = I>>(
