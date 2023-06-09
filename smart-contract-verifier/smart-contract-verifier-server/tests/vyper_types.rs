@@ -166,8 +166,19 @@ pub struct StandardJson {
     pub compiler_version: String,
     pub file_name: String,
     pub contract_name: String,
-    pub input: serde_json::Value,
+    #[serde(deserialize_with = "StandardJson::deserialize_input")]
+    pub input: String,
     pub expected_constructor_argument: Option<DisplayBytes>,
+}
+
+impl StandardJson {
+    fn deserialize_input<'de, D>(deserializer: D) -> Result<String, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let val = serde_json::Value::deserialize(deserializer)?;
+        Ok(val.to_string())
+    }
 }
 
 impl TestCase for StandardJson {
@@ -180,7 +191,7 @@ impl TestCase for StandardJson {
             "bytecode": self.creation_bytecode,
             "bytecodeType": BytecodeType::CreationInput.as_str_name(),
             "compilerVersion": self.compiler_version,
-            "input": self.input.to_string()
+            "input": self.input
         })
     }
 
@@ -217,8 +228,9 @@ impl TestCase for StandardJson {
             ContractTypes(serde_json::Value),
         }
 
+        let input = serde_json::Value::from_str(&self.input).unwrap();
         let mut source_files = if let serde_json::Value::Object(map) =
-            self.input.get("sources").expect("sources are missing")
+            input.get("sources").expect("sources are missing")
         {
             map.into_iter()
                 .map(|(path, value)| {
@@ -230,7 +242,7 @@ impl TestCase for StandardJson {
         } else {
             BTreeMap::default()
         };
-        if let Some(serde_json::Value::Object(map)) = self.input.get("interfaces") {
+        if let Some(serde_json::Value::Object(map)) = input.get("interfaces") {
             source_files.extend(map.into_iter().map(|(path, value)| {
                 let interface: Interface =
                     serde_json::from_value(value.clone()).expect("invalid interface");
@@ -246,7 +258,8 @@ impl TestCase for StandardJson {
     }
 
     fn evm_version(&self) -> Option<String> {
-        self.input.get("settings")?.get("evmVersion").map(|value| {
+        let input = serde_json::Value::from_str(&self.input).unwrap();
+        input.get("settings")?.get("evmVersion").map(|value| {
             if let serde_json::Value::String(val) = value {
                 val.clone()
             } else {
@@ -256,7 +269,8 @@ impl TestCase for StandardJson {
     }
 
     fn optimize(&self) -> Option<bool> {
-        self.input.get("settings")?.get("optimize").map(|value| {
+        let input = serde_json::Value::from_str(&self.input).unwrap();
+        input.get("settings")?.get("optimize").map(|value| {
             if let serde_json::Value::Bool(val) = value {
                 *val
             } else {
@@ -266,15 +280,13 @@ impl TestCase for StandardJson {
     }
 
     fn bytecode_metadata(&self) -> Option<bool> {
-        self.input
-            .get("settings")?
-            .get("bytecodeMetadata")
-            .map(|value| {
-                if let serde_json::Value::Bool(val) = value {
-                    *val
-                } else {
-                    panic!("bytecode metadata is not a bool")
-                }
-            })
+        let input = serde_json::Value::from_str(&self.input).unwrap();
+        input.get("settings")?.get("bytecodeMetadata").map(|value| {
+            if let serde_json::Value::Bool(val) = value {
+                *val
+            } else {
+                panic!("bytecode metadata is not a bool")
+            }
+        })
     }
 }

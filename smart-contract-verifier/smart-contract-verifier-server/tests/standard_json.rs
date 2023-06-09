@@ -3,6 +3,7 @@ mod standard_json_types;
 use crate::standard_json_types::TestInput;
 use actix_web::{
     dev::ServiceResponse,
+    http::StatusCode,
     test,
     test::{read_body, read_body_json, TestRequest},
     App,
@@ -235,6 +236,68 @@ async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse
     verification_response_clone
 }
 
+/// Test verification failures (note: do not handle 400 BadRequest responses)
+async fn test_failure(dir: &str, mut input: TestInput, expected_message: &str) {
+    let (response, _expected_constructor_argument) = test_setup(dir, &mut input).await;
+
+    assert!(
+        response.status().is_success(),
+        "Invalid status code (success expected): {}",
+        response.status()
+    );
+
+    let verification_response: VerifyResponse = read_body_json(response).await;
+
+    assert_eq!(
+        verification_response.status().as_str_name(),
+        "FAILURE", // failure
+        "Invalid verification status. Response: {:?}",
+        verification_response
+    );
+
+    assert!(
+        verification_response.source.is_none(),
+        "In case of failure, source should be None"
+    );
+    assert!(
+        verification_response.extra_data.is_none(),
+        "In case of failure, extra data should be None"
+    );
+
+    assert!(
+        verification_response.message.contains(expected_message),
+        "Invalid message: {}",
+        verification_response.message
+    );
+}
+
+/// Test errors codes (handle 400 BadRequest, 500 InternalServerError and similar responses)
+async fn test_error(
+    dir: &str,
+    mut input: TestInput,
+    expected_status: StatusCode,
+    expected_message: Option<&str>,
+) {
+    let (response, _expected_constructor_argument) = test_setup(dir, &mut input).await;
+
+    let status = response.status();
+
+    let body = read_body(response).await;
+    let message = from_utf8(&body).expect("Read body as UTF-8");
+
+    assert_eq!(
+        status, expected_status,
+        "Invalid status code. Message: {}",
+        message
+    );
+
+    if let Some(expected_message) = expected_message {
+        assert!(
+            message.contains(expected_message),
+            "Invalid message: {message}"
+        );
+    }
+}
 mod success_tests {
     use super::*;
 
@@ -314,5 +377,40 @@ mod match_types_tests {
         let test_input = TestInput::new("Storage", "v0.8.7+commit.e28d00a7");
         let response = test_success(contract_dir, test_input).await;
         check_match_type(response, MatchType::Full);
+    }
+}
+
+mod failure_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn invalid_input() {
+        let contract_dir = "solidity_0.4.18";
+        let test_input = TestInput::new("Main", "v0.4.18+commit.9cf6e910")
+            // The outer bracket is not closed
+            .with_standard_json_input("{ \"language\": \"Solidity\" ".to_string());
+        test_failure(
+            contract_dir,
+            test_input,
+            "content is not a valid standard json",
+        )
+        .await;
+    }
+}
+
+mod error_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn bad_request() {
+        let contract_dir = "solidity_0.4.18";
+        let test_input = TestInput::new("Main", "invalid_compiler_version");
+        test_error(
+            contract_dir,
+            test_input,
+            StatusCode::BAD_REQUEST,
+            Some("Invalid compiler version"),
+        )
+        .await;
     }
 }

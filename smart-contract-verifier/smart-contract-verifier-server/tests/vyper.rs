@@ -203,6 +203,7 @@ async fn test_error(test_case: impl TestCase, expected_status: StatusCode, expec
         "Invalid message: {message}"
     );
 }
+
 mod flattened {
     use super::{test_error, test_failure, test_success, vyper_types};
     use actix_web::http::StatusCode;
@@ -269,6 +270,8 @@ mod multi_part {
 
 mod standard_json {
     use super::{test_success, vyper_types};
+    use crate::{test_error, test_failure};
+    use actix_web::http::StatusCode;
     use vyper_types::StandardJson;
 
     #[tokio::test]
@@ -277,5 +280,34 @@ mod standard_json {
             let test_case = vyper_types::from_file::<StandardJson>(test_case_name);
             test_success(test_case).await;
         }
+    }
+
+    #[tokio::test]
+    async fn verify_invalid_input() {
+        let test_case = {
+            let mut test_case =
+                vyper_types::from_file::<StandardJson>("standard_json_with_interfaces");
+            // Remove the latest "}" bracket to make the input json invalid
+            test_case.input.remove(test_case.input.len() - 1);
+            test_case
+        };
+        test_failure(test_case, "content is not a valid standard json").await;
+    }
+
+    #[tokio::test]
+    async fn verify_bad_request() {
+        let test_case = {
+            let mut test_case =
+                vyper_types::from_file::<StandardJson>("standard_json_with_interfaces");
+            // Remove the latest "}" bracket to make the input json invalid
+            test_case.compiler_version = "invalid_compiler_version".to_string();
+            test_case
+        };
+        test_error(
+            test_case,
+            StatusCode::BAD_REQUEST,
+            "Invalid compiler version",
+        )
+        .await;
     }
 }
