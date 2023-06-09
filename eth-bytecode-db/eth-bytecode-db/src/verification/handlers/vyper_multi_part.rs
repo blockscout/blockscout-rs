@@ -13,7 +13,6 @@ use std::collections::BTreeMap;
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MultiPartFiles {
     pub evm_version: Option<String>,
-    pub optimizations: Option<bool>,
     pub source_files: BTreeMap<String, String>,
     pub interfaces: BTreeMap<String, String>,
 }
@@ -80,7 +79,6 @@ mod tests {
             compiler_version: "compiler_version".to_string(),
             content: MultiPartFiles {
                 evm_version: Some("istanbul".to_string()),
-                optimizations: Some(true),
                 source_files: BTreeMap::from([
                     ("source_file1".into(), "content1".into()),
                     ("source_file2".into(), "content2".into()),
@@ -128,7 +126,6 @@ mod tests {
             compiler_version: "compiler_version".to_string(),
             content: MultiPartFiles {
                 evm_version: Some("istanbul".to_string()),
-                optimizations: Some(true),
                 source_files: BTreeMap::from([
                     ("source_file1".into(), "content1".into()),
                     ("source_file2".into(), "content2".into()),

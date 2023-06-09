@@ -39,7 +39,6 @@ impl vyper_verifier_server::VyperVerifier for VyperVerifierService {
                 source_files: request.source_files,
                 interfaces: request.interfaces,
                 evm_version: request.evm_version,
-                optimizations: request.optimizations,
             },
             metadata: request
                 .metadata
