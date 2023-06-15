@@ -17,12 +17,12 @@ actix-web = { version = "4", optional = true }
 actix-web-prom = { version = "0.6", optional = true }
 cfg-if = { version = "1.0.0", optional = true }
 tracing = { version = "0.1", optional = true }
-tonic = { version = "0.8", optional = true }
+tonic = { version = "0.9", optional = true }
 futures = { version = "0.3", optional = true }
 prometheus = { version = "0.13", optional = true }
-opentelemetry = { version = "0.18", optional = true }
-opentelemetry-jaeger = { version = "0.17", features = ["rt-tokio"], optional = true }
-tracing-opentelemetry = { version = "0.18", optional = true }
+opentelemetry = { version = "0.19", optional = true }
+opentelemetry-jaeger = { version = "0.18", features = ["rt-tokio"], optional = true }
+tracing-opentelemetry = { version = "0.19", optional = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"], optional = true }
 tokio = { version = "1", optional = true }
 url = { version = "2.3.1", optional = true }
