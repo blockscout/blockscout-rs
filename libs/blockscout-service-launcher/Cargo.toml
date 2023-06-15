@@ -11,20 +11,20 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = { version = "1.0", optional = true }
-serde = { version = "1.0", features = ["derive"], optional = true }
 actix-web = { version = "4", optional = true }
 actix-web-prom = { version = "0.6", optional = true }
-cfg-if = { version = "1.0.0", optional = true }
-tracing = { version = "0.1", optional = true }
-tonic = { version = "0.9", optional = true }
+anyhow = { version = "1.0", optional = true }
 futures = { version = "0.3", optional = true }
-prometheus = { version = "0.13", optional = true }
+cfg-if = { version = "1.0.0", optional = true }
 opentelemetry = { version = "0.19", optional = true }
 opentelemetry-jaeger = { version = "0.18", features = ["rt-tokio"], optional = true }
+prometheus = { version = "0.13", optional = true }
+serde = { version = "1.0", features = ["derive"], optional = true }
+tokio = { version = "1", optional = true }
+tonic = { version = ">= 0.8, < 0.10", optional = true }
+tracing = { version = "0.1", optional = true }
 tracing-opentelemetry = { version = "0.19", optional = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"], optional = true }
-tokio = { version = "1", optional = true }
 url = { version = "2.3.1", optional = true }
 
 # Dependencies required for database initialization
