@@ -1,4 +1,4 @@
-use crate::{
+use super::{
     metrics::Metrics,
     router::{configure_router, HttpRouter},
     settings::{MetricsSettings, ServerSettings},

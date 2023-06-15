@@ -11,32 +11,67 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-serde = { version = "1.0", features = ["derive"] }
-actix-web = "4"
-actix-web-prom = "0.6"
-cfg-if = "1.0.0"
-tracing = "0.1"
-tonic = "0.8"
-futures = "0.3"
-prometheus = "0.13"
-opentelemetry = { version = "0.18", features = ["rt-tokio"] }
-opentelemetry-jaeger = { version = "0.17", features = ["rt-tokio"] }
-tracing-opentelemetry = "0.18"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-anyhow = "1.0"
-tokio = { version = "1", features = ["rt-multi-thread"] }
+anyhow = { version = "1.0", optional = true }
+serde = { version = "1.0", features = ["derive"], optional = true }
+actix-web = { version = "4", optional = true }
+actix-web-prom = { version = "0.6", optional = true }
+cfg-if = { version = "1.0.0", optional = true }
+tracing = { version = "0.1", optional = true }
+tonic = { version = "0.8", optional = true }
+futures = { version = "0.3", optional = true }
+prometheus = { version = "0.13", optional = true }
+opentelemetry = { version = "0.18", optional = true }
+opentelemetry-jaeger = { version = "0.17", features = ["rt-tokio"], optional = true }
+tracing-opentelemetry = { version = "0.18", optional = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"], optional = true }
+tokio = { version = "1", optional = true }
+url = { version = "2.3.1", optional = true }
 
 # Dependencies required for database initialization
-
-sea-orm-0_11 = { package = "sea-orm", version = "0.11", optional = true }
-sea-orm-migration-0_11 = { package = "sea-orm-migration", version = "0.11", optional = true }
 
 sea-orm-0_10 = { package = "sea-orm", version = "0.10", optional = true }
 sea-orm-migration-0_10 = { package = "sea-orm-migration", version = "0.10", optional = true }
 
-url = { version = "2.3.1", optional = true }
+sea-orm-0_11 = { package = "sea-orm", version = "0.11", optional = true }
+sea-orm-migration-0_11 = { package = "sea-orm-migration", version = "0.11", optional = true }
 
 [features]
-database = ["url"]
-database-0_11 = ["sea-orm-0_11", "sea-orm-migration-0_11", "database"]
-database-0_10 = ["sea-orm-0_10", "sea-orm-migration-0_10", "database"]
+default = ["launcher", "tracing"]
+launcher = [
+    "dep:actix-web",
+    "dep:actix-web-prom",
+    "dep:anyhow",
+    "dep:futures",
+    "dep:prometheus",
+    "dep:serde",
+    "dep:tokio",
+    "dep:tonic",
+    "dep:tracing",
+]
+tracing = [
+    "dep:anyhow",
+    "dep:opentelemetry",
+    "dep:opentelemetry-jaeger",
+    "dep:serde",
+    "dep:tracing-opentelemetry",
+    "dep:tracing-subscriber",
+]
+
+# Cannot be used without corresponding sea-orm dependency.
+# Choose any of `database-0_10`, `database-0_11` for the actual usage.
+database = [
+    "dep:anyhow",
+    "dep:cfg-if",
+    "dep:tracing",
+    "dep:url",
+]
+database-0_10 = [
+    "database",
+    "dep:sea-orm-0_10",
+    "dep:sea-orm-migration-0_10",
+]
+database-0_11 = [
+    "database",
+    "dep:sea-orm-0_11",
+    "dep:sea-orm-migration-0_11",
+]
