@@ -49,7 +49,7 @@ Alternatively, you can use docker images from our [registry](https://github.com/
     If protobuf version is too old, you may see the following error: `Explicit 'optional' labels are disallowed in the Proto3 syntax.`
 
 1. Install [`protoc-gen-openapiv2`](https://github.com/grpc-ecosystem/grpc-gateway#installation).
-    You may find usefule the following [Action](https://github.com/blockscout/blockscout-rs/blob/main/.github/actions/deps/action.yml#L21)
+    You may find useful the following [Action](https://github.com/blockscout/blockscout-rs/blob/main/.github/actions/deps/action.yml#L21)
     we use in our Github pipeline.
 
     If not installed, you may see the following error: `Error: Custom { kind: Other, error: "protoc failed: Unknown flag: --openapiv2_opt\n" }`
