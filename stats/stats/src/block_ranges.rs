@@ -35,8 +35,7 @@ pub async fn from_cache(
             .column_as(blocks::Column::Number.min(), "from_number")
             .column_as(blocks::Column::Number.max(), "to_number")
             .filter(blocks::Column::Consensus.eq(true))
-            .group_by(date.clone())
-            .order_by_asc(date.clone());
+            .group_by(date.clone());
         match &maybe_oldest {
             Some(oldest) => query.filter(Expr::expr(date).gte(oldest.date)),
             None => query,
@@ -53,7 +52,7 @@ pub async fn from_cache(
     }
     let all_ranges = block_ranges::Entity::find()
         .order_by_asc(block_ranges::Column::Date)
-        .all(stats)
+        .all(&txn)
         .await
         .map_err(Error::StatsDB)?;
     txn.commit().await.map_err(Error::StatsDB)?;
