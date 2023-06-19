@@ -1,3 +1,4 @@
+mod block_ranges;
 mod charts;
 mod read;
 
