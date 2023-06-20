@@ -6,7 +6,10 @@ use crate::{
         VerifyVyperStandardJsonRequest,
     },
     settings::{Extensions, FetcherSettings, VyperSettings},
-    types::{VerifyResponseWrapper, VerifyVyperMultiPartRequestWrapper},
+    types::{
+        StandardJsonParseError, VerifyResponseWrapper, VerifyVyperMultiPartRequestWrapper,
+        VerifyVyperStandardJsonRequestWrapper,
+    },
 };
 use smart_contract_verifier::{
     vyper, Compilers, ListFetcher, VerificationError, VyperClient, VyperCompiler,
@@ -102,11 +105,52 @@ impl VyperVerifier for VyperVerifierService {
 
     async fn verify_standard_json(
         &self,
-        _request: Request<VerifyVyperStandardJsonRequest>,
+        request: Request<VerifyVyperStandardJsonRequest>,
     ) -> Result<Response<VerifyResponse>, Status> {
-        Err(Status::unimplemented(
-            "Vyper standard-json verification is not implemented yet",
-        ))
+        let request: VerifyVyperStandardJsonRequestWrapper = request.into_inner().into();
+        let chain_id = request.metadata.clone().unwrap_or_default().chain_id;
+        let verification_request = {
+            let request: Result<_, StandardJsonParseError> = request.try_into();
+            if let Err(err) = request {
+                match err {
+                    StandardJsonParseError::InvalidContent(_) => {
+                        return Ok(Response::new(VerifyResponseWrapper::err(err).into_inner()))
+                    }
+                    StandardJsonParseError::BadRequest(_) => {
+                        return Err(Status::invalid_argument(err.to_string()))
+                    }
+                }
+            }
+            request.unwrap()
+        };
+        let result = vyper::standard_json::verify(self.client.clone(), verification_request).await;
+
+        let response = if let Ok(verification_success) = result {
+            VerifyResponseWrapper::ok(verification_success)
+        } else {
+            let err = result.unwrap_err();
+            match err {
+                VerificationError::Compilation(_)
+                | VerificationError::NoMatchingContracts
+                | VerificationError::CompilerVersionMismatch(_) => VerifyResponseWrapper::err(err),
+                VerificationError::Initialization(_) | VerificationError::VersionNotFound(_) => {
+                    tracing::debug!("invalid argument: {err:#?}");
+                    return Err(Status::invalid_argument(err.to_string()));
+                }
+                VerificationError::Internal(err) => {
+                    tracing::error!("internal error: {err:#?}");
+                    return Err(Status::internal(err.to_string()));
+                }
+            }
+        };
+
+        metrics::count_verify_contract(
+            chain_id.as_ref(),
+            "vyper",
+            response.status().as_str_name(),
+            "standard-json",
+        );
+        return Ok(Response::new(response.into_inner()));
     }
 
     async fn list_compiler_versions(

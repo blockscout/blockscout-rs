@@ -66,6 +66,12 @@ impl TryFrom<VerifyVyperMultiPartRequestWrapper> for VerificationRequest {
             })
             .collect();
 
+        let interfaces: BTreeMap<PathBuf, String> = request
+            .interfaces
+                .into_iter()
+            .map(|(name, content)| (PathBuf::from_str(&name).unwrap(), content)) /* TODO: why unwrap? */
+            .collect();
+
         let evm_version = match request.evm_version {
             Some(version) if version != "default" => {
                 Some(EvmVersion::from_str(&version).map_err(tonic::Status::invalid_argument)?)
@@ -79,6 +85,7 @@ impl TryFrom<VerifyVyperMultiPartRequestWrapper> for VerificationRequest {
             compiler_version,
             content: MultiFileContent {
                 sources,
+                interfaces,
                 evm_version,
             },
             chain_id: request.metadata.map(|metadata| metadata.chain_id),
@@ -99,9 +106,8 @@ mod tests {
             bytecode_type: BytecodeType::CreationInput.into(),
             compiler_version: "0.3.7+commit.6020b8bb".to_string(),
             source_files: BTreeMap::from([("source_path".into(), "source_content".into())]),
-            interfaces: Default::default(),
+            interfaces: BTreeMap::from([("interface_path".into(), "interface_content".into())]),
             evm_version: Some("byzantium".to_string()),
-            optimizations: None,
             metadata: Some(VerificationMetadata {
                 chain_id: "1".into(),
                 contract_address: "0xcafecafecafecafecafecafecafecafecafecafe".into(),
@@ -119,6 +125,7 @@ mod tests {
             compiler_version: Version::from_str("0.3.7+commit.6020b8bb").unwrap(),
             content: MultiFileContent {
                 sources: BTreeMap::from([("source_path".into(), "source_content".into())]),
+                interfaces: BTreeMap::from([("interface_path".into(), "interface_content".into())]),
                 evm_version: Some(EvmVersion::Byzantium),
             },
             chain_id: Some("1".into()),
@@ -137,7 +144,6 @@ mod tests {
             source_files: Default::default(),
             interfaces: Default::default(),
             evm_version: Some("default".to_string()),
-            optimizations: None,
             metadata: None,
         };
 
@@ -162,7 +168,6 @@ mod tests {
             source_files: Default::default(),
             interfaces: Default::default(),
             evm_version: None,
-            optimizations: None,
             metadata: None,
         };
 
@@ -186,7 +191,6 @@ mod tests {
             source_files: Default::default(),
             interfaces: Default::default(),
             evm_version: None,
-            optimizations: None,
             metadata: None,
         };
 

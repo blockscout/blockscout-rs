@@ -127,10 +127,10 @@ impl SolidityVerifier for SolidityVerifierService {
             if let Err(err) = request {
                 match err {
                     StandardJsonParseError::InvalidContent(_) => {
-                        return Err(Status::invalid_argument(err.to_string()))
+                        return Ok(Response::new(VerifyResponseWrapper::err(err).into_inner()))
                     }
                     StandardJsonParseError::BadRequest(_) => {
-                        return Ok(Response::new(VerifyResponseWrapper::err(err).into_inner()))
+                        return Err(Status::invalid_argument(err.to_string()))
                     }
                 }
             }

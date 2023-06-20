@@ -1,6 +1,6 @@
 use crate::DisplayBytes;
 use serde::{Deserialize, Serialize};
-use smart_contract_verifier::{SourcifySuccess, VerificationSuccess};
+use smart_contract_verifier::{SoliditySuccess, SourcifySuccess, VyperSuccess};
 use std::{collections::BTreeMap, fmt::Display, sync::Arc};
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -50,20 +50,20 @@ pub struct VerificationResult {
     pub local_deployed_bytecode_parts: Option<Vec<BytecodePart>>,
 }
 
-impl From<VerificationSuccess> for VerificationResult {
-    fn from(verification_success: VerificationSuccess) -> Self {
-        let compiler_input = verification_success.compiler_input;
+impl From<SoliditySuccess> for VerificationResult {
+    fn from(value: SoliditySuccess) -> Self {
+        let compiler_input = value.compiler_input;
         let compiler_settings = serde_json::to_string(&compiler_input.settings).unwrap();
         VerificationResult {
-            file_name: verification_success.file_path,
-            contract_name: verification_success.contract_name,
-            compiler_version: verification_success.compiler_version.to_string(),
+            file_name: value.file_path,
+            contract_name: value.contract_name,
+            compiler_version: value.compiler_version.to_string(),
             evm_version: compiler_input
                 .settings
                 .evm_version
                 .map(|v| v.to_string())
                 .unwrap_or_else(|| "default".to_string()),
-            constructor_arguments: verification_success.constructor_args,
+            constructor_arguments: value.constructor_args,
             optimization: compiler_input.settings.optimizer.enabled,
             optimization_runs: compiler_input.settings.optimizer.runs,
             contract_libraries: compiler_input
@@ -73,7 +73,7 @@ impl From<VerificationSuccess> for VerificationResult {
                 .into_iter()
                 .flat_map(|(_path, libs)| libs)
                 .collect(),
-            abi: verification_success.abi.as_ref().map(|abi| {
+            abi: value.abi.as_ref().map(|abi| {
                 serde_json::to_string(abi)
                     .expect("Is result of local compilation and, thus, should be always valid")
             }),
@@ -90,7 +90,7 @@ impl From<VerificationSuccess> for VerificationResult {
             compiler_settings,
 
             local_creation_input_parts: Some(
-                verification_success
+                value
                     .local_bytecode_parts
                     .creation_tx_input_parts
                     .into_iter()
@@ -98,7 +98,60 @@ impl From<VerificationSuccess> for VerificationResult {
                     .collect(),
             ),
             local_deployed_bytecode_parts: Some(
-                verification_success
+                value
+                    .local_bytecode_parts
+                    .deployed_bytecode_parts
+                    .into_iter()
+                    .map(|part| part.into())
+                    .collect(),
+            ),
+        }
+    }
+}
+
+impl From<VyperSuccess> for VerificationResult {
+    fn from(value: VyperSuccess) -> Self {
+        let compiler_input = value.compiler_input;
+        let compiler_settings = serde_json::to_string(&compiler_input.settings).unwrap();
+        VerificationResult {
+            file_name: value.file_path,
+            contract_name: value.contract_name,
+            compiler_version: value.compiler_version.to_string(),
+            evm_version: compiler_input
+                .settings
+                .evm_version
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "default".to_string()),
+            constructor_arguments: value.constructor_args,
+            optimization: compiler_input.settings.optimize,
+            optimization_runs: None,
+            contract_libraries: Default::default(),
+            abi: value.abi.as_ref().map(|abi| {
+                serde_json::to_string(abi)
+                    .expect("Is result of local compilation and, thus, should be always valid")
+            }),
+            sources: compiler_input
+                .sources
+                .into_iter()
+                .map(|(path, source)| {
+                    // Similar to `unwrap_or_clone` which is still nightly-only feature.
+                    let content = Arc::try_unwrap(source.content)
+                        .unwrap_or_else(|content| (*content).clone());
+                    (path.to_string_lossy().to_string(), content)
+                })
+                .collect(),
+            compiler_settings,
+
+            local_creation_input_parts: Some(
+                value
+                    .local_bytecode_parts
+                    .creation_tx_input_parts
+                    .into_iter()
+                    .map(|part| part.into())
+                    .collect(),
+            ),
+            local_deployed_bytecode_parts: Some(
+                value
                     .local_bytecode_parts
                     .deployed_bytecode_parts
                     .into_iter()

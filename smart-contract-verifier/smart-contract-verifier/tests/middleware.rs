@@ -21,7 +21,7 @@ fn middleware<Output: 'static + Send + Sync>() -> MockMiddleware<Output> {
 mod solidity {
     use super::*;
     use smart_contract_verifier::{
-        solidity, Compilers, ListFetcher, SolidityClient, SolidityCompiler, VerificationSuccess,
+        solidity, Compilers, ListFetcher, SolidityClient, SolidityCompiler, SoliditySuccess,
         DEFAULT_SOLIDITY_COMPILER_LIST,
     };
     use std::{collections::BTreeMap, sync::Arc};
@@ -73,7 +73,7 @@ mod solidity {
 
     #[rstest::rstest]
     #[tokio::test]
-    async fn multi_part(middleware: impl smart_contract_verifier::Middleware<VerificationSuccess>) {
+    async fn multi_part(middleware: impl smart_contract_verifier::Middleware<SoliditySuccess>) {
         let compilers = global_compilers().await;
         let client = SolidityClient::new_arc(compilers.clone()).with_middleware(middleware);
 
@@ -88,9 +88,7 @@ mod solidity {
 
     #[rstest::rstest]
     #[tokio::test]
-    async fn standard_json(
-        middleware: impl smart_contract_verifier::Middleware<VerificationSuccess>,
-    ) {
+    async fn standard_json(middleware: impl smart_contract_verifier::Middleware<SoliditySuccess>) {
         let compilers = global_compilers().await;
         let client = SolidityClient::new_arc(compilers.clone()).with_middleware(middleware);
 
@@ -107,7 +105,7 @@ mod solidity {
 mod vyper {
     use super::*;
     use smart_contract_verifier::{
-        vyper, Compilers, ListFetcher, VerificationSuccess, VyperClient, VyperCompiler,
+        vyper, Compilers, ListFetcher, VyperClient, VyperCompiler, VyperSuccess,
         DEFAULT_VYPER_COMPILER_LIST,
     };
     use std::{collections::BTreeMap, sync::Arc};
@@ -152,7 +150,7 @@ mod vyper {
 
     #[rstest::rstest]
     #[tokio::test]
-    async fn multi_part(middleware: impl smart_contract_verifier::Middleware<VerificationSuccess>) {
+    async fn multi_part(middleware: impl smart_contract_verifier::Middleware<VyperSuccess>) {
         let compilers = global_compilers().await;
         let client = VyperClient::new_arc(compilers.clone()).with_middleware(middleware);
 

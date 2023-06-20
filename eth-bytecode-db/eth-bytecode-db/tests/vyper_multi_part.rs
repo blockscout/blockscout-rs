@@ -22,8 +22,8 @@ const DB_PREFIX: &str = "vyper_multi_part";
 fn default_request_content() -> MultiPartFiles {
     MultiPartFiles {
         source_files: Default::default(),
+        interfaces: Default::default(),
         evm_version: Some("london".to_string()),
-        optimizations: Some(false),
     }
 }
 
@@ -89,8 +89,8 @@ async fn test_historical_data_is_added_into_database(service: MockVyperVerifierS
         "bytecode_type": "CreationInput",
         "compiler_version": "compiler_version",
         "evm_version": "london",
-        "optimizations": false,
-        "source_files": {}
+        "source_files": {},
+        "interfaces": {}
     });
     let verification_type = sea_orm_active_enums::VerificationType::MultiPartFiles;
     verification_test_helpers::test_historical_data_is_added_into_database(

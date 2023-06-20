@@ -13,8 +13,8 @@ use std::collections::BTreeMap;
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MultiPartFiles {
     pub evm_version: Option<String>,
-    pub optimizations: Option<bool>,
     pub source_files: BTreeMap<String, String>,
+    pub interfaces: BTreeMap<String, String>,
 }
 
 impl From<VerificationRequest<MultiPartFiles>> for VerifyVyperMultiPartRequest {
@@ -24,8 +24,8 @@ impl From<VerificationRequest<MultiPartFiles>> for VerifyVyperMultiPartRequest {
             bytecode_type: BytecodeType::from(request.bytecode_type).into(),
             compiler_version: request.compiler_version,
             source_files: request.content.source_files,
+            interfaces: request.content.interfaces,
             evm_version: request.content.evm_version,
-            optimizations: request.content.optimizations,
             metadata: request.metadata.map(|metadata| metadata.into()),
         }
     }
@@ -79,10 +79,13 @@ mod tests {
             compiler_version: "compiler_version".to_string(),
             content: MultiPartFiles {
                 evm_version: Some("istanbul".to_string()),
-                optimizations: Some(true),
                 source_files: BTreeMap::from([
                     ("source_file1".into(), "content1".into()),
                     ("source_file2".into(), "content2".into()),
+                ]),
+                interfaces: BTreeMap::from([
+                    ("interface1".into(), "interface_content1".into()),
+                    ("interface2".into(), "interface_content2".into()),
                 ]),
             },
             metadata: Some(types::VerificationMetadata {
@@ -98,8 +101,11 @@ mod tests {
                 ("source_file1".into(), "content1".into()),
                 ("source_file2".into(), "content2".into()),
             ]),
+            interfaces: BTreeMap::from([
+                ("interface1".into(), "interface_content1".into()),
+                ("interface2".into(), "interface_content2".into()),
+            ]),
             evm_version: Some("istanbul".to_string()),
-            optimizations: Some(true),
             metadata: Some(smart_contract_verifier::VerificationMetadata {
                 chain_id: "1".to_string(),
                 contract_address: "0x0101010101010101010101010101010101010101".to_string(),
@@ -120,10 +126,13 @@ mod tests {
             compiler_version: "compiler_version".to_string(),
             content: MultiPartFiles {
                 evm_version: Some("istanbul".to_string()),
-                optimizations: Some(true),
                 source_files: BTreeMap::from([
                     ("source_file1".into(), "content1".into()),
                     ("source_file2".into(), "content2".into()),
+                ]),
+                interfaces: BTreeMap::from([
+                    ("interface1".into(), "interface_content1".into()),
+                    ("interface2".into(), "interface_content2".into()),
                 ]),
             },
             metadata: Some(types::VerificationMetadata {
@@ -139,8 +148,11 @@ mod tests {
                 ("source_file1".into(), "content1".into()),
                 ("source_file2".into(), "content2".into()),
             ]),
+            interfaces: BTreeMap::from([
+                ("interface1".into(), "interface_content1".into()),
+                ("interface2".into(), "interface_content2".into()),
+            ]),
             evm_version: Some("istanbul".to_string()),
-            optimizations: Some(true),
             metadata: Some(smart_contract_verifier::VerificationMetadata {
                 chain_id: "1".to_string(),
                 contract_address: "0x0101010101010101010101010101010101010101".to_string(),

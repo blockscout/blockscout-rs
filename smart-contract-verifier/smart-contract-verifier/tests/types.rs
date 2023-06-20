@@ -147,6 +147,7 @@ pub mod vyper {
                 compiler_version: source.compiler_version,
                 content: multi_part::MultiFileContent {
                     sources: source.sources,
+                    interfaces: Default::default(),
                     evm_version: source.evm_version,
                 },
                 chain_id: Default::default(),

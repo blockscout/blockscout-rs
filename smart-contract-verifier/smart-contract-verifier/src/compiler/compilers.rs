@@ -4,7 +4,7 @@ use super::{
     version::Version,
 };
 use crate::metrics::{self, GuardedGauge};
-use ethers_solc::{artifacts::Severity, error::SolcError, CompilerInput, CompilerOutput};
+use ethers_solc::{artifacts::Severity, error::SolcError, CompilerOutput};
 use std::{
     fmt::Debug,
     path::{Path, PathBuf},
@@ -30,11 +30,13 @@ pub enum Error {
 
 #[async_trait::async_trait]
 pub trait EvmCompiler {
+    type CompilerInput;
+
     async fn compile(
         &self,
         path: &Path,
         ver: &Version,
-        input: &CompilerInput,
+        input: &Self::CompilerInput,
     ) -> Result<CompilerOutput, SolcError>;
 }
 
@@ -65,7 +67,7 @@ where
     pub async fn compile(
         &self,
         compiler_version: &Version,
-        input: &CompilerInput,
+        input: &C::CompilerInput,
         chain_id: Option<&str>,
     ) -> Result<CompilerOutput, Error> {
         let path_result = {
@@ -146,7 +148,10 @@ where
 mod tests {
     use super::{super::list_fetcher::ListFetcher, *};
     use crate::{consts::DEFAULT_SOLIDITY_COMPILER_LIST, solidity::SolidityCompiler};
-    use ethers_solc::artifacts::{Source, Sources};
+    use ethers_solc::{
+        artifacts::{Source, Sources},
+        CompilerInput,
+    };
     use std::{default::Default, env::temp_dir, str::FromStr};
     use tokio::sync::{OnceCell, Semaphore};
 

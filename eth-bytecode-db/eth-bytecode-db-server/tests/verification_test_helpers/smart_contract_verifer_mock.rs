@@ -7,7 +7,7 @@ use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
     vyper_verifier_server::{VyperVerifier, VyperVerifierServer},
     ListCompilerVersionsRequest, ListCompilerVersionsResponse, VerifyResponse,
     VerifySolidityMultiPartRequest, VerifySolidityStandardJsonRequest, VerifySourcifyRequest,
-    VerifyVyperMultiPartRequest,
+    VerifyVyperMultiPartRequest, VerifyVyperStandardJsonRequest,
 };
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
@@ -33,6 +33,8 @@ mock! {
     #[async_trait::async_trait]
     impl VyperVerifier for VyperVerifierService {
         async fn verify_multi_part(&self, request: tonic::Request<VerifyVyperMultiPartRequest>) -> Result<tonic::Response<VerifyResponse>, tonic::Status>;
+
+        async fn verify_standard_json(&self, request: tonic::Request<VerifyVyperStandardJsonRequest>) -> Result<tonic::Response<VerifyResponse>, tonic::Status>;
 
         async fn list_compiler_versions(&self, request: tonic::Request<ListCompilerVersionsRequest>) -> Result<tonic::Response<ListCompilerVersionsResponse>, tonic::Status>;
     }

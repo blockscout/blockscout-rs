@@ -1,3 +1,4 @@
+use super::StandardJsonParseError;
 use crate::proto::{BytecodeType, VerifySolidityStandardJsonRequest};
 use anyhow::anyhow;
 use blockscout_display_bytes::Bytes as DisplayBytes;
@@ -8,15 +9,6 @@ use smart_contract_verifier::{
     Version,
 };
 use std::{ops::Deref, str::FromStr};
-use thiserror::Error;
-
-#[derive(Error, Debug)]
-pub enum ParseError {
-    #[error("content is not valid standard json: {0}")]
-    InvalidContent(#[from] serde_json::Error),
-    #[error("{0}")]
-    BadRequest(#[from] anyhow::Error),
-}
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct VerifySolidityStandardJsonRequestWrapper(VerifySolidityStandardJsonRequest);
@@ -46,7 +38,7 @@ impl VerifySolidityStandardJsonRequestWrapper {
 }
 
 impl TryFrom<VerifySolidityStandardJsonRequestWrapper> for VerificationRequest {
-    type Error = ParseError;
+    type Error = StandardJsonParseError;
 
     fn try_from(request: VerifySolidityStandardJsonRequestWrapper) -> Result<Self, Self::Error> {
         let request = request.into_inner();
@@ -55,7 +47,7 @@ impl TryFrom<VerifySolidityStandardJsonRequestWrapper> for VerificationRequest {
             .map_err(|err| anyhow!("Invalid deployed bytecode: {:?}", err))?
             .0;
         let (creation_bytecode, deployed_bytecode) = match request.bytecode_type() {
-            BytecodeType::Unspecified => Err(ParseError::BadRequest(anyhow!(
+            BytecodeType::Unspecified => Err(StandardJsonParseError::BadRequest(anyhow!(
                 "Bytecode type is unspecified"
             )))?,
             BytecodeType::CreationInput => (Some(bytecode), bytes::Bytes::new()),
