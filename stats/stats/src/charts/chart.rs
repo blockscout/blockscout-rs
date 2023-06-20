@@ -1,5 +1,8 @@
 use super::mutex::get_global_update_mutex;
-use crate::ReadError;
+use crate::{
+    charts::updater::{get_last_row, get_min_block_blockscout},
+    DateValue, ReadError,
+};
 use async_trait::async_trait;
 use entity::{charts, sea_orm_active_enums::ChartType};
 use sea_orm::{prelude::*, sea_query, FromQueryResult, QuerySelect, Set};
@@ -103,4 +106,44 @@ pub async fn create_chart(
     .exec(db)
     .await?;
     Ok(())
+}
+
+pub struct UpdateInfo {
+    pub chart_id: i32,
+    pub min_blockscout_block: i64,
+    pub last_row: Option<DateValue>,
+}
+
+pub async fn get_update_info<C>(
+    chart: &C,
+    db: &DatabaseConnection,
+    blockscout: &DatabaseConnection,
+    force_full: bool,
+    last_row_offset: Option<u64>,
+) -> Result<UpdateInfo, UpdateError>
+where
+    C: Chart + ?Sized,
+{
+    let chart_id = find_chart(db, chart.name())
+        .await
+        .map_err(UpdateError::StatsDB)?
+        .ok_or_else(|| UpdateError::NotFound(chart.name().into()))?;
+    let min_blockscout_block = get_min_block_blockscout(blockscout)
+        .await
+        .map_err(UpdateError::BlockscoutDB)?;
+    let last_row = get_last_row(
+        chart,
+        chart_id,
+        min_blockscout_block,
+        db,
+        force_full,
+        last_row_offset,
+    )
+    .await?;
+
+    Ok(UpdateInfo {
+        chart_id,
+        min_blockscout_block,
+        last_row,
+    })
 }

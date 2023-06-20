@@ -2,4 +2,5 @@
 
 pub use super::{
     block_ranges::Entity as BlockRanges, chart_data::Entity as ChartData, charts::Entity as Charts,
+    native_coin_supply_data::Entity as NativeCoinSupplyData,
 };

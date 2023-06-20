@@ -5,4 +5,5 @@ pub mod prelude;
 pub mod block_ranges;
 pub mod chart_data;
 pub mod charts;
+pub mod native_coin_supply_data;
 pub mod sea_orm_active_enums;

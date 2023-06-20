@@ -1,6 +1,9 @@
-use super::{get_last_row, get_min_block_blockscout, get_min_date_blockscout};
+use super::get_min_date_blockscout;
 use crate::{
-    charts::{find_chart, insert::insert_data_many},
+    charts::{
+        chart::{get_update_info, UpdateInfo},
+        insert::insert_data_many,
+    },
     metrics, Chart, DateValue, UpdateError,
 };
 use async_trait::async_trait;
@@ -21,36 +24,25 @@ pub trait ChartBatchUpdater: Chart {
         blockscout: &DatabaseConnection,
         force_full: bool,
     ) -> Result<(), UpdateError> {
-        let chart_id = find_chart(db, self.name())
-            .await
-            .map_err(UpdateError::StatsDB)?
-            .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
-        let min_blockscout_block = get_min_block_blockscout(blockscout)
-            .await
-            .map_err(UpdateError::BlockscoutDB)?;
-        let last_row = get_last_row(self, chart_id, min_blockscout_block, db, force_full).await?;
-
+        let update_info = get_update_info(self, db, blockscout, force_full, None).await?;
         let _timer = metrics::CHART_FETCH_NEW_DATA_TIME
             .with_label_values(&[self.name()])
             .start_timer();
-        tracing::info!(last_row =? last_row, "start batch update");
-        self.batch_update(db, blockscout, last_row, chart_id, min_blockscout_block)
-            .await
+        tracing::info!(last_row =? update_info.last_row, "start batch update");
+        self.batch_update(db, blockscout, update_info).await
     }
 
     async fn batch_update(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
-        last_row: Option<DateValue>,
-        chart_id: i32,
-        min_blockscout_block: i64,
+        update_info: UpdateInfo,
     ) -> Result<(), UpdateError> {
         let txn = blockscout
             .begin()
             .await
             .map_err(UpdateError::BlockscoutDB)?;
-        let first_date = match last_row {
+        let first_date = match update_info.last_row {
             Some(last_row) => last_row.date,
             None => get_min_date_blockscout(&txn)
                 .await
@@ -71,7 +63,9 @@ pub trait ChartBatchUpdater: Chart {
                 .await
                 .map_err(UpdateError::BlockscoutDB)?
                 .into_iter()
-                .map(|value| value.active_model(chart_id, Some(min_blockscout_block)));
+                .map(|value| {
+                    value.active_model(update_info.chart_id, Some(update_info.min_blockscout_block))
+                });
             let elapsed = now.elapsed();
             let found = values.len();
             tracing::info!(found =? found, elapsed =? elapsed, "{}/{} step of batch done", i + 1, n);

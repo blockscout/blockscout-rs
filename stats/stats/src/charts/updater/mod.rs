@@ -76,10 +76,12 @@ pub async fn get_last_row<C>(
     min_blockscout_block: i64,
     db: &DatabaseConnection,
     force_full: bool,
+    offset: Option<u64>,
 ) -> Result<Option<DateValue>, UpdateError>
 where
     C: Chart + ?Sized,
 {
+    let offset = offset.unwrap_or(1);
     let last_row = if force_full {
         tracing::info!(
             min_blockscout_block = min_blockscout_block,
@@ -94,7 +96,7 @@ where
             .column(chart_data::Column::MinBlockscoutBlock)
             .filter(chart_data::Column::ChartId.eq(chart_id))
             .order_by_desc(chart_data::Column::Date)
-            .offset(1)
+            .offset(offset)
             .into_model()
             .one(db)
             .await
