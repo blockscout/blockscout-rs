@@ -19,10 +19,10 @@ id = "totalAccounts"
 title = "Total Accounts"
 update_schedule = "0 0 16 * * * *"
 
-[[counters]]
-id = "totalNativeCoinHolders"
-title = "Total Native Coin Holders"
-update_schedule = "0 0 17 * * * *"
+# [[counters]]
+# id = "totalNativeCoinHolders"
+# title = "Total Native Coin Holders"
+# update_schedule = "0 0 17 * * * *"
 
 [[counters]]
 id = "totalNativeCoinTransfers"
@@ -160,18 +160,18 @@ drop_last_point = true
 id = "tokens"
 title = "Tokens"
 
-[[lines.sections.charts]]
-id = "nativeCoinHoldersGrowth"
-title = "Native coin holders growth"
-description = "Cumulative token holders number for the period"
-update_schedule = "0 0 10 * * * *"
+# [[lines.sections.charts]]
+# id = "nativeCoinHoldersGrowth"
+# title = "Native coin holders growth"
+# description = "Cumulative token holders number for the period"
+# update_schedule = "0 0 10 * * * *"
 
-[[lines.sections.charts]]
-id = "newNativeCoinHolders"
-title = "New native coin holders"
-description = "New token holders number per day"
-update_schedule = "0 0 22 * * * *"
-drop_last_point = true
+# [[lines.sections.charts]]
+# id = "newNativeCoinHolders"
+# title = "New native coin holders"
+# description = "New token holders number per day"
+# update_schedule = "0 0 22 * * * *"
+# drop_last_point = true
 
 [[lines.sections.charts]]
 id = "newNativeCoinTransfers"
@@ -180,13 +180,13 @@ description = "New token transfers number for the period"
 update_schedule = "0 0 3 * * * *"
 drop_last_point = true
 
-[[lines.sections.charts]]
-id = "nativeCoinSupply"
-title = "Native coin circulating supply"
-description = "Amount of token circulating supply for the period"
-units = "ETH"
-update_schedule = "0 0 11 * * * *"
-drop_last_point = true
+# [[lines.sections.charts]]
+# id = "nativeCoinSupply"
+# title = "Native coin circulating supply"
+# description = "Amount of token circulating supply for the period"
+# units = "ETH"
+# update_schedule = "0 0 11 * * * *"
+# drop_last_point = true
 
 
 [[lines.sections]]

@@ -60,7 +60,7 @@ async fn test_counters_ok() {
         "totalTxns",
         "totalAccounts",
         "totalTokens",
-        "totalNativeCoinHolders",
+        // "totalNativeCoinHolders",
         "totalNativeCoinTransfers",
         "lastNewContracts",
         "lastNewVerifiedContracts",
