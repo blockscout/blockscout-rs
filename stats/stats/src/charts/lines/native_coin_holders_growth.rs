@@ -62,6 +62,9 @@ impl crate::Chart for NativeCoinHoldersGrowth {
     fn missing_date_policy(&self) -> MissingDatePolicy {
         MissingDatePolicy::FillPrevious
     }
+    fn drop_last_point(&self) -> bool {
+        false
+    }
 
     async fn update(
         &self,

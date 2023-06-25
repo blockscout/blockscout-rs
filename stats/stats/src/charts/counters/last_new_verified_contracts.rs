@@ -40,9 +40,11 @@ impl crate::Chart for LastNewVerifiedContracts {
     fn name(&self) -> &str {
         "lastNewVerifiedContracts"
     }
-
     fn chart_type(&self) -> ChartType {
         ChartType::Counter
+    }
+    fn relevant_or_zero(&self) -> bool {
+        true
     }
 
     async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {

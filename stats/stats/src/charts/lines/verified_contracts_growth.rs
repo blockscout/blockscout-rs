@@ -46,6 +46,9 @@ impl crate::Chart for VerifiedContractsGrowth {
     fn missing_date_policy(&self) -> MissingDatePolicy {
         MissingDatePolicy::FillPrevious
     }
+    fn drop_last_point(&self) -> bool {
+        false
+    }
 
     async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
         self.parent.create(db).await?;
