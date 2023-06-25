@@ -1,15 +1,14 @@
+use crate::{charts::Charts, serializers::serialize_line_points};
 use async_trait::async_trait;
 use chrono::NaiveDate;
 use sea_orm::{DatabaseConnection, DbErr};
 use stats::ReadError;
 use stats_proto::blockscout::stats::v1::{
     stats_service_server::StatsService, Counter, Counters, GetCountersRequest, GetLineChartRequest,
-    GetLineChartsRequest, LineChart, LineCharts, Point,
+    GetLineChartsRequest, LineChart, LineCharts,
 };
 use std::{str::FromStr, sync::Arc};
 use tonic::{Request, Response, Status};
-
-use crate::charts::Charts;
 
 #[derive(Clone)]
 pub struct ReadService {
@@ -70,14 +69,8 @@ impl StatsService for ReadService {
         request: Request<GetLineChartRequest>,
     ) -> Result<Response<LineChart>, Status> {
         let request = request.into_inner();
-        if !self.charts.lines_filter.contains(&request.name) {
-            return Err(tonic::Status::not_found(format!(
-                "chart {} not found",
-                request.name
-            )));
-        }
-        let settings =
-            self.charts.settings.get(&request.name).ok_or_else(|| {
+        let chart_info =
+            self.charts.charts_info.get(&request.name).ok_or_else(|| {
                 tonic::Status::not_found(format!("chart {} not found", request.name))
             })?;
 
@@ -89,7 +82,7 @@ impl StatsService for ReadService {
             .await
             .map_err(map_read_error)?;
 
-        if settings.drop_last_point {
+        if chart_info.settings.drop_last_point {
             // remove last data point, because it can be partially updated
             if let Some(last) = data.last() {
                 if last.is_partial() {
@@ -97,14 +90,8 @@ impl StatsService for ReadService {
                 }
             }
         }
-
-        let serialized_chart: Vec<_> = data
-            .into_iter()
-            .map(|point| Point {
-                date: point.date.to_string(),
-                value: point.value,
-            })
-            .collect();
+        let serialized_chart =
+            serialize_line_points(data, chart_info.chart.missing_date_policy(), from, to);
         Ok(Response::new(LineChart {
             chart: serialized_chart,
         }))

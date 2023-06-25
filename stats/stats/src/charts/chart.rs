@@ -26,10 +26,20 @@ impl From<ReadError> for UpdateError {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MissingDatePolicy {
+    DoNothing,
+    FillZero,
+    FillPrevious,
+}
+
 #[async_trait]
 pub trait Chart: Sync {
     fn name(&self) -> &str;
     fn chart_type(&self) -> ChartType;
+    fn missing_date_policy(&self) -> MissingDatePolicy {
+        MissingDatePolicy::FillZero
+    }
 
     async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
         create_chart(db, self.name().into(), self.chart_type()).await
