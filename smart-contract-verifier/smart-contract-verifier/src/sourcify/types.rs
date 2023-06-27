@@ -12,7 +12,8 @@ pub struct ApiRequest {
     pub address: String,
     pub chain: String,
     pub files: Files,
-    pub chosen_contract: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chosen_contract: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -158,7 +159,7 @@ mod tests {
                         ("source.sol".to_string(), "pragma ...".to_string()),
                         ("metadata.json".to_string(), "{ metadata: ... }".to_string()),
                     ])),
-                    chosen_contract: Some(1),
+                    chosen_contract: Some("1".into()),
                 },
             ),
         ]);
