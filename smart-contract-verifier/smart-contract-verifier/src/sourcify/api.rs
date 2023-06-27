@@ -20,7 +20,7 @@ impl From<VerificationRequest> for ApiRequest {
             address: value.address,
             chain: value.chain,
             files: Files(value.files),
-            chosen_contract: value.chosen_contract,
+            chosen_contract: value.chosen_contract.map(|v| v.to_string()),
         }
     }
 }
