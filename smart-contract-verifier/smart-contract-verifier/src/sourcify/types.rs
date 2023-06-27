@@ -150,7 +150,7 @@ mod tests {
                         "source.sol": "pragma ...",
                         "metadata.json": "{ metadata: ... }"
                     },
-                    "chosenContract": 1
+                    "chosenContract": "1"
                 }"#,
                 ApiRequest {
                     address: "0xcafecafecafecafecafecafecafecafecafecafe".to_string(),
