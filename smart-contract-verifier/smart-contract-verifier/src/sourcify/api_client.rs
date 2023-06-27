@@ -62,14 +62,19 @@ impl SourcifyApiClient {
         &self,
         params: &ApiRequest,
     ) -> Result<ApiVerificationResponse, anyhow::Error> {
-        self.reqwest_client
+        let response = self
+            .reqwest_client
             .post(self.host.as_str())
             .json(&params)
             .send()
-            .await?
-            .json()
-            .await
-            .map_err(anyhow::Error::msg)
+            .await?;
+        if !response.status().is_success() {
+            return Err(anyhow::anyhow!(
+                "response status code is not success: {}",
+                response.status()
+            ));
+        }
+        response.json().await.map_err(anyhow::Error::msg)
     }
 
     pub(super) async fn source_files_request(
@@ -80,12 +85,13 @@ impl SourcifyApiClient {
             .host
             .join(format!("files/any/{}/{}", &params.chain, &params.address).as_str())
             .expect("should be valid url");
-        self.reqwest_client
-            .get(url)
-            .send()
-            .await?
-            .json()
-            .await
-            .map_err(anyhow::Error::msg)
+        let response = self.reqwest_client.get(url).send().await?;
+        if !response.status().is_success() {
+            return Err(anyhow::anyhow!(
+                "response status code is not success: {}",
+                response.status()
+            ));
+        }
+        response.json().await.map_err(anyhow::Error::msg)
     }
 }
