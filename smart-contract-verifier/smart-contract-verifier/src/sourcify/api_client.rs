@@ -70,8 +70,9 @@ impl SourcifyApiClient {
             .await?;
         if !response.status().is_success() {
             return Err(anyhow::anyhow!(
-                "response status code is not success: {}",
-                response.status()
+                "response status code is not success: {} - {}",
+                response.status(),
+                response.text().await?
             ));
         }
         response.json().await.map_err(anyhow::Error::msg)
@@ -88,8 +89,9 @@ impl SourcifyApiClient {
         let response = self.reqwest_client.get(url).send().await?;
         if !response.status().is_success() {
             return Err(anyhow::anyhow!(
-                "response status code is not success: {}",
-                response.status()
+                "response status code is not success: {} - {}",
+                response.status(),
+                response.text().await?
             ));
         }
         response.json().await.map_err(anyhow::Error::msg)
