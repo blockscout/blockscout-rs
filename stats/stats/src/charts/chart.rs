@@ -28,7 +28,6 @@ impl From<ReadError> for UpdateError {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MissingDatePolicy {
-    DoNothing,
     FillZero,
     FillPrevious,
 }

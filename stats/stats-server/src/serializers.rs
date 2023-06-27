@@ -4,11 +4,11 @@ use stats_proto::blockscout::stats::v1::Point;
 
 pub fn serialize_line_points(
     data: Vec<DateValue>,
-    missin_date_policy: MissingDatePolicy,
+    missing_date_policy: MissingDatePolicy,
     from: Option<NaiveDate>,
     to: Option<NaiveDate>,
 ) -> Vec<Point> {
-    let data = fill_missing_points(data, missin_date_policy, from, to);
+    let data = fill_missing_points(data, missing_date_policy, from, to);
     let serialized_chart: Vec<_> = data
         .into_iter()
         .map(|point| Point {
@@ -26,32 +26,16 @@ fn fill_missing_points(
     from: Option<NaiveDate>,
     to: Option<NaiveDate>,
 ) -> Vec<DateValue> {
-    if policy == MissingDatePolicy::DoNothing {
-        data
-    } else {
-        let (first, last) = (
-            data.iter().min().map(|v| v.date),
-            data.iter().max().map(|v| v.date),
-        );
-        let from = if let Some(from) = from.or(first) {
-            from
-        } else {
-            return data;
-        };
-        let to = if let Some(to) = to.or(last) {
-            to
-        } else {
-            return data;
-        };
-        if from > to {
-            return data;
-        }
+    let from = from.or(data.first().map(|v| v.date));
+    let to = to.or(data.last().map(|v| v.date));
+    let (from, to) = match (from, to) {
+        (Some(from), Some(to)) if from <= to => (from, to),
+        _ => return data,
+    };
 
-        match policy {
-            MissingDatePolicy::FillZero => fill_zeros(data, from, to),
-            MissingDatePolicy::FillPrevious => fill_previous(data, from, to),
-            MissingDatePolicy::DoNothing => unreachable!(),
-        }
+    match policy {
+        MissingDatePolicy::FillZero => fill_zeros(data, from, to),
+        MissingDatePolicy::FillPrevious => fill_previous(data, from, to),
     }
 }
 
@@ -62,9 +46,7 @@ fn fill_zeros(data: Vec<DateValue>, from: NaiveDate, to: NaiveDate) -> Vec<DateV
     let mut current_date = from;
     let mut i = 0;
     while current_date <= to {
-        let maybe_value_exists = data
-            .get(i)
-            .and_then(|v| v.date.eq(&current_date).then_some(v));
+        let maybe_value_exists = data.get(i).filter(|&v| v.date.eq(&current_date));
 
         let value = match maybe_value_exists {
             Some(value) => {
@@ -86,9 +68,7 @@ fn fill_previous(data: Vec<DateValue>, from: NaiveDate, to: NaiveDate) -> Vec<Da
     let mut current_date = from;
     let mut i = 0;
     while current_date <= to {
-        let maybe_value_exists = data
-            .get(i)
-            .and_then(|v| v.date.eq(&current_date).then_some(v));
+        let maybe_value_exists = data.get(i).filter(|&v| v.date.eq(&current_date));
         let value = match maybe_value_exists {
             Some(value) => {
                 i += 1;
