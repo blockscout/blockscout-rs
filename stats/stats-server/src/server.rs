@@ -60,8 +60,8 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
     let charts = Arc::new(Charts::new(charts_config)?);
 
     // TODO: may be run this with migrations or have special config
-    for chart in charts.charts.iter() {
-        chart.create(&db).await?;
+    for chart_info in charts.charts_info.values() {
+        chart_info.chart.create(&db).await?;
     }
 
     let update_service =

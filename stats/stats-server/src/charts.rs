@@ -1,19 +1,23 @@
 use crate::charts_config::{ChartSettings, Config};
 use stats::{cache::Cache, counters, entity::sea_orm_active_enums::ChartType, lines, Chart};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     hash::Hash,
     sync::Arc,
 };
 
 pub type ArcChart = Arc<dyn Chart + Send + Sync + 'static>;
 
+pub struct ChartInfo {
+    pub chart: ArcChart,
+    pub settings: ChartSettings,
+}
+
 pub struct Charts {
     pub config: Config,
-    pub charts: Vec<ArcChart>,
+    pub charts_info: BTreeMap<String, ChartInfo>,
     pub counters_filter: HashSet<String>,
     pub lines_filter: HashSet<String>,
-    pub settings: HashMap<String, ChartSettings>,
 }
 
 fn new_hashset_check_duplicates<T: Hash + Eq, I: IntoIterator<Item = T>>(
@@ -30,7 +34,7 @@ fn new_hashset_check_duplicates<T: Hash + Eq, I: IntoIterator<Item = T>>(
 }
 
 struct ValidatedConfig {
-    charts: Vec<ArcChart>,
+    charts_info: BTreeMap<String, ChartInfo>,
     counters_filter: HashSet<String>,
     lines_filter: HashSet<String>,
 }
@@ -38,17 +42,15 @@ struct ValidatedConfig {
 impl Charts {
     pub fn new(config: Config) -> Result<Self, anyhow::Error> {
         let ValidatedConfig {
-            charts,
+            charts_info,
             counters_filter,
             lines_filter,
         } = Self::validate_config(&config)?;
-        let settings = Self::new_settings(&config);
         Ok(Self {
             config,
-            charts,
+            charts_info,
             counters_filter,
             lines_filter,
-            settings,
         })
     }
 
@@ -67,11 +69,22 @@ impl Charts {
 
         let mut counters_unknown = counters_filter.clone();
         let mut lines_unknown = lines_filter.clone();
-        let charts = Self::all_charts()
+        let settings = Self::new_settings(config);
+        let charts_info = Self::all_charts()
             .into_iter()
             .filter(|chart| match chart.chart_type() {
                 ChartType::Counter => counters_unknown.remove(chart.name()),
                 ChartType::Line => lines_unknown.remove(chart.name()),
+            })
+            .filter_map(|chart| {
+                let name = chart.name().to_string();
+                settings.get(&name).map(|settings| {
+                    let info = ChartInfo {
+                        chart,
+                        settings: settings.to_owned(),
+                    };
+                    (name.to_string(), info)
+                })
             })
             .collect();
 
@@ -83,7 +96,7 @@ impl Charts {
         }
 
         Ok(ValidatedConfig {
-            charts,
+            charts_info,
             counters_filter,
             lines_filter,
         })

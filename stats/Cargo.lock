@@ -3292,6 +3292,7 @@ dependencies = [
  "config",
  "cron",
  "futures",
+ "pretty_assertions",
  "reqwest",
  "reqwest-middleware",
  "reqwest-retry",

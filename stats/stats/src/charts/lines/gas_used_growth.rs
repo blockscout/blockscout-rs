@@ -3,7 +3,7 @@ use crate::{
         insert::{DateValue, DateValueDecimal},
         updater::ChartPartialUpdater,
     },
-    UpdateError,
+    MissingDatePolicy, UpdateError,
 };
 use async_trait::async_trait;
 use entity::sea_orm_active_enums::ChartType;
@@ -81,6 +81,9 @@ impl crate::Chart for GasUsedGrowth {
     }
     fn chart_type(&self) -> ChartType {
         ChartType::Line
+    }
+    fn missing_date_policy(&self) -> MissingDatePolicy {
+        MissingDatePolicy::FillPrevious
     }
 
     async fn update(
