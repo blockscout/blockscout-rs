@@ -43,7 +43,6 @@ update_schedule = "0 10 */3 * * * *"
 id = "lastNewContracts"
 title = "Number of deployed contracts today"
 update_schedule = "0 15 */3 * * * *"
-relevant_or_zero = true
 
 [[counters]]
 id = "totalContracts"
@@ -54,7 +53,6 @@ update_schedule = "0 20 */3 * * * *"
 id = "lastNewVerifiedContracts"
 title = "Number of verified contracts today"
 update_schedule = "0 25 */3 * * * *"
-relevant_or_zero = true
 
 [[counters]]
 id = "totalVerifiedContracts"
@@ -71,7 +69,6 @@ id = "activeAccounts"
 title = "Active accounts"
 description = "Active accounts number per period"
 update_schedule = "0 0 4 * * * *"
-drop_last_point = true
 
 [[lines.sections.charts]]
 id = "accountsGrowth"
@@ -84,7 +81,6 @@ id = "newAccounts"
 title = "New accounts"
 description = "New accounts number per day"
 update_schedule = "0 0 21 * * * *"
-drop_last_point = true
 
 
 [[lines.sections]]
@@ -97,7 +93,6 @@ title = "Average transaction fee"
 description = "The average amount in ETH spent per transaction"
 units = "ETH"
 update_schedule = "0 0 6 * * * *"
-drop_last_point = true
 
 [[lines.sections.charts]]
 id = "txnsFee"
@@ -105,14 +100,12 @@ title = "Transactions fees"
 description = "Amount of tokens paid as fees"
 units = "ETH"
 update_schedule = "0 0 7 * * * *"
-drop_last_point = true
 
 [[lines.sections.charts]]
 id = "newTxns"
 title = "New transactions"
 description = "New transactions number"
 update_schedule = "0 0 1 * * * *"
-drop_last_point = true
 
 [[lines.sections.charts]]
 id = "txnsGrowth"
@@ -125,7 +118,6 @@ id = "txnsSuccessRate"
 title = "Transactions success rate"
 description = "Successful transactions rate per day"
 update_schedule = "0 0 19 * * * *"
-drop_last_point = true
 
 
 [[lines.sections]]
@@ -137,7 +129,6 @@ id = "newBlocks"
 title = "New blocks"
 description = "New blocks number"
 update_schedule = "0 0 8 * * * *"
-drop_last_point = true
 
 [[lines.sections.charts]]
 id = "averageBlockSize"
@@ -145,7 +136,6 @@ title = "Average block size"
 description = "Average size of blocks in bytes"
 units = "Bytes"
 update_schedule = "0 0 9 * * * *"
-drop_last_point = true
 
 [[lines.sections.charts]]
 id = "averageBlockRewards"
@@ -153,7 +143,6 @@ title = "Average block rewards"
 description = "Average amount of distributed reward in tokens per day"
 units = "ETH"
 update_schedule = "0 0 20 * * * *"
-drop_last_point = true
 
 
 [[lines.sections]]
@@ -171,14 +160,12 @@ title = "Tokens"
 # title = "New native coin holders"
 # description = "New token holders number per day"
 # update_schedule = "0 0 22 * * * *"
-# drop_last_point = true
 
 [[lines.sections.charts]]
 id = "newNativeCoinTransfers"
 title = "New native coins transfers"
 description = "New token transfers number for the period"
 update_schedule = "0 0 3 * * * *"
-drop_last_point = true
 
 # [[lines.sections.charts]]
 # id = "nativeCoinSupply"
@@ -186,7 +173,6 @@ drop_last_point = true
 # description = "Amount of token circulating supply for the period"
 # units = "ETH"
 # update_schedule = "0 0 11 * * * *"
-# drop_last_point = true
 
 
 [[lines.sections]]
@@ -198,7 +184,6 @@ id = "averageGasLimit"
 title = "Average gas limit"
 description = "Average gas limit per block for the period"
 update_schedule = "0 0 12 * * * *"
-drop_last_point = true
 
 [[lines.sections.charts]]
 id = "gasUsedGrowth"
@@ -212,7 +197,6 @@ title = "Average gas price"
 description = "Average gas price for the period (Gwei)"
 units = "Gwei"
 update_schedule = "0 0 14 * * * *"
-drop_last_point = true
 
 
 [[lines.sections]]
@@ -224,27 +208,21 @@ id = "newVerifiedContracts"
 title = "New verified contracts"
 description = "New verified contracts number for the period"
 update_schedule = "0 0 15 * * * *"
-drop_last_point = true
 
 [[lines.sections.charts]]
 id = "verifiedContractsGrowth"
 title = "Verified contracts growth"
 description = "Cumulative number verified contracts for the period"
 update_schedule = "0 0 7 * * * *"
-drop_last_point = false
-
 
 [[lines.sections.charts]]
 id = "newContracts"
 title = "New contracts"
 description = "New contracts number for the period"
 update_schedule = "0 0 16 * * * *"
-drop_last_point = true
 
 [[lines.sections.charts]]
 id = "contractsGrowth"
 title = "Contracts growth"
 description = "Cumulative number of contracts for the period"
 update_schedule = "0 0 8 * * * *"
-drop_last_point = false
-
