@@ -2,25 +2,16 @@ use chrono::{Duration, NaiveDate};
 use stats::{DateValue, MissingDatePolicy};
 use stats_proto::blockscout::stats::v1::Point;
 
-pub fn serialize_line_points(
-    data: Vec<DateValue>,
-    missing_date_policy: MissingDatePolicy,
-    from: Option<NaiveDate>,
-    to: Option<NaiveDate>,
-) -> Vec<Point> {
-    let data = fill_missing_points(data, missing_date_policy, from, to);
-    let serialized_chart: Vec<_> = data
-        .into_iter()
+pub fn serialize_line_points(data: Vec<DateValue>) -> Vec<Point> {
+    data.into_iter()
         .map(|point| Point {
             date: point.date.to_string(),
             value: point.value,
         })
-        .collect();
-
-    serialized_chart
+        .collect()
 }
 
-fn fill_missing_points(
+pub fn fill_missing_points(
     data: Vec<DateValue>,
     policy: MissingDatePolicy,
     from: Option<NaiveDate>,

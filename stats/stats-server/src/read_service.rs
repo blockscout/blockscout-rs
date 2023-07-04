@@ -1,4 +1,7 @@
-use crate::{charts::Charts, serializers::serialize_line_points};
+use crate::{
+    charts::Charts,
+    serializers::{fill_missing_points, serialize_line_points},
+};
 use async_trait::async_trait;
 use chrono::NaiveDate;
 use sea_orm::{DatabaseConnection, DbErr};
@@ -80,6 +83,7 @@ impl StatsService for ReadService {
         let to = request.to.and_then(|date| NaiveDate::from_str(&date).ok());
         let mut data = stats::get_chart_data(&self.db, &request.name, from, to)
             .await
+            .map(|data| fill_missing_points(data, chart_info.chart.missing_date_policy(), from, to))
             .map_err(map_read_error)?;
 
         if chart_info.settings.drop_last_point {
@@ -90,8 +94,7 @@ impl StatsService for ReadService {
                 }
             }
         }
-        let serialized_chart =
-            serialize_line_points(data, chart_info.chart.missing_date_policy(), from, to);
+        let serialized_chart = serialize_line_points(data);
         Ok(Response::new(LineChart {
             chart: serialized_chart,
         }))
