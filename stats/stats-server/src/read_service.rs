@@ -47,17 +47,23 @@ impl StatsService for ReadService {
             .config
             .counters
             .iter()
-            .filter_map(|info| {
-                data.remove(&info.id).map(|point| {
-                    let point = if info.settings.relevant_or_zero {
+            .filter_map(|counter| {
+                self.charts
+                    .charts_info
+                    .get(&counter.id)
+                    .map(|info| (counter, info))
+            })
+            .filter_map(|(counter, info)| {
+                data.remove(&counter.id).map(|point| {
+                    let point: stats::DateValue = if info.chart.relevant_or_zero() {
                         point.relevant_or_zero()
                     } else {
                         point
                     };
                     Counter {
-                        id: info.id.clone(),
+                        id: counter.id.clone(),
                         value: point.value,
-                        title: info.title.clone(),
+                        title: counter.title.clone(),
                         units: info.settings.units.clone(),
                     }
                 })
@@ -86,7 +92,7 @@ impl StatsService for ReadService {
             .map(|data| fill_missing_points(data, chart_info.chart.missing_date_policy(), from, to))
             .map_err(map_read_error)?;
 
-        if chart_info.settings.drop_last_point {
+        if chart_info.chart.drop_last_point() {
             // remove last data point, because it can be partially updated
             if let Some(last) = data.last() {
                 if last.is_partial() {
