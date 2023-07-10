@@ -47,135 +47,133 @@
         }
     },
     "lines": {
-        "sections": {
-            "accounts": {
-                "title": "Accounts",
-                "charts": {
-                    "active_accounts": {
-                        "title": "Active accounts",
-                        "description": "Active accounts number per period",
-                        "update_schedule": "0 0 4 * * * *"
-                    },
-                    "accounts_growth": {
-                        "title": "Accounts growth",
-                        "description": "Cumulative accounts number per period",
-                        "update_schedule": "0 0 5 * * * *"
-                    },
-                    "new_accounts": {
-                        "title": "New accounts",
-                        "description": "New accounts number per day",
-                        "update_schedule": "0 0 21 * * * *"
-                    }
+        "accounts": {
+            "title": "Accounts",
+            "charts": {
+                "active_accounts": {
+                    "title": "Active accounts",
+                    "description": "Active accounts number per period",
+                    "update_schedule": "0 0 4 * * * *"
+                },
+                "accounts_growth": {
+                    "title": "Accounts growth",
+                    "description": "Cumulative accounts number per period",
+                    "update_schedule": "0 0 5 * * * *"
+                },
+                "new_accounts": {
+                    "title": "New accounts",
+                    "description": "New accounts number per day",
+                    "update_schedule": "0 0 21 * * * *"
                 }
-            },
-            "transactions": {
-                "title": "Transactions",
-                "charts": {
-                    "average_txn_fee": {
-                        "title": "Average transaction fee",
-                        "description": "The average amount in ETH spent per transaction",
-                        "units": "ETH",
-                        "update_schedule": "0 0 6 * * * *"
-                    },
-                    "txns_fee": {
-                        "title": "Transactions fees",
-                        "description": "Amount of tokens paid as fees",
-                        "units": "ETH",
-                        "update_schedule": "0 0 7 * * * *"
-                    },
-                    "new_txns": {
-                        "title": "New transactions",
-                        "description": "New transactions number",
-                        "update_schedule": "0 0 1 * * * *"
-                    },
-                    "txns_growth": {
-                        "title": "Transactions growth",
-                        "description": "Cumulative transactions number",
-                        "update_schedule": "0 0 2 * * * *"
-                    },
-                    "txns_success_rate": {
-                        "title": "Transactions success rate",
-                        "description": "Successful transactions rate per day",
-                        "update_schedule": "0 0 19 * * * *"
-                    }
+            }
+        },
+        "transactions": {
+            "title": "Transactions",
+            "charts": {
+                "average_txn_fee": {
+                    "title": "Average transaction fee",
+                    "description": "The average amount in ETH spent per transaction",
+                    "units": "ETH",
+                    "update_schedule": "0 0 6 * * * *"
+                },
+                "txns_fee": {
+                    "title": "Transactions fees",
+                    "description": "Amount of tokens paid as fees",
+                    "units": "ETH",
+                    "update_schedule": "0 0 7 * * * *"
+                },
+                "new_txns": {
+                    "title": "New transactions",
+                    "description": "New transactions number",
+                    "update_schedule": "0 0 1 * * * *"
+                },
+                "txns_growth": {
+                    "title": "Transactions growth",
+                    "description": "Cumulative transactions number",
+                    "update_schedule": "0 0 2 * * * *"
+                },
+                "txns_success_rate": {
+                    "title": "Transactions success rate",
+                    "description": "Successful transactions rate per day",
+                    "update_schedule": "0 0 19 * * * *"
                 }
-            },
-            "blocks": {
-                "title": "Blocks",
-                "charts": {
-                    "new_blocks": {
-                        "title": "New blocks",
-                        "description": "New blocks number",
-                        "update_schedule": "0 0 8 * * * *"
-                    },
-                    "average_block_size": {
-                        "title": "Average block size",
-                        "description": "Average size of blocks in bytes",
-                        "units": "Bytes",
-                        "update_schedule": "0 0 9 * * * *"
-                    },
-                    "average_block_rewards": {
-                        "title": "Average block rewards",
-                        "description": "Average amount of distributed reward in tokens per day",
-                        "units": "ETH",
-                        "update_schedule": "0 0 20 * * * *"
-                    }
+            }
+        },
+        "blocks": {
+            "title": "Blocks",
+            "charts": {
+                "new_blocks": {
+                    "title": "New blocks",
+                    "description": "New blocks number",
+                    "update_schedule": "0 0 8 * * * *"
+                },
+                "average_block_size": {
+                    "title": "Average block size",
+                    "description": "Average size of blocks in bytes",
+                    "units": "Bytes",
+                    "update_schedule": "0 0 9 * * * *"
+                },
+                "average_block_rewards": {
+                    "title": "Average block rewards",
+                    "description": "Average amount of distributed reward in tokens per day",
+                    "units": "ETH",
+                    "update_schedule": "0 0 20 * * * *"
                 }
-            },
-            "tokens": {
-                "title": "Tokens",
-                "charts": {
-                    "new_native_coin_transfers": {
-                        "title": "New native coins transfers",
-                        "description": "New token transfers number for the period",
-                        "update_schedule": "0 0 3 * * * *"
-                    }
+            }
+        },
+        "tokens": {
+            "title": "Tokens",
+            "charts": {
+                "new_native_coin_transfers": {
+                    "title": "New native coins transfers",
+                    "description": "New token transfers number for the period",
+                    "update_schedule": "0 0 3 * * * *"
                 }
-            },
-            "gas": {
-                "title": "Gas",
-                "charts": {
-                    "average_gas_limit": {
-                        "title": "Average gas limit",
-                        "description": "Average gas limit per block for the period",
-                        "update_schedule": "0 0 12 * * * *"
-                    },
-                    "gas_used_growth": {
-                        "title": "Gas used growth",
-                        "description": "Cumulative gas used for the period",
-                        "update_schedule": "0 0 13 * * * *"
-                    },
-                    "average_gas_price": {
-                        "title": "Average gas price",
-                        "description": "Average gas price for the period (Gwei)",
-                        "units": "Gwei",
-                        "update_schedule": "0 0 14 * * * *"
-                    }
+            }
+        },
+        "gas": {
+            "title": "Gas",
+            "charts": {
+                "average_gas_limit": {
+                    "title": "Average gas limit",
+                    "description": "Average gas limit per block for the period",
+                    "update_schedule": "0 0 12 * * * *"
+                },
+                "gas_used_growth": {
+                    "title": "Gas used growth",
+                    "description": "Cumulative gas used for the period",
+                    "update_schedule": "0 0 13 * * * *"
+                },
+                "average_gas_price": {
+                    "title": "Average gas price",
+                    "description": "Average gas price for the period (Gwei)",
+                    "units": "Gwei",
+                    "update_schedule": "0 0 14 * * * *"
                 }
-            },
-            "contracts": {
-                "title": "Contracts",
-                "charts": {
-                    "new_verified_contracts": {
-                        "title": "New verified contracts",
-                        "description": "New verified contracts number for the period",
-                        "update_schedule": "0 0 15 * * * *"
-                    },
-                    "verified_contracts_growth": {
-                        "title": "Verified contracts growth",
-                        "description": "Cumulative number verified contracts for the period",
-                        "update_schedule": "0 0 7 * * * *"
-                    },
-                    "new_contracts": {
-                        "title": "New contracts",
-                        "description": "New contracts number for the period",
-                        "update_schedule": "0 0 16 * * * *"
-                    },
-                    "contracts_growth": {
-                        "title": "Contracts growth",
-                        "description": "Cumulative number of contracts for the period",
-                        "update_schedule": "0 0 8 * * * *"
-                    }
+            }
+        },
+        "contracts": {
+            "title": "Contracts",
+            "charts": {
+                "new_verified_contracts": {
+                    "title": "New verified contracts",
+                    "description": "New verified contracts number for the period",
+                    "update_schedule": "0 0 15 * * * *"
+                },
+                "verified_contracts_growth": {
+                    "title": "Verified contracts growth",
+                    "description": "Cumulative number verified contracts for the period",
+                    "update_schedule": "0 0 7 * * * *"
+                },
+                "new_contracts": {
+                    "title": "New contracts",
+                    "description": "New contracts number for the period",
+                    "update_schedule": "0 0 16 * * * *"
+                },
+                "contracts_growth": {
+                    "title": "Contracts growth",
+                    "description": "Cumulative number of contracts for the period",
+                    "update_schedule": "0 0 8 * * * *"
                 }
             }
         }

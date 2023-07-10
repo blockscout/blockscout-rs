@@ -15,15 +15,9 @@ pub struct LineChartSection {
 
 #[derive(Default, Debug, Clone, Deserialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct LineCharts {
-    pub sections: BTreeMap<String, LineChartSection>,
-}
-
-#[derive(Default, Debug, Clone, Deserialize)]
-#[serde(default, deny_unknown_fields)]
 pub struct Config {
     pub counters: BTreeMap<String, CounterInfo>,
-    pub lines: LineCharts,
+    pub lines: BTreeMap<String, LineChartSection>,
 }
 
 impl From<Config> for toml_config::Config {
@@ -34,20 +28,19 @@ impl From<Config> for toml_config::Config {
                 .into_iter()
                 .map(toml_config::CounterInfo::from)
                 .collect(),
-            lines: value.lines.into(),
+            lines: value
+                .lines
+                .into_iter()
+                .map(toml_config::LineChartSection::from)
+                .collect::<Vec<_>>()
+                .into(),
         }
     }
 }
 
-impl From<LineCharts> for toml_config::LineCharts {
-    fn from(value: LineCharts) -> Self {
-        Self {
-            sections: value
-                .sections
-                .into_iter()
-                .map(toml_config::LineChartSection::from)
-                .collect(),
-        }
+impl From<Vec<toml_config::LineChartSection>> for toml_config::LineCharts {
+    fn from(sections: Vec<toml_config::LineChartSection>) -> Self {
+        Self { sections }
     }
 }
 
