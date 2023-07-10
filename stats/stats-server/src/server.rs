@@ -1,5 +1,5 @@
 use crate::{
-    charts::Charts, charts_config, health::HealthService, read_service::ReadService,
+    charts::Charts, config::read_charts_config, health::HealthService, read_service::ReadService,
     settings::Settings, update_service::UpdateService,
 };
 use blockscout_service_launcher::LaunchSettings;
@@ -40,9 +40,7 @@ fn grpc_router<S: StatsService>(
 pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
     blockscout_service_launcher::init_logs(SERVICE_NAME, &settings.tracing, &settings.jaeger)?;
 
-    let charts_config = std::fs::read(settings.charts_config)?;
-    let charts_config: charts_config::Config = toml::from_slice(&charts_config)?;
-
+    let charts_config = read_charts_config(settings.charts_config.clone())?;
     let mut opt = ConnectOptions::new(settings.db_url.clone());
     opt.sqlx_logging_level(tracing::log::LevelFilter::Debug);
     blockscout_service_launcher::database::initialize_postgres::<stats::migration::Migrator>(

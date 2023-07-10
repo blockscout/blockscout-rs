@@ -66,7 +66,7 @@ impl Default for Settings {
             default_schedule: Schedule::from_str("0 0 1 * * * *").unwrap(),
             force_update_on_start: Some(false),
             concurrent_start_updates: 3,
-            charts_config: PathBuf::from_str("config/charts.toml").unwrap(),
+            charts_config: PathBuf::from_str("config/charts.json").unwrap(),
             blockscout_db_url: Default::default(),
             create_database: Default::default(),
             run_migrations: Default::default(),
