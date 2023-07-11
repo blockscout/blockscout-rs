@@ -1,4 +1,7 @@
-use crate::config::{toml_config::Config, ChartSettings};
+use crate::config::{
+    toml_config::{Config, LineChartSection},
+    ChartSettings,
+};
 use stats::{cache::Cache, counters, entity::sea_orm_active_enums::ChartType, lines, Chart};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -33,49 +36,28 @@ fn new_hashset_check_duplicates<T: Hash + Eq, I: IntoIterator<Item = T>>(
     Ok(result)
 }
 
-struct ValidatedConfig {
-    charts_info: BTreeMap<String, ChartInfo>,
-    counters_filter: HashSet<String>,
-    lines_filter: HashSet<String>,
-}
-
 impl Charts {
     pub fn new(config: Config) -> Result<Self, anyhow::Error> {
-        let ValidatedConfig {
-            charts_info,
-            counters_filter,
-            lines_filter,
-        } = Self::validate_config(&config)?;
-        Ok(Self {
-            config,
-            charts_info,
-            counters_filter,
-            lines_filter,
-        })
+        Self::validated(config)
     }
 
-    fn validate_config(config: &Config) -> Result<ValidatedConfig, anyhow::Error> {
-        let counters_filter = config
-            .counters
-            .iter()
-            .filter(|counter| counter.settings.enabled)
-            .map(|counter| counter.id.clone());
+    fn validated(config: Config) -> Result<Self, anyhow::Error> {
+        let config = Self::remove_disabled_charts(config);
+        let counters_filter = config.counters.iter().map(|counter| counter.id.clone());
         let counters_filter = new_hashset_check_duplicates(counters_filter)
             .map_err(|id| anyhow::anyhow!("encountered same id twice: {}", id))?;
 
-        let lines_filter = config.lines.sections.iter().flat_map(|section| {
-            section
-                .charts
-                .iter()
-                .filter(|line| line.settings.enabled)
-                .map(|chart| chart.id.clone())
-        });
+        let lines_filter = config
+            .lines
+            .sections
+            .iter()
+            .flat_map(|section| section.charts.iter().map(|chart| chart.id.clone()));
         let lines_filter = new_hashset_check_duplicates(lines_filter)
             .map_err(|id| anyhow::anyhow!("encountered same id twice: {}", id))?;
 
         let mut counters_unknown = counters_filter.clone();
         let mut lines_unknown = lines_filter.clone();
-        let settings = Self::new_settings(config);
+        let settings = Self::new_settings(&config);
         let charts_info = Self::all_charts()
             .into_iter()
             .filter(|chart| match chart.chart_type() {
@@ -101,11 +83,37 @@ impl Charts {
             ));
         }
 
-        Ok(ValidatedConfig {
+        Ok(Self {
+            config,
             charts_info,
             counters_filter,
             lines_filter,
         })
+    }
+
+    fn remove_disabled_charts(config: Config) -> Config {
+        let counters = config
+            .counters
+            .into_iter()
+            .filter(|info| info.settings.enabled)
+            .collect();
+        let lines = config
+            .lines
+            .sections
+            .into_iter()
+            .map(|sec| LineChartSection {
+                id: sec.id,
+                title: sec.title,
+                charts: sec
+                    .charts
+                    .into_iter()
+                    .filter(|info| info.settings.enabled)
+                    .collect(),
+            })
+            .filter(|sec| !sec.charts.is_empty())
+            .collect::<Vec<_>>()
+            .into();
+        Config { counters, lines }
     }
 
     // assumes that config is valid

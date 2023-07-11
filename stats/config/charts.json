@@ -44,6 +44,11 @@
         "total_verified_contracts": {
             "title": "Total verified contracts",
             "update_schedule": "0 30 */3 * * * *"
+        },
+        "total_native_coin_holders": {
+            "enabled": false,
+            "title": "Total native coin holders",
+            "update_schedule": "0 0 17 * * * *"
         }
     },
     "lines": {
@@ -128,6 +133,25 @@
                     "title": "New native coins transfers",
                     "description": "New token transfers number for the period",
                     "update_schedule": "0 0 3 * * * *"
+                },
+                "native_coin_holders_growth": {
+                    "enabled": false,
+                    "title": "Native coin holders growth",
+                    "description": "Cumulative token holders number for the period",
+                    "update_schedule": "0 0 10 * * * *"
+                },
+                "new_native_coin_holders": {
+                    "enabled": false,
+                    "title": "New native coin holders",
+                    "description": "New token holders number per day",
+                    "update_schedule": "0 0 22 * * * *"
+                },
+                "native_coin_supply": {
+                    "enabled": false,
+                    "title": "Native coin circulating supply",
+                    "description": "Amount of token circulating supply for the period",
+                    "units": "ETH",
+                    "update_schedule": "0 0 11 * * * *"
                 }
             }
         },
