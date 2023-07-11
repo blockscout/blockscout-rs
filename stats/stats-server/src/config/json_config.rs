@@ -61,7 +61,7 @@ impl From<(String, LineChartSection)> for toml_config::LineChartSection {
 impl From<(String, LineChartInfo)> for toml_config::LineChartInfo {
     fn from((id, info): (String, LineChartInfo)) -> Self {
         Self {
-            id: id.to_case(Case::Camel),
+            id: id.from_case(Case::Snake).to_case(Case::Camel),
             title: info.title,
             description: info.description,
             settings: info.settings,
@@ -72,7 +72,7 @@ impl From<(String, LineChartInfo)> for toml_config::LineChartInfo {
 impl From<(String, CounterInfo)> for toml_config::CounterInfo {
     fn from((id, info): (String, CounterInfo)) -> Self {
         Self {
-            id: id.to_case(Case::Camel),
+            id: id.from_case(Case::Snake).to_case(Case::Camel),
             title: info.title,
             settings: info.settings,
         }

@@ -1,7 +1,7 @@
 use super::{json_config, toml_config};
-use std::path::PathBuf;
+use std::path::Path;
 
-pub fn read_charts_config(path: PathBuf) -> Result<toml_config::Config, anyhow::Error> {
+pub fn read_charts_config(path: &Path) -> Result<toml_config::Config, anyhow::Error> {
     let extension = path.extension();
     if extension == Some(std::ffi::OsStr::new("json")) {
         let json_config: json_config::Config = config::Config::builder()
