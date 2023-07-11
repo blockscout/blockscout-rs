@@ -38,6 +38,12 @@ pub struct LineChartSection {
     pub charts: Vec<LineChartInfo>,
 }
 
+impl From<Vec<LineChartSection>> for LineCharts {
+    fn from(sections: Vec<LineChartSection>) -> Self {
+        Self { sections }
+    }
+}
+
 impl From<LineChartSection> for proto::LineChartSection {
     fn from(value: LineChartSection) -> Self {
         Self {

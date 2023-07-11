@@ -38,12 +38,6 @@ impl From<Config> for toml_config::Config {
     }
 }
 
-impl From<Vec<toml_config::LineChartSection>> for toml_config::LineCharts {
-    fn from(sections: Vec<toml_config::LineChartSection>) -> Self {
-        Self { sections }
-    }
-}
-
 impl From<(String, LineChartSection)> for toml_config::LineChartSection {
     fn from((id, section): (String, LineChartSection)) -> Self {
         Self {
