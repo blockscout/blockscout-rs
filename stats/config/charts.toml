@@ -1,22 +1,22 @@
 [[counters]]
 id = "totalBlocks"
-title = "Total Blocks"
+title = "Total blocks"
 update_schedule = "0 0 */3 * * * *"
 
 [[counters]]
 id = "averageBlockTime"
-title = "Average Block Time"
+title = "Average block time"
 units = "s"
 update_schedule = "0 0 15 * * * *"
 
 [[counters]]
 id = "completedTxns"
-title = "Completed Txns"
+title = "Completed txns"
 update_schedule = "0 5 */3 * * * *"
 
 [[counters]]
 id = "totalAccounts"
-title = "Total Accounts"
+title = "Total accounts"
 update_schedule = "0 0 16 * * * *"
 
 # [[counters]]
@@ -26,17 +26,17 @@ update_schedule = "0 0 16 * * * *"
 
 [[counters]]
 id = "totalNativeCoinTransfers"
-title = "Total Native Coin Transfers"
+title = "Total native coin transfers"
 update_schedule = "0 0 13 * * * *"
 
 [[counters]]
 id = "totalTokens"
-title = "Total Tokens"
+title = "Total tokens"
 update_schedule = "0 0 18 * * * *"
 
 [[counters]]
 id = "totalTxns"
-title = "Total Txns"
+title = "Total txns"
 update_schedule = "0 10 */3 * * * *"
 
 [[counters]]

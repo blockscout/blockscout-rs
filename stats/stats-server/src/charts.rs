@@ -1,4 +1,4 @@
-use crate::charts_config::{ChartSettings, Config};
+use crate::config::{toml_config::Config, ChartSettings};
 use stats::{cache::Cache, counters, entity::sea_orm_active_enums::ChartType, lines, Chart};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -55,15 +55,21 @@ impl Charts {
     }
 
     fn validate_config(config: &Config) -> Result<ValidatedConfig, anyhow::Error> {
-        let counters_filter = config.counters.iter().map(|counter| counter.id.clone());
+        let counters_filter = config
+            .counters
+            .iter()
+            .filter(|counter| counter.settings.enabled)
+            .map(|counter| counter.id.clone());
         let counters_filter = new_hashset_check_duplicates(counters_filter)
             .map_err(|id| anyhow::anyhow!("encountered same id twice: {}", id))?;
 
-        let lines_filter = config
-            .lines
-            .sections
-            .iter()
-            .flat_map(|section| section.charts.iter().map(|chart| chart.id.clone()));
+        let lines_filter = config.lines.sections.iter().flat_map(|section| {
+            section
+                .charts
+                .iter()
+                .filter(|line| line.settings.enabled)
+                .map(|chart| chart.id.clone())
+        });
         let lines_filter = new_hashset_check_duplicates(lines_filter)
             .map_err(|id| anyhow::anyhow!("encountered same id twice: {}", id))?;
 

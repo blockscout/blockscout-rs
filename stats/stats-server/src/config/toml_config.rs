@@ -1,15 +1,7 @@
-use cron::Schedule;
 use serde::Deserialize;
-use serde_with::{serde_as, DisplayFromStr};
 use stats_proto::blockscout::stats::v1 as proto;
 
-#[serde_as]
-#[derive(Debug, Clone, Deserialize)]
-pub struct ChartSettings {
-    #[serde_as(as = "Option<DisplayFromStr>")]
-    pub update_schedule: Option<Schedule>,
-    pub units: Option<String>,
-}
+use super::chart_info::ChartSettings;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct CounterInfo {
