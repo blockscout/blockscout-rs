@@ -7,7 +7,7 @@ pub fn read_charts_config(path: PathBuf) -> Result<toml_config::Config, anyhow::
         let json_config: json_config::Config = config::Config::builder()
             .add_source(config::File::from(path))
             .add_source(
-                config::Environment::with_prefix("STATS_CFG")
+                config::Environment::with_prefix("STATS_CHARTS")
                     .separator("__")
                     .try_parsing(true),
             )
