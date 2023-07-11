@@ -110,6 +110,7 @@ impl Charts {
                     .filter(|info| info.settings.enabled)
                     .collect(),
             })
+            .filter(|sec| !sec.charts.is_empty())
             .collect::<Vec<_>>()
             .into();
         Config { counters, lines }
