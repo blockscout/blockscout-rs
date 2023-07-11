@@ -1,32 +1,32 @@
 {
     "counters": {
         "total_blocks": {
-            "title": "Total Blocks",
+            "title": "Total blocks",
             "update_schedule": "0 0 */3 * * * *"
         },
         "average_block_time": {
-            "title": "Average Block Time",
+            "title": "Average block time",
             "units": "s",
             "update_schedule": "0 0 15 * * * *"
         },
         "completed_txns": {
-            "title": "Completed Txns",
+            "title": "Completed txns",
             "update_schedule": "0 5 */3 * * * *"
         },
         "total_accounts": {
-            "title": "Total Accounts",
+            "title": "Total accounts",
             "update_schedule": "0 0 16 * * * *"
         },
         "total_native_coin_transfers": {
-            "title": "Total Native Coin Transfers",
+            "title": "Total native coin transfers",
             "update_schedule": "0 0 13 * * * *"
         },
         "total_tokens": {
-            "title": "Total Tokens",
+            "title": "Total tokens",
             "update_schedule": "0 0 18 * * * *"
         },
         "total_txns": {
-            "title": "Total Txns",
+            "title": "Total txns",
             "update_schedule": "0 10 */3 * * * *"
         },
         "last_new_contracts": {
