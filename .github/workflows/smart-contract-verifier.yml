@@ -1,7 +1,7 @@
 on:
   push:
     branches:
-      - 'main'
+      - 'arm64'
     tags:
       - 'smart-contract-verifier/v*'
   pull_request:
@@ -15,7 +15,8 @@ name: Test, lint and docker (smart-contract-verifier)
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: blockscout/smart-contract-verifier
+  IMAGE_NAME: atapin/smart-contract-verifier
+  PLATFORMS: 
 
 defaults:
   run:
@@ -119,7 +120,7 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.AUTH_TOKEN }}
 
       - name: Extract metadata for Docker
         id: meta
