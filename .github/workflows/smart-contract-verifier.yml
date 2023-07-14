@@ -115,11 +115,11 @@ jobs:
           (if ! [[ "$t" == "" ]]; then echo tags=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$t, ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest; elif ! [[ "$m" == "" ]]; then echo tags=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$m; else echo tags=; fi) >> $GITHUB_OUTPUT
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v1
+        uses: docker/login-action@v2
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.AUTH_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract metadata for Docker
         id: meta
