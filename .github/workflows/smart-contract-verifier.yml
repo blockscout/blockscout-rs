@@ -94,9 +94,10 @@ jobs:
     # needs:
     #   - test
     #   - lint
-    if: always()
-      # (needs.test.result == 'success' || needs.test.result == 'cancelled') &&
-      # (needs.lint.result == 'success' || needs.lint.result == 'cancelled')
+    # if: |
+    #   always() &&
+    #   (needs.test.result == 'success' || needs.test.result == 'cancelled') &&
+    #   (needs.lint.result == 'success' || needs.lint.result == 'cancelled')
     timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
@@ -123,6 +124,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+
       - name: Extract metadata for Docker
         id: meta
         uses: docker/metadata-action@v3
@@ -145,4 +147,4 @@ jobs:
           tags: ${{ steps.tags_extractor.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:build-cache
-          cache-to: ${{ github.ref == 'refs/heads/main' && format('type=registry,ref={0}/{1}:build-cache,mode=max', env.REGISTRY, env.IMAGE_NAME) || '' }}
+          cache-to: ${{ github.ref == 'refs/heads/arm64' && format('type=registry,ref={0}/{1}:build-cache,mode=max', env.REGISTRY, env.IMAGE_NAME) || '' }}
