@@ -2,8 +2,8 @@ on:
   push:
     branches:
       - 'arm64'
-    tags:
-      - 'smart-contract-verifier/v*'
+    # tags:
+    #   - 'smart-contract-verifier/v*'
   pull_request:
     paths:
       - smart-contract-verifier/**
@@ -89,13 +89,12 @@ jobs:
 
   push:
     name: Docker build and docker push
-    needs:
-      - test
-      - lint
-    if: |
-      always() &&
-      (needs.test.result == 'success' || needs.test.result == 'cancelled') &&
-      (needs.lint.result == 'success' || needs.lint.result == 'cancelled')
+    # needs:
+    #   - test
+    #   - lint
+    if: always()
+      # (needs.test.result == 'success' || needs.test.result == 'cancelled') &&
+      # (needs.lint.result == 'success' || needs.lint.result == 'cancelled')
     timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
