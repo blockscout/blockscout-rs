@@ -85,8 +85,8 @@ mod tests {
             compiler_version: "compiler_version".to_string(),
             input: "standard_json_input".to_string(),
             metadata: Some(smart_contract_verifier::VerificationMetadata {
-                chain_id: "1".to_string(),
-                contract_address: "0x0101010101010101010101010101010101010101".to_string(),
+                chain_id: Some("1".to_string()),
+                contract_address: Some("0x0101010101010101010101010101010101010101".to_string()),
             }),
         };
         assert_eq!(
@@ -116,8 +116,8 @@ mod tests {
             compiler_version: "compiler_version".to_string(),
             input: "standard_json_input".to_string(),
             metadata: Some(smart_contract_verifier::VerificationMetadata {
-                chain_id: "1".to_string(),
-                contract_address: "0x0101010101010101010101010101010101010101".to_string(),
+                chain_id: Some("1".to_string()),
+                contract_address: Some("0x0101010101010101010101010101010101010101".to_string()),
             }),
         };
         assert_eq!(
