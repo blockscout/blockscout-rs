@@ -63,7 +63,7 @@ impl TryFrom<VerifySolidityStandardJsonRequestWrapper> for VerificationRequest {
             creation_bytecode,
             compiler_version,
             content: StandardJsonContent { input },
-            chain_id: request.metadata.map(|metadata| metadata.chain_id),
+            chain_id: request.metadata.and_then(|metadata| metadata.chain_id),
         })
     }
 }
@@ -84,8 +84,8 @@ mod tests {
             compiler_version: "v0.8.17+commit.8df45f5f".to_string(),
             input: "{\"language\": \"Solidity\", \"sources\": {\"./src/contracts/Foo.sol\": {\"content\": \"pragma solidity ^0.8.2;\\n\\ncontract Foo {\\n    function bar() external pure returns (uint256) {\\n        return 42;\\n    }\\n}\\n\"}}, \"settings\": {\"metadata\": {\"useLiteralContent\": true}, \"optimizer\": {\"enabled\": true, \"runs\": 200}, \"outputSelection\": {\"*\": {\"*\": [\"abi\", \"evm.bytecode\", \"evm.deployedBytecode\", \"evm.methodIdentifiers\"], \"\": [\"id\", \"ast\"]}}}}".to_string(),
             metadata: Some(VerificationMetadata {
-                chain_id: "1".into(),
-                contract_address: "0xcafecafecafecafecafecafecafecafecafecafe".into()
+                chain_id: Some("1".into()),
+                contract_address: Some("0xcafecafecafecafecafecafecafecafecafecafe".into())
             }),
         };
         let input: CompilerInput = serde_json::from_str(&request.input).unwrap();

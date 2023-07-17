@@ -88,7 +88,7 @@ impl TryFrom<VerifyVyperMultiPartRequestWrapper> for VerificationRequest {
                 interfaces,
                 evm_version,
             },
-            chain_id: request.metadata.map(|metadata| metadata.chain_id),
+            chain_id: request.metadata.and_then(|metadata| metadata.chain_id),
         })
     }
 }
@@ -109,8 +109,8 @@ mod tests {
             interfaces: BTreeMap::from([("interface_path".into(), "interface_content".into())]),
             evm_version: Some("byzantium".to_string()),
             metadata: Some(VerificationMetadata {
-                chain_id: "1".into(),
-                contract_address: "0xcafecafecafecafecafecafecafecafecafecafe".into(),
+                chain_id: Some("1".into()),
+                contract_address: Some("0xcafecafecafecafecafecafecafecafecafecafe".into()),
             }),
         };
 

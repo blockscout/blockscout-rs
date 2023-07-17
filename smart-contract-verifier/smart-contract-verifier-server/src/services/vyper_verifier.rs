@@ -72,7 +72,11 @@ impl VyperVerifier for VyperVerifierService {
         request: Request<VerifyVyperMultiPartRequest>,
     ) -> Result<Response<VerifyResponse>, Status> {
         let request: VerifyVyperMultiPartRequestWrapper = request.into_inner().into();
-        let chain_id = request.metadata.clone().unwrap_or_default().chain_id;
+        let chain_id = request
+            .metadata
+            .as_ref()
+            .and_then(|metadata| metadata.chain_id.clone())
+            .unwrap_or_default();
         let result = vyper::multi_part::verify(self.client.clone(), request.try_into()?).await;
 
         let response = if let Ok(verification_success) = result {
@@ -108,7 +112,11 @@ impl VyperVerifier for VyperVerifierService {
         request: Request<VerifyVyperStandardJsonRequest>,
     ) -> Result<Response<VerifyResponse>, Status> {
         let request: VerifyVyperStandardJsonRequestWrapper = request.into_inner().into();
-        let chain_id = request.metadata.clone().unwrap_or_default().chain_id;
+        let chain_id = request
+            .metadata
+            .as_ref()
+            .and_then(|metadata| metadata.chain_id.clone())
+            .unwrap_or_default();
         let verification_request = {
             let request: Result<_, StandardJsonParseError> = request.try_into();
             if let Err(err) = request {

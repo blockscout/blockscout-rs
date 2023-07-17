@@ -84,7 +84,7 @@ impl TryFrom<VerifySolidityMultiPartRequestWrapper> for VerificationRequest {
                 optimization_runs: request.optimization_runs.map(|i| i as usize),
                 contract_libraries: Some(request.libraries.into_iter().collect()),
             },
-            chain_id: request.metadata.map(|metadata| metadata.chain_id),
+            chain_id: request.metadata.and_then(|metadata| metadata.chain_id),
         })
     }
 }
@@ -108,8 +108,8 @@ mod tests {
             optimization_runs: Some(200),
             libraries: BTreeMap::from([("Lib".into(), "0xcafe".into())]),
             metadata: Some(VerificationMetadata {
-                chain_id: "1".into(),
-                contract_address: "0xcafecafecafecafecafecafecafecafecafecafe".into(),
+                chain_id: Some("1".into()),
+                contract_address: Some("0xcafecafecafecafecafecafecafecafecafecafe".into()),
             }),
         };
 

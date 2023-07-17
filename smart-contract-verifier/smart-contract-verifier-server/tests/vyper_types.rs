@@ -47,6 +47,10 @@ pub struct Flattened {
     pub evm_version: Option<String>,
     pub source_code: String,
     pub expected_constructor_argument: Option<DisplayBytes>,
+
+    // Verification metadata related values
+    pub chain_id: Option<String>,
+    pub contract_address: Option<String>,
 }
 
 fn default_flattened_contract_name() -> String {
@@ -67,6 +71,10 @@ impl TestCase for Flattened {
             "sourceFiles": {
                 format!("{}.vy", self.contract_name): self.source_code
             },
+            "metadata": {
+                "chainId": self.chain_id,
+                "contractAddress": self.contract_address
+            }
         })
     }
 
@@ -106,6 +114,10 @@ pub struct MultiPart {
     pub source_files: BTreeMap<String, String>,
     pub interfaces: BTreeMap<String, String>,
     pub expected_constructor_argument: Option<DisplayBytes>,
+
+    // Verification metadata related values
+    pub chain_id: Option<String>,
+    pub contract_address: Option<String>,
 }
 
 impl TestCase for MultiPart {
@@ -121,6 +133,10 @@ impl TestCase for MultiPart {
             "evmVersion": self.evm_version,
             "sourceFiles": self.source_files,
             "interfaces": self.interfaces,
+            "metadata": {
+                "chainId": self.chain_id,
+                "contractAddress": self.contract_address
+            }
         })
     }
 
@@ -169,6 +185,10 @@ pub struct StandardJson {
     #[serde(deserialize_with = "StandardJson::deserialize_input")]
     pub input: String,
     pub expected_constructor_argument: Option<DisplayBytes>,
+
+    // Verification metadata related values
+    pub chain_id: Option<String>,
+    pub contract_address: Option<String>,
 }
 
 impl StandardJson {
@@ -191,7 +211,11 @@ impl TestCase for StandardJson {
             "bytecode": self.creation_bytecode,
             "bytecodeType": BytecodeType::CreationInput.as_str_name(),
             "compilerVersion": self.compiler_version,
-            "input": self.input
+            "input": self.input,
+            "metadata": {
+                "chainId": self.chain_id,
+                "contractAddress": self.contract_address
+            }
         })
     }
 
