@@ -132,3 +132,27 @@ async fn test_search_returns_full_matches_only_if_any() {
     )
     .await;
 }
+
+#[rstest]
+#[tokio::test]
+#[timeout(std::time::Duration::from_secs(60))]
+#[ignore = "Needs database to run"]
+async fn test_accepts_partial_verification_metadata_in_input() {
+    let default_request = VerifyVyperMultiPartRequest {
+        bytecode: "".to_string(),
+        bytecode_type: BytecodeType::CreationInput.into(),
+        compiler_version: "".to_string(),
+        evm_version: None,
+        source_files: Default::default(),
+        interfaces: Default::default(),
+        metadata: None,
+    };
+    let source_type = verification::SourceType::Vyper;
+    test_cases::test_accepts_partial_verification_metadata_in_input::<MockVyperVerifierService, _>(
+        TEST_SUITE_NAME,
+        ROUTE,
+        default_request,
+        source_type,
+    )
+    .await;
+}

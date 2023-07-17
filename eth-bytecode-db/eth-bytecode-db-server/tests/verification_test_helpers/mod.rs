@@ -434,4 +434,65 @@ pub mod test_cases {
             "Sources returned on verification and search differ"
         );
     }
+
+    pub async fn test_accepts_partial_verification_metadata_in_input<Service, Request>(
+        test_suite_name: &str,
+        route: &str,
+        verification_request: Request,
+        source_type: SourceType,
+    ) where
+        Service: Default + VerifierService<smart_contract_verifier_v2::VerifyResponse>,
+        Request: Serialize + Clone,
+    {
+        let db = init_db(
+            test_suite_name,
+            "test_accepts_partial_verification_metadata_in_input",
+        )
+        .await;
+
+        let test_data = test_input_data::basic(source_type, MatchType::Partial);
+
+        let db_url = db.db_url();
+        let verifier_addr =
+            init_verifier_server(Service::default(), test_data.verifier_response).await;
+
+        let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
+
+        let validate = |metadata: serde_json::Value| async {
+            let metadata_to_print = metadata.clone();
+            let mut request = serde_json::to_value(verification_request.clone()).unwrap();
+            if let Some(value) = request.as_object_mut() {
+                value.insert("metadata".to_string(), metadata)
+            } else {
+                panic!("Request value is not an object")
+            };
+
+            let response = reqwest::Client::new()
+                .post(eth_bytecode_db_base.join(route).unwrap())
+                .json(&request)
+                .send()
+                .await
+                .expect("Failed to send request");
+
+            // Assert that status code is success
+            if !response.status().is_success() {
+                let status = response.status();
+                let message = response.text().await.expect("Read body as text");
+                panic!(
+                    "Invalid status code (success expected). \
+                    Status: {status}. Message: {message}.\
+                    Metadata: {metadata_to_print}"
+                )
+            }
+        };
+
+        // `chain_id` is provided, but `contract_address` is missed from the verification metadata
+        let metadata = serde_json::json!({ "chainId": "5" });
+        validate(metadata).await;
+
+        // `chain_id` is provided, but `contract_address` is missed from the verification metadata
+        let metadata =
+            serde_json::json!({ "contractAddress": "0x0123456789012345678901234567890123456789" });
+        validate(metadata).await;
+    }
 }
