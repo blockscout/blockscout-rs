@@ -106,7 +106,7 @@ impl<T> Bytecode<T> {
 
         Ok(Self {
             bytecode,
-            source: PhantomData::default(),
+            source: PhantomData,
         })
     }
 
