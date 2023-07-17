@@ -253,6 +253,26 @@ mod flattened {
         test_case.creation_bytecode = "0xkeklol".to_string();
         test_error(test_case, StatusCode::BAD_REQUEST, "Invalid bytecode: ").await;
     }
+
+    #[tokio::test]
+    async fn accepts_partial_verification_metadata_in_input() {
+        // `chain_id` is provided, but `contract_address` is missed from the verification metadata
+        let test_case = {
+            let mut test_case = vyper_types::from_file::<Flattened>("simple");
+            test_case.chain_id = Some("5".to_string());
+            test_case
+        };
+        test_success(test_case).await;
+
+        // `contract_address` is provided, but `chain_id` is missed from the verification metadata
+        let test_case = {
+            let mut test_case = vyper_types::from_file::<Flattened>("simple");
+            test_case.contract_address =
+                Some("0x0123456789012345678901234567890123456789".to_string());
+            test_case
+        };
+        test_success(test_case).await;
+    }
 }
 
 mod multi_part {
@@ -265,6 +285,26 @@ mod multi_part {
             let test_case = vyper_types::from_file::<MultiPart>(test_case_name);
             test_success(test_case).await;
         }
+    }
+
+    #[tokio::test]
+    async fn accepts_partial_verification_metadata_in_input() {
+        // `chain_id` is provided, but `contract_address` is missed from the verification metadata
+        let test_case = {
+            let mut test_case = vyper_types::from_file::<MultiPart>("with_interfaces");
+            test_case.chain_id = Some("5".to_string());
+            test_case
+        };
+        test_success(test_case).await;
+
+        // `contract_address` is provided, but `chain_id` is missed from the verification metadata
+        let test_case = {
+            let mut test_case = vyper_types::from_file::<MultiPart>("with_interfaces");
+            test_case.contract_address =
+                Some("0x0123456789012345678901234567890123456789".to_string());
+            test_case
+        };
+        test_success(test_case).await;
     }
 }
 
@@ -309,5 +349,27 @@ mod standard_json {
             "Invalid compiler version",
         )
         .await;
+    }
+
+    #[tokio::test]
+    async fn accepts_partial_verification_metadata_in_input() {
+        // `chain_id` is provided, but `contract_address` is missed from the verification metadata
+        let test_case = {
+            let mut test_case =
+                vyper_types::from_file::<StandardJson>("standard_json_with_interfaces");
+            test_case.chain_id = Some("5".to_string());
+            test_case
+        };
+        test_success(test_case).await;
+
+        // `contract_address` is provided, but `chain_id` is missed from the verification metadata
+        let test_case = {
+            let mut test_case =
+                vyper_types::from_file::<StandardJson>("standard_json_with_interfaces");
+            test_case.contract_address =
+                Some("0x0123456789012345678901234567890123456789".to_string());
+            test_case
+        };
+        test_success(test_case).await;
     }
 }
