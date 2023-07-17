@@ -65,7 +65,7 @@ impl TryFrom<VerifyVyperStandardJsonRequestWrapper> for VerificationRequest {
             creation_bytecode,
             compiler_version,
             content: StandardJsonContent { input },
-            chain_id: request.metadata.map(|metadata| metadata.chain_id),
+            chain_id: request.metadata.and_then(|metadata| metadata.chain_id),
         })
     }
 }
@@ -86,8 +86,8 @@ mod tests {
             compiler_version: "v0.3.7+commit.6020b8bb".to_string(),
             input: "{\"language\":\"Vyper\",\"sources\":{\"Contract.vy\":{\"content\":\"stored: address\\r\\n\\r\\nevent SingleVyper17: pass\\r\\n\\r\\n@internal\\r\\ndef extract(temp: address) -> address:\\r\\n  ret: address = self.stored\\r\\n  self.stored = temp\\r\\n  return ret\\r\\n\\r\\n@external\\r\\ndef identity(x: address) -> address:\\r\\n  log SingleVyper17()\\r\\n  temp: address = self.stored\\r\\n  self.stored = x\\r\\n  return self.extract(temp)\"}},\"settings\":{\"outputSelection\":{\"*\":[\"evm\"]}}}".to_string(),
             metadata: Some(VerificationMetadata {
-                chain_id: "1".into(),
-                contract_address: "0xcafecafecafecafecafecafecafecafecafecafe".into()
+                chain_id: Some("1".into()),
+                contract_address: Some("0xcafecafecafecafecafecafecafecafecafecafe".into()),
             }),
         };
         let input: CompilerInput = serde_json::from_str(&request.input).unwrap();

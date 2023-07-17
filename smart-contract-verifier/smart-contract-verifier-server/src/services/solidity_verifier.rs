@@ -85,7 +85,11 @@ impl SolidityVerifier for SolidityVerifierService {
         request: Request<VerifySolidityMultiPartRequest>,
     ) -> Result<Response<VerifyResponse>, Status> {
         let request: VerifySolidityMultiPartRequestWrapper = request.into_inner().into();
-        let chain_id = request.metadata.clone().unwrap_or_default().chain_id;
+        let chain_id = request
+            .metadata
+            .as_ref()
+            .and_then(|metadata| metadata.chain_id.clone())
+            .unwrap_or_default();
         let result = solidity::multi_part::verify(self.client.clone(), request.try_into()?).await;
 
         let response = if let Ok(verification_success) = result {
@@ -121,7 +125,11 @@ impl SolidityVerifier for SolidityVerifierService {
         request: Request<VerifySolidityStandardJsonRequest>,
     ) -> Result<Response<VerifyResponse>, Status> {
         let request: VerifySolidityStandardJsonRequestWrapper = request.into_inner().into();
-        let chain_id = request.metadata.clone().unwrap_or_default().chain_id;
+        let chain_id = request
+            .metadata
+            .as_ref()
+            .and_then(|metadata| metadata.chain_id.clone())
+            .unwrap_or_default();
         let verification_request = {
             let request: Result<_, StandardJsonParseError> = request.try_into();
             if let Err(err) = request {
