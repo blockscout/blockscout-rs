@@ -79,9 +79,9 @@ enum BytecodeType {
 
 message VerificationMetadata {
   /// Id of the chain the contract is verified on
-  string chain_id = 1;
+  optional string chain_id = 1;
   /// The address of the contract to be verified
-  string contract_address = 2;
+  optional string contract_address = 2;
 }
 
 message VerifySolidityMultiPartRequest {

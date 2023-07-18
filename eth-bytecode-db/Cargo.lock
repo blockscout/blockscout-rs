@@ -1387,6 +1387,7 @@ dependencies = [
  "rstest",
  "sea-orm",
  "serde",
+ "serde_json",
  "serde_with",
  "smart-contract-verifier-proto",
  "tokio",
@@ -3902,7 +3903,7 @@ checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
 [[package]]
 name = "smart-contract-verifier-proto"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs?rev=ee52afad#ee52afad47b5032c79492f4bef20f99d999c50bb"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=52c41ec#52c41ecdf4dca82580893cd4dd026079f784d560"
 dependencies = [
  "actix-prost",
  "actix-prost-build",

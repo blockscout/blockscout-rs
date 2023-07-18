@@ -174,16 +174,19 @@ pub struct Source {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VerificationMetadata {
-    pub chain_id: i64,
-    pub contract_address: bytes::Bytes,
+    pub chain_id: Option<i64>,
+    pub contract_address: Option<bytes::Bytes>,
 }
 
 impl From<VerificationMetadata> for smart_contract_verifier::VerificationMetadata {
     fn from(value: VerificationMetadata) -> Self {
+        let chain_id = value.chain_id.map(|id| format!("{}", id));
+        let contract_address = value
+            .contract_address
+            .map(|address| blockscout_display_bytes::Bytes::from(address).to_string());
         Self {
-            chain_id: format!("{}", value.chain_id),
-            contract_address: blockscout_display_bytes::Bytes::from(value.contract_address)
-                .to_string(),
+            chain_id,
+            contract_address,
         }
     }
 }

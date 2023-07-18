@@ -89,8 +89,8 @@ mod tests {
                 ]),
             },
             metadata: Some(types::VerificationMetadata {
-                chain_id: 1,
-                contract_address: bytes::Bytes::from_static(&[1u8; 20]),
+                chain_id: Some(1),
+                contract_address: Some(bytes::Bytes::from_static(&[1u8; 20])),
             }),
         };
         let expected = VerifyVyperMultiPartRequest {
@@ -107,8 +107,8 @@ mod tests {
             ]),
             evm_version: Some("istanbul".to_string()),
             metadata: Some(smart_contract_verifier::VerificationMetadata {
-                chain_id: "1".to_string(),
-                contract_address: "0x0101010101010101010101010101010101010101".to_string(),
+                chain_id: Some("1".to_string()),
+                contract_address: Some("0x0101010101010101010101010101010101010101".to_string()),
             }),
         };
         assert_eq!(
@@ -136,8 +136,8 @@ mod tests {
                 ]),
             },
             metadata: Some(types::VerificationMetadata {
-                chain_id: 1,
-                contract_address: bytes::Bytes::from_static(&[1u8; 20]),
+                chain_id: Some(1),
+                contract_address: Some(bytes::Bytes::from_static(&[1u8; 20])),
             }),
         };
         let expected = VerifyVyperMultiPartRequest {
@@ -154,8 +154,8 @@ mod tests {
             ]),
             evm_version: Some("istanbul".to_string()),
             metadata: Some(smart_contract_verifier::VerificationMetadata {
-                chain_id: "1".to_string(),
-                contract_address: "0x0101010101010101010101010101010101010101".to_string(),
+                chain_id: Some("1".to_string()),
+                contract_address: Some("0x0101010101010101010101010101010101010101".to_string()),
             }),
         };
         assert_eq!(

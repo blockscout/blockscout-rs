@@ -89,8 +89,8 @@ mod tests {
                 libraries: BTreeMap::from([("lib1".into(), "0xcafe".into())]),
             },
             metadata: Some(types::VerificationMetadata {
-                chain_id: 1,
-                contract_address: bytes::Bytes::from_static(&[1u8; 20]),
+                chain_id: Some(1),
+                contract_address: Some(bytes::Bytes::from_static(&[1u8; 20])),
             }),
         };
         let expected = VerifySolidityMultiPartRequest {
@@ -105,8 +105,8 @@ mod tests {
             optimization_runs: Some(200),
             libraries: BTreeMap::from([("lib1".into(), "0xcafe".into())]),
             metadata: Some(smart_contract_verifier::VerificationMetadata {
-                chain_id: "1".to_string(),
-                contract_address: "0x0101010101010101010101010101010101010101".to_string(),
+                chain_id: Some("1".to_string()),
+                contract_address: Some("0x0101010101010101010101010101010101010101".to_string()),
             }),
         };
         assert_eq!(
@@ -132,8 +132,8 @@ mod tests {
                 libraries: BTreeMap::from([("lib1".into(), "0xcafe".into())]),
             },
             metadata: Some(types::VerificationMetadata {
-                chain_id: 1,
-                contract_address: bytes::Bytes::from_static(&[1u8; 20]),
+                chain_id: Some(1),
+                contract_address: Some(bytes::Bytes::from_static(&[1u8; 20])),
             }),
         };
         let expected = VerifySolidityMultiPartRequest {
@@ -148,8 +148,8 @@ mod tests {
             optimization_runs: Some(200),
             libraries: BTreeMap::from([("lib1".into(), "0xcafe".into())]),
             metadata: Some(smart_contract_verifier::VerificationMetadata {
-                chain_id: "1".to_string(),
-                contract_address: "0x0101010101010101010101010101010101010101".to_string(),
+                chain_id: Some("1".to_string()),
+                contract_address: Some("0x0101010101010101010101010101010101010101".to_string()),
             }),
         };
         assert_eq!(

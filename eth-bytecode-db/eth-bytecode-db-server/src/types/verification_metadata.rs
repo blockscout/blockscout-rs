@@ -12,12 +12,29 @@ impl TryFrom<VerificationMetadataWrapper> for verification::VerificationMetadata
 
     fn try_from(value: VerificationMetadataWrapper) -> Result<Self, Self::Error> {
         let value = value.0;
+
+        let chain_id = if let Some(chain_id) = &value.chain_id {
+            Some(
+                i64::from_str(chain_id)
+                    .map_err(|_err| tonic::Status::invalid_argument("Invalid metadata.chain_id"))?,
+            )
+        } else {
+            None
+        };
+
+        let contract_address = if let Some(contract_address) = &value.contract_address {
+            Some(
+                DisplayBytes::from_str(contract_address)
+                    .map_err(|_err| tonic::Status::invalid_argument("Invalid contract address"))?
+                    .0,
+            )
+        } else {
+            None
+        };
+
         Ok(verification::VerificationMetadata {
-            chain_id: i64::from_str(&value.chain_id)
-                .map_err(|_err| tonic::Status::invalid_argument("Invalid metadata.chain_id"))?,
-            contract_address: DisplayBytes::from_str(&value.contract_address)
-                .map_err(|_err| tonic::Status::invalid_argument("Invalid contract address"))?
-                .0,
+            chain_id,
+            contract_address,
         })
     }
 }
@@ -29,15 +46,17 @@ mod tests {
     #[test]
     fn from_proto_to_verification_metadata() {
         let proto_type = proto::VerificationMetadata {
-            chain_id: "1".into(),
-            contract_address: "0xcafecafecafecafecafecafecafecafecafecafe".into(),
+            chain_id: Some("1".into()),
+            contract_address: Some("0xcafecafecafecafecafecafecafecafecafecafe".into()),
         };
 
         let expected = verification::VerificationMetadata {
-            chain_id: 1,
-            contract_address: DisplayBytes::from_str("0xcafecafecafecafecafecafecafecafecafecafe")
-                .unwrap()
-                .0,
+            chain_id: Some(1),
+            contract_address: Some(
+                DisplayBytes::from_str("0xcafecafecafecafecafecafecafecafecafecafe")
+                    .unwrap()
+                    .0,
+            ),
         };
 
         let wrapper: VerificationMetadataWrapper = proto_type.into();
