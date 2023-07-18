@@ -32,7 +32,7 @@ where
             "updating parent"
         );
         parent.update_with_mutex(db, blockscout, force_full).await?;
-        let data = get_chart_data(db, parent.name(), None, None).await?;
+        let data = get_chart_data(db, parent.name(), None, None, None).await?;
         Ok(data)
     }
 
