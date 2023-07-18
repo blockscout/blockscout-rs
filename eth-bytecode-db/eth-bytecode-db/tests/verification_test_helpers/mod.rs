@@ -467,8 +467,8 @@ pub async fn test_historical_data_saves_chain_id_and_contract_address<Service, R
         service.generate_request(
             1,
             Some(VerificationMetadata {
-                chain_id,
-                contract_address: contract_address.clone(),
+                chain_id: Some(chain_id),
+                contract_address: Some(contract_address.clone()),
             }),
         ),
         source_type,

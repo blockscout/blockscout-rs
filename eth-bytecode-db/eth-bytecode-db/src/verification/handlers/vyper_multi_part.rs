@@ -89,8 +89,8 @@ mod tests {
                 ]),
             },
             metadata: Some(types::VerificationMetadata {
-                chain_id: 1,
-                contract_address: bytes::Bytes::from_static(&[1u8; 20]),
+                chain_id: Some(1),
+                contract_address: Some(bytes::Bytes::from_static(&[1u8; 20])),
             }),
         };
         let expected = VerifyVyperMultiPartRequest {
@@ -136,8 +136,8 @@ mod tests {
                 ]),
             },
             metadata: Some(types::VerificationMetadata {
-                chain_id: 1,
-                contract_address: bytes::Bytes::from_static(&[1u8; 20]),
+                chain_id: Some(1),
+                contract_address: Some(bytes::Bytes::from_static(&[1u8; 20])),
             }),
         };
         let expected = VerifyVyperMultiPartRequest {

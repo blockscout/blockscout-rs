@@ -118,8 +118,8 @@ pub(crate) async fn insert_verified_contract_data(
     let (chain_id, contract_address) = match verification_metadata {
         None => (None, None),
         Some(metadata) => (
-            Some(metadata.chain_id),
-            Some(metadata.contract_address.to_vec()),
+            metadata.chain_id,
+            metadata.contract_address.map(|address| address.to_vec()),
         ),
     };
     verified_contracts::ActiveModel {
