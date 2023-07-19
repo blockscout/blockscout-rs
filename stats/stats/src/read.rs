@@ -1,4 +1,4 @@
-use crate::charts::insert::DateValue;
+use crate::{charts::insert::DateValue, missing_date::get_and_fill_chart, MissingDatePolicy};
 use chrono::NaiveDate;
 use entity::{chart_data, charts};
 use sea_orm::{
@@ -62,6 +62,7 @@ pub async fn get_chart_data(
     name: &str,
     from: Option<NaiveDate>,
     to: Option<NaiveDate>,
+    policy: Option<MissingDatePolicy>,
 ) -> Result<Vec<DateValue>, ReadError> {
     let chart = charts::Entity::find()
         .column(charts::Column::Id)
@@ -70,8 +71,11 @@ pub async fn get_chart_data(
         .await?
         .ok_or_else(|| ReadError::NotFound(name.into()))?;
 
-    let chart = get_chart(db, chart.id, from, to).await?;
-    Ok(chart)
+    let data = match policy {
+        Some(policy) => get_and_fill_chart(db, chart.id, from, to, policy).await?,
+        None => get_chart(db, chart.id, from, to).await?,
+    };
+    Ok(data)
 }
 
 async fn get_chart(
@@ -174,7 +178,7 @@ mod tests {
 
         let db = init_db::<migration::Migrator>("get_chart_int_mock", None).await;
         insert_mock_data(&db).await;
-        let chart = get_chart_data(&db, "newBlocksPerDay", None, None)
+        let chart = get_chart_data(&db, "newBlocksPerDay", None, None, None)
             .await
             .unwrap();
         assert_eq!(

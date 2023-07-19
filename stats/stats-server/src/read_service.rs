@@ -1,7 +1,4 @@
-use crate::{
-    charts::Charts,
-    serializers::{fill_missing_points, serialize_line_points},
-};
+use crate::{charts::Charts, serializers::serialize_line_points};
 use async_trait::async_trait;
 use chrono::NaiveDate;
 use sea_orm::{DatabaseConnection, DbErr};
@@ -28,7 +25,10 @@ impl ReadService {
 fn map_read_error(err: ReadError) -> Status {
     match &err {
         ReadError::NotFound(_) => tonic::Status::not_found(err.to_string()),
-        _ => tonic::Status::internal(err.to_string()),
+        _ => {
+            tracing::error!(err = ?err, "internal read error");
+            tonic::Status::internal(err.to_string())
+        }
     }
 }
 
@@ -87,9 +87,9 @@ impl StatsService for ReadService {
             .from
             .and_then(|date| NaiveDate::from_str(&date).ok());
         let to = request.to.and_then(|date| NaiveDate::from_str(&date).ok());
-        let mut data = stats::get_chart_data(&self.db, &request.name, from, to)
+        let policy = Some(chart_info.chart.missing_date_policy());
+        let mut data = stats::get_chart_data(&self.db, &request.name, from, to, policy)
             .await
-            .map(|data| fill_missing_points(data, chart_info.chart.missing_date_policy(), from, to))
             .map_err(map_read_error)?;
 
         if chart_info.chart.drop_last_point() {

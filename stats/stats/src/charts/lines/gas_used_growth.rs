@@ -101,9 +101,8 @@ impl crate::Chart for GasUsedGrowth {
 
 #[cfg(test)]
 mod tests {
-    use crate::tests::simple_test::simple_test_chart;
-
     use super::GasUsedGrowth;
+    use crate::tests::simple_test::{ranged_test_chart, simple_test_chart};
 
     #[tokio::test]
     #[ignore = "needs database to run"]
@@ -122,6 +121,34 @@ mod tests {
                 ("2023-02-01", "389580"),
                 ("2023-03-01", "403140"),
             ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn ranged_update_gas_used_growth() {
+        let chart = GasUsedGrowth::default();
+        let value_2022_11_12 = "250680";
+        ranged_test_chart(
+            "ranged_update_gas_used_growth",
+            chart,
+            vec![
+                ("2022-11-20", value_2022_11_12),
+                ("2022-11-21", value_2022_11_12),
+                ("2022-11-22", value_2022_11_12),
+                ("2022-11-23", value_2022_11_12),
+                ("2022-11-24", value_2022_11_12),
+                ("2022-11-25", value_2022_11_12),
+                ("2022-11-26", value_2022_11_12),
+                ("2022-11-27", value_2022_11_12),
+                ("2022-11-28", value_2022_11_12),
+                ("2022-11-29", value_2022_11_12),
+                ("2022-11-30", value_2022_11_12),
+                ("2022-12-01", "288350"),
+            ],
+            "2022-11-20".parse().unwrap(),
+            "2022-12-01".parse().unwrap(),
         )
         .await;
     }
