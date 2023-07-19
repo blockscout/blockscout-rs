@@ -1,26 +1,34 @@
 mod client;
 mod types;
 
-pub use client::Client;
+pub use client::{Client, ClientBuilder};
 pub use types::{GetSourceFilesResponse, MatchType};
+
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum SourcifyError {
+    #[error("'Too Many Requests': {0}")]
+    TooManyRequests(String),
+    #[error("'Internal Server Error': {0}")]
+    InternalServerError(String),
+    #[error("'Not Found': {0}")]
+    NotFound(String),
+    #[error("'Bad Request': {0}")]
+    BadRequest(String),
+    #[error("unexpected status code: {status_code} - {msg}")]
+    UnexpectedStatusCode {
+        status_code: reqwest::StatusCode,
+        msg: String,
+    },
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("invalid argument: {arg} - {error}")]
     InvalidArgument { arg: String, error: String },
-    #[error("request related error: {0}")]
+    #[error("error occurred while sending request: {0}")]
     Reqwest(#[from] reqwest::Error),
-    #[error("sourcify returned 'Too Many Requests' error: {0}")]
-    SourcifyTooManyRequests(String),
-    #[error("sourcify returned 'Internal Server Error' error: {0}")]
-    SourcifyInternalServerError(String),
-    #[error("sourcify returned 'Not Found' error: {0}")]
-    SourcifyNotFound(String),
-    #[error("sourcify returned 'Bad Request' error: {0}")]
-    SourcifyBadRequest(String),
-    #[error("sourcify returned unexpected status code: {status_code} - {msg}")]
-    SourcifyUnexpectedStatusCode {
-        status_code: reqwest::StatusCode,
-        msg: String,
-    },
+    #[error("error with the middleware occurred while sending request: {0:#}")]
+    ReqwestMiddleware(anyhow::Error),
+    #[error("error got from the Sourcify: {0}")]
+    Sourcify(#[from] SourcifyError),
 }

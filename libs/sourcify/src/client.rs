@@ -1,42 +1,76 @@
 use crate::{
-    types::{Error as SourcifyError, GetSourceFilesResponse},
-    Error,
+    types::{Error as InternalError, GetSourceFilesResponse},
+    Error, SourcifyError,
 };
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use bytes::Bytes;
 use reqwest::{Response, StatusCode};
+use reqwest_middleware::ClientWithMiddleware;
+use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use serde::Deserialize;
 use std::{str::FromStr, time::Duration};
 use url::Url;
 
 #[derive(Clone)]
-pub struct Client {
-    base_url: Url,
-    reqwest_client: reqwest::Client,
+pub struct ClientBuilder {
+    base_url: String,
+    total_duration: Duration,
 }
 
-impl Default for Client {
+impl Default for ClientBuilder {
     fn default() -> Self {
-        let base_url = "https://sourcify.dev/server/";
-        Client::with_base_url(base_url).unwrap()
+        Self {
+            base_url: "https://sourcify.dev/server/".to_string(),
+            total_duration: Duration::from_secs(60),
+        }
     }
 }
 
-impl Client {
-    pub fn with_base_url(base_url: &str) -> Result<Self, Error> {
-        let base_url = Url::from_str(base_url).map_err(|err| Error::InvalidArgument {
+impl ClientBuilder {
+    pub fn base_url(&mut self, base_url: &str) -> &mut Self {
+        self.base_url = base_url.to_string();
+        self
+    }
+
+    pub fn total_duration(&mut self, total_duration: Duration) -> &mut Self {
+        self.total_duration = total_duration;
+        self
+    }
+
+    pub fn build(self) -> Result<Client, Error> {
+        let base_url = Url::from_str(&self.base_url).map_err(|err| Error::InvalidArgument {
             arg: "base_url".to_string(),
             error: err.to_string(),
         })?;
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(10))
-            .build()?;
-        Ok(Self {
+
+        let retry_policy =
+            ExponentialBackoff::builder().build_with_total_retry_duration(self.total_duration);
+        let client = reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
+            .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+            .build();
+
+        Ok(Client {
             base_url,
             reqwest_client: client,
         })
     }
+}
 
+#[derive(Clone)]
+pub struct Client {
+    base_url: Url,
+    reqwest_client: ClientWithMiddleware,
+}
+
+impl Default for Client {
+    /// Initializes [`Client`] with base url set to "https://sourcify.dev/server/",
+    /// and total duration to 60 seconds.
+    fn default() -> Self {
+        ClientBuilder::default().build().unwrap()
+    }
+}
+
+impl Client {
     pub async fn get_source_files_any(
         &self,
         chain_id: &str,
@@ -48,7 +82,15 @@ impl Client {
             .join(format!("files/any/{}/{}", chain_id, contract_address).as_str())
             .unwrap();
 
-        let response = self.reqwest_client.get(url).send().await?;
+        let response = self
+            .reqwest_client
+            .get(url)
+            .send()
+            .await
+            .map_err(|error| match error {
+                reqwest_middleware::Error::Middleware(err) => Error::ReqwestMiddleware(err),
+                reqwest_middleware::Error::Reqwest(err) => Error::Reqwest(err),
+            })?;
 
         Self::process_sourcify_response(response).await
     }
@@ -60,27 +102,29 @@ impl Client {
     ) -> Result<T, Error> {
         let error_message = |response: Response| async {
             response
-                .json::<SourcifyError>()
+                .json::<InternalError>()
                 .await
                 .map(|value| value.error)
         };
 
         match response.status() {
             StatusCode::OK => Ok(response.json::<T>().await?),
-            StatusCode::NOT_FOUND => Err(Error::SourcifyNotFound(error_message(response).await?)),
-            StatusCode::BAD_REQUEST => {
-                Err(Error::SourcifyBadRequest(error_message(response).await?))
-            }
-            StatusCode::INTERNAL_SERVER_ERROR => Err(Error::SourcifyInternalServerError(
+            StatusCode::NOT_FOUND => Err(Error::Sourcify(SourcifyError::NotFound(
                 error_message(response).await?,
-            )),
-            StatusCode::TOO_MANY_REQUESTS => Err(Error::SourcifyTooManyRequests(
+            ))),
+            StatusCode::BAD_REQUEST => Err(Error::Sourcify(SourcifyError::BadRequest(
                 error_message(response).await?,
+            ))),
+            StatusCode::INTERNAL_SERVER_ERROR => Err(Error::Sourcify(
+                SourcifyError::InternalServerError(error_message(response).await?),
             )),
-            _ => Err(Error::SourcifyUnexpectedStatusCode {
+            StatusCode::TOO_MANY_REQUESTS => Err(Error::Sourcify(SourcifyError::TooManyRequests(
+                error_message(response).await?,
+            ))),
+            _ => Err(Error::Sourcify(SourcifyError::UnexpectedStatusCode {
                 status_code: response.status(),
                 msg: response.text().await?,
-            }),
+            })),
         }
     }
 }
@@ -143,8 +187,8 @@ mod tests {
             .await
             .expect_err("error expected");
         assert!(
-            matches!(result, Error::SourcifyNotFound(_)),
-            "expected: 'SourcifyNotFound', got: {result:?}"
+            matches!(result, Error::Sourcify(SourcifyError::NotFound(_))),
+            "expected: 'SourcifyError::NotFound', got: {result:?}"
         );
     }
 
@@ -158,8 +202,8 @@ mod tests {
             .await
             .expect_err("error expected");
         assert!(
-            matches!(result, Error::SourcifyBadRequest(_)),
-            "expected: 'SourcifyBadRequest', got: {result:?}"
+            matches!(result, Error::Sourcify(SourcifyError::BadRequest(_))),
+            "expected: 'SourcifyError::BadRequest', got: {result:?}"
         );
     }
 }
