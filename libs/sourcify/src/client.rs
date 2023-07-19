@@ -1,4 +1,7 @@
-use crate::{types, types::*, Error};
+use crate::{
+    types::{Error as SourcifyError, GetSourceFilesResponse},
+    Error,
+};
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use bytes::Bytes;
 use reqwest::{Response, StatusCode};
@@ -57,7 +60,7 @@ impl Client {
     ) -> Result<T, Error> {
         let error_message = |response: Response| async {
             response
-                .json::<types::Error>()
+                .json::<SourcifyError>()
                 .await
                 .map(|value| value.error)
         };
