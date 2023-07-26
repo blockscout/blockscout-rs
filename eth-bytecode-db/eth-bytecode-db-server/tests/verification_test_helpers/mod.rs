@@ -1,8 +1,8 @@
 #![allow(unused_imports, dead_code)]
 
 mod database_helpers;
-mod test_input_data;
 
+pub mod test_input_data;
 pub mod smart_contract_verifer_mock;
 
 use async_trait::async_trait;
@@ -176,6 +176,7 @@ pub mod test_cases {
                 eth_bytecode_db_v2::SearchSourcesRequest {
                     bytecode: creation_input,
                     bytecode_type: eth_bytecode_db_v2::BytecodeType::CreationInput.into(),
+                    metadata: None,
                 }
             };
 
@@ -204,6 +205,7 @@ pub mod test_cases {
                 eth_bytecode_db_v2::SearchSourcesRequest {
                     bytecode: deployed_bytecode,
                     bytecode_type: eth_bytecode_db_v2::BytecodeType::DeployedBytecode.into(),
+                    metadata: None,
                 }
             };
 
@@ -297,6 +299,7 @@ pub mod test_cases {
                 eth_bytecode_db_v2::SearchSourcesRequest {
                     bytecode: creation_input,
                     bytecode_type: eth_bytecode_db_v2::BytecodeType::CreationInput.into(),
+                    metadata: None,
                 }
             };
 
@@ -397,6 +400,7 @@ pub mod test_cases {
                 eth_bytecode_db_v2::SearchSourcesRequest {
                     bytecode: full_match_creation_input,
                     bytecode_type: eth_bytecode_db_v2::BytecodeType::CreationInput.into(),
+                    metadata: None,
                 }
             };
 

@@ -173,6 +173,8 @@ message SearchSourcesRequest {
   string bytecode = 1;
   /// Either CREATION_INPUT or DEPLOYED_BYTECODE, depending on what you are looking upon
   BytecodeType bytecode_type = 2;
+
+  optional VerificationMetadata metadata = 3;
 }
 
 message SearchSourcesResponse {
