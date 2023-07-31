@@ -66,7 +66,7 @@ mod get_source_files_response {
     }
 
     impl TryFrom<GetSourceFilesResponseRaw> for GetSourceFilesResponse {
-        type Error = crate::Error;
+        type Error = String;
 
         fn try_from(value: GetSourceFilesResponseRaw) -> Result<Self, Self::Error> {
             let raw =
@@ -106,28 +106,26 @@ mod get_source_files_response {
                             Some(GetSourceFilesResponse::process_immutable_references(file)?);
                     }
                     Some(segment) => {
-                        return Err(crate::Error::Internal(format!(
+                        return Err(format!(
                             "{:?}: unknown next segment ({segment:?})",
                             file.path
-                        )))
+                        ))
                     }
                     None => {
-                        return Err(crate::Error::Internal(format!(
+                        return Err(format!(
                             "{:?}: the next segment should but does not exist",
                             file.path
-                        )))
+                        ))
                     }
                 }
             }
 
             if metadata.is_none() {
-                return Err(crate::Error::Internal(
-                    "metadata file is missing".to_string(),
-                ));
+                return Err("metadata file is missing".to_string());
             }
 
             if sources.is_empty() {
-                return Err(crate::Error::Internal("no sources available".to_string()));
+                return Err("sources are missing".to_string());
             }
 
             Ok(Self {
@@ -143,74 +141,77 @@ mod get_source_files_response {
     }
 
     impl GetSourceFilesResponse {
-        fn process_metadata(file: File) -> Result<serde_json::Value, crate::Error> {
+        fn process_metadata(file: File) -> Result<serde_json::Value, String> {
             if file.name != "metadata.json" {
-                return Err(crate::Error::Internal(format!(
+                return Err(format!(
                     "{:?}: invalid name for the metadata file: {}",
                     file.path, file.name
-                )));
+                ));
             }
-            serde_json::Value::from_str(&file.content).map_err(|err| {
-                crate::Error::Internal(format!("metadata file is not a valid json: {err}"))
-            })
+            serde_json::Value::from_str(&file.content)
+                .map_err(|err| format!("metadata file is not a valid json: '{err}'"))
         }
 
-        fn process_library_map(file: File) -> Result<BTreeMap<String, Bytes>, crate::Error> {
+        fn process_library_map(file: File) -> Result<BTreeMap<String, Bytes>, String> {
             if file.name != "library-map.json" {
-                return Err(crate::Error::Internal(format!(
+                return Err(format!(
                     "{:?}: invalid name for the library map file: {}",
                     file.path, file.name
-                )));
+                ));
             }
 
-            let parsed_content =
-                serde_json::Value::from_str(file.content.as_str()).map_err(|err| {
-                    crate::Error::Internal(format!("library map is not a valid json: {err}"))
-                })?;
+            let parsed_content = serde_json::Value::from_str(file.content.as_str())
+                .map_err(|err| format!("library map is not a valid json: '{err}'"))?;
 
             let mut library_map = BTreeMap::new();
-            for (placeholder, value) in parsed_content.as_object().ok_or_else(|| {
-                crate::Error::Internal("library map is not a json object".to_string())
-            })? {
+            for (placeholder, value) in parsed_content
+                .as_object()
+                .ok_or_else(|| "library map is not a json object".to_string())?
+            {
                 let value = value.as_str().ok_or_else(|| {
-                    crate::Error::Internal(format!(
-                        "library map has a placeholder value that is not a string: {placeholder}"
-                    ))
+                    format!(
+                        "library map has a placeholder value that is not a string; placeholder: \
+                        {placeholder}, value: {value}"
+                    )
                 })?;
-                let address = DisplayBytes::from_str(value).map_err(|err| crate::Error::Internal(format!("library map has a placeholder value that is not valid bytes: {placeholder} - {err}")))?;
+                let address = DisplayBytes::from_str(value).map_err(|err| {
+                    format!(
+                        "library map has a placeholder value that is not valid bytes; \
+                    placeholder: {placeholder}, value: {value}, err: '{err}'"
+                    )
+                })?;
                 library_map.insert(placeholder.clone(), address.0);
             }
 
             Ok(library_map)
         }
 
-        fn process_constructor_arguments(file: File) -> Result<Bytes, crate::Error> {
+        fn process_constructor_arguments(file: File) -> Result<Bytes, String> {
             if file.name != "constructor-args.txt" {
-                return Err(crate::Error::Internal(format!(
+                return Err(format!(
                     "{:?}: invalid name for the constructor args file: {}",
                     file.path, file.name
-                )));
+                ));
             }
 
-            let display_bytes = DisplayBytes::from_str(file.content.as_str()).map_err(|err| {
-                crate::Error::Internal(format!("constructor arguments are not valid bytes: {err}"))
-            })?;
+            let display_bytes = DisplayBytes::from_str(file.content.as_str())
+                .map_err(|err| format!(
+                    "constructor arguments are not valid bytes; constructor_arguments: {}, err: '{err}'",
+                    file.content
+                ))?;
             Ok(display_bytes.0)
         }
 
-        fn process_immutable_references(file: File) -> Result<serde_json::Value, crate::Error> {
+        fn process_immutable_references(file: File) -> Result<serde_json::Value, String> {
             if file.name != "immutable-references.json" {
-                return Err(crate::Error::Internal(format!(
+                return Err(format!(
                     "{:?}: invalid name for the immutable references file: {}",
                     file.path, file.name
-                )));
+                ));
             }
 
-            serde_json::Value::from_str(&file.content).map_err(|err| {
-                crate::Error::Internal(format!(
-                    "immutable references file is not a valid json: {err}"
-                ))
-            })
+            serde_json::Value::from_str(&file.content)
+                .map_err(|err| format!("immutable references file is not a valid json: '{err}'"))
         }
     }
 }
@@ -231,7 +232,7 @@ mod tests {
     ) {
         let msg_prefix = msg_prefix.map(|msg| format!("{msg} ")).unwrap_or_default();
         let result: T = serde_json::from_value(value)
-            .unwrap_or_else(|_| panic!("{msg_prefix}deserialization failed"));
+            .unwrap_or_else(|err| panic!("{msg_prefix}deserialization failed: {err}"));
         assert_eq!(expected, result, "{msg_prefix}check failed");
     }
 
@@ -331,7 +332,7 @@ mod tests {
                 {
                     "name": "library-map.json",
                     "path": "/home/data/repository/contracts/full_match/4/0x705bF4e3CCbF37B0cE5dE86B3F606e640A2a40BD/library-map.json",
-                    "content": "{\n  \"__$c486e37aeebf327f7a754ca76e58aaef3b$__\": \"a8602b5e79650417ee75f78aa60836be0f234868\"\n}"
+                    "content": "{\n  \"__$c486e37aeebf327f7a754ca76e58aaef3b$__\": \"pa8602b5e79650417ee75f78aa60836be0f234868\"\n}"
                 },
                 {
                     "name": "metadata.json",
@@ -359,7 +360,7 @@ mod tests {
             raw_json: value.clone(),
         };
 
-        check(value, expected, Some("constructor-arguments"));
+        check(value, expected, Some("contract with constructor-arguments"));
 
         /********** Response with library map, immutable details and several sources **********/
 
@@ -424,7 +425,7 @@ mod tests {
         check(
             value,
             expected,
-            Some("library-map, immutable-details, several sources"),
+            Some("contract with library-map, immutable-details, several sources"),
         )
     }
 }
