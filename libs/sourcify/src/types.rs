@@ -105,18 +105,16 @@ mod get_source_files_response {
                         immutable_references =
                             Some(GetSourceFilesResponse::process_immutable_references(file)?);
                     }
+                    #[cfg(feature = "tracing")]
                     Some(segment) => {
-                        return Err(format!(
-                            "{:?}: unknown next segment ({segment:?})",
-                            file.path
-                        ))
+                        tracing::warn!(target: "sourcify", "unknown next segment name; file: {:?}, segment: {segment:?}", file.path);
                     }
+                    #[cfg(feature = "tracing")]
                     None => {
-                        return Err(format!(
-                            "{:?}: the next segment should but does not exist",
-                            file.path
-                        ))
+                        tracing::warn!(target: "sourcify", "no next segment available; file: {:?}", file.path);
                     }
+                    #[cfg(not(feature = "tracing"))]
+                    _ => {}
                 }
             }
 
@@ -332,7 +330,7 @@ mod tests {
                 {
                     "name": "library-map.json",
                     "path": "/home/data/repository/contracts/full_match/4/0x705bF4e3CCbF37B0cE5dE86B3F606e640A2a40BD/library-map.json",
-                    "content": "{\n  \"__$c486e37aeebf327f7a754ca76e58aaef3b$__\": \"pa8602b5e79650417ee75f78aa60836be0f234868\"\n}"
+                    "content": "{\n  \"__$c486e37aeebf327f7a754ca76e58aaef3b$__\": \"a8602b5e79650417ee75f78aa60836be0f234868\"\n}"
                 },
                 {
                     "name": "metadata.json",
