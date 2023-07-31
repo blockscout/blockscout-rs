@@ -31,4 +31,6 @@ pub enum Error {
     ReqwestMiddleware(anyhow::Error),
     #[error("error got from the Sourcify: {0}")]
     Sourcify(#[from] SourcifyError),
+    #[error("internal (unexpected) error occurred: {0}")]
+    Internal(String),
 }

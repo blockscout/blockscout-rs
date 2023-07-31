@@ -132,13 +132,8 @@ impl Client {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lazy_static::lazy_static;
     use pretty_assertions::assert_eq;
     use serde_json::json;
-
-    lazy_static! {
-        static ref CLIENT: Client = Client::default();
-    }
 
     fn parse_contract_address(contract_address: &str) -> Bytes {
         DisplayBytes::from_str(contract_address).unwrap().0
@@ -170,7 +165,7 @@ mod tests {
         let chain_id = "5";
         let contract_address = parse_contract_address("0x027f1fe8BbC2a7E9fE97868E82c6Ec6939086c52");
 
-        let result = CLIENT
+        let result = Client::default()
             .get_source_files_any(chain_id, contract_address)
             .await
             .expect("success expected");
@@ -182,7 +177,7 @@ mod tests {
         let chain_id = "5";
         let contract_address = parse_contract_address("0x8A81C1619f38a5bb29cfaf20dB24B23F42A42dCb");
 
-        let result = CLIENT
+        let result = Client::default()
             .get_source_files_any(chain_id, contract_address)
             .await
             .expect_err("error expected");
@@ -197,7 +192,7 @@ mod tests {
         let chain_id = "5";
         let contract_address = parse_contract_address("0xcafecafecafecafe");
 
-        let result = CLIENT
+        let result = Client::default()
             .get_source_files_any(chain_id, contract_address)
             .await
             .expect_err("error expected");
