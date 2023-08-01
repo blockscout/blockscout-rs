@@ -256,8 +256,6 @@ definitions:
       bytecodeType:
         $ref: '#/definitions/v2BytecodeType'
         title: / Either CREATION_INPUT or DEPLOYED_BYTECODE, depending on what you are looking upon
-      metadata:
-        $ref: '#/definitions/v2VerificationMetadata'
   v2SearchSourcesResponse:
     type: object
     properties:

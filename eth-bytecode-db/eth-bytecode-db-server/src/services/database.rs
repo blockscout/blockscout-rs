@@ -1,8 +1,5 @@
 use crate::{
-    proto::{
-        database_server::Database, SearchSourcesRequest, SearchSourcesResponse,
-        VerificationMetadata,
-    },
+    proto::{database_server::Database, SearchSourcesRequest, SearchSourcesResponse},
     types::{BytecodeTypeWrapper, SourceWrapper},
 };
 use amplify::Wrapper;
@@ -23,11 +20,6 @@ impl DatabaseService {
             db_client,
             sourcify_client: None,
         }
-    }
-
-    pub fn with_sourcify_client(mut self, sourcify_client: sourcify::Client) -> Self {
-        self.sourcify_client = Some(sourcify_client);
-        self
     }
 }
 
@@ -50,24 +42,6 @@ impl Database for DatabaseService {
         let sources = search::find_contract(self.db_client.as_ref(), &bytecode_remote)
             .await
             .map_err(|err| tonic::Status::internal(err.to_string()))?;
-
-        match (self.sourcify_client.as_ref(), request.metadata) {
-            (
-                Some(sourcify_client),
-                Some(VerificationMetadata {
-                    chain_id: Some(chain_id),
-                    contract_address: Some(contract_address),
-                }),
-            ) => {
-                let contract_address = DisplayBytes::from_str(&contract_address)
-                    .map_err(|err| tonic::Status::invalid_argument(format!("Invalid contract address in verification metadata: {err}")))?
-                    .0;
-                let sourcify_result = sourcify_client.get_source_files_any(&chain_id, contract_address).await.map_err(|err| match err {
-
-                });
-            }
-            _ => todo!(),
-        };
 
         let sources = sources
             .into_iter()

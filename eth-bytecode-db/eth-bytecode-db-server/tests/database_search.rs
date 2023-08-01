@@ -4,22 +4,19 @@ use crate::verification_test_helpers::{
     init_db, init_eth_bytecode_db_server, init_verifier_server,
 };
 use async_trait::async_trait;
-use eth_bytecode_db::verification;
-use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2 as eth_bytecode_db_v2;
-use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2::{
-    BytecodeType, SearchSourcesRequest, SearchSourcesResponse, Source, VerificationMetadata,
-    VerifySolidityMultiPartRequest,
+use eth_bytecode_db::{verification, verification::MatchType};
+use eth_bytecode_db_proto::blockscout::eth_bytecode_db::{
+    v2 as eth_bytecode_db_v2,
+    v2::{BytecodeType, SearchSourcesRequest, SearchSourcesResponse, Source},
 };
 use pretty_assertions::assert_eq;
 use rstest::{fixture, rstest};
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2 as smart_contract_verifier_v2;
-use std::{net::SocketAddr, str::FromStr};
 use std::collections::BTreeMap;
 use tonic::Response;
-use eth_bytecode_db::verification::MatchType;
 use verification_test_helpers::{
     smart_contract_verifer_mock::{MockSolidityVerifierService, SmartContractVerifierServer},
-    test_cases, VerifierService, test_input_data
+    test_input_data, VerifierService,
 };
 
 const TEST_SUITE_NAME: &str = "database_search";
@@ -57,17 +54,10 @@ async fn search_in_sourcify(service: MockSolidityVerifierService) {
 
     let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
 
-    let chain_id = "5";
-    let contract_address = "0x027f1fe8BbC2a7E9fE97868E82c6Ec6939086c52";
-
     let bytecode = "0x608060405234801561001057600080fd5b506101ac806100206000396000f3fe608060405234801561001057600080fd5b506004361061002b5760003560e01c8063f0eb5e5414610030575b600080fd5b6100566004803603602081101561004657600080fd5b50356001600160a01b0316610072565b604080516001600160a01b039092168252519081900360200190f35b6040516000907fcd6e305ffe05775ee4dccd218c885635a575631eb3fe360b322621bad158facb908290a1600080546001810182558180527f290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e56301805473ffffffffffffffffffffffffffffffffffffffff19166001600160a01b038516179055604080516374f0fffb60e01b8152600481019290925251736b88c55cfbd4eda1320f802b724193cab062ccce916374f0fffb916024808301926020929190829003018186803b15801561014457600080fd5b505af4158015610158573d6000803e3d6000fd5b505050506040513d602081101561016e57600080fd5b50519291505056fea26469706673582212205d1888f7386285c3a4057473423de59284f625b9678dc83756b94cdba366949d64736f6c63430006080033";
     let request = SearchSourcesRequest {
         bytecode: bytecode.to_string(),
         bytecode_type: BytecodeType::CreationInput.into(),
-        metadata: Some(VerificationMetadata {
-            chain_id: Some(chain_id.to_string()),
-            contract_address: Some(contract_address.to_string()),
-        }),
     };
 
     let response = reqwest::Client::new()
