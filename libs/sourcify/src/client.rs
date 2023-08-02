@@ -1,5 +1,5 @@
 use crate::{
-    types::{Error as InternalError, GetSourceFilesResponse},
+    types::{ErrorResponse, GetSourceFilesResponse},
     Error, SourcifyError,
 };
 use blockscout_display_bytes::Bytes as DisplayBytes;
@@ -102,7 +102,7 @@ impl Client {
     ) -> Result<T, Error> {
         let error_message = |response: Response| async {
             response
-                .json::<InternalError>()
+                .json::<ErrorResponse>()
                 .await
                 .map(|value| value.error)
         };

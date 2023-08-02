@@ -8,7 +8,7 @@ pub enum MatchType {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
-pub struct Error {
+pub struct ErrorResponse {
     pub error: String,
 }
 
@@ -240,7 +240,7 @@ mod tests {
             "error": "Invalid address: 0x027f1fe8BbC2a7E9fE97868E82c6Ec6939086c51",
             "message": "Invalid address: 0x027f1fe8BbC2a7E9fE97868E82c6Ec6939086c51"
         });
-        let expected = Error {
+        let expected = ErrorResponse {
             error: "Invalid address: 0x027f1fe8BbC2a7E9fE97868E82c6Ec6939086c51".to_string(),
         };
         check(value, expected, None);
