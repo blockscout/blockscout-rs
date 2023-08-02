@@ -120,6 +120,10 @@ fn process_sourcify_error(error: sourcify::Error) -> Option<tonic::Status> {
             tracing::trace!(target: "sourcify", "{error}");
             None
         }
+        sourcify::Error::Sourcify(sourcify::SourcifyError::ChainNotSupported(_)) => {
+            tracing::error!(target: "sourcify", "{error}");
+            None
+        }
         sourcify::Error::Sourcify(sourcify::SourcifyError::BadRequest(_)) => {
             tracing::error!(target: "sourcify", "{error}");
             Some(tonic::Status::internal("sourcify responded with error"))
