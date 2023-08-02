@@ -33,6 +33,26 @@ paths:
             $ref: '#/definitions/v2SearchSourcesRequest'
       tags:
         - Database
+  /api/v2/bytecodes/sources:search-sourcify:
+    post:
+      operationId: Database_SearchSourcifySources
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v2SearchSourcesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v2SearchSourcifySourcesRequest'
+      tags:
+        - Database
   /api/v2/verifier/solidity/sources:verify-multi-part:
     post:
       operationId: SolidityVerifier_VerifyMultiPart
@@ -263,6 +283,15 @@ definitions:
         type: array
         items:
           $ref: '#/definitions/v2Source'
+  v2SearchSourcifySourcesRequest:
+    type: object
+    properties:
+      chainId:
+        type: string
+        title: / Id of the chain the contract is verified on
+      contractAddress:
+        type: string
+        title: / The address of the contract to be verified
   v2Source:
     type: object
     properties:
