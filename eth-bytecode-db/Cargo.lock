@@ -5110,7 +5110,7 @@ dependencies = [
 [[package]]
 name = "sourcify"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs?branch=rimrakhimov/libs/sourcify#a5d1bd9be3acb17135cb368348fd3c5fda2bb1d0"
+source = "git+https://github.com/blockscout/blockscout-rs?branch=rimrakhimov/libs/sourcify#55a44202a2e812997df850758c98c7bd806ee175"
 dependencies = [
  "anyhow",
  "blockscout-display-bytes",

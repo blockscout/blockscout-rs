@@ -59,6 +59,7 @@ pub async fn init_eth_bytecode_db_server(db_url: &str, verifier_addr: SocketAddr
         settings.metrics.enabled = false;
         settings.tracing.enabled = false;
         settings.jaeger.enabled = false;
+        settings.database.sourcify.enabled = true;
         settings
     };
 

@@ -18,16 +18,14 @@ pub struct DatabaseService {
 }
 
 impl DatabaseService {
-    pub fn new_arc(db_client: Arc<DatabaseConnection>) -> Self {
+    pub fn new_arc(
+        db_client: Arc<DatabaseConnection>,
+        sourcify_client: Option<sourcify::Client>,
+    ) -> Self {
         Self {
             db_client,
-            sourcify_client: None,
+            sourcify_client,
         }
-    }
-
-    pub fn with_sourcify_client(mut self, sourcify_client: sourcify::Client) -> Self {
-        self.sourcify_client = Some(sourcify_client);
-        self
     }
 }
 
@@ -76,7 +74,9 @@ impl Database for DatabaseService {
         let sourcify_client = self
             .sourcify_client
             .as_ref()
-            .ok_or(tonic::Status::unimplemented("sourcify search is enabled"))?;
+            .ok_or(tonic::Status::unimplemented(
+                "sourcify search is not enabled",
+            ))?;
 
         let sourcify_result = sourcify_client
             .get_source_files_any(&chain_id, contract_address)

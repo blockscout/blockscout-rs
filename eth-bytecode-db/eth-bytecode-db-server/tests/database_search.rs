@@ -85,11 +85,11 @@ async fn search_sourcify_sources(service: MockSolidityVerifierService) {
         Source {
             file_name: "contracts/project:/ExternalTestMultiple.sol".to_string(),
             contract_name: "ExternalTestMultiple".to_string(),
-            compiler_version: "v0.6.8+commit.0bbfe453".to_string(),
-            compiler_settings: "{\r\n        \"evmVersion\": \"istanbul\",\r\n        \"libraries\": {},\r\n        \"metadata\": {\r\n            \"bytecodeHash\": \"ipfs\"\r\n        },\r\n        \"optimizer\": {\r\n            \"enabled\": true,\r\n            \"runs\": 300\r\n        },\r\n        \"remappings\": []\r\n    }".to_string(),
+            compiler_version: "0.6.8+commit.0bbfe453".to_string(),
+            compiler_settings: "{\"evmVersion\":\"istanbul\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":true,\"runs\":300},\"remappings\":[]}".to_string(),
             source_type: eth_bytecode_db_v2::source::SourceType::Solidity.into(),
-            source_files: BTreeMap::from([("contracts/project:/ExternalTestMultiple.sol".to_string(), "//SPDX-License-Identifier: MIT\r\npragma solidity ^0.6.8;\r\n\r\nlibrary ExternalTestLibraryMultiple {\r\n  function pop(address[] storage list) external returns (address out) {\r\n    out = list[list.length - 1];\r\n    list.pop();\r\n  }\r\n}\r\n".to_string())]),
-            abi: Some("[\r\n    {\r\n        \"anonymous\": false,\r\n        \"inputs\": [],\r\n        \"name\": \"SourcifySolidity14\",\r\n        \"type\": \"event\"\r\n    },\r\n    {\r\n        \"inputs\": [\r\n            {\r\n                \"internalType\": \"address\",\r\n                \"name\": \"input\",\r\n                \"type\": \"address\"\r\n            }\r\n        ],\r\n        \"name\": \"identity\",\r\n        \"outputs\": [\r\n            {\r\n                \"internalType\": \"address\",\r\n                \"name\": \"\",\r\n                \"type\": \"address\"\r\n            }\r\n        ],\r\n        \"stateMutability\": \"nonpayable\",\r\n        \"type\": \"function\"\r\n    }\r\n]".to_string()),
+            source_files: BTreeMap::from([("contracts/project_/ExternalTestMultiple.sol".to_string(), "//SPDX-License-Identifier: MIT\r\npragma solidity ^0.6.8;\r\n\r\nlibrary ExternalTestLibraryMultiple {\r\n  function pop(address[] storage list) external returns (address out) {\r\n    out = list[list.length - 1];\r\n    list.pop();\r\n  }\r\n}\r\n".to_string())]),
+            abi: Some("[{\"anonymous\":false,\"inputs\":[],\"name\":\"SourcifySolidity14\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"input\",\"type\":\"address\"}],\"name\":\"identity\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]".to_string()),
             constructor_arguments: None,
             match_type: eth_bytecode_db_v2::source::MatchType::Full.into(),
         }
