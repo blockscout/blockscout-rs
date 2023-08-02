@@ -27,12 +27,12 @@ impl Default for ClientBuilder {
 }
 
 impl ClientBuilder {
-    pub fn base_url(&mut self, base_url: &str) -> &mut Self {
+    pub fn base_url(mut self, base_url: &str) -> Self {
         self.base_url = base_url.to_string();
         self
     }
 
-    pub fn total_duration(&mut self, total_duration: Duration) -> &mut Self {
+    pub fn total_duration(mut self, total_duration: Duration) -> Self {
         self.total_duration = total_duration;
         self
     }
