@@ -5,5 +5,4 @@ members = [
     "eth-bytecode-db/migration",
     "eth-bytecode-db-server",
     "eth-bytecode-db-proto",
-    "sourcify-search",
 ]

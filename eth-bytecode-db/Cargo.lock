@@ -1743,7 +1743,6 @@ dependencies = [
  "serde_with",
  "smart-contract-verifier-proto",
  "sourcify",
- "sourcify-search",
  "tokio",
  "tokio-stream",
  "tonic",
@@ -5110,7 +5109,7 @@ dependencies = [
 [[package]]
 name = "sourcify"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs?branch=rimrakhimov/libs/sourcify#80030fc4684681ffe690d31cce50e2e1bc4fa015"
+source = "git+https://github.com/blockscout/blockscout-rs?branch=rimrakhimov/libs/sourcify#9abb78b6b373bd08f2a5f4dac1a4d069e60c7dd6"
 dependencies = [
  "anyhow",
  "blockscout-display-bytes",
@@ -5124,10 +5123,6 @@ dependencies = [
  "tracing",
  "url",
 ]
-
-[[package]]
-name = "sourcify-search"
-version = "0.1.0"
 
 [[package]]
 name = "spin"

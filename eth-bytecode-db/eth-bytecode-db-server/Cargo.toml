@@ -9,7 +9,6 @@ edition = "2021"
 eth-bytecode-db-proto = { path = "../eth-bytecode-db-proto" }
 eth-bytecode-db = { path = "../eth-bytecode-db" }
 migration = { path = "../eth-bytecode-db/migration" }
-sourcify-search = { path = "../sourcify-search" }
 
 actix-web = "4.2"
 amplify = { version = "3.13.0", features = ["derive"] }
