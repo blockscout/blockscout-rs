@@ -10,6 +10,8 @@ pub enum SourcifyError {
     TooManyRequests(String),
     #[error("'Internal Server Error': {0}")]
     InternalServerError(String),
+    #[error("Chain is not supported: {0}")]
+    ChainNotSupported(String),
     #[error("'Not Found': {0}")]
     NotFound(String),
     #[error("'Bad Request': {0}")]

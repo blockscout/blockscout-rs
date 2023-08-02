@@ -115,9 +115,17 @@ impl Client {
             StatusCode::BAD_REQUEST => Err(Error::Sourcify(SourcifyError::BadRequest(
                 error_message(response).await?,
             ))),
-            StatusCode::INTERNAL_SERVER_ERROR => Err(Error::Sourcify(
-                SourcifyError::InternalServerError(error_message(response).await?),
-            )),
+            StatusCode::INTERNAL_SERVER_ERROR => {
+                let message = error_message(response).await?;
+
+                // For now the only way to recognize that the chain is not supported by Sourcify.
+                // Message example: "Chain 134135 is not a Sourcify chain!"
+                if message.contains("is not a Sourcify chain") {
+                    Err(Error::Sourcify(SourcifyError::ChainNotSupported(message)))
+                } else {
+                    Err(Error::Sourcify(SourcifyError::InternalServerError(message)))
+                }
+            }
             StatusCode::TOO_MANY_REQUESTS => Err(Error::Sourcify(SourcifyError::TooManyRequests(
                 error_message(response).await?,
             ))),
@@ -198,6 +206,21 @@ mod tests {
             .expect_err("error expected");
         assert!(
             matches!(result, Error::Sourcify(SourcifyError::BadRequest(_))),
+            "expected: 'SourcifyError::BadRequest', got: {result:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn get_source_files_any_unsupported_chain() {
+        let chain_id = "12345";
+        let contract_address = parse_contract_address("0x027f1fe8BbC2a7E9fE97868E82c6Ec6939086c52");
+
+        let result = Client::default()
+            .get_source_files_any(chain_id, contract_address)
+            .await
+            .expect_err("error expected");
+        assert!(
+            matches!(result, Error::Sourcify(SourcifyError::ChainNotSupported(_))),
             "expected: 'SourcifyError::BadRequest', got: {result:?}"
         );
     }
