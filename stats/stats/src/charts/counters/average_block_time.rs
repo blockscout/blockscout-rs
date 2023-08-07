@@ -32,7 +32,7 @@ impl ChartFullUpdater for AverageBlockTime {
                         EPOCH FROM timestamp - lag(timestamp) OVER (ORDER BY timestamp)
                     ) as diff
                 FROM "blocks"
-                WHERE consensus = true
+                WHERE consensus = true AND timestamp != to_timestamp(0)
             ) t
             "#,
             vec![],
