@@ -21,7 +21,7 @@ impl Default for ClientBuilder {
     fn default() -> Self {
         Self {
             base_url: Url::from_str("https://sourcify.dev/server/").unwrap(),
-            total_duration: Duration::from_secs(60),
+            total_duration: Duration::from_secs(180),
         }
     }
 }
@@ -190,16 +190,19 @@ impl Client {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pretty_assertions::assert_eq;
     use serde_json::json;
 
     fn parse_contract_address(contract_address: &str) -> Bytes {
         DisplayBytes::from_str(contract_address).unwrap().0
     }
 
-    #[tokio::test]
-    async fn get_source_files_any_success() {
-        let expected: GetSourceFilesResponse = serde_json::from_value(json!({
+    mod success {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        #[tokio::test]
+        async fn get_source_files_any() {
+            let expected: GetSourceFilesResponse = serde_json::from_value(json!({
             "status": "full",
             "files": [
                 {
@@ -220,64 +223,20 @@ mod tests {
             ]
         })).unwrap();
 
-        let chain_id = "5";
-        let contract_address = parse_contract_address("0x027f1fe8BbC2a7E9fE97868E82c6Ec6939086c52");
+            let chain_id = "5";
+            let contract_address =
+                parse_contract_address("0x027f1fe8BbC2a7E9fE97868E82c6Ec6939086c52");
 
-        let result = Client::default()
-            .get_source_files_any(chain_id, contract_address)
-            .await
-            .expect("success expected");
-        assert_eq!(expected, result);
-    }
+            let result = Client::default()
+                .get_source_files_any(chain_id, contract_address)
+                .await
+                .expect("success expected");
+            assert_eq!(expected, result);
+        }
 
-    #[tokio::test]
-    async fn get_source_files_any_not_found() {
-        let chain_id = "5";
-        let contract_address = parse_contract_address("0x8A81C1619f38a5bb29cfaf20dB24B23F42A42dCb");
-
-        let result = Client::default()
-            .get_source_files_any(chain_id, contract_address)
-            .await
-            .expect_err("error expected");
-        assert!(
-            matches!(result, Error::Sourcify(SourcifyError::NotFound(_))),
-            "expected: 'SourcifyError::NotFound', got: {result:?}"
-        );
-    }
-
-    #[tokio::test]
-    async fn get_source_files_any_invalid_argument() {
-        let chain_id = "5";
-        let contract_address = parse_contract_address("0xcafecafecafecafe");
-
-        let result = Client::default()
-            .get_source_files_any(chain_id, contract_address)
-            .await
-            .expect_err("error expected");
-        assert!(
-            matches!(result, Error::Sourcify(SourcifyError::BadRequest(_))),
-            "expected: 'SourcifyError::BadRequest', got: {result:?}"
-        );
-    }
-
-    #[tokio::test]
-    async fn get_source_files_any_unsupported_chain() {
-        let chain_id = "12345";
-        let contract_address = parse_contract_address("0x027f1fe8BbC2a7E9fE97868E82c6Ec6939086c52");
-
-        let result = Client::default()
-            .get_source_files_any(chain_id, contract_address)
-            .await
-            .expect_err("error expected");
-        assert!(
-            matches!(result, Error::Sourcify(SourcifyError::ChainNotSupported(_))),
-            "expected: 'SourcifyError::BadRequest', got: {result:?}"
-        );
-    }
-
-    #[tokio::test]
-    async fn verify_from_sourcify_success() {
-        let expected: VerifyFromEtherscanResponse = serde_json::from_value(json!({
+        #[tokio::test]
+        async fn verify_from_etherscan() {
+            let expected: VerifyFromEtherscanResponse = serde_json::from_value(json!({
             "result": [
                 {
                     "address": "0x831b003398106153eD89a758bEC9734667D18AeC",
@@ -291,13 +250,168 @@ mod tests {
             ]
         })).unwrap();
 
-        let chain_id = "10";
-        let contract_address = parse_contract_address("0x831b003398106153eD89a758bEC9734667D18AeC");
+            let chain_id = "10";
+            let contract_address =
+                parse_contract_address("0x831b003398106153eD89a758bEC9734667D18AeC");
 
-        let result = Client::default()
-            .verify_from_etherscan(chain_id, contract_address)
-            .await
-            .expect("success expected");
-        assert_eq!(expected, result);
+            let result = Client::default()
+                .verify_from_etherscan(chain_id, contract_address)
+                .await
+                .expect("success expected");
+            assert_eq!(expected, result);
+        }
+    }
+
+    mod not_found {
+        use super::*;
+
+        #[tokio::test]
+        async fn get_source_files_any() {
+            let chain_id = "5";
+            let contract_address =
+                parse_contract_address("0x847F2d0c193E90963aAD7B2791aAE8d7310dFF6A");
+
+            let result = Client::default()
+                .get_source_files_any(chain_id, contract_address)
+                .await
+                .expect_err("error expected");
+            assert!(
+                matches!(result, Error::Sourcify(SourcifyError::NotFound(_))),
+                "expected: 'SourcifyError::NotFound', got: {result:?}"
+            );
+        }
+
+        /*
+        * Not implemented, as custom error that 'contract is not verified on Etherscan' is returned instead.
+
+        * async fn verify_from_etherscan() {}
+        */
+    }
+
+    mod bad_request {
+        use super::*;
+
+        #[tokio::test]
+        async fn get_source_files_any_invalid_argument() {
+            let chain_id = "5";
+            let contract_address = parse_contract_address("0xcafecafecafecafe");
+
+            let result = Client::default()
+                .get_source_files_any(chain_id, contract_address)
+                .await
+                .expect_err("error expected");
+            assert!(
+                matches!(result, Error::Sourcify(SourcifyError::BadRequest(_))),
+                "expected: 'SourcifyError::BadRequest', got: {result:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn verify_from_etherscan_invalid_argument() {
+            let chain_id = "5";
+            let contract_address = parse_contract_address("0xcafecafecafecafe");
+
+            let result = Client::default()
+                .verify_from_etherscan(chain_id, contract_address)
+                .await
+                .expect_err("error expected");
+            assert!(
+                matches!(result, Error::Sourcify(SourcifyError::BadRequest(_))),
+                "expected: 'SourcifyError::BadRequest', got: {result:?}"
+            );
+        }
+    }
+
+    mod chain_not_supported {
+        use super::*;
+
+        #[tokio::test]
+        async fn get_source_files_any() {
+            let chain_id = "12345";
+            let contract_address =
+                parse_contract_address("0x027f1fe8BbC2a7E9fE97868E82c6Ec6939086c52");
+
+            let result = Client::default()
+                .get_source_files_any(chain_id, contract_address)
+                .await
+                .expect_err("error expected");
+            assert!(
+                matches!(result, Error::Sourcify(SourcifyError::ChainNotSupported(_))),
+                "expected: 'SourcifyError::BadRequest', got: {result:?}"
+            );
+        }
+
+        /*
+        * Not implemented, as custom error that 'chain is not supported for verification on Etherscan' is returned instead.
+
+        * async fn verify_from_etherscan() {}
+        */
+    }
+
+    mod custom_errors {
+        use super::*;
+
+        #[tokio::test]
+        async fn verify_from_etherscan_chain_is_not_supported() {
+            let chain_id = "2221";
+            let contract_address =
+                parse_contract_address("0xcb566e3B6934Fa77258d68ea18E931fa75e1aaAa");
+
+            let result = Client::default()
+                .verify_from_etherscan(chain_id, contract_address)
+                .await
+                .expect_err("error expected");
+            assert!(matches!(
+                result,
+                Error::Sourcify(SourcifyError::Custom(
+                    VerifyFromEtherscanError::ChainNotSupported(_)
+                ))
+            ));
+        }
+
+        #[tokio::test]
+        async fn verify_from_etherscan_contract_not_verified() {
+            let chain_id = "5";
+            let contract_address =
+                parse_contract_address("0x847F2d0c193E90963aAD7B2791aAE8d7310dFF6A");
+
+            let result = Client::default()
+                .verify_from_etherscan(chain_id, contract_address)
+                .await
+                .expect_err("error expected");
+            assert!(matches!(
+                result,
+                Error::Sourcify(SourcifyError::Custom(
+                    VerifyFromEtherscanError::ContractNotVerified(_)
+                ))
+            ));
+        }
+
+        /*
+        * Not implemented to avoid unnecessary burden on the Sourcify server.
+
+        * async fn verify_from_etherscan_too_many_request() {}
+        */
+
+        /*
+        * Not implemented as could not find any contract for which the error is returned.
+        * We need to add the implementation when such contract is found.
+
+        * async fn verify_from_etherscan_api_response_error() {}
+        */
+
+        /*
+        * Not implemented as could not find any contract for which the error is returned.
+        * We need to add the implementation when such contract is found.
+
+        * async fn verify_from_etherscan_cannot_generate_solc_json_input() {}
+        */
+
+        /*
+        * Not implemented as could not find any contract for which the error is returned.
+        * We need to add the implementation when such contract is found.
+
+        * async fn verify_from_etherscan_verified_with_errors() {}
+        */
     }
 }

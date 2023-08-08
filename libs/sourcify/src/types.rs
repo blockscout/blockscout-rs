@@ -257,9 +257,12 @@ mod verify_from_etherscan {
 
     #[derive(Clone, Debug, PartialEq, Eq)]
     pub enum VerifyFromEtherscanError {
-        ChainIsNotSupported(String),
+        // Is different from the common `ChainNotSupported` error in the way,
+        // that may occur even if the chain is supported by the Sourcify in general,
+        // but is not supported by Etherscan.
+        ChainNotSupported(String),
         TooManyRequests(String),
-        EtherscanResponseError(String),
+        ApiResponseError(String),
         ContractNotVerified(String),
         CannotGenerateSolcJsonInput(String),
         VerifiedWithErrors(String),
@@ -268,13 +271,13 @@ mod verify_from_etherscan {
     impl CustomError for VerifyFromEtherscanError {
         fn handle_bad_request(message: &str) -> Option<Self> {
             if message.contains("is not supported for importing from Etherscan") {
-                return Some(VerifyFromEtherscanError::ChainIsNotSupported(
+                return Some(VerifyFromEtherscanError::ChainNotSupported(
                     message.to_string(),
                 ));
             }
 
             if message.contains("Error in Etherscan API response") {
-                return Some(VerifyFromEtherscanError::EtherscanResponseError(
+                return Some(VerifyFromEtherscanError::ApiResponseError(
                     message.to_string(),
                 ));
             }
