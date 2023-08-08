@@ -1,9 +1,9 @@
 #![allow(unused_imports, dead_code)]
 
 mod database_helpers;
-mod test_input_data;
 
 pub mod smart_contract_verifer_mock;
+pub mod test_input_data;
 
 use async_trait::async_trait;
 use database_helpers::TestDbGuard;
@@ -59,6 +59,7 @@ pub async fn init_eth_bytecode_db_server(db_url: &str, verifier_addr: SocketAddr
         settings.metrics.enabled = false;
         settings.tracing.enabled = false;
         settings.jaeger.enabled = false;
+        settings.database.sourcify.enabled = true;
         settings
     };
 

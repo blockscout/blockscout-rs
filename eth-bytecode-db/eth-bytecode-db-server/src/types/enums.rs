@@ -77,6 +77,17 @@ impl From<verification::MatchType> for MatchTypeWrapper {
     }
 }
 
+impl From<sourcify::MatchType> for MatchTypeWrapper {
+    fn from(value: sourcify::MatchType) -> Self {
+        match value {
+            sourcify::MatchType::Full => MatchTypeWrapper::from(proto::source::MatchType::Full),
+            sourcify::MatchType::Partial => {
+                MatchTypeWrapper::from(proto::source::MatchType::Partial)
+            }
+        }
+    }
+}
+
 /********** Tests **********/
 
 #[cfg(test)]
@@ -158,6 +169,17 @@ mod match_type_tests {
     #[case(verification::MatchType::Full, proto::source::MatchType::Full)]
     fn from_verification_to_proto(
         #[case] verification_type: verification::MatchType,
+        #[case] proto_type: proto::source::MatchType,
+    ) {
+        let result = MatchTypeWrapper::from(verification_type).into_inner();
+        assert_eq!(proto_type, result);
+    }
+
+    #[rstest]
+    #[case(sourcify::MatchType::Partial, proto::source::MatchType::Partial)]
+    #[case(sourcify::MatchType::Full, proto::source::MatchType::Full)]
+    fn from_sourcify_to_proto(
+        #[case] verification_type: sourcify::MatchType,
         #[case] proto_type: proto::source::MatchType,
     ) {
         let result = MatchTypeWrapper::from(verification_type).into_inner();

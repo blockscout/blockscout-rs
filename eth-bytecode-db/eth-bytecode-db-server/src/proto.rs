@@ -3,8 +3,8 @@ pub use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2::{
     solidity_verifier_actix, solidity_verifier_server, source, sourcify_verifier_actix,
     sourcify_verifier_server, verify_response, vyper_verifier_actix, vyper_verifier_server,
     BytecodeType, HealthCheckRequest, HealthCheckResponse, ListCompilerVersionsRequest,
-    ListCompilerVersionsResponse, SearchSourcesRequest, SearchSourcesResponse, Source,
-    VerificationMetadata, VerifyResponse, VerifySolidityMultiPartRequest,
-    VerifySolidityStandardJsonRequest, VerifySourcifyRequest, VerifyVyperMultiPartRequest,
-    VerifyVyperStandardJsonRequest,
+    ListCompilerVersionsResponse, SearchSourcesRequest, SearchSourcesResponse,
+    SearchSourcifySourcesRequest, Source, VerificationMetadata, VerifyResponse,
+    VerifySolidityMultiPartRequest, VerifySolidityStandardJsonRequest, VerifySourcifyRequest,
+    VerifyVyperMultiPartRequest, VerifyVyperStandardJsonRequest,
 };
