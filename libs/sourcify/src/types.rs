@@ -5,9 +5,9 @@ pub(crate) struct ErrorResponse {
     pub error: String,
 }
 
-pub(crate) use custom_error::CustomError;
+pub(crate) use custom_error::{CustomError, EmptyCustomError};
 mod custom_error {
-    pub(crate) trait CustomError: Sized {
+    pub(crate) trait CustomError: std::error::Error + Sized {
         fn handle_not_found(_message: &str) -> Option<Self> {
             None
         }
@@ -25,7 +25,9 @@ mod custom_error {
         }
     }
 
-    impl CustomError for () {}
+    #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+    pub enum EmptyCustomError {}
+    impl CustomError for EmptyCustomError {}
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
@@ -255,16 +257,22 @@ mod verify_from_etherscan {
         pub immutable_references: Option<serde_json::Value>,
     }
 
-    #[derive(Clone, Debug, PartialEq, Eq)]
+    #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
     pub enum VerifyFromEtherscanError {
         // Is different from the common `ChainNotSupported` error in the way,
         // that may occur even if the chain is supported by the Sourcify in general,
         // but is not supported by Etherscan.
+        #[error("{0}")]
         ChainNotSupported(String),
+        #[error("{0}")]
         TooManyRequests(String),
+        #[error("{0}")]
         ApiResponseError(String),
+        #[error("{0}")]
         ContractNotVerified(String),
+        #[error("{0}")]
         CannotGenerateSolcJsonInput(String),
+        #[error("{0}")]
         VerifiedWithErrors(String),
     }
 

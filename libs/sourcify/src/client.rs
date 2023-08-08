@@ -1,5 +1,8 @@
 use crate::{
-    types::{CustomError, ErrorResponse, GetSourceFilesResponse, VerifyFromEtherscanResponse},
+    types::{
+        CustomError, EmptyCustomError, ErrorResponse, GetSourceFilesResponse,
+        VerifyFromEtherscanResponse,
+    },
     Error, SourcifyError, VerifyFromEtherscanError,
 };
 use blockscout_display_bytes::Bytes as DisplayBytes;
@@ -72,7 +75,7 @@ impl Client {
         &self,
         chain_id: &str,
         contract_address: Bytes,
-    ) -> Result<GetSourceFilesResponse, Error<()>> {
+    ) -> Result<GetSourceFilesResponse, Error<EmptyCustomError>> {
         let contract_address = DisplayBytes::from(contract_address);
         let url =
             self.generate_url(format!("files/any/{}/{}", chain_id, contract_address).as_str());
