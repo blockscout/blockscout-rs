@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum MatchType {
+    #[serde(alias = "perfect")]
     Full,
     Partial,
 }
@@ -210,6 +211,99 @@ mod get_source_files_response {
 
             serde_json::Value::from_str(&file.content)
                 .map_err(|err| format!("immutable references file is not a valid json: '{err}'"))
+        }
+    }
+}
+
+pub use verify_from_etherscan::VerifyFromEtherscanResponse;
+mod verify_from_etherscan {
+    use super::*;
+    use blockscout_display_bytes::Bytes as DisplayBytes;
+    use bytes::Bytes;
+    use serde::{de, Deserializer};
+    use std::{collections::BTreeMap, str::FromStr};
+
+    #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct ResultWrapper {
+        pub address: String,
+        pub chain_id: String,
+        pub status: MatchType,
+        pub library_map: BTreeMap<String, String>,
+        pub immutable_references: Option<serde_json::Value>,
+    }
+
+    #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct VerifyFromEtherscanResponseRaw {
+        result: Vec<ResultWrapper>,
+    }
+
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub struct VerifyFromEtherscanResponse {
+        pub address: Bytes,
+        pub chain_id: String,
+        pub status: MatchType,
+        pub library_map: BTreeMap<String, Bytes>,
+        pub immutable_references: Option<serde_json::Value>,
+    }
+
+    impl<'de> Deserialize<'de> for VerifyFromEtherscanResponse {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            // Deserialize GetSourceFilesResponseRaw from the deserializer
+            let raw = VerifyFromEtherscanResponseRaw::deserialize(deserializer)?;
+
+            // Convert GetSourceFilesResponseRaw to GetSourceFilesResponse
+            VerifyFromEtherscanResponse::try_from(raw).map_err(de::Error::custom)
+        }
+    }
+
+    impl TryFrom<VerifyFromEtherscanResponseRaw> for VerifyFromEtherscanResponse {
+        type Error = String;
+
+        fn try_from(value: VerifyFromEtherscanResponseRaw) -> Result<Self, Self::Error> {
+            let value = value
+                .result
+                .into_iter()
+                .next()
+                .ok_or_else(|| "response does not contain any result".to_string())?;
+
+            let address = DisplayBytes::from_str(&value.address)
+                .map_err(|err| {
+                    format!(
+                        "address is not a valid byte sequence; address: {}, err: '{err}'",
+                        value.address
+                    )
+                })?
+                .0;
+
+            let library_map = value
+                .library_map
+                .into_iter()
+                .map(|(placeholder, value)| {
+                    let address = DisplayBytes::from_str(&value)
+                        .map_err(|err| {
+                            format!(
+                                "library map has a placeholder value that is not a valid byte sequence; \
+                        placeholder: {placeholder}, value: {value}, err: '{err}'"
+                            )
+                        })?
+                        .0;
+
+                    Ok((placeholder, address))
+                })
+                .collect::<Result<BTreeMap<_, _>, String>>()?;
+
+            Ok(Self {
+                address,
+                chain_id: value.chain_id,
+                status: value.status,
+                library_map,
+                immutable_references: value.immutable_references,
+            })
         }
     }
 }
@@ -425,5 +519,86 @@ mod tests {
             expected,
             Some("contract with library-map, immutable-details, several sources"),
         )
+    }
+
+    #[test]
+    fn parse_import_from_etherscan_response() {
+        /********** Full match with library map **********/
+
+        let value = json!({
+          "result": [
+            {
+              "address": "0x123f681646d4a755815f9cb19e1acc8565a0c2ac",
+              "chainId": "1",
+              "status": "perfect",
+              "libraryMap": {
+                "lib1": "0x3f681646d4a755815f9cb19e1acc8565a0c2ac",
+                "lib2": "0x4f681646d4a755815f9cb19e1acc8565a0c2ac"
+              }
+            }
+          ]
+        });
+        let expected = VerifyFromEtherscanResponse {
+            address: DisplayBytes::from_str("0x123f681646d4a755815f9cb19e1acc8565a0c2ac")
+                .unwrap()
+                .0,
+            chain_id: "1".to_string(),
+            status: MatchType::Full,
+            library_map: BTreeMap::from([
+                (
+                    "lib1".into(),
+                    DisplayBytes::from_str("0x3f681646d4a755815f9cb19e1acc8565a0c2ac")
+                        .unwrap()
+                        .0,
+                ),
+                (
+                    "lib2".into(),
+                    DisplayBytes::from_str("0x4f681646d4a755815f9cb19e1acc8565a0c2ac")
+                        .unwrap()
+                        .0,
+                ),
+            ]),
+            immutable_references: None,
+        };
+
+        check(value, expected, Some("full match with library-map"));
+
+        /********** Partial match with library map and immutable references **********/
+
+        let value = json!({
+            "result": [
+                {
+                    "address": "0x831b003398106153eD89a758bEC9734667D18AeC",
+                    "chainId": "10",
+                    "status": "partial",
+                    "libraryMap": {
+                        "__$5762d9689e001ee319dd424b89cc702f5c$__": "9224ee604e9b62f8e0a0e5824fee2e0df2ca902f"
+                    },
+                    "immutableReferences": {"2155":[{"length":32,"start":4157},{"length":32,"start":4712}],"2157":[{"length":32,"start":1172},{"length":32,"start":1221},{"length":32,"start":1289},{"length":32,"start":2077},{"length":32,"start":4218},{"length":32,"start":5837}],"2159":[{"length":32,"start":742},{"length":32,"start":4943}],"2161":[{"length":32,"start":402},{"length":32,"start":3247},{"length":32,"start":5564}]}
+                }
+            ]
+        });
+        let expected = VerifyFromEtherscanResponse {
+            address: DisplayBytes::from_str("0x831b003398106153eD89a758bEC9734667D18AeC")
+                .unwrap()
+                .0,
+            chain_id: "10".to_string(),
+            status: MatchType::Partial,
+            library_map: BTreeMap::from([
+                (
+                    "__$5762d9689e001ee319dd424b89cc702f5c$__".into(),
+                    DisplayBytes::from_str("9224ee604e9b62f8e0a0e5824fee2e0df2ca902f")
+                        .unwrap()
+                        .0,
+                ),
+            ]),
+            immutable_references: Some(serde_json::from_value(json!({"2155":[{"length":32,"start":4157},{"length":32,"start":4712}],"2157":[{"length":32,"start":1172},{"length":32,"start":1221},{"length":32,"start":1289},{"length":32,"start":2077},{"length":32,"start":4218},{"length":32,"start":5837}],"2159":[{"length":32,"start":742},{"length":32,"start":4943}],"2161":[{"length":32,"start":402},{"length":32,"start":3247},{"length":32,"start":5564}]})).unwrap()),
+        };
+
+        check(
+            value,
+            expected,
+            Some("partial match with library-map, immutable-references"),
+        );
     }
 }

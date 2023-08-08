@@ -1,5 +1,5 @@
 use crate::{
-    types::{ErrorResponse, GetSourceFilesResponse},
+    types::{ErrorResponse, GetSourceFilesResponse, VerifyFromEtherscanResponse},
     Error, SourcifyError,
 };
 use blockscout_display_bytes::Bytes as DisplayBytes;
@@ -7,7 +7,7 @@ use bytes::Bytes;
 use reqwest::{Response, StatusCode};
 use reqwest_middleware::ClientWithMiddleware;
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{str::FromStr, time::Duration};
 use url::Url;
 
@@ -77,10 +77,8 @@ impl Client {
         contract_address: Bytes,
     ) -> Result<GetSourceFilesResponse, Error> {
         let contract_address = DisplayBytes::from(contract_address);
-        let url = self
-            .base_url
-            .join(format!("files/any/{}/{}", chain_id, contract_address).as_str())
-            .unwrap();
+        let url =
+            self.generate_url(format!("files/any/{}/{}", chain_id, contract_address).as_str());
 
         let response = self
             .reqwest_client
@@ -94,9 +92,47 @@ impl Client {
 
         Self::process_sourcify_response(response).await
     }
+
+    pub async fn verify_from_etherscan(
+        &self,
+        chain_id: &str,
+        contract_address: Bytes,
+    ) -> Result<VerifyFromEtherscanResponse, Error> {
+        let contract_address = DisplayBytes::from(contract_address);
+        let url = self.generate_url("verify/etherscan");
+
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Request<'a> {
+            chain_id: &'a str,
+            address: String,
+        }
+
+        let request = Request {
+            chain_id,
+            address: contract_address.to_string(),
+        };
+
+        let response = self
+            .reqwest_client
+            .post(url)
+            .json(&request)
+            .send()
+            .await
+            .map_err(|error| match error {
+                reqwest_middleware::Error::Middleware(err) => Error::ReqwestMiddleware(err),
+                reqwest_middleware::Error::Reqwest(err) => Error::Reqwest(err),
+            })?;
+
+        Self::process_sourcify_response(response).await
+    }
 }
 
 impl Client {
+    fn generate_url(&self, route: &str) -> Url {
+        self.base_url.join(route).unwrap()
+    }
+
     async fn process_sourcify_response<T: for<'de> Deserialize<'de>>(
         response: Response,
     ) -> Result<T, Error> {
@@ -223,5 +259,31 @@ mod tests {
             matches!(result, Error::Sourcify(SourcifyError::ChainNotSupported(_))),
             "expected: 'SourcifyError::BadRequest', got: {result:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn verify_from_sourcify_success() {
+        let expected: VerifyFromEtherscanResponse = serde_json::from_value(json!({
+            "result": [
+                {
+                    "address": "0x831b003398106153eD89a758bEC9734667D18AeC",
+                    "chainId": "10",
+                    "status": "partial",
+                    "libraryMap": {
+                        "__$5762d9689e001ee319dd424b89cc702f5c$__": "9224ee604e9b62f8e0a0e5824fee2e0df2ca902f"
+                    },
+                    "immutableReferences": {"2155":[{"length":32,"start":4157},{"length":32,"start":4712}],"2157":[{"length":32,"start":1172},{"length":32,"start":1221},{"length":32,"start":1289},{"length":32,"start":2077},{"length":32,"start":4218},{"length":32,"start":5837}],"2159":[{"length":32,"start":742},{"length":32,"start":4943}],"2161":[{"length":32,"start":402},{"length":32,"start":3247},{"length":32,"start":5564}]}
+                }
+            ]
+        })).unwrap();
+
+        let chain_id = "10";
+        let contract_address = parse_contract_address("0x831b003398106153eD89a758bEC9734667D18AeC");
+
+        let result = Client::default()
+            .verify_from_etherscan(chain_id, contract_address)
+            .await
+            .expect("success expected");
+        assert_eq!(expected, result);
     }
 }
