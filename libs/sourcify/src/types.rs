@@ -259,6 +259,10 @@ mod verify_from_etherscan {
     pub enum VerifyFromEtherscanError {
         ChainIsNotSupported(String),
         TooManyRequests(String),
+        EtherscanResponseError(String),
+        ContractNotVerified(String),
+        CannotGenerateSolcJsonInput(String),
+        VerifiedWithErrors(String),
     }
 
     impl CustomError for VerifyFromEtherscanError {
@@ -267,6 +271,38 @@ mod verify_from_etherscan {
                 return Some(VerifyFromEtherscanError::ChainIsNotSupported(
                     message.to_string(),
                 ));
+            }
+
+            if message.contains("Error in Etherscan API response") {
+                return Some(VerifyFromEtherscanError::EtherscanResponseError(
+                    message.to_string(),
+                ));
+            }
+
+            if message.contains("contract is not verified on Etherscan") {
+                return Some(VerifyFromEtherscanError::ContractNotVerified(
+                    message.to_string(),
+                ));
+            }
+
+            if message.contains("cannot generate the solcJsonInput") {
+                return Some(VerifyFromEtherscanError::CannotGenerateSolcJsonInput(
+                    message.to_string(),
+                ));
+            }
+
+            if message.contains("contract was verified with errors") {
+                return Some(VerifyFromEtherscanError::VerifiedWithErrors(
+                    message.to_string(),
+                ));
+            }
+
+            None
+        }
+
+        fn handle_status_code(status_code: reqwest::StatusCode, text: &str) -> Option<Self> {
+            if status_code == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                return Some(VerifyFromEtherscanError::TooManyRequests(text.to_string()));
             }
 
             None
