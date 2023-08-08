@@ -1,6 +1,6 @@
 use crate::{
-    types::{ErrorResponse, GetSourceFilesResponse, VerifyFromEtherscanResponse},
-    Error, SourcifyError,
+    types::{CustomError, ErrorResponse, GetSourceFilesResponse, VerifyFromEtherscanResponse},
+    Error, SourcifyError, VerifyFromEtherscanError,
 };
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use bytes::Bytes;
@@ -37,7 +37,7 @@ impl ClientBuilder {
         self
     }
 
-    pub fn build(self) -> Result<Client, Error> {
+    pub fn build(self) -> Result<Client, Error<()>> {
         let base_url = Url::from_str(&self.base_url).map_err(|err| Error::InvalidArgument {
             arg: "base_url".to_string(),
             error: err.to_string(),
@@ -75,7 +75,7 @@ impl Client {
         &self,
         chain_id: &str,
         contract_address: Bytes,
-    ) -> Result<GetSourceFilesResponse, Error> {
+    ) -> Result<GetSourceFilesResponse, Error<()>> {
         let contract_address = DisplayBytes::from(contract_address);
         let url =
             self.generate_url(format!("files/any/{}/{}", chain_id, contract_address).as_str());
@@ -97,7 +97,7 @@ impl Client {
         &self,
         chain_id: &str,
         contract_address: Bytes,
-    ) -> Result<VerifyFromEtherscanResponse, Error> {
+    ) -> Result<VerifyFromEtherscanResponse, Error<VerifyFromEtherscanError>> {
         let contract_address = DisplayBytes::from(contract_address);
         let url = self.generate_url("verify/etherscan");
 
@@ -133,9 +133,9 @@ impl Client {
         self.base_url.join(route).unwrap()
     }
 
-    async fn process_sourcify_response<T: for<'de> Deserialize<'de>>(
+    async fn process_sourcify_response<T: for<'de> Deserialize<'de>, E: CustomError>(
         response: Response,
-    ) -> Result<T, Error> {
+    ) -> Result<T, Error<E>> {
         let error_message = |response: Response| async {
             response
                 .json::<ErrorResponse>()
@@ -145,30 +145,47 @@ impl Client {
 
         match response.status() {
             StatusCode::OK => Ok(response.json::<T>().await?),
-            StatusCode::NOT_FOUND => Err(Error::Sourcify(SourcifyError::NotFound(
-                error_message(response).await?,
-            ))),
-            StatusCode::BAD_REQUEST => Err(Error::Sourcify(SourcifyError::BadRequest(
-                error_message(response).await?,
-            ))),
-            StatusCode::INTERNAL_SERVER_ERROR => {
+            StatusCode::NOT_FOUND => {
                 let message = error_message(response).await?;
-
-                // For now the only way to recognize that the chain is not supported by Sourcify.
-                // Message example: "Chain 134135 is not a Sourcify chain!"
-                if message.contains("is not a Sourcify chain") {
-                    Err(Error::Sourcify(SourcifyError::ChainNotSupported(message)))
+                if let Some(err) = E::handle_not_found(&message) {
+                    Err(Error::Sourcify(SourcifyError::Custom(err)))
                 } else {
-                    Err(Error::Sourcify(SourcifyError::InternalServerError(message)))
+                    Err(Error::Sourcify(SourcifyError::NotFound(message)))
                 }
             }
-            StatusCode::TOO_MANY_REQUESTS => Err(Error::Sourcify(SourcifyError::TooManyRequests(
-                error_message(response).await?,
-            ))),
-            _ => Err(Error::Sourcify(SourcifyError::UnexpectedStatusCode {
-                status_code: response.status(),
-                msg: response.text().await?,
-            })),
+            StatusCode::BAD_REQUEST => {
+                let message = error_message(response).await?;
+                if let Some(err) = E::handle_bad_request(&message) {
+                    Err(Error::Sourcify(SourcifyError::Custom(err)))
+                } else {
+                    Err(Error::Sourcify(SourcifyError::BadRequest(message)))
+                }
+            }
+            StatusCode::INTERNAL_SERVER_ERROR => {
+                let message = error_message(response).await?;
+                if let Some(err) = E::handle_internal_server_error(&message) {
+                    Err(Error::Sourcify(SourcifyError::Custom(err)))
+                } else {
+                    // For now the only way to recognize that the chain is not supported by Sourcify.
+                    // Message example: "Chain 134135 is not a Sourcify chain!"
+                    if message.contains("is not a Sourcify chain") {
+                        Err(Error::Sourcify(SourcifyError::ChainNotSupported(message)))
+                    } else {
+                        Err(Error::Sourcify(SourcifyError::InternalServerError(message)))
+                    }
+                }
+            }
+            status_code => {
+                let text = response.text().await?;
+                if let Some(err) = E::handle_status_code(status_code, &text) {
+                    Err(Error::Sourcify(SourcifyError::Custom(err)))
+                } else {
+                    Err(Error::Sourcify(SourcifyError::UnexpectedStatusCode {
+                        status_code,
+                        msg: text,
+                    }))
+                }
+            }
         }
     }
 }

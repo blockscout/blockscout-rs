@@ -1,16 +1,39 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub(crate) struct ErrorResponse {
+    pub error: String,
+}
+
+pub(crate) use custom_error::CustomError;
+mod custom_error {
+    pub(crate) trait CustomError: Sized {
+        fn handle_not_found(_message: &str) -> Option<Self> {
+            None
+        }
+
+        fn handle_bad_request(_message: &str) -> Option<Self> {
+            None
+        }
+
+        fn handle_internal_server_error(_message: &str) -> Option<Self> {
+            None
+        }
+
+        fn handle_status_code(_status_code: reqwest::StatusCode, _text: &str) -> Option<Self> {
+            None
+        }
+    }
+
+    impl CustomError for () {}
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum MatchType {
     #[serde(alias = "perfect")]
     Full,
     Partial,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
-pub struct ErrorResponse {
-    pub error: String,
 }
 
 pub use get_source_files_response::GetSourceFilesResponse;
@@ -215,13 +238,40 @@ mod get_source_files_response {
     }
 }
 
-pub use verify_from_etherscan::VerifyFromEtherscanResponse;
+pub use verify_from_etherscan::{VerifyFromEtherscanError, VerifyFromEtherscanResponse};
 mod verify_from_etherscan {
     use super::*;
     use blockscout_display_bytes::Bytes as DisplayBytes;
     use bytes::Bytes;
     use serde::{de, Deserializer};
     use std::{collections::BTreeMap, str::FromStr};
+
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub struct VerifyFromEtherscanResponse {
+        pub address: Bytes,
+        pub chain_id: String,
+        pub status: MatchType,
+        pub library_map: BTreeMap<String, Bytes>,
+        pub immutable_references: Option<serde_json::Value>,
+    }
+
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub enum VerifyFromEtherscanError {
+        ChainIsNotSupported(String),
+        TooManyRequests(String),
+    }
+
+    impl CustomError for VerifyFromEtherscanError {
+        fn handle_bad_request(message: &str) -> Option<Self> {
+            if message.contains("is not supported for importing from Etherscan") {
+                return Some(VerifyFromEtherscanError::ChainIsNotSupported(
+                    message.to_string(),
+                ));
+            }
+
+            None
+        }
+    }
 
     #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
     #[serde(rename_all = "camelCase")]
@@ -237,15 +287,6 @@ mod verify_from_etherscan {
     #[serde(rename_all = "camelCase")]
     struct VerifyFromEtherscanResponseRaw {
         result: Vec<ResultWrapper>,
-    }
-
-    #[derive(Clone, Debug, PartialEq, Eq)]
-    pub struct VerifyFromEtherscanResponse {
-        pub address: Bytes,
-        pub chain_id: String,
-        pub status: MatchType,
-        pub library_map: BTreeMap<String, Bytes>,
-        pub immutable_references: Option<serde_json::Value>,
     }
 
     impl<'de> Deserialize<'de> for VerifyFromEtherscanResponse {
