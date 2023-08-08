@@ -27,8 +27,6 @@ pub enum SourcifyError<T> {
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error<T> {
-    #[error("invalid argument: {arg} - {error}")]
-    InvalidArgument { arg: String, error: String },
     #[error("error occurred while sending request: {0}")]
     Reqwest(#[from] reqwest::Error),
     #[error("error with the middleware occurred while sending request: {0:#}")]

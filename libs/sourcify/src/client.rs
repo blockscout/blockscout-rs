@@ -13,23 +13,25 @@ use url::Url;
 
 #[derive(Clone)]
 pub struct ClientBuilder {
-    base_url: String,
+    base_url: Url,
     total_duration: Duration,
 }
 
 impl Default for ClientBuilder {
     fn default() -> Self {
         Self {
-            base_url: "https://sourcify.dev/server/".to_string(),
+            base_url: Url::from_str("https://sourcify.dev/server/").unwrap(),
             total_duration: Duration::from_secs(60),
         }
     }
 }
 
 impl ClientBuilder {
-    pub fn base_url(mut self, base_url: &str) -> Self {
-        self.base_url = base_url.to_string();
-        self
+    pub fn try_base_url(mut self, base_url: &str) -> Result<Self, String> {
+        let base_url = Url::from_str(base_url).map_err(|err| err.to_string())?;
+        self.base_url = base_url;
+
+        Ok(self)
     }
 
     pub fn total_duration(mut self, total_duration: Duration) -> Self {
@@ -37,22 +39,17 @@ impl ClientBuilder {
         self
     }
 
-    pub fn build(self) -> Result<Client, Error<()>> {
-        let base_url = Url::from_str(&self.base_url).map_err(|err| Error::InvalidArgument {
-            arg: "base_url".to_string(),
-            error: err.to_string(),
-        })?;
-
+    pub fn build(self) -> Client {
         let retry_policy =
             ExponentialBackoff::builder().build_with_total_retry_duration(self.total_duration);
         let client = reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
             .with(RetryTransientMiddleware::new_with_policy(retry_policy))
             .build();
 
-        Ok(Client {
-            base_url,
+        Client {
+            base_url: self.base_url,
             reqwest_client: client,
-        })
+        }
     }
 }
 
@@ -66,7 +63,7 @@ impl Default for Client {
     /// Initializes [`Client`] with base url set to "https://sourcify.dev/server/",
     /// and total duration to 60 seconds.
     fn default() -> Self {
-        ClientBuilder::default().build().unwrap()
+        ClientBuilder::default().build()
     }
 }
 
