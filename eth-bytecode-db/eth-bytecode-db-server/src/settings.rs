@@ -4,6 +4,7 @@ use blockscout_service_launcher::{
 use config::{Config, File};
 use serde::{de, Deserialize};
 use serde_with::{serde_as, DisplayFromStr};
+use std::time::Duration;
 
 /// Wrapper under [`serde::de::IgnoredAny`] which implements
 /// [`PartialEq`] and [`Eq`] for fields to be ignored.
@@ -47,6 +48,8 @@ pub struct DatabaseSettings {
     pub url: String,
     pub create_database: bool,
     pub run_migrations: bool,
+    #[serde(default)]
+    pub sourcify: SourcifySettings,
 }
 
 #[serde_as]
@@ -55,6 +58,25 @@ pub struct DatabaseSettings {
 pub struct VerifierSettings {
     #[serde_as(as = "DisplayFromStr")]
     pub uri: tonic::transport::Uri,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct SourcifySettings {
+    pub enabled: bool,
+    pub base_url: String,
+    /// The maximum duration for which attempts to send a request will be processed.
+    pub total_request_duration: Duration,
+}
+
+impl Default for SourcifySettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            base_url: "https://sourcify.dev/server/".to_string(),
+            total_request_duration: Duration::from_secs(60),
+        }
+    }
 }
 
 impl Settings {
@@ -84,6 +106,7 @@ impl Settings {
                 url: database_url,
                 create_database: false,
                 run_migrations: false,
+                sourcify: Default::default(),
             },
             verifier: VerifierSettings { uri: verifier_uri },
             config_path: Default::default(),
