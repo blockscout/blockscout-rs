@@ -5,7 +5,7 @@ pub(crate) struct ErrorResponse {
     pub error: String,
 }
 
-pub(crate) use custom_error::{CustomError, EmptyCustomError};
+pub(crate) use custom_error::CustomError;
 mod custom_error {
     pub(crate) trait CustomError: std::error::Error + Sized {
         fn handle_not_found(_message: &str) -> Option<Self> {
@@ -25,10 +25,11 @@ mod custom_error {
         }
     }
 
-    #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
-    pub enum EmptyCustomError {}
-    impl CustomError for EmptyCustomError {}
+    impl CustomError for super::EmptyCustomError {}
 }
+
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum EmptyCustomError {}
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
