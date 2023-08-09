@@ -3,7 +3,8 @@ mod types;
 
 pub use client::{Client, ClientBuilder};
 pub use types::{
-    GetSourceFilesResponse, MatchType, VerifyFromEtherscanError, VerifyFromEtherscanResponse,
+    EmptyCustomError, GetSourceFilesResponse, MatchType, VerifyFromEtherscanError,
+    VerifyFromEtherscanResponse,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
