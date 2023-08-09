@@ -1,6 +1,9 @@
 use crate::{
     metrics,
-    proto::{sourcify_verifier_server::SourcifyVerifier, VerifyResponse, VerifySourcifyRequest},
+    proto::{
+        sourcify_verifier_server::SourcifyVerifier, VerifyFromEtherscanSourcifyRequest,
+        VerifyResponse, VerifySourcifyRequest,
+    },
     settings::{Extensions, SourcifySettings},
     types::{VerifyResponseWrapper, VerifySourcifyRequestWrapper},
 };
@@ -73,5 +76,12 @@ impl SourcifyVerifier for SourcifyVerifierService {
             "sourcify",
         );
         return Ok(Response::new(result.into_inner()));
+    }
+
+    async fn verify_from_etherscan(
+        &self,
+        _request: Request<VerifyFromEtherscanSourcifyRequest>,
+    ) -> Result<Response<VerifyResponse>, Status> {
+        todo!()
     }
 }

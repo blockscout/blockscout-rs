@@ -22,6 +22,8 @@ service VyperVerifier {
 
 service SourcifyVerifier {
   rpc Verify(VerifySourcifyRequest) returns (VerifyResponse) {}
+
+  rpc VerifyFromEtherscan(VerifyFromEtherscanSourcifyRequest) returns (VerifyResponse) {}
 }
 
 message Source {
@@ -190,6 +192,14 @@ message VerifySourcifyRequest {
   map<string, string> files = 3;
   // (optional) see Sourcify Api
   optional int32 chosen_contract = 4;
+}
+
+message VerifyFromEtherscanSourcifyRequest {
+  /// Address of the contract to be verified
+  string address = 1;
+  /// The chain (network) the contract was deployed to
+  /// (https://docs.sourcify.dev/docs/api/chains/)
+  string chain = 2;
 }
 
 message ListCompilerVersionsRequest {}
