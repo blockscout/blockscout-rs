@@ -35,10 +35,77 @@ pub struct Success {
     pub match_type: MatchType,
 }
 
+impl TryFrom<sourcify::GetSourceFilesResponse> for Success {
+    type Error = Error;
+
+    fn try_from(value: sourcify::GetSourceFilesResponse) -> Result<Self, Self::Error> {
+        let metadata: ethers_solc::artifacts::Metadata =
+            serde_json::from_value(value.metadata.clone()).map_err(|err| {
+                tracing::error!(target: "sourcify", "returned metadata cannot be parsed: {err}");
+                Error::Internal(anyhow::anyhow!(
+                    "error occurred when parsing sourcify response"
+                ))
+            })?;
+
+        // Compiler settings inside metadata contains a "compilationTarget"
+        // which does not exist in compiler input. We should remove the key
+        // to make the settings which could be used for the compiler input.
+        let compiler_settings = {
+            let mut compiler_settings = value
+                .metadata
+                .as_object()
+                .expect("metadata has been parsed successfully and must be an object")
+                .get("settings")
+                .expect("metadata has been parsed successfully and must contain 'settings' key")
+                .as_object()
+                .expect("metadata has been parsed successfully and 'settings' must be an object")
+                .clone();
+
+            compiler_settings.remove("compilationTarget");
+            compiler_settings
+        };
+
+        let abi = value
+            .metadata
+            .as_object()
+            .expect("metadata has been parsed successfully and must be an object")
+            .get("output")
+            .expect("metadata has been parsed successfully and must contain 'output' key")
+            .as_object()
+            .expect("metadata has been parsed successfully and 'output' must be an object")
+            .get("abi")
+            .expect("metadata has been parsed successfully and must contain 'output.abi' key")
+            .clone();
+
+        let (file_name, contract_name) = metadata.settings.compilation_target.into_iter()
+            .next().ok_or_else(|| {
+            tracing::error!(target: "sourcify", "returned metadata does not contain any compilation target");
+            Error::Internal(anyhow::anyhow!("error occurred when parsing sourcify response"))
+        })?;
+
+        Ok(Success {
+            file_name,
+            contract_name,
+            compiler_version: metadata.compiler.version,
+            evm_version: None,
+            optimization: metadata.settings.optimizer.enabled,
+            optimization_runs: metadata.settings.optimizer.runs,
+            constructor_arguments: value.constructor_arguments,
+            contract_libraries: metadata.settings.libraries,
+            abi: serde_json::to_string(&abi).unwrap(),
+            sources: value.sources,
+            compiler_settings: serde_json::to_string(&compiler_settings).unwrap(),
+            match_type: MatchType::from(value.status),
+        })
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("{0:#}")]
     Internal(anyhow::Error),
+    #[error("{0:#}")]
+    BadRequest(anyhow::Error),
     #[error("verification error: {0}")]
     Verification(String),
     #[error("validation error: {0}")]

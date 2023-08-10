@@ -42,6 +42,7 @@ pub async fn verify(
             Error::Internal(err) => Err(error::ErrorInternalServerError(err)),
             Error::Verification(err) => Ok(VerificationResponse::err(err)),
             Error::Validation(err) => Err(error::ErrorBadRequest(err)),
+            Error::BadRequest(err) => Err(error::ErrorBadRequest(err)),
         },
     }?;
     metrics::count_verify_contract("solidity", &response.status, "sourcify");

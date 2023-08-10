@@ -75,6 +75,29 @@ pub async fn verify(
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerifyFromEtherscanRequest {
+    pub address: bytes::Bytes,
+    pub chain: String,
+}
+
+pub async fn verify_from_etherscan(
+    sourcify_client: Arc<sourcify::Client>,
+    request: VerifyFromEtherscanRequest,
+) -> Result<Success, Error> {
+    sourcify_client
+        .verify_from_etherscan(request.chain.as_str(), request.address.clone())
+        .await
+        .map_err(error_handler::process_sourcify_error)?;
+
+    let source_files = sourcify_client
+        .get_source_files_any(request.chain.as_str(), request.address)
+        .await
+        .map_err(error_handler::process_sourcify_error)?;
+
+    Success::try_from(source_files)
+}
+
 /// Validates verification result.
 /// In case of success returns corresponding match type.
 fn validate_verification_result(result: Vec<ResultItem>) -> Result<MatchType, Error> {
@@ -90,5 +113,77 @@ fn validate_verification_result(result: Vec<ResultItem>) -> Result<MatchType, Er
         _ => Err(Error::Verification(
             item.message.clone().unwrap_or_default(),
         )),
+    }
+}
+
+mod error_handler {
+    use super::Error;
+    use sourcify::{EmptyCustomError, VerifyFromEtherscanError};
+
+    pub trait ErrorHandler: Sized {
+        fn handle(self) -> Error;
+    }
+
+    impl ErrorHandler for EmptyCustomError {
+        fn handle(self) -> Error {
+            // Empty error cannot be initialized
+            unreachable!()
+        }
+    }
+
+    impl ErrorHandler for VerifyFromEtherscanError {
+        fn handle(self) -> Error {
+            match self {
+                VerifyFromEtherscanError::ChainNotSupported(_) => {
+                    todo!()
+                }
+                VerifyFromEtherscanError::TooManyRequests(_) => {
+                    todo!()
+                }
+                VerifyFromEtherscanError::ApiResponseError(_) => {
+                    todo!()
+                }
+                VerifyFromEtherscanError::ContractNotVerified(_) => {
+                    todo!()
+                }
+                VerifyFromEtherscanError::CannotGenerateSolcJsonInput(_) => {
+                    todo!()
+                }
+                VerifyFromEtherscanError::VerifiedWithErrors(_) => {
+                    todo!()
+                }
+            }
+        }
+    }
+
+    pub fn process_sourcify_error<E: std::error::Error + ErrorHandler>(
+        error: sourcify::Error<E>,
+    ) -> Error {
+        match error {
+            sourcify::Error::Reqwest(_) | sourcify::Error::ReqwestMiddleware(_) => {
+                Error::Internal(anyhow::anyhow!(error.to_string()))
+            }
+            sourcify::Error::Sourcify(sourcify::SourcifyError::InternalServerError(_)) => {
+                Error::Internal(anyhow::anyhow!(error.to_string()))
+            }
+            sourcify::Error::Sourcify(sourcify::SourcifyError::NotFound(msg)) => {
+                Error::BadRequest(anyhow::anyhow!("{msg}"))
+            }
+            sourcify::Error::Sourcify(sourcify::SourcifyError::ChainNotSupported(msg)) => {
+                Error::BadRequest(anyhow::anyhow!("{msg}"))
+            }
+            sourcify::Error::Sourcify(sourcify::SourcifyError::BadRequest(_)) => {
+                tracing::error!(target: "sourcify", "{error}");
+                Error::Internal(anyhow::anyhow!("{error}"))
+            }
+            sourcify::Error::Sourcify(sourcify::SourcifyError::UnexpectedStatusCode { .. }) => {
+                tracing::error!(target: "sourcify", "{error}");
+                Error::Internal(anyhow::anyhow!("{error}"))
+            }
+            sourcify::Error::Sourcify(sourcify::SourcifyError::Custom(err)) => {
+                tracing::error!(target: "sourcify", "custom endpoint error: {err}");
+                E::handle(err)
+            }
+        }
     }
 }
