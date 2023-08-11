@@ -11,12 +11,11 @@ use crate::{
     },
 };
 use smart_contract_verifier::{sourcify as sc_sourcify, sourcify::Error, SourcifyApiClient};
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
 pub struct SourcifyVerifierService {
     client: Arc<SourcifyApiClient>,
-    lib_client: Arc<sourcify::Client>,
 }
 
 impl SourcifyVerifierService {
@@ -24,14 +23,6 @@ impl SourcifyVerifierService {
         settings: SourcifySettings, /* Otherwise, results in compilation warning if all extensions are disabled */
         #[allow(unused_variables)] extensions: Extensions,
     ) -> anyhow::Result<Self> {
-        let total_duration =
-            settings.request_timeout * settings.verification_attempts.get() as u64 * 2;
-        let lib_client = sourcify::ClientBuilder::default()
-            .try_base_url(settings.api_url.as_str())
-            .unwrap()
-            .total_duration(Duration::from_secs(total_duration))
-            .build();
-
         /* Otherwise, results in compilation warning if all extensions are disabled */
         #[allow(unused_mut)]
         let mut client = {
@@ -52,7 +43,6 @@ impl SourcifyVerifierService {
 
         Ok(Self {
             client: Arc::new(client),
-            lib_client: Arc::new(lib_client),
         })
     }
 }
@@ -89,8 +79,7 @@ impl SourcifyVerifier for SourcifyVerifierService {
         let chain_id = request.chain.clone();
 
         let result = process_verification_result(
-            sc_sourcify::api::verify_from_etherscan(self.lib_client.clone(), request.try_into()?)
-                .await,
+            sc_sourcify::api::verify_from_etherscan(self.client.clone(), request.try_into()?).await,
         )?;
 
         metrics::count_verify_contract(

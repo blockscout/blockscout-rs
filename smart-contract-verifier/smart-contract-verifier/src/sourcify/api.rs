@@ -82,20 +82,28 @@ pub struct VerifyFromEtherscanRequest {
 }
 
 pub async fn verify_from_etherscan(
-    sourcify_client: Arc<sourcify::Client>,
+    sourcify_client: Arc<SourcifyApiClient>,
     request: VerifyFromEtherscanRequest,
 ) -> Result<Success, Error> {
-    sourcify_client
+    let lib_client = sourcify_client.lib_client();
+
+    lib_client
         .verify_from_etherscan(request.chain.as_str(), request.address.clone())
         .await
         .map_err(error_handler::process_sourcify_error)?;
 
-    let source_files = sourcify_client
+    let source_files = lib_client
         .get_source_files_any(request.chain.as_str(), request.address)
         .await
         .map_err(error_handler::process_sourcify_error)?;
 
-    Success::try_from(source_files)
+    let success = Success::try_from(source_files)?;
+
+    if let Some(middleware) = sourcify_client.middleware() {
+        middleware.call(&success).await;
+    }
+
+    Ok(success)
 }
 
 /// Validates verification result.
@@ -134,24 +142,18 @@ mod error_handler {
     impl ErrorHandler for VerifyFromEtherscanError {
         fn handle(self) -> Error {
             match self {
-                VerifyFromEtherscanError::ChainNotSupported(msg) => {
-                    Error::Verification(msg)
-                }
+                VerifyFromEtherscanError::ChainNotSupported(msg) => Error::Verification(msg),
                 VerifyFromEtherscanError::TooManyRequests(msg) => {
                     Error::Internal(anyhow::anyhow!(msg))
                 }
                 VerifyFromEtherscanError::ApiResponseError(msg) => {
                     Error::Internal(anyhow::anyhow!(msg))
                 }
-                VerifyFromEtherscanError::ContractNotVerified(msg) => {
-                    Error::Verification(msg)
-                }
+                VerifyFromEtherscanError::ContractNotVerified(msg) => Error::Verification(msg),
                 VerifyFromEtherscanError::CannotGenerateSolcJsonInput(msg) => {
                     Error::Verification(msg)
                 }
-                VerifyFromEtherscanError::VerifiedWithErrors(msg) => {
-                    Error::Verification(msg)
-                }
+                VerifyFromEtherscanError::VerifiedWithErrors(msg) => Error::Verification(msg),
             }
         }
     }

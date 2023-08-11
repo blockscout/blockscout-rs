@@ -4028,7 +4028,6 @@ dependencies = [
  "sig-provider-extension",
  "smart-contract-verifier",
  "smart-contract-verifier-proto",
- "sourcify",
  "thiserror",
  "tokio",
  "tonic",

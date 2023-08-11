@@ -2,7 +2,7 @@ use actix_web::{test, test::TestRequest, App};
 use pretty_assertions::assert_eq;
 use serde_json::json;
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
-    sourcify_verifier_actix::route_sourcify_verifier, VerifyResponse
+    sourcify_verifier_actix::route_sourcify_verifier, VerifyResponse,
 };
 use smart_contract_verifier_server::{Settings, SourcifyVerifierService};
 use std::sync::Arc;
@@ -83,7 +83,7 @@ async fn chain_not_supported_fail() {
     let app = test::init_service(
         App::new().configure(|config| route_sourcify_verifier(config, service.clone())),
     )
-        .await;
+    .await;
 
     let request_body = json!({
         "address": address,
@@ -124,7 +124,7 @@ async fn contract_not_verified_fail() {
     let app = test::init_service(
         App::new().configure(|config| route_sourcify_verifier(config, service.clone())),
     )
-        .await;
+    .await;
 
     let request_body = json!({
         "address": address,
