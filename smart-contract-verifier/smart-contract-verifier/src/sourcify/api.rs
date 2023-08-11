@@ -128,6 +128,10 @@ mod error_handler {
     use super::Error;
     use sourcify::{EmptyCustomError, VerifyFromEtherscanError};
 
+    // Is public just to make it possible to use it for generics in outer functions.
+    // Implementations for required custom errors are supposed to be added inside this module.
+    //
+    // Added to avoid passing the handler inside `process_sourcify_error`.
     pub trait ErrorHandler: Sized {
         fn handle(self) -> Error;
     }
