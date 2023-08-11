@@ -1,5 +1,8 @@
 use super::verifier_base;
-use crate::proto::{sourcify_verifier_server, VerifyResponse, VerifySourcifyRequest};
+use crate::proto::{
+    sourcify_verifier_server, VerifyFromEtherscanSourcifyRequest, VerifyResponse,
+    VerifySourcifyRequest,
+};
 use async_trait::async_trait;
 use eth_bytecode_db::verification::{
     sourcify::{self, VerificationRequest},
@@ -34,5 +37,12 @@ impl sourcify_verifier_server::SourcifyVerifier for SourcifyVerifierService {
         let result = sourcify::verify(self.client.clone(), verification_request).await;
 
         verifier_base::process_verification_result(result)
+    }
+
+    async fn verify_from_etherscan(
+        &self,
+        _request: tonic::Request<VerifyFromEtherscanSourcifyRequest>,
+    ) -> Result<tonic::Response<VerifyResponse>, tonic::Status> {
+        todo!()
     }
 }
