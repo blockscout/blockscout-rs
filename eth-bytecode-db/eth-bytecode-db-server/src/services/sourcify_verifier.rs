@@ -4,10 +4,7 @@ use crate::proto::{
     VerifySourcifyRequest,
 };
 use async_trait::async_trait;
-use eth_bytecode_db::verification::{
-    sourcify::{self, VerificationRequest},
-    Client,
-};
+use eth_bytecode_db::verification::{sourcify, sourcify_from_etherscan, Client};
 
 pub struct SourcifyVerifierService {
     client: Client,
@@ -27,7 +24,7 @@ impl sourcify_verifier_server::SourcifyVerifier for SourcifyVerifierService {
     ) -> Result<tonic::Response<VerifyResponse>, tonic::Status> {
         let request = request.into_inner();
 
-        let verification_request = VerificationRequest {
+        let verification_request = sourcify::VerificationRequest {
             address: request.address,
             chain: request.chain,
             chosen_contract: request.chosen_contract,
@@ -41,8 +38,18 @@ impl sourcify_verifier_server::SourcifyVerifier for SourcifyVerifierService {
 
     async fn verify_from_etherscan(
         &self,
-        _request: tonic::Request<VerifyFromEtherscanSourcifyRequest>,
+        request: tonic::Request<VerifyFromEtherscanSourcifyRequest>,
     ) -> Result<tonic::Response<VerifyResponse>, tonic::Status> {
-        todo!()
+        let request = request.into_inner();
+
+        let verification_request = sourcify_from_etherscan::VerificationRequest {
+            address: request.address,
+            chain: request.chain,
+        };
+
+        let result =
+            sourcify_from_etherscan::verify(self.client.clone(), verification_request).await;
+
+        verifier_base::process_verification_result(result)
     }
 }

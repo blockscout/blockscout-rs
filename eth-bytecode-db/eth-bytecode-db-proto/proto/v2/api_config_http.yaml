@@ -45,7 +45,7 @@ http:
       post: /api/v2/verifier/sourcify/sources:verify
       body: "*"
 
-    - selector: blockscout.smartContractVerifier.v2.SourcifyVerifier.VerifyFromEtherscan
+    - selector: blockscout.ethBytecodeDb.v2.SourcifyVerifier.VerifyFromEtherscan
       post: /api/v2/verifier/sourcify/sources:verify-from-etherscan
       body: "*"
 
