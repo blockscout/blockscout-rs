@@ -65,6 +65,10 @@ impl TryFrom<sourcify::GetSourceFilesResponse> for Success {
             compiler_settings
         };
 
+        let evm_version = compiler_settings
+            .get("evmVersion")
+            .and_then(|value| value.as_str().map(|value| value.to_string()));
+
         let abi = value
             .metadata
             .as_object()
@@ -87,7 +91,7 @@ impl TryFrom<sourcify::GetSourceFilesResponse> for Success {
             file_name,
             contract_name,
             compiler_version: metadata.compiler.version,
-            evm_version: None,
+            evm_version,
             optimization: metadata.settings.optimizer.enabled,
             optimization_runs: metadata.settings.optimizer.runs,
             constructor_arguments: value.constructor_arguments,
