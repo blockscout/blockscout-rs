@@ -2,7 +2,7 @@ use actix_web::{test, test::TestRequest, App};
 use pretty_assertions::assert_eq;
 use serde_json::json;
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
-    sourcify_verifier_actix::route_sourcify_verifier,
+    sourcify_verifier_actix::route_sourcify_verifier, VerifyResponse
 };
 use smart_contract_verifier_server::{Settings, SourcifyVerifierService};
 use std::sync::Arc;
@@ -19,7 +19,8 @@ async fn init_service() -> Arc<SourcifyVerifierService> {
 
 #[tokio::test]
 async fn should_return_200() {
-    let address = "0x20f6a0edCE30681CDE6debAa58ed9768E42d1899".to_string();
+    let address = "0x20f6a0edCE30681CDE6debAa58ed9768E42d1899";
+    let chain_id = "5";
 
     let service = init_service().await;
     let app = test::init_service(
@@ -31,7 +32,7 @@ async fn should_return_200() {
         // relies on the fact that the Ethereum Testnet Goerli has this contract
             // https://goerli.etherscan.io/address/0x20f6a0edCE30681CDE6debAa58ed9768E42d1899#code
         "address": address,
-        "chain": "5"
+        "chain": chain_id,
     });
 
     let resp = TestRequest::post()
@@ -70,5 +71,87 @@ async fn should_return_200() {
                 "localDeployedBytecodeParts": [],
             }
         }),
+    );
+}
+
+#[tokio::test]
+async fn chain_not_supported_fail() {
+    let address = "0xcb566e3B6934Fa77258d68ea18E931fa75e1aaAa";
+    let chain_id = "2221";
+
+    let service = init_service().await;
+    let app = test::init_service(
+        App::new().configure(|config| route_sourcify_verifier(config, service.clone())),
+    )
+        .await;
+
+    let request_body = json!({
+        "address": address,
+        "chain": chain_id,
+    });
+
+    let resp = TestRequest::post()
+        .uri(ROUTE)
+        .set_json(&request_body)
+        .send_request(&app)
+        .await;
+
+    assert!(
+        resp.status().is_success(),
+        "failed to verify contract, status is {}",
+        resp.status()
+    );
+
+    let body: VerifyResponse = test::read_body_json(resp).await;
+
+    assert_eq!(body.status().as_str_name(), "FAILURE");
+
+    let error_message = "is not supported for importing from Etherscan";
+    assert!(
+        body.message.contains(error_message),
+        "body message: {}, expected message: {}",
+        body.message,
+        error_message
+    );
+}
+
+#[tokio::test]
+async fn contract_not_verified_fail() {
+    let address = "0x847F2d0c193E90963aAD7B2791aAE8d7310dFF6A";
+    let chain_id = "5";
+
+    let service = init_service().await;
+    let app = test::init_service(
+        App::new().configure(|config| route_sourcify_verifier(config, service.clone())),
+    )
+        .await;
+
+    let request_body = json!({
+        "address": address,
+        "chain": chain_id,
+    });
+
+    let resp = TestRequest::post()
+        .uri(ROUTE)
+        .set_json(&request_body)
+        .send_request(&app)
+        .await;
+
+    assert!(
+        resp.status().is_success(),
+        "failed to verify contract, status is {}",
+        resp.status()
+    );
+
+    let body: VerifyResponse = test::read_body_json(resp).await;
+
+    assert_eq!(body.status().as_str_name(), "FAILURE");
+
+    let error_message = "contract is not verified on Etherscan";
+    assert!(
+        body.message.contains(error_message),
+        "body message: {}, expected message: {}",
+        body.message,
+        error_message
     );
 }

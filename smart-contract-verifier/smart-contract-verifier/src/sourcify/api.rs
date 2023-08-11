@@ -134,23 +134,23 @@ mod error_handler {
     impl ErrorHandler for VerifyFromEtherscanError {
         fn handle(self) -> Error {
             match self {
-                VerifyFromEtherscanError::ChainNotSupported(_) => {
-                    todo!()
+                VerifyFromEtherscanError::ChainNotSupported(msg) => {
+                    Error::Verification(msg)
                 }
-                VerifyFromEtherscanError::TooManyRequests(_) => {
-                    todo!()
+                VerifyFromEtherscanError::TooManyRequests(msg) => {
+                    Error::Internal(anyhow::anyhow!(msg))
                 }
-                VerifyFromEtherscanError::ApiResponseError(_) => {
-                    todo!()
+                VerifyFromEtherscanError::ApiResponseError(msg) => {
+                    Error::Internal(anyhow::anyhow!(msg))
                 }
-                VerifyFromEtherscanError::ContractNotVerified(_) => {
-                    todo!()
+                VerifyFromEtherscanError::ContractNotVerified(msg) => {
+                    Error::Verification(msg)
                 }
-                VerifyFromEtherscanError::CannotGenerateSolcJsonInput(_) => {
-                    todo!()
+                VerifyFromEtherscanError::CannotGenerateSolcJsonInput(msg) => {
+                    Error::Verification(msg)
                 }
-                VerifyFromEtherscanError::VerifiedWithErrors(_) => {
-                    todo!()
+                VerifyFromEtherscanError::VerifiedWithErrors(msg) => {
+                    Error::Verification(msg)
                 }
             }
         }

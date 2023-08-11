@@ -97,7 +97,7 @@ impl SourcifyVerifier for SourcifyVerifierService {
             chain_id.as_ref(),
             "solidity",
             result.status().as_str_name(),
-            "from-etherscan",
+            "sourcify-from-etherscan",
         );
         return Ok(Response::new(result.into_inner()));
     }
