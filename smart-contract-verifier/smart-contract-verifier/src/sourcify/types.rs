@@ -47,39 +47,38 @@ impl TryFrom<sourcify::GetSourceFilesResponse> for Success {
                 ))
             })?;
 
-        // Compiler settings inside metadata contains a "compilationTarget"
-        // which does not exist in compiler input. We should remove the key
-        // to make the settings which could be used for the compiler input.
-        let compiler_settings = {
-            let mut compiler_settings = value
-                .metadata
-                .as_object()
-                .expect("metadata has been parsed successfully and must be an object")
-                .get("settings")
-                .expect("metadata has been parsed successfully and must contain 'settings' key")
+        let (compiler_settings, abi) = {
+            #[derive(Deserialize)]
+            #[serde(rename_all = "camelCase")]
+            struct CustomOutput {
+                abi: serde_json::Value,
+            }
+
+            #[derive(Deserialize)]
+            #[serde(rename_all = "camelCase")]
+            struct CustomMetadata {
+                settings: serde_json::Value,
+                output: CustomOutput,
+            }
+
+            let metadata: CustomMetadata = serde_json::from_value(value.metadata.clone())
+                .expect("metadata has already been parsed successfully");
+
+            let abi = metadata.output.abi;
+
+            let mut compiler_settings = metadata
+                .settings
                 .as_object()
                 .expect("metadata has been parsed successfully and 'settings' must be an object")
                 .clone();
-
             compiler_settings.remove("compilationTarget");
-            compiler_settings
+
+            (compiler_settings, abi)
         };
 
         let evm_version = compiler_settings
             .get("evmVersion")
             .and_then(|value| value.as_str().map(|value| value.to_string()));
-
-        let abi = value
-            .metadata
-            .as_object()
-            .expect("metadata has been parsed successfully and must be an object")
-            .get("output")
-            .expect("metadata has been parsed successfully and must contain 'output' key")
-            .as_object()
-            .expect("metadata has been parsed successfully and 'output' must be an object")
-            .get("abi")
-            .expect("metadata has been parsed successfully and must contain 'output.abi' key")
-            .clone();
 
         let (file_name, contract_name) = metadata.settings.compilation_target.into_iter()
             .next().ok_or_else(|| {
