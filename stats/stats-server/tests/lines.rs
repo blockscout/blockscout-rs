@@ -40,6 +40,30 @@ async fn test_lines_ok() {
 
     let client = client();
 
+    let resp = client
+        .get(format!("{base}/api/v1/lines"))
+        .send()
+        .await
+        .expect("failed to connect to server");
+    let s = resp.status();
+    assert_eq!(s, 200, "invalid status for charts info: {s:?}");
+    let line_charts: stats_proto::blockscout::stats::v1::LineCharts =
+        resp.json().await.expect("failed to parse response");
+    let sections: Vec<&str> = line_charts
+        .sections
+        .iter()
+        .map(|sec| sec.id.as_str())
+        .collect();
+    let expected_sections = [
+        "accounts",
+        "transactions",
+        "blocks",
+        "tokens",
+        "gas",
+        "contracts",
+    ];
+    assert_eq!(sections, expected_sections, "wrong sections response");
+
     for line_name in [
         "accountsGrowth",
         "activeAccounts",
