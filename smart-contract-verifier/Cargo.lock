@@ -4087,7 +4087,7 @@ dependencies = [
 [[package]]
 name = "sourcify"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs?branch=rimrakhimov/libs/sourcify-import-etherscan#d9e49717bc82702ae149e3ac88669a0fb2103d33"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=e61bd59#e61bd59f41694bb51665f578a5f75f00f48572be"
 dependencies = [
  "anyhow",
  "blockscout-display-bytes",
