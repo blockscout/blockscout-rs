@@ -30,7 +30,10 @@ impl ChartPartialUpdater for AverageBlockRewards {
                     (AVG(block_rewards.reward) / $1)::FLOAT as value
                 FROM block_rewards
                 JOIN blocks ON block_rewards.block_hash = blocks.hash
-                WHERE date(blocks.timestamp) > $2 AND blocks.consensus = true
+                WHERE 
+                    blocks.timestamp != to_timestamp(0) AND 
+                    date(blocks.timestamp) > $2 AND 
+                    blocks.consensus = true
                 GROUP BY date
                 "#,
                 vec![ETH.into(), row.date.into()],
@@ -43,7 +46,9 @@ impl ChartPartialUpdater for AverageBlockRewards {
                     (AVG(block_rewards.reward) / $1)::FLOAT as value
                 FROM block_rewards
                 JOIN blocks ON block_rewards.block_hash = blocks.hash
-                WHERE blocks.consensus = true
+                WHERE 
+                    blocks.timestamp != to_timestamp(0) AND 
+                    blocks.consensus = true
                 GROUP BY date
                 "#,
                 vec![ETH.into()],

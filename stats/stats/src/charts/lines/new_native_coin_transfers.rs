@@ -26,6 +26,7 @@ impl ChartPartialUpdater for NewNativeCoinTransfers {
                 FROM transactions t
                 JOIN blocks       b ON t.block_hash = b.hash
                 WHERE
+                    b.timestamp != to_timestamp(0) AND
                     DATE(b.timestamp) > $1 AND
                     b.consensus = true AND
                     LENGTH(t.input) = 0 AND
@@ -43,6 +44,7 @@ impl ChartPartialUpdater for NewNativeCoinTransfers {
                 FROM transactions t
                 JOIN blocks       b ON t.block_hash = b.hash
                 WHERE
+                    b.timestamp != to_timestamp(0) AND
                     b.consensus = true AND
                     LENGTH(t.input) = 0 AND
                     t.value >= 0

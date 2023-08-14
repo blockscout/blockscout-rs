@@ -22,7 +22,10 @@ impl ChartPartialUpdater for NewBlocks {
                 r#"
                     SELECT date(blocks.timestamp) as date, COUNT(*)::TEXT as value
                         FROM public.blocks
-                        WHERE date(blocks.timestamp) > $1 AND consensus = true
+                        WHERE 
+                            blocks.timestamp != to_timestamp(0) AND
+                            date(blocks.timestamp) > $1 AND
+                            consensus = true
                         GROUP BY date;
                     "#,
                 vec![row.date.into()],
@@ -32,7 +35,9 @@ impl ChartPartialUpdater for NewBlocks {
                 r#"
                     SELECT date(blocks.timestamp) as date, COUNT(*)::TEXT as value
                         FROM public.blocks
-                        WHERE consensus = true
+                        WHERE 
+                            blocks.timestamp != to_timestamp(0) AND 
+                            consensus = true
                         GROUP BY date;
                     "#
                 .into(),

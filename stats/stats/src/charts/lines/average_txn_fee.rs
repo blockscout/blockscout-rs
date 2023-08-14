@@ -31,6 +31,7 @@ impl ChartPartialUpdater for AverageTxnFee {
                 FROM transactions t
                 JOIN blocks       b ON t.block_hash = b.hash
                 WHERE
+                    b.timestamp != to_timestamp(0) AND
                     DATE(b.timestamp) > $2 AND
                     b.consensus = true
                 GROUP BY DATE(b.timestamp)
@@ -45,7 +46,9 @@ impl ChartPartialUpdater for AverageTxnFee {
                     (AVG(t.gas_used * t.gas_price) / $1)::FLOAT as value
                 FROM transactions t
                 JOIN blocks       b ON t.block_hash = b.hash
-                WHERE b.consensus = true
+                WHERE 
+                    b.timestamp != to_timestamp(0) AND
+                    b.consensus = true
                 GROUP BY DATE(b.timestamp)
                 "#,
                 vec![ETHER.into()],

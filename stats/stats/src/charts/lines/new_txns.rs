@@ -26,6 +26,7 @@ impl ChartPartialUpdater for NewTxns {
                 FROM transactions t
                 JOIN blocks       b ON t.block_hash = b.hash
                 WHERE 
+                    b.timestamp != to_timestamp(0) AND
                     date(b.timestamp) > $1 AND 
                     b.consensus = true
                 GROUP BY date;
@@ -40,7 +41,9 @@ impl ChartPartialUpdater for NewTxns {
                     COUNT(*)::TEXT as value
                 FROM transactions t
                 JOIN blocks       b ON t.block_hash = b.hash
-                WHERE b.consensus = true
+                WHERE
+                    b.timestamp != to_timestamp(0) AND 
+                    b.consensus = true
                 GROUP BY date;
                 "#,
                 vec![],
