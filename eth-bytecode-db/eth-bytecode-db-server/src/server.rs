@@ -91,10 +91,13 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         .sourcify
         .enabled
         .then(|| {
-            sourcify::ClientBuilder::default()
-                .base_url(&settings.database.sourcify.base_url)
-                .total_duration(settings.database.sourcify.total_request_duration)
-                .build()
+            Ok::<_, anyhow::Error>(
+                sourcify::ClientBuilder::default()
+                    .try_base_url(&settings.database.sourcify.base_url)
+                    .map_err(|err| anyhow::anyhow!(err))?
+                    .total_duration(settings.database.sourcify.total_request_duration)
+                    .build(),
+            )
         })
         .transpose()?;
     let database = Arc::new(DatabaseService::new_arc(db_connection, sourcify_client));
