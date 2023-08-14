@@ -75,6 +75,37 @@ pub async fn verify(
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerifyFromEtherscanRequest {
+    pub address: bytes::Bytes,
+    pub chain: String,
+}
+
+pub async fn verify_from_etherscan(
+    sourcify_client: Arc<SourcifyApiClient>,
+    request: VerifyFromEtherscanRequest,
+) -> Result<Success, Error> {
+    let lib_client = sourcify_client.lib_client();
+
+    lib_client
+        .verify_from_etherscan(request.chain.as_str(), request.address.clone())
+        .await
+        .map_err(error_handler::process_sourcify_error)?;
+
+    let source_files = lib_client
+        .get_source_files_any(request.chain.as_str(), request.address)
+        .await
+        .map_err(error_handler::process_sourcify_error)?;
+
+    let success = Success::try_from(source_files)?;
+
+    if let Some(middleware) = sourcify_client.middleware() {
+        middleware.call(&success).await;
+    }
+
+    Ok(success)
+}
+
 /// Validates verification result.
 /// In case of success returns corresponding match type.
 fn validate_verification_result(result: Vec<ResultItem>) -> Result<MatchType, Error> {
@@ -90,5 +121,75 @@ fn validate_verification_result(result: Vec<ResultItem>) -> Result<MatchType, Er
         _ => Err(Error::Verification(
             item.message.clone().unwrap_or_default(),
         )),
+    }
+}
+
+mod error_handler {
+    use super::Error;
+    use sourcify::{EmptyCustomError, VerifyFromEtherscanError};
+
+    // Is public just to make it possible to use it for generics in outer functions.
+    // Implementations for required custom errors are supposed to be added inside this module.
+    //
+    // Added to avoid passing the handler inside `process_sourcify_error`.
+    pub trait ErrorHandler: Sized {
+        fn handle(self) -> Error;
+    }
+
+    impl ErrorHandler for EmptyCustomError {
+        fn handle(self) -> Error {
+            // Empty error cannot be initialized
+            unreachable!()
+        }
+    }
+
+    impl ErrorHandler for VerifyFromEtherscanError {
+        fn handle(self) -> Error {
+            match self {
+                VerifyFromEtherscanError::ChainNotSupported(msg) => Error::Verification(msg),
+                VerifyFromEtherscanError::TooManyRequests(msg) => {
+                    Error::Internal(anyhow::anyhow!(msg))
+                }
+                VerifyFromEtherscanError::ApiResponseError(msg) => {
+                    Error::Internal(anyhow::anyhow!(msg))
+                }
+                VerifyFromEtherscanError::ContractNotVerified(msg) => Error::Verification(msg),
+                VerifyFromEtherscanError::CannotGenerateSolcJsonInput(msg) => {
+                    Error::Verification(msg)
+                }
+                VerifyFromEtherscanError::VerifiedWithErrors(msg) => Error::Verification(msg),
+            }
+        }
+    }
+
+    pub fn process_sourcify_error<E: std::error::Error + ErrorHandler>(
+        error: sourcify::Error<E>,
+    ) -> Error {
+        match error {
+            sourcify::Error::Reqwest(_) | sourcify::Error::ReqwestMiddleware(_) => {
+                Error::Internal(anyhow::anyhow!(error.to_string()))
+            }
+            sourcify::Error::Sourcify(sourcify::SourcifyError::InternalServerError(_)) => {
+                Error::Internal(anyhow::anyhow!(error.to_string()))
+            }
+            sourcify::Error::Sourcify(sourcify::SourcifyError::NotFound(msg)) => {
+                Error::BadRequest(anyhow::anyhow!("{msg}"))
+            }
+            sourcify::Error::Sourcify(sourcify::SourcifyError::ChainNotSupported(msg)) => {
+                Error::BadRequest(anyhow::anyhow!("{msg}"))
+            }
+            sourcify::Error::Sourcify(sourcify::SourcifyError::BadRequest(_)) => {
+                tracing::error!(target: "sourcify", "{error}");
+                Error::Internal(anyhow::anyhow!("{error}"))
+            }
+            sourcify::Error::Sourcify(sourcify::SourcifyError::UnexpectedStatusCode { .. }) => {
+                tracing::error!(target: "sourcify", "{error}");
+                Error::Internal(anyhow::anyhow!("{error}"))
+            }
+            sourcify::Error::Sourcify(sourcify::SourcifyError::Custom(err)) => {
+                tracing::error!(target: "sourcify", "custom endpoint error: {err}");
+                E::handle(err)
+            }
+        }
     }
 }

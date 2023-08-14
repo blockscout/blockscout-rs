@@ -5,3 +5,12 @@ pub enum MatchType {
     Partial,
     Full,
 }
+
+impl From<sourcify::MatchType> for MatchType {
+    fn from(value: sourcify::MatchType) -> Self {
+        match value {
+            sourcify::MatchType::Full => MatchType::Full,
+            sourcify::MatchType::Partial => MatchType::Partial,
+        }
+    }
+}
