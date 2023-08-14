@@ -22,13 +22,13 @@ sea-orm = "0.11"
 serde = "1.0"
 serde_json = "1.0.96"
 serde_with = "2.1"
-sourcify = { git = "https://github.com/blockscout/blockscout-rs", branch = "rimrakhimov/libs/sourcify" }
+sourcify = { git = "https://github.com/blockscout/blockscout-rs", rev = "e61bd59" }
 tokio = { version = "1.23", features = [ "rt-multi-thread", "macros" ] }
 tonic = "0.8"
 tracing = "0.1"
 
 [dev-dependencies]
-smart-contract-verifier-proto = { git = "https://github.com/blockscout/blockscout-rs", branch = "rimrakhimov/verifier/sourcify-verify-from-etherscan" }
+smart-contract-verifier-proto = { git = "https://github.com/blockscout/blockscout-rs", rev = "e003306" }
 
 hex = "0.4.3"
 mockall = "0.11"

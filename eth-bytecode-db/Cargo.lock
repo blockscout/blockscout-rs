@@ -5055,7 +5055,7 @@ checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
 [[package]]
 name = "smart-contract-verifier-proto"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs?branch=rimrakhimov/verifier/sourcify-verify-from-etherscan#a92c838d154546661c9b235c19afa646bce7581c"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=e003306#e0033062747f10103611ca0ed044206c1037f175"
 dependencies = [
  "actix-prost",
  "actix-prost-build",
@@ -5109,7 +5109,7 @@ dependencies = [
 [[package]]
 name = "sourcify"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs?branch=rimrakhimov/libs/sourcify#9abb78b6b373bd08f2a5f4dac1a4d069e60c7dd6"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=e61bd59#e61bd59f41694bb51665f578a5f75f00f48572be"
 dependencies = [
  "anyhow",
  "blockscout-display-bytes",

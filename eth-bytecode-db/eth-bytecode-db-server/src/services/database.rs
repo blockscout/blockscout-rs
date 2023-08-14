@@ -98,19 +98,15 @@ impl Database for DatabaseService {
     }
 }
 
-fn process_sourcify_error(error: sourcify::Error) -> Option<tonic::Status> {
+fn process_sourcify_error(
+    error: sourcify::Error<sourcify::EmptyCustomError>,
+) -> Option<tonic::Status> {
     match error {
-        sourcify::Error::InvalidArgument { .. }
-        | sourcify::Error::Reqwest(_)
-        | sourcify::Error::ReqwestMiddleware(_) => {
+        sourcify::Error::Reqwest(_) | sourcify::Error::ReqwestMiddleware(_) => {
             tracing::error!(target: "sourcify", "{error}");
             Some(tonic::Status::internal(
                 "sending request to sourcify failed",
             ))
-        }
-        sourcify::Error::Sourcify(sourcify::SourcifyError::TooManyRequests(_)) => {
-            tracing::error!(target: "sourcify", "{error}");
-            Some(tonic::Status::resource_exhausted(error.to_string()))
         }
         sourcify::Error::Sourcify(sourcify::SourcifyError::InternalServerError(_)) => {
             tracing::error!(target: "sourcify", "{error}");
@@ -131,6 +127,10 @@ fn process_sourcify_error(error: sourcify::Error) -> Option<tonic::Status> {
         sourcify::Error::Sourcify(sourcify::SourcifyError::UnexpectedStatusCode { .. }) => {
             tracing::error!(target: "sourcify", "{error}");
             Some(tonic::Status::internal("sourcify responded with error"))
+        }
+        sourcify::Error::Sourcify(sourcify::SourcifyError::Custom(_)) => {
+            // `EmptyCustomError` enum has no variants and cannot be initialized
+            unreachable!()
         }
     }
 }

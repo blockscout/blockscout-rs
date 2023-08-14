@@ -33,13 +33,13 @@ serde_json = "1"
 serde_with = "2"
 sha2 = "0.10"
 solidity-metadata = "1.0"
-sourcify = { git = "https://github.com/blockscout/blockscout-rs", branch = "rimrakhimov/libs/sourcify-import-etherscan" }
+sourcify = { git = "https://github.com/blockscout/blockscout-rs", rev = "e61bd59" }
 sscanf = "0.3"
 tempfile = "3.3"
 thiserror = "1.0"
 tokio = { version = "1", features = ["macros"] }
 tracing = "0.1"
-url = { version = "2.4", features = ["serde"] }
+url = { version = "2.2", features = ["serde"] }
 
 [dev-dependencies]
 const_format = "0.2"
