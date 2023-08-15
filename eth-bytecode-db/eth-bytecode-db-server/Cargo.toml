@@ -28,7 +28,7 @@ tonic = "0.8"
 tracing = "0.1"
 
 [dev-dependencies]
-smart-contract-verifier-proto = { git = "https://github.com/blockscout/blockscout-rs", rev = "52c41ec" }
+smart-contract-verifier-proto = { git = "https://github.com/blockscout/blockscout-rs", rev = "e003306" }
 
 hex = "0.4.3"
 mockall = "0.11"

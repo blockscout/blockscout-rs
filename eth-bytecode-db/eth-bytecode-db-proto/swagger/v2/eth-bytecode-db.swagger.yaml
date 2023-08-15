@@ -127,6 +127,26 @@ paths:
             $ref: '#/definitions/v2VerifySourcifyRequest'
       tags:
         - SourcifyVerifier
+  /api/v2/verifier/sourcify/sources:verify-from-etherscan:
+    post:
+      operationId: SourcifyVerifier_VerifyFromEtherscan
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v2VerifyResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v2VerifyFromEtherscanSourcifyRequest'
+      tags:
+        - SourcifyVerifier
   /api/v2/verifier/vyper/sources:verify-multi-part:
     post:
       operationId: VyperVerifier_VerifyMultiPart
@@ -337,6 +357,17 @@ definitions:
       contractAddress:
         type: string
         title: / The address of the contract to be verified
+  v2VerifyFromEtherscanSourcifyRequest:
+    type: object
+    properties:
+      address:
+        type: string
+        title: / Address of the contract to be verified
+      chain:
+        type: string
+        title: |-
+          / The chain (network) the contract was deployed to
+          / (https://docs.sourcify.dev/docs/api/chains/)
   v2VerifyResponse:
     type: object
     properties:

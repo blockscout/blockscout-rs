@@ -4,7 +4,7 @@ pub use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2::{
     sourcify_verifier_server, verify_response, vyper_verifier_actix, vyper_verifier_server,
     BytecodeType, HealthCheckRequest, HealthCheckResponse, ListCompilerVersionsRequest,
     ListCompilerVersionsResponse, SearchSourcesRequest, SearchSourcesResponse,
-    SearchSourcifySourcesRequest, Source, VerificationMetadata, VerifyResponse,
-    VerifySolidityMultiPartRequest, VerifySolidityStandardJsonRequest, VerifySourcifyRequest,
-    VerifyVyperMultiPartRequest, VerifyVyperStandardJsonRequest,
+    SearchSourcifySourcesRequest, Source, VerificationMetadata, VerifyFromEtherscanSourcifyRequest,
+    VerifyResponse, VerifySolidityMultiPartRequest, VerifySolidityStandardJsonRequest,
+    VerifySourcifyRequest, VerifyVyperMultiPartRequest, VerifyVyperStandardJsonRequest,
 };

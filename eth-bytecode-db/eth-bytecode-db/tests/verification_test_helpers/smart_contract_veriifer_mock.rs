@@ -5,9 +5,9 @@ use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
     solidity_verifier_server::{SolidityVerifier, SolidityVerifierServer},
     sourcify_verifier_server::{SourcifyVerifier, SourcifyVerifierServer},
     vyper_verifier_server::{VyperVerifier, VyperVerifierServer},
-    ListCompilerVersionsRequest, ListCompilerVersionsResponse, VerifyResponse,
-    VerifySolidityMultiPartRequest, VerifySolidityStandardJsonRequest, VerifySourcifyRequest,
-    VerifyVyperMultiPartRequest, VerifyVyperStandardJsonRequest,
+    ListCompilerVersionsRequest, ListCompilerVersionsResponse, VerifyFromEtherscanSourcifyRequest,
+    VerifyResponse, VerifySolidityMultiPartRequest, VerifySolidityStandardJsonRequest,
+    VerifySourcifyRequest, VerifyVyperMultiPartRequest, VerifyVyperStandardJsonRequest,
 };
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
@@ -47,6 +47,8 @@ mock! {
     #[async_trait::async_trait]
     impl SourcifyVerifier for SourcifyVerifierService {
         async fn verify(&self, request: tonic::Request<VerifySourcifyRequest>) -> Result<tonic::Response<VerifyResponse>, tonic::Status>;
+
+        async fn verify_from_etherscan(&self, request: tonic::Request<VerifyFromEtherscanSourcifyRequest>) -> Result<tonic::Response<VerifyResponse>, tonic::Status>;
     }
 }
 
