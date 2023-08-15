@@ -39,7 +39,9 @@ impl ChartPartialUpdater for AverageGasLimit {
                     DATE(blocks.timestamp) as date,
                     ROUND(AVG(blocks.gas_limit))::TEXT as value
                 FROM blocks 
-                WHERE blocks.consensus = true
+                WHERE 
+                    blocks.timestamp != to_timestamp(0) AND
+                    blocks.consensus = true
                 GROUP BY date
                 "#,
                 vec![],
