@@ -54,6 +54,7 @@
     "lines": {
         "accounts": {
             "title": "Accounts",
+            "order": 1,
             "charts": {
                 "active_accounts": {
                     "title": "Active accounts",
@@ -74,6 +75,7 @@
         },
         "transactions": {
             "title": "Transactions",
+            "order": 2,
             "charts": {
                 "average_txn_fee": {
                     "title": "Average transaction fee",
@@ -106,6 +108,7 @@
         },
         "blocks": {
             "title": "Blocks",
+            "order": 3,
             "charts": {
                 "new_blocks": {
                     "title": "New blocks",
@@ -128,6 +131,7 @@
         },
         "tokens": {
             "title": "Tokens",
+            "order": 4,
             "charts": {
                 "new_native_coin_transfers": {
                     "title": "New native coins transfers",
@@ -157,6 +161,7 @@
         },
         "gas": {
             "title": "Gas",
+            "order": 5,
             "charts": {
                 "average_gas_limit": {
                     "title": "Average gas limit",
@@ -178,6 +183,7 @@
         },
         "contracts": {
             "title": "Contracts",
+            "order": 6,
             "charts": {
                 "new_verified_contracts": {
                     "title": "New verified contracts",

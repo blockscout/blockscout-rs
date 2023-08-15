@@ -3,6 +3,7 @@ use super::{
     toml_config,
 };
 use convert_case::{Case, Casing};
+use itertools::Itertools;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
@@ -10,6 +11,7 @@ use std::collections::BTreeMap;
 #[serde(default, deny_unknown_fields)]
 pub struct LineChartSection {
     pub title: String,
+    pub order: Option<i64>,
     pub charts: BTreeMap<String, LineChartInfo>,
 }
 
@@ -31,6 +33,7 @@ impl From<Config> for toml_config::Config {
             lines: value
                 .lines
                 .into_iter()
+                .sorted_by_key(|(_, section)| section.order)
                 .map(toml_config::LineChartSection::from)
                 .collect::<Vec<_>>()
                 .into(),
