@@ -24,7 +24,7 @@ impl ChartPartialUpdater for NativeCoinHoldersGrowth {
                         day as date,
                         count(*)::TEXT as value
                     FROM address_coin_balances_daily
-                    WHERE value != 0 AND day > $1
+                    WHERE value != 0 AND day > $1 AND day != to_timestamp(0)
                     GROUP BY day;
                 "#,
                 vec![row.date.into()],
@@ -36,7 +36,7 @@ impl ChartPartialUpdater for NativeCoinHoldersGrowth {
                         day as date,
                         count(*)::TEXT as value
                     FROM address_coin_balances_daily
-                    WHERE value != 0
+                    WHERE value != 0 AND day != to_timestamp(0)
                     GROUP BY day;
                 "#,
                 vec![],
