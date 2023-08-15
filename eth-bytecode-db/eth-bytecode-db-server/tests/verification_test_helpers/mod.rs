@@ -8,6 +8,7 @@ pub mod test_input_data;
 use async_trait::async_trait;
 use database_helpers::TestDbGuard;
 use eth_bytecode_db::verification::SourceType;
+use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2 as eth_bytecode_db_v2;
 use eth_bytecode_db_server::Settings;
 use reqwest::Url;
 use smart_contract_verifer_mock::SmartContractVerifierServer;
@@ -87,11 +88,35 @@ pub async fn init_eth_bytecode_db_server(db_url: &str, verifier_addr: SocketAddr
     base
 }
 
+pub async fn verify<Request: serde::Serialize>(
+    eth_bytecode_db_base: &Url,
+    route: &str,
+    request: &Request,
+) -> eth_bytecode_db_v2::VerifyResponse {
+    let response = reqwest::Client::new()
+        .post(eth_bytecode_db_base.join(route).unwrap())
+        .json(&request)
+        .send()
+        .await
+        .expect("Failed to send request");
+
+    // Assert that status code is success
+    if !response.status().is_success() {
+        let status = response.status();
+        let message = response.text().await.expect("Read body as text");
+        panic!("Invalid status code (success expected). Status: {status}. Message: {message}")
+    }
+
+    response
+        .json()
+        .await
+        .expect("Response deserialization failed")
+}
+
 pub mod test_cases {
     use super::*;
     use amplify::set;
     use eth_bytecode_db::verification::MatchType;
-    use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2 as eth_bytecode_db_v2;
     use pretty_assertions::assert_eq;
     use serde::Serialize;
 
@@ -114,24 +139,7 @@ pub mod test_cases {
 
         let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
 
-        let response = reqwest::Client::new()
-            .post(eth_bytecode_db_base.join(route).unwrap())
-            .json(&request)
-            .send()
-            .await
-            .expect("Failed to send request");
-
-        // Assert that status code is success
-        if !response.status().is_success() {
-            let status = response.status();
-            let message = response.text().await.expect("Read body as text");
-            panic!("Invalid status code (success expected). Status: {status}. Message: {message}")
-        }
-
-        let verification_response: eth_bytecode_db_v2::VerifyResponse = response
-            .json()
-            .await
-            .expect("Response deserialization failed");
+        let verification_response = verify(&eth_bytecode_db_base, route, &request).await;
 
         assert_eq!(
             test_data.eth_bytecode_db_response, verification_response,
@@ -160,17 +168,8 @@ pub mod test_cases {
 
         let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
 
-        let response = reqwest::Client::new()
-            .post(eth_bytecode_db_base.join(route).unwrap())
-            .json(&verification_request)
-            .send()
-            .await
-            .expect("Failed to send verification request");
-
-        let verification_response: eth_bytecode_db_v2::VerifyResponse = response
-            .json()
-            .await
-            .expect("Verification response deserialization failed");
+        let verification_response =
+            verify(&eth_bytecode_db_base, route, &verification_request).await;
 
         let creation_input_search_response: eth_bytecode_db_v2::SearchSourcesResponse = {
             let request = {
@@ -264,29 +263,10 @@ pub mod test_cases {
 
         let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
 
-        let response = reqwest::Client::new()
-            .post(eth_bytecode_db_base.join(route).unwrap())
-            .json(&verification_request)
-            .send()
-            .await
-            .expect("Failed to send verification request");
-
-        let verification_response: eth_bytecode_db_v2::VerifyResponse = response
-            .json()
-            .await
-            .expect("Verification response deserialization failed");
-
-        let response_2 = reqwest::Client::new()
-            .post(eth_bytecode_db_base.join(route).unwrap())
-            .json(&verification_request)
-            .send()
-            .await
-            .expect("Failed to send verification request");
-
-        let verification_response_2: eth_bytecode_db_v2::VerifyResponse = response_2
-            .json()
-            .await
-            .expect("Verification response deserialization failed");
+        let verification_response =
+            verify(&eth_bytecode_db_base, route, &verification_request).await;
+        let verification_response_2 =
+            verify(&eth_bytecode_db_base, route, &verification_request).await;
 
         assert_eq!(
             verification_response, verification_response_2,
@@ -367,15 +347,8 @@ pub mod test_cases {
         let verifier_addr =
             init_verifier_server(Service::default(), full_match_test_data.verifier_response).await;
         let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
-        let _response: eth_bytecode_db_v2::VerifyResponse = reqwest::Client::new()
-            .post(eth_bytecode_db_base.join(route).unwrap())
-            .json(&verification_request)
-            .send()
-            .await
-            .expect("Failed to send verification request")
-            .json()
-            .await
-            .expect("Verification response deserialization failed");
+        let _verification_response =
+            verify(&eth_bytecode_db_base, route, &verification_request).await;
 
         let verifier_addr = init_verifier_server(
             Service::default(),
@@ -383,15 +356,8 @@ pub mod test_cases {
         )
         .await;
         let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
-        let _response: eth_bytecode_db_v2::VerifyResponse = reqwest::Client::new()
-            .post(eth_bytecode_db_base.join(route).unwrap())
-            .json(&verification_request)
-            .send()
-            .await
-            .expect("Failed to send verification request")
-            .json()
-            .await
-            .expect("Verification response deserialization failed");
+        let _verification_response =
+            verify(&eth_bytecode_db_base, route, &verification_request).await;
 
         let creation_input_search_response: eth_bytecode_db_v2::SearchSourcesResponse = {
             let request = {

@@ -252,22 +252,6 @@ definitions:
       - NOT_SERVING
       - SERVICE_UNKNOWN
     default: UNKNOWN
-  SearchAllSourcesResponseAnnotatedSources:
-    type: object
-    properties:
-      origin:
-        $ref: '#/definitions/SearchAllSourcesResponseOrigin'
-      sources:
-        type: array
-        items:
-          $ref: '#/definitions/v2Source'
-  SearchAllSourcesResponseOrigin:
-    type: string
-    enum:
-      - ORIGIN_UNSPECIFIED
-      - BYTECODE_DB
-      - SOURCIFY
-    default: ORIGIN_UNSPECIFIED
   SourceMatchType:
     type: string
     enum:
@@ -341,10 +325,14 @@ definitions:
   v2SearchAllSourcesResponse:
     type: object
     properties:
-      annotatedSources:
+      ethBytecodeDbSources:
         type: array
         items:
-          $ref: '#/definitions/SearchAllSourcesResponseAnnotatedSources'
+          $ref: '#/definitions/v2Source'
+      sourcifySources:
+        type: array
+        items:
+          $ref: '#/definitions/v2Source'
   v2SearchSourcesRequest:
     type: object
     properties:

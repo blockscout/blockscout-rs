@@ -1,7 +1,7 @@
 use crate::{
     proto::{
-        database_server::Database, SearchAllSourcesRequest, SearchAllSourcesResponse,
-        SearchSourcesRequest, SearchSourcesResponse, SearchSourcifySourcesRequest,
+        database_server::Database, BytecodeType, SearchAllSourcesRequest, SearchAllSourcesResponse,
+        SearchSourcesRequest, SearchSourcesResponse, SearchSourcifySourcesRequest, Source,
     },
     types::{BytecodeTypeWrapper, SourceWrapper},
 };
@@ -38,24 +38,11 @@ impl Database for DatabaseService {
         let request = request.into_inner();
 
         let bytecode_type = request.bytecode_type();
-        let bytecode_remote = BytecodeRemote {
-            bytecode_type: BytecodeTypeWrapper::from_inner(bytecode_type).try_into()?,
-            data: DisplayBytes::from_str(&request.bytecode)
-                .map_err(|err| tonic::Status::invalid_argument(format!("Invalid bytecode: {err}")))?
-                .0,
-        };
+        let bytecode = request.bytecode;
 
-        let sources = search::find_contract(self.db_client.as_ref(), &bytecode_remote)
-            .await
-            .map_err(|err| tonic::Status::internal(err.to_string()))?;
+        let sources = self.search_sources(bytecode_type, bytecode).await?;
 
-        let sources = sources
-            .into_iter()
-            .map(|source| SourceWrapper::from(source).into_inner())
-            .collect();
-
-        let response = SearchSourcesResponse { sources };
-        Ok(tonic::Response::new(response))
+        Ok(tonic::Response::new(SearchSourcesResponse { sources }))
     }
 
     async fn search_sourcify_sources(
@@ -99,9 +86,47 @@ impl Database for DatabaseService {
 
     async fn search_all_sources(
         &self,
-        _request: tonic::Request<SearchAllSourcesRequest>,
+        request: tonic::Request<SearchAllSourcesRequest>,
     ) -> Result<tonic::Response<SearchAllSourcesResponse>, tonic::Status> {
-        todo!()
+        let request = request.into_inner();
+
+        let bytecode_type = request.bytecode_type();
+        let bytecode = request.bytecode;
+
+        let eth_bytecode_db_sources = self.search_sources(bytecode_type, bytecode).await?;
+
+        let response = SearchAllSourcesResponse {
+            eth_bytecode_db_sources,
+            sourcify_sources: vec![],
+        };
+
+        Ok(tonic::Response::new(response))
+    }
+}
+
+impl DatabaseService {
+    async fn search_sources(
+        &self,
+        bytecode_type: BytecodeType,
+        bytecode: String,
+    ) -> Result<Vec<Source>, tonic::Status> {
+        let bytecode_remote = BytecodeRemote {
+            bytecode_type: BytecodeTypeWrapper::from_inner(bytecode_type).try_into()?,
+            data: DisplayBytes::from_str(&bytecode)
+                .map_err(|err| tonic::Status::invalid_argument(format!("Invalid bytecode: {err}")))?
+                .0,
+        };
+
+        let sources = search::find_contract(self.db_client.as_ref(), &bytecode_remote)
+            .await
+            .map_err(|err| tonic::Status::internal(err.to_string()))?;
+
+        let sources = sources
+            .into_iter()
+            .map(|source| SourceWrapper::from(source).into_inner())
+            .collect();
+
+        Ok(sources)
     }
 }
 

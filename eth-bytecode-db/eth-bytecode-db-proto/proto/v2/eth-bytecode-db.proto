@@ -204,18 +204,9 @@ message SearchSourcesResponse {
 }
 
 message SearchAllSourcesResponse {
-  enum Origin {
-    ORIGIN_UNSPECIFIED = 0;
-    BYTECODE_DB = 1;
-    SOURCIFY = 2;
-  }
+  repeated Source eth_bytecode_db_sources = 1;
 
-  message AnnotatedSources {
-    Origin origin = 1;
-    repeated Source sources = 2;
-  }
-
-  repeated AnnotatedSources annotated_sources = 1;
+  repeated Source sourcify_sources = 2;
 }
 
 message VerifySourcifyRequest {
