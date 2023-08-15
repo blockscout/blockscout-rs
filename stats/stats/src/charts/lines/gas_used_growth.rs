@@ -31,7 +31,10 @@ impl ChartPartialUpdater for GasUsedGrowth {
                         DATE(blocks.timestamp) as date, 
                         (sum(sum(blocks.gas_used)) OVER (ORDER BY date(blocks.timestamp))) AS value
                     FROM blocks
-                    WHERE DATE(blocks.timestamp) > $1 AND blocks.consensus = true
+                    WHERE 
+                        blocks.timestamp != to_timestamp(0) AND 
+                        DATE(blocks.timestamp) > $1 AND 
+                        blocks.consensus = true
                     GROUP BY date(blocks.timestamp)
                     ORDER BY date;
                     "#,
@@ -57,7 +60,9 @@ impl ChartPartialUpdater for GasUsedGrowth {
                         DATE(blocks.timestamp) as date, 
                         (sum(sum(blocks.gas_used)) OVER (ORDER BY date(blocks.timestamp)))::TEXT AS value
                     FROM blocks
-                    WHERE blocks.consensus = true
+                    WHERE 
+                        blocks.timestamp != to_timestamp(0) AND 
+                        blocks.consensus = true
                     GROUP BY date(blocks.timestamp)
                     ORDER BY date;
                     "#,

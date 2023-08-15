@@ -36,7 +36,9 @@ impl NewAccounts {
                         b.timestamp::date as date
                     FROM transactions  t
                     JOIN blocks        b ON t.block_hash = b.hash
-                    WHERE b.consensus = true
+                    WHERE 
+                        b.timestamp != to_timestamp(0) AND 
+                        b.consensus = true
                     ORDER BY t.from_address_hash, b.timestamp
                 ) first_tx
                 GROUP BY first_tx.date;

@@ -24,7 +24,8 @@ impl ChartPartialUpdater for AverageBlockSize {
                     DATE(blocks.timestamp) as date,
                     ROUND(AVG(blocks.size))::TEXT as value
                 FROM blocks
-                WHERE 
+                WHERE
+                    blocks.timestamp != to_timestamp(0) AND
                     DATE(blocks.timestamp) > $1 AND 
                     consensus = true
                 GROUP BY date
@@ -38,7 +39,9 @@ impl ChartPartialUpdater for AverageBlockSize {
                     DATE(blocks.timestamp) as date,
                     ROUND(AVG(blocks.size))::TEXT as value
                 FROM blocks
-                WHERE consensus = true
+                WHERE 
+                    blocks.timestamp != to_timestamp(0) AND 
+                    consensus = true
                 GROUP BY date
                 "#,
                 vec![],

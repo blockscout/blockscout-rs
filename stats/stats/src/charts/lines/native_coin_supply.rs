@@ -36,7 +36,7 @@ impl ChartPartialUpdater for NativeCoinSupply {
                                 END
                             ) / $1)::float AS value
                         FROM address_coin_balances_daily
-                        WHERE day > $2
+                        WHERE day > $2 AND day != to_timestamp(0)
                         GROUP BY day
                     ) as intermediate
                     WHERE value is not NULL;
@@ -57,6 +57,7 @@ impl ChartPartialUpdater for NativeCoinSupply {
                                 END
                             ) / $1)::float AS value
                         FROM address_coin_balances_daily
+                        WHERE day != to_timestamp(0)
                         GROUP BY day
                     ) as intermediate
                     WHERE value is not NULL;
