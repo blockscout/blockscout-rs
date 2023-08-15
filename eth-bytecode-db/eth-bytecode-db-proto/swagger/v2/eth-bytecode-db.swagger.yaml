@@ -33,6 +33,26 @@ paths:
             $ref: '#/definitions/v2SearchSourcesRequest'
       tags:
         - Database
+  /api/v2/bytecodes/sources:search-all:
+    post:
+      operationId: Database_SearchAllSources
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v2SearchAllSourcesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v2SearchAllSourcesRequest'
+      tags:
+        - Database
   /api/v2/bytecodes/sources:search-sourcify:
     post:
       operationId: Database_SearchSourcifySources
@@ -232,6 +252,22 @@ definitions:
       - NOT_SERVING
       - SERVICE_UNKNOWN
     default: UNKNOWN
+  SearchAllSourcesResponseAnnotatedSources:
+    type: object
+    properties:
+      origin:
+        $ref: '#/definitions/SearchAllSourcesResponseOrigin'
+      sources:
+        type: array
+        items:
+          $ref: '#/definitions/v2Source'
+  SearchAllSourcesResponseOrigin:
+    type: string
+    enum:
+      - ORIGIN_UNSPECIFIED
+      - BYTECODE_DB
+      - SOURCIFY
+    default: ORIGIN_UNSPECIFIED
   SourceMatchType:
     type: string
     enum:
@@ -287,6 +323,28 @@ definitions:
         items:
           type: string
         title: / Compiler versions available
+  v2SearchAllSourcesRequest:
+    type: object
+    properties:
+      bytecode:
+        type: string
+        title: / Bytecode to search the sources for
+      bytecodeType:
+        $ref: '#/definitions/v2BytecodeType'
+        title: / Either CREATION_INPUT or DEPLOYED_BYTECODE, depending on what you are looking upon
+      chainId:
+        type: string
+        title: / Id of the chain the contract should be verified on
+      contractAddress:
+        type: string
+        title: / The address of the contract being verified
+  v2SearchAllSourcesResponse:
+    type: object
+    properties:
+      annotatedSources:
+        type: array
+        items:
+          $ref: '#/definitions/SearchAllSourcesResponseAnnotatedSources'
   v2SearchSourcesRequest:
     type: object
     properties:
@@ -308,10 +366,10 @@ definitions:
     properties:
       chainId:
         type: string
-        title: / Id of the chain the contract is verified on
+        title: / Id of the chain the contract should be verified on
       contractAddress:
         type: string
-        title: / The address of the contract to be verified
+        title: / The address of the contract being verified
   v2Source:
     type: object
     properties:

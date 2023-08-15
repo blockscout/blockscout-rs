@@ -13,6 +13,10 @@ http:
       post: /api/v2/bytecodes/sources:search-sourcify
       body: "*"
 
+    - selector: blockscout.ethBytecodeDb.v2.Database.SearchAllSources
+      post: /api/v2/bytecodes/sources:search-all
+      body: "*"
+
     #################### SolidityVerifier ####################
 
     - selector: blockscout.ethBytecodeDb.v2.SolidityVerifier.VerifyMultiPart

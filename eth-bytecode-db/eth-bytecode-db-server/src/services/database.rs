@@ -1,7 +1,7 @@
 use crate::{
     proto::{
-        database_server::Database, SearchSourcesRequest, SearchSourcesResponse,
-        SearchSourcifySourcesRequest,
+        database_server::Database, SearchAllSourcesRequest, SearchAllSourcesResponse,
+        SearchSourcesRequest, SearchSourcesResponse, SearchSourcifySourcesRequest,
     },
     types::{BytecodeTypeWrapper, SourceWrapper},
 };
@@ -95,6 +95,13 @@ impl Database for DatabaseService {
         };
 
         Ok(tonic::Response::new(result))
+    }
+
+    async fn search_all_sources(
+        &self,
+        _request: tonic::Request<SearchAllSourcesRequest>,
+    ) -> Result<tonic::Response<SearchAllSourcesResponse>, tonic::Status> {
+        todo!()
     }
 }
 
