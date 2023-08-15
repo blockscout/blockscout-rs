@@ -26,6 +26,7 @@ impl ChartBatchUpdater for NewContracts {
                         WHERE
                             t.created_contract_address_hash NOTNULL AND
                             b.consensus = TRUE AND
+                            b.timestamp != to_timestamp(0) AND
                             b.timestamp::date < $2 AND
                             b.timestamp::date >= $1
                         UNION
@@ -37,6 +38,7 @@ impl ChartBatchUpdater for NewContracts {
                         WHERE
                             it.created_contract_address_hash NOTNULL AND
                             b.consensus = TRUE AND
+                            b.timestamp != to_timestamp(0) AND
                             b.timestamp::date < $2 AND
                             b.timestamp::date >= $1
                     ) txns_plus_internal_txns
