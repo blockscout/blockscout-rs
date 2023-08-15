@@ -40,7 +40,7 @@ impl Database for DatabaseService {
         let bytecode_type = request.bytecode_type();
         let bytecode = request.bytecode;
 
-        let sources = self.search_sources(bytecode_type, bytecode).await?;
+        let sources = self.search_sources(bytecode_type, &bytecode).await?;
 
         Ok(tonic::Response::new(SearchSourcesResponse { sources }))
     }
@@ -52,36 +52,15 @@ impl Database for DatabaseService {
         let request = request.into_inner();
 
         let chain_id = request.chain_id;
-        let contract_address = DisplayBytes::from_str(&request.contract_address)
-            .map_err(|err| {
-                tonic::Status::invalid_argument(format!("Invalid contract address: {err}"))
-            })?
-            .0;
+        let contract_address = request.contract_address;
 
-        let sourcify_client = self
-            .sourcify_client
-            .as_ref()
-            .ok_or(tonic::Status::unimplemented(
-                "sourcify search is not enabled",
-            ))?;
+        let source = self
+            .search_sourcify_sources(&chain_id, &contract_address)
+            .await?;
 
-        let sourcify_result = sourcify_client
-            .get_source_files_any(&chain_id, contract_address)
-            .await
-            .map_err(process_sourcify_error);
-
-        let result = match sourcify_result {
-            Ok(response) => {
-                let source = SourceWrapper::try_from(response)?.into_inner();
-                SearchSourcesResponse {
-                    sources: vec![source],
-                }
-            }
-            Err(None) => SearchSourcesResponse { sources: vec![] },
-            Err(Some(err)) => return Err(err),
-        };
-
-        Ok(tonic::Response::new(result))
+        Ok(tonic::Response::new(SearchSourcesResponse {
+            sources: source.map_or(vec![], |source| vec![source]),
+        }))
     }
 
     async fn search_all_sources(
@@ -93,11 +72,18 @@ impl Database for DatabaseService {
         let bytecode_type = request.bytecode_type();
         let bytecode = request.bytecode;
 
-        let eth_bytecode_db_sources = self.search_sources(bytecode_type, bytecode).await?;
+        let eth_bytecode_db_sources = self.search_sources(bytecode_type, &bytecode).await?;
+
+        let chain_id = request.chain_id;
+        let contract_address = request.contract_address;
+
+        let sourcify_source = self
+            .search_sourcify_sources(&chain_id, &contract_address)
+            .await?;
 
         let response = SearchAllSourcesResponse {
             eth_bytecode_db_sources,
-            sourcify_sources: vec![],
+            sourcify_sources: sourcify_source.map_or(vec![], |source| vec![source]),
         };
 
         Ok(tonic::Response::new(response))
@@ -108,11 +94,11 @@ impl DatabaseService {
     async fn search_sources(
         &self,
         bytecode_type: BytecodeType,
-        bytecode: String,
+        bytecode: &str,
     ) -> Result<Vec<Source>, tonic::Status> {
         let bytecode_remote = BytecodeRemote {
             bytecode_type: BytecodeTypeWrapper::from_inner(bytecode_type).try_into()?,
-            data: DisplayBytes::from_str(&bytecode)
+            data: DisplayBytes::from_str(bytecode)
                 .map_err(|err| tonic::Status::invalid_argument(format!("Invalid bytecode: {err}")))?
                 .0,
         };
@@ -127,6 +113,41 @@ impl DatabaseService {
             .collect();
 
         Ok(sources)
+    }
+
+    async fn search_sourcify_sources(
+        &self,
+        chain_id: &str,
+        contract_address: &str,
+    ) -> Result<Option<Source>, tonic::Status> {
+        let contract_address = DisplayBytes::from_str(contract_address)
+            .map_err(|err| {
+                tonic::Status::invalid_argument(format!("Invalid contract address: {err}"))
+            })?
+            .0;
+
+        let sourcify_client = self
+            .sourcify_client
+            .as_ref()
+            .ok_or(tonic::Status::unimplemented(
+                "sourcify search is not enabled",
+            ))?;
+
+        let sourcify_result = sourcify_client
+            .get_source_files_any(chain_id, contract_address)
+            .await
+            .map_err(process_sourcify_error);
+
+        let result = match sourcify_result {
+            Ok(response) => {
+                let source = SourceWrapper::try_from(response)?.into_inner();
+                Some(source)
+            }
+            Err(None) => None,
+            Err(Some(err)) => return Err(err),
+        };
+
+        Ok(result)
     }
 }
 
