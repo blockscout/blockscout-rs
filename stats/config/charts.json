@@ -4,6 +4,10 @@
             "title": "Total blocks",
             "update_schedule": "0 0 */3 * * * *"
         },
+        "total_addresses": {
+            "title": "Total addresses",
+            "update_schedule": "0 0 */3 * * * *"
+        },
         "average_block_time": {
             "title": "Average block time",
             "units": "s",
