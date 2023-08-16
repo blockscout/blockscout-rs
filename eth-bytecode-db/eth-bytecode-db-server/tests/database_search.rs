@@ -1,7 +1,7 @@
 mod verification_test_helpers;
 
 use crate::verification_test_helpers::{
-    init_db, init_eth_bytecode_db_server, init_verifier_server, verify,
+    init_db, init_eth_bytecode_db_server, init_verifier_server, send_request,
 };
 use async_trait::async_trait;
 use eth_bytecode_db::{verification, verification::MatchType};
@@ -80,24 +80,8 @@ async fn search_sourcify_sources(service: MockSolidityVerifierService) {
         contract_address,
     };
 
-    let response = reqwest::Client::new()
-        .post(eth_bytecode_db_base.join(ROUTE).unwrap())
-        .json(&request)
-        .send()
-        .await
-        .expect("Failed to send request");
-
-    // Assert that status code is success
-    if !response.status().is_success() {
-        let status = response.status();
-        let message = response.text().await.expect("Read body as text");
-        panic!("Invalid status code (success expected). Status: {status}. Message: {message}")
-    }
-
-    let verification_response: SearchSourcesResponse = response
-        .json()
-        .await
-        .expect("Response deserialization failed");
+    let verification_response: SearchSourcesResponse =
+        send_request(&eth_bytecode_db_base, ROUTE, &request).await;
 
     let expected_sources: Vec<Source> = vec![
         Source {
@@ -167,8 +151,8 @@ async fn search_all_sources(service: MockSolidityVerifierService) {
     // Fill the database with existing value
     {
         let dummy_request = default_verify_request();
-        let _verification_response =
-            verify(&eth_bytecode_db_base, VERIFY_ROUTE, &dummy_request).await;
+        let _verification_response: eth_bytecode_db_v2::VerifyResponse =
+            send_request(&eth_bytecode_db_base, VERIFY_ROUTE, &dummy_request).await;
     }
 
     let chain_id = "5".to_string();
@@ -181,24 +165,8 @@ async fn search_all_sources(service: MockSolidityVerifierService) {
         contract_address,
     };
 
-    let response = reqwest::Client::new()
-        .post(eth_bytecode_db_base.join(ROUTE).unwrap())
-        .json(&request)
-        .send()
-        .await
-        .expect("Failed to send request");
-
-    // Assert that status code is success
-    if !response.status().is_success() {
-        let status = response.status();
-        let message = response.text().await.expect("Read body as text");
-        panic!("Invalid status code (success expected). Status: {status}. Message: {message}")
-    }
-
-    let verification_response: SearchAllSourcesResponse = response
-        .json()
-        .await
-        .expect("Response deserialization failed");
+    let verification_response: SearchAllSourcesResponse =
+        send_request(&eth_bytecode_db_base, ROUTE, &request).await;
 
     let expected_response = SearchAllSourcesResponse {
       eth_bytecode_db_sources: vec![

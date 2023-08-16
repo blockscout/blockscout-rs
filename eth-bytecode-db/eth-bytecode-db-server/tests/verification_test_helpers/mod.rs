@@ -88,29 +88,42 @@ pub async fn init_eth_bytecode_db_server(db_url: &str, verifier_addr: SocketAddr
     base
 }
 
-pub async fn verify<Request: serde::Serialize>(
+pub async fn send_annotated_request<
+    Request: serde::Serialize,
+    Response: for<'a> serde::Deserialize<'a>,
+>(
     eth_bytecode_db_base: &Url,
     route: &str,
     request: &Request,
-) -> eth_bytecode_db_v2::VerifyResponse {
+    annotation: Option<&str>,
+) -> Response {
+    let annotation = annotation.map(|v| format!("({v}) ")).unwrap_or_default();
+
     let response = reqwest::Client::new()
         .post(eth_bytecode_db_base.join(route).unwrap())
         .json(&request)
         .send()
         .await
-        .expect("Failed to send request");
+        .unwrap_or_else(|_| panic!("{annotation}Failed to send request"));
 
     // Assert that status code is success
     if !response.status().is_success() {
         let status = response.status();
         let message = response.text().await.expect("Read body as text");
-        panic!("Invalid status code (success expected). Status: {status}. Message: {message}")
+        panic!("({annotation})Invalid status code (success expected). Status: {status}. Message: {message}")
     }
 
     response
         .json()
         .await
-        .expect("Response deserialization failed")
+        .unwrap_or_else(|_| panic!("({annotation})Response deserialization failed"))
+}
+pub async fn send_request<Request: serde::Serialize, Response: for<'a> serde::Deserialize<'a>>(
+    eth_bytecode_db_base: &Url,
+    route: &str,
+    request: &Request,
+) -> Response {
+    send_annotated_request(eth_bytecode_db_base, route, request, None).await
 }
 
 pub mod test_cases {
@@ -139,7 +152,8 @@ pub mod test_cases {
 
         let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
 
-        let verification_response = verify(&eth_bytecode_db_base, route, &request).await;
+        let verification_response: eth_bytecode_db_v2::VerifyResponse =
+            send_request(&eth_bytecode_db_base, route, &request).await;
 
         assert_eq!(
             test_data.eth_bytecode_db_response, verification_response,
@@ -168,8 +182,8 @@ pub mod test_cases {
 
         let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
 
-        let verification_response =
-            verify(&eth_bytecode_db_base, route, &verification_request).await;
+        let verification_response: eth_bytecode_db_v2::VerifyResponse =
+            send_request(&eth_bytecode_db_base, route, &verification_request).await;
 
         let creation_input_search_response: eth_bytecode_db_v2::SearchSourcesResponse = {
             let request = {
@@ -178,25 +192,13 @@ pub mod test_cases {
                     bytecode_type: eth_bytecode_db_v2::BytecodeType::CreationInput.into(),
                 }
             };
-
-            let response = reqwest::Client::new()
-                .post(eth_bytecode_db_base.join(DB_SEARCH_ROUTE).unwrap())
-                .json(&request)
-                .send()
-                .await
-                .expect("Failed to send creation input search request");
-            // Assert that status code is success
-            if !response.status().is_success() {
-                let status = response.status();
-                let message = response.text().await.expect("Read body as text");
-                panic!(
-                    "Creation input search: invalid status code (success expected). Status: {status}. Message: {message}"
-                )
-            }
-            response
-                .json()
-                .await
-                .expect("Creation input search response deserialization failed")
+            send_annotated_request(
+                &eth_bytecode_db_base,
+                DB_SEARCH_ROUTE,
+                &request,
+                Some("Creation input search"),
+            )
+            .await
         };
 
         let deployed_bytecode_search_response: eth_bytecode_db_v2::SearchSourcesResponse = {
@@ -206,25 +208,13 @@ pub mod test_cases {
                     bytecode_type: eth_bytecode_db_v2::BytecodeType::DeployedBytecode.into(),
                 }
             };
-
-            let response = reqwest::Client::new()
-                .post(eth_bytecode_db_base.join(DB_SEARCH_ROUTE).unwrap())
-                .json(&request)
-                .send()
-                .await
-                .expect("Failed to send deployed bytecode search request");
-            // Assert that status code is success
-            if !response.status().is_success() {
-                let status = response.status();
-                let message = response.text().await.expect("Read body as text");
-                panic!(
-                    "Deployed bytecode search: invalid status code (success expected). Status: {status}. Message: {message}"
-                )
-            }
-            response
-                .json()
-                .await
-                .expect("Deployed bytecode search response deserialization failed")
+            send_annotated_request(
+                &eth_bytecode_db_base,
+                DB_SEARCH_ROUTE,
+                &request,
+                Some("Deployed bytecode search"),
+            )
+            .await
         };
 
         assert_eq!(
@@ -263,10 +253,10 @@ pub mod test_cases {
 
         let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
 
-        let verification_response =
-            verify(&eth_bytecode_db_base, route, &verification_request).await;
-        let verification_response_2 =
-            verify(&eth_bytecode_db_base, route, &verification_request).await;
+        let verification_response: eth_bytecode_db_v2::VerifyResponse =
+            send_request(&eth_bytecode_db_base, route, &verification_request).await;
+        let verification_response_2: eth_bytecode_db_v2::VerifyResponse =
+            send_request(&eth_bytecode_db_base, route, &verification_request).await;
 
         assert_eq!(
             verification_response, verification_response_2,
@@ -281,24 +271,13 @@ pub mod test_cases {
                 }
             };
 
-            let response = reqwest::Client::new()
-                .post(eth_bytecode_db_base.join(DB_SEARCH_ROUTE).unwrap())
-                .json(&request)
-                .send()
-                .await
-                .expect("Failed to send creation input search request");
-            // Assert that status code is success
-            if !response.status().is_success() {
-                let status = response.status();
-                let message = response.text().await.expect("Read body as text");
-                panic!(
-                    "Creation input search: invalid status code (success expected). Status: {status}. Message: {message}"
-                )
-            }
-            response
-                .json()
-                .await
-                .expect("Creation input search response deserialization failed")
+            send_annotated_request(
+                &eth_bytecode_db_base,
+                DB_SEARCH_ROUTE,
+                &request,
+                Some("Creation input search"),
+            )
+            .await
         };
 
         assert_eq!(
@@ -347,8 +326,8 @@ pub mod test_cases {
         let verifier_addr =
             init_verifier_server(Service::default(), full_match_test_data.verifier_response).await;
         let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
-        let _verification_response =
-            verify(&eth_bytecode_db_base, route, &verification_request).await;
+        let _verification_response: eth_bytecode_db_v2::VerifyResponse =
+            send_request(&eth_bytecode_db_base, route, &verification_request).await;
 
         let verifier_addr = init_verifier_server(
             Service::default(),
@@ -356,8 +335,8 @@ pub mod test_cases {
         )
         .await;
         let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
-        let _verification_response =
-            verify(&eth_bytecode_db_base, route, &verification_request).await;
+        let _verification_response: eth_bytecode_db_v2::VerifyResponse =
+            send_request(&eth_bytecode_db_base, route, &verification_request).await;
 
         let creation_input_search_response: eth_bytecode_db_v2::SearchSourcesResponse = {
             let request = {
@@ -367,24 +346,13 @@ pub mod test_cases {
                 }
             };
 
-            let response = reqwest::Client::new()
-                .post(eth_bytecode_db_base.join(DB_SEARCH_ROUTE).unwrap())
-                .json(&request)
-                .send()
-                .await
-                .expect("Failed to send creation input search request");
-            // Assert that status code is success
-            if !response.status().is_success() {
-                let status = response.status();
-                let message = response.text().await.expect("Read body as text");
-                panic!(
-                    "Creation input search: invalid status code (success expected). Status: {status}. Message: {message}"
-                )
-            }
-            response
-                .json()
-                .await
-                .expect("Creation input search response deserialization failed")
+            send_annotated_request(
+                &eth_bytecode_db_base,
+                DB_SEARCH_ROUTE,
+                &request,
+                Some("Creation input search"),
+            )
+            .await
         };
 
         assert_eq!(
@@ -434,23 +402,10 @@ pub mod test_cases {
                 panic!("Request value is not an object")
             };
 
-            let response = reqwest::Client::new()
-                .post(eth_bytecode_db_base.join(route).unwrap())
-                .json(&request)
-                .send()
-                .await
-                .expect("Failed to send request");
-
-            // Assert that status code is success
-            if !response.status().is_success() {
-                let status = response.status();
-                let message = response.text().await.expect("Read body as text");
-                panic!(
-                    "Invalid status code (success expected). \
-                    Status: {status}. Message: {message}.\
-                    Metadata: {metadata_to_print}"
-                )
-            }
+            let annotation = format!("Metadata: {metadata_to_print}");
+            let _: eth_bytecode_db_v2::VerifyResponse =
+                send_annotated_request(&eth_bytecode_db_base, route, &request, Some(&annotation))
+                    .await;
         };
 
         // `chain_id` is provided, but `contract_address` is missed from the verification metadata
