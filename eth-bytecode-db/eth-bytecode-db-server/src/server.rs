@@ -86,20 +86,11 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let db_connection = Arc::new(sea_orm::Database::connect(settings.database.url).await?);
     let client = Client::new_arc(db_connection.clone(), settings.verifier.uri).await?;
 
-    let sourcify_client = settings
-        .database
-        .sourcify
-        .enabled
-        .then(|| {
-            Ok::<_, anyhow::Error>(
-                sourcify::ClientBuilder::default()
-                    .try_base_url(&settings.database.sourcify.base_url)
-                    .map_err(|err| anyhow::anyhow!(err))?
-                    .total_duration(settings.database.sourcify.total_request_duration)
-                    .build(),
-            )
-        })
-        .transpose()?;
+    let sourcify_client = sourcify::ClientBuilder::default()
+        .try_base_url(&settings.sourcify.base_url)
+        .map_err(|err| anyhow::anyhow!(err))?
+        .total_duration(settings.sourcify.total_request_duration)
+        .build();
     let database = Arc::new(DatabaseService::new_arc(client.clone(), sourcify_client));
 
     let solidity_verifier = Arc::new(SolidityVerifierService::new(client.clone()));

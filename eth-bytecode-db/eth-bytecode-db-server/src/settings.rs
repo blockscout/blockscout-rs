@@ -34,6 +34,8 @@ pub struct Settings {
 
     pub database: DatabaseSettings,
     pub verifier: VerifierSettings,
+    #[serde(default)]
+    pub sourcify: SourcifySettings,
 
     // Is required as we deny unknown fields, but allow users provide
     // path to config through PREFIX__CONFIG env variable. If removed,
@@ -50,8 +52,6 @@ pub struct DatabaseSettings {
     pub create_database: bool,
     #[serde(default)]
     pub run_migrations: bool,
-    #[serde(default)]
-    pub sourcify: SourcifySettings,
 }
 
 #[serde_as]
@@ -65,7 +65,6 @@ pub struct VerifierSettings {
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct SourcifySettings {
-    pub enabled: bool,
     pub base_url: String,
     /// The maximum duration for which attempts to send a request will be processed.
     pub total_request_duration: Duration,
@@ -74,7 +73,6 @@ pub struct SourcifySettings {
 impl Default for SourcifySettings {
     fn default() -> Self {
         Self {
-            enabled: false,
             base_url: "https://sourcify.dev/server/".to_string(),
             total_request_duration: Duration::from_secs(60),
         }
@@ -108,9 +106,9 @@ impl Settings {
                 url: database_url,
                 create_database: false,
                 run_migrations: false,
-                sourcify: Default::default(),
             },
             verifier: VerifierSettings { uri: verifier_uri },
+            sourcify: Default::default(),
             config_path: Default::default(),
         }
     }

@@ -18,14 +18,11 @@ use std::str::FromStr;
 
 pub struct DatabaseService {
     pub client: verification::Client,
-    pub sourcify_client: Option<sourcify::Client>,
+    pub sourcify_client: sourcify::Client,
 }
 
 impl DatabaseService {
-    pub fn new_arc(
-        client: verification::Client,
-        sourcify_client: Option<sourcify::Client>,
-    ) -> Self {
+    pub fn new_arc(client: verification::Client, sourcify_client: sourcify::Client) -> Self {
         Self {
             client,
             sourcify_client,
@@ -148,14 +145,8 @@ impl DatabaseService {
             })?
             .0;
 
-        let sourcify_client = self
+        let sourcify_result = self
             .sourcify_client
-            .as_ref()
-            .ok_or(tonic::Status::unimplemented(
-                "sourcify search is not enabled",
-            ))?;
-
-        let sourcify_result = sourcify_client
             .get_source_files_any(chain_id, contract_address)
             .await
             .map_err(process_sourcify_error);
