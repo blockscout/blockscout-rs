@@ -2,28 +2,32 @@ use crate::{
     proto::{
         database_server::Database, BytecodeType, SearchAllSourcesRequest, SearchAllSourcesResponse,
         SearchSourcesRequest, SearchSourcesResponse, SearchSourcifySourcesRequest, Source,
+        VerifyResponse,
     },
-    types::{BytecodeTypeWrapper, SourceWrapper},
+    types::{BytecodeTypeWrapper, SourceWrapper, VerifyResponseWrapper},
 };
 use amplify::Wrapper;
 use async_trait::async_trait;
 use blockscout_display_bytes::Bytes as DisplayBytes;
-use eth_bytecode_db::search::{self, BytecodeRemote};
-use sea_orm::DatabaseConnection;
-use std::{str::FromStr, sync::Arc};
+use eth_bytecode_db::{
+    search::{self, BytecodeRemote},
+    verification,
+    verification::sourcify_from_etherscan,
+};
+use std::str::FromStr;
 
 pub struct DatabaseService {
-    pub db_client: Arc<DatabaseConnection>,
+    pub client: verification::Client,
     pub sourcify_client: Option<sourcify::Client>,
 }
 
 impl DatabaseService {
     pub fn new_arc(
-        db_client: Arc<DatabaseConnection>,
+        client: verification::Client,
         sourcify_client: Option<sourcify::Client>,
     ) -> Self {
         Self {
-            db_client,
+            client,
             sourcify_client,
         }
     }
@@ -71,15 +75,33 @@ impl Database for DatabaseService {
 
         let bytecode_type = request.bytecode_type();
         let bytecode = request.bytecode;
-
-        let eth_bytecode_db_sources = self.search_sources(bytecode_type, &bytecode).await?;
-
         let chain_id = request.chain_id;
         let contract_address = request.contract_address;
 
-        let sourcify_source = self
-            .search_sourcify_sources(&chain_id, &contract_address)
-            .await?;
+        let search_sources_task = self.search_sources(bytecode_type, &bytecode);
+        let search_sourcify_sources_task =
+            self.search_sourcify_sources(&chain_id, &contract_address);
+
+        let (eth_bytecode_db_sources, sourcify_source) =
+            tokio::join!(search_sources_task, search_sourcify_sources_task);
+        let eth_bytecode_db_sources = eth_bytecode_db_sources?;
+        let mut sourcify_source = sourcify_source?;
+
+        // Importing contracts from etherscan may be quite expensive operation.
+        // For that reason, we try to use that approach only if no other sources have been found.
+        if eth_bytecode_db_sources.is_empty() && sourcify_source.is_none() {
+            let verification_request = sourcify_from_etherscan::VerificationRequest {
+                address: contract_address,
+                chain: chain_id,
+            };
+            let result =
+                sourcify_from_etherscan::verify(self.client.clone(), verification_request).await;
+
+            if let Ok(source) = result {
+                let response: VerifyResponse = VerifyResponseWrapper::ok(source).into();
+                sourcify_source = response.source;
+            }
+        }
 
         let response = SearchAllSourcesResponse {
             eth_bytecode_db_sources,
@@ -103,7 +125,7 @@ impl DatabaseService {
                 .0,
         };
 
-        let sources = search::find_contract(self.db_client.as_ref(), &bytecode_remote)
+        let sources = search::find_contract(self.client.db_client.as_ref(), &bytecode_remote)
             .await
             .map_err(|err| tonic::Status::internal(err.to_string()))?;
 

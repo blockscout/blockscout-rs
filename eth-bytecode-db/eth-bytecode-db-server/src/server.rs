@@ -100,7 +100,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             )
         })
         .transpose()?;
-    let database = Arc::new(DatabaseService::new_arc(db_connection, sourcify_client));
+    let database = Arc::new(DatabaseService::new_arc(client.clone(), sourcify_client));
 
     let solidity_verifier = Arc::new(SolidityVerifierService::new(client.clone()));
     let vyper_verifier = Arc::new(VyperVerifierService::new(client.clone()));

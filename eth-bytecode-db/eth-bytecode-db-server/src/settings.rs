@@ -46,7 +46,9 @@ pub struct Settings {
 #[serde(deny_unknown_fields)]
 pub struct DatabaseSettings {
     pub url: String,
+    #[serde(default)]
     pub create_database: bool,
+    #[serde(default)]
     pub run_migrations: bool,
     #[serde(default)]
     pub sourcify: SourcifySettings,
@@ -61,7 +63,7 @@ pub struct VerifierSettings {
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct SourcifySettings {
     pub enabled: bool,
     pub base_url: String,
