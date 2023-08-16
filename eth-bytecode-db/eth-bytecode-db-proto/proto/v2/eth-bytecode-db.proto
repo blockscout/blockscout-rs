@@ -183,9 +183,9 @@ message SearchSourcesRequest {
 
 message SearchSourcifySourcesRequest {
   /// Id of the chain the contract should be verified on
-  string chain_id = 1;
+  string chain = 1;
   /// The address of the contract being verified
-  string contract_address = 2;
+  string address = 2;
 }
 
 message SearchAllSourcesRequest {
@@ -194,9 +194,9 @@ message SearchAllSourcesRequest {
   /// Either CREATION_INPUT or DEPLOYED_BYTECODE, depending on what you are looking upon
   BytecodeType bytecode_type = 2;
   /// Id of the chain the contract should be verified on
-  string chain_id = 3;
+  string chain = 3;
   /// The address of the contract being verified
-  string contract_address = 4;
+  string address = 4;
 }
 
 message SearchSourcesResponse {
