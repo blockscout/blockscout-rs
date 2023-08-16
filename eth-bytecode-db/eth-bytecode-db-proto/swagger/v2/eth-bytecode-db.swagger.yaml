@@ -310,18 +310,18 @@ definitions:
   v2SearchAllSourcesRequest:
     type: object
     properties:
+      address:
+        type: string
+        title: / The address of the contract being verified
       bytecode:
         type: string
         title: / Bytecode to search the sources for
       bytecodeType:
         $ref: '#/definitions/v2BytecodeType'
         title: / Either CREATION_INPUT or DEPLOYED_BYTECODE, depending on what you are looking upon
-      chainId:
+      chain:
         type: string
         title: / Id of the chain the contract should be verified on
-      contractAddress:
-        type: string
-        title: / The address of the contract being verified
   v2SearchAllSourcesResponse:
     type: object
     properties:
@@ -352,12 +352,12 @@ definitions:
   v2SearchSourcifySourcesRequest:
     type: object
     properties:
-      chainId:
-        type: string
-        title: / Id of the chain the contract should be verified on
-      contractAddress:
+      address:
         type: string
         title: / The address of the contract being verified
+      chain:
+        type: string
+        title: / Id of the chain the contract should be verified on
   v2Source:
     type: object
     properties:

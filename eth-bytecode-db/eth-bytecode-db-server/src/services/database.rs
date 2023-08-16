@@ -55,8 +55,8 @@ impl Database for DatabaseService {
     ) -> Result<tonic::Response<SearchSourcesResponse>, tonic::Status> {
         let request = request.into_inner();
 
-        let chain_id = request.chain_id;
-        let contract_address = request.contract_address;
+        let chain_id = request.chain;
+        let contract_address = request.address;
 
         let source = self
             .search_sourcify_sources(&chain_id, &contract_address)
@@ -75,8 +75,8 @@ impl Database for DatabaseService {
 
         let bytecode_type = request.bytecode_type();
         let bytecode = request.bytecode;
-        let chain_id = request.chain_id;
-        let contract_address = request.contract_address;
+        let chain_id = request.chain;
+        let contract_address = request.address;
 
         let search_sources_task = self.search_sources(bytecode_type, &bytecode);
         let search_sourcify_sources_task =
