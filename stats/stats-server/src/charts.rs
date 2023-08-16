@@ -146,6 +146,7 @@ impl Charts {
 
         vec![
             // tier 1
+            Arc::new(counters::TotalAddresses::default()),
             Arc::new(lines::AverageBlockRewards::default()),
             Arc::new(counters::TotalTokens::default()),
             Arc::new(lines::NativeCoinSupply::default()),

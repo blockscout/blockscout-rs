@@ -22,7 +22,7 @@ async fn test_lines_ok() {
     fill_mock_blockscout_data(&blockscout, "2023-03-01").await;
 
     let mut settings = Settings::default();
-    settings.charts_config = PathBuf::from_str("../config/charts.toml").unwrap();
+    settings.charts_config = PathBuf::from_str("../config/charts.json").unwrap();
     settings.server.grpc.enabled = false;
     settings.metrics.enabled = false;
     settings.jaeger.enabled = false;

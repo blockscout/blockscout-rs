@@ -23,7 +23,7 @@ async fn test_counters_ok() {
     fill_mock_blockscout_data(&blockscout, "2023-03-01").await;
 
     let mut settings = Settings::default();
-    settings.charts_config = PathBuf::from_str("../config/charts.toml").unwrap();
+    settings.charts_config = PathBuf::from_str("../config/charts.json").unwrap();
     settings.server.grpc.enabled = false;
     settings.metrics.enabled = false;
     settings.jaeger.enabled = false;
@@ -55,6 +55,7 @@ async fn test_counters_ok() {
     let counter_names: HashSet<_> = counters.counters.iter().map(|c| c.id.as_str()).collect();
     let expected_counter_names: HashSet<_> = [
         "totalBlocks",
+        "totalAddresses",
         "averageBlockTime",
         "completedTxns",
         "totalTxns",
