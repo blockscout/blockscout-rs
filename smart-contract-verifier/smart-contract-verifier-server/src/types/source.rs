@@ -1,3 +1,4 @@
+
 use crate::proto::{source, Source};
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use smart_contract_verifier::{vyper, MatchType, SoliditySuccess, SourcifySuccess, VyperSuccess};
@@ -27,6 +28,9 @@ macro_rules! from_success {
             }),
             constructor_arguments: $value.constructor_args.map(|args| args.to_string()),
             match_type: match_type.into(),
+            compilation_artifacts: None,
+            creation_input_artifacts: None,
+            deployed_bytecode_artifacts: None,
         }
     }};
 }
@@ -90,6 +94,9 @@ pub fn from_sourcify_success(value: SourcifySuccess) -> Source {
             .constructor_arguments
             .map(|bytes| DisplayBytes::from(bytes).to_string()),
         match_type: match_type.into(),
+        compilation_artifacts: None,
+        creation_input_artifacts: None,
+        deployed_bytecode_artifacts: None,
     }
 }
 
@@ -149,6 +156,9 @@ mod tests {
             constructor_arguments: Some("0x123456".into()),
             abi: Some("{}".to_string()),
             match_type: source::MatchType::Partial.into(),
+            compilation_artifacts: None,
+            creation_input_artifacts: None,
+            deployed_bytecode_artifacts: None,
         };
 
         assert_eq!(expected, result);
@@ -197,6 +207,9 @@ mod tests {
             constructor_arguments: Some("0x123456".into()),
             abi: Some("{}".to_string()),
             match_type: source::MatchType::Partial.into(),
+            compilation_artifacts: None,
+            creation_input_artifacts: None,
+            deployed_bytecode_artifacts: None,
         };
 
         assert_eq!(expected, result);
@@ -230,6 +243,9 @@ mod tests {
             constructor_arguments: Some("0x123456".into()),
             abi: Some("abi".to_string()),
             match_type: source::MatchType::Full.into(),
+            compilation_artifacts: None,
+            creation_input_artifacts: None,
+            deployed_bytecode_artifacts: None,
         };
 
         assert_eq!(expected, result);
