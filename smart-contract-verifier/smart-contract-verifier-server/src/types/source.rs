@@ -1,4 +1,3 @@
-
 use crate::proto::{source, Source};
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use smart_contract_verifier::{vyper, MatchType, SoliditySuccess, SourcifySuccess, VyperSuccess};

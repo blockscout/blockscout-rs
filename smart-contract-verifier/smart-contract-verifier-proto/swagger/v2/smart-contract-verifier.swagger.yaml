@@ -281,7 +281,7 @@ definitions:
       compilationArtifacts:
         type: string
         description: |-
-          / General and compiler-specific artifacts (abi, userdoc, devdoc, licenses, etc),
+          / General and compiler-specific artifacts (abi, userdoc, devdoc, licenses, ast, etc),
           / encoded as a json.
       compilerSettings:
         type: string

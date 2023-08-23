@@ -68,7 +68,7 @@ message Source {
   /// Similar to Sourcify (see https://docs.sourcify.dev/docs/full-vs-partial-match/)
   MatchType match_type = 9;
 
-  /// General and compiler-specific artifacts (abi, userdoc, devdoc, licenses, etc),
+  /// General and compiler-specific artifacts (abi, userdoc, devdoc, licenses, ast, etc),
   /// encoded as a json.
   optional string compilation_artifacts = 10;
 
