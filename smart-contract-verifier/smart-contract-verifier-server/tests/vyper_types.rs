@@ -29,6 +29,18 @@ pub trait TestCase {
     fn bytecode_metadata(&self) -> Option<bool> {
         None
     }
+
+    fn compiler_artifacts(&self) -> Option<serde_json::Value> {
+        None
+    }
+
+    fn creation_input_artifacts(&self) -> Option<serde_json::Value> {
+        None
+    }
+
+    fn deployed_bytecode_artifacts(&self) -> Option<serde_json::Value> {
+        None
+    }
 }
 
 pub fn from_file<T: TestCase + DeserializeOwned>(test_case: &str) -> T {
@@ -47,6 +59,9 @@ pub struct Flattened {
     pub evm_version: Option<String>,
     pub source_code: String,
     pub expected_constructor_argument: Option<DisplayBytes>,
+    pub expected_compiler_artifacts: Option<serde_json::Value>,
+    pub expected_creation_input_artifacts: Option<serde_json::Value>,
+    pub expected_deployed_bytecode_artifacts: Option<serde_json::Value>,
 
     // Verification metadata related values
     pub chain_id: Option<String>,
@@ -100,6 +115,18 @@ impl TestCase for Flattened {
 
     fn source_files(&self) -> BTreeMap<String, String> {
         BTreeMap::from([(self.file_name().to_string(), self.source_code.clone())])
+    }
+
+    fn compiler_artifacts(&self) -> Option<serde_json::Value> {
+        self.expected_compiler_artifacts.clone()
+    }
+
+    fn creation_input_artifacts(&self) -> Option<serde_json::Value> {
+        self.expected_creation_input_artifacts.clone()
+    }
+
+    fn deployed_bytecode_artifacts(&self) -> Option<serde_json::Value> {
+        self.expected_deployed_bytecode_artifacts.clone()
     }
 }
 

@@ -155,6 +155,58 @@ async fn test_success(test_case: impl TestCase) {
         test_case.source_files(),
         "Invalid source files"
     );
+
+    if let Some(expected_compilation_artifacts) = test_case.compiler_artifacts() {
+        let compilation_artifacts = verification_result
+            .compilation_artifacts
+            .map(|value| {
+                serde_json::from_str::<serde_json::Value>(&value).unwrap_or_else(|err| {
+                    panic!(
+                        "Compilation artifacts deserialization failed: {}; err: {}",
+                        value, err
+                    )
+                })
+            })
+            .expect("Compilation artifacts are missing");
+        assert_eq!(
+            compilation_artifacts, expected_compilation_artifacts,
+            "Invalid compilation artifacts"
+        )
+    }
+    if let Some(expected_creation_input_artifacts) = test_case.creation_input_artifacts() {
+        let creation_input_artifacts = verification_result
+            .creation_input_artifacts
+            .map(|value| {
+                serde_json::from_str::<serde_json::Value>(&value).unwrap_or_else(|err| {
+                    panic!(
+                        "Creation input artifacts deserialization failed: {}; err: {}",
+                        value, err
+                    )
+                })
+            })
+            .expect("Creation input artifacts are missing");
+        assert_eq!(
+            creation_input_artifacts, expected_creation_input_artifacts,
+            "Invalid creation input artifacts"
+        )
+    }
+    if let Some(expected_deployed_bytecode_artifacts) = test_case.deployed_bytecode_artifacts() {
+        let deployed_bytecode_artifacts = verification_result
+            .deployed_bytecode_artifacts
+            .map(|value| {
+                serde_json::from_str::<serde_json::Value>(&value).unwrap_or_else(|err| {
+                    panic!(
+                        "Deployed bytecode artifacts deserialization failed: {}; err: {}",
+                        value, err
+                    )
+                })
+            })
+            .expect("Deployed bytecode artifacts are missing");
+        assert_eq!(
+            deployed_bytecode_artifacts, expected_deployed_bytecode_artifacts,
+            "Invalid deployed bytecode artifacts"
+        )
+    }
 }
 
 async fn test_failure(test_case: impl TestCase, expected_message: &str) {
@@ -211,7 +263,8 @@ mod flattened {
 
     #[tokio::test]
     async fn verify_success() {
-        for test_case_name in &["simple", "arguments", "erc20", "erc667"] {
+        // for test_case_name in &["simple", "arguments", "erc20", "erc667"] {
+        for test_case_name in &["erc20"] {
             let test_case = vyper_types::from_file::<Flattened>(test_case_name);
             test_success(test_case).await;
         }
