@@ -181,6 +181,9 @@ mod tests {
             constructor_args: None,
             local_bytecode_parts: Default::default(),
             match_type: MatchType::Partial,
+            compilation_artifacts: Default::default(),
+            creation_input_artifacts: Default::default(),
+            deployed_bytecode_artifacts: Default::default(),
         };
 
         let response = VerifyResponseWrapper::ok(verification_success.clone()).into_inner();

@@ -27,9 +27,15 @@ macro_rules! from_success {
             }),
             constructor_arguments: $value.constructor_args.map(|args| args.to_string()),
             match_type: match_type.into(),
-            compilation_artifacts: None,
-            creation_input_artifacts: None,
-            deployed_bytecode_artifacts: None,
+            compilation_artifacts: Some(
+                serde_json::to_string(&$value.compilation_artifacts).unwrap(),
+            ),
+            creation_input_artifacts: Some(
+                serde_json::to_string(&$value.creation_input_artifacts).unwrap(),
+            ),
+            deployed_bytecode_artifacts: Some(
+                serde_json::to_string(&$value.deployed_bytecode_artifacts).unwrap(),
+            ),
         }
     }};
 }
@@ -141,6 +147,9 @@ mod tests {
             constructor_args: Some(DisplayBytes::from_str("0x123456").unwrap()),
             local_bytecode_parts: Default::default(),
             match_type: MatchType::Partial,
+            compilation_artifacts: serde_json::json!({"abi": []}),
+            creation_input_artifacts: serde_json::json!({"sourceMap": "-1:-1:0:-;;;;;:::-;;:::-;:::-;;;;;;;;;:::-;"}),
+            deployed_bytecode_artifacts: serde_json::json!({"sourceMap": "1704:475;;;;:::-;-1:-1;;;;;;:::-;;"}),
         };
 
         let result = from_solidity_success(verification_success);
@@ -155,9 +164,13 @@ mod tests {
             constructor_arguments: Some("0x123456".into()),
             abi: Some("{}".to_string()),
             match_type: source::MatchType::Partial.into(),
-            compilation_artifacts: None,
-            creation_input_artifacts: None,
-            deployed_bytecode_artifacts: None,
+            compilation_artifacts: Some("{\"abi\":[]}".into()),
+            creation_input_artifacts: Some(
+                "\"sourceMap\":\"-1:-1:0:-;;;;;:::-;;:::-;:::-;;;;;;;;;:::-;\"".into(),
+            ),
+            deployed_bytecode_artifacts: Some(
+                "{\"sourceMap\": \"1704:475;;;;:::-;-1:-1;;;;;;:::-;;\"}".into(),
+            ),
         };
 
         assert_eq!(expected, result);
@@ -189,6 +202,9 @@ mod tests {
             constructor_args: Some(DisplayBytes::from_str("0x123456").unwrap()),
             local_bytecode_parts: Default::default(),
             match_type: MatchType::Partial,
+            compilation_artifacts: serde_json::json!({"abi": []}),
+            creation_input_artifacts: serde_json::json!({"sourceMap": "-1:-1:0:-;;;;;:::-;;:::-;:::-;;;;;;;;;:::-;"}),
+            deployed_bytecode_artifacts: serde_json::json!({"sourceMap": "1704:475;;;;:::-;-1:-1;;;;;;:::-;;"}),
         };
 
         let result = from_vyper_success(verification_success);
@@ -206,9 +222,13 @@ mod tests {
             constructor_arguments: Some("0x123456".into()),
             abi: Some("{}".to_string()),
             match_type: source::MatchType::Partial.into(),
-            compilation_artifacts: None,
-            creation_input_artifacts: None,
-            deployed_bytecode_artifacts: None,
+            compilation_artifacts: Some("{\"abi\":[]}".into()),
+            creation_input_artifacts: Some(
+                "\"sourceMap\":\"-1:-1:0:-;;;;;:::-;;:::-;:::-;;;;;;;;;:::-;\"".into(),
+            ),
+            deployed_bytecode_artifacts: Some(
+                "{\"sourceMap\": \"1704:475;;;;:::-;-1:-1;;;;;;:::-;;\"}".into(),
+            ),
         };
 
         assert_eq!(expected, result);

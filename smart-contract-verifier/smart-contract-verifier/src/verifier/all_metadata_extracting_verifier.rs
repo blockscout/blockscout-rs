@@ -104,6 +104,9 @@ impl<T: Source> Verifier<T> {
                         constructor_args,
                         local_bytecode,
                         match_type,
+                        compilation_artifacts,
+                        creation_input_artifacts,
+                        deployed_bytecode_artifacts,
                     }) => {
                         return Ok(VerificationSuccess {
                             file_path: path.clone(),
@@ -113,6 +116,10 @@ impl<T: Source> Verifier<T> {
 
                             local_bytecode_parts: local_bytecode.into(),
                             match_type,
+
+                            compilation_artifacts,
+                            creation_input_artifacts,
+                            deployed_bytecode_artifacts,
                         })
                     }
                     Err(err) => {
@@ -189,11 +196,66 @@ impl<T: Source> Verifier<T> {
             abi.as_ref().and_then(|abi| abi.constructor()),
         )?;
 
+        let compilation_artifacts = {
+            let userdoc = match serde_json::to_value(&contract.userdoc).unwrap() {
+                serde_json::Value::Object(map) if map.is_empty() => None,
+                value => Some(value),
+            };
+            let devdoc = match serde_json::to_value(&contract.devdoc).unwrap() {
+                serde_json::Value::Object(map) if map.is_empty() => None,
+                value => Some(value),
+            };
+            let abi = contract.abi.clone().map(|abi| abi.abi_value);
+            let is_storage_layout_empty = |layout: &ethers_solc::artifacts::StorageLayout| {
+                layout.storage.is_empty() && layout.types.is_empty()
+            };
+            let storage_layout = (!is_storage_layout_empty(&contract.storage_layout))
+                .then_some(serde_json::to_value(&contract.storage_layout).unwrap());
+            serde_json::json!({
+                "abi": abi,
+                "devdoc": devdoc,
+                "userdoc": userdoc,
+                "storageLayout": storage_layout,
+            })
+        };
+        let creation_input_artifacts = {
+            let bytecode = contract
+                .get_bytecode()
+                .expect("bytecode has already been extracted above");
+            let source_map = bytecode.source_map.clone();
+            let link_references = bytecode.link_references.clone();
+            serde_json::json!({
+                "sourceMap": source_map,
+                "linkReferences": link_references,
+            })
+        };
+        let deployed_bytecode_artifacts = {
+            let deployed_bytecode = contract
+                .get_deployed_bytecode()
+                .expect("deployed bytecode has already been extracted above");
+            let immutable_references = (!deployed_bytecode.immutable_references.is_empty())
+                .then_some(deployed_bytecode.immutable_references.clone());
+            let bytecode = deployed_bytecode
+                .bytecode
+                .clone()
+                .expect("deployed bytecode has already been extracted above");
+            let source_map = bytecode.source_map.clone();
+            let link_references = bytecode.link_references.clone();
+            serde_json::json!({
+                "sourceMap": source_map,
+                "linkReferences": link_references,
+                "immutableReferences": immutable_references,
+            })
+        };
+
         Ok(ComparisonSuccess {
             abi: contract.abi.clone().map(|abi| abi.abi_value),
             constructor_args,
             local_bytecode,
             match_type,
+            compilation_artifacts,
+            creation_input_artifacts,
+            deployed_bytecode_artifacts,
         })
     }
 
@@ -363,6 +425,9 @@ struct ComparisonSuccess<T> {
     pub constructor_args: Option<Bytes>,
     pub local_bytecode: LocalBytecode<T>,
     pub match_type: MatchType,
+    pub compilation_artifacts: serde_json::Value,
+    pub creation_input_artifacts: serde_json::Value,
+    pub deployed_bytecode_artifacts: serde_json::Value,
 }
 
 #[cfg(test)]

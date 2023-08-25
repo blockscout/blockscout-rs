@@ -263,8 +263,7 @@ mod flattened {
 
     #[tokio::test]
     async fn verify_success() {
-        // for test_case_name in &["simple", "arguments", "erc20", "erc667"] {
-        for test_case_name in &["erc20"] {
+        for test_case_name in &["simple", "arguments", "erc20", "erc667"] {
             let test_case = vyper_types::from_file::<Flattened>(test_case_name);
             test_success(test_case).await;
         }

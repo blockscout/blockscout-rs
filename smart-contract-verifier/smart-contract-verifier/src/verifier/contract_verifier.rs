@@ -60,6 +60,9 @@ pub struct Success {
     pub constructor_args: Option<DisplayBytes>,
     pub local_bytecode_parts: LocalBytecodeParts,
     pub match_type: MatchType,
+    pub compilation_artifacts: serde_json::Value,
+    pub creation_input_artifacts: serde_json::Value,
+    pub deployed_bytecode_artifacts: serde_json::Value,
 }
 
 pub struct ContractVerifier<'a, C> {
@@ -161,6 +164,9 @@ impl<'a, C: EvmCompiler> ContractVerifier<'a, C> {
             constructor_args: verification_success.constructor_args,
             local_bytecode_parts: verification_success.local_bytecode_parts,
             match_type: verification_success.match_type,
+            compilation_artifacts: verification_success.compilation_artifacts,
+            creation_input_artifacts: verification_success.creation_input_artifacts,
+            deployed_bytecode_artifacts: verification_success.deployed_bytecode_artifacts,
         })
     }
 }

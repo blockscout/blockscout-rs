@@ -30,6 +30,10 @@ pub struct VerificationSuccess {
 
     pub local_bytecode_parts: LocalBytecodeParts,
     pub match_type: MatchType,
+
+    pub compilation_artifacts: serde_json::Value,
+    pub creation_input_artifacts: serde_json::Value,
+    pub deployed_bytecode_artifacts: serde_json::Value,
 }
 
 /// Combine different verifiers
