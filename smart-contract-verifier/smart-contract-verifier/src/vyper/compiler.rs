@@ -163,7 +163,7 @@ def getUserName() -> String[100]:
             result.contracts_into_iter().map(|(name, _)| name).collect();
         assert_eq!(
             contracts,
-            HashSet::from_iter(vec!["source".into()]),
+            HashSet::from_iter(["source".into()]),
             "compilation output should contain 1 contract",
         )
     }
@@ -174,9 +174,9 @@ def getUserName() -> String[100]:
         let version =
             compiler::Version::from_str("v0.2.11+commit.5db35ef").expect("Compiler version");
 
-        for sources in vec![
-            BTreeMap::from_iter(vec![("source.vy".into(), "some wrong vyper code".into())]),
-            BTreeMap::from_iter(vec![(
+        for sources in [
+            BTreeMap::from_iter([("source.vy".into(), "some wrong vyper code".into())]),
+            BTreeMap::from_iter([(
                 "source.vy".into(),
                 "\n\n# @version =0.3.1\n\n# wrong vyper version".into(),
             )]),

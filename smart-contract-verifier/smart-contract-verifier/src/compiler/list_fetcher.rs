@@ -317,7 +317,7 @@ mod tests {
         .await
         .expect("list.json file should be valid");
 
-        for compiler_version in vec![
+        for compiler_version in [
             Version::from_str("0.7.0+commit.9e61f92b").unwrap(),
             Version::from_str("0.8.9+commit.e5eed63a").unwrap(),
         ] {
