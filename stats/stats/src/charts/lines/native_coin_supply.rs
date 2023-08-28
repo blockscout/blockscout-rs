@@ -24,7 +24,7 @@ impl ChartPartialUpdater for NativeCoinSupply {
         let stmnt = match last_row {
             Some(row) => Statement::from_sql_and_values(
                 DbBackend::Postgres,
-                r#"
+                r"
                     SELECT date, value FROM 
                     (
                         SELECT
@@ -40,12 +40,12 @@ impl ChartPartialUpdater for NativeCoinSupply {
                         GROUP BY day
                     ) as intermediate
                     WHERE value is not NULL;
-                "#,
+                ",
                 vec![ETH.into(), row.date.into()],
             ),
             None => Statement::from_sql_and_values(
                 DbBackend::Postgres,
-                r#"
+                r"
                     SELECT date, value FROM 
                     (
                         SELECT
@@ -61,7 +61,7 @@ impl ChartPartialUpdater for NativeCoinSupply {
                         GROUP BY day
                     ) as intermediate
                     WHERE value is not NULL;
-                "#,
+                ",
                 vec![ETH.into()],
             ),
         };

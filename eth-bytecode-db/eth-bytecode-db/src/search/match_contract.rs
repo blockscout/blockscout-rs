@@ -164,7 +164,7 @@ mod tests {
         let remote = BytecodeRemote {
             bytecode_type: BytecodeType::CreationInput,
             data: DisplayBytes::from_str(
-                &vec![NUMBER_MAIN_PART, NUMBER_META_PART, NUMBER_ARGS_PART].join(""),
+                &[NUMBER_MAIN_PART, NUMBER_META_PART, NUMBER_ARGS_PART].join(""),
             )
             .unwrap()
             .0,
@@ -188,10 +188,7 @@ mod tests {
         assert_eq!(result.source_type, source.source_type.into());
         assert_eq!(
             result.source_files,
-            BTreeMap::from_iter(vec![(
-                "Number.sol".to_string(),
-                "contract Number {}".to_string()
-            )])
+            BTreeMap::from_iter([("Number.sol".to_string(), "contract Number {}".to_string())])
         );
         assert_eq!(result.abi, source.abi.map(|abi| abi.to_string()));
         assert_eq!(
@@ -211,7 +208,7 @@ mod tests {
         let remote = BytecodeRemote {
             bytecode_type: BytecodeType::CreationInput,
             data: DisplayBytes::from_str(
-                &vec![NUMBER_MAIN_PART, NUMBER_META_PART, invalid_args].join(""),
+                &[NUMBER_MAIN_PART, NUMBER_META_PART, invalid_args].join(""),
             )
             .unwrap()
             .0,
