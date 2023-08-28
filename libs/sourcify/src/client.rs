@@ -11,8 +11,7 @@ use reqwest::{Response, StatusCode};
 use reqwest_middleware::{ClientWithMiddleware, Middleware};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use serde::{Deserialize, Serialize};
-use std::{str::FromStr};
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 use url::Url;
 
 #[derive(Clone)]
@@ -175,6 +174,14 @@ impl Client {
                     Err(Error::Sourcify(SourcifyError::BadRequest(message)))
                 }
             }
+            StatusCode::BAD_GATEWAY => {
+                let message = error_message(response).await?;
+                if let Some(err) = E::handle_bad_gateway(&message) {
+                    Err(Error::Sourcify(SourcifyError::Custom(err)))
+                } else {
+                    Err(Error::Sourcify(SourcifyError::BadGateway(message)))
+                }
+            }
             StatusCode::INTERNAL_SERVER_ERROR => {
                 let message = error_message(response).await?;
                 if let Some(err) = E::handle_internal_server_error(&message) {
@@ -206,32 +213,42 @@ impl Client {
 
 #[cfg(test)]
 mod tests {
-    use std::num::NonZeroU32;
     use super::*;
-    use serde_json::json;
-    use reqwest_rate_limiter::RateLimiterMiddleware;
-    use governor::{RateLimiter, Quota};
-    use governor::clock::DefaultClock;
-    use governor::middleware::NoOpMiddleware;
-    use governor::state::{InMemoryState, NotKeyed};
+    use governor::{
+        clock::DefaultClock,
+        middleware::NoOpMiddleware,
+        state::{InMemoryState, NotKeyed},
+        Quota, RateLimiter,
+    };
     use once_cell::sync::OnceCell;
+    use reqwest_rate_limiter::RateLimiterMiddleware;
+    use serde_json::json;
+    use std::num::NonZeroU32;
 
     fn parse_contract_address(contract_address: &str) -> Bytes {
         DisplayBytes::from_str(contract_address).unwrap().0
     }
 
-    static RATE_LIMITER_MIDDLEWARE: OnceCell<Arc<RateLimiterMiddleware<NotKeyed, InMemoryState, DefaultClock, NoOpMiddleware>>> = OnceCell::new();
-    fn rate_limiter_middleware() -> &'static Arc<RateLimiterMiddleware<NotKeyed, InMemoryState, DefaultClock, NoOpMiddleware>> {
-        RATE_LIMITER_MIDDLEWARE
-            .get_or_init(|| {
-                let max_burst = NonZeroU32::new(1).unwrap();
-                Arc::new(RateLimiterMiddleware::new(RateLimiter::direct(Quota::per_second(max_burst))))
-            })
+    static RATE_LIMITER_MIDDLEWARE: OnceCell<
+        Arc<RateLimiterMiddleware<NotKeyed, InMemoryState, DefaultClock, NoOpMiddleware>>,
+    > = OnceCell::new();
+    fn rate_limiter_middleware(
+    ) -> &'static Arc<RateLimiterMiddleware<NotKeyed, InMemoryState, DefaultClock, NoOpMiddleware>>
+    {
+        RATE_LIMITER_MIDDLEWARE.get_or_init(|| {
+            let max_burst = NonZeroU32::new(1).unwrap();
+            Arc::new(RateLimiterMiddleware::new(RateLimiter::direct(
+                Quota::per_second(max_burst),
+            )))
+        })
     }
 
     fn client() -> Client {
         let rate_limiter = rate_limiter_middleware().clone();
-        ClientBuilder::default().max_retries(1).with_arc_middleware(rate_limiter).build()
+        ClientBuilder::default()
+            .max_retries(1)
+            .with_arc_middleware(rate_limiter)
+            .build()
     }
 
     mod success {

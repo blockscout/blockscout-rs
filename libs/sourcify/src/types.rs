@@ -16,6 +16,10 @@ mod custom_error {
             None
         }
 
+        fn handle_bad_gateway(_message: &str) -> Option<Self> {
+            None
+        }
+
         fn handle_internal_server_error(_message: &str) -> Option<Self> {
             None
         }
@@ -285,18 +289,6 @@ mod verify_from_etherscan {
                 ));
             }
 
-            if message.contains("Error in Etherscan API response") {
-                return Some(VerifyFromEtherscanError::ApiResponseError(
-                    message.to_string(),
-                ));
-            }
-
-            if message.contains("contract is not verified on Etherscan") {
-                return Some(VerifyFromEtherscanError::ContractNotVerified(
-                    message.to_string(),
-                ));
-            }
-
             if message.contains("cannot generate the solcJsonInput") {
                 return Some(VerifyFromEtherscanError::CannotGenerateSolcJsonInput(
                     message.to_string(),
@@ -305,6 +297,24 @@ mod verify_from_etherscan {
 
             if message.contains("contract was verified with errors") {
                 return Some(VerifyFromEtherscanError::VerifiedWithErrors(
+                    message.to_string(),
+                ));
+            }
+
+            None
+        }
+
+        fn handle_bad_gateway(message: &str) -> Option<Self> {
+            if (message.contains("Request to") && message.contains("apiKey=XXX failed with code"))
+                || message.contains("Error in Etherscan API response")
+            {
+                return Some(VerifyFromEtherscanError::ApiResponseError(
+                    message.to_string(),
+                ));
+            }
+
+            if message.contains("contract is not verified on Etherscan") {
+                return Some(VerifyFromEtherscanError::ContractNotVerified(
                     message.to_string(),
                 ));
             }
