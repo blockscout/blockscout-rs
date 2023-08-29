@@ -17,6 +17,8 @@ pub enum SourcifyError<E: std::error::Error> {
     NotFound(String),
     #[error("'Bad Request': {0}")]
     BadRequest(String),
+    #[error("'Bad Gateway': {0}")]
+    BadGateway(String),
     #[error("unexpected status code: {status_code} - {msg}")]
     UnexpectedStatusCode {
         status_code: reqwest::StatusCode,
