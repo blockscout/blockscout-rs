@@ -1,0 +1,387 @@
+use blockscout_display_bytes::Bytes as DisplayBytes;
+use serde::{de::DeserializeOwned, Deserialize};
+use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
+    source::MatchType, BytecodeType,
+};
+use std::{borrow::Cow, collections::BTreeMap};
+
+const TEST_CASES_DIR: &str = "tests/test_cases_solidity";
+
+pub trait TestCase {
+    fn route() -> &'static str;
+
+    fn to_request(&self) -> serde_json::Value;
+
+    fn is_yul(&self) -> bool;
+
+    fn file_name(&self) -> Cow<'_, str>;
+
+    fn contract_name(&self) -> &str;
+
+    fn compiler_version(&self) -> &str;
+
+    fn evm_version(&self) -> Option<String>;
+
+    fn libraries(&self) -> BTreeMap<String, String>;
+
+    fn optimizer_enabled(&self) -> Option<bool>;
+
+    fn optimizer_runs(&self) -> Option<i32>;
+
+    fn source_files(&self) -> BTreeMap<String, String>;
+
+    fn constructor_args(&self) -> Option<DisplayBytes>;
+
+    fn match_type(&self) -> MatchType;
+
+    fn abi(&self) -> Option<serde_json::Value> {
+        None
+    }
+
+    fn compiler_settings(&self) -> Option<serde_json::Value> {
+        None
+    }
+
+    fn compiler_artifacts(&self) -> Option<serde_json::Value> {
+        None
+    }
+
+    fn creation_input_artifacts(&self) -> Option<serde_json::Value> {
+        None
+    }
+
+    fn deployed_bytecode_artifacts(&self) -> Option<serde_json::Value> {
+        None
+    }
+}
+
+pub fn from_file<T: TestCase + DeserializeOwned>(test_case: &str) -> T {
+    let test_case_path = format!("{TEST_CASES_DIR}/{test_case}.json");
+    let content = std::fs::read_to_string(test_case_path).expect("failed to read file");
+    serde_json::from_str(&content).expect("invalid test case format")
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Flattened {
+    pub contract_name: String,
+    pub deployed_bytecode: String,
+    pub creation_bytecode: String,
+    pub compiler_version: String,
+    pub evm_version: Option<String>,
+    pub optimization_runs: Option<i32>,
+    #[serde(default)]
+    pub libraries: BTreeMap<String, String>,
+    pub source_code: String,
+    pub expected_constructor_argument: Option<DisplayBytes>,
+    pub is_yul: Option<bool>,
+    pub is_full_match: Option<bool>,
+
+    pub expected_compiler_artifacts: Option<serde_json::Value>,
+    pub expected_creation_input_artifacts: Option<serde_json::Value>,
+    pub expected_deployed_bytecode_artifacts: Option<serde_json::Value>,
+
+    // Verification metadata related values
+    pub chain_id: Option<String>,
+    pub contract_address: Option<String>,
+}
+
+impl TestCase for Flattened {
+    fn route() -> &'static str {
+        "/api/v2/verifier/solidity/sources:verify-multi-part"
+    }
+
+    fn to_request(&self) -> serde_json::Value {
+        let extension = if self.is_yul() { "yul" } else { "sol" };
+        serde_json::json!({
+            "bytecode": self.creation_bytecode,
+            "bytecodeType": BytecodeType::CreationInput.as_str_name(),
+            "compilerVersion": self.compiler_version,
+            "evmVersion": self.evm_version,
+            "optimization_runs": self.optimization_runs,
+            "sourceFiles": {
+                format!("source.{extension}"): self.source_code
+            },
+            "libraries": self.libraries,
+            "metadata": {
+                "chainId": self.chain_id,
+                "contractAddress": self.contract_address
+            }
+        })
+    }
+
+    fn is_yul(&self) -> bool {
+        self.is_yul.unwrap_or_default()
+    }
+
+    fn file_name(&self) -> Cow<'_, str> {
+        "source.sol".into()
+    }
+
+    fn contract_name(&self) -> &str {
+        self.contract_name.as_str()
+    }
+
+    fn compiler_version(&self) -> &str {
+        self.compiler_version.as_str()
+    }
+
+    fn evm_version(&self) -> Option<String> {
+        self.evm_version.clone()
+    }
+
+    fn libraries(&self) -> BTreeMap<String, String> {
+        self.libraries.clone()
+    }
+
+    fn optimizer_enabled(&self) -> Option<bool> {
+        Some(self.optimization_runs.is_some())
+    }
+
+    fn optimizer_runs(&self) -> Option<i32> {
+        self.optimization_runs.clone()
+    }
+
+    fn source_files(&self) -> BTreeMap<String, String> {
+        BTreeMap::from([(self.file_name().to_string(), self.source_code.clone())])
+    }
+
+    fn constructor_args(&self) -> Option<DisplayBytes> {
+        self.expected_constructor_argument.clone()
+    }
+
+    fn match_type(&self) -> MatchType {
+        if let Some(true) = self.is_full_match {
+            MatchType::Full
+        } else {
+            MatchType::Partial
+        }
+    }
+
+    fn abi(&self) -> Option<serde_json::Value> {
+        None
+    }
+
+    fn compiler_artifacts(&self) -> Option<serde_json::Value> {
+        self.expected_compiler_artifacts.clone()
+    }
+
+    fn creation_input_artifacts(&self) -> Option<serde_json::Value> {
+        self.expected_creation_input_artifacts.clone()
+    }
+
+    fn deployed_bytecode_artifacts(&self) -> Option<serde_json::Value> {
+        self.expected_deployed_bytecode_artifacts.clone()
+    }
+}
+
+// #[derive(Debug, Clone, Deserialize)]
+// pub struct MultiPart {
+//     pub deployed_bytecode: String,
+//     pub creation_bytecode: String,
+//     pub compiler_version: String,
+//     pub file_name: String,
+//     pub contract_name: String,
+//     pub evm_version: Option<String>,
+//     pub source_files: BTreeMap<String, String>,
+//     pub interfaces: BTreeMap<String, String>,
+//     pub expected_constructor_argument: Option<DisplayBytes>,
+//
+//     // Verification metadata related values
+//     pub chain_id: Option<String>,
+//     pub contract_address: Option<String>,
+// }
+//
+// impl TestCase for MultiPart {
+//     fn route() -> &'static str {
+//         "/api/v2/verifier/vyper/sources:verify-multi-part"
+//     }
+//
+//     fn to_request(&self) -> serde_json::Value {
+//         serde_json::json!({
+//             "bytecode": self.creation_bytecode,
+//             "bytecodeType": BytecodeType::CreationInput.as_str_name(),
+//             "compilerVersion": self.compiler_version,
+//             "evmVersion": self.evm_version,
+//             "sourceFiles": self.source_files,
+//             "interfaces": self.interfaces,
+//             "metadata": {
+//                 "chainId": self.chain_id,
+//                 "contractAddress": self.contract_address
+//             }
+//         })
+//     }
+//
+//     fn file_name(&self) -> Cow<'_, str> {
+//         Cow::from(&self.file_name)
+//     }
+//
+//     fn contract_name(&self) -> &str {
+//         self.contract_name.as_str()
+//     }
+//
+//     fn constructor_args(&self) -> Option<DisplayBytes> {
+//         self.expected_constructor_argument.clone()
+//     }
+//
+//     fn compiler_version(&self) -> &str {
+//         self.compiler_version.as_str()
+//     }
+//
+//     fn evm_version(&self) -> Option<String> {
+//         self.evm_version.clone()
+//     }
+//
+//     fn source_files(&self) -> BTreeMap<String, String> {
+//         let sources = self.source_files.clone().into_iter();
+//         let interfaces = self.interfaces.iter().map(|(path, content)| {
+//             let content = if PathBuf::from(path).extension() == Some(std::ffi::OsStr::new("json")) {
+//                 let value = serde_json::Value::from_str(content).unwrap();
+//                 value.to_string()
+//             } else {
+//                 content.clone()
+//             };
+//             (path.clone(), content)
+//         });
+//         sources.chain(interfaces).collect()
+//     }
+// }
+//
+// #[derive(Debug, Clone, Deserialize)]
+// pub struct StandardJson {
+//     pub deployed_bytecode: String,
+//     pub creation_bytecode: String,
+//     pub compiler_version: String,
+//     pub file_name: String,
+//     pub contract_name: String,
+//     #[serde(deserialize_with = "StandardJson::deserialize_input")]
+//     pub input: String,
+//     pub expected_constructor_argument: Option<DisplayBytes>,
+//
+//     // Verification metadata related values
+//     pub chain_id: Option<String>,
+//     pub contract_address: Option<String>,
+// }
+//
+// impl StandardJson {
+//     fn deserialize_input<'de, D>(deserializer: D) -> Result<String, D::Error>
+//     where
+//         D: serde::Deserializer<'de>,
+//     {
+//         let val = serde_json::Value::deserialize(deserializer)?;
+//         Ok(val.to_string())
+//     }
+// }
+//
+// impl TestCase for StandardJson {
+//     fn route() -> &'static str {
+//         "/api/v2/verifier/vyper/sources:verify-standard-json"
+//     }
+//
+//     fn to_request(&self) -> serde_json::Value {
+//         serde_json::json!({
+//             "bytecode": self.creation_bytecode,
+//             "bytecodeType": BytecodeType::CreationInput.as_str_name(),
+//             "compilerVersion": self.compiler_version,
+//             "input": self.input,
+//             "metadata": {
+//                 "chainId": self.chain_id,
+//                 "contractAddress": self.contract_address
+//             }
+//         })
+//     }
+//
+//     fn file_name(&self) -> Cow<'_, str> {
+//         Cow::from(&self.file_name)
+//     }
+//
+//     fn contract_name(&self) -> &str {
+//         self.contract_name.as_str()
+//     }
+//
+//     fn constructor_args(&self) -> Option<DisplayBytes> {
+//         self.expected_constructor_argument.clone()
+//     }
+//
+//     fn compiler_version(&self) -> &str {
+//         self.compiler_version.as_str()
+//     }
+//
+//     fn source_files(&self) -> BTreeMap<String, String> {
+//         #[derive(Deserialize)]
+//         struct VyperSource {
+//             pub content: String,
+//         }
+//         #[derive(Deserialize)]
+//         struct AbiSource {
+//             pub abi: serde_json::Value,
+//         }
+//         #[derive(Deserialize)]
+//         #[serde(untagged)]
+//         enum Interface {
+//             Vyper(VyperSource),
+//             Abi(AbiSource),
+//             ContractTypes(serde_json::Value),
+//         }
+//
+//         let input = serde_json::Value::from_str(&self.input).unwrap();
+//         let mut source_files = if let serde_json::Value::Object(map) =
+//             input.get("sources").expect("sources are missing")
+//         {
+//             map.into_iter()
+//                 .map(|(path, value)| {
+//                     let source: VyperSource =
+//                         serde_json::from_value(value.clone()).expect("invalid source");
+//                     (path.clone(), source.content)
+//                 })
+//                 .collect()
+//         } else {
+//             BTreeMap::default()
+//         };
+//         if let Some(serde_json::Value::Object(map)) = input.get("interfaces") {
+//             source_files.extend(map.into_iter().map(|(path, value)| {
+//                 let interface: Interface =
+//                     serde_json::from_value(value.clone()).expect("invalid interface");
+//                 let content = match interface {
+//                     Interface::Vyper(source) => source.content,
+//                     Interface::Abi(source) => source.abi.to_string(),
+//                     Interface::ContractTypes(source) => source.to_string(),
+//                 };
+//                 (path.clone(), content)
+//             }))
+//         };
+//         source_files
+//     }
+//
+//     fn evm_version(&self) -> Option<String> {
+//         let input = serde_json::Value::from_str(&self.input).unwrap();
+//         input.get("settings")?.get("evmVersion").map(|value| {
+//             if let serde_json::Value::String(val) = value {
+//                 val.clone()
+//             } else {
+//                 panic!("evm version is not a string")
+//             }
+//         })
+//     }
+//
+//     fn optimize(&self) -> Option<bool> {
+//         let input = serde_json::Value::from_str(&self.input).unwrap();
+//         input.get("settings")?.get("optimize").map(|value| {
+//             if let serde_json::Value::Bool(val) = value {
+//                 *val
+//             } else {
+//                 panic!("optimize is not a bool")
+//             }
+//         })
+//     }
+//
+//     fn bytecode_metadata(&self) -> Option<bool> {
+//         let input = serde_json::Value::from_str(&self.input).unwrap();
+//         input.get("settings")?.get("bytecodeMetadata").map(|value| {
+//             if let serde_json::Value::Bool(val) = value {
+//                 *val
+//             } else {
+//                 panic!("bytecode metadata is not a bool")
+//             }
+//         })
+//     }
+// }
