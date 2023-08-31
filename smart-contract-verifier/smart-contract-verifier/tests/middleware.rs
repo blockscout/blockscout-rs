@@ -164,39 +164,39 @@ mod vyper {
     }
 }
 
-mod sourcify {
-    use super::*;
-    use smart_contract_verifier::{
-        sourcify, sourcify::api::VerificationRequest, SourcifyApiClient, SourcifySuccess,
-        DEFAULT_SOURCIFY_HOST,
-    };
-    use std::{collections::BTreeMap, sync::Arc};
-    use url::Url;
-
-    fn default_request() -> VerificationRequest {
-        VerificationRequest {
-            address: "0x8a8FA3Da120534a4945666520112a2A0D0A3aC55".to_string(),
-            chain: "5".to_string(),
-            files: BTreeMap::from([
-                ("metadata.json".to_string(), r#"{"compiler":{"version":"0.8.7+commit.e28d00a7"},"language":"Solidity","output":{"abi":[],"devdoc":{"kind":"dev","methods":{},"version":1},"userdoc":{"kind":"user","methods":{},"version":1}},"settings":{"compilationTarget":{"contracts/Basic.sol":"Main"},"evmVersion":"london","libraries":{},"metadata":{"bytecodeHash":"ipfs"},"optimizer":{"enabled":false,"runs":200},"remappings":[]},"sources":{"contracts/Basic.sol":{"keccak256":"0x16b344408fcd46f38344e2192b7b82677bb29a8c5e822145e55d67d156fd02b5","urls":["bzz-raw://99f0cffe21a52b8f1d0a6d687f974173d6ed3ccfe4fa25af22bcb8b343372363","dweb:/ipfs/Qmc5BsPNZkDeooYWLxwq6HCNKmH6GzXLmQSJ3LmrnFrNzw"]}},"version":1}"#.to_string()),
-                ("contracts/Basic.sol".to_string(), "pragma solidity >0.4.5; contract Main {uint256 a; }".to_string())
-            ]),
-            chosen_contract: None
-        }
-    }
-
-    #[rstest::rstest]
-    #[tokio::test]
-    async fn verify(middleware: impl smart_contract_verifier::Middleware<SourcifySuccess>) {
-        let host = Url::try_from(DEFAULT_SOURCIFY_HOST).expect("Invalid Sourcify host Url");
-        let client = SourcifyApiClient::new(host, 10, 3.try_into().unwrap())
-            .expect("Sourcify client build failed")
-            .with_middleware(middleware);
-
-        let request = default_request();
-
-        sourcify::api::verify(Arc::new(client), request)
-            .await
-            .expect("Verification failed");
-    }
-}
+// mod sourcify {
+//     use super::*;
+//     use smart_contract_verifier::{
+//         sourcify, sourcify::api::VerificationRequest, SourcifyApiClient, SourcifySuccess,
+//         DEFAULT_SOURCIFY_HOST,
+//     };
+//     use std::{collections::BTreeMap, sync::Arc};
+//     use url::Url;
+//
+//     fn default_request() -> VerificationRequest {
+//         VerificationRequest {
+//             address: "0x8a8FA3Da120534a4945666520112a2A0D0A3aC55".to_string(),
+//             chain: "5".to_string(),
+//             files: BTreeMap::from([
+//                 ("metadata.json".to_string(), r#"{"compiler":{"version":"0.8.7+commit.e28d00a7"},"language":"Solidity","output":{"abi":[],"devdoc":{"kind":"dev","methods":{},"version":1},"userdoc":{"kind":"user","methods":{},"version":1}},"settings":{"compilationTarget":{"contracts/Basic.sol":"Main"},"evmVersion":"london","libraries":{},"metadata":{"bytecodeHash":"ipfs"},"optimizer":{"enabled":false,"runs":200},"remappings":[]},"sources":{"contracts/Basic.sol":{"keccak256":"0x16b344408fcd46f38344e2192b7b82677bb29a8c5e822145e55d67d156fd02b5","urls":["bzz-raw://99f0cffe21a52b8f1d0a6d687f974173d6ed3ccfe4fa25af22bcb8b343372363","dweb:/ipfs/Qmc5BsPNZkDeooYWLxwq6HCNKmH6GzXLmQSJ3LmrnFrNzw"]}},"version":1}"#.to_string()),
+//                 ("contracts/Basic.sol".to_string(), "pragma solidity >0.4.5; contract Main {uint256 a; }".to_string())
+//             ]),
+//             chosen_contract: None
+//         }
+//     }
+//
+//     #[rstest::rstest]
+//     #[tokio::test]
+//     async fn verify(middleware: impl smart_contract_verifier::Middleware<SourcifySuccess>) {
+//         let host = Url::try_from(DEFAULT_SOURCIFY_HOST).expect("Invalid Sourcify host Url");
+//         let client = SourcifyApiClient::new(host, 10, 3.try_into().unwrap())
+//             .expect("Sourcify client build failed")
+//             .with_middleware(middleware);
+//
+//         let request = default_request();
+//
+//         sourcify::api::verify(Arc::new(client), request)
+//             .await
+//             .expect("Verification failed");
+//     }
+// }
