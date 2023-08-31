@@ -71,6 +71,9 @@ async fn should_return_200(#[case] address: String, #[case] match_type: String) 
                 "compilerSettings": "{\"compilationTarget\":{\"contracts/1_Storage.sol\":\"Storage\"},\"evmVersion\":\"london\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]}",
                 "matchType": match_type,
                 "sourceType": "SOLIDITY",
+                "compilationArtifacts": null,
+                "creationInputArtifacts": null,
+                "deployedBytecodeArtifacts": null,
             },
             "extraData": {
                 "localCreationInputParts": [],
