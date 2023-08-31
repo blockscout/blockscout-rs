@@ -138,7 +138,7 @@ impl TestCase for Flattened {
     }
 
     fn optimizer_runs(&self) -> Option<i32> {
-        self.optimization_runs.clone()
+        self.optimization_runs
     }
 
     fn source_files(&self) -> BTreeMap<String, String> {

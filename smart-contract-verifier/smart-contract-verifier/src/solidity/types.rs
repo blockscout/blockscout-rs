@@ -34,9 +34,9 @@ impl From<(ethers_solc::CompilerInput, verifier::Success)> for Success {
             constructor_args: success.constructor_args,
             local_bytecode_parts: success.local_bytecode_parts,
             match_type: success.match_type,
-            compilation_artifacts: Default::default(),
-            creation_input_artifacts: Default::default(),
-            deployed_bytecode_artifacts: Default::default(),
+            compilation_artifacts: success.compilation_artifacts,
+            creation_input_artifacts: success.creation_input_artifacts,
+            deployed_bytecode_artifacts: success.deployed_bytecode_artifacts,
         }
     }
 }

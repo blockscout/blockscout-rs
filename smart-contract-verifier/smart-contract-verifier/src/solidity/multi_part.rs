@@ -5,7 +5,10 @@ use crate::{
 };
 use bytes::Bytes;
 use ethers_solc::{
-    artifacts::{BytecodeHash, Libraries, Settings, SettingsMetadata, Source, Sources},
+    artifacts::{
+        output_selection::OutputSelection, BytecodeHash, Libraries, Settings, SettingsMetadata,
+        Source, Sources,
+    },
     CompilerInput, EvmVersion,
 };
 use semver::VersionReq;
@@ -37,6 +40,9 @@ impl From<MultiFileContent> for Vec<CompilerInput> {
         let mut settings = Settings::default();
         settings.optimizer.enabled = Some(content.optimization_runs.is_some());
         settings.optimizer.runs = content.optimization_runs;
+
+        settings.output_selection = OutputSelection::complete_output_selection();
+
         if let Some(libs) = content.contract_libraries {
             // we have to know filename for library, but we don't know,
             // so we assume that every file MAY contains all libraries

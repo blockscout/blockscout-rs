@@ -37,7 +37,7 @@ pub trait EvmCompiler {
         path: &Path,
         ver: &Version,
         input: &Self::CompilerInput,
-    ) -> Result<CompilerOutput, SolcError>;
+    ) -> Result<(serde_json::Value, CompilerOutput), SolcError>;
 }
 
 pub struct Compilers<C> {
@@ -69,7 +69,7 @@ where
         compiler_version: &Version,
         input: &C::CompilerInput,
         chain_id: Option<&str>,
-    ) -> Result<CompilerOutput, Error> {
+    ) -> Result<(serde_json::Value, CompilerOutput), Error> {
         let path_result = {
             self.cache
                 .get(self.fetcher.as_ref(), compiler_version)
@@ -80,7 +80,7 @@ where
             res => res?,
         };
 
-        let output = {
+        let (raw, output) = {
             let span = tracing::debug_span!(
                 "compile contract with ethers-solc",
                 ver = compiler_version.to_string()
@@ -116,7 +116,7 @@ where
             return Err(Error::Compilation(errors));
         }
 
-        Ok(output)
+        Ok((raw, output))
     }
 
     pub fn all_versions(&self) -> Vec<Version> {
@@ -219,7 +219,7 @@ mod tests {
         let input: CompilerInput = Input::with_source_code(source_code.into()).into();
         let version = Version::from_str("v0.8.10+commit.fc410830").expect("Compiler version");
 
-        let result = compilers
+        let (_raw, result) = compilers
             .compile(&version, &input, None)
             .await
             .expect("Compilation failed");
@@ -237,7 +237,7 @@ mod tests {
         let input: CompilerInput = Input::with_source_code(source_code.into()).into();
         let version = Version::from_str("v0.5.9+commit.c68bc34e").expect("Compiler version");
 
-        let result = compilers
+        let (_raw, result) = compilers
             .compile(&version, &input, None)
             .await
             .expect("Compilation failed");

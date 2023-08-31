@@ -258,52 +258,56 @@ async fn test_success(test_case: impl TestCase) {
     }
 }
 
-// async fn test_failure(test_case: impl TestCase, expected_message: &str) {
-//     let response = test_setup(&test_case).await;
-//
-//     assert!(
-//         response.status().is_success(),
-//         "Invalid status code (success expected): {}",
-//         response.status()
-//     );
-//
-//     let verification_response: VerifyResponse = read_body_json(response).await;
-//
-//     assert_eq!(
-//         verification_response.status(),
-//         Status::Failure,
-//         "Invalid verification status. Response: {verification_response:?}"
-//     );
-//
-//     assert!(
-//         verification_response.source.is_none(),
-//         "Failure verification source should be None"
-//     );
-//     assert!(
-//         verification_response.extra_data.is_none(),
-//         "Failure verification extra data should be None"
-//     );
-//
-//     assert!(
-//         verification_response.message.contains(expected_message),
-//         "Invalid message: {}",
-//         verification_response.message
-//     );
-// }
-//
-// async fn test_error(test_case: impl TestCase, expected_status: StatusCode, expected_message: &str) {
-//     let response = test_setup(&test_case).await;
-//     let status = response.status();
-//     let body = read_body(response).await;
-//     let message = from_utf8(&body).expect("Read body as UTF-8");
-//
-//     assert_eq!(status, expected_status, "Invalid status code: {status}",);
-//
-//     assert!(
-//         message.contains(expected_message),
-//         "Invalid message: {message}"
-//     );
-// }
+async fn _test_failure(test_case: impl TestCase, expected_message: &str) {
+    let response = test_setup(&test_case).await;
+
+    assert!(
+        response.status().is_success(),
+        "Invalid status code (success expected): {}",
+        response.status()
+    );
+
+    let verification_response: VerifyResponse = read_body_json(response).await;
+
+    assert_eq!(
+        verification_response.status(),
+        Status::Failure,
+        "Invalid verification status. Response: {verification_response:?}"
+    );
+
+    assert!(
+        verification_response.source.is_none(),
+        "Failure verification source should be None"
+    );
+    assert!(
+        verification_response.extra_data.is_none(),
+        "Failure verification extra data should be None"
+    );
+
+    assert!(
+        verification_response.message.contains(expected_message),
+        "Invalid message: {}",
+        verification_response.message
+    );
+}
+
+async fn _test_error(
+    test_case: impl TestCase,
+    expected_status: StatusCode,
+    expected_message: &str,
+) {
+    let response = test_setup(&test_case).await;
+    let status = response.status();
+    let body = read_body(response).await;
+    let message = from_utf8(&body).expect("Read body as UTF-8");
+
+    assert_eq!(status, expected_status, "Invalid status code: {status}",);
+
+    assert!(
+        message.contains(expected_message),
+        "Invalid message: {message}"
+    );
+}
 
 mod success_tests {
     use super::*;

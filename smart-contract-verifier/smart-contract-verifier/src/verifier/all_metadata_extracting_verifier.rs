@@ -23,10 +23,10 @@ pub struct Verifier<T> {
 }
 
 impl<T: Source + Send + Sync> base::Verifier for Verifier<T> {
-    type Input = (CompilerOutput, CompilerOutput);
+    type Input = (CompilerOutput, CompilerOutput, serde_json::Value);
 
     fn verify(&self, input: &Self::Input) -> Result<VerificationSuccess, Vec<VerificationError>> {
-        self.verify(&input.0, &input.1)
+        self.verify(&input.0, &input.1, &input.2)
     }
 }
 
@@ -48,6 +48,7 @@ impl<T: Source> Verifier<T> {
         &self,
         output: &CompilerOutput,
         output_modified: &CompilerOutput,
+        raw_output: &serde_json::Value,
     ) -> Result<VerificationSuccess, Vec<VerificationError>> {
         let not_found_in_modified_compiler_output_error =
             |file_path: String, contract_name: Option<String>| match contract_name {
@@ -104,10 +105,181 @@ impl<T: Source> Verifier<T> {
                         constructor_args,
                         local_bytecode,
                         match_type,
-                        compilation_artifacts,
-                        creation_input_artifacts,
-                        deployed_bytecode_artifacts,
                     }) => {
+                        mod raw_types {
+                            use serde::Deserialize;
+                            use std::collections::BTreeMap;
+
+                            #[derive(Clone, Debug, Deserialize, PartialEq)]
+                            pub struct CompilerOutput {
+                                #[serde(default)]
+                                pub contracts: BTreeMap<String, BTreeMap<String, Contract>>,
+                            }
+
+                            #[derive(Clone, Debug, Deserialize, PartialEq)]
+                            #[serde(rename_all = "camelCase")]
+                            pub struct Contract {
+                                /// The Ethereum Contract Metadata.
+                                /// See <https://docs.soliditylang.org/en/develop/metadata.html>
+                                pub abi: Option<serde_json::Value>,
+                                #[serde(default)]
+                                pub userdoc: Option<serde_json::Value>,
+                                #[serde(default)]
+                                pub devdoc: Option<serde_json::Value>,
+                                #[serde(default)]
+                                pub storage_layout: Option<serde_json::Value>,
+                                /// EVM-related outputs
+                                #[serde(default)]
+                                pub evm: Option<Evm>,
+                            }
+
+                            #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+                            #[serde(rename_all = "camelCase")]
+                            pub struct Evm {
+                                pub bytecode: Option<Bytecode>,
+                                #[serde(default)]
+                                pub deployed_bytecode: Option<DeployedBytecode>,
+                            }
+
+                            #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+                            #[serde(rename_all = "camelCase")]
+                            pub struct Bytecode {
+                                /// The source mapping as a string. See the source mapping definition.
+                                #[serde(default)]
+                                pub source_map: Option<String>,
+                                /// If given, this is an unlinked object.
+                                #[serde(default)]
+                                pub link_references: Option<serde_json::Value>,
+                            }
+
+                            #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+                            #[serde(rename_all = "camelCase")]
+                            pub struct DeployedBytecode {
+                                /// The source mapping as a string. See the source mapping definition.
+                                #[serde(default)]
+                                pub source_map: Option<String>,
+                                /// If given, this is an unlinked object.
+                                #[serde(default)]
+                                pub link_references: Option<serde_json::Value>,
+                                #[serde(default)]
+                                pub immutable_references: Option<serde_json::Value>,
+                            }
+                        }
+
+                        let raw_compiler_output: raw_types::CompilerOutput =
+                            match serde_json::from_value(raw_output.clone()) {
+                                Ok(output) => output,
+                                Err(err) => {
+                                    let error = VerificationError::with_contract(
+                                        path.clone(),
+                                        name.clone(),
+                                        VerificationErrorKind::InternalError(format!(
+                                            "could not parse raw compiler output: {err}"
+                                        )),
+                                    );
+                                    tracing::error!("{}", error);
+                                    errors.push(error);
+
+                                    continue;
+                                }
+                            };
+
+                        let raw_contract = if let Some(output) = raw_compiler_output
+                            .contracts
+                            .get(path)
+                            .and_then(|contract| contract.get(name))
+                        {
+                            output
+                        } else {
+                            let error = VerificationError::with_contract(
+                                path.clone(),
+                                name.clone(),
+                                VerificationErrorKind::InternalError(
+                                    "not found in raw compiler output".into(),
+                                ),
+                            );
+                            tracing::error!("{}", error);
+                            errors.push(error);
+
+                            continue;
+                        };
+
+                        let compilation_artifacts = {
+                            #[derive(Clone, Debug, serde::Serialize, Eq, PartialEq)]
+                            #[serde(rename_all = "camelCase")]
+                            struct CompilationArtifacts<'a> {
+                                #[serde(skip_serializing_if = "Option::is_none")]
+                                pub abi: Option<&'a serde_json::Value>,
+                                #[serde(skip_serializing_if = "Option::is_none")]
+                                pub devdoc: Option<&'a serde_json::Value>,
+                                #[serde(skip_serializing_if = "Option::is_none")]
+                                pub userdoc: Option<&'a serde_json::Value>,
+                                #[serde(skip_serializing_if = "Option::is_none")]
+                                pub storage_layout: Option<&'a serde_json::Value>,
+                            }
+
+                            let artifacts = CompilationArtifacts {
+                                abi: raw_contract.abi.as_ref(),
+                                devdoc: raw_contract.devdoc.as_ref(),
+                                userdoc: raw_contract.userdoc.as_ref(),
+                                storage_layout: raw_contract.storage_layout.as_ref(),
+                            };
+
+                            serde_json::to_value(artifacts).unwrap()
+                        };
+
+                        let creation_input_artifacts = {
+                            #[derive(Clone, Debug, serde::Serialize, Eq, PartialEq)]
+                            #[serde(rename_all = "camelCase")]
+                            struct CreationInputArtifacts<'a> {
+                                #[serde(skip_serializing_if = "Option::is_none")]
+                                pub source_map: Option<&'a String>,
+                                #[serde(skip_serializing_if = "Option::is_none")]
+                                pub link_references: Option<&'a serde_json::Value>,
+                            }
+
+                            let bytecode = raw_contract
+                                .evm
+                                .as_ref()
+                                .and_then(|evm| evm.bytecode.as_ref());
+                            let artifacts = CreationInputArtifacts {
+                                source_map: bytecode
+                                    .and_then(|bytecode| bytecode.source_map.as_ref()),
+                                link_references: bytecode
+                                    .and_then(|bytecode| bytecode.link_references.as_ref()),
+                            };
+
+                            serde_json::to_value(artifacts).unwrap()
+                        };
+
+                        let deployed_bytecode_artifacts = {
+                            #[derive(Clone, Debug, serde::Serialize, Eq, PartialEq)]
+                            #[serde(rename_all = "camelCase")]
+                            struct DeployedBytecodeArtifacts<'a> {
+                                #[serde(skip_serializing_if = "Option::is_none")]
+                                pub source_map: Option<&'a String>,
+                                #[serde(skip_serializing_if = "Option::is_none")]
+                                pub link_references: Option<&'a serde_json::Value>,
+                                #[serde(skip_serializing_if = "Option::is_none")]
+                                pub immutable_references: Option<&'a serde_json::Value>,
+                            }
+
+                            let deployed_bytecode = raw_contract
+                                .evm
+                                .as_ref()
+                                .and_then(|evm| evm.deployed_bytecode.as_ref());
+                            let artifacts = DeployedBytecodeArtifacts {
+                                source_map: deployed_bytecode
+                                    .and_then(|bytecode| bytecode.source_map.as_ref()),
+                                link_references: deployed_bytecode
+                                    .and_then(|bytecode| bytecode.link_references.as_ref()),
+                                immutable_references: deployed_bytecode
+                                    .and_then(|bytecode| bytecode.immutable_references.as_ref()),
+                            };
+
+                            serde_json::to_value(artifacts).unwrap()
+                        };
+
                         return Ok(VerificationSuccess {
                             file_path: path.clone(),
                             contract_name: name.clone(),
@@ -120,7 +292,7 @@ impl<T: Source> Verifier<T> {
                             compilation_artifacts,
                             creation_input_artifacts,
                             deployed_bytecode_artifacts,
-                        })
+                        });
                     }
                     Err(err) => {
                         let error =
@@ -196,66 +368,11 @@ impl<T: Source> Verifier<T> {
             abi.as_ref().and_then(|abi| abi.constructor()),
         )?;
 
-        let compilation_artifacts = {
-            let userdoc = match serde_json::to_value(&contract.userdoc).unwrap() {
-                serde_json::Value::Object(map) if map.is_empty() => None,
-                value => Some(value),
-            };
-            let devdoc = match serde_json::to_value(&contract.devdoc).unwrap() {
-                serde_json::Value::Object(map) if map.is_empty() => None,
-                value => Some(value),
-            };
-            let abi = contract.abi.clone().map(|abi| abi.abi_value);
-            let is_storage_layout_empty = |layout: &ethers_solc::artifacts::StorageLayout| {
-                layout.storage.is_empty() && layout.types.is_empty()
-            };
-            let storage_layout = (!is_storage_layout_empty(&contract.storage_layout))
-                .then_some(serde_json::to_value(&contract.storage_layout).unwrap());
-            serde_json::json!({
-                "abi": abi,
-                "devdoc": devdoc,
-                "userdoc": userdoc,
-                "storageLayout": storage_layout,
-            })
-        };
-        let creation_input_artifacts = {
-            let bytecode = contract
-                .get_bytecode()
-                .expect("bytecode has already been extracted above");
-            let source_map = bytecode.source_map.clone();
-            let link_references = bytecode.link_references.clone();
-            serde_json::json!({
-                "sourceMap": source_map,
-                "linkReferences": link_references,
-            })
-        };
-        let deployed_bytecode_artifacts = {
-            let deployed_bytecode = contract
-                .get_deployed_bytecode()
-                .expect("deployed bytecode has already been extracted above");
-            let immutable_references = (!deployed_bytecode.immutable_references.is_empty())
-                .then_some(deployed_bytecode.immutable_references.clone());
-            let bytecode = deployed_bytecode
-                .bytecode
-                .clone()
-                .expect("deployed bytecode has already been extracted above");
-            let source_map = bytecode.source_map.clone();
-            let link_references = bytecode.link_references.clone();
-            serde_json::json!({
-                "sourceMap": source_map,
-                "linkReferences": link_references,
-                "immutableReferences": immutable_references,
-            })
-        };
-
         Ok(ComparisonSuccess {
             abi: contract.abi.clone().map(|abi| abi.abi_value),
             constructor_args,
             local_bytecode,
             match_type,
-            compilation_artifacts,
-            creation_input_artifacts,
-            deployed_bytecode_artifacts,
         })
     }
 
@@ -425,9 +542,6 @@ struct ComparisonSuccess<T> {
     pub constructor_args: Option<Bytes>,
     pub local_bytecode: LocalBytecode<T>,
     pub match_type: MatchType,
-    pub compilation_artifacts: serde_json::Value,
-    pub creation_input_artifacts: serde_json::Value,
-    pub deployed_bytecode_artifacts: serde_json::Value,
 }
 
 #[cfg(test)]

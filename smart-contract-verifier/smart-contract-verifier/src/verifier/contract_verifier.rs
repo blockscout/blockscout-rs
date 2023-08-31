@@ -68,7 +68,7 @@ pub struct Success {
 pub struct ContractVerifier<'a, C> {
     compilers: &'a Compilers<C>,
     compiler_version: &'a compiler::Version,
-    verifier: Box<dyn base::Verifier<Input = (CompilerOutput, CompilerOutput)>>,
+    verifier: Box<dyn base::Verifier<Input = (CompilerOutput, CompilerOutput, serde_json::Value)>>,
     chain_id: Option<String>,
 }
 
@@ -80,15 +80,16 @@ impl<'a, C: EvmCompiler> ContractVerifier<'a, C> {
         deployed_bytecode: Bytes,
         chain_id: Option<String>,
     ) -> Result<Self, Error> {
-        let verifier: Box<dyn base::Verifier<Input = (CompilerOutput, CompilerOutput)>> =
-            match creation_tx_input {
-                None => Box::new(all_metadata_extracting_verifier::Verifier::<
-                    DeployedBytecode,
-                >::new(deployed_bytecode)?),
-                Some(creation_tx_input) => Box::new(all_metadata_extracting_verifier::Verifier::<
-                    CreationTxInput,
-                >::new(creation_tx_input)?),
-            };
+        let verifier: Box<
+            dyn base::Verifier<Input = (CompilerOutput, CompilerOutput, serde_json::Value)>,
+        > = match creation_tx_input {
+            None => Box::new(all_metadata_extracting_verifier::Verifier::<
+                DeployedBytecode,
+            >::new(deployed_bytecode)?),
+            Some(creation_tx_input) => Box::new(all_metadata_extracting_verifier::Verifier::<
+                CreationTxInput,
+            >::new(creation_tx_input)?),
+        };
         Ok(Self {
             compilers,
             compiler_version,
@@ -102,7 +103,7 @@ impl<'a, C: EvmCompiler> ContractVerifier<'a, C> {
     where
         C::CompilerInput: CompilerInput + Serialize + Clone,
     {
-        let compiler_output = self
+        let (raw, compiler_output) = self
             .compilers
             .compile(
                 self.compiler_version,
@@ -110,7 +111,7 @@ impl<'a, C: EvmCompiler> ContractVerifier<'a, C> {
                 self.chain_id.as_deref(),
             )
             .await?;
-        let compiler_output_modified = {
+        let (_raw_modified, compiler_output_modified) = {
             let compiler_input = compiler_input.clone().modify();
             self.compilers
                 .compile(
@@ -121,7 +122,7 @@ impl<'a, C: EvmCompiler> ContractVerifier<'a, C> {
                 .await?
         };
 
-        let outputs = (compiler_output, compiler_output_modified);
+        let outputs = (compiler_output, compiler_output_modified, raw);
         let verification_success = self.verifier.verify(&outputs).map_err(|errs| {
             errs.into_iter()
                 .find_map(|err| match err {
@@ -151,7 +152,7 @@ impl<'a, C: EvmCompiler> ContractVerifier<'a, C> {
                 .unwrap_or(Error::NoMatchingContracts)
         })?;
 
-        let (compiler_output, _) = outputs;
+        let (_raw_output, compiler_output, _compiler_output_modified) = outputs;
         // We accept compiler input and compiler version by reference, so that we
         // avoid their cloning if verification fails.
         // In case of success, they will be cloned exactly once.
