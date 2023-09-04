@@ -166,10 +166,10 @@ mod tests {
             match_type: source::MatchType::Partial.into(),
             compilation_artifacts: Some("{\"abi\":[]}".into()),
             creation_input_artifacts: Some(
-                "\"sourceMap\":\"-1:-1:0:-;;;;;:::-;;:::-;:::-;;;;;;;;;:::-;\"".into(),
+                "{\"sourceMap\":\"-1:-1:0:-;;;;;:::-;;:::-;:::-;;;;;;;;;:::-;\"}".into(),
             ),
             deployed_bytecode_artifacts: Some(
-                "{\"sourceMap\": \"1704:475;;;;:::-;-1:-1;;;;;;:::-;;\"}".into(),
+                "{\"sourceMap\":\"1704:475;;;;:::-;-1:-1;;;;;;:::-;;\"}".into(),
             ),
         };
 
@@ -224,10 +224,10 @@ mod tests {
             match_type: source::MatchType::Partial.into(),
             compilation_artifacts: Some("{\"abi\":[]}".into()),
             creation_input_artifacts: Some(
-                "\"sourceMap\":\"-1:-1:0:-;;;;;:::-;;:::-;:::-;;;;;;;;;:::-;\"".into(),
+                "{\"sourceMap\":\"-1:-1:0:-;;;;;:::-;;:::-;:::-;;;;;;;;;:::-;\"}".into(),
             ),
             deployed_bytecode_artifacts: Some(
-                "{\"sourceMap\": \"1704:475;;;;:::-;-1:-1;;;;;;:::-;;\"}".into(),
+                "{\"sourceMap\":\"1704:475;;;;:::-;-1:-1;;;;;;:::-;;\"}".into(),
             ),
         };
 
