@@ -1,4 +1,4 @@
-use crate::{JaegerSettings, TracingFormat, TracingSettings};
+use super::{JaegerSettings, TracingFormat, TracingSettings};
 use opentelemetry::{
     global::{self},
     sdk::{self, propagation::TraceContextPropagator},
