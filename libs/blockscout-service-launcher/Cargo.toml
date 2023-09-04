@@ -35,6 +35,9 @@ sea-orm-migration-0_10 = { package = "sea-orm-migration", version = "0.10", opti
 sea-orm-0_11 = { package = "sea-orm", version = "0.11", optional = true }
 sea-orm-migration-0_11 = { package = "sea-orm-migration", version = "0.11", optional = true }
 
+sea-orm-0_12 = { package = "sea-orm", version = "0.12.2", optional = true }
+sea-orm-migration-0_12 = { package = "sea-orm-migration", version = "0.12.2", optional = true }
+
 [features]
 default = ["launcher", "tracing"]
 launcher = [
@@ -58,20 +61,25 @@ tracing = [
 ]
 
 # Cannot be used without corresponding sea-orm dependency.
-# Choose any of `database-0_10`, `database-0_11` for the actual usage.
+# Choose any of `database-0_12`, `database-0_11`, `database-0_10` for the actual usage.
 database = [
     "dep:anyhow",
     "dep:cfg-if",
     "dep:tracing",
     "dep:url",
 ]
-database-0_10 = [
+database-0_12 = [
     "database",
-    "dep:sea-orm-0_10",
-    "dep:sea-orm-migration-0_10",
+    "dep:sea-orm-0_12",
+    "dep:sea-orm-migration-0_12",
 ]
 database-0_11 = [
     "database",
     "dep:sea-orm-0_11",
     "dep:sea-orm-migration-0_11",
+]
+database-0_10 = [
+    "database",
+    "dep:sea-orm-0_10",
+    "dep:sea-orm-migration-0_10",
 ]
