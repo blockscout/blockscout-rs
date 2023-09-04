@@ -2,7 +2,7 @@
 
 use sea_orm::entity::prelude::*;
 
-#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Copy, DeriveDisplay)]
+#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, DeriveDisplay)]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "bytecode_type")]
 pub enum BytecodeType {
     #[sea_orm(string_value = "creation_input")]
@@ -10,7 +10,7 @@ pub enum BytecodeType {
     #[sea_orm(string_value = "deployed_bytecode")]
     DeployedBytecode,
 }
-#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Copy, DeriveDisplay)]
+#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, DeriveDisplay)]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "part_type")]
 pub enum PartType {
     #[sea_orm(string_value = "main")]
@@ -18,7 +18,7 @@ pub enum PartType {
     #[sea_orm(string_value = "metadata")]
     Metadata,
 }
-#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Copy, DeriveDisplay)]
+#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, DeriveDisplay)]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "source_type")]
 pub enum SourceType {
     #[sea_orm(string_value = "solidity")]
@@ -28,7 +28,7 @@ pub enum SourceType {
     #[sea_orm(string_value = "yul")]
     Yul,
 }
-#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Copy, DeriveDisplay)]
+#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, DeriveDisplay)]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "verification_type")]
 pub enum VerificationType {
     #[sea_orm(string_value = "flattened_contract")]

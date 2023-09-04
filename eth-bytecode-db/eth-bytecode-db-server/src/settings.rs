@@ -1,5 +1,6 @@
 use blockscout_service_launcher::{
-    JaegerSettings, MetricsSettings, ServerSettings, TracingSettings,
+    launcher::{MetricsSettings, ServerSettings},
+    tracing::{JaegerSettings, TracingSettings},
 };
 use config::{Config, File};
 use serde::{de, Deserialize};
