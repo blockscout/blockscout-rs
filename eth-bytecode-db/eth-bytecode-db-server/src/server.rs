@@ -13,7 +13,7 @@ use crate::{
     },
     settings::Settings,
 };
-use blockscout_service_launcher::LaunchSettings;
+use blockscout_service_launcher::{database, launcher, launcher::LaunchSettings, tracing};
 use eth_bytecode_db::verification::Client;
 use migration::Migrator;
 use std::sync::Arc;
@@ -52,7 +52,7 @@ impl Router {
     }
 }
 
-impl blockscout_service_launcher::HttpRouter for Router {
+impl launcher::HttpRouter for Router {
     fn register_routes(&self, service_config: &mut actix_web::web::ServiceConfig) {
         service_config.configure(|config| route_health(config, self.health.clone()));
 
@@ -72,11 +72,11 @@ impl blockscout_service_launcher::HttpRouter for Router {
 }
 
 pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
-    blockscout_service_launcher::init_logs(SERVICE_NAME, &settings.tracing, &settings.jaeger)?;
+    tracing::init_logs(SERVICE_NAME, &settings.tracing, &settings.jaeger)?;
 
     let health = Arc::new(HealthService::default());
 
-    blockscout_service_launcher::database::initialize_postgres::<Migrator>(
+    database::initialize_postgres::<Migrator>(
         &settings.database.url,
         settings.database.create_database,
         settings.database.run_migrations,
@@ -114,5 +114,5 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         metrics: settings.metrics,
     };
 
-    blockscout_service_launcher::launch(&launch_settings, http_router, grpc_router).await
+    launcher::launch(&launch_settings, http_router, grpc_router).await
 }
