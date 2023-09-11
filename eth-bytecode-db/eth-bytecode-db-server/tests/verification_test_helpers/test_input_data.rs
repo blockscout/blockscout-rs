@@ -144,9 +144,13 @@ pub fn basic(source_type: SourceType, match_type: MatchType) -> TestInputData {
         constructor_arguments: None,
         abi: Some("[]".to_string()),
         match_type: match_type.into(),
-        compilation_artifacts: None,
-        creation_input_artifacts: None,
-        deployed_bytecode_artifacts: None,
+        compilation_artifacts: Some("{\"userdoc\":{\"kind\":\"user\"}}".to_string()),
+        creation_input_artifacts: Some(
+            "{\"sourceMap\":\"1:2:3:-:0;;;;;;;;;;;;;;;;;;;\"}".to_string(),
+        ),
+        deployed_bytecode_artifacts: Some(
+            "{\"sourceMap\":\"10:11:12:-:0;;;;;;;;;;;;;;;;;;;\"}".to_string(),
+        ),
     };
 
     let extra_data = smart_contract_verifier_proto_v2::verify_response::ExtraData {

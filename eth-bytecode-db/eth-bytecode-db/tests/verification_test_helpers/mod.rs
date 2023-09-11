@@ -162,6 +162,33 @@ where
         "Invalid abi"
     );
     assert_eq!(
+        Some(
+            serde_json::from_str::<serde_json::Value>("{\"userdoc\":{\"kind\":\"user\"}}").unwrap()
+        ),
+        db_source.compilation_artifacts,
+        "Invalid compilation artifacts"
+    );
+    assert_eq!(
+        Some(
+            serde_json::from_str::<serde_json::Value>(
+                "{\"sourceMap\":\"1:2:3:-:0;;;;;;;;;;;;;;;;;;;\"}"
+            )
+            .unwrap()
+        ),
+        db_source.creation_input_artifacts,
+        "Invalid creation input artifacts"
+    );
+    assert_eq!(
+        Some(
+            serde_json::from_str::<serde_json::Value>(
+                "{\"sourceMap\":\"10:11:12:-:0;;;;;;;;;;;;;;;;;;;\"}"
+            )
+            .unwrap()
+        ),
+        db_source.deployed_bytecode_artifacts,
+        "Invalid deployed bytecode artifacts"
+    );
+    assert_eq!(
         vec![0x01u8, 0x23u8, 0x45u8, 0x67u8],
         db_source.raw_creation_input,
         "Invalid raw creation input"
