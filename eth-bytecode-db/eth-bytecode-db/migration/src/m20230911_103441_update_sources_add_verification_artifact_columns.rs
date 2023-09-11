@@ -9,15 +9,15 @@ impl MigrationTrait for Migration {
         let sql = r#"
             -- General and compiler-specific artifacts (abi, userdoc, devdoc, licenses, ast, etc), encoded as a json.
             ALTER TABLE "sources"
-            ADD COLUMN "compilation_artifacts" jsonb NOT NULL;
+            ADD COLUMN "compilation_artifacts" jsonb;
 
             -- Info about the creation code (sourcemaps, linkreferences) encoded as a json.
             ALTER TABLE "sources"
-            ADD COLUMN "creation_input_artifacts" jsonb NOT NULL;
+            ADD COLUMN "creation_input_artifacts" jsonb;
 
             -- Info about the runtime code (sourcemaps, linkreferences, immutables) encoded as a json.
             ALTER TABLE "sources"
-            ADD COLUMN "deployed_bytecode_artifacts" jsonb NOT NULL;
+            ADD COLUMN "deployed_bytecode_artifacts" jsonb;
         "#;
         crate::from_sql(manager, sql).await
     }
