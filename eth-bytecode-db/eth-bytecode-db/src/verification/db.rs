@@ -196,6 +196,25 @@ async fn insert_source_details(
     let compiler_settings: Json =
         serde_json::from_str(&source.compiler_settings).context("deserialize compiler settings")?;
 
+    let compilation_artifacts: Option<Json> = source
+        .compilation_artifacts
+        .as_deref()
+        .map(serde_json::from_str)
+        .transpose()
+        .context("deserialize compilation artifacts")?;
+    let creation_input_artifacts: Option<Json> = source
+        .creation_input_artifacts
+        .as_deref()
+        .map(serde_json::from_str)
+        .transpose()
+        .context("deserialize creation input artifacts")?;
+    let deployed_bytecode_artifacts: Option<Json> = source
+        .deployed_bytecode_artifacts
+        .as_deref()
+        .map(serde_json::from_str)
+        .transpose()
+        .context("deserialize deployed bytecode artifacts")?;
+
     let active_model = sources::ActiveModel {
         source_type: Set(source.source_type.into()),
         compiler_version: Set(source.compiler_version.clone()),
@@ -206,6 +225,9 @@ async fn insert_source_details(
         raw_deployed_bytecode: Set(source.raw_deployed_bytecode.clone()),
         abi: Set(abi.clone()),
         file_ids_hash: Set(file_ids_hash),
+        compilation_artifacts: Set(compilation_artifacts),
+        creation_input_artifacts: Set(creation_input_artifacts),
+        deployed_bytecode_artifacts: Set(deployed_bytecode_artifacts),
         ..Default::default()
     };
     insert_then_select!(

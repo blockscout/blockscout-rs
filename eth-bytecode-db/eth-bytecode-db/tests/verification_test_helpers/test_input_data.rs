@@ -28,6 +28,13 @@ pub fn input_data_1<T>(request: T, source_type: SourceType) -> TestInputData<T> 
             constructor_arguments: Some("cafe".to_string()),
             abi: Some("{ \"abi\": \"metadata\" }".to_string()),
             match_type: source::MatchType::Partial.into(),
+            compilation_artifacts: Some("{ \"userdoc\": {\"kind\":\"user\"} }".to_string()),
+            creation_input_artifacts: Some(
+                "{ \"sourceMap\": \"1:2:3:-:0;;;;;;;;;;;;;;;;;;;\" }".to_string(),
+            ),
+            deployed_bytecode_artifacts: Some(
+                "{ \"sourceMap\": \"10:11:12:-:0;;;;;;;;;;;;;;;;;;;\" }".to_string(),
+            ),
         }),
         extra_data: Some(verify_response::ExtraData {
             local_creation_input_parts: vec![
@@ -66,6 +73,13 @@ pub fn input_data_1<T>(request: T, source_type: SourceType) -> TestInputData<T> 
         abi: Some("{ \"abi\": \"metadata\" }".to_string()),
         constructor_arguments: Some("cafe".to_string()),
         match_type: MatchType::Partial,
+        compilation_artifacts: Some("{ \"userdoc\": {\"kind\":\"user\"} }".to_string()),
+        creation_input_artifacts: Some(
+            "{ \"sourceMap\": \"1:2:3:-:0;;;;;;;;;;;;;;;;;;;\" }".to_string(),
+        ),
+        deployed_bytecode_artifacts: Some(
+            "{ \"sourceMap\": \"10:11:12:-:0;;;;;;;;;;;;;;;;;;;\" }".to_string(),
+        ),
         raw_creation_input: vec![0x01u8, 0x23u8, 0x45u8, 0x67u8],
         raw_deployed_bytecode: vec![0x89u8, 0xabu8, 0xcdu8, 0xefu8],
         creation_input_parts: vec![
