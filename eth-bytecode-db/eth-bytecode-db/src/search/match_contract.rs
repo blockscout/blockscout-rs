@@ -147,6 +147,9 @@ mod tests {
             created_at: Default::default(),
             updated_at: Default::default(),
             file_ids_hash: Default::default(),
+            compilation_artifacts: Default::default(),
+            creation_input_artifacts: Default::default(),
+            deployed_bytecode_artifacts: Default::default(),
         }
     }
 

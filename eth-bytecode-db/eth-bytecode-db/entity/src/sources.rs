@@ -23,6 +23,12 @@ pub struct Model {
     #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
     pub raw_deployed_bytecode: Vec<u8>,
     pub file_ids_hash: Uuid,
+    #[sea_orm(column_type = "JsonBinary")]
+    pub compilation_artifacts: Json,
+    #[sea_orm(column_type = "JsonBinary")]
+    pub creation_input_artifacts: Json,
+    #[sea_orm(column_type = "JsonBinary")]
+    pub deployed_bytecode_artifacts: Json,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
