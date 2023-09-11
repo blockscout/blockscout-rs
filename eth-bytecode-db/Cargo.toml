@@ -4,6 +4,8 @@ members = [
     "eth-bytecode-db",
     "eth-bytecode-db/entity",
     "eth-bytecode-db/migration",
+    "eth-bytecode-db/verifier-alliance-entity",
+    "eth-bytecode-db/verifier-alliance-migration",
     "eth-bytecode-db-server",
     "eth-bytecode-db-proto",
 ]
