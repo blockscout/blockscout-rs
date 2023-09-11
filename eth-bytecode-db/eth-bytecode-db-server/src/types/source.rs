@@ -23,6 +23,9 @@ impl From<verification::Source> for SourceWrapper {
             abi: value.abi,
             constructor_arguments: value.constructor_arguments,
             match_type: match_type.into(),
+            compilation_artifacts: value.compilation_artifacts,
+            creation_input_artifacts: value.creation_input_artifacts,
+            deployed_bytecode_artifacts: value.deployed_bytecode_artifacts,
         }
         .into()
     }
@@ -42,6 +45,9 @@ impl From<search::MatchContract> for SourceWrapper {
             abi: value.abi,
             constructor_arguments: value.constructor_arguments,
             match_type: match_type.into(),
+            compilation_artifacts: value.compilation_artifacts,
+            creation_input_artifacts: value.creation_input_artifacts,
+            deployed_bytecode_artifacts: value.deployed_bytecode_artifacts,
         }
         .into()
     }
@@ -109,6 +115,9 @@ impl TryFrom<sourcify::GetSourceFilesResponse> for SourceWrapper {
             abi: Some(serde_json::to_string(&abi).unwrap()),
             constructor_arguments,
             match_type: match_type.into(),
+            compilation_artifacts: None,
+            creation_input_artifacts: None,
+            deployed_bytecode_artifacts: None,
         }
         .into())
     }
@@ -132,6 +141,9 @@ mod tests {
             abi: Some("abi".into()),
             constructor_arguments: Some("args".into()),
             match_type: verification::MatchType::Partial,
+            compilation_artifacts: Some("compilation_artifacts".into()),
+            creation_input_artifacts: Some("creation_input_artifacts".into()),
+            deployed_bytecode_artifacts: Some("deployed_bytecode_artifacts".into()),
             raw_creation_input: vec![0u8, 1u8, 2u8, 3u8, 4u8],
             raw_deployed_bytecode: vec![5u8, 6u8, 7u8, 8u8],
             creation_input_parts: vec![
@@ -162,6 +174,9 @@ mod tests {
             abi: Some("abi".into()),
             constructor_arguments: Some("args".into()),
             match_type: proto::source::MatchType::Partial.into(),
+            compilation_artifacts: Some("compilation_artifacts".into()),
+            creation_input_artifacts: Some("creation_input_artifacts".into()),
+            deployed_bytecode_artifacts: Some("deployed_bytecode_artifacts".into()),
         };
 
         let result = SourceWrapper::from(verification_source).into_inner();
@@ -180,6 +195,9 @@ mod tests {
             abi: Some("abi".into()),
             constructor_arguments: Some("args".into()),
             match_type: verification::MatchType::Partial,
+            compilation_artifacts: Some("compilation_artifacts".into()),
+            creation_input_artifacts: Some("creation_input_artifacts".into()),
+            deployed_bytecode_artifacts: Some("deployed_bytecode_artifacts".into()),
             raw_creation_input: vec![0u8, 1u8, 2u8, 3u8, 4u8],
             raw_deployed_bytecode: vec![5u8, 6u8, 7u8, 8u8],
         };
@@ -194,6 +212,9 @@ mod tests {
             abi: Some("abi".into()),
             constructor_arguments: Some("args".into()),
             match_type: proto::source::MatchType::Partial.into(),
+            compilation_artifacts: Some("compilation_artifacts".into()),
+            creation_input_artifacts: Some("creation_input_artifacts".into()),
+            deployed_bytecode_artifacts: Some("deployed_bytecode_artifacts".into()),
         };
 
         let result = SourceWrapper::from(search_source).into_inner();
@@ -258,6 +279,9 @@ mod tests {
             abi: Some("[{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"_c\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"inputs\":[],\"name\":\"a\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"name\":\"arr\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"b\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"c\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"test_array\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]".into()),
             constructor_arguments: None,
             match_type: proto::source::MatchType::Full.into(),
+            compilation_artifacts: None,
+            creation_input_artifacts: None,
+            deployed_bytecode_artifacts: None,
         };
 
         let result = SourceWrapper::try_from(sourcify_response)

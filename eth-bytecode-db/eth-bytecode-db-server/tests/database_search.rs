@@ -94,6 +94,9 @@ async fn search_sourcify_sources(service: MockSolidityVerifierService) {
             abi: Some("[{\"anonymous\":false,\"inputs\":[],\"name\":\"SourcifySolidity14\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"input\",\"type\":\"address\"}],\"name\":\"identity\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]".to_string()),
             constructor_arguments: None,
             match_type: eth_bytecode_db_v2::source::MatchType::Full.into(),
+            compilation_artifacts: None,
+            creation_input_artifacts: None,
+            deployed_bytecode_artifacts: None,
         }
     ];
 
@@ -183,6 +186,9 @@ async fn search_all_sources(service: MockSolidityVerifierService) {
                 abi: Some("[{\"anonymous\":false,\"inputs\":[],\"name\":\"SourcifySolidity14\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"input\",\"type\":\"address\"}],\"name\":\"identity\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]".to_string()),
                 constructor_arguments: None,
                 match_type: eth_bytecode_db_v2::source::MatchType::Full.into(),
+                compilation_artifacts: None,
+                creation_input_artifacts: None,
+                deployed_bytecode_artifacts: None,
             }
         ]
     };

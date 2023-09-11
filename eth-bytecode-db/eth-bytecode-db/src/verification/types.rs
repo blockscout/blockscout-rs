@@ -163,6 +163,9 @@ pub struct Source {
     pub abi: Option<String>,
     pub constructor_arguments: Option<String>,
     pub match_type: MatchType,
+    pub compilation_artifacts: Option<String>,
+    pub creation_input_artifacts: Option<String>,
+    pub deployed_bytecode_artifacts: Option<String>,
 
     pub raw_creation_input: Vec<u8>,
     pub raw_deployed_bytecode: Vec<u8>,

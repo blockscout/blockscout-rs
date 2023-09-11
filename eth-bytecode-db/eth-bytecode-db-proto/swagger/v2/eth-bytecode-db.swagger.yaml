@@ -366,6 +366,11 @@ definitions:
         title: |-
           / Contract abi (https://docs.soliditylang.org/en/latest/abi-spec.html?highlight=abi#json);
           / (does not exist for Yul contracts)
+      compilationArtifacts:
+        type: string
+        description: |-
+          / General and compiler-specific artifacts (abi, userdoc, devdoc, licenses, ast, etc),
+          / encoded as a json.
       compilerSettings:
         type: string
         title: |-
@@ -382,6 +387,12 @@ definitions:
       contractName:
         type: string
         title: / The name of the contract which was verified
+      creationInputArtifacts:
+        type: string
+        description: / Info about the creation code (sourcemaps, linkreferences) encoded as a json.
+      deployedBytecodeArtifacts:
+        type: string
+        description: / Info about the runtime code (sourcemaps, linkreferences, immutables) encoded as a json.
       fileName:
         type: string
         title: / The name of the file verified contract was located at

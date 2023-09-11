@@ -19,6 +19,9 @@ pub struct MatchContract {
     pub abi: Option<String>,
     pub constructor_arguments: Option<String>,
     pub match_type: verification::MatchType,
+    pub compilation_artifacts: Option<String>,
+    pub creation_input_artifacts: Option<String>,
+    pub deployed_bytecode_artifacts: Option<String>,
     pub raw_creation_input: Vec<u8>,
     pub raw_deployed_bytecode: Vec<u8>,
 }
@@ -83,6 +86,13 @@ impl MatchContract {
             abi: source.abi.map(|abi| abi.to_string()),
             constructor_arguments: constructor_args.map(hex::encode),
             match_type,
+            compilation_artifacts: source.compilation_artifacts.map(|value| value.to_string()),
+            creation_input_artifacts: source
+                .creation_input_artifacts
+                .map(|value| value.to_string()),
+            deployed_bytecode_artifacts: source
+                .deployed_bytecode_artifacts
+                .map(|value| value.to_string()),
             raw_creation_input: source.raw_creation_input,
             raw_deployed_bytecode: source.raw_deployed_bytecode,
         };
