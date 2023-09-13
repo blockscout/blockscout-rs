@@ -98,6 +98,7 @@ definitions:
       - NOT_SERVING
       - SERVICE_UNKNOWN
     default: UNKNOWN
+    description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
   protobufAny:
     type: object
     properties:
@@ -110,22 +111,25 @@ definitions:
       code:
         type: integer
         format: int32
+      message:
+        type: string
       details:
         type: array
         items:
+          type: object
           $ref: '#/definitions/protobufAny'
-      message:
-        type: string
   v1Counter:
     type: object
     properties:
       id:
         type: string
+      value:
+        type: string
       title:
         type: string
       units:
         type: string
-      value:
+      description:
         type: string
   v1Counters:
     type: object
@@ -133,6 +137,7 @@ definitions:
       counters:
         type: array
         items:
+          type: object
           $ref: '#/definitions/v1Counter'
   v1HealthCheckResponse:
     type: object
@@ -145,35 +150,38 @@ definitions:
       chart:
         type: array
         items:
+          type: object
           $ref: '#/definitions/v1Point'
   v1LineChartInfo:
     type: object
     properties:
-      description:
-        type: string
       id:
         type: string
       title:
+        type: string
+      description:
         type: string
       units:
         type: string
   v1LineChartSection:
     type: object
     properties:
-      charts:
-        type: array
-        items:
-          $ref: '#/definitions/v1LineChartInfo'
       id:
         type: string
       title:
         type: string
+      charts:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1LineChartInfo'
   v1LineCharts:
     type: object
     properties:
       sections:
         type: array
         items:
+          type: object
           $ref: '#/definitions/v1LineChartSection'
   v1Point:
     type: object

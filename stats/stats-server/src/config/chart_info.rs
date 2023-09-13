@@ -21,6 +21,7 @@ fn enabled_default() -> bool {
 #[serde(default, deny_unknown_fields)]
 pub struct CounterInfo {
     pub title: String,
+    pub description: String,
     #[serde(flatten)]
     pub settings: ChartSettings,
 }

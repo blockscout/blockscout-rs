@@ -52,6 +52,10 @@ async fn test_counters_ok() {
         .json()
         .await
         .expect("failed to convert response to json");
+    for counter in counters.counters.iter() {
+        assert!(!counter.description.is_empty());
+        assert!(!counter.title.is_empty());
+    }
     let counter_names: HashSet<_> = counters.counters.iter().map(|c| c.id.as_str()).collect();
     let expected_counter_names: HashSet<_> = [
         "totalBlocks",

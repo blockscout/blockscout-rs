@@ -7,6 +7,7 @@ use super::chart_info::ChartSettings;
 pub struct CounterInfo {
     pub id: String,
     pub title: String,
+    pub description: String,
     #[serde(flatten)]
     pub settings: ChartSettings,
 }
