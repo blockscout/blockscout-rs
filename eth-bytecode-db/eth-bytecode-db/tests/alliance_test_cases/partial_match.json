@@ -47,7 +47,7 @@
     "creation_match": true,
     "creation_values": {
         "cborAuxdata": {
-            "Storage": "0xa26469706673582212203863ce629eb61798cd34ba5d73d729ef1f86d2529ee1bdfc20e7eda860c4260564736f6c63430008120033"
+            "1": "0xa26469706673582212203863ce629eb61798cd34ba5d73d729ef1f86d2529ee1bdfc20e7eda860c4260564736f6c63430008120033"
         }
     },
     "creation_transformations": [
@@ -55,14 +55,14 @@
             "type": "replace",
             "reason": "auxdata",
             "offset": 286,
-            "id": "Storage"
+            "id": "1"
         }
     ],
 
     "runtime_match": true,
     "runtime_values": {
         "cborAuxdata": {
-            "Storage": "0xa26469706673582212203863ce629eb61798cd34ba5d73d729ef1f86d2529ee1bdfc20e7eda860c4260564736f6c63430008120033"
+            "1": "0xa26469706673582212203863ce629eb61798cd34ba5d73d729ef1f86d2529ee1bdfc20e7eda860c4260564736f6c63430008120033"
         }
     },
     "runtime_transformations": [
@@ -70,7 +70,7 @@
             "type": "replace",
             "reason": "auxdata",
             "offset": 254,
-            "id": "Storage"
+            "id": "1"
         }
     ]
 }
