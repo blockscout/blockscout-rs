@@ -71,6 +71,7 @@ impl From<(String, CounterInfo)> for toml_config::CounterInfo {
         Self {
             id: id.from_case(Case::Snake).to_case(Case::Camel),
             title: info.title,
+            description: info.description,
             settings: info.settings,
         }
     }

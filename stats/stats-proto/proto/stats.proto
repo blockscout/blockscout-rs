@@ -17,6 +17,7 @@ message Counter {
   string value = 2;
   string title = 3;
   optional string units = 4;
+  string description = 5;
 }
 
 message Counters { repeated Counter counters = 1; }

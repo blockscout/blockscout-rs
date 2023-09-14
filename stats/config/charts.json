@@ -2,56 +2,69 @@
     "counters": {
         "total_blocks": {
             "title": "Total blocks",
+            "description": "Number of blocks over all time",
             "update_schedule": "0 0 */3 * * * *"
         },
         "total_addresses": {
             "title": "Total addresses",
+            "description": "Number of addresses that participated in the blockchain",
             "update_schedule": "0 0 */3 * * * *"
         },
         "average_block_time": {
             "title": "Average block time",
+            "description": "Average time taken in seconds for a block to be included in the blockchain",
             "units": "s",
             "update_schedule": "0 0 15 * * * *"
         },
         "completed_txns": {
             "title": "Completed txns",
+            "description": "Number of transactions with success status",
             "update_schedule": "0 5 */3 * * * *"
         },
         "total_accounts": {
             "title": "Total accounts",
+            "description": "Number of EOAs that sent at least 1 transaction",
             "update_schedule": "0 0 16 * * * *"
         },
         "total_native_coin_transfers": {
             "title": "Total native coin transfers",
+            "description": "Number of transactions with the transfer of the native coin",
             "update_schedule": "0 0 13 * * * *"
         },
         "total_tokens": {
             "title": "Total tokens",
+            "description": "Number of all token contracts",
             "update_schedule": "0 0 18 * * * *"
         },
         "total_txns": {
             "title": "Total txns",
+            "description": "All transactions including pending, dropped, replaced, failed transactions",
             "update_schedule": "0 10 */3 * * * *"
         },
         "last_new_contracts": {
             "title": "Number of deployed contracts today",
+            "description": "Number of deployed contracts today",
             "update_schedule": "0 15 */3 * * * *"
         },
         "total_contracts": {
             "title": "Total contracts",
+            "description": "Number of contracts",
             "update_schedule": "0 20 */3 * * * *"
         },
         "last_new_verified_contracts": {
             "title": "Number of verified contracts today",
+            "description": "Number of contracts verified today",
             "update_schedule": "0 25 */3 * * * *"
         },
         "total_verified_contracts": {
             "title": "Total verified contracts",
+            "description": "Number of verified contracts",
             "update_schedule": "0 30 */3 * * * *"
         },
         "total_native_coin_holders": {
             "enabled": false,
             "title": "Total native coin holders",
+            "description": "Number of accounts with native coin",
             "update_schedule": "0 0 17 * * * *"
         }
     },

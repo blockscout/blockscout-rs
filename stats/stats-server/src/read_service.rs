@@ -64,6 +64,7 @@ impl StatsService for ReadService {
                         id: counter.id.clone(),
                         value: point.value,
                         title: counter.title.clone(),
+                        description: counter.description.clone(),
                         units: info.settings.units.clone(),
                     }
                 })
