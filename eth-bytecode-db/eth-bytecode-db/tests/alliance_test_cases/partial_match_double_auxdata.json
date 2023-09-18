@@ -83,7 +83,7 @@
     "runtime_match": true,
     "runtime_values": {
         "cborAuxdata": {
-            "1": "a2646970667358221220bc2c6d72c52842d4077bb24c307576e44a078831aaa16da6611ef342fd052ec764736f6c63430008120033",
+            "1": "0xa2646970667358221220bc2c6d72c52842d4077bb24c307576e44a078831aaa16da6611ef342fd052ec764736f6c63430008120033"
         }
     },
     "runtime_transformations": [
