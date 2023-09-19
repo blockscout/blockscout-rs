@@ -38,12 +38,15 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"]}
 
 [dev-dependencies]
 async-trait = "0.1"
+keccak-hash = "0.10.0"
 migration = {path = "./migration"}
 mockall = "0.11"
 pretty_assertions = "1.3"
-rstest = "0.16"
+rstest = "0.18.0"
 sea-orm = { version = "*", features = ["mock"] }
 tokio-stream = { version = "0.1", features = ["net"] }
+verifier-alliance-entity = { path = "./verifier-alliance-entity" }
+verifier-alliance-migration = { path = "./verifier-alliance-migration" }
 url = "2.4.0"
 
 [features]

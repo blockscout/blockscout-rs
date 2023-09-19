@@ -2,7 +2,9 @@
 
 mod database_helpers;
 pub mod smart_contract_veriifer_mock;
-mod test_input_data;
+pub mod test_input_data;
+
+pub mod verifier_alliance_types;
 
 use async_trait::async_trait;
 use blockscout_display_bytes::Bytes as DisplayBytes;
@@ -55,7 +57,7 @@ pub fn generate_verification_request<T>(
     }
 }
 
-async fn init_db(db_prefix: &str, test_name: &str) -> TestDbGuard {
+pub async fn init_db(db_prefix: &str, test_name: &str) -> TestDbGuard {
     #[allow(unused_variables)]
     let db_url: Option<String> = None;
     // Uncomment if providing url explicitly is more convenient
@@ -64,7 +66,7 @@ async fn init_db(db_prefix: &str, test_name: &str) -> TestDbGuard {
     TestDbGuard::new(db_name.as_str(), db_url).await
 }
 
-async fn start_server_and_init_client<Service, Request>(
+pub async fn start_server_and_init_client<Service, Request>(
     db_client: Arc<DatabaseConnection>,
     mut service: Service,
     input_data: Vec<TestInputData<Request>>,
@@ -74,8 +76,8 @@ where
 {
     // Initialize service
     for input in input_data {
-        let response = input.response.clone();
-        let request = Service::GrpcT::from(input.request);
+        let response = input.verifier_response.clone();
+        let request = Service::GrpcT::from(input.eth_bytecode_db_request);
         service.add_into_service(request, response)
     }
     // Initialize server
@@ -99,11 +101,11 @@ where
     let client =
         start_server_and_init_client(db.client().clone(), service, vec![input_data.clone()]).await;
 
-    let source = Service::verify(client, input_data.request)
+    let source = Service::verify(client, input_data.eth_bytecode_db_request)
         .await
         .expect("Verification failed");
 
-    assert_eq!(input_data.source, source, "Invalid source");
+    assert_eq!(input_data.eth_bytecode_db_source, source, "Invalid source");
 }
 
 pub async fn test_data_is_added_into_database<Service, Request>(db_prefix: &str, service: Service)
@@ -117,7 +119,7 @@ where
     let client =
         start_server_and_init_client(db.client().clone(), service, vec![input_data.clone()]).await;
 
-    let _source = Service::verify(client, input_data.request)
+    let _source = Service::verify(client, input_data.eth_bytecode_db_request)
         .await
         .expect("Verification failed");
 
@@ -424,7 +426,7 @@ pub async fn test_historical_data_is_added_into_database<Service, Request>(
     let client =
         start_server_and_init_client(db.client().clone(), service, vec![input_data.clone()]).await;
 
-    let _source = Service::verify(client, input_data.request)
+    let _source = Service::verify(client, input_data.eth_bytecode_db_request)
         .await
         .expect("Verification failed");
 
@@ -503,7 +505,7 @@ pub async fn test_historical_data_saves_chain_id_and_contract_address<Service, R
     let client =
         start_server_and_init_client(db.client().clone(), service, vec![input_data.clone()]).await;
 
-    let _source = Service::verify(client, input_data.request)
+    let _source = Service::verify(client, input_data.eth_bytecode_db_request)
         .await
         .expect("Verification failed");
 
@@ -553,11 +555,11 @@ pub async fn test_verification_of_same_source_results_stored_once<Service, Reque
     let client =
         start_server_and_init_client(db.client().clone(), service, vec![input_data.clone()]).await;
 
-    let source = Service::verify(client.clone(), input_data.request.clone())
+    let source = Service::verify(client.clone(), input_data.eth_bytecode_db_request.clone())
         .await
         .expect("Verification failed");
 
-    let source_2 = Service::verify(client, input_data.request)
+    let source_2 = Service::verify(client, input_data.eth_bytecode_db_request)
         .await
         .expect("Duplicative verification failed");
 
