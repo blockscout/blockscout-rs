@@ -72,6 +72,7 @@ impl VerifierService<VerificationRequest<StandardJson>> for MockSolidityVerifier
 #[tokio::test]
 #[ignore = "Needs database to run"]
 pub async fn success(#[files("tests/alliance_test_cases/*.json")] test_case_path: PathBuf) {
+    // let test_case_path = PathBuf::from("tests/alliance_test_cases/immutables.json");
     let service = MockSolidityVerifierService::new();
 
     // e.g. "tests/alliance_test_cases/full_match.json" => "full_match"
@@ -90,16 +91,18 @@ pub async fn success(#[files("tests/alliance_test_cases/*.json")] test_case_path
         .await
         .with_alliance_db()
         .await;
-    prepare_alliance_database(db.alliance_client().unwrap(), &test_case).await;
+
+    let alliance_db_client = db.alliance_client().unwrap();
+    prepare_alliance_database(alliance_db_client.clone(), &test_case).await;
 
     let client =
-        start_server_and_init_client(db.client().clone(), service, vec![input_data.clone()]).await;
+        start_server_and_init_client(db.client().clone(), service, vec![input_data.clone()])
+            .await
+            .with_alliance_db_arc(alliance_db_client.clone());
 
     let _source = MockSolidityVerifierService::verify(client, input_data.eth_bytecode_db_request)
         .await
         .expect("verification failed");
-
-    let alliance_db_client = db.alliance_client().unwrap();
 
     let compiled_contract = compiled_contracts::Entity::find()
         .one(alliance_db_client.as_ref())
@@ -125,6 +128,7 @@ fn input_data(test_case: &TestCase) -> TestInputData<VerificationRequest<Standar
 async fn prepare_alliance_database(db: Arc<DatabaseConnection>, test_case: &TestCase) {
     let txn = db.begin().await.expect("starting a transaction failed");
     let _contract_deployment_id = insert_contract_deployment(&txn, test_case).await;
+    txn.commit().await.expect("committing transaction failed");
 }
 
 async fn insert_contract_deployment(txn: &DatabaseTransaction, test_case: &TestCase) -> Uuid {

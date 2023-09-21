@@ -53,6 +53,7 @@ pub async fn verify(
 
     process_verify_response(
         &client.db_client,
+        client.alliance_db_client.as_deref(),
         response,
         ProcessResponseAction::SaveData {
             bytecode_type,
@@ -91,6 +92,7 @@ mod tests {
             metadata: Some(types::VerificationMetadata {
                 chain_id: Some(1),
                 contract_address: Some(bytes::Bytes::from_static(&[1u8; 20])),
+                transaction_hash: None,
             }),
         };
         let expected = VerifySolidityMultiPartRequest {
@@ -134,6 +136,7 @@ mod tests {
             metadata: Some(types::VerificationMetadata {
                 chain_id: Some(1),
                 contract_address: Some(bytes::Bytes::from_static(&[1u8; 20])),
+                transaction_hash: None,
             }),
         };
         let expected = VerifySolidityMultiPartRequest {

@@ -498,6 +498,7 @@ pub async fn test_historical_data_saves_chain_id_and_contract_address<Service, R
             Some(VerificationMetadata {
                 chain_id: Some(chain_id),
                 contract_address: Some(contract_address.clone()),
+                transaction_hash: None,
             }),
         ),
         source_type,

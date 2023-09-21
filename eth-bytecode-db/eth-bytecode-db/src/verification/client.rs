@@ -9,6 +9,7 @@ use tonic::transport::{Channel, Uri};
 #[derive(Clone, Debug)]
 pub struct Client {
     pub db_client: Arc<DatabaseConnection>,
+    pub alliance_db_client: Option<Arc<DatabaseConnection>>,
     pub solidity_client: SolidityVerifierClient<Channel>,
     pub vyper_client: VyperVerifierClient<Channel>,
     pub sourcify_client: SourcifyVerifierClient<Channel>,
@@ -36,9 +37,19 @@ impl Client {
 
         Ok(Self {
             db_client,
+            alliance_db_client: None,
             solidity_client,
             vyper_client,
             sourcify_client,
         })
+    }
+
+    pub fn with_alliance_db(self, alliance_db_client: DatabaseConnection) -> Self {
+        self.with_alliance_db_arc(Arc::new(alliance_db_client))
+    }
+
+    pub fn with_alliance_db_arc(mut self, alliance_db_client: Arc<DatabaseConnection>) -> Self {
+        self.alliance_db_client = Some(alliance_db_client);
+        self
     }
 }

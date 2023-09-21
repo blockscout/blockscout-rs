@@ -12,7 +12,10 @@ use super::{
     db,
     errors::Error,
     smart_contract_verifier,
-    types::{BytecodePart, BytecodeType, Source, VerificationMetadata, VerificationType},
+    types::{
+        BytecodePart, BytecodeType, DatabaseReadySource, Source, VerificationMetadata,
+        VerificationType,
+    },
 };
 use anyhow::Context;
 use sea_orm::DatabaseConnection;
@@ -30,6 +33,7 @@ enum ProcessResponseAction {
 
 async fn process_verify_response(
     db_client: &DatabaseConnection,
+    alliance_db_client: Option<&DatabaseConnection>,
     response: smart_contract_verifier::VerifyResponse,
     action: ProcessResponseAction,
 ) -> Result<Source, Error> {
@@ -111,22 +115,49 @@ async fn process_verify_response(
                 verification_type,
                 verification_metadata,
             } => {
-                let source_id = db::insert_data(db_client, source.clone())
-                    .await
-                    .context("Insert data into database")?;
+                let database_source = DatabaseReadySource::try_from(source.clone())
+                    .context("Converting source into database ready version")?;
+                let source_id =
+                    db::eth_bytecode_db::insert_data(db_client, database_source.clone())
+                        .await
+                        .context("Insert data into database")?;
 
                 // For historical data we just log any errors but do not propagate them further
-                db::insert_verified_contract_data(
+                db::eth_bytecode_db::insert_verified_contract_data(
                     db_client,
                     source_id,
                     raw_request_bytecode,
                     bytecode_type,
                     verification_settings,
                     verification_type,
-                    verification_metadata,
+                    verification_metadata.clone(),
                 )
                 .await
                 .context("Insert verified contract data")?;
+
+                if let Some(alliance_db_client) = alliance_db_client {
+                    if let Some(verification_metadata) = verification_metadata {
+                        if let (Some(chain_id), Some(contract_address), Some(transaction_hash)) = (
+                            verification_metadata.chain_id,
+                            verification_metadata.contract_address,
+                            verification_metadata.transaction_hash,
+                        ) {
+                            let deployment_data =
+                                db::verifier_alliance_db::ContractDeploymentData {
+                                    chain_id,
+                                    contract_address: contract_address.to_vec(),
+                                    transaction_hash: transaction_hash.to_vec(),
+                                };
+                            db::verifier_alliance_db::insert_data(
+                                alliance_db_client,
+                                database_source,
+                                deployment_data,
+                            )
+                            .await
+                            .context("Insert data into verifier alliance database")?;
+                        }
+                    }
+                }
             }
         };
         Ok(())
@@ -135,6 +166,7 @@ async fn process_verify_response(
     let _ = process_database_insertion()
         .await
         .map_err(|err: anyhow::Error| {
+            println!("Error while inserting contract data into database: {err:#}");
             tracing::error!("Error while inserting contract data into database: {err:#}")
         });
 

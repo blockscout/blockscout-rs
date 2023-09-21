@@ -31,5 +31,11 @@ pub async fn verify(mut client: Client, request: VerificationRequest) -> Result<
         .map_err(Error::from)?
         .into_inner();
 
-    process_verify_response(&client.db_client, response, ProcessResponseAction::IgnoreDb).await
+    process_verify_response(
+        &client.db_client,
+        client.alliance_db_client.as_deref(),
+        response,
+        ProcessResponseAction::IgnoreDb,
+    )
+    .await
 }

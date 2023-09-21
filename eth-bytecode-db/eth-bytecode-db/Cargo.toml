@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 entity = { path = "./entity" }
+verifier-alliance-entity = { path = "./verifier-alliance-entity" }
 
 anyhow = "1.0"
 blockscout-display-bytes = "1.0"
@@ -22,6 +23,7 @@ sea-orm = { version = "0.12.2", features = [
     "postgres-array",
 ] }
 futures = "0.3"
+keccak-hash = "0.10.0"
 lazy_static = "1"
 prometheus = "0.13"
 reqwest = "0.11.18"
@@ -38,7 +40,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"]}
 
 [dev-dependencies]
 async-trait = "0.1"
-keccak-hash = "0.10.0"
 migration = {path = "./migration"}
 mockall = "0.11"
 pretty_assertions = "1.3"

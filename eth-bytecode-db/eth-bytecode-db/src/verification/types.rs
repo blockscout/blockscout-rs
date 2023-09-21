@@ -1,4 +1,5 @@
 use super::smart_contract_verifier;
+use anyhow::Context;
 use entity::sea_orm_active_enums;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -173,12 +174,83 @@ pub struct Source {
     pub deployed_bytecode_parts: Vec<BytecodePart>,
 }
 
+/// The same as [`Source`] but processed to be inserted into the database.
+/// The processing consists of converting all JSON stored types into [`serde_json::Value`].
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DatabaseReadySource {
+    pub file_name: String,
+    pub contract_name: String,
+    pub compiler_version: String,
+    pub compiler_settings: serde_json::Value,
+    pub source_type: SourceType,
+    pub source_files: BTreeMap<String, String>,
+    pub abi: Option<serde_json::Value>,
+    pub compilation_artifacts: Option<serde_json::Value>,
+    pub creation_input_artifacts: Option<serde_json::Value>,
+    pub deployed_bytecode_artifacts: Option<serde_json::Value>,
+
+    pub raw_creation_input: Vec<u8>,
+    pub raw_deployed_bytecode: Vec<u8>,
+    pub creation_input_parts: Vec<BytecodePart>,
+    pub deployed_bytecode_parts: Vec<BytecodePart>,
+}
+
+impl TryFrom<Source> for DatabaseReadySource {
+    type Error = anyhow::Error;
+
+    fn try_from(value: Source) -> Result<Self, Self::Error> {
+        let abi = value
+            .abi
+            .map(|abi| serde_json::from_str(&abi).context("deserialize abi into json value"))
+            .transpose()?;
+        let compiler_settings: serde_json::Value =
+            serde_json::from_str(&value.compiler_settings)
+                .context("deserialize compiler settings into json value")?;
+        let compilation_artifacts: Option<serde_json::Value> = value
+            .compilation_artifacts
+            .as_deref()
+            .map(serde_json::from_str)
+            .transpose()
+            .context("deserialize compilation artifacts into json value")?;
+        let creation_input_artifacts: Option<serde_json::Value> = value
+            .creation_input_artifacts
+            .as_deref()
+            .map(serde_json::from_str)
+            .transpose()
+            .context("deserialize creation input artifacts into json value")?;
+        let deployed_bytecode_artifacts: Option<serde_json::Value> = value
+            .deployed_bytecode_artifacts
+            .as_deref()
+            .map(serde_json::from_str)
+            .transpose()
+            .context("deserialize deployed bytecode artifacts into json value")?;
+
+        Ok(Self {
+            file_name: value.file_name,
+            contract_name: value.contract_name,
+            compiler_version: value.compiler_version,
+            compiler_settings,
+            source_type: value.source_type,
+            source_files: value.source_files,
+            abi,
+            compilation_artifacts,
+            creation_input_artifacts,
+            deployed_bytecode_artifacts,
+            raw_creation_input: value.raw_creation_input,
+            raw_deployed_bytecode: value.raw_deployed_bytecode,
+            creation_input_parts: value.creation_input_parts,
+            deployed_bytecode_parts: value.deployed_bytecode_parts,
+        })
+    }
+}
+
 /********** Verification Request **********/
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VerificationMetadata {
     pub chain_id: Option<i64>,
     pub contract_address: Option<bytes::Bytes>,
+    pub transaction_hash: Option<bytes::Bytes>,
 }
 
 impl From<VerificationMetadata> for smart_contract_verifier::VerificationMetadata {

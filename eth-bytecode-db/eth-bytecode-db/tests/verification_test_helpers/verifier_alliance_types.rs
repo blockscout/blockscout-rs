@@ -1,7 +1,7 @@
 use super::test_input_data::TestInputData;
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use bytes::Bytes;
-use eth_bytecode_db::verification::{BytecodeType, VerificationRequest};
+use eth_bytecode_db::verification::{BytecodeType, VerificationMetadata, VerificationRequest};
 use serde::Deserialize;
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2 as smart_contract_verifier_v2;
 use std::{collections::BTreeMap, path::Path, str::FromStr};
@@ -96,7 +96,11 @@ impl TestCase {
             bytecode_type: BytecodeType::CreationInput,
             compiler_version: self.version.clone(),
             content,
-            metadata: None,
+            metadata: Some(VerificationMetadata {
+                chain_id: Some(self.chain_id as i64),
+                contract_address: Some(self.address.0.clone()),
+                transaction_hash: Some(self.transaction_hash.0.clone()),
+            }),
         }
     }
 
@@ -143,7 +147,7 @@ impl TestCase {
         smart_contract_verifier_v2::Source {
             file_name: file_name.to_string(),
             contract_name: self.name.clone(),
-            compiler_version: self.compiler.clone(),
+            compiler_version: self.version.clone(),
             compiler_settings: self.compiler_settings.to_string(),
             source_type: source_type.into(),
             source_files: self.sources.clone(),

@@ -1,4 +1,7 @@
-use super::{types, BytecodeType};
+use super::{
+    super::{types, BytecodeType},
+    insert_then_select,
+};
 use crate::verification::VerificationMetadata;
 use anyhow::Context;
 use entity::{
@@ -6,60 +9,15 @@ use entity::{
     verified_contracts,
 };
 use sea_orm::{
-    entity::prelude::ColumnTrait,
-    prelude::{Json, Uuid},
-    sea_query::OnConflict,
-    ActiveModelTrait,
-    ActiveValue::Set,
-    ConnectionTrait, DatabaseBackend, DatabaseConnection, DatabaseTransaction, DbErr, EntityTrait,
-    QueryFilter, Statement, TransactionTrait,
+    entity::prelude::ColumnTrait, prelude::Uuid, sea_query::OnConflict, ActiveModelTrait,
+    ActiveValue::Set, ConnectionTrait, DatabaseBackend, DatabaseConnection, DatabaseTransaction,
+    DbErr, EntityTrait, QueryFilter, Statement, TransactionTrait,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-macro_rules! insert_then_select {
-    ( $txn:expr, $entity_module:ident, $active_model:expr, [ $( ($column:ident, $value:expr) ),+ $(,)? ] ) => {
-        {
-            let result: Result<_, DbErr> = $entity_module::Entity::insert($active_model)
-                .on_conflict(OnConflict::new().do_nothing().to_owned())
-                .exec($txn)
-                .await;
-
-            // Returns the model and the bool flag showing whether the model was actually inserted.
-            match result {
-                Ok(res) => {
-                    let model = $entity_module::Entity::find_by_id(res.last_insert_id)
-                        .one($txn)
-                        .await
-                        .context(format!("select from \"{}\" by \"id\"", stringify!($entity_module)))?
-                        .ok_or(anyhow::anyhow!(
-                            "select from \"{}\" by \"id\"={} returned no data",
-                            stringify!($entity_module),
-                            res.last_insert_id
-                        ))?;
-
-                    Ok((model, true))
-                }
-                Err(DbErr::RecordNotInserted) => {
-                    let model = $entity_module::Entity::find()
-                        $(
-                            .filter($entity_module::Column::$column.eq($value))
-                        )*
-                        .one($txn)
-                        .await
-                        .context(format!("select from \"{}\" by unique columns", stringify!($entity_module)))?
-                        .ok_or(anyhow::anyhow!("select from \"{}\" by unique columns returned no data", stringify!($entity_module)))?;
-
-                    Ok((model, false))
-                }
-                Err(err) => Err(err).context(format!("insert into \"{}\"", stringify!($entity_module))),
-            }
-        }
-    };
-}
-
 pub(crate) async fn insert_data(
     db_client: &DatabaseConnection,
-    source_response: types::Source,
+    source_response: types::DatabaseReadySource,
 ) -> Result<i64, anyhow::Error> {
     let txn = db_client
         .begin()
@@ -163,14 +121,9 @@ async fn insert_files(
 
 async fn insert_source_details(
     txn: &DatabaseTransaction,
-    source: types::Source,
+    source: types::DatabaseReadySource,
     file_models: &[files::Model],
 ) -> Result<(sources::Model, bool), anyhow::Error> {
-    let abi = source
-        .abi
-        .map(|abi| serde_json::from_str(&abi).context("deserialize abi"))
-        .transpose()?;
-
     // To ensure uniqueness and ordering properties
     let file_ids: BTreeSet<_> = file_models.iter().map(|file| file.id).collect();
 
@@ -193,41 +146,19 @@ async fn insert_source_details(
         .try_get("", "md5")
         .context("calculate hash of file ids")?;
 
-    let compiler_settings: Json =
-        serde_json::from_str(&source.compiler_settings).context("deserialize compiler settings")?;
-
-    let compilation_artifacts: Option<Json> = source
-        .compilation_artifacts
-        .as_deref()
-        .map(serde_json::from_str)
-        .transpose()
-        .context("deserialize compilation artifacts")?;
-    let creation_input_artifacts: Option<Json> = source
-        .creation_input_artifacts
-        .as_deref()
-        .map(serde_json::from_str)
-        .transpose()
-        .context("deserialize creation input artifacts")?;
-    let deployed_bytecode_artifacts: Option<Json> = source
-        .deployed_bytecode_artifacts
-        .as_deref()
-        .map(serde_json::from_str)
-        .transpose()
-        .context("deserialize deployed bytecode artifacts")?;
-
     let active_model = sources::ActiveModel {
         source_type: Set(source.source_type.into()),
         compiler_version: Set(source.compiler_version.clone()),
-        compiler_settings: Set(compiler_settings.clone()),
+        compiler_settings: Set(source.compiler_settings.clone()),
         file_name: Set(source.file_name.clone()),
         contract_name: Set(source.contract_name.clone()),
         raw_creation_input: Set(source.raw_creation_input.clone()),
         raw_deployed_bytecode: Set(source.raw_deployed_bytecode.clone()),
-        abi: Set(abi.clone()),
+        abi: Set(source.abi.clone()),
         file_ids_hash: Set(file_ids_hash),
-        compilation_artifacts: Set(compilation_artifacts),
-        creation_input_artifacts: Set(creation_input_artifacts),
-        deployed_bytecode_artifacts: Set(deployed_bytecode_artifacts),
+        compilation_artifacts: Set(source.compilation_artifacts),
+        creation_input_artifacts: Set(source.creation_input_artifacts),
+        deployed_bytecode_artifacts: Set(source.deployed_bytecode_artifacts),
         ..Default::default()
     };
     insert_then_select!(
@@ -236,7 +167,7 @@ async fn insert_source_details(
         active_model,
         [
             (CompilerVersion, source.compiler_version),
-            (CompilerSettings, compiler_settings),
+            (CompilerSettings, source.compiler_settings),
             (FileName, source.file_name),
             (ContractName, source.contract_name),
             (FileIdsHash, file_ids_hash)
