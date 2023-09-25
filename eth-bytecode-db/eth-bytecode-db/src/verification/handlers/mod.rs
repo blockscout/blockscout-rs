@@ -20,9 +20,10 @@ use super::{
 use anyhow::Context;
 use sea_orm::DatabaseConnection;
 
-enum ProcessResponseAction {
+enum ProcessResponseAction<'a> {
     IgnoreDb,
     SaveData {
+        db_client: &'a DatabaseConnection,
         bytecode_type: BytecodeType,
         raw_request_bytecode: Vec<u8>,
         verification_settings: serde_json::Value,
@@ -31,11 +32,48 @@ enum ProcessResponseAction {
     },
 }
 
+enum VerifierAllianceDbAction<'a> {
+    IgnoreDb,
+    SaveIfDeploymentExists {
+        db_client: &'a DatabaseConnection,
+        chain_id: i64,
+        contract_address: bytes::Bytes,
+        transaction_hash: bytes::Bytes,
+    },
+}
+
+impl<'a> VerifierAllianceDbAction<'a> {
+    pub fn from_db_client_and_metadata(
+        db_client: Option<&'a DatabaseConnection>,
+        verification_metadata: Option<VerificationMetadata>,
+    ) -> Self {
+        if db_client.is_none() {
+            return Self::IgnoreDb;
+        }
+
+        match (db_client, verification_metadata) {
+            (
+                Some(db_client),
+                Some(VerificationMetadata {
+                    chain_id: Some(chain_id),
+                    contract_address: Some(contract_address),
+                    transaction_hash: Some(transaction_hash),
+                }),
+            ) => Self::SaveIfDeploymentExists {
+                db_client,
+                chain_id,
+                contract_address,
+                transaction_hash,
+            },
+            _ => Self::IgnoreDb,
+        }
+    }
+}
+
 async fn process_verify_response(
-    db_client: &DatabaseConnection,
-    alliance_db_client: Option<&DatabaseConnection>,
     response: smart_contract_verifier::VerifyResponse,
-    action: ProcessResponseAction,
+    action: ProcessResponseAction<'_>,
+    alliance_db_action: VerifierAllianceDbAction<'_>,
 ) -> Result<Source, Error> {
     let (source, extra_data) = match (response.status(), response.source, response.extra_data) {
         (smart_contract_verifier::Status::Success, Some(source), Some(extra_data)) => {
@@ -109,6 +147,7 @@ async fn process_verify_response(
         match action {
             ProcessResponseAction::IgnoreDb => {}
             ProcessResponseAction::SaveData {
+                db_client,
                 bytecode_type,
                 raw_request_bytecode,
                 verification_settings,
@@ -117,10 +156,9 @@ async fn process_verify_response(
             } => {
                 let database_source = DatabaseReadySource::try_from(source.clone())
                     .context("Converting source into database ready version")?;
-                let source_id =
-                    db::eth_bytecode_db::insert_data(db_client, database_source.clone())
-                        .await
-                        .context("Insert data into database")?;
+                let source_id = db::eth_bytecode_db::insert_data(db_client, database_source)
+                    .await
+                    .context("Insert data into database")?;
 
                 // For historical data we just log any errors but do not propagate them further
                 db::eth_bytecode_db::insert_verified_contract_data(
@@ -134,40 +172,53 @@ async fn process_verify_response(
                 )
                 .await
                 .context("Insert verified contract data")?;
-
-                if let Some(alliance_db_client) = alliance_db_client {
-                    if let Some(verification_metadata) = verification_metadata {
-                        if let (Some(chain_id), Some(contract_address), Some(transaction_hash)) = (
-                            verification_metadata.chain_id,
-                            verification_metadata.contract_address,
-                            verification_metadata.transaction_hash,
-                        ) {
-                            let deployment_data =
-                                db::verifier_alliance_db::ContractDeploymentData {
-                                    chain_id,
-                                    contract_address: contract_address.to_vec(),
-                                    transaction_hash: transaction_hash.to_vec(),
-                                };
-                            db::verifier_alliance_db::insert_data(
-                                alliance_db_client,
-                                database_source,
-                                deployment_data,
-                            )
-                            .await
-                            .context("Insert data into verifier alliance database")?;
-                        }
-                    }
-                }
             }
         };
+        Ok(())
+    };
+
+    let process_alliance_database_insertion = || async {
+        match alliance_db_action {
+            VerifierAllianceDbAction::IgnoreDb => {}
+            VerifierAllianceDbAction::SaveIfDeploymentExists {
+                db_client: alliance_db_client,
+                chain_id,
+                contract_address,
+                transaction_hash,
+            } => {
+                let database_source = DatabaseReadySource::try_from(source.clone())
+                    .context("Converting source into database ready version")?;
+
+                let deployment_data = db::verifier_alliance_db::ContractDeploymentData {
+                    chain_id,
+                    contract_address: contract_address.to_vec(),
+                    transaction_hash: transaction_hash.to_vec(),
+                };
+                db::verifier_alliance_db::insert_data(
+                    alliance_db_client,
+                    database_source,
+                    deployment_data,
+                )
+                .await
+                .context("Insert data into verifier alliance database")?;
+            }
+        }
+
         Ok(())
     };
 
     let _ = process_database_insertion()
         .await
         .map_err(|err: anyhow::Error| {
-            println!("Error while inserting contract data into database: {err:#}");
             tracing::error!("Error while inserting contract data into database: {err:#}")
+        });
+
+    let _ = process_alliance_database_insertion()
+        .await
+        .map_err(|err: anyhow::Error| {
+            tracing::error!(
+                "Error while inserting contract data into verifier alliance database: {err:#}"
+            )
         });
 
     Ok(source)

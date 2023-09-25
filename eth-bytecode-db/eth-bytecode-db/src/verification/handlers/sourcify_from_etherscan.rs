@@ -3,7 +3,7 @@ use super::{
         client::Client, errors::Error, smart_contract_verifier::VerifyFromEtherscanSourcifyRequest,
         types::Source,
     },
-    process_verify_response, ProcessResponseAction,
+    process_verify_response, ProcessResponseAction, VerifierAllianceDbAction,
 };
 use serde::{Deserialize, Serialize};
 
@@ -32,10 +32,9 @@ pub async fn verify(mut client: Client, request: VerificationRequest) -> Result<
         .into_inner();
 
     process_verify_response(
-        &client.db_client,
-        client.alliance_db_client.as_deref(),
         response,
         ProcessResponseAction::IgnoreDb,
+        VerifierAllianceDbAction::IgnoreDb,
     )
     .await
 }

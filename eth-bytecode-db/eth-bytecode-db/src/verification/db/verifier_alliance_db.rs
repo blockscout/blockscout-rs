@@ -83,52 +83,35 @@ async fn retrieve_code(
         .context("select from \"code\"")
 }
 
-async fn insert_verified_contract(
+async fn check_code_match<F>(
     txn: &DatabaseTransaction,
-    contract: &contracts::Model,
-    compiled_contract: &compiled_contracts::Model,
-) -> Result<verified_contracts::Model, anyhow::Error> {
-    let deployed_creation_code = retrieve_code(txn, contract.creation_code_hash.clone()).await.context("retrieve deployed creation code")?
-        .expect("\"contracts\".\"creation_code_hash\" has a foreign key constraint on \"code\".\"code_hash\"");
-    let compiled_creation_code = retrieve_code(txn, compiled_contract.creation_code_hash.clone()).await.context("retrieve compiled creation code")?
-        .expect("\"compiled_contracts\".\"creation_code_hash\" has a foreign key constraint on \"code\".\"code_hash\"");
+    deployed_code_hash: Vec<u8>,
+    compiled_code_hash: Vec<u8>,
+    code_artifacts: serde_json::Value,
+    processing_function: F,
+) -> Result<(bool, Option<serde_json::Value>, Option<serde_json::Value>), anyhow::Error>
+where
+    F: Fn(
+        &[u8],
+        Vec<u8>,
+        serde_json::Value,
+    ) -> Result<(serde_json::Value, serde_json::Value), anyhow::Error>,
+{
+    let deployed_code = retrieve_code(txn, deployed_code_hash)
+        .await
+        .context("retrieve deployed code")?
+        .expect(
+            "\"contracts\".\"code_hash\" has a foreign key constraint on \"code\".\"code_hash\"",
+        );
+    let compiled_code = retrieve_code(txn, compiled_code_hash).await.context("retrieve compiled code")?
+        .expect("\"compiled_contracts\".\"code_hash\" has a foreign key constraint on \"code\".\"code_hash\"");
 
-    let deployed_runtime_code = retrieve_code(txn, contract.runtime_code_hash.clone()).await.context("retrieve deployed runtime code")?
-        .expect("\"contracts\".\"creation_code_hash\" has a foreign key constraint on \"code\".\"code_hash\"");
-    let compiled_runtime_code = retrieve_code(txn, compiled_contract.runtime_code_hash.clone()).await.context("retrieve compiled runtime code")?
-        .expect("\"compiled_contracts\".\"creation_code_hash\" has a foreign key constraint on \"code\".\"code_hash\"");
-
-    let creation_code_match_details =
-        match (deployed_creation_code.code, compiled_creation_code.code) {
-            (Some(deployed_code), Some(compiled_code)) => {
-                let code_artifacts = compiled_contract.creation_code_artifacts.clone();
-                match verifier_alliance::process_creation_code(
-                    &deployed_code,
-                    compiled_code,
-                    code_artifacts,
-                ) {
-                    Ok(res) => Some(res),
-                    Err(err) => {
-                        tracing::warn!("creation code processing failed; err={err:#}");
-                        None
-                    }
-                }
-            }
-            _ => None,
-        };
-    let runtime_code_match_details = match (deployed_runtime_code.code, compiled_runtime_code.code)
-    {
+    let code_match_details = match (deployed_code.code, compiled_code.code) {
         (Some(deployed_code), Some(compiled_code)) => {
-            let code_artifacts = compiled_contract.runtime_code_artifacts.clone();
-            match verifier_alliance::process_runtime_code(
-                &deployed_code,
-                compiled_code,
-                code_artifacts,
-            ) {
+            match processing_function(&deployed_code, compiled_code, code_artifacts) {
                 Ok(res) => Some(res),
                 Err(err) => {
-                    println!("runtime code processing failed; err={err:#}");
-                    tracing::warn!("runtime code processing failed; err={err:#}");
+                    tracing::warn!("code processing failed; err={err:#}");
                     None
                 }
             }
@@ -136,16 +119,37 @@ async fn insert_verified_contract(
         _ => None,
     };
 
-    let (creation_match, creation_values, creation_transformations) =
-        match creation_code_match_details {
-            None => (false, None, None),
-            Some((values, transformations)) => (true, Some(values), Some(transformations)),
-        };
-    let (runtime_match, runtime_values, runtime_transformations) = match runtime_code_match_details
-    {
+    let (creation_match, creation_values, creation_transformations) = match code_match_details {
         None => (false, None, None),
         Some((values, transformations)) => (true, Some(values), Some(transformations)),
     };
+
+    Ok((creation_match, creation_values, creation_transformations))
+}
+
+async fn insert_verified_contract(
+    txn: &DatabaseTransaction,
+    contract: &contracts::Model,
+    compiled_contract: &compiled_contracts::Model,
+) -> Result<verified_contracts::Model, anyhow::Error> {
+    let (creation_match, creation_values, creation_transformations) = check_code_match(
+        txn,
+        contract.creation_code_hash.clone(),
+        compiled_contract.creation_code_hash.clone(),
+        compiled_contract.creation_code_artifacts.clone(),
+        verifier_alliance::process_creation_code,
+    )
+    .await
+    .context("check creation code match")?;
+    let (runtime_match, runtime_values, runtime_transformations) = check_code_match(
+        txn,
+        contract.runtime_code_hash.clone(),
+        compiled_contract.runtime_code_hash.clone(),
+        compiled_contract.runtime_code_artifacts.clone(),
+        verifier_alliance::process_runtime_code,
+    )
+    .await
+    .context("check runtime code match")?;
 
     if !(creation_match || runtime_match) {
         return Err(anyhow::anyhow!(
@@ -253,47 +257,4 @@ async fn insert_code(
         insert_then_select!(txn, code, active_model, [(CodeHash, code_hash.0.to_vec())])?;
 
     Ok(code)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use bytes::Bytes;
-    use pretty_assertions::assert_eq;
-    use sea_orm::{DatabaseBackend, QueryTrait};
-    use verifier_alliance_entity::code;
-
-    #[tokio::test]
-    async fn test() {
-        let chain_id: i64 = 123;
-        let address = Bytes::from_static(&[1u8, 2, 3, 4]);
-        let transaction_hash = Bytes::from_static(&[5u8, 6, 7, 8, 9, 10]);
-
-        let query = contracts::Entity::find()
-            .join(
-                JoinType::Join,
-                contracts::Relation::ContractDeployments.def(),
-            )
-            .filter(contract_deployments::Column::ChainId.eq(chain_id))
-            .filter(contract_deployments::Column::Address.eq(address.to_vec()))
-            .filter(contract_deployments::Column::TransactionHash.eq(transaction_hash.to_vec()))
-            .build(DatabaseBackend::Postgres)
-            .to_string();
-
-        assert_eq!("", query);
-
-        let query = code::Entity::find()
-            .join_rev(
-                JoinType::Join,
-                contracts::Entity::belongs_to(code::Entity)
-                    .from(contracts::Column::CreationCodeHash)
-                    .to(code::Column::CodeHash)
-                    .into(),
-            )
-            .filter(contracts::Column::Id.eq(vec![1u8, 2, 3, 4]))
-            .build(DatabaseBackend::Postgres)
-            .to_string();
-
-        assert_eq!("", query);
-    }
 }
