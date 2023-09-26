@@ -283,7 +283,7 @@ mod tests {
     fn client() -> Client {
         let rate_limiter = rate_limiter_middleware().clone();
         ClientBuilder::default()
-            .max_retries(1)
+            .max_retries(3)
             .with_arc_middleware(rate_limiter)
             .build()
     }
@@ -462,24 +462,23 @@ mod tests {
             ));
         }
 
-        // TODO: returns TooManyRequests to the Etherscan API for some reason
-        // #[tokio::test]
-        // async fn verify_from_etherscan_contract_not_verified() {
-        //     let chain_id = "5";
-        //     let contract_address =
-        //         parse_contract_address("0x847F2d0c193E90963aAD7B2791aAE8d7310dFF6A");
-        //
-        //     let result = client()
-        //         .verify_from_etherscan(chain_id, contract_address)
-        //         .await
-        //         .expect_err("error expected");
-        //     assert!(matches!(
-        //         result,
-        //         Error::Sourcify(SourcifyError::Custom(
-        //             VerifyFromEtherscanError::ContractNotVerified(_)
-        //         ))
-        //     ));
-        // }
+        #[tokio::test]
+        async fn verify_from_etherscan_contract_not_verified() {
+            let chain_id = "5";
+            let contract_address =
+                parse_contract_address("0x847F2d0c193E90963aAD7B2791aAE8d7310dFF6A");
+
+            let result = client()
+                .verify_from_etherscan(chain_id, contract_address)
+                .await
+                .expect_err("error expected");
+            assert!(matches!(
+                result,
+                Error::Sourcify(SourcifyError::Custom(
+                    VerifyFromEtherscanError::ContractNotVerified(_)
+                ))
+            ));
+        }
 
         /*
         * Not implemented to avoid unnecessary burden on the Sourcify server.
