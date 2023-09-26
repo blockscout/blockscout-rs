@@ -98,8 +98,9 @@ async fn test_success(test_case: impl TestCase) {
     );
 
     if let Some(expected_compiler_settings) = test_case.compiler_settings() {
+        let compiler_settings = serde_json::Value::from_str(&source.compiler_settings).expect("Compiler settings deserialization failed");
         assert_eq!(
-            source.compiler_settings, expected_compiler_settings,
+            compiler_settings, expected_compiler_settings,
             "Invalid compiler settings"
         );
     } else {
@@ -318,4 +319,11 @@ mod success_tests {
         let test_case = solidity_types::from_file::<Flattened>("simple_storage");
         test_success(test_case).await;
     }
+
+    // TODO: is not working right now, as auxdata is not retrieved for contracts compiled without metadata hash.
+    // #[tokio::test]
+    // async fn returns_compilation_related_artifacts_with_no_metadata_hash() {
+    //     let test_case = solidity_types::from_file::<StandardJson>("no_metadata_hash");
+    //     test_success(test_case).await;
+    // }
 }

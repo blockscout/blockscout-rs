@@ -174,214 +174,174 @@ impl TestCase for Flattened {
     }
 }
 
-// #[derive(Debug, Clone, Deserialize)]
-// pub struct MultiPart {
-//     pub deployed_bytecode: String,
-//     pub creation_bytecode: String,
-//     pub compiler_version: String,
-//     pub file_name: String,
-//     pub contract_name: String,
-//     pub evm_version: Option<String>,
-//     pub source_files: BTreeMap<String, String>,
-//     pub interfaces: BTreeMap<String, String>,
-//     pub expected_constructor_argument: Option<DisplayBytes>,
-//
-//     // Verification metadata related values
-//     pub chain_id: Option<String>,
-//     pub contract_address: Option<String>,
-// }
-//
-// impl TestCase for MultiPart {
-//     fn route() -> &'static str {
-//         "/api/v2/verifier/vyper/sources:verify-multi-part"
-//     }
-//
-//     fn to_request(&self) -> serde_json::Value {
-//         serde_json::json!({
-//             "bytecode": self.creation_bytecode,
-//             "bytecodeType": BytecodeType::CreationInput.as_str_name(),
-//             "compilerVersion": self.compiler_version,
-//             "evmVersion": self.evm_version,
-//             "sourceFiles": self.source_files,
-//             "interfaces": self.interfaces,
-//             "metadata": {
-//                 "chainId": self.chain_id,
-//                 "contractAddress": self.contract_address
-//             }
-//         })
-//     }
-//
-//     fn file_name(&self) -> Cow<'_, str> {
-//         Cow::from(&self.file_name)
-//     }
-//
-//     fn contract_name(&self) -> &str {
-//         self.contract_name.as_str()
-//     }
-//
-//     fn constructor_args(&self) -> Option<DisplayBytes> {
-//         self.expected_constructor_argument.clone()
-//     }
-//
-//     fn compiler_version(&self) -> &str {
-//         self.compiler_version.as_str()
-//     }
-//
-//     fn evm_version(&self) -> Option<String> {
-//         self.evm_version.clone()
-//     }
-//
-//     fn source_files(&self) -> BTreeMap<String, String> {
-//         let sources = self.source_files.clone().into_iter();
-//         let interfaces = self.interfaces.iter().map(|(path, content)| {
-//             let content = if PathBuf::from(path).extension() == Some(std::ffi::OsStr::new("json")) {
-//                 let value = serde_json::Value::from_str(content).unwrap();
-//                 value.to_string()
-//             } else {
-//                 content.clone()
-//             };
-//             (path.clone(), content)
-//         });
-//         sources.chain(interfaces).collect()
-//     }
-// }
-//
-// #[derive(Debug, Clone, Deserialize)]
-// pub struct StandardJson {
-//     pub deployed_bytecode: String,
-//     pub creation_bytecode: String,
-//     pub compiler_version: String,
-//     pub file_name: String,
-//     pub contract_name: String,
-//     #[serde(deserialize_with = "StandardJson::deserialize_input")]
-//     pub input: String,
-//     pub expected_constructor_argument: Option<DisplayBytes>,
-//
-//     // Verification metadata related values
-//     pub chain_id: Option<String>,
-//     pub contract_address: Option<String>,
-// }
-//
-// impl StandardJson {
-//     fn deserialize_input<'de, D>(deserializer: D) -> Result<String, D::Error>
-//     where
-//         D: serde::Deserializer<'de>,
-//     {
-//         let val = serde_json::Value::deserialize(deserializer)?;
-//         Ok(val.to_string())
-//     }
-// }
-//
-// impl TestCase for StandardJson {
-//     fn route() -> &'static str {
-//         "/api/v2/verifier/vyper/sources:verify-standard-json"
-//     }
-//
-//     fn to_request(&self) -> serde_json::Value {
-//         serde_json::json!({
-//             "bytecode": self.creation_bytecode,
-//             "bytecodeType": BytecodeType::CreationInput.as_str_name(),
-//             "compilerVersion": self.compiler_version,
-//             "input": self.input,
-//             "metadata": {
-//                 "chainId": self.chain_id,
-//                 "contractAddress": self.contract_address
-//             }
-//         })
-//     }
-//
-//     fn file_name(&self) -> Cow<'_, str> {
-//         Cow::from(&self.file_name)
-//     }
-//
-//     fn contract_name(&self) -> &str {
-//         self.contract_name.as_str()
-//     }
-//
-//     fn constructor_args(&self) -> Option<DisplayBytes> {
-//         self.expected_constructor_argument.clone()
-//     }
-//
-//     fn compiler_version(&self) -> &str {
-//         self.compiler_version.as_str()
-//     }
-//
-//     fn source_files(&self) -> BTreeMap<String, String> {
-//         #[derive(Deserialize)]
-//         struct VyperSource {
-//             pub content: String,
-//         }
-//         #[derive(Deserialize)]
-//         struct AbiSource {
-//             pub abi: serde_json::Value,
-//         }
-//         #[derive(Deserialize)]
-//         #[serde(untagged)]
-//         enum Interface {
-//             Vyper(VyperSource),
-//             Abi(AbiSource),
-//             ContractTypes(serde_json::Value),
-//         }
-//
-//         let input = serde_json::Value::from_str(&self.input).unwrap();
-//         let mut source_files = if let serde_json::Value::Object(map) =
-//             input.get("sources").expect("sources are missing")
-//         {
-//             map.into_iter()
-//                 .map(|(path, value)| {
-//                     let source: VyperSource =
-//                         serde_json::from_value(value.clone()).expect("invalid source");
-//                     (path.clone(), source.content)
-//                 })
-//                 .collect()
-//         } else {
-//             BTreeMap::default()
-//         };
-//         if let Some(serde_json::Value::Object(map)) = input.get("interfaces") {
-//             source_files.extend(map.into_iter().map(|(path, value)| {
-//                 let interface: Interface =
-//                     serde_json::from_value(value.clone()).expect("invalid interface");
-//                 let content = match interface {
-//                     Interface::Vyper(source) => source.content,
-//                     Interface::Abi(source) => source.abi.to_string(),
-//                     Interface::ContractTypes(source) => source.to_string(),
-//                 };
-//                 (path.clone(), content)
-//             }))
-//         };
-//         source_files
-//     }
-//
-//     fn evm_version(&self) -> Option<String> {
-//         let input = serde_json::Value::from_str(&self.input).unwrap();
-//         input.get("settings")?.get("evmVersion").map(|value| {
-//             if let serde_json::Value::String(val) = value {
-//                 val.clone()
-//             } else {
-//                 panic!("evm version is not a string")
-//             }
-//         })
-//     }
-//
-//     fn optimize(&self) -> Option<bool> {
-//         let input = serde_json::Value::from_str(&self.input).unwrap();
-//         input.get("settings")?.get("optimize").map(|value| {
-//             if let serde_json::Value::Bool(val) = value {
-//                 *val
-//             } else {
-//                 panic!("optimize is not a bool")
-//             }
-//         })
-//     }
-//
-//     fn bytecode_metadata(&self) -> Option<bool> {
-//         let input = serde_json::Value::from_str(&self.input).unwrap();
-//         input.get("settings")?.get("bytecodeMetadata").map(|value| {
-//             if let serde_json::Value::Bool(val) = value {
-//                 *val
-//             } else {
-//                 panic!("bytecode metadata is not a bool")
-//             }
-//         })
-//     }
-// }
+#[derive(Debug, Clone, Deserialize)]
+pub struct StandardJson {
+    pub file_name: String,
+    pub contract_name: String,
+    pub deployed_bytecode: String,
+    pub creation_bytecode: String,
+    pub compiler_version: String,
+
+    #[serde(deserialize_with = "StandardJson::deserialize_input")]
+    pub input: String,
+
+    pub is_full_match: Option<bool>,
+    pub expected_constructor_argument: Option<DisplayBytes>,
+    pub expected_compiler_artifacts: Option<serde_json::Value>,
+    pub expected_creation_input_artifacts: Option<serde_json::Value>,
+    pub expected_deployed_bytecode_artifacts: Option<serde_json::Value>,
+
+    // Verification metadata related values
+    pub chain_id: Option<String>,
+    pub contract_address: Option<String>,
+}
+
+impl StandardJson {
+    fn deserialize_input<'de, D>(deserializer: D) -> Result<String, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let val = serde_json::Value::deserialize(deserializer)?;
+        Ok(val.to_string())
+    }
+}
+
+// The helper function for the tests. Allows to easier create the structs required for the json fields deserialization.
+macro_rules! single_field_struct {
+    ($struct_name:ident, $field:ident, $field_type:ty) => {
+        #[derive(Default, Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        #[serde(default)]
+        struct $struct_name {
+            $field: $field_type,
+        }
+    }
+}
+
+impl TestCase for StandardJson {
+    fn route() -> &'static str {
+        "/api/v2/verifier/solidity/sources:verify-standard-json"
+    }
+
+    fn to_request(&self) -> serde_json::Value {
+        serde_json::json!({
+            "bytecode": self.creation_bytecode,
+            "bytecodeType": BytecodeType::CreationInput.as_str_name(),
+            "compilerVersion": self.compiler_version,
+            "input": self.input,
+            "metadata": {
+                "chainId": self.chain_id,
+                "contractAddress": self.contract_address
+            }
+        })
+    }
+
+    fn is_yul(&self) -> bool {
+        single_field_struct!(Input, language, String);
+
+        let input: Input = serde_json::from_str(&self.input).expect("language parsing failed");
+        input.language == "Yul"
+    }
+
+    fn file_name(&self) -> Cow<'_, str> {
+        Cow::from(&self.file_name)
+    }
+
+    fn contract_name(&self) -> &str {
+        self.contract_name.as_str()
+    }
+
+    fn compiler_version(&self) -> &str {
+        self.compiler_version.as_str()
+    }
+
+    fn evm_version(&self) -> Option<String> {
+        single_field_struct!(Settings, evm_version, Option<String>);
+        single_field_struct!(Input, settings, Option<Settings>);
+
+        let input: Input = serde_json::from_str(&self.input).expect("evm version parsing failed");
+        input.settings.and_then(|v| v.evm_version)
+    }
+
+    fn libraries(&self) -> BTreeMap<String, String> {
+        single_field_struct!(Settings, libraries, BTreeMap<String, BTreeMap<String, String>>);
+        single_field_struct!(Input, settings, Option<Settings>);
+
+        let input: Input = serde_json::from_str(&self.input).expect("libraries parsing failed");
+        input
+            .settings
+            .map(|v| v.libraries.into_values().flatten().collect())
+            .unwrap_or_default()
+    }
+
+    fn optimizer_enabled(&self) -> Option<bool> {
+        single_field_struct!(Optimizer, enabled, Option<bool>);
+        single_field_struct!(Settings, optimizer, Option<Optimizer>);
+        single_field_struct!(Input, settings, Option<Settings>);
+
+        let input: Input =
+            serde_json::from_str(&self.input).expect("optimizer_enabled parsing failed");
+        input
+            .settings
+            .and_then(|v| v.optimizer.and_then(|v| v.enabled))
+    }
+
+    fn optimizer_runs(&self) -> Option<i32> {
+        single_field_struct!(Optimizer, runs, Option<i32>);
+        single_field_struct!(Settings, optimizer, Option<Optimizer>);
+        single_field_struct!(Input, settings, Option<Settings>);
+
+        let input: Input =
+            serde_json::from_str(&self.input).expect("optimizer_runs parsing failed");
+        input
+            .settings
+            .and_then(|v| v.optimizer.and_then(|v| v.runs))
+    }
+
+    fn source_files(&self) -> BTreeMap<String, String> {
+        single_field_struct!(Source, content, String);
+        single_field_struct!(Input, sources, BTreeMap<String, Source>);
+
+        let input: Input = serde_json::from_str(&self.input).expect("source files parsing failed");
+        input
+            .sources
+            .into_iter()
+            .map(|(name, source)| (name, source.content))
+            .collect()
+    }
+
+    fn constructor_args(&self) -> Option<DisplayBytes> {
+        self.expected_constructor_argument.clone()
+    }
+
+    fn match_type(&self) -> MatchType {
+        if let Some(true) = self.is_full_match {
+            MatchType::Full
+        } else {
+            MatchType::Partial
+        }
+    }
+
+    fn abi(&self) -> Option<serde_json::Value> {
+        None
+    }
+
+    fn compiler_settings(&self) -> Option<serde_json::Value> {
+        single_field_struct!(Input, settings, Option<serde_json::Value>);
+
+        let input: Input = serde_json::from_str(&self.input).expect("settings parsing failed");
+        input.settings
+    }
+
+    fn compiler_artifacts(&self) -> Option<serde_json::Value> {
+        self.expected_compiler_artifacts.clone()
+    }
+
+    fn creation_input_artifacts(&self) -> Option<serde_json::Value> {
+        self.expected_creation_input_artifacts.clone()
+    }
+
+    fn deployed_bytecode_artifacts(&self) -> Option<serde_json::Value> {
+        self.expected_deployed_bytecode_artifacts.clone()
+    }
+}
