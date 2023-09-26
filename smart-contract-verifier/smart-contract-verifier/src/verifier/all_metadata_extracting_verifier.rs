@@ -12,6 +12,7 @@ use ethabi::{Constructor, Token};
 use ethers_solc::{artifacts::Contract, Artifact, CompilerOutput};
 use mismatch::Mismatch;
 use solidity_metadata::MetadataHash;
+use std::collections::BTreeMap;
 
 /// Verifier used for contract verification.
 ///
@@ -228,6 +229,28 @@ impl<T: Source> Verifier<T> {
                             serde_json::to_value(artifacts).unwrap()
                         };
 
+                        #[derive(Clone, Debug, serde::Serialize, Eq, PartialEq)]
+                        struct CborAuxdataValue {
+                            offset: usize,
+                            value: DisplayBytes,
+                        }
+
+                        let generate_auxdata = |bytecode_parts: &[BytecodePart]| {
+                            let mut auxdata = BTreeMap::new();
+                            let mut offset = 0;
+                            for part in bytecode_parts {
+                                match part {
+                                    BytecodePart::Main { .. } => offset += part.size(),
+                                    BytecodePart::Metadata { raw, .. } => {
+                                        let id = format!("{}", auxdata.len());
+                                        let value = DisplayBytes::from(raw.to_vec());
+                                        auxdata.insert(id, CborAuxdataValue { offset, value });
+                                    }
+                                }
+                            }
+                            auxdata
+                        };
+
                         let creation_input_artifacts = {
                             #[derive(Clone, Debug, serde::Serialize, Eq, PartialEq)]
                             #[serde(rename_all = "camelCase")]
@@ -236,6 +259,8 @@ impl<T: Source> Verifier<T> {
                                 pub source_map: Option<&'a String>,
                                 #[serde(skip_serializing_if = "Option::is_none")]
                                 pub link_references: Option<&'a serde_json::Value>,
+                                #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+                                pub cbor_auxdata: BTreeMap<String, CborAuxdataValue>,
                             }
 
                             let bytecode = raw_contract
@@ -247,6 +272,9 @@ impl<T: Source> Verifier<T> {
                                     .and_then(|bytecode| bytecode.source_map.as_ref()),
                                 link_references: bytecode
                                     .and_then(|bytecode| bytecode.link_references.as_ref()),
+                                cbor_auxdata: generate_auxdata(
+                                    &local_bytecode.creation_tx_input_parts,
+                                ),
                             };
 
                             serde_json::to_value(artifacts).unwrap()
@@ -262,6 +290,8 @@ impl<T: Source> Verifier<T> {
                                 pub link_references: Option<&'a serde_json::Value>,
                                 #[serde(skip_serializing_if = "Option::is_none")]
                                 pub immutable_references: Option<&'a serde_json::Value>,
+                                #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+                                pub cbor_auxdata: BTreeMap<String, CborAuxdataValue>,
                             }
 
                             let deployed_bytecode = raw_contract
@@ -275,6 +305,9 @@ impl<T: Source> Verifier<T> {
                                     .and_then(|bytecode| bytecode.link_references.as_ref()),
                                 immutable_references: deployed_bytecode
                                     .and_then(|bytecode| bytecode.immutable_references.as_ref()),
+                                cbor_auxdata: generate_auxdata(
+                                    &local_bytecode.deployed_bytecode_parts,
+                                ),
                             };
 
                             serde_json::to_value(artifacts).unwrap()
