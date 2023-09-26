@@ -1,11 +1,12 @@
 use super::{json_config, toml_config};
-use std::path::Path;
+use crate::Settings;
 
-pub fn read_charts_config(path: &Path) -> Result<toml_config::Config, anyhow::Error> {
+pub fn read_charts_config(settings: &Settings) -> Result<toml_config::Config, anyhow::Error> {
+    let path = &settings.charts_config;
     let extension = path.extension();
     if extension == Some(std::ffi::OsStr::new("json")) {
         let json_config: json_config::Config = config::Config::builder()
-            .add_source(config::File::from(path))
+            .add_source(config::File::from(path.as_path()))
             .add_source(
                 config::Environment::with_prefix("STATS_CHARTS")
                     .separator("__")
@@ -13,6 +14,7 @@ pub fn read_charts_config(path: &Path) -> Result<toml_config::Config, anyhow::Er
             )
             .build()?
             .try_deserialize()?;
+        let json_config = json_config.render_with_template_values()?;
         Ok(json_config.into())
     } else if extension == Some(std::ffi::OsStr::new("toml")) {
         let toml_config = std::fs::read(path)?;
