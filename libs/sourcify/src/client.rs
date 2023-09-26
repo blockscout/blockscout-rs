@@ -430,7 +430,7 @@ mod tests {
                 .expect_err("error expected");
             assert!(
                 matches!(result, Error::Sourcify(SourcifyError::ChainNotSupported(_))),
-                "expected: 'SourcifyError::BadRequest', got: {result:?}"
+                "expected: 'SourcifyError::ChainNotSupported', got: {result:?}"
             );
         }
 
@@ -454,12 +454,15 @@ mod tests {
                 .verify_from_etherscan(chain_id, contract_address)
                 .await
                 .expect_err("error expected");
-            assert!(matches!(
-                result,
-                Error::Sourcify(SourcifyError::Custom(
-                    VerifyFromEtherscanError::ChainNotSupported(_)
-                ))
-            ));
+            assert!(
+                matches!(
+                    result,
+                    Error::Sourcify(SourcifyError::Custom(
+                        VerifyFromEtherscanError::ChainNotSupported(_)
+                    ))
+                ),
+                "expected: 'SourcifyError::ChainNotSupported', got: {result:?}"
+            );
         }
 
         #[tokio::test]
@@ -472,12 +475,15 @@ mod tests {
                 .verify_from_etherscan(chain_id, contract_address)
                 .await
                 .expect_err("error expected");
-            assert!(matches!(
-                result,
-                Error::Sourcify(SourcifyError::Custom(
-                    VerifyFromEtherscanError::ContractNotVerified(_)
-                ))
-            ));
+            assert!(
+                matches!(
+                    result,
+                    Error::Sourcify(SourcifyError::Custom(
+                        VerifyFromEtherscanError::ContractNotVerified(_)
+                    ))
+                ),
+                "expected: 'SourcifyError::ContractNotVerified', got: {result:?}"
+            );
         }
 
         /*
