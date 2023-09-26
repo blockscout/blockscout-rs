@@ -14,6 +14,40 @@ use serde::{Deserialize, Serialize};
 use std::{str::FromStr, sync::Arc};
 use url::Url;
 
+mod retryable_strategy {
+    use reqwest::StatusCode;
+    use reqwest_middleware::Error;
+    use reqwest_retry::{Retryable, RetryableStrategy};
+
+    pub struct SourcifyRetryableStrategy;
+
+    impl RetryableStrategy for SourcifyRetryableStrategy {
+        fn handle(&self, res: &Result<reqwest::Response, Error>) -> Option<Retryable> {
+            match res {
+                Ok(success) => default_on_request_success(success),
+                Err(error) => reqwest_retry::default_on_request_failure(error),
+            }
+        }
+    }
+
+    // The strategy differs from `reqwest_retry::default_on_request_success`
+    // by considering 500 errors as Fatal instead of Transient.
+    // The reason is that Sourcify uses 500 code to propagate fatal internal errors,
+    // which will not be resolved on retry and which we would like to get early to process.
+    fn default_on_request_success(success: &reqwest::Response) -> Option<Retryable> {
+        let status = success.status();
+        if status.is_server_error() && status != StatusCode::INTERNAL_SERVER_ERROR {
+            Some(Retryable::Transient)
+        } else if status.is_success() {
+            None
+        } else if status == StatusCode::REQUEST_TIMEOUT || status == StatusCode::TOO_MANY_REQUESTS {
+            Some(Retryable::Transient)
+        } else {
+            Some(Retryable::Fatal)
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct ClientBuilder {
     base_url: Url,
@@ -56,7 +90,10 @@ impl ClientBuilder {
     pub fn build(self) -> Client {
         let retry_policy = ExponentialBackoff::builder().build_with_max_retries(self.max_retries);
         let mut client_builder = reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
-            .with(RetryTransientMiddleware::new_with_policy(retry_policy));
+            .with(RetryTransientMiddleware::new_with_policy_and_strategy(
+                retry_policy,
+                retryable_strategy::SourcifyRetryableStrategy,
+            ));
         for middleware in self.middleware_stack {
             client_builder = client_builder.with_arc(middleware);
         }
