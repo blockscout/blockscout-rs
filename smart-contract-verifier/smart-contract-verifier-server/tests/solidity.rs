@@ -98,7 +98,8 @@ async fn test_success(test_case: impl TestCase) {
     );
 
     if let Some(expected_compiler_settings) = test_case.compiler_settings() {
-        let compiler_settings = serde_json::Value::from_str(&source.compiler_settings).expect("Compiler settings deserialization failed");
+        let compiler_settings = serde_json::Value::from_str(&source.compiler_settings)
+            .expect("Compiler settings deserialization failed");
         assert_eq!(
             compiler_settings, expected_compiler_settings,
             "Invalid compiler settings"

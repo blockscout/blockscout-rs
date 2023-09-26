@@ -215,7 +215,7 @@ macro_rules! single_field_struct {
         struct $struct_name {
             $field: $field_type,
         }
-    }
+    };
 }
 
 impl TestCase for StandardJson {
