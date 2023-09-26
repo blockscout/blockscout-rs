@@ -39,7 +39,6 @@ fn grpc_router<S: StatsService>(
 
 pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
     blockscout_service_launcher::init_logs(SERVICE_NAME, &settings.tracing, &settings.jaeger)?;
-
     let charts_config = read_charts_config(&settings.charts_config)?;
     let mut opt = ConnectOptions::new(settings.db_url.clone());
     opt.sqlx_logging_level(tracing::log::LevelFilter::Debug);

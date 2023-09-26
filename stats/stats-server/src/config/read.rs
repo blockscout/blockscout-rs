@@ -13,6 +13,7 @@ pub fn read_charts_config(path: &Path) -> Result<toml_config::Config, anyhow::Er
             )
             .build()?
             .try_deserialize()?;
+        let json_config = json_config.render_with_template_values()?;
         Ok(json_config.into())
     } else if extension == Some(std::ffi::OsStr::new("toml")) {
         let toml_config = std::fs::read(path)?;

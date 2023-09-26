@@ -1,7 +1,6 @@
+use super::chart_info::ChartSettings;
 use serde::Deserialize;
 use stats_proto::blockscout::stats::v1 as proto;
-
-use super::chart_info::ChartSettings;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct CounterInfo {

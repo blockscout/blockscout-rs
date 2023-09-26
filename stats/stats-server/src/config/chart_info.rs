@@ -1,9 +1,9 @@
 use cron::Schedule;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
 
 #[serde_as]
-#[derive(Default, Debug, Clone, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ChartSettings {
     #[serde(default = "enabled_default")]
@@ -17,7 +17,7 @@ fn enabled_default() -> bool {
     true
 }
 
-#[derive(Default, Debug, Clone, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct CounterInfo {
     pub title: String,
@@ -26,7 +26,7 @@ pub struct CounterInfo {
     pub settings: ChartSettings,
 }
 
-#[derive(Default, Debug, Clone, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct LineChartInfo {
     pub title: String,

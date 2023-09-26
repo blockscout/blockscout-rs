@@ -1,4 +1,7 @@
 {
+    "template_values": {
+        "native_coin_symbol": "ETH"
+    },
     "counters": {
         "total_blocks": {
             "title": "Total blocks",
@@ -96,14 +99,14 @@
             "charts": {
                 "average_txn_fee": {
                     "title": "Average transaction fee",
-                    "description": "The average amount in ETH spent per transaction",
-                    "units": "ETH",
+                    "description": "The average amount in {{native_coin_symbol}} spent per transaction",
+                    "units": "{{native_coin_symbol}}",
                     "update_schedule": "0 0 6 * * * *"
                 },
                 "txns_fee": {
                     "title": "Transactions fees",
                     "description": "Amount of tokens paid as fees",
-                    "units": "ETH",
+                    "units": "{{native_coin_symbol}}",
                     "update_schedule": "0 0 7 * * * *"
                 },
                 "new_txns": {
@@ -141,7 +144,7 @@
                 "average_block_rewards": {
                     "title": "Average block rewards",
                     "description": "Average amount of distributed reward in tokens per day",
-                    "units": "ETH",
+                    "units": "{{native_coin_symbol}}",
                     "update_schedule": "0 0 20 * * * *"
                 }
             }
@@ -171,7 +174,7 @@
                     "enabled": false,
                     "title": "Native coin circulating supply",
                     "description": "Amount of token circulating supply for the period",
-                    "units": "ETH",
+                    "units": "{{native_coin_symbol}}",
                     "update_schedule": "0 0 11 * * * *"
                 }
             }
