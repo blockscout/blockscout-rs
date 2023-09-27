@@ -19,13 +19,10 @@ impl SourcifyApiClient {
         request_timeout: u64,
         verification_attempts: NonZeroU32,
     ) -> Result<Self, reqwest::Error> {
-        // Calculated based on some basic reasoning: to provide maximum time for all attempts;
-        // multiplied by two just in case. Probably we need some better estimations here.
-        let total_duration = request_timeout * verification_attempts.get() as u64 * 2;
         let lib_client = sourcify::ClientBuilder::default()
             .try_base_url(host.as_str())
             .unwrap()
-            .total_duration(Duration::from_secs(total_duration))
+            .max_retries(verification_attempts.get())
             .build();
 
         let retry_policy =

@@ -22,7 +22,7 @@ sea-orm = "0.12.2"
 serde = "1.0"
 serde_json = "1.0.96"
 serde_with = "2.1"
-sourcify = { git = "https://github.com/blockscout/blockscout-rs", rev = "e61bd59" }
+sourcify = { git = "https://github.com/blockscout/blockscout-rs", rev = "34827ae" }
 tokio = { version = "1.23", features = [ "rt-multi-thread", "macros" ] }
 tonic = "0.8"
 tracing = "0.1"

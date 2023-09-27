@@ -87,10 +87,16 @@ pub async fn verify_from_etherscan(
 ) -> Result<Success, Error> {
     let lib_client = sourcify_client.lib_client();
 
-    lib_client
+    let verification_result = lib_client
         .verify_from_etherscan(request.chain.as_str(), request.address.clone())
-        .await
-        .map_err(error_handler::process_sourcify_error)?;
+        .await;
+
+    match verification_result {
+        Ok(_) => {}
+        Err(sourcify::Error::Sourcify(sourcify::SourcifyError::InternalServerError(err)))
+            if err.contains("directory already has entry by that name") => {}
+        Err(error) => return Err(error_handler::process_sourcify_error(error)),
+    }
 
     let source_files = lib_client
         .get_source_files_any(request.chain.as_str(), request.address)
@@ -179,6 +185,10 @@ mod error_handler {
                 Error::BadRequest(anyhow::anyhow!("{msg}"))
             }
             sourcify::Error::Sourcify(sourcify::SourcifyError::BadRequest(_)) => {
+                tracing::error!(target: "sourcify", "{error}");
+                Error::Internal(anyhow::anyhow!("{error}"))
+            }
+            sourcify::Error::Sourcify(sourcify::SourcifyError::BadGateway(_)) => {
                 tracing::error!(target: "sourcify", "{error}");
                 Error::Internal(anyhow::anyhow!("{error}"))
             }

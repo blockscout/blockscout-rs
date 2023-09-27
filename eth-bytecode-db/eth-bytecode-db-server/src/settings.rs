@@ -5,7 +5,6 @@ use blockscout_service_launcher::{
 use config::{Config, File};
 use serde::{de, Deserialize};
 use serde_with::{serde_as, DisplayFromStr};
-use std::time::Duration;
 
 /// Wrapper under [`serde::de::IgnoredAny`] which implements
 /// [`PartialEq`] and [`Eq`] for fields to be ignored.
@@ -67,15 +66,15 @@ pub struct VerifierSettings {
 #[serde(default, deny_unknown_fields)]
 pub struct SourcifySettings {
     pub base_url: String,
-    /// The maximum duration for which attempts to send a request will be processed.
-    pub total_request_duration: Duration,
+    /// The maximum number of attempts to repeat requests in case of server side errors.
+    pub max_retries: u32,
 }
 
 impl Default for SourcifySettings {
     fn default() -> Self {
         Self {
             base_url: "https://sourcify.dev/server/".to_string(),
-            total_request_duration: Duration::from_secs(60),
+            max_retries: 3,
         }
     }
 }
