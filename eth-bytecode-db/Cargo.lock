@@ -4387,9 +4387,9 @@ dependencies = [
 
 [[package]]
 name = "reqwest-retry"
-version = "0.2.2"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48d0fd6ef4c6d23790399fe15efc8d12cd9f3d4133958f9bd7801ee5cbaec6c4"
+checksum = "9af20b65c2ee9746cc575acb6bd28a05ffc0d15e25c992a8f4462d8686aacb4f"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4410,9 +4410,9 @@ dependencies = [
 
 [[package]]
 name = "retry-policies"
-version = "0.1.2"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e09bbcb5003282bcb688f0bae741b278e9c7e8f378f561522c9806c58e075d9b"
+checksum = "a715dc4d0e8aea3085a9a94d76e79c79c7df7c9f6be609da841a6d2489ca3687"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5260,7 +5260,7 @@ dependencies = [
 [[package]]
 name = "sourcify"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs?rev=e61bd59#e61bd59f41694bb51665f578a5f75f00f48572be"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=34827ae#34827ae1c21407e8712a788bf1c7ccef5fca3920"
 dependencies = [
  "anyhow",
  "blockscout-display-bytes",

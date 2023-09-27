@@ -89,7 +89,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let sourcify_client = sourcify::ClientBuilder::default()
         .try_base_url(&settings.sourcify.base_url)
         .map_err(|err| anyhow::anyhow!(err))?
-        .total_duration(settings.sourcify.total_request_duration)
+        .max_retries(settings.sourcify.max_retries)
         .build();
     let database = Arc::new(DatabaseService::new_arc(client.clone(), sourcify_client));
 

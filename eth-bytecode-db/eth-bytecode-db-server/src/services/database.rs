@@ -186,6 +186,10 @@ fn process_sourcify_error(
             tracing::error!(target: "sourcify", "{error}");
             None
         }
+        sourcify::Error::Sourcify(sourcify::SourcifyError::BadGateway(_)) => {
+            tracing::error!(target: "sourcify", "{error}");
+            Some(tonic::Status::internal("sourcify responded with error"))
+        }
         sourcify::Error::Sourcify(sourcify::SourcifyError::BadRequest(_)) => {
             tracing::error!(target: "sourcify", "{error}");
             Some(tonic::Status::internal("sourcify responded with error"))
