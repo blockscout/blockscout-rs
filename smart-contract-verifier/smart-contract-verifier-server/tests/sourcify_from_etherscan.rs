@@ -66,6 +66,9 @@ async fn should_return_200() {
                 "compilerSettings": "{\"evmVersion\":\"london\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]}",
                 "matchType": "PARTIAL",
                 "sourceType": "SOLIDITY",
+                "compilationArtifacts": null,
+                "creationInputArtifacts": null,
+                "deployedBytecodeArtifacts": null
             },
             "extraData": {
                 "localCreationInputParts": [],
