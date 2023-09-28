@@ -30,8 +30,8 @@
             "update_schedule": "0 0 16 * * * *"
         },
         "total_native_coin_transfers": {
-            "title": "Total native coin transfers",
-            "description": "Number of transactions with the transfer of the native coin",
+            "title": "Total {{native_coin_symbol}} transfers",
+            "description": "Number of transactions with the transfer of the {{native_coin_symbol}}",
             "update_schedule": "0 0 13 * * * *"
         },
         "total_tokens": {
@@ -66,8 +66,8 @@
         },
         "total_native_coin_holders": {
             "enabled": false,
-            "title": "Total native coin holders",
-            "description": "Number of accounts with native coin",
+            "title": "Total {{native_coin_symbol}} holders",
+            "description": "Number of accounts with {{native_coin_symbol}}",
             "update_schedule": "0 0 17 * * * *"
         }
     },
@@ -154,25 +154,25 @@
             "order": 4,
             "charts": {
                 "new_native_coin_transfers": {
-                    "title": "New native coins transfers",
+                    "title": "New {{native_coin_symbol}} transfers",
                     "description": "New token transfers number for the period",
                     "update_schedule": "0 0 3 * * * *"
                 },
                 "native_coin_holders_growth": {
                     "enabled": false,
-                    "title": "Native coin holders growth",
+                    "title": "{{native_coin_symbol}} holders growth",
                     "description": "Cumulative token holders number for the period",
                     "update_schedule": "0 0 10 * * * *"
                 },
                 "new_native_coin_holders": {
                     "enabled": false,
-                    "title": "New native coin holders",
+                    "title": "New {{native_coin_symbol}} holders",
                     "description": "New token holders number per day",
                     "update_schedule": "0 0 22 * * * *"
                 },
                 "native_coin_supply": {
                     "enabled": false,
-                    "title": "Native coin circulating supply",
+                    "title": "{{native_coin_symbol}} circulating supply",
                     "description": "Amount of token circulating supply for the period",
                     "units": "{{native_coin_symbol}}",
                     "update_schedule": "0 0 11 * * * *"
