@@ -174,6 +174,71 @@ pub struct Source {
     pub deployed_bytecode_parts: Vec<BytecodePart>,
 }
 
+impl
+    TryFrom<(
+        smart_contract_verifier::Source,
+        smart_contract_verifier::ExtraData,
+    )> for Source
+{
+    type Error = anyhow::Error;
+
+    fn try_from(
+        (source, extra_data): (
+            smart_contract_verifier::Source,
+            smart_contract_verifier::ExtraData,
+        ),
+    ) -> Result<Self, Self::Error> {
+        let parse_local_parts = |local_parts: Vec<smart_contract_verifier::BytecodePart>,
+                                 bytecode_type: &str|
+         -> Result<(Vec<BytecodePart>, Vec<u8>), anyhow::Error> {
+            let parts = local_parts
+                .into_iter()
+                .map(|part| {
+                    BytecodePart::try_from(part).map_err(|err| {
+                        anyhow::anyhow!("error while decoding local {}: {}", bytecode_type, err,)
+                            .context("verifier service connection")
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            let raw_input = parts
+                .iter()
+                .flat_map(|part| part.data().to_vec())
+                .collect::<Vec<_>>();
+
+            Ok((parts, raw_input))
+        };
+
+        let (creation_input_parts, raw_creation_input) =
+            parse_local_parts(extra_data.local_creation_input_parts, "creation input")?;
+        let (deployed_bytecode_parts, raw_deployed_bytecode) = parse_local_parts(
+            extra_data.local_deployed_bytecode_parts,
+            "deployed bytecode",
+        )?;
+
+        let source_type = source.source_type().try_into()?;
+        let match_type = source.match_type().into();
+        Ok(Self {
+            file_name: source.file_name,
+            contract_name: source.contract_name,
+            compiler_version: source.compiler_version,
+            compiler_settings: source.compiler_settings,
+            source_type,
+            source_files: source.source_files,
+            abi: source.abi,
+            constructor_arguments: source.constructor_arguments,
+            match_type,
+            compilation_artifacts: source.compilation_artifacts,
+            creation_input_artifacts: source.creation_input_artifacts,
+            deployed_bytecode_artifacts: source.deployed_bytecode_artifacts,
+            raw_creation_input,
+            raw_deployed_bytecode,
+            creation_input_parts,
+            deployed_bytecode_parts,
+        })
+    }
+}
+
 /// The same as [`Source`] but processed to be inserted into the database.
 /// The processing consists of converting all JSON stored types into [`serde_json::Value`].
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

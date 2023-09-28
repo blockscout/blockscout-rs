@@ -12,15 +12,12 @@ use super::{
     db,
     errors::Error,
     smart_contract_verifier,
-    types::{
-        BytecodePart, BytecodeType, DatabaseReadySource, Source, VerificationMetadata,
-        VerificationType,
-    },
+    types::{BytecodeType, DatabaseReadySource, Source, VerificationMetadata, VerificationType},
 };
 use anyhow::Context;
 use sea_orm::DatabaseConnection;
 
-enum ProcessResponseAction<'a> {
+enum EthBytecodeDbAction<'a> {
     IgnoreDb,
     SaveData {
         db_client: &'a DatabaseConnection,
@@ -72,8 +69,34 @@ impl<'a> VerifierAllianceDbAction<'a> {
 
 async fn process_verify_response(
     response: smart_contract_verifier::VerifyResponse,
-    action: ProcessResponseAction<'_>,
+    eth_bytecode_db_action: EthBytecodeDbAction<'_>,
     alliance_db_action: VerifierAllianceDbAction<'_>,
+) -> Result<Source, Error> {
+    let source = from_response_to_source(response).await?;
+
+    let process_eth_bytecode_db_future =
+        process_eth_bytecode_db_action(source.clone(), eth_bytecode_db_action);
+
+    let process_alliance_db_future =
+        process_verifier_alliance_db_action(source.clone(), alliance_db_action);
+
+    // We may process insertion into both databases concurrently, as they are independent from one another.
+    let (process_eth_bytecode_db_result, process_alliance_db_result) =
+        futures::future::join(process_eth_bytecode_db_future, process_alliance_db_future).await;
+    let _ = process_eth_bytecode_db_result.map_err(|err: anyhow::Error| {
+        tracing::error!("Error while inserting contract data into database: {err:#}")
+    });
+    let _ = process_alliance_db_result.map_err(|err: anyhow::Error| {
+        tracing::error!(
+            "Error while inserting contract data into verifier alliance database: {err:#}"
+        )
+    });
+
+    Ok(source)
+}
+
+async fn from_response_to_source(
+    response: smart_contract_verifier::VerifyResponse,
 ) -> Result<Source, Error> {
     let (source, extra_data) = match (response.status(), response.source, response.extra_data) {
         (smart_contract_verifier::Status::Success, Some(source), Some(extra_data)) => {
@@ -92,134 +115,76 @@ async fn process_verify_response(
         }
     };
 
-    let parse_local_parts = |local_parts: Vec<smart_contract_verifier::BytecodePart>,
-                             bytecode_type: &str|
-     -> Result<(Vec<BytecodePart>, Vec<u8>), Error> {
-        let parts = local_parts
-            .into_iter()
-            .map(|part| {
-                BytecodePart::try_from(part).map_err(|err| {
-                    Error::Internal(
-                        anyhow::anyhow!("error while decoding local {}: {}", bytecode_type, err,)
-                            .context("verifier service connection"),
-                    )
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+    Source::try_from((source, extra_data)).map_err(Error::Internal)
+}
 
-        let raw_input = parts
-            .iter()
-            .flat_map(|part| part.data().to_vec())
-            .collect::<Vec<_>>();
+async fn process_eth_bytecode_db_action(
+    source: Source,
+    action: EthBytecodeDbAction<'_>,
+) -> Result<(), anyhow::Error> {
+    match action {
+        EthBytecodeDbAction::IgnoreDb => {}
+        EthBytecodeDbAction::SaveData {
+            db_client,
+            bytecode_type,
+            raw_request_bytecode,
+            verification_settings,
+            verification_type,
+            verification_metadata,
+        } => {
+            let database_source = DatabaseReadySource::try_from(source)
+                .context("Converting source into database ready version")?;
+            let source_id = db::eth_bytecode_db::insert_data(db_client, database_source)
+                .await
+                .context("Insert data into database")?;
 
-        Ok((parts, raw_input))
-    };
-
-    let (creation_input_parts, raw_creation_input) =
-        parse_local_parts(extra_data.local_creation_input_parts, "creation input")?;
-    let (deployed_bytecode_parts, raw_deployed_bytecode) = parse_local_parts(
-        extra_data.local_deployed_bytecode_parts,
-        "deployed bytecode",
-    )?;
-
-    let source_type = source.source_type().try_into().map_err(Error::Internal)?;
-    let match_type = source.match_type().into();
-    let source = Source {
-        file_name: source.file_name,
-        contract_name: source.contract_name,
-        compiler_version: source.compiler_version,
-        compiler_settings: source.compiler_settings,
-        source_type,
-        source_files: source.source_files,
-        abi: source.abi,
-        constructor_arguments: source.constructor_arguments,
-        match_type,
-        compilation_artifacts: source.compilation_artifacts,
-        creation_input_artifacts: source.creation_input_artifacts,
-        deployed_bytecode_artifacts: source.deployed_bytecode_artifacts,
-        raw_creation_input,
-        raw_deployed_bytecode,
-        creation_input_parts,
-        deployed_bytecode_parts,
-    };
-
-    let process_database_insertion = || async {
-        match action {
-            ProcessResponseAction::IgnoreDb => {}
-            ProcessResponseAction::SaveData {
+            // For historical data we just log any errors but do not propagate them further
+            db::eth_bytecode_db::insert_verified_contract_data(
                 db_client,
-                bytecode_type,
+                source_id,
                 raw_request_bytecode,
+                bytecode_type,
                 verification_settings,
                 verification_type,
-                verification_metadata,
-            } => {
-                let database_source = DatabaseReadySource::try_from(source.clone())
-                    .context("Converting source into database ready version")?;
-                let source_id = db::eth_bytecode_db::insert_data(db_client, database_source)
-                    .await
-                    .context("Insert data into database")?;
-
-                // For historical data we just log any errors but do not propagate them further
-                db::eth_bytecode_db::insert_verified_contract_data(
-                    db_client,
-                    source_id,
-                    raw_request_bytecode,
-                    bytecode_type,
-                    verification_settings,
-                    verification_type,
-                    verification_metadata.clone(),
-                )
-                .await
-                .context("Insert verified contract data")?;
-            }
-        };
-        Ok(())
-    };
-
-    let process_alliance_database_insertion = || async {
-        match alliance_db_action {
-            VerifierAllianceDbAction::IgnoreDb => {}
-            VerifierAllianceDbAction::SaveIfDeploymentExists {
-                db_client: alliance_db_client,
-                chain_id,
-                contract_address,
-                transaction_hash,
-            } => {
-                let database_source = DatabaseReadySource::try_from(source.clone())
-                    .context("Converting source into database ready version")?;
-
-                let deployment_data = db::verifier_alliance_db::ContractDeploymentData {
-                    chain_id,
-                    contract_address: contract_address.to_vec(),
-                    transaction_hash: transaction_hash.to_vec(),
-                };
-                db::verifier_alliance_db::insert_data(
-                    alliance_db_client,
-                    database_source,
-                    deployment_data,
-                )
-                .await
-                .context("Insert data into verifier alliance database")?;
-            }
-        }
-
-        Ok(())
-    };
-
-    let _ = process_database_insertion()
-        .await
-        .map_err(|err: anyhow::Error| {
-            tracing::error!("Error while inserting contract data into database: {err:#}")
-        });
-
-    let _ = process_alliance_database_insertion()
-        .await
-        .map_err(|err: anyhow::Error| {
-            tracing::error!(
-                "Error while inserting contract data into verifier alliance database: {err:#}"
+                verification_metadata.clone(),
             )
-        });
+            .await
+            .context("Insert verified contract data")?;
+        }
+    };
 
-    Ok(source)
+    Ok(())
+}
+
+async fn process_verifier_alliance_db_action(
+    source: Source,
+    action: VerifierAllianceDbAction<'_>,
+) -> Result<(), anyhow::Error> {
+    match action {
+        VerifierAllianceDbAction::IgnoreDb => {}
+        VerifierAllianceDbAction::SaveIfDeploymentExists {
+            db_client: alliance_db_client,
+            chain_id,
+            contract_address,
+            transaction_hash,
+        } => {
+            let database_source = DatabaseReadySource::try_from(source)
+                .context("Converting source into database ready version")?;
+
+            let deployment_data = db::verifier_alliance_db::ContractDeploymentData {
+                chain_id,
+                contract_address: contract_address.to_vec(),
+                transaction_hash: transaction_hash.to_vec(),
+            };
+            db::verifier_alliance_db::insert_data(
+                alliance_db_client,
+                database_source,
+                deployment_data,
+            )
+            .await
+            .context("Insert data into verifier alliance database")?;
+        }
+    }
+
+    Ok(())
 }

@@ -5,7 +5,7 @@ use super::{
         smart_contract_verifier::{BytecodeType, VerifyVyperMultiPartRequest},
         types::{Source, VerificationRequest, VerificationType},
     },
-    process_verify_response, ProcessResponseAction, VerifierAllianceDbAction,
+    process_verify_response, EthBytecodeDbAction, VerifierAllianceDbAction,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -55,7 +55,7 @@ pub async fn verify(
     );
     process_verify_response(
         response,
-        ProcessResponseAction::SaveData {
+        EthBytecodeDbAction::SaveData {
             db_client: &client.db_client,
             bytecode_type,
             raw_request_bytecode,
