@@ -106,6 +106,10 @@ message VerificationMetadata {
   optional int64 transaction_index = 5;
   /// The address which actually deployed the contract (i.e. called the create/create2 opcode)
   optional string deployer = 6;
+  /// The bytecode from the calldata (for eoa deployments) or given to create/create2
+  optional string creation_code = 7;
+  // The bytecode actually stored in the blockchain for the given contract
+  optional string runtime_code = 8;
 }
 
 message VerifySolidityMultiPartRequest {

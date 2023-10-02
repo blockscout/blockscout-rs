@@ -26,6 +26,12 @@ impl TryFrom<VerificationMetadataWrapper> for verification::VerificationMetadata
         .map(|v| v.0);
         let deployer =
             from_optional_string::<DisplayBytes>(value.deployer, "metadata.deployer")?.map(|v| v.0);
+        let creation_code =
+            from_optional_string::<DisplayBytes>(value.creation_code, "metadata.creation_code")?
+                .map(|v| v.0);
+        let runtime_code =
+            from_optional_string::<DisplayBytes>(value.runtime_code, "metadata.runtime_code")?
+                .map(|v| v.0);
 
         Ok(verification::VerificationMetadata {
             chain_id,
@@ -34,6 +40,8 @@ impl TryFrom<VerificationMetadataWrapper> for verification::VerificationMetadata
             block_number: value.block_number,
             transaction_index: value.transaction_index,
             deployer,
+            creation_code,
+            runtime_code,
         })
     }
 }
@@ -56,6 +64,8 @@ mod tests {
 
     #[test]
     fn from_proto_to_verification_metadata() {
+        let bytes_from_str = |s: &str| DisplayBytes::from_str(s).unwrap().0;
+
         let proto_type = proto::VerificationMetadata {
             chain_id: Some("1".into()),
             contract_address: Some("0xcafecafecafecafecafecafecafecafecafecafe".into()),
@@ -65,22 +75,16 @@ mod tests {
             block_number: Some(1),
             transaction_index: Some(1),
             deployer: Some("0x000102030405060708090a0b0c0d0e0f10111213".into()),
+            creation_code: Some("0xcafecafecafecafe1234567890abcdef".into()),
+            runtime_code: Some("0x1234567890abcdef".into()),
         };
 
         let expected = verification::VerificationMetadata {
             chain_id: Some(1),
-            contract_address: Some(
-                DisplayBytes::from_str("0xcafecafecafecafecafecafecafecafecafecafe")
-                    .unwrap()
-                    .0,
-            ),
-            transaction_hash: Some(
-                DisplayBytes::from_str(
-                    "0x000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f",
-                )
-                .unwrap()
-                .0,
-            ),
+            contract_address: Some(bytes_from_str("0xcafecafecafecafecafecafecafecafecafecafe")),
+            transaction_hash: Some(bytes_from_str(
+                "0x000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f",
+            )),
             block_number: Some(1),
             transaction_index: Some(1),
             deployer: Some(
@@ -88,6 +92,8 @@ mod tests {
                     .unwrap()
                     .0,
             ),
+            creation_code: Some(bytes_from_str("0xcafecafecafecafe1234567890abcdef")),
+            runtime_code: Some(bytes_from_str("0x1234567890abcdef")),
         };
 
         let wrapper: VerificationMetadataWrapper = proto_type.into();

@@ -111,6 +111,8 @@ impl TestCase {
                 block_number: Some(self.block_number as i64),
                 transaction_index: Some(self.transaction_index as i64),
                 deployer: Some(self.deployer.0.clone()),
+                creation_code: Some(self.deployed_creation_code.0.clone()),
+                runtime_code: Some(self.deployed_runtime_code.0.clone()),
             }),
             is_authorized,
         }

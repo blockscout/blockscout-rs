@@ -172,8 +172,13 @@ pub async fn failure_without_existing_deployment_not_authorized(
 
     let prepare_alliance_database = |_db: Arc<DatabaseConnection>, _test_case: TestCase| async {};
 
-    let (client, _test_case) =
-        setup(TEST_PREFIX, test_case_path, prepare_alliance_database, true).await;
+    let (client, _test_case) = setup(
+        TEST_PREFIX,
+        test_case_path,
+        prepare_alliance_database,
+        false,
+    )
+    .await;
     let alliance_db_client = client.alliance_db_client.unwrap();
 
     assert_eq!(

@@ -12,12 +12,17 @@ use verifier_alliance_entity::{
     code, compiled_contracts, contract_deployments, contracts, verified_contracts,
 };
 
+#[derive(Clone, Default)]
 pub(crate) struct ContractDeploymentData {
     pub chain_id: i64,
     pub contract_address: Vec<u8>,
     pub transaction_hash: Vec<u8>,
+    pub block_number: Option<i64>,
+    pub transaction_index: Option<i64>,
+    pub deployer: Option<Vec<u8>>,
+    pub creation_code: Option<Vec<u8>>,
+    pub runtime_code: Option<Vec<u8>>,
 }
-
 pub(crate) async fn insert_data(
     db_client: &DatabaseConnection,
     source_response: types::DatabaseReadySource,
@@ -47,6 +52,32 @@ pub(crate) async fn insert_data(
     let _verified_contract = insert_verified_contract(&txn, &contract, &compiled_contract)
         .await
         .context("insert verified_contract")?;
+
+    txn.commit().await.context("commit transaction")?;
+
+    Ok(())
+}
+
+pub(crate) async fn insert_deployment_data(
+    db_client: &DatabaseConnection,
+    mut deployment_data: ContractDeploymentData,
+) -> Result<(), anyhow::Error> {
+    let txn = db_client
+        .begin()
+        .await
+        .context("begin database transaction")?;
+
+    let contract = insert_contract(
+        &txn,
+        deployment_data.creation_code.take(),
+        deployment_data.runtime_code.take(),
+    )
+    .await
+    .context("insert contract")?;
+
+    let _contract_deployment = insert_contract_deployment(&txn, deployment_data, &contract)
+        .await
+        .context("insert contract deployment")?;
 
     txn.commit().await.context("commit transaction")?;
 
@@ -241,6 +272,85 @@ async fn insert_compiled_contract(
     )?;
 
     Ok(compiled_contract)
+}
+
+async fn insert_contract_deployment(
+    txn: &DatabaseTransaction,
+    deployment_data: ContractDeploymentData,
+    contract: &contracts::Model,
+) -> Result<contract_deployments::Model, anyhow::Error> {
+    let active_model = contract_deployments::ActiveModel {
+        id: Default::default(),
+        chain_id: Set(deployment_data.chain_id.into()),
+        address: Set(deployment_data.contract_address.clone()),
+        transaction_hash: Set(deployment_data.transaction_hash.clone()),
+        block_number: Set(deployment_data.block_number.map(|v| v.into())),
+        txindex: Set(deployment_data.transaction_index.map(|v| v.into())),
+        deployer: Set(deployment_data.deployer),
+        contract_id: Set(contract.id),
+    };
+    let (contract_deployment, _inserted) = insert_then_select!(
+        txn,
+        contract_deployments,
+        active_model,
+        [
+            (ChainId, deployment_data.chain_id),
+            (Address, deployment_data.contract_address),
+            (TransactionHash, deployment_data.transaction_hash)
+        ]
+    )?;
+
+    Ok(contract_deployment)
+}
+
+async fn insert_contract(
+    txn: &DatabaseTransaction,
+    creation_code: Option<Vec<u8>>,
+    runtime_code: Option<Vec<u8>>,
+) -> Result<contracts::Model, anyhow::Error> {
+    if creation_code.is_none() && runtime_code.is_none() {
+        return Err(anyhow::anyhow!(
+            "at least one of creation or runtime code must not be null"
+        ));
+    }
+    let creation_code = if let Some(creation_code) = creation_code {
+        Some(
+            insert_code(txn, creation_code)
+                .await
+                .context("insert creation code")?,
+        )
+    } else {
+        None
+    };
+    let runtime_code = if let Some(runtime_code) = runtime_code {
+        Some(
+            insert_code(txn, runtime_code)
+                .await
+                .context("insert runtime code")?,
+        )
+    } else {
+        None
+    };
+
+    let creation_code_hash = creation_code.map(|code| code.code_hash).unwrap_or_default();
+    let runtime_code_hash = runtime_code.map(|code| code.code_hash).unwrap_or_default();
+
+    let active_model = contracts::ActiveModel {
+        id: Default::default(),
+        creation_code_hash: Set(creation_code_hash.clone()),
+        runtime_code_hash: Set(runtime_code_hash.clone()),
+    };
+    let (contract, _inserted) = insert_then_select!(
+        txn,
+        contracts,
+        active_model,
+        [
+            (CreationCodeHash, creation_code_hash),
+            (RuntimeCodeHash, runtime_code_hash)
+        ]
+    )?;
+
+    Ok(contract)
 }
 
 async fn insert_code(

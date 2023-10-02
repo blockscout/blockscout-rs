@@ -503,6 +503,8 @@ pub async fn test_historical_data_saves_chain_id_and_contract_address<Service, R
                 block_number: None,
                 transaction_index: None,
                 deployer: None,
+                creation_code: None,
+                runtime_code: None,
             }),
         ),
         source_type,

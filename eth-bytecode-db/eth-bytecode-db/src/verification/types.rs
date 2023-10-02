@@ -319,6 +319,8 @@ pub struct VerificationMetadata {
     pub block_number: Option<i64>,
     pub transaction_index: Option<i64>,
     pub deployer: Option<bytes::Bytes>,
+    pub creation_code: Option<bytes::Bytes>,
+    pub runtime_code: Option<bytes::Bytes>,
 }
 
 impl From<VerificationMetadata> for smart_contract_verifier::VerificationMetadata {

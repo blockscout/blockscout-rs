@@ -418,9 +418,15 @@ definitions:
       contractAddress:
         type: string
         title: / The address of the contract to be verified
+      creationCode:
+        type: string
+        title: / The bytecode from the calldata (for eoa deployments) or given to create/create2
       deployer:
         type: string
         title: / The address which actually deployed the contract (i.e. called the create/create2 opcode)
+      runtimeCode:
+        type: string
+        title: The bytecode actually stored in the blockchain for the given contract
       transactionHash:
         type: string
         title: / The hash of the transaction the contract has been created at
