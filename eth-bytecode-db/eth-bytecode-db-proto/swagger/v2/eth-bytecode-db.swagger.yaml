@@ -408,12 +408,26 @@ definitions:
   v2VerificationMetadata:
     type: object
     properties:
+      blockNumber:
+        type: string
+        format: int64
+        title: / The number of the block containing the creation transaction
       chainId:
         type: string
         title: / Id of the chain the contract is verified on
       contractAddress:
         type: string
         title: / The address of the contract to be verified
+      deployer:
+        type: string
+        title: / The address which actually deployed the contract (i.e. called the create/create2 opcode)
+      transactionHash:
+        type: string
+        title: / The hash of the transaction the contract has been created at
+      transactionIndex:
+        type: string
+        format: int64
+        title: / The position number transaction has been added into a block
   v2VerifyFromEtherscanSourcifyRequest:
     type: object
     properties:

@@ -83,8 +83,9 @@ mod tests {
             metadata: Some(types::VerificationMetadata {
                 chain_id: Some(1),
                 contract_address: Some(bytes::Bytes::from_static(&[1u8; 20])),
-                transaction_hash: None,
+                ..Default::default()
             }),
+            is_authorized: false,
         };
         let expected = VerifySolidityStandardJsonRequest {
             bytecode: "0x1234".to_string(),
@@ -115,8 +116,9 @@ mod tests {
             metadata: Some(types::VerificationMetadata {
                 chain_id: Some(1),
                 contract_address: Some(bytes::Bytes::from_static(&[1u8; 20])),
-                transaction_hash: None,
+                ..Default::default()
             }),
+            is_authorized: false,
         };
         let expected = VerifySolidityStandardJsonRequest {
             bytecode: "0x1234".to_string(),

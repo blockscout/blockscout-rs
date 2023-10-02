@@ -44,6 +44,7 @@ impl vyper_verifier_server::VyperVerifier for VyperVerifierService {
                 .metadata
                 .map(|metadata| VerificationMetadataWrapper::from_inner(metadata).try_into())
                 .transpose()?,
+            is_authorized: false,
         };
         let result = vyper_multi_part::verify(self.client.clone(), verification_request).await;
 
@@ -68,6 +69,7 @@ impl vyper_verifier_server::VyperVerifier for VyperVerifierService {
                 .metadata
                 .map(|metadata| VerificationMetadataWrapper::from_inner(metadata).try_into())
                 .transpose()?,
+            is_authorized: false,
         };
         let result = vyper_standard_json::verify(self.client.clone(), verification_request).await;
 

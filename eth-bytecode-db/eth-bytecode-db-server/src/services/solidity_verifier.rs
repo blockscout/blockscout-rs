@@ -45,6 +45,7 @@ impl solidity_verifier_server::SolidityVerifier for SolidityVerifierService {
                 .metadata
                 .map(|metadata| VerificationMetadataWrapper::from_inner(metadata).try_into())
                 .transpose()?,
+            is_authorized: false,
         };
         let result = solidity_multi_part::verify(self.client.clone(), verification_request).await;
 
@@ -69,6 +70,7 @@ impl solidity_verifier_server::SolidityVerifier for SolidityVerifierService {
                 .metadata
                 .map(|metadata| VerificationMetadataWrapper::from_inner(metadata).try_into())
                 .transpose()?,
+            is_authorized: false,
         };
         let result =
             solidity_standard_json::verify(self.client.clone(), verification_request).await;

@@ -78,8 +78,12 @@ impl TestCase {
         serde_json::from_str(&content).expect("invalid test case format")
     }
 
-    pub fn to_test_input_data<C>(&self, content: C) -> TestInputData<VerificationRequest<C>> {
-        let eth_bytecode_db_request = self.to_eth_bytecode_db_request(content);
+    pub fn to_test_input_data<C>(
+        &self,
+        content: C,
+        is_authorized: bool,
+    ) -> TestInputData<VerificationRequest<C>> {
+        let eth_bytecode_db_request = self.to_eth_bytecode_db_request(content, is_authorized);
         let verifier_source = self.to_verifier_source();
         let verifier_extra_data = self.to_verifier_extra_data();
 
@@ -90,7 +94,11 @@ impl TestCase {
         )
     }
 
-    fn to_eth_bytecode_db_request<C>(&self, content: C) -> VerificationRequest<C> {
+    fn to_eth_bytecode_db_request<C>(
+        &self,
+        content: C,
+        is_authorized: bool,
+    ) -> VerificationRequest<C> {
         VerificationRequest {
             bytecode: self.deployed_creation_code.to_string(),
             bytecode_type: BytecodeType::CreationInput,
@@ -100,7 +108,11 @@ impl TestCase {
                 chain_id: Some(self.chain_id as i64),
                 contract_address: Some(self.address.0.clone()),
                 transaction_hash: Some(self.transaction_hash.0.clone()),
+                block_number: Some(self.block_number as i64),
+                transaction_index: Some(self.transaction_index as i64),
+                deployer: Some(self.deployer.0.clone()),
             }),
+            is_authorized,
         }
     }
 

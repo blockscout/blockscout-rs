@@ -54,6 +54,7 @@ pub fn generate_verification_request<T>(
         compiler_version: "compiler_version".to_string(),
         content,
         metadata,
+        is_authorized: false,
     }
 }
 
@@ -499,6 +500,9 @@ pub async fn test_historical_data_saves_chain_id_and_contract_address<Service, R
                 chain_id: Some(chain_id),
                 contract_address: Some(contract_address.clone()),
                 transaction_hash: None,
+                block_number: None,
+                transaction_index: None,
+                deployer: None,
             }),
         ),
         source_type,

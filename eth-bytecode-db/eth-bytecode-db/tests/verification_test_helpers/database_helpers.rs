@@ -58,15 +58,19 @@ impl TestDbGuard {
         let conn_without_db = Database::connect(base_db_url)
             .await
             .expect("Connection to postgres (without database) failed");
-        Self::drop_database(&conn_without_db, db_name)
+
+        // We use a hash, as the name itself may be quite long and be trimmed.
+        let hashed_db_name = format!("_{:x}", keccak_hash::keccak(db_name));
+
+        Self::drop_database(&conn_without_db, &hashed_db_name)
             .await
             .expect("Database drop failed");
-        Self::create_database(&conn_without_db, db_name)
+        Self::create_database(&conn_without_db, &hashed_db_name)
             .await
             .expect("Database creation failed");
 
         // Migrate database
-        let db_url = format!("{base_db_url}/{db_name}");
+        let db_url = format!("{base_db_url}/{hashed_db_name}");
         let conn_with_db = Database::connect(&db_url)
             .await
             .expect("Connection to postgres (with database) failed");

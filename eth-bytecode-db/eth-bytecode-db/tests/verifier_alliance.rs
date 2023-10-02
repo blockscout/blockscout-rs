@@ -9,13 +9,15 @@ use eth_bytecode_db::verification::{
 use pretty_assertions::assert_eq;
 use rstest::rstest;
 use sea_orm::{
-    prelude::Uuid, ActiveModelTrait, ActiveValue::Set, DatabaseConnection, DatabaseTransaction,
-    EntityTrait, TransactionTrait,
+    prelude::{Decimal, Uuid},
+    ActiveModelTrait,
+    ActiveValue::Set,
+    DatabaseConnection, DatabaseTransaction, EntityTrait, TransactionTrait,
 };
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
     VerifyResponse, VerifySolidityStandardJsonRequest,
 };
-use std::{path::PathBuf, sync::Arc};
+use std::{future::Future, path::PathBuf, sync::Arc};
 use verification_test_helpers::{
     init_db,
     smart_contract_veriifer_mock::{MockSolidityVerifierService, SmartContractVerifierServer},
@@ -68,24 +70,30 @@ impl VerifierService<VerificationRequest<StandardJson>> for MockSolidityVerifier
     }
 }
 
-#[rstest]
-#[tokio::test]
-#[ignore = "Needs database to run"]
-pub async fn success(#[files("tests/alliance_test_cases/*.json")] test_case_path: PathBuf) {
-    // let test_case_path = PathBuf::from("tests/alliance_test_cases/immutables.json");
+async fn setup<F, Fut: Future<Output = ()>>(
+    test_prefix: &str,
+    test_case_path: PathBuf,
+    setup_db: F,
+    is_authorized: bool,
+) -> (Client, TestCase)
+where
+    F: FnOnce(Arc<DatabaseConnection>, TestCase) -> Fut,
+{
     let service = MockSolidityVerifierService::new();
 
     // e.g. "tests/alliance_test_cases/full_match.json" => "full_match"
-    let test_name = test_case_path
-        .file_stem()
-        .as_ref()
-        .unwrap()
-        .to_str()
-        .unwrap()
-        .to_string();
+    let test_name = format!(
+        "{test_prefix}_{}",
+        test_case_path
+            .file_stem()
+            .as_ref()
+            .unwrap()
+            .to_str()
+            .unwrap()
+    );
 
     let test_case = TestCase::from_file(test_case_path);
-    let input_data = input_data(&test_case);
+    let input_data = input_data(&test_case, is_authorized);
 
     let db = init_db(DB_PREFIX, &test_name)
         .await
@@ -93,42 +101,108 @@ pub async fn success(#[files("tests/alliance_test_cases/*.json")] test_case_path
         .await;
 
     let alliance_db_client = db.alliance_client().unwrap();
-    prepare_alliance_database(alliance_db_client.clone(), &test_case).await;
+    setup_db(alliance_db_client.clone(), test_case.clone()).await;
 
     let client =
         start_server_and_init_client(db.client().clone(), service, vec![input_data.clone()])
             .await
             .with_alliance_db_arc(alliance_db_client.clone());
 
-    let _source = MockSolidityVerifierService::verify(client, input_data.eth_bytecode_db_request)
-        .await
-        .expect("verification failed");
+    let _source =
+        MockSolidityVerifierService::verify(client.clone(), input_data.eth_bytecode_db_request)
+            .await
+            .expect("verification failed");
 
-    let compiled_contract = compiled_contracts::Entity::find()
-        .one(alliance_db_client.as_ref())
-        .await
-        .expect("Error while retrieving compiled contract")
-        .expect("The data has not been added into `compiled_contracts` table");
-    check_compiled_contract(compiled_contract, &test_case);
-
-    let verified_contract = verified_contracts::Entity::find()
-        .one(alliance_db_client.as_ref())
-        .await
-        .expect("Error while retrieving verified contract")
-        .expect("The data has not been added into `verified_contracts` table");
-    check_verified_contract(verified_contract, &test_case);
+    (client, test_case)
 }
 
-fn input_data(test_case: &TestCase) -> TestInputData<VerificationRequest<StandardJson>> {
-    test_case.to_test_input_data(StandardJson {
-        input: "".to_string(),
-    })
+#[rstest]
+#[tokio::test]
+#[ignore = "Needs database to run"]
+pub async fn success_with_existing_deployment(
+    #[files("tests/alliance_test_cases/*.json")] test_case_path: PathBuf,
+) {
+    const TEST_PREFIX: &str = "success_with_existing_deployment";
+
+    let prepare_alliance_database = |db: Arc<DatabaseConnection>, test_case: TestCase| async move {
+        let txn = db.begin().await.expect("starting a transaction failed");
+        let _contract_deployment_id = insert_contract_deployment(&txn, &test_case).await;
+        txn.commit().await.expect("committing transaction failed");
+    };
+
+    let (client, test_case) = setup(
+        TEST_PREFIX,
+        test_case_path,
+        prepare_alliance_database,
+        false,
+    )
+    .await;
+    let alliance_db_client = client.alliance_db_client.unwrap();
+
+    check_compiled_contract(alliance_db_client.as_ref(), &test_case).await;
+    check_verified_contract(alliance_db_client.as_ref(), &test_case).await;
 }
 
-async fn prepare_alliance_database(db: Arc<DatabaseConnection>, test_case: &TestCase) {
-    let txn = db.begin().await.expect("starting a transaction failed");
-    let _contract_deployment_id = insert_contract_deployment(&txn, test_case).await;
-    txn.commit().await.expect("committing transaction failed");
+#[rstest]
+#[tokio::test]
+#[ignore = "Needs database to run"]
+pub async fn success_without_existing_deployment(
+    #[files("tests/alliance_test_cases/full_match.json")] test_case_path: PathBuf,
+) {
+    const TEST_PREFIX: &str = "success_without_existing_deployment";
+
+    let prepare_alliance_database = |_db: Arc<DatabaseConnection>, _test_case: TestCase| async {};
+
+    let (client, test_case) =
+        setup(TEST_PREFIX, test_case_path, prepare_alliance_database, true).await;
+    let alliance_db_client = client.alliance_db_client.unwrap();
+
+    check_contract_deployment(alliance_db_client.as_ref(), &test_case).await;
+    check_compiled_contract(alliance_db_client.as_ref(), &test_case).await;
+    check_verified_contract(alliance_db_client.as_ref(), &test_case).await;
+}
+
+#[rstest]
+#[tokio::test]
+#[ignore = "Needs database to run"]
+pub async fn failure_without_existing_deployment_not_authorized(
+    #[files("tests/alliance_test_cases/full_match.json")] test_case_path: PathBuf,
+) {
+    const TEST_PREFIX: &str = "failure_without_existing_deployment_not_authorized";
+
+    let prepare_alliance_database = |_db: Arc<DatabaseConnection>, _test_case: TestCase| async {};
+
+    let (client, _test_case) =
+        setup(TEST_PREFIX, test_case_path, prepare_alliance_database, true).await;
+    let alliance_db_client = client.alliance_db_client.unwrap();
+
+    assert_eq!(
+        None,
+        retrieve_contract_deployment(alliance_db_client.as_ref()).await,
+        "`contract_deployment` inserted"
+    );
+    assert_eq!(
+        None,
+        retrieve_compiled_contract(alliance_db_client.as_ref()).await,
+        "`compiled_contract` inserted"
+    );
+    assert_eq!(
+        None,
+        retrieve_verified_contract(alliance_db_client.as_ref()).await,
+        "`verified_contract` inserted"
+    );
+}
+
+fn input_data(
+    test_case: &TestCase,
+    is_authorized: bool,
+) -> TestInputData<VerificationRequest<StandardJson>> {
+    test_case.to_test_input_data(
+        StandardJson {
+            input: "".to_string(),
+        },
+        is_authorized,
+    )
 }
 
 async fn insert_contract_deployment(txn: &DatabaseTransaction, test_case: &TestCase) -> Uuid {
@@ -199,7 +273,96 @@ async fn insert_code(txn: &DatabaseTransaction, code: Vec<u8>) -> keccak_hash::H
     code_hash
 }
 
-fn check_compiled_contract(compiled_contract: compiled_contracts::Model, test_case: &TestCase) {
+async fn check_contract(db: &DatabaseConnection, contract: contracts::Model, test_case: &TestCase) {
+    let creation_code = code::Entity::find_by_id(contract.creation_code_hash)
+        .one(db)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        Some(test_case.deployed_creation_code.to_vec()),
+        creation_code.code,
+        "Invalid creation_code for deployed contract"
+    );
+
+    let runtime_code = code::Entity::find_by_id(contract.runtime_code_hash)
+        .one(db)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        Some(test_case.deployed_runtime_code.to_vec()),
+        runtime_code.code,
+        "Invalid runtime_code for deployed contract"
+    );
+}
+
+async fn retrieve_contract_deployment(
+    db: &DatabaseConnection,
+) -> Option<contract_deployments::Model> {
+    contract_deployments::Entity::find()
+        .one(db)
+        .await
+        .expect("Error while retrieving contract deployment")
+}
+async fn check_contract_deployment(db: &DatabaseConnection, test_case: &TestCase) {
+    let contract_deployment = retrieve_contract_deployment(db)
+        .await
+        .expect("The data has not been added into `contract_deployments` table");
+
+    let test_case_chain_id: Decimal = test_case.chain_id.into();
+    let test_case_block_number: Decimal = test_case.block_number.into();
+    let test_case_transaction_index: Decimal = test_case.transaction_index.into();
+    assert_eq!(
+        test_case_chain_id, contract_deployment.chain_id,
+        "Invalid contract_deployments.chain_id"
+    );
+    assert_eq!(
+        test_case.address.to_vec(),
+        contract_deployment.address,
+        "Invalid contract_deployments.address"
+    );
+    assert_eq!(
+        test_case.transaction_hash.to_vec(),
+        contract_deployment.transaction_hash,
+        "Invalid contract_deployments.transaction_hash"
+    );
+    assert_eq!(
+        Some(test_case_block_number),
+        contract_deployment.block_number,
+        "Invalid contract_deployments.block_number"
+    );
+    assert_eq!(
+        Some(test_case_transaction_index),
+        contract_deployment.txindex,
+        "Invalid contract_deployments.txindex"
+    );
+    assert_eq!(
+        Some(test_case.deployer.to_vec()),
+        contract_deployment.deployer,
+        "Invalid contract_deployments.deployer"
+    );
+
+    let contract = contracts::Entity::find_by_id(contract_deployment.contract_id)
+        .one(db)
+        .await
+        .unwrap()
+        .unwrap();
+    check_contract(db, contract, test_case).await;
+}
+
+async fn retrieve_compiled_contract(db: &DatabaseConnection) -> Option<compiled_contracts::Model> {
+    compiled_contracts::Entity::find()
+        .one(db)
+        .await
+        .expect("Error while retrieving compiled contract")
+}
+
+async fn check_compiled_contract(db: &DatabaseConnection, test_case: &TestCase) {
+    let compiled_contract = retrieve_compiled_contract(db)
+        .await
+        .expect("The data has not been added into `compiled_contracts` table");
+
     let test_case_sources = serde_json::to_value(test_case.sources.clone()).unwrap();
     let test_case_creation_code_hash = keccak_hash::keccak(&test_case.compiled_creation_code)
         .0
@@ -255,7 +418,18 @@ fn check_compiled_contract(compiled_contract: compiled_contracts::Model, test_ca
     );
 }
 
-fn check_verified_contract(verified_contract: verified_contracts::Model, test_case: &TestCase) {
+async fn retrieve_verified_contract(db: &DatabaseConnection) -> Option<verified_contracts::Model> {
+    verified_contracts::Entity::find()
+        .one(db)
+        .await
+        .expect("Error while retrieving verified contract")
+}
+
+async fn check_verified_contract(db: &DatabaseConnection, test_case: &TestCase) {
+    let verified_contract = retrieve_verified_contract(db)
+        .await
+        .expect("The data has not been added into `verified_contracts` table");
+
     let test_case_creation_values = Some(test_case.creation_values.clone());
     let test_case_creation_transformations = Some(test_case.creation_transformations.clone());
     let test_case_runtime_values = Some(test_case.runtime_values.clone());

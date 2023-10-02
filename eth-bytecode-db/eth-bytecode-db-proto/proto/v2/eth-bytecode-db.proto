@@ -98,6 +98,14 @@ message VerificationMetadata {
   optional string chain_id = 1;
   /// The address of the contract to be verified
   optional string contract_address = 2;
+  /// The hash of the transaction the contract has been created at
+  optional string transaction_hash = 3;
+  /// The number of the block containing the creation transaction
+  optional int64 block_number = 4;
+  /// The position number transaction has been added into a block
+  optional int64 transaction_index = 5;
+  /// The address which actually deployed the contract (i.e. called the create/create2 opcode)
+  optional string deployer = 6;
 }
 
 message VerifySolidityMultiPartRequest {

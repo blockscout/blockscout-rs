@@ -55,6 +55,7 @@ impl<'a> VerifierAllianceDbAction<'a> {
                     chain_id: Some(chain_id),
                     contract_address: Some(contract_address),
                     transaction_hash: Some(transaction_hash),
+                    ..
                 }),
             ) => Self::SaveIfDeploymentExists {
                 db_client,
