@@ -16,7 +16,7 @@ use crate::{
 use blockscout_service_launcher::{database, launcher, launcher::LaunchSettings, tracing};
 use eth_bytecode_db::verification::Client;
 use migration::Migrator;
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 const SERVICE_NAME: &str = "eth_bytecode_db";
 
@@ -84,7 +84,12 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     .await?;
 
     let db_connection = Arc::new(sea_orm::Database::connect(settings.database.url).await?);
-    let client = Client::new_arc(db_connection.clone(), settings.verifier.uri).await?;
+    let mut client = Client::new_arc(db_connection.clone(), settings.verifier.uri).await?;
+    if settings.verifier_alliance_database.enabled {
+        let alliance_db_connection =
+            sea_orm::Database::connect(settings.verifier_alliance_database.url).await?;
+        client = client.with_alliance_db(alliance_db_connection);
+    }
 
     let sourcify_client = sourcify::ClientBuilder::default()
         .try_base_url(&settings.sourcify.base_url)
@@ -93,8 +98,17 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         .build();
     let database = Arc::new(DatabaseService::new_arc(client.clone(), sourcify_client));
 
-    let solidity_verifier = Arc::new(SolidityVerifierService::new(client.clone()));
-    let vyper_verifier = Arc::new(VyperVerifierService::new(client.clone()));
+    let authorized_keys: HashSet<_> = settings
+        .authorized_keys
+        .into_values()
+        .map(|key| key.key)
+        .collect();
+
+    let solidity_verifier = Arc::new(
+        SolidityVerifierService::new(client.clone()).with_authorized_keys(authorized_keys.clone()),
+    );
+    let vyper_verifier =
+        Arc::new(VyperVerifierService::new(client.clone()).with_authorized_keys(authorized_keys));
     let sourcify_verifier = Arc::new(SourcifyVerifierService::new(client.clone()));
 
     let router = Router {

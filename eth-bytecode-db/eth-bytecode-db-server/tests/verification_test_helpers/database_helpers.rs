@@ -11,7 +11,7 @@ pub struct TestDbGuard {
 }
 
 impl TestDbGuard {
-    pub async fn new(db_name: &str, db_url: Option<String>) -> Self {
+    pub async fn new<Migrator: MigratorTrait>(db_name: &str, db_url: Option<String>) -> Self {
         let db_url = db_url.unwrap_or_else(|| {
             std::env::var("DATABASE_URL").expect(
                 "Database url should either be provided explicitly, or \
@@ -19,25 +19,9 @@ impl TestDbGuard {
             )
         });
 
-        // Create database
-        let conn_without_db = Database::connect(&db_url)
-            .await
-            .expect("Connection to postgres (without database) failed");
-        Self::drop_database(&conn_without_db, db_name)
-            .await
-            .expect("Database drop failed");
-        Self::create_database(&conn_without_db, db_name)
-            .await
-            .expect("Database creation failed");
-
-        // Migrate database
-        let db_url = format!("{db_url}/{db_name}");
-        let conn_with_db = Database::connect(&db_url)
-            .await
-            .expect("Connection to postgres (with database) failed");
-        Self::run_migrations(&conn_with_db)
-            .await
-            .expect("Database migration failed");
+        // We use a hash, as the name itself may be quite long and be trimmed.
+        let db_name = format!("_{:x}", keccak_hash::keccak(db_name));
+        let (db_url, conn_with_db) = Self::init_database::<Migrator>(&db_url, &db_name).await;
 
         TestDbGuard {
             conn_with_db: Arc::new(conn_with_db),
@@ -51,6 +35,33 @@ impl TestDbGuard {
 
     pub fn db_url(&self) -> &str {
         &self.db_url
+    }
+
+    async fn init_database<Migrator: MigratorTrait>(
+        base_db_url: &str,
+        db_name: &str,
+    ) -> (String, DatabaseConnection) {
+        // Create database
+        let conn_without_db = Database::connect(base_db_url)
+            .await
+            .expect("Connection to postgres (without database) failed");
+        Self::drop_database(&conn_without_db, db_name)
+            .await
+            .expect("Database drop failed");
+        Self::create_database(&conn_without_db, db_name)
+            .await
+            .expect("Database creation failed");
+
+        // Migrate database
+        let db_url = format!("{base_db_url}/{db_name}");
+        let conn_with_db = Database::connect(&db_url)
+            .await
+            .expect("Connection to postgres (with database) failed");
+        Self::run_migrations::<Migrator>(&conn_with_db)
+            .await
+            .expect("Database migration failed");
+
+        (db_url, conn_with_db)
     }
 
     async fn create_database(db: &DatabaseConnection, db_name: &str) -> Result<(), DbErr> {
@@ -73,7 +84,7 @@ impl TestDbGuard {
         Ok(())
     }
 
-    async fn run_migrations(db: &DatabaseConnection) -> Result<(), DbErr> {
-        <migration::Migrator as MigratorTrait>::up(db, None).await
+    async fn run_migrations<Migrator: MigratorTrait>(db: &DatabaseConnection) -> Result<(), DbErr> {
+        Migrator::up(db, None).await
     }
 }
