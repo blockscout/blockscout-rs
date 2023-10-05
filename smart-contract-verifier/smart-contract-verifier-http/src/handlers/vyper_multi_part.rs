@@ -98,6 +98,9 @@ pub async fn verify(
         VerificationError::Initialization(_) | VerificationError::VersionNotFound(_) => {
             Err(error::ErrorBadRequest(err))
         }
-        VerificationError::Internal(_) => Err(error::ErrorInternalServerError(err)),
+        VerificationError::Internal(_) => {
+            tracing::error!("internal error: {err}");
+            Err(error::ErrorInternalServerError(err))
+        }
     }
 }

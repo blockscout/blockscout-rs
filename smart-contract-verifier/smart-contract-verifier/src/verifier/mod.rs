@@ -6,6 +6,7 @@ mod errors;
 
 mod compiler_input;
 mod contract_verifier;
+mod lossless_compiler_output;
 
 pub use base::LocalBytecodeParts;
 pub use bytecode::BytecodePart;
