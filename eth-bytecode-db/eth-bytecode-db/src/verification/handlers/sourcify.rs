@@ -3,7 +3,7 @@ use super::{
         client::Client, errors::Error, smart_contract_verifier::VerifySourcifyRequest,
         types::Source,
     },
-    process_verify_response, ProcessResponseAction,
+    process_verify_response, EthBytecodeDbAction, VerifierAllianceDbAction,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -36,5 +36,10 @@ pub async fn verify(mut client: Client, request: VerificationRequest) -> Result<
         .map_err(Error::from)?
         .into_inner();
 
-    process_verify_response(&client.db_client, response, ProcessResponseAction::IgnoreDb).await
+    process_verify_response(
+        response,
+        EthBytecodeDbAction::IgnoreDb,
+        VerifierAllianceDbAction::IgnoreDb,
+    )
+    .await
 }

@@ -35,6 +35,7 @@ impl TryFrom<VerificationMetadataWrapper> for verification::VerificationMetadata
         Ok(verification::VerificationMetadata {
             chain_id,
             contract_address,
+            transaction_hash: None,
         })
     }
 }
@@ -57,6 +58,7 @@ mod tests {
                     .unwrap()
                     .0,
             ),
+            transaction_hash: None,
         };
 
         let wrapper: VerificationMetadataWrapper = proto_type.into();

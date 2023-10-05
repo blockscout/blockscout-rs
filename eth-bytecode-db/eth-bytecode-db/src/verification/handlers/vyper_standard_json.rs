@@ -5,7 +5,7 @@ use super::{
         smart_contract_verifier::{BytecodeType, VerifyVyperStandardJsonRequest},
         types::{Source, VerificationRequest, VerificationType},
     },
-    process_verify_response, ProcessResponseAction,
+    process_verify_response, EthBytecodeDbAction, VerifierAllianceDbAction,
 };
 use serde::{Deserialize, Serialize};
 
@@ -43,16 +43,21 @@ pub async fn verify(
         .map_err(Error::from)?
         .into_inner();
 
+    let verifier_alliance_db_action = VerifierAllianceDbAction::from_db_client_and_metadata(
+        client.alliance_db_client.as_deref(),
+        verification_metadata.clone(),
+    );
     process_verify_response(
-        &client.db_client,
         response,
-        ProcessResponseAction::SaveData {
+        EthBytecodeDbAction::SaveData {
+            db_client: &client.db_client,
             bytecode_type,
             raw_request_bytecode,
             verification_settings,
             verification_type: VerificationType::StandardJson,
             verification_metadata,
         },
+        verifier_alliance_db_action,
     )
     .await
 }
@@ -77,6 +82,7 @@ mod tests {
             metadata: Some(types::VerificationMetadata {
                 chain_id: Some(1),
                 contract_address: Some(bytes::Bytes::from_static(&[1u8; 20])),
+                transaction_hash: None,
             }),
         };
         let expected = VerifyVyperStandardJsonRequest {
@@ -108,6 +114,7 @@ mod tests {
             metadata: Some(types::VerificationMetadata {
                 chain_id: Some(1),
                 contract_address: Some(bytes::Bytes::from_static(&[1u8; 20])),
+                transaction_hash: None,
             }),
         };
         let expected = VerifyVyperStandardJsonRequest {

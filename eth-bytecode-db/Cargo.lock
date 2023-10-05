@@ -1746,6 +1746,7 @@ dependencies = [
  "ethers-core",
  "futures",
  "hex",
+ "keccak-hash",
  "lazy_static",
  "migration",
  "mismatch",
@@ -1753,7 +1754,7 @@ dependencies = [
  "pretty_assertions",
  "prometheus",
  "reqwest",
- "rstest",
+ "rstest 0.18.2",
  "sea-orm",
  "semver",
  "serde",
@@ -1767,6 +1768,8 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "verifier-alliance-entity",
+ "verifier-alliance-migration",
 ]
 
 [[package]]
@@ -1805,7 +1808,7 @@ dependencies = [
  "pretty_assertions",
  "rand",
  "reqwest",
- "rstest",
+ "rstest 0.16.0",
  "sea-orm",
  "serde",
  "serde_json",
@@ -2927,6 +2930,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3afef3b6eff9ce9d8ff9b3601125eec7f0c8cbac7abd14f355d053fa56c98768"
 dependencies = [
  "cpufeatures",
+]
+
+[[package]]
+name = "keccak-hash"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4b286e6b663fb926e1eeb68528e69cb70ed46c6d65871a21b2215ae8154c6d3c"
+dependencies = [
+ "primitive-types",
+ "tiny-keccak",
 ]
 
 [[package]]
@@ -4319,6 +4332,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5ea92a5b6195c6ef2a0295ea818b312502c6fc94dde986c5553242e18fd4ce2"
 
 [[package]]
+name = "relative-path"
+version = "1.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c707298afce11da2efef2f600116fa93ffa7a032b5d7b628aa17711ec81383ca"
+
+[[package]]
 name = "rend"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4541,7 +4560,19 @@ checksum = "b07f2d176c472198ec1e6551dc7da28f1c089652f66a7b722676c2238ebc0edf"
 dependencies = [
  "futures",
  "futures-timer",
- "rstest_macros",
+ "rstest_macros 0.16.0",
+ "rustc_version",
+]
+
+[[package]]
+name = "rstest"
+version = "0.18.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97eeab2f3c0a199bc4be135c36c924b6590b88c377d416494288c14f2db30199"
+dependencies = [
+ "futures",
+ "futures-timer",
+ "rstest_macros 0.18.2",
  "rustc_version",
 ]
 
@@ -4556,6 +4587,23 @@ dependencies = [
  "quote",
  "rustc_version",
  "syn 1.0.109",
+ "unicode-ident",
+]
+
+[[package]]
+name = "rstest_macros"
+version = "0.18.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d428f8247852f894ee1be110b375111b586d4fa431f6c46e64ba5a0dcccbe605"
+dependencies = [
+ "cfg-if",
+ "glob",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "relative-path",
+ "rustc_version",
+ "syn 2.0.26",
  "unicode-ident",
 ]
 
@@ -5206,7 +5254,7 @@ checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
 [[package]]
 name = "smart-contract-verifier-proto"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs?branch=rimrakhimov/verifier/extended-compiler-output#d1b166cdc4f7def65e4a5475c72ef9aa3922ac4d"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=2480b20#2480b20c70436373d9a8de39e77118651f2ac53f"
 dependencies = [
  "actix-prost",
  "actix-prost-build",
