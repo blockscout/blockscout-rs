@@ -17,6 +17,9 @@ pub struct Success {
     pub constructor_args: Option<DisplayBytes>,
     pub local_bytecode_parts: LocalBytecodeParts,
     pub match_type: MatchType,
+    pub compilation_artifacts: serde_json::Value,
+    pub creation_input_artifacts: serde_json::Value,
+    pub deployed_bytecode_artifacts: serde_json::Value,
 }
 
 impl From<(ethers_solc::CompilerInput, verifier::Success)> for Success {
@@ -31,6 +34,9 @@ impl From<(ethers_solc::CompilerInput, verifier::Success)> for Success {
             constructor_args: success.constructor_args,
             local_bytecode_parts: success.local_bytecode_parts,
             match_type: success.match_type,
+            compilation_artifacts: success.compilation_artifacts,
+            creation_input_artifacts: success.creation_input_artifacts,
+            deployed_bytecode_artifacts: success.deployed_bytecode_artifacts,
         }
     }
 }

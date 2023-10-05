@@ -21,9 +21,13 @@ impl EvmCompiler for VyperCompiler {
         path: &Path,
         _ver: &Version,
         input: &Self::CompilerInput,
-    ) -> Result<CompilerOutput, SolcError> {
-        let vyper_output: types::VyperCompilerOutput = Solc::from(path).compile_as(input)?;
-        Ok(CompilerOutput::from(vyper_output))
+    ) -> Result<(serde_json::Value, CompilerOutput), SolcError> {
+        let raw = Solc::from(path).async_compile_output(input).await?;
+        let vyper_output: types::VyperCompilerOutput = serde_json::from_slice(&raw)?;
+        Ok((
+            serde_json::from_slice(&raw)?,
+            CompilerOutput::from(vyper_output),
+        ))
     }
 }
 
@@ -155,7 +159,7 @@ def getUserName() -> String[100]:
         let version =
             compiler::Version::from_str("0.3.6+commit.4a2124d0").expect("Compiler version");
 
-        let result = compilers
+        let (_raw, result) = compilers
             .compile(&version, &input, None)
             .await
             .expect("Compilation failed");

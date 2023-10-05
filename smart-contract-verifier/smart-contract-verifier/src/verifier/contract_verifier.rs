@@ -3,13 +3,13 @@ use super::{
     base::LocalBytecodeParts,
     bytecode::{CreationTxInput, DeployedBytecode},
     errors::{BytecodeInitError, VerificationError, VerificationErrorKind},
-    CompilerInput,
+    lossless_compiler_output, CompilerInput,
 };
 use crate::{
     compiler::{self, Compilers, EvmCompiler},
     DisplayBytes, MatchType,
 };
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use bytes::Bytes;
 use ethers_solc::CompilerOutput;
 use mismatch::Mismatch;
@@ -60,12 +60,23 @@ pub struct Success {
     pub constructor_args: Option<DisplayBytes>,
     pub local_bytecode_parts: LocalBytecodeParts,
     pub match_type: MatchType,
+    pub compilation_artifacts: serde_json::Value,
+    pub creation_input_artifacts: serde_json::Value,
+    pub deployed_bytecode_artifacts: serde_json::Value,
 }
 
 pub struct ContractVerifier<'a, C> {
     compilers: &'a Compilers<C>,
     compiler_version: &'a compiler::Version,
-    verifier: Box<dyn base::Verifier<Input = (CompilerOutput, CompilerOutput)>>,
+    verifier: Box<
+        dyn base::Verifier<
+            Input = (
+                CompilerOutput,
+                CompilerOutput,
+                lossless_compiler_output::CompilerOutput,
+            ),
+        >,
+    >,
     chain_id: Option<String>,
 }
 
@@ -77,15 +88,22 @@ impl<'a, C: EvmCompiler> ContractVerifier<'a, C> {
         deployed_bytecode: Bytes,
         chain_id: Option<String>,
     ) -> Result<Self, Error> {
-        let verifier: Box<dyn base::Verifier<Input = (CompilerOutput, CompilerOutput)>> =
-            match creation_tx_input {
-                None => Box::new(all_metadata_extracting_verifier::Verifier::<
-                    DeployedBytecode,
-                >::new(deployed_bytecode)?),
-                Some(creation_tx_input) => Box::new(all_metadata_extracting_verifier::Verifier::<
-                    CreationTxInput,
-                >::new(creation_tx_input)?),
-            };
+        let verifier: Box<
+            dyn base::Verifier<
+                Input = (
+                    CompilerOutput,
+                    CompilerOutput,
+                    lossless_compiler_output::CompilerOutput,
+                ),
+            >,
+        > = match creation_tx_input {
+            None => Box::new(all_metadata_extracting_verifier::Verifier::<
+                DeployedBytecode,
+            >::new(deployed_bytecode)?),
+            Some(creation_tx_input) => Box::new(all_metadata_extracting_verifier::Verifier::<
+                CreationTxInput,
+            >::new(creation_tx_input)?),
+        };
         Ok(Self {
             compilers,
             compiler_version,
@@ -99,7 +117,7 @@ impl<'a, C: EvmCompiler> ContractVerifier<'a, C> {
     where
         C::CompilerInput: CompilerInput + Serialize + Clone,
     {
-        let compiler_output = self
+        let (raw_compiler_output, compiler_output) = self
             .compilers
             .compile(
                 self.compiler_version,
@@ -107,7 +125,7 @@ impl<'a, C: EvmCompiler> ContractVerifier<'a, C> {
                 self.chain_id.as_deref(),
             )
             .await?;
-        let compiler_output_modified = {
+        let (_raw_compiler_output_modified, compiler_output_modified) = {
             let compiler_input = compiler_input.clone().modify();
             self.compilers
                 .compile(
@@ -118,7 +136,16 @@ impl<'a, C: EvmCompiler> ContractVerifier<'a, C> {
                 .await?
         };
 
-        let outputs = (compiler_output, compiler_output_modified);
+        let lossless_compiler_output: lossless_compiler_output::CompilerOutput =
+            serde_json::from_value(raw_compiler_output)
+                .context("could not parse raw compiler output into lossless struct")
+                .map_err(Error::Internal)?;
+
+        let outputs = (
+            compiler_output,
+            compiler_output_modified,
+            lossless_compiler_output,
+        );
         let verification_success = self.verifier.verify(&outputs).map_err(|errs| {
             errs.into_iter()
                 .find_map(|err| match err {
@@ -148,7 +175,7 @@ impl<'a, C: EvmCompiler> ContractVerifier<'a, C> {
                 .unwrap_or(Error::NoMatchingContracts)
         })?;
 
-        let (compiler_output, _) = outputs;
+        let (_raw_output, compiler_output, _compiler_output_modified) = outputs;
         // We accept compiler input and compiler version by reference, so that we
         // avoid their cloning if verification fails.
         // In case of success, they will be cloned exactly once.
@@ -161,6 +188,9 @@ impl<'a, C: EvmCompiler> ContractVerifier<'a, C> {
             constructor_args: verification_success.constructor_args,
             local_bytecode_parts: verification_success.local_bytecode_parts,
             match_type: verification_success.match_type,
+            compilation_artifacts: verification_success.compilation_artifacts,
+            creation_input_artifacts: verification_success.creation_input_artifacts,
+            deployed_bytecode_artifacts: verification_success.deployed_bytecode_artifacts,
         })
     }
 }

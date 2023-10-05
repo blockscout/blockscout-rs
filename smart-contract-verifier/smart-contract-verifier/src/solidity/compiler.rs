@@ -21,11 +21,13 @@ impl EvmCompiler for SolidityCompiler {
         path: &Path,
         ver: &Version,
         input: &Self::CompilerInput,
-    ) -> Result<CompilerOutput, SolcError> {
+    ) -> Result<(serde_json::Value, CompilerOutput), SolcError> {
         if ver.version() < &semver::Version::new(0, 4, 11) {
-            solc_cli::compile_using_cli(path, input).await
+            let output = solc_cli::compile_using_cli(path, input).await?;
+            Ok((serde_json::to_value(&output).unwrap(), output))
         } else {
-            Solc::from(path).async_compile(input).await
+            let raw = Solc::from(path).async_compile_output(input).await?;
+            Ok((serde_json::from_slice(&raw)?, serde_json::from_slice(&raw)?))
         }
     }
 }

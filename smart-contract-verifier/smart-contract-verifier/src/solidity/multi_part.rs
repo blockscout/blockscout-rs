@@ -5,7 +5,10 @@ use crate::{
 };
 use bytes::Bytes;
 use ethers_solc::{
-    artifacts::{BytecodeHash, Libraries, Settings, SettingsMetadata, Source, Sources},
+    artifacts::{
+        output_selection::OutputSelection, BytecodeHash, Libraries, Settings, SettingsMetadata,
+        Source, Sources,
+    },
     CompilerInput, EvmVersion,
 };
 use semver::VersionReq;
@@ -37,6 +40,9 @@ impl From<MultiFileContent> for Vec<CompilerInput> {
         let mut settings = Settings::default();
         settings.optimizer.enabled = Some(content.optimization_runs.is_some());
         settings.optimizer.runs = content.optimization_runs;
+
+        settings.output_selection = OutputSelection::complete_output_selection();
+
         if let Some(libs) = content.contract_libraries {
             // we have to know filename for library, but we don't know,
             // so we assume that every file MAY contains all libraries
@@ -191,7 +197,7 @@ mod tests {
                 "some_address".into(),
             )])),
         };
-        let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":"pragma"}},"settings":{"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"london","libraries":{"source.sol":{"some_library":"some_address"}}}}"#;
+        let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":"pragma"}},"settings":{"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"":["*"],"*":["*"]}},"evmVersion":"london","libraries":{"source.sol":{"some_library":"some_address"}}}}"#;
         test_to_input(multi_part, vec![expected]);
         let multi_part = MultiFileContent {
             sources: sources(&[("source.sol", "")]),
@@ -199,7 +205,7 @@ mod tests {
             optimization_runs: None,
             contract_libraries: None,
         };
-        let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":""}},"settings":{"optimizer":{"enabled":false},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"spuriousDragon","libraries":{}}}"#;
+        let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":""}},"settings":{"optimizer":{"enabled":false},"outputSelection":{"*":{"":["*"],"*":["*"]}},"evmVersion":"spuriousDragon","libraries":{}}}"#;
         test_to_input(multi_part, vec![expected]);
     }
 
@@ -215,8 +221,8 @@ mod tests {
             optimization_runs: Some(200),
             contract_libraries: None,
         };
-        let expected_solidity = r#"{"language":"Solidity","sources":{"source.sol":{"content":"pragma"}},"settings":{"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"london","libraries":{}}}"#;
-        let expected_yul = r#"{"language":"Yul","sources":{".yul":{"content":"object \"A\" {}"},"source2.yul":{"content":"object \"A\" {}"}},"settings":{"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"london","libraries":{}}}"#;
+        let expected_solidity = r#"{"language":"Solidity","sources":{"source.sol":{"content":"pragma"}},"settings":{"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"":["*"],"*":["*"]}},"evmVersion":"london","libraries":{}}}"#;
+        let expected_yul = r#"{"language":"Yul","sources":{".yul":{"content":"object \"A\" {}"},"source2.yul":{"content":"object \"A\" {}"}},"settings":{"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"":["*"],"*":["*"]}},"evmVersion":"london","libraries":{}}}"#;
         test_to_input(multi_part, vec![expected_solidity, expected_yul]);
     }
 }

@@ -29,7 +29,7 @@ impl From<StandardJsonContent> for CompilerInput {
 
         // always overwrite output selection as it customizes what compiler outputs and
         // is not what is returned to the user, but only used internally by our service
-        let output_selection = OutputSelection::default_output_selection();
+        let output_selection = OutputSelection::complete_output_selection();
         input.settings.output_selection = output_selection;
 
         input
