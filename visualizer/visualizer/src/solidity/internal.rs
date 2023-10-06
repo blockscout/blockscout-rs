@@ -29,6 +29,13 @@ pub async fn save_files(root: &Path, files: BTreeMap<PathBuf, String>) -> Result
                 ));
             }
 
+            // Set a default file prefix if none is provided
+            let name = if name.ends_with(".sol") {
+                name.with_file_name("main.sol")
+            } else {
+                name
+            };
+
             let file_path = root.join(name);
             let prefix = file_path.parent();
             if let Some(prefix) = prefix {
