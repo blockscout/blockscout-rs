@@ -1,10 +1,4 @@
-use crate::proto::{
-    blockscout::visualizer::v1::{
-        VisualizeContractsRequest, VisualizeResponse, VisualizeStorageRequest,
-    },
-    google::protobuf::FieldMask,
-};
-use bytes::Bytes;
+use crate::proto::FieldMask;
 use lazy_static::lazy_static;
 use regex::{Regex, RegexBuilder};
 use std::{
@@ -22,14 +16,14 @@ lazy_static! {
     static ref REGEX_NO_DOTS: Regex = Regex::new(r"(^|/)[.]+($|/)").unwrap();
 }
 
-fn sources(sources: HashMap<String, String>) -> BTreeMap<PathBuf, String> {
+pub fn sources(sources: HashMap<String, String>) -> BTreeMap<PathBuf, String> {
     sources
         .into_iter()
         .map(|(path, content)| (PathBuf::from(path), content))
         .collect()
 }
 
-fn output_mask(field_mask: Option<FieldMask>) -> Result<OutputMask, anyhow::Error> {
+pub fn output_mask(field_mask: Option<FieldMask>) -> Result<OutputMask, anyhow::Error> {
     let mut output_mask: OutputMask = field_mask
         .map(|mask| {
             mask.paths
@@ -39,14 +33,14 @@ fn output_mask(field_mask: Option<FieldMask>) -> Result<OutputMask, anyhow::Erro
                 .map(OutputMask)
         })
         .unwrap_or_else(|| Ok(Default::default()))?;
-    // empty output mask means that all fields must present
+    // empty output mask means that all fields must be present
     if output_mask.0.is_empty() {
         output_mask = OutputMask::full();
     };
     Ok(output_mask)
 }
 
-fn fix_sources_paths(sources: BTreeMap<PathBuf, String>) -> BTreeMap<PathBuf, String> {
+pub fn fix_sources_paths(sources: BTreeMap<PathBuf, String>) -> BTreeMap<PathBuf, String> {
     sources
         .into_iter()
         .map(|(path, content)| {
@@ -65,44 +59,12 @@ fn fix_sources_paths(sources: BTreeMap<PathBuf, String>) -> BTreeMap<PathBuf, St
 
 // Should be the same as in
 // https://github.com/ethereum/sourcify/blob/d0882a5d6158d0f56e121835d79860034f072cd8/services/verification/src/services/Injector.ts#L907
-fn sanitize_path(path: &str) -> String {
+pub fn sanitize_path(path: &str) -> String {
     let path = REGEX_ONLY_CHARS.replace_all(path, "_");
     let path = REGEX_NO_DOTS.replace_all(path.as_ref(), "_");
     path.to_string()
 }
 
-impl TryFrom<VisualizeContractsRequest> for visualizer::VisualizeContractsRequest {
-    type Error = anyhow::Error;
-
-    fn try_from(request: VisualizeContractsRequest) -> Result<Self, Self::Error> {
-        Ok(Self {
-            sources: fix_sources_paths(sources(request.sources)),
-            output_mask: output_mask(request.output_mask)?,
-        })
-    }
-}
-
-impl TryFrom<VisualizeStorageRequest> for visualizer::VisualizeStorageRequest {
-    type Error = anyhow::Error;
-
-    fn try_from(request: VisualizeStorageRequest) -> Result<Self, Self::Error> {
-        Ok(Self {
-            sources: fix_sources_paths(sources(request.sources)),
-            file_path: PathBuf::from(request.file_name),
-            contract_name: request.contract_name,
-            output_mask: output_mask(request.output_mask)?,
-        })
-    }
-}
-
-impl From<visualizer::Response> for VisualizeResponse {
-    fn from(response: visualizer::Response) -> Self {
-        Self {
-            png: response.png.map(Bytes::from),
-            svg: response.svg.map(Bytes::from),
-        }
-    }
-}
 #[cfg(test)]
 mod tests {
     use super::*;
