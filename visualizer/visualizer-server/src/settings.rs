@@ -4,7 +4,6 @@ use blockscout_service_launcher::{
 };
 use config::{Config, File};
 use serde::{de, Deserialize};
-use std::str::FromStr;
 
 /// Wrapper under [`serde::de::IgnoredAny`] which implements
 /// [`PartialEq`] and [`Eq`] for fields to be ignored.

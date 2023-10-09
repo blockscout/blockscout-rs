@@ -5,8 +5,9 @@ use crate::{
 };
 use blockscout_service_launcher::{launcher, launcher::LaunchSettings, tracing};
 use std::sync::Arc;
-use visualizer_proto::blockscout::visualizer::v1::health_actix::route_health;
-use visualizer_proto::blockscout::visualizer::v1::solidity_visualizer_actix::route_solidity_visualizer;
+use visualizer_proto::blockscout::visualizer::v1::{
+    health_actix::route_health, solidity_visualizer_actix::route_solidity_visualizer,
+};
 
 const SERVICE_NAME: &str = "visualizer";
 

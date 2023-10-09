@@ -5,4 +5,5 @@ mod settings;
 mod types;
 
 pub use server::run;
+pub use services::SolidityVisualizerService;
 pub use settings::Settings;
