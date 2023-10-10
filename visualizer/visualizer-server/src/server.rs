@@ -44,7 +44,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let http_router = router;
 
     let launch_settings = LaunchSettings {
-        service_name: "visualizer".to_owned(),
+        service_name: SERVICE_NAME.to_owned(),
         server: settings.server,
         metrics: settings.metrics,
     };
