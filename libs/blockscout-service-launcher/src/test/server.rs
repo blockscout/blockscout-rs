@@ -1,12 +1,21 @@
 use crate::launcher::ServerSettings;
-use rand;
 use reqwest::Url;
-use std::{future::Future, net::SocketAddr, str::FromStr};
+use std::{
+    future::Future,
+    net::{SocketAddr, TcpListener},
+    str::FromStr,
+    time::Duration,
+};
+use tokio::time::timeout;
+
+fn get_free_port() -> u16 {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.local_addr().unwrap().port()
+}
 
 pub fn get_test_server_settings() -> (ServerSettings, Url) {
     let mut server = ServerSettings::default();
-    // Take a random port in range [10000..65535]
-    let port = (rand::random::<u16>() % 55535) + 10000;
+    let port = get_free_port();
     server.http.addr = SocketAddr::from_str(&format!("127.0.0.1:{port}")).unwrap();
     server.grpc.enabled = false;
     let base = Url::parse(&format!("http://{}", server.http.addr)).unwrap();
@@ -21,18 +30,23 @@ where
     tokio::spawn(async move { run().await });
 
     let client = reqwest::Client::new();
-
     let health_endpoint = base.join("health").unwrap();
-    // Wait for the server to start
-    loop {
-        if let Ok(_response) = client
-            .get(health_endpoint.clone())
-            .query(&[("service", health_check_service)])
-            .send()
-            .await
-        {
-            break;
+
+    let wait_health_check = async {
+        loop {
+            if let Ok(_response) = client
+                .get(health_endpoint.clone())
+                .query(&[("service", health_check_service)])
+                .send()
+                .await
+            {
+                break;
+            }
         }
+    };
+    // Wait for the server to start
+    if (timeout(Duration::from_secs(10), wait_health_check).await).is_err() {
+        panic!("Server did not start in time");
     }
 }
 
