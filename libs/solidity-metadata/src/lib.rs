@@ -49,7 +49,7 @@ impl<'b> Decode<'b, DecodeContext> for MetadataHash {
         for _ in 0..number_of_elements {
             // try to parse the key
             match d.str() {
-                Ok(s) if s == "solc" => {
+                Ok("solc") => {
                     if solc.is_some() {
                         // duplicate keys are not allowed in CBOR (RFC 8949)
                         return Err(Error::custom(ParseMetadataHashError::DuplicateKeys));
