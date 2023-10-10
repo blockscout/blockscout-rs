@@ -6,3 +6,6 @@ pub mod launcher;
 
 #[cfg(feature = "tracing")]
 pub mod tracing;
+
+#[cfg(feature = "test")]
+pub mod test;
