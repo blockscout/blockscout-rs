@@ -1,0 +1,204 @@
+swagger: "2.0"
+info:
+  title: bens.proto
+  version: version not set
+tags:
+  - name: DomainsExtractor
+  - name: Health
+consumes:
+  - application/json
+produces:
+  - application/json
+paths:
+  /api/v1/domains/get-detailed:
+    post:
+      operationId: DomainsExtractor_GetDetailedDomain
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetDetailedDomainResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1GetDetailedDomainRequest'
+      tags:
+        - DomainsExtractor
+  /api/v1/domains/search-address:
+    post:
+      operationId: DomainsExtractor_SearchAddress
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1SearchAddressResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1SearchAddressRequest'
+      tags:
+        - DomainsExtractor
+definitions:
+  HealthCheckResponseServingStatus:
+    type: string
+    enum:
+      - UNKNOWN
+      - SERVING
+      - NOT_SERVING
+      - SERVICE_UNKNOWN
+    default: UNKNOWN
+    description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
+  protobufAny:
+    type: object
+    properties:
+      '@type':
+        type: string
+    additionalProperties: {}
+  rpcStatus:
+    type: object
+    properties:
+      code:
+        type: integer
+        format: int32
+      message:
+        type: string
+      details:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/protobufAny'
+  v1Domain:
+    type: object
+    properties:
+      domainSource:
+        $ref: '#/definitions/v1DomainSource'
+        title: / Source of domain name. Now could be only ENS, in future we could add UNSTOPPABLE_DOMAINS
+      id:
+        type: string
+        title: / Unique id for the domain, also known as nodehash
+      name:
+        type: string
+        title: / The human readable name, if known. Unknown portions replaced with hash in square brackets (eg, foo.[1234].eth)
+      tokenId:
+        type: string
+        format: uint64
+        title: / Integer representation of labelhash
+      owner:
+        type: string
+        title: / The account that owns the domain
+      resolvedAddress:
+        type: string
+        title: / Optinal. Resolved address of this domain
+      registrant:
+        type: string
+        title: / Optinal. The account that owns the ERC721 NFT for the domain
+      expiryDate:
+        type: string
+        format: uint64
+        title: / Optinal. Unix timestamp of expiry date. None means never expires
+      registrationDate:
+        type: string
+        format: uint64
+        title: / Unix timestamp of regisration date
+      otherAddress:
+        type: object
+        additionalProperties:
+          type: string
+        title: / Map chain -> resolved_address. This map will contain `current_chain_id` -> `resovled_address` if `resovled_address` is not None
+  v1DomainEvent:
+    type: object
+    properties:
+      transactionHash:
+        type: string
+        title: / Transaction hash where action occured
+      timestamp:
+        type: string
+        format: uint64
+        title: / Timestamp of this transaction
+      fromAddress:
+        type: string
+        title: / Sender of transaction
+      action:
+        type: string
+        title: / Optinal. Action name
+  v1DomainSource:
+    type: string
+    enum:
+      - ENS
+    default: ENS
+    description: |-
+      /// https://docs.unstoppabledomains.com/
+      UNSTOPPABLE_DOMAINS = 1;
+    title: '- ENS: / https://docs.ens.domains/'
+  v1GetDetailedDomainRequest:
+    type: object
+    properties:
+      name:
+        type: string
+        title: / Name of domain, for example vitalik.eth
+      chainId:
+        type: string
+        format: uint64
+        title: / The chain (network) where domain search should be done
+  v1GetDetailedDomainResponse:
+    type: object
+    properties:
+      domain:
+        $ref: '#/definitions/v1Domain'
+        title: / Optinal. Basic domain info
+      history:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1DomainEvent'
+        title: / List of domain events
+  v1HealthCheckResponse:
+    type: object
+    properties:
+      status:
+        $ref: '#/definitions/HealthCheckResponseServingStatus'
+  v1SearchAddressRequest:
+    type: object
+    properties:
+      address:
+        type: string
+        title: / Ethereum address of EOA or contract
+      chainId:
+        type: string
+        format: uint64
+        title: / The chain (network) where domain search should be done
+      resolvedTo:
+        type: boolean
+        title: / Include domains resolved to the address
+      ownedBy:
+        type: boolean
+        title: / Include domains owned by the address
+  v1SearchAddressResponse:
+    type: object
+    properties:
+      resolvedTo:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Domain'
+        title: |-
+          List of domains that resolved to requested address
+          Sorted by relevance, so first address could be displayed as main resolved address
+      ownedBy:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Domain'
+        title: List of domains owned by requested address

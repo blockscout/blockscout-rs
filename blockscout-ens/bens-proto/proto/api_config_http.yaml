@@ -1,0 +1,18 @@
+type: google.api.Service
+config_version: 3
+
+http:
+  rules:
+    #################### DomainsExtractor ####################
+    - selector: blockscout.bens.v1.DomainsExtractor.SearchAddress
+      post: /api/v1/domains/search-address
+      body: "*"
+
+    - selector: blockscout.bens.v1.DomainsExtractor.GetDetailedDomain
+      post: /api/v1/domains/get-detailed
+      body: "*"
+
+    #################### Health ####################
+
+    - selector: blockscout.ethBytecodeDb.v2.Health.Check
+      get: /health
