@@ -89,6 +89,7 @@ database-0_10 = [
 ]
 
 test-server = [
+    "launcher",
     "dep:reqwest",
 ]
 
