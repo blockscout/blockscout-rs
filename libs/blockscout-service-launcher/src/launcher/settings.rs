@@ -1,5 +1,37 @@
+use config::{Config, File};
 use serde::{Deserialize, Serialize};
 use std::{net::SocketAddr, str::FromStr};
+
+pub trait ConfigSettings {
+    const SERVICE_NAME: &'static str;
+
+    fn build() -> anyhow::Result<Self>
+    where
+        Self: Deserialize<'static>,
+    {
+        let config_path_name: &String = &format!("{}__CONFIG", Self::SERVICE_NAME);
+        let config_path = std::env::var(config_path_name);
+
+        let mut builder = Config::builder();
+        if let Ok(config_path) = config_path {
+            builder = builder.add_source(File::with_name(&config_path));
+            std::env::remove_var(config_path_name);
+        };
+        // Use `__` so that it would be possible to address keys with underscores in names (e.g. `access_key`)
+        builder = builder
+            .add_source(config::Environment::with_prefix(Self::SERVICE_NAME).separator("__"));
+
+        let settings: Self = builder.build()?.try_deserialize()?;
+
+        settings.validate()?;
+
+        Ok(settings)
+    }
+
+    fn validate(&self) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
 
 /// HTTP and GRPC server settings.
 /// Notice that, by default, HTTP server is enabled, and GRPC is disabled.
