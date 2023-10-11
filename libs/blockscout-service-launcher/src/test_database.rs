@@ -10,7 +10,9 @@ pub struct TestDbGuard {
 }
 
 impl TestDbGuard {
-    pub async fn new<Migrator: MigratorTrait>(db_name: &str, db_url: String) -> Self {
+    pub async fn new<Migrator: MigratorTrait>(db_name: &str) -> Self {
+        let db_url = std::env::var("DATABASE_URL")
+            .expect("Database url must be set to initialize a test database");
         // We use a hash, as the name itself may be quite long and be trimmed.
         let db_name = format!("_{:x}", keccak_hash::keccak(db_name));
         let (db_url, conn_with_db) = Self::init_database::<Migrator>(&db_url, &db_name).await;
