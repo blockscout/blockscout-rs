@@ -22,7 +22,7 @@ pub fn get_test_server_settings() -> (ServerSettings, Url) {
     (server, base)
 }
 
-pub async fn init_server<F, R>(run: F, base: &Url, health_check_service: &str)
+pub async fn init_server<F, R>(run: F, base: &Url)
 where
     F: FnOnce() -> R + Send + 'static,
     R: Future<Output = ()> + Send,
@@ -36,7 +36,7 @@ where
         loop {
             if let Ok(_response) = client
                 .get(health_endpoint.clone())
-                .query(&[("service", health_check_service)])
+                .query(&[("service", "")])
                 .send()
                 .await
             {
