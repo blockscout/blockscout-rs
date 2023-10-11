@@ -81,6 +81,7 @@ definitions:
       - NOT_SERVING
       - SERVICE_UNKNOWN
     default: UNKNOWN
+    description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
   protobufAny:
     type: object
     properties:
@@ -93,12 +94,12 @@ definitions:
       code:
         type: integer
         format: int32
+      message:
+        type: string
       details:
         type: array
         items:
           $ref: '#/definitions/protobufAny'
-      message:
-        type: string
   v1HealthCheckResponse:
     type: object
     properties:
@@ -107,12 +108,12 @@ definitions:
   v1VisualizeContractsRequest:
     type: object
     properties:
-      outputMask:
-        type: string
       sources:
         type: object
         additionalProperties:
           type: string
+      outputMask:
+        type: string
   v1VisualizeResponse:
     type: object
     properties:
@@ -129,13 +130,13 @@ definitions:
   v1VisualizeStorageRequest:
     type: object
     properties:
-      contractName:
-        type: string
-      fileName:
-        type: string
-      outputMask:
-        type: string
       sources:
         type: object
         additionalProperties:
           type: string
+      fileName:
+        type: string
+      contractName:
+        type: string
+      outputMask:
+        type: string

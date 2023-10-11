@@ -1,8 +1,6 @@
-use crate::proto::blockscout::visualizer::v1::{
+use crate::proto::{
     health_check_response, health_server::Health, HealthCheckRequest, HealthCheckResponse,
 };
-
-pub use crate::proto::blockscout::visualizer::v1::health_actix::route_health;
 
 #[derive(Default)]
 pub struct HealthService {}
@@ -14,7 +12,7 @@ impl Health for HealthService {
         _request: tonic::Request<HealthCheckRequest>,
     ) -> Result<tonic::Response<HealthCheckResponse>, tonic::Status> {
         Ok(tonic::Response::new(HealthCheckResponse {
-            status: health_check_response::ServingStatus::Serving as i32,
+            status: health_check_response::ServingStatus::Serving.into(),
         }))
     }
 }

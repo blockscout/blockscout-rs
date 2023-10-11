@@ -8,7 +8,8 @@ use bytes::Bytes;
 use serde::Deserialize;
 use serde_json::json;
 use serde_with::serde_as;
-use visualizer_server::{route_solidity_visualizer, SolidityVisualizerService};
+use visualizer_proto::blockscout::visualizer::v1::solidity_visualizer_actix::route_solidity_visualizer;
+use visualizer_server::SolidityVisualizerService;
 
 use std::{collections::BTreeMap, fs, path::PathBuf, str::from_utf8, sync::Arc};
 use walkdir::WalkDir;

@@ -2,5 +2,6 @@
 resolver = "2"
 members = [
     "visualizer",
-    "visualizer-server"
+    "visualizer-server",
+    "visualizer-proto"
 ]

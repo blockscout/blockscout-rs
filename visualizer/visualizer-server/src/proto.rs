@@ -1,15 +1,8 @@
-#![allow(clippy::derive_partial_eq_without_eq)]
-
-pub mod blockscout {
-    pub mod visualizer {
-        pub mod v1 {
-            include!(concat!(env!("OUT_DIR"), "/blockscout.visualizer.v1.rs"));
-        }
-    }
-}
-
-pub mod google {
-    pub mod protobuf {
-        include!(concat!(env!("OUT_DIR"), "/google.protobuf.rs"));
-    }
-}
+pub use visualizer_proto::{
+    blockscout::visualizer::v1::{
+        health_actix, health_check_response, health_server, solidity_visualizer_actix,
+        solidity_visualizer_server, HealthCheckRequest, HealthCheckResponse,
+        VisualizeContractsRequest, VisualizeResponse, VisualizeStorageRequest,
+    },
+    google::protobuf::FieldMask,
+};
