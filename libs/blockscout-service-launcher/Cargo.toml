@@ -88,7 +88,11 @@ database-0_10 = [
     "dep:sea-orm-migration-0_10",
 ]
 
-test = [
+test-server = [
     "dep:reqwest",
+]
+
+test-database = [
+    "database",
     "dep:keccak-hash",
 ]
