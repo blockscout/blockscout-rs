@@ -75,6 +75,14 @@ impl Database for DatabaseService {
         let chain_id = request.chain;
         let contract_address = request.address;
 
+        tracing::debug!(
+            contract_address = contract_address,
+            chain_id = chain_id,
+            bytecode_type = ?bytecode_type,
+            bytecode = bytecode,
+            "search all sources request"
+        );
+
         let search_sources_task = self.search_sources(bytecode_type, &bytecode);
         let search_sourcify_sources_task =
             self.search_sourcify_sources(&chain_id, &contract_address);
@@ -87,6 +95,12 @@ impl Database for DatabaseService {
         // Importing contracts from etherscan may be quite expensive operation.
         // For that reason, we try to use that approach only if no other sources have been found.
         if eth_bytecode_db_sources.is_empty() && sourcify_source.is_none() {
+            tracing::info!(
+                contract_address = contract_address,
+                chain_id = chain_id,
+                "no sources have been found neither in eth-bytecode-db nor in sourcify.\
+                Trying to verify from etherscan"
+            );
             let verification_request = sourcify_from_etherscan::VerificationRequest {
                 address: contract_address,
                 chain: chain_id,
