@@ -1,6 +1,6 @@
 use blockscout_service_launcher::{
-    GrpcServerSettings, HttpServerSettings, JaegerSettings, MetricsSettings, ServerSettings,
-    TracingSettings,
+    launcher::{GrpcServerSettings, HttpServerSettings, MetricsSettings, ServerSettings},
+    tracing::{JaegerSettings, TracingSettings},
 };
 use config::{Config, File};
 use cron::Schedule;

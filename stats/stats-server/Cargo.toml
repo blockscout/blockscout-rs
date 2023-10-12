@@ -24,7 +24,7 @@ sea-orm = { version = "0.10", features = [
     "runtime-tokio-rustls",
 ] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-blockscout-service-launcher = { version = "0.7.1", features = [ "database-0_10" ] }
+blockscout-service-launcher = { path = "../../libs/blockscout-service-launcher", features = [ "database-0_10", "test-database", "test-server" ] }
 cron = "0.12"
 convert_case = "0.6.0"
 itertools = "0.11.0"
@@ -32,7 +32,7 @@ liquid-json = "0.5.0"
 serde_json = "1.0"
 
 [dev-dependencies]
-reqwest-middleware = "0.2"
-reqwest-retry = "0.2"
+blockscout-db = { git = "https://github.com/blockscout/blockscout-rs" }
+stats-migration = { path = "../stats/migration", package = "migration" }
 reqwest = "0.11"
 pretty_assertions = "1.3"
