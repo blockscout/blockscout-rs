@@ -5,12 +5,11 @@ http:
   rules:
     #################### DomainsExtractor ####################
     - selector: blockscout.bens.v1.DomainsExtractor.SearchAddress
-      post: /api/v1/domains/search-address
+      post: /api/v1/{chain_id}/domains:reverse-search
       body: "*"
 
     - selector: blockscout.bens.v1.DomainsExtractor.GetDetailedDomain
-      post: /api/v1/domains/get-detailed
-      body: "*"
+      get: /api/v1/{chain_id}/domains/{name}
 
     #################### Health ####################
 

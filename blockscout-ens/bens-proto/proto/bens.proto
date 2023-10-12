@@ -5,38 +5,30 @@ package blockscout.bens.v1;
 option go_package = "github.com/blockscout/blockscout-rs/bens";
 
 service DomainsExtractor {
-  rpc SearchAddress(SearchAddressRequest) returns (SearchAddressResponse) {}
-  rpc GetDetailedDomain(GetDetailedDomainRequest) returns (GetDetailedDomainResponse) {}
-}
-
-enum DomainSource {
-  /// https://docs.ens.domains/
-  ENS = 0;
-  // /// https://docs.unstoppabledomains.com/
-  //UNSTOPPABLE_DOMAINS = 1;
+  rpc ReverseDomainSearch(ReverseDomainSearchRequest) returns (ReverseDomainSearchResponse) {}
+  rpc GetDetailedDomain(GetDetailedDomainRequest) returns (DetailedDomain) {}
 }
 
 message Domain {
-  /// Source of domain name. Now could be only ENS, in future we could add UNSTOPPABLE_DOMAINS
-  DomainSource domain_source = 1;
   /// Unique id for the domain, also known as nodehash
-  string id = 2;
+  string id = 1;
   /// The human readable name, if known. Unknown portions replaced with hash in square brackets (eg, foo.[1234].eth)
-  string name = 3;
+  string name = 2;
   /// Integer representation of labelhash
-  uint64 token_id = 4;
+  uint64 token_id = 3;
   /// The account that owns the domain
-  string owner = 5;
+  string owner = 4;
   /// Optinal. Resolved address of this domain
-  optional string resolved_address = 6;
+  optional string resolved_address = 5;
   /// Optinal. The account that owns the ERC721 NFT for the domain
-  optional string registrant = 7;
+  optional string registrant = 6;
   /// Optinal. Unix timestamp of expiry date. None means never expires
-  optional uint64 expiry_date = 8;
+  optional uint64 expiry_date = 7;
   /// Unix timestamp of regisration date
-  uint64 registration_date = 9;
-  /// Map chain -> resolved_address. This map will contain `current_chain_id` -> `resovled_address` if `resovled_address` is not None
-  map<string, string> other_address = 10;
+  uint64 registration_date = 8;
+  /// Map chain -> resolved_address that contains other blockchain addresses.
+  /// This map will contain `current_chain_id` -> `resovled_address` if `resovled_address` is not None
+  map<string, string> other_address = 9;
 }
 
 message DomainEvent {
@@ -51,8 +43,16 @@ message DomainEvent {
 }
 
 
-message SearchAddressRequest {
-  /// Ethereum address of EOA or contract
+message DetailedDomain {
+  /// Optinal. Basic domain info
+  optional Domain domain = 1;
+  /// List of domain events
+  repeated DomainEvent history = 2;
+}
+
+
+message ReverseDomainSearchRequest {
+  /// Address of EOA or contract
   string address = 1;
   /// The chain (network) where domain search should be done
   uint64 chain_id = 2;
@@ -62,7 +62,7 @@ message SearchAddressRequest {
   bool owned_by = 4;
 }
 
-message SearchAddressResponse {
+message ReverseDomainSearchResponse {
   // List of domains that resolved to requested address
   // Sorted by relevance, so first address could be displayed as main resolved address
   repeated Domain resolved_to = 1;
@@ -75,11 +75,4 @@ message GetDetailedDomainRequest {
   string name = 1;
   /// The chain (network) where domain search should be done
   uint64 chain_id = 2;
-}
-
-message GetDetailedDomainResponse {
-  /// Optinal. Basic domain info
-  optional Domain domain = 1;
-  /// List of domain events
-  repeated DomainEvent history = 2;
 }
