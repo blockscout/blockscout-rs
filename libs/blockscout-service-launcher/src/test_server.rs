@@ -25,7 +25,7 @@ pub fn get_test_server_settings() -> (ServerSettings, Url) {
 pub async fn init_server<F, R>(run: F, base: &Url)
 where
     F: FnOnce() -> R + Send + 'static,
-    R: Future<Output = ()> + Send,
+    R: Future<Output = Result<(), anyhow::Error>> + Send,
 {
     tokio::spawn(async move { run().await });
 
@@ -50,20 +50,20 @@ where
     }
 }
 
-async fn send_annotated_request<
-    Request: serde::Serialize,
-    Response: for<'a> serde::Deserialize<'a>,
->(
+async fn send_annotated_request<Response: for<'a> serde::Deserialize<'a>>(
     url: &Url,
     route: &str,
-    request: &Request,
+    method: reqwest::Method,
+    payload: Option<&impl serde::Serialize>,
     annotation: Option<&str>,
 ) -> Response {
     let annotation = annotation.map(|v| format!("({v}) ")).unwrap_or_default();
 
-    let response = reqwest::Client::new()
-        .post(url.join(route).unwrap())
-        .json(&request)
+    let mut request = reqwest::Client::new().request(method, url.join(route).unwrap());
+    if let Some(p) = payload {
+        request = request.json(p);
+    };
+    let response = request
         .send()
         .await
         .unwrap_or_else(|_| panic!("{annotation}Failed to send request"));
@@ -80,11 +80,17 @@ async fn send_annotated_request<
         .await
         .unwrap_or_else(|_| panic!("({annotation})Response deserialization failed"))
 }
-
-pub async fn send_request<Request: serde::Serialize, Response: for<'a> serde::Deserialize<'a>>(
+pub async fn send_post_request<Response: for<'a> serde::Deserialize<'a>>(
     url: &Url,
     route: &str,
-    request: &Request,
+    payload: &impl serde::Serialize,
 ) -> Response {
-    send_annotated_request(url, route, request, None).await
+    send_annotated_request(url, route, reqwest::Method::POST, Some(payload), None).await
+}
+
+pub async fn send_get_request<Response: for<'a> serde::Deserialize<'a>>(
+    url: &Url,
+    route: &str,
+) -> Response {
+    send_annotated_request(url, route, reqwest::Method::GET, None::<&()>, None).await
 }
