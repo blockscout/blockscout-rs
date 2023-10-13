@@ -1,7 +1,7 @@
 use crate::database::{
     ConnectionTrait, Database, DatabaseConnection, DbErr, MigratorTrait, Statement,
 };
-use std::sync::Arc;
+use std::{ops::Deref, sync::Arc};
 
 #[derive(Clone, Debug)]
 pub struct TestDbGuard {
@@ -80,5 +80,12 @@ impl TestDbGuard {
 
     async fn run_migrations<Migrator: MigratorTrait>(db: &DatabaseConnection) -> Result<(), DbErr> {
         Migrator::up(db, None).await
+    }
+}
+
+impl Deref for TestDbGuard {
+    type Target = DatabaseConnection;
+    fn deref(&self) -> &Self::Target {
+        &*self.conn_with_db
     }
 }
