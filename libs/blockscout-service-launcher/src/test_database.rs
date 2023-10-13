@@ -86,6 +86,6 @@ impl TestDbGuard {
 impl Deref for TestDbGuard {
     type Target = DatabaseConnection;
     fn deref(&self) -> &Self::Target {
-        &*self.conn_with_db
+        &self.conn_with_db
     }
 }
