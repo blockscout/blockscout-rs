@@ -90,7 +90,7 @@ mod tests {
     #[ignore = "needs database to run"]
     async fn update_new_blocks_recurrent() {
         let _ = tracing_subscriber::fmt::try_init();
-        let (db, blockscout) = init_db_all("update_new_blocks_recurrent", None).await;
+        let (db, blockscout) = init_db_all("update_new_blocks_recurrent").await;
         fill_mock_blockscout_data(&blockscout, "2022-11-12").await;
 
         let updater = NewBlocks::default();
@@ -114,7 +114,7 @@ mod tests {
                 ..Default::default()
             },
         ])
-        .exec(&db)
+        .exec(&db as &DatabaseConnection)
         .await
         .unwrap();
 
@@ -169,7 +169,7 @@ mod tests {
     #[ignore = "needs database to run"]
     async fn update_new_blocks_fresh() {
         let _ = tracing_subscriber::fmt::try_init();
-        let (db, blockscout) = init_db_all("update_new_blocks_fresh", None).await;
+        let (db, blockscout) = init_db_all("update_new_blocks_fresh").await;
         fill_mock_blockscout_data(&blockscout, "2022-11-12").await;
 
         let updater = NewBlocks::default();
@@ -204,7 +204,7 @@ mod tests {
     #[ignore = "needs database to run"]
     async fn update_new_blocks_last() {
         let _ = tracing_subscriber::fmt::try_init();
-        let (db, blockscout) = init_db_all("update_new_blocks_last", None).await;
+        let (db, blockscout) = init_db_all("update_new_blocks_last").await;
         fill_mock_blockscout_data(&blockscout, "2022-11-12").await;
 
         let updater = NewBlocks::default();
@@ -243,7 +243,7 @@ mod tests {
                 ..Default::default()
             },
         ])
-        .exec(&db)
+        .exec(&db as &DatabaseConnection)
         .await
         .unwrap();
 
