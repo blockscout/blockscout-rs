@@ -29,6 +29,7 @@ pub async fn verify(
     mut client: Client,
     request: VerificationRequest<StandardJson>,
 ) -> Result<Source, Error> {
+    let is_authorized = request.is_authorized;
     let bytecode_type = request.bytecode_type;
     let raw_request_bytecode = hex::decode(request.bytecode.clone().trim_start_matches("0x"))
         .map_err(|err| Error::InvalidArgument(format!("invalid bytecode: {err}")))?;
@@ -46,6 +47,7 @@ pub async fn verify(
     let verifier_alliance_db_action = VerifierAllianceDbAction::from_db_client_and_metadata(
         client.alliance_db_client.as_deref(),
         verification_metadata.clone(),
+        is_authorized,
     );
     process_verify_response(
         response,
@@ -82,8 +84,9 @@ mod tests {
             metadata: Some(types::VerificationMetadata {
                 chain_id: Some(1),
                 contract_address: Some(bytes::Bytes::from_static(&[1u8; 20])),
-                transaction_hash: None,
+                ..Default::default()
             }),
+            is_authorized: false,
         };
         let expected = VerifyVyperStandardJsonRequest {
             bytecode: "0x1234".to_string(),
@@ -114,8 +117,9 @@ mod tests {
             metadata: Some(types::VerificationMetadata {
                 chain_id: Some(1),
                 contract_address: Some(bytes::Bytes::from_static(&[1u8; 20])),
-                transaction_hash: None,
+                ..Default::default()
             }),
+            is_authorized: false,
         };
         let expected = VerifyVyperStandardJsonRequest {
             bytecode: "0x1234".to_string(),

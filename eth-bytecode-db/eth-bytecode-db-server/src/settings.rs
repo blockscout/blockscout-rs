@@ -5,6 +5,7 @@ use blockscout_service_launcher::{
 use config::{Config, File};
 use serde::{de, Deserialize};
 use serde_with::{serde_as, DisplayFromStr};
+use std::collections::HashMap;
 
 /// Wrapper under [`serde::de::IgnoredAny`] which implements
 /// [`PartialEq`] and [`Eq`] for fields to be ignored.
@@ -36,6 +37,11 @@ pub struct Settings {
     pub verifier: VerifierSettings,
     #[serde(default)]
     pub sourcify: SourcifySettings,
+    #[serde(default)]
+    pub verifier_alliance_database: VerifierAllianceDatabaseSettings,
+
+    #[serde(default)]
+    pub authorized_keys: HashMap<String, ApiKey>,
 
     // Is required as we deny unknown fields, but allow users provide
     // path to config through PREFIX__CONFIG env variable. If removed,
@@ -79,6 +85,19 @@ impl Default for SourcifySettings {
     }
 }
 
+#[derive(Debug, Default, Clone, Deserialize, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields)]
+pub struct VerifierAllianceDatabaseSettings {
+    pub enabled: bool,
+    pub url: String,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ApiKey {
+    pub key: String,
+}
+
 impl Settings {
     pub fn new() -> anyhow::Result<Self> {
         let config_path = std::env::var("ETH_BYTECODE_DB__CONFIG");
@@ -109,6 +128,8 @@ impl Settings {
             },
             verifier: VerifierSettings { uri: verifier_uri },
             sourcify: Default::default(),
+            verifier_alliance_database: Default::default(),
+            authorized_keys: Default::default(),
             config_path: Default::default(),
         }
     }

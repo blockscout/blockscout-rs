@@ -2,6 +2,7 @@ use super::test_input_data::TestInputData;
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use bytes::Bytes;
 use eth_bytecode_db::verification::{BytecodeType, VerificationMetadata, VerificationRequest};
+use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2 as eth_bytecode_db_v2;
 use serde::Deserialize;
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2 as smart_contract_verifier_v2;
 use std::{collections::BTreeMap, path::Path, str::FromStr};
@@ -78,47 +79,14 @@ impl TestCase {
         serde_json::from_str(&content).expect("invalid test case format")
     }
 
-    pub fn to_test_input_data<C>(
-        &self,
-        content: C,
-        is_authorized: bool,
-    ) -> TestInputData<VerificationRequest<C>> {
-        let eth_bytecode_db_request = self.to_eth_bytecode_db_request(content, is_authorized);
-        let verifier_source = self.to_verifier_source();
+    pub fn to_test_input_data(&self) -> TestInputData {
+        let eth_bytecode_db_source = self.to_eth_bytecode_db_source();
         let verifier_extra_data = self.to_verifier_extra_data();
 
-        TestInputData::from_verifier_source_and_extra_data(
-            eth_bytecode_db_request,
-            verifier_source,
-            verifier_extra_data,
-        )
+        TestInputData::from_source_and_extra_data(eth_bytecode_db_source, verifier_extra_data)
     }
 
-    fn to_eth_bytecode_db_request<C>(
-        &self,
-        content: C,
-        is_authorized: bool,
-    ) -> VerificationRequest<C> {
-        VerificationRequest {
-            bytecode: self.deployed_creation_code.to_string(),
-            bytecode_type: BytecodeType::CreationInput,
-            compiler_version: self.version.clone(),
-            content,
-            metadata: Some(VerificationMetadata {
-                chain_id: Some(self.chain_id as i64),
-                contract_address: Some(self.address.0.clone()),
-                transaction_hash: Some(self.transaction_hash.0.clone()),
-                block_number: Some(self.block_number as i64),
-                transaction_index: Some(self.transaction_index as i64),
-                deployer: Some(self.deployer.0.clone()),
-                creation_code: Some(self.deployed_creation_code.0.clone()),
-                runtime_code: Some(self.deployed_runtime_code.0.clone()),
-            }),
-            is_authorized,
-        }
-    }
-
-    fn to_verifier_source(&self) -> smart_contract_verifier_v2::Source {
+    fn to_eth_bytecode_db_source(&self) -> eth_bytecode_db_v2::Source {
         let file_name = self
             .fully_qualified_name
             .split(':')
@@ -158,7 +126,7 @@ impl TestCase {
             smart_contract_verifier_v2::source::MatchType::Full
         };
 
-        smart_contract_verifier_v2::Source {
+        eth_bytecode_db_v2::Source {
             file_name: file_name.to_string(),
             contract_name: self.name.clone(),
             compiler_version: self.version.clone(),

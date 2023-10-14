@@ -1,12 +1,9 @@
 mod verification_test_helpers;
 
-use crate::verification_test_helpers::test_input_data::TestInputData;
+use crate::verification_test_helpers::{send_annotated_request, RequestWrapper};
 use async_trait::async_trait;
-use eth_bytecode_db::verification::{
-    solidity_standard_json, solidity_standard_json::StandardJson, Client, Error, Source,
-    SourceType, VerificationMetadata, VerificationRequest,
-};
-use pretty_assertions::assert_eq;
+use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2 as eth_bytecode_db_v2;
+use eth_bytecode_db_server::Settings;
 use rstest::rstest;
 use sea_orm::{
     prelude::{Decimal, Uuid},
@@ -14,59 +11,58 @@ use sea_orm::{
     ActiveValue::Set,
     DatabaseConnection, DatabaseTransaction, EntityTrait, TransactionTrait,
 };
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
-    VerifyResponse, VerifySolidityStandardJsonRequest,
-};
+use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2 as smart_contract_verifier_v2;
 use std::{future::Future, path::PathBuf, sync::Arc};
+use tonic::Response;
 use verification_test_helpers::{
-    init_db,
-    smart_contract_veriifer_mock::{MockSolidityVerifierService, SmartContractVerifierServer},
-    start_server_and_init_client,
+    init_alliance_db, init_db, init_eth_bytecode_db_server_with_settings_setup,
+    init_verifier_server,
+    smart_contract_verifer_mock::{MockSolidityVerifierService, SmartContractVerifierServer},
     verifier_alliance_types::TestCase,
-    VerifierService,
+    TestDbGuard, VerifierService,
 };
 use verifier_alliance_entity::{
     code, compiled_contracts, contract_deployments, contracts, verified_contracts,
 };
 
-const DB_PREFIX: &str = "verifier_alliance";
-
 #[async_trait]
-impl VerifierService<VerificationRequest<StandardJson>> for MockSolidityVerifierService {
-    type GrpcT = VerifySolidityStandardJsonRequest;
-
-    fn add_into_service(
-        &mut self,
-        request: VerifySolidityStandardJsonRequest,
-        response: VerifyResponse,
-    ) {
+impl VerifierService<smart_contract_verifier_v2::VerifyResponse> for MockSolidityVerifierService {
+    fn add_into_service(&mut self, response: smart_contract_verifier_v2::VerifyResponse) {
         self.expect_verify_standard_json()
-            .withf(move |arg| arg.get_ref() == &request)
-            .returning(move |_| Ok(tonic::Response::new(response.clone())));
+            .returning(move |_| Ok(Response::new(response.clone())));
     }
 
     fn build_server(self) -> SmartContractVerifierServer {
         SmartContractVerifierServer::new().solidity_service(self)
     }
+}
 
-    fn generate_request(
-        &self,
-        _id: u8,
-        _metadata: Option<VerificationMetadata>,
-    ) -> VerificationRequest<StandardJson> {
-        unreachable!()
-        // generate_verification_request(id, default_request_content(), metadata)
-    }
+const TEST_SUITE_NAME: &str = "verifier_alliance";
 
-    fn source_type(&self) -> SourceType {
-        unreachable!()
-    }
+const ROUTE: &str = "/api/v2/verifier/solidity/sources:verify-standard-json";
 
-    async fn verify(
-        client: Client,
-        request: VerificationRequest<StandardJson>,
-    ) -> Result<Source, Error> {
-        solidity_standard_json::verify(client, request).await
+const API_KEY_NAME: &str = "x-api-key";
+
+const API_KEY: &str = "some api key";
+
+fn verify_request(test_case: &TestCase) -> eth_bytecode_db_v2::VerifySolidityStandardJsonRequest {
+    let metadata = eth_bytecode_db_v2::VerificationMetadata {
+        chain_id: Some(format!("{}", test_case.chain_id)),
+        contract_address: Some(test_case.address.to_string()),
+        transaction_hash: Some(test_case.transaction_hash.to_string()),
+        block_number: Some(test_case.block_number as i64),
+        transaction_index: Some(test_case.transaction_index as i64),
+        deployer: Some(test_case.deployer.to_string()),
+        creation_code: Some(test_case.deployed_creation_code.to_string()),
+        runtime_code: Some(test_case.deployed_runtime_code.to_string()),
+    };
+
+    eth_bytecode_db_v2::VerifySolidityStandardJsonRequest {
+        bytecode: "".to_string(),
+        bytecode_type: eth_bytecode_db_v2::BytecodeType::CreationInput.into(),
+        compiler_version: "".to_string(),
+        input: "".to_string(),
+        metadata: Some(metadata),
     }
 }
 
@@ -75,7 +71,7 @@ async fn setup<F, Fut: Future<Output = ()>>(
     test_case_path: PathBuf,
     setup_db: F,
     is_authorized: bool,
-) -> (Client, TestCase)
+) -> (TestDbGuard, TestCase)
 where
     F: FnOnce(Arc<DatabaseConnection>, TestCase) -> Fut,
 {
@@ -92,28 +88,40 @@ where
             .unwrap()
     );
 
+    let db = init_db(TEST_SUITE_NAME, &test_name).await;
+    let alliance_db = init_alliance_db(TEST_SUITE_NAME, &test_name).await;
+
     let test_case = TestCase::from_file(test_case_path);
-    let input_data = input_data(&test_case, is_authorized);
+    let test_input_data = test_case.to_test_input_data();
 
-    let db = init_db(DB_PREFIX, &test_name)
-        .await
-        .with_alliance_db()
-        .await;
+    setup_db(alliance_db.client(), test_case.clone()).await;
 
-    let alliance_db_client = db.alliance_client().unwrap();
-    setup_db(alliance_db_client.clone(), test_case.clone()).await;
+    let db_url = db.db_url();
+    let verifier_addr = init_verifier_server(service, test_input_data.verifier_response).await;
 
-    let client =
-        start_server_and_init_client(db.client().clone(), service, vec![input_data.clone()])
-            .await
-            .with_alliance_db_arc(alliance_db_client.clone());
+    let settings_setup = |mut settings: Settings| {
+        settings.verifier_alliance_database.enabled = true;
+        settings.verifier_alliance_database.url = alliance_db.db_url().to_string();
 
-    let _source =
-        MockSolidityVerifierService::verify(client.clone(), input_data.eth_bytecode_db_request)
-            .await
-            .expect("verification failed");
+        settings.authorized_keys =
+            serde_json::from_value(serde_json::json!({"blockscout": {"key": API_KEY}})).unwrap();
+        settings
+    };
+    let eth_bytecode_db_base =
+        init_eth_bytecode_db_server_with_settings_setup(db_url, verifier_addr, settings_setup)
+            .await;
+    // Fill the database with existing value
+    {
+        let dummy_request = verify_request(&test_case);
+        let mut wrapped_request: RequestWrapper<_> = (&dummy_request).into();
+        if is_authorized {
+            wrapped_request.header(API_KEY_NAME, API_KEY);
+        }
+        let _verification_response: eth_bytecode_db_v2::VerifyResponse =
+            send_annotated_request(&eth_bytecode_db_base, ROUTE, &wrapped_request, None).await;
+    }
 
-    (client, test_case)
+    (alliance_db, test_case)
 }
 
 #[rstest]
@@ -130,17 +138,16 @@ pub async fn success_with_existing_deployment(
         txn.commit().await.expect("committing transaction failed");
     };
 
-    let (client, test_case) = setup(
+    let (alliance_db, test_case) = setup(
         TEST_PREFIX,
         test_case_path,
         prepare_alliance_database,
         false,
     )
     .await;
-    let alliance_db_client = client.alliance_db_client.unwrap();
 
-    check_compiled_contract(alliance_db_client.as_ref(), &test_case).await;
-    check_verified_contract(alliance_db_client.as_ref(), &test_case).await;
+    check_compiled_contract(alliance_db.client().as_ref(), &test_case).await;
+    check_verified_contract(alliance_db.client().as_ref(), &test_case).await;
 }
 
 #[rstest]
@@ -153,13 +160,12 @@ pub async fn success_without_existing_deployment(
 
     let prepare_alliance_database = |_db: Arc<DatabaseConnection>, _test_case: TestCase| async {};
 
-    let (client, test_case) =
+    let (alliance_db, test_case) =
         setup(TEST_PREFIX, test_case_path, prepare_alliance_database, true).await;
-    let alliance_db_client = client.alliance_db_client.unwrap();
 
-    check_contract_deployment(alliance_db_client.as_ref(), &test_case).await;
-    check_compiled_contract(alliance_db_client.as_ref(), &test_case).await;
-    check_verified_contract(alliance_db_client.as_ref(), &test_case).await;
+    check_contract_deployment(alliance_db.client().as_ref(), &test_case).await;
+    check_compiled_contract(alliance_db.client().as_ref(), &test_case).await;
+    check_verified_contract(alliance_db.client().as_ref(), &test_case).await;
 }
 
 #[rstest]
@@ -172,42 +178,29 @@ pub async fn failure_without_existing_deployment_not_authorized(
 
     let prepare_alliance_database = |_db: Arc<DatabaseConnection>, _test_case: TestCase| async {};
 
-    let (client, _test_case) = setup(
+    let (alliance_db, _test_case) = setup(
         TEST_PREFIX,
         test_case_path,
         prepare_alliance_database,
         false,
     )
     .await;
-    let alliance_db_client = client.alliance_db_client.unwrap();
 
     assert_eq!(
         None,
-        retrieve_contract_deployment(alliance_db_client.as_ref()).await,
+        retrieve_contract_deployment(alliance_db.client().as_ref()).await,
         "`contract_deployment` inserted"
     );
     assert_eq!(
         None,
-        retrieve_compiled_contract(alliance_db_client.as_ref()).await,
+        retrieve_compiled_contract(alliance_db.client().as_ref()).await,
         "`compiled_contract` inserted"
     );
     assert_eq!(
         None,
-        retrieve_verified_contract(alliance_db_client.as_ref()).await,
+        retrieve_verified_contract(alliance_db.client().as_ref()).await,
         "`verified_contract` inserted"
     );
-}
-
-fn input_data(
-    test_case: &TestCase,
-    is_authorized: bool,
-) -> TestInputData<VerificationRequest<StandardJson>> {
-    test_case.to_test_input_data(
-        StandardJson {
-            input: "".to_string(),
-        },
-        is_authorized,
-    )
 }
 
 async fn insert_contract_deployment(txn: &DatabaseTransaction, test_case: &TestCase) -> Uuid {

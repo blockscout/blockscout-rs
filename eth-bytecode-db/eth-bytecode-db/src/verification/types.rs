@@ -311,11 +311,16 @@ impl TryFrom<Source> for DatabaseReadySource {
 
 /********** Verification Request **********/
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VerificationMetadata {
     pub chain_id: Option<i64>,
     pub contract_address: Option<bytes::Bytes>,
     pub transaction_hash: Option<bytes::Bytes>,
+    pub block_number: Option<i64>,
+    pub transaction_index: Option<i64>,
+    pub deployer: Option<bytes::Bytes>,
+    pub creation_code: Option<bytes::Bytes>,
+    pub runtime_code: Option<bytes::Bytes>,
 }
 
 impl From<VerificationMetadata> for smart_contract_verifier::VerificationMetadata {
@@ -331,7 +336,7 @@ impl From<VerificationMetadata> for smart_contract_verifier::VerificationMetadat
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct VerificationRequest<T> {
     pub bytecode: String,
     pub bytecode_type: BytecodeType,
@@ -339,6 +344,8 @@ pub struct VerificationRequest<T> {
     #[serde(flatten)]
     pub content: T,
     pub metadata: Option<VerificationMetadata>,
+    #[serde(skip_serializing)]
+    pub is_authorized: bool,
 }
 
 /********** Verification Type **********/

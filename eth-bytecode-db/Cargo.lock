@@ -981,9 +981,9 @@ checksum = "14c189c53d098945499cdfa7ecc63567cf3886b3332b312a5b4585d8d3a6a610"
 
 [[package]]
 name = "bytes"
-version = "1.4.0"
+version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89b2fd2a0dcf38d7971e2194b6b6eebab45ae01067456a7fd93d5547a61b70be"
+checksum = "a2bd12c1caf447e69cd4528f47f94d203fd2582878ecb9e9465484c4148a8223"
 dependencies = [
  "serde",
 ]
@@ -1754,7 +1754,7 @@ dependencies = [
  "pretty_assertions",
  "prometheus",
  "reqwest",
- "rstest 0.18.2",
+ "rstest",
  "sea-orm",
  "semver",
  "serde",
@@ -1798,17 +1798,19 @@ dependencies = [
  "async-trait",
  "blockscout-display-bytes",
  "blockscout-service-launcher",
+ "bytes",
  "config",
  "eth-bytecode-db",
  "eth-bytecode-db-proto",
  "ethers",
  "hex",
+ "keccak-hash",
  "migration",
  "mockall",
  "pretty_assertions",
  "rand",
  "reqwest",
- "rstest 0.16.0",
+ "rstest",
  "sea-orm",
  "serde",
  "serde_json",
@@ -1819,6 +1821,8 @@ dependencies = [
  "tokio-stream",
  "tonic",
  "tracing",
+ "verifier-alliance-entity",
+ "verifier-alliance-migration",
 ]
 
 [[package]]
@@ -4554,40 +4558,14 @@ dependencies = [
 
 [[package]]
 name = "rstest"
-version = "0.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b07f2d176c472198ec1e6551dc7da28f1c089652f66a7b722676c2238ebc0edf"
-dependencies = [
- "futures",
- "futures-timer",
- "rstest_macros 0.16.0",
- "rustc_version",
-]
-
-[[package]]
-name = "rstest"
 version = "0.18.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97eeab2f3c0a199bc4be135c36c924b6590b88c377d416494288c14f2db30199"
 dependencies = [
  "futures",
  "futures-timer",
- "rstest_macros 0.18.2",
+ "rstest_macros",
  "rustc_version",
-]
-
-[[package]]
-name = "rstest_macros"
-version = "0.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7229b505ae0706e64f37ffc54a9c163e11022a6636d58fe1f3f52018257ff9f7"
-dependencies = [
- "cfg-if",
- "proc-macro2",
- "quote",
- "rustc_version",
- "syn 1.0.109",
- "unicode-ident",
 ]
 
 [[package]]

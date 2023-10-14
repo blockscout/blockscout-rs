@@ -11,14 +11,24 @@ use async_trait::async_trait;
 use eth_bytecode_db::verification::{
     compiler_versions, vyper_multi_part, vyper_standard_json, Client, VerificationRequest,
 };
+use std::collections::HashSet;
 
 pub struct VyperVerifierService {
     client: Client,
+    authorized_keys: HashSet<String>,
 }
 
 impl VyperVerifierService {
     pub fn new(client: Client) -> Self {
-        Self { client }
+        Self {
+            client,
+            authorized_keys: Default::default(),
+        }
+    }
+
+    pub fn with_authorized_keys(mut self, authorized_keys: HashSet<String>) -> Self {
+        self.authorized_keys = authorized_keys;
+        self
     }
 }
 
@@ -28,7 +38,7 @@ impl vyper_verifier_server::VyperVerifier for VyperVerifierService {
         &self,
         request: tonic::Request<VerifyVyperMultiPartRequest>,
     ) -> Result<tonic::Response<VerifyResponse>, tonic::Status> {
-        let request = request.into_inner();
+        let (metadata, _, request) = request.into_parts();
 
         let bytecode_type = request.bytecode_type();
         let verification_request = VerificationRequest {
@@ -44,6 +54,7 @@ impl vyper_verifier_server::VyperVerifier for VyperVerifierService {
                 .metadata
                 .map(|metadata| VerificationMetadataWrapper::from_inner(metadata).try_into())
                 .transpose()?,
+            is_authorized: super::is_key_authorized(&self.authorized_keys, metadata)?,
         };
         let result = vyper_multi_part::verify(self.client.clone(), verification_request).await;
 
@@ -54,7 +65,7 @@ impl vyper_verifier_server::VyperVerifier for VyperVerifierService {
         &self,
         request: tonic::Request<VerifyVyperStandardJsonRequest>,
     ) -> Result<tonic::Response<VerifyResponse>, tonic::Status> {
-        let request = request.into_inner();
+        let (metadata, _, request) = request.into_parts();
 
         let bytecode_type = request.bytecode_type();
         let verification_request = VerificationRequest {
@@ -68,6 +79,7 @@ impl vyper_verifier_server::VyperVerifier for VyperVerifierService {
                 .metadata
                 .map(|metadata| VerificationMetadataWrapper::from_inner(metadata).try_into())
                 .transpose()?,
+            is_authorized: super::is_key_authorized(&self.authorized_keys, metadata)?,
         };
         let result = vyper_standard_json::verify(self.client.clone(), verification_request).await;
 
