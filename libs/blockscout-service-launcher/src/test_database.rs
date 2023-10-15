@@ -1,13 +1,33 @@
 use crate::database::{
     ConnectionTrait, Database, DatabaseConnection, DbErr, MigratorTrait, Statement,
 };
-use std::{ops::Deref, sync::Arc};
+use async_dropper::derive::AsyncDrop;
+use async_trait::async_trait;
+use std::{ops::Deref, sync::Arc, time::Duration};
 
-#[derive(Clone, Debug)]
+#[derive(AsyncDrop, Clone, Debug, Default)]
 pub struct TestDbGuard {
     conn_with_db: Arc<DatabaseConnection>,
     db_url: String,
+    db_name: String,
+    should_drop: bool,
 }
+
+impl PartialEq<Self> for TestDbGuard {
+    fn eq(&self, other: &Self) -> bool {
+        self.db_url == other.db_url
+            && self.db_name == other.db_name
+            && matches!(
+                (self.conn_with_db.deref(), other.conn_with_db.deref()),
+                (
+                    DatabaseConnection::Disconnected,
+                    DatabaseConnection::Disconnected
+                )
+            )
+    }
+}
+
+impl Eq for TestDbGuard {}
 
 impl TestDbGuard {
     pub async fn new<Migrator: MigratorTrait>(db_name: &str) -> Self {
@@ -20,7 +40,14 @@ impl TestDbGuard {
         TestDbGuard {
             conn_with_db: Arc::new(conn_with_db),
             db_url,
+            db_name,
+            should_drop: true,
         }
+    }
+
+    pub fn without_drop(mut self) -> Self {
+        self.should_drop = false;
+        self
     }
 
     pub fn client(&self) -> Arc<DatabaseConnection> {
@@ -87,5 +114,24 @@ impl Deref for TestDbGuard {
     type Target = DatabaseConnection;
     fn deref(&self) -> &Self::Target {
         &self.conn_with_db
+    }
+}
+
+#[async_trait]
+impl AsyncDrop for TestDbGuard {
+    async fn async_drop(&mut self) -> Result<(), AsyncDropError> {
+        if self.should_drop {
+            // Workaround for postgres error `cannot drop the currently open database`
+            self.conn_with_db.drop();
+            let conn_without_db = Database::connect(self.db_url())
+                .await
+                .expect("Connection to postgres (without database) failed");
+            self.conn_with_db = Arc::new(conn_without_db);
+
+            TestDbGuard::drop_database(self, self.db_name.as_str())
+                .await
+                .expect("Failed to drop database");
+        }
+        Ok(())
     }
 }
