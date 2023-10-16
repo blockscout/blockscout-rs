@@ -44,6 +44,15 @@ macro_rules! process_result {
     };
 }
 
+#[derive(Debug, Serialize)]
+struct StandardJson {
+    language: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    interfaces: Option<serde_json::Value>,
+    sources: serde_json::Value,
+    settings: serde_json::Value,
+}
+
 #[derive(Clone)]
 pub struct Client {
     pub db_client: Arc<DatabaseConnection>,
@@ -187,6 +196,11 @@ impl Client {
             chain_id: Set(self.chain_id.into()),
             sources: Set(contract_details.sources),
             settings: Set(contract_details.settings),
+            verified_via_sourcify: Set(contract_details.verified_via_sourcify),
+            optimization_enabled: Set(contract_details.optimization_enabled),
+            optimization_runs: Set(contract_details.optimization_runs),
+            evm_version: Set(contract_details.evm_version),
+            libraries: Set(contract_details.libraries),
             creation_code: Set(contract_details.creation_code),
             runtime_code: Set(contract_details.runtime_code),
             transaction_hash: Set(Some(contract_details.transaction_hash)),
@@ -207,7 +221,13 @@ impl Client {
         contract: contract_addresses::Model,
         contract_details: contract_details::Model,
     ) -> anyhow::Result<Source> {
-        let input = Self::generate_input(contract.language.clone(), &contract_details)?;
+        let input = if contract_details.verified_via_sourcify {
+            self.generate_input_from_sourcify().await?
+        } else if let Some(_libraries) = contract_details.libraries {
+            Self::generate_input_with_libraries()?
+        } else {
+            Self::generate_input(contract.language.clone(), &contract_details)?
+        };
 
         let (bytecode, bytecode_type) =
             if let Some(creation_code) = contract_details.creation_code.as_ref() {
@@ -240,7 +260,8 @@ impl Client {
                     bytecode: Bytes::from(bytecode).to_string(),
                     bytecode_type: bytecode_type.into(),
                     compiler_version: contract.compiler_version,
-                    input: input.to_string(),
+                    input: serde_json::to_string(&input)
+                        .context("serializing standard json input failed")?,
                     metadata: Some(metadata),
                 };
 
@@ -270,27 +291,62 @@ impl Client {
     fn generate_input(
         language: sea_orm_active_enums::Language,
         contract_details: &contract_details::Model,
-    ) -> anyhow::Result<serde_json::Value> {
-        #[derive(Debug, Serialize)]
-        struct StandardJson {
-            language: String,
-            interfaces: Option<serde_json::Value>,
-            sources: serde_json::Value,
-            settings: serde_json::Value,
-        }
-
+    ) -> anyhow::Result<StandardJson> {
         let (language, interfaces) = match language {
             sea_orm_active_enums::Language::Solidity => ("Solidity", None),
             sea_orm_active_enums::Language::Yul => ("Yul", None),
             sea_orm_active_enums::Language::Vyper => ("Vyper", Some(serde_json::json!({}))),
         };
-        serde_json::to_value(StandardJson {
+
+        let settings = if let Some(settings) = &contract_details.settings {
+            settings.clone()
+        } else {
+            #[derive(Debug, Serialize)]
+            #[serde(rename_all = "camelCase")]
+            struct Settings {
+                pub optimizer: Optimizer,
+                pub evm_version: Option<String>,
+            }
+
+            #[derive(Debug, Serialize)]
+            #[serde(rename_all = "camelCase")]
+            struct Optimizer {
+                pub enabled: Option<bool>,
+                pub runs: Option<i64>,
+            }
+
+            let settings = Settings {
+                optimizer: Optimizer {
+                    enabled: contract_details.optimization_enabled,
+                    runs: contract_details.optimization_runs,
+                },
+                evm_version: contract_details
+                    .evm_version
+                    .clone()
+                    .filter(|v| v != "default"),
+            };
+
+            serde_json::to_value(settings).unwrap()
+        };
+
+        Ok(StandardJson {
             language: language.to_string(),
             sources: contract_details.sources.clone(),
             interfaces,
-            settings: contract_details.settings.clone(),
+            settings,
         })
-        .context("converting standard json to serde_json::value failed")
+    }
+
+    fn generate_input_with_libraries() -> anyhow::Result<StandardJson> {
+        Err(anyhow::anyhow!(
+            "Input generation for sources with libraries is not implemented yet"
+        ))
+    }
+
+    async fn generate_input_from_sourcify(&self) -> anyhow::Result<StandardJson> {
+        Err(anyhow::anyhow!(
+            "Input generation from sourcify is not implemented yet"
+        ))
     }
 
     async fn mark_as_success(

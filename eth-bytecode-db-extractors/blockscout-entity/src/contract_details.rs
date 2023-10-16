@@ -17,8 +17,14 @@ pub struct Model {
     pub chain_id: Decimal,
     #[sea_orm(column_type = "JsonBinary")]
     pub sources: Json,
-    #[sea_orm(column_type = "JsonBinary")]
-    pub settings: Json,
+    #[sea_orm(column_type = "JsonBinary", nullable)]
+    pub settings: Option<Json>,
+    pub verified_via_sourcify: bool,
+    pub optimization_enabled: Option<bool>,
+    pub optimization_runs: Option<i64>,
+    pub evm_version: Option<String>,
+    #[sea_orm(column_type = "JsonBinary", nullable)]
+    pub libraries: Option<Json>,
     #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
     pub creation_code: Option<Vec<u8>>,
     #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]

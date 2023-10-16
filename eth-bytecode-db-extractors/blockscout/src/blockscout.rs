@@ -24,7 +24,13 @@ pub struct ContractDetails {
     pub deployer: Vec<u8>,
 
     pub sources: serde_json::Value,
-    pub settings: serde_json::Value,
+    pub settings: Option<serde_json::Value>,
+
+    pub verified_via_sourcify: bool,
+    pub optimization_enabled: Option<bool>,
+    pub optimization_runs: Option<i64>,
+    pub evm_version: Option<String>,
+    pub libraries: Option<serde_json::Value>,
 }
 
 impl Client {
@@ -77,9 +83,11 @@ impl Client {
         .await
         .context("get transaction details failed")?;
 
-        let sources =
-            serde_json::to_value(smart_contracts::retrieve_sources(&smart_contract_details))
-                .unwrap();
+        let sources = smart_contracts::retrieve_sources(&smart_contract_details);
+
+        let libraries = smart_contracts::parse_external_libraries(
+            smart_contract_details.external_libraries.clone(),
+        );
 
         Ok(ContractDetails {
             creation_code: smart_contract_details.creation_bytecode.map(|v| v.to_vec()),
@@ -92,6 +100,14 @@ impl Client {
 
             sources,
             settings: smart_contract_details.compiler_settings,
+
+            verified_via_sourcify: smart_contract_details
+                .is_verified_via_sourcify
+                .unwrap_or_default(),
+            optimization_enabled: smart_contract_details.optimization_enabled,
+            optimization_runs: smart_contract_details.optimization_runs,
+            evm_version: smart_contract_details.evm_version,
+            libraries,
         })
     }
 
@@ -285,32 +301,45 @@ mod smart_contracts {
                 content: response.source_code.as_str(),
             },
         );
-        for additional_source in &response.additional_sources {
-            sources.insert(
-                additional_source.file_path.as_str(),
-                Source {
-                    content: additional_source.source_code.as_str(),
-                },
-            );
+        if let Some(additional_sources) = response.additional_sources.as_ref() {
+            for additional_source in additional_sources {
+                sources.insert(
+                    additional_source.file_path.as_str(),
+                    Source {
+                        content: additional_source.source_code.as_str(),
+                    },
+                );
+            }
         }
         serde_json::to_value(sources).unwrap()
+    }
+
+    pub fn parse_external_libraries(libraries: Vec<ExternalLibrary>) -> Option<serde_json::Value> {
+        if libraries.is_empty() {
+            return None;
+        }
+
+        Some(serde_json::to_value(libraries).unwrap())
     }
 
     #[derive(Debug, Deserialize)]
     pub struct Response {
         pub verified_at: chrono::DateTime<chrono::FixedOffset>,
-        pub is_vyper_contract: bool,
-        pub optimization_enabled: Option<bool>,
-        pub optimization_runs: Option<u64>,
+
         pub compiler_version: String,
-        // pub evm_version: Option<String>,
         pub source_code: String,
         pub file_path: Option<String>,
-        pub compiler_settings: serde_json::Value,
-        pub additional_sources: Vec<AdditionalSource>,
+        pub compiler_settings: Option<serde_json::Value>,
+        pub additional_sources: Option<Vec<AdditionalSource>>,
         pub deployed_bytecode: Bytes,
         pub creation_bytecode: Option<Bytes>,
-        // pub external_libraries: Vec<ExternalLibrary>,
+
+        pub is_vyper_contract: bool,
+        pub is_verified_via_sourcify: Option<bool>,
+        pub optimization_enabled: Option<bool>,
+        pub optimization_runs: Option<i64>,
+        pub evm_version: Option<String>,
+        pub external_libraries: Vec<ExternalLibrary>,
     }
 
     #[derive(Debug, Deserialize)]
@@ -319,11 +348,11 @@ mod smart_contracts {
         source_code: String,
     }
 
-    // #[derive(Debug, Deserialize)]
-    // pub struct ExternalLibrary {
-    //     name: String,
-    //     address_hash: Bytes,
-    // }
+    #[derive(Debug, Clone, Deserialize, Serialize)]
+    pub struct ExternalLibrary {
+        name: String,
+        address_hash: Bytes,
+    }
 }
 
 mod addresses {

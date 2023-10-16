@@ -15,7 +15,13 @@ impl MigrationTrait for Migration {
               "chain_id" numeric NOT NULL,
 
               "sources" jsonb NOT NULL,
-              "settings" jsonb NOT NULL,
+              "settings" jsonb,
+
+              "verified_via_sourcify" bool NOT NULL DEFAULT false,
+              "optimization_enabled" bool,
+              "optimization_runs" bigint,
+              "evm_version" varchar,
+              "libraries" jsonb,
 
               "creation_code" bytea,
               "runtime_code" bytea NOT NULL,
