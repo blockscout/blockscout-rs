@@ -80,12 +80,44 @@ async fn send_annotated_request<Response: for<'a> serde::Deserialize<'a>>(
         .await
         .unwrap_or_else(|_| panic!("({annotation})Response deserialization failed"))
 }
+
+pub async fn send_annotated_post_request<Response: for<'a> serde::Deserialize<'a>>(
+    url: &Url,
+    route: &str,
+    payload: &impl serde::Serialize,
+    annotation: &str,
+) -> Response {
+    send_annotated_request(
+        url,
+        route,
+        reqwest::Method::POST,
+        Some(payload),
+        Some(annotation),
+    )
+    .await
+}
+
 pub async fn send_post_request<Response: for<'a> serde::Deserialize<'a>>(
     url: &Url,
     route: &str,
     payload: &impl serde::Serialize,
 ) -> Response {
     send_annotated_request(url, route, reqwest::Method::POST, Some(payload), None).await
+}
+
+pub async fn send_annotated_get_request<Response: for<'a> serde::Deserialize<'a>>(
+    url: &Url,
+    route: &str,
+    annotation: &str,
+) -> Response {
+    send_annotated_request(
+        url,
+        route,
+        reqwest::Method::GET,
+        None::<&()>,
+        Some(annotation),
+    )
+    .await
 }
 
 pub async fn send_get_request<Response: for<'a> serde::Deserialize<'a>>(
