@@ -12,7 +12,7 @@ blockscout-migration = { path = "../blockscout-migration" }
 anyhow = "1.0.70"
 async-trait = "0.1"
 blockscout-display-bytes = "1.0.0"
-blockscout-service-launcher = { version = "0.8.0", features = ["database-0_12"] }
+blockscout-service-launcher = { version = "0.9.0", features = ["database-0_12"] }
 chrono = "0.4.31"
 config = "0.13.3"
 eth-bytecode-db-proto = { git = "https://github.com/blockscout/blockscout-rs", branch = "rimrakhimov/eth-bytecode-db/verifier-alliance-deployment-insertion" }

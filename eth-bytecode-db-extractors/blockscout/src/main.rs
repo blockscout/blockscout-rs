@@ -1,9 +1,7 @@
 use anyhow::Context;
 use blockscout::{Client, Settings};
-use blockscout_service_launcher as launcher;
+use blockscout_service_launcher::{self as launcher, launcher::ConfigSettings};
 use migration::Migrator;
-// use smart_contract_fiesta::{database, dataset, Settings, VerificationClient};
-use std::sync::Arc;
 
 const SERVICE_NAME: &str = "blockscout-extractor";
 
@@ -12,19 +10,18 @@ async fn main() -> Result<(), anyhow::Error> {
     launcher::tracing::init_logs(SERVICE_NAME, &Default::default(), &Default::default())
         .context("tracing initialization")?;
 
-    let settings = Settings::new().context("failed to read config")?;
+    let settings = Settings::build().context("failed to read config")?;
 
     let mut connect_options = sea_orm::ConnectOptions::new(&settings.database_url);
     connect_options.sqlx_logging_level(tracing::log::LevelFilter::Debug);
-    launcher::database::initialize_postgres::<Migrator>(
-        connect_options.clone(),
+    let db_connection = launcher::database::initialize_postgres::<Migrator>(
+        connect_options,
         settings.create_database,
         settings.run_migrations,
     )
     .await?;
-    let db_connection = Arc::new(sea_orm::Database::connect(connect_options).await?);
 
-    let client = Client::try_new_arc(
+    let client = Client::try_new(
         db_connection,
         settings.chain_id,
         settings.blockscout_url,

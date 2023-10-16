@@ -62,8 +62,8 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn try_new_arc(
-        db_client: Arc<DatabaseConnection>,
+    pub fn try_new(
+        db_client: DatabaseConnection,
         chain_id: u64,
         blockscout_url: String,
         eth_bytecode_db_url: String,
@@ -77,7 +77,7 @@ impl Client {
             eth_bytecode_db::Client::try_new(eth_bytecode_db_url, eth_bytecode_db_api_key)?;
 
         let client = Self {
-            db_client,
+            db_client: Arc::new(db_client),
             chain_id,
             blockscout_client,
             eth_bytecode_db_client,
