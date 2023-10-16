@@ -25,7 +25,7 @@ pub async fn initialize_postgres<Migrator: MigratorTrait>(
     connect_options: impl Into<ConnectOptions>,
     create_database: bool,
     run_migrations: bool,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<DatabaseConnection> {
     let connect_options = connect_options.into();
 
     // Create database if not exists
@@ -75,7 +75,7 @@ pub async fn initialize_postgres<Migrator: MigratorTrait>(
         Migrator::up(&db, None).await?;
     }
 
-    Ok(())
+    Ok(db)
 }
 
 fn with_connect_options(url: impl Into<String>, source_options: &ConnectOptions) -> ConnectOptions {
