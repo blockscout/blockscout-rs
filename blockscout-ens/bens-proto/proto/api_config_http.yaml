@@ -4,12 +4,13 @@ config_version: 3
 http:
   rules:
     #################### DomainsExtractor ####################
-    - selector: blockscout.bens.v1.DomainsExtractor.SearchAddress
-      post: /api/v1/{chain_id}/domains:reverse-search
+    - selector: blockscout.bens.v1.DomainsExtractor.SearchReverseDomain
+      post: /api/v1/{chain_id}/domains:search-reverse
       body: "*"
 
-    - selector: blockscout.bens.v1.DomainsExtractor.GetDetailedDomain
-      get: /api/v1/{chain_id}/domains/{name}
+    - selector: blockscout.bens.v1.DomainsExtractor.SearchDomain
+      post: /api/v1/{chain_id}/domains:search
+      body: "*"
 
     #################### Health ####################
 

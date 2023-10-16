@@ -5,8 +5,8 @@ package blockscout.bens.v1;
 option go_package = "github.com/blockscout/blockscout-rs/bens";
 
 service DomainsExtractor {
-  rpc ReverseDomainSearch(ReverseDomainSearchRequest) returns (ReverseDomainSearchResponse) {}
-  rpc GetDetailedDomain(GetDetailedDomainRequest) returns (DetailedDomain) {}
+  rpc SearchReverseDomain(SearchReverseDomainRequest) returns (SearchReverseDomainResponse) {}
+  rpc SearchDomain(SearchDomainRequest) returns (DetailedDomain) {}
 }
 
 message Domain {
@@ -51,7 +51,7 @@ message DetailedDomain {
 }
 
 
-message ReverseDomainSearchRequest {
+message SearchReverseDomainRequest {
   /// Address of EOA or contract
   string address = 1;
   /// The chain (network) where domain search should be done
@@ -62,7 +62,7 @@ message ReverseDomainSearchRequest {
   bool owned_by = 4;
 }
 
-message ReverseDomainSearchResponse {
+message SearchReverseDomainResponse {
   // List of domains that resolved to requested address
   // Sorted by relevance, so first address could be displayed as main resolved address
   repeated Domain resolved_to = 1;
@@ -70,7 +70,7 @@ message ReverseDomainSearchResponse {
   repeated Domain owned_by = 2;
 }
 
-message GetDetailedDomainRequest {
+message SearchDomainRequest {
   /// Name of domain, for example vitalik.eth
   string name = 1;
   /// The chain (network) where domain search should be done
