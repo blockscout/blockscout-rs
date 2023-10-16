@@ -2,33 +2,15 @@ use crate::database::{
     ConnectionTrait, Database, DatabaseConnection, DbErr, MigratorTrait, Statement,
 };
 use anyhow::anyhow;
-use async_dropper::derive::AsyncDrop;
-use async_trait::async_trait;
-use std::{ops::Deref, sync::Arc, time::Duration};
+use std::{ops::Deref, sync::Arc};
 
-#[derive(AsyncDrop, Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct TestDbGuard {
     conn_with_db: Arc<DatabaseConnection>,
     base_db_url: String,
     db_name: String,
     should_drop: bool,
 }
-
-impl PartialEq<Self> for TestDbGuard {
-    fn eq(&self, other: &Self) -> bool {
-        self.base_db_url == other.base_db_url
-            && self.db_name == other.db_name
-            && matches!(
-                (self.conn_with_db.deref(), other.conn_with_db.deref()),
-                (
-                    DatabaseConnection::Disconnected,
-                    DatabaseConnection::Disconnected
-                )
-            )
-    }
-}
-
-impl Eq for TestDbGuard {}
 
 impl TestDbGuard {
     pub async fn new<Migrator: MigratorTrait>(db_name: &str) -> Self {
@@ -106,20 +88,6 @@ impl TestDbGuard {
     async fn run_migrations<Migrator: MigratorTrait>(db: &DatabaseConnection) -> Result<(), DbErr> {
         Migrator::up(db, None).await
     }
-
-    async fn drop_internal(&mut self) -> Result<(), anyhow::Error> {
-        if self.should_drop {
-            // Workaround for postgres error `cannot drop the currently open database`:
-            // We need to create another connection without the database to drop it
-            let conn_without_db = Database::connect(self.base_db_url.as_str())
-                .await
-                .map_err(|_| anyhow!("Failed to connect to the database"))?;
-            TestDbGuard::drop_database(&conn_without_db, self.db_name.as_str())
-                .await
-                .map_err(|e| anyhow!("Failed to drop the database: {}", e))?;
-        }
-        Ok(())
-    }
 }
 
 impl Deref for TestDbGuard {
@@ -129,20 +97,26 @@ impl Deref for TestDbGuard {
     }
 }
 
-#[async_trait]
-impl AsyncDrop for TestDbGuard {
-    async fn async_drop(&mut self) -> Result<(), AsyncDropError> {
-        self.drop_internal().await.map_err(|e| {
-            eprintln!("Failed to drop TestDbGuard: {:?}", e);
-            AsyncDropError::UnexpectedError(e.into())
-        })
-    }
+impl Drop for TestDbGuard {
+    fn drop(&mut self) {
+        if !self.should_drop {
+            return;
+        }
 
-    fn drop_fail_action(&self) -> DropFailAction {
-        DropFailAction::Panic
-    }
+        let base_db_url = self.base_db_url.clone();
+        let db_name = self.db_name.clone();
 
-    fn drop_timeout(&self) -> Duration {
-        Duration::from_secs(1)
+        tokio::spawn(async move {
+            // Workaround for postgres error `cannot drop the currently open database`:
+            // We need to create another connection without the database to drop it
+            let conn_without_db = Database::connect(base_db_url.as_str())
+                .await
+                .map_err(|_| anyhow!("Failed to connect to the database"))
+                .unwrap();
+            TestDbGuard::drop_database(&conn_without_db, db_name.as_str())
+                .await
+                .map_err(|e| anyhow!("Failed to drop the database: {}", e))
+                .unwrap();
+        });
     }
 }
