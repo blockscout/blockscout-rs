@@ -3,14 +3,14 @@ use std::str::FromStr;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "database-0_12")] {
-        use sea_orm_0_12::{ConnectOptions, ConnectionTrait, Database, DatabaseBackend, Statement};
-        use sea_orm_migration_0_12::MigratorTrait;
+        pub use sea_orm_0_12::{ConnectOptions, ConnectionTrait, Database, DatabaseBackend, Statement, DatabaseConnection, DbErr};
+        pub use sea_orm_migration_0_12::MigratorTrait;
     } else if #[cfg(feature = "database-0_11")] {
-        use sea_orm_0_11::{ConnectOptions, ConnectionTrait, Database, DatabaseBackend, Statement};
-        use sea_orm_migration_0_11::MigratorTrait;
+        pub use sea_orm_0_11::{ConnectOptions, ConnectionTrait, Database, DatabaseBackend, Statement, DatabaseConnection, DbErr};
+        pub use sea_orm_migration_0_11::MigratorTrait;
     } else if #[cfg(feature = "database-0_10")] {
-        use sea_orm_0_10::{ConnectOptions, ConnectionTrait, Database, DatabaseBackend, Statement};
-        use sea_orm_migration_0_10::MigratorTrait;
+        pub use sea_orm_0_10::{ConnectOptions, ConnectionTrait, Database, DatabaseBackend, Statement, DatabaseConnection, DbErr};
+        pub use sea_orm_migration_0_10::MigratorTrait;
     } else {
         compile_error!(
             "one of the features ['database-0_12', 'database-0_11', 'database-0_10'] \
