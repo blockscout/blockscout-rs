@@ -1,21 +1,30 @@
 use anyhow::Context;
+use blockscout_service_launcher::{
+    database, launcher::ConfigSettings, tracing as launcher_tracing,
+};
 use migration::Migrator;
-use smart_contract_fiesta::{database, dataset, Settings, VerificationClient};
+use smart_contract_fiesta::{dataset, Settings, VerificationClient};
 use std::sync::Arc;
 
-const _SERVICE_NAME: &str = "smart-contract-fiesta-extractor";
+const SERVICE_NAME: &str = "smart-contract-fiesta-extractor";
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let settings = Settings::new().context("failed to read config")?;
+    launcher_tracing::init_logs(SERVICE_NAME, &Default::default(), &Default::default())
+        .context("tracing initialization")?;
 
-    database::initialize_postgres::<Migrator>(
-        &settings.database_url,
-        settings.create_database,
-        settings.run_migrations,
-    )
-    .await?;
-    let db_connection = Arc::new(sea_orm::Database::connect(settings.database_url).await?);
+    let settings = Settings::build().context("failed to read config")?;
+
+    let mut connect_options = sea_orm::ConnectOptions::new(&settings.database_url);
+    connect_options.sqlx_logging_level(tracing::log::LevelFilter::Debug);
+    let db_connection = Arc::new(
+        database::initialize_postgres::<Migrator>(
+            connect_options,
+            settings.create_database,
+            settings.run_migrations,
+        )
+        .await?,
+    );
 
     if settings.import_dataset {
         dataset::import_dataset(

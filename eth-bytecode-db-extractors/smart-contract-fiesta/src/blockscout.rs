@@ -1,9 +1,9 @@
-use crate::rate_limiter_middleware::RateLimiterMiddleware;
 use anyhow::Context;
 use blockscout_display_bytes::Bytes;
 use governor::{Quota, RateLimiter};
 use reqwest::Response;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
+use reqwest_rate_limiter::RateLimiterMiddleware;
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use serde::Deserialize;
 use std::{num::NonZeroU32, str::FromStr, time::Duration};

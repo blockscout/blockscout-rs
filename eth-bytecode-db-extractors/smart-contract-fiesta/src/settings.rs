@@ -1,20 +1,6 @@
-use config::{Config, File};
-use serde::{de, Deserialize};
+use blockscout_service_launcher::launcher::ConfigSettings;
+use serde::Deserialize;
 use std::path::PathBuf;
-
-/// Wrapper under [`serde::de::IgnoredAny`] which implements
-/// [`PartialEq`] and [`Eq`] for fields to be ignored.
-#[derive(Copy, Clone, Debug, Default, Deserialize)]
-struct IgnoredAny(de::IgnoredAny);
-
-impl PartialEq for IgnoredAny {
-    fn eq(&self, _other: &Self) -> bool {
-        // We ignore that values, so they should not impact the equality
-        true
-    }
-}
-
-impl Eq for IgnoredAny {}
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -48,12 +34,20 @@ pub struct Settings {
     pub search_enabled: bool,
     #[serde(default = "default_search_n_threads")]
     pub search_n_threads: usize,
+}
 
-    // Is required as we deny unknown fields, but allow users provide
-    // path to config through PREFIX__CONFIG env variable. If removed,
-    // the setup would fail with `unknown field `config`, expected one of...`
-    #[serde(default, rename = "config")]
-    config_path: IgnoredAny,
+impl ConfigSettings for Settings {
+    const SERVICE_NAME: &'static str = "FIESTA_EXTRACTOR__CONFIG";
+
+    fn validate(&self) -> anyhow::Result<()> {
+        if self.import_dataset && self.dataset.is_none() {
+            return Err(anyhow::anyhow!(
+                "`dataset` path should be specified if `import_dataset` is enabled"
+            ));
+        }
+
+        Ok(())
+    }
 }
 
 fn default_blockscout_url() -> String {
@@ -75,34 +69,4 @@ fn default_n_threads() -> usize {
 
 fn default_search_n_threads() -> usize {
     1
-}
-
-impl Settings {
-    pub fn new() -> anyhow::Result<Self> {
-        let config_path = std::env::var("FIESTA_EXTRACTOR__CONFIG");
-
-        let mut builder = Config::builder();
-        if let Ok(config_path) = config_path {
-            builder = builder.add_source(File::with_name(&config_path));
-        };
-        // Use `__` so that it would be possible to address keys with underscores in names (e.g. `access_key`)
-        builder = builder
-            .add_source(config::Environment::with_prefix("FIESTA_EXTRACTOR").separator("__"));
-
-        let settings: Settings = builder.build()?.try_deserialize()?;
-
-        settings.validate()?;
-
-        Ok(settings)
-    }
-
-    fn validate(&self) -> anyhow::Result<()> {
-        if self.import_dataset && self.dataset.is_none() {
-            return Err(anyhow::anyhow!(
-                "`dataset` path should be specified if `import_dataset` is enabled"
-            ));
-        }
-
-        Ok(())
-    }
 }
