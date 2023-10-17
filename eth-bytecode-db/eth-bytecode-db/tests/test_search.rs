@@ -9,10 +9,8 @@ use eth_bytecode_db::{
     },
     verification::MatchType,
 };
-use migration::{Migrator, MigratorTrait};
-use sea_orm::{ConnectionTrait, Database, DatabaseConnection, Statement};
+use sea_orm::DatabaseConnection;
 use std::{collections::HashMap, str::FromStr};
-use url::Url;
 
 async fn prepare_db(
     db: &DatabaseConnection,
@@ -119,7 +117,7 @@ async fn check_bytecode_search(
 #[tokio::test]
 #[ignore = "Needs database to run"]
 async fn test_full_match_search_bytecodes() {
-    let db = TestDbGuard::new("test_full_match_search_bytecodes")
+    let db = TestDbGuard::new::<migration::Migrator>("test_full_match_search_bytecodes")
         .await
         .client();
     let max_id = 10;
@@ -154,7 +152,7 @@ async fn test_full_match_search_bytecodes() {
 #[tokio::test]
 #[ignore = "Needs database to run"]
 async fn test_partial_search_bytecodes() {
-    let db = TestDbGuard::new("test_partial_search_bytecodes")
+    let db = TestDbGuard::new::<migration::Migrator>("test_partial_search_bytecodes")
         .await
         .client();
     let max_id = 10;
@@ -213,7 +211,7 @@ async fn test_partial_search_bytecodes() {
         data,
         bytecode_type: BytecodeType::CreationInput,
     };
-    let partial_matches = find_contract(&db, &search)
+    let partial_matches = find_contract(db.as_ref(), &search)
         .await
         .expect("error during contract search");
     assert_eq!(partial_matches.len(), repeated_amount);
@@ -248,7 +246,7 @@ async fn test_partial_search_bytecodes() {
                 bytecode_type: BytecodeType::CreationInput,
             };
 
-            let partial_matches = find_contract(&db, &search)
+            let partial_matches = find_contract(db.as_ref(), &search)
                 .await
                 .expect("unkown contract should not give error");
             assert!(
@@ -268,7 +266,7 @@ async fn test_partial_search_bytecodes() {
             bytecode_type: BytecodeType::CreationInput,
         };
 
-        let partial_matches = find_contract(&db, &search)
+        let partial_matches = find_contract(db.as_ref(), &search)
             .await
             .expect("random string should not give error");
         assert!(
