@@ -1,5 +1,6 @@
 #![cfg(feature = "test-utils")]
 
+use blockscout_service_launcher::test_database::TestDbGuard;
 use entity::{sea_orm_active_enums::BytecodeType, sources};
 use eth_bytecode_db::{
     search::{find_contract, BytecodeRemote},
@@ -12,38 +13,6 @@ use migration::{Migrator, MigratorTrait};
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, Statement};
 use std::{collections::HashMap, str::FromStr};
 use url::Url;
-
-async fn init_db<M: MigratorTrait>(name: &str) -> DatabaseConnection {
-    let db_url = std::env::var("DATABASE_URL").expect("no DATABASE_URL env");
-    let url = Url::parse(&db_url).expect("unvalid database url");
-    let db_url = url.join("/").unwrap().to_string();
-    let raw_conn = Database::connect(db_url)
-        .await
-        .expect("failed to connect to postgres");
-
-    raw_conn
-        .execute(Statement::from_string(
-            sea_orm::DatabaseBackend::Postgres,
-            format!("DROP DATABASE IF EXISTS {name} WITH (FORCE)"),
-        ))
-        .await
-        .expect("failed to drop test database");
-    raw_conn
-        .execute(Statement::from_string(
-            sea_orm::DatabaseBackend::Postgres,
-            format!("CREATE DATABASE {name}"),
-        ))
-        .await
-        .expect("failed to create test database");
-
-    let db_url = url.join(&format!("/{name}")).unwrap().to_string();
-    let conn = Database::connect(db_url.clone())
-        .await
-        .expect("failed to connect to test db");
-    M::up(&conn, None).await.expect("failed to run migrations");
-
-    conn
-}
 
 async fn prepare_db(
     db: &DatabaseConnection,
@@ -150,7 +119,9 @@ async fn check_bytecode_search(
 #[tokio::test]
 #[ignore = "Needs database to run"]
 async fn test_full_match_search_bytecodes() {
-    let db = init_db::<Migrator>("test_full_match_search_bytecodes").await;
+    let db = TestDbGuard::new("test_full_match_search_bytecodes")
+        .await
+        .client();
     let max_id = 10;
     let change_bytecode = false;
     let all_sources = prepare_db(&db, max_id).await;
@@ -183,7 +154,9 @@ async fn test_full_match_search_bytecodes() {
 #[tokio::test]
 #[ignore = "Needs database to run"]
 async fn test_partial_search_bytecodes() {
-    let db = init_db::<Migrator>("test_partial_search_bytecodes").await;
+    let db = TestDbGuard::new("test_partial_search_bytecodes")
+        .await
+        .client();
     let max_id = 10;
     let repeated_amount = 10;
     let repeated_info = ContractInfo {
