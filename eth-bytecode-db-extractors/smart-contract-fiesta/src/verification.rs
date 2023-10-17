@@ -233,7 +233,7 @@ impl Client {
                 });
 
             if let Some((contract_address, creation_input)) = result {
-                println!(
+                tracing::info!(
                     "search contract_address: {}",
                     Bytes::from(contract_address.clone())
                 );
@@ -243,7 +243,7 @@ impl Client {
                 };
                 let search_result = self.eth_bytecode_db_client.search_sources(request).await;
                 if let Err(err) = search_result {
-                    println!("{err:#?}")
+                    tracing::info!("{err:#?}")
                 }
             }
             // tokio::time::sleep(std::time::Duration::from_secs(2)).await;
