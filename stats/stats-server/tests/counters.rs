@@ -18,8 +18,8 @@ async fn test_counters_ok() {
     let (server_settings, base) = get_test_server_settings();
     settings.server = server_settings;
     settings.charts_config = PathBuf::from_str("../config/charts.json").unwrap();
-    settings.db_url = stats_db.db_url().to_string();
-    settings.blockscout_db_url = blockscout_db.db_url().to_string();
+    settings.db_url = stats_db.db_url();
+    settings.blockscout_db_url = blockscout_db.db_url();
 
     init_server(|| stats(settings), &base).await;
 

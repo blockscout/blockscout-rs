@@ -23,8 +23,7 @@ prometheus = "0.13"
 
 # Dependencies for test-utils only
 tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
-blockscout-service-launcher = { git = "https://github.com/blockscout/blockscout-rs", rev = "6233072", features = [ "database-0_10", "test-database" ], optional = true }
-
+blockscout-service-launcher = { version = "0.9.0", features = [ "database-0_10", "test-database" ], optional = true }
 [dev-dependencies]
 pretty_assertions = "1.2"
 
