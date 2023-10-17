@@ -702,7 +702,7 @@ dependencies = [
  "blockscout-service-launcher",
  "chrono",
  "config",
- "eth-bytecode-db-proto 0.1.0 (git+https://github.com/blockscout/blockscout-rs?branch=rimrakhimov/eth-bytecode-db/verifier-alliance-deployment-insertion)",
+ "eth-bytecode-db-proto 0.1.0 (git+https://github.com/blockscout/blockscout-rs?rev=41fc491)",
  "futures",
  "governor",
  "reqwest",
@@ -1332,7 +1332,7 @@ dependencies = [
 [[package]]
 name = "eth-bytecode-db-proto"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs?branch=rimrakhimov/eth-bytecode-db/verifier-alliance-deployment-insertion#154536951d19283b306a60347ce56b06d032bc43"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=41fc491#41fc49174b022503c336f4349a84868e6ecda4d5"
 dependencies = [
  "actix-prost",
  "actix-prost-build",
