@@ -10,6 +10,9 @@ pub struct Settings {
     #[serde(default)]
     pub run_migrations: bool,
 
+    #[serde(default)]
+    pub force_import: bool,
+
     #[serde(default = "default_chain_id")]
     pub chain_id: u64,
 

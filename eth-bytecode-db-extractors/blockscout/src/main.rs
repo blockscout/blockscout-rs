@@ -31,7 +31,9 @@ async fn main() -> Result<(), anyhow::Error> {
     )?;
 
     tracing::info!("importing contract addresses started");
-    let processed = client.import_contract_addresses().await?;
+    let processed = client
+        .import_contract_addresses(settings.force_import)
+        .await?;
     tracing::info!("importing contract addresses finished. Total processed contracts={processed}");
 
     let mut handles = Vec::with_capacity(settings.n_threads);

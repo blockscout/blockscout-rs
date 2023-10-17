@@ -88,7 +88,7 @@ impl Client {
 }
 
 impl Client {
-    pub async fn import_contract_addresses(&self) -> anyhow::Result<usize> {
+    pub async fn import_contract_addresses(&self, force_import: bool) -> anyhow::Result<usize> {
         let mut verified_contracts = self
             .blockscout_client
             .get_verified_contracts()
@@ -136,8 +136,11 @@ impl Client {
             {
                 Ok(_) => {}
                 Err(DbErr::RecordNotInserted) => {
-                    tracing::info!("No records have been inserted. Stop dataset import");
-                    break;
+                    // Do not stop if re-import of all contracts have been setup.
+                    if !force_import {
+                        tracing::info!("No records have been inserted. Stop dataset import");
+                        break;
+                    }
                 }
                 Err(err) => {
                     return Err(err).context(format!(
