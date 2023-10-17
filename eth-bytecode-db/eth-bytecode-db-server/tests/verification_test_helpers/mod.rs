@@ -68,7 +68,7 @@ where
 {
     let verifier_uri = Uri::from_str(&format!("http://{verifier_addr}")).unwrap();
     let (settings, base) = {
-        let mut settings = Settings::default(db_url.into(), verifier_uri);
+        let mut settings = Settings::default(db_url, verifier_uri);
         let (server_settings, base) = test_server::get_test_server_settings();
         settings.server = server_settings;
         settings.metrics.enabled = false;
