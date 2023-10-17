@@ -334,7 +334,7 @@ mod smart_contracts {
         pub deployed_bytecode: Bytes,
         pub creation_bytecode: Option<Bytes>,
 
-        pub is_vyper_contract: bool,
+        // pub is_vyper_contract: Option<bool>,
         pub is_verified_via_sourcify: Option<bool>,
         pub optimization_enabled: Option<bool>,
         pub optimization_runs: Option<i64>,
