@@ -1,15 +1,12 @@
 #![allow(unused_imports, dead_code)]
 
-mod database_helpers;
-
 pub mod smart_contract_verifer_mock;
 pub mod test_input_data;
 
 pub mod verifier_alliance_types;
 
-pub use database_helpers::TestDbGuard;
-
 use async_trait::async_trait;
+use blockscout_service_launcher::{test_database::TestDbGuard, test_server};
 use eth_bytecode_db::verification::SourceType;
 use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2 as eth_bytecode_db_v2;
 use eth_bytecode_db_server::Settings;
@@ -35,21 +32,12 @@ pub async fn init_db(test_suite_name: &str, test_name: &str) -> TestDbGuard {
     init_db_raw::<migration::Migrator>(test_suite_name, test_name).await
 }
 
-pub async fn init_alliance_db(test_suite_name: &str, test_name: &str) -> TestDbGuard {
-    let test_name = format!("{test_name}_alliance");
-    init_db_raw::<verifier_alliance_migration::Migrator>(test_suite_name, &test_name).await
-}
-
-async fn init_db_raw<Migrator: MigratorTrait>(
+pub async fn init_db_raw<Migrator: MigratorTrait>(
     test_suite_name: &str,
     test_name: &str,
 ) -> TestDbGuard {
-    #[allow(unused_variables)]
-    let db_url: Option<String> = None;
-    // Uncomment if providing url explicitly is more convenient
-    // let db_url = Some("postgres://postgres:admin@localhost:9432/".into());
     let db_name = format!("{DB_PREFIX}_{test_suite_name}_{test_name}");
-    TestDbGuard::new::<Migrator>(db_name.as_str(), db_url).await
+    TestDbGuard::new::<Migrator>(db_name.as_str()).await
 }
 
 pub async fn init_verifier_server<Service, Response>(
@@ -63,7 +51,7 @@ where
     service.build_server().start().await
 }
 
-pub async fn init_eth_bytecode_db_server(db_url: &str, verifier_addr: SocketAddr) -> Url {
+pub async fn init_eth_bytecode_db_server(db_url: String, verifier_addr: SocketAddr) -> Url {
     let no_op_settings_setup = |settings: Settings| settings;
 
     init_eth_bytecode_db_server_with_settings_setup(db_url, verifier_addr, no_op_settings_setup)
@@ -71,7 +59,7 @@ pub async fn init_eth_bytecode_db_server(db_url: &str, verifier_addr: SocketAddr
 }
 
 pub async fn init_eth_bytecode_db_server_with_settings_setup<F>(
-    db_url: &str,
+    db_url: String,
     verifier_addr: SocketAddr,
     settings_setup: F,
 ) -> Url
@@ -79,117 +67,20 @@ where
     F: Fn(Settings) -> Settings,
 {
     let verifier_uri = Uri::from_str(&format!("http://{verifier_addr}")).unwrap();
-
-    let settings = {
+    let (settings, base) = {
         let mut settings = Settings::default(db_url.into(), verifier_uri);
-
-        // Take a random port in range [10000..65535]
-        let port = (rand::random::<u16>() % 55535) + 10000;
-        settings.server.http.addr = SocketAddr::from_str(&format!("127.0.0.1:{port}")).unwrap();
-        settings.server.grpc.enabled = false;
+        let (server_settings, base) = test_server::get_test_server_settings();
+        settings.server = server_settings;
         settings.metrics.enabled = false;
         settings.tracing.enabled = false;
         settings.jaeger.enabled = false;
 
-        settings_setup(settings)
+        (settings_setup(settings), base)
     };
 
-    let _server_handle = {
-        let settings = settings.clone();
-        tokio::spawn(async move { eth_bytecode_db_server::run(settings).await })
-    };
-
-    let client = reqwest::Client::new();
-    let base = Url::parse(&format!("http://{}", settings.server.http.addr)).unwrap();
-
-    let health_endpoint = base.join("health").unwrap();
-    // Wait for the server to start
-    loop {
-        if let Ok(_response) = client
-            .get(health_endpoint.clone())
-            .query(&[("service", "blockscout.ethBytecodeDb.v2.SourcifyVerifier")])
-            .send()
-            .await
-        {
-            break;
-        }
-    }
+    test_server::init_server(|| eth_bytecode_db_server::run(settings), &base).await;
 
     base
-}
-
-pub struct RequestWrapper<'a, Request> {
-    inner: &'a Request,
-    headers: reqwest::header::HeaderMap,
-}
-
-impl<'a, Request> From<&'a Request> for RequestWrapper<'a, Request> {
-    fn from(value: &'a Request) -> Self {
-        Self {
-            inner: value,
-            headers: Default::default(),
-        }
-    }
-}
-
-impl<'a, Request> RequestWrapper<'a, Request> {
-    pub fn header(&mut self, key: &str, value: &str) {
-        let key = reqwest::header::HeaderName::from_str(key)
-            .expect("Error converting key string into header name");
-        let value = reqwest::header::HeaderValue::from_str(value)
-            .expect("Error converting value string into header value");
-        self.headers.insert(key, value);
-    }
-
-    pub fn headers(&mut self, headers: HashMap<String, String>) {
-        for (key, value) in headers {
-            self.header(&key, &value);
-        }
-    }
-}
-
-pub async fn send_annotated_request<
-    Request: serde::Serialize,
-    Response: for<'a> serde::Deserialize<'a>,
->(
-    eth_bytecode_db_base: &Url,
-    route: &str,
-    request: &RequestWrapper<'_, Request>,
-    annotation: Option<&str>,
-) -> Response {
-    let annotation = annotation.map(|v| format!("({v}) ")).unwrap_or_default();
-
-    let response = reqwest::Client::new()
-        .post(eth_bytecode_db_base.join(route).unwrap())
-        .json(&request.inner)
-        .headers(request.headers.clone())
-        .send()
-        .await
-        .unwrap_or_else(|_| panic!("{annotation}Failed to send request"));
-
-    // Assert that status code is success
-    if !response.status().is_success() {
-        let status = response.status();
-        let message = response.text().await.expect("Read body as text");
-        panic!("({annotation})Invalid status code (success expected). Status: {status}. Message: {message}")
-    }
-
-    response
-        .json()
-        .await
-        .unwrap_or_else(|_| panic!("({annotation})Response deserialization failed"))
-}
-pub async fn send_request<
-    'a,
-    Request: serde::Serialize,
-    Response: for<'b> serde::Deserialize<'b>,
->(
-    eth_bytecode_db_base: &Url,
-    route: &str,
-    request: &'a Request,
-) -> Response {
-    let wrapped_request: RequestWrapper<'a, Request> = request.into();
-    send_annotated_request(eth_bytecode_db_base, route, &wrapped_request, None).await
 }
 
 pub mod test_cases {
@@ -219,7 +110,7 @@ pub mod test_cases {
         let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
 
         let verification_response: eth_bytecode_db_v2::VerifyResponse =
-            send_request(&eth_bytecode_db_base, route, &request).await;
+            test_server::send_post_request(&eth_bytecode_db_base, route, &request).await;
 
         assert_eq!(
             test_data.eth_bytecode_db_response, verification_response,
@@ -249,7 +140,8 @@ pub mod test_cases {
         let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
 
         let verification_response: eth_bytecode_db_v2::VerifyResponse =
-            send_request(&eth_bytecode_db_base, route, &verification_request).await;
+            test_server::send_post_request(&eth_bytecode_db_base, route, &verification_request)
+                .await;
 
         let creation_input_search_response: eth_bytecode_db_v2::SearchSourcesResponse = {
             let request = {
@@ -258,11 +150,11 @@ pub mod test_cases {
                     bytecode_type: eth_bytecode_db_v2::BytecodeType::CreationInput.into(),
                 }
             };
-            send_annotated_request(
+            test_server::send_annotated_post_request(
                 &eth_bytecode_db_base,
                 DB_SEARCH_ROUTE,
-                &(&request).into(),
-                Some("Creation input search"),
+                &request,
+                "Creation input search",
             )
             .await
         };
@@ -274,11 +166,11 @@ pub mod test_cases {
                     bytecode_type: eth_bytecode_db_v2::BytecodeType::DeployedBytecode.into(),
                 }
             };
-            send_annotated_request(
+            test_server::send_annotated_post_request(
                 &eth_bytecode_db_base,
                 DB_SEARCH_ROUTE,
-                &(&request).into(),
-                Some("Deployed bytecode search"),
+                &request,
+                "Deployed bytecode search",
             )
             .await
         };
@@ -320,9 +212,11 @@ pub mod test_cases {
         let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
 
         let verification_response: eth_bytecode_db_v2::VerifyResponse =
-            send_request(&eth_bytecode_db_base, route, &verification_request).await;
+            test_server::send_post_request(&eth_bytecode_db_base, route, &verification_request)
+                .await;
         let verification_response_2: eth_bytecode_db_v2::VerifyResponse =
-            send_request(&eth_bytecode_db_base, route, &verification_request).await;
+            test_server::send_post_request(&eth_bytecode_db_base, route, &verification_request)
+                .await;
 
         assert_eq!(
             verification_response, verification_response_2,
@@ -337,11 +231,11 @@ pub mod test_cases {
                 }
             };
 
-            send_annotated_request(
+            test_server::send_annotated_post_request(
                 &eth_bytecode_db_base,
                 DB_SEARCH_ROUTE,
-                &(&request).into(),
-                Some("Creation input search"),
+                &request,
+                "Creation input search",
             )
             .await
         };
@@ -391,9 +285,10 @@ pub mod test_cases {
 
         let verifier_addr =
             init_verifier_server(Service::default(), full_match_test_data.verifier_response).await;
-        let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
+        let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url.clone(), verifier_addr).await;
         let _verification_response: eth_bytecode_db_v2::VerifyResponse =
-            send_request(&eth_bytecode_db_base, route, &verification_request).await;
+            test_server::send_post_request(&eth_bytecode_db_base, route, &verification_request)
+                .await;
 
         let verifier_addr = init_verifier_server(
             Service::default(),
@@ -402,7 +297,8 @@ pub mod test_cases {
         .await;
         let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
         let _verification_response: eth_bytecode_db_v2::VerifyResponse =
-            send_request(&eth_bytecode_db_base, route, &verification_request).await;
+            test_server::send_post_request(&eth_bytecode_db_base, route, &verification_request)
+                .await;
 
         let creation_input_search_response: eth_bytecode_db_v2::SearchSourcesResponse = {
             let request = {
@@ -412,11 +308,11 @@ pub mod test_cases {
                 }
             };
 
-            send_annotated_request(
+            test_server::send_annotated_post_request(
                 &eth_bytecode_db_base,
                 DB_SEARCH_ROUTE,
-                &(&request).into(),
-                Some("Creation input search"),
+                &request,
+                "Creation input search",
             )
             .await
         };
@@ -469,11 +365,11 @@ pub mod test_cases {
             };
 
             let annotation = format!("Metadata: {metadata_to_print}");
-            let _: eth_bytecode_db_v2::VerifyResponse = send_annotated_request(
+            let _: eth_bytecode_db_v2::VerifyResponse = test_server::send_annotated_post_request(
                 &eth_bytecode_db_base,
                 route,
-                &(&request).into(),
-                Some(&annotation),
+                &request,
+                &annotation,
             )
             .await;
         };
