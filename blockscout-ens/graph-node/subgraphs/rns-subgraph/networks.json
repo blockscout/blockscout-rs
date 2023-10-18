@@ -1,0 +1,25 @@
+{
+  "rootstock": {
+    "RnsRegistry": {
+      "address": "0xCB868AeAbd31E2b66F74E9a55cF064AbB31A4Ad5",
+      "startBlock": 905027
+    },
+    "NameResolver": {
+      "address": "0x4b1a11BF6723e60b9D2e02AA3ecE34E24Bde77d9",
+      "startBlock": 1721969
+    },
+    "PublicResolver": {
+      "address": "0xD87f8121D44F3717d4bAdC50b24E50044f86D64B",
+      "startBlock": 2406885
+    }
+  },
+  "rootstock-testnet": {
+    "RnsRegistry": {
+      "address": "0x7d284aaac6e925aad802a53c0c69efe3764597b8",
+      "startBlock": 0
+    },
+    "PublicResolver": {
+      "address": "0xD87f8121D44F3717d4bAdC50b24E50044f86D64B"
+    }
+  }
+}

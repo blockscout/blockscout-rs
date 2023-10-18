@@ -1,0 +1,7 @@
+build/
+node_modules/
+*.xlsx
+.bin
+*.csv
+*.ipynb
+generated
