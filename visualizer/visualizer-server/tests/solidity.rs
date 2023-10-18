@@ -234,6 +234,22 @@ mod success_advanced_tests {
         visualize_contract_success(request, expected_svg).await;
     }
 
+    #[actix_web::test]
+    async fn uml_empty_file_name() {
+        let contract_path = format!("{CONTRACTS_DIR}/SimpleContract.sol",);
+        let contract =
+            fs::read_to_string(&contract_path).expect("Error while reading SimpleContract.sol");
+        let svg_path = format!("{SAMPLES_DIR}/uml/simple_contract.svg",);
+        let expected_svg = fs::read_to_string(&svg_path)
+            .unwrap_or_else(|_| panic!("Error while reading simple_contract.svg",));
+        let request = json!({
+            "sources": {
+                ".sol": contract,
+            }
+        });
+        visualize_contract_success(request, expected_svg).await;
+    }
+
     // filename that starts with @
     #[actix_web::test]
     async fn uml_starting_at_sign() {
