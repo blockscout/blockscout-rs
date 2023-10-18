@@ -49,9 +49,10 @@ pub(crate) async fn insert_data(
         .await
         .context("insert compiled_contract")?;
 
-    let _verified_contract = insert_verified_contract(&txn, &contract, &compiled_contract)
-        .await
-        .context("insert verified_contract")?;
+    let _verified_contract =
+        insert_verified_contract(&deployment_data, &txn, &contract, &compiled_contract)
+            .await
+            .context("insert verified_contract")?;
 
     txn.commit().await.context("commit transaction")?;
 
@@ -115,6 +116,7 @@ async fn retrieve_code(
 }
 
 async fn check_code_match<F>(
+    deployment_data: &ContractDeploymentData,
     txn: &DatabaseTransaction,
     deployed_code_hash: Vec<u8>,
     compiled_code_hash: Vec<u8>,
@@ -142,7 +144,13 @@ where
             match processing_function(&deployed_code, compiled_code, code_artifacts) {
                 Ok(res) => Some(res),
                 Err(err) => {
-                    tracing::warn!("code processing failed; err={err:#}");
+                    let contract_address =
+                        DisplayBytes::from(deployment_data.contract_address.clone());
+                    tracing::warn!(
+                        contract_address = contract_address.to_string(),
+                        chain_id = deployment_data.chain_id,
+                        "code processing failed; err={err:#}"
+                    );
                     None
                 }
             }
@@ -159,11 +167,13 @@ where
 }
 
 async fn insert_verified_contract(
+    deployment_data: &ContractDeploymentData,
     txn: &DatabaseTransaction,
     contract: &contracts::Model,
     compiled_contract: &compiled_contracts::Model,
 ) -> Result<verified_contracts::Model, anyhow::Error> {
     let (creation_match, creation_values, creation_transformations) = check_code_match(
+        deployment_data,
         txn,
         contract.creation_code_hash.clone(),
         compiled_contract.creation_code_hash.clone(),
@@ -173,6 +183,7 @@ async fn insert_verified_contract(
     .await
     .context("check creation code match")?;
     let (runtime_match, runtime_values, runtime_transformations) = check_code_match(
+        deployment_data,
         txn,
         contract.runtime_code_hash.clone(),
         compiled_contract.runtime_code_hash.clone(),
@@ -186,7 +197,7 @@ async fn insert_verified_contract(
         return Err(anyhow::anyhow!(
             "neither creation code nor runtime code have not matched"
         ));
-    };
+    }
 
     let active_model = verified_contracts::ActiveModel {
         id: Default::default(),
