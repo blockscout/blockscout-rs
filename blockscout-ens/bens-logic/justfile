@@ -19,21 +19,14 @@ start-postgres:
     $SHELL -c '[[ -z "{{db-name}}" ]] || docker exec -it {{docker-name}} psql -U {{db-user}} -c "create database {{db-name}};"'
 
 stop-postgres:
-    docker kill {{docker-name}}
+    docker rm -f {{docker-name}}
+
+stop-test-postgres:
+    just docker-name="{{docker-name}}-test" stop-postgres
 
 test *args:
     SQLX_OFFLINE=true cargo test {{args}}
 
-migrate:
-    cargo sqlx migrate run
-
 test-with-db *args:
     -just db-port="{{test-db-port}}" db-name="" docker-name="{{docker-name}}-test" start-postgres
     just db-port="{{test-db-port}}" db-name=""                                     test {{args}}
-    #just                            docker-name="{{docker-name}}-test"             stop-postgres
-
-restart-generate-entities: 
-    just restart-postgres
-    just stats/migrate-up
-    just stats/generate-entities
-    just stop-postgres
