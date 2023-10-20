@@ -9,10 +9,7 @@ pub fn hash_ens_domain_name(name: &str) -> [u8; 32] {
         let (label, remainder) = name.split_once('.').unwrap_or((name, ""));
         let remainder_hash = hash_ens_domain_name(remainder);
         let label_hash = keccak256(label.as_bytes());
-        let concatenated: Vec<u8> = remainder_hash
-            .into_iter()
-            .chain(label_hash.into_iter())
-            .collect();
+        let concatenated: Vec<u8> = remainder_hash.into_iter().chain(label_hash).collect();
         keccak256(concatenated)
     }
 }
