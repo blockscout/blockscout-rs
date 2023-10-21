@@ -57,6 +57,7 @@ dataSources:
     source:
       abi: PublicResolver
       address: "0xD87f8121D44F3717d4bAdC50b24E50044f86D64B"
+      startBlock: 2406885
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -75,7 +76,8 @@ dataSources:
         - name: PublicResolver
           file: ./abis/PublicResolver.json
       eventHandlers:
-        - event: AuthorisationChanged(indexed bytes32,indexed address,indexed address,bool)
+        - event: AuthorisationChanged(indexed bytes32,indexed address,indexed
+            address,bool)
           handler: handleAuthorisationChanged
         - event: TextChanged(indexed bytes32,indexed string,string)
           handler: handleTextChanged
@@ -94,4 +96,3 @@ dataSources:
         - event: VersionChanged(indexed bytes32,uint64)
           handler: handleVersionChanged
       file: ./src/public-resolver.ts
-

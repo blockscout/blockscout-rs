@@ -28,7 +28,7 @@ import {
   Domain,
   MulticoinAddrChanged
 } from "../generated/schema"
-import { maybeSaveDomainName } from "./utils";
+import { createEventID, maybeSaveDomainName } from "./utils";
 
 export function handleAddrChanged(event: AddrChangedEvent): void {
   let account = new Account(event.params.a.toHexString());
@@ -204,13 +204,6 @@ function getOrCreateResolver(node: Bytes, address: Address): Resolver {
     resolver.address = address;
   }
   return resolver as Resolver;
-}
-
-function createEventID(event: ethereum.Event): string {
-  return event.block.number
-    .toString()
-    .concat("-")
-    .concat(event.logIndex.toString());
 }
 
 function createResolverID(node: Bytes, resolver: Address): string {

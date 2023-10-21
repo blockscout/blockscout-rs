@@ -13,7 +13,9 @@ export function createEventID(event: ethereum.Event): string {
   return event.block.number
     .toString()
     .concat("-")
-    .concat(event.logIndex.toString());
+    .concat(event.transaction.index.toString())
+    .concat("-")
+    .concat(event.transactionLogIndex.toString());
 }
 
 // Helper for concatenating two byte arrays
