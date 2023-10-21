@@ -12,7 +12,7 @@ pub struct Domain {
     pub resolver: Option<String>,
     pub ttl: Option<sqlx::types::BigDecimal>,
     pub is_migrated: bool,
-    pub created_at: Option<sqlx::types::BigDecimal>,
+    pub created_at: sqlx::types::BigDecimal,
     pub owner: String,
     pub registrant: Option<String>,
     pub wrapped_owner: Option<String>,
