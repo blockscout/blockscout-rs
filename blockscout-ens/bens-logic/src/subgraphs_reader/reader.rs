@@ -84,16 +84,16 @@ async fn find_domain(
 ) -> Result<Option<Domain>, SubgraphReadError> {
     let maybe_domain = sqlx::query_as(&format!(
         r#"
-        SELECT
-        DISTINCT ON (id) *
+        SELECT *
         FROM {schema}.domain
         WHERE
             id = $1 
             AND name IS NOT NULL
-            AND to_timestamp(expiry_date) > now()
-        ORDER BY
-            id,
-            block_range DESC
+            AND (
+                expiry_date is null
+                OR to_timestamp(expiry_date) > now()
+            )
+            AND block_range @> 2147483647
         "#,
     ))
     .bind(id)
@@ -110,16 +110,16 @@ async fn find_resolved_addresses(
     let resolved_domains: Vec<Domain> = sqlx::query_as(&format!(
         r#"
         SELECT * FROM (
-            SELECT 
-            DISTINCT ON (id) *
+            SELECT *
             FROM {schema}.domain
             WHERE 
                 resolved_address = $1
                 AND name IS NOT NULL 
-                AND to_timestamp(expiry_date) > now()
-            ORDER BY
-                id,
-                block_range DESC
+                AND (
+                    expiry_date is null
+                    OR to_timestamp(expiry_date) > now()
+                )
+                AND block_range @> 2147483647
         ) sub
         ORDER BY created_at ASC
         "#,
@@ -139,8 +139,7 @@ async fn find_owned_addresses(
     let owned_domains: Vec<Domain> = sqlx::query_as(&format!(
         r#"
         SELECT * FROM (
-            SELECT 
-            DISTINCT ON (id) *
+            SELECT *
             FROM {schema}.domain
             WHERE 
                 (
@@ -148,10 +147,11 @@ async fn find_owned_addresses(
                     OR wrapped_owner = $1
                 )
                 AND name IS NOT NULL
-                AND to_timestamp(expiry_date) > now()
-            ORDER BY
-                id,
-                block_range DESC
+                AND (
+                    expiry_date is null
+                    OR to_timestamp(expiry_date) > now()
+                )
+                AND block_range @> 2147483647
         ) sub
         ORDER BY created_at ASC
         "#,
