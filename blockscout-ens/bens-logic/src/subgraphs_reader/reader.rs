@@ -109,18 +109,16 @@ async fn find_resolved_addresses(
 ) -> Result<Vec<Domain>, SubgraphReadError> {
     let resolved_domains: Vec<Domain> = sqlx::query_as(&format!(
         r#"
-        SELECT * FROM (
-            SELECT *
-            FROM {schema}.domain
-            WHERE 
-                resolved_address = $1
-                AND name IS NOT NULL 
-                AND (
-                    expiry_date is null
-                    OR to_timestamp(expiry_date) > now()
-                )
-                AND block_range @> 2147483647
-        ) sub
+        SELECT *
+        FROM {schema}.domain
+        WHERE 
+            resolved_address = $1
+            AND name IS NOT NULL 
+            AND (
+                expiry_date is null
+                OR to_timestamp(expiry_date) > now()
+            )
+            AND block_range @> 2147483647
         ORDER BY created_at ASC
         "#,
     ))
@@ -138,21 +136,19 @@ async fn find_owned_addresses(
 ) -> Result<Vec<Domain>, SubgraphReadError> {
     let owned_domains: Vec<Domain> = sqlx::query_as(&format!(
         r#"
-        SELECT * FROM (
-            SELECT *
-            FROM {schema}.domain
-            WHERE 
-                (
-                    owner = $1
-                    OR wrapped_owner = $1
-                )
-                AND name IS NOT NULL
-                AND (
-                    expiry_date is null
-                    OR to_timestamp(expiry_date) > now()
-                )
-                AND block_range @> 2147483647
-        ) sub
+        SELECT *
+        FROM {schema}.domain
+        WHERE 
+            (
+                owner = $1
+                OR wrapped_owner = $1
+            )
+            AND name IS NOT NULL
+            AND (
+                expiry_date is null
+                OR to_timestamp(expiry_date) > now()
+            )
+            AND block_range @> 2147483647
         ORDER BY created_at ASC
         "#,
     ))
