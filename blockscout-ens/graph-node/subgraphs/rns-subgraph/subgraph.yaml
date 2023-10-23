@@ -56,8 +56,7 @@ dataSources:
     network: rootstock
     source:
       abi: PublicResolver
-      address: "0xD87f8121D44F3717d4bAdC50b24E50044f86D64B"
-      startBlock: 2406885
+      startBlock: 905027
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
