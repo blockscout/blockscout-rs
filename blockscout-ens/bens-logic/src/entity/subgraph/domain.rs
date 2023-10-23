@@ -1,3 +1,5 @@
+use chrono::Utc;
+
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct Domain {
     pub vid: i64,
@@ -10,11 +12,12 @@ pub struct Domain {
     pub subdomain_count: i32,
     pub resolved_address: Option<String>,
     pub resolver: Option<String>,
-    pub ttl: Option<sqlx::types::BigDecimal>,
+    pub ttl: Option<chrono::DateTime<Utc>>,
     pub is_migrated: bool,
-    pub created_at: sqlx::types::BigDecimal,
+    pub created_at: chrono::DateTime<Utc>,
     pub owner: String,
     pub registrant: Option<String>,
     pub wrapped_owner: Option<String>,
-    pub expiry_date: Option<sqlx::types::BigDecimal>,
+    pub expiry_date: Option<chrono::DateTime<Utc>>,
+    pub is_expired: bool,
 }

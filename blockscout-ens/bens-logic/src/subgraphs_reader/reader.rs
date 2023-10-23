@@ -1,20 +1,8 @@
-use super::schema_selector::schema_names;
+use super::{schema_selector::schema_names, sql};
 use crate::{entity::subgraph::domain::Domain, hash_name::hash_ens_domain_name};
 use sqlx::postgres::PgPool;
 use std::{collections::HashMap, sync::Arc};
 use thiserror::Error;
-
-// `block_range @>` is special sql syntax for fast filtering int4range
-// to access current version of domain.
-// Source: https://github.com/graphprotocol/graph-node/blob/19fd41bb48511f889dc94f5d82e16cd492f29da1/store/postgres/src/block_range.rs#L26
-const DOMAIN_DEFAULT_WHERE_CLAUSE: &str = r#"
-name IS NOT NULL
-AND (
-    expiry_date is null
-    OR to_timestamp(expiry_date) > now()
-)
-AND block_range @> 2147483647
-"#;
 
 pub struct SubgraphReader {
     pool: Arc<PgPool>,
@@ -51,7 +39,7 @@ impl SubgraphReader {
             .get(&network_id)
             .ok_or_else(|| SubgraphReadError::NetworkNotFound(network_id))?;
         let id = domain_id(name);
-        find_domain(self.pool.as_ref(), schema, &id).await
+        sql::find_domain(self.pool.as_ref(), schema, &id).await
     }
 
     pub async fn get_domain_history(
@@ -72,7 +60,7 @@ impl SubgraphReader {
             .get(&network_id)
             .ok_or_else(|| SubgraphReadError::NetworkNotFound(network_id))?;
         let address = hex(address);
-        find_resolved_addresses(self.pool.as_ref(), schema, &address).await
+        sql::find_resolved_addresses(self.pool.as_ref(), schema, &address).await
     }
 
     pub async fn search_owned_domain_reverse(
@@ -85,75 +73,8 @@ impl SubgraphReader {
             .get(&network_id)
             .ok_or_else(|| SubgraphReadError::NetworkNotFound(network_id))?;
         let address = hex(address);
-        find_owned_addresses(self.pool.as_ref(), schema, &address).await
+        sql::find_owned_addresses(self.pool.as_ref(), schema, &address).await
     }
-}
-
-async fn find_domain(
-    pool: &PgPool,
-    schema: &str,
-    id: &str,
-) -> Result<Option<Domain>, SubgraphReadError> {
-    let maybe_domain = sqlx::query_as(&format!(
-        r#"
-        SELECT *
-        FROM {schema}.domain
-        WHERE
-            id = $1 
-            AND {DOMAIN_DEFAULT_WHERE_CLAUSE}
-        "#,
-    ))
-    .bind(id)
-    .fetch_optional(pool)
-    .await?;
-    Ok(maybe_domain)
-}
-
-async fn find_resolved_addresses(
-    pool: &PgPool,
-    schema: &str,
-    address: &str,
-) -> Result<Vec<Domain>, SubgraphReadError> {
-    let resolved_domains: Vec<Domain> = sqlx::query_as(&format!(
-        r#"
-        SELECT *
-        FROM {schema}.domain
-        WHERE 
-            resolved_address = $1
-            AND {DOMAIN_DEFAULT_WHERE_CLAUSE}
-        ORDER BY created_at ASC
-        "#,
-    ))
-    .bind(address)
-    .fetch_all(pool)
-    .await?;
-
-    Ok(resolved_domains)
-}
-
-async fn find_owned_addresses(
-    pool: &PgPool,
-    schema: &str,
-    address: &str,
-) -> Result<Vec<Domain>, SubgraphReadError> {
-    let owned_domains: Vec<Domain> = sqlx::query_as(&format!(
-        r#"
-        SELECT *
-        FROM {schema}.domain
-        WHERE 
-            (
-                owner = $1
-                OR wrapped_owner = $1
-            )
-            AND {DOMAIN_DEFAULT_WHERE_CLAUSE}
-        ORDER BY created_at ASC
-        "#,
-    ))
-    .bind(address)
-    .fetch_all(pool)
-    .await?;
-
-    Ok(owned_domains)
 }
 
 fn domain_id(name: &str) -> String {
@@ -194,8 +115,13 @@ mod tests {
         let result = reader
             .get_domain(1, "expired.eth")
             .await
-            .expect("failed to get expired domain");
-        assert!(result.is_none(), "expired domain returned: {:?}", result);
+            .expect("failed to get expired domain")
+            .expect("expired domain not found");
+        assert!(
+            result.is_expired,
+            "expired domain has is_expired=false: {:?}",
+            result
+        );
     }
 
     #[sqlx::test(migrations = "tests/migrations")]
@@ -206,7 +132,7 @@ mod tests {
             .expect("failed to init reader");
 
         let result = reader
-            .search_resolved_domain_reverse(1, addr("d8da6bf26964af9d7eed9e03e53415d37aa96045"))
+            .search_resolved_domain_reverse(1, addr("0xd8da6bf26964af9d7eed9e03e53415d37aa96045"))
             .await
             .expect("failed to get vitalik domains");
         assert_eq!(
@@ -215,16 +141,32 @@ mod tests {
         );
 
         let result = reader
-            .search_owned_domain_reverse(1, addr("d8da6bf26964af9d7eed9e03e53415d37aa96045"))
+            .search_owned_domain_reverse(1, addr("0xd8da6bf26964af9d7eed9e03e53415d37aa96045"))
             .await
             .expect("failed to get vitalik domains");
         assert_eq!(
             result.iter().map(|d| d.name.as_deref()).collect::<Vec<_>>(),
             vec![Some("vitalik.eth")]
         );
+
+        // search for expired address
+        let result = reader
+            .search_resolved_domain_reverse(1, addr("0x9f7f7ddbfb8e14d1756580ba8037530da0880b99"))
+            .await
+            .expect("failed to get expired domains");
+        // expired domain shoudn't be returned as resolved
+        assert_eq!(
+            result.iter().map(|d| d.name.as_deref()).collect::<Vec<_>>(),
+            vec![]
+        );
     }
 
     fn addr(a: &str) -> ethers::types::Address {
-        ethers::types::Address::from_slice(hex::decode(a).unwrap().as_slice())
+        let a = a.trim_start_matches("0x");
+        ethers::types::Address::from_slice(
+            hex::decode(a)
+                .expect("invalid hex provided in addr()")
+                .as_slice(),
+        )
     }
 }
