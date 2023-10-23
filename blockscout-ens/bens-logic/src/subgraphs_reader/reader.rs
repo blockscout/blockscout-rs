@@ -4,6 +4,18 @@ use sqlx::postgres::PgPool;
 use std::{collections::HashMap, sync::Arc};
 use thiserror::Error;
 
+// `block_range @>` is special sql syntax for fast filtering int4range
+// to access current version of domain.
+// Source: https://github.com/graphprotocol/graph-node/blob/19fd41bb48511f889dc94f5d82e16cd492f29da1/store/postgres/src/block_range.rs#L26
+const DOMAIN_DEFAULT_WHERE_CLAUSE: &str = r#"
+name IS NOT NULL
+AND (
+    expiry_date is null
+    OR to_timestamp(expiry_date) > now()
+)
+AND block_range @> 2147483647
+"#;
+
 pub struct SubgraphReader {
     pool: Arc<PgPool>,
     schema_names: HashMap<i64, String>,
@@ -88,12 +100,7 @@ async fn find_domain(
         FROM {schema}.domain
         WHERE
             id = $1 
-            AND name IS NOT NULL
-            AND (
-                expiry_date is null
-                OR to_timestamp(expiry_date) > now()
-            )
-            AND block_range @> 2147483647
+            AND {DOMAIN_DEFAULT_WHERE_CLAUSE}
         "#,
     ))
     .bind(id)
@@ -113,12 +120,7 @@ async fn find_resolved_addresses(
         FROM {schema}.domain
         WHERE 
             resolved_address = $1
-            AND name IS NOT NULL 
-            AND (
-                expiry_date is null
-                OR to_timestamp(expiry_date) > now()
-            )
-            AND block_range @> 2147483647
+            AND {DOMAIN_DEFAULT_WHERE_CLAUSE}
         ORDER BY created_at ASC
         "#,
     ))
@@ -143,12 +145,7 @@ async fn find_owned_addresses(
                 owner = $1
                 OR wrapped_owner = $1
             )
-            AND name IS NOT NULL
-            AND (
-                expiry_date is null
-                OR to_timestamp(expiry_date) > now()
-            )
-            AND block_range @> 2147483647
+            AND {DOMAIN_DEFAULT_WHERE_CLAUSE}
         ORDER BY created_at ASC
         "#,
     ))
