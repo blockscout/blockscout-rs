@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\nSELECT DISTINCT ON (c.net_version) \n    c.net_version::BIGINT as net_version,\n    ds.name AS schema_name\nFROM deployment_schemas ds\nLEFT JOIN chains c ON ds.network = c.NAME\nORDER  BY c.net_version,\nds.version DESC;",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "net_version",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "schema_name",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      false
+    ]
+  },
+  "hash": "277734755b0a47edd50e8ab65d39cc8e5836fec540c7770afc1811347dd4264b"
+}
