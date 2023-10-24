@@ -4,7 +4,7 @@ use super::{
     settings::{MetricsSettings, ServerSettings},
     HttpServerSettings,
 };
-use actix_web::{App, HttpServer};
+use actix_web::{middleware::Condition, App, HttpServer};
 use actix_web_prom::PrometheusMetrics;
 use std::net::SocketAddr;
 
@@ -22,10 +22,7 @@ pub async fn launch<R>(
 where
     R: HttpRouter + Send + Sync + Clone + 'static,
 {
-    let metrics = settings
-        .metrics
-        .enabled
-        .then(|| Metrics::new(&settings.service_name, &settings.metrics.route));
+    let metrics = Metrics::new(&settings.service_name, &settings.metrics.route);
 
     let mut futures = vec![];
 
@@ -33,9 +30,8 @@ where
         let http_server = {
             let http_server_future = http_serve(
                 http,
-                metrics
-                    .as_ref()
-                    .map(|metrics| metrics.http_middleware().clone()),
+                &settings.metrics,
+                metrics.http_middleware().clone(),
                 &settings.server.http,
             );
             tokio::spawn(async move { http_server_future.await.map_err(anyhow::Error::msg) })
@@ -51,7 +47,7 @@ where
         futures.push(grpc_server)
     }
 
-    if let Some(metrics) = metrics {
+    if settings.metrics.enabled {
         let addr = settings.metrics.addr;
         futures.push(tokio::spawn(async move {
             metrics.run_server(addr).await?;
@@ -68,7 +64,8 @@ where
 
 fn http_serve<R>(
     http: R,
-    metrics: Option<PrometheusMetrics>,
+    metrics_settings: &MetricsSettings,
+    metrics: PrometheusMetrics,
     settings: &HttpServerSettings,
 ) -> actix_web::dev::Server
 where
@@ -77,26 +74,20 @@ where
     tracing::info!("starting http server on addr {}", settings.addr);
 
     let json_cfg = actix_web::web::JsonConfig::default().limit(settings.max_body_size);
-    if let Some(metrics) = metrics {
-        HttpServer::new(move || {
-            App::new()
-                .wrap(metrics.clone())
-                .app_data(json_cfg.clone())
-                .configure(configure_router(&http))
-        })
-        .bind(settings.addr)
-        .expect("failed to bind server")
-        .run()
-    } else {
-        HttpServer::new(move || {
-            App::new()
-                .app_data(json_cfg.clone())
-                .configure(configure_router(&http))
-        })
-        .bind(settings.addr)
-        .expect("failed to bind server")
-        .run()
-    }
+    let metrics_enabled = metrics_settings.enabled;
+    let cors_settings = settings.cors.clone();
+    HttpServer::new(move || {
+        let cors = cors_settings.clone().build();
+        let cors_enabled = cors_settings.enabled;
+        App::new()
+            .wrap(Condition::new(metrics_enabled, metrics.clone()))
+            .wrap(Condition::new(cors_enabled, cors))
+            .app_data(json_cfg.clone())
+            .configure(configure_router(&http))
+    })
+    .bind(settings.addr)
+    .expect("failed to bind server")
+    .run()
 }
 
 fn grpc_serve(
