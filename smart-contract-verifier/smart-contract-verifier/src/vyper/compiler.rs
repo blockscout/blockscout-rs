@@ -35,7 +35,7 @@ mod types {
     use std::collections::BTreeMap;
 
     use ethers_solc::{
-        artifacts::{Contract, Error, Severity},
+        artifacts::{Contract, Error, Severity, SourceFile},
         CompilerOutput,
     };
     use serde::{Deserialize, Serialize};
@@ -61,6 +61,8 @@ mod types {
         pub errors: Vec<VyperError>,
         #[serde(default)]
         pub contracts: BTreeMap<String, BTreeMap<String, Contract>>,
+        #[serde(default)]
+        pub sources: BTreeMap<String, SourceFile>,
     }
 
     impl From<VyperCompilerOutput> for CompilerOutput {
@@ -81,7 +83,7 @@ mod types {
                 .collect();
             CompilerOutput {
                 errors,
-                sources: BTreeMap::new(),
+                sources: vyper.sources,
                 contracts: vyper.contracts,
             }
         }
