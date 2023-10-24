@@ -1,5 +1,5 @@
 use super::{schema_selector::schema_names, sql};
-use crate::{entity::subgraph::domain::Domain, hash_name::hash_ens_domain_name};
+use crate::{entity::subgraph::{domain::Domain, domain_event::DomainEvent}, hash_name::hash_ens_domain_name};
 use sqlx::postgres::PgPool;
 use std::{collections::HashMap, sync::Arc};
 use thiserror::Error;
@@ -46,7 +46,7 @@ impl SubgraphReader {
         &self,
         _network_id: i64,
         _name: &str,
-    ) -> Result<Vec<()>, SubgraphReadError> {
+    ) -> Result<Vec<DomainEvent>, SubgraphReadError> {
         todo!()
     }
 
