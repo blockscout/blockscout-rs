@@ -3,6 +3,7 @@ mod missing_date;
 mod read;
 
 pub mod metrics;
+#[cfg(feature = "test-utils")]
 pub mod tests;
 
 pub use entity;

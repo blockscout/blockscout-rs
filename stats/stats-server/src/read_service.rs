@@ -24,10 +24,10 @@ impl ReadService {
 
 fn map_read_error(err: ReadError) -> Status {
     match &err {
-        ReadError::NotFound(_) => tonic::Status::not_found(err.to_string()),
+        ReadError::NotFound(_) => Status::not_found(err.to_string()),
         _ => {
             tracing::error!(err = ?err, "internal read error");
-            tonic::Status::internal(err.to_string())
+            Status::internal(err.to_string())
         }
     }
 }
@@ -79,10 +79,11 @@ impl StatsService for ReadService {
         request: Request<GetLineChartRequest>,
     ) -> Result<Response<LineChart>, Status> {
         let request = request.into_inner();
-        let chart_info =
-            self.charts.charts_info.get(&request.name).ok_or_else(|| {
-                tonic::Status::not_found(format!("chart {} not found", request.name))
-            })?;
+        let chart_info = self
+            .charts
+            .charts_info
+            .get(&request.name)
+            .ok_or_else(|| Status::not_found(format!("chart {} not found", request.name)))?;
 
         let from = request
             .from
@@ -109,8 +110,8 @@ impl StatsService for ReadService {
 
     async fn get_line_charts(
         &self,
-        _request: tonic::Request<GetLineChartsRequest>,
-    ) -> Result<tonic::Response<LineCharts>, tonic::Status> {
+        _request: Request<GetLineChartsRequest>,
+    ) -> Result<Response<LineCharts>, Status> {
         Ok(Response::new(self.charts.config.lines.clone().into()))
     }
 }

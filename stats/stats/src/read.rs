@@ -162,7 +162,7 @@ mod tests {
     async fn get_counters_mock() {
         let _ = tracing_subscriber::fmt::try_init();
 
-        let db = init_db::<migration::Migrator>("get_counters_mock", None).await;
+        let db = init_db("get_counters_mock").await;
         insert_mock_data(&db).await;
         let counters = get_counters(&db).await.unwrap();
         assert_eq!(
@@ -176,7 +176,7 @@ mod tests {
     async fn get_chart_int_mock() {
         let _ = tracing_subscriber::fmt::try_init();
 
-        let db = init_db::<migration::Migrator>("get_chart_int_mock", None).await;
+        let db = init_db("get_chart_int_mock").await;
         insert_mock_data(&db).await;
         let chart = get_chart_data(&db, "newBlocksPerDay", None, None, None)
             .await

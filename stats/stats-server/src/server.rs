@@ -2,7 +2,7 @@ use crate::{
     charts::Charts, config::read_charts_config, health::HealthService, read_service::ReadService,
     settings::Settings, update_service::UpdateService,
 };
-use blockscout_service_launcher::LaunchSettings;
+use blockscout_service_launcher::launcher::{self, LaunchSettings};
 use sea_orm::{ConnectOptions, Database};
 use stats_proto::blockscout::stats::v1::{
     health_actix::route_health,
@@ -20,7 +20,7 @@ struct HttpRouter<S: StatsService> {
     health: Arc<HealthService>,
 }
 
-impl<S: StatsService> blockscout_service_launcher::HttpRouter for HttpRouter<S> {
+impl<S: StatsService> launcher::HttpRouter for HttpRouter<S> {
     fn register_routes(&self, service_config: &mut actix_web::web::ServiceConfig) {
         service_config
             .configure(|config| route_health(config, self.health.clone()))
@@ -38,7 +38,11 @@ fn grpc_router<S: StatsService>(
 }
 
 pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
-    blockscout_service_launcher::init_logs(SERVICE_NAME, &settings.tracing, &settings.jaeger)?;
+    blockscout_service_launcher::tracing::init_logs(
+        SERVICE_NAME,
+        &settings.tracing,
+        &settings.jaeger,
+    )?;
     let charts_config = read_charts_config(&settings.charts_config)?;
     let mut opt = ConnectOptions::new(settings.db_url.clone());
     opt.sqlx_logging_level(tracing::log::LevelFilter::Debug);
@@ -89,5 +93,5 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
         metrics: settings.metrics,
     };
 
-    blockscout_service_launcher::launch(&launch_settings, http_router, grpc_router).await
+    launcher::launch(&launch_settings, http_router, grpc_router).await
 }
