@@ -26,6 +26,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "actix-cors"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b340e9cfa5b08690aae90fb61beb44e9b06f44fe3d0f93781aaa58cfba86245e"
+dependencies = [
+ "actix-utils",
+ "actix-web",
+ "derive_more",
+ "futures-util",
+ "log",
+ "once_cell",
+ "smallvec",
+]
+
+[[package]]
 name = "actix-http"
 version = "3.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -628,6 +643,32 @@ dependencies = [
  "config",
  "futures",
  "keccak-hash",
+ "opentelemetry",
+ "opentelemetry-jaeger",
+ "prometheus",
+ "sea-orm",
+ "sea-orm-migration",
+ "serde",
+ "tokio",
+ "tonic",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+ "url",
+]
+
+[[package]]
+name = "blockscout-service-launcher"
+version = "0.9.0"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=3cdbb47#3cdbb475deef2776267cf83ceca7613c48e63dde"
+dependencies = [
+ "actix-cors",
+ "actix-web",
+ "actix-web-prom",
+ "anyhow",
+ "cfg-if",
+ "config",
+ "futures",
  "opentelemetry",
  "opentelemetry-jaeger",
  "prometheus",
@@ -3365,7 +3406,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "blockscout-db",
- "blockscout-service-launcher",
+ "blockscout-service-launcher 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono",
  "entity",
  "lazy_static",
@@ -3405,7 +3446,7 @@ dependencies = [
  "actix-web",
  "anyhow",
  "async-trait",
- "blockscout-service-launcher",
+ "blockscout-service-launcher 0.9.0 (git+https://github.com/blockscout/blockscout-rs?rev=3cdbb47)",
  "bytes",
  "chrono",
  "config",
