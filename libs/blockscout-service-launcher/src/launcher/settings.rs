@@ -1,3 +1,4 @@
+use actix_cors::Cors;
 use config::{Config, File};
 use serde::{Deserialize, Serialize};
 use std::{net::SocketAddr, str::FromStr};
@@ -48,6 +49,7 @@ pub struct HttpServerSettings {
     pub enabled: bool,
     pub addr: SocketAddr,
     pub max_body_size: usize,
+    pub cors: CorsSettings,
 }
 
 impl Default for HttpServerSettings {
@@ -56,7 +58,49 @@ impl Default for HttpServerSettings {
             enabled: true,
             addr: SocketAddr::from_str("0.0.0.0:8050").unwrap(),
             max_body_size: 2 * 1024 * 1024, // 2 Mb - default Actix value
+            cors: Default::default(),
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct CorsSettings {
+    pub enabled: bool,
+    pub allowed_origin: String,
+    pub allowed_methods: String,
+    pub allowed_credentials: bool,
+    pub max_age: usize,
+    pub block_on_origin_mismatch: bool,
+}
+
+impl Default for CorsSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            allowed_origin: "".to_string(),
+            allowed_methods: "PUT, GET, POST, OPTIONS, DELETE, PATCH".to_string(),
+            allowed_credentials: true,
+            max_age: 3600,
+            block_on_origin_mismatch: false,
+        }
+    }
+}
+
+impl CorsSettings {
+    pub fn build(self) -> Cors {
+        let mut cors = Cors::default()
+            .allow_any_header()
+            .allowed_methods(self.allowed_methods.split(", "))
+            .max_age(Some(self.max_age))
+            .block_on_origin_mismatch(self.block_on_origin_mismatch);
+        if self.allowed_credentials {
+            cors = cors.supports_credentials()
+        }
+        for origin in self.allowed_origin.split(", ") {
+            cors = cors.allowed_origin(origin)
+        }
+        cors
     }
 }
 

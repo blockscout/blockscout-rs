@@ -4,7 +4,7 @@ use super::{
     settings::{MetricsSettings, ServerSettings},
     HttpServerSettings,
 };
-use actix_web::{App, HttpServer};
+use actix_web::{middleware::Condition, App, HttpServer};
 use actix_web_prom::PrometheusMetrics;
 use std::net::SocketAddr;
 
@@ -77,10 +77,14 @@ where
     tracing::info!("starting http server on addr {}", settings.addr);
 
     let json_cfg = actix_web::web::JsonConfig::default().limit(settings.max_body_size);
+    let cors_settings = settings.cors.clone();
+    let cors_enabled = cors_settings.enabled;
     if let Some(metrics) = metrics {
         HttpServer::new(move || {
+            let cors = cors_settings.clone().build();
             App::new()
                 .wrap(metrics.clone())
+                .wrap(Condition::new(cors_enabled, cors))
                 .app_data(json_cfg.clone())
                 .configure(configure_router(&http))
         })
@@ -89,7 +93,9 @@ where
         .run()
     } else {
         HttpServer::new(move || {
+            let cors = cors_settings.clone().build();
             App::new()
+                .wrap(Condition::new(cors_enabled, cors))
                 .app_data(json_cfg.clone())
                 .configure(configure_router(&http))
         })
