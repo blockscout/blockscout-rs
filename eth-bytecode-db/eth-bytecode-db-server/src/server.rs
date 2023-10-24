@@ -76,15 +76,14 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let health = Arc::new(HealthService::default());
 
-    database::initialize_postgres::<Migrator>(
+    let db_connection = database::initialize_postgres::<Migrator>(
         &settings.database.url,
         settings.database.create_database,
         settings.database.run_migrations,
     )
     .await?;
 
-    let db_connection = Arc::new(sea_orm::Database::connect(settings.database.url).await?);
-    let mut client = Client::new_arc(db_connection.clone(), settings.verifier.uri).await?;
+    let mut client = Client::new(db_connection, settings.verifier.uri).await?;
     if settings.verifier_alliance_database.enabled {
         let alliance_db_connection =
             sea_orm::Database::connect(settings.verifier_alliance_database.url).await?;

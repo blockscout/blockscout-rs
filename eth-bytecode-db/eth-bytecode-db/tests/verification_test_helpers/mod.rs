@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 
-mod database_helpers;
 pub mod smart_contract_veriifer_mock;
 pub mod test_input_data;
 
@@ -8,7 +7,7 @@ pub mod verifier_alliance_types;
 
 use async_trait::async_trait;
 use blockscout_display_bytes::Bytes as DisplayBytes;
-use database_helpers::TestDbGuard;
+use blockscout_service_launcher::test_database::TestDbGuard;
 use entity::{
     bytecode_parts, bytecodes, files, parts, sea_orm_active_enums, source_files, sources,
     verified_contracts,
@@ -59,12 +58,8 @@ pub fn generate_verification_request<T>(
 }
 
 pub async fn init_db(db_prefix: &str, test_name: &str) -> TestDbGuard {
-    #[allow(unused_variables)]
-    let db_url: Option<String> = None;
-    // Uncomment if providing url explicitly is more convenient
-    // let db_url = Some("postgres://postgres:admin@localhost:9432/".into());
     let db_name = format!("{db_prefix}_{test_name}");
-    TestDbGuard::new(db_name.as_str(), db_url).await
+    TestDbGuard::new::<migration::Migrator>(db_name.as_str()).await
 }
 
 pub async fn start_server_and_init_client<Service, Request>(

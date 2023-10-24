@@ -1,9 +1,10 @@
 mod verification_test_helpers;
 
 use crate::verification_test_helpers::{
-    init_db, init_eth_bytecode_db_server, init_verifier_server, send_request,
+    init_db, init_eth_bytecode_db_server, init_verifier_server,
 };
 use async_trait::async_trait;
+use blockscout_service_launcher::test_server;
 use eth_bytecode_db::{verification, verification::MatchType};
 use eth_bytecode_db_proto::blockscout::eth_bytecode_db::{
     v2 as eth_bytecode_db_v2,
@@ -81,7 +82,7 @@ async fn search_sourcify_sources(service: MockSolidityVerifierService) {
     };
 
     let verification_response: SearchSourcesResponse =
-        send_request(&eth_bytecode_db_base, ROUTE, &request).await;
+        test_server::send_post_request(&eth_bytecode_db_base, ROUTE, &request).await;
 
     let expected_sources: Vec<Source> = vec![
         Source {
@@ -155,7 +156,8 @@ async fn search_all_sources(service: MockSolidityVerifierService) {
     {
         let dummy_request = default_verify_request();
         let _verification_response: eth_bytecode_db_v2::VerifyResponse =
-            send_request(&eth_bytecode_db_base, VERIFY_ROUTE, &dummy_request).await;
+            test_server::send_post_request(&eth_bytecode_db_base, VERIFY_ROUTE, &dummy_request)
+                .await;
     }
 
     let chain_id = "5".to_string();
@@ -169,7 +171,7 @@ async fn search_all_sources(service: MockSolidityVerifierService) {
     };
 
     let verification_response: SearchAllSourcesResponse =
-        send_request(&eth_bytecode_db_base, ROUTE, &request).await;
+        test_server::send_post_request(&eth_bytecode_db_base, ROUTE, &request).await;
 
     let expected_response = SearchAllSourcesResponse {
       eth_bytecode_db_sources: vec![
