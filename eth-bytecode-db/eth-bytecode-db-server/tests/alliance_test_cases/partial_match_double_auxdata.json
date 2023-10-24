@@ -30,7 +30,8 @@
         "abi": [{"inputs":[],"name":"code","outputs":[{"internalType":"bytes","name":"","type":"bytes"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"number","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"num","type":"uint256"}],"name":"store","outputs":[],"stateMutability":"nonpayable","type":"function"}],
         "devdoc": {"details":"Store & retrieve value in a variable","kind":"dev","methods":{"store(uint256)":{"details":"Store value in variable","params":{"num":"value to store"}}},"title":"Storage","version":1},
         "userdoc": {"kind":"user","methods":{},"version":1},
-        "storageLayout": {"storage":[{"astId":5,"contract":"contracts/1_Storage.sol:Storage","label":"number","offset":0,"slot":"0","type":"t_uint256"},{"astId":11,"contract":"contracts/1_Storage.sol:Storage","label":"code","offset":0,"slot":"1","type":"t_bytes_storage"}],"types":{"t_bytes_storage":{"encoding":"bytes","label":"bytes","numberOfBytes":"32"},"t_uint256":{"encoding":"inplace","label":"uint256","numberOfBytes":"32"}}}
+        "storageLayout": {"storage":[{"astId":5,"contract":"contracts/1_Storage.sol:Storage","label":"number","offset":0,"slot":"0","type":"t_uint256"},{"astId":11,"contract":"contracts/1_Storage.sol:Storage","label":"code","offset":0,"slot":"1","type":"t_bytes_storage"}],"types":{"t_bytes_storage":{"encoding":"bytes","label":"bytes","numberOfBytes":"32"},"t_uint256":{"encoding":"inplace","label":"uint256","numberOfBytes":"32"}}},
+        "sources": {"contracts/1_Storage.sol": {"id":  0} }
     },
     "creation_code_artifacts": {
         "linkReferences": {},
