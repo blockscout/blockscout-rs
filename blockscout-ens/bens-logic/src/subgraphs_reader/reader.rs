@@ -137,14 +137,10 @@ async fn events_from_transactions(
 ) -> Result<Vec<DomainEvent>, SubgraphReadError> {
     let txns = txns
         .into_iter()
-        .map(|t| (t.transaction_id.clone(), t))
+        .map(|t| (TxHash::from_slice(t.transaction_id.as_slice()), t))
         .collect::<HashMap<_, _>>();
-    let transaction_hashes: Vec<TxHash> = txns
-        .keys()
-        .map(|t_id| TxHash::from_slice(t_id.as_slice()))
-        .collect();
     let transactions = client
-        .transactions_batch(transaction_hashes.iter().collect())
+        .transactions_batch(txns.keys().collect())
         .await
         .map_err(|e| SubgraphReadError::Internal(e.to_string()))?;
 
@@ -158,7 +154,7 @@ async fn events_from_transactions(
                 from_address: t.from.hash,
                 method: t.method,
                 actions: txns
-                    .get(t.hash.as_bytes())
+                    .get(&t.hash)
                     .map(|d| d.actions.clone())
                     .unwrap_or_default(),
             }),
@@ -228,8 +224,8 @@ mod tests {
     #[sqlx::test(migrations = "tests/migrations")]
     async fn search_domain_reverse_works(pool: PgPool) {
         let pool = Arc::new(pool);
-        let client = mocked_blockscout_clients().await;
-        let reader = SubgraphReader::initialize(pool.clone(), client)
+        let clients = mocked_blockscout_clients().await;
+        let reader = SubgraphReader::initialize(pool.clone(), clients)
             .await
             .expect("failed to init reader");
 
@@ -266,8 +262,8 @@ mod tests {
     #[sqlx::test(migrations = "tests/migrations")]
     async fn get_domain_history_works(pool: PgPool) {
         let pool = Arc::new(pool);
-        let client = mocked_blockscout_clients().await;
-        let reader = SubgraphReader::initialize(pool.clone(), client)
+        let clients = mocked_blockscout_clients().await;
+        let reader = SubgraphReader::initialize(pool.clone(), clients)
             .await
             .expect("failed to init reader");
         let history = reader

@@ -7,6 +7,8 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::instrument;
 
+const MAX_REQUESTS_BATCH: usize = 5;
+
 #[derive(Debug, Clone)]
 pub struct BlockscoutClient {
     url: url::Url,
@@ -92,8 +94,7 @@ impl BlockscoutClient {
         transaction_hashes: Vec<&ethers::types::TxHash>,
     ) -> reqwest_middleware::Result<Vec<(TxHash, Response<Transaction>)>> {
         let n = transaction_hashes.len();
-        // Create a channel to collect the results
-        let (tx, mut rx) = mpsc::channel(5); // Set the channel buffer size to 5 for concurrent requests.
+        let (tx, mut rx) = mpsc::channel(MAX_REQUESTS_BATCH);
 
         for &hash in transaction_hashes.clone().into_iter() {
             let client = self.clone();

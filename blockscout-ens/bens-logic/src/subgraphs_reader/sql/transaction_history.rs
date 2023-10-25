@@ -17,12 +17,12 @@ pub async fn find_transaction_events(
     Ok(transactions)
 }
 
-const SQL_EVENTS_TEMPLATE: &str = include_str!("history.sql");
+const SQL_HISTORY_TEMPLATE: &str = include_str!("history.sql");
 
 lazy_static! {
     pub static ref TEMPLATES: Tera = {
         let mut tera = Tera::default();
-        tera.add_raw_template("history.sql", SQL_EVENTS_TEMPLATE)
+        tera.add_raw_template("history.sql", SQL_HISTORY_TEMPLATE)
             .expect("failed to parse history.sql");
         tera.autoescape_on(vec![".sql"]);
         tera
