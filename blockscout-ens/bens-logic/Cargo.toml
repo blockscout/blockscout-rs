@@ -23,6 +23,7 @@ features = [
   "runtime-async-std", 
   "tls-rustls",
   "migrate",
+  "chrono"
 ]
 
 [dev-dependencies]
