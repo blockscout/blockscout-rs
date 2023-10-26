@@ -21,7 +21,7 @@ just build
 
 2. Deploy to blockscout:
 
-+ Make sure you have access to graph, for example:
++ Make sure you have access to graph, for example using port forwarding to staging graph-node:
 
 ```bash
 kubectl port-forward -n graph-node svc/graph-node 8020:8020

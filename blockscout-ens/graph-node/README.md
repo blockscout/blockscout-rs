@@ -14,6 +14,12 @@ One can submit subgraph to `graph-node` -- actual code how to handle new events 
 docker-compose up -d
 ```
 
-+ Download 
++ Load small version of ens-rainbow
+
+```bash
+./rainbow.small.sh
+```
+
++ Or use [full ens-rainbow](https://github.com/graphprotocol/ens-rainbow/) dump
 
 + Read [subgraphs/README.md](./subgraphs/README.md) to build and deploy subgraph to graph-node
