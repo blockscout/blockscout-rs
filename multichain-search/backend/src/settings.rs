@@ -34,8 +34,8 @@ impl Default for BlockscoutSettings {
     fn default() -> Self {
         Self {
             instances: serde_json::from_value(serde_json::json!([
-                {"title": "POA", "url": "https://blockscout.com/poa/core", "id": "poa/core"},
-                {"title": "Ethereum", "url": "https://blockscout.com/eth/mainnet", "id": "eth/mainnet"},
+                {"title": "Goerli", "url": "https://eth-goerli.blockscout.com", "id": "eth/goerli"},
+                {"title": "Mainnet", "url": "https://eth.blockscout.com", "id": "eth/mainnet"},
             ])).expect("invalid default instances"),
             concurrent_requests: 10,
             request_timeout: time::Duration::from_secs(60),
@@ -52,7 +52,7 @@ pub struct ServerSettings {
 impl Default for ServerSettings {
     fn default() -> Self {
         Self {
-            addr: SocketAddr::from_str("0.0.0.0:8044").expect("should be valid url"),
+            addr: SocketAddr::from_str("0.0.0.0:8050").expect("should be valid url"),
         }
     }
 }

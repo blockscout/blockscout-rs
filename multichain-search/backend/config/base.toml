@@ -1,12 +1,12 @@
 [server]
-addr = "0.0.0.0:8044"
+addr = "0.0.0.0:8050"
 
 [blockscout]
 base_url = "https://blockscout.com"
 concurrent_requests = 10
 instances = [
-    '{"title": "POA", "url": "https://blockscout.com/poa/core", "id": "poa/core"}',
-    '{"title": "Sokol", "url": "https://blockscout.com/poa/sokol", "id": "poa/sokol"}',
+    '{"title": "Goerli", "url": "https://eth-goerli.blockscout.com", "id": "eth/goerli"}',
+    '{"title": "Mainnet", "url": "https://eth.blockscout.com/", "id": "eth/mainnet"}',
 ]
 request_timeout = 60
 

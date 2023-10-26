@@ -1,20 +1,20 @@
 version: "3"
 services:
-  mc_backend:
+  ms_backend:
     image: "lymarenkolev/multichain-search:latest"
     build: backend
     ports:
       - "8044:8044"
     volumes:
-      - ./backend/config.toml:/config.toml
+      - ./backend/config/config.prod.toml:/config.toml
     environment:
       - MULTICHAIN_SEARCH__CONFIG=/config.toml
 
-  mc_frontend:
+  ms_frontend:
     image: "lymarenkolev/multichain-search-frontend:latest"
     build: frontend
     environment:
-      - PROXY_HOST=http://mc_backend:8044
-      - CLIENT_PROXY_HOST=http://localhost:8044
+      - PROXY_HOST=http://ms_backend:8050
+      - CLIENT_PROXY_HOST=http://localhost:8050
     ports:
     - "80:3000"
