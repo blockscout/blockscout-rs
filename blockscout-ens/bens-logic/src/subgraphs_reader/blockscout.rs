@@ -1,10 +1,10 @@
 use ethers::types::TxHash;
+use futures::StreamExt;
 use reqwest::StatusCode;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use serde::{de::DeserializeOwned, Deserialize};
 use std::sync::Arc;
-use tokio::sync::mpsc;
 use tracing::instrument;
 
 const MAX_REQUESTS_BATCH: usize = 5;
@@ -93,29 +93,13 @@ impl BlockscoutClient {
         self: &Arc<Self>,
         transaction_hashes: Vec<&ethers::types::TxHash>,
     ) -> reqwest_middleware::Result<Vec<(TxHash, Response<Transaction>)>> {
-        let n = transaction_hashes.len();
-        let (tx, mut rx) = mpsc::channel(MAX_REQUESTS_BATCH);
-
-        for &hash in transaction_hashes.clone().into_iter() {
-            let client = self.clone();
-            let tx = tx.clone();
-
-            tokio::spawn(async move {
-                let result = client.transaction(&hash).await.map(|r| (hash, r));
-
-                if let Err(err) = tx.send(result).await {
-                    tracing::error!("error while sending to channel: {err}");
-                }
-            });
-        }
-
-        let mut results = Vec::new();
-        for _ in 0..n {
-            if let Some(result) = rx.recv().await {
-                results.push(result);
-            }
-        }
-
-        results.into_iter().collect()
+        let fetches = futures::stream::iter(transaction_hashes.iter().map(move |hash| async {
+            let result = self.transaction(hash).await;
+            result.map(|r| (TxHash::clone(hash), r))
+        }))
+        .buffer_unordered(MAX_REQUESTS_BATCH)
+        .collect::<Vec<_>>();
+        let result = fetches.await.into_iter().collect::<Result<Vec<_>, _>>()?;
+        Ok(result)
     }
 }

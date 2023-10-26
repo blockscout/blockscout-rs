@@ -21,6 +21,7 @@ reqwest-middleware = "0.2"
 reqwest-retry = "0.3"
 lazy_static = "1.4"
 tracing = "0.1"
+futures = "0.3"
 
 [dependencies.sqlx]
 version = "0.7"

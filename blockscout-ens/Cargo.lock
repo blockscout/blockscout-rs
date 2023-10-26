@@ -524,6 +524,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "ethers",
+ "futures",
  "hex",
  "lazy_static",
  "pretty_assertions",
