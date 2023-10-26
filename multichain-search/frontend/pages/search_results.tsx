@@ -20,7 +20,7 @@ const SearchResults: NextPage<Props> = ({q, client_proxy_host}) => {
   useEffect(() => {
     if (client_proxy_host) {
       setLoading(true)
-      let url = new URL('/api/v1/search', client_proxy_host).toString() + '?q=' + q;
+      let url = new URL('/api/v2/search', client_proxy_host).toString() + '?q=' + q;
       fetch(url)
         .then((res) => res.json())
         .then((data) => {
