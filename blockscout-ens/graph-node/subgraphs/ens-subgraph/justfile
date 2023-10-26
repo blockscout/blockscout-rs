@@ -20,4 +20,4 @@ deploy VERSION:
 
 deploy-remote VERSION:
     just graph_node_url={{graph_node_url}} ipfs_url=http://ipfs.node.blockscout.com network={{network}} name={{name}} \
-    deploy {{VERSION}}
+        deploy {{VERSION}}
