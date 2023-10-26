@@ -4,7 +4,7 @@ services:
     image: "lymarenkolev/multichain-search:latest"
     build: backend
     ports:
-      - "8044:8044"
+      - "8050:8050"
     volumes:
       - ./backend/config/config.prod.toml:/config.toml
     environment:

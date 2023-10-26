@@ -2,7 +2,7 @@
 instances = [
     '{"title": "Ethereum", "url": "https://eth.blockscout.com", "id": "eth/mainnet"}',
     '{"title": "Goerli", "url": "https://eth-goerli.blockscout.com", "id": "eth/goerli"}',
-    '{"title": "Sepolia", "url": "eth-sepolia.blockscout.com", "id": "eth/sepolia"}',
+    '{"title": "Sepolia", "url": "http://eth-sepolia.blockscout.com", "id": "eth/sepolia"}',
     '{"title": "Gnosis", "url": "http://gnosis.blockscout.com/", "id": "xdai/mainnet"}',
     '{"title": "Optimism", "url": "https://optimism.blockscout.com/", "id": "optimism/mainnet"}',
     '{"title": "Base", "url": "https://base.blockscout.com", "id": "base/mainnet"}',
