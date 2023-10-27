@@ -155,6 +155,17 @@ impl SubgraphReader {
         Ok(address_to_name)
     }
 
+    pub async fn quick_resolve_address(
+        &self,
+        network_id: i64,
+        address: Address,
+    ) -> Result<Option<String>, SubgraphReadError> {
+        let domains = self
+            .quick_resolve_addresses(network_id, std::iter::once(address))
+            .await?;
+        Ok(domains.get(&hex(address)).map(Clone::clone))
+    }
+
     pub async fn quick_resolve_domains(
         &self,
         network_id: i64,
@@ -182,6 +193,16 @@ impl SubgraphReader {
             (domain_name.clone(), d.resolved_address)
         }).collect();
         Ok(domain_to_address)
+    }
+    pub async fn quick_resolve_domain(
+        &self,
+        network_id: i64,
+        name: &str,
+    ) -> Result<Option<String>, SubgraphReadError> {
+        let addresses: BTreeMap<String, String> = self
+            .quick_resolve_domains(network_id, std::iter::once(name))
+            .await?;
+        Ok(addresses.get(name).map(Clone::clone))
     }
 }
 
