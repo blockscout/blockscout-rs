@@ -25,7 +25,7 @@ stop-test-postgres:
     just docker-name="{{docker-name}}-test" stop-postgres
 
 test *args:
-    SQLX_OFFLINE=true cargo test {{args}}
+    SQLX_OFFLINE=true RUST_LOG=info cargo test {{args}}
 
 test-with-db *args:
     -just db-port="{{test-db-port}}" db-name="" docker-name="{{docker-name}}-test" start-postgres

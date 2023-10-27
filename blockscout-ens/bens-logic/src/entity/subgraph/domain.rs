@@ -1,6 +1,6 @@
 use chrono::Utc;
 
-#[derive(Debug, Clone, sqlx::FromRow)]
+#[derive(Debug, Clone, PartialEq, Eq, sqlx::FromRow)]
 pub struct Domain {
     pub vid: i64,
     pub block_range: sqlx::postgres::types::PgRange<i32>,

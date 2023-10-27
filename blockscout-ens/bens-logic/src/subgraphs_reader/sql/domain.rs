@@ -1,5 +1,4 @@
-use super::SubgraphReadError;
-use crate::entity::subgraph::domain::Domain;
+use crate::{entity::subgraph::domain::Domain, subgraphs_reader::SubgraphReadError};
 use sqlx::postgres::PgPool;
 
 const DOMAIN_DEFAULT_SELECT_CLAUSE: &str = r#"
@@ -20,7 +19,7 @@ owner,
 registrant,
 wrapped_owner,
 to_timestamp(expiry_date) as expiry_date,
-to_timestamp(expiry_date) < now() AS is_expired 
+COALESCE(to_timestamp(expiry_date) < now(), false) AS is_expired 
 "#;
 
 // `block_range @>` is special sql syntax for fast filtering int4range
