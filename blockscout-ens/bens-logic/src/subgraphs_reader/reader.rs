@@ -13,7 +13,7 @@ use crate::{
 use ethers::types::{Address, TxHash};
 use sqlx::postgres::PgPool;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     sync::Arc,
 };
 use thiserror::Error;
@@ -110,7 +110,7 @@ impl SubgraphReader {
     pub async fn search_resolved_domain_reverse(
         &self,
         network_id: i64,
-        address: ethers::types::Address,
+        address: Address,
     ) -> Result<Vec<Domain>, SubgraphReadError> {
         let network = self
             .networks
@@ -136,19 +136,19 @@ impl SubgraphReader {
     pub async fn quick_resolve_addresses(
         &self,
         network_id: i64,
-        addresses: &[Address],
-    ) -> Result<HashMap<String, String>, SubgraphReadError> {
+        addresses: impl IntoIterator<Item = Address>,
+    ) -> Result<BTreeMap<String, String>, SubgraphReadError> {
         let network = self
             .networks
             .get(&network_id)
             .ok_or_else(|| SubgraphReadError::NetworkNotFound(network_id))?;
         // remove duplicates
-        let addresses: HashSet<String> = addresses.iter().map(hex).collect();
+        let addresses: HashSet<String> = addresses.into_iter().map(hex).collect();
         let addreses_str: Vec<&str> = addresses.iter().map(String::as_str).collect::<Vec<_>>();
         let result =
             sql::quick_find_resolved_addresses(&self.pool, &network.schema_name, &addreses_str)
                 .await?;
-        let address_to_name: HashMap<String, String> = result
+        let address_to_name = result
             .into_iter()
             .map(|d| (d.resolved_address, d.domain_name))
             .collect();
@@ -158,14 +158,14 @@ impl SubgraphReader {
     pub async fn quick_resolve_domains(
         &self,
         network_id: i64,
-        names: &[&str],
-    ) -> Result<HashMap<String, String>, SubgraphReadError> {
+        names: impl IntoIterator<Item = &str>,
+    ) -> Result<BTreeMap<String, String>, SubgraphReadError> {
         let network = self
             .networks
             .get(&network_id)
             .ok_or_else(|| SubgraphReadError::NetworkNotFound(network_id))?;
         let id_to_name: HashMap<String, String> = names
-            .iter()
+            .into_iter()
             .map(|name| (domain_id(name), name.to_string()))
             .collect();
         let ids_str: Vec<&str> = id_to_name.keys().map(String::as_str).collect();
@@ -176,7 +176,7 @@ impl SubgraphReader {
             // it's better to use user provided name, but in case subgraph have wrong domain.id, 
             // we return found data
             let domain_name = id_to_name.get(&d.id).unwrap_or_else(|| {
-                tracing::error!(names =? names, "quick search returned invalid domain.id: {}", d.id);
+                tracing::error!(names =? id_to_name.values(), "quick search returned invalid domain.id: {}", d.id);
                 &d.domain_name
             });
             (domain_name.clone(), d.resolved_address)
@@ -388,6 +388,63 @@ mod tests {
             },
         ];
         assert_eq!(expected_history, history);
+    }
+
+    #[sqlx::test(migrations = "tests/migrations")]
+    async fn quick_resolve_works(pool: PgPool) {
+        let pool = Arc::new(pool);
+        let clients = mocked_blockscout_clients().await;
+        let reader = SubgraphReader::initialize(pool.clone(), clients)
+            .await
+            .expect("failed to init reader");
+
+        let addresses = [
+            // test.eth
+            "0xeefb13c7d42efcc655e528da6d6f7bbcf9a2251d",
+            // is was address of test.eth until 13294741 block
+            "0x226159d592e2b063810a10ebf6dcbada94ed68b8",
+            // vitalik.eth
+            "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
+            // vitalik.eth
+            "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
+            // expired.eth (expired domain)
+            "0x9f7f7ddbfb8e14d1756580ba8037530da0880b99",
+            // wa🇬🇲i.eth
+            "0x9c996076a85b46061d9a70ff81f013853a86b619",
+            // not in database
+            "0x0000000000000000000000000000000000000000",
+        ]
+        .into_iter()
+        .map(addr);
+        let expected_domains = serde_json::from_value(serde_json::json!({
+            "0x9c996076a85b46061d9a70ff81f013853a86b619": "wa🇬🇲i.eth",
+            "0xd8da6bf26964af9d7eed9e03e53415d37aa96045": "vitalik.eth",
+            "0xeefb13c7d42efcc655e528da6d6f7bbcf9a2251d": "test.eth",
+        }))
+        .unwrap();
+        let domains = reader
+            .quick_resolve_addresses(1, addresses)
+            .await
+            .expect("failed to resolve addresess");
+        assert_eq!(domains, expected_domains);
+
+        let expected_domains = expected_domains
+            .into_iter()
+            .map(|(k, v)| (v, k))
+            .collect::<BTreeMap<_, _>>();
+        let names = expected_domains.keys().map(String::as_str).chain(vec![
+            // no such domain in database
+            "not_in_database.eth",
+            // no resolved address for this name
+            "booking.eth",
+            // expired domain
+            "expired.eth",
+        ]);
+        let addresses = reader
+            .quick_resolve_domains(1, names)
+            .await
+            .expect("failed to resolve domain names");
+        assert_eq!(addresses, expected_domains);
     }
 
     fn addr(a: &str) -> Address {
