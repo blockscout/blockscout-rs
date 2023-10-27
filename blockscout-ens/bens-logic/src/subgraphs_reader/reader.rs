@@ -10,9 +10,12 @@ use crate::{
     },
     hash_name::hash_ens_domain_name,
 };
-use ethers::types::TxHash;
+use ethers::types::{Address, TxHash};
 use sqlx::postgres::PgPool;
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 use thiserror::Error;
 
 #[derive(Debug, Clone)]
@@ -120,7 +123,7 @@ impl SubgraphReader {
     pub async fn search_owned_domain_reverse(
         &self,
         network_id: i64,
-        address: ethers::types::Address,
+        address: Address,
     ) -> Result<Vec<Domain>, SubgraphReadError> {
         let network = self
             .networks
@@ -128,6 +131,57 @@ impl SubgraphReader {
             .ok_or_else(|| SubgraphReadError::NetworkNotFound(network_id))?;
         let address = hex(address);
         sql::find_owned_addresses(self.pool.as_ref(), &network.schema_name, &address).await
+    }
+
+    pub async fn quick_resolve_addresses(
+        &self,
+        network_id: i64,
+        addresses: &[Address],
+    ) -> Result<HashMap<String, String>, SubgraphReadError> {
+        let network = self
+            .networks
+            .get(&network_id)
+            .ok_or_else(|| SubgraphReadError::NetworkNotFound(network_id))?;
+        // remove duplicates
+        let addresses: HashSet<String> = addresses.iter().map(hex).collect();
+        let addreses_str: Vec<&str> = addresses.iter().map(String::as_str).collect::<Vec<_>>();
+        let result =
+            sql::quick_find_resolved_addresses(&self.pool, &network.schema_name, &addreses_str)
+                .await?;
+        let address_to_name: HashMap<String, String> = result
+            .into_iter()
+            .map(|d| (d.resolved_address, d.domain_name))
+            .collect();
+        Ok(address_to_name)
+    }
+
+    pub async fn quick_resolve_domains(
+        &self,
+        network_id: i64,
+        names: &[&str],
+    ) -> Result<HashMap<String, String>, SubgraphReadError> {
+        let network = self
+            .networks
+            .get(&network_id)
+            .ok_or_else(|| SubgraphReadError::NetworkNotFound(network_id))?;
+        let id_to_name: HashMap<String, String> = names
+            .iter()
+            .map(|name| (domain_id(name), name.to_string()))
+            .collect();
+        let ids_str: Vec<&str> = id_to_name.keys().map(String::as_str).collect();
+        let result =
+            sql::quick_find_resolved_domains(self.pool.as_ref(), &network.schema_name, &ids_str)
+                .await?;
+        let domain_to_address = result.into_iter().map(|d| {
+            // it's better to use user provided name, but in case subgraph have wrong domain.id, 
+            // we return found data
+            let domain_name = id_to_name.get(&d.id).unwrap_or_else(|| {
+                tracing::error!(names =? names, "quick search returned invalid domain.id: {}", d.id);
+                &d.domain_name
+            });
+            (domain_name.clone(), d.resolved_address)
+        }).collect();
+        Ok(domain_to_address)
     }
 }
 
