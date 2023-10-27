@@ -10,6 +10,118 @@ consumes:
 produces:
   - application/json
 paths:
+  /api/v1/{chainId}/domains/quick-resolve:address:
+    post:
+      operationId: DomainsExtractor_QuickResolveAddress
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1QuickResolveResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: chainId
+          in: path
+          required: true
+          type: string
+        - name: body
+          in: body
+          required: true
+          schema:
+            type: object
+            properties:
+              address:
+                type: string
+      tags:
+        - DomainsExtractor
+  /api/v1/{chainId}/domains/quick-resolve:addresses-batch:
+    post:
+      operationId: DomainsExtractor_QuickResolveAddresses
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1QuickResolveResponseManyDomains'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: chainId
+          in: path
+          required: true
+          type: string
+        - name: body
+          in: body
+          required: true
+          schema:
+            type: object
+            properties:
+              addresses:
+                type: array
+                items:
+                  type: string
+      tags:
+        - DomainsExtractor
+  /api/v1/{chainId}/domains/quick-resolve:domain:
+    post:
+      operationId: DomainsExtractor_QuickResolveDomain
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1QuickResolveResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: chainId
+          in: path
+          required: true
+          type: string
+        - name: body
+          in: body
+          required: true
+          schema:
+            type: object
+            properties:
+              name:
+                type: string
+      tags:
+        - DomainsExtractor
+  /api/v1/{chainId}/domains/quick-resolve:domains-batch:
+    post:
+      operationId: DomainsExtractor_QuickResolveDomains
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1QuickResolveResponseManyAddresses'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: chainId
+          in: path
+          required: true
+          type: string
+        - name: body
+          in: body
+          required: true
+          schema:
+            type: object
+            properties:
+              names:
+                type: array
+                items:
+                  type: string
+      tags:
+        - DomainsExtractor
   /api/v1/{chainId}/domains:search:
     post:
       operationId: DomainsExtractor_SearchDomain
@@ -170,11 +282,37 @@ definitions:
       action:
         type: string
         title: / Optinal. Action name
+  v1DomainWithAddress:
+    type: object
+    properties:
+      resolvedAddress:
+        type: string
+      domainName:
+        type: string
   v1HealthCheckResponse:
     type: object
     properties:
       status:
         $ref: '#/definitions/HealthCheckResponseServingStatus'
+  v1QuickResolveResponse:
+    type: object
+    properties:
+      domain:
+        $ref: '#/definitions/v1DomainWithAddress'
+  v1QuickResolveResponseManyAddresses:
+    type: object
+    properties:
+      addresses:
+        type: object
+        additionalProperties:
+          type: string
+  v1QuickResolveResponseManyDomains:
+    type: object
+    properties:
+      domains:
+        type: object
+        additionalProperties:
+          type: string
   v1SearchReverseDomainResponse:
     type: object
     properties:

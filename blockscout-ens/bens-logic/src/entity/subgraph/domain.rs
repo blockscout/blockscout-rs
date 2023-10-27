@@ -21,3 +21,10 @@ pub struct Domain {
     pub expiry_date: Option<chrono::DateTime<Utc>>,
     pub is_expired: bool,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, sqlx::FromRow)]
+pub struct DomainWithAddress {
+    pub id: String,
+    pub domain_name: String,
+    pub resolved_address: String,
+}
