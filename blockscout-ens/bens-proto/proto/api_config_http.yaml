@@ -12,6 +12,22 @@ http:
       post: /api/v1/{chain_id}/domains:search
       body: "*"
 
+    - selector: blockscout.bens.v1.DomainsExtractor.QuickResolveAddresses
+      post: /api/v1/{chain_id}/domains/quick-resolve:addresses-batch
+      body: "*"
+    
+    - selector: blockscout.bens.v1.DomainsExtractor.QuickResolveAddress
+      post: /api/v1/{chain_id}/domains/quick-resolve:address
+      body: "*"
+    
+    - selector: blockscout.bens.v1.DomainsExtractor.QuickResolveDomains
+      post: /api/v1/{chain_id}/domains/quick-resolve:domains-batch
+      body: "*"
+    
+    - selector: blockscout.bens.v1.DomainsExtractor.QuickResolveDomain
+      post: /api/v1/{chain_id}/domains/quick-resolve:domain
+      body: "*"
+
     #################### Health ####################
 
     - selector: blockscout.ethBytecodeDb.v2.Health.Check
