@@ -24,6 +24,7 @@ paths:
             $ref: '#/definitions/rpcStatus'
       parameters:
         - name: chainId
+          description: The chain (network) where domain search should be done
           in: path
           required: true
           type: string
@@ -35,6 +36,7 @@ paths:
             properties:
               address:
                 type: string
+                title: Requested address in hex format
       tags:
         - DomainsExtractor
   /api/v1/{chainId}/domains/quick-resolve:addresses-batch:
@@ -51,6 +53,7 @@ paths:
             $ref: '#/definitions/rpcStatus'
       parameters:
         - name: chainId
+          description: The chain (network) where domain search should be done
           in: path
           required: true
           type: string
@@ -64,6 +67,7 @@ paths:
                 type: array
                 items:
                   type: string
+                title: List of requested addresses
       tags:
         - DomainsExtractor
   /api/v1/{chainId}/domains/quick-resolve:domain:
@@ -80,6 +84,7 @@ paths:
             $ref: '#/definitions/rpcStatus'
       parameters:
         - name: chainId
+          description: The chain (network) where domain search should be done
           in: path
           required: true
           type: string
@@ -91,6 +96,7 @@ paths:
             properties:
               name:
                 type: string
+                title: Requested domain name
       tags:
         - DomainsExtractor
   /api/v1/{chainId}/domains/quick-resolve:domains-batch:
@@ -107,6 +113,7 @@ paths:
             $ref: '#/definitions/rpcStatus'
       parameters:
         - name: chainId
+          description: The chain (network) where domain search should be done
           in: path
           required: true
           type: string
@@ -120,6 +127,7 @@ paths:
                 type: array
                 items:
                   type: string
+                title: List of requested domain names
       tags:
         - DomainsExtractor
   /api/v1/{chainId}/domains:search:
@@ -136,7 +144,7 @@ paths:
             $ref: '#/definitions/rpcStatus'
       parameters:
         - name: chainId
-          description: / The chain (network) where domain search should be done
+          description: The chain (network) where domain search should be done
           in: path
           required: true
           type: string
@@ -149,7 +157,7 @@ paths:
             properties:
               name:
                 type: string
-                title: / Name of domain, for example vitalik.eth
+                title: Name of domain, for example vitalik.eth
       tags:
         - DomainsExtractor
   /api/v1/{chainId}/domains:search-reverse:
@@ -166,7 +174,7 @@ paths:
             $ref: '#/definitions/rpcStatus'
       parameters:
         - name: chainId
-          description: / The chain (network) where domain search should be done
+          description: The chain (network) where domain search should be done
           in: path
           required: true
           type: string
@@ -179,15 +187,37 @@ paths:
             properties:
               address:
                 type: string
-                title: / Address of EOA or contract
+                title: Address of EOA or contract
               resolvedTo:
                 type: boolean
-                title: / Include domains resolved to the address
+                title: Include domains resolved to the address
               ownedBy:
                 type: boolean
-                title: / Include domains owned by the address
+                title: Include domains owned by the address
       tags:
         - DomainsExtractor
+  /health:
+    get:
+      summary: |-
+        If the requested service is unknown, the call will fail with status
+        NOT_FOUND.
+      operationId: Health_Check
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1HealthCheckResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: service
+          in: query
+          required: false
+          type: string
+      tags:
+        - Health
 definitions:
   HealthCheckResponseServingStatus:
     type: string
@@ -222,73 +252,75 @@ definitions:
     properties:
       domain:
         $ref: '#/definitions/v1Domain'
-        title: / Optinal. Basic domain info
+        title: Optinal. Basic domain info
       history:
         type: array
         items:
           type: object
           $ref: '#/definitions/v1DomainEvent'
-        title: / List of domain events
+        title: List of domain events
   v1Domain:
     type: object
     properties:
       id:
         type: string
-        title: / Unique id for the domain, also known as nodehash
+        title: Unique id for the domain, also known as nodehash
       name:
         type: string
-        title: / The human readable name, if known. Unknown portions replaced with hash in square brackets (eg, foo.[1234].eth)
+        title: The human readable name, if known. Unknown portions replaced with hash in square brackets (eg, foo.[1234].eth)
       tokenId:
         type: string
         format: uint64
-        title: / Integer representation of labelhash
+        title: Integer representation of labelhash
       owner:
         type: string
-        title: / The account that owns the domain
+        title: The account that owns the domain
       resolvedAddress:
         type: string
-        title: / Optinal. Resolved address of this domain
+        title: Optinal. Resolved address of this domain
       registrant:
         type: string
-        title: / Optinal. The account that owns the ERC721 NFT for the domain
+        title: Optinal. The account that owns the ERC721 NFT for the domain
       expiryDate:
         type: string
         format: uint64
-        title: / Optinal. Unix timestamp of expiry date. None means never expires
+        title: Optinal. Unix timestamp of expiry date. None means never expires
       registrationDate:
         type: string
         format: uint64
-        title: / Unix timestamp of regisration date
+        title: Unix timestamp of regisration date
       otherAddress:
         type: object
         additionalProperties:
           type: string
         title: |-
-          / Map chain -> resolved_address that contains other blockchain addresses.
-          / This map will contain `current_chain_id` -> `resovled_address` if `resovled_address` is not None
+          Map chain -> resolved_address that contains other blockchain addresses.
+          This map will contain `current_chain_id` -> `resovled_address` if `resovled_address` is not None
   v1DomainEvent:
     type: object
     properties:
       transactionHash:
         type: string
-        title: / Transaction hash where action occured
+        title: Transaction hash where action occured
       timestamp:
         type: string
         format: uint64
-        title: / Timestamp of this transaction
+        title: Timestamp of this transaction
       fromAddress:
         type: string
-        title: / Sender of transaction
+        title: /Sender of transaction
       action:
         type: string
-        title: / Optinal. Action name
+        title: Optinal. Action name
   v1DomainWithAddress:
     type: object
     properties:
       resolvedAddress:
         type: string
+        title: Resolved address of domain in hex format
       domainName:
         type: string
+        title: Domain name, for example vitalik.eth
   v1HealthCheckResponse:
     type: object
     properties:
@@ -299,6 +331,7 @@ definitions:
     properties:
       domain:
         $ref: '#/definitions/v1DomainWithAddress'
+        title: Optional. Found domain name with resolved address
   v1QuickResolveResponseManyAddresses:
     type: object
     properties:
@@ -306,6 +339,7 @@ definitions:
         type: object
         additionalProperties:
           type: string
+        title: Map of domain_name => resolved_address
   v1QuickResolveResponseManyDomains:
     type: object
     properties:
@@ -313,6 +347,7 @@ definitions:
         type: object
         additionalProperties:
           type: string
+        title: Map of resolved_address => domain_name
   v1SearchReverseDomainResponse:
     type: object
     properties:
