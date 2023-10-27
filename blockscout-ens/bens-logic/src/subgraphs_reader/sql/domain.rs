@@ -41,12 +41,7 @@ const DOMAIN_NOT_EXPIRED_WHERE_CLAUSE: &str = r#"
 )
 "#;
 
-#[instrument(
-    name = "find_owned_addresses",
-    skip(pool),
-    err(level = "error"),
-    level = "info"
-)]
+#[instrument(name = "find_domain", skip(pool), err(level = "error"), level = "info")]
 pub async fn find_domain(
     pool: &PgPool,
     schema: &str,
@@ -68,7 +63,7 @@ pub async fn find_domain(
 }
 
 #[instrument(
-    name = "find_owned_addresses",
+    name = "find_resolved_addresses",
     skip(pool),
     err(level = "error"),
     level = "info"
