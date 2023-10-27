@@ -30,5 +30,5 @@ http:
 
     #################### Health ####################
 
-    - selector: blockscout.ethBytecodeDb.v2.Health.Check
+    - selector: blockscout.bens.v1.Health.Check
       get: /health

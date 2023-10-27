@@ -15,55 +15,55 @@ service DomainsExtractor {
 }
 
 message Domain {
-  /// Unique id for the domain, also known as nodehash
+  // Unique id for the domain, also known as nodehash
   string id = 1;
-  /// The human readable name, if known. Unknown portions replaced with hash in square brackets (eg, foo.[1234].eth)
+  // The human readable name, if known. Unknown portions replaced with hash in square brackets (eg, foo.[1234].eth)
   string name = 2;
-  /// Integer representation of labelhash
+  // Integer representation of labelhash
   uint64 token_id = 3;
-  /// The account that owns the domain
+  // The account that owns the domain
   string owner = 4;
-  /// Optinal. Resolved address of this domain
+  // Optinal. Resolved address of this domain
   optional string resolved_address = 5;
-  /// Optinal. The account that owns the ERC721 NFT for the domain
+  // Optinal. The account that owns the ERC721 NFT for the domain
   optional string registrant = 6;
-  /// Optinal. Unix timestamp of expiry date. None means never expires
+  // Optinal. Unix timestamp of expiry date. None means never expires
   optional uint64 expiry_date = 7;
-  /// Unix timestamp of regisration date
+  // Unix timestamp of regisration date
   uint64 registration_date = 8;
-  /// Map chain -> resolved_address that contains other blockchain addresses.
-  /// This map will contain `current_chain_id` -> `resovled_address` if `resovled_address` is not None
+  // Map chain -> resolved_address that contains other blockchain addresses.
+  // This map will contain `current_chain_id` -> `resovled_address` if `resovled_address` is not None
   map<string, string> other_address = 9;
 }
 
 message DomainEvent {
-  /// Transaction hash where action occured
+  // Transaction hash where action occured
   string transaction_hash = 1;
-  /// Timestamp of this transaction
+  // Timestamp of this transaction
   uint64 timestamp = 2;
-  /// Sender of transaction
+  ///Sender of transaction
   string from_address = 3;
-  /// Optinal. Action name
+  // Optinal. Action name
   optional string action = 4;
 }
 
 
 message DetailedDomain {
-  /// Optinal. Basic domain info
+  // Optinal. Basic domain info
   optional Domain domain = 1;
-  /// List of domain events
+  // List of domain events
   repeated DomainEvent history = 2;
 }
 
 
 message SearchReverseDomainRequest {
-  /// Address of EOA or contract
+  // Address of EOA or contract
   string address = 1;
-  /// The chain (network) where domain search should be done
+  // The chain (network) where domain search should be done
   uint64 chain_id = 2;
-  /// Include domains resolved to the address
+  // Include domains resolved to the address
   bool resolved_to = 3;
-  /// Include domains owned by the address
+  // Include domains owned by the address
   bool owned_by = 4;
 }
 
@@ -76,46 +76,59 @@ message SearchReverseDomainResponse {
 }
 
 message SearchDomainRequest {
-  /// Name of domain, for example vitalik.eth
+  // Name of domain, for example vitalik.eth
   string name = 1;
-  /// The chain (network) where domain search should be done
+  // The chain (network) where domain search should be done
   uint64 chain_id = 2;
 }
 
 
 message DomainWithAddress {
+  // Resolved address of domain in hex format
   string resolved_address = 1;
+  // Domain name, for example vitalik.eth
   string domain_name = 2;
 }
 
 message QuickResolveResponse {
+  // Optional. Found domain name with resolved address
   optional DomainWithAddress domain = 1;
 }
 
 message QuickResolveResponseManyDomains {
+  // Map of resolved_address => domain_name
   map<string, string> domains = 1;
 }
 
 message QuickResolveResponseManyAddresses {
+  // Map of domain_name => resolved_address
   map<string, string> addresses = 1;
 }
 
 message QuickResolveAddressesRequest {
+  // List of requested addresses
   repeated string addresses = 1;
+  // The chain (network) where domain search should be done
   string chain_id = 2;
 }
 
 message QuickResolveAddressRequest {
+  // Requested address in hex format
   string address = 1;
+  // The chain (network) where domain search should be done
   string chain_id = 2;
 }
 
 message QuickResolveDomainsRequest {
+  // List of requested domain names
   repeated string names = 1;
+  // The chain (network) where domain search should be done
   string chain_id = 2;
 }
 
 message QuickResolveDomainRequest {
+  // Requested domain name
   string name = 1;
+  // The chain (network) where domain search should be done 
   string chain_id = 2;
 }
