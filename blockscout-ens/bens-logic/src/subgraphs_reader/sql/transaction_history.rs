@@ -4,7 +4,14 @@ use crate::{
 use lazy_static::lazy_static;
 use sqlx::postgres::PgPool;
 use tera::{Context, Tera};
+use tracing::instrument;
 
+#[instrument(
+    name = "find_owned_addresses",
+    skip(pool),
+    err(level = "error"),
+    level = "info"
+)]
 pub async fn find_transaction_events(
     pool: &PgPool,
     schema: &str,

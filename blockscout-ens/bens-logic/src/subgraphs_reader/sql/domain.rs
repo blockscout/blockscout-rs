@@ -41,6 +41,12 @@ const DOMAIN_NOT_EXPIRED_WHERE_CLAUSE: &str = r#"
 )
 "#;
 
+#[instrument(
+    name = "find_owned_addresses",
+    skip(pool),
+    err(level = "error"),
+    level = "info"
+)]
 pub async fn find_domain(
     pool: &PgPool,
     schema: &str,
@@ -61,6 +67,12 @@ pub async fn find_domain(
     Ok(maybe_domain)
 }
 
+#[instrument(
+    name = "find_owned_addresses",
+    skip(pool),
+    err(level = "error"),
+    level = "info"
+)]
 pub async fn find_resolved_addresses(
     pool: &PgPool,
     schema: &str,
@@ -85,6 +97,12 @@ pub async fn find_resolved_addresses(
     Ok(resolved_domains)
 }
 
+#[instrument(
+    name = "find_owned_addresses",
+    skip(pool),
+    err(level = "error"),
+    level = "info"
+)]
 pub async fn find_owned_addresses(
     pool: &PgPool,
     schema: &str,
@@ -114,8 +132,8 @@ pub async fn find_owned_addresses(
 
 #[instrument(
     name = "quick_find_resolved_addresses",
-    skip_all,
-    fields(schema = schema, job_size = addresses.len()),
+    skip(pool, addresses),
+    fields(job_size = addresses.len()),
     err(level = "error"),
     level = "info",
 )]
@@ -132,6 +150,7 @@ pub async fn quick_find_resolved_addresses(
             resolved_address = ANY($1)
             AND name NOT LIKE '%[%'
             AND {DOMAIN_DEFAULT_WHERE_CLAUSE}
+            AND {DOMAIN_NOT_EXPIRED_WHERE_CLAUSE}
         ORDER BY resolved_address, created_at
         "#,
     ))
@@ -144,8 +163,8 @@ pub async fn quick_find_resolved_addresses(
 
 #[instrument(
     name = "quick_find_resolved_domains",
-    skip_all,
-    fields(schema = schema, job_size = ids.len()),
+    skip(pool, ids),
+    fields(job_size = ids.len()),
     err(level = "error"),
     level = "info",
 )]
@@ -162,6 +181,7 @@ pub async fn quick_find_resolved_domains(
             id = ANY($1)
             AND resolved_address IS NOT NULL
             AND {DOMAIN_DEFAULT_WHERE_CLAUSE}
+            AND {DOMAIN_NOT_EXPIRED_WHERE_CLAUSE}
         "#,
     ))
     .bind(ids)
