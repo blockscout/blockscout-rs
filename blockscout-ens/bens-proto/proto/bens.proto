@@ -7,6 +7,11 @@ option go_package = "github.com/blockscout/blockscout-rs/bens";
 service DomainsExtractor {
   rpc SearchReverseDomain(SearchReverseDomainRequest) returns (SearchReverseDomainResponse) {}
   rpc SearchDomain(SearchDomainRequest) returns (DetailedDomain) {}
+  rpc QuickResolveAddresses(QuickResolveAddressesRequest) returns (QuickResolveResponseMany) {}
+  rpc QuickResolveAddress(QuickResolveAddressRequest) returns (QuickResolveResponse) {}
+  rpc QuickResolveDomains(QuickResolveDomainsRequest) returns (QuickResolveResponseMany) {}
+  rpc QuickResolveDomain(QuickResolveDomainRequest) returns (QuickResolveResponse) {}
+  
 }
 
 message Domain {
@@ -75,4 +80,34 @@ message SearchDomainRequest {
   string name = 1;
   /// The chain (network) where domain search should be done
   uint64 chain_id = 2;
+}
+
+
+message DomainWithAddress {
+  string resolved_address = 1;
+  string domain_name = 2;
+}
+
+message QuickResolveResponse {
+  optional DomainWithAddress domain = 1;
+}
+
+message QuickResolveResponseMany {
+  repeated DomainWithAddress domains = 1;
+}
+
+message QuickResolveAddressesRequest {
+  repeated string addresses = 1;
+}
+
+message QuickResolveAddressRequest {
+  string address = 1;
+}
+
+message QuickResolveDomainsRequest {
+  repeated string names = 1;
+}
+
+message QuickResolveDomainRequest {
+  string name = 1;
 }
