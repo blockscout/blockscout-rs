@@ -37,4 +37,7 @@ features = [
 [dev-dependencies]
 pretty_assertions = "1.4.0"
 wiremock = "0.5"
+tracing-subscriber = {version = "0.3", features = ["env-filter"]}
 
+[[example]]
+name = "resolve_benchmark"
