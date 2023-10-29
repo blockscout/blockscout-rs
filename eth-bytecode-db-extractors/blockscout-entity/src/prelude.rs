@@ -3,3 +3,4 @@
 pub use super::{
     contract_addresses::Entity as ContractAddresses, contract_details::Entity as ContractDetails,
 };
+pub use job_queue::entity::Entity as JobQueue;
