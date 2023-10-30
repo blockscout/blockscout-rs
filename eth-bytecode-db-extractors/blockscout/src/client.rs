@@ -8,8 +8,8 @@ use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2::{
 };
 use sea_orm::{
     prelude::Uuid, sea_query::OnConflict, ActiveModelTrait, ActiveValue::Set, ColumnTrait,
-    ConnectionTrait, DatabaseBackend, DatabaseConnection, DbErr, EntityTrait, QueryFilter,
-    Statement,
+    DatabaseConnection, DbErr, EntityTrait, JoinType, QueryFilter, QuerySelect, RelationTrait,
+    Select,
 };
 use serde::Serialize;
 use std::sync::Arc;
@@ -171,7 +171,7 @@ impl Client {
             let contract_details_model = process_result!(
                 self.import_contract_details(contract_address.clone()).await,
                 &self,
-                job_id.clone(),
+                job_id,
                 contract_address
             );
 
@@ -179,10 +179,10 @@ impl Client {
                 self.verify_contract(contract_model, contract_details_model)
                     .await,
                 &self,
-                job_id.clone(),
+                job_id,
                 contract_address
             );
-            self.mark_as_success(job_id.clone(), contract_address, source)
+            self.mark_as_success(job_id, contract_address, source)
                 .await?;
         }
 
@@ -382,48 +382,24 @@ impl Client {
 
     async fn next_contract(&self) -> anyhow::Result<Option<contract_addresses::Model>> {
         // Notice that we are looking only for contracts with given `chain_id`
-        let next_job_id_sql = format!(
-            r#"
-            UPDATE _job_queue
-            SET status = 'in_process'
-            WHERE id = (SELECT id
-                                      FROM _job_queue JOIN contract_addresses
-                                        ON _job_queue.id = contract_addresses._job_id
-                                      WHERE _job_queue.status = 'waiting'
-                                        AND contract_addresses.chain_id = {}
-                                      LIMIT 1 FOR UPDATE SKIP LOCKED)
-            RETURNING _job_queue.id;
-        "#,
-            self.chain_id
-        );
+        let chain_id_filter = |select: Select<entity::job_queue::Entity>| {
+            select
+                .join_rev(JoinType::Join, contract_addresses::Relation::JobQueue.def())
+                .filter(contract_addresses::Column::ChainId.eq(self.chain_id))
+        };
 
-        let next_job_id_statement =
-            Statement::from_string(DatabaseBackend::Postgres, next_job_id_sql.to_string());
-
-        let next_job_id = self
-            .db_client
-            .as_ref()
-            .query_one(next_job_id_statement)
-            .await
-            .context("querying for the next job id")?
-            .map(|query_result| {
-                query_result
-                    .try_get_by::<Uuid, _>("id")
-                    .expect("error while try_get_by id")
-            });
+        let next_job_id =
+            job_queue::functions::next_job_id_with_filter(self.db_client.as_ref(), chain_id_filter)
+                .await
+                .context("querying the next_job_id")?;
 
         if let Some(job_id) = next_job_id {
             let model = contract_addresses::Entity::find()
                 .filter(contract_addresses::Column::JobId.eq(job_id))
                 .one(self.db_client.as_ref())
                 .await
-                .expect("querying contract_address model failed")
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "contract_address model does not exist for the job_id: {}",
-                        Bytes::from(job_id.as_bytes().to_vec()),
-                    )
-                })?;
+                .context("querying contract_address model")?
+                .expect("contract_address model does not exist");
 
             return Ok(Some(model));
         }

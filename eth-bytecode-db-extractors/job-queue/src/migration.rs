@@ -100,18 +100,18 @@ impl MigrationTrait for Migration {
 }
 
 pub fn create_trigger_insert_job_statement(relation: &str) -> String {
-    return format!(
+    format!(
         r#"
         CREATE TRIGGER insert_job
         BEFORE INSERT ON {relation}
             FOR EACH ROW
         EXECUTE FUNCTION _insert_job();
     "#
-    );
+    )
 }
 
 pub fn drop_trigger_insert_job_statement(relation: &str) -> String {
-    return format!("DROP TRIGGER insert_job ON {relation};");
+    format!("DROP TRIGGER insert_job ON {relation};")
 }
 
 async fn from_statements(manager: &SchemaManager<'_>, statements: &[&str]) -> Result<(), DbErr> {
