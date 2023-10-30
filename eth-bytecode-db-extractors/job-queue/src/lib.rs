@@ -1,10 +1,15 @@
 #[cfg(feature = "entity")]
 pub mod entity;
 
-#[cfg(feature = "functions")]
-pub mod functions;
-#[cfg(feature = "functions")]
-pub mod processor;
-
 #[cfg(feature = "migration")]
 pub mod migration;
+
+#[cfg(feature = "logic")]
+mod functions;
+#[cfg(feature = "logic")]
+mod macros;
+
+#[cfg(feature = "logic")]
+pub use functions::*;
+#[cfg(feature = "logic")]
+pub use macros::*;

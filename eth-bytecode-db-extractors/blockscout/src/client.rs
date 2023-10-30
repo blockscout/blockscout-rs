@@ -14,37 +14,6 @@ use sea_orm::{
 use serde::Serialize;
 use std::sync::Arc;
 
-macro_rules! process_result {
-    ( $result:expr, $self:expr, $job_id:expr, $contract_address:expr) => {
-        match $result {
-            Ok(res) => res,
-            Err(err) => {
-                let formatted_error = format!("{err:#}");
-
-                tracing::warn!(
-                    contract_address = $contract_address.to_string(),
-                    chain_id = format!("{}", $self.chain_id),
-                    error = formatted_error,
-                    "Error processing contract"
-                );
-
-                job_queue::functions::mark_as_error(
-                    $self.db_client.as_ref(),
-                    $job_id,
-                    Some(formatted_error),
-                )
-                .await
-                .context(format!(
-                    "saving error details failed; contract={}, chain_id={}",
-                    $contract_address, $self.chain_id,
-                ))?;
-
-                continue;
-            }
-        }
-    };
-}
-
 #[derive(Debug, Serialize)]
 struct StandardJson {
     language: String,
@@ -168,20 +137,22 @@ impl Client {
                 "contract processed"
             );
 
-            let contract_details_model = process_result!(
+            let contract_details_model = job_queue::process_result!(
+                self.db_client.as_ref(),
                 self.import_contract_details(contract_address.clone()).await,
-                &self,
                 job_id,
-                contract_address
+                contract_address = contract_address,
+                chain_id = self.chain_id
             );
 
-            let source = process_result!(
+            let source = job_queue::process_result!(
+                self.db_client.as_ref(),
                 self.verify_contract(contract_model, contract_details_model)
                     .await,
-                &self,
                 job_id,
-                contract_address
+                contract_address = contract_address
             );
+
             self.mark_as_success(job_id, contract_address, source)
                 .await?;
         }
@@ -363,7 +334,7 @@ impl Client {
         contract_address: Bytes,
         source: Source,
     ) -> anyhow::Result<()> {
-        job_queue::functions::mark_as_success(
+        job_queue::mark_as_success(
             self.db_client.as_ref(),
             job_id,
             Some(
@@ -389,7 +360,7 @@ impl Client {
         };
 
         let next_job_id =
-            job_queue::functions::next_job_id_with_filter(self.db_client.as_ref(), chain_id_filter)
+            job_queue::next_job_id_with_filter(self.db_client.as_ref(), chain_id_filter)
                 .await
                 .context("querying the next_job_id")?;
 
