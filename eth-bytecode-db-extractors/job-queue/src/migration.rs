@@ -42,6 +42,8 @@ impl MigrationTrait for Migration {
                 "log" varchar
             );
         "#;
+        let create_index_job_queue_status =
+            "CREATE INDEX _job_queue_status_index ON _job_queue (status);";
         let create_trigger_job_queue_set_modified_at = r#"
             CREATE TRIGGER "set_modified_at"
             BEFORE UPDATE ON "_job_queue"
@@ -69,6 +71,7 @@ impl MigrationTrait for Migration {
                 create_function_job_queue_set_modified_at,
                 create_enum_job_status,
                 create_table_job_queue,
+                create_index_job_queue_status,
                 create_trigger_job_queue_set_modified_at,
                 create_function_insert_job,
             ],
@@ -79,6 +82,7 @@ impl MigrationTrait for Migration {
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let drop_function_insert_job = "DROP FUNCTION _insert_job;";
         let drop_trigger_job_queue_set_modified_at = "DROP TRIGGER set_modified_at ON _job_queue;";
+        let drop_index_job_queue_status = "DROP INDEX _job_queue_status_index;";
         let drop_table_job_queue = "DROP TABLE _job_queue;";
         let drop_enum_job_status = "DROP TYPE _job_status;";
         let drop_function_job_queue_set_modified_at = "DROP FUNCTION _job_queue_set_modified_at;";
@@ -89,6 +93,7 @@ impl MigrationTrait for Migration {
             &[
                 drop_function_insert_job,
                 drop_trigger_job_queue_set_modified_at,
+                drop_index_job_queue_status,
                 drop_table_job_queue,
                 drop_enum_job_status,
                 drop_function_job_queue_set_modified_at,
