@@ -841,18 +841,21 @@ dependencies = [
 
 [[package]]
 name = "blockscout-service-launcher"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18fc9022734a46409fd0e33659b7e48eff5bc1235a087f6d1f6fb7a4fbcb02d8"
+checksum = "662512331ca49faf635aab7d25d29b2e66c020a807354d8cbd3d8a921600aa24"
 dependencies = [
  "actix-web",
  "actix-web-prom",
  "anyhow",
  "cfg-if",
+ "config",
  "futures",
+ "keccak-hash",
  "opentelemetry",
  "opentelemetry-jaeger",
  "prometheus",
+ "reqwest",
  "sea-orm",
  "sea-orm-migration",
  "serde",
@@ -1740,6 +1743,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "blockscout-display-bytes",
+ "blockscout-service-launcher",
  "bytes",
  "entity",
  "ethabi",

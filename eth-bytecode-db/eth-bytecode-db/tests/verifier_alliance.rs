@@ -2,6 +2,7 @@ mod verification_test_helpers;
 
 use crate::verification_test_helpers::test_input_data::TestInputData;
 use async_trait::async_trait;
+use blockscout_service_launcher::test_database::TestDbGuard;
 use eth_bytecode_db::verification::{
     solidity_standard_json, solidity_standard_json::StandardJson, Client, Error, Source,
     SourceType, VerificationMetadata, VerificationRequest,
@@ -70,6 +71,11 @@ impl VerifierService<VerificationRequest<StandardJson>> for MockSolidityVerifier
     }
 }
 
+pub async fn init_alliance_db(db_prefix: &str, test_name: &str) -> TestDbGuard {
+    let db_name = format!("{db_prefix}_{test_name}_alliance");
+    TestDbGuard::new::<verifier_alliance_migration::Migrator>(db_name.as_str()).await
+}
+
 async fn setup<F, Fut: Future<Output = ()>>(
     test_prefix: &str,
     test_case_path: PathBuf,
@@ -95,18 +101,14 @@ where
     let test_case = TestCase::from_file(test_case_path);
     let input_data = input_data(&test_case, is_authorized);
 
-    let db = init_db(DB_PREFIX, &test_name)
+    let db = init_db(DB_PREFIX, &test_name).await;
+    let alliance_db = init_alliance_db(DB_PREFIX, &test_name).await;
+
+    setup_db(alliance_db.client(), test_case.clone()).await;
+
+    let client = start_server_and_init_client(db.client(), service, vec![input_data.clone()])
         .await
-        .with_alliance_db()
-        .await;
-
-    let alliance_db_client = db.alliance_client().unwrap();
-    setup_db(alliance_db_client.clone(), test_case.clone()).await;
-
-    let client =
-        start_server_and_init_client(db.client().clone(), service, vec![input_data.clone()])
-            .await
-            .with_alliance_db_arc(alliance_db_client.clone());
+        .with_alliance_db_arc(alliance_db.client());
 
     let _source =
         MockSolidityVerifierService::verify(client.clone(), input_data.eth_bytecode_db_request)

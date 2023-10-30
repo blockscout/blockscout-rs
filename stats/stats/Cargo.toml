@@ -21,10 +21,12 @@ rand = "0.8"
 lazy_static = "1.4"
 prometheus = "0.13"
 
+# Dependencies for test-utils only
+tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
+blockscout-service-launcher = { version = "0.9.0", features = [ "database-0_10", "test-database" ], optional = true }
 [dev-dependencies]
 pretty_assertions = "1.2"
-sea-orm-migration = { version = "0.10", features = [
-    "runtime-tokio-rustls",
-    "sqlx-postgres",
-] }
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[features]
+default = []
+test-utils = ["dep:tracing-subscriber", "dep:blockscout-service-launcher"]

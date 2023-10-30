@@ -1,7 +1,7 @@
 mod verification_test_helpers;
 
-use crate::verification_test_helpers::{send_annotated_request, RequestWrapper};
 use async_trait::async_trait;
+use blockscout_service_launcher::test_database::TestDbGuard;
 use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2 as eth_bytecode_db_v2;
 use eth_bytecode_db_server::Settings;
 use rstest::rstest;
@@ -12,14 +12,13 @@ use sea_orm::{
     DatabaseConnection, DatabaseTransaction, EntityTrait, TransactionTrait,
 };
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2 as smart_contract_verifier_v2;
-use std::{future::Future, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, future::Future, path::PathBuf, str::FromStr, sync::Arc};
 use tonic::Response;
 use verification_test_helpers::{
-    init_alliance_db, init_db, init_eth_bytecode_db_server_with_settings_setup,
-    init_verifier_server,
+    init_db, init_db_raw, init_eth_bytecode_db_server_with_settings_setup, init_verifier_server,
     smart_contract_verifer_mock::{MockSolidityVerifierService, SmartContractVerifierServer},
     verifier_alliance_types::TestCase,
-    TestDbGuard, VerifierService,
+    VerifierService,
 };
 use verifier_alliance_entity::{
     code, compiled_contracts, contract_deployments, contracts, verified_contracts,
@@ -64,6 +63,67 @@ fn verify_request(test_case: &TestCase) -> eth_bytecode_db_v2::VerifySoliditySta
         input: "".to_string(),
         metadata: Some(metadata),
     }
+}
+
+async fn init_alliance_db(test_suite_name: &str, test_name: &str) -> TestDbGuard {
+    let test_name = format!("{test_name}_alliance");
+    init_db_raw::<verifier_alliance_migration::Migrator>(test_suite_name, &test_name).await
+}
+
+pub struct RequestWrapper<'a, Request> {
+    inner: &'a Request,
+    headers: reqwest::header::HeaderMap,
+}
+
+impl<'a, Request> From<&'a Request> for RequestWrapper<'a, Request> {
+    fn from(value: &'a Request) -> Self {
+        Self {
+            inner: value,
+            headers: Default::default(),
+        }
+    }
+}
+
+impl<'a, Request> RequestWrapper<'a, Request> {
+    pub fn header(&mut self, key: &str, value: &str) {
+        let key = reqwest::header::HeaderName::from_str(key)
+            .expect("Error converting key string into header name");
+        let value = reqwest::header::HeaderValue::from_str(value)
+            .expect("Error converting value string into header value");
+        self.headers.insert(key, value);
+    }
+
+    pub fn headers(&mut self, headers: HashMap<String, String>) {
+        for (key, value) in headers {
+            self.header(&key, &value);
+        }
+    }
+}
+
+pub async fn send_request<Request: serde::Serialize, Response: for<'a> serde::Deserialize<'a>>(
+    eth_bytecode_db_base: &reqwest::Url,
+    route: &str,
+    request: &RequestWrapper<'_, Request>,
+) -> Response {
+    let response = reqwest::Client::new()
+        .post(eth_bytecode_db_base.join(route).unwrap())
+        .json(&request.inner)
+        .headers(request.headers.clone())
+        .send()
+        .await
+        .unwrap_or_else(|_| panic!("Failed to send request"));
+
+    // Assert that status code is success
+    if !response.status().is_success() {
+        let status = response.status();
+        let message = response.text().await.expect("Read body as text");
+        panic!("Invalid status code (success expected). Status: {status}. Message: {message}")
+    }
+
+    response
+        .json()
+        .await
+        .unwrap_or_else(|_| panic!("Response deserialization failed"))
 }
 
 async fn setup<F, Fut: Future<Output = ()>>(
@@ -118,7 +178,7 @@ where
             wrapped_request.header(API_KEY_NAME, API_KEY);
         }
         let _verification_response: eth_bytecode_db_v2::VerifyResponse =
-            send_annotated_request(&eth_bytecode_db_base, ROUTE, &wrapped_request, None).await;
+            send_request(&eth_bytecode_db_base, ROUTE, &wrapped_request).await;
     }
 
     (alliance_db, test_case)

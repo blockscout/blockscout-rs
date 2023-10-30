@@ -1,0 +1,32 @@
+default:
+    just --list --unsorted
+
+db-host := env_var_or_default('DB_HOST', "localhost")
+db-port := env_var_or_default('DB_PORT', "5432")
+db-user := env_var_or_default('DB_USER', "graph-node")
+db-password := env_var_or_default('DB_PASSWORD', "admin")
+db-name := env_var_or_default('DB_NAME', "bens")
+export DATABASE_URL := "postgres://" + db-user + ":" + db-password + "@" + db-host + ":" + db-port + "/" + db-name
+
+docker-name := env_var_or_default('DOCKER_NAME', "bens-postgres")
+test-db-port := env_var_or_default('TEST_DB_PORT', "9433")
+
+start-postgres:
+    # we run it in --rm mode, so all data will be deleted after stopping
+    docker run -p {{db-port}}:5432 --name {{docker-name}} -e POSTGRES_PASSWORD={{db-password}} -e POSTGRES_USER={{db-user}} --rm -d postgres -N 500
+    sleep 3
+    # wait for postgres to start, but only if db_name is not empty
+    $SHELL -c '[[ -z "{{db-name}}" ]] || docker exec -it {{docker-name}} psql -U {{db-user}} -c "create database {{db-name}};"'
+
+stop-postgres:
+    docker rm -f {{docker-name}}
+
+stop-test-postgres:
+    just docker-name="{{docker-name}}-test" stop-postgres
+
+test *args:
+    SQLX_OFFLINE=true RUST_LOG=info cargo test {{args}}
+
+test-with-db *args:
+    -just db-port="{{test-db-port}}" db-name="" docker-name="{{docker-name}}-test" start-postgres
+    just db-port="{{test-db-port}}" db-name=""                                     test {{args}}

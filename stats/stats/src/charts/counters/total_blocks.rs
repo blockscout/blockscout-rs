@@ -80,7 +80,7 @@ mod tests {
     #[ignore = "needs database to run"]
     async fn update_total_blocks_recurrent() {
         let _ = tracing_subscriber::fmt::try_init();
-        let (db, blockscout) = init_db_all("update_total_blocks_recurrent", None).await;
+        let (db, blockscout) = init_db_all("update_total_blocks_recurrent").await;
         let updater = TotalBlocks::default();
 
         updater.create(&db).await.unwrap();
@@ -91,7 +91,7 @@ mod tests {
             value: Set(1.to_string()),
             ..Default::default()
         })
-        .exec(&db)
+        .exec(&db as &DatabaseConnection)
         .await
         .unwrap();
 
@@ -106,7 +106,7 @@ mod tests {
     #[ignore = "needs database to run"]
     async fn update_total_blocks_fresh() {
         let _ = tracing_subscriber::fmt::try_init();
-        let (db, blockscout) = init_db_all("update_total_blocks_fresh", None).await;
+        let (db, blockscout) = init_db_all("update_total_blocks_fresh").await;
         let updater = TotalBlocks::default();
 
         updater.create(&db).await.unwrap();
@@ -122,7 +122,7 @@ mod tests {
     #[ignore = "needs database to run"]
     async fn update_total_blocks_last() {
         let _ = tracing_subscriber::fmt::try_init();
-        let (db, blockscout) = init_db_all("update_total_blocks_last", None).await;
+        let (db, blockscout) = init_db_all("update_total_blocks_last").await;
         let updater = TotalBlocks::default();
 
         updater.create(&db).await.unwrap();
@@ -133,7 +133,7 @@ mod tests {
             value: Set(1.to_string()),
             ..Default::default()
         })
-        .exec(&db)
+        .exec(&db as &DatabaseConnection)
         .await
         .unwrap();
 

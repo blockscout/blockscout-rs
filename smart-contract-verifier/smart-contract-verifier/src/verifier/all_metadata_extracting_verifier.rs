@@ -12,7 +12,10 @@ use crate::{
 };
 use bytes::Bytes;
 use ethabi::{Constructor, Token};
-use ethers_solc::{artifacts::Contract, Artifact, CompilerOutput};
+use ethers_solc::{
+    artifacts::{self, Contract},
+    Artifact, CompilerOutput,
+};
 use mismatch::Mismatch;
 use solidity_metadata::MetadataHash;
 use std::collections::BTreeMap;
@@ -125,7 +128,8 @@ impl<T: Source> Verifier<T> {
                             }
                         };
 
-                        let compilation_artifacts = compilation_artifacts(raw_contract);
+                        let compilation_artifacts =
+                            compilation_artifacts(raw_contract, &output.sources);
                         let creation_input_artifacts =
                             creation_input_artifacts(raw_contract, &local_bytecode);
                         let deployed_bytecode_artifacts =
@@ -444,7 +448,18 @@ fn raw_contract<'a>(
     }
 }
 
-fn compilation_artifacts(raw_contract: &lossless_compiler_output::Contract) -> serde_json::Value {
+fn compilation_artifacts(
+    raw_contract: &lossless_compiler_output::Contract,
+    sources_files: &BTreeMap<String, artifacts::SourceFile>,
+) -> serde_json::Value {
+    #[derive(Clone, Debug, serde::Serialize, Eq, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    // We need a separate structure, as `artifacts::SourceFile` does include
+    // serialization of "ast" field even though it contains `None` value.
+    struct SourceFile {
+        id: u32,
+    }
+
     #[derive(Clone, Debug, serde::Serialize, Eq, PartialEq)]
     #[serde(rename_all = "camelCase")]
     struct CompilationArtifacts<'a> {
@@ -456,6 +471,7 @@ fn compilation_artifacts(raw_contract: &lossless_compiler_output::Contract) -> s
         pub userdoc: Option<&'a serde_json::Value>,
         #[serde(skip_serializing_if = "Option::is_none")]
         pub storage_layout: Option<&'a serde_json::Value>,
+        pub sources: BTreeMap<String, SourceFile>,
     }
 
     let artifacts = CompilationArtifacts {
@@ -463,6 +479,10 @@ fn compilation_artifacts(raw_contract: &lossless_compiler_output::Contract) -> s
         devdoc: raw_contract.devdoc.as_ref(),
         userdoc: raw_contract.userdoc.as_ref(),
         storage_layout: raw_contract.storage_layout.as_ref(),
+        sources: sources_files
+            .iter()
+            .map(|(k, v)| (k.clone(), SourceFile { id: v.id }))
+            .collect(),
     };
 
     serde_json::to_value(artifacts).unwrap()

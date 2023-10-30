@@ -1,12 +1,12 @@
 use super::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data};
 use crate::{get_chart_data, get_counters, Chart, MissingDatePolicy};
 use chrono::NaiveDate;
-use pretty_assertions::assert_eq;
 use sea_orm::DatabaseConnection;
+use std::assert_eq;
 
 pub async fn simple_test_chart(test_name: &str, chart: impl Chart, expected: Vec<(&str, &str)>) {
     let _ = tracing_subscriber::fmt::try_init();
-    let (db, blockscout) = init_db_all(test_name, None).await;
+    let (db, blockscout) = init_db_all(test_name).await;
     chart.create(&db).await.unwrap();
     fill_mock_blockscout_data(&blockscout, "2023-03-01").await;
 
@@ -25,7 +25,7 @@ pub async fn ranged_test_chart(
     to: NaiveDate,
 ) {
     let _ = tracing_subscriber::fmt::try_init();
-    let (db, blockscout) = init_db_all(test_name, None).await;
+    let (db, blockscout) = init_db_all(test_name).await;
     chart.create(&db).await.unwrap();
     fill_mock_blockscout_data(&blockscout, "2023-03-01").await;
     let policy = chart.missing_date_policy();
@@ -61,7 +61,7 @@ async fn get_chart_and_assert_eq(
 
 pub async fn simple_test_counter(test_name: &str, counter: impl Chart, expected: &str) {
     let _ = tracing_subscriber::fmt::try_init();
-    let (db, blockscout) = init_db_all(test_name, None).await;
+    let (db, blockscout) = init_db_all(test_name).await;
     counter.create(&db).await.unwrap();
     fill_mock_blockscout_data(&blockscout, "2023-03-01").await;
 
