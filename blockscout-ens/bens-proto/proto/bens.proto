@@ -9,10 +9,9 @@ service DomainsExtractor {
   rpc ListDomainEvents(ListDomainEventsRequest) returns (ListDomainEventsResponse) {}
 
   rpc ResolveDomainName(ResolveDomainNameRequest) returns (ResolveDomainNameResponse) {}
-  rpc BatchResolveDomainNames(BatchResolveDomainNamesRequest) returns (BatchResolveDomainNamesResponse) {}
-
   rpc ResolveAddress(ResolveAddressRequest) returns (ResolveAddressResponse) {}
-  rpc BatchResolveAddresses(BatchResolveAddressesRequest) returns (BatchResolveAddressesResponse) {}
+  
+  rpc BatchSearchAddresses(BatchSearchAddressesRequest) returns (BatchSearchAddressesResponse) {}
 }
 
 message Domain {
@@ -92,6 +91,8 @@ message ResolveDomainNameRequest {
   uint64 chain_id = 2;
   // Specifies how much information about domain should be returned.
   DomainView view = 3;
+  // Filtering field to remove expired domains
+  bool only_active = 4;
 }
 
 message ResolveDomainNameResponse {
@@ -103,18 +104,6 @@ message ResolveDomainNameResponse {
   repeated DomainEvent domain_events = 2;
 }
 
-message BatchResolveDomainNamesRequest {
-  // List of requested domain names
-  repeated string names = 1;
-  // The chain (network) where domain search should be done
-  string chain_id = 2;
-  // Specifies how much information about domains should be returned.
-  DomainView view = 3;
-}
-
-message BatchResolveDomainNamesResponse {
-  map<string, Domain> domains = 1;
-}
 
 message ResolveAddressRequest {
   // Address of EOA or contract
@@ -127,6 +116,8 @@ message ResolveAddressRequest {
   bool resolved_to = 4;
   // Include domains owned by the address
   bool owned_by = 5;
+  // Filtering field to remove expired domains
+  bool only_active = 6;
 }
 
 message ResolveAddressResponse {
@@ -137,18 +128,13 @@ message ResolveAddressResponse {
   repeated Domain owned = 2;
 }
 
-message BatchResolveAddressesRequest {
+message BatchSearchAddressesRequest {
   // List of requested addresses
   repeated string addresses = 1;
   // The chain (network) where domain search should be done
   string chain_id = 2;
-  // Specifies how much information about corresponding domains should be returned.
-  DomainView view = 3;
 }
 
-message BatchResolveAddressesResponse {
-  message Domains {
-    repeated Domain domains = 1;
-  }
-  map<string, Domains> domains = 1;
+message BatchSearchAddressesResponse {
+  map<string, string> domains = 1;
 }

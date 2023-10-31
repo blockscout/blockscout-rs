@@ -133,7 +133,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let size = addresses.len();
     let now = Instant::now();
     let result = reader
-        .quick_resolve_addresses(1, addresses.into_iter())
+        .batch_search_addresses(1, addresses.into_iter())
         .await
         .expect("failed to quick resolve");
     // job size is 94. elapsed 1.1955539s. resolved as 13 domains

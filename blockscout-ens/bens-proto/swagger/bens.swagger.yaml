@@ -10,40 +10,6 @@ consumes:
 produces:
   - application/json
 paths:
-  /api/v1/{chainId}/addresses:batch-resolve:
-    post:
-      operationId: DomainsExtractor_BatchResolveAddresses
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1BatchResolveAddressesResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/rpcStatus'
-      parameters:
-        - name: chainId
-          description: The chain (network) where domain search should be done
-          in: path
-          required: true
-          type: string
-        - name: body
-          in: body
-          required: true
-          schema:
-            type: object
-            properties:
-              addresses:
-                type: array
-                items:
-                  type: string
-                title: List of requested addresses
-              view:
-                $ref: '#/definitions/v1DomainView'
-                description: Specifies how much information about corresponding domains should be returned.
-      tags:
-        - DomainsExtractor
   /api/v1/{chainId}/addresses:resolve:
     post:
       operationId: DomainsExtractor_ResolveAddress
@@ -81,6 +47,9 @@ paths:
               ownedBy:
                 type: boolean
                 title: Include domains owned by the address
+              onlyActive:
+                type: boolean
+                title: Filtering field to remove expired domains
       tags:
         - DomainsExtractor
   /api/v1/{chainId}/domains/{domainId}/events:
@@ -153,40 +122,6 @@ paths:
           default: DOMAIN_VIEW_UNSPECIFIED
       tags:
         - DomainsExtractor
-  /api/v1/{chainId}/domains:batch-resolve:
-    post:
-      operationId: DomainsExtractor_BatchResolveDomainNames
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1BatchResolveDomainNamesResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/rpcStatus'
-      parameters:
-        - name: chainId
-          description: The chain (network) where domain search should be done
-          in: path
-          required: true
-          type: string
-        - name: body
-          in: body
-          required: true
-          schema:
-            type: object
-            properties:
-              names:
-                type: array
-                items:
-                  type: string
-                title: List of requested domain names
-              view:
-                $ref: '#/definitions/v1DomainView'
-                description: Specifies how much information about domains should be returned.
-      tags:
-        - DomainsExtractor
   /api/v1/{chainId}/domains:resolve:
     post:
       operationId: DomainsExtractor_ResolveDomainName
@@ -218,6 +153,9 @@ paths:
               view:
                 $ref: '#/definitions/v1DomainView'
                 description: Specifies how much information about domain should be returned.
+              onlyActive:
+                type: boolean
+                title: Filtering field to remove expired domains
       tags:
         - DomainsExtractor
   /health:
@@ -243,14 +181,6 @@ paths:
       tags:
         - Health
 definitions:
-  BatchResolveAddressesResponseDomains:
-    type: object
-    properties:
-      domains:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1Domain'
   HealthCheckResponseServingStatus:
     type: string
     enum:
@@ -279,20 +209,13 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/protobufAny'
-  v1BatchResolveAddressesResponse:
+  v1BatchSearchAddressesResponse:
     type: object
     properties:
       domains:
         type: object
         additionalProperties:
-          $ref: '#/definitions/BatchResolveAddressesResponseDomains'
-  v1BatchResolveDomainNamesResponse:
-    type: object
-    properties:
-      domains:
-        type: object
-        additionalProperties:
-          $ref: '#/definitions/v1Domain'
+          type: string
   v1Domain:
     type: object
     properties:
