@@ -46,7 +46,11 @@ pub async fn find_domain(
     pool: &PgPool,
     schema: &str,
     id: &str,
+    only_active: bool,
 ) -> Result<Option<Domain>, SubgraphReadError> {
+    let only_active_clause = only_active
+        .then(|| format!("AND {DOMAIN_NOT_EXPIRED_WHERE_CLAUSE}"))
+        .unwrap_or_default();
     let maybe_domain = sqlx::query_as(&format!(
         r#"
         SELECT {DOMAIN_DEFAULT_SELECT_CLAUSE}
@@ -54,6 +58,7 @@ pub async fn find_domain(
         WHERE
             id = $1 
             AND {DOMAIN_DEFAULT_WHERE_CLAUSE}
+            {only_active_clause}
         "#,
     ))
     .bind(id)
@@ -72,7 +77,11 @@ pub async fn find_resolved_addresses(
     pool: &PgPool,
     schema: &str,
     address: &str,
+    only_active: bool,
 ) -> Result<Vec<Domain>, SubgraphReadError> {
+    let only_active_clause = only_active
+        .then(|| format!("AND {DOMAIN_NOT_EXPIRED_WHERE_CLAUSE}"))
+        .unwrap_or_default();
     let resolved_domains: Vec<Domain> = sqlx::query_as(&format!(
         r#"
         SELECT {DOMAIN_DEFAULT_SELECT_CLAUSE}
@@ -80,7 +89,7 @@ pub async fn find_resolved_addresses(
         WHERE 
             resolved_address = $1
             AND {DOMAIN_DEFAULT_WHERE_CLAUSE}
-            AND {DOMAIN_NOT_EXPIRED_WHERE_CLAUSE}
+            {only_active_clause}
         ORDER BY created_at ASC
         LIMIT 100
         "#,
@@ -102,7 +111,11 @@ pub async fn find_owned_addresses(
     pool: &PgPool,
     schema: &str,
     address: &str,
+    only_active: bool,
 ) -> Result<Vec<Domain>, SubgraphReadError> {
+    let only_active_clause = only_active
+        .then(|| format!("AND {DOMAIN_NOT_EXPIRED_WHERE_CLAUSE}"))
+        .unwrap_or_default();
     let owned_domains: Vec<Domain> = sqlx::query_as(&format!(
         r#"
         SELECT {DOMAIN_DEFAULT_SELECT_CLAUSE}
@@ -113,7 +126,7 @@ pub async fn find_owned_addresses(
                 OR wrapped_owner = $1
             )
             AND {DOMAIN_DEFAULT_WHERE_CLAUSE}
-            AND {DOMAIN_NOT_EXPIRED_WHERE_CLAUSE}
+            {only_active_clause}
         ORDER BY created_at ASC
         LIMIT 100
         "#,
@@ -126,13 +139,13 @@ pub async fn find_owned_addresses(
 }
 
 #[instrument(
-    name = "quick_find_resolved_addresses",
+    name = "batch_search_addresses",
     skip(pool, addresses),
     fields(job_size = addresses.len()),
     err(level = "error"),
     level = "info",
 )]
-pub async fn quick_find_resolved_addresses(
+pub async fn batch_search_addresses(
     pool: &PgPool,
     schema: &str,
     addresses: &[&str],
@@ -156,32 +169,32 @@ pub async fn quick_find_resolved_addresses(
     Ok(domains)
 }
 
-#[instrument(
-    name = "quick_find_resolved_domains",
-    skip(pool, ids),
-    fields(job_size = ids.len()),
-    err(level = "error"),
-    level = "info",
-)]
-pub async fn quick_find_resolved_domains(
-    pool: &PgPool,
-    schema: &str,
-    ids: &[&str],
-) -> Result<Vec<DomainWithAddress>, SubgraphReadError> {
-    let domains: Vec<DomainWithAddress> = sqlx::query_as(&format!(
-        r#"
-        SELECT id, name as domain_name, resolved_address 
-        FROM {schema}.domain
-        WHERE
-            id = ANY($1)
-            AND resolved_address IS NOT NULL
-            AND {DOMAIN_DEFAULT_WHERE_CLAUSE}
-            AND {DOMAIN_NOT_EXPIRED_WHERE_CLAUSE}
-        "#,
-    ))
-    .bind(ids)
-    .fetch_all(pool)
-    .await?;
+// #[instrument(
+//     name = "quick_find_resolved_domains",
+//     skip(pool, ids),
+//     fields(job_size = ids.len()),
+//     err(level = "error"),
+//     level = "info",
+// )]
+// pub async fn quick_find_resolved_domains(
+//     pool: &PgPool,
+//     schema: &str,
+//     ids: &[&str],
+// ) -> Result<Vec<DomainWithAddress>, SubgraphReadError> {
+//     let domains: Vec<DomainWithAddress> = sqlx::query_as(&format!(
+//         r#"
+//         SELECT id, name as domain_name, resolved_address
+//         FROM {schema}.domain
+//         WHERE
+//             id = ANY($1)
+//             AND resolved_address IS NOT NULL
+//             AND {DOMAIN_DEFAULT_WHERE_CLAUSE}
+//             AND {DOMAIN_NOT_EXPIRED_WHERE_CLAUSE}
+//         "#,
+//     ))
+//     .bind(ids)
+//     .fetch_all(pool)
+//     .await?;
 
-    Ok(domains)
-}
+//     Ok(domains)
+// }
