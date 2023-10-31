@@ -31,7 +31,7 @@ pub async fn verify(
     request: VerificationRequest<StandardJson>,
 ) -> Result<Source, Error> {
     let is_authorized = request.is_authorized;
-    println!("\n\nRAFLA: is_authorized={is_authorized}\n\n");
+
     let bytecode_type = request.bytecode_type;
     let raw_request_bytecode = hex::decode(request.bytecode.clone().trim_start_matches("0x"))
         .map_err(|err| Error::InvalidArgument(format!("invalid bytecode: {err}")))?;
