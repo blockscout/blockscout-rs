@@ -71,7 +71,7 @@ message GetDomainRequest {
   // The chain (network) where domain search should be done
   uint64 chain_id = 2;
   // Specifies how much information about domain should be returned.
-  DomainView domain_view = 3;
+  DomainView view = 3;
 }
 
 message ListDomainEventsRequest {
@@ -91,7 +91,7 @@ message ResolveDomainNameRequest {
   // The chain (network) where domain search should be done
   uint64 chain_id = 2;
   // Specifies how much information about domain should be returned.
-  DomainView domain_view = 3;
+  DomainView view = 3;
 }
 
 message ResolveDomainNameResponse {
@@ -109,7 +109,7 @@ message BatchResolveDomainNamesRequest {
   // The chain (network) where domain search should be done
   string chain_id = 2;
   // Specifies how much information about domains should be returned.
-  DomainView domain_view = 3;
+  DomainView view = 3;
 }
 
 message BatchResolveDomainNamesResponse {
@@ -143,7 +143,7 @@ message BatchResolveAddressesRequest {
   // The chain (network) where domain search should be done
   string chain_id = 2;
   // Specifies how much information about corresponding domains should be returned.
-  DomainView domain_view = 3;
+  DomainView view = 3;
 }
 
 message BatchResolveAddressesResponse {

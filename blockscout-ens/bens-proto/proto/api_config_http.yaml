@@ -8,7 +8,7 @@ http:
       get: /api/v1/{chain_id}/domains/{id}
 
     - selector: blockscout.bens.v1.DomainsExtractor.ListDomainEvents
-      get: /api/v1/{chain_id}/domains/{domain_id}/domain-events
+      get: /api/v1/{chain_id}/domains/{domain_id}/events
 
     - selector: blockscout.bens.v1.DomainsExtractor.ResolveDomainName
       post: /api/v1/{chain_id}/domains:resolve
@@ -26,7 +26,7 @@ http:
       post: /api/v1/{chain_id}/addresses:batch-resolve
       body: "*"
 
-      #################### Health ####################
+    #################### Health ####################
 
     - selector: blockscout.bens.v1.Health.Check
       get: /health
