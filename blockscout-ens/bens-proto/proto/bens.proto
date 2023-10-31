@@ -55,10 +55,10 @@ enum DomainView {
 
   // Include basic metadata about the domain, but not the full contents.
   // (id, name, resolved_address, expiry_date)
+  // This is the default value.
   DOMAIN_VIEW_BASIC = 1;
 
   // Include everything.
-  // This is the default value.
   DOMAIN_VIEW_FULL = 2;
 }
 
