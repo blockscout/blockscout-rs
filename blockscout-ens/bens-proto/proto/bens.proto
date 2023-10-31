@@ -11,7 +11,7 @@ service DomainsExtractor {
   rpc ResolveDomainName(ResolveDomainNameRequest) returns (ResolveDomainNameResponse) {}
   rpc ResolveAddress(ResolveAddressRequest) returns (ResolveAddressResponse) {}
   
-  rpc BatchSearchAddresses(BatchSearchAddressesRequest) returns (BatchSearchAddressesResponse) {}
+  rpc BatchSearchAddressNames(BatchSearchAddressNamesRequest) returns (BatchSearchAddressNamesResponse) {}
 }
 
 message Domain {
@@ -111,7 +111,7 @@ message ResolveAddressRequest {
   // The chain (network) where domain search should be done
   uint64 chain_id = 2;
   // Specifies how much information about corresponding domain should be returned.
-  DomainView domain_view = 3;
+  DomainView view = 3;
   // Include domains resolved to the address
   bool resolved_to = 4;
   // Include domains owned by the address
@@ -128,13 +128,13 @@ message ResolveAddressResponse {
   repeated Domain owned = 2;
 }
 
-message BatchSearchAddressesRequest {
+message BatchSearchAddressNamesRequest {
   // List of requested addresses
   repeated string addresses = 1;
   // The chain (network) where domain search should be done
   string chain_id = 2;
 }
 
-message BatchSearchAddressesResponse {
-  map<string, string> domains = 1;
+message BatchSearchAddressNamesResponse {
+  map<string, string> domain_names = 1;
 }
