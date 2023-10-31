@@ -4,31 +4,29 @@ config_version: 3
 http:
   rules:
     #################### DomainsExtractor ####################
-    - selector: blockscout.bens.v1.DomainsExtractor.SearchReverseDomain
-      post: /api/v1/{chain_id}/domains:search-reverse
+    - selector: blockscout.bens.v1.DomainsExtractor.GetDomain
+      get: /api/v1/{chain_id}/domains/{id}
+
+    - selector: blockscout.bens.v1.DomainsExtractor.ListDomainEvents
+      get: /api/v1/{chain_id}/domains/{domain_id}/domain-events
+
+    - selector: blockscout.bens.v1.DomainsExtractor.ResolveDomainName
+      post: /api/v1/{chain_id}/domains:resolve
       body: "*"
 
-    - selector: blockscout.bens.v1.DomainsExtractor.SearchDomain
-      post: /api/v1/{chain_id}/domains:search
+    - selector: blockscout.bens.v1.DomainsExtractor.BatchResolveDomainNames
+      post: /api/v1/{chain_id}/domains:batch-resolve
       body: "*"
 
-    - selector: blockscout.bens.v1.DomainsExtractor.QuickResolveAddresses
-      post: /api/v1/{chain_id}/domains/quick-resolve:addresses-batch
-      body: "*"
-    
-    - selector: blockscout.bens.v1.DomainsExtractor.QuickResolveAddress
-      post: /api/v1/{chain_id}/domains/quick-resolve:address
-      body: "*"
-    
-    - selector: blockscout.bens.v1.DomainsExtractor.QuickResolveDomains
-      post: /api/v1/{chain_id}/domains/quick-resolve:domains-batch
-      body: "*"
-    
-    - selector: blockscout.bens.v1.DomainsExtractor.QuickResolveDomain
-      post: /api/v1/{chain_id}/domains/quick-resolve:domain
+    - selector: blockscout.bens.v1.DomainsExtractor.ResolveAddress
+      post: /api/v1/{chain_id}/addresses:resolve
       body: "*"
 
-    #################### Health ####################
+    - selector: blockscout.bens.v1.DomainsExtractor.BatchResolveAddresses
+      post: /api/v1/{chain_id}/addresses:batch-resolve
+      body: "*"
+
+      #################### Health ####################
 
     - selector: blockscout.bens.v1.Health.Check
       get: /health
