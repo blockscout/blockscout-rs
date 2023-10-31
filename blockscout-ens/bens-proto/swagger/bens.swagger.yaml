@@ -10,6 +10,37 @@ consumes:
 produces:
   - application/json
 paths:
+  /api/v1/{chainId}/address-names:batch-search:
+    post:
+      operationId: DomainsExtractor_BatchSearchAddressNames
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1BatchSearchAddressNamesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: chainId
+          description: The chain (network) where domain search should be done
+          in: path
+          required: true
+          type: string
+        - name: body
+          in: body
+          required: true
+          schema:
+            type: object
+            properties:
+              addresses:
+                type: array
+                items:
+                  type: string
+                title: List of requested addresses
+      tags:
+        - DomainsExtractor
   /api/v1/{chainId}/addresses:resolve:
     post:
       operationId: DomainsExtractor_ResolveAddress
@@ -38,7 +69,7 @@ paths:
               address:
                 type: string
                 title: Address of EOA or contract
-              domainView:
+              view:
                 $ref: '#/definitions/v1DomainView'
                 description: Specifies how much information about corresponding domain should be returned.
               resolvedTo:
@@ -110,8 +141,8 @@ paths:
             The API will default to the BASIC view.
              - DOMAIN_VIEW_BASIC: Include basic metadata about the domain, but not the full contents.
             (id, name, resolved_address, expiry_date)
-             - DOMAIN_VIEW_FULL: Include everything.
             This is the default value.
+             - DOMAIN_VIEW_FULL: Include everything.
           in: query
           required: false
           type: string
@@ -209,7 +240,7 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/protobufAny'
-  v1BatchSearchAddressesResponse:
+  v1BatchSearchAddressNamesResponse:
     type: object
     properties:
       domains:
@@ -281,8 +312,8 @@ definitions:
       The API will default to the BASIC view.
        - DOMAIN_VIEW_BASIC: Include basic metadata about the domain, but not the full contents.
       (id, name, resolved_address, expiry_date)
-       - DOMAIN_VIEW_FULL: Include everything.
       This is the default value.
+       - DOMAIN_VIEW_FULL: Include everything.
   v1HealthCheckResponse:
     type: object
     properties:

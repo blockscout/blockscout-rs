@@ -22,8 +22,8 @@ http:
       post: /api/v1/{chain_id}/addresses:resolve
       body: "*"
 
-    - selector: blockscout.bens.v1.DomainsExtractor.BatchResolveAddresses
-      post: /api/v1/{chain_id}/addresses:batch-resolve
+    - selector: blockscout.bens.v1.DomainsExtractor.BatchSearchAddressNames
+      post: /api/v1/{chain_id}/address-names:batch-search
       body: "*"
 
     #################### Health ####################
