@@ -168,33 +168,3 @@ pub async fn batch_search_addresses(
 
     Ok(domains)
 }
-
-// #[instrument(
-//     name = "quick_find_resolved_domains",
-//     skip(pool, ids),
-//     fields(job_size = ids.len()),
-//     err(level = "error"),
-//     level = "info",
-// )]
-// pub async fn quick_find_resolved_domains(
-//     pool: &PgPool,
-//     schema: &str,
-//     ids: &[&str],
-// ) -> Result<Vec<DomainWithAddress>, SubgraphReadError> {
-//     let domains: Vec<DomainWithAddress> = sqlx::query_as(&format!(
-//         r#"
-//         SELECT id, name as domain_name, resolved_address
-//         FROM {schema}.domain
-//         WHERE
-//             id = ANY($1)
-//             AND resolved_address IS NOT NULL
-//             AND {DOMAIN_DEFAULT_WHERE_CLAUSE}
-//             AND {DOMAIN_NOT_EXPIRED_WHERE_CLAUSE}
-//         "#,
-//     ))
-//     .bind(ids)
-//     .fetch_all(pool)
-//     .await?;
-
-//     Ok(domains)
-// }
