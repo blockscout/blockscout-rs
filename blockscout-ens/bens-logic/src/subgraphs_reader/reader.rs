@@ -10,9 +10,12 @@ use crate::{
     },
     hash_name::hash_ens_domain_name,
 };
-use ethers::types::TxHash;
+use ethers::types::{Address, TxHash};
 use sqlx::postgres::PgPool;
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap, HashSet},
+    sync::Arc,
+};
 use thiserror::Error;
 
 #[derive(Debug, Clone)]
@@ -74,60 +77,104 @@ pub enum SubgraphReadError {
 }
 
 impl SubgraphReader {
-    pub async fn get_domain(
+    pub async fn resolve_domain(
         &self,
         network_id: i64,
         name: &str,
+        only_active: bool,
+    ) -> Result<Option<Domain>, SubgraphReadError> {
+        self.get_domain(network_id, &domain_id(name), only_active)
+            .await
+    }
+
+    pub async fn get_domain(
+        &self,
+        network_id: i64,
+        id: &str,
+        only_active: bool,
     ) -> Result<Option<Domain>, SubgraphReadError> {
         let network = self
             .networks
             .get(&network_id)
             .ok_or_else(|| SubgraphReadError::NetworkNotFound(network_id))?;
-        let id = domain_id(name);
-        sql::find_domain(self.pool.as_ref(), &network.schema_name, &id).await
+        sql::find_domain(self.pool.as_ref(), &network.schema_name, id, only_active).await
     }
 
     pub async fn get_domain_history(
         &self,
         network_id: i64,
-        name: &str,
+        id: &str,
     ) -> Result<Vec<DomainEvent>, SubgraphReadError> {
         let network = self
             .networks
             .get(&network_id)
             .ok_or_else(|| SubgraphReadError::NetworkNotFound(network_id))?;
-        let id = domain_id(name);
         let domain_txns: Vec<DomainEventTransaction> =
-            sql::find_transaction_events(self.pool.as_ref(), &network.schema_name, &id).await?;
+            sql::find_transaction_events(self.pool.as_ref(), &network.schema_name, id).await?;
         let domain_events =
             events_from_transactions(network.blockscout_client.clone(), domain_txns).await?;
         Ok(domain_events)
     }
 
-    pub async fn search_resolved_domain_reverse(
+    pub async fn resolve_address(
         &self,
         network_id: i64,
-        address: ethers::types::Address,
+        address: Address,
+        only_active: bool,
     ) -> Result<Vec<Domain>, SubgraphReadError> {
         let network = self
             .networks
             .get(&network_id)
             .ok_or_else(|| SubgraphReadError::NetworkNotFound(network_id))?;
         let address = hex(address);
-        sql::find_resolved_addresses(self.pool.as_ref(), &network.schema_name, &address).await
+        sql::find_resolved_addresses(
+            self.pool.as_ref(),
+            &network.schema_name,
+            &address,
+            only_active,
+        )
+        .await
     }
 
-    pub async fn search_owned_domain_reverse(
+    pub async fn resolve_owned_address(
         &self,
         network_id: i64,
-        address: ethers::types::Address,
+        address: Address,
+        only_active: bool,
     ) -> Result<Vec<Domain>, SubgraphReadError> {
         let network = self
             .networks
             .get(&network_id)
             .ok_or_else(|| SubgraphReadError::NetworkNotFound(network_id))?;
         let address = hex(address);
-        sql::find_owned_addresses(self.pool.as_ref(), &network.schema_name, &address).await
+        sql::find_owned_addresses(
+            self.pool.as_ref(),
+            &network.schema_name,
+            &address,
+            only_active,
+        )
+        .await
+    }
+
+    pub async fn batch_search_addresses(
+        &self,
+        network_id: i64,
+        addresses: impl IntoIterator<Item = Address>,
+    ) -> Result<BTreeMap<String, String>, SubgraphReadError> {
+        let network = self
+            .networks
+            .get(&network_id)
+            .ok_or_else(|| SubgraphReadError::NetworkNotFound(network_id))?;
+        // remove duplicates
+        let addresses: HashSet<String> = addresses.into_iter().map(hex).collect();
+        let addreses_str: Vec<&str> = addresses.iter().map(String::as_str).collect::<Vec<_>>();
+        let result =
+            sql::batch_search_addresses(&self.pool, &network.schema_name, &addreses_str).await?;
+        let address_to_name = result
+            .into_iter()
+            .map(|d| (d.resolved_address, d.domain_name))
+            .collect();
+        Ok(address_to_name)
     }
 }
 
@@ -198,8 +245,9 @@ mod tests {
             .expect("failed to init reader");
 
         // get vitalik domain
+        let id = domain_id("vitalik.eth");
         let result = reader
-            .get_domain(1, "vitalik.eth")
+            .get_domain(1, &id, false)
             .await
             .expect("failed to get vitalik domain")
             .expect("domain not found");
@@ -209,8 +257,9 @@ mod tests {
             Some("0xd8da6bf26964af9d7eed9e03e53415d37aa96045")
         );
         // get expired domain
+        let id = domain_id("expired.eth");
         let result = reader
-            .get_domain(1, "expired.eth")
+            .get_domain(1, &id, false)
             .await
             .expect("failed to get expired domain")
             .expect("expired domain not found");
@@ -219,10 +268,21 @@ mod tests {
             "expired domain has is_expired=false: {:?}",
             result
         );
+        // get expired domain with only_active filter
+        let id = domain_id("expired.eth");
+        let result = reader
+            .get_domain(1, &id, true)
+            .await
+            .expect("failed to get expired domain");
+        assert!(
+            result.is_none(),
+            "expired domain returned with only_active=true: {:?}",
+            result
+        );
     }
 
     #[sqlx::test(migrations = "tests/migrations")]
-    async fn search_domain_reverse_works(pool: PgPool) {
+    async fn resolve_works(pool: PgPool) {
         let pool = Arc::new(pool);
         let clients = mocked_blockscout_clients().await;
         let reader = SubgraphReader::initialize(pool.clone(), clients)
@@ -230,7 +290,7 @@ mod tests {
             .expect("failed to init reader");
 
         let result = reader
-            .search_resolved_domain_reverse(1, addr("0xd8da6bf26964af9d7eed9e03e53415d37aa96045"))
+            .resolve_address(1, addr("0xd8da6bf26964af9d7eed9e03e53415d37aa96045"), false)
             .await
             .expect("failed to get vitalik domains");
         assert_eq!(
@@ -239,7 +299,7 @@ mod tests {
         );
 
         let result = reader
-            .search_owned_domain_reverse(1, addr("0xd8da6bf26964af9d7eed9e03e53415d37aa96045"))
+            .resolve_owned_address(1, addr("0xd8da6bf26964af9d7eed9e03e53415d37aa96045"), false)
             .await
             .expect("failed to get vitalik domains");
         assert_eq!(
@@ -249,7 +309,17 @@ mod tests {
 
         // search for expired address
         let result = reader
-            .search_resolved_domain_reverse(1, addr("0x9f7f7ddbfb8e14d1756580ba8037530da0880b99"))
+            .resolve_address(1, addr("0x9f7f7ddbfb8e14d1756580ba8037530da0880b99"), false)
+            .await
+            .expect("failed to get expired domains");
+        // expired domain shoudn't be returned as resolved
+        assert_eq!(
+            result.iter().map(|d| d.name.as_deref()).collect::<Vec<_>>(),
+            vec![Some("expired.eth")]
+        );
+        // search for expired address with only_active
+        let result = reader
+            .resolve_address(1, addr("0x9f7f7ddbfb8e14d1756580ba8037530da0880b99"), true)
             .await
             .expect("failed to get expired domains");
         // expired domain shoudn't be returned as resolved
@@ -266,8 +336,9 @@ mod tests {
         let reader = SubgraphReader::initialize(pool.clone(), clients)
             .await
             .expect("failed to init reader");
+        let id = domain_id("vitalik.eth");
         let history = reader
-            .get_domain_history(1, "vitalik.eth")
+            .get_domain_history(1, &id)
             .await
             .expect("failed to get history");
 
@@ -334,6 +405,45 @@ mod tests {
             },
         ];
         assert_eq!(expected_history, history);
+    }
+
+    #[sqlx::test(migrations = "tests/migrations")]
+    async fn batch_search_works(pool: PgPool) {
+        let pool = Arc::new(pool);
+        let clients = mocked_blockscout_clients().await;
+        let reader = SubgraphReader::initialize(pool.clone(), clients)
+            .await
+            .expect("failed to init reader");
+
+        let addresses = [
+            // test.eth
+            "0xeefb13c7d42efcc655e528da6d6f7bbcf9a2251d",
+            // is was address of test.eth until 13294741 block
+            "0x226159d592e2b063810a10ebf6dcbada94ed68b8",
+            // vitalik.eth
+            "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
+            // vitalik.eth
+            "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
+            // expired.eth (expired domain)
+            "0x9f7f7ddbfb8e14d1756580ba8037530da0880b99",
+            // wa🇬🇲i.eth
+            "0x9c996076a85b46061d9a70ff81f013853a86b619",
+            // not in database
+            "0x0000000000000000000000000000000000000000",
+        ]
+        .into_iter()
+        .map(addr);
+        let expected_domains = serde_json::from_value(serde_json::json!({
+            "0x9c996076a85b46061d9a70ff81f013853a86b619": "wa🇬🇲i.eth",
+            "0xd8da6bf26964af9d7eed9e03e53415d37aa96045": "vitalik.eth",
+            "0xeefb13c7d42efcc655e528da6d6f7bbcf9a2251d": "test.eth",
+        }))
+        .unwrap();
+        let domains = reader
+            .batch_search_addresses(1, addresses)
+            .await
+            .expect("failed to resolve addresess");
+        assert_eq!(domains, expected_domains);
     }
 
     fn addr(a: &str) -> Address {

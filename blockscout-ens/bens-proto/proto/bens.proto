@@ -5,74 +5,136 @@ package blockscout.bens.v1;
 option go_package = "github.com/blockscout/blockscout-rs/bens";
 
 service DomainsExtractor {
-  rpc SearchReverseDomain(SearchReverseDomainRequest) returns (SearchReverseDomainResponse) {}
-  rpc SearchDomain(SearchDomainRequest) returns (DetailedDomain) {}
+  rpc GetDomain(GetDomainRequest) returns (Domain) {}
+  rpc ListDomainEvents(ListDomainEventsRequest) returns (ListDomainEventsResponse) {}
+
+  rpc ResolveDomainName(ResolveDomainNameRequest) returns (ResolveDomainNameResponse) {}
+  rpc ResolveAddress(ResolveAddressRequest) returns (ResolveAddressResponse) {}
+  
+  rpc BatchSearchAddressNames(BatchSearchAddressNamesRequest) returns (BatchSearchAddressNamesResponse) {}
 }
 
 message Domain {
-  /// Unique id for the domain, also known as nodehash
+  // Unique id for the domain, also known as nodehash
   string id = 1;
-  /// The human readable name, if known. Unknown portions replaced with hash in square brackets (eg, foo.[1234].eth)
+  // The human readable name, if known. Unknown portions replaced with hash in square brackets (eg, foo.[1234].eth)
   string name = 2;
-  /// Integer representation of labelhash
+  // Integer representation of labelhash
   uint64 token_id = 3;
-  /// The account that owns the domain
+  // The account that owns the domain
   string owner = 4;
-  /// Optinal. Resolved address of this domain
+  // Optinal. Resolved address of this domain
   optional string resolved_address = 5;
-  /// Optinal. The account that owns the ERC721 NFT for the domain
+  // Optinal. The account that owns the ERC721 NFT for the domain
   optional string registrant = 6;
-  /// Optinal. Unix timestamp of expiry date. None means never expires
+  // Optinal. Unix timestamp of expiry date. None means never expires
   optional uint64 expiry_date = 7;
-  /// Unix timestamp of regisration date
+  // Unix timestamp of regisration date
   uint64 registration_date = 8;
-  /// Map chain -> resolved_address that contains other blockchain addresses.
-  /// This map will contain `current_chain_id` -> `resovled_address` if `resovled_address` is not None
-  map<string, string> other_address = 9;
+  // Map chain -> resolved_address that contains other blockchain addresses.
+  // This map will contain `current_chain_id` -> `resovled_address` if `resovled_address` is not None
+  map<string, string> other_addresses = 9;
 }
 
 message DomainEvent {
-  /// Transaction hash where action occured
+  // Transaction hash where action occured
   string transaction_hash = 1;
-  /// Timestamp of this transaction
+  // Timestamp of this transaction
   uint64 timestamp = 2;
-  /// Sender of transaction
+  ///Sender of transaction
   string from_address = 3;
-  /// Optinal. Action name
+  // Optinal. Action name
   optional string action = 4;
 }
 
 
-message DetailedDomain {
-  /// Optinal. Basic domain info
-  optional Domain domain = 1;
-  /// List of domain events
-  repeated DomainEvent history = 2;
+enum DomainView {
+  // The default / unset value.
+  // The API will default to the BASIC view.
+  DOMAIN_VIEW_UNSPECIFIED = 0;
+
+  // Include basic metadata about the domain, but not the full contents.
+  // (id, name, resolved_address, expiry_date)
+  // This is the default value.
+  DOMAIN_VIEW_BASIC = 1;
+
+  // Include everything.
+  DOMAIN_VIEW_FULL = 2;
 }
 
+/************************************************/
 
-message SearchReverseDomainRequest {
-  /// Address of EOA or contract
-  string address = 1;
-  /// The chain (network) where domain search should be done
+message GetDomainRequest {
+  // Unique id for the domain, also known as nodehash
+  string id = 1;
+  // The chain (network) where domain search should be done
   uint64 chain_id = 2;
-  /// Include domains resolved to the address
-  bool resolved_to = 3;
-  /// Include domains owned by the address
-  bool owned_by = 4;
+  // Specifies how much information about domain should be returned.
+  DomainView view = 3;
 }
 
-message SearchReverseDomainResponse {
+message ListDomainEventsRequest {
+  // Unique id for the domain, also known as nodehash
+  string domain_id = 1;
+  // The chain (network) where domain search should be done
+  uint64 chain_id = 2;
+}
+
+message ListDomainEventsResponse {
+  repeated DomainEvent domain_events = 1;
+}
+
+message ResolveDomainNameRequest {
+  // Name of domain, for example vitalik.eth
+  string name = 1;
+  // The chain (network) where domain search should be done
+  uint64 chain_id = 2;
+  // Specifies how much information about domain should be returned.
+  DomainView view = 3;
+  // Filtering field to remove expired domains
+  bool only_active = 4;
+}
+
+message ResolveDomainNameResponse {
+  // Basic domain info.
+  // May be empty in case if domain name haven't been resolved.
+  // The caller should check that `domain.id` is not zero.
+  Domain domain = 1;
+  // List of domain events. Is empty, if BASIC domain view have been requested.
+  repeated DomainEvent domain_events = 2;
+}
+
+
+message ResolveAddressRequest {
+  // Address of EOA or contract
+  string address = 1;
+  // The chain (network) where domain search should be done
+  uint64 chain_id = 2;
+  // Specifies how much information about corresponding domain should be returned.
+  DomainView view = 3;
+  // Include domains resolved to the address
+  bool resolved_to = 4;
+  // Include domains owned by the address
+  bool owned_by = 5;
+  // Filtering field to remove expired domains
+  bool only_active = 6;
+}
+
+message ResolveAddressResponse {
   // List of domains that resolved to requested address
   // Sorted by relevance, so first address could be displayed as main resolved address
-  repeated Domain resolved_to = 1;
+  repeated Domain resolved = 1;
   // List of domains owned by requested address
-  repeated Domain owned_by = 2;
+  repeated Domain owned = 2;
 }
 
-message SearchDomainRequest {
-  /// Name of domain, for example vitalik.eth
-  string name = 1;
-  /// The chain (network) where domain search should be done
-  uint64 chain_id = 2;
+message BatchSearchAddressNamesRequest {
+  // List of requested addresses
+  repeated string addresses = 1;
+  // The chain (network) where domain search should be done
+  string chain_id = 2;
+}
+
+message BatchSearchAddressNamesResponse {
+  map<string, string> names = 1;
 }
