@@ -84,7 +84,7 @@ paths:
       tags:
         - DomainsExtractor
   /api/v1/{chainId}/domains/{domainId}/domain-events:
-    post:
+    get:
       operationId: DomainsExtractor_ListDomainEvents
       responses:
         "200":
@@ -107,15 +107,10 @@ paths:
           in: path
           required: true
           type: string
-        - name: body
-          in: body
-          required: true
-          schema:
-            type: object
       tags:
         - DomainsExtractor
   /api/v1/{chainId}/domains/{id}:
-    post:
+    get:
       operationId: DomainsExtractor_GetDomain
       responses:
         "200":
@@ -138,15 +133,24 @@ paths:
           in: path
           required: true
           type: string
-        - name: body
-          in: body
-          required: true
-          schema:
-            type: object
-            properties:
-              domainView:
-                $ref: '#/definitions/v1DomainView'
-                description: Specifies how much information about domain should be returned.
+        - name: domainView
+          description: |-
+            Specifies how much information about domain should be returned.
+
+             - DOMAIN_VIEW_UNSPECIFIED: The default / unset value.
+            The API will default to the BASIC view.
+             - DOMAIN_VIEW_BASIC: Include basic metadata about the domain, but not the full contents.
+            (id, name, resolved_address, expiry_date)
+             - DOMAIN_VIEW_FULL: Include everything.
+            This is the default value.
+          in: query
+          required: false
+          type: string
+          enum:
+            - DOMAIN_VIEW_UNSPECIFIED
+            - DOMAIN_VIEW_BASIC
+            - DOMAIN_VIEW_FULL
+          default: DOMAIN_VIEW_UNSPECIFIED
       tags:
         - DomainsExtractor
   /api/v1/{chainId}/domains:batch-resolve:

@@ -5,12 +5,10 @@ http:
   rules:
     #################### DomainsExtractor ####################
     - selector: blockscout.bens.v1.DomainsExtractor.GetDomain
-      post: /api/v1/{chain_id}/domains/{id}
-      body: "*"
+      get: /api/v1/{chain_id}/domains/{id}
 
     - selector: blockscout.bens.v1.DomainsExtractor.ListDomainEvents
-      post: /api/v1/{chain_id}/domains/{domain_id}/domain-events
-      body: "*"
+      get: /api/v1/{chain_id}/domains/{domain_id}/domain-events
 
     - selector: blockscout.bens.v1.DomainsExtractor.ResolveDomainName
       post: /api/v1/{chain_id}/domains:resolve
