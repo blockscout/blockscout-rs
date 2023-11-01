@@ -29,35 +29,35 @@ impl MigrationTrait for Migration {
                 FOR EACH ROW
             EXECUTE FUNCTION set_modified_at();
         "#;
-        let create_trigger_insert_into_job_queue =
-            job_queue::migration::create_trigger_insert_job_statement("contract_addresses");
+        let create_job_queue_connection_statements =
+            job_queue::migration::create_job_queue_connection_statements("contract_addresses");
 
-        crate::from_statements(
-            manager,
-            &[
-                create_contract_addresses_table,
-                create_trigger_set_modified_at,
-                &create_trigger_insert_into_job_queue,
-            ],
-        )
-        .await
+        let mut statements = vec![
+            create_contract_addresses_table,
+            create_trigger_set_modified_at,
+        ];
+        statements.extend(
+            create_job_queue_connection_statements
+                .iter()
+                .map(|v| v.as_str()),
+        );
+
+        crate::from_statements(manager, &statements).await
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        let drop_trigger_insert_into_job_queue =
-            job_queue::migration::drop_trigger_insert_job_statement("contract_addresses");
+        let drop_job_queue_connection_statements =
+            job_queue::migration::drop_job_queue_connection_statements("contract_addresses");
         let drop_trigger_set_modified_at =
             "DROP TRIGGER trigger_set_modified_at ON contract_addresses;";
         let drop_table_contract_addresses = "DROP TABLE contract_addresses;";
 
-        crate::from_statements(
-            manager,
-            &[
-                &drop_trigger_insert_into_job_queue,
-                drop_trigger_set_modified_at,
-                drop_table_contract_addresses,
-            ],
-        )
-        .await
+        let mut statements = drop_job_queue_connection_statements
+            .iter()
+            .map(|v| v.as_str())
+            .collect::<Vec<_>>();
+        statements.extend([drop_trigger_set_modified_at, drop_table_contract_addresses]);
+
+        crate::from_statements(manager, &statements).await
     }
 }

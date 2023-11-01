@@ -104,19 +104,26 @@ impl MigrationTrait for Migration {
     }
 }
 
-pub fn create_trigger_insert_job_statement(relation: &str) -> String {
-    format!(
+pub fn create_job_queue_connection_statements(relation: &str) -> Vec<String> {
+    let create_trigger_insert_job = format!(
         r#"
-        CREATE TRIGGER insert_job
-        BEFORE INSERT ON {relation}
-            FOR EACH ROW
-        EXECUTE FUNCTION _insert_job();
-    "#
-    )
+            CREATE TRIGGER insert_job
+            BEFORE INSERT ON {relation}
+                FOR EACH ROW
+            EXECUTE FUNCTION _insert_job();
+        "#
+    );
+    let create_index_on_job_id =
+        format!("CREATE INDEX _{relation}_job_id_index ON {relation} (_job_id);");
+
+    vec![create_trigger_insert_job, create_index_on_job_id]
 }
 
-pub fn drop_trigger_insert_job_statement(relation: &str) -> String {
-    format!("DROP TRIGGER insert_job ON {relation};")
+pub fn drop_job_queue_connection_statements(relation: &str) -> Vec<String> {
+    let drop_trigger_insert_job = format!("DROP TRIGGER insert_job ON {relation};");
+    let drop_index_on_job_id = format!("DROP INDEX _{relation}_job_id_index;");
+
+    vec![drop_index_on_job_id, drop_trigger_insert_job]
 }
 
 async fn from_statements(manager: &SchemaManager<'_>, statements: &[&str]) -> Result<(), DbErr> {
