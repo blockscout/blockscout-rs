@@ -12,7 +12,7 @@ use sea_orm::{
 pub async fn mark_as_success<C: ConnectionTrait>(
     db: &C,
     id: Uuid,
-    message: Option<impl Into<String>>,
+    message: Option<String>,
 ) -> Result<(), DbErr> {
     update_status(db, JobStatus::Success, id, message).await
 }
@@ -20,7 +20,7 @@ pub async fn mark_as_success<C: ConnectionTrait>(
 pub async fn mark_as_error<C: ConnectionTrait>(
     db: &C,
     id: Uuid,
-    message: Option<impl Into<String>>,
+    message: Option<String>,
 ) -> Result<(), DbErr> {
     update_status(db, JobStatus::Error, id, message).await
 }
@@ -29,12 +29,12 @@ async fn update_status<C: ConnectionTrait>(
     db: &C,
     new_status: JobStatus,
     id: Uuid,
-    message: Option<impl Into<String>>,
+    message: Option<String>,
 ) -> Result<(), DbErr> {
     job_queue::ActiveModel {
         id: Set(id),
         status: Set(new_status),
-        log: Set(message.map(|msg| msg.into())),
+        log: Set(message),
         ..Default::default()
     }
     .update(db)
