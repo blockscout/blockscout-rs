@@ -18,10 +18,30 @@ fn compile(
         .bytes(["."])
         .btree_map(["."])
         .type_attribute(".", "#[actix_prost_macros::serde]")
-        // .field_attribute(
-        //     ".blockscout.ethBytecodeDb.v2.VerifyVyperMultiPartRequest.interfaces",
-        //     "#[serde(default)]"
-        // )
+        .field_attribute(
+            ".blockscout.bens.v1.ListDomainEventsRequest.sort",
+            "#[serde(default)]"
+        )
+        .field_attribute(
+            ".blockscout.bens.v1.ListDomainEventsRequest.order",
+            "#[serde(default)]"
+        )
+        .field_attribute(
+            ".blockscout.bens.v1.LookupDomainNameRequest.sort",
+            "#[serde(default)]"
+        )
+        .field_attribute(
+            ".blockscout.bens.v1.LookupDomainNameRequest.order",
+            "#[serde(default)]"
+        )
+        .field_attribute(
+            ".blockscout.bens.v1.LookupAddressRequest.sort",
+            "#[serde(default)]"
+        )
+        .field_attribute(
+            ".blockscout.bens.v1.LookupAddressRequest.order",
+            "#[serde(default)]"
+        )
         ;
     config.compile_protos(protos, includes)?;
     Ok(())

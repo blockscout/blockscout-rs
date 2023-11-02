@@ -27,11 +27,13 @@ message Domain {
   // The human readable name, if known. Unknown portions replaced with hash in square brackets (eg, foo.[1234].eth)
   string name = 2;
   // Optinal. Resolved address of this domain
-  optional string resolved_address = 3;
+  optional Address resolved_address = 3;
   // The account that owns the domain
   Address owner = 4;
   // Optinal. Unix timestamp of expiry date. None means never expires
-  optional uint64 expiry_date = 5; 
+  uint64 registration_date = 5;
+  // Optinal. Unix timestamp of expiry date. None means never expires
+  optional uint64 expiry_date = 6; 
 }
 
 message DetailedDomain {
@@ -67,6 +69,12 @@ message DomainEvent {
   optional string action = 4;
 }
 
+enum OrderDirection {
+    NOT_SET = 0;
+    ASC = 1;
+    DESC = 2;
+}
+
 message Pagination {
   uint32 total_records = 1;
 }
@@ -85,6 +93,10 @@ message ListDomainEventsRequest {
   string name = 1;
   // The chain (network) where domain search should be done
   uint64 chain_id = 2;
+  // Sorting field. Default is `timestamp`
+  string sort = 4;
+  // Order direction. Default is ASC
+  OrderDirection order = 5;
 }
 
 message ListDomainEventsResponse {
@@ -99,6 +111,10 @@ message LookupDomainNameRequest {
   uint64 chain_id = 2;
   // Filtering field to remove expired domains
   bool only_active = 3;
+  // Sorting field. Default is `registration_date`
+  string sort = 4;
+  // Order direction. Default is ASC
+  OrderDirection order = 5;
 }
 
 message LookupDomainNameResponse {
@@ -119,6 +135,10 @@ message LookupAddressRequest {
   bool owned_by = 5;
   // Filtering field to remove expired domains
   bool only_active = 6;
+  // Sorting field. Default is `registration_date`
+  string sort = 7;
+  // Order direction. Defaut is ASC
+  OrderDirection order = 8;
 }
 
 message LookupAddressResponse {
