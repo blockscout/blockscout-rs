@@ -80,6 +80,12 @@ paths:
               onlyActive:
                 type: boolean
                 title: Filtering field to remove expired domains
+              sort:
+                type: string
+                title: Sorting field. Default is `registration_date`
+              order:
+                $ref: '#/definitions/v1OrderDirection'
+                title: Order direction. Defaut is ASC
       tags:
         - DomainsExtractor
   /api/v1/{chainId}/domains/{name}:
@@ -134,6 +140,21 @@ paths:
           in: path
           required: true
           type: string
+        - name: sort
+          description: Sorting field. Default is `timestamp`
+          in: query
+          required: false
+          type: string
+        - name: order
+          description: Order direction. Default is ASC
+          in: query
+          required: false
+          type: string
+          enum:
+            - NOT_SET
+            - ASC
+            - DESC
+          default: NOT_SET
       tags:
         - DomainsExtractor
   /api/v1/{chainId}/domains:lookup:
@@ -168,6 +189,12 @@ paths:
               onlyActive:
                 type: boolean
                 title: Filtering field to remove expired domains
+              sort:
+                type: string
+                title: Sorting field. Default is `registration_date`
+              order:
+                $ref: '#/definitions/v1OrderDirection'
+                title: Order direction. Default is ASC
       tags:
         - DomainsExtractor
   /health:
@@ -221,6 +248,11 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/protobufAny'
+  v1Address:
+    type: object
+    properties:
+      hash:
+        type: string
   v1BatchResolveAddressNamesResponse:
     type: object
     properties:
@@ -242,13 +274,13 @@ definitions:
         format: uint64
         title: Integer representation of labelhash
       owner:
-        type: string
+        $ref: '#/definitions/v1Address'
         title: The account that owns the domain
       resolvedAddress:
-        type: string
+        $ref: '#/definitions/v1Address'
         title: Optinal. Resolved address of this domain
       registrant:
-        type: string
+        $ref: '#/definitions/v1Address'
         title: Optinal. The account that owns the ERC721 NFT for the domain
       expiryDate:
         type: string
@@ -275,11 +307,15 @@ definitions:
         type: string
         title: The human readable name, if known. Unknown portions replaced with hash in square brackets (eg, foo.[1234].eth)
       resolvedAddress:
-        type: string
+        $ref: '#/definitions/v1Address'
         title: Optinal. Resolved address of this domain
       owner:
-        type: string
+        $ref: '#/definitions/v1Address'
         title: The account that owns the domain
+      registrationDate:
+        type: string
+        format: uint64
+        title: Optinal. Unix timestamp of expiry date. None means never expires
       expiryDate:
         type: string
         format: uint64
@@ -295,7 +331,7 @@ definitions:
         format: uint64
         title: Timestamp of this transaction
       fromAddress:
-        type: string
+        $ref: '#/definitions/v1Address'
         title: /Sender of transaction
       action:
         type: string
@@ -341,6 +377,13 @@ definitions:
           Sorted by relevance, so first address could be displayed as main resolved address
       pagination:
         $ref: '#/definitions/v1Pagination'
+  v1OrderDirection:
+    type: string
+    enum:
+      - NOT_SET
+      - ASC
+      - DESC
+    default: NOT_SET
   v1Pagination:
     type: object
     properties:
