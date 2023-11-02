@@ -321,6 +321,12 @@ mod success_tests {
         test_success(test_case).await;
     }
 
+    #[tokio::test]
+    async fn returns_compilation_related_artifacts_with_two_cbor_auxdata() {
+        let test_case = solidity_types::from_file::<Flattened>("two_cbor_auxdata");
+        test_success(test_case).await;
+    }
+
     // TODO: is not working right now, as auxdata is not retrieved for contracts compiled without metadata hash.
     // #[tokio::test]
     // async fn returns_compilation_related_artifacts_with_no_metadata_hash() {
