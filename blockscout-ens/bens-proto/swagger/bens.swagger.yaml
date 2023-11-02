@@ -29,6 +29,7 @@ paths:
           in: path
           required: true
           type: string
+          format: int64
         - name: body
           in: body
           required: true
@@ -61,7 +62,7 @@ paths:
           in: path
           required: true
           type: string
-          format: uint64
+          format: int64
         - name: body
           in: body
           required: true
@@ -107,7 +108,7 @@ paths:
           in: path
           required: true
           type: string
-          format: uint64
+          format: int64
         - name: name
           description: Name of domain, for example vitalik.eth
           in: path
@@ -134,7 +135,7 @@ paths:
           in: path
           required: true
           type: string
-          format: uint64
+          format: int64
         - name: name
           description: Name of domain, for example vitalik.eth
           in: path
@@ -176,7 +177,7 @@ paths:
           in: path
           required: true
           type: string
-          format: uint64
+          format: int64
         - name: body
           in: body
           required: true
@@ -271,8 +272,7 @@ definitions:
         title: The human readable name, if known. Unknown portions replaced with hash in square brackets (eg, foo.[1234].eth)
       tokenId:
         type: string
-        format: uint64
-        title: Integer representation of labelhash
+        title: Hex representation of labelhash
       owner:
         $ref: '#/definitions/v1Address'
         title: The account that owns the domain
@@ -284,11 +284,11 @@ definitions:
         title: Optinal. The account that owns the ERC721 NFT for the domain
       expiryDate:
         type: string
-        format: uint64
+        format: int64
         title: Optinal. Unix timestamp of expiry date. None means never expires
       registrationDate:
         type: string
-        format: uint64
+        format: int64
         title: Unix timestamp of regisration date
       otherAddresses:
         type: object
@@ -314,11 +314,11 @@ definitions:
         title: The account that owns the domain
       registrationDate:
         type: string
-        format: uint64
+        format: int64
         title: Optinal. Unix timestamp of expiry date. None means never expires
       expiryDate:
         type: string
-        format: uint64
+        format: int64
         title: Optinal. Unix timestamp of expiry date. None means never expires
   v1DomainEvent:
     type: object
@@ -328,7 +328,6 @@ definitions:
         title: Transaction hash where action occured
       timestamp:
         type: string
-        format: uint64
         title: Timestamp of this transaction
       fromAddress:
         $ref: '#/definitions/v1Address'
