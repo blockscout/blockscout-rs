@@ -27,7 +27,6 @@ mock! {
 }
 
 mock! {
-    #[derive(Clone)]
     pub VyperVerifierService {}
 
     #[async_trait::async_trait]
@@ -41,7 +40,6 @@ mock! {
 }
 
 mock! {
-    #[derive(Clone)]
     pub SourcifyVerifierService {}
 
     #[async_trait::async_trait]

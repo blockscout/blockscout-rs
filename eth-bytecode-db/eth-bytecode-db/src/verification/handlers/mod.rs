@@ -178,6 +178,7 @@ async fn process_verify_response(
     let (process_eth_bytecode_db_result, process_alliance_db_result) =
         futures::future::join(process_eth_bytecode_db_future, process_alliance_db_future).await;
     let _ = process_eth_bytecode_db_result.map_err(|err: anyhow::Error| {
+        println!("Error while inserting contract data into database: {err:#}");
         tracing::error!(
             ?eth_bytecode_db_action_contract_address,
             ?eth_bytecode_db_action_chain_id,
@@ -185,6 +186,7 @@ async fn process_verify_response(
         )
     });
     let _ = process_alliance_db_result.map_err(|err: anyhow::Error| {
+        println!("Error while inserting contract data into verifier alliance database: {err:#}");
         tracing::error!(
             ?alliance_db_action_contract_address,
             ?alliance_db_action_chain_id,

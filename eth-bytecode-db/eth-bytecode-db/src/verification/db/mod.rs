@@ -4,9 +4,9 @@ pub mod verifier_alliance_db;
 ////////////////////////////////////////////////////////////////////////////////////////////
 
 macro_rules! insert_then_select {
-    ( $txn:expr, $entity_module:ident, $active_model:expr, [ $( ($column:ident, $value:expr) ),+ $(,)? ] ) => {
+    ( $txn:expr, $entity_module:ident, $active_model:expr, $update_on_conflict:expr, [ $( ($column:ident, $value:expr) ),+ $(,)? ] ) => {
         {
-            let result: Result<_, sea_orm::DbErr> = $entity_module::Entity::insert($active_model)
+            let result: Result<_, sea_orm::DbErr> = $entity_module::Entity::insert($active_model.clone())
                 .on_conflict(sea_orm::sea_query::OnConflict::new().do_nothing().to_owned())
                 .exec($txn)
                 .await;
@@ -28,14 +28,28 @@ macro_rules! insert_then_select {
                     Ok((model, true))
                 }
                 Err(sea_orm::DbErr::RecordNotInserted) => {
-                    let model = $entity_module::Entity::find()
-                        $(
-                            .filter($entity_module::Column::$column.eq($value))
-                        )*
-                        .one($txn)
-                        .await
-                        .context(format!("select from \"{}\" by unique columns", stringify!($entity_module)))?
-                        .ok_or(anyhow::anyhow!("select from \"{}\" by unique columns returned no data", stringify!($entity_module)))?;
+                    let mut model =
+                        $entity_module::Entity::find()
+                            $(
+                                .filter($entity_module::Column::$column.eq($value))
+                            )*
+                            .one($txn)
+                            .await
+                            .context(format!("select from \"{}\" by unique columns", stringify!($entity_module)))?
+                            .ok_or(anyhow::anyhow!("select from \"{}\" by unique columns returned no data", stringify!($entity_module)))?;
+                    // The active model have not been inserted.
+                    // Thus, there were a value already that we need to update.
+                    if $update_on_conflict {
+                        let mut active_model_to_update = $active_model;
+                        for primary_key in <$entity_module::PrimaryKey as sea_orm::Iterable>::iter() {
+                            let column = sea_orm::PrimaryKeyToColumn::into_column(primary_key);
+                            let value = sea_orm::ModelTrait::get(&model, column);
+                            sea_orm::ActiveModelTrait::set(&mut active_model_to_update, column, value);
+                        }
+                        model = sea_orm::ActiveModelTrait::update(
+                            active_model_to_update, $txn
+                        ).await.context(format!("update on conflict in \"{}\"", stringify!($entity_module)))?;
+                    }
 
                     Ok((model, false))
                 }
