@@ -10,14 +10,16 @@ http:
     - selector: blockscout.bens.v1.DomainsExtractor.ListDomainEvents
       get: /api/v1/{chain_id}/domains/{name}/events
 
-    - selector: blockscout.bens.v1.DomainsExtractor.ResolveDomainName
-      get: /api/v1/{chain_id}/domains/{name}/resolve
+    - selector: blockscout.bens.v1.DomainsExtractor.LookupDomainName
+      post: /api/v1/{chain_id}/domains:lookup
+      body: "*"
 
-    - selector: blockscout.bens.v1.DomainsExtractor.ResolveAddress
-      get: /api/v1/{chain_id}/addresses/{address}/resolve
+    - selector: blockscout.bens.v1.DomainsExtractor.LookupAddress
+      post: /api/v1/{chain_id}/addresses:lookup
+      body: "*"
 
-    - selector: blockscout.bens.v1.DomainsExtractor.BatchSearchAddressNames
-      post: /api/v1/{chain_id}/address-names:batch-search
+    - selector: blockscout.bens.v1.DomainsExtractor.BatchResolveAddressNames
+      post: /api/v1/{chain_id}/addresses:batch-resolve-names
       body: "*"
 
     #################### Health ####################
