@@ -9,12 +9,16 @@ service DomainsExtractor {
   rpc GetDomain(GetDomainRequest) returns (DetailedDomain) {}
   // Get list of events of domain for Detailed domain page
   rpc ListDomainEvents(ListDomainEventsRequest) returns (ListDomainEventsResponse) {}
-  // Get basic info about domain for ens-lookup and blockscout quick-search
-  rpc ResolveDomainName(ResolveDomainNameRequest) returns (Domain) {}
-  // Get basic info about address for ens-lookup and blockscout quick-search
-  rpc ResolveAddress(ResolveAddressRequest) returns (ResolveAddressResponse) {}
+  // Get basic info about domain for ens-lookup and blockscout quick-search. Sorted by `registration_date`
+  rpc LookupDomainName(LookupDomainNameRequest) returns (LookupDomainNameResponse) {}
+  // Get basic info about address for ens-lookup and blockscout quick-search. Sorted by `registration_date`
+  rpc LookupAddress(LookupAddressRequest) returns (LookupAddressResponse) {}
   // Perform batch resolving of list of address for blockscout backend requests
-  rpc BatchSearchAddressNames(BatchSearchAddressNamesRequest) returns (BatchSearchAddressNamesResponse) {}
+  rpc BatchResolveAddressNames(BatchResolveAddressNamesRequest) returns (BatchResolveAddressNamesResponse) {}
+}
+
+message Address {
+  string hash = 1;
 }
 
 message Domain {
@@ -25,7 +29,7 @@ message Domain {
   // Optinal. Resolved address of this domain
   optional string resolved_address = 3;
   // The account that owns the domain
-  string owner = 4;
+  Address owner = 4;
   // Optinal. Unix timestamp of expiry date. None means never expires
   optional uint64 expiry_date = 5; 
 }
@@ -38,11 +42,11 @@ message DetailedDomain {
   // Integer representation of labelhash
   uint64 token_id = 3;
   // The account that owns the domain
-  string owner = 4;
+  Address owner = 4;
   // Optinal. Resolved address of this domain
-  optional string resolved_address = 5;
+  optional Address resolved_address = 5;
   // Optinal. The account that owns the ERC721 NFT for the domain
-  optional string registrant = 6;
+  optional Address registrant = 6;
   // Optinal. Unix timestamp of expiry date. None means never expires
   optional uint64 expiry_date = 7;
   // Unix timestamp of regisration date
@@ -58,11 +62,14 @@ message DomainEvent {
   // Timestamp of this transaction
   uint64 timestamp = 2;
   ///Sender of transaction
-  string from_address = 3;
+  Address from_address = 3;
   // Optinal. Action name
   optional string action = 4;
 }
 
+message Pagination {
+  uint32 total_records = 1;
+}
 
 /************************************************/
 
@@ -82,9 +89,10 @@ message ListDomainEventsRequest {
 
 message ListDomainEventsResponse {
   repeated DomainEvent items = 1;
+  Pagination pagination = 2;
 }
 
-message ResolveDomainNameRequest {
+message LookupDomainNameRequest {
   // Name of domain, for example vitalik.eth
   string name = 1;
   // The chain (network) where domain search should be done
@@ -93,8 +101,14 @@ message ResolveDomainNameRequest {
   bool only_active = 3;
 }
 
+message LookupDomainNameResponse {
+  // List of domains that resolved to or owned by requested address
+  // Sorted by relevance, so first address could be displayed as main resolved address
+  repeated Domain items = 1;
+  Pagination pagination = 2;
+}
 
-message ResolveAddressRequest {
+message LookupAddressRequest {
   // Address of EOA or contract
   string address = 1;
   // The chain (network) where domain search should be done
@@ -107,19 +121,20 @@ message ResolveAddressRequest {
   bool only_active = 6;
 }
 
-message ResolveAddressResponse {
+message LookupAddressResponse {
   // List of domains that resolved to or owned by requested address
   // Sorted by relevance, so first address could be displayed as main resolved address
   repeated Domain items = 1;
+  Pagination pagination = 2;
 }
 
-message BatchSearchAddressNamesRequest {
+message BatchResolveAddressNamesRequest {
   // List of requested addresses
   repeated string addresses = 1;
   // The chain (network) where domain search should be done
   string chain_id = 2;
 }
 
-message BatchSearchAddressNamesResponse {
+message BatchResolveAddressNamesResponse {
   map<string, string> names = 1;
 }
