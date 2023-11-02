@@ -421,6 +421,7 @@ mod cbor_auxdata {
                     let id = format!("{}", auxdata.len());
                     let value = DisplayBytes::from(raw.to_vec());
                     auxdata.insert(id, CborAuxdataValue { offset, value });
+                    offset += part.size();
                 }
             }
         }
