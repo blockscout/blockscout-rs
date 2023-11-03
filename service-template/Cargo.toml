@@ -1,0 +1,15 @@
+[workspace]
+resolver = "2"
+members = [
+    {% if logic -%}
+    "{{project-name}}-logic",
+    {% endif -%}
+    {% if entity -%}
+    "{{project-name}}-logic/entity",
+    {% endif -%}
+    {% if entity -%}
+    "{{project-name}}-logic/migration",
+    {% endif -%}
+    "{{project-name}}-proto",
+    "{{project-name}}-server",
+]

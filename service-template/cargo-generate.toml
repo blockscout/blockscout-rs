@@ -1,0 +1,56 @@
+[template]
+cargo_generate_version = ">=0.17.4"
+ignore = []
+
+[placeholders.logic]
+type = "bool"
+prompt = "Include logic crate?"
+default = true
+
+[conditional.'!logic']
+ignore = ["{{project-name}}-logic"]
+
+[conditional.'logic'.placeholders.entity]
+type = "bool"
+prompt = "Include entity crate inside logic crate?"
+default = true
+
+[conditional.'!entity']
+ignore = ["{{project-name}}-logic/entity"]
+
+[conditional.'logic'.placeholders.migrations]
+type = "bool"
+prompt = "Include migration crate inside logic crate?"
+default = true
+
+[conditional.'!migrations']
+ignore = ["{{project-name}}-logic/migrations"]
+
+
+[placeholders.database]
+type = "bool"
+prompt = "Does server need to connect to postgres database?"
+default = true
+
+[placeholders.cicd]
+type = "bool"
+prompt = "Generate github cicd YML file in .github/workflows? (You will need to move it to right location)"
+default = true
+
+[conditional.'!cicd']
+ignore = [".github"]
+
+[placeholders.proto_ex]
+type = "bool"
+prompt = "Generate example service, endpoints and messages in proto definition?"
+default = true
+
+# [conditional.'proto_ex'.placeholders.proto_ex_name]
+# type = "string"
+# prompt = "Write example service name to generating proto examples"
+# default = "TestService"
+
+[hooks]
+pre = [
+    "pre-script.rhai"
+]
