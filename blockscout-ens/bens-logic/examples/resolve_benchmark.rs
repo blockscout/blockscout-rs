@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 
-use bens_logic::subgraphs_reader::{blockscout::BlockscoutClient, SubgraphReader};
+use bens_logic::subgraphs_reader::{
+    blockscout::BlockscoutClient, BatchResolveAddressNamesInput, SubgraphReader,
+};
 use sqlx::postgres::PgPoolOptions;
 use std::{collections::HashMap, sync::Arc, time::Instant};
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -133,7 +135,10 @@ async fn main() -> Result<(), anyhow::Error> {
     let size = addresses.len();
     let now = Instant::now();
     let result = reader
-        .batch_search_addresses(1, addresses.into_iter())
+        .batch_resolve_address_names(BatchResolveAddressNamesInput {
+            network_id: 1,
+            addresses,
+        })
         .await
         .expect("failed to quick resolve");
     // job size is 94. elapsed 1.1955539s. resolved as 13 domains

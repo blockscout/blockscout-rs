@@ -90,12 +90,15 @@ impl BlockscoutClient {
     }
 
     pub async fn transactions_batch(
-        self: &Arc<Self>,
+        self: Arc<Self>,
         transaction_hashes: Vec<&ethers::types::TxHash>,
     ) -> reqwest_middleware::Result<Vec<(TxHash, Response<Transaction>)>> {
-        let fetches = futures::stream::iter(transaction_hashes.iter().map(move |hash| async {
-            let result = self.transaction(hash).await;
-            result.map(|r| (TxHash::clone(hash), r))
+        let fetches = futures::stream::iter(transaction_hashes.into_iter().cloned().map(|hash| {
+            let client = self.clone();
+            async move {
+                let result = client.transaction(&hash).await;
+                result.map(|r| (TxHash::clone(&hash), r))
+            }
         }))
         .buffer_unordered(MAX_REQUESTS_BATCH)
         .collect::<Vec<_>>();
