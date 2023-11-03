@@ -17,10 +17,6 @@ service DomainsExtractor {
   rpc BatchResolveAddressNames(BatchResolveAddressNamesRequest) returns (BatchResolveAddressNamesResponse) {}
 }
 
-message Address {
-  string hash = 1;
-}
-
 message Domain {
   // Unique id for the domain, also known as nodehash
   string id = 1;
@@ -69,10 +65,13 @@ message DomainEvent {
   optional string action = 4;
 }
 
-enum OrderDirection {
-    NOT_SET = 0;
-    ASC = 1;
-    DESC = 2;
+message Address {
+  string hash = 1;
+}
+
+enum Order {
+    ASC = 0;
+    DESC = 1;
 }
 
 message Pagination {
@@ -96,7 +95,7 @@ message ListDomainEventsRequest {
   // Sorting field. Default is `timestamp`
   string sort = 4;
   // Order direction. Default is ASC
-  OrderDirection order = 5;
+  Order order = 5;
 }
 
 message ListDomainEventsResponse {
@@ -114,7 +113,7 @@ message LookupDomainNameRequest {
   // Sorting field. Default is `registration_date`
   string sort = 4;
   // Order direction. Default is ASC
-  OrderDirection order = 5;
+  Order order = 5;
 }
 
 message LookupDomainNameResponse {
@@ -138,7 +137,7 @@ message LookupAddressRequest {
   // Sorting field. Default is `registration_date`
   string sort = 7;
   // Order direction. Defaut is ASC
-  OrderDirection order = 8;
+  Order order = 8;
 }
 
 message LookupAddressResponse {
