@@ -46,9 +46,19 @@ macro_rules! insert_then_select {
                             let value = sea_orm::ModelTrait::get(&model, column);
                             sea_orm::ActiveModelTrait::set(&mut active_model_to_update, column, value);
                         }
-                        model = sea_orm::ActiveModelTrait::update(
+                        let updated_model = sea_orm::ActiveModelTrait::update(
                             active_model_to_update, $txn
                         ).await.context(format!("update on conflict in \"{}\"", stringify!($entity_module)))?;
+
+                        if updated_model != model {
+                            tracing::warn!(
+                                model=?model,
+                                updated_model=?updated_model,
+                                "the \"{}\" model has been updated",
+                                stringify!($entity_module)
+                            );
+                            model = updated_model;
+                        }
                     }
 
                     Ok((model, false))
