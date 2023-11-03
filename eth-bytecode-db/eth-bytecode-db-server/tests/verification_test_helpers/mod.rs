@@ -383,4 +383,93 @@ pub mod test_cases {
             serde_json::json!({ "contractAddress": "0x0123456789012345678901234567890123456789" });
         validate(metadata).await;
     }
+
+    pub async fn test_update_source_then_search<Service, Request>(
+        test_suite_name: &str,
+        route: &str,
+        verification_request: Request,
+        source_type: SourceType,
+    ) where
+        Service: VerifierService<smart_contract_verifier_v2::VerifyResponse> + Default,
+        Request: Serialize,
+    {
+        let db = init_db(test_suite_name, "test_update_source_then_search").await;
+
+        {
+            let test_data = test_input_data::basic(source_type, MatchType::Full);
+
+            let verifier_addr =
+                init_verifier_server(Service::default(), test_data.verifier_response).await;
+            let eth_bytecode_db_base =
+                init_eth_bytecode_db_server(db.db_url(), verifier_addr).await;
+
+            let _verification_response: eth_bytecode_db_v2::VerifyResponse =
+                test_server::send_post_request(&eth_bytecode_db_base, route, &verification_request)
+                    .await;
+        }
+
+        let updated_test_data = {
+            let test_input_data::TestInputData {
+                verifier_response,
+                mut eth_bytecode_db_response,
+            } = test_input_data::basic(source_type, MatchType::Full);
+            if let Some(source) = eth_bytecode_db_response.source.as_mut() {
+                let mut compilation_artifacts: serde_json::Value =
+                    serde_json::from_str(source.compilation_artifacts()).unwrap();
+                compilation_artifacts
+                    .as_object_mut()
+                    .unwrap()
+                    .insert("additionalValue".to_string(), serde_json::Value::default());
+                source.compilation_artifacts = Some(compilation_artifacts.to_string());
+            }
+
+            test_input_data::TestInputData::from_source_and_extra_data(
+                eth_bytecode_db_response.source.unwrap(),
+                verifier_response.extra_data.unwrap(),
+            )
+        };
+
+        let creation_input = updated_test_data.creation_input().unwrap();
+
+        let verifier_addr =
+            init_verifier_server(Service::default(), updated_test_data.verifier_response).await;
+        let eth_bytecode_db_base = init_eth_bytecode_db_server(db.db_url(), verifier_addr).await;
+
+        let verification_response: eth_bytecode_db_v2::VerifyResponse =
+            test_server::send_post_request(&eth_bytecode_db_base, route, &verification_request)
+                .await;
+
+        assert_eq!(
+            verification_response, updated_test_data.eth_bytecode_db_response,
+            "Invalid verification response"
+        );
+
+        let creation_input_search_response: eth_bytecode_db_v2::SearchSourcesResponse = {
+            let request = {
+                eth_bytecode_db_v2::SearchSourcesRequest {
+                    bytecode: creation_input,
+                    bytecode_type: eth_bytecode_db_v2::BytecodeType::CreationInput.into(),
+                }
+            };
+
+            test_server::send_annotated_post_request(
+                &eth_bytecode_db_base,
+                DB_SEARCH_ROUTE,
+                &request,
+                "Creation input search",
+            )
+            .await
+        };
+
+        assert_eq!(
+            1,
+            creation_input_search_response.sources.len(),
+            "Invalid number of sources returned"
+        );
+        assert_eq!(
+            verification_response.source.unwrap(),
+            creation_input_search_response.sources[0],
+            "Sources returned on verification and search differ"
+        );
+    }
 }

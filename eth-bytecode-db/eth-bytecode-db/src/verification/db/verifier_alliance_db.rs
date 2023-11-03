@@ -215,6 +215,7 @@ async fn insert_verified_contract(
         txn,
         verified_contracts,
         active_model,
+        false,
         [
             (CompilationId, compiled_contract.id),
             (ContractId, contract.id),
@@ -274,6 +275,7 @@ async fn insert_compiled_contract(
         txn,
         compiled_contracts,
         active_model,
+        false,
         [
             (Compiler, compiler),
             (Language, language),
@@ -304,6 +306,7 @@ async fn insert_contract_deployment(
         txn,
         contract_deployments,
         active_model,
+        false,
         [
             (ChainId, deployment_data.chain_id),
             (Address, deployment_data.contract_address),
@@ -355,6 +358,7 @@ async fn insert_contract(
         txn,
         contracts,
         active_model,
+        false,
         [
             (CreationCodeHash, creation_code_hash),
             (RuntimeCodeHash, runtime_code_hash)
@@ -374,8 +378,13 @@ async fn insert_code(
         code_hash: Set(code_hash.0.to_vec()),
         code: Set(Some(code)),
     };
-    let (code, _inserted) =
-        insert_then_select!(txn, code, active_model, [(CodeHash, code_hash.0.to_vec())])?;
+    let (code, _inserted) = insert_then_select!(
+        txn,
+        code,
+        active_model,
+        false,
+        [(CodeHash, code_hash.0.to_vec())]
+    )?;
 
     Ok(code)
 }
