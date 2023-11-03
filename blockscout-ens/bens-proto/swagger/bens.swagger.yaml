@@ -85,7 +85,7 @@ paths:
                 type: string
                 title: Sorting field. Default is `registration_date`
               order:
-                $ref: '#/definitions/v1OrderDirection'
+                $ref: '#/definitions/v1Order'
                 title: Order direction. Defaut is ASC
       tags:
         - DomainsExtractor
@@ -152,10 +152,9 @@ paths:
           required: false
           type: string
           enum:
-            - NOT_SET
             - ASC
             - DESC
-          default: NOT_SET
+          default: ASC
       tags:
         - DomainsExtractor
   /api/v1/{chainId}/domains:lookup:
@@ -194,7 +193,7 @@ paths:
                 type: string
                 title: Sorting field. Default is `registration_date`
               order:
-                $ref: '#/definitions/v1OrderDirection'
+                $ref: '#/definitions/v1Order'
                 title: Order direction. Default is ASC
       tags:
         - DomainsExtractor
@@ -376,13 +375,12 @@ definitions:
           Sorted by relevance, so first address could be displayed as main resolved address
       pagination:
         $ref: '#/definitions/v1Pagination'
-  v1OrderDirection:
+  v1Order:
     type: string
     enum:
-      - NOT_SET
       - ASC
       - DESC
-    default: NOT_SET
+    default: ASC
   v1Pagination:
     type: object
     properties:
