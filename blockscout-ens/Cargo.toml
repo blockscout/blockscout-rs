@@ -3,4 +3,5 @@
 members = [
     "bens-logic",
     "bens-proto",
+    "bens-server",
 ]
