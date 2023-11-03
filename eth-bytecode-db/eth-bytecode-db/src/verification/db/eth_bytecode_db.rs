@@ -110,8 +110,13 @@ async fn insert_files(
             content: Set(content.clone()),
             ..Default::default()
         };
-        let (file, _inserted) =
-            insert_then_select!(txn, files, active_model, [(Name, name), (Content, content)])?;
+        let (file, _inserted) = insert_then_select!(
+            txn,
+            files,
+            active_model,
+            true,
+            [(Name, name), (Content, content)]
+        )?;
 
         result.push(file);
     }
@@ -165,6 +170,7 @@ async fn insert_source_details(
         txn,
         sources,
         active_model,
+        true,
         [
             (CompilerVersion, source.compiler_version),
             (CompilerSettings, source.compiler_settings),
@@ -214,6 +220,7 @@ async fn insert_bytecodes(
             txn,
             bytecodes,
             active_model,
+            true,
             [(SourceId, source_id), (BytecodeType, bytecode_type)]
         )?;
         bytecode
@@ -232,6 +239,7 @@ async fn insert_bytecodes(
                 txn,
                 parts,
                 active_model,
+                true,
                 [(Data, part.data()), (PartType, part_type)]
             )?;
             part

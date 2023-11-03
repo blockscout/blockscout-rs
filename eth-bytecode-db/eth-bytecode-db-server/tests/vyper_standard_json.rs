@@ -129,7 +129,7 @@ async fn test_search_returns_full_matches_only_if_any() {
 #[tokio::test]
 #[timeout(std::time::Duration::from_secs(60))]
 #[ignore = "Needs database to run"]
-async fn test_accepts_partial_verification_metadata_in_input() {
+async fn test_update_source_then_search() {
     let default_request = VerifyVyperStandardJsonRequest {
         bytecode: "".to_string(),
         bytecode_type: BytecodeType::CreationInput.into(),
@@ -138,7 +138,7 @@ async fn test_accepts_partial_verification_metadata_in_input() {
         metadata: None,
     };
     let source_type = verification::SourceType::Vyper;
-    test_cases::test_accepts_partial_verification_metadata_in_input::<MockVyperVerifierService, _>(
+    test_cases::test_update_source_then_search::<MockVyperVerifierService, _>(
         TEST_SUITE_NAME,
         ROUTE,
         default_request,

@@ -651,3 +651,95 @@ pub async fn test_verification_of_same_source_results_stored_once<Service, Reque
         bytecode_parts.len()
     );
 }
+
+pub async fn test_verification_of_updated_source_replace_the_old_result<Service, Request>(
+    db_prefix: &str,
+    service_generator: impl Fn() -> Service,
+) where
+    Request: Clone,
+    Service: VerifierService<Request>,
+{
+    let db = init_db(
+        db_prefix,
+        "test_verification_of_updated_source_replace_the_old_result",
+    )
+    .await;
+
+    {
+        let service = service_generator();
+        let source_type = service.source_type();
+        let input_data =
+            test_input_data::input_data_1(service.generate_request(1, None), source_type);
+        let client =
+            start_server_and_init_client(db.client().clone(), service, vec![input_data.clone()])
+                .await;
+        let _source = Service::verify(client.clone(), input_data.eth_bytecode_db_request.clone())
+            .await
+            .expect("Verification failed");
+    }
+
+    let updated_service = service_generator();
+    let source_type = updated_service.source_type();
+    let updated_input_data = {
+        let TestInputData {
+            eth_bytecode_db_request,
+            verifier_response: mut updated_verifier_response,
+            ..
+        } = test_input_data::input_data_1(updated_service.generate_request(1, None), source_type);
+        if let Some(source) = updated_verifier_response.source.as_mut() {
+            let mut compilation_artifacts: serde_json::Value =
+                serde_json::from_str(source.compilation_artifacts()).unwrap();
+            compilation_artifacts
+                .as_object_mut()
+                .unwrap()
+                .insert("additionalValue".to_string(), serde_json::Value::default());
+            source.compilation_artifacts = Some(compilation_artifacts.to_string());
+        }
+
+        TestInputData::from_verifier_source_and_extra_data(
+            eth_bytecode_db_request,
+            updated_verifier_response.source.unwrap(),
+            updated_verifier_response.extra_data.unwrap(),
+        )
+    };
+    let client = start_server_and_init_client(
+        db.client().clone(),
+        updated_service,
+        vec![updated_input_data.clone()],
+    )
+    .await;
+    let source = Service::verify(
+        client.clone(),
+        updated_input_data.eth_bytecode_db_request.clone(),
+    )
+    .await
+    .expect("Verification failed");
+
+    assert_eq!(
+        updated_input_data.eth_bytecode_db_source, source,
+        "Invalid source"
+    );
+
+    let db_client = db.client();
+    let db_client_ref = db_client.as_ref();
+
+    /* Assert inserted into "sources" */
+
+    let db_source = sources::Entity::find()
+        .one(db_client_ref)
+        .await
+        .expect("Error while reading source")
+        .expect("No sources when there should be one");
+
+    assert_eq!(
+        updated_input_data
+            .verifier_response
+            .source
+            .unwrap()
+            .compilation_artifacts
+            .as_ref()
+            .map(|v| serde_json::from_str(v).unwrap()),
+        db_source.compilation_artifacts,
+        "Invalid compilation artifacts"
+    );
+}
