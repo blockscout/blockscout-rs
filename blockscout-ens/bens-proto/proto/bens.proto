@@ -69,13 +69,13 @@ message Address {
   string hash = 1;
 }
 
-enum Order {
-    ASC = 0;
-    DESC = 1;
-}
-
 message Pagination {
   uint32 total_records = 1;
+}
+
+enum Order {
+  ASC = 0;
+  DESC = 1;
 }
 
 /************************************************/
