@@ -5,25 +5,21 @@ http:
   rules:
     #################### DomainsExtractor ####################
     - selector: blockscout.bens.v1.DomainsExtractor.GetDomain
-      get: /api/v1/{chain_id}/domains/{id}
+      get: /api/v1/{chain_id}/domains/{name}
 
     - selector: blockscout.bens.v1.DomainsExtractor.ListDomainEvents
-      get: /api/v1/{chain_id}/domains/{domain_id}/events
+      get: /api/v1/{chain_id}/domains/{name}/events
 
-    - selector: blockscout.bens.v1.DomainsExtractor.ResolveDomainName
-      post: /api/v1/{chain_id}/domains:resolve
+    - selector: blockscout.bens.v1.DomainsExtractor.LookupDomainName
+      post: /api/v1/{chain_id}/domains:lookup
       body: "*"
 
-    - selector: blockscout.bens.v1.DomainsExtractor.BatchResolveDomainNames
-      post: /api/v1/{chain_id}/domains:batch-resolve
+    - selector: blockscout.bens.v1.DomainsExtractor.LookupAddress
+      post: /api/v1/{chain_id}/addresses:lookup
       body: "*"
 
-    - selector: blockscout.bens.v1.DomainsExtractor.ResolveAddress
-      post: /api/v1/{chain_id}/addresses:resolve
-      body: "*"
-
-    - selector: blockscout.bens.v1.DomainsExtractor.BatchSearchAddressNames
-      post: /api/v1/{chain_id}/address-names:batch-search
+    - selector: blockscout.bens.v1.DomainsExtractor.BatchResolveAddressNames
+      post: /api/v1/{chain_id}/addresses:batch-resolve-names
       body: "*"
 
     #################### Health ####################
