@@ -74,15 +74,15 @@ impl Display for EventSort {
 #[derive(Debug, Clone, Copy, Deserialize, Default)]
 pub enum Order {
     #[default]
-    ASC,
-    DESC,
+    Asc,
+    Desc,
 }
 
 impl Display for Order {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Order::ASC => write!(f, "asc"),
-            Order::DESC => write!(f, "desc"),
+            Order::Asc => write!(f, "asc"),
+            Order::Desc => write!(f, "desc"),
         }
     }
 }

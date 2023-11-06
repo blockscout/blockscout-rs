@@ -93,7 +93,7 @@ mod tests {
 
     #[test]
     fn events_sql_works() {
-        let sql = sql_events_of_domain("sgd1", EventSort::BlockNumber, Order::ASC)
+        let sql = sql_events_of_domain("sgd1", EventSort::BlockNumber, Order::Asc)
             .expect("failed to render history.sql");
         let expected = include_str!("history_expected.sql");
         assert_eq!(sql, expected);
