@@ -16,6 +16,11 @@ http:
     - selector: blockscout.smartContractVerifier.v2.SolidityVerifier.ListCompilerVersions
       get: /api/v2/verifier/solidity/versions
 
+    - selector: blockscout.smartContractVerifier.v2.SolidityVerifier.LookupMethods
+      post: /api/v2/verifier/solidity/lookup-methods
+      body: "*"
+
+
     #################### Vyper Verifier ####################
 
     - selector: blockscout.smartContractVerifier.v2.VyperVerifier.VerifyMultiPart

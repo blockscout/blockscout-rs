@@ -8,8 +8,11 @@ mod verify_response;
 mod vyper_multi_part;
 mod vyper_standard_json;
 
+mod lookup_methods;
+
 pub use self::sourcify::VerifySourcifyRequestWrapper;
 pub use errors::StandardJsonParseError;
+pub use lookup_methods::{LookupMethodsRequestWrapper, LookupMethodsResponseWrapper};
 pub use solidity_multi_part::VerifySolidityMultiPartRequestWrapper;
 pub use solidity_standard_json::VerifySolidityStandardJsonRequestWrapper;
 pub use sourcify_from_etherscan::VerifyFromEtherscanSourcifyRequestWrapper;

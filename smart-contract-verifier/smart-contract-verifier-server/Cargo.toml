@@ -12,6 +12,7 @@ sig-provider-extension = { path = "../sig-provider-extension", optional = true }
 
 actix-web = "4"
 actix-web-prom = "0.6"
+amplify = { version = "3.13.0", features = ["derive"] }
 anyhow = "1.0"
 async-trait = "0.1"
 blockscout-display-bytes = { version = "1.0" }
@@ -20,6 +21,7 @@ bytes = "1.3"
 config = "0.13"
 cron = "0.11"
 ethers-solc = "2.0.6"
+ethers-core = "2.0.10"
 futures = "0.3"
 lazy_static = "1"
 opentelemetry = { version = "0.18", features = ["rt-tokio"] }

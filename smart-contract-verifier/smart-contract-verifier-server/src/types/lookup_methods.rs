@@ -1,0 +1,54 @@
+use crate::proto;
+use amplify::{From, Wrapper};
+use blockscout_display_bytes::Bytes as DisplayBytes;
+use ethers_core::abi::Abi;
+use ethers_solc::sourcemap;
+use smart_contract_verifier::{LookupMethodsRequest, LookupMethodsResponse};
+use std::{collections::BTreeMap, str::FromStr};
+
+#[derive(Wrapper, From, Clone, Debug, PartialEq)]
+pub struct LookupMethodsRequestWrapper(proto::LookupMethodsRequest);
+
+impl TryFrom<LookupMethodsRequestWrapper> for LookupMethodsRequest {
+    type Error = tonic::Status;
+
+    fn try_from(request: LookupMethodsRequestWrapper) -> Result<Self, Self::Error> {
+        let bytecode = DisplayBytes::from_str(&request.bytecode)
+            .map_err(|err| tonic::Status::invalid_argument(format!("Invalid bytecode: {err:?}")))?
+            .0;
+        let abi = Abi::load(request.abi.as_bytes()).unwrap(); // TODO why unwrap?
+        let source_map = sourcemap::parse(&request.source_map).unwrap();
+        let file_id_map = request.file_id_map.clone(); // TODO: use Arc ?
+
+        Ok(Self {
+            bytecode,
+            abi,
+            source_map,
+            file_id_map,
+        })
+    }
+}
+
+#[derive(Wrapper, From, Clone, Debug, PartialEq)]
+pub struct LookupMethodsResponseWrapper(proto::LookupMethodsResponse);
+
+impl From<LookupMethodsResponse> for LookupMethodsResponseWrapper {
+    fn from(response: LookupMethodsResponse) -> Self {
+        Self(proto::LookupMethodsResponse {
+            methods: response
+                .methods
+                .iter()
+                .map(|(selector, method)| {
+                    (
+                        selector.clone(),
+                        proto::lookup_methods_response::Method {
+                            file_name: method.filename.clone(),
+                            file_offset: method.offset as i32,
+                            length: method.length as i32,
+                        },
+                    )
+                })
+                .collect::<BTreeMap<String, proto::lookup_methods_response::Method>>(),
+        })
+    }
+}
