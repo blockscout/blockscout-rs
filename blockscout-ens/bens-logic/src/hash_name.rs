@@ -14,6 +14,17 @@ pub fn hash_ens_domain_name(name: &str) -> [u8; 32] {
     }
 }
 
+pub fn domain_id(name: &str) -> String {
+    hex(hash_ens_domain_name(name))
+}
+
+pub fn hex<T>(data: T) -> String
+where
+    T: AsRef<[u8]>,
+{
+    format!("0x{}", hex::encode(data))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

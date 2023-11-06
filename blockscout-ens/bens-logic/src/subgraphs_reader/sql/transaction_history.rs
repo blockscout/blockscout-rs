@@ -1,5 +1,7 @@
 use crate::{
-    entity::subgraph::domain_event::DomainEventTransaction, subgraphs_reader::SubgraphReadError,
+    entity::subgraph::domain_event::DomainEventTransaction,
+    hash_name::domain_id,
+    subgraphs_reader::{EventSort, GetDomainHistoryInput, Order, SubgraphReadError},
 };
 use lazy_static::lazy_static;
 use sqlx::postgres::PgPool;
@@ -15,10 +17,13 @@ use tracing::instrument;
 pub async fn find_transaction_events(
     pool: &PgPool,
     schema: &str,
-    id: &str,
+    input: &GetDomainHistoryInput,
 ) -> Result<Vec<DomainEventTransaction>, SubgraphReadError> {
-    let sql =
-        sql_events_of_domain(schema).map_err(|e| SubgraphReadError::Internal(e.to_string()))?;
+    let sort = input.sort;
+    let order = input.order;
+    let id = domain_id(&input.name);
+    let sql = sql_events_of_domain(schema, sort, order)
+        .map_err(|e| SubgraphReadError::Internal(e.to_string()))?;
     let transactions: Vec<DomainEventTransaction> =
         sqlx::query_as(&sql).bind(id).fetch_all(pool).await?;
     Ok(transactions)
@@ -69,9 +74,15 @@ lazy_static! {
     };
 }
 
-fn sql_events_of_domain(schema: &str) -> Result<String, tera::Error> {
+fn sql_events_of_domain(
+    schema: &str,
+    sort: EventSort,
+    order: Order,
+) -> Result<String, tera::Error> {
     let mut context = DEFAULT_HISTORY_CONTEXT.clone();
     context.insert("schema", schema);
+    context.insert("sort", &sort.to_string());
+    context.insert("order", &order.to_string());
     TEMPLATES.render("history.sql", &context)
 }
 
@@ -82,7 +93,8 @@ mod tests {
 
     #[test]
     fn events_sql_works() {
-        let sql = sql_events_of_domain("sgd1").expect("failed to render history.sql");
+        let sql = sql_events_of_domain("sgd1", EventSort::BlockNumber, Order::Asc)
+            .expect("failed to render history.sql");
         let expected = include_str!("history_expected.sql");
         assert_eq!(sql, expected);
     }

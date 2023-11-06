@@ -31,4 +31,5 @@ FROM (
     ORDER BY transaction_id
 ) unique_events
 GROUP BY transaction_id, block_number
-ORDER BY block_number
+ORDER BY {{sort}} {{order}}
+
