@@ -12,6 +12,26 @@ consumes:
 produces:
   - application/json
 paths:
+  /api/v2/verifier/solidity/lookup-methods:
+    post:
+      operationId: SolidityVerifier_LookupMethods
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v2LookupMethodsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v2LookupMethodsRequest'
+      tags:
+        - SolidityVerifier
   /api/v2/verifier/solidity/sources:verify-multi-part:
     post:
       operationId: SolidityVerifier_VerifyMultiPart
@@ -186,9 +206,9 @@ definitions:
   ExtraDataBytecodePart:
     type: object
     properties:
-      data:
-        type: string
       type:
+        type: string
+      data:
         type: string
   HealthCheckResponseServingStatus:
     type: string
@@ -198,6 +218,18 @@ definitions:
       - NOT_SERVING
       - SERVICE_UNKNOWN
     default: UNKNOWN
+    description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
+  LookupMethodsResponseMethod:
+    type: object
+    properties:
+      fileName:
+        type: string
+      fileOffset:
+        type: integer
+        format: int32
+      length:
+        type: integer
+        format: int32
   SourceMatchType:
     type: string
     enum:
@@ -238,12 +270,12 @@ definitions:
       code:
         type: integer
         format: int32
+      message:
+        type: string
       details:
         type: array
         items:
           $ref: '#/definitions/protobufAny'
-      message:
-        type: string
   protobufAny:
     type: object
     properties:
@@ -270,53 +302,73 @@ definitions:
         items:
           type: string
         title: / Compiler versions available
+  v2LookupMethodsRequest:
+    type: object
+    properties:
+      bytecode:
+        type: string
+      abi:
+        type: string
+      sourceMap:
+        type: string
+      fileIdMap:
+        type: object
+        additionalProperties:
+          type: string
+  v2LookupMethodsResponse:
+    type: object
+    properties:
+      methods:
+        type: object
+        additionalProperties:
+          $ref: '#/definitions/LookupMethodsResponseMethod'
   v2Source:
     type: object
     properties:
-      abi:
+      fileName:
         type: string
-        title: |-
-          / Contract abi (https://docs.soliditylang.org/en/latest/abi-spec.html?highlight=abi#json);
-          / (does not exist for Yul contracts)
-      compilationArtifacts:
+        title: / The name of the file verified contract was located at
+      contractName:
         type: string
-        description: |-
-          / General and compiler-specific artifacts (abi, userdoc, devdoc, licenses, ast, etc),
-          / encoded as a json.
+        title: / The name of the contract which was verified
+      compilerVersion:
+        type: string
+        title: Compiler version used to compile the contract
       compilerSettings:
         type: string
         title: |-
           / 'settings' key in Standard Input JSON
           / (https://docs.soliditylang.org/en/latest/using-the-compiler.html#input-description)
-      compilerVersion:
+      sourceType:
+        $ref: '#/definitions/SourceSourceType'
+      sourceFiles:
+        type: object
+        additionalProperties:
+          type: string
+      abi:
         type: string
-        title: Compiler version used to compile the contract
+        title: |-
+          / Contract abi (https://docs.soliditylang.org/en/latest/abi-spec.html?highlight=abi#json);
+          / (does not exist for Yul contracts)
       constructorArguments:
         type: string
         title: |-
           / Constructor arguments used for deploying verified contract
           / (exists only for creation inputs)
-      contractName:
+      matchType:
+        $ref: '#/definitions/SourceMatchType'
+        title: / Similar to Sourcify (see https://docs.sourcify.dev/docs/full-vs-partial-match/)
+      compilationArtifacts:
         type: string
-        title: / The name of the contract which was verified
+        description: |-
+          / General and compiler-specific artifacts (abi, userdoc, devdoc, licenses, ast, etc),
+          / encoded as a json.
       creationInputArtifacts:
         type: string
         description: / Info about the creation code (sourcemaps, linkreferences) encoded as a json.
       deployedBytecodeArtifacts:
         type: string
         description: / Info about the runtime code (sourcemaps, linkreferences, immutables) encoded as a json.
-      fileName:
-        type: string
-        title: / The name of the file verified contract was located at
-      matchType:
-        $ref: '#/definitions/SourceMatchType'
-        title: / Similar to Sourcify (see https://docs.sourcify.dev/docs/full-vs-partial-match/)
-      sourceFiles:
-        type: object
-        additionalProperties:
-          type: string
-      sourceType:
-        $ref: '#/definitions/SourceSourceType'
   v2VerificationMetadata:
     type: object
     properties:
@@ -340,14 +392,14 @@ definitions:
   v2VerifyResponse:
     type: object
     properties:
-      extraData:
-        $ref: '#/definitions/VerifyResponseExtraData'
       message:
         type: string
-      source:
-        $ref: '#/definitions/v2Source'
       status:
         $ref: '#/definitions/v2VerifyResponseStatus'
+      source:
+        $ref: '#/definitions/v2Source'
+      extraData:
+        $ref: '#/definitions/VerifyResponseExtraData'
   v2VerifyResponseStatus:
     type: string
     enum:
@@ -370,14 +422,6 @@ definitions:
       evmVersion:
         type: string
         title: / Version of the EVM to compile for. If absent results in default EVM version
-      libraries:
-        type: object
-        additionalProperties:
-          type: string
-        title: / Map from a library name to its address
-      metadata:
-        $ref: '#/definitions/v2VerificationMetadata'
-        title: / An optional field to be filled by explorers
       optimizationRuns:
         type: integer
         format: int32
@@ -389,6 +433,14 @@ definitions:
         additionalProperties:
           type: string
         title: / Map from a source file name to the actual source code
+      libraries:
+        type: object
+        additionalProperties:
+          type: string
+        title: / Map from a library name to its address
+      metadata:
+        $ref: '#/definitions/v2VerificationMetadata'
+        title: / An optional field to be filled by explorers
   v2VerifySolidityStandardJsonRequest:
     type: object
     properties:
@@ -418,10 +470,6 @@ definitions:
         title: |-
           / The chain (network) the contract was deployed to
           / (https://docs.sourcify.dev/docs/api/chains/)
-      chosenContract:
-        type: integer
-        format: int32
-        title: (optional) see Sourcify Api
       files:
         type: object
         additionalProperties:
@@ -430,6 +478,10 @@ definitions:
           / Files required for verification (see Sourcify Api)
           Is named as `files` instead of `source_files`
           to correspond with Sourcify api
+      chosenContract:
+        type: integer
+        format: int32
+        title: (optional) see Sourcify Api
   v2VerifyVyperMultiPartRequest:
     type: object
     properties:
@@ -445,6 +497,11 @@ definitions:
       evmVersion:
         type: string
         title: / Version of the EVM to compile for. If absent results in default EVM version
+      sourceFiles:
+        type: object
+        additionalProperties:
+          type: string
+        title: / Map from a source file name to the actual source code
       interfaces:
         type: object
         additionalProperties:
@@ -455,11 +512,6 @@ definitions:
       metadata:
         $ref: '#/definitions/v2VerificationMetadata'
         title: / An optional field to be filled by explorers
-      sourceFiles:
-        type: object
-        additionalProperties:
-          type: string
-        title: / Map from a source file name to the actual source code
   v2VerifyVyperStandardJsonRequest:
     type: object
     properties:

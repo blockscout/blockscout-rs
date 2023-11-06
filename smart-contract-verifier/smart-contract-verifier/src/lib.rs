@@ -7,6 +7,7 @@ pub mod middleware;
 mod common_types;
 mod compiler;
 mod consts;
+mod lookup_methods;
 mod metrics;
 mod scheduler;
 mod verifier;
@@ -28,6 +29,7 @@ pub use compiler::{Compilers, Fetcher, ListFetcher, S3Fetcher, Version};
 pub use verifier::{BytecodePart, Error as VerificationError};
 
 pub use crate::sourcify::{SourcifyApiClient, Success as SourcifySuccess};
+pub use lookup_methods::{find_methods, LookupMethodsRequest, LookupMethodsResponse};
 pub use solidity::{
     Client as SolidityClient, SolcValidator, SolidityCompiler, Success as SoliditySuccess,
 };
