@@ -36,3 +36,6 @@ features = [
 
 [dev-dependencies]
 bens-logic = { path = "../bens-logic", features = ["test-utils"] }
+blockscout-service-launcher = { version = "0.9.0", features = [ "database-0_12", "test-server" ] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+pretty_assertions = "1.4.0"
