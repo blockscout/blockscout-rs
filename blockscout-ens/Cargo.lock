@@ -651,6 +651,7 @@ dependencies = [
  "config",
  "ethers",
  "hex",
+ "pretty_assertions",
  "serde",
  "serde_json",
  "sqlx",
@@ -658,6 +659,7 @@ dependencies = [
  "tokio",
  "tonic",
  "tracing",
+ "tracing-subscriber",
  "url",
 ]
 
@@ -750,6 +752,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-jaeger",
  "prometheus",
+ "reqwest",
  "sea-orm",
  "sea-orm-migration",
  "serde",

@@ -1,0 +1,8 @@
+[metrics]
+enabled = false
+
+[jaeger]
+enabled = false
+
+[tracing]
+enabled = false
