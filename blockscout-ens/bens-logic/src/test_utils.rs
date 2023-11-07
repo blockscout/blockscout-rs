@@ -1,4 +1,4 @@
-use super::blockscout::BlockscoutClient;
+use crate::subgraphs_reader::blockscout::BlockscoutClient;
 use ethers::types::TxHash;
 use std::collections::HashMap;
 use wiremock::{
