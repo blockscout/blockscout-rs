@@ -68,7 +68,7 @@ impl<T> Response<T>
 where
     T: DeserializeOwned,
 {
-    pub async fn try_from_reqwest_response(
+    async fn try_from_reqwest_response(
         response: reqwest::Response,
     ) -> reqwest_middleware::Result<Self> {
         let response = match response.status() {
