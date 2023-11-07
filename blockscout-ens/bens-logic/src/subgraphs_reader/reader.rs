@@ -193,7 +193,7 @@ async fn events_from_transactions(
 
 #[cfg(test)]
 mod tests {
-    use crate::subgraphs_reader::test_helpers::mocked_blockscout_clients;
+    use crate::test_utils::mocked_blockscout_clients;    
 
     use super::*;
     use ethers::types::Address;
