@@ -26,9 +26,9 @@ async fn main() -> Result<(), anyhow::Error> {
             .connect(&url)
             .await?,
     );
-    let eth_client = BlockscoutClient::new("https://eth.blockscout.com".parse().unwrap());
+    let eth_client = BlockscoutClient::new("https://eth.blockscout.com".parse().unwrap(), 5, 30);
     let rootstock_client =
-        BlockscoutClient::new("https://rootstock.blockscout.com".parse().unwrap());
+        BlockscoutClient::new("https://rootstock.blockscout.com".parse().unwrap(), 5, 30);
     let clients: HashMap<i64, BlockscoutClient> =
         HashMap::from_iter([(1, eth_client), (30, rootstock_client)]);
     let reader = SubgraphReader::initialize(pool.clone(), clients).await?;
