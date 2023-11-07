@@ -24,6 +24,7 @@ async-trait = "0.1"
 url = { version = "2", features = ["serde"] }
 hex = "0.4"
 thiserror = "1"
+chrono = "0.4"
 
 [dependencies.sqlx]
 version = "0.7"

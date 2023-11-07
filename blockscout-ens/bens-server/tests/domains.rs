@@ -50,7 +50,7 @@ async fn basic_domain_extracting_works(pool: PgPool) {
     assert_eq!(
         request,
         json!({
-            "expiryDate": "1975009824",
+            "expiryDate": "2032-08-01T21:50:24.000Z",
             "id": "0xee6c4522aab0003e8d14cd40a6af439055fd2577951148c14b6cea9a53475835",
             "name": "vitalik.eth",
             "otherAddresses": {
@@ -63,7 +63,7 @@ async fn basic_domain_extracting_works(pool: PgPool) {
             "registrant": {
                 "hash": "0x220866b1a2219f40e72f5c628b65d54268ca3a9d",
             },
-            "registrationDate": "1497775154",
+            "registrationDate": "2017-06-18T08:39:14.000Z",
             "resolvedAddress": {
                 "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
             },
@@ -78,7 +78,7 @@ async fn basic_domain_extracting_works(pool: PgPool) {
             "fromAddress": {
                 "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
             },
-            "timestamp": ("2017-06-18T08:39:14.000000Z"),
+            "timestamp": "2017-06-18T08:39:14.000000Z",
             "transactionHash": "0xdd16deb1ea750037c3ed1cae5ca20ff9db0e664a5146e5a030137d277a9247f3",
         },
         {
@@ -86,7 +86,7 @@ async fn basic_domain_extracting_works(pool: PgPool) {
             "fromAddress": {
                 "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
             },
-            "timestamp": ("2019-07-10T05:58:51.000000Z"),
+            "timestamp": "2019-07-10T05:58:51.000000Z",
             "transactionHash": "0xea30bda97a7e9afcca208d5a648e8ec1e98b245a8884bf589dec8f4aa332fb14",
         },
         {
@@ -149,8 +149,8 @@ async fn basic_domain_extracting_works(pool: PgPool) {
             "owner": {
                 "hash": "0x66a6f7744ce4dea450910b81a7168588f992eafb"
             },
-            "registrationDate": "1640341437",
-            "expiryDate": "1711231341"
+            "registrationDate": "2021-12-24T10:23:57.000Z",
+            "expiryDate": "2024-03-23T22:02:21.000Z"
         }
     )];
     expect_lookup_results(
@@ -174,8 +174,8 @@ async fn basic_domain_extracting_works(pool: PgPool) {
             "owner": {
                 "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045"
             },
-            "registrationDate": "1497775154",
-            "expiryDate": "1975009824"
+            "registrationDate": "2017-06-18T08:39:14.000Z",
+            "expiryDate": "2032-08-01T21:50:24.000Z"
         }
     )]
     .into_iter()

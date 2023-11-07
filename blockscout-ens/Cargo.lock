@@ -648,6 +648,7 @@ dependencies = [
  "bens-proto",
  "blockscout-display-bytes",
  "blockscout-service-launcher",
+ "chrono",
  "config",
  "ethers",
  "hex",
