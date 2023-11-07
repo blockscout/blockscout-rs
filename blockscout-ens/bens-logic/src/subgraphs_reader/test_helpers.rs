@@ -84,6 +84,6 @@ pub async fn mocked_blockscout_clients() -> HashMap<i64, BlockscoutClient> {
     }
     let url = mock_server.uri().parse().unwrap();
 
-    let client = BlockscoutClient::new(url);
+    let client = BlockscoutClient::new(url, 1, 30);
     HashMap::from_iter([(1, client)])
 }

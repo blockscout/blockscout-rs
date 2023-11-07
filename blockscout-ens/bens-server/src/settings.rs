@@ -42,26 +42,45 @@ pub struct NetworkConfig {
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields, default)]
 pub struct BlockscoutSettings {
+    #[serde(default = "default_networks")]
     pub networks: HashMap<i64, NetworkConfig>,
+    #[serde(default = "default_max_concurrent_requests")]
+    pub max_concurrent_requests: usize,
+    #[serde(default = "default_blockscout_timeout")]
+    pub timeout: u64,
+}
+
+fn default_networks() -> HashMap<i64, NetworkConfig> {
+    HashMap::from_iter([
+        (
+            1,
+            NetworkConfig {
+                url: "https://eth.blockscout.com".parse().unwrap(),
+            },
+        ),
+        (
+            30,
+            NetworkConfig {
+                url: "https://rootstock.blockscout.com".parse().unwrap(),
+            },
+        ),
+    ])
+}
+
+fn default_max_concurrent_requests() -> usize {
+    5
+}
+
+fn default_blockscout_timeout() -> u64 {
+    30
 }
 
 impl Default for BlockscoutSettings {
     fn default() -> Self {
         Self {
-            networks: HashMap::from_iter([
-                (
-                    1,
-                    NetworkConfig {
-                        url: "https://eth.blockscout.com".parse().unwrap(),
-                    },
-                ),
-                (
-                    30,
-                    NetworkConfig {
-                        url: "https://rootstock.blockscout.com".parse().unwrap(),
-                    },
-                ),
-            ]),
+            networks: default_networks(),
+            max_concurrent_requests: default_max_concurrent_requests(),
+            timeout: default_blockscout_timeout(),
         }
     }
 }
