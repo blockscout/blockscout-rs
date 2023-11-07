@@ -281,14 +281,12 @@ definitions:
       registrant:
         $ref: '#/definitions/v1Address'
         title: Optinal. The account that owns the ERC721 NFT for the domain
-      expiryDate:
-        type: string
-        format: int64
-        title: Optinal. Unix timestamp of expiry date. None means never expires
       registrationDate:
         type: string
-        format: int64
-        title: Unix timestamp of regisration date
+        description: Optinal. RFC 3339 datetime  of expiry date.
+      expiryDate:
+        type: string
+        title: Optinal. RFC 3339 datetime  of expiry date. None means never expires
       otherAddresses:
         type: object
         additionalProperties:
@@ -313,12 +311,10 @@ definitions:
         title: The account that owns the domain
       registrationDate:
         type: string
-        format: int64
-        title: Optinal. Unix timestamp of expiry date. None means never expires
+        description: Optinal. RFC 3339 datetime of expiry date.
       expiryDate:
         type: string
-        format: int64
-        title: Optinal. Unix timestamp of expiry date. None means never expires
+        title: Optinal. RFC 3339 datetime  of expiry date. None means never expires
   v1DomainEvent:
     type: object
     properties:
