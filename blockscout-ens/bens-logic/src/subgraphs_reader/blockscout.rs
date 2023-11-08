@@ -82,7 +82,10 @@ where
 
 #[cached(
     key = "String",
-    convert = r#"{ format!("{transaction_hash:#}") }"#,
+    convert = r#"{ 
+        let url = client.url();
+        format!("{url}/tx/{transaction_hash:#}")
+    }"#,
     result = true,
     time = 86_400, // 24 * 60 * 60 seconds
     size = 50_000,
