@@ -193,9 +193,8 @@ impl SolidityVerifier for SolidityVerifierService {
         &self,
         request: Request<LookupMethodsRequest>,
     ) -> Result<Response<LookupMethodsResponse>, Status> {
-        let r: LookupMethodsRequestWrapper = request.into_inner().into();
-        let methods = find_methods(r.try_into()?);
-        println!("methods: {:?}", methods.methods);
+        let request: LookupMethodsRequestWrapper = request.into_inner().into();
+        let methods = find_methods(request.try_into()?);
         let response = LookupMethodsResponseWrapper::from(methods);
         Ok(Response::new(response.into()))
     }

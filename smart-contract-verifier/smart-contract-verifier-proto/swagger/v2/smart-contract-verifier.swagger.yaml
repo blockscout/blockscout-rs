@@ -12,7 +12,7 @@ consumes:
 produces:
   - application/json
 paths:
-  /api/v2/verifier/solidity/lookup-methods:
+  /api/v2/verifier/solidity/methods:lookup:
     post:
       operationId: SolidityVerifier_LookupMethods
       responses:
@@ -311,7 +311,7 @@ definitions:
         type: string
       sourceMap:
         type: string
-      fileIdMap:
+      fileIds:
         type: object
         additionalProperties:
           type: string
