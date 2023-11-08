@@ -1,7 +1,5 @@
 FROM lukemathwalker/cargo-chef:0.1.62-rust-1.72-buster as chef
 WORKDIR /app
-RUN rustup target add x86_64-unknown-linux-musl
-RUN apt-get update && apt-get install -y curl wget unzip musl-dev musl-tools
 RUN wget https://github.com/protocolbuffers/protobuf/releases/download/v21.12/protoc-21.12-linux-x86_64.zip -O ./protoc.zip \
           && unzip protoc.zip \
           && mv ./include/* /usr/include/ \
@@ -25,7 +23,11 @@ COPY --from=cache /app/target target
 COPY --from=cache $CARGO_HOME $CARGO_HOME
 RUN cargo build --release --bin bens-server
 
-FROM debian:bookworm-slim AS runtime
+FROM ubuntu:20.04 as run
 WORKDIR /app
-COPY --from=build /app/target/release/bens-server /usr/local/bin
+RUN apt-get update && apt-get install -y libssl1.1 libssl-dev ca-certificates
+ENV APP_USER=app
+RUN groupadd $APP_USER \
+    && useradd -g $APP_USER $APP_USER
+COPY --from=build /app/target/release/bens-server /usr/local/bin/bens-server
 ENTRYPOINT ["/usr/local/bin/bens-server"]
