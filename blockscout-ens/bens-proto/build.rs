@@ -35,11 +35,19 @@ fn compile(
             "#[serde(default)]"
         )
         .field_attribute(
+            ".blockscout.bens.v1.LookupDomainNameRequest.only_active",
+            "#[serde(default)]"
+        )
+        .field_attribute(
             ".blockscout.bens.v1.LookupAddressRequest.sort",
             "#[serde(default)]"
         )
         .field_attribute(
             ".blockscout.bens.v1.LookupAddressRequest.order",
+            "#[serde(default)]"
+        )
+        .field_attribute(
+            ".blockscout.bens.v1.LookupAddressRequest.only_active",
             "#[serde(default)]"
         )
         ;

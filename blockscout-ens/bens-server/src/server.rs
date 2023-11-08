@@ -9,7 +9,7 @@ use bens_proto::blockscout::bens::v1::{
     domains_extractor_server::DomainsExtractorServer, health_actix::route_health,
     health_server::HealthServer,
 };
-use blockscout_service_launcher::{launcher, launcher::LaunchSettings, tracing};
+use blockscout_service_launcher::{launcher, launcher::LaunchSettings};
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
 
@@ -40,7 +40,11 @@ impl launcher::HttpRouter for Router {
 }
 
 pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
-    tracing::init_logs(SERVICE_NAME, &settings.tracing, &settings.jaeger)?;
+    blockscout_service_launcher::tracing::init_logs(
+        SERVICE_NAME,
+        &settings.tracing,
+        &settings.jaeger,
+    )?;
 
     let health = Arc::new(HealthService::default());
 
@@ -54,8 +58,19 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         .blockscout
         .networks
         .into_iter()
-        .map(|(id, network)| (id, BlockscoutClient::new(network.url)))
+        .map(|(id, network)| {
+            (
+                id,
+                BlockscoutClient::new(
+                    network.url,
+                    settings.blockscout.max_concurrent_requests,
+                    settings.blockscout.timeout,
+                ),
+            )
+        })
         .collect();
+
+    tracing::info!("found blockscout clients from config: {blockscout_clients:?}");
 
     let subgraph_reader = SubgraphReader::initialize(pool, blockscout_clients)
         .await

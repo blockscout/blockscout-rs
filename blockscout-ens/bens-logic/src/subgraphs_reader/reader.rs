@@ -154,44 +154,46 @@ async fn events_from_transactions(
     client: Arc<BlockscoutClient>,
     txns: Vec<DomainEventTransaction>,
 ) -> Result<Vec<DomainEvent>, SubgraphReadError> {
-    let txns = txns
-        .into_iter()
-        .map(|t| (TxHash::from_slice(t.transaction_id.as_slice()), t))
-        .collect::<HashMap<_, _>>();
-    let transactions = client
-        .transactions_batch(txns.keys().collect())
+    let txn_ids: Vec<TxHash> = txns
+        .iter()
+        .map(|t| TxHash::from_slice(t.transaction_id.as_slice()))
+        .collect();
+    let mut blockscout_txns = client
+        .transactions_batch(txn_ids)
         .await
-        .map_err(|e| SubgraphReadError::Internal(e.to_string()))?;
-
-    let mut events: Vec<DomainEvent> = transactions
+        .map_err(|e| SubgraphReadError::Internal(e.to_string()))?
         .into_iter()
-        .filter_map(|(tx_hash, t)| match t {
-            blockscout::Response::Ok(t) => Some(DomainEvent {
-                transaction_hash: t.hash,
-                block_number: t.block,
-                timestamp: t.timestamp,
-                from_address: t.from.hash,
-                method: t.method,
-                actions: txns
-                    .get(&t.hash)
-                    .map(|d| d.actions.clone())
-                    .unwrap_or_default(),
-            }),
+        .filter_map(|(hash, result)| match result {
+            blockscout::Response::Ok(t) => Some((hash, t)),
             e => {
                 tracing::warn!(
-                    "invalid response from blockscout transaction '{tx_hash:#x}' api: {e:?}"
+                    "invalid response from blockscout transaction '{hash:#x}' api: {e:?}"
                 );
                 None
             }
         })
+        .collect::<HashMap<_, _>>();
+    let events: Vec<DomainEvent> = txns
+        .into_iter()
+        .filter_map(|txn| {
+            blockscout_txns
+                .remove(&TxHash::from_slice(txn.transaction_id.as_slice()))
+                .map(|t| DomainEvent {
+                    transaction_hash: t.hash,
+                    block_number: t.block,
+                    timestamp: t.timestamp,
+                    from_address: t.from.hash,
+                    method: t.method,
+                    actions: txn.actions,
+                })
+        })
         .collect::<Vec<_>>();
-    events.sort_by_key(|event| event.block_number);
     Ok(events)
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::subgraphs_reader::test_helpers::mocked_blockscout_clients;
+    use crate::test_utils::mocked_blockscout_clients;
 
     use super::*;
     use ethers::types::Address;

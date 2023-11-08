@@ -1,4 +1,4 @@
-use super::blockscout::BlockscoutClient;
+use crate::subgraphs_reader::blockscout::BlockscoutClient;
 use ethers::types::TxHash;
 use std::collections::HashMap;
 use wiremock::{
@@ -84,6 +84,6 @@ pub async fn mocked_blockscout_clients() -> HashMap<i64, BlockscoutClient> {
     }
     let url = mock_server.uri().parse().unwrap();
 
-    let client = BlockscoutClient::new(url);
+    let client = BlockscoutClient::new(url, 1, 30);
     HashMap::from_iter([(1, client)])
 }
