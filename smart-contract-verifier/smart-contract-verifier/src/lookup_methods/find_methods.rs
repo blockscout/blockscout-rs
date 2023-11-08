@@ -11,7 +11,7 @@ pub struct LookupMethodsRequest {
     pub bytecode: Bytes,
     pub abi: Abi,
     pub source_map: SourceMap,
-    pub file_id_map: BTreeMap<u32, String>,
+    pub file_ids: BTreeMap<u32, String>,
 }
 
 pub struct LookupMethodsResponse {
@@ -26,55 +26,57 @@ pub fn find_methods(request: LookupMethodsRequest) -> LookupMethodsResponse {
     let methods = methods
         .into_iter()
         .filter_map(|(func_sig, selector)| {
-            let func_index = find_selector(&selector, opcodes).or_else(|| {
-                tracing::warn!(
-                    "function {} with selector '{}' not found in bytecode",
-                    func_sig,
-                    hex::encode(selector)
-                );
-                None
-            })?;
+            let func_index = match find_src_map_index(&selector, opcodes) {
+                Some(i) => i,
+                None => {
+                    tracing::warn!(func_sig, "function not found");
+                    return None;
+                }
+            };
 
-            tracing::info!("found function {} in {}", func_sig, func_index);
-            let method = Method::from_source_map(
+            tracing::debug!(func_sig, func_index, "found function");
+            let method = match Method::from_source_map(
                 selector,
                 &request.source_map,
                 func_index,
-                &request.file_id_map,
-            )
-            .unwrap();
+                &request.file_ids,
+            ) {
+                Ok(m) => m,
+                Err(err) => {
+                    tracing::warn!(func_sig, err = err.to_string(), "failed to parse method");
+                    return None;
+                }
+            };
             Some((hex::encode(selector), method))
         })
         .collect::<BTreeMap<String, Method>>();
     LookupMethodsResponse { methods }
 }
 
-fn prepend_selector(partial_selector: &Vec<u8>) -> Option<Vec<u8>> {
+fn prepend_selector(partial_selector: &Vec<u8>) -> anyhow::Result<Vec<u8>> {
     if partial_selector.len() > 4 {
-        return None;
+        return Err(anyhow::anyhow!("selector is too long"));
     };
 
     // prepend selector with 0s if it's shorter than 4 bytes
     let mut selector = partial_selector.clone();
     selector.splice(..0, repeat(0).take(4 - partial_selector.len()));
-    Some(selector)
+    Ok(selector)
 }
 
-fn find_selector(selector: &[u8; 4], opcodes: &[DisassembledOpcode]) -> Option<usize> {
+fn find_src_map_index(selector: &[u8; 4], opcodes: &[DisassembledOpcode]) -> Option<usize> {
     for window in opcodes.windows(5) {
         if window[0].operation.name.starts_with("PUSH")
             && window[1].operation.name == "EQ"
             && window[2].operation.name.starts_with("PUSH")
             && window[3].operation.name == "JUMPI"
         {
-            let push_selector = prepend_selector(&window[0].args).expect("valid selector");
-
-            if push_selector != selector {
+            // If found selector doesn't match, continue
+            if !prepend_selector(&window[0].args).is_ok_and(|s| s == selector) {
                 continue;
             }
 
-            let jump_to =
-                usize::from_str_radix(&hex::encode(&window[2].args), 16).expect("valid hex string");
+            let jump_to = usize::from_str_radix(&hex::encode(&window[2].args), 16).ok()?;
 
             let maybe_target_opcode_index = opcodes
                 .iter()
@@ -93,14 +95,12 @@ fn find_selector(selector: &[u8; 4], opcodes: &[DisassembledOpcode]) -> Option<u
             && window[3].operation.name.starts_with("PUSH")
             && window[4].operation.name == "JUMPI"
         {
-            let push_selector = prepend_selector(&window[0].args).expect("valid selector");
-
-            if push_selector != selector {
+            // If found selector doesn't match, continue
+            if !prepend_selector(&window[0].args).is_ok_and(|s| s == selector) {
                 continue;
             }
 
-            let jump_to =
-                usize::from_str_radix(&hex::encode(&window[3].args), 16).expect("valid hex string");
+            let jump_to = usize::from_str_radix(&hex::encode(&window[3].args), 16).ok()?;
 
             let maybe_target_opcode_index = opcodes
                 .iter()

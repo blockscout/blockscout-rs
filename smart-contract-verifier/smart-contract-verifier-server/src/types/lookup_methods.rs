@@ -14,17 +14,19 @@ impl TryFrom<LookupMethodsRequestWrapper> for LookupMethodsRequest {
 
     fn try_from(request: LookupMethodsRequestWrapper) -> Result<Self, Self::Error> {
         let bytecode = DisplayBytes::from_str(&request.bytecode)
-            .map_err(|err| tonic::Status::invalid_argument(format!("Invalid bytecode: {err:?}")))?
+            .map_err(|e| tonic::Status::invalid_argument(format!("Invalid bytecode: {e:?}")))?
             .0;
-        let abi = Abi::load(request.abi.as_bytes()).unwrap(); // TODO why unwrap?
-        let source_map = sourcemap::parse(&request.source_map).unwrap();
-        let file_id_map = request.file_id_map.clone(); // TODO: use Arc ?
+        let abi = Abi::load(request.abi.as_bytes())
+            .map_err(|e| tonic::Status::invalid_argument(format!("Invalid abi: {e:?}")))?;
+        let source_map = sourcemap::parse(&request.source_map)
+            .map_err(|e| tonic::Status::invalid_argument(format!("Invalid source_map: {e:?}")))?;
+        let file_ids = request.file_ids.clone();
 
         Ok(Self {
             bytecode,
             abi,
             source_map,
-            file_id_map,
+            file_ids,
         })
     }
 }

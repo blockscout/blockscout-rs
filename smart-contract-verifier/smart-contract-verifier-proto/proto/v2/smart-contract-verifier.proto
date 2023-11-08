@@ -225,7 +225,7 @@ message LookupMethodsRequest {
   string bytecode = 1;
   string abi = 2;
   string source_map = 3;
-  map<uint32, string> file_id_map = 4;
+  map<uint32, string> file_ids = 4;
 }
 
 message LookupMethodsResponse {

@@ -14,7 +14,7 @@ impl Method {
         selector: [u8; 4],
         source_map: &SourceMap,
         index: usize,
-        file_id_map: &BTreeMap<u32, String>,
+        file_ids: &BTreeMap<u32, String>,
     ) -> anyhow::Result<Self> {
         let src = source_map
             .get(index)
@@ -22,10 +22,9 @@ impl Method {
 
         let filename = src
             .index
-            .and_then(|id| file_id_map.get(&id))
+            .and_then(|id| file_ids.get(&id))
             .ok_or_else(|| anyhow::anyhow!("src {:?} not found in output sources", src.index))?;
 
-        println!("src: {:?}", src);
         Ok(Method {
             selector,
             offset: src.offset,
