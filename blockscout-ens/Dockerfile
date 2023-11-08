@@ -23,9 +23,9 @@ FROM chef AS build
 COPY . .
 COPY --from=cache /app/target target
 COPY --from=cache $CARGO_HOME $CARGO_HOME
-RUN cargo build --release --bin app
+RUN cargo build --release --bin bens-server
 
 FROM debian:bookworm-slim AS runtime
 WORKDIR /app
-COPY --from=build /app/target/release/app /usr/local/bin
-ENTRYPOINT ["/usr/local/bin/app"]
+COPY --from=build /app/target/release/bens-server /usr/local/bin
+ENTRYPOINT ["/usr/local/bin/bens-server"]
