@@ -151,7 +151,7 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           context: "blockscout-ens"
-          file: "blockscout-ens/bens-server/Dockerfile"
+          file: "blockscout-ens/Dockerfile"
           push: ${{ steps.tags_extractor.outputs.tags != '' }}
           tags: ${{ steps.tags_extractor.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
