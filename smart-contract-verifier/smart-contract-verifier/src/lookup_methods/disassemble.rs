@@ -18,16 +18,6 @@ impl Debug for DisassembledOpcode {
     }
 }
 
-impl Display for DisassembledOpcode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.args.is_empty() {
-            write!(f, "{}", self.operation.name)
-        } else {
-            write!(f, "{} {:?}", self.operation.name, self.args)
-        }
-    }
-}
-
 // Changed version of
 // https://github.com/Jon-Becker/heimdall-rs/blob/6363d2fe02b68a4b03e0d5f726f605d1360250b7/common/src/ether/evm/ext/disassemble.rs#L34
 pub fn disassemble_bytecode(bytecode: &Bytes) -> Vec<DisassembledOpcode> {
