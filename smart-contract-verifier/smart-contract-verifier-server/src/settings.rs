@@ -1,7 +1,6 @@
 use anyhow::anyhow;
-use blockscout_service_launcher::launcher::ConfigSettings;
 use blockscout_service_launcher::{
-    launcher::{MetricsSettings, ServerSettings},
+    launcher::{ConfigSettings, MetricsSettings, ServerSettings},
     tracing::{JaegerSettings, TracingSettings},
 };
 use cron::Schedule;
