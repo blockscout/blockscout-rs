@@ -136,12 +136,14 @@ impl DatabaseService {
                 .0,
         };
 
-        let sources = search::find_contract(self.client.db_client.as_ref(), &bytecode_remote)
+        let mut matches = search::find_contract(self.client.db_client.as_ref(), &bytecode_remote)
             .await
             .map_err(|err| tonic::Status::internal(err.to_string()))?;
+        matches.sort_by_key(|m| m.updated_at);
 
-        let sources = sources
+        let sources = matches
             .into_iter()
+            .rev()
             .map(|source| SourceWrapper::from(source).into_inner())
             .collect();
 
