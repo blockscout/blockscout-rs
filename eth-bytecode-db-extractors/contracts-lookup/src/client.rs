@@ -45,7 +45,7 @@ impl Client {
                 "processing contract"
             );
 
-            job_queue::process_result!(
+            let response = job_queue::process_result!(
                 self.db_client.as_ref(),
                 self.blockscout_client
                     .search_contract(contract_address.clone())
@@ -54,7 +54,8 @@ impl Client {
                 contract_address = contract_address
             );
 
-            self.mark_as_success(job_id, contract_address).await?;
+            self.mark_as_success(job_id, contract_address, response.message)
+                .await?;
 
             processed += 1;
         }
@@ -62,8 +63,13 @@ impl Client {
         Ok(processed)
     }
 
-    async fn mark_as_success(&self, job_id: Uuid, contract_address: Bytes) -> anyhow::Result<()> {
-        job_queue::mark_as_success(self.db_client.as_ref(), job_id, None)
+    async fn mark_as_success(
+        &self,
+        job_id: Uuid,
+        contract_address: Bytes,
+        message: Option<String>,
+    ) -> anyhow::Result<()> {
+        job_queue::mark_as_success(self.db_client.as_ref(), job_id, message)
             .await
             .context(format!(
                 "saving success details failed for the contract {}",

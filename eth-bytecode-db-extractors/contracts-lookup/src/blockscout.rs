@@ -4,9 +4,14 @@ use governor::{Quota, RateLimiter};
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_rate_limiter::RateLimiterMiddleware;
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
-use serde::de::DeserializeOwned;
+use serde::{de::DeserializeOwned, Deserialize};
 use std::{num::NonZeroU32, str::FromStr};
 use url::Url;
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct SearchContractResponse {
+    pub message: Option<String>,
+}
 
 #[derive(Clone)]
 pub struct Client {
@@ -40,7 +45,10 @@ impl Client {
         })
     }
 
-    pub async fn search_contract(&self, contract_address: Bytes) -> anyhow::Result<()> {
+    pub async fn search_contract(
+        &self,
+        contract_address: Bytes,
+    ) -> anyhow::Result<SearchContractResponse> {
         let url = {
             let path = format!("/api/v2/import/smart-contracts/{contract_address}");
             let mut url = self.base_url.clone();
@@ -50,9 +58,7 @@ impl Client {
 
         self.send_request(url, [("x-api-key", &self.api_key)])
             .await
-            .context("sending request")?;
-
-        Ok(())
+            .context("sending request")
     }
 
     async fn send_request<Response: DeserializeOwned>(
