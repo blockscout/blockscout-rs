@@ -10,7 +10,7 @@ impl MigrationTrait for Migration {
             CREATE TABLE "contract_addresses" (
                 "contract_address" bytea NOT NULL,
 
-                "fetched_coin_balance_block_number" bigint NOT NULL,
+                "fetched_coin_balance_block_number" bigint,
                 "inserted_at" timestamp NOT NULL,
                 "updated_at" timestamp NOT NULL,
 
@@ -23,9 +23,7 @@ impl MigrationTrait for Migration {
         let create_job_queue_connection_statements =
             job_queue::migration::create_job_queue_connection_statements("contract_addresses");
 
-        let mut statements = vec![
-            create_contract_addresses_table,
-        ];
+        let mut statements = vec![create_contract_addresses_table];
         statements.extend(
             create_job_queue_connection_statements
                 .iter()
