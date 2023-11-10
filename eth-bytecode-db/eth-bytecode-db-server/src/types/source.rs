@@ -186,6 +186,7 @@ mod tests {
     #[test]
     fn from_search_source_to_proto_source() {
         let search_source = search::MatchContract {
+            updated_at: Default::default(),
             file_name: "file_name".to_string(),
             contract_name: "contract_name".to_string(),
             compiler_version: "compiler_version".to_string(),
