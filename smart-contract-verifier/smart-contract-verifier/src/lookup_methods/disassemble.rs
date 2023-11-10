@@ -1,6 +1,6 @@
 use super::opcodes::{opcode, Opcode};
 use bytes::Bytes;
-use std::fmt::{Debug, Display};
+use std::fmt::Debug;
 
 pub struct DisassembledOpcode {
     pub operation: Opcode,

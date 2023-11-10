@@ -53,17 +53,6 @@ pub fn find_methods(request: LookupMethodsRequest) -> LookupMethodsResponse {
     LookupMethodsResponse { methods }
 }
 
-fn prepend_selector(partial_selector: &Vec<u8>) -> anyhow::Result<Vec<u8>> {
-    if partial_selector.len() > 4 {
-        return Err(anyhow::anyhow!("selector is too long"));
-    };
-
-    // prepend selector with 0s if it's shorter than 4 bytes
-    let mut selector = partial_selector.clone();
-    selector.splice(..0, repeat(0).take(4 - partial_selector.len()));
-    Ok(selector)
-}
-
 fn find_src_map_index(selector: &[u8; 4], opcodes: &[DisassembledOpcode]) -> Option<usize> {
     for window in opcodes.windows(5) {
         if window[0].operation.name.starts_with("PUSH")
@@ -121,4 +110,30 @@ fn parse_selectors(abi: Abi) -> BTreeMap<String, [u8; 4]> {
     abi.functions()
         .map(|f| (f.signature(), f.short_signature()))
         .collect()
+}
+
+fn prepend_selector(partial_selector: &Vec<u8>) -> anyhow::Result<Vec<u8>> {
+    if partial_selector.len() > 4 {
+        return Err(anyhow::anyhow!("selector is too long"));
+    };
+
+    // prepend selector with 0s if it's shorter than 4 bytes
+    let mut selector = partial_selector.clone();
+    selector.splice(..0, repeat(0).take(4 - partial_selector.len()));
+    Ok(selector)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::prepend_selector;
+
+    #[test]
+    fn test_prepend_selector() {
+        assert_eq!(
+            prepend_selector(&vec![1, 2, 3, 4]).unwrap(),
+            vec![1, 2, 3, 4]
+        );
+        assert_eq!(prepend_selector(&vec![1, 2]).unwrap(), vec![0, 0, 1, 2]);
+        assert!(prepend_selector(&vec![1, 2, 3, 4, 5]).is_err());
+    }
 }
