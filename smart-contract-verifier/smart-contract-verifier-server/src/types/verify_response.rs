@@ -218,9 +218,7 @@ mod tests {
             status: Status::Failure.into(),
             source: None,
             extra_data: None,
-            post_action_responses: Some(PostActionResponses {
-                lookup_methods: None,
-            }),
+            post_action_responses: None,
         };
         assert_eq!(expected, response);
     }
