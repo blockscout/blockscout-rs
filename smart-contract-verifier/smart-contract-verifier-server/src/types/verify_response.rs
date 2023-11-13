@@ -1,5 +1,5 @@
 use crate::proto::{
-    verify_response::{ExtraData, Status},
+    verify_response::{ExtraData, PostActionResponses, Status},
     Source, VerifyResponse,
 };
 use serde::{Deserialize, Serialize};
@@ -91,6 +91,9 @@ impl VerifyResponseWrapper {
             status: Status::Success.into(),
             source: Some(source),
             extra_data: Some(extra_data),
+            post_action_responses: Some(PostActionResponses {
+                lookup_methods: None,
+            }),
         }
         .into()
     }
@@ -101,6 +104,7 @@ impl VerifyResponseWrapper {
             status: Status::Failure.into(),
             source: None,
             extra_data: None,
+            post_action_responses: None,
         }
         .into()
     }
@@ -198,6 +202,9 @@ mod tests {
                 local_creation_input_parts: vec![],
                 local_deployed_bytecode_parts: vec![],
             }),
+            post_action_responses: Some(PostActionResponses {
+                lookup_methods: None,
+            }),
         };
 
         assert_eq!(expected, response);
@@ -211,6 +218,9 @@ mod tests {
             status: Status::Failure.into(),
             source: None,
             extra_data: None,
+            post_action_responses: Some(PostActionResponses {
+                lookup_methods: None,
+            }),
         };
         assert_eq!(expected, response);
     }

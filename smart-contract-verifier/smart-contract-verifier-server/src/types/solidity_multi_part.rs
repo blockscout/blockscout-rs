@@ -111,6 +111,7 @@ mod tests {
                 chain_id: Some("1".into()),
                 contract_address: Some("0xcafecafecafecafecafecafecafecafecafecafe".into()),
             }),
+            post_actions: vec![],
         };
 
         let mut expected = VerificationRequest {
@@ -156,6 +157,7 @@ mod tests {
             optimization_runs: None,
             libraries: Default::default(),
             metadata: None,
+            post_actions: vec![],
         };
 
         let verification_request: VerificationRequest =
@@ -181,6 +183,7 @@ mod tests {
             optimization_runs: None,
             libraries: Default::default(),
             metadata: None,
+            post_actions: vec![],
         };
 
         let verification_request: VerificationRequest =
@@ -205,6 +208,7 @@ mod tests {
             optimization_runs: None,
             libraries: Default::default(),
             metadata: None,
+            post_actions: vec![],
         };
 
         let verification_request: VerificationRequest =
