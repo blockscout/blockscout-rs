@@ -28,10 +28,57 @@ impl ConfigSettings for Settings {
     const SERVICE_NAME: &'static str = "BENS";
 }
 
+// TODO: move database settings to blockscout-service-launcher
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct DatabaseSettings {
-    pub url: String,
+    pub connect: DatabaseConnectSettings,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields, rename_all = "lowercase")]
+pub enum DatabaseConnectSettings {
+    Url(String),
+    Kv(DatabaseKvConnection),
+}
+
+impl DatabaseConnectSettings {
+    pub fn url(self) -> String {
+        match self {
+            DatabaseConnectSettings::Url(s) => s,
+            DatabaseConnectSettings::Kv(kv) => kv.url(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct DatabaseKvConnection {
+    pub host: String,
+    pub port: u16,
+    pub user: String,
+    pub password: String,
+    #[serde(default)]
+    pub dbname: Option<String>,
+    #[serde(default)]
+    pub options: Option<String>,
+}
+
+impl DatabaseKvConnection {
+    pub fn url(self) -> String {
+        let dbname = self
+            .dbname
+            .map(|dbname| format!("/{dbname}"))
+            .unwrap_or_default();
+        let options = self
+            .options
+            .map(|options| format!("?{options}"))
+            .unwrap_or_default();
+        format!(
+            "postgresql://{}:{}@{}:{}{}{}",
+            self.user, self.password, self.host, self.port, dbname, options
+        )
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -92,7 +139,9 @@ impl Settings {
             metrics: Default::default(),
             tracing: Default::default(),
             jaeger: Default::default(),
-            database: DatabaseSettings { url: database_url },
+            database: DatabaseSettings {
+                connect: DatabaseConnectSettings::Url(database_url),
+            },
             blockscout: Default::default(),
         }
     }
