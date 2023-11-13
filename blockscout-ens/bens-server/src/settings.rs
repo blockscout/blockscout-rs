@@ -39,36 +39,44 @@ pub struct DatabaseSettings {
 #[serde(deny_unknown_fields, rename_all = "lowercase")]
 pub enum DatabaseConnectSettings {
     Url(String),
-    KV(DatabaseKVConnection),
+    Kv(DatabaseKvConnection),
 }
 
 impl DatabaseConnectSettings {
-    pub fn url(&self) -> String {
+    pub fn url(self) -> String {
         match self {
-            DatabaseConnectSettings::Url(s) => s.clone(),
-            DatabaseConnectSettings::KV(kv) => kv.url(),
+            DatabaseConnectSettings::Url(s) => s,
+            DatabaseConnectSettings::Kv(kv) => kv.url(),
         }
     }
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
-pub struct DatabaseKVConnection {
+pub struct DatabaseKvConnection {
     pub host: String,
-    pub port: i32,
+    pub port: u16,
     pub user: String,
     pub password: String,
     #[serde(default)]
-    pub dbname: String,
+    pub dbname: Option<String>,
     #[serde(default)]
-    pub options: String,
+    pub options: Option<String>,
 }
 
-impl DatabaseKVConnection {
-    pub fn url(&self) -> String {
+impl DatabaseKvConnection {
+    pub fn url(self) -> String {
+        let dbname = self
+            .dbname
+            .map(|dbname| format!("/{dbname}"))
+            .unwrap_or_default();
+        let options = self
+            .options
+            .map(|options| format!("?{options}"))
+            .unwrap_or_default();
         format!(
-            "postgresql://{}:{}@{}:{}/{}{}",
-            self.user, self.password, self.host, self.port, self.dbname, self.options
+            "postgresql://{}:{}@{}:{}{}{}",
+            self.user, self.password, self.host, self.port, dbname, options
         )
     }
 }
