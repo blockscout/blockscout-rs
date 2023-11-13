@@ -48,10 +48,11 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let health = Arc::new(HealthService::default());
 
+    let database_url = settings.database.connect.url();
     let pool = Arc::new(
         PgPoolOptions::new()
             .max_connections(40)
-            .connect(&settings.database.connect.url())
+            .connect(&database_url)
             .await
             .context("database connect")?,
     );
