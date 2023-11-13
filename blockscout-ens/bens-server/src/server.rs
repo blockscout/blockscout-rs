@@ -51,8 +51,9 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let pool = Arc::new(
         PgPoolOptions::new()
             .max_connections(40)
-            .connect(&settings.database.url)
-            .await?,
+            .connect(&settings.database.connect.url())
+            .await
+            .context("database connect")?,
     );
     let blockscout_clients = settings
         .blockscout

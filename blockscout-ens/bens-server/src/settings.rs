@@ -28,10 +28,49 @@ impl ConfigSettings for Settings {
     const SERVICE_NAME: &'static str = "BENS";
 }
 
+// TODO: move database settings to blockscout-service-launcher
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct DatabaseSettings {
-    pub url: String,
+    pub connect: DatabaseConnectSettings,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields, rename_all = "lowercase")]
+pub enum DatabaseConnectSettings {
+    Url(String),
+    KV(DatabaseKVConnection),
+}
+
+impl DatabaseConnectSettings {
+    pub fn url(&self) -> String {
+        match self {
+            DatabaseConnectSettings::Url(s) => s.clone(),
+            DatabaseConnectSettings::KV(kv) => kv.url(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct DatabaseKVConnection {
+    pub host: String,
+    pub port: i32,
+    pub user: String,
+    pub password: String,
+    #[serde(default)]
+    pub dbname: String,
+    #[serde(default)]
+    pub options: String,
+}
+
+impl DatabaseKVConnection {
+    pub fn url(&self) -> String {
+        format!(
+            "postgresql://{}:{}@{}:{}/{}{}",
+            self.user, self.password, self.host, self.port, self.dbname, self.options
+        )
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -92,7 +131,9 @@ impl Settings {
             metrics: Default::default(),
             tracing: Default::default(),
             jaeger: Default::default(),
-            database: DatabaseSettings { url: database_url },
+            database: DatabaseSettings {
+                connect: DatabaseConnectSettings::Url(database_url),
+            },
             blockscout: Default::default(),
         }
     }
