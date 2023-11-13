@@ -16,7 +16,7 @@ async fn basic_domain_extracting_works(pool: PgPool) {
         "{postgres_url}{}",
         pool.connect_options().get_database().unwrap()
     );
-    std::env::set_var("BENS__DATABASE__URL", db_url);
+    std::env::set_var("BENS__DATABASE__CONNECT__URL", db_url);
     let clients = mocked_blockscout_clients().await;
     std::env::set_var("BENS__CONFIG", "./tests/config.test.toml");
     let mut settings = Settings::build().expect("Failed to build settings");
