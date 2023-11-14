@@ -10,13 +10,14 @@ use bens_proto::blockscout::bens::v1::{
     ListDomainEventsRequest, ListDomainEventsResponse, LookupAddressRequest, LookupAddressResponse,
     LookupDomainNameRequest, LookupDomainNameResponse, Pagination,
 };
+use std::sync::Arc;
 
 pub struct DomainsExtractorService {
-    pub subgraph_reader: SubgraphReader,
+    pub subgraph_reader: Arc<SubgraphReader>,
 }
 
 impl DomainsExtractorService {
-    pub fn new(subgraph_reader: SubgraphReader) -> Self {
+    pub fn new(subgraph_reader: Arc<SubgraphReader>) -> Self {
         Self { subgraph_reader }
     }
 }

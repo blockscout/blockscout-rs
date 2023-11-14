@@ -211,3 +211,30 @@ pub async fn batch_search_addresses(
 
     Ok(domains)
 }
+
+#[instrument(
+    name = "batch_search_addresses_cached",
+    skip(pool, addresses),
+    fields(job_size = addresses.len()),
+    err(level = "error"),
+    level = "info",
+)]
+pub async fn batch_search_addresses_cached(
+    pool: &PgPool,
+    schema: &str,
+    addresses: &[&str],
+) -> Result<Vec<DomainWithAddress>, SubgraphReadError> {
+    let domains: Vec<DomainWithAddress> = sqlx::query_as(&format!(
+        r#"
+        SELECT id, domain_name, resolved_address
+        FROM {schema}.address_names
+        where
+            resolved_address = ANY($1)
+        "#,
+    ))
+    .bind(addresses)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(domains)
+}

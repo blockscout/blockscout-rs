@@ -12,6 +12,7 @@ use bens_proto::blockscout::bens::v1::{
 use blockscout_service_launcher::{launcher, launcher::LaunchSettings};
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
+use tokio_cron_scheduler::{Job, JobScheduler};
 
 const SERVICE_NAME: &str = "bens";
 
@@ -74,11 +75,34 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     tracing::info!("found blockscout clients from config: {blockscout_clients:?}");
 
-    let subgraph_reader = SubgraphReader::initialize(pool, blockscout_clients)
-        .await
-        .context("failed to initialize subgraph-reader")?;
+    let subgraph_reader = Arc::new(
+        SubgraphReader::initialize(pool, blockscout_clients, settings.subgraph.cache_enabled)
+            .await
+            .context("failed to initialize subgraph-reader")?,
+    );
+    let domains_extractor = Arc::new(DomainsExtractorService::new(subgraph_reader.clone()));
 
-    let domains_extractor = Arc::new(DomainsExtractorService::new(subgraph_reader));
+    if settings.subgraph.cache_enabled {
+        let scheduler = JobScheduler::new().await?;
+        scheduler
+            .add(Job::new_async(
+                settings.subgraph.refresh_cache_schedule.as_str(),
+                move |_uuid, mut _l| {
+                    let reader = subgraph_reader.clone();
+                    Box::pin(async move {
+                        tracing::info!("refresh subgraph cache");
+                        match reader.as_ref().refresh_cache().await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                tracing::error!("error during refreshing subgraph: {e}");
+                            }
+                        };
+                    })
+                },
+            )?)
+            .await?;
+        scheduler.start().await?;
+    }
 
     let router = Router {
         domains_extractor,
