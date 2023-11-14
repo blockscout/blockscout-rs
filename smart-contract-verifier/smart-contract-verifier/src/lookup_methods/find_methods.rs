@@ -21,12 +21,11 @@ pub struct LookupMethodsResponse {
 pub fn find_methods(request: LookupMethodsRequest) -> LookupMethodsResponse {
     let methods = parse_selectors(request.abi);
     let opcodes = disassemble_bytecode(&request.bytecode);
-    let opcodes = opcodes.as_slice();
 
     let methods = methods
         .into_iter()
         .filter_map(|(func_sig, selector)| {
-            let func_index = match find_src_map_index(&selector, opcodes) {
+            let func_index = match find_src_map_index(&selector, &opcodes) {
                 Some(i) => i,
                 None => {
                     tracing::warn!(func_sig, "function not found");
@@ -49,7 +48,7 @@ pub fn find_methods(request: LookupMethodsRequest) -> LookupMethodsResponse {
             };
             Some((hex::encode(selector), method))
         })
-        .collect::<BTreeMap<String, Method>>();
+        .collect();
     LookupMethodsResponse { methods }
 }
 
