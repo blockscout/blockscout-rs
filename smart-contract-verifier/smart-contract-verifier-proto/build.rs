@@ -21,6 +21,14 @@ fn compile(
         .field_attribute(
             ".blockscout.smartContractVerifier.v2.VerifyVyperMultiPartRequest.interfaces",
             "#[serde(default)]"
+        )
+        .field_attribute(
+            ".blockscout.smartContractVerifier.v2.VerifySolidityMultiPartRequest.post_actions",
+            "#[serde(default)]"
+        )
+        .field_attribute(
+            ".blockscout.smartContractVerifier.v2.VerifySolidityStandardJsonRequest.post_actions",
+            "#[serde(default)]"
         );
     config.compile_protos(protos, includes)?;
     Ok(())

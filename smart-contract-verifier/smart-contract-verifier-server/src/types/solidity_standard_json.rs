@@ -87,6 +87,7 @@ mod tests {
                 chain_id: Some("1".into()),
                 contract_address: Some("0xcafecafecafecafecafecafecafecafecafecafe".into())
             }),
+            post_actions: vec![],
         };
         let input: CompilerInput = serde_json::from_str(&request.input).unwrap();
 
@@ -149,6 +150,7 @@ mod tests {
             compiler_version: "v0.8.17+commit.8df45f5f".to_string(),
             input: "{\"language\": \"Solidity\", \"sources\": {\"./src/contracts/Foo.sol\": {\"content\": \"pragma solidity ^0.8.2;\\n\\ncontract Foo {\\n    function bar() external pure returns (uint256) {\\n        return 42;\\n    }\\n}\\n\"}}, \"settings\": {\"metadata\": {\"useLiteralContent\": true}, \"optimizer\": {\"enabled\": true, \"runs\": 200}, \"outputSelection\": {\"*\": {\"*\": [\"abi\", \"evm.bytecode\", \"evm.deployedBytecode\", \"evm.methodIdentifiers\"], \"\": [\"id\", \"ast\"]}}}}".to_string(),
             metadata: None,
+            post_actions: vec![],
         };
 
         let verification_request: VerificationRequest =
