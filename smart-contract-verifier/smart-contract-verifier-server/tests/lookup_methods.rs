@@ -2,7 +2,7 @@ use blockscout_service_launcher::{
     launcher::ConfigSettings,
     test_server::{get_test_server_settings, init_server, send_post_request},
 };
-use ethers_solc::{CompilerInput, CompilerOutput, EvmVersion, Solc};
+use ethers_solc::{artifacts::Severity, CompilerInput, CompilerOutput, EvmVersion, Solc};
 use lazy_static::lazy_static;
 use rstest::rstest;
 use serde::Deserialize;
@@ -102,6 +102,14 @@ async fn test_lookup_methods(#[files("tests/test_cases_lookup_methods/*")] test_
     let inputs = CompilerInput::new(test_dir).expect("failed to read dir");
     let input = inputs[0].clone().evm_version(EvmVersion::London);
     let output = solc.compile(&input).expect("failed to compile");
+    let errors = output
+        .errors
+        .iter()
+        .filter(|e| e.severity == Severity::Error)
+        .collect::<Vec<_>>();
+    if !errors.is_empty() {
+        panic!("errors during compilation: {:?}", errors);
+    }
 
     let (request, methods) = process_compiler_output(&output, &test_case.contract_name).unwrap();
     let res: LookupMethodsResponse = send_post_request(&base, ROUTE, &request).await;

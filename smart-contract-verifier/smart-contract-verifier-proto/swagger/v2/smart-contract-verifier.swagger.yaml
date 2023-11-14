@@ -226,10 +226,10 @@ definitions:
         type: string
       fileOffset:
         type: integer
-        format: int32
+        format: int64
       length:
         type: integer
-        format: int32
+        format: int64
   SourceMatchType:
     type: string
     enum:

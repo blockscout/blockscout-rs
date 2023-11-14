@@ -39,14 +39,14 @@ impl From<LookupMethodsResponse> for LookupMethodsResponseWrapper {
         Self(proto::LookupMethodsResponse {
             methods: response
                 .methods
-                .iter()
+                .into_iter()
                 .map(|(selector, method)| {
                     (
-                        selector.clone(),
+                        selector,
                         proto::lookup_methods_response::Method {
-                            file_name: method.filename.clone(),
-                            file_offset: method.offset as i32,
-                            length: method.length as i32,
+                            file_name: method.filename,
+                            file_offset: method.offset as u32,
+                            length: method.length as u32,
                         },
                     )
                 })
