@@ -14,6 +14,7 @@ bytes = "1.2"
 chrono = "0.4"
 cron = "0.11"
 ethabi = "18.0"
+ethers-core = "2.0.10"
 ethers-solc = { version = "2.0.6", features = ["async"] }
 futures = "0.3"
 hex = "0.4"

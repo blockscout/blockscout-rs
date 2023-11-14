@@ -7,14 +7,18 @@ use crate::{
     },
     settings::{Extensions, FetcherSettings, S3FetcherSettings, SoliditySettings},
     types::{
-        StandardJsonParseError, VerifyResponseWrapper, VerifySolidityMultiPartRequestWrapper,
+        LookupMethodsRequestWrapper, LookupMethodsResponseWrapper, StandardJsonParseError,
+        VerifyResponseWrapper, VerifySolidityMultiPartRequestWrapper,
         VerifySolidityStandardJsonRequestWrapper,
     },
 };
 use s3::{creds::Credentials, Bucket, Region};
 use smart_contract_verifier::{
-    solidity, Compilers, Fetcher, ListFetcher, S3Fetcher, SolcValidator, SolidityClient,
-    SolidityCompiler, VerificationError,
+    find_methods, solidity, Compilers, Fetcher, ListFetcher, S3Fetcher, SolcValidator,
+    SolidityClient, SolidityCompiler, VerificationError,
+};
+use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
+    LookupMethodsRequest, LookupMethodsResponse,
 };
 use std::{str::FromStr, sync::Arc};
 use tokio::sync::Semaphore;
@@ -183,6 +187,16 @@ impl SolidityVerifier for SolidityVerifierService {
         Ok(Response::new(ListCompilerVersionsResponse {
             compiler_versions,
         }))
+    }
+
+    async fn lookup_methods(
+        &self,
+        request: Request<LookupMethodsRequest>,
+    ) -> Result<Response<LookupMethodsResponse>, Status> {
+        let request: LookupMethodsRequestWrapper = request.into_inner().into();
+        let methods = find_methods(request.try_into()?);
+        let response = LookupMethodsResponseWrapper::from(methods);
+        Ok(Response::new(response.into()))
     }
 }
 
