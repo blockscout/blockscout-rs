@@ -253,6 +253,7 @@ definitions:
       localCreationInputParts:
         type: array
         items:
+          type: object
           $ref: '#/definitions/ExtraDataBytecodePart'
         description: |-
           / Creation transaction input resultant from local compilation
@@ -260,10 +261,19 @@ definitions:
       localDeployedBytecodeParts:
         type: array
         items:
+          type: object
           $ref: '#/definitions/ExtraDataBytecodePart'
         description: |-
           / Deployed bytecode resultant from local compilation
           / parsed and split on Main and Meta parts. Is empty for Sourcify verification.
+  VerifyResponsePostActionResponses:
+    type: object
+    properties:
+      lookupMethods:
+        $ref: '#/definitions/v2LookupMethodsResponse'
+        description: |-
+          / If requested, will contain the response for
+          / 'lookup-methods' processing applied to the verified contract.
   googlerpcStatus:
     type: object
     properties:
@@ -275,6 +285,7 @@ definitions:
       details:
         type: array
         items:
+          type: object
           $ref: '#/definitions/protobufAny'
   protobufAny:
     type: object
@@ -400,6 +411,8 @@ definitions:
         $ref: '#/definitions/v2Source'
       extraData:
         $ref: '#/definitions/VerifyResponseExtraData'
+      postActionResponses:
+        $ref: '#/definitions/VerifyResponsePostActionResponses'
   v2VerifyResponseStatus:
     type: string
     enum:
@@ -441,6 +454,13 @@ definitions:
       metadata:
         $ref: '#/definitions/v2VerificationMetadata'
         title: / An optional field to be filled by explorers
+      postActions:
+        type: array
+        items:
+          type: string
+        description: |-
+          / Additional actions the client wants the result to be returned.
+          / Currently supports only: "lookup-methods" for Solidity contracts.
   v2VerifySolidityStandardJsonRequest:
     type: object
     properties:
@@ -459,6 +479,13 @@ definitions:
       metadata:
         $ref: '#/definitions/v2VerificationMetadata'
         title: / An optional field to be filled by explorers
+      postActions:
+        type: array
+        items:
+          type: string
+        description: |-
+          / Additional actions the client wants the result to be returned.
+          / Currently supports only: "lookup-methods" for Solidity contracts.
   v2VerifySourcifyRequest:
     type: object
     properties:
