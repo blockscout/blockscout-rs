@@ -80,7 +80,7 @@ impl VyperVerifier for VyperVerifierService {
         let result = vyper::multi_part::verify(self.client.clone(), request.try_into()?).await;
 
         let response = if let Ok(verification_success) = result {
-            VerifyResponseWrapper::ok(verification_success)
+            VerifyResponseWrapper::ok(verification_success, None)
         } else {
             let err = result.unwrap_err();
             match err {
@@ -134,7 +134,7 @@ impl VyperVerifier for VyperVerifierService {
         let result = vyper::standard_json::verify(self.client.clone(), verification_request).await;
 
         let response = if let Ok(verification_success) = result {
-            VerifyResponseWrapper::ok(verification_success)
+            VerifyResponseWrapper::ok(verification_success, None)
         } else {
             let err = result.unwrap_err();
             match err {

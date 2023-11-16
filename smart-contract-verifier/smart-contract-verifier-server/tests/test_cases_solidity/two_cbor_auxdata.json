@@ -5,6 +5,27 @@
     "compiler_version": "v0.8.18+commit.87f61d96",
     "contract_name": "CarFactory",
     "source_code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.17;\n\ncontract Car {\n    \n    string public model;\n    address public carAddr;\n\n    constructor( string memory _model)  {\n        model = _model;\n        carAddr = address(this);\n    }\n}\n\ncontract CarFactory {\n    Car[] public cars;\n\n    function create( string memory _model) public {\n        Car car = new Car( _model);\n        cars.push(car);\n    }\n\n\n    function create2( string memory _model, bytes32 _salt) public {\n        Car car = (new Car){salt: _salt}( _model);\n        cars.push(car);\n    }\n\n    \n}\n",
+    "expected_lookup_methods": {
+        "lookupMethods": {
+            "methods":{
+                "973d5e44": {
+                    "fileName": "source.sol",
+                    "fileOffset": 410,
+                    "length": 144
+                },
+                "b6a46b3b": {
+                    "fileName": "source.sol",
+                    "fileOffset": 290,
+                    "length": 113
+                },
+                "f7746e36": {
+                    "fileName": "source.sol",
+                    "fileOffset": 266,
+                    "length": 17
+                }
+            }
+        }
+    },
     "expected_compiler_artifacts": {
         "abi": [{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"cars","outputs":[{"internalType":"contract Car","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"string","name":"_model","type":"string"}],"name":"create","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"string","name":"_model","type":"string"},{"internalType":"bytes32","name":"_salt","type":"bytes32"}],"name":"create2","outputs":[],"stateMutability":"nonpayable","type":"function"}],
         "userdoc": {"kind":"user","methods":{},"version":1},

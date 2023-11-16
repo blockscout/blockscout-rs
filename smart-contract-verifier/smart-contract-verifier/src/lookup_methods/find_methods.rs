@@ -4,7 +4,7 @@ use super::{
 };
 use bytes::Bytes;
 use ethers_core::abi::Abi;
-use ethers_solc::sourcemap::SourceMap;
+use ethers_solc::{sourcemap::SourceMap, CompilerOutput};
 use std::{collections::BTreeMap, iter::repeat};
 
 pub struct LookupMethodsRequest {
@@ -18,9 +18,68 @@ pub struct LookupMethodsResponse {
     pub methods: BTreeMap<String, Method>,
 }
 
+pub fn find_methods_from_compiler_output(
+    contract_name: &String,
+    output: &CompilerOutput,
+) -> anyhow::Result<LookupMethodsResponse> {
+    let file_ids = output
+        .sources
+        .iter()
+        .map(|(name, file)| (file.id, name.clone()))
+        .collect();
+
+    let (_, contract) = output
+        .contracts_iter()
+        .find(|(name, _)| *name == contract_name)
+        .ok_or_else(|| anyhow::anyhow!("contract {contract_name} not found"))?;
+
+    let evm = contract
+        .evm
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("evm missing"))?;
+    let deployed_bytecode = evm
+        .deployed_bytecode
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("deployed bytecode missing"))?;
+    let bytecode = deployed_bytecode
+        .bytecode
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("bytecode missing"))?;
+    let source_map = bytecode
+        .source_map()
+        .ok_or_else(|| anyhow::anyhow!("source map missing"))??;
+    let bytecode_raw = &bytecode
+        .object
+        .as_bytes()
+        .ok_or_else(|| anyhow::anyhow!("invalid bytecode"))?
+        .0;
+    let methods = parse_selectors_from_method_ids(&evm.method_identifiers)?;
+
+    Ok(find_methods_internal(
+        methods,
+        bytecode_raw,
+        &source_map,
+        &file_ids,
+    ))
+}
+
 pub fn find_methods(request: LookupMethodsRequest) -> LookupMethodsResponse {
-    let methods = parse_selectors(request.abi);
-    let opcodes = disassemble_bytecode(&request.bytecode);
+    let methods = parse_selectors_from_abi(&request.abi);
+    find_methods_internal(
+        methods,
+        &request.bytecode,
+        &request.source_map,
+        &request.file_ids,
+    )
+}
+
+fn find_methods_internal(
+    methods: BTreeMap<String, [u8; 4]>,
+    bytecode: &Bytes,
+    source_map: &SourceMap,
+    file_ids: &BTreeMap<u32, String>,
+) -> LookupMethodsResponse {
+    let opcodes = disassemble_bytecode(bytecode);
 
     let methods = methods
         .into_iter()
@@ -33,13 +92,7 @@ pub fn find_methods(request: LookupMethodsRequest) -> LookupMethodsResponse {
                 }
             };
 
-            tracing::debug!(func_sig, func_index, "found function");
-            let method = match Method::from_source_map(
-                selector,
-                &request.source_map,
-                func_index,
-                &request.file_ids,
-            ) {
+            let method = match Method::from_source_map(selector, source_map, func_index, file_ids) {
                 Ok(m) => m,
                 Err(err) => {
                     tracing::warn!(func_sig, err = err.to_string(), "failed to parse method");
@@ -105,7 +158,20 @@ fn find_src_map_index(selector: &[u8; 4], opcodes: &[DisassembledOpcode]) -> Opt
     None
 }
 
-fn parse_selectors(abi: Abi) -> BTreeMap<String, [u8; 4]> {
+fn parse_selectors_from_method_ids(
+    methods: &BTreeMap<String, String>,
+) -> anyhow::Result<BTreeMap<String, [u8; 4]>> {
+    let methods: BTreeMap<String, [u8; 4]> = methods
+        .iter()
+        .map(|(name, selector)| {
+            let mut result = [0u8; 4];
+            hex::decode_to_slice(selector, &mut result).map(|_| (name.to_owned(), result))
+        })
+        .collect::<Result<_, _>>()?;
+    Ok(methods)
+}
+
+fn parse_selectors_from_abi(abi: &Abi) -> BTreeMap<String, [u8; 4]> {
     abi.functions()
         .map(|f| (f.signature(), f.short_signature()))
         .collect()

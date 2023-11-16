@@ -53,6 +53,10 @@ pub trait TestCase {
     fn deployed_bytecode_artifacts(&self) -> Option<serde_json::Value> {
         None
     }
+
+    fn lookup_methods(&self) -> Option<serde_json::Value> {
+        None
+    }
 }
 
 pub fn from_file<T: TestCase + DeserializeOwned>(test_case: &str) -> T {
@@ -79,6 +83,7 @@ pub struct Flattened {
     pub expected_compiler_artifacts: Option<serde_json::Value>,
     pub expected_creation_input_artifacts: Option<serde_json::Value>,
     pub expected_deployed_bytecode_artifacts: Option<serde_json::Value>,
+    pub expected_lookup_methods: Option<serde_json::Value>,
 
     // Verification metadata related values
     pub chain_id: Option<String>,
@@ -105,7 +110,8 @@ impl TestCase for Flattened {
             "metadata": {
                 "chainId": self.chain_id,
                 "contractAddress": self.contract_address
-            }
+            },
+            "postActions": ["lookup-methods"]
         })
     }
 
@@ -171,6 +177,10 @@ impl TestCase for Flattened {
 
     fn deployed_bytecode_artifacts(&self) -> Option<serde_json::Value> {
         self.expected_deployed_bytecode_artifacts.clone()
+    }
+
+    fn lookup_methods(&self) -> Option<serde_json::Value> {
+        self.expected_lookup_methods.clone()
     }
 }
 

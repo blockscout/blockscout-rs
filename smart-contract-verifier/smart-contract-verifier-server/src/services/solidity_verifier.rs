@@ -14,15 +14,30 @@ use crate::{
 };
 use s3::{creds::Credentials, Bucket, Region};
 use smart_contract_verifier::{
-    find_methods, solidity, Compilers, Fetcher, ListFetcher, S3Fetcher, SolcValidator,
-    SolidityClient, SolidityCompiler, VerificationError,
+    find_methods, find_methods_from_compiler_output, solidity, Compilers, Fetcher, ListFetcher,
+    S3Fetcher, SolcValidator, SolidityClient, SolidityCompiler, SoliditySuccess, VerificationError,
 };
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
-    LookupMethodsRequest, LookupMethodsResponse,
+    verify_response::PostActionResponses, LookupMethodsRequest, LookupMethodsResponse,
 };
-use std::{str::FromStr, sync::Arc};
+use std::{collections::HashSet, str::FromStr, sync::Arc};
 use tokio::sync::Semaphore;
 use tonic::{Request, Response, Status};
+
+pub enum VerifyPostAction {
+    LookupMethods,
+}
+
+impl FromStr for VerifyPostAction {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "lookup-methods" => Ok(VerifyPostAction::LookupMethods),
+            _ => Err(anyhow::anyhow!("invalid post action")),
+        }
+    }
+}
 
 pub struct SolidityVerifierService {
     client: Arc<SolidityClient>,
@@ -82,6 +97,52 @@ impl SolidityVerifierService {
     }
 }
 
+fn process_verify_result(
+    result: Result<SoliditySuccess, VerificationError>,
+    post_actions: Vec<VerifyPostAction>,
+) -> Result<VerifyResponse, Status> {
+    match result {
+        Ok(res) => {
+            // Process requested post actions
+            let mut post_actions_responses: PostActionResponses = Default::default();
+            for action in post_actions {
+                match action {
+                    VerifyPostAction::LookupMethods => {
+                        let methods = find_methods_from_compiler_output(
+                            &res.contract_name,
+                            &res.compiler_output,
+                        );
+                        match methods {
+                            Ok(methods) => {
+                                let response = LookupMethodsResponseWrapper::from(methods);
+                                post_actions_responses.lookup_methods = Some(response.into());
+                            }
+                            Err(err) => {
+                                tracing::error!("lookup-methods error: {err:#?}");
+                            }
+                        }
+                    }
+                }
+            }
+            Ok(VerifyResponseWrapper::ok(res, Some(post_actions_responses)))
+        }
+        Err(err) => match err {
+            VerificationError::Compilation(_)
+            | VerificationError::NoMatchingContracts
+            | VerificationError::CompilerVersionMismatch(_) => Ok(VerifyResponseWrapper::err(err)),
+            VerificationError::Initialization(_) | VerificationError::VersionNotFound(_) => {
+                tracing::debug!("invalid argument: {err:#?}");
+                Err(Status::invalid_argument(err.to_string()))
+            }
+            VerificationError::Internal(err) => {
+                tracing::error!("internal error: {err:#?}");
+                Err(Status::internal(err.to_string()))
+            }
+        },
+    }
+    .map(|r| r.into_inner())
+}
+
 #[async_trait::async_trait]
 impl SolidityVerifier for SolidityVerifierService {
     async fn verify_multi_part(
@@ -89,6 +150,16 @@ impl SolidityVerifier for SolidityVerifierService {
         request: Request<VerifySolidityMultiPartRequest>,
     ) -> Result<Response<VerifyResponse>, Status> {
         let request: VerifySolidityMultiPartRequestWrapper = request.into_inner().into();
+
+        let post_actions = request
+            .post_actions
+            .iter()
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .map(|action| action.parse())
+            .collect::<anyhow::Result<Vec<VerifyPostAction>>>()
+            .map_err(|err| Status::invalid_argument(err.to_string()))?;
+
         let chain_id = request
             .metadata
             .as_ref()
@@ -96,24 +167,7 @@ impl SolidityVerifier for SolidityVerifierService {
             .unwrap_or_default();
         let result = solidity::multi_part::verify(self.client.clone(), request.try_into()?).await;
 
-        let response = if let Ok(verification_success) = result {
-            VerifyResponseWrapper::ok(verification_success)
-        } else {
-            let err = result.unwrap_err();
-            match err {
-                VerificationError::Compilation(_)
-                | VerificationError::NoMatchingContracts
-                | VerificationError::CompilerVersionMismatch(_) => VerifyResponseWrapper::err(err),
-                VerificationError::Initialization(_) | VerificationError::VersionNotFound(_) => {
-                    tracing::debug!("invalid argument: {err:#?}");
-                    return Err(Status::invalid_argument(err.to_string()));
-                }
-                VerificationError::Internal(err) => {
-                    tracing::error!("internal error: {err:#?}");
-                    return Err(Status::internal(err.to_string()));
-                }
-            }
-        };
+        let response = process_verify_result(result, post_actions)?;
 
         metrics::count_verify_contract(
             chain_id.as_ref(),
@@ -121,7 +175,7 @@ impl SolidityVerifier for SolidityVerifierService {
             response.status().as_str_name(),
             "multi-part",
         );
-        Ok(Response::new(response.into_inner()))
+        Ok(Response::new(response))
     }
 
     async fn verify_standard_json(
@@ -129,6 +183,16 @@ impl SolidityVerifier for SolidityVerifierService {
         request: Request<VerifySolidityStandardJsonRequest>,
     ) -> Result<Response<VerifyResponse>, Status> {
         let request: VerifySolidityStandardJsonRequestWrapper = request.into_inner().into();
+
+        let post_actions = request
+            .post_actions
+            .iter()
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .map(|action| action.parse())
+            .collect::<anyhow::Result<Vec<VerifyPostAction>>>()
+            .map_err(|err| Status::invalid_argument(err.to_string()))?;
+
         let chain_id = request
             .metadata
             .as_ref()
@@ -151,24 +215,7 @@ impl SolidityVerifier for SolidityVerifierService {
         let result =
             solidity::standard_json::verify(self.client.clone(), verification_request).await;
 
-        let response = if let Ok(verification_success) = result {
-            VerifyResponseWrapper::ok(verification_success)
-        } else {
-            let err = result.unwrap_err();
-            match err {
-                VerificationError::Compilation(_)
-                | VerificationError::NoMatchingContracts
-                | VerificationError::CompilerVersionMismatch(_) => VerifyResponseWrapper::err(err),
-                VerificationError::Initialization(_) | VerificationError::VersionNotFound(_) => {
-                    tracing::debug!("invalid argument: {err:#?}");
-                    return Err(Status::invalid_argument(err.to_string()));
-                }
-                VerificationError::Internal(err) => {
-                    tracing::error!("internal error: {err:#?}");
-                    return Err(Status::internal(err.to_string()));
-                }
-            }
-        };
+        let response = process_verify_result(result, post_actions)?;
 
         metrics::count_verify_contract(
             chain_id.as_ref(),
@@ -176,7 +223,7 @@ impl SolidityVerifier for SolidityVerifierService {
             response.status().as_str_name(),
             "standard-json",
         );
-        Ok(Response::new(response.into_inner()))
+        Ok(Response::new(response))
     }
 
     async fn list_compiler_versions(

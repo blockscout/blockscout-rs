@@ -29,7 +29,9 @@ pub use compiler::{Compilers, Fetcher, ListFetcher, S3Fetcher, Version};
 pub use verifier::{BytecodePart, Error as VerificationError};
 
 pub use crate::sourcify::{SourcifyApiClient, Success as SourcifySuccess};
-pub use lookup_methods::{find_methods, LookupMethodsRequest, LookupMethodsResponse};
+pub use lookup_methods::{
+    find_methods, find_methods_from_compiler_output, LookupMethodsRequest, LookupMethodsResponse,
+};
 pub use solidity::{
     Client as SolidityClient, SolcValidator, SolidityCompiler, Success as SoliditySuccess,
 };
