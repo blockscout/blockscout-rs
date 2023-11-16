@@ -7,9 +7,9 @@ use crate::{
     },
     settings::{Extensions, FetcherSettings, S3FetcherSettings, SoliditySettings},
     types::{
-        LookupMethodsRequestWrapper, LookupMethodsResponseWrapper, StandardJsonParseError,
-        VerifyResponseWrapper, VerifySolidityMultiPartRequestWrapper,
-        VerifySolidityStandardJsonRequestWrapper,
+        parse_post_actions, LookupMethodsRequestWrapper, LookupMethodsResponseWrapper,
+        StandardJsonParseError, VerifyPostAction, VerifyResponseWrapper,
+        VerifySolidityMultiPartRequestWrapper, VerifySolidityStandardJsonRequestWrapper,
     },
 };
 use s3::{creds::Credentials, Bucket, Region};
@@ -20,24 +20,9 @@ use smart_contract_verifier::{
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
     verify_response::PostActionResponses, LookupMethodsRequest, LookupMethodsResponse,
 };
-use std::{collections::HashSet, str::FromStr, sync::Arc};
+use std::{str::FromStr, sync::Arc};
 use tokio::sync::Semaphore;
 use tonic::{Request, Response, Status};
-
-pub enum VerifyPostAction {
-    LookupMethods,
-}
-
-impl FromStr for VerifyPostAction {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "lookup-methods" => Ok(VerifyPostAction::LookupMethods),
-            _ => Err(anyhow::anyhow!("invalid post action")),
-        }
-    }
-}
 
 pub struct SolidityVerifierService {
     client: Arc<SolidityClient>,
@@ -97,52 +82,6 @@ impl SolidityVerifierService {
     }
 }
 
-fn process_verify_result(
-    result: Result<SoliditySuccess, VerificationError>,
-    post_actions: Vec<VerifyPostAction>,
-) -> Result<VerifyResponse, Status> {
-    match result {
-        Ok(res) => {
-            // Process requested post actions
-            let mut post_actions_responses: PostActionResponses = Default::default();
-            for action in post_actions {
-                match action {
-                    VerifyPostAction::LookupMethods => {
-                        let methods = find_methods_from_compiler_output(
-                            &res.contract_name,
-                            &res.compiler_output,
-                        );
-                        match methods {
-                            Ok(methods) => {
-                                let response = LookupMethodsResponseWrapper::from(methods);
-                                post_actions_responses.lookup_methods = Some(response.into());
-                            }
-                            Err(err) => {
-                                tracing::error!("lookup-methods error: {err:#?}");
-                            }
-                        }
-                    }
-                }
-            }
-            Ok(VerifyResponseWrapper::ok(res, Some(post_actions_responses)))
-        }
-        Err(err) => match err {
-            VerificationError::Compilation(_)
-            | VerificationError::NoMatchingContracts
-            | VerificationError::CompilerVersionMismatch(_) => Ok(VerifyResponseWrapper::err(err)),
-            VerificationError::Initialization(_) | VerificationError::VersionNotFound(_) => {
-                tracing::debug!("invalid argument: {err:#?}");
-                Err(Status::invalid_argument(err.to_string()))
-            }
-            VerificationError::Internal(err) => {
-                tracing::error!("internal error: {err:#?}");
-                Err(Status::internal(err.to_string()))
-            }
-        },
-    }
-    .map(|r| r.into_inner())
-}
-
 #[async_trait::async_trait]
 impl SolidityVerifier for SolidityVerifierService {
     async fn verify_multi_part(
@@ -151,13 +90,7 @@ impl SolidityVerifier for SolidityVerifierService {
     ) -> Result<Response<VerifyResponse>, Status> {
         let request: VerifySolidityMultiPartRequestWrapper = request.into_inner().into();
 
-        let post_actions = request
-            .post_actions
-            .iter()
-            .collect::<HashSet<_>>()
-            .into_iter()
-            .map(|action| action.parse())
-            .collect::<anyhow::Result<Vec<VerifyPostAction>>>()
+        let post_actions = parse_post_actions(&request.post_actions)
             .map_err(|err| Status::invalid_argument(err.to_string()))?;
 
         let chain_id = request
@@ -184,13 +117,7 @@ impl SolidityVerifier for SolidityVerifierService {
     ) -> Result<Response<VerifyResponse>, Status> {
         let request: VerifySolidityStandardJsonRequestWrapper = request.into_inner().into();
 
-        let post_actions = request
-            .post_actions
-            .iter()
-            .collect::<HashSet<_>>()
-            .into_iter()
-            .map(|action| action.parse())
-            .collect::<anyhow::Result<Vec<VerifyPostAction>>>()
+        let post_actions = parse_post_actions(&request.post_actions)
             .map_err(|err| Status::invalid_argument(err.to_string()))?;
 
         let chain_id = request
@@ -279,4 +206,55 @@ fn new_bucket(settings: &S3FetcherSettings) -> anyhow::Result<Arc<Bucket>> {
         )?,
     )?);
     Ok(bucket)
+}
+
+fn process_verify_result(
+    result: Result<SoliditySuccess, VerificationError>,
+    post_actions: Vec<VerifyPostAction>,
+) -> Result<VerifyResponse, Status> {
+    match result {
+        Ok(res) => {
+            let post_actions_responses = process_post_actions(&res, &post_actions);
+            Ok(VerifyResponseWrapper::ok(res, Some(post_actions_responses)))
+        }
+        Err(err) => match err {
+            VerificationError::Compilation(_)
+            | VerificationError::NoMatchingContracts
+            | VerificationError::CompilerVersionMismatch(_) => Ok(VerifyResponseWrapper::err(err)),
+            VerificationError::Initialization(_) | VerificationError::VersionNotFound(_) => {
+                tracing::debug!("invalid argument: {err:#?}");
+                Err(Status::invalid_argument(err.to_string()))
+            }
+            VerificationError::Internal(err) => {
+                tracing::error!("internal error: {err:#?}");
+                Err(Status::internal(err.to_string()))
+            }
+        },
+    }
+    .map(|r| r.into_inner())
+}
+
+fn process_post_actions(
+    res: &SoliditySuccess,
+    post_actions: &Vec<VerifyPostAction>,
+) -> PostActionResponses {
+    let mut post_actions_responses: PostActionResponses = Default::default();
+    for action in post_actions {
+        match action {
+            VerifyPostAction::LookupMethods => {
+                let methods =
+                    find_methods_from_compiler_output(&res.contract_name, &res.compiler_output);
+                match methods {
+                    Ok(methods) => {
+                        let response = LookupMethodsResponseWrapper::from(methods);
+                        post_actions_responses.lookup_methods = Some(response.into());
+                    }
+                    Err(err) => {
+                        tracing::error!("lookup-methods error: {err:#?}");
+                    }
+                }
+            }
+        }
+    }
+    post_actions_responses
 }

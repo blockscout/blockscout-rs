@@ -191,7 +191,9 @@ mod tests {
             deployed_bytecode_artifacts: Default::default(),
         };
 
-        let response = VerifyResponseWrapper::ok(verification_success.clone(), None).into_inner();
+        let response =
+            VerifyResponseWrapper::ok(verification_success.clone(), Some(Default::default()))
+                .into_inner();
 
         let expected = VerifyResponse {
             message: "OK".to_string(),

@@ -97,6 +97,10 @@ impl TestCase for Flattened {
 
     fn to_request(&self) -> serde_json::Value {
         let extension = if self.is_yul() { "yul" } else { "sol" };
+        let mut post_actions = vec![];
+        if self.expected_lookup_methods.is_some() {
+            post_actions.push("lookup-methods");
+        }
         serde_json::json!({
             "bytecode": self.creation_bytecode,
             "bytecodeType": BytecodeType::CreationInput.as_str_name(),
@@ -111,7 +115,7 @@ impl TestCase for Flattened {
                 "chainId": self.chain_id,
                 "contractAddress": self.contract_address
             },
-            "postActions": ["lookup-methods"]
+            "postActions": post_actions
         })
     }
 
