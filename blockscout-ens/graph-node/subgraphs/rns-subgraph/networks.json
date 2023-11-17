@@ -1,0 +1,15 @@
+{
+  "rootstock": {
+    "RnsRegistry": {
+      "address": "0xCB868AeAbd31E2b66F74E9a55cF064AbB31A4Ad5",
+      "startBlock": 905027
+    },
+    "NameResolver": {
+      "address": "0x4b1a11BF6723e60b9D2e02AA3ecE34E24Bde77d9",
+      "startBlock": 1721969
+    },
+    "PublicResolver": {
+      "startBlock": 905027
+    }
+  }
+}

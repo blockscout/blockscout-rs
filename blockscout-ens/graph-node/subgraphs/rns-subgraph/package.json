@@ -1,0 +1,21 @@
+{
+  "name": "rns-subgraph",
+  "license": "UNLICENSED",
+  "scripts": {
+    "codegen": "graph codegen",
+    "build": "graph build",
+    "deploy": "graph deploy --node https://api.studio.thegraph.com/deploy/ rns-subgraph",
+    "create-local": "graph create --node http://localhost:8020/ rns-subgraph",
+    "remove-local": "graph remove --node http://localhost:8020/ rns-subgraph",
+    "deploy-local": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 rns-subgraph",
+    "test": "graph test"
+  },
+  "devDependencies": {
+    "@ensdomains/content-hash": "^2.5.3",
+    "@graphprotocol/graph-cli": "^0.51.2",
+    "@graphprotocol/graph-ts": "^0.31.0",
+    "assemblyscript": "^0.19.0",
+    "matchstick-as": "^0.5.2",
+    "typescript": "^4.9.4"
+  }
+}
