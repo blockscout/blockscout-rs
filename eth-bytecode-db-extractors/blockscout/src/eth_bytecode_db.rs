@@ -14,12 +14,11 @@ use url::Url;
 #[derive(Clone)]
 pub struct Client {
     url: Url,
-    api_key: String,
     request_client: reqwest::Client,
 }
 
 impl Client {
-    pub fn try_new(service_url: String, api_key: String) -> anyhow::Result<Self> {
+    pub fn try_new(service_url: String) -> anyhow::Result<Self> {
         let service_url =
             Url::from_str(&service_url).context("invalid eth_bytecode_db service url")?;
 
@@ -30,7 +29,6 @@ impl Client {
 
         Ok(Self {
             url: service_url,
-            api_key,
             request_client: client,
         })
     }
@@ -89,7 +87,6 @@ impl Client {
             .request_client
             .post(url)
             .json(&request)
-            .header("x-api-key", &self.api_key)
             .send()
             .await
             .context("error sending request")?;

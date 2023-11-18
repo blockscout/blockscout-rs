@@ -21,19 +21,24 @@ async fn main() -> Result<(), anyhow::Error> {
     )
     .await?;
 
+    let mut eth_bytecode_db_connect_options =
+        sea_orm::ConnectOptions::new(&settings.eth_bytecode_db_database);
+    eth_bytecode_db_connect_options.sqlx_logging_level(tracing::log::LevelFilter::Debug);
+    let eth_bytecode_db_db_connection = launcher::database::initialize_postgres::<Migrator>(
+        eth_bytecode_db_connect_options,
+        settings.create_database,
+        settings.run_migrations,
+    )
+    .await?;
+
     let client = Client::try_new(
         db_connection,
-        settings.chain_id,
-        settings.blockscout_url,
+        eth_bytecode_db_db_connection,
         settings.eth_bytecode_db_url,
-        settings.eth_bytecode_db_api_key,
-        settings.limit_requests_per_second,
     )?;
 
     tracing::info!("importing contract addresses started");
-    let processed = client
-        .import_contract_addresses(settings.force_import)
-        .await?;
+    let processed = client.import_contract_addresses().await?;
     tracing::info!("importing contract addresses finished. Total processed contracts={processed}");
 
     let mut handles = Vec::with_capacity(settings.n_threads);

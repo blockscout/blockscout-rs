@@ -4,11 +4,6 @@ members = [
     "blockscout",
     "blockscout-entity",
     "blockscout-migration",
-    "contracts-lookup",
-    "contracts-lookup-entity",
-    "contracts-lookup-migration",
-    "smart-contract-fiesta",
-    "smart-contract-fiesta-entity",
-    "smart-contract-fiesta-migration",
+    "eth-bytecode-db-entity",
     "job-queue",
 ]

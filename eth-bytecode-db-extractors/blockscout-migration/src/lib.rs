@@ -16,7 +16,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20230426_170496_create_functions::Migration),
             Box::new(m20230426_170508_create_language_enum::Migration),
             Box::new(m20230426_170541_create_contract_addresses_table::Migration),
-            Box::new(m20230426_170553_create_contract_details_table::Migration),
+            // Box::new(m20230426_170553_create_contract_details_table::Migration),
         ]
     }
 }

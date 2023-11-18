@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 blockscout-entity = { path = "../blockscout-entity" }
 blockscout-migration = { path = "../blockscout-migration" }
+eth-bytecode-db-entity = { path = "../eth-bytecode-db-entity" }
 job-queue = { path = "../job-queue", features = ["logic"] }
 
 anyhow = "1.0.70"

@@ -8,19 +8,14 @@ impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let create_contract_addresses_table = r#"
             CREATE TABLE "contract_addresses" (
-                "contract_address" bytea NOT NULL,
-                "chain_id" numeric NOT NULL,
+                "source_id" bigint NOT NULL,
 
                 "created_at" timestamp NOT NULL DEFAULT (now()),
                 "modified_at" timestamp NOT NULL DEFAULT (now()),
 
-                "verified_at" timestamptz NOT NULL,
-                "language" language NOT NULL,
-                "compiler_version" varchar NOT NULL,
-
                 "_job_id" uuid NOT NULL REFERENCES "_job_queue" ("id"),
 
-                PRIMARY KEY ("contract_address", "chain_id")
+                PRIMARY KEY ("source_id")
             );
         "#;
         let create_trigger_set_modified_at = r#"
