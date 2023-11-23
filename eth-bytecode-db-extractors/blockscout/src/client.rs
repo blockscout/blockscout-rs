@@ -12,6 +12,7 @@ use sea_orm::{
 };
 use serde::Serialize;
 use std::{collections::BTreeMap, sync::Arc};
+use migration::SimpleExpr;
 
 #[derive(Debug, Serialize)]
 struct StandardJson {
@@ -54,11 +55,19 @@ impl Client {
         loop {
             let eth_bytecode_db_sources = sources::Entity::find()
                 .filter(sources::Column::Id.gt(last_processed_id))
+                .filter(SimpleExpr::Custom(
+                    r#"compiler_settings -> 'outputSelection' = '{"*": {"*": ["abi", "evm.bytecode", "evm.deployedBytecode", "evm.methodIdentifiers"]}}'::jsonb"#
+                        .to_string()
+                ))
                 .order_by_asc(sources::Column::Id)
                 .limit(1000)
                 .all(self.eth_bytecode_db_database_client.as_ref())
                 .await
                 .context("retrieving source ids to process")?;
+
+            if eth_bytecode_db_sources.len() == 0 {
+                break;
+            }
 
             let active_models =
                 eth_bytecode_db_sources
