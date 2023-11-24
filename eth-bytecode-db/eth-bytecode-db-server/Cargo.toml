@@ -26,6 +26,7 @@ sourcify = { git = "https://github.com/blockscout/blockscout-rs", rev = "34827ae
 tokio = { version = "1.23", features = [ "rt-multi-thread", "macros" ] }
 tonic = "0.8"
 tracing = "0.1"
+uuid = { version = "1.6.1", features = ["v4"] }
 
 [dev-dependencies]
 smart-contract-verifier-proto = { git = "https://github.com/blockscout/blockscout-rs", rev = "2480b20" }

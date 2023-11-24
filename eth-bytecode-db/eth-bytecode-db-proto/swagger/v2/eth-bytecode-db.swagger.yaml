@@ -252,6 +252,7 @@ definitions:
       - NOT_SERVING
       - SERVICE_UNKNOWN
     default: UNKNOWN
+    description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
   SourceMatchType:
     type: string
     enum:
@@ -275,12 +276,13 @@ definitions:
       code:
         type: integer
         format: int32
+      message:
+        type: string
       details:
         type: array
         items:
+          type: object
           $ref: '#/definitions/protobufAny'
-      message:
-        type: string
   protobufAny:
     type: object
     properties:
@@ -310,9 +312,6 @@ definitions:
   v2SearchAllSourcesRequest:
     type: object
     properties:
-      address:
-        type: string
-        title: / The address of the contract being verified
       bytecode:
         type: string
         title: / Bytecode to search the sources for
@@ -322,16 +321,21 @@ definitions:
       chain:
         type: string
         title: / Id of the chain the contract should be verified on
+      address:
+        type: string
+        title: / The address of the contract being verified
   v2SearchAllSourcesResponse:
     type: object
     properties:
       ethBytecodeDbSources:
         type: array
         items:
+          type: object
           $ref: '#/definitions/v2Source'
       sourcifySources:
         type: array
         items:
+          type: object
           $ref: '#/definitions/v2Source'
   v2SearchSourcesRequest:
     type: object
@@ -348,92 +352,93 @@ definitions:
       sources:
         type: array
         items:
+          type: object
           $ref: '#/definitions/v2Source'
   v2SearchSourcifySourcesRequest:
     type: object
     properties:
-      address:
-        type: string
-        title: / The address of the contract being verified
       chain:
         type: string
         title: / Id of the chain the contract should be verified on
+      address:
+        type: string
+        title: / The address of the contract being verified
   v2Source:
     type: object
     properties:
-      abi:
+      fileName:
         type: string
-        title: |-
-          / Contract abi (https://docs.soliditylang.org/en/latest/abi-spec.html?highlight=abi#json);
-          / (does not exist for Yul contracts)
-      compilationArtifacts:
+        title: / The name of the file verified contract was located at
+      contractName:
         type: string
-        description: |-
-          / General and compiler-specific artifacts (abi, userdoc, devdoc, licenses, ast, etc),
-          / encoded as a json.
+        title: / The name of the contract which was verified
+      compilerVersion:
+        type: string
+        title: Compiler version used to compile the contract
       compilerSettings:
         type: string
         title: |-
           / 'settings' key in Standard Input JSON
           / (https://docs.soliditylang.org/en/latest/using-the-compiler.html#input-description)
-      compilerVersion:
+      sourceType:
+        $ref: '#/definitions/SourceSourceType'
+      sourceFiles:
+        type: object
+        additionalProperties:
+          type: string
+      abi:
         type: string
-        title: Compiler version used to compile the contract
+        title: |-
+          / Contract abi (https://docs.soliditylang.org/en/latest/abi-spec.html?highlight=abi#json);
+          / (does not exist for Yul contracts)
       constructorArguments:
         type: string
         title: |-
           / Constructor arguments used for deploying verified contract
           / (exists only for creation inputs)
-      contractName:
+      matchType:
+        $ref: '#/definitions/SourceMatchType'
+        title: / Similar to Sourcify (see https://docs.sourcify.dev/docs/full-vs-partial-match/)
+      compilationArtifacts:
         type: string
-        title: / The name of the contract which was verified
+        description: |-
+          / General and compiler-specific artifacts (abi, userdoc, devdoc, licenses, ast, etc),
+          / encoded as a json.
       creationInputArtifacts:
         type: string
         description: / Info about the creation code (sourcemaps, linkreferences) encoded as a json.
       deployedBytecodeArtifacts:
         type: string
         description: / Info about the runtime code (sourcemaps, linkreferences, immutables) encoded as a json.
-      fileName:
-        type: string
-        title: / The name of the file verified contract was located at
-      matchType:
-        $ref: '#/definitions/SourceMatchType'
-        title: / Similar to Sourcify (see https://docs.sourcify.dev/docs/full-vs-partial-match/)
-      sourceFiles:
-        type: object
-        additionalProperties:
-          type: string
-      sourceType:
-        $ref: '#/definitions/SourceSourceType'
   v2VerificationMetadata:
     type: object
     properties:
-      blockNumber:
-        type: string
-        format: int64
-        title: / The number of the block containing the creation transaction
       chainId:
         type: string
         title: / Id of the chain the contract is verified on
       contractAddress:
         type: string
         title: / The address of the contract to be verified
-      creationCode:
-        type: string
-        title: / The bytecode from the calldata (for eoa deployments) or given to create/create2
-      deployer:
-        type: string
-        title: / The address which actually deployed the contract (i.e. called the create/create2 opcode)
-      runtimeCode:
-        type: string
-        title: The bytecode actually stored in the blockchain for the given contract
       transactionHash:
         type: string
         title: / The hash of the transaction the contract has been created at
+      blockNumber:
+        type: string
+        format: int64
+        title: / The number of the block containing the creation transaction
       transactionIndex:
         type: string
         format: int64
         title: / The position number transaction has been added into a block
+      deployer:
+        type: string
+        title: / The address which actually deployed the contract (i.e. called the create/create2 opcode)
+      creationCode:
+        type: string
+        title: / The bytecode from the calldata (for eoa deployments) or given to create/create2
+      runtimeCode:
+        type: string
+        title: The bytecode actually stored in the blockchain for the given contract
   v2VerifyFromEtherscanSourcifyRequest:
     type: object
     properties:
@@ -450,10 +455,10 @@ definitions:
     properties:
       message:
         type: string
-      source:
-        $ref: '#/definitions/v2Source'
       status:
         $ref: '#/definitions/v2VerifyResponseStatus'
+      source:
+        $ref: '#/definitions/v2Source'
   v2VerifyResponseStatus:
     type: string
     enum:
@@ -476,14 +481,6 @@ definitions:
       evmVersion:
         type: string
         title: / Version of the EVM to compile for. If absent results in default EVM version
-      libraries:
-        type: object
-        additionalProperties:
-          type: string
-        title: / Map from a library name to its address
-      metadata:
-        $ref: '#/definitions/v2VerificationMetadata'
-        title: / An optional field to be filled by explorers
       optimizationRuns:
         type: integer
         format: int32
@@ -495,6 +492,14 @@ definitions:
         additionalProperties:
           type: string
         title: / Map from a source file name to the actual source code
+      libraries:
+        type: object
+        additionalProperties:
+          type: string
+        title: / Map from a library name to its address
+      metadata:
+        $ref: '#/definitions/v2VerificationMetadata'
+        title: / An optional field to be filled by explorers
   v2VerifySolidityStandardJsonRequest:
     type: object
     properties:
@@ -524,10 +529,6 @@ definitions:
         title: |-
           / The chain (network) the contract was deployed to
           / (https://docs.sourcify.dev/docs/api/chains/)
-      chosenContract:
-        type: integer
-        format: int32
-        title: (optional) see Sourcify Api
       files:
         type: object
         additionalProperties:
@@ -536,6 +537,10 @@ definitions:
           / Files required for verification (see Sourcify Api)
           Named as `files` instead of `source_files`
           to correspond with Sourcify api
+      chosenContract:
+        type: integer
+        format: int32
+        title: (optional) see Sourcify Api
   v2VerifyVyperMultiPartRequest:
     type: object
     properties:
@@ -551,6 +556,11 @@ definitions:
       evmVersion:
         type: string
         title: / Version of the EVM to compile for. If absent results in default EVM version
+      sourceFiles:
+        type: object
+        additionalProperties:
+          type: string
+        title: / Map from a source file name to the actual source code
       interfaces:
         type: object
         additionalProperties:
@@ -561,11 +571,6 @@ definitions:
       metadata:
         $ref: '#/definitions/v2VerificationMetadata'
         title: / An optional field to be filled by explorers
-      sourceFiles:
-        type: object
-        additionalProperties:
-          type: string
-        title: / Map from a source file name to the actual source code
   v2VerifyVyperStandardJsonRequest:
     type: object
     properties:

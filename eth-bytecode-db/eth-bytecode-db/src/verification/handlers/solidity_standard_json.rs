@@ -29,6 +29,7 @@ impl From<VerificationRequest<StandardJson>> for VerifySolidityStandardJsonReque
 pub async fn verify(
     mut client: Client,
     request: VerificationRequest<StandardJson>,
+    request_id: blockscout_display_bytes::Bytes,
 ) -> Result<Source, Error> {
     let is_authorized = request.is_authorized;
 
@@ -39,12 +40,22 @@ pub async fn verify(
     let verification_metadata = request.metadata.clone();
 
     let request: VerifySolidityStandardJsonRequest = request.into();
+    tracing::info!(
+        request_id = request_id.to_string(),
+        "sending request to the verifier"
+    );
     let response = client
         .solidity_client
         .verify_standard_json(request)
         .await
         .map_err(Error::from)?
         .into_inner();
+    tracing::info!(
+        request_id = request_id.to_string(),
+        status = response.status,
+        message = response.message,
+        "response from the verifier"
+    );
 
     let verifier_alliance_db_action = VerifierAllianceDbAction::from_db_client_and_metadata(
         client.alliance_db_client.as_deref(),
