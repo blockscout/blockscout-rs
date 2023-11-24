@@ -23,6 +23,7 @@ use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
 use std::{str::FromStr, sync::Arc};
 use tokio::sync::Semaphore;
 use tonic::{Request, Response, Status};
+use uuid::Uuid;
 
 pub struct SolidityVerifierService {
     client: Arc<SolidityClient>,
@@ -94,22 +95,39 @@ impl SolidityVerifier for SolidityVerifierService {
             .as_ref()
             .and_then(|metadata| metadata.chain_id.clone())
             .unwrap_or_default();
+        let contract_address = request
+            .metadata
+            .as_ref()
+            .and_then(|metadata| metadata.contract_address.clone())
+            .unwrap_or_default();
+        let request_id = blockscout_display_bytes::Bytes::from(Uuid::new_v4().as_bytes());
+        tracing::info!(
+            request_id = request_id.to_string(),
+            chain_id = chain_id,
+            contract_address = contract_address,
+            "Solidity multi-part verification request received"
+        );
+
         let result = solidity::multi_part::verify(self.client.clone(), request.try_into()?).await;
 
         let response = if let Ok(verification_success) = result {
+            tracing::info!(request_id=request_id.to_string(), match_type=?verification_success.match_type, "Request processed successfully");
             VerifyResponseWrapper::ok(verification_success)
         } else {
             let err = result.unwrap_err();
+            tracing::info!(request_id=request_id.to_string(), err=%err, "Request processing failed");
             match err {
                 VerificationError::Compilation(_)
                 | VerificationError::NoMatchingContracts
                 | VerificationError::CompilerVersionMismatch(_) => VerifyResponseWrapper::err(err),
                 VerificationError::Initialization(_) | VerificationError::VersionNotFound(_) => {
-                    tracing::debug!("invalid argument: {err:#?}");
                     return Err(Status::invalid_argument(err.to_string()));
                 }
                 VerificationError::Internal(err) => {
-                    tracing::error!("internal error: {err:#?}");
+                    tracing::error!(
+                        request_id = request_id.to_string(),
+                        "internal error: {err:#?}"
+                    );
                     return Err(Status::internal(err.to_string()));
                 }
             }
@@ -134,15 +152,31 @@ impl SolidityVerifier for SolidityVerifierService {
             .as_ref()
             .and_then(|metadata| metadata.chain_id.clone())
             .unwrap_or_default();
+        let contract_address = request
+            .metadata
+            .as_ref()
+            .and_then(|metadata| metadata.contract_address.clone())
+            .unwrap_or_default();
+        let request_id = blockscout_display_bytes::Bytes::from(Uuid::new_v4().as_bytes());
+        tracing::info!(
+            request_id = request_id.to_string(),
+            chain_id = chain_id,
+            contract_address = contract_address,
+            "Solidity standard-json verification request received"
+        );
+
         let verification_request = {
             let request: Result<_, StandardJsonParseError> = request.try_into();
             if let Err(err) = request {
                 match err {
                     StandardJsonParseError::InvalidContent(_) => {
-                        return Ok(Response::new(VerifyResponseWrapper::err(err).into_inner()))
+                        let response = VerifyResponseWrapper::err(err).into_inner();
+                        tracing::info!(request_id=request_id.to_string(), response=?response, "Request processed");
+                        return Ok(Response::new(response));
                     }
                     StandardJsonParseError::BadRequest(_) => {
-                        return Err(Status::invalid_argument(err.to_string()))
+                        tracing::info!(request_id=request_id.to_string(), err=%err, "Bad request");
+                        return Err(Status::invalid_argument(err.to_string()));
                     }
                 }
             }
@@ -152,19 +186,23 @@ impl SolidityVerifier for SolidityVerifierService {
             solidity::standard_json::verify(self.client.clone(), verification_request).await;
 
         let response = if let Ok(verification_success) = result {
+            tracing::info!(request_id=request_id.to_string(), match_type=?verification_success.match_type, "Request processed successfully");
             VerifyResponseWrapper::ok(verification_success)
         } else {
             let err = result.unwrap_err();
+            tracing::info!(request_id=request_id.to_string(), err=%err, "Request processing failed");
             match err {
                 VerificationError::Compilation(_)
                 | VerificationError::NoMatchingContracts
                 | VerificationError::CompilerVersionMismatch(_) => VerifyResponseWrapper::err(err),
                 VerificationError::Initialization(_) | VerificationError::VersionNotFound(_) => {
-                    tracing::debug!("invalid argument: {err:#?}");
                     return Err(Status::invalid_argument(err.to_string()));
                 }
                 VerificationError::Internal(err) => {
-                    tracing::error!("internal error: {err:#?}");
+                    tracing::error!(
+                        request_id = request_id.to_string(),
+                        "internal error: {err:#?}"
+                    );
                     return Err(Status::internal(err.to_string()));
                 }
             }
