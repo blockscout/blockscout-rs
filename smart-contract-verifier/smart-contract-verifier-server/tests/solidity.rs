@@ -14,7 +14,7 @@ use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
     VerifyResponse,
 };
 use smart_contract_verifier_server::{Settings, SolidityVerifierService};
-use solidity_types::TestCase;
+use solidity_types::{BytecodeType, TestCase};
 use std::{
     collections::BTreeMap,
     str::{from_utf8, FromStr},
@@ -40,14 +40,14 @@ async fn global_service() -> &'static Arc<SolidityVerifierService> {
         .await
 }
 
-async fn test_setup<T: TestCase>(test_case: &T) -> ServiceResponse {
+async fn test_setup<T: TestCase>(test_case: &T, bytecode_type: BytecodeType) -> ServiceResponse {
     let service = global_service().await;
     let app = test::init_service(
         App::new().configure(|config| route_solidity_verifier(config, service.clone())),
     )
     .await;
 
-    let request = test_case.to_request();
+    let request = test_case.to_request(bytecode_type);
 
     TestRequest::post()
         .uri(T::route())
@@ -56,8 +56,8 @@ async fn test_setup<T: TestCase>(test_case: &T) -> ServiceResponse {
         .await
 }
 
-async fn test_success(test_case: impl TestCase) {
-    let response = test_setup(&test_case).await;
+async fn test_success<T: TestCase>(test_case: &T, bytecode_type: BytecodeType) {
+    let response = test_setup(test_case, bytecode_type).await;
     if !response.status().is_success() {
         let status = response.status();
         let body = read_body(response).await;
@@ -260,8 +260,12 @@ async fn test_success(test_case: impl TestCase) {
     }
 }
 
-async fn _test_failure(test_case: impl TestCase, expected_message: &str) {
-    let response = test_setup(&test_case).await;
+async fn _test_failure<T: TestCase>(
+    test_case: &T,
+    bytecode_type: BytecodeType,
+    expected_message: &str,
+) {
+    let response = test_setup(test_case, bytecode_type).await;
 
     assert!(
         response.status().is_success(),
@@ -293,12 +297,13 @@ async fn _test_failure(test_case: impl TestCase, expected_message: &str) {
     );
 }
 
-async fn _test_error(
-    test_case: impl TestCase,
+async fn _test_error<T: TestCase>(
+    test_case: &T,
+    bytecode_type: BytecodeType,
     expected_status: StatusCode,
     expected_message: &str,
 ) {
-    let response = test_setup(&test_case).await;
+    let response = test_setup(test_case, bytecode_type).await;
     let status = response.status();
     let body = read_body(response).await;
     let message = from_utf8(&body).expect("Read body as UTF-8");
@@ -318,13 +323,15 @@ mod success_tests {
     #[tokio::test]
     async fn returns_compilation_related_artifacts() {
         let test_case = solidity_types::from_file::<Flattened>("simple_storage");
-        test_success(test_case).await;
+        test_success(&test_case, BytecodeType::CreationInput).await;
+        test_success(&test_case, BytecodeType::DeployedBytecode).await;
     }
 
     #[tokio::test]
     async fn returns_compilation_related_artifacts_with_two_cbor_auxdata() {
         let test_case = solidity_types::from_file::<Flattened>("two_cbor_auxdata");
-        test_success(test_case).await;
+        test_success(&test_case, BytecodeType::CreationInput).await;
+        test_success(&test_case, BytecodeType::DeployedBytecode).await;
     }
 
     // TODO: is not working right now, as auxdata is not retrieved for contracts compiled without metadata hash.
@@ -333,4 +340,11 @@ mod success_tests {
     //     let test_case = solidity_types::from_file::<StandardJson>("no_metadata_hash");
     //     test_success(test_case).await;
     // }
+
+    #[tokio::test]
+    async fn verifies_runtime_code_with_immutables() {
+        let test_case = solidity_types::from_file::<Flattened>("immutables");
+        test_success(&test_case, BytecodeType::CreationInput).await;
+        test_success(&test_case, BytecodeType::DeployedBytecode).await;
+    }
 }
