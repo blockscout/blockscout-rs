@@ -13,7 +13,7 @@ use crate::{
 use bytes::Bytes;
 use ethabi::{Constructor, Token};
 use ethers_solc::{
-    artifacts::{self, Contract},
+    artifacts::{self, Contract, Offsets},
     Artifact, CompilerOutput,
 };
 use mismatch::Mismatch;
@@ -208,12 +208,18 @@ impl<T: Source> Verifier<T> {
                 VerificationErrorKind::InternalError(format!("modified contract: {err}"))
             })?;
 
+        let immutable_references = contract
+            .get_deployed_bytecode()
+            .expect("deployed bytecode object exists as 'deployed_bytecode' has been retrieved successfully before")
+            .immutable_references
+            .clone();
         let local_bytecode = LocalBytecode::new(
             (creation_tx_input, deployed_bytecode),
             (creation_tx_input_modified, deployed_bytecode_modified),
+            immutable_references,
         )?;
 
-        let match_type = Self::compare_creation_tx_inputs(&self.remote_bytecode, &local_bytecode)?;
+        let match_type = Self::compare_bytecodes(&self.remote_bytecode, &local_bytecode)?;
 
         let abi = contract.get_abi().map(|abi| abi.into_owned());
 
@@ -231,39 +237,54 @@ impl<T: Source> Verifier<T> {
         })
     }
 
-    fn compare_creation_tx_inputs(
+    fn compare_bytecodes(
         remote_bytecode: &Bytecode<T>,
         local_bytecode: &LocalBytecode<T>,
     ) -> Result<MatchType, VerificationErrorKind> {
-        let remote_creation_tx_input = remote_bytecode.bytecode();
-        let local_creation_tx_input = local_bytecode.bytecode();
+        let remote_code = remote_bytecode.bytecode();
+        let local_code = local_bytecode.bytecode();
 
-        if remote_creation_tx_input.starts_with(local_creation_tx_input) {
+        if remote_code.len() < local_code.len() {
+            return Err(VerificationErrorKind::BytecodeLengthMismatch {
+                part: Mismatch::new(local_code.len(), remote_code.len()),
+                raw: Mismatch::new(local_code.clone().into(), remote_code.clone().into()),
+            });
+        }
+
+        let processed_remote_code = if T::has_immutable_references() {
+            Self::nullify_immutable_references(remote_code, &local_bytecode.immutable_references)
+        } else {
+            remote_code.clone()
+        };
+
+        if processed_remote_code.starts_with(local_code) {
             // If local compilation bytecode is prefix of remote one,
             // metadata parts are the same and we do not need to compare bytecode parts.
             return Ok(MatchType::Full);
         }
 
-        if remote_creation_tx_input.len() < local_creation_tx_input.len() {
-            return Err(VerificationErrorKind::BytecodeLengthMismatch {
-                part: Mismatch::new(
-                    local_creation_tx_input.len(),
-                    remote_creation_tx_input.len(),
-                ),
-                raw: Mismatch::new(
-                    local_creation_tx_input.clone().into(),
-                    remote_creation_tx_input.clone().into(),
-                ),
-            });
-        }
-
         Self::compare_bytecode_parts(
-            remote_creation_tx_input,
-            local_creation_tx_input,
+            &processed_remote_code,
+            local_code,
             local_bytecode.bytecode_parts(),
         )?;
 
         Ok(MatchType::Partial)
+    }
+
+    fn nullify_immutable_references(
+        deployed_code: &Bytes,
+        immutable_references: &BTreeMap<String, Vec<Offsets>>,
+    ) -> Bytes {
+        let mut updated_deployed_code = deployed_code.to_vec();
+        for offsets in immutable_references.values() {
+            for offset in offsets {
+                let range = offset.start as usize..offset.start as usize + offset.length as usize;
+                updated_deployed_code[range].fill(0);
+            }
+        }
+
+        Bytes::from(updated_deployed_code)
     }
 
     /// Performs an actual comparison of locally compiled bytecode

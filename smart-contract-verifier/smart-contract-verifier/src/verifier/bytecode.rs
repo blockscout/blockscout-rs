@@ -1,9 +1,12 @@
 use super::errors::{BytecodeInitError, VerificationErrorKind};
 use bytes::{Buf, Bytes};
-use ethers_solc::{artifacts::Contract, Artifact};
+use ethers_solc::{
+    artifacts::{Contract, Offsets},
+    Artifact,
+};
 use mismatch::Mismatch;
 use solidity_metadata::MetadataHash;
-use std::marker::PhantomData;
+use std::{collections::BTreeMap, marker::PhantomData};
 
 /// Types that can be used as Bytecode source indicator
 pub trait Source {
@@ -13,6 +16,8 @@ pub trait Source {
     /// Indicates whether constructor arguments exist for the source
     /// (used when comparing unused bytes with constructor ABI)
     fn has_constructor_args() -> bool;
+
+    fn has_immutable_references() -> bool;
 
     fn source_kind() -> SourceKind;
 }
@@ -51,6 +56,10 @@ impl Source for DeployedBytecode {
         false
     }
 
+    fn has_immutable_references() -> bool {
+        true
+    }
+
     fn source_kind() -> SourceKind {
         SourceKind::DeployedBytecode
     }
@@ -82,6 +91,10 @@ impl Source for CreationTxInput {
 
     fn has_constructor_args() -> bool {
         true
+    }
+
+    fn has_immutable_references() -> bool {
+        false
     }
 
     fn source_kind() -> SourceKind {
@@ -149,6 +162,8 @@ pub struct LocalBytecode<T> {
     pub creation_tx_input_parts: Vec<BytecodePart>,
     pub deployed_bytecode_parts: Vec<BytecodePart>,
 
+    pub immutable_references: BTreeMap<String, Vec<Offsets>>,
+
     source: PhantomData<T>,
 }
 
@@ -168,6 +183,7 @@ impl<T> LocalBytecode<T> {
             Bytecode<CreationTxInput>,
             Bytecode<DeployedBytecode>,
         ),
+        immutable_references: BTreeMap<String, Vec<Offsets>>,
     ) -> Result<Self, VerificationErrorKind> {
         let creation_tx_input_parts = Self::split(
             creation_tx_input.bytecode(),
@@ -183,6 +199,7 @@ impl<T> LocalBytecode<T> {
             deployed_bytecode,
             creation_tx_input_parts,
             deployed_bytecode_parts,
+            immutable_references,
 
             source: Default::default(),
         })
@@ -379,6 +396,7 @@ mod local_bytecode_initialization_tests {
         LocalBytecode::new(
             (creation_tx_input.clone(), deployed_bytecode.clone()),
             (creation_tx_input_modified, deployed_bytecode_modified),
+            Default::default(),
         )
         .map(|local_bytecode| Bytecodes {
             local_bytecode,

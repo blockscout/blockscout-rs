@@ -56,8 +56,8 @@ async fn test_setup<T: TestCase>(test_case: &T, bytecode_type: BytecodeType) -> 
         .await
 }
 
-async fn test_success(test_case: impl TestCase, bytecode_type: BytecodeType) {
-    let response = test_setup(&test_case, bytecode_type).await;
+async fn test_success<T: TestCase>(test_case: &T, bytecode_type: BytecodeType) {
+    let response = test_setup(test_case, bytecode_type).await;
     if !response.status().is_success() {
         let status = response.status();
         let body = read_body(response).await;
@@ -260,12 +260,12 @@ async fn test_success(test_case: impl TestCase, bytecode_type: BytecodeType) {
     }
 }
 
-async fn _test_failure(
-    test_case: impl TestCase,
+async fn _test_failure<T: TestCase>(
+    test_case: &T,
     bytecode_type: BytecodeType,
     expected_message: &str,
 ) {
-    let response = test_setup(&test_case, bytecode_type).await;
+    let response = test_setup(test_case, bytecode_type).await;
 
     assert!(
         response.status().is_success(),
@@ -297,13 +297,13 @@ async fn _test_failure(
     );
 }
 
-async fn _test_error(
-    test_case: impl TestCase,
+async fn _test_error<T: TestCase>(
+    test_case: &T,
     bytecode_type: BytecodeType,
     expected_status: StatusCode,
     expected_message: &str,
 ) {
-    let response = test_setup(&test_case, bytecode_type).await;
+    let response = test_setup(test_case, bytecode_type).await;
     let status = response.status();
     let body = read_body(response).await;
     let message = from_utf8(&body).expect("Read body as UTF-8");
@@ -323,13 +323,15 @@ mod success_tests {
     #[tokio::test]
     async fn returns_compilation_related_artifacts() {
         let test_case = solidity_types::from_file::<Flattened>("simple_storage");
-        test_success(test_case, BytecodeType::CreationInput).await;
+        test_success(&test_case, BytecodeType::CreationInput).await;
+        test_success(&test_case, BytecodeType::DeployedBytecode).await;
     }
 
     #[tokio::test]
     async fn returns_compilation_related_artifacts_with_two_cbor_auxdata() {
         let test_case = solidity_types::from_file::<Flattened>("two_cbor_auxdata");
-        test_success(test_case, BytecodeType::CreationInput).await;
+        test_success(&test_case, BytecodeType::CreationInput).await;
+        test_success(&test_case, BytecodeType::DeployedBytecode).await;
     }
 
     // TODO: is not working right now, as auxdata is not retrieved for contracts compiled without metadata hash.
@@ -342,6 +344,7 @@ mod success_tests {
     #[tokio::test]
     async fn verifies_runtime_code_with_immutables() {
         let test_case = solidity_types::from_file::<Flattened>("immutables");
-        test_success(test_case, BytecodeType::DeployedBytecode).await;
+        test_success(&test_case, BytecodeType::CreationInput).await;
+        test_success(&test_case, BytecodeType::DeployedBytecode).await;
     }
 }
