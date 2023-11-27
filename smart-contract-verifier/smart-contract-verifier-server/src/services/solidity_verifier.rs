@@ -18,7 +18,7 @@ use smart_contract_verifier::{
     SolidityClient, SolidityCompiler, VerificationError,
 };
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
-    LookupMethodsRequest, LookupMethodsResponse,
+    BytecodeType, LookupMethodsRequest, LookupMethodsResponse,
 };
 use std::{str::FromStr, sync::Arc};
 use tokio::sync::Semaphore;
@@ -163,6 +163,16 @@ impl SolidityVerifier for SolidityVerifierService {
             chain_id = chain_id,
             contract_address = contract_address,
             "Solidity standard-json verification request received"
+        );
+        tracing::info!(
+            request_id = request_id.to_string(),
+            bytecode = request.bytecode,
+            bytecode_type = BytecodeType::from_i32(request.bytecode_type)
+                .unwrap()
+                .as_str_name(),
+            compiler_version = request.compiler_version,
+            input = request.input,
+            "Request details"
         );
 
         let verification_request = {
