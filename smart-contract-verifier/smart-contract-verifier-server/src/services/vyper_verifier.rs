@@ -1,7 +1,7 @@
 use crate::{
     metrics,
     proto::{
-        vyper_verifier_server::VyperVerifier, ListCompilerVersionsRequest,
+        vyper_verifier_server::VyperVerifier, BytecodeType, ListCompilerVersionsRequest,
         ListCompilerVersionsResponse, VerifyResponse, VerifyVyperMultiPartRequest,
         VerifyVyperStandardJsonRequest,
     },
@@ -91,6 +91,19 @@ impl VyperVerifier for VyperVerifierService {
             "Vyper multi-part verification request received"
         );
 
+        tracing::debug!(
+            request_id = request_id.to_string(),
+            bytecode = request.bytecode,
+            bytecode_type = BytecodeType::from_i32(request.bytecode_type)
+                .unwrap()
+                .as_str_name(),
+            compiler_version = request.compiler_version,
+            evm_version = request.evm_version,
+            source_files = ?request.source_files,
+            interfaces = ?request.interfaces,
+            "Request details"
+        );
+
         let result = vyper::multi_part::verify(self.client.clone(), request.try_into()?).await;
 
         let response = if let Ok(verification_success) = result {
@@ -146,6 +159,17 @@ impl VyperVerifier for VyperVerifierService {
             chain_id = chain_id,
             contract_address = contract_address,
             "Vyper standard-json verification request received"
+        );
+
+        tracing::debug!(
+            request_id = request_id.to_string(),
+            bytecode = request.bytecode,
+            bytecode_type = BytecodeType::from_i32(request.bytecode_type)
+                .unwrap()
+                .as_str_name(),
+            compiler_version = request.compiler_version,
+            input = request.input,
+            "Request details"
         );
 
         let verification_request = {

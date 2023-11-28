@@ -108,6 +108,20 @@ impl SolidityVerifier for SolidityVerifierService {
             "Solidity multi-part verification request received"
         );
 
+        tracing::debug!(
+            request_id = request_id.to_string(),
+            bytecode = request.bytecode,
+            bytecode_type = BytecodeType::from_i32(request.bytecode_type)
+                .unwrap()
+                .as_str_name(),
+            compiler_version = request.compiler_version,
+            evm_version = request.evm_version,
+            optimization_runs = request.optimization_runs,
+            source_files = ?request.source_files,
+            libraries = ?request.libraries,
+            "Request details"
+        );
+
         let result = solidity::multi_part::verify(self.client.clone(), request.try_into()?).await;
 
         let response = if let Ok(verification_success) = result {
@@ -164,7 +178,8 @@ impl SolidityVerifier for SolidityVerifierService {
             contract_address = contract_address,
             "Solidity standard-json verification request received"
         );
-        tracing::info!(
+
+        tracing::debug!(
             request_id = request_id.to_string(),
             bytecode = request.bytecode,
             bytecode_type = BytecodeType::from_i32(request.bytecode_type)
