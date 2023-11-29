@@ -5,6 +5,10 @@
 + `ens-subgraph`: Ethereum (.eth)
 + `rns-subgraph`: Rootstock (.rsk)
 
+## Add your own subgraph
+
+Read guide [Howto new subgraph](../subgraph-writer/README.md)
+
 ## To start
 
 > For every directory, it's posibble to deploy subgraph to blockscout graph-node

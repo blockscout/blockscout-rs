@@ -1,0 +1,38 @@
+default_context:
+  project_name: "YetAnotherNameService Subgraph"
+  short_name: "yans"
+  network: "mainnet"
+  network_test: "goerli"
+
+  registry: true
+  registry_name: 'YansRegistry'
+  registry_address: '0x0000000000000000000000000000000000000000'
+  registry_start_block: 0
+  registry_address_test: '0x0000000000000000000000000000000000000000'
+  registry_start_block_test: 0
+  registry_abi: '[]'
+
+  resolver: true
+  resolver_name: 'Resolver'
+  resolver_start_block: 0
+  resolver_start_block_test: 0
+  resolver_abi: '[]'
+
+  controller: true
+  controller_name: 'EthRegistrarController'
+  controller_address: '0x0000000000000000000000000000000000000000'
+  controller_start_block: 0
+  controller_address_test: '0x0000000000000000000000000000000000000000'
+  controller_start_block_test: 0
+  controller_abi: '[]'
+  
+  base: true
+  base_name: 'BaseRegistrar'
+  base_address: '0x0000000000000000000000000000000000000000'
+  base_start_block: 0
+  base_address_test: '0x0000000000000000000000000000000000000000'
+  base_start_block_test: 0
+  base_abi: '[]'
+  base_tld: ".yans"
+  ## value of nodehash(yans) taken from https://swolfeyes.github.io/ethereum-namehash-calculator/
+  base_tld_hash: "39cd827279d83c108749d319b1835c707f0e9aa1c6e0b744b48fc45ecf26c27a"
