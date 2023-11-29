@@ -1,8 +1,9 @@
 import { BigInt, ByteArray, Bytes, crypto, ethereum, log } from "@graphprotocol/graph-ts";
 import { Account, Domain } from "../generated/schema";
 
+export const BASE_NODE_HASH = "{{ cookiecutter.base_tld_hash }}"
 export const BASE_NODE =
-  "{{ cookiecutter.base_tld_hash }}";
+  "{{ cookiecutter.base_tld }}";
 
 export const ROOT_NODE =
   "0x0000000000000000000000000000000000000000000000000000000000000000";

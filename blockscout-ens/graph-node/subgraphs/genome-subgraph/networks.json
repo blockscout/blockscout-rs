@@ -14,15 +14,15 @@
   },
   "gnosis-chiado": {
     "Registry": {
-      "address": "0x5c5C9C16869608602b2f6d89F1ce29D3fF45ADba",
-      "startBlock": 6564769
+      "address": "0x5dC881dDA4e4a8d312be3544AD13118D1a04Cb17",
+      "startBlock": 7085080
     },
     "Resolver": {
-      "startBlock": 6564807
+      "startBlock": 7085139
     },
     "RegistrarController": {
-      "address": "0x0000000000000000000000000000000000000000",
-      "startBlock": 0
+      "address": "0xD7b837A0E388B4c25200983bdAa3EF3A83ca86b7",
+      "startBlock": 7085111
     }
   }
 }

@@ -9,6 +9,7 @@ import {
     checkValidLabel,
     concat,
     byteArrayFromHex,
+    BASE_NODE_HASH,
     BASE_NODE,
   } from "./utils";
 
@@ -24,7 +25,7 @@ import {
   } from "../generated/schema";
 
 
-var rootNode: ByteArray = byteArrayFromHex(BASE_NODE);
+var rootNode: ByteArray = byteArrayFromHex(BASE_NODE_HASH);
 
 export function handleNameRegisteredByController(
     event: ControllerNameRegisteredEvent
@@ -50,7 +51,7 @@ function setNamePreimage(name: string, label: Bytes, cost: BigInt): void {
   let domain = Domain.load(crypto.keccak256(concat(rootNode, label)).toHex())!;
   if (domain.labelName !== name) {
     domain.labelName = name;
-    domain.name = name + ".eth";
+    domain.name = name + BASE_NODE;
     domain.save();
   }
 

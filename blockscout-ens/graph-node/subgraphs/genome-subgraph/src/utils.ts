@@ -1,8 +1,11 @@
 import { BigInt, ByteArray, Bytes, crypto, ethereum, log } from "@graphprotocol/graph-ts";
 import { Account, Domain } from "../generated/schema";
 
+// note that this has is not the same as nodehash(gno):
+// https://github.com/Space-ID/sid-toolkit/blob/be208b012afe5b5cad2ed3b633b13f7b5ca71ba9/contracts/base/Base.sol#L80-L85
+export const BASE_NODE_HASH = "634ae5e4e77ee5a262a820f4a9eacd51ac137dd75989e5a5d993f5b1db797fba"
 export const BASE_NODE =
-  "None";
+  ".gno";
 
 export const ROOT_NODE =
   "0x0000000000000000000000000000000000000000000000000000000000000000";

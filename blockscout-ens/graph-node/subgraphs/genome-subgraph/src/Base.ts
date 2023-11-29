@@ -16,7 +16,7 @@ import {
   NameRegistered as NameRegisteredEvent,
   NameRenewed as NameRenewedEvent,
   Transfer as TransferEvent,
-} from "../generated/{{ cookiecutter.base_name }}/{{ cookiecutter.base_name }}";
+} from "../generated/Base/Base";
 
 // Import entity types generated from the GraphQL schema
 import {
@@ -28,6 +28,7 @@ import {
   Registration,
 } from "../generated/schema";
 
+// https://github.com/ensdomains/ens-contracts/blob/6f7d92e8ce49c58786367a73a0251087bc54a035/contracts/ethregistrar/BaseRegistrarImplementation.sol#L17
 const GRACE_PERIOD_SECONDS = BigInt.fromI32(7776000); // 90 days
 
 var rootNode: ByteArray = byteArrayFromHex(BASE_NODE_HASH);

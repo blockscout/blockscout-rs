@@ -79,7 +79,34 @@ dataSources:
           handler: handleTextChangedWithValue
         # - event: VersionChanged(indexed bytes32,uint64)
         #   handler: handleVersionChanged
-    
+
+  - kind: ethereum/contract
+    name: Base
+    network: gnosis
+    source:
+      abi: Base
+      address: "0x0000000000000000000000000000000000000000"
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./src/Base.ts
+      entities:
+        - Registration
+        - NameRegistered
+        - NameRenewed
+        - NameTransferred
+      abis:
+        - name: Base
+          file: ./abis/Base.json
+      eventHandlers:
+        - event: NameRegistered(indexed uint256,indexed address,uint256)
+          handler: handleNameRegistered
+        - event: NameRenewed(indexed uint256,uint256)
+          handler: handleNameRenewed
+        - event: Transfer(indexed address,indexed address,indexed uint256)
+          handler: handleNameTransferred
   - kind: ethereum/contract
     name: RegistrarController
     network: gnosis
