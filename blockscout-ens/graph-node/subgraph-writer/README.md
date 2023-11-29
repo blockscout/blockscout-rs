@@ -37,9 +37,10 @@ just init && just codegen
 
 In case of any error, adjust typescript code of subgraph. Also make sure subgraph handles events properly.
 
-+ Now build sungraph code
++ Now build subgraph code
   
 ```bash
 just build
 ```
 
++ Now you should run your subgraph by submitting it to graph-node: [Subgraphs: To start](../subgraphs/README.md#to-start)

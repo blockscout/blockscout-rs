@@ -106,7 +106,10 @@ export function maybeSaveDomainName(name: string): void {
 }
 
 export function hashNyName(name: string): ByteArray {
-  if (!name) {
+  if (name == 'gno') {
+    return byteArrayFromHex(BASE_NODE_HASH)
+  }
+  else if (!name) {
     return byteArrayFromHex(ROOT_NODE)
   } else {
     const partition = splitStringOnce(name, '.');

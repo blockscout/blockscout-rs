@@ -20,7 +20,7 @@ services:
       postgres_pass: let-me-in
       postgres_db: graph-node
       ipfs: 'ipfs:5001'
-      ethereum: 'mainnet:https://api.zmok.io/mainnet/oaen6dy8ff6hju9k'
+      ethereum: 'mainnet:https://api.zmok.io/mainnet/oaen6dy8ff6hju9k gnosis-chiado:https://rpc.eu-central-2.gateway.fm/v3/gnosis/archival/chiado'
       GRAPH_LOG: info
     volumes:
       - ./gn-config.toml:/root/gn-config.toml
@@ -33,7 +33,7 @@ services:
       - ./data/ipfs:/data/ipfs
   postgres:
     container_name: gn-postgres-dev
-    image: postgres:14
+    image: postgres:16.1
     ports:
       - '5432:5432'
     command:
