@@ -6,7 +6,7 @@ edition = "2021"
 
 [dependencies]
 {% if entity -%}
-entity = { path = "./entity" }
+{{project-name}}-entity = { path = "../{{project-name}}-entity" }
 {% endif -%}
 
 anyhow = "1.0"
@@ -47,5 +47,5 @@ blockscout-service-launcher = { version = "0.9.0", features = [
 ] }
 pretty_assertions = "1.3"
 {% if migrations -%}
-migration = {path = "./migration"}
+{{project-name}}-migration = {path = "../{{project-name}}-migration"}
 {% endif -%}

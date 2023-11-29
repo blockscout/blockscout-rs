@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package blockscout.{{projectName}}.v2;
+package blockscout.{{projectName}}.v1;
 
 option go_package = "github.com/blockscout/blockscout-rs/{{project-name}}";
 

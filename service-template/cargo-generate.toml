@@ -16,7 +16,7 @@ prompt = "Include entity crate inside logic crate?"
 default = true
 
 [conditional.'!entity']
-ignore = ["{{project-name}}-logic/entity"]
+ignore = ["{{project-name}}-entity"]
 
 [conditional.'logic'.placeholders.migrations]
 type = "bool"
@@ -24,7 +24,7 @@ prompt = "Include migration crate inside logic crate?"
 default = true
 
 [conditional.'!migrations']
-ignore = ["{{project-name}}-logic/migrations"]
+ignore = ["{{project-name}}-migration"]
 
 
 [placeholders.database]

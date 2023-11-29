@@ -24,6 +24,7 @@ jobs:
   test:
     name: Unit, doc and integration tests
     runs-on: ubuntu-latest
+    {%- if database %}
     services:
       postgres:
         image: postgres
@@ -37,6 +38,7 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
+    {%- endif %}
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -68,8 +70,10 @@ jobs:
       - name: Integration tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --test '*' -- --nocapture --include-ignored
         if: success() || failure()
+        {%- if database %}
         env:
           DATABASE_URL: postgres://postgres:admin@localhost:5432/
+        {%- endif %}
 
   lint:
     name: Linting

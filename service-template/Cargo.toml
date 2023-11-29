@@ -5,10 +5,10 @@ members = [
     "{{project-name}}-logic",
     {% endif -%}
     {% if entity -%}
-    "{{project-name}}-logic/entity",
+    "{{project-name}}-entity",
     {% endif -%}
-    {% if entity -%}
-    "{{project-name}}-logic/migration",
+    {% if migration -%}
+    "{{project-name}}-migration",
     {% endif -%}
     "{{project-name}}-proto",
     "{{project-name}}-server",

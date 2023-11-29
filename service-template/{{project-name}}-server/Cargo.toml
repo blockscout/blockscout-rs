@@ -10,7 +10,7 @@ edition = "2021"
 {{project-name}}-logic = { path = "../{{project-name}}-logic" }
 {% endif -%}
 {% if migrations -%}
-migration = { path = "../{{project-name}}-logic/migration" }
+{{project-name}}-migration = { path = "../{{project-name}}-migration" }
 {% endif -%}
 
 actix-web = "4.2"
