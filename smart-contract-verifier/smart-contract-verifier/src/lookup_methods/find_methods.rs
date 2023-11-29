@@ -2,9 +2,10 @@ use super::{
     disassemble::{disassemble_bytecode, DisassembledOpcode},
     method::Method,
 };
+use crate::SoliditySuccess;
 use bytes::Bytes;
 use ethers_core::abi::Abi;
-use ethers_solc::{sourcemap::SourceMap, CompilerOutput};
+use ethers_solc::sourcemap::SourceMap;
 use std::{collections::BTreeMap, iter::repeat};
 
 pub struct LookupMethodsRequest {
@@ -19,24 +20,37 @@ pub struct LookupMethodsResponse {
 }
 
 pub fn find_methods_from_compiler_output(
-    contract_name: &String,
-    output: &CompilerOutput,
+    res: &SoliditySuccess,
 ) -> anyhow::Result<LookupMethodsResponse> {
-    let file_ids = output
+    let file_ids = res
+        .compiler_output
         .sources
         .iter()
         .map(|(name, file)| (file.id, name.clone()))
         .collect();
 
-    let (_, contract) = output
-        .contracts_iter()
-        .find(|(name, _)| *name == contract_name)
+    let path = &res.file_path;
+    let file = res
+        .compiler_output
+        .contracts
+        .get(path)
+        .ok_or_else(|| anyhow::anyhow!("file {path} not found"))?;
+    let contract_name = &res.contract_name;
+    let contract = file
+        .get(&res.contract_name)
         .ok_or_else(|| anyhow::anyhow!("contract {contract_name} not found"))?;
+
+    let abi = &contract
+        .abi
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("abi missing"))?
+        .abi;
 
     let evm = contract
         .evm
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("evm missing"))?;
+
     let deployed_bytecode = evm
         .deployed_bytecode
         .as_ref()
@@ -45,6 +59,7 @@ pub fn find_methods_from_compiler_output(
         .bytecode
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("bytecode missing"))?;
+
     let source_map = bytecode
         .source_map()
         .ok_or_else(|| anyhow::anyhow!("source map missing"))??;
@@ -53,11 +68,7 @@ pub fn find_methods_from_compiler_output(
         .as_bytes()
         .ok_or_else(|| anyhow::anyhow!("invalid bytecode"))?
         .0;
-    let abi = &contract
-        .abi
-        .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("abi missing"))?
-        .abi;
+
     let methods = parse_selectors(abi);
 
     Ok(find_methods_internal(

@@ -1,5 +1,6 @@
 use std::{collections::HashSet, str::FromStr};
 
+#[derive(PartialEq, Eq, Hash)]
 pub enum VerifyPostAction {
     LookupMethods,
 }
@@ -14,11 +15,6 @@ impl FromStr for VerifyPostAction {
         }
     }
 }
-pub fn parse_post_actions(actions: &[String]) -> anyhow::Result<Vec<VerifyPostAction>> {
-    actions
-        .iter()
-        .collect::<HashSet<_>>()
-        .into_iter()
-        .map(|action| action.parse())
-        .collect()
+pub fn parse_post_actions(actions: &[String]) -> anyhow::Result<HashSet<VerifyPostAction>> {
+    actions.iter().map(|action| action.parse()).collect()
 }

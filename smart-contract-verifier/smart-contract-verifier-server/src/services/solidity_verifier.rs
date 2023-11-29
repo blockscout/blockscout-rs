@@ -20,7 +20,7 @@ use smart_contract_verifier::{
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
     verify_response::PostActionResponses, LookupMethodsRequest, LookupMethodsResponse,
 };
-use std::{str::FromStr, sync::Arc};
+use std::{collections::HashSet, str::FromStr, sync::Arc};
 use tokio::sync::Semaphore;
 use tonic::{Request, Response, Status};
 
@@ -210,7 +210,7 @@ fn new_bucket(settings: &S3FetcherSettings) -> anyhow::Result<Arc<Bucket>> {
 
 fn process_verify_result(
     result: Result<SoliditySuccess, VerificationError>,
-    post_actions: Vec<VerifyPostAction>,
+    post_actions: HashSet<VerifyPostAction>,
 ) -> Result<VerifyResponse, Status> {
     match result {
         Ok(res) => {
@@ -236,14 +236,13 @@ fn process_verify_result(
 
 fn process_post_actions(
     res: &SoliditySuccess,
-    post_actions: &Vec<VerifyPostAction>,
+    post_actions: &HashSet<VerifyPostAction>,
 ) -> PostActionResponses {
     let mut post_actions_responses: PostActionResponses = Default::default();
     for action in post_actions {
         match action {
             VerifyPostAction::LookupMethods => {
-                let methods =
-                    find_methods_from_compiler_output(&res.contract_name, &res.compiler_output);
+                let methods = find_methods_from_compiler_output(res);
                 match methods {
                     Ok(methods) => {
                         let response = LookupMethodsResponseWrapper::from(methods);
