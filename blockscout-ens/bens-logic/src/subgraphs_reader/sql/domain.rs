@@ -40,12 +40,12 @@ COALESCE(to_timestamp(expiry_date) < now(), false) AS is_expired
 // `block_range @>` is special sql syntax for fast filtering int4range
 // to access current version of domain.
 // Source: https://github.com/graphprotocol/graph-node/blob/19fd41bb48511f889dc94f5d82e16cd492f29da1/store/postgres/src/block_range.rs#L26
-const DOMAIN_DEFAULT_WHERE_CLAUSE: &str = r#"
+pub const DOMAIN_DEFAULT_WHERE_CLAUSE: &str = r#"
 label_name IS NOT NULL
 AND block_range @> 2147483647
 "#;
 
-const DOMAIN_NOT_EXPIRED_WHERE_CLAUSE: &str = r#"
+pub const DOMAIN_NOT_EXPIRED_WHERE_CLAUSE: &str = r#"
 (
     expiry_date is null
     OR to_timestamp(expiry_date) > now()
