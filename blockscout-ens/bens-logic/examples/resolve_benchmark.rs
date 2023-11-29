@@ -31,7 +31,7 @@ async fn main() -> Result<(), anyhow::Error> {
         BlockscoutClient::new("https://rootstock.blockscout.com".parse().unwrap(), 5, 30);
     let clients: HashMap<i64, BlockscoutClient> =
         HashMap::from_iter([(1, eth_client), (30, rootstock_client)]);
-    let reader = SubgraphReader::initialize(pool.clone(), clients).await?;
+    let reader = SubgraphReader::initialize(pool.clone(), clients, true).await?;
 
     let addresses = vec![
         "0x0292f204513eeafe8c032ffc4cb4c7e10eca908c",
@@ -141,7 +141,7 @@ async fn main() -> Result<(), anyhow::Error> {
         })
         .await
         .expect("failed to quick resolve");
-    // job size is 94. elapsed 1.1955539s. resolved as 13 domains
+    // job size is 94. elapsed 0.65092486s. resolved as 14 domains
     println!(
         "job size is {}. elapsed {:?}s. resolved as {} domains",
         size,

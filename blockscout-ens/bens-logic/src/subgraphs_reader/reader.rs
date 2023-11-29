@@ -12,6 +12,7 @@ use crate::{
     },
     hash_name::hex,
 };
+use anyhow::Context;
 use ethers::types::TxHash;
 use sqlx::postgres::PgPool;
 use std::{
@@ -30,12 +31,14 @@ pub struct NetworkConfig {
 pub struct SubgraphReader {
     pool: Arc<PgPool>,
     networks: HashMap<i64, NetworkConfig>,
+    use_cache: bool,
 }
 
 impl SubgraphReader {
     pub async fn initialize(
         pool: Arc<PgPool>,
         mut blockscout_clients: HashMap<i64, BlockscoutClient>,
+        use_cache: bool,
     ) -> Result<Self, anyhow::Error> {
         let schema_names = schema_names(&pool).await?;
         tracing::info!(schema_names =? schema_names, "found subgraph schemas");
@@ -60,12 +63,37 @@ impl SubgraphReader {
         for (id, client) in blockscout_clients {
             tracing::warn!("no chain found for blockscout url with chain_id {id} and url {}, skip this network", client.url())
         }
+
+        if use_cache {
+            for config in networks.values() {
+                let schema = &config.schema_name;
+                sql::create_address_names_view(pool.as_ref(), schema)
+                    .await
+                    .context(format!(
+                        "failed to create address_names view for schema {schema}"
+                    ))?
+            }
+        }
         tracing::info!(networks =? networks.keys().collect::<Vec<_>>(), "initialized subgraph reader");
-        Ok(Self::new(pool, networks))
+        Ok(Self::new(pool, networks, use_cache))
     }
 
-    pub fn new(pool: Arc<PgPool>, networks: HashMap<i64, NetworkConfig>) -> Self {
-        Self { pool, networks }
+    pub fn new(pool: Arc<PgPool>, networks: HashMap<i64, NetworkConfig>, use_cache: bool) -> Self {
+        Self {
+            pool,
+            networks,
+            use_cache,
+        }
+    }
+
+    pub async fn refresh_cache(&self) -> Result<(), anyhow::Error> {
+        for config in self.networks.values() {
+            let schema = &config.schema_name;
+            sql::refresh_address_names_view(self.pool.as_ref(), schema)
+                .await
+                .context(format!("failed to update {schema}_address_names"))?;
+        }
+        Ok(())
     }
 }
 
@@ -139,8 +167,13 @@ impl SubgraphReader {
         // remove duplicates
         let addresses: HashSet<String> = input.addresses.into_iter().map(hex).collect();
         let addreses_str: Vec<&str> = addresses.iter().map(String::as_str).collect::<Vec<_>>();
-        let result =
-            sql::batch_search_addresses(&self.pool, &network.schema_name, &addreses_str).await?;
+        let result = if self.use_cache {
+            sql::batch_search_addresses_cached(&self.pool, &network.schema_name, &addreses_str)
+                .await?
+        } else {
+            sql::batch_search_addresses(&self.pool, &network.schema_name, &addreses_str).await?
+        };
+
         let address_to_name = result
             .into_iter()
             .map(|d| (d.resolved_address, d.domain_name))
@@ -203,7 +236,7 @@ mod tests {
     async fn get_domain_works(pool: PgPool) {
         let pool = Arc::new(pool);
         let clients = mocked_blockscout_clients().await;
-        let reader = SubgraphReader::initialize(pool.clone(), clients)
+        let reader = SubgraphReader::initialize(pool.clone(), clients, true)
             .await
             .expect("failed to init reader");
 
@@ -269,7 +302,7 @@ mod tests {
     async fn lookup_domain_name_works(pool: PgPool) {
         let pool = Arc::new(pool);
         let clients = mocked_blockscout_clients().await;
-        let reader = SubgraphReader::initialize(pool.clone(), clients)
+        let reader = SubgraphReader::initialize(pool.clone(), clients, true)
             .await
             .expect("failed to init reader");
 
@@ -293,7 +326,7 @@ mod tests {
     async fn lookup_addresses_works(pool: PgPool) {
         let pool = Arc::new(pool);
         let clients = mocked_blockscout_clients().await;
-        let reader = SubgraphReader::initialize(pool.clone(), clients)
+        let reader = SubgraphReader::initialize(pool.clone(), clients, true)
             .await
             .expect("failed to init reader");
 
@@ -373,7 +406,7 @@ mod tests {
     async fn get_domain_history_works(pool: PgPool) {
         let pool = Arc::new(pool);
         let clients = mocked_blockscout_clients().await;
-        let reader = SubgraphReader::initialize(pool.clone(), clients)
+        let reader = SubgraphReader::initialize(pool.clone(), clients, true)
             .await
             .expect("failed to init reader");
         let name = "vitalik.eth".to_string();
@@ -456,7 +489,7 @@ mod tests {
     async fn batch_search_works(pool: PgPool) {
         let pool = Arc::new(pool);
         let clients = mocked_blockscout_clients().await;
-        let reader = SubgraphReader::initialize(pool.clone(), clients)
+        let reader = SubgraphReader::initialize(pool.clone(), clients, true)
             .await
             .expect("failed to init reader");
 

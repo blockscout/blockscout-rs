@@ -18,7 +18,8 @@ pub struct Settings {
     pub tracing: TracingSettings,
     #[serde(default)]
     pub jaeger: JaegerSettings,
-
+    #[serde(default)]
+    pub subgraph: SubgraphSettings,
     pub database: DatabaseSettings,
     #[serde(default)]
     pub blockscout: BlockscoutSettings,
@@ -26,6 +27,32 @@ pub struct Settings {
 
 impl ConfigSettings for Settings {
     const SERVICE_NAME: &'static str = "BENS";
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct SubgraphSettings {
+    #[serde(default = "default_cache_enabled")]
+    pub cache_enabled: bool,
+    #[serde(default = "default_refresh_cache_schedule")]
+    pub refresh_cache_schedule: String,
+}
+
+fn default_refresh_cache_schedule() -> String {
+    "0 0 * * * *".to_string() // every hour
+}
+
+fn default_cache_enabled() -> bool {
+    true
+}
+
+impl Default for SubgraphSettings {
+    fn default() -> Self {
+        Self {
+            refresh_cache_schedule: default_refresh_cache_schedule(),
+            cache_enabled: default_cache_enabled(),
+        }
+    }
 }
 
 // TODO: move database settings to blockscout-service-launcher
@@ -139,6 +166,7 @@ impl Settings {
             metrics: Default::default(),
             tracing: Default::default(),
             jaeger: Default::default(),
+            subgraph: Default::default(),
             database: DatabaseSettings {
                 connect: DatabaseConnectSettings::Url(database_url),
             },

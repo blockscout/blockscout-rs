@@ -40,12 +40,12 @@ COALESCE(to_timestamp(expiry_date) < now(), false) AS is_expired
 // `block_range @>` is special sql syntax for fast filtering int4range
 // to access current version of domain.
 // Source: https://github.com/graphprotocol/graph-node/blob/19fd41bb48511f889dc94f5d82e16cd492f29da1/store/postgres/src/block_range.rs#L26
-const DOMAIN_DEFAULT_WHERE_CLAUSE: &str = r#"
+pub const DOMAIN_DEFAULT_WHERE_CLAUSE: &str = r#"
 label_name IS NOT NULL
 AND block_range @> 2147483647
 "#;
 
-const DOMAIN_NOT_EXPIRED_WHERE_CLAUSE: &str = r#"
+pub const DOMAIN_NOT_EXPIRED_WHERE_CLAUSE: &str = r#"
 (
     expiry_date is null
     OR to_timestamp(expiry_date) > now()
@@ -203,6 +203,33 @@ pub async fn batch_search_addresses(
             AND {DOMAIN_DEFAULT_WHERE_CLAUSE}
             AND {DOMAIN_NOT_EXPIRED_WHERE_CLAUSE}
         ORDER BY resolved_address, created_at
+        "#,
+    ))
+    .bind(addresses)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(domains)
+}
+
+#[instrument(
+    name = "batch_search_addresses_cached",
+    skip(pool, addresses),
+    fields(job_size = addresses.len()),
+    err(level = "error"),
+    level = "info",
+)]
+pub async fn batch_search_addresses_cached(
+    pool: &PgPool,
+    schema: &str,
+    addresses: &[&str],
+) -> Result<Vec<DomainWithAddress>, SubgraphReadError> {
+    let domains: Vec<DomainWithAddress> = sqlx::query_as(&format!(
+        r#"
+        SELECT id, domain_name, resolved_address
+        FROM {schema}.address_names
+        where
+            resolved_address = ANY($1)
         "#,
     ))
     .bind(addresses)

@@ -33,7 +33,19 @@ async fn basic_domain_extracting_works(pool: PgPool) {
             )
         })
         .collect();
+    settings.subgraph.cache_enabled = true;
 
+    // first start with enabled cache
+    check_basic_scenario(settings.clone(), base.clone()).await;
+    // second start with same settings to check
+    // that creation of cache tables works fine
+    check_basic_scenario(settings.clone(), base.clone()).await;
+    // third start with disabled cache
+    settings.subgraph.cache_enabled = false;
+    check_basic_scenario(settings, base).await;
+}
+
+async fn check_basic_scenario(settings: Settings, base: Url) {
     init_server(
         || async {
             bens_server::run(settings).await.unwrap();
