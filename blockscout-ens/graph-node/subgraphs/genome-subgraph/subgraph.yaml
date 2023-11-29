@@ -1,0 +1,104 @@
+specVersion: 0.0.4
+description: Subgraph to index Genome subgraph
+repository: https://github.com/blockscout/blokcscout-rs
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum/contract
+    name: Registry
+    network: gnosis
+    source:
+      abi: Registry
+      address: "0xFFC305697bb27483268106be6F22B0555c192804"
+      startBlock: 30929686
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./src/Registry.ts
+      entities:
+        - Domain
+        - Account
+        - Resolver
+      abis:
+        - name: Registry
+          file: ./abis/Registry.json
+      eventHandlers:
+        - event: Transfer(indexed bytes32,address)
+          handler: handleTransfer
+        - event: NewOwner(indexed bytes32,indexed bytes32,address)
+          handler: handleNewOwner
+        - event: NewResolver(indexed bytes32,address)
+          handler: handleNewResolver
+        - event: NewTTL(indexed bytes32,uint64)
+          handler: handleNewTTL
+  
+  
+  - kind: ethereum/contract
+    name: Resolver
+    network: gnosis
+    source:
+      abi: Resolver
+      startBlock: 31040099
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./src/Resolver.ts
+      entities:
+        - AddrChanged
+        - MulticoinAddrChanged
+        - NameChanged
+        - AbiChanged
+        - PubkeyChanged
+        - Textchanged
+        - ContenthashChanged
+        - InterfaceChanged
+        - AuthorisationChanged
+      abis:
+        - name: Resolver
+          file: ./abis/Resolver.json
+      eventHandlers:
+        - event: ABIChanged(indexed bytes32,indexed uint256)
+          handler: handleABIChanged
+        - event: AddrChanged(indexed bytes32,address)
+          handler: handleAddrChanged
+        - event: AddressChanged(indexed bytes32,uint256,bytes)
+          handler: handleMulticoinAddrChanged
+        # - event: AuthorisationChanged(indexed bytes32,indexed address,indexed address,bool)
+        #   handler: handleAuthorisationChanged
+        - event: ContenthashChanged(indexed bytes32,bytes)
+          handler: handleContentHashChanged
+        - event: InterfaceChanged(indexed bytes32,indexed bytes4,address)
+          handler: handleInterfaceChanged
+        - event: NameChanged(indexed bytes32,string)
+          handler: handleNameChanged
+        - event: PubkeyChanged(indexed bytes32,bytes32,bytes32)
+          handler: handlePubkeyChanged
+        - event: TextChanged(indexed bytes32,indexed string,string,string)
+          handler: handleTextChangedWithValue
+        # - event: VersionChanged(indexed bytes32,uint64)
+        #   handler: handleVersionChanged
+    
+  - kind: ethereum/contract
+    name: RegistrarController
+    network: gnosis
+    source:
+      abi: RegistrarController
+      address: "0x4211B1Dcf3adbEbAB6013A907465d2B90e90eb6d"
+      startBlock: 30929686
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./src/RegistrarController.ts
+      entities:
+        - Registration
+      abis:
+        - name: RegistrarController
+          file: ./abis/RegistrarController.json
+      eventHandlers:
+        - event: NameRegistered(uint256,string,indexed bytes32,indexed address,uint256,uint256)
+          handler: handleNameRegisteredByController
+        - event: NameRenewed(uint256,string,indexed bytes32,uint256,uint256)
+          handler: handleNameRenewedByController
