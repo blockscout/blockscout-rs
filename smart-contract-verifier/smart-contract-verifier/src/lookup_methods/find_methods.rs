@@ -53,7 +53,12 @@ pub fn find_methods_from_compiler_output(
         .as_bytes()
         .ok_or_else(|| anyhow::anyhow!("invalid bytecode"))?
         .0;
-    let methods = parse_selectors_from_method_ids(&evm.method_identifiers)?;
+    let abi = &contract
+        .abi
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("abi missing"))?
+        .abi;
+    let methods = parse_selectors(abi);
 
     Ok(find_methods_internal(
         methods,
@@ -64,7 +69,7 @@ pub fn find_methods_from_compiler_output(
 }
 
 pub fn find_methods(request: LookupMethodsRequest) -> LookupMethodsResponse {
-    let methods = parse_selectors_from_abi(&request.abi);
+    let methods = parse_selectors(&request.abi);
     find_methods_internal(
         methods,
         &request.bytecode,
@@ -158,20 +163,7 @@ fn find_src_map_index(selector: &[u8; 4], opcodes: &[DisassembledOpcode]) -> Opt
     None
 }
 
-fn parse_selectors_from_method_ids(
-    methods: &BTreeMap<String, String>,
-) -> anyhow::Result<BTreeMap<String, [u8; 4]>> {
-    let methods: BTreeMap<String, [u8; 4]> = methods
-        .iter()
-        .map(|(name, selector)| {
-            let mut result = [0u8; 4];
-            hex::decode_to_slice(selector, &mut result).map(|_| (name.to_owned(), result))
-        })
-        .collect::<Result<_, _>>()?;
-    Ok(methods)
-}
-
-fn parse_selectors_from_abi(abi: &Abi) -> BTreeMap<String, [u8; 4]> {
+fn parse_selectors(abi: &Abi) -> BTreeMap<String, [u8; 4]> {
     abi.functions()
         .map(|f| (f.signature(), f.short_signature()))
         .collect()

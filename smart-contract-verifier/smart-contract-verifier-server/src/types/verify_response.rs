@@ -84,17 +84,14 @@ impl VerifyResponseOk for SourcifySuccess {
 }
 
 impl VerifyResponseWrapper {
-    pub fn ok<T: VerifyResponseOk>(
-        success: T,
-        post_action_responses: Option<PostActionResponses>,
-    ) -> Self {
+    pub fn ok<T: VerifyResponseOk>(success: T, post_action_responses: PostActionResponses) -> Self {
         let (source, extra_data) = success.result();
         VerifyResponse {
             message: "OK".to_string(),
             status: Status::Success.into(),
             source: Some(source),
             extra_data: Some(extra_data),
-            post_action_responses,
+            post_action_responses: Some(post_action_responses),
         }
         .into()
     }
@@ -191,9 +188,8 @@ mod tests {
             deployed_bytecode_artifacts: Default::default(),
         };
 
-        let response =
-            VerifyResponseWrapper::ok(verification_success.clone(), Some(Default::default()))
-                .into_inner();
+        let response = VerifyResponseWrapper::ok(verification_success.clone(), Default::default())
+            .into_inner();
 
         let expected = VerifyResponse {
             message: "OK".to_string(),

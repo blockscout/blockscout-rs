@@ -215,7 +215,7 @@ fn process_verify_result(
     match result {
         Ok(res) => {
             let post_actions_responses = process_post_actions(&res, &post_actions);
-            Ok(VerifyResponseWrapper::ok(res, Some(post_actions_responses)))
+            Ok(VerifyResponseWrapper::ok(res, post_actions_responses))
         }
         Err(err) => match err {
             VerificationError::Compilation(_)
