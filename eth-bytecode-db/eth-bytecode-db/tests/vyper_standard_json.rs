@@ -59,7 +59,8 @@ impl VerifierService<VerificationRequest<StandardJson>> for MockVyperVerifierSer
         client: Client,
         request: VerificationRequest<StandardJson>,
     ) -> Result<Source, Error> {
-        vyper_standard_json::verify(client, request).await
+        vyper_standard_json::verify(client, request, blockscout_display_bytes::Bytes::from([]))
+            .await
     }
 }
 

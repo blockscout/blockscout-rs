@@ -23,6 +23,8 @@ impl sourcify_verifier_server::SourcifyVerifier for SourcifyVerifierService {
         request: tonic::Request<VerifySourcifyRequest>,
     ) -> Result<tonic::Response<VerifyResponse>, tonic::Status> {
         let request = request.into_inner();
+        let request_id =
+            super::trace_verification_request!("Sourcify verify", &request.address, &request.chain);
 
         let verification_request = sourcify::VerificationRequest {
             address: request.address,
@@ -33,7 +35,7 @@ impl sourcify_verifier_server::SourcifyVerifier for SourcifyVerifierService {
 
         let result = sourcify::verify(self.client.clone(), verification_request).await;
 
-        verifier_base::process_verification_result(result)
+        verifier_base::process_verification_result(result, request_id)
     }
 
     async fn verify_from_etherscan(
@@ -41,6 +43,11 @@ impl sourcify_verifier_server::SourcifyVerifier for SourcifyVerifierService {
         request: tonic::Request<VerifyFromEtherscanSourcifyRequest>,
     ) -> Result<tonic::Response<VerifyResponse>, tonic::Status> {
         let request = request.into_inner();
+        let request_id = super::trace_verification_request!(
+            "Sourcify verify-from-etherscan",
+            &request.address,
+            &request.chain
+        );
 
         let verification_request = sourcify_from_etherscan::VerificationRequest {
             address: request.address,
@@ -50,6 +57,6 @@ impl sourcify_verifier_server::SourcifyVerifier for SourcifyVerifierService {
         let result =
             sourcify_from_etherscan::verify(self.client.clone(), verification_request).await;
 
-        verifier_base::process_verification_result(result)
+        verifier_base::process_verification_result(result, request_id)
     }
 }

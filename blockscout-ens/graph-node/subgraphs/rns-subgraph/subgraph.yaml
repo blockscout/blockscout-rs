@@ -1,0 +1,97 @@
+specVersion: 0.0.5
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: RnsRegistry
+    network: rootstock
+    source:
+      abi: RnsRegistry
+      address: "0xCB868AeAbd31E2b66F74E9a55cF064AbB31A4Ad5"
+      startBlock: 905027
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - NewOwner
+        - Transfer
+        - NewResolver
+        - NewTTL
+      abis:
+        - name: RnsRegistry
+          file: ./abis/RnsRegistry.json
+      eventHandlers:
+        - event: NewOwner(indexed bytes32,indexed bytes32,address)
+          handler: handleNewOwner
+        - event: Transfer(indexed bytes32,address)
+          handler: handleTransfer
+        - event: NewResolver(indexed bytes32,address)
+          handler: handleNewResolver
+        - event: NewTTL(indexed bytes32,uint64)
+          handler: handleNewTTL
+      file: ./src/rns-registry.ts
+  - kind: ethereum
+    name: NameResolver
+    network: rootstock
+    source:
+      address: "0x4b1a11BF6723e60b9D2e02AA3ecE34E24Bde77d9"
+      abi: NameResolver
+      startBlock: 1721969
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - NameChanged
+      abis:
+        - name: NameResolver
+          file: ./abis/NameResolver.json
+      eventHandlers:
+        - event: NameChanged(indexed bytes32,string)
+          handler: handleNameChanged
+      file: ./src/name-resolver.ts
+  - kind: ethereum
+    name: PublicResolver
+    network: rootstock
+    source:
+      abi: PublicResolver
+      startBlock: 905027
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - AuthorisationChanged
+        - TextChanged
+        - PubkeyChanged
+        - PublicResolverNameChanged
+        - InterfaceChanged
+        - AddrChanged
+        - AddressChanged
+        - ABIChanged
+        - VersionChanged
+      abis:
+        - name: PublicResolver
+          file: ./abis/PublicResolver.json
+      eventHandlers:
+        - event: AuthorisationChanged(indexed bytes32,indexed address,indexed
+            address,bool)
+          handler: handleAuthorisationChanged
+        - event: TextChanged(indexed bytes32,indexed string,string)
+          handler: handleTextChanged
+        - event: PubkeyChanged(indexed bytes32,bytes32,bytes32)
+          handler: handlePubkeyChanged
+        - event: NameChanged(indexed bytes32,string)
+          handler: handleNameChanged
+        - event: InterfaceChanged(indexed bytes32,indexed bytes4,address)
+          handler: handleInterfaceChanged
+        - event: AddrChanged(indexed bytes32,address)
+          handler: handleAddrChanged
+        - event: AddressChanged(indexed bytes32,uint256,bytes)
+          handler: handleMulticoinAddrChanged
+        - event: ABIChanged(indexed bytes32,indexed uint256)
+          handler: handleABIChanged
+        - event: VersionChanged(indexed bytes32,uint64)
+          handler: handleVersionChanged
+      file: ./src/public-resolver.ts

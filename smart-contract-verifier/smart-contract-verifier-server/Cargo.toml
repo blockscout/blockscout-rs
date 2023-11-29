@@ -38,6 +38,7 @@ tracing = "0.1"
 tracing-opentelemetry = "0.18"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 url = "2.3"
+uuid = { version = "1.6.1", features = ["v4"] }
 
 [dev-dependencies]
 ethers-solc = { version = "2.0.10", features = ["svm-solc"] }

@@ -39,6 +39,7 @@ impl solidity_verifier_server::SolidityVerifier for SolidityVerifierService {
         request: tonic::Request<VerifySolidityMultiPartRequest>,
     ) -> Result<tonic::Response<VerifyResponse>, tonic::Status> {
         let (metadata, _, request) = request.into_parts();
+        let request_id = super::trace_verification_request!("Solidity multi-part", &request);
 
         let bytecode_type = request.bytecode_type();
         let verification_request = VerificationRequest {
@@ -57,9 +58,14 @@ impl solidity_verifier_server::SolidityVerifier for SolidityVerifierService {
                 .transpose()?,
             is_authorized: super::is_key_authorized(&self.authorized_keys, metadata)?,
         };
-        let result = solidity_multi_part::verify(self.client.clone(), verification_request).await;
+        let result = solidity_multi_part::verify(
+            self.client.clone(),
+            verification_request,
+            request_id.clone(),
+        )
+        .await;
 
-        verifier_base::process_verification_result(result)
+        verifier_base::process_verification_result(result, request_id)
     }
 
     async fn verify_standard_json(
@@ -67,6 +73,7 @@ impl solidity_verifier_server::SolidityVerifier for SolidityVerifierService {
         request: tonic::Request<VerifySolidityStandardJsonRequest>,
     ) -> Result<tonic::Response<VerifyResponse>, tonic::Status> {
         let (metadata, _, request) = request.into_parts();
+        let request_id = super::trace_verification_request!("Solidity standard-json", &request);
 
         let bytecode_type = request.bytecode_type();
         let verification_request = VerificationRequest {
@@ -82,10 +89,14 @@ impl solidity_verifier_server::SolidityVerifier for SolidityVerifierService {
                 .transpose()?,
             is_authorized: super::is_key_authorized(&self.authorized_keys, metadata)?,
         };
-        let result =
-            solidity_standard_json::verify(self.client.clone(), verification_request).await;
+        let result = solidity_standard_json::verify(
+            self.client.clone(),
+            verification_request,
+            request_id.clone(),
+        )
+        .await;
 
-        verifier_base::process_verification_result(result)
+        verifier_base::process_verification_result(result, request_id)
     }
 
     async fn list_compiler_versions(
