@@ -53,6 +53,10 @@ pub trait TestCase {
     fn deployed_bytecode_artifacts(&self) -> Option<serde_json::Value> {
         None
     }
+
+    fn lookup_methods(&self) -> Option<serde_json::Value> {
+        None
+    }
 }
 
 pub fn from_file<T: TestCase + DeserializeOwned>(test_case: &str) -> T {
@@ -79,6 +83,7 @@ pub struct Flattened {
     pub expected_compiler_artifacts: Option<serde_json::Value>,
     pub expected_creation_input_artifacts: Option<serde_json::Value>,
     pub expected_deployed_bytecode_artifacts: Option<serde_json::Value>,
+    pub expected_lookup_methods: Option<serde_json::Value>,
 
     // Verification metadata related values
     pub chain_id: Option<String>,
@@ -92,6 +97,10 @@ impl TestCase for Flattened {
 
     fn to_request(&self, bytecode_type: BytecodeType) -> serde_json::Value {
         let extension = if self.is_yul() { "yul" } else { "sol" };
+        let mut post_actions = vec![];
+        if self.expected_lookup_methods.is_some() {
+            post_actions.push("lookup-methods");
+        }
         let bytecode = match bytecode_type {
             BytecodeType::Unspecified | BytecodeType::CreationInput => {
                 self.creation_bytecode.as_str()
@@ -111,7 +120,8 @@ impl TestCase for Flattened {
             "metadata": {
                 "chainId": self.chain_id,
                 "contractAddress": self.contract_address
-            }
+            },
+            "postActions": post_actions
         })
     }
 
@@ -177,6 +187,10 @@ impl TestCase for Flattened {
 
     fn deployed_bytecode_artifacts(&self) -> Option<serde_json::Value> {
         self.expected_deployed_bytecode_artifacts.clone()
+    }
+
+    fn lookup_methods(&self) -> Option<serde_json::Value> {
+        self.expected_lookup_methods.clone()
     }
 }
 

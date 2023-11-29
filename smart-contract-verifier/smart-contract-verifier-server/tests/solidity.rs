@@ -258,6 +258,24 @@ async fn test_success<T: TestCase>(test_case: &T, bytecode_type: BytecodeType) {
             "Invalid deployed bytecode artifacts"
         )
     }
+
+    if let Some(expected_lookup_methods) = test_case.lookup_methods() {
+        let lookup_methods = verification_response
+            .post_action_responses
+            .map(|value| {
+                serde_json::to_value(&value).unwrap_or_else(|err| {
+                    panic!(
+                        "Lookup methods serialization failed: {:?}; err: {}",
+                        value, err
+                    )
+                })
+            })
+            .expect("Lookup methods are missing");
+        assert_eq!(
+            lookup_methods, expected_lookup_methods,
+            "Invalid lookup methods"
+        )
+    }
 }
 
 async fn _test_failure<T: TestCase>(

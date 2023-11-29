@@ -108,7 +108,7 @@ impl VyperVerifier for VyperVerifierService {
 
         let response = if let Ok(verification_success) = result {
             tracing::info!(request_id=request_id.to_string(), match_type=?verification_success.match_type, "Request processed successfully");
-            VerifyResponseWrapper::ok(verification_success)
+            VerifyResponseWrapper::ok(verification_success, Default::default())
         } else {
             let err = result.unwrap_err();
             tracing::info!(request_id=request_id.to_string(), err=%err, "Request processing failed");
@@ -193,7 +193,7 @@ impl VyperVerifier for VyperVerifierService {
 
         let response = if let Ok(verification_success) = result {
             tracing::info!(request_id=request_id.to_string(), match_type=?verification_success.match_type, "Request processed successfully");
-            VerifyResponseWrapper::ok(verification_success)
+            VerifyResponseWrapper::ok(verification_success, Default::default())
         } else {
             let err = result.unwrap_err();
             tracing::info!(request_id=request_id.to_string(), err=%err, "Request processing failed");

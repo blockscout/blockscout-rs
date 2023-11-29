@@ -120,7 +120,10 @@ fn process_verification_result(
     response: Result<sc_sourcify::Success, Error>,
 ) -> Result<VerifyResponseWrapper, Status> {
     match response {
-        Ok(verification_success) => Ok(VerifyResponseWrapper::ok(verification_success)),
+        Ok(verification_success) => Ok(VerifyResponseWrapper::ok(
+            verification_success,
+            Default::default(),
+        )),
         Err(err) => match err {
             Error::Internal(err) => {
                 tracing::error!("internal error: {err:#?}");
