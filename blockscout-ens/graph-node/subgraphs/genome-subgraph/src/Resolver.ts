@@ -25,7 +25,7 @@ import {
   Domain,
   MulticoinAddrChanged
 } from "../generated/schema"
-import { createEventID, maybeSaveDomainName } from "./utils";
+import { COIN_TYPE, createEventID, maybeSaveDomainName } from "./utils";
 
 export function handleAddrChanged(event: AddrChangedEvent): void {
   let account = new Account(event.params.a.toHexString());
@@ -54,8 +54,37 @@ export function handleAddrChanged(event: AddrChangedEvent): void {
 }
 
 export function handleMulticoinAddrChanged(event: AddressChangedEvent): void {
-  let resolver = getOrCreateResolver(event.params.node, event.address);
+  let coinType = event.params.coinType;
+  if (coinType.toI64() == COIN_TYPE) {
+    let account = new Account(event.params.newAddress.toHexString());
+    account.save();
 
+    let resolver = new Resolver(
+      createResolverID(event.params.node, event.address)
+    );
+    resolver.domain = event.params.node.toHexString();
+    resolver.address = event.address;
+    resolver.addr = event.params.newAddress.toHexString();
+    resolver.save();
+
+    let domain = Domain.load(event.params.node.toHexString());
+    if (domain && domain.resolver == resolver.id) {
+      domain.resolvedAddress = event.params.newAddress.toHexString();
+      domain.save();
+    }
+
+    let resolverEvent = new AddrChanged(createEventID(event));
+    resolverEvent.resolver = resolver.id;
+    resolverEvent.blockNumber = event.block.number.toI32();
+    resolverEvent.transactionID = event.transaction.hash;
+    resolverEvent.addr = event.params.newAddress.toHexString();
+    resolverEvent.save();
+  } else {
+    _handleMulticoinAddrChanged(event)
+  }
+}
+function _handleMulticoinAddrChanged(event: AddressChangedEvent): void {
+  let resolver = getOrCreateResolver(event.params.node, event.address);
   let coinType = event.params.coinType;
   if (resolver.coinTypes == null) {
     resolver.coinTypes = [coinType];
