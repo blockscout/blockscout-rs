@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package blockscout.metadata.v1;
+
+option go_package = "github.com/blockscout/blockscout-rs/metadata";
+
+
+service TestService {
+  rpc TestServiceCreate(TestServiceCreateRequest) returns (TestServiceCreateResponse) {}
+  rpc TestServiceSearch(TestServiceSearchRequest) returns (TestServiceSearchResponse) {}
+  
+}
+
+message Item {
+  string id = 1;
+  string name = 2;
+}
+
+message TestServiceCreateRequest {
+  string foo = 1;
+  optional string bar = 2;
+  int64 timestamp = 3;
+  map<string, string> map = 4;
+}
+
+message TestServiceCreateResponse {
+  Item item = 1;
+}
+
+
+
+message TestServiceSearchRequest {
+  string filter_1 = 1;
+  string filter_2 = 2;
+  string filter_3 = 3;
+}
+
+message TestServiceSearchResponse {
+  repeated Item items = 1;
+}
+
+
+
