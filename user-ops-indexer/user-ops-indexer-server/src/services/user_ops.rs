@@ -139,17 +139,8 @@ impl UserOps for UserOpsService {
         let bundler_filter = inner.bundler.map(parse_filter).transpose()?;
         let entry_point_filter = inner.entry_point.map(parse_filter).transpose()?;
 
-        let page_token = inner
-            .page_token
-            .map(|t| match t.split(',').collect::<Vec<&str>>().as_slice() {
-                [page_token_block_number, page_token_tx_hash, page_token_bundle_index] => Ok((
-                    parse_filter::<u64>(page_token_block_number.to_string())?,
-                    parse_filter::<H256>(page_token_tx_hash.to_string())?,
-                    parse_filter::<u64>(page_token_bundle_index.to_string())?,
-                )),
-                _ => Err(Status::invalid_argument("invalid page_token format")),
-            })
-            .transpose()?;
+        let page_token: Option<(u64, H256, u64)> =
+            inner.page_token.map(parse_filter_3).transpose()?;
         let page_size = normalize_page_size(inner.page_size);
 
         let (bundles, next_page_token) = repository::bundle::list_bundles(
@@ -189,17 +180,7 @@ impl UserOps for UserOpsService {
         let bundle_index_filter = inner.bundle_index;
         let block_number_filter = inner.block_number;
 
-        let page_token = inner
-            .page_token
-            .map(|t| match t.split(',').collect::<Vec<&str>>().as_slice() {
-                [page_token_block_number, page_token_op_hash] => Ok((
-                    parse_filter::<u64>(page_token_block_number.to_string())?,
-                    parse_filter::<H256>(page_token_op_hash.to_string())?,
-                )),
-                _ => Err(Status::invalid_argument("invalid page_token format")),
-            })
-            .transpose()?;
-
+        let page_token: Option<(u64, H256)> = inner.page_token.map(parse_filter_2).transpose()?;
         let page_size = normalize_page_size(inner.page_size);
 
         let (ops, next_page_token) = repository::user_op::list_user_ops(
@@ -249,16 +230,8 @@ impl UserOps for UserOpsService {
     ) -> Result<Response<ListFactoriesResponse>, Status> {
         let inner = request.into_inner();
 
-        let page_token = inner
-            .page_token
-            .map(|t| match t.split(',').collect::<Vec<&str>>().as_slice() {
-                [page_token_total_accounts, page_token_factory] => Ok((
-                    parse_filter::<u64>(page_token_total_accounts.to_string())?,
-                    parse_filter::<Address>(page_token_factory.to_string())?,
-                )),
-                _ => Err(Status::invalid_argument("invalid page_token format")),
-            })
-            .transpose()?;
+        let page_token: Option<(u64, Address)> =
+            inner.page_token.map(parse_filter_2).transpose()?;
         let page_size = normalize_page_size(inner.page_size);
 
         let (factories, next_page_token) =
@@ -289,5 +262,40 @@ fn parse_filter<T: FromStr>(input: String) -> Result<T, Status>
 where
     <T as FromStr>::Err: std::fmt::Display,
 {
-    T::from_str(&input).map_err(|e| Status::invalid_argument(format!("Invalid value {}: {e}", input)))
+    T::from_str(&input)
+        .map_err(|e| Status::invalid_argument(format!("Invalid value {}: {e}", input)))
+}
+
+#[inline]
+fn parse_filter_2<T1: FromStr, T2: FromStr>(input: String) -> Result<(T1, T2), Status>
+where
+    <T1 as FromStr>::Err: std::fmt::Display,
+    <T2 as FromStr>::Err: std::fmt::Display,
+{
+    match input.split(',').collect::<Vec<&str>>().as_slice() {
+        [v1, v2] => Ok((
+            parse_filter::<T1>(v1.to_string())?,
+            parse_filter::<T2>(v2.to_string())?,
+        )),
+        _ => Err(Status::invalid_argument("invalid page_token format")),
+    }
+}
+
+#[inline]
+fn parse_filter_3<T1: FromStr, T2: FromStr, T3: FromStr>(
+    input: String,
+) -> Result<(T1, T2, T3), Status>
+where
+    <T1 as FromStr>::Err: std::fmt::Display,
+    <T2 as FromStr>::Err: std::fmt::Display,
+    <T3 as FromStr>::Err: std::fmt::Display,
+{
+    match input.split(',').collect::<Vec<&str>>().as_slice() {
+        [v1, v2, v3] => Ok((
+            parse_filter::<T1>(v1.to_string())?,
+            parse_filter::<T2>(v2.to_string())?,
+            parse_filter::<T3>(v3.to_string())?,
+        )),
+        _ => Err(Status::invalid_argument("invalid page_token format")),
+    }
 }
