@@ -1,4 +1,3 @@
-use std::cmp::max;
 use std::future;
 use std::ops::Div;
 
@@ -58,19 +57,17 @@ impl IndexerV06 {
         let block_number = self.client.get_block_number().await?.as_u32();
         tracing::info!(block_number, "latest block number");
 
+        let rpc_refetch_block_number = block_number.saturating_sub(past_rpc_logs_range);
         let missed_db_txs = if past_db_logs_start_block != 0 || past_db_logs_end_block != 0 {
             let from_block = if past_db_logs_start_block > 0 {
                 past_db_logs_start_block as u64
             } else {
-                max(block_number as i32 + past_db_logs_start_block, 0) as u64
+                rpc_refetch_block_number.saturating_sub((-past_db_logs_start_block) as u32) as u64
             };
             let to_block = if past_db_logs_end_block > 0 {
                 past_db_logs_end_block as u64
             } else {
-                max(
-                    (block_number - past_rpc_logs_range) as i32 + past_db_logs_end_block,
-                    0,
-                ) as u64
+                rpc_refetch_block_number.saturating_sub((-past_db_logs_end_block) as u32) as u64
             };
             tracing::info!(from_block, to_block, "fetching missed tx hashes in db");
             let txs = repository::user_op::find_unprocessed_logs_tx_hashes(
@@ -88,13 +85,14 @@ impl IndexerV06 {
         };
 
         let recent_logs = if past_rpc_logs_range > 0 {
-            let from_block = (block_number + 1 - past_rpc_logs_range).max(0);
             tracing::info!(
-                from_block,
+                from_block = rpc_refetch_block_number + 1,
                 to_block = block_number,
                 "fetching past BeforeExecution logs from rpc"
             );
-            let filter = filter.from_block(from_block).to_block(block_number);
+            let filter = filter
+                .from_block(rpc_refetch_block_number + 1)
+                .to_block(block_number);
             let logs = self.client.get_logs(&filter).await?;
             tracing::info!(count = logs.len(), "fetched past BeforeExecution logs");
             logs
@@ -260,8 +258,7 @@ impl IndexerV06 {
                             Err(err) => {
                                 let logs_start_index = logs
                                     .get(0)
-                                    .map(|l| l.log_index)
-                                    .flatten()
+                                    .and_then(|l| l.log_index)
                                     .map(|i| i.as_u64());
                                 let logs_count = logs.len();
                                 tracing::error!(
@@ -337,14 +334,9 @@ fn build_user_op_model(
     } else {
         None
     };
-    let sender_deposit = tx_deposits
-        .iter()
-        .find(|e| e.account == raw_user_op.user_op.sender)
-        .is_some();
-    let paymaster_deposit = tx_deposits
-        .iter()
-        .find(|e| Some(e.account) == paymaster)
-        .is_some();
+    let sender = raw_user_op.user_op.sender;
+    let sender_deposit = tx_deposits.iter().any(|e| e.account == sender);
+    let paymaster_deposit = tx_deposits.iter().any(|e| Some(e.account) == paymaster);
     let sponsor_type = match (paymaster, sender_deposit, paymaster_deposit) {
         (None, false, _) => SponsorType::WalletBalance,
         (None, true, _) => SponsorType::WalletDeposit,
@@ -360,7 +352,7 @@ fn build_user_op_model(
     }
     Ok(UserOp {
         op_hash: H256::from(user_op_event.user_op_hash),
-        sender: raw_user_op.user_op.sender,
+        sender,
         nonce: H256::from_uint(&raw_user_op.user_op.nonce),
         init_code: none_if_empty(&raw_user_op.user_op.init_code),
         call_data: raw_user_op.user_op.call_data.clone(),
