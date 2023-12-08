@@ -38,6 +38,7 @@ impl IndexerV06 {
 
     pub async fn start(
         &self,
+        concurrency: u32,
         past_rpc_logs_range: u32,
         past_db_logs_start_block: i32,
         past_db_logs_end_block: i32,
@@ -117,11 +118,10 @@ impl IndexerV06 {
             .filter_map(|tx_hash| async move { tx_hash });
 
         stream_txs
-            .for_each(|tx| async move {
+            .for_each_concurrent(Some(concurrency as usize), |tx| async move {
                 if let Err(err) = &self.handle_tx(tx.clone()).await {
                     tracing::error!(error = ?err, tx_hash = ?tx, "tx handler failed, skipping");
                 }
-                ()
             })
             .await;
 
@@ -242,7 +242,7 @@ impl IndexerV06 {
                     )
                 }
                 Ok(raw_user_ops
-                    .iter()
+                    .into_iter()
                     .zip(log_bundle.iter())
                     .enumerate()
                     .filter_map(|(j, (raw_user_op, logs))| {
@@ -256,10 +256,8 @@ impl IndexerV06 {
                         ) {
                             Ok(model) => Some(model),
                             Err(err) => {
-                                let logs_start_index = logs
-                                    .get(0)
-                                    .and_then(|l| l.log_index)
-                                    .map(|i| i.as_u64());
+                                let logs_start_index =
+                                    logs.get(0).and_then(|l| l.log_index).map(|i| i.as_u64());
                                 let logs_count = logs.len();
                                 tracing::error!(
                                     tx_hash = ?tx_hash,
@@ -299,7 +297,7 @@ fn build_user_op_model(
     bundler: Address,
     bundle_index: u64,
     op_index: u64,
-    raw_user_op: &RawUserOperation,
+    raw_user_op: RawUserOperation,
     logs: &[Log],
     tx_deposits: &Vec<DepositedFilter>,
 ) -> anyhow::Result<UserOp> {
@@ -354,17 +352,17 @@ fn build_user_op_model(
         op_hash: H256::from(user_op_event.user_op_hash),
         sender,
         nonce: H256::from_uint(&raw_user_op.user_op.nonce),
-        init_code: none_if_empty(&raw_user_op.user_op.init_code),
-        call_data: raw_user_op.user_op.call_data.clone(),
+        init_code: none_if_empty(raw_user_op.user_op.init_code),
+        call_data: raw_user_op.user_op.call_data,
         call_gas_limit,
         verification_gas_limit,
         pre_verification_gas,
         max_fee_per_gas: raw_user_op.user_op.max_fee_per_gas,
         max_priority_fee_per_gas: raw_user_op.user_op.max_priority_fee_per_gas,
-        paymaster_and_data: none_if_empty(&raw_user_op.user_op.paymaster_and_data),
-        signature: raw_user_op.user_op.signature.clone(),
+        paymaster_and_data: none_if_empty(raw_user_op.user_op.paymaster_and_data),
+        signature: raw_user_op.user_op.signature,
         aggregator: raw_user_op.aggregator,
-        aggregator_signature: raw_user_op.aggregator_signature.clone(),
+        aggregator_signature: raw_user_op.aggregator_signature,
         entry_point: *ENTRYPOINT_V06,
         tx_hash: user_op_log.transaction_hash.unwrap_or(H256::zero()),
         block_number: user_op_log.block_number.map_or(0, |n| n.as_u64()),
@@ -394,10 +392,10 @@ fn build_user_op_model(
     })
 }
 
-fn none_if_empty(b: &Bytes) -> Option<Bytes> {
+fn none_if_empty(b: Bytes) -> Option<Bytes> {
     if b.is_empty() {
         None
     } else {
-        Some(b.clone())
+        Some(b)
     }
 }

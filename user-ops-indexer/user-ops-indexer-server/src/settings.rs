@@ -48,7 +48,7 @@ pub struct ApiSettings {
 pub struct IndexerSettings {
     pub rpc_url: String,
 
-    pub batch_size: u32,
+    pub concurrency: u32,
 
     pub entrypoints: EntrypointsSettings,
 
@@ -132,7 +132,7 @@ impl Settings {
             api: ApiSettings { max_page_size: 100 },
             indexer: IndexerSettings {
                 rpc_url: "ws://127.0.0.1:8546".to_string(),
-                batch_size: 10,
+                concurrency: 10,
                 entrypoints: EntrypointsSettings { v06: true },
                 realtime: RealtimeIndexerSettings { enabled: true },
                 past_rpc_logs_indexer: PastRpcLogsIndexerSettings {

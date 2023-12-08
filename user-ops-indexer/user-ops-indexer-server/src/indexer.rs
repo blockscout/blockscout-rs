@@ -18,6 +18,7 @@ pub async fn run(
 
         indexer
             .start(
+                settings.indexer.concurrency,
                 settings.indexer.past_rpc_logs_indexer.get_block_range(),
                 settings.indexer.past_db_logs_indexer.get_start_block(),
                 settings.indexer.past_db_logs_indexer.get_end_block(),

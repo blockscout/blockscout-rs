@@ -12,7 +12,7 @@ max_page_size = 1000
 
 [indexer]
 rpc_url = "ws://127.0.0.1:8545"
-batch_size = 10
+concurrency = 10
 
 [indexer.entrypoints]
 v06 = true
