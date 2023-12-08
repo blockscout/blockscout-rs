@@ -46,7 +46,7 @@ pub struct UserOp {
     pub user_logs_count: u64,
 
     pub consensus: Option<bool>,
-    pub timestamp: Option<u32>,
+    pub timestamp: Option<u64>,
 }
 
 #[derive(Clone)]
@@ -55,43 +55,43 @@ pub struct ListUserOp {
     pub block_number: u64,
     pub sender: Address,
     pub tx_hash: H256,
-    pub timestamp: u32,
+    pub timestamp: u64,
 }
 
-impl Into<Model> for UserOp {
-    fn into(self) -> Model {
-        Model {
-            op_hash: self.op_hash.as_bytes().to_vec(),
-            sender: self.sender.as_bytes().to_vec(),
-            nonce: self.nonce.as_bytes().to_vec(),
-            init_code: self.init_code.clone().map(|a| a.to_vec()),
-            call_data: self.call_data.to_vec(),
-            call_gas_limit: Decimal::from(self.call_gas_limit),
-            verification_gas_limit: Decimal::from(self.verification_gas_limit),
-            pre_verification_gas: Decimal::from(self.pre_verification_gas),
-            max_fee_per_gas: u256_to_decimal(self.max_fee_per_gas),
-            max_priority_fee_per_gas: u256_to_decimal(self.max_priority_fee_per_gas),
-            paymaster_and_data: self.paymaster_and_data.clone().map(|a| a.to_vec()),
-            signature: self.signature.to_vec(),
-            aggregator: self.aggregator.map(|a| a.as_bytes().to_vec()),
-            aggregator_signature: self.aggregator_signature.clone().map(|a| a.to_vec()),
-            entry_point: self.entry_point.as_bytes().to_vec(),
-            tx_hash: self.tx_hash.as_bytes().to_vec(),
-            block_number: self.block_number as i32,
-            block_hash: self.block_hash.as_bytes().to_vec(),
-            bundler: self.bundler.as_bytes().to_vec(),
-            bundle_index: self.bundle_index as i32,
-            op_index: self.op_index as i32,
-            factory: self.factory.map(|a| a.as_bytes().to_vec()),
-            paymaster: self.paymaster.map(|a| a.as_bytes().to_vec()),
-            status: self.status,
-            revert_reason: self.revert_reason.clone().map(|a| a.to_vec()),
-            gas: Decimal::from(self.gas),
-            gas_price: u256_to_decimal(self.gas_price),
-            gas_used: Decimal::from(self.gas_used),
-            sponsor_type: self.sponsor_type.clone(),
-            user_logs_start_index: self.user_logs_start_index as i32,
-            user_logs_count: self.user_logs_count as i32,
+impl From<UserOp> for Model {
+    fn from(v: UserOp) -> Self {
+        Self {
+            op_hash: v.op_hash.as_bytes().to_vec(),
+            sender: v.sender.as_bytes().to_vec(),
+            nonce: v.nonce.as_bytes().to_vec(),
+            init_code: v.init_code.clone().map(|a| a.to_vec()),
+            call_data: v.call_data.to_vec(),
+            call_gas_limit: Decimal::from(v.call_gas_limit),
+            verification_gas_limit: Decimal::from(v.verification_gas_limit),
+            pre_verification_gas: Decimal::from(v.pre_verification_gas),
+            max_fee_per_gas: u256_to_decimal(v.max_fee_per_gas),
+            max_priority_fee_per_gas: u256_to_decimal(v.max_priority_fee_per_gas),
+            paymaster_and_data: v.paymaster_and_data.clone().map(|a| a.to_vec()),
+            signature: v.signature.to_vec(),
+            aggregator: v.aggregator.map(|a| a.as_bytes().to_vec()),
+            aggregator_signature: v.aggregator_signature.clone().map(|a| a.to_vec()),
+            entry_point: v.entry_point.as_bytes().to_vec(),
+            tx_hash: v.tx_hash.as_bytes().to_vec(),
+            block_number: v.block_number as i32,
+            block_hash: v.block_hash.as_bytes().to_vec(),
+            bundler: v.bundler.as_bytes().to_vec(),
+            bundle_index: v.bundle_index as i32,
+            op_index: v.op_index as i32,
+            factory: v.factory.map(|a| a.as_bytes().to_vec()),
+            paymaster: v.paymaster.map(|a| a.as_bytes().to_vec()),
+            status: v.status,
+            revert_reason: v.revert_reason.clone().map(|a| a.to_vec()),
+            gas: Decimal::from(v.gas),
+            gas_price: u256_to_decimal(v.gas_price),
+            gas_used: Decimal::from(v.gas_used),
+            sponsor_type: v.sponsor_type.clone(),
+            user_logs_start_index: v.user_logs_start_index as i32,
+            user_logs_count: v.user_logs_count as i32,
             created_at: Default::default(),
             updated_at: Default::default(),
         }
@@ -139,47 +139,45 @@ impl From<Model> for UserOp {
     }
 }
 
-impl Into<user_ops_indexer_proto::blockscout::user_ops_indexer::v1::UserOp> for UserOp {
-    fn into(self) -> user_ops_indexer_proto::blockscout::user_ops_indexer::v1::UserOp {
+impl From<UserOp> for user_ops_indexer_proto::blockscout::user_ops_indexer::v1::UserOp {
+    fn from(v: UserOp) -> Self {
         user_ops_indexer_proto::blockscout::user_ops_indexer::v1::UserOp {
-            op_hash: self.op_hash.encode_hex(),
-            sender: to_checksum(&self.sender, None),
-            nonce: self.nonce.encode_hex(),
-            init_code: self.init_code.map(|b| bytes::Bytes::from(b.to_vec())),
-            call_data: bytes::Bytes::from(self.call_data.to_vec()),
-            call_gas_limit: self.call_gas_limit,
-            verification_gas_limit: self.verification_gas_limit,
-            pre_verification_gas: self.pre_verification_gas,
-            max_fee_per_gas: self.max_fee_per_gas.to_string(),
-            max_priority_fee_per_gas: self.max_priority_fee_per_gas.to_string(),
-            paymaster_and_data: self
-                .paymaster_and_data
-                .map(|b| bytes::Bytes::from(b.to_vec())),
-            signature: bytes::Bytes::from(self.signature.to_vec()),
-            aggregator: self.aggregator.map(|a| to_checksum(&a, None)),
-            aggregator_signature: self
+            op_hash: v.op_hash.encode_hex(),
+            sender: to_checksum(&v.sender, None),
+            nonce: v.nonce.encode_hex(),
+            init_code: v.init_code.map(|b| bytes::Bytes::from(b.to_vec())),
+            call_data: bytes::Bytes::from(v.call_data.to_vec()),
+            call_gas_limit: v.call_gas_limit,
+            verification_gas_limit: v.verification_gas_limit,
+            pre_verification_gas: v.pre_verification_gas,
+            max_fee_per_gas: v.max_fee_per_gas.to_string(),
+            max_priority_fee_per_gas: v.max_priority_fee_per_gas.to_string(),
+            paymaster_and_data: v.paymaster_and_data.map(|b| bytes::Bytes::from(b.to_vec())),
+            signature: bytes::Bytes::from(v.signature.to_vec()),
+            aggregator: v.aggregator.map(|a| to_checksum(&a, None)),
+            aggregator_signature: v
                 .aggregator_signature
                 .map(|b| bytes::Bytes::from(b.to_vec())),
-            entry_point: to_checksum(&self.entry_point, None),
-            tx_hash: self.tx_hash.encode_hex(),
-            block_number: self.block_number,
-            block_hash: self.block_hash.encode_hex(),
-            bundler: to_checksum(&self.bundler, None),
-            bundle_index: self.bundle_index,
-            op_index: self.op_index,
-            factory: self.factory.map(|a| to_checksum(&a, None)),
-            paymaster: self.paymaster.map(|a| to_checksum(&a, None)),
-            status: self.status,
-            revert_reason: self.revert_reason.map(|b| bytes::Bytes::from(b.to_vec())),
-            gas: self.gas,
-            gas_price: self.gas_price.to_string(),
-            gas_used: self.gas_used,
-            sponsor_type: self.sponsor_type.to_value().to_string(),
-            user_logs_start_index: self.user_logs_start_index,
-            user_logs_count: self.user_logs_count,
+            entry_point: to_checksum(&v.entry_point, None),
+            tx_hash: v.tx_hash.encode_hex(),
+            block_number: v.block_number,
+            block_hash: v.block_hash.encode_hex(),
+            bundler: to_checksum(&v.bundler, None),
+            bundle_index: v.bundle_index,
+            op_index: v.op_index,
+            factory: v.factory.map(|a| to_checksum(&a, None)),
+            paymaster: v.paymaster.map(|a| to_checksum(&a, None)),
+            status: v.status,
+            revert_reason: v.revert_reason.map(|b| bytes::Bytes::from(b.to_vec())),
+            gas: v.gas,
+            gas_price: v.gas_price.to_string(),
+            gas_used: v.gas_used,
+            sponsor_type: v.sponsor_type.to_value().to_string(),
+            user_logs_start_index: v.user_logs_start_index,
+            user_logs_count: v.user_logs_count,
 
-            consensus: self.consensus,
-            timestamp: self.timestamp,
+            consensus: v.consensus,
+            timestamp: v.timestamp,
         }
     }
 }
@@ -191,19 +189,19 @@ impl From<ListUserOpDB> for ListUserOp {
             block_number: v.block_number as u64,
             sender: Address::from_slice(&v.sender),
             tx_hash: H256::from_slice(&v.tx_hash),
-            timestamp: v.timestamp.timestamp() as u32,
+            timestamp: v.timestamp.timestamp() as u64,
         }
     }
 }
 
-impl Into<user_ops_indexer_proto::blockscout::user_ops_indexer::v1::ListUserOp> for ListUserOp {
-    fn into(self) -> user_ops_indexer_proto::blockscout::user_ops_indexer::v1::ListUserOp {
+impl From<ListUserOp> for user_ops_indexer_proto::blockscout::user_ops_indexer::v1::ListUserOp {
+    fn from(v: ListUserOp) -> Self {
         user_ops_indexer_proto::blockscout::user_ops_indexer::v1::ListUserOp {
-            op_hash: self.op_hash.encode_hex(),
-            block_number: self.block_number,
-            tx_hash: self.tx_hash.encode_hex(),
-            address: to_checksum(&self.sender, None),
-            timestamp: self.timestamp,
+            op_hash: v.op_hash.encode_hex(),
+            block_number: v.block_number,
+            tx_hash: v.tx_hash.encode_hex(),
+            address: to_checksum(&v.sender, None),
+            timestamp: v.timestamp,
         }
     }
 }

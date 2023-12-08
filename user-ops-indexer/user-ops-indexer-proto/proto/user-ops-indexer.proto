@@ -5,11 +5,11 @@ package blockscout.userOpsIndexer.v1;
 option go_package = "github.com/blockscout/blockscout-rs/user-ops-indexer";
 
 service UserOpsService {
-  rpc GetAccount(GetAccountRequest) returns (GetAccountResponse);
-  rpc GetUserOp(GetUserOpRequest) returns (GetUserOpResponse);
-  rpc GetBundler(GetBundlerRequest) returns (GetBundlerResponse);
-  rpc GetPaymaster(GetPaymasterRequest) returns (GetPaymasterResponse);
-  rpc GetFactory(GetFactoryRequest) returns (GetFactoryResponse);
+  rpc GetAccount(GetAccountRequest) returns (Account);
+  rpc GetUserOp(GetUserOpRequest) returns (UserOp);
+  rpc GetBundler(GetBundlerRequest) returns (Bundler);
+  rpc GetPaymaster(GetPaymasterRequest) returns (Paymaster);
+  rpc GetFactory(GetFactoryRequest) returns (Factory);
 
   rpc ListAccounts(ListAccountsRequest) returns (ListAccountsResponse);
   rpc ListBundles(ListBundlesRequest) returns (ListBundlesResponse);
@@ -23,45 +23,25 @@ message GetAccountRequest {
   string address = 1;
 }
 
-message GetAccountResponse {
-  optional Account account = 1;
-}
-
 message GetUserOpRequest {
   string op_hash = 1;
-}
-
-message GetUserOpResponse {
-  optional UserOp op = 1;
 }
 
 message GetBundlerRequest {
   string address = 1;
 }
 
-message GetBundlerResponse {
-  Bundler bundler = 1;
-}
-
 message GetPaymasterRequest {
   string address = 1;
-}
-
-message GetPaymasterResponse {
-  Paymaster paymaster = 1;
 }
 
 message GetFactoryRequest {
   string address = 1;
 }
 
-message GetFactoryResponse {
-  Factory factory = 1;
-}
-
 message ListAccountsRequest {
   optional string factory = 1;
-  optional int32 page_size = 2;
+  optional uint32 page_size = 2;
   optional string page_token = 3;
 }
 
@@ -73,7 +53,7 @@ message ListAccountsResponse {
 message ListBundlesRequest {
   optional string bundler = 1;
   optional string entry_point = 2;
-  optional int32 page_size = 3;
+  optional uint32 page_size = 3;
   optional string page_token = 4;
 }
 
@@ -91,7 +71,7 @@ message ListUserOpsRequest {
   optional string entry_point = 6;
   optional uint64 bundle_index = 7;
   optional uint64 block_number = 8;
-  optional int32 page_size = 9;
+  optional uint32 page_size = 9;
   optional string page_token = 10;
 }
 
@@ -101,7 +81,7 @@ message ListUserOpsResponse {
 }
 
 message ListBundlersRequest {
-  optional int32 page_size = 1;
+  optional uint32 page_size = 1;
   optional string page_token = 2;
 }
 
@@ -111,7 +91,7 @@ message ListBundlersResponse {
 }
 
 message ListPaymastersRequest {
-  optional int32 page_size = 1;
+  optional uint32 page_size = 1;
   optional string page_token = 2;
 }
 
@@ -121,7 +101,7 @@ message ListPaymastersResponse {
 }
 
 message ListFactoriesRequest {
-  optional int32 page_size = 1;
+  optional uint32 page_size = 1;
   optional string page_token = 2;
 }
 
@@ -135,7 +115,7 @@ message Account {
   optional string factory = 2;
   optional string creation_tx_hash = 3;
   optional string creation_op_hash = 4;
-  optional uint32 creation_timestamp = 5;
+  optional uint64 creation_timestamp = 5;
   uint32 total_ops = 6;
 }
 
@@ -144,7 +124,7 @@ message Bundle {
   string bundler = 2;
   uint64 block_number = 3;
   uint64 bundle_index = 4;
-  uint32 timestamp = 5;
+  uint64 timestamp = 5;
   uint32 total_ops = 6;
 }
 
@@ -198,7 +178,7 @@ message UserOp {
   uint64 user_logs_count = 31;
 
   optional bool consensus = 32;
-  optional uint32 timestamp = 33;
+  optional uint64 timestamp = 33;
 }
 
 message ListUserOp {
@@ -206,5 +186,5 @@ message ListUserOp {
   uint64 block_number = 2;
   string tx_hash = 3;
   string address = 4;
-  uint32 timestamp = 5;
+  uint64 timestamp = 5;
 }

@@ -20,11 +20,11 @@ impl From<FactoryDB> for Factory {
     }
 }
 
-impl Into<user_ops_indexer_proto::blockscout::user_ops_indexer::v1::Factory> for Factory {
-    fn into(self) -> user_ops_indexer_proto::blockscout::user_ops_indexer::v1::Factory {
-        user_ops_indexer_proto::blockscout::user_ops_indexer::v1::Factory {
-            address: to_checksum(&self.factory, None),
-            total_accounts: self.total_accounts,
+impl From<Factory> for user_ops_indexer_proto::blockscout::user_ops_indexer::v1::Factory {
+    fn from(v: Factory) -> Self {
+        Self {
+            address: to_checksum(&v.factory, None),
+            total_accounts: v.total_accounts,
         }
     }
 }

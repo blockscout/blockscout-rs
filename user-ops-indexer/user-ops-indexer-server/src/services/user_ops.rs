@@ -8,12 +8,11 @@ use tonic::{Request, Response, Status};
 
 use user_ops_indexer::repository;
 use user_ops_indexer_proto::blockscout::user_ops_indexer::v1::{
-    GetAccountRequest, GetAccountResponse, GetBundlerRequest, GetBundlerResponse,
-    GetFactoryRequest, GetFactoryResponse, GetPaymasterRequest, GetPaymasterResponse,
-    GetUserOpRequest, GetUserOpResponse, ListAccountsRequest, ListAccountsResponse,
+    Account, Bundler, Factory, GetAccountRequest, GetBundlerRequest, GetFactoryRequest,
+    GetPaymasterRequest, GetUserOpRequest, ListAccountsRequest, ListAccountsResponse,
     ListBundlersRequest, ListBundlersResponse, ListBundlesRequest, ListBundlesResponse,
     ListFactoriesRequest, ListFactoriesResponse, ListPaymastersRequest, ListPaymastersResponse,
-    ListUserOpsRequest, ListUserOpsResponse,
+    ListUserOpsRequest, ListUserOpsResponse, Paymaster, UserOp,
 };
 
 use crate::proto::user_ops_service_server::UserOpsService as UserOps;
@@ -50,7 +49,7 @@ impl UserOps for UserOpsService {
     async fn get_account(
         &self,
         request: Request<GetAccountRequest>,
-    ) -> Result<Response<GetAccountResponse>, Status> {
+    ) -> Result<Response<Account>, Status> {
         let inner = request.into_inner();
 
         let address = parse_filter!(Address, inner.address);
@@ -60,19 +59,16 @@ impl UserOps for UserOpsService {
             .map_err(|err| {
                 tracing::error!(error = ?err, "failed to query account");
                 Status::internal("failed to query account")
-            })?;
+            })?
+            .ok_or(Status::not_found("account not found"))?;
 
-        let res = GetAccountResponse {
-            account: acc.map(|acc| acc.into()),
-        };
-
-        Ok(Response::new(res))
+        Ok(Response::new(acc.into()))
     }
 
     async fn get_user_op(
         &self,
         request: Request<GetUserOpRequest>,
-    ) -> Result<Response<GetUserOpResponse>, Status> {
+    ) -> Result<Response<UserOp>, Status> {
         let inner = request.into_inner();
 
         let op_hash = parse_filter!(H256, inner.op_hash);
@@ -82,33 +78,30 @@ impl UserOps for UserOpsService {
             .map_err(|err| {
                 tracing::error!(error = ?err, "failed to query user operation");
                 Status::internal("failed to query user operation")
-            })?;
+            })?
+            .ok_or(Status::not_found("user operation not found"))?;
 
-        let res = GetUserOpResponse {
-            op: user_op.map(|op| op.into()),
-        };
-
-        Ok(Response::new(res))
+        Ok(Response::new(user_op.into()))
     }
 
     async fn get_bundler(
         &self,
         _request: Request<GetBundlerRequest>,
-    ) -> Result<Response<GetBundlerResponse>, Status> {
+    ) -> Result<Response<Bundler>, Status> {
         todo!()
     }
 
     async fn get_paymaster(
         &self,
         _request: Request<GetPaymasterRequest>,
-    ) -> Result<Response<GetPaymasterResponse>, Status> {
+    ) -> Result<Response<Paymaster>, Status> {
         todo!()
     }
 
     async fn get_factory(
         &self,
         request: Request<GetFactoryRequest>,
-    ) -> Result<Response<GetFactoryResponse>, Status> {
+    ) -> Result<Response<Factory>, Status> {
         let inner = request.into_inner();
 
         let factory = parse_filter!(Address, inner.address);
@@ -118,13 +111,10 @@ impl UserOps for UserOpsService {
             .map_err(|err| {
                 tracing::error!(error = ?err, "failed to query factory");
                 Status::internal("failed to query factory")
-            })?;
+            })?
+            .ok_or(Status::not_found("factory not found"))?;
 
-        let res = GetFactoryResponse {
-            factory: factory.map(|op| op.into()),
-        };
-
-        Ok(Response::new(res))
+        Ok(Response::new(factory.into()))
     }
 
     async fn list_accounts(
@@ -146,7 +136,7 @@ impl UserOps for UserOpsService {
                 })?;
 
         let res = ListAccountsResponse {
-            accounts: accounts.iter().map(|acc| acc.clone().into()).collect(),
+            accounts: accounts.into_iter().map(|acc| acc.into()).collect(),
             next_page_token: next_page_token.map(|a| to_checksum(&a, None)),
         };
 
@@ -191,7 +181,7 @@ impl UserOps for UserOpsService {
         })?;
 
         let res = ListBundlesResponse {
-            bundles: bundles.iter().map(|b| b.clone().into()).collect(),
+            bundles: bundles.into_iter().map(|b| b.into()).collect(),
             next_page_token: next_page_token
                 .map(|(b, t, i)| format!("{},{},{}", b, t.encode_hex(), i)),
         };
@@ -246,7 +236,7 @@ impl UserOps for UserOpsService {
         })?;
 
         let res = ListUserOpsResponse {
-            ops: ops.iter().map(|acc| acc.clone().into()).collect(),
+            ops: ops.into_iter().map(|acc| acc.into()).collect(),
             next_page_token: next_page_token.map(|(b, o)| format!("{},{}", b, o.encode_hex())),
         };
 
@@ -295,7 +285,7 @@ impl UserOps for UserOpsService {
                 })?;
 
         let res = ListFactoriesResponse {
-            factories: factories.iter().map(|b| b.clone().into()).collect(),
+            factories: factories.into_iter().map(|b| b.into()).collect(),
             next_page_token: next_page_token
                 .map(|(t, f)| format!("{},{}", t, to_checksum(&f, None))),
         };
@@ -304,7 +294,7 @@ impl UserOps for UserOpsService {
     }
 }
 
-fn normalize_page_size(size: Option<i32>) -> u64 {
+fn normalize_page_size(size: Option<u32>) -> u64 {
     size.map_or(DEFAULT_PAGE_SIZE, |a| a as u64)
         .clamp(1, MAX_PAGE_SIZE)
 }

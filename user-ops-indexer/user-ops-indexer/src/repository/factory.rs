@@ -60,8 +60,8 @@ pub async fn list_factories(
         .into_model::<FactoryDB>()
         .all(db)
         .await?
-        .iter()
-        .map(|f| Factory::from(f.clone()))
+        .into_iter()
+        .map(|f| Factory::from(f))
         .collect();
 
     match factories.get(limit as usize) {

@@ -65,7 +65,7 @@ pub async fn find_user_op_by_op_hash(
             user_op.consensus = res.try_get("", "consensus")?;
             user_op.timestamp = res
                 .try_get::<Option<DateTime>>("", "timestamp")?
-                .map(|t| t.timestamp() as u32);
+                .map(|t| t.timestamp() as u64);
             Some(user_op)
         }
     };
@@ -140,8 +140,8 @@ pub async fn list_user_ops(
         .into_model::<ListUserOpDB>()
         .all(db)
         .await?
-        .iter()
-        .map(|op| ListUserOp::from(op.clone()))
+        .into_iter()
+        .map(|op| ListUserOp::from(op))
         .collect();
 
     match user_ops.get(limit as usize) {
@@ -157,8 +157,8 @@ pub async fn upsert_many(
     db: &DatabaseConnection,
     user_ops: Vec<UserOp>,
 ) -> Result<(), anyhow::Error> {
-    let user_ops = user_ops.iter().map(|user_op| {
-        let model: Model = user_op.clone().into();
+    let user_ops = user_ops.into_iter().map(|user_op| {
+        let model: Model = user_op.into();
         let mut active: ActiveModel = model.into();
         active.created_at = ActiveValue::NotSet;
         active.updated_at = ActiveValue::NotSet;

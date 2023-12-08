@@ -168,13 +168,13 @@ impl IndexerV06 {
             self.client
                 .trace_transaction(tx_hash)
                 .await?
-                .iter()
+                .into_iter()
                 .filter_map(|t| {
-                    if let Action::Call(cd) = &t.action {
+                    if let Action::Call(cd) = t.action {
                         if cd.to == *ENTRYPOINT_V06 && HandleOpsCall::decode(&cd.input).is_ok()
                             || HandleAggregatedOpsCall::decode(&cd.input).is_ok()
                         {
-                            Some(cd.input.clone())
+                            Some(cd.input)
                         } else {
                             None
                         }
@@ -210,22 +210,25 @@ impl IndexerV06 {
                     IEntrypointV06Calls::HandleAggregatedOps(cd) => (
                         cd.beneficiary,
                         cd.ops_per_aggregator
-                            .iter()
+                            .into_iter()
                             .flat_map(|agg_ops| {
-                                agg_ops.user_ops.iter().map(|op| RawUserOperation {
-                                    user_op: op.clone(),
-                                    aggregator: Some(agg_ops.aggregator),
-                                    aggregator_signature: Some(agg_ops.signature.clone()),
-                                })
+                                agg_ops
+                                    .user_ops
+                                    .into_iter()
+                                    .map(move |op| RawUserOperation {
+                                        user_op: op,
+                                        aggregator: Some(agg_ops.aggregator),
+                                        aggregator_signature: Some(agg_ops.signature.clone()),
+                                    })
                             })
                             .collect(),
                     ),
                     IEntrypointV06Calls::HandleOps(cd) => (
                         cd.beneficiary,
                         cd.ops
-                            .iter()
+                            .into_iter()
                             .map(|op| RawUserOperation {
-                                user_op: op.clone(),
+                                user_op: op,
                                 aggregator: None,
                                 aggregator_signature: None,
                             })

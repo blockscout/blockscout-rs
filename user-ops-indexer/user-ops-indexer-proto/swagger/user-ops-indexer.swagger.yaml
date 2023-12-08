@@ -31,7 +31,7 @@ paths:
           in: query
           required: false
           type: integer
-          format: int32
+          format: int64
         - name: pageToken
           in: query
           required: false
@@ -45,7 +45,7 @@ paths:
         "200":
           description: A successful response.
           schema:
-            $ref: '#/definitions/v1GetAccountResponse'
+            $ref: '#/definitions/v1Account'
         default:
           description: An unexpected error response.
           schema:
@@ -74,7 +74,7 @@ paths:
           in: query
           required: false
           type: integer
-          format: int32
+          format: int64
         - name: pageToken
           in: query
           required: false
@@ -88,7 +88,7 @@ paths:
         "200":
           description: A successful response.
           schema:
-            $ref: '#/definitions/v1GetBundlerResponse'
+            $ref: '#/definitions/v1Bundler'
         default:
           description: An unexpected error response.
           schema:
@@ -125,7 +125,7 @@ paths:
           in: query
           required: false
           type: integer
-          format: int32
+          format: int64
         - name: pageToken
           in: query
           required: false
@@ -149,7 +149,7 @@ paths:
           in: query
           required: false
           type: integer
-          format: int32
+          format: int64
         - name: pageToken
           in: query
           required: false
@@ -163,7 +163,7 @@ paths:
         "200":
           description: A successful response.
           schema:
-            $ref: '#/definitions/v1GetFactoryResponse'
+            $ref: '#/definitions/v1Factory'
         default:
           description: An unexpected error response.
           schema:
@@ -192,7 +192,7 @@ paths:
           in: query
           required: false
           type: integer
-          format: int32
+          format: int64
         - name: pageToken
           in: query
           required: false
@@ -206,7 +206,7 @@ paths:
         "200":
           description: A successful response.
           schema:
-            $ref: '#/definitions/v1GetPaymasterResponse'
+            $ref: '#/definitions/v1Paymaster'
         default:
           description: An unexpected error response.
           schema:
@@ -269,7 +269,7 @@ paths:
           in: query
           required: false
           type: integer
-          format: int32
+          format: int64
         - name: pageToken
           in: query
           required: false
@@ -283,7 +283,7 @@ paths:
         "200":
           description: A successful response.
           schema:
-            $ref: '#/definitions/v1GetUserOpResponse'
+            $ref: '#/definitions/v1UserOp'
         default:
           description: An unexpected error response.
           schema:
@@ -357,8 +357,8 @@ definitions:
       creationOpHash:
         type: string
       creationTimestamp:
-        type: integer
-        format: int64
+        type: string
+        format: uint64
       totalOps:
         type: integer
         format: int64
@@ -376,8 +376,8 @@ definitions:
         type: string
         format: uint64
       timestamp:
-        type: integer
-        format: int64
+        type: string
+        format: uint64
       totalOps:
         type: integer
         format: int64
@@ -400,31 +400,6 @@ definitions:
       totalAccounts:
         type: integer
         format: int64
-  v1GetAccountResponse:
-    type: object
-    properties:
-      account:
-        $ref: '#/definitions/v1Account'
-  v1GetBundlerResponse:
-    type: object
-    properties:
-      bundler:
-        $ref: '#/definitions/v1Bundler'
-  v1GetFactoryResponse:
-    type: object
-    properties:
-      factory:
-        $ref: '#/definitions/v1Factory'
-  v1GetPaymasterResponse:
-    type: object
-    properties:
-      paymaster:
-        $ref: '#/definitions/v1Paymaster'
-  v1GetUserOpResponse:
-    type: object
-    properties:
-      op:
-        $ref: '#/definitions/v1UserOp'
   v1HealthCheckResponse:
     type: object
     properties:
@@ -488,8 +463,8 @@ definitions:
       address:
         type: string
       timestamp:
-        type: integer
-        format: int64
+        type: string
+        format: uint64
   v1ListUserOpsResponse:
     type: object
     properties:
@@ -591,5 +566,5 @@ definitions:
       consensus:
         type: boolean
       timestamp:
-        type: integer
-        format: int64
+        type: string
+        format: uint64
