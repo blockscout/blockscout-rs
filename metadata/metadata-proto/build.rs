@@ -17,12 +17,7 @@ fn compile(
         .protoc_arg("grpc_api_configuration=proto/v1/api_config_http.yaml,output_format=yaml,allow_merge=true,merge_file_name=metadata")
         .bytes(["."])
         .btree_map(["."])
-        .type_attribute(".", "#[actix_prost_macros::serde]")
-        // .field_attribute(
-        //     ".blockscout.metadata.v1.<MessageName>.<DefaultFieldName>",
-        //     "#[serde(default)]"
-        // )
-        ;
+        .type_attribute(".", "#[actix_prost_macros::serde]");
     config.compile_protos(protos, includes)?;
     Ok(())
 }

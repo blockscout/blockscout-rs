@@ -1,6 +1,9 @@
 use crate::{
-    proto::{health_actix::route_health, health_server::HealthServer},
-    services::HealthService,
+    proto::{
+        health_actix::route_health, health_server::HealthServer, metadata_actix::route_metadata,
+        metadata_server::MetadataServer,
+    },
+    services::{HealthService, MetadataService},
     settings::Settings,
 };
 use blockscout_service_launcher::{database, launcher, launcher::LaunchSettings, tracing};
@@ -13,19 +16,23 @@ const SERVICE_NAME: &str = "metadata";
 
 #[derive(Clone)]
 struct Router {
-    // TODO: add services here
+    metadata: Arc<MetadataService>,
+
     health: Arc<HealthService>,
 }
 
 impl Router {
     pub fn grpc_router(&self) -> tonic::transport::server::Router {
-        tonic::transport::Server::builder().add_service(HealthServer::from_arc(self.health.clone()))
+        tonic::transport::Server::builder()
+            .add_service(HealthServer::from_arc(self.health.clone()))
+            .add_service(MetadataServer::from_arc(self.metadata.clone()))
     }
 }
 
 impl launcher::HttpRouter for Router {
     fn register_routes(&self, service_config: &mut actix_web::web::ServiceConfig) {
         service_config.configure(|config| route_health(config, self.health.clone()));
+        service_config.configure(|config| route_metadata(config, self.metadata.clone()));
     }
 }
 
@@ -34,16 +41,16 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let health = Arc::new(HealthService::default());
 
-    let _db_connection = database::initialize_postgres::<Migrator>(
+    let db_connection = database::initialize_postgres::<Migrator>(
         &settings.database.url,
         settings.database.create_database,
         settings.database.run_migrations,
     )
     .await?;
 
-    // TODO: init services here
+    let metadata = Arc::new(MetadataService::new(db_connection));
 
-    let router = Router { health };
+    let router = Router { metadata, health };
 
     let grpc_router = router.grpc_router();
     let http_router = router;

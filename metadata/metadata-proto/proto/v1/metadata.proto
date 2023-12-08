@@ -4,40 +4,48 @@ package blockscout.metadata.v1;
 
 option go_package = "github.com/blockscout/blockscout-rs/metadata";
 
-
-service TestService {
-  rpc TestServiceCreate(TestServiceCreateRequest) returns (TestServiceCreateResponse) {}
-  rpc TestServiceSearch(TestServiceSearchRequest) returns (TestServiceSearchResponse) {}
-  
+service Metadata {
+  rpc GetMetadata(GetMetadataRequest) returns (GetMetadataResponse) {}
 }
 
-message Item {
-  string id = 1;
+message GetMetadataRequest {
+  string address = 1;
+  optional int32 chain_id = 2;
+
+  optional TagsRequest tags = 3;
+  optional NotesRequest notes = 4;
+  optional ReputationRequest reputation = 5;
+}
+
+message TagsRequest { uint64 limit = 1; }
+
+message NotesRequest { uint64 limit = 1; }
+
+message ReputationRequest {}
+
+message GetMetadataResponse {
+  optional TagsResponse tags = 1;
+  optional NotesResponse notes = 2;
+  optional ReputationResponse reputation = 3;
+}
+
+message TagsResponse { repeated Tag values = 1; }
+
+message Tag {
+  string slug = 1;
   string name = 2;
+  string tag_type = 3;
+  int32 ordinal = 4;
+  string meta = 5;
 }
 
-message TestServiceCreateRequest {
-  string foo = 1;
-  optional string bar = 2;
-  int64 timestamp = 3;
-  map<string, string> map = 4;
+message NotesResponse { repeated Note values = 1; }
+
+message Note {
+  string text = 1;
+  string severity = 2;
+  int32 ordinal = 3;
+  string meta = 4;
 }
 
-message TestServiceCreateResponse {
-  Item item = 1;
-}
-
-
-
-message TestServiceSearchRequest {
-  string filter_1 = 1;
-  string filter_2 = 2;
-  string filter_3 = 3;
-}
-
-message TestServiceSearchResponse {
-  repeated Item items = 1;
-}
-
-
-
+message ReputationResponse { int32 score = 1; }

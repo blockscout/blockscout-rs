@@ -3,21 +3,21 @@ info:
   title: v1/metadata.proto
   version: version not set
 tags:
-  - name: TestService
+  - name: Metadata
   - name: Health
 consumes:
   - application/json
 produces:
   - application/json
 paths:
-  /api/v1/TestService:create:
+  /api/v1/metadata:
     post:
-      operationId: TestService_TestServiceCreate
+      operationId: Metadata_GetMetadata
       responses:
         "200":
           description: A successful response.
           schema:
-            $ref: '#/definitions/v1TestServiceCreateResponse'
+            $ref: '#/definitions/v1GetMetadataResponse'
         default:
           description: An unexpected error response.
           schema:
@@ -27,36 +27,9 @@ paths:
           in: body
           required: true
           schema:
-            $ref: '#/definitions/v1TestServiceCreateRequest'
+            $ref: '#/definitions/v1GetMetadataRequest'
       tags:
-        - TestService
-  /api/v1/TestService:search:
-    get:
-      operationId: TestService_TestServiceSearch
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1TestServiceSearchResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/rpcStatus'
-      parameters:
-        - name: filter1
-          in: query
-          required: false
-          type: string
-        - name: filter2
-          in: query
-          required: false
-          type: string
-        - name: filter3
-          in: query
-          required: false
-          type: string
-      tags:
-        - TestService
+        - Metadata
   /health:
     get:
       summary: |-
@@ -108,42 +81,93 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/protobufAny'
+  v1GetMetadataRequest:
+    type: object
+    properties:
+      address:
+        type: string
+      chainId:
+        type: integer
+        format: int32
+      tags:
+        $ref: '#/definitions/v1TagsRequest'
+      notes:
+        $ref: '#/definitions/v1NotesRequest'
+      reputation:
+        $ref: '#/definitions/v1ReputationRequest'
+  v1GetMetadataResponse:
+    type: object
+    properties:
+      tags:
+        $ref: '#/definitions/v1TagsResponse'
+      notes:
+        $ref: '#/definitions/v1NotesResponse'
+      reputation:
+        $ref: '#/definitions/v1ReputationResponse'
   v1HealthCheckResponse:
     type: object
     properties:
       status:
         $ref: '#/definitions/HealthCheckResponseServingStatus'
-  v1Item:
+  v1Note:
     type: object
     properties:
-      id:
+      text:
         type: string
-      name:
+      severity:
         type: string
-  v1TestServiceCreateRequest:
+      ordinal:
+        type: integer
+        format: int32
+      meta:
+        type: string
+  v1NotesRequest:
     type: object
     properties:
-      foo:
+      limit:
         type: string
-      bar:
-        type: string
-      timestamp:
-        type: string
-        format: int64
-      map:
-        type: object
-        additionalProperties:
-          type: string
-  v1TestServiceCreateResponse:
+        format: uint64
+  v1NotesResponse:
     type: object
     properties:
-      item:
-        $ref: '#/definitions/v1Item'
-  v1TestServiceSearchResponse:
-    type: object
-    properties:
-      items:
+      values:
         type: array
         items:
           type: object
-          $ref: '#/definitions/v1Item'
+          $ref: '#/definitions/v1Note'
+  v1ReputationRequest:
+    type: object
+  v1ReputationResponse:
+    type: object
+    properties:
+      score:
+        type: integer
+        format: int32
+  v1Tag:
+    type: object
+    properties:
+      slug:
+        type: string
+      name:
+        type: string
+      tagType:
+        type: string
+      ordinal:
+        type: integer
+        format: int32
+      meta:
+        type: string
+  v1TagsRequest:
+    type: object
+    properties:
+      limit:
+        type: string
+        format: uint64
+  v1TagsResponse:
+    type: object
+    properties:
+      values:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Tag'

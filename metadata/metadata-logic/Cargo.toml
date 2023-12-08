@@ -6,6 +6,7 @@ edition = "2021"
 
 [dependencies]
 metadata-entity = { path = "../metadata-entity" }
+ethers = "2.0.0"
 anyhow = "1.0"
 blockscout-display-bytes = "1.0"
 tracing = "0.1"

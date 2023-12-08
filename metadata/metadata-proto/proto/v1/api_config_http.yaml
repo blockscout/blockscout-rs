@@ -3,13 +3,12 @@ config_version: 3
 
 http:
   rules:
-    
-    - selector: blockscout.metadata.v1.TestService.TestServiceCreate
-      post: /api/v1/TestService:create
+    #################### Metadata ####################
+
+    - selector: blockscout.metadata.v1.Metadata.GetMetadata
+      post: /api/v1/metadata
       body: "*"
 
-    - selector: blockscout.metadata.v1.TestService.TestServiceSearch
-      get: /api/v1/TestService:search
     
     #################### Health ####################
 
