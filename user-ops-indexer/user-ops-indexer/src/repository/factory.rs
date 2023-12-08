@@ -8,7 +8,7 @@ use sea_orm::{
 
 use entity::user_operations::{Column, Entity};
 
-use crate::repository::user_op::user_ops_block_rel;
+use crate::repository::user_op::user_ops_blocks_rel;
 use crate::types::factory::Factory;
 
 #[derive(FromQueryResult, Clone)]
@@ -25,8 +25,9 @@ pub async fn find_factory_by_address(
         .select_only()
         .column(Column::Factory)
         .column_as(Column::Factory.count(), "total_accounts")
-        .join_rev(JoinType::Join, user_ops_block_rel())
+        .join_rev(JoinType::Join, user_ops_blocks_rel())
         .filter(Column::Factory.eq(addr.as_bytes()).into_condition())
+        .group_by(Column::Factory)
         .into_model::<FactoryDB>()
         .one(db)
         .await?
@@ -46,7 +47,7 @@ pub async fn list_factories(
         .select_only()
         .column(Column::Factory)
         .column_as(Column::Factory.count(), "total_accounts")
-        .join_rev(JoinType::Join, user_ops_block_rel())
+        .join_rev(JoinType::Join, user_ops_blocks_rel())
         .filter(Column::Factory.is_not_null().into_condition())
         .group_by(Column::Factory)
         .having(

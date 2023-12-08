@@ -73,16 +73,40 @@ impl UserOps for UserOpsService {
 
     async fn get_bundler(
         &self,
-        _request: Request<GetBundlerRequest>,
+        request: Request<GetBundlerRequest>,
     ) -> Result<Response<Bundler>, Status> {
-        todo!()
+        let inner = request.into_inner();
+
+        let bundler = parse_filter(inner.address)?;
+
+        let bundler = repository::bundler::find_bundler_by_address(&self.db, bundler)
+            .await
+            .map_err(|err| {
+                tracing::error!(error = ?err, "failed to query bundler");
+                Status::internal("failed to query bundler")
+            })?
+            .ok_or(Status::not_found("bundler not found"))?;
+
+        Ok(Response::new(bundler.into()))
     }
 
     async fn get_paymaster(
         &self,
-        _request: Request<GetPaymasterRequest>,
+        request: Request<GetPaymasterRequest>,
     ) -> Result<Response<Paymaster>, Status> {
-        todo!()
+        let inner = request.into_inner();
+
+        let paymaster = parse_filter(inner.address)?;
+
+        let paymaster = repository::paymaster::find_paymaster_by_address(&self.db, paymaster)
+            .await
+            .map_err(|err| {
+                tracing::error!(error = ?err, "failed to query paymaster");
+                Status::internal("failed to query paymaster")
+            })?
+            .ok_or(Status::not_found("paymaster not found"))?;
+
+        Ok(Response::new(paymaster.into()))
     }
 
     async fn get_factory(
@@ -212,16 +236,56 @@ impl UserOps for UserOpsService {
 
     async fn list_bundlers(
         &self,
-        _request: Request<ListBundlersRequest>,
+        request: Request<ListBundlersRequest>,
     ) -> Result<Response<ListBundlersResponse>, Status> {
-        todo!()
+        let inner = request.into_inner();
+
+        let page_token: Option<(u64, Address)> =
+            inner.page_token.map(parse_filter_2).transpose()?;
+        let page_size = normalize_page_size(inner.page_size);
+
+        let (bundlers, next_page_token) =
+            repository::bundler::list_bundlers(&self.db, page_token, page_size)
+                .await
+                .map_err(|err| {
+                    tracing::error!(error = ?err, "failed to query bundlers");
+                    Status::internal("failed to query bundlers")
+                })?;
+
+        let res = ListBundlersResponse {
+            bundlers: bundlers.into_iter().map(|b| b.into()).collect(),
+            next_page_token: next_page_token
+                .map(|(t, f)| format!("{},{}", t, to_checksum(&f, None))),
+        };
+
+        Ok(Response::new(res))
     }
 
     async fn list_paymasters(
         &self,
-        _request: Request<ListPaymastersRequest>,
+        request: Request<ListPaymastersRequest>,
     ) -> Result<Response<ListPaymastersResponse>, Status> {
-        todo!()
+        let inner = request.into_inner();
+
+        let page_token: Option<(u64, Address)> =
+            inner.page_token.map(parse_filter_2).transpose()?;
+        let page_size = normalize_page_size(inner.page_size);
+
+        let (paymasters, next_page_token) =
+            repository::paymaster::list_paymasters(&self.db, page_token, page_size)
+                .await
+                .map_err(|err| {
+                    tracing::error!(error = ?err, "failed to query paymasters");
+                    Status::internal("failed to query paymasters")
+                })?;
+
+        let res = ListPaymastersResponse {
+            paymasters: paymasters.into_iter().map(|b| b.into()).collect(),
+            next_page_token: next_page_token
+                .map(|(t, f)| format!("{},{}", t, to_checksum(&f, None))),
+        };
+
+        Ok(Response::new(res))
     }
 
     async fn list_factories(

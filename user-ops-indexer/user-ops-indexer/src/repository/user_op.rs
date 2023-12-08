@@ -25,7 +25,7 @@ pub struct ListUserOpDB {
     pub timestamp: DateTime,
 }
 
-pub fn user_ops_block_rel() -> RelationDef {
+pub fn user_ops_blocks_rel() -> RelationDef {
     entity::blocks::Entity::belongs_to(Entity)
         .from(entity::blocks::Column::Hash)
         .to(Column::BlockHash)
@@ -96,7 +96,7 @@ pub async fn list_user_ops(
             Column::TxHash,
         ])
         .column(entity::blocks::Column::Timestamp)
-        .join_rev(JoinType::Join, user_ops_block_rel());
+        .join_rev(JoinType::Join, user_ops_blocks_rel());
     if let Some(sender) = sender_filter {
         q = q.filter(Column::Sender.eq(sender.as_bytes()));
     }
