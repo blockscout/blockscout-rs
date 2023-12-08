@@ -25,18 +25,18 @@ WITH account_ops_cte AS (SELECT sender, factory, tx_hash, op_hash, blocks.timest
                          FROM user_operations
                                   JOIN blocks ON blocks.hash = block_hash AND consensus
                          WHERE sender = $1),
-     account_creation_op_cte AS (SELECT DISTINCT ON (sender) sender, factory, tx_hash, timestamp
+     account_creation_op_cte AS (SELECT DISTINCT ON (sender) sender, factory, op_hash, tx_hash, timestamp
                                  FROM account_ops_cte
                                  WHERE factory IS NOT NULL),
      account_total_cte AS (SELECT sender, count(*) as total_ops FROM account_ops_cte GROUP BY sender)
-SELECT account_total_cte.sender    as address,
-       account_total_cte.total_ops as total_ops,
-       account_ops_cte.factory     as factory,
-       account_ops_cte.tx_hash     as creation_tx_hash,
-       account_ops_cte.op_hash     as creation_op_hash,
-       account_ops_cte.timestamp   as creation_timestamp
+SELECT account_total_cte.sender          as address,
+       account_total_cte.total_ops       as total_ops,
+       account_creation_op_cte.factory   as factory,
+       account_creation_op_cte.tx_hash   as creation_tx_hash,
+       account_creation_op_cte.op_hash   as creation_op_hash,
+       account_creation_op_cte.timestamp as creation_timestamp
 FROM account_total_cte,
-     account_ops_cte"#,
+     account_creation_op_cte"#,
         [addr.as_bytes().into()],
     ))
         .one(db)
