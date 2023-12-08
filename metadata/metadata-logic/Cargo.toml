@@ -9,6 +9,7 @@ metadata-entity = { path = "../metadata-entity" }
 ethers = "2.0.0"
 anyhow = "1.0"
 blockscout-display-bytes = "1.0"
+futures = "0.3"
 tracing = "0.1"
 
 sea-orm = { version = "0.12.2", features = [
@@ -22,7 +23,6 @@ sea-orm = { version = "0.12.2", features = [
 ## Uncomment this if needed
 #ethabi = "18.0"
 #ethers-core = "2.0.0"
-#futures = "0.3"
 #hex = "0.4"
 #keccak-hash = "0.10.0"
 #lazy_static = "1"

@@ -24,7 +24,7 @@ pub struct GetMetadataResponse {
     pub reputation: Option<ReputationData>,
 }
 
-#[derive(FromQueryResult, Debug)]
+#[derive(FromQueryResult)]
 pub struct TagData {
     pub slug: String,
     pub name: String,
@@ -33,7 +33,7 @@ pub struct TagData {
     pub meta: JsonValue,
 }
 
-#[derive(FromQueryResult, Debug)]
+#[derive(FromQueryResult)]
 pub struct NoteData {
     pub text: String,
     pub severity: String,
@@ -41,7 +41,7 @@ pub struct NoteData {
     pub meta: JsonValue,
 }
 
-#[derive(FromQueryResult, Debug)]
+#[derive(FromQueryResult)]
 pub struct ReputationData {
     pub score: i32,
 }

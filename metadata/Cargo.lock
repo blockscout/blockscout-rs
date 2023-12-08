@@ -2949,6 +2949,7 @@ dependencies = [
  "blockscout-display-bytes",
  "blockscout-service-launcher",
  "ethers",
+ "futures",
  "metadata-entity",
  "metadata-migration",
  "pretty_assertions",
