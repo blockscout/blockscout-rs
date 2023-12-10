@@ -36,7 +36,6 @@ impl From<VerificationRequest<MultiPartFiles>> for VerifySolidityMultiPartReques
 pub async fn verify(
     mut client: Client,
     request: VerificationRequest<MultiPartFiles>,
-    request_id: blockscout_display_bytes::Bytes,
 ) -> Result<Source, Error> {
     let is_authorized = request.is_authorized;
     let bytecode_type = request.bytecode_type;
@@ -46,10 +45,7 @@ pub async fn verify(
     let verification_metadata = request.metadata.clone();
 
     let request: VerifySolidityMultiPartRequest = request.into();
-    tracing::info!(
-        request_id = request_id.to_string(),
-        "sending request to the verifier"
-    );
+    tracing::info!("sending request to the verifier");
     let response = client
         .solidity_client
         .verify_multi_part(request)
@@ -57,7 +53,6 @@ pub async fn verify(
         .map_err(Error::from)?
         .into_inner();
     tracing::info!(
-        request_id = request_id.to_string(),
         status = response.status,
         message = response.message,
         "response from the verifier"

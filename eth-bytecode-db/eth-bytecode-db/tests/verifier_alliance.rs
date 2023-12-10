@@ -67,8 +67,7 @@ impl VerifierService<VerificationRequest<StandardJson>> for MockSolidityVerifier
         client: Client,
         request: VerificationRequest<StandardJson>,
     ) -> Result<Source, Error> {
-        solidity_standard_json::verify(client, request, blockscout_display_bytes::Bytes::from([]))
-            .await
+        solidity_standard_json::verify(client, request).await
     }
 }
 

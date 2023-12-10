@@ -12,6 +12,7 @@ use eth_bytecode_db::verification::{
     compiler_versions, vyper_multi_part, vyper_standard_json, Client, VerificationRequest,
 };
 use std::collections::HashSet;
+use tracing::instrument;
 
 pub struct VyperVerifierService {
     client: Client,
@@ -34,12 +35,13 @@ impl VyperVerifierService {
 
 #[async_trait]
 impl vyper_verifier_server::VyperVerifier for VyperVerifierService {
+    #[instrument(skip_all)]
     async fn verify_multi_part(
         &self,
         request: tonic::Request<VerifyVyperMultiPartRequest>,
     ) -> Result<tonic::Response<VerifyResponse>, tonic::Status> {
         let (metadata, _, request) = request.into_parts();
-        let request_id = super::trace_verification_request!("Vyper multi-part", &request);
+        super::trace_verification_request!(&request);
 
         let bytecode_type = request.bytecode_type();
         let verification_request = VerificationRequest {
@@ -57,22 +59,18 @@ impl vyper_verifier_server::VyperVerifier for VyperVerifierService {
                 .transpose()?,
             is_authorized: super::is_key_authorized(&self.authorized_keys, metadata)?,
         };
-        let result = vyper_multi_part::verify(
-            self.client.clone(),
-            verification_request,
-            request_id.clone(),
-        )
-        .await;
+        let result = vyper_multi_part::verify(self.client.clone(), verification_request).await;
 
-        verifier_base::process_verification_result(result, request_id)
+        verifier_base::process_verification_result(result)
     }
 
+    #[instrument(skip_all)]
     async fn verify_standard_json(
         &self,
         request: tonic::Request<VerifyVyperStandardJsonRequest>,
     ) -> Result<tonic::Response<VerifyResponse>, tonic::Status> {
         let (metadata, _, request) = request.into_parts();
-        let request_id = super::trace_verification_request!("Vyper standard-json", &request);
+        super::trace_verification_request!(&request);
 
         let bytecode_type = request.bytecode_type();
         let verification_request = VerificationRequest {
@@ -88,16 +86,12 @@ impl vyper_verifier_server::VyperVerifier for VyperVerifierService {
                 .transpose()?,
             is_authorized: super::is_key_authorized(&self.authorized_keys, metadata)?,
         };
-        let result = vyper_standard_json::verify(
-            self.client.clone(),
-            verification_request,
-            request_id.clone(),
-        )
-        .await;
+        let result = vyper_standard_json::verify(self.client.clone(), verification_request).await;
 
-        verifier_base::process_verification_result(result, request_id)
+        verifier_base::process_verification_result(result)
     }
 
+    #[instrument(skip_all)]
     async fn list_compiler_versions(
         &self,
         _request: tonic::Request<ListCompilerVersionsRequest>,
