@@ -1,0 +1,20 @@
+[package]
+name = "conversion-error"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+thiserror = "1"
+cfg-if = "1.0.0"
+
+tonic-0_8 = { package = "tonic", version = "0.8", optional = true }
+
+[features]
+tonic = []
+
+tonic-0_8 = [
+    "dep:tonic-0_8",
+    "tonic",
+]
