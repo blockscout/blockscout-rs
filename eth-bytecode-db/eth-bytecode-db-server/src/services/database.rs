@@ -1,10 +1,10 @@
 use crate::{
     proto::{
         database_server::Database, BytecodeType, SearchAllSourcesRequest, SearchAllSourcesResponse,
-        SearchSourcesRequest, SearchSourcesResponse, SearchSourcifySourcesRequest, Source,
-        VerifyResponse,
+        SearchEventDescriptionsRequest, SearchEventDescriptionsResponse, SearchSourcesRequest,
+        SearchSourcesResponse, SearchSourcifySourcesRequest, Source, VerifyResponse,
     },
-    types::{BytecodeTypeWrapper, SourceWrapper, VerifyResponseWrapper},
+    types::{BytecodeTypeWrapper, EventDescriptionWrapper, SourceWrapper, VerifyResponseWrapper},
 };
 use amplify::Wrapper;
 use async_trait::async_trait;
@@ -14,6 +14,7 @@ use eth_bytecode_db::{
     verification,
     verification::sourcify_from_etherscan,
 };
+use ethers::types::H256;
 use std::str::FromStr;
 
 pub struct DatabaseService {
@@ -117,6 +118,29 @@ impl Database for DatabaseService {
         let response = SearchAllSourcesResponse {
             eth_bytecode_db_sources,
             sourcify_sources: sourcify_source.map_or(vec![], |source| vec![source]),
+        };
+
+        Ok(tonic::Response::new(response))
+    }
+
+    async fn search_event_descriptions(
+        &self,
+        request: tonic::Request<SearchEventDescriptionsRequest>,
+    ) -> Result<tonic::Response<SearchEventDescriptionsResponse>, tonic::Status> {
+        let request = request.into_inner();
+        let selector = H256::from_str(&request.selector).map_err(|err| {
+            tonic::Status::invalid_argument(format!("selector is not valid: {err}"))
+        })?;
+        let event_descriptions =
+            search::find_event_descriptions(self.client.db_client.as_ref(), selector)
+                .await
+                .map_err(|err| tonic::Status::internal(err.to_string()))?;
+
+        let response = SearchEventDescriptionsResponse {
+            event_descriptions: event_descriptions
+                .into_iter()
+                .map(|event| EventDescriptionWrapper::from(event).into())
+                .collect(),
         };
 
         Ok(tonic::Response::new(response))

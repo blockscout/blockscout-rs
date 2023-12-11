@@ -15,6 +15,7 @@ mod m20230509_132647_add_not_null_constraint_parts_data_text_column;
 mod m20230510_151046_add_search_speedup_indexes_on_parts;
 mod m20230531_191321_update_parts_data_text_prefix_index_to_150_chars;
 mod m20230911_103441_update_sources_add_verification_artifact_columns;
+mod m20231210_129532_create_event_descriptions_table;
 
 pub struct Migrator;
 
@@ -36,6 +37,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20230510_151046_add_search_speedup_indexes_on_parts::Migration),
             Box::new(m20230531_191321_update_parts_data_text_prefix_index_to_150_chars::Migration),
             Box::new(m20230911_103441_update_sources_add_verification_artifact_columns::Migration),
+            Box::new(m20231210_129532_create_event_descriptions_table::Migration),
         ]
     }
 }

@@ -3,7 +3,7 @@ config_version: 3
 
 http:
   rules:
-    #################### SolidityVerifier ####################
+    #################### Database ####################
 
     - selector: blockscout.ethBytecodeDb.v2.Database.SearchSources
       post: /api/v2/bytecodes/sources:search
@@ -16,6 +16,13 @@ http:
     - selector: blockscout.ethBytecodeDb.v2.Database.SearchAllSources
       post: /api/v2/bytecodes/sources:search-all
       body: "*"
+
+    - selector: blockscout.ethBytecodeDb.v2.Database.SearchEventDescriptions
+      post: /api/v2/event-descriptions:search
+      body: "*"
+
+    - selector: blockscout.ethBytecodeDb.v2.Database.SearchEventDescriptions
+      get: /api/v2/event-descriptions:search
 
     #################### SolidityVerifier ####################
 

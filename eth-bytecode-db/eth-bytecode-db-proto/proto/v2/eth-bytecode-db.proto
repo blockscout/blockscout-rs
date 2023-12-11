@@ -10,6 +10,8 @@ service Database {
   rpc SearchSourcifySources(SearchSourcifySourcesRequest) returns (SearchSourcesResponse) {}
 
   rpc SearchAllSources(SearchAllSourcesRequest) returns (SearchAllSourcesResponse) {}
+
+  rpc SearchEventDescriptions(SearchEventDescriptionsRequest) returns (SearchEventDescriptionsResponse) {}
 }
 
 service SolidityVerifier {
@@ -229,6 +231,25 @@ message SearchAllSourcesResponse {
   repeated Source eth_bytecode_db_sources = 1;
 
   repeated Source sourcify_sources = 2;
+}
+
+message SearchEventDescriptionsRequest {
+  /// For non-anonymous events, this is a bytes32 value
+  /// containing the keccak256 hash of the event signature,
+  /// as used in the default topic.
+  string selector = 1;
+}
+
+message SearchEventDescriptionsResponse {
+  message EventDescription {
+    /// Will always be "event"
+    string type = 1;
+    /// The name of the event
+    string name = 2;
+    /// Json encoded array of objects each describing one of the event arguments
+    string inputs = 3;
+  }
+  repeated EventDescription event_descriptions = 1;
 }
 
 message VerifySourcifyRequest {
