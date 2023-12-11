@@ -8,6 +8,16 @@ pub enum Error {
     InternalError(String),
 }
 
+impl Error {
+    pub fn invalid_argument(message: impl Into<String>) -> Self {
+        Self::InvalidArgument(message.into())
+    }
+
+    pub fn internal_error(message: impl Into<String>) -> Self {
+        Self::InternalError(message.into())
+    }
+}
+
 #[cfg(feature = "tonic")]
 cfg_if::cfg_if! {
     if #[cfg(feature = "tonic-0_8")] {

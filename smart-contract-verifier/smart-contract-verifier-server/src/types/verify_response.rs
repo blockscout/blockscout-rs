@@ -56,7 +56,7 @@ macro_rules! extract_extra_data {
 impl VerifyResponseOk for SoliditySuccess {
     fn result(mut self) -> (Source, ExtraData) {
         let extra_data = extract_extra_data!(self);
-        let source = super::source::from_solidity_success(self);
+        let source = self.into();
 
         (source, extra_data)
     }
@@ -195,9 +195,7 @@ mod tests {
         let expected = VerifyResponse {
             message: "OK".to_string(),
             status: Status::Success.into(),
-            source: Some(super::super::source::from_solidity_success(
-                verification_success,
-            )),
+            source: Some(verification_success.into()),
             extra_data: Some(ExtraData {
                 local_creation_input_parts: vec![],
                 local_deployed_bytecode_parts: vec![],

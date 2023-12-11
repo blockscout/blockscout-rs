@@ -1,6 +1,6 @@
 use crate::proto::{source, Source};
 use blockscout_display_bytes::Bytes as DisplayBytes;
-use smart_contract_verifier::{vyper, MatchType, SoliditySuccess, SourcifySuccess, VyperSuccess};
+use smart_contract_verifier::{vyper, MatchType, SourcifySuccess, VyperSuccess};
 use std::sync::Arc;
 
 macro_rules! from_success {
@@ -38,27 +38,6 @@ macro_rules! from_success {
             ),
         }
     }};
-}
-
-pub fn from_solidity_success(value: SoliditySuccess) -> Source {
-    let source_type = match value.compiler_input.language.as_str() {
-        "Solidity" => source::SourceType::Solidity,
-        "Yul" => source::SourceType::Yul,
-        _ => source::SourceType::Unspecified,
-    };
-    let extract_source_files = |compiler_input: ethers_solc::CompilerInput| {
-        compiler_input
-            .sources
-            .into_iter()
-            .map(|(path, source)| {
-                // Similar to `unwrap_or_clone` which is still nightly-only feature.
-                let content =
-                    Arc::try_unwrap(source.content).unwrap_or_else(|content| (*content).clone());
-                (path.to_string_lossy().to_string(), content)
-            })
-            .collect()
-    };
-    from_success!(value, source_type, extract_source_files)
 }
 
 pub fn from_vyper_success(value: VyperSuccess) -> Source {
@@ -109,72 +88,12 @@ pub fn from_sourcify_success(value: SourcifySuccess) -> Source {
 mod tests {
     use super::*;
     use ethers_solc::{
-        artifacts::{self, Libraries, Optimizer},
+        artifacts::{self},
         EvmVersion,
     };
     use pretty_assertions::assert_eq;
     use smart_contract_verifier::{vyper, Version};
     use std::{collections::BTreeMap, str::FromStr};
-
-    #[test]
-    fn test_from_solidity_success() {
-        let compiler_settings = ethers_solc::artifacts::Settings {
-            optimizer: Optimizer {
-                enabled: Some(true),
-                runs: Some(200),
-                ..Default::default()
-            },
-            evm_version: Some(EvmVersion::London),
-            libraries: Libraries {
-                libs: BTreeMap::from([(
-                    "lib_path".into(),
-                    BTreeMap::from([("lib_name".into(), "lib_address".into())]),
-                )]),
-            },
-            ..Default::default()
-        };
-        let verification_success = SoliditySuccess {
-            compiler_input: ethers_solc::CompilerInput {
-                language: "Solidity".to_string(),
-                sources: BTreeMap::from([("file_name".into(), artifacts::Source::new("content"))]),
-                settings: compiler_settings.clone(),
-            },
-            compiler_output: Default::default(),
-            compiler_version: Version::from_str("v0.8.17+commit.8df45f5f").unwrap(),
-            file_path: "file_name".to_string(),
-            contract_name: "contract_name".to_string(),
-            abi: Some(serde_json::Value::Object(Default::default())),
-            constructor_args: Some(DisplayBytes::from_str("0x123456").unwrap()),
-            local_bytecode_parts: Default::default(),
-            match_type: MatchType::Partial,
-            compilation_artifacts: serde_json::json!({"abi": []}),
-            creation_input_artifacts: serde_json::json!({"sourceMap": "-1:-1:0:-;;;;;:::-;;:::-;:::-;;;;;;;;;:::-;"}),
-            deployed_bytecode_artifacts: serde_json::json!({"sourceMap": "1704:475;;;;:::-;-1:-1;;;;;;:::-;;"}),
-        };
-
-        let result = from_solidity_success(verification_success);
-
-        let expected = Source {
-            file_name: "file_name".to_string(),
-            contract_name: "contract_name".to_string(),
-            compiler_version: "v0.8.17+commit.8df45f5f".to_string(),
-            compiler_settings: serde_json::to_string(&compiler_settings).unwrap(),
-            source_type: source::SourceType::Solidity.into(),
-            source_files: BTreeMap::from([("file_name".into(), "content".into())]),
-            constructor_arguments: Some("0x123456".into()),
-            abi: Some("{}".to_string()),
-            match_type: source::MatchType::Partial.into(),
-            compilation_artifacts: Some("{\"abi\":[]}".into()),
-            creation_input_artifacts: Some(
-                "{\"sourceMap\":\"-1:-1:0:-;;;;;:::-;;:::-;:::-;;;;;;;;;:::-;\"}".into(),
-            ),
-            deployed_bytecode_artifacts: Some(
-                "{\"sourceMap\":\"1704:475;;;;:::-;-1:-1;;;;;;:::-;;\"}".into(),
-            ),
-        };
-
-        assert_eq!(expected, result);
-    }
 
     #[test]
     fn test_from_vyper_success() {
