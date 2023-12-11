@@ -22,22 +22,26 @@ impl tracing_actix_web::RootSpanBuilder for CompactRootSpanBuilder {
             duration = tracing::field::Empty,
             unit = tracing::field::Empty
         );
-        REQUEST_TIMINGS
-            .lock()
-            .unwrap()
-            .insert(span.id().unwrap(), Instant::now());
+        // Will be none if tracing subscriber is not initialized
+        if let Some(span_id) = span.id() {
+            REQUEST_TIMINGS
+                .lock()
+                .unwrap()
+                .insert(span_id, Instant::now());
+        }
         span
     }
 
     fn on_request_end<B: MessageBody>(span: Span, outcome: &Result<ServiceResponse<B>, Error>) {
-        let duration = Instant::now()
-            - REQUEST_TIMINGS
-                .lock()
-                .unwrap()
-                .remove(&span.id().unwrap())
-                .unwrap();
-        span.record("duration", duration.as_micros());
-        span.record("unit", "microsecond");
+        // Will be none if tracing subscriber is not initialized
+        if let Some(span_id) = span.id() {
+            let start = REQUEST_TIMINGS.lock().unwrap().remove(&span_id);
+            if let Some(start) = start {
+                let duration = Instant::now() - start;
+                span.record("duration", duration.as_micros());
+                span.record("unit", "microsecond");
+            }
+        }
 
         match &outcome {
             Ok(response) => {
