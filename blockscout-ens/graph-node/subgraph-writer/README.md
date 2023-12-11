@@ -2,7 +2,7 @@
 # Howto create subgraph for your domain name protocol
 
 The first thing to note is that the closer your protocol is to **ENS**, the easier it will be to create a blockscout-compatible subgraph.
-We take initial structure from [ENS subgraph](github.com/ensdomains/ens-subgraph).
+We take initial structure from [ENS subgraph](https://github.com/ensdomains/ens-subgraph).
 You can take a look at that subgraph and understand structure of our project more precisely.
 
 1. Install [just](https://github.com/casey/just). `Just` is like cmake but better.
@@ -38,6 +38,8 @@ You can take a look at that subgraph and understand structure of our project mor
     ```
 
     In case of any error, adjust typescript code of subgraph. Also make sure subgraph handles events properly.
+
+1. Write your mappings: [official subgraph guide](https://thegraph.com/docs/en/developing/creating-a-subgraph/#writing-mappings). You have to handle events of your protocol properly in order to index all blockchain data. You can use default mapping from generated template, however make sure that code is written correctly.
 
 1. Now build subgraph code
   
