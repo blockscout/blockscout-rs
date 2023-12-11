@@ -16,6 +16,7 @@ use crate::{
 use blockscout_service_launcher::{database, launcher, launcher::LaunchSettings, tracing};
 use eth_bytecode_db::verification::Client;
 use migration::Migrator;
+use sea_orm::ConnectOptions;
 use std::{collections::HashSet, sync::Arc};
 
 const SERVICE_NAME: &str = "eth_bytecode_db";
@@ -76,8 +77,11 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let health = Arc::new(HealthService::default());
 
+    let mut connect_options = ConnectOptions::new(settings.database.url);
+    connect_options.sqlx_logging_level(::tracing::log::LevelFilter::Debug);
+
     let db_connection = database::initialize_postgres::<Migrator>(
-        &settings.database.url,
+        connect_options,
         settings.database.create_database,
         settings.database.run_migrations,
     )
