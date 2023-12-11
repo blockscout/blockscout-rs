@@ -39,7 +39,7 @@ You can take a look at that subgraph and understand structure of our project mor
 
     In case of any error, adjust typescript code of subgraph. Also make sure subgraph handles events properly.
 
-1. Write your mappings: [official subgraph guide](https://thegraph.com/docs/en/developing/creating-a-subgraph/#writing-mappings). You have to handle events of your protocol properly in order to index all blockchain data. You can use default mapping from generated template, however make sure that code is written correctly.
+1. Write your mappings: read [official subgraph guide](https://thegraph.com/docs/en/developing/creating-a-subgraph/#writing-mappings). You have to handle events of your protocol properly in order to index all blockchain data. You can use default mapping from generated template, however make sure that code is written correctly.
 
 1. Now build subgraph code
   
@@ -47,4 +47,4 @@ You can take a look at that subgraph and understand structure of our project mor
     just build
     ```
 
-1. Now you should run your subgraph by submitting it to graph-node: [Subgraphs: deploy](../subgraphs/README.md#deploy-subgraph-to-graph-node)
+1. Now you should run your subgraph by submitting it to graph-node: read [deploy subgraphs to graph-node](../subgraphs/README.md#deploy-subgraph-to-graph-node)

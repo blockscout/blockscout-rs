@@ -29,7 +29,7 @@ Read guide [How to add new subgraph](../subgraph-writer/README.md)
     kubectl port-forward -n graph-node svc/graph-node 8020:8020
     ```
 
-    Or you can run your own `graph-node` using docker: [Graph-node: start locally](../README.md#start-locally)
+    Or you can run your own `graph-node` using docker: read [graph-node: start locally](../README.md#start-locally)
 
 1. Create subgraph on graph-node
 
@@ -62,4 +62,4 @@ Read guide [How to add new subgraph](../subgraph-writer/README.md)
         limit 100;
         ```
 
-   + Run `bens-server` API and send requests to check results of subgraph: [Bens-server](../../bens-server/README.md)
+   + Run `bens-server` API and send requests to check results of subgraph: read [bens-server docs](../../bens-server/README.md)
