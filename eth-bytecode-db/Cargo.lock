@@ -857,7 +857,7 @@ dependencies = [
 [[package]]
 name = "blockscout-service-launcher"
 version = "0.9.0"
-source = "git+https://github.com/blockscout/blockscout-rs/?branch=rimrakhimov/verifier/tracing-logs#cdf95f704c94cdad84e4fa3b6143c46a2c948e2e"
+source = "git+https://github.com/blockscout/blockscout-rs/?branch=rimrakhimov/verifier/tracing-logs#a9fc8f1e69dea2383a6fa41d50348c4d1b324545"
 dependencies = [
  "actix-cors",
  "actix-web",
