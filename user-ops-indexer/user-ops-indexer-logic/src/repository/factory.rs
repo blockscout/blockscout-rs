@@ -1,15 +1,12 @@
 use ethers::prelude::Address;
-use sea_orm::prelude::Expr;
-use sea_orm::sea_query::IntoCondition;
 use sea_orm::{
-    ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, IntoSimpleExpr, JoinType,
-    QueryFilter, QueryOrder, QuerySelect,
+    prelude::Expr, sea_query::IntoCondition, ColumnTrait, DatabaseConnection, EntityTrait,
+    FromQueryResult, IntoSimpleExpr, JoinType, QueryFilter, QueryOrder, QuerySelect,
 };
 
 use entity::user_operations::{Column, Entity};
 
-use crate::repository::user_op::user_ops_blocks_rel;
-use crate::types::factory::Factory;
+use crate::{repository::user_op::user_ops_blocks_rel, types::factory::Factory};
 
 #[derive(FromQueryResult, Clone)]
 pub struct FactoryDB {

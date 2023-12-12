@@ -1,6 +1,5 @@
 use ethers::prelude::{Address, H256};
-use sea_orm::prelude::DateTime;
-use sea_orm::{ConnectionTrait, DatabaseConnection, FromQueryResult, Statement};
+use sea_orm::{prelude::DateTime, ConnectionTrait, DatabaseConnection, FromQueryResult, Statement};
 
 use crate::types::bundle::Bundle;
 
@@ -61,10 +60,10 @@ LIMIT $6"#,
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
     use super::*;
     use crate::repository::tests::get_shared_db;
     use pretty_assertions::assert_eq;
+    use std::str::FromStr;
 
     #[tokio::test]
     async fn list_bundles_ok() {
@@ -74,20 +73,27 @@ mod tests {
         assert_eq!(items.len(), 100);
         assert_ne!(next_page_token, None);
 
-        let entrypoint = Some(Address::from_str("0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789").unwrap());
+        let entrypoint =
+            Some(Address::from_str("0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789").unwrap());
         let bundler = Some(Address::from_low_u64_be(0x0105));
 
-        let (items, next_page_token) = list_bundles(&db, None, entrypoint, None, 100).await.unwrap();
+        let (items, next_page_token) = list_bundles(&db, None, entrypoint, None, 100)
+            .await
+            .unwrap();
         assert_eq!(items.len(), 100);
         assert_ne!(next_page_token, None);
-        let (items, next_page_token) = list_bundles(&db, bundler, entrypoint, None, 100).await.unwrap();
+        let (items, next_page_token) = list_bundles(&db, bundler, entrypoint, None, 100)
+            .await
+            .unwrap();
         assert_eq!(items.len(), 100);
         assert_eq!(next_page_token, None);
         assert!(items.iter().all(|a| Some(a.bundler) == bundler));
         let (items, next_page_token) = list_bundles(&db, bundler, None, None, 100).await.unwrap();
         assert_eq!(items.len(), 100);
         assert_eq!(next_page_token, None);
-        let (items, next_page_token) = list_bundles(&db, bundler, bundler, None, 100).await.unwrap();
+        let (items, next_page_token) = list_bundles(&db, bundler, bundler, None, 100)
+            .await
+            .unwrap();
         assert_eq!(items.len(), 0);
         assert_eq!(next_page_token, None);
     }

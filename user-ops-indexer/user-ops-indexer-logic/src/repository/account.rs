@@ -1,6 +1,5 @@
 use ethers::prelude::Address;
-use sea_orm::prelude::DateTime;
-use sea_orm::{ConnectionTrait, DatabaseConnection, FromQueryResult, Statement};
+use sea_orm::{prelude::DateTime, ConnectionTrait, DatabaseConnection, FromQueryResult, Statement};
 
 use crate::types::account::Account;
 

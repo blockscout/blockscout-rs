@@ -1,8 +1,8 @@
 use blockscout_db::entity::blocks;
 use ethers::prelude::{Address, H256};
-use sea_orm::prelude::DateTime;
-use sea_orm::sea_query::{Expr, IntoCondition, OnConflict};
 use sea_orm::{
+    prelude::DateTime,
+    sea_query::{Expr, IntoCondition, OnConflict},
     ActiveValue, ColumnTrait, ConnectionTrait, DatabaseConnection, DbBackend, EntityTrait,
     FromQueryResult, IntoSimpleExpr, Iterable, JoinType, QueryFilter, QueryOrder, QuerySelect,
     QueryTrait, RelationDef, Statement,

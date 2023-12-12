@@ -1,8 +1,10 @@
 use std::str::FromStr;
 
-use ethers::abi::{AbiEncode, Address};
-use ethers::prelude::H256;
-use ethers::utils::to_checksum;
+use ethers::{
+    abi::{AbiEncode, Address},
+    prelude::H256,
+    utils::to_checksum,
+};
 use sea_orm::DatabaseConnection;
 use tonic::{Request, Response, Status};
 

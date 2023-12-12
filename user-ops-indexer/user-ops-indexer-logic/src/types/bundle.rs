@@ -1,6 +1,5 @@
 use ethers::prelude::{Address, H256};
-use ethers_core::abi::AbiEncode;
-use ethers_core::utils::to_checksum;
+use ethers_core::{abi::AbiEncode, utils::to_checksum};
 
 pub use entity::sea_orm_active_enums::SponsorType;
 

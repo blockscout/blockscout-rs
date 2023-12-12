@@ -1,5 +1,4 @@
-use blockscout_service_launcher::database;
-use blockscout_service_launcher::launcher::ConfigSettings;
+use blockscout_service_launcher::{database, launcher::ConfigSettings};
 use migration::Migrator;
 use user_ops_indexer_server::{run_indexer, run_server, Settings};
 

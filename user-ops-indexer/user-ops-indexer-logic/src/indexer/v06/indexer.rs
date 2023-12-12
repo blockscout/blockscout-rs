@@ -1,23 +1,25 @@
-use std::future;
-use std::ops::Div;
-use std::time::Duration;
+use std::{future, ops::Div, time::Duration};
 
 use anyhow::{anyhow, bail};
 use ethers::prelude::{BigEndianHash, EthEvent, Middleware, Provider, Ws};
-use ethers_core::abi::{AbiDecode, AbiEncode};
-use ethers_core::types::{Action, Address, Bytes, Filter, Log};
+use ethers_core::{
+    abi::{AbiDecode, AbiEncode},
+    types::{Action, Address, Bytes, Filter, Log},
+};
 use futures::{stream, StreamExt};
 use keccak_hash::H256;
 use sea_orm::DatabaseConnection;
 use tokio::time::sleep;
 
-use crate::indexer::v06::constants::{
-    matches_entrypoint_event, parse_event, BeforeExecutionFilter, DepositedFilter,
-    HandleAggregatedOpsCall, HandleOpsCall, IEntrypointV06Calls, UserOperation,
-    UserOperationEventFilter, UserOperationRevertReasonFilter, ENTRYPOINT_V06,
+use crate::{
+    indexer::v06::constants::{
+        matches_entrypoint_event, parse_event, BeforeExecutionFilter, DepositedFilter,
+        HandleAggregatedOpsCall, HandleOpsCall, IEntrypointV06Calls, UserOperation,
+        UserOperationEventFilter, UserOperationRevertReasonFilter, ENTRYPOINT_V06,
+    },
+    repository,
+    types::user_op::{SponsorType, UserOp},
 };
-use crate::repository;
-use crate::types::user_op::{SponsorType, UserOp};
 
 pub struct RawUserOperation {
     pub user_op: UserOperation,

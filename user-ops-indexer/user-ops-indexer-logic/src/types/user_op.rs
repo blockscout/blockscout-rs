@@ -1,15 +1,12 @@
 use ethers::prelude::{Address, Bytes, H256, U256};
-use ethers_core::abi::AbiEncode;
-use ethers_core::utils::to_checksum;
+use ethers_core::{abi::AbiEncode, utils::to_checksum};
 use num_traits::cast::ToPrimitive;
-use sea_orm::prelude::BigDecimal;
-use sea_orm::ActiveEnum;
+use sea_orm::{prelude::BigDecimal, ActiveEnum};
 
 pub use entity::sea_orm_active_enums::SponsorType;
 use entity::user_operations::Model;
 
-use crate::repository::user_op::ListUserOpDB;
-use crate::types::common::u256_to_decimal;
+use crate::{repository::user_op::ListUserOpDB, types::common::u256_to_decimal};
 
 #[derive(Clone)]
 pub struct UserOp {
