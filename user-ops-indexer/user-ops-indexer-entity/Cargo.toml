@@ -1,5 +1,5 @@
 [package]
-name = "entity"
+name = "user-ops-indexer-entity"
 version = "0.0.0"
 edition = "2021"
 publish = false

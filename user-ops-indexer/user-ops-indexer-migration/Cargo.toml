@@ -1,5 +1,5 @@
 [package]
-name = "migration"
+name = "user-ops-indexer-migration"
 version = "0.0.0"
 edition = "2021"
 publish = false

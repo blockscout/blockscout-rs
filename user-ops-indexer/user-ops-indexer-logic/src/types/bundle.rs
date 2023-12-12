@@ -6,7 +6,7 @@ pub use entity::sea_orm_active_enums::SponsorType;
 
 use crate::repository::bundle::BundleDB;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Bundle {
     pub tx_hash: H256,
     pub bundle_index: u64,

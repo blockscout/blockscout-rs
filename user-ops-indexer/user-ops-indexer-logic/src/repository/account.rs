@@ -35,8 +35,8 @@ SELECT account_total_cte.sender          as address,
        account_creation_op_cte.tx_hash   as creation_tx_hash,
        account_creation_op_cte.op_hash   as creation_op_hash,
        account_creation_op_cte.timestamp as creation_timestamp
-FROM account_total_cte,
-     account_creation_op_cte"#,
+FROM account_total_cte
+         LEFT JOIN account_creation_op_cte ON account_total_cte.sender = account_creation_op_cte.sender"#,
         [addr.as_bytes().into()],
     ))
         .one(db)
@@ -95,5 +95,69 @@ FROM accounts_cte
     match accounts.get(limit as usize) {
         Some(a) => Ok((accounts[0..limit as usize].to_vec(), Some(a.address))),
         None => Ok((accounts, None)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::repository::tests::get_shared_db;
+    use keccak_hash::H256;
+    use pretty_assertions::assert_eq;
+
+    #[tokio::test]
+    async fn find_account_by_address_ok() {
+        let db = get_shared_db().await;
+
+        let addr = Address::from_low_u64_be(0xffff);
+        let item = find_account_by_address(&db, addr).await.unwrap();
+        assert_eq!(item, None);
+
+        let addr = Address::from_low_u64_be(0x0102);
+        let item = find_account_by_address(&db, addr).await.unwrap();
+        assert_eq!(
+            item,
+            Some(Account {
+                address: addr,
+                factory: None,
+                creation_tx_hash: None,
+                creation_op_hash: None,
+                creation_timestamp: None,
+                total_ops: 100,
+            })
+        );
+
+        let addr = Address::from_low_u64_be(0x3202);
+        let item = find_account_by_address(&db, addr).await.unwrap();
+        assert_eq!(
+            item,
+            Some(Account {
+                address: addr,
+                factory: Some(Address::from_low_u64_be(0xf1)),
+                creation_tx_hash: Some(H256::from_low_u64_be(0x3204)),
+                creation_op_hash: Some(H256::from_low_u64_be(0x3201)),
+                creation_timestamp: Some(1704067260),
+                total_ops: 100,
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn list_accounts_ok() {
+        let db = get_shared_db().await;
+
+        let (items, next_page_token) = list_accounts(&db, None, None, 60).await.unwrap();
+        assert_eq!(items.len(), 60);
+        assert_ne!(next_page_token, None);
+
+        let (items, next_page_token) = list_accounts(&db, None, next_page_token, 60).await.unwrap();
+        assert_eq!(items.len(), 40);
+        assert_eq!(next_page_token, None);
+
+        let factory = Some(Address::from_low_u64_be(0xf1));
+        let (items, next_page_token) = list_accounts(&db, factory, None, 60).await.unwrap();
+        assert_eq!(items.len(), 10);
+        assert_eq!(next_page_token, None);
+        assert!(items.iter().all(|a| a.factory == factory))
     }
 }

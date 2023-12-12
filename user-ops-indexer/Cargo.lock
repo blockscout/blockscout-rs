@@ -1716,13 +1716,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "entity"
-version = "0.0.0"
-dependencies = [
- "sea-orm",
-]
-
-[[package]]
 name = "equivalent"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3111,14 +3104,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a634b1c61a95585bd15607c6ab0c4e5b226e695ff2800ba0cdccddf208c406c"
 dependencies = [
  "autocfg",
-]
-
-[[package]]
-name = "migration"
-version = "0.0.0"
-dependencies = [
- "async-std",
- "sea-orm-migration",
 ]
 
 [[package]]
@@ -5282,24 +5267,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4dccd0940a2dcdf68d092b8cbab7dc0ad8fa938bf95787e1b916b0e3d0e8e970"
 
 [[package]]
-name = "smart-contract-verifier-proto"
-version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs?rev=2480b20#2480b20c70436373d9a8de39e77118651f2ac53f"
-dependencies = [
- "actix-prost",
- "actix-prost-build",
- "actix-prost-macros",
- "actix-web",
- "async-trait",
- "prost",
- "prost-build",
- "serde",
- "serde_with",
- "tonic",
- "tonic-build",
-]
-
-[[package]]
 name = "socket2"
 version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6419,6 +6386,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "daf8dba3b7eb870caf1ddeed7bc9d2a049f3cfdfae7cb521b087cc33ae4c49da"
 
 [[package]]
+name = "user-ops-indexer-entity"
+version = "0.0.0"
+dependencies = [
+ "sea-orm",
+]
+
+[[package]]
 name = "user-ops-indexer-logic"
 version = "0.1.0"
 dependencies = [
@@ -6429,7 +6403,6 @@ dependencies = [
  "blockscout-display-bytes",
  "blockscout-service-launcher",
  "bytes",
- "entity",
  "ethabi",
  "ethers",
  "ethers-core",
@@ -6438,7 +6411,6 @@ dependencies = [
  "itertools 0.11.0",
  "keccak-hash",
  "lazy_static",
- "migration",
  "mismatch",
  "mockall",
  "num-traits",
@@ -6450,7 +6422,6 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
- "smart-contract-verifier-proto",
  "solidity-metadata",
  "thiserror",
  "tokio",
@@ -6459,7 +6430,17 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "user-ops-indexer-entity",
+ "user-ops-indexer-migration",
  "user-ops-indexer-proto",
+]
+
+[[package]]
+name = "user-ops-indexer-migration"
+version = "0.0.0"
+dependencies = [
+ "async-std",
+ "sea-orm-migration",
 ]
 
 [[package]]
@@ -6494,7 +6475,6 @@ dependencies = [
  "ethers",
  "hex",
  "keccak-hash",
- "migration",
  "mockall",
  "pretty_assertions",
  "rand",
@@ -6510,6 +6490,7 @@ dependencies = [
  "tonic",
  "tracing",
  "user-ops-indexer-logic",
+ "user-ops-indexer-migration",
  "user-ops-indexer-proto",
  "uuid 1.6.1",
 ]

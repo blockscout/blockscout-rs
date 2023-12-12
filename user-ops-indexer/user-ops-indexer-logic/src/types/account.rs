@@ -6,7 +6,7 @@ pub use entity::sea_orm_active_enums::SponsorType;
 
 use crate::repository::account::AccountDB;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Account {
     pub address: Address,
     pub factory: Option<Address>,

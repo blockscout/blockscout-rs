@@ -7,8 +7,8 @@ edition = "2021"
 
 [dependencies]
 user-ops-indexer-logic = { path = "../user-ops-indexer-logic" }
+user-ops-indexer-migration = { path = "../user-ops-indexer-migration" }
 user-ops-indexer-proto = { path = "../user-ops-indexer-proto" }
-migration = { path = "../user-ops-indexer-migration" }
 
 actix-web = "4.2"
 amplify = { version = "3.13.0", features = ["derive"] }
