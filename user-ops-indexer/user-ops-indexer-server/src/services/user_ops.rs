@@ -6,7 +6,7 @@ use ethers::utils::to_checksum;
 use sea_orm::DatabaseConnection;
 use tonic::{Request, Response, Status};
 
-use user_ops_indexer::repository;
+use user_ops_indexer_logic::repository;
 use user_ops_indexer_proto::blockscout::user_ops_indexer::v1::{
     Account, Bundler, Factory, GetAccountRequest, GetBundlerRequest, GetFactoryRequest,
     GetPaymasterRequest, GetUserOpRequest, ListAccountsRequest, ListAccountsResponse,

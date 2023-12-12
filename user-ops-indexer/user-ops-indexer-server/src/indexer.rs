@@ -14,7 +14,7 @@ pub async fn run(
 
     if settings.indexer.entrypoints.v06 {
         let indexer =
-            user_ops_indexer::indexer::v06::indexer::IndexerV06::new(client, db_connection);
+            user_ops_indexer_logic::indexer::v06::indexer::IndexerV06::new(client, db_connection);
 
         indexer
             .start(

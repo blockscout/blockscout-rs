@@ -6419,7 +6419,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "daf8dba3b7eb870caf1ddeed7bc9d2a049f3cfdfae7cb521b087cc33ae4c49da"
 
 [[package]]
-name = "user-ops-indexer"
+name = "user-ops-indexer-logic"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -6509,7 +6509,7 @@ dependencies = [
  "tokio-stream",
  "tonic",
  "tracing",
- "user-ops-indexer",
+ "user-ops-indexer-logic",
  "user-ops-indexer-proto",
  "uuid 1.6.1",
 ]

@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-user-ops-indexer = { path = "../user-ops-indexer" }
+user-ops-indexer-logic = { path = "../user-ops-indexer-logic" }
 user-ops-indexer-proto = { path = "../user-ops-indexer-proto" }
 migration = { path = "../user-ops-indexer-migration" }
 
