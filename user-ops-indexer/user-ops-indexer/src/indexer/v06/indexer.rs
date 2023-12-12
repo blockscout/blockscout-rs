@@ -1,5 +1,6 @@
 use std::future;
 use std::ops::Div;
+use std::time::Duration;
 
 use anyhow::{anyhow, bail};
 use ethers::prelude::{BigEndianHash, EthEvent, Middleware, Provider, Ws};
@@ -8,6 +9,7 @@ use ethers_core::types::{Action, Address, Bytes, Filter, Log};
 use futures::{stream, StreamExt};
 use keccak_hash::H256;
 use sea_orm::DatabaseConnection;
+use tokio::time::sleep;
 
 use crate::indexer::v06::constants::{
     matches_entrypoint_event, parse_event, BeforeExecutionFilter, DepositedFilter,
@@ -119,8 +121,18 @@ impl IndexerV06 {
 
         stream_txs
             .for_each_concurrent(Some(concurrency as usize), |tx| async move {
-                if let Err(err) = &self.handle_tx(tx).await {
-                    tracing::error!(error = ?err, tx_hash = ?tx, "tx handler failed, skipping");
+                let mut backoff = vec![1, 5, 20].into_iter().map(Duration::from_secs);
+                while let Err(err) = &self.handle_tx(tx).await {
+                    match backoff.next() {
+                        None => {
+                            tracing::error!(error = ?err, tx_hash = ?tx, "tx handler failed, skipping");
+                            break;
+                        }
+                        Some(delay) => {
+                            tracing::error!(error = ?err, tx_hash = ?tx, ?delay, "tx handler failed, retrying");
+                            sleep(delay).await;
+                        }
+                    };
                 }
             })
             .await;
