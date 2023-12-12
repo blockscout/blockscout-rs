@@ -408,7 +408,7 @@ definitions:
   v1ListAccountsResponse:
     type: object
     properties:
-      accounts:
+      items:
         type: array
         items:
           $ref: '#/definitions/v1Account'
@@ -417,7 +417,7 @@ definitions:
   v1ListBundlersResponse:
     type: object
     properties:
-      bundlers:
+      items:
         type: array
         items:
           $ref: '#/definitions/v1Bundler'
@@ -426,7 +426,7 @@ definitions:
   v1ListBundlesResponse:
     type: object
     properties:
-      bundles:
+      items:
         type: array
         items:
           $ref: '#/definitions/v1Bundle'
@@ -435,7 +435,7 @@ definitions:
   v1ListFactoriesResponse:
     type: object
     properties:
-      factories:
+      items:
         type: array
         items:
           $ref: '#/definitions/v1Factory'
@@ -444,7 +444,7 @@ definitions:
   v1ListPaymastersResponse:
     type: object
     properties:
-      paymasters:
+      items:
         type: array
         items:
           $ref: '#/definitions/v1Paymaster'
@@ -468,7 +468,7 @@ definitions:
   v1ListUserOpsResponse:
     type: object
     properties:
-      ops:
+      items:
         type: array
         items:
           $ref: '#/definitions/v1ListUserOp'

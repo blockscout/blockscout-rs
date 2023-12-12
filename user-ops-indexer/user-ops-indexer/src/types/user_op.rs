@@ -2,7 +2,7 @@ use ethers::prelude::{Address, Bytes, H256, U256};
 use ethers_core::abi::AbiEncode;
 use ethers_core::utils::to_checksum;
 use num_traits::cast::ToPrimitive;
-use sea_orm::prelude::Decimal;
+use sea_orm::prelude::BigDecimal;
 use sea_orm::ActiveEnum;
 
 pub use entity::sea_orm_active_enums::SponsorType;
@@ -66,9 +66,9 @@ impl From<UserOp> for Model {
             nonce: v.nonce.as_bytes().to_vec(),
             init_code: v.init_code.clone().map(|a| a.to_vec()),
             call_data: v.call_data.to_vec(),
-            call_gas_limit: Decimal::from(v.call_gas_limit),
-            verification_gas_limit: Decimal::from(v.verification_gas_limit),
-            pre_verification_gas: Decimal::from(v.pre_verification_gas),
+            call_gas_limit: BigDecimal::from(v.call_gas_limit),
+            verification_gas_limit: BigDecimal::from(v.verification_gas_limit),
+            pre_verification_gas: BigDecimal::from(v.pre_verification_gas),
             max_fee_per_gas: u256_to_decimal(v.max_fee_per_gas),
             max_priority_fee_per_gas: u256_to_decimal(v.max_priority_fee_per_gas),
             paymaster_and_data: v.paymaster_and_data.clone().map(|a| a.to_vec()),
@@ -86,9 +86,9 @@ impl From<UserOp> for Model {
             paymaster: v.paymaster.map(|a| a.as_bytes().to_vec()),
             status: v.status,
             revert_reason: v.revert_reason.clone().map(|a| a.to_vec()),
-            gas: Decimal::from(v.gas),
+            gas: BigDecimal::from(v.gas),
             gas_price: u256_to_decimal(v.gas_price),
-            gas_used: Decimal::from(v.gas_used),
+            gas_used: BigDecimal::from(v.gas_used),
             sponsor_type: v.sponsor_type.clone(),
             user_logs_start_index: v.user_logs_start_index as i32,
             user_logs_count: v.user_logs_count as i32,

@@ -74,6 +74,7 @@ pub async fn find_user_op_by_op_hash(
     Ok(user_op)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn list_user_ops(
     db: &DatabaseConnection,
     sender_filter: Option<Address>,
@@ -142,7 +143,7 @@ pub async fn list_user_ops(
         .all(db)
         .await?
         .into_iter()
-        .map(|op| ListUserOp::from(op))
+        .map(ListUserOp::from)
         .collect();
 
     match user_ops.get(limit as usize) {
@@ -169,11 +170,8 @@ pub async fn upsert_many(
     Entity::insert_many(user_ops)
         .on_conflict(
             OnConflict::column(Column::OpHash)
-                .update_columns(Column::iter().filter(|col| match col {
-                    Column::OpHash => false,
-                    Column::CreatedAt => false,
-                    Column::UpdatedAt => false,
-                    _ => true,
+                .update_columns(Column::iter().filter(|col| {
+                    !matches!(col, Column::OpHash | Column::CreatedAt | Column::UpdatedAt)
                 }))
                 .value(Column::UpdatedAt, Expr::current_timestamp())
                 .to_owned(),

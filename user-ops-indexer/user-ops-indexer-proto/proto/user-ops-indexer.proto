@@ -46,7 +46,7 @@ message ListAccountsRequest {
 }
 
 message ListAccountsResponse {
-  repeated Account accounts = 1;
+  repeated Account items = 1;
   optional string next_page_token = 2;
 }
 
@@ -58,7 +58,7 @@ message ListBundlesRequest {
 }
 
 message ListBundlesResponse {
-  repeated Bundle bundles = 1;
+  repeated Bundle items = 1;
   optional string next_page_token = 2;
 }
 
@@ -76,7 +76,7 @@ message ListUserOpsRequest {
 }
 
 message ListUserOpsResponse {
-  repeated ListUserOp ops = 1;
+  repeated ListUserOp items = 1;
   optional string next_page_token = 2;
 }
 
@@ -86,7 +86,7 @@ message ListBundlersRequest {
 }
 
 message ListBundlersResponse {
-  repeated Bundler bundlers = 1;
+  repeated Bundler items = 1;
   optional string next_page_token = 2;
 }
 
@@ -96,7 +96,7 @@ message ListPaymastersRequest {
 }
 
 message ListPaymastersResponse {
-  repeated Paymaster paymasters = 1;
+  repeated Paymaster items = 1;
   optional string next_page_token = 2;
 }
 
@@ -106,7 +106,7 @@ message ListFactoriesRequest {
 }
 
 message ListFactoriesResponse {
-  repeated Factory factories = 1;
+  repeated Factory items = 1;
   optional string next_page_token = 2;
 }
 

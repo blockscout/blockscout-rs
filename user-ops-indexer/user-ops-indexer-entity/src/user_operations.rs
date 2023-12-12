@@ -21,15 +21,15 @@ pub struct Model {
     #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
     pub call_data: Vec<u8>,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))")]
-    pub call_gas_limit: Decimal,
+    pub call_gas_limit: BigDecimal,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))")]
-    pub verification_gas_limit: Decimal,
+    pub verification_gas_limit: BigDecimal,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))")]
-    pub pre_verification_gas: Decimal,
+    pub pre_verification_gas: BigDecimal,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))")]
-    pub max_fee_per_gas: Decimal,
+    pub max_fee_per_gas: BigDecimal,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))")]
-    pub max_priority_fee_per_gas: Decimal,
+    pub max_priority_fee_per_gas: BigDecimal,
     #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
     pub paymaster_and_data: Option<Vec<u8>>,
     #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
@@ -57,11 +57,11 @@ pub struct Model {
     #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
     pub revert_reason: Option<Vec<u8>>,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))")]
-    pub gas: Decimal,
+    pub gas: BigDecimal,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))")]
-    pub gas_price: Decimal,
+    pub gas_price: BigDecimal,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))")]
-    pub gas_used: Decimal,
+    pub gas_used: BigDecimal,
     pub sponsor_type: SponsorType,
     pub user_logs_start_index: i32,
     pub user_logs_count: i32,

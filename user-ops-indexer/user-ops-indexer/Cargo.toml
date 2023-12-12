@@ -6,9 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-entity = { path = "./entity" }
-blockscout-db = { path = "../../libs/blockscout-db" }
+entity = { path = "../user-ops-indexer-entity" }
 user-ops-indexer-proto = { path = "../user-ops-indexer-proto" }
+blockscout-db = { git = "https://github.com/blockscout/blockscout-rs", rev = "bb2eb15" }
 
 atoi = "2.0.0"
 anyhow = "1.0"
@@ -46,7 +46,7 @@ itertools = "0.11.0"
 [dev-dependencies]
 async-trait = "0.1"
 blockscout-service-launcher = { version = "0.9.0", features = ["test-database", "database-0_12"] }
-migration = { path = "./migration" }
+migration = { path = "../user-ops-indexer-migration" }
 mockall = "0.11"
 pretty_assertions = "1.3"
 rstest = "0.18.0"

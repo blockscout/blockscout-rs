@@ -26,7 +26,7 @@ impl From<Bundler> for user_ops_indexer_proto::blockscout::user_ops_indexer::v1:
     fn from(v: Bundler) -> Self {
         Self {
             address: to_checksum(&v.bundler, None),
-            total_bundles: v.total_bundles as u32,
+            total_bundles: v.total_bundles,
             total_ops: v.total_ops,
         }
     }

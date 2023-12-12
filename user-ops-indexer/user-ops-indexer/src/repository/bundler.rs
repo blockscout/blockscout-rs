@@ -63,7 +63,7 @@ LIMIT $3"#,
     .all(db)
     .await?
     .into_iter()
-    .map(|b| Bundler::from(b))
+    .map(Bundler::from)
     .collect();
 
     match bundlers.get(limit as usize) {

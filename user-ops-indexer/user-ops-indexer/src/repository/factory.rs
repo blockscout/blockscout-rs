@@ -62,7 +62,7 @@ pub async fn list_factories(
         .all(db)
         .await?
         .into_iter()
-        .map(|f| Factory::from(f))
+        .map(Factory::from)
         .collect();
 
     match factories.get(limit as usize) {

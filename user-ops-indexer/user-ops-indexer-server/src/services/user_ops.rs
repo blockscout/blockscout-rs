@@ -147,7 +147,7 @@ impl UserOps for UserOpsService {
                 })?;
 
         let res = ListAccountsResponse {
-            accounts: accounts.into_iter().map(|acc| acc.into()).collect(),
+            items: accounts.into_iter().map(|acc| acc.into()).collect(),
             next_page_token: next_page_token.map(|a| to_checksum(&a, None)),
         };
 
@@ -181,7 +181,7 @@ impl UserOps for UserOpsService {
         })?;
 
         let res = ListBundlesResponse {
-            bundles: bundles.into_iter().map(|b| b.into()).collect(),
+            items: bundles.into_iter().map(|b| b.into()).collect(),
             next_page_token: next_page_token
                 .map(|(b, t, i)| format!("{},{},{}", b, t.encode_hex(), i)),
         };
@@ -227,7 +227,7 @@ impl UserOps for UserOpsService {
         })?;
 
         let res = ListUserOpsResponse {
-            ops: ops.into_iter().map(|acc| acc.into()).collect(),
+            items: ops.into_iter().map(|acc| acc.into()).collect(),
             next_page_token: next_page_token.map(|(b, o)| format!("{},{}", b, o.encode_hex())),
         };
 
@@ -253,7 +253,7 @@ impl UserOps for UserOpsService {
                 })?;
 
         let res = ListBundlersResponse {
-            bundlers: bundlers.into_iter().map(|b| b.into()).collect(),
+            items: bundlers.into_iter().map(|b| b.into()).collect(),
             next_page_token: next_page_token
                 .map(|(t, f)| format!("{},{}", t, to_checksum(&f, None))),
         };
@@ -280,7 +280,7 @@ impl UserOps for UserOpsService {
                 })?;
 
         let res = ListPaymastersResponse {
-            paymasters: paymasters.into_iter().map(|b| b.into()).collect(),
+            items: paymasters.into_iter().map(|b| b.into()).collect(),
             next_page_token: next_page_token
                 .map(|(t, f)| format!("{},{}", t, to_checksum(&f, None))),
         };
@@ -307,7 +307,7 @@ impl UserOps for UserOpsService {
                 })?;
 
         let res = ListFactoriesResponse {
-            factories: factories.into_iter().map(|b| b.into()).collect(),
+            items: factories.into_iter().map(|b| b.into()).collect(),
             next_page_token: next_page_token
                 .map(|(t, f)| format!("{},{}", t, to_checksum(&f, None))),
         };

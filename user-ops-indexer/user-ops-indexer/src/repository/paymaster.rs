@@ -67,7 +67,7 @@ pub async fn list_paymasters(
         .all(db)
         .await?
         .into_iter()
-        .map(|p| Paymaster::from(p))
+        .map(Paymaster::from)
         .collect();
 
     match paymasters.get(limit as usize) {

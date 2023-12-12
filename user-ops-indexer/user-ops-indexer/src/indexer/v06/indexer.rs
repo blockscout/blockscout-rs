@@ -112,14 +112,14 @@ impl IndexerV06 {
                     future::ready(Some(None))
                 } else {
                     *prev = tx_hash;
-                    future::ready(Some(Some(tx_hash.clone())))
+                    future::ready(Some(Some(tx_hash)))
                 }
             })
             .filter_map(|tx_hash| async move { tx_hash });
 
         stream_txs
             .for_each_concurrent(Some(concurrency as usize), |tx| async move {
-                if let Err(err) = &self.handle_tx(tx.clone()).await {
+                if let Err(err) = &self.handle_tx(tx).await {
                     tracing::error!(error = ?err, tx_hash = ?tx, "tx handler failed, skipping");
                 }
             })
@@ -192,7 +192,7 @@ impl IndexerV06 {
             )
         }
 
-        let tx_deposits = receipt
+        let tx_deposits: Vec<DepositedFilter> = receipt
             .logs
             .iter()
             .filter_map(|log| parse_event::<DepositedFilter>(log).ok())
@@ -299,7 +299,7 @@ fn build_user_op_model(
     op_index: u64,
     raw_user_op: RawUserOperation,
     logs: &[Log],
-    tx_deposits: &Vec<DepositedFilter>,
+    tx_deposits: &[DepositedFilter],
 ) -> anyhow::Result<UserOp> {
     let user_op_log = logs.last().ok_or(anyhow!("last log missing"))?;
     let user_op_event = parse_event::<UserOperationEventFilter>(user_op_log)?;
@@ -379,7 +379,7 @@ fn build_user_op_model(
             + verification_gas_limit,
         gas_price: user_op_event
             .actual_gas_cost
-            .div(user_op_event.actual_gas_used.clone()),
+            .div(user_op_event.actual_gas_used),
         gas_used: user_op_event.actual_gas_used.as_u64(),
         sponsor_type,
         user_logs_start_index: logs
