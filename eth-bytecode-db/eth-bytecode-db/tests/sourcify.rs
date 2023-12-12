@@ -64,3 +64,11 @@ fn service() -> MockSourcifyVerifierService {
 async fn returns_valid_source(service: MockSourcifyVerifierService) {
     verification_test_helpers::test_returns_valid_source(DB_PREFIX, service).await
 }
+
+#[rstest]
+#[tokio::test]
+#[ignore = "Needs database to run"]
+async fn test_verification_inserts_event_descriptions() {
+    verification_test_helpers::test_verification_inserts_event_descriptions(DB_PREFIX, service)
+        .await;
+}

@@ -74,28 +74,6 @@ paths:
       tags:
         - Database
   /api/v2/event-descriptions:search:
-    get:
-      operationId: Database_SearchEventDescriptions2
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v2SearchEventDescriptionsResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/googlerpcStatus'
-      parameters:
-        - name: selector
-          description: |-
-            / For non-anonymous events, this is a bytes32 value
-            / containing the keccak256 hash of the event signature,
-            / as used in the default topic.
-          in: query
-          required: false
-          type: string
-      tags:
-        - Database
     post:
       operationId: Database_SearchEventDescriptions
       responses:

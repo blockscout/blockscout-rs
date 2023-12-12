@@ -12,9 +12,9 @@ pub async fn find_event_descriptions<C>(
 where
     C: ConnectionTrait + TransactionTrait,
 {
-    Ok(events::Entity::find()
+    events::Entity::find()
         .filter(events::Column::Selector.eq(selector.as_bytes().to_vec()))
         .all(db)
         .await
-        .context("extracting events from the database")?)
+        .context("extracting events from the database")
 }

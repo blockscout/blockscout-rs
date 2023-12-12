@@ -9,7 +9,8 @@ use eth_bytecode_db::{verification, verification::MatchType};
 use eth_bytecode_db_proto::blockscout::eth_bytecode_db::{
     v2 as eth_bytecode_db_v2,
     v2::{
-        SearchAllSourcesRequest, SearchAllSourcesResponse, SearchSourcesResponse,
+        search_event_descriptions_response, SearchAllSourcesRequest, SearchAllSourcesResponse,
+        SearchEventDescriptionsRequest, SearchEventDescriptionsResponse, SearchSourcesResponse,
         SearchSourcifySourcesRequest, Source,
     },
 };
@@ -311,4 +312,53 @@ async fn search_sources_returns_latest_contract() {
 #[tokio::test]
 #[timeout(std::time::Duration::from_secs(60))]
 #[ignore = "Needs database to run"]
-async fn search_event_descriptions() {}
+async fn search_event_descriptions() {
+    const ROUTE: &str = "/api/v2/event-descriptions:search";
+
+    let db = init_db(TEST_SUITE_NAME, "search_event_descriptions").await;
+
+    let abi = r#"[{"inputs":[{"internalType":"uint256","name":"val","type":"uint256"}],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"uint256","name":"a","type":"uint256"}],"name":"A","type":"event"},{"anonymous":true,"inputs":[{"indexed":false,"internalType":"uint256","name":"start","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"middle","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"end","type":"uint256"}],"name":"Anonymous","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"string","name":"a","type":"string"},{"indexed":true,"internalType":"uint256","name":"b","type":"uint256"},{"indexed":true,"internalType":"uint256","name":"c","type":"uint256"},{"indexed":true,"internalType":"bytes","name":"d","type":"bytes"}],"name":"B","type":"event"},{"stateMutability":"payable","type":"fallback"},{"inputs":[],"name":"f","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"stateMutability":"payable","type":"receive"}]"#;
+
+    let test_data = {
+        let mut test_data =
+            test_input_data::basic(verification::SourceType::Solidity, MatchType::Partial);
+        test_data.set_abi(abi.to_string());
+        test_data
+    };
+
+    let db_url = db.db_url();
+    let verifier_addr = init_verifier_server(service(), test_data.verifier_response).await;
+
+    let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
+
+    // Fill the database with existing value
+    {
+        let dummy_request = default_verify_request();
+        let _verification_response: eth_bytecode_db_v2::VerifyResponse =
+            test_server::send_post_request(&eth_bytecode_db_base, VERIFY_ROUTE, &dummy_request)
+                .await;
+    }
+
+    let selector = "0xa17a9e66f0c355e3aa3b9ea969991204d6b1d2e62a47877f612cb2371d79e06a";
+
+    let request = SearchEventDescriptionsRequest {
+        selector: selector.into(),
+    };
+
+    let event_descriptions: SearchEventDescriptionsResponse =
+        test_server::send_post_request(&eth_bytecode_db_base, ROUTE, &request).await;
+
+    let expected_response = SearchEventDescriptionsResponse {
+        event_descriptions: vec![search_event_descriptions_response::EventDescription {
+            r#type: "event".into(),
+            name: "A".into(),
+            inputs: r#"[{"indexed":true,"internalType":"uint256","name":"a","type":"uint256"}]"#
+                .into(),
+        }],
+    };
+
+    assert_eq!(
+        expected_response, event_descriptions,
+        "Invalid response returned"
+    );
+}

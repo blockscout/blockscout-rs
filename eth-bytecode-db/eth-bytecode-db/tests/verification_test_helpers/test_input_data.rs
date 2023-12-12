@@ -113,10 +113,9 @@ impl<T> TestInputData<T> {
 impl<T> TestInputData<T> {
     pub fn with_abi(mut self, abi: String) -> Self {
         self.eth_bytecode_db_source.abi = Some(abi.clone());
-        self.verifier_response
-            .source
-            .as_mut()
-            .map(|source| source.abi = Some(abi));
+        if let Some(source) = self.verifier_response.source.as_mut() {
+            source.abi = Some(abi)
+        }
         self
     }
 }
