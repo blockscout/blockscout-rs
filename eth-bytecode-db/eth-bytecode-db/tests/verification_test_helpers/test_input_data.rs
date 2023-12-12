@@ -110,6 +110,17 @@ impl<T> TestInputData<T> {
     }
 }
 
+impl<T> TestInputData<T> {
+    pub fn with_abi(mut self, abi: String) -> Self {
+        self.eth_bytecode_db_source.abi = Some(abi.clone());
+        self.verifier_response
+            .source
+            .as_mut()
+            .map(|source| source.abi = Some(abi));
+        self
+    }
+}
+
 pub fn input_data_1<T>(request: T, source_type: SourceType) -> TestInputData<T> {
     let verifier_source = smart_contract_verifier_v2::Source {
         file_name: "source_file1.sol".to_string(),

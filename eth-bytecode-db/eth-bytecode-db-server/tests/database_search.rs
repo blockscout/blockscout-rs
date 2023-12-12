@@ -306,3 +306,9 @@ async fn search_sources_returns_latest_contract() {
         "Invalid response returned"
     );
 }
+
+#[rstest]
+#[tokio::test]
+#[timeout(std::time::Duration::from_secs(60))]
+#[ignore = "Needs database to run"]
+async fn search_event_descriptions() {}
