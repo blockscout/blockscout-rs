@@ -35,7 +35,7 @@ new-migration name:
     sea-orm-cli migrate generate {{name}}
 
 generate-entities:
-    sea-orm-cli generate entity --lib -o entity/src
+    sea-orm-cli generate entity --lib -o entity/src --tables user_operations
 
 test:
     cargo test -- --include-ignored

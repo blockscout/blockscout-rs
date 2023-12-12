@@ -1,7 +1,6 @@
 pub use sea_orm_migration::prelude::*;
-use sea_orm_migration::sea_orm::{ConnectionTrait, Statement, TransactionTrait};
-mod m20220101_000001_blockscout_tables;
-mod m20220101_000002_initial_tables;
+use sea_orm_migration::sea_orm::{Statement, TransactionTrait};
+mod m20220101_000001_initial_tables;
 mod m20231117_093738_add_indexes;
 
 pub struct Migrator;
@@ -10,21 +9,14 @@ pub struct Migrator;
 impl MigratorTrait for Migrator {
     fn migrations() -> Vec<Box<dyn MigrationTrait>> {
         vec![
-            Box::new(m20220101_000001_blockscout_tables::Migration),
-            Box::new(m20220101_000002_initial_tables::Migration),
+            Box::new(m20220101_000001_initial_tables::Migration),
             Box::new(m20231117_093738_add_indexes::Migration),
         ]
     }
 }
 
 pub async fn from_sql(manager: &SchemaManager<'_>, content: &str) -> Result<(), DbErr> {
-    exec_stmts(manager, content.split(';')).await
-}
-
-pub async fn exec_stmts(
-    manager: &SchemaManager<'_>,
-    stmts: impl IntoIterator<Item = &str>,
-) -> Result<(), DbErr> {
+    let stmts: Vec<&str> = content.split(';').collect();
     let txn = manager.get_connection().begin().await?;
     for st in stmts {
         txn.execute(Statement::from_string(
@@ -35,47 +27,4 @@ pub async fn exec_stmts(
         .map_err(|e| DbErr::Migration(format!("{e}\nQuery: {st}")))?;
     }
     txn.commit().await
-}
-
-// https://discord.com/channels/873880840487206962/900758376164757555/1050378980181671936
-fn split(s: &str) -> Vec<&str> {
-    let mut data = vec![];
-    let mut start = 0;
-    let mut inside = false;
-    let mut del_len = 0;
-    for (i, c) in s.chars().enumerate() {
-        if c == '$' {
-            if del_len == 0 {
-                del_len += 1;
-            } else if del_len == 1 {
-                del_len = 0;
-            } else if del_len == 2 {
-                inside = !inside;
-                del_len = 0;
-            }
-        } else if c == '_' {
-            if del_len == 1 {
-                del_len += 1;
-            } else {
-                del_len = 0;
-            }
-        } else {
-            del_len = 0;
-            if c == ';' && !inside {
-                data.push(&s[start..i + 1]);
-                start = i + 1;
-            }
-        }
-    }
-    data
-}
-
-pub async fn from_sql_file(manager: &SchemaManager<'_>, content: &str) -> Result<(), DbErr> {
-    let filtered = content
-        .lines()
-        .filter(|line| !line.starts_with("--"))
-        .collect::<Vec<_>>()
-        .join("\n");
-    let stmnts = split(&filtered);
-    exec_stmts(manager, stmnts).await
 }

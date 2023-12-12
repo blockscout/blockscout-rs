@@ -1,3 +1,4 @@
+use blockscout_db::entity::blocks;
 use ethers::prelude::{Address, H256};
 use sea_orm::prelude::DateTime;
 use sea_orm::sea_query::{Expr, IntoCondition, OnConflict};
@@ -26,11 +27,11 @@ pub struct ListUserOpDB {
 }
 
 pub fn user_ops_blocks_rel() -> RelationDef {
-    entity::blocks::Entity::belongs_to(Entity)
-        .from(entity::blocks::Column::Hash)
+    blocks::Entity::belongs_to(Entity)
+        .from(blocks::Column::Hash)
         .to(Column::BlockHash)
         .on_condition(|_, _| {
-            entity::blocks::Column::Consensus
+            blocks::Column::Consensus
                 .into_simple_expr()
                 .into_condition()
         })
@@ -44,12 +45,12 @@ pub async fn find_user_op_by_op_hash(
     let res = db
         .query_one(
             Entity::find_by_id(op_hash.as_bytes())
-                .column(entity::blocks::Column::Consensus)
-                .column(entity::blocks::Column::Timestamp)
+                .column(blocks::Column::Consensus)
+                .column(blocks::Column::Timestamp)
                 .join_rev(
                     JoinType::LeftJoin,
-                    entity::blocks::Entity::belongs_to(Entity)
-                        .from(entity::blocks::Column::Hash)
+                    blocks::Entity::belongs_to(Entity)
+                        .from(blocks::Column::Hash)
                         .to(Column::BlockHash)
                         .into(),
                 )
@@ -95,7 +96,7 @@ pub async fn list_user_ops(
             Column::Sender,
             Column::TxHash,
         ])
-        .column(entity::blocks::Column::Timestamp)
+        .column(blocks::Column::Timestamp)
         .join_rev(JoinType::Join, user_ops_blocks_rel());
     if let Some(sender) = sender_filter {
         q = q.filter(Column::Sender.eq(sender.as_bytes()));

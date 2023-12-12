@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 entity = { path = "./entity" }
+blockscout-db = { path = "../../libs/blockscout-db" }
 user-ops-indexer-proto = { path = "../user-ops-indexer-proto" }
 
 atoi = "2.0.0"

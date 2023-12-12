@@ -865,6 +865,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "blockscout-db"
+version = "4.1.8"
+dependencies = [
+ "blockscout-db-entity",
+ "blockscout-db-migration",
+]
+
+[[package]]
+name = "blockscout-db-entity"
+version = "4.1.8"
+dependencies = [
+ "sea-orm",
+]
+
+[[package]]
+name = "blockscout-db-migration"
+version = "4.1.8"
+dependencies = [
+ "async-std",
+ "sea-orm-migration",
+]
+
+[[package]]
 name = "blockscout-display-bytes"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6399,6 +6422,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "atoi",
+ "blockscout-db",
  "blockscout-display-bytes",
  "blockscout-service-launcher",
  "bytes",
