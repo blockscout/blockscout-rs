@@ -210,3 +210,128 @@ WHERE logs.address_hash = $1
 
     Ok(tx_hashes)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::repository::tests::get_shared_db;
+    use pretty_assertions::assert_eq;
+    use std::str::FromStr;
+
+    #[tokio::test]
+    async fn find_user_op_by_op_hash_ok() {
+        let db = get_shared_db().await;
+
+        let hash = H256::from_low_u64_be(0x0102);
+        let item = find_user_op_by_op_hash(&db, hash).await.unwrap();
+        assert_eq!(item, None);
+
+        let hash = H256::from_low_u64_be(0x0101);
+        let item = find_user_op_by_op_hash(&db, hash).await.unwrap();
+        assert_ne!(item, None);
+        let item = item.unwrap();
+        assert_eq!(item.op_hash, hash);
+        assert_eq!(item.consensus, Some(true));
+
+        let hash = H256::from_low_u64_be(0x1a0401);
+        let item = find_user_op_by_op_hash(&db, hash).await.unwrap();
+        assert_ne!(item, None);
+        let item = item.unwrap();
+        assert_eq!(item.op_hash, hash);
+        assert_eq!(item.consensus, Some(false));
+
+        let hash = H256::from_low_u64_be(0x1a0e01);
+        let item = find_user_op_by_op_hash(&db, hash).await.unwrap();
+        assert_ne!(item, None);
+        let item = item.unwrap();
+        assert_eq!(item.op_hash, hash);
+        assert_eq!(item.consensus, None);
+    }
+
+    #[tokio::test]
+    async fn list_user_ops_ok() {
+        let db = get_shared_db().await;
+
+        let (items, next_page_token) = list_user_ops(
+            &db, None, None, None, None, None, None, None, None, None, 5000,
+        )
+        .await
+        .unwrap();
+        assert_eq!(items.len(), 5000);
+        assert_ne!(next_page_token, None);
+        assert!(items
+            .iter()
+            .all(|a| a.block_number != 666 && a.block_number != 667));
+
+        let (items, next_page_token) = list_user_ops(
+            &db,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            next_page_token,
+            5000,
+        )
+        .await
+        .unwrap();
+        assert_eq!(items.len(), 4980);
+        assert_eq!(next_page_token, None);
+        assert!(items
+            .iter()
+            .all(|a| a.block_number != 666 && a.block_number != 667));
+
+        let (items, next_page_token) = list_user_ops(
+            &db,
+            Some(Address::from_low_u64_be(0x0502)),
+            None,
+            None,
+            None,
+            Some(H256::from_low_u64_be(0x0504)),
+            None,
+            Some(0),
+            Some(0),
+            None,
+            10,
+        )
+        .await
+        .unwrap();
+        assert_eq!(next_page_token, None);
+        assert_eq!(
+            items,
+            [
+                ListUserOp {
+                    op_hash: H256::from_low_u64_be(0x6901),
+                    block_number: 0,
+                    sender: Address::from_low_u64_be(0x0502),
+                    tx_hash: H256::from_low_u64_be(0x0504),
+                    timestamp: 1704067200,
+                },
+                ListUserOp {
+                    op_hash: H256::from_low_u64_be(0x0501),
+                    block_number: 0,
+                    sender: Address::from_low_u64_be(0x0502),
+                    tx_hash: H256::from_low_u64_be(0x0504),
+                    timestamp: 1704067200,
+                }
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn find_unprocessed_logs_tx_hashes_ok() {
+        let db = get_shared_db().await;
+
+        let entrypoint = Address::from_str("0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789").unwrap();
+        let topic =
+            H256::from_str("0x49628fd1471006c1482da88028e9ce4dbb080b815c9b0344d39e5a8e6ec1419f")
+                .unwrap();
+        let items = find_unprocessed_logs_tx_hashes(&db, entrypoint, topic, 100, 150)
+            .await
+            .unwrap();
+        assert_eq!(items, [H256::from_low_u64_be(0xffff)]);
+    }
+}

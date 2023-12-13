@@ -5,7 +5,7 @@ pub use entity::sea_orm_active_enums::SponsorType;
 
 use crate::repository::factory::FactoryDB;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Factory {
     pub factory: Address,
     pub total_accounts: u32,

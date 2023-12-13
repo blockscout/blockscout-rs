@@ -9,7 +9,7 @@ SELECT true,
        n,
        '\x',
        '2024-01-01 00:00:00'::timestamp + interval '12 seconds' * n, now(), now()
-FROM generate_series(0, 1000) n;
+FROM generate_series(0, 999) n;
 
 INSERT INTO user_operations (op_hash, sender, nonce, call_data, call_gas_limit, verification_gas_limit,
                              pre_verification_gas, max_fee_per_gas, max_priority_fee_per_gas, signature, entry_point,
@@ -39,11 +39,15 @@ SELECT decode(lpad(to_hex(n * 256 + 1), 64, '0'), 'hex'),
        7000000 + n,
        8000000 + n,
        'wallet_deposit'
-FROM generate_series(0, 10000) n;
+FROM generate_series(0, 9999) n;
 
 UPDATE blocks
 SET consensus = false
 WHERE number = 666;
+
+DELETE
+FROM blocks
+WHERE number = 667;
 
 UPDATE user_operations
 SET factory = '\x00000000000000000000000000000000000000f1'
@@ -52,3 +56,27 @@ WHERE block_number = 5;
 UPDATE user_operations
 SET factory = '\x00000000000000000000000000000000000000f2'
 WHERE block_number = 6;
+
+UPDATE user_operations
+SET op_index     = 1,
+    block_hash   = '\x0000000000000000000000000000000000000000000000000000000000000000',
+    block_number = 0,
+    tx_hash      = '\x0000000000000000000000000000000000000000000000000000000000000504'
+WHERE tx_hash = '\x0000000000000000000000000000000000000000000000000000000000006904';
+
+UPDATE user_operations
+SET paymaster    = '\x00000000000000000000000000000000000000e1',
+    sponsor_type = 'paymaster_sponsor'
+WHERE block_number = 20;
+
+UPDATE user_operations
+SET paymaster    = '\x00000000000000000000000000000000000000e2',
+    sponsor_type = 'paymaster_sponsor'
+WHERE block_number = 21;
+
+INSERT INTO logs (data, index, type, first_topic, second_topic, third_topic, fourth_topic, inserted_at, updated_at,
+                  address_hash, transaction_hash, block_hash, block_number)
+VALUES ('\x', 0, NULL, '0x49628fd1471006c1482da88028e9ce4dbb080b815c9b0344d39e5a8e6ec1419f', NULL, NULL, NULL, now(),
+        now(), '\x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789',
+        '\x000000000000000000000000000000000000000000000000000000000000ffff',
+        '\x000000000000000000000000000000000000000000000000000000000000ff00', 123);

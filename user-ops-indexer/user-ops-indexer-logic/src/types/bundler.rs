@@ -5,7 +5,7 @@ pub use entity::sea_orm_active_enums::SponsorType;
 
 use crate::repository::bundler::BundlerDB;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Bundler {
     pub bundler: Address,
     pub total_bundles: u32,

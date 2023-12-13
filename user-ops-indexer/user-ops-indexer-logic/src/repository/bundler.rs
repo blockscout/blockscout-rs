@@ -74,3 +74,57 @@ LIMIT $3"#,
         None => Ok((bundlers, None)),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::repository::tests::get_shared_db;
+    use pretty_assertions::assert_eq;
+
+    #[tokio::test]
+    async fn find_bundler_by_address_ok() {
+        let db = get_shared_db().await;
+
+        let addr = Address::from_low_u64_be(0xffff);
+        let item = find_bundler_by_address(&db, addr).await.unwrap();
+        assert_eq!(item, None);
+
+        let addr = Address::from_low_u64_be(0x0105);
+        let item = find_bundler_by_address(&db, addr).await.unwrap();
+        assert_eq!(
+            item,
+            Some(Bundler {
+                bundler: addr,
+                total_ops: 100,
+                total_bundles: 100,
+            })
+        );
+
+        let addr = Address::from_low_u64_be(0x0505);
+        let item = find_bundler_by_address(&db, addr).await.unwrap();
+        assert_eq!(
+            item,
+            Some(Bundler {
+                bundler: addr,
+                total_ops: 100,
+                total_bundles: 99,
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn list_bundlers_ok() {
+        let db = get_shared_db().await;
+
+        let (items, next_page_token) = list_bundlers(&db, None, 60).await.unwrap();
+        assert_eq!(items.len(), 60);
+        assert_ne!(next_page_token, None);
+
+        let (items, next_page_token) = list_bundlers(&db, next_page_token, 60).await.unwrap();
+        assert_eq!(items.len(), 40);
+        assert_eq!(next_page_token, None);
+        assert!(items
+            .iter()
+            .all(|a| a.total_ops == 99 || a.total_ops == 100))
+    }
+}

@@ -8,7 +8,7 @@ use entity::user_operations::Model;
 
 use crate::{repository::user_op::ListUserOpDB, types::common::u256_to_decimal};
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct UserOp {
     pub op_hash: H256,
     pub sender: Address,
@@ -46,7 +46,7 @@ pub struct UserOp {
     pub timestamp: Option<u64>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ListUserOp {
     pub op_hash: H256,
     pub block_number: u64,

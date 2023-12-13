@@ -5,7 +5,7 @@ pub use entity::sea_orm_active_enums::SponsorType;
 
 use crate::repository::paymaster::PaymasterDB;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Paymaster {
     pub paymaster: Address,
     pub total_ops: u32,

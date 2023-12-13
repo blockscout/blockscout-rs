@@ -75,3 +75,43 @@ pub async fn list_paymasters(
         None => Ok((paymasters, None)),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::repository::tests::get_shared_db;
+    use pretty_assertions::assert_eq;
+
+    #[tokio::test]
+    async fn find_paymaster_by_address_ok() {
+        let db = get_shared_db().await;
+
+        let addr = Address::from_low_u64_be(0xe3);
+        let item = find_paymaster_by_address(&db, addr).await.unwrap();
+        assert_eq!(item, None);
+
+        let addr = Address::from_low_u64_be(0xe1);
+        let item = find_paymaster_by_address(&db, addr).await.unwrap();
+        assert_eq!(
+            item,
+            Some(Paymaster {
+                paymaster: addr,
+                total_ops: 10,
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn list_paymasters_ok() {
+        let db = get_shared_db().await;
+
+        let (items, next_page_token) = list_paymasters(&db, None, 1).await.unwrap();
+        assert_eq!(items.len(), 1);
+        assert_ne!(next_page_token, None);
+
+        let (items, next_page_token) = list_paymasters(&db, next_page_token, 1).await.unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(next_page_token, None);
+        assert!(items.iter().all(|a| a.total_ops == 10))
+    }
+}

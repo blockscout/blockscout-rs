@@ -70,3 +70,43 @@ pub async fn list_factories(
         None => Ok((factories, None)),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::repository::tests::get_shared_db;
+    use pretty_assertions::assert_eq;
+
+    #[tokio::test]
+    async fn find_factory_by_address_ok() {
+        let db = get_shared_db().await;
+
+        let addr = Address::from_low_u64_be(0xf3);
+        let item = find_factory_by_address(&db, addr).await.unwrap();
+        assert_eq!(item, None);
+
+        let addr = Address::from_low_u64_be(0xf1);
+        let item = find_factory_by_address(&db, addr).await.unwrap();
+        assert_eq!(
+            item,
+            Some(Factory {
+                factory: addr,
+                total_accounts: 10,
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn list_factories_ok() {
+        let db = get_shared_db().await;
+
+        let (items, next_page_token) = list_factories(&db, None, 1).await.unwrap();
+        assert_eq!(items.len(), 1);
+        assert_ne!(next_page_token, None);
+
+        let (items, next_page_token) = list_factories(&db, next_page_token, 1).await.unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(next_page_token, None);
+        assert!(items.iter().all(|a| a.total_accounts == 10))
+    }
+}
