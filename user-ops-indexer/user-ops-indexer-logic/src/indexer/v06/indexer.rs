@@ -1,7 +1,7 @@
 use std::{future, ops::Div, time::Duration};
 
 use anyhow::{anyhow, bail};
-use ethers::prelude::{BigEndianHash, EthEvent, Middleware, Provider, Ws};
+use ethers::prelude::{BigEndianHash, EthEvent, Middleware, Provider, PubsubClient};
 use ethers_core::{
     abi::{AbiDecode, AbiEncode},
     types::{Action, Address, Bytes, Filter, Log},
@@ -29,14 +29,14 @@ pub struct RawUserOperation {
     pub aggregator_signature: Option<Bytes>,
 }
 
-pub struct IndexerV06 {
-    client: Provider<Ws>,
+pub struct IndexerV06<C: PubsubClient> {
+    client: Provider<C>,
 
     db: DatabaseConnection,
 }
 
-impl IndexerV06 {
-    pub fn new(client: Provider<Ws>, db: DatabaseConnection) -> Self {
+impl<C: PubsubClient> IndexerV06<C> {
+    pub fn new(client: Provider<C>, db: DatabaseConnection) -> Self {
         Self { client, db }
     }
 
@@ -411,5 +411,81 @@ fn none_if_empty(b: Bytes) -> Option<Bytes> {
         None
     } else {
         Some(b)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ethabi::ethereum_types::U256;
+    use ethers::prelude::{JsonRpcClient, MockProvider, Provider};
+    use ethers_core::types::{Transaction, TransactionReceipt};
+    use futures::stream::{empty, Empty};
+    use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult};
+    use serde::{de::DeserializeOwned, Serialize};
+    use serde_json::value::RawValue;
+    use std::{fmt::Debug, future::Future, pin::Pin, str::FromStr};
+
+    #[derive(Debug)]
+    struct PubSubMockProvider<M: JsonRpcClient>(M);
+
+    impl<M: JsonRpcClient> JsonRpcClient for PubSubMockProvider<M> {
+        type Error = M::Error;
+
+        fn request<'life0, 'life1, 'async_trait, T, R>(
+            &'life0 self,
+            method: &'life1 str,
+            params: T,
+        ) -> Pin<Box<dyn Future<Output = Result<R, Self::Error>> + Send + 'async_trait>>
+        where
+            T: Debug + Serialize + Send + Sync,
+            R: DeserializeOwned + Send,
+            T: 'async_trait,
+            R: 'async_trait,
+            'life0: 'async_trait,
+            'life1: 'async_trait,
+            Self: 'async_trait,
+        {
+            self.0.request(method, params)
+        }
+    }
+
+    impl PubsubClient for PubSubMockProvider<MockProvider> {
+        type NotificationStream = Empty<Box<RawValue>>;
+
+        fn subscribe<T: Into<U256>>(
+            &self,
+            _id: T,
+        ) -> Result<Self::NotificationStream, Self::Error> {
+            Ok(empty())
+        }
+
+        fn unsubscribe<T: Into<U256>>(&self, _id: T) -> Result<(), Self::Error> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn handle_tx_ok() {
+        let db: DatabaseConnection = MockDatabase::new(DatabaseBackend::Postgres)
+            .append_exec_results([MockExecResult {
+                last_insert_id: 1,
+                rows_affected: 1,
+            }])
+            .into_connection();
+        let client = MockProvider::new();
+
+        // just some random tx from mainnet
+        let tx_hash =
+            H256::from_str("0xf9f60f6dc99663c6ce4912ef92fe6a122bb90585e47b5f213efca1705be26d6e")
+                .unwrap();
+        let tx: Transaction = serde_json::from_str(r#"{"accessList":[],"blockHash":"0xe90aa1d6038c87b029a0666148ac2058ab8397f9c53594cc5a38c0113a48eab4","blockNumber":"0x11e7bd0","chainId":"0x1","from":"0x2df993cd76bb8dbda50546eef00eee2e6331a2c8","gas":"0x64633","gasPrice":"0x8b539dcf3","hash":"0xf9f60f6dc99663c6ce4912ef92fe6a122bb90585e47b5f213efca1705be26d6e","input":"0x1fad948c00000000000000000000000000000000000000000000000000000000000000400000000000000000000000002df993cd76bb8dbda50546eef00eee2e6331a2c800000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000020000000000000000000000000eae4d85f7733ad522f601ce7ad4f595704a2d67700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000160000000000000000000000000000000000000000000000000000000000000018000000000000000000000000000000000000000000000000000000000000169b7000000000000000000000000000000000000000000000000000000000001546d000000000000000000000000000000000000000000000000000000000000c2ec0000000000000000000000000000000000000000000000000000000c88385240000000000000000000000000000000000000000000000000000000001dcd650000000000000000000000000000000000000000000000000000000000000002a000000000000000000000000000000000000000000000000000000000000002c0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000e470641a22000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044095ea7b30000000000000000000000001e0049783f008a0085193e00003d00cd54003c71ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000062000000000000000000000000000000000000000000000000000000000065793a092c25c7a7c5e4bc46467324e2845caf1ccae767786e07806ca720f8a6b83356bc7d43a63a96b34507cfe7c424db37f351d71851ae9318e8d5c3d9f17c8bdb744c1c000000000000000000000000000000000000000000000000000000000000","maxFeePerGas":"0xc88385240","maxPriorityFeePerGas":"0x1dcd6500","nonce":"0x143","r":"0x1c2b5eb48f71d803de3557309428decfa63f639a97ab98ab6b52667b9c415aa0","s":"0x54a110c5f7db8ce7a488080249d3eab77e426300cd36b78cf82156ded86b26ee","to":"0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789","transactionIndex":"0x63","type":"0x2","v":"0x0","value":"0x0","yParity":"0x0"}"#).unwrap();
+        let receipt: TransactionReceipt = serde_json::from_str(r#"{"blockHash":"0xe90aa1d6038c87b029a0666148ac2058ab8397f9c53594cc5a38c0113a48eab4","blockNumber":"0x11e7bd0","contractAddress":null,"cumulativeGasUsed":"0xca9e14","effectiveGasPrice":"0x8b539dcf3","from":"0x2df993cd76bb8dbda50546eef00eee2e6331a2c8","gasUsed":"0x27a21","logs":[{"address":"0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789","blockHash":"0xe90aa1d6038c87b029a0666148ac2058ab8397f9c53594cc5a38c0113a48eab4","blockNumber":"0x11e7bd0","data":"0x000000000000000000000000000000000000000000000000002bea15dbb76400","logIndex":"0x10a","removed":false,"topics":["0x2da466a7b24304f47e87fa2e1e5a81b9831ce54fec19055ce277ca2f39ba42c4","0x000000000000000000000000eae4d85f7733ad522f601ce7ad4f595704a2d677"],"transactionHash":"0xf9f60f6dc99663c6ce4912ef92fe6a122bb90585e47b5f213efca1705be26d6e","transactionIndex":"0x63"},{"address":"0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789","blockHash":"0xe90aa1d6038c87b029a0666148ac2058ab8397f9c53594cc5a38c0113a48eab4","blockNumber":"0x11e7bd0","data":"0x","logIndex":"0x10b","removed":false,"topics":["0xbb47ee3e183a558b1a2ff0874b079f3fc5478b7454eacf2bfc5af2ff5878f972"],"transactionHash":"0xf9f60f6dc99663c6ce4912ef92fe6a122bb90585e47b5f213efca1705be26d6e","transactionIndex":"0x63"},{"address":"0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2","blockHash":"0xe90aa1d6038c87b029a0666148ac2058ab8397f9c53594cc5a38c0113a48eab4","blockNumber":"0x11e7bd0","data":"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","logIndex":"0x10c","removed":false,"topics":["0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925","0x000000000000000000000000eae4d85f7733ad522f601ce7ad4f595704a2d677","0x0000000000000000000000001e0049783f008a0085193e00003d00cd54003c71"],"transactionHash":"0xf9f60f6dc99663c6ce4912ef92fe6a122bb90585e47b5f213efca1705be26d6e","transactionIndex":"0x63"},{"address":"0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789","blockHash":"0xe90aa1d6038c87b029a0666148ac2058ab8397f9c53594cc5a38c0113a48eab4","blockNumber":"0x11e7bd0","data":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000015ed8b1358919200000000000000000000000000000000000000000000000000000000000284a6","logIndex":"0x10d","removed":false,"topics":["0x49628fd1471006c1482da88028e9ce4dbb080b815c9b0344d39e5a8e6ec1419f","0x2d5f7a884e9a99cfe2445db2af140a8851fbd860852b668f2f199190f68adf87","0x000000000000000000000000eae4d85f7733ad522f601ce7ad4f595704a2d677","0x0000000000000000000000000000000000000000000000000000000000000000"],"transactionHash":"0xf9f60f6dc99663c6ce4912ef92fe6a122bb90585e47b5f213efca1705be26d6e","transactionIndex":"0x63"}],"logsBloom":"0x000000000400000000000000000000000000000000000000000000000000000000080000000000000002000100000000021000000800000000000200002000000000008000000000200000000000000020000000000000000000000000002000000000000a0000000000000000000800000000000000000000000000000200000000000000002000000000000000000000000000000000000000000000000000020001000000400000400000000000000000000020000000000002000000000000000000000000000001000000000000000000000000000000000000000020000050200000000000000000000000000000000000000000000010000000000000","status":"0x1","to":"0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789","transactionHash":"0xf9f60f6dc99663c6ce4912ef92fe6a122bb90585e47b5f213efca1705be26d6e","transactionIndex":"0x63","type":"0x2"}"#).unwrap();
+
+        client.push(receipt).unwrap();
+        client.push(tx).unwrap();
+
+        let indexer = IndexerV06::new(Provider::new(PubSubMockProvider(client)), db);
+        indexer.handle_tx(tx_hash).await.unwrap();
     }
 }
