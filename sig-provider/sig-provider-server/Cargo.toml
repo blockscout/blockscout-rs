@@ -26,9 +26,10 @@ anyhow = "1.0"
 url = { version = "2", features = ["serde"] }
 hex = "0.4"
 ethabi = "17"
-blockscout-service-launcher = "0.1"
+blockscout-service-launcher = "0.9.0"
 
 [dev-dependencies]
+blockscout-service-launcher = { version = "*", features = ["test-server"] }
 http = "0.2"
 httpmock = "0.6"
 pretty_assertions = "1.3"

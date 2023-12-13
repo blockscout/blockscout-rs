@@ -1,3 +1,4 @@
+pub mod eth_bytecode_db;
 pub mod fourbyte;
 pub mod sigeth;
 

@@ -12,6 +12,8 @@ service SignatureService {
 service AbiService {
   rpc GetFunctionAbi(GetFunctionAbiRequest) returns (GetFunctionAbiResponse) {}
   rpc GetEventAbi(GetEventAbiRequest) returns (GetEventAbiResponse) {}
+
+  rpc BatchGetEventAbis(BatchGetEventAbisRequest) returns (BatchGetEventAbisResponse) {}
 }
 
 message CreateSignaturesRequest { string abi = 1; }
@@ -44,3 +46,11 @@ message GetEventAbiRequest {
 }
 
 message GetEventAbiResponse { repeated Abi abi = 1; }
+
+message BatchGetEventAbisRequest {
+  repeated GetEventAbiRequest requests = 1;
+}
+
+message BatchGetEventAbisResponse {
+  repeated GetEventAbiResponse responses = 1;
+}

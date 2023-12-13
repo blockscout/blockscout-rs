@@ -1,9 +1,28 @@
-use actix_web::App;
+use blockscout_service_launcher::test_server;
 use httpmock::MockServer;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
-use sig_provider_server::{http_configure, new_service, SourcesSettings};
+use sig_provider_server::SourcesSettings;
 use std::time::Duration;
+
+async fn run_server(fourbyte_port: u16, sigeth_port: u16) -> url::Url {
+    let mut settings = sig_provider_server::Settings::default();
+    let (server_settings, base) = test_server::get_test_server_settings();
+    settings.server = server_settings;
+    settings.jaeger.enabled = false;
+    settings.tracing.enabled = false;
+
+    settings.sources = SourcesSettings {
+        fourbyte: format!("http://127.0.0.1:{}/", fourbyte_port)
+            .parse()
+            .unwrap(),
+        sigeth: format!("http://127.0.0.1:{}/", sigeth_port)
+            .parse()
+            .unwrap(),
+    };
+    test_server::init_server(|| sig_provider_server::sig_provider(settings), &base).await;
+    base
+}
 
 #[tokio::test]
 async fn create() {
@@ -35,27 +54,11 @@ async fn create() {
             .json_body(sigeth_response);
     });
 
-    let service = new_service(SourcesSettings {
-        fourbyte: format!("http://127.0.0.1:{}/", fourbyte.port())
-            .parse()
-            .unwrap(),
-        sigeth: format!("http://127.0.0.1:{}/", sigeth.port())
-            .parse()
-            .unwrap(),
-    });
-    let app = actix_web::test::init_service(
-        App::new().configure(|config| http_configure(config, service.clone(), service.clone())),
-    )
-    .await;
+    let base = run_server(fourbyte.port(), sigeth.port()).await;
 
+    let route = "/api/v1/signatures";
     let request = serde_json::json!({"abi":"[{\"constant\":false,\"inputs\":[],\"name\":\"f\",\"outputs\":[],\"type\":\"function\"},{\"inputs\":[],\"type\":\"constructor\"},{\"anonymous\":false,\"inputs\":[{\"name\":\"\",\"type\":\"string\",\"indexed\":true}],\"name\":\"E\",\"type\":\"event\"}]"});
-    let request = actix_web::test::TestRequest::default()
-        .method(http::Method::POST)
-        .uri("/api/v1/signatures")
-        .append_header(("Content-type", "application/json"))
-        .set_json(request)
-        .to_request();
-    let response: serde_json::Value = actix_web::test::call_and_read_body_json(&app, request).await;
+    let response: serde_json::Value = test_server::send_post_request(&base, route, &request).await;
     // allow async handle to work
     tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -110,24 +113,10 @@ async fn get_function() {
             .json_body(sigeth_response);
     });
 
-    let service = new_service(SourcesSettings {
-        fourbyte: format!("http://127.0.0.1:{}/", fourbyte.port())
-            .parse()
-            .unwrap(),
-        sigeth: format!("http://127.0.0.1:{}/", sigeth.port())
-            .parse()
-            .unwrap(),
-    });
-    let app = actix_web::test::init_service(
-        App::new().configure(|config| http_configure(config, service.clone(), service.clone())),
-    )
-    .await;
+    let base = run_server(fourbyte.port(), sigeth.port()).await;
 
-    let request = actix_web::test::TestRequest::default()
-        .method(http::Method::GET)
-        .uri("/api/v1/abi/function?txInput=0x70a0823100000000000000000000000000000000219ab540356cbb839cbe05303d7705fa")
-        .to_request();
-    let response: serde_json::Value = actix_web::test::call_and_read_body_json(&app, request).await;
+    let route = "/api/v1/abi/function?txInput=0x70a0823100000000000000000000000000000000219ab540356cbb839cbe05303d7705fa";
+    let response: serde_json::Value = test_server::send_get_request(&base, route).await;
 
     fourbyte_handle.assert();
     sigeth_handle.assert();
@@ -173,24 +162,10 @@ async fn get_event() {
             .json_body(sigeth_response);
     });
 
-    let service = new_service(SourcesSettings {
-        fourbyte: format!("http://127.0.0.1:{}/", fourbyte.port())
-            .parse()
-            .unwrap(),
-        sigeth: format!("http://127.0.0.1:{}/", sigeth.port())
-            .parse()
-            .unwrap(),
-    });
-    let app = actix_web::test::init_service(
-        App::new().configure(|config| http_configure(config, service.clone(), service.clone())),
-    )
-    .await;
+    let base = run_server(fourbyte.port(), sigeth.port()).await;
 
-    let request = actix_web::test::TestRequest::default()
-        .method(http::Method::GET)
-        .uri("/api/v1/abi/event?topics=0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef,000000000000000000000000b8ace4d9bc469ddc8e788e636e817c299a1a8150,000000000000000000000000f76c5b19e86c256482f4aad1dae620a0c3ac0cd6&data=00000000000000000000000000000000000000000000000000000000006acfc0")
-        .to_request();
-    let response: serde_json::Value = actix_web::test::call_and_read_body_json(&app, request).await;
+    let route = "/api/v1/abi/event?topics=0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef,000000000000000000000000b8ace4d9bc469ddc8e788e636e817c299a1a8150,000000000000000000000000f76c5b19e86c256482f4aad1dae620a0c3ac0cd6&data=00000000000000000000000000000000000000000000000000000000006acfc0";
+    let response: serde_json::Value = test_server::send_get_request(&base, route).await;
 
     fourbyte_handle.assert();
     sigeth_handle.assert();

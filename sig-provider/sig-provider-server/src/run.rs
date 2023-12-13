@@ -1,6 +1,5 @@
 use crate::{health::HealthService, settings::SourcesSettings, Service, Settings};
-use actix_web::web::ServiceConfig;
-use blockscout_service_launcher::LaunchSettings;
+use blockscout_service_launcher::{launcher, launcher::LaunchSettings, tracing};
 use sig_provider::{fourbyte, sigeth, SourceAggregator};
 use sig_provider_proto::blockscout::sig_provider::v1::{
     abi_service_actix::route_abi_service,
@@ -12,41 +11,31 @@ use sig_provider_proto::blockscout::sig_provider::v1::{
 };
 use std::sync::Arc;
 
-pub fn http_configure<S: SignatureService, A: AbiService>(
-    config: &mut ServiceConfig,
-    signature: Arc<S>,
-    abi: Arc<A>,
-) {
-    route_signature_service(config, signature);
-    route_abi_service(config, abi);
-}
+const SERVICE_NAME: &str = "sig_provider";
 
 #[derive(Clone)]
-struct HttpRouter<S: SignatureService, A: AbiService> {
+struct Router<S: SignatureService, A: AbiService> {
     signature: Arc<S>,
     abi: Arc<A>,
     health: Arc<HealthService>,
 }
 
-impl<S: SignatureService, A: AbiService> blockscout_service_launcher::HttpRouter
-    for HttpRouter<S, A>
-{
-    fn register_routes(&self, service_config: &mut actix_web::web::ServiceConfig) {
-        service_config
-            .configure(|config| route_health(config, self.health.clone()))
-            .configure(|config| http_configure(config, self.signature.clone(), self.abi.clone()));
+impl<S: SignatureService, A: AbiService> Router<S, A> {
+    pub fn grpc_router(&self) -> tonic::transport::server::Router {
+        tonic::transport::Server::builder()
+            .add_service(HealthServer::from_arc(self.health.clone()))
+            .add_service(SignatureServiceServer::from_arc(self.signature.clone()))
+            .add_service(AbiServiceServer::from_arc(self.abi.clone()))
     }
 }
 
-fn grpc_router<S: SignatureService, A: AbiService>(
-    signature: Arc<S>,
-    abi: Arc<A>,
-    health: Arc<HealthService>,
-) -> tonic::transport::server::Router {
-    tonic::transport::Server::builder()
-        .add_service(HealthServer::from_arc(health))
-        .add_service(SignatureServiceServer::from_arc(signature))
-        .add_service(AbiServiceServer::from_arc(abi))
+impl<S: SignatureService, A: AbiService> launcher::HttpRouter for Router<S, A> {
+    fn register_routes(&self, service_config: &mut actix_web::web::ServiceConfig) {
+        service_config
+            .configure(|config| route_health(config, self.health.clone()))
+            .configure(|config| route_signature_service(config, self.signature.clone()))
+            .configure(|config| route_abi_service(config, self.abi.clone()));
+    }
 }
 
 pub fn new_service(sources: SourcesSettings) -> Arc<Service> {
@@ -58,21 +47,25 @@ pub fn new_service(sources: SourcesSettings) -> Arc<Service> {
 }
 
 pub async fn sig_provider(settings: Settings) -> Result<(), anyhow::Error> {
-    let service = new_service(settings.sources);
-    let health = Arc::new(HealthService::default());
+    tracing::init_logs(SERVICE_NAME, &settings.tracing, &settings.jaeger)?;
 
-    let grpc_router = grpc_router(service.clone(), service.clone(), health.clone());
-    let http_router = HttpRouter {
-        signature: service.clone(),
+    let health = Arc::new(HealthService::default());
+    let service = new_service(settings.sources);
+
+    let router = Router {
         abi: service.clone(),
+        signature: service.clone(),
         health,
     };
+
+    let grpc_router = router.grpc_router();
+    let http_router = router;
+
     let launch_settings = LaunchSettings {
-        service_name: "sig_provider".to_owned(),
+        service_name: SERVICE_NAME.to_string(),
         server: settings.server,
         metrics: settings.metrics,
-        jaeger: settings.jaeger,
     };
 
-    blockscout_service_launcher::launch(&launch_settings, http_router, grpc_router).await
+    launcher::launch(&launch_settings, http_router, grpc_router).await
 }

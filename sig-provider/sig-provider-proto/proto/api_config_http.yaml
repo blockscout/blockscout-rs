@@ -13,5 +13,8 @@ http:
       get: /api/v1/abi/event
       response_body: "abi"
 
+    - selector: blockscout.sig_provider.v1.AbiService.BatchGetEventAbis
+      get: /api/v1/abi/events:batch-get
+
     - selector: blockscout.sig_provider.v1.Health.Check
       get: /health

@@ -3,8 +3,9 @@ use ethabi::{ethereum_types::H256, RawLog};
 use sig_provider::SourceAggregator;
 use sig_provider_proto::blockscout::sig_provider::v1::{
     abi_service_server::AbiService, signature_service_server::SignatureService,
-    CreateSignaturesRequest, CreateSignaturesResponse, GetEventAbiRequest, GetEventAbiResponse,
-    GetFunctionAbiRequest, GetFunctionAbiResponse,
+    BatchGetEventAbisRequest, BatchGetEventAbisResponse, CreateSignaturesRequest,
+    CreateSignaturesResponse, GetEventAbiRequest, GetEventAbiResponse, GetFunctionAbiRequest,
+    GetFunctionAbiResponse,
 };
 use std::sync::Arc;
 
@@ -81,5 +82,12 @@ impl AbiService for Service {
             .await
             .map(|abi| tonic::Response::new(GetEventAbiResponse { abi }))
             .map_err(|e| tonic::Status::internal(e.to_string()))
+    }
+
+    async fn batch_get_event_abis(
+        &self,
+        _request: tonic::Request<BatchGetEventAbisRequest>,
+    ) -> Result<tonic::Response<BatchGetEventAbisResponse>, tonic::Status> {
+        todo!()
     }
 }

@@ -20,6 +20,7 @@ paths:
           schema:
             type: array
             items:
+              type: object
               $ref: '#/definitions/v1Abi'
         default:
           description: An unexpected error response.
@@ -37,6 +38,20 @@ paths:
           type: string
       tags:
         - AbiService
+  /api/v1/abi/events:batch-get:
+    get:
+      operationId: AbiService_BatchGetEventAbis
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1BatchGetEventAbisResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - AbiService
   /api/v1/abi/function:
     get:
       operationId: AbiService_GetFunctionAbi
@@ -46,6 +61,7 @@ paths:
           schema:
             type: array
             items:
+              type: object
               $ref: '#/definitions/v1Abi'
         default:
           description: An unexpected error response.
@@ -109,6 +125,7 @@ definitions:
       - NOT_SERVING
       - SERVICE_UNKNOWN
     default: UNKNOWN
+    description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
   protobufAny:
     type: object
     properties:
@@ -121,38 +138,49 @@ definitions:
       code:
         type: integer
         format: int32
+      message:
+        type: string
       details:
         type: array
         items:
+          type: object
           $ref: '#/definitions/protobufAny'
-      message:
-        type: string
   v1Abi:
     type: object
     properties:
+      name:
+        type: string
       inputs:
         type: array
         items:
+          type: object
           $ref: '#/definitions/v1Argument'
-      name:
-        type: string
   v1Argument:
     type: object
     properties:
-      components:
-        type: array
-        items:
-          $ref: '#/definitions/v1Argument'
-      indexed:
-        type: boolean
-        title: this is present only in events
       name:
         type: string
       type:
         type: string
+      components:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Argument'
+      indexed:
+        type: boolean
+        title: this is present only in events
       value:
         type: string
         title: decoded value
+  v1BatchGetEventAbisResponse:
+    type: object
+    properties:
+      responses:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1GetEventAbiResponse'
   v1CreateSignaturesRequest:
     type: object
     properties:
@@ -160,12 +188,21 @@ definitions:
         type: string
   v1CreateSignaturesResponse:
     type: object
+  v1GetEventAbiRequest:
+    type: object
+    properties:
+      data:
+        type: string
+      topics:
+        type: string
+        title: comma separated hex values, ex. `0x0000..1234,0x0000...5678`
   v1GetEventAbiResponse:
     type: object
     properties:
       abi:
         type: array
         items:
+          type: object
           $ref: '#/definitions/v1Abi'
   v1GetFunctionAbiResponse:
     type: object
@@ -173,6 +210,7 @@ definitions:
       abi:
         type: array
         items:
+          type: object
           $ref: '#/definitions/v1Abi'
   v1HealthCheckResponse:
     type: object
