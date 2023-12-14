@@ -69,9 +69,6 @@ message Address {
   string hash = 1;
 }
 
-message Pagination {
-  uint32 total_records = 1;
-}
 
 enum Order {
   ASC = 0;
@@ -85,6 +82,8 @@ message GetDomainRequest {
   string name = 1;
   // The chain (network) where domain search should be done
   int64 chain_id = 2;
+  // Filtering field to remove expired domains
+  bool only_active = 3;
 }
 
 message ListDomainEventsRequest {
@@ -100,7 +99,7 @@ message ListDomainEventsRequest {
 
 message ListDomainEventsResponse {
   repeated DomainEvent items = 1;
-  Pagination pagination = 2;
+  uint32 total_records = 2;
 }
 
 message LookupDomainNameRequest {
@@ -120,7 +119,7 @@ message LookupDomainNameResponse {
   // List of domains that resolved to or owned by requested address
   // Sorted by relevance, so first address could be displayed as main resolved address
   repeated Domain items = 1;
-  Pagination pagination = 2;
+  uint32 total_records = 2;
 }
 
 message LookupAddressRequest {
@@ -144,7 +143,7 @@ message LookupAddressResponse {
   // List of domains that resolved to or owned by requested address
   // Sorted by relevance, so first address could be displayed as main resolved address
   repeated Domain items = 1;
-  Pagination pagination = 2;
+  uint32 total_records = 2;
 }
 
 message BatchResolveAddressNamesRequest {

@@ -114,6 +114,11 @@ paths:
           in: path
           required: true
           type: string
+        - name: onlyActive
+          description: Filtering field to remove expired domains
+          in: query
+          required: false
+          type: boolean
       tags:
         - DomainsExtractor
   /api/v1/{chainId}/domains/{name}/events:
@@ -343,8 +348,9 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1DomainEvent'
-      pagination:
-        $ref: '#/definitions/v1Pagination'
+      totalRecords:
+        type: integer
+        format: int64
   v1LookupAddressResponse:
     type: object
     properties:
@@ -356,8 +362,9 @@ definitions:
         title: |-
           List of domains that resolved to or owned by requested address
           Sorted by relevance, so first address could be displayed as main resolved address
-      pagination:
-        $ref: '#/definitions/v1Pagination'
+      totalRecords:
+        type: integer
+        format: int64
   v1LookupDomainNameResponse:
     type: object
     properties:
@@ -369,17 +376,12 @@ definitions:
         title: |-
           List of domains that resolved to or owned by requested address
           Sorted by relevance, so first address could be displayed as main resolved address
-      pagination:
-        $ref: '#/definitions/v1Pagination'
+      totalRecords:
+        type: integer
+        format: int64
   v1Order:
     type: string
     enum:
       - ASC
       - DESC
     default: ASC
-  v1Pagination:
-    type: object
-    properties:
-      totalRecords:
-        type: integer
-        format: int64
