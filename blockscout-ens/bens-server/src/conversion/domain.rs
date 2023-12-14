@@ -116,9 +116,8 @@ pub fn domain_from_logic(d: Domain) -> Result<proto::Domain, ConversionError> {
 }
 
 fn address_from_str_inner(addr: &str) -> Result<Address, ConversionError> {
-    let address = blockscout_display_bytes::Bytes::from_str(addr)
-        .map_err(|_| ConversionError::UserRequest(format!("invalid address '{addr}'")))?;
-    Ok(Address::from_slice(&address))
+    Address::from_str(addr)
+        .map_err(|e| ConversionError::UserRequest(format!("invalid address '{addr}': {e}")))
 }
 
 fn date_from_logic(d: chrono::DateTime<chrono::Utc>) -> String {
