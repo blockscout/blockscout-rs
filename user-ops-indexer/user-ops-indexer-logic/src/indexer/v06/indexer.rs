@@ -1,4 +1,4 @@
-use std::{future, ops::Div, time::Duration};
+use std::{future, ops::Div, pin::Pin, time::Duration};
 
 use anyhow::{anyhow, bail};
 use ethers::prelude::{BigEndianHash, EthEvent, Middleware, Provider, PubsubClient};
@@ -6,7 +6,7 @@ use ethers_core::{
     abi::{AbiDecode, AbiEncode},
     types::{Action, Address, Bytes, Filter, Log},
 };
-use futures::{stream, StreamExt};
+use futures::{stream, Stream, StreamExt};
 use keccak_hash::H256;
 use sea_orm::DatabaseConnection;
 use tokio::time::sleep;
@@ -43,27 +43,41 @@ impl<C: PubsubClient> IndexerV06<C> {
     pub async fn start(
         &self,
         concurrency: u32,
+        realtime: bool,
         past_rpc_logs_range: u32,
         past_db_logs_start_block: i32,
         past_db_logs_end_block: i32,
     ) -> anyhow::Result<()> {
-        // subscribe to a stream of new logs starting at the current block
-        tracing::info!("subscribing to BeforeExecution logs from rpc");
+        let mut stream_txs: Pin<Box<dyn Stream<Item = H256> + Send>> = Box::pin(stream::empty());
+
         let filter = Filter::new()
             .address(*ENTRYPOINT_V06)
             .topic0(BeforeExecutionFilter::signature());
-        let stream_logs = self
-            .client
-            .subscribe_logs(&filter)
-            .await?
-            .filter(|log| future::ready(log.removed != Some(true)));
+
+        if realtime {
+            // subscribe to a stream of new logs starting at the current block
+            tracing::info!("subscribing to BeforeExecution logs from rpc");
+            let realtime_stream_txs =
+                self.client
+                    .subscribe_logs(&filter)
+                    .await?
+                    .filter_map(|log| {
+                        future::ready(if log.removed == Some(true) {
+                            log.transaction_hash
+                        } else {
+                            None
+                        })
+                    });
+
+            stream_txs = Box::pin(stream_txs.chain(realtime_stream_txs));
+        }
 
         tracing::debug!("fetching latest block number");
         let block_number = self.client.get_block_number().await?.as_u32();
         tracing::info!(block_number, "latest block number");
 
         let rpc_refetch_block_number = block_number.saturating_sub(past_rpc_logs_range);
-        let missed_db_txs = if past_db_logs_start_block != 0 || past_db_logs_end_block != 0 {
+        if past_db_logs_start_block != 0 || past_db_logs_end_block != 0 {
             let from_block = if past_db_logs_start_block > 0 {
                 past_db_logs_start_block as u64
             } else {
@@ -84,12 +98,11 @@ impl<C: PubsubClient> IndexerV06<C> {
             )
             .await?;
             tracing::info!(count = txs.len(), "found missed txs in db");
-            txs
-        } else {
-            Vec::new()
-        };
 
-        let recent_logs = if past_rpc_logs_range > 0 {
+            stream_txs = Box::pin(stream::iter(txs).chain(stream_txs));
+        }
+
+        if past_rpc_logs_range > 0 {
             tracing::info!(
                 from_block = rpc_refetch_block_number + 1,
                 to_block = block_number,
@@ -98,19 +111,21 @@ impl<C: PubsubClient> IndexerV06<C> {
             let filter = filter
                 .from_block(rpc_refetch_block_number + 1)
                 .to_block(block_number);
-            let logs = self.client.get_logs(&filter).await?;
-            tracing::info!(count = logs.len(), "fetched past BeforeExecution logs");
-            logs
-        } else {
-            Vec::new()
-        };
+            let txs: Vec<H256> = self
+                .client
+                .get_logs(&filter)
+                .await?
+                .iter()
+                .filter_map(|log| log.transaction_hash)
+                .collect();
+            tracing::info!(count = txs.len(), "fetched past BeforeExecution logs");
 
-        let stream_logs = stream::iter(recent_logs).chain(stream_logs);
+            stream_txs = Box::pin(stream::iter(txs).chain(stream_txs));
+        }
 
         // map to transactions hashes containing user ops, with deduplicated transaction hashes
         // e.g. [A, A, B, B, B, C, C] -> [A, B, C]
-        let stream_txs = stream::iter(missed_db_txs)
-            .chain(stream_logs.filter_map(|log| async move { log.transaction_hash }))
+        let stream_txs = stream_txs
             .scan(H256::zero(), |prev, tx_hash| {
                 if *prev == tx_hash {
                     future::ready(Some(None))
