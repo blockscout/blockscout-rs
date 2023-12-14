@@ -404,8 +404,8 @@ fn build_user_op_model(
         status: user_op_event.success,
         revert_reason: revert_event.map(|e| e.revert_reason),
         gas: call_gas_limit
-            + pre_verification_gas * if paymaster.is_none() { 1 } else { 3 }
-            + verification_gas_limit,
+            + verification_gas_limit * if paymaster.is_none() { 1 } else { 3 }
+            + pre_verification_gas,
         gas_price: user_op_event
             .actual_gas_cost
             .div(user_op_event.actual_gas_used),
