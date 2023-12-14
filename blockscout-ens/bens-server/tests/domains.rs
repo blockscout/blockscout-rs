@@ -249,9 +249,7 @@ async fn expect_list_results(base: &Url, route: &str, route_desc: &str, items: V
         request,
         json!({
             "items": items,
-            "pagination": {
-                "totalRecords": items.len()
-            }
+            "totalRecords": items.len()
         })
     );
 
@@ -262,9 +260,7 @@ async fn expect_list_results(base: &Url, route: &str, route_desc: &str, items: V
         request,
         json!({
             "items": reversed_items,
-            "pagination": {
-                "totalRecords": reversed_items.len()
-            }
+            "totalRecords": reversed_items.len()
         })
     );
 }
@@ -275,9 +271,7 @@ async fn expect_lookup_results(base: &Url, route: &str, mut payload: Value, item
         request,
         json!({
             "items": items,
-            "pagination": {
-                "totalRecords": items.len()
-            }
+            "totalRecords": items.len()
         })
     );
     payload
@@ -291,9 +285,7 @@ async fn expect_lookup_results(base: &Url, route: &str, mut payload: Value, item
         request,
         json!({
             "items": reversed_items,
-            "pagination": {
-                "totalRecords": reversed_items.len()
-            }
+            "totalRecords": reversed_items.len()
         })
     );
 }

@@ -3,7 +3,7 @@ use crate::{
     hash_name::{domain_id, hex},
     subgraphs_reader::{GetDomainInput, LookupAddressInput, LookupDomainInput, SubgraphReadError},
 };
-use sqlx::postgres::PgPool;
+use sqlx::postgres::{PgPool, PgQueryResult};
 use tracing::instrument;
 
 const DETAILED_DOMAIN_DEFAULT_SELECT_CLAUSE: &str = r#"
@@ -40,10 +40,9 @@ COALESCE(to_timestamp(expiry_date) < now(), false) AS is_expired
 // `block_range @>` is special sql syntax for fast filtering int4range
 // to access current version of domain.
 // Source: https://github.com/graphprotocol/graph-node/blob/19fd41bb48511f889dc94f5d82e16cd492f29da1/store/postgres/src/block_range.rs#L26
-pub const DOMAIN_DEFAULT_WHERE_CLAUSE: &str = r#"
-label_name IS NOT NULL
-AND block_range @> 2147483647
-"#;
+pub const DOMAIN_BLOCK_RANGE_WHERE_CLAUSE: &str = "block_range @> 2147483647";
+
+pub const DOMAIN_NONEMPTY_LABEL_WHERE_CLAUSE: &str = "label_name IS NOT NULL";
 
 pub const DOMAIN_NOT_EXPIRED_WHERE_CLAUSE: &str = r#"
 (
@@ -86,7 +85,7 @@ pub async fn get_domain(
         ) multi_coin_addresses ON {schema}.domain.id = multi_coin_addresses.domain_id
         WHERE 
             id = $1 
-            AND {DOMAIN_DEFAULT_WHERE_CLAUSE}
+            AND {DOMAIN_BLOCK_RANGE_WHERE_CLAUSE}
         {only_active_clause}
         ;"#,
     ))
@@ -120,7 +119,7 @@ pub async fn find_domains(
         FROM {schema}.domain
         WHERE
             id = $1 
-            AND {DOMAIN_DEFAULT_WHERE_CLAUSE}
+            AND {DOMAIN_BLOCK_RANGE_WHERE_CLAUSE}
             {only_active_clause}
         ORDER BY {sort} {order}
         "#,
@@ -168,7 +167,8 @@ pub async fn find_resolved_addresses(
                 {resolved_to_clause}
                 {owned_by_clause}
             )
-            AND {DOMAIN_DEFAULT_WHERE_CLAUSE}
+            AND {DOMAIN_BLOCK_RANGE_WHERE_CLAUSE}
+            AND {DOMAIN_NONEMPTY_LABEL_WHERE_CLAUSE}
             {only_active_clause}
         ORDER BY {sort} {order}
         LIMIT 100
@@ -200,7 +200,8 @@ pub async fn batch_search_addresses(
         WHERE
             resolved_address = ANY($1)
             AND name NOT LIKE '%[%'
-            AND {DOMAIN_DEFAULT_WHERE_CLAUSE}
+            AND {DOMAIN_BLOCK_RANGE_WHERE_CLAUSE}
+            AND {DOMAIN_NONEMPTY_LABEL_WHERE_CLAUSE}
             AND {DOMAIN_NOT_EXPIRED_WHERE_CLAUSE}
         ORDER BY resolved_address, created_at
         "#,
@@ -237,4 +238,26 @@ pub async fn batch_search_addresses_cached(
     .await?;
 
     Ok(domains)
+}
+
+#[instrument(
+    name = "update_domain_name",
+    skip(pool),
+    err(level = "error"),
+    level = "info"
+)]
+pub async fn update_domain_name(
+    pool: &PgPool,
+    schema: &str,
+    id: &str,
+    name: &str,
+) -> Result<PgQueryResult, sqlx::Error> {
+    let result = sqlx::query(&format!(
+        "UPDATE {schema}.domain SET name = $1 WHERE id = $2;"
+    ))
+    .bind(name)
+    .bind(id)
+    .execute(pool)
+    .await?;
+    Ok(result)
 }
