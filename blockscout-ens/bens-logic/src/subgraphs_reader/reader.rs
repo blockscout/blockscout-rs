@@ -6,6 +6,7 @@ use super::{
     LookupDomainInput,
 };
 use crate::{
+    coin_type::coin_name,
     entity::subgraph::{
         domain::{DetailedDomain, Domain},
         domain_event::{DomainEvent, DomainEventTransaction},
@@ -116,7 +117,21 @@ impl SubgraphReader {
             .networks
             .get(&input.network_id)
             .ok_or_else(|| SubgraphReadError::NetworkNotFound(input.network_id))?;
-        sql::get_domain(self.pool.as_ref(), &network.schema_name, &input).await
+        let domain = sql::get_domain(self.pool.as_ref(), &network.schema_name, &input)
+            .await?
+            .map(|mut domain| {
+                domain.other_addresses = sqlx::types::Json(
+                    domain
+                        .other_addresses
+                        .0
+                        .into_iter()
+                        .map(|(coin_type, address)| (coin_name(&coin_type), address))
+                        .collect(),
+                );
+                domain
+            });
+
+        Ok(domain)
     }
 
     pub async fn get_domain_history(
@@ -257,8 +272,8 @@ mod tests {
             Some("0xd8da6bf26964af9d7eed9e03e53415d37aa96045")
         );
         let other_addresses: HashMap<String, String> = serde_json::from_value(serde_json::json!({
-            "60": "d8da6bf26964af9d7eed9e03e53415d37aa96045",
-            "137": "f0d485009714ce586358e3761754929904d76b9d",
+            "ETH": "d8da6bf26964af9d7eed9e03e53415d37aa96045",
+            "RSK": "f0d485009714ce586358e3761754929904d76b9d",
         }))
         .unwrap();
         assert_eq!(result.other_addresses, other_addresses.into());

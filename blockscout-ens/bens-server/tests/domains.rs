@@ -66,8 +66,8 @@ async fn check_basic_scenario(settings: Settings, base: Url) {
             "id": "0xee6c4522aab0003e8d14cd40a6af439055fd2577951148c14b6cea9a53475835",
             "name": "vitalik.eth",
             "otherAddresses": {
-                "137": "f0d485009714ce586358e3761754929904d76b9d",
-                "60": "d8da6bf26964af9d7eed9e03e53415d37aa96045",
+                "RSK": "f0d485009714ce586358e3761754929904d76b9d",
+                "ETH": "d8da6bf26964af9d7eed9e03e53415d37aa96045",
             },
             "owner": {
                 "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
