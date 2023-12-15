@@ -40,7 +40,7 @@ pub async fn run(
     database_connection: DatabaseConnection,
 ) -> Result<(), anyhow::Error> {
     let health = Arc::new(HealthService::default());
-    let user_ops = Arc::new(UserOpsService::new(database_connection));
+    let user_ops = Arc::new(UserOpsService::new(database_connection, settings.api));
 
     let router = Router { health, user_ops };
 

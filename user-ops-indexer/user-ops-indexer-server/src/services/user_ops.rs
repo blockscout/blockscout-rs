@@ -17,19 +17,24 @@ use user_ops_indexer_proto::blockscout::user_ops_indexer::v1::{
     ListUserOpsRequest, ListUserOpsResponse, Paymaster, UserOp,
 };
 
-use crate::proto::user_ops_service_server::UserOpsService as UserOps;
+use crate::{proto::user_ops_service_server::UserOpsService as UserOps, settings::ApiSettings};
 
-const DEFAULT_PAGE_SIZE: u64 = 10;
-const MAX_PAGE_SIZE: u64 = 100;
+const DEFAULT_PAGE_SIZE: u32 = 10;
 
-#[derive(Default)]
 pub struct UserOpsService {
     db: DatabaseConnection,
+
+    settings: ApiSettings,
 }
 
 impl UserOpsService {
-    pub fn new(db: DatabaseConnection) -> Self {
-        Self { db }
+    pub fn new(db: DatabaseConnection, settings: ApiSettings) -> Self {
+        Self { db, settings }
+    }
+
+    fn normalize_page_size(&self, size: Option<u32>) -> u64 {
+        size.unwrap_or(DEFAULT_PAGE_SIZE)
+            .clamp(1, self.settings.max_page_size) as u64
     }
 }
 
@@ -138,7 +143,7 @@ impl UserOps for UserOpsService {
 
         let factory_filter = inner.factory.map(parse_filter).transpose()?;
         let page_token = inner.page_token.map(parse_filter).transpose()?;
-        let page_size = normalize_page_size(inner.page_size);
+        let page_size = self.normalize_page_size(inner.page_size);
 
         let (accounts, next_page_token) =
             repository::account::list_accounts(&self.db, factory_filter, page_token, page_size)
@@ -167,7 +172,7 @@ impl UserOps for UserOpsService {
 
         let page_token: Option<(u64, H256, u64)> =
             inner.page_token.map(parse_filter_3).transpose()?;
-        let page_size = normalize_page_size(inner.page_size);
+        let page_size = self.normalize_page_size(inner.page_size);
 
         let (bundles, next_page_token) = repository::bundle::list_bundles(
             &self.db,
@@ -207,7 +212,7 @@ impl UserOps for UserOpsService {
         let block_number_filter = inner.block_number;
 
         let page_token: Option<(u64, H256)> = inner.page_token.map(parse_filter_2).transpose()?;
-        let page_size = normalize_page_size(inner.page_size);
+        let page_size = self.normalize_page_size(inner.page_size);
 
         let (ops, next_page_token) = repository::user_op::list_user_ops(
             &self.db,
@@ -244,7 +249,7 @@ impl UserOps for UserOpsService {
 
         let page_token: Option<(u64, Address)> =
             inner.page_token.map(parse_filter_2).transpose()?;
-        let page_size = normalize_page_size(inner.page_size);
+        let page_size = self.normalize_page_size(inner.page_size);
 
         let (bundlers, next_page_token) =
             repository::bundler::list_bundlers(&self.db, page_token, page_size)
@@ -271,7 +276,7 @@ impl UserOps for UserOpsService {
 
         let page_token: Option<(u64, Address)> =
             inner.page_token.map(parse_filter_2).transpose()?;
-        let page_size = normalize_page_size(inner.page_size);
+        let page_size = self.normalize_page_size(inner.page_size);
 
         let (paymasters, next_page_token) =
             repository::paymaster::list_paymasters(&self.db, page_token, page_size)
@@ -298,7 +303,7 @@ impl UserOps for UserOpsService {
 
         let page_token: Option<(u64, Address)> =
             inner.page_token.map(parse_filter_2).transpose()?;
-        let page_size = normalize_page_size(inner.page_size);
+        let page_size = self.normalize_page_size(inner.page_size);
 
         let (factories, next_page_token) =
             repository::factory::list_factories(&self.db, page_token, page_size)
@@ -316,11 +321,6 @@ impl UserOps for UserOpsService {
 
         Ok(Response::new(res))
     }
-}
-
-fn normalize_page_size(size: Option<u32>) -> u64 {
-    size.map_or(DEFAULT_PAGE_SIZE, |a| a as u64)
-        .clamp(1, MAX_PAGE_SIZE)
 }
 
 #[inline]
