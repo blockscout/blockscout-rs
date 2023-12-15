@@ -13,6 +13,9 @@ impl MigratorTrait for Migrator {
             Box::new(m20231117_093738_add_indexes::Migration),
         ]
     }
+    fn migration_table_name() -> DynIden {
+        Alias::new("user_ops_indexer_migrations").into_iden()
+    }
 }
 
 pub async fn from_sql(manager: &SchemaManager<'_>, content: &str) -> Result<(), DbErr> {

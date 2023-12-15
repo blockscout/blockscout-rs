@@ -6,12 +6,12 @@ pub struct Migration;
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        if manager.has_table("blocks").await? {
+        if !manager.has_table("blocks").await? {
             return Err(DbErr::Migration(
                 "Table blocks does not exist in the database".to_string(),
             ));
         }
-        if manager.has_table("logs").await? {
+        if !manager.has_table("logs").await? {
             return Err(DbErr::Migration(
                 "Table logs does not exist in the database".to_string(),
             ));
