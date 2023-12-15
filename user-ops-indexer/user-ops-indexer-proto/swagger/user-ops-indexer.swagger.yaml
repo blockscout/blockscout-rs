@@ -493,10 +493,8 @@ definitions:
         type: string
       initCode:
         type: string
-        format: byte
       callData:
         type: string
-        format: byte
       callGasLimit:
         type: string
         format: uint64
@@ -512,15 +510,12 @@ definitions:
         type: string
       paymasterAndData:
         type: string
-        format: byte
       signature:
         type: string
-        format: byte
       aggregator:
         type: string
       aggregatorSignature:
         type: string
-        format: byte
       entryPoint:
         type: string
       txHash:
@@ -546,7 +541,6 @@ definitions:
         type: boolean
       revertReason:
         type: string
-        format: byte
       gas:
         type: string
         format: uint64
