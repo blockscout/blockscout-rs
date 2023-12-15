@@ -7,7 +7,7 @@ use crate::repository::bundle::BundleDB;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Bundle {
-    pub tx_hash: H256,
+    pub transaction_hash: H256,
     pub bundle_index: u64,
     pub block_number: u64,
     pub bundler: Address,
@@ -18,7 +18,7 @@ pub struct Bundle {
 impl From<BundleDB> for Bundle {
     fn from(v: BundleDB) -> Self {
         Self {
-            tx_hash: H256::from_slice(&v.tx_hash),
+            transaction_hash: H256::from_slice(&v.transaction_hash),
             bundle_index: v.bundle_index as u64,
             block_number: v.block_number as u64,
             bundler: Address::from_slice(&v.bundler),
@@ -31,7 +31,7 @@ impl From<BundleDB> for Bundle {
 impl From<Bundle> for user_ops_indexer_proto::blockscout::user_ops_indexer::v1::Bundle {
     fn from(v: Bundle) -> Self {
         Self {
-            tx_hash: v.tx_hash.encode_hex(),
+            transaction_hash: v.transaction_hash.encode_hex(),
             bundler: to_checksum(&v.bundler, None),
             block_number: v.block_number,
             bundle_index: v.bundle_index,

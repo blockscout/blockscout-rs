@@ -10,7 +10,7 @@ use crate::{repository::user_op::ListUserOpDB, types::common::u256_to_decimal};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct UserOp {
-    pub op_hash: H256,
+    pub hash: H256,
     pub sender: Address,
     pub nonce: H256,
     pub init_code: Option<Bytes>,
@@ -25,12 +25,12 @@ pub struct UserOp {
     pub aggregator: Option<Address>,
     pub aggregator_signature: Option<Bytes>,
     pub entry_point: Address,
-    pub tx_hash: H256,
+    pub transaction_hash: H256,
     pub block_number: u64,
     pub block_hash: H256,
     pub bundler: Address,
     pub bundle_index: u64,
-    pub op_index: u64,
+    pub index: u64,
     pub factory: Option<Address>,
     pub paymaster: Option<Address>,
     pub status: bool,
@@ -48,17 +48,17 @@ pub struct UserOp {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ListUserOp {
-    pub op_hash: H256,
+    pub hash: H256,
     pub block_number: u64,
     pub sender: Address,
-    pub tx_hash: H256,
+    pub transaction_hash: H256,
     pub timestamp: u64,
 }
 
 impl From<UserOp> for Model {
     fn from(v: UserOp) -> Self {
         Self {
-            op_hash: v.op_hash.as_bytes().to_vec(),
+            hash: v.hash.as_bytes().to_vec(),
             sender: v.sender.as_bytes().to_vec(),
             nonce: v.nonce.as_bytes().to_vec(),
             init_code: v.init_code.clone().map(|a| a.to_vec()),
@@ -73,12 +73,12 @@ impl From<UserOp> for Model {
             aggregator: v.aggregator.map(|a| a.as_bytes().to_vec()),
             aggregator_signature: v.aggregator_signature.clone().map(|a| a.to_vec()),
             entry_point: v.entry_point.as_bytes().to_vec(),
-            tx_hash: v.tx_hash.as_bytes().to_vec(),
+            transaction_hash: v.transaction_hash.as_bytes().to_vec(),
             block_number: v.block_number as i32,
             block_hash: v.block_hash.as_bytes().to_vec(),
             bundler: v.bundler.as_bytes().to_vec(),
             bundle_index: v.bundle_index as i32,
-            op_index: v.op_index as i32,
+            index: v.index as i32,
             factory: v.factory.map(|a| a.as_bytes().to_vec()),
             paymaster: v.paymaster.map(|a| a.as_bytes().to_vec()),
             status: v.status,
@@ -89,7 +89,7 @@ impl From<UserOp> for Model {
             sponsor_type: v.sponsor_type.clone(),
             user_logs_start_index: v.user_logs_start_index as i32,
             user_logs_count: v.user_logs_count as i32,
-            created_at: Default::default(),
+            inserted_at: Default::default(),
             updated_at: Default::default(),
         }
     }
@@ -98,7 +98,7 @@ impl From<UserOp> for Model {
 impl From<Model> for UserOp {
     fn from(v: Model) -> Self {
         Self {
-            op_hash: H256::from_slice(&v.op_hash),
+            hash: H256::from_slice(&v.hash),
             sender: Address::from_slice(&v.sender),
             nonce: H256::from_slice(&v.nonce),
             init_code: v.init_code.clone().map(Bytes::from),
@@ -113,12 +113,12 @@ impl From<Model> for UserOp {
             aggregator: v.aggregator.clone().map(|a| Address::from_slice(&a)),
             aggregator_signature: v.aggregator_signature.clone().map(Bytes::from),
             entry_point: Address::from_slice(&v.entry_point),
-            tx_hash: H256::from_slice(&v.tx_hash),
+            transaction_hash: H256::from_slice(&v.transaction_hash),
             block_number: v.block_number as u64,
             block_hash: H256::from_slice(&v.block_hash),
             bundler: Address::from_slice(&v.bundler),
             bundle_index: v.bundle_index as u64,
-            op_index: v.op_index as u64,
+            index: v.index as u64,
             factory: v.factory.clone().map(|a| Address::from_slice(&a)),
             paymaster: v.paymaster.clone().map(|a| Address::from_slice(&a)),
             status: v.status,
@@ -139,7 +139,7 @@ impl From<Model> for UserOp {
 impl From<UserOp> for user_ops_indexer_proto::blockscout::user_ops_indexer::v1::UserOp {
     fn from(v: UserOp) -> Self {
         user_ops_indexer_proto::blockscout::user_ops_indexer::v1::UserOp {
-            op_hash: v.op_hash.encode_hex(),
+            hash: v.hash.encode_hex(),
             sender: to_checksum(&v.sender, None),
             nonce: v.nonce.encode_hex(),
             init_code: v.init_code.map(|b| b.to_string()),
@@ -154,12 +154,12 @@ impl From<UserOp> for user_ops_indexer_proto::blockscout::user_ops_indexer::v1::
             aggregator: v.aggregator.map(|a| to_checksum(&a, None)),
             aggregator_signature: v.aggregator_signature.map(|b| b.to_string()),
             entry_point: to_checksum(&v.entry_point, None),
-            tx_hash: v.tx_hash.encode_hex(),
+            transaction_hash: v.transaction_hash.encode_hex(),
             block_number: v.block_number,
             block_hash: v.block_hash.encode_hex(),
             bundler: to_checksum(&v.bundler, None),
             bundle_index: v.bundle_index,
-            op_index: v.op_index,
+            index: v.index,
             factory: v.factory.map(|a| to_checksum(&a, None)),
             paymaster: v.paymaster.map(|a| to_checksum(&a, None)),
             status: v.status,
@@ -180,10 +180,10 @@ impl From<UserOp> for user_ops_indexer_proto::blockscout::user_ops_indexer::v1::
 impl From<ListUserOpDB> for ListUserOp {
     fn from(v: ListUserOpDB) -> Self {
         Self {
-            op_hash: H256::from_slice(&v.op_hash),
+            hash: H256::from_slice(&v.hash),
             block_number: v.block_number as u64,
             sender: Address::from_slice(&v.sender),
-            tx_hash: H256::from_slice(&v.tx_hash),
+            transaction_hash: H256::from_slice(&v.transaction_hash),
             timestamp: v.timestamp.timestamp() as u64,
         }
     }
@@ -192,9 +192,9 @@ impl From<ListUserOpDB> for ListUserOp {
 impl From<ListUserOp> for user_ops_indexer_proto::blockscout::user_ops_indexer::v1::ListUserOp {
     fn from(v: ListUserOp) -> Self {
         user_ops_indexer_proto::blockscout::user_ops_indexer::v1::ListUserOp {
-            op_hash: v.op_hash.encode_hex(),
+            hash: v.hash.encode_hex(),
             block_number: v.block_number,
-            tx_hash: v.tx_hash.encode_hex(),
+            transaction_hash: v.transaction_hash.encode_hex(),
             address: to_checksum(&v.sender, None),
             timestamp: v.timestamp,
         }

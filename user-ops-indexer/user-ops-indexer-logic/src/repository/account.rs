@@ -7,7 +7,7 @@ use crate::types::account::Account;
 pub struct AccountDB {
     pub address: Vec<u8>,
     pub factory: Option<Vec<u8>>,
-    pub creation_tx_hash: Option<Vec<u8>>,
+    pub creation_transaction_hash: Option<Vec<u8>>,
     pub creation_op_hash: Option<Vec<u8>>,
     pub creation_timestamp: Option<DateTime>,
     pub total_ops: i64,
@@ -20,20 +20,20 @@ pub async fn find_account_by_address(
     let acc = AccountDB::find_by_statement(Statement::from_sql_and_values(
         db.get_database_backend(),
         r#"
-WITH account_ops_cte AS (SELECT sender, factory, tx_hash, op_hash, blocks.timestamp
+WITH account_ops_cte AS (SELECT sender, factory, user_operations.transaction_hash, user_operations.hash, blocks.timestamp
                          FROM user_operations
                                   JOIN blocks ON blocks.hash = block_hash AND consensus
                          WHERE sender = $1),
-     account_creation_op_cte AS (SELECT DISTINCT ON (sender) sender, factory, op_hash, tx_hash, timestamp
+     account_creation_op_cte AS (SELECT DISTINCT ON (sender) sender, factory, hash, transaction_hash, timestamp
                                  FROM account_ops_cte
                                  WHERE factory IS NOT NULL),
      account_total_cte AS (SELECT sender, count(*) as total_ops FROM account_ops_cte GROUP BY sender)
-SELECT account_total_cte.sender          as address,
-       account_total_cte.total_ops       as total_ops,
-       account_creation_op_cte.factory   as factory,
-       account_creation_op_cte.tx_hash   as creation_tx_hash,
-       account_creation_op_cte.op_hash   as creation_op_hash,
-       account_creation_op_cte.timestamp as creation_timestamp
+SELECT account_total_cte.sender                 as address,
+       account_total_cte.total_ops              as total_ops,
+       account_creation_op_cte.factory          as factory,
+       account_creation_op_cte.transaction_hash as creation_transaction_hash,
+       account_creation_op_cte.hash             as creation_op_hash,
+       account_creation_op_cte.timestamp        as creation_timestamp
 FROM account_total_cte
          LEFT JOIN account_creation_op_cte ON account_total_cte.sender = account_creation_op_cte.sender"#,
         [addr.as_bytes().into()],
@@ -56,9 +56,9 @@ pub async fn list_accounts(
         r#"
 WITH accounts_cte AS (SELECT DISTINCT ON (sender) sender,
                                                   factory,
-                                                  CASE WHEN factory IS NOT NULL THEN tx_hash END          as tx_hash,
-                                                  CASE WHEN factory IS NOT NULL THEN op_hash END          as op_hash,
-                                                  CASE WHEN factory IS NOT NULL THEN blocks.timestamp END as timestamp
+                                                  CASE WHEN factory IS NOT NULL THEN user_operations.transaction_hash END as creation_transaction_hash,
+                                                  CASE WHEN factory IS NOT NULL THEN user_operations.hash END             as creation_op_hash,
+                                                  CASE WHEN factory IS NOT NULL THEN blocks.timestamp END                 as creation_timestamp
                       FROM user_operations
                                JOIN blocks
                                     ON blocks.hash = block_hash AND consensus
@@ -71,12 +71,12 @@ WITH accounts_cte AS (SELECT DISTINCT ON (sender) sender,
                                      JOIN user_operations ON accounts_cte.sender = user_operations.sender
                                      JOIN blocks ON blocks.hash = block_hash AND consensus
                             GROUP BY accounts_cte.sender)
-SELECT accounts_cte.sender          as address,
-       accounts_total_cte.total_ops as total_ops,
-       accounts_cte.factory         as factory,
-       accounts_cte.tx_hash         as creation_tx_hash,
-       accounts_cte.op_hash         as creation_op_hash,
-       accounts_cte.timestamp       as creation_timestamp
+SELECT accounts_cte.sender                    as address,
+       accounts_total_cte.total_ops           as total_ops,
+       accounts_cte.factory                   as factory,
+       accounts_cte.creation_transaction_hash as creation_transaction_hash,
+       accounts_cte.creation_op_hash          as creation_op_hash,
+       accounts_cte.creation_timestamp        as creation_timestamp
 FROM accounts_cte
          JOIN accounts_total_cte ON accounts_cte.sender = accounts_total_cte.sender"#,
         [
@@ -119,7 +119,7 @@ mod tests {
             Some(Account {
                 address: addr,
                 factory: None,
-                creation_tx_hash: None,
+                creation_transaction_hash: None,
                 creation_op_hash: None,
                 creation_timestamp: None,
                 total_ops: 100,
@@ -133,7 +133,7 @@ mod tests {
             Some(Account {
                 address: addr,
                 factory: Some(Address::from_low_u64_be(0xf1)),
-                creation_tx_hash: Some(H256::from_low_u64_be(0x3204)),
+                creation_transaction_hash: Some(H256::from_low_u64_be(0x3204)),
                 creation_op_hash: Some(H256::from_low_u64_be(0x3201)),
                 creation_timestamp: Some(1704067260),
                 total_ops: 100,

@@ -14,15 +14,15 @@ use crate::types::user_op::{ListUserOp, UserOp};
 
 #[derive(FromQueryResult)]
 struct TxHash {
-    tx_hash: Vec<u8>,
+    transaction_hash: Vec<u8>,
 }
 
 #[derive(FromQueryResult, Clone)]
 pub struct ListUserOpDB {
-    pub op_hash: Vec<u8>,
+    pub hash: Vec<u8>,
     pub block_number: i32,
     pub sender: Vec<u8>,
-    pub tx_hash: Vec<u8>,
+    pub transaction_hash: Vec<u8>,
     pub timestamp: DateTime,
 }
 
@@ -92,10 +92,10 @@ pub async fn list_user_ops(
     let mut q = Entity::find()
         .select_only()
         .columns([
-            Column::OpHash,
+            Column::Hash,
             Column::BlockNumber,
             Column::Sender,
-            Column::TxHash,
+            Column::TransactionHash,
         ])
         .column(blocks::Column::Timestamp)
         .join_rev(JoinType::Join, user_ops_blocks_rel());
@@ -112,7 +112,7 @@ pub async fn list_user_ops(
         q = q.filter(Column::Factory.eq(factory.as_bytes()));
     }
     if let Some(tx_hash) = tx_hash_filter {
-        q = q.filter(Column::TxHash.eq(tx_hash.as_bytes()));
+        q = q.filter(Column::TransactionHash.eq(tx_hash.as_bytes()));
         if let Some(bundle_index) = bundle_index_filter {
             q = q.filter(Column::BundleIndex.eq(bundle_index));
         }
@@ -127,7 +127,7 @@ pub async fn list_user_ops(
         .filter(
             Expr::tuple([
                 Column::BlockNumber.into_simple_expr(),
-                Column::OpHash.into_simple_expr(),
+                Column::Hash.into_simple_expr(),
             ])
             .lte(Expr::tuple([
                 page_token.0.into(),
@@ -135,7 +135,7 @@ pub async fn list_user_ops(
             ])),
         )
         .order_by_desc(Column::BlockNumber)
-        .order_by_desc(Column::OpHash)
+        .order_by_desc(Column::Hash)
         .limit(limit + 1);
 
     let user_ops: Vec<ListUserOp> = q
@@ -149,7 +149,7 @@ pub async fn list_user_ops(
     match user_ops.get(limit as usize) {
         Some(a) => Ok((
             user_ops[0..limit as usize].to_vec(),
-            Some((a.block_number, a.op_hash)),
+            Some((a.block_number, a.hash)),
         )),
         None => Ok((user_ops, None)),
     }
@@ -162,16 +162,16 @@ pub async fn upsert_many(
     let user_ops = user_ops.into_iter().map(|user_op| {
         let model: Model = user_op.into();
         let mut active: ActiveModel = model.into();
-        active.created_at = ActiveValue::NotSet;
+        active.inserted_at = ActiveValue::NotSet;
         active.updated_at = ActiveValue::NotSet;
         active
     });
 
     Entity::insert_many(user_ops)
         .on_conflict(
-            OnConflict::column(Column::OpHash)
+            OnConflict::column(Column::Hash)
                 .update_columns(Column::iter().filter(|col| {
-                    !matches!(col, Column::OpHash | Column::CreatedAt | Column::UpdatedAt)
+                    !matches!(col, Column::Hash | Column::InsertedAt | Column::UpdatedAt)
                 }))
                 .value(Column::UpdatedAt, Expr::current_timestamp())
                 .to_owned(),
@@ -191,21 +191,21 @@ pub async fn find_unprocessed_logs_tx_hashes(
     let tx_hashes = TxHash::find_by_statement(Statement::from_sql_and_values(
         DbBackend::Postgres,
         r#"
-SELECT DISTINCT logs.transaction_hash as tx_hash
+SELECT DISTINCT logs.transaction_hash as transaction_hash
 FROM logs
          JOIN blocks ON logs.block_hash = blocks.hash AND blocks.consensus
-         LEFT JOIN user_operations ON logs.second_topic = '0x' || ENCODE(user_operations.op_hash, 'hex')
-WHERE logs.address_hash = $1
-  AND logs.first_topic = '0x' || ENCODE($2, 'hex')
-  AND logs.block_number >= $3
-  AND logs.block_number <= $4
-  AND user_operations.op_hash IS NULL"#,
+         LEFT JOIN user_operations ON logs.second_topic = '0x' || ENCODE(user_operations.hash, 'hex')
+WHERE logs.address_hash    = $1
+  AND logs.first_topic     = '0x' || ENCODE($2, 'hex')
+  AND logs.block_number    >= $3
+  AND logs.block_number    <= $4
+  AND user_operations.hash IS NULL"#,
         [addr.as_bytes().into(), topic.as_bytes().into(), from_block.into(), to_block.into()],
     ))
         .all(db)
         .await?
         .into_iter()
-        .map(|tx| H256::from_slice(&tx.tx_hash))
+        .map(|tx| H256::from_slice(&tx.transaction_hash))
         .collect();
 
     Ok(tx_hashes)
@@ -230,21 +230,21 @@ mod tests {
         let item = find_user_op_by_op_hash(&db, hash).await.unwrap();
         assert_ne!(item, None);
         let item = item.unwrap();
-        assert_eq!(item.op_hash, hash);
+        assert_eq!(item.hash, hash);
         assert_eq!(item.consensus, Some(true));
 
         let hash = H256::from_low_u64_be(0x1a0401);
         let item = find_user_op_by_op_hash(&db, hash).await.unwrap();
         assert_ne!(item, None);
         let item = item.unwrap();
-        assert_eq!(item.op_hash, hash);
+        assert_eq!(item.hash, hash);
         assert_eq!(item.consensus, Some(false));
 
         let hash = H256::from_low_u64_be(0x1a0e01);
         let item = find_user_op_by_op_hash(&db, hash).await.unwrap();
         assert_ne!(item, None);
         let item = item.unwrap();
-        assert_eq!(item.op_hash, hash);
+        assert_eq!(item.hash, hash);
         assert_eq!(item.consensus, None);
     }
 
@@ -304,17 +304,17 @@ mod tests {
             items,
             [
                 ListUserOp {
-                    op_hash: H256::from_low_u64_be(0x6901),
+                    hash: H256::from_low_u64_be(0x6901),
                     block_number: 0,
                     sender: Address::from_low_u64_be(0x0502),
-                    tx_hash: H256::from_low_u64_be(0x0504),
+                    transaction_hash: H256::from_low_u64_be(0x0504),
                     timestamp: 1704067200,
                 },
                 ListUserOp {
-                    op_hash: H256::from_low_u64_be(0x0501),
+                    hash: H256::from_low_u64_be(0x0501),
                     block_number: 0,
                     sender: Address::from_low_u64_be(0x0502),
-                    tx_hash: H256::from_low_u64_be(0x0504),
+                    transaction_hash: H256::from_low_u64_be(0x0504),
                     timestamp: 1704067200,
                 }
             ]

@@ -6,7 +6,7 @@ http:
     - selector: blockscout.userOpsIndexer.v1.UserOpsService.GetAccount
       get: /api/v1/accounts/{address}
     - selector: blockscout.userOpsIndexer.v1.UserOpsService.GetUserOp
-      get: /api/v1/userOps/{op_hash}
+      get: /api/v1/userOps/{hash}
     - selector: blockscout.userOpsIndexer.v1.UserOpsService.GetBundler
       get: /api/v1/bundlers/{address}
     - selector: blockscout.userOpsIndexer.v1.UserOpsService.GetPaymaster

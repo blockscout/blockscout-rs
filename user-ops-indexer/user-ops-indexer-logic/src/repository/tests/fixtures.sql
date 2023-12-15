@@ -11,9 +11,9 @@ SELECT true,
        '2024-01-01 00:00:00'::timestamp + interval '12 seconds' * n, now(), now()
 FROM generate_series(0, 999) n;
 
-INSERT INTO user_operations (op_hash, sender, nonce, call_data, call_gas_limit, verification_gas_limit,
+INSERT INTO user_operations (hash, sender, nonce, call_data, call_gas_limit, verification_gas_limit,
                              pre_verification_gas, max_fee_per_gas, max_priority_fee_per_gas, signature, entry_point,
-                             tx_hash, block_number, block_hash, bundle_index, op_index, user_logs_start_index,
+                             transaction_hash, block_number, block_hash, bundle_index, index, user_logs_start_index,
                              user_logs_count, bundler, status, gas, gas_price, gas_used, sponsor_type)
 SELECT decode(lpad(to_hex(n * 256 + 1), 64, '0'), 'hex'),
        decode(lpad(to_hex(mod(n, 100) * 256 + 2), 40, '0'), 'hex'),
@@ -58,11 +58,11 @@ SET factory = '\x00000000000000000000000000000000000000f2'
 WHERE block_number = 6;
 
 UPDATE user_operations
-SET op_index     = 1,
-    block_hash   = '\x0000000000000000000000000000000000000000000000000000000000000000',
-    block_number = 0,
-    tx_hash      = '\x0000000000000000000000000000000000000000000000000000000000000504'
-WHERE tx_hash = '\x0000000000000000000000000000000000000000000000000000000000006904';
+SET index            = 1,
+    block_hash       = '\x0000000000000000000000000000000000000000000000000000000000000000',
+    block_number     = 0,
+    transaction_hash = '\x0000000000000000000000000000000000000000000000000000000000000504'
+WHERE transaction_hash = '\x0000000000000000000000000000000000000000000000000000000000006904';
 
 UPDATE user_operations
 SET paymaster    = '\x00000000000000000000000000000000000000e1',

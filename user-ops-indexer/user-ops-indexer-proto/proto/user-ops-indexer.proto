@@ -24,7 +24,7 @@ message GetAccountRequest {
 }
 
 message GetUserOpRequest {
-  string op_hash = 1;
+  string hash = 1;
 }
 
 message GetBundlerRequest {
@@ -67,7 +67,7 @@ message ListUserOpsRequest {
   optional string bundler = 2;
   optional string paymaster = 3;
   optional string factory = 4;
-  optional string tx_hash = 5;
+  optional string transaction_hash = 5;
   optional string entry_point = 6;
   optional uint64 bundle_index = 7;
   optional uint64 block_number = 8;
@@ -113,14 +113,14 @@ message ListFactoriesResponse {
 message Account {
   string address = 1;
   optional string factory = 2;
-  optional string creation_tx_hash = 3;
+  optional string creation_transaction_hash = 3;
   optional string creation_op_hash = 4;
   optional uint64 creation_timestamp = 5;
   uint32 total_ops = 6;
 }
 
 message Bundle {
-  string tx_hash = 1;
+  string transaction_hash = 1;
   string bundler = 2;
   uint64 block_number = 3;
   uint64 bundle_index = 4;
@@ -145,7 +145,7 @@ message Factory {
 }
 
 message UserOp {
-  string op_hash = 1;
+  string hash = 1;
   string sender = 2;
   string nonce = 3;
   optional string init_code = 4;
@@ -160,12 +160,12 @@ message UserOp {
   optional string aggregator = 13;
   optional string aggregator_signature = 14;
   string entry_point = 15;
-  string tx_hash = 16;
+  string transaction_hash = 16;
   uint64 block_number = 17;
   string block_hash = 18;
   string bundler = 19;
   uint64 bundle_index = 20;
-  uint64 op_index = 21;
+  uint64 index = 21;
   optional string factory = 22;
   optional string paymaster = 23;
   bool status = 24;
@@ -182,9 +182,9 @@ message UserOp {
 }
 
 message ListUserOp {
-  string op_hash = 1;
+  string hash = 1;
   uint64 block_number = 2;
-  string tx_hash = 3;
+  string transaction_hash = 3;
   string address = 4;
   uint64 timestamp = 5;
 }

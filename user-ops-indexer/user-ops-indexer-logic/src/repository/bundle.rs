@@ -5,7 +5,7 @@ use crate::types::bundle::Bundle;
 
 #[derive(FromQueryResult)]
 pub struct BundleDB {
-    pub tx_hash: Vec<u8>,
+    pub transaction_hash: Vec<u8>,
     pub bundle_index: i32,
     pub block_number: i32,
     pub bundler: Vec<u8>,
@@ -24,15 +24,15 @@ pub async fn list_bundles(
     let bundles: Vec<Bundle> = BundleDB::find_by_statement(Statement::from_sql_and_values(
         db.get_database_backend(),
         r#"
-SELECT tx_hash, bundle_index, block_number, bundler, blocks.timestamp as timestamp, count(*) as total_ops
+SELECT transaction_hash, bundle_index, block_number, bundler, blocks.timestamp as timestamp, count(*) as total_ops
 FROM user_operations
          JOIN blocks ON blocks.hash = user_operations.block_hash AND consensus
-WHERE (block_number, tx_hash, bundle_index) <=
+WHERE (block_number, transaction_hash, bundle_index) <=
       ($3, $4, $5)
       AND ($1 IS NULL OR bundler = $1)
       AND ($2 IS NULL OR entry_point = $2)
-GROUP BY tx_hash, bundle_index, block_number, bundler, blocks.timestamp
-ORDER BY block_number DESC, tx_hash DESC, bundle_index DESC
+GROUP BY transaction_hash, bundle_index, block_number, bundler, blocks.timestamp
+ORDER BY block_number DESC, transaction_hash DESC, bundle_index DESC
 LIMIT $6"#,
         [
             bundler_filter.map(|f| f.as_bytes().to_vec()).into(),
@@ -52,7 +52,7 @@ LIMIT $6"#,
     match bundles.get(limit as usize) {
         Some(a) => Ok((
             bundles[0..limit as usize].to_vec(),
-            Some((a.block_number, a.tx_hash, a.bundle_index)),
+            Some((a.block_number, a.transaction_hash, a.bundle_index)),
         )),
         None => Ok((bundles, None)),
     }

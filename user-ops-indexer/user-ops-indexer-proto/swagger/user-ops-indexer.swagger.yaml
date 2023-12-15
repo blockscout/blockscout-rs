@@ -247,7 +247,7 @@ paths:
           in: query
           required: false
           type: string
-        - name: txHash
+        - name: transactionHash
           in: query
           required: false
           type: string
@@ -276,7 +276,7 @@ paths:
           type: string
       tags:
         - UserOpsService
-  /api/v1/userOps/{opHash}:
+  /api/v1/userOps/{hash}:
     get:
       operationId: UserOpsService_GetUserOp
       responses:
@@ -289,7 +289,7 @@ paths:
           schema:
             $ref: '#/definitions/rpcStatus'
       parameters:
-        - name: opHash
+        - name: hash
           in: path
           required: true
           type: string
@@ -352,7 +352,7 @@ definitions:
         type: string
       factory:
         type: string
-      creationTxHash:
+      creationTransactionHash:
         type: string
       creationOpHash:
         type: string
@@ -365,7 +365,7 @@ definitions:
   v1Bundle:
     type: object
     properties:
-      txHash:
+      transactionHash:
         type: string
       bundler:
         type: string
@@ -453,12 +453,12 @@ definitions:
   v1ListUserOp:
     type: object
     properties:
-      opHash:
+      hash:
         type: string
       blockNumber:
         type: string
         format: uint64
-      txHash:
+      transactionHash:
         type: string
       address:
         type: string
@@ -485,7 +485,7 @@ definitions:
   v1UserOp:
     type: object
     properties:
-      opHash:
+      hash:
         type: string
       sender:
         type: string
@@ -518,7 +518,7 @@ definitions:
         type: string
       entryPoint:
         type: string
-      txHash:
+      transactionHash:
         type: string
       blockNumber:
         type: string
@@ -530,7 +530,7 @@ definitions:
       bundleIndex:
         type: string
         format: uint64
-      opIndex:
+      index:
         type: string
         format: uint64
       factory:

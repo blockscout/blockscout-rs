@@ -26,7 +26,7 @@ impl MigrationTrait for Migration {
             );
 
             CREATE TABLE "user_operations" (
-              "op_hash" bytea PRIMARY KEY,
+              "hash" bytea PRIMARY KEY,
 
               -- EIP4337 struct raw fields
               "sender" bytea NOT NULL, -- AA wallet address
@@ -46,11 +46,11 @@ impl MigrationTrait for Migration {
 
               -- context fields
               "entry_point" bytea NOT NULL,
-              "tx_hash" bytea NOT NULL,
+              "transaction_hash" bytea NOT NULL,
               "block_number" int NOT NULL,
               "block_hash" bytea NOT NULL,
               "bundle_index" int NOT NULL,
-              "op_index" int NOT NULL,
+              "index" int NOT NULL,
               "user_logs_start_index" int NOT NULL,
               "user_logs_count" int NOT NULL,
 
@@ -66,7 +66,7 @@ impl MigrationTrait for Migration {
 
               "sponsor_type" sponsor_type NOT NULL,
 
-              "created_at" timestamp NOT NULL DEFAULT (now()),
+              "inserted_at" timestamp NOT NULL DEFAULT (now()),
               "updated_at" timestamp NOT NULL DEFAULT (now())
             );
         "#;

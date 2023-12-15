@@ -11,7 +11,7 @@ pub struct Model {
         auto_increment = false,
         column_type = "Binary(BlobSize::Blob(None))"
     )]
-    pub op_hash: Vec<u8>,
+    pub hash: Vec<u8>,
     #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
     pub sender: Vec<u8>,
     #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
@@ -41,14 +41,16 @@ pub struct Model {
     #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
     pub entry_point: Vec<u8>,
     #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
-    pub tx_hash: Vec<u8>,
+    pub transaction_hash: Vec<u8>,
     pub block_number: i32,
     #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
     pub block_hash: Vec<u8>,
+    pub bundle_index: i32,
+    pub index: i32,
+    pub user_logs_start_index: i32,
+    pub user_logs_count: i32,
     #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
     pub bundler: Vec<u8>,
-    pub bundle_index: i32,
-    pub op_index: i32,
     #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
     pub factory: Option<Vec<u8>>,
     #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
@@ -63,9 +65,7 @@ pub struct Model {
     #[sea_orm(column_type = "Decimal(Some((100, 0)))")]
     pub gas_used: BigDecimal,
     pub sponsor_type: SponsorType,
-    pub user_logs_start_index: i32,
-    pub user_logs_count: i32,
-    pub created_at: DateTime,
+    pub inserted_at: DateTime,
     pub updated_at: DateTime,
 }
 

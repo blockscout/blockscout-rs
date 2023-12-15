@@ -21,7 +21,7 @@ WITH bundles_cte AS (SELECT bundler, count(*) as bundle_ops
                      FROM user_operations
                               JOIN blocks ON blocks.hash = user_operations.block_hash AND consensus
                      WHERE bundler = $1
-                     GROUP BY bundler, tx_hash, bundle_index)
+                     GROUP BY bundler, transaction_hash, bundle_index)
 SELECT bundler, count(*) as total_bundles, sum(bundle_ops)::int8 as total_ops
 FROM bundles_cte
 GROUP BY bundler"#,
@@ -47,7 +47,7 @@ pub async fn list_bundlers(
 WITH bundles_cte AS (SELECT bundler, count(*) as bundle_ops
                      FROM user_operations
                               JOIN blocks ON blocks.hash = user_operations.block_hash AND consensus
-                     GROUP BY bundler, tx_hash, bundle_index)
+                     GROUP BY bundler, transaction_hash, bundle_index)
 SELECT bundler, count(*) as total_bundles, sum(bundle_ops)::int8 as total_ops
 FROM bundles_cte
 GROUP BY bundler

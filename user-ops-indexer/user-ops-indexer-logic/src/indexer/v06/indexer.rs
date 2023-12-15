@@ -325,7 +325,7 @@ impl<C: PubsubClient> IndexerV06<C> {
 fn build_user_op_model(
     bundler: Address,
     bundle_index: u64,
-    op_index: u64,
+    index: u64,
     raw_user_op: RawUserOperation,
     logs: &[Log],
     tx_deposits: &[DepositedFilter],
@@ -378,7 +378,7 @@ fn build_user_op_model(
         user_logs_count -= 1;
     }
     Ok(UserOp {
-        op_hash: H256::from(user_op_event.user_op_hash),
+        hash: H256::from(user_op_event.user_op_hash),
         sender,
         nonce: H256::from_uint(&raw_user_op.user_op.nonce),
         init_code: none_if_empty(raw_user_op.user_op.init_code),
@@ -393,12 +393,12 @@ fn build_user_op_model(
         aggregator: raw_user_op.aggregator,
         aggregator_signature: raw_user_op.aggregator_signature,
         entry_point: *ENTRYPOINT_V06,
-        tx_hash: user_op_log.transaction_hash.unwrap_or(H256::zero()),
+        transaction_hash: user_op_log.transaction_hash.unwrap_or(H256::zero()),
         block_number: user_op_log.block_number.map_or(0, |n| n.as_u64()),
         block_hash: user_op_log.block_hash.unwrap_or(H256::zero()),
         bundler,
         bundle_index,
-        op_index,
+        index,
         factory,
         paymaster,
         status: user_op_event.success,

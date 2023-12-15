@@ -65,7 +65,7 @@ impl UserOps for UserOpsService {
     ) -> Result<Response<UserOp>, Status> {
         let inner = request.into_inner();
 
-        let op_hash = parse_filter(inner.op_hash)?;
+        let op_hash = parse_filter(inner.hash)?;
 
         let user_op = repository::user_op::find_user_op_by_op_hash(&self.db, op_hash)
             .await
@@ -206,7 +206,7 @@ impl UserOps for UserOpsService {
         let bundler_filter = inner.bundler.map(parse_filter).transpose()?;
         let paymaster_filter = inner.paymaster.map(parse_filter).transpose()?;
         let factory_filter = inner.factory.map(parse_filter).transpose()?;
-        let tx_hash_filter = inner.tx_hash.map(parse_filter).transpose()?;
+        let tx_hash_filter = inner.transaction_hash.map(parse_filter).transpose()?;
         let entry_point_filter = inner.entry_point.map(parse_filter).transpose()?;
         let bundle_index_filter = inner.bundle_index;
         let block_number_filter = inner.block_number;
