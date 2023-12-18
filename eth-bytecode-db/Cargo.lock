@@ -857,37 +857,6 @@ dependencies = [
 [[package]]
 name = "blockscout-service-launcher"
 version = "0.9.0"
-source = "git+https://github.com/blockscout/blockscout-rs/?branch=rimrakhimov/verifier/tracing-logs#02e6f3552ae25890caa457e59ae694dabe2d5318"
-dependencies = [
- "actix-cors",
- "actix-web",
- "actix-web-prom",
- "anyhow",
- "cfg-if",
- "config",
- "futures",
- "keccak-hash",
- "once_cell",
- "opentelemetry",
- "opentelemetry-jaeger",
- "prometheus",
- "sea-orm",
- "sea-orm-migration",
- "serde",
- "serde_json",
- "tokio",
- "tonic",
- "tracing",
- "tracing-actix-web",
- "tracing-opentelemetry",
- "tracing-subscriber",
- "url",
- "uuid 1.6.1",
-]
-
-[[package]]
-name = "blockscout-service-launcher"
-version = "0.9.0"
 source = "git+https://github.com/blockscout/blockscout-rs/?rev=b5bac554#b5bac554506f576b05467b8206baef8042df110d"
 dependencies = [
  "actix-cors",
@@ -1793,7 +1762,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "blockscout-display-bytes",
- "blockscout-service-launcher 0.9.0 (git+https://github.com/blockscout/blockscout-rs/?branch=rimrakhimov/verifier/tracing-logs)",
+ "blockscout-service-launcher",
  "bytes",
  "entity",
  "ethabi",
@@ -1851,7 +1820,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "blockscout-display-bytes",
- "blockscout-service-launcher 0.9.0 (git+https://github.com/blockscout/blockscout-rs/?rev=b5bac554)",
+ "blockscout-service-launcher",
  "bytes",
  "config",
  "eth-bytecode-db",
