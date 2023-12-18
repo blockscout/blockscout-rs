@@ -48,7 +48,7 @@ pub async fn verify(
         .into_inner();
     tracing::info!(
         status = response.status,
-        message = response.message,
+        response_message = response.message,
         "response from the verifier"
     );
 
