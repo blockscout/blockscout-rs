@@ -1,8 +1,10 @@
 use crate::{
     proto::{
-        database_server::Database, BytecodeType, SearchAllSourcesRequest, SearchAllSourcesResponse,
-        SearchEventDescriptionsRequest, SearchEventDescriptionsResponse, SearchSourcesRequest,
-        SearchSourcesResponse, SearchSourcifySourcesRequest, Source, VerifyResponse,
+        database_server::Database, BatchSearchEventDescriptionsRequest,
+        BatchSearchEventDescriptionsResponse, BytecodeType, SearchAllSourcesRequest,
+        SearchAllSourcesResponse, SearchEventDescriptionsRequest, SearchEventDescriptionsResponse,
+        SearchSourcesRequest, SearchSourcesResponse, SearchSourcifySourcesRequest, Source,
+        VerifyResponse,
     },
     types::{BytecodeTypeWrapper, EventDescriptionWrapper, SourceWrapper, VerifyResponseWrapper},
 };
@@ -143,6 +145,16 @@ impl Database for DatabaseService {
                 .collect(),
         };
 
+        Ok(tonic::Response::new(response))
+    }
+
+    async fn batch_search_event_descriptions(
+        &self,
+        request: tonic::Request<BatchSearchEventDescriptionsRequest>,
+    ) -> Result<tonic::Response<BatchSearchEventDescriptionsResponse>, tonic::Status> {
+        let _request = request.into_inner();
+
+        let response = BatchSearchEventDescriptionsResponse { responses: vec![] };
         Ok(tonic::Response::new(response))
     }
 }
