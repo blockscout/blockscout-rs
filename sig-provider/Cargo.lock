@@ -3661,6 +3661,7 @@ dependencies = [
  "sig-provider",
  "sig-provider-proto",
  "tokio",
+ "tokio-stream",
  "toml",
  "tonic",
  "tracing",

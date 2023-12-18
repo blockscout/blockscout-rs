@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use ethabi::{ethereum_types::H256, RawLog};
+use futures::StreamExt;
 use sig_provider::SourceAggregator;
 use sig_provider_proto::blockscout::sig_provider::v1::{
     abi_service_server::AbiService, signature_service_server::SignatureService, Abi,
@@ -74,13 +75,15 @@ impl AbiService for Service {
 
         let process_function = |raw| async { self.agg.batch_get_event_abi(raw).await };
 
-        let mut responses = Vec::new();
-        for event_request in request.requests {
-            let response = self
-                .get_event_abi_internal(event_request, process_function)
-                .await?;
-            responses.push(response);
-        }
+        let responses = tokio_stream::iter(request.requests.into_iter().map(|request| async {
+            self.get_event_abi_internal(request, process_function)
+                .await
+                .unwrap_or_default()
+        }))
+        .buffered(10)
+        .collect::<Vec<_>>()
+        .await;
+
         Ok(tonic::Response::new(BatchGetEventAbisResponse {
             responses,
         }))

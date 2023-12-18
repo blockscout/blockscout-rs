@@ -315,14 +315,14 @@ async fn batch_get_events() {
     mocks.assert();
 
     assert_eq!(
-        serde_json::json!({"responses": [
+        serde_json::json!([
             {"abi": [{"inputs":[{"components":[],"indexed":false,"name":"c","type":"uint256","value":"1"}],"name":"C"}] },
             {"abi": [] },
             {"abi": [
                 {"inputs":[{"components":[],"indexed":true,"name":"a","type":"uint256","value":"1"},{"components":[],"indexed":true,"name":"b","type":"uint256","value":"2"}],"name":"A"},
                 {"inputs":[{"components":[],"indexed":true,"name":"a2","type":"uint256","value":"1"},{"components":[],"indexed":true,"name":"b2","type":"uint256","value":"2"}],"name":"A"},
             ]},
-        ]}),
+        ]),
         response,
     );
 }

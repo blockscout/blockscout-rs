@@ -43,9 +43,12 @@ paths:
       operationId: AbiService_BatchGetEventAbis
       responses:
         "200":
-          description: A successful response.
+          description: ""
           schema:
-            $ref: '#/definitions/v1BatchGetEventAbisResponse'
+            type: array
+            items:
+              type: object
+              $ref: '#/definitions/v1GetEventAbiResponse'
         default:
           description: An unexpected error response.
           schema:
