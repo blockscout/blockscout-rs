@@ -14,14 +14,6 @@ impl Source {
         }
     }
 
-    fn hash(hex: &str) -> String {
-        if hex.starts_with("0x") {
-            hex.to_owned()
-        } else {
-            "0x".to_owned() + hex
-        }
-    }
-
     async fn fetch(&self, path: &str) -> Result<json::GetResponse, anyhow::Error> {
         let response = self
             .client
@@ -65,7 +57,7 @@ impl SignatureSource for Source {
     }
 
     async fn get_function_signatures(&self, hex: &str) -> Result<Vec<String>, anyhow::Error> {
-        let hash = Self::hash(hex);
+        let hash = super::hash(hex);
         let resp = self
             .fetch(&format!("/api/v1/signatures?function={hash}&all"))
             .await?;
@@ -74,7 +66,7 @@ impl SignatureSource for Source {
     }
 
     async fn get_event_signatures(&self, hex: &str) -> Result<Vec<String>, anyhow::Error> {
-        let hash = Self::hash(hex);
+        let hash = super::hash(hex);
         let resp = self
             .fetch(&format!("/api/v1/signatures?event={hash}&all"))
             .await?;

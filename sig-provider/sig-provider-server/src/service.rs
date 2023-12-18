@@ -60,20 +60,7 @@ impl AbiService for Service {
         request: tonic::Request<GetEventAbiRequest>,
     ) -> Result<tonic::Response<GetEventAbiResponse>, tonic::Status> {
         let request = request.into_inner();
-        let topics: Result<Vec<_>, _> = request
-            .topics
-            .split(',')
-            .map(|topic| {
-                let hex = decode(topic)?;
-                if hex.len() != 32 {
-                    return Err(tonic::Status::invalid_argument(
-                        "topic len must be 32 bytes",
-                    ));
-                }
-                Ok(H256::from_slice(&hex))
-            })
-            .collect();
-        let topics = topics?;
+        let topics = parse_topics(request.topics)?;
         self.agg
             .get_event_abi(RawLog {
                 data: decode(&request.data)?,
@@ -86,8 +73,29 @@ impl AbiService for Service {
 
     async fn batch_get_event_abis(
         &self,
-        _request: tonic::Request<BatchGetEventAbisRequest>,
+        request: tonic::Request<BatchGetEventAbisRequest>,
     ) -> Result<tonic::Response<BatchGetEventAbisResponse>, tonic::Status> {
-        todo!()
+        let request = request.into_inner();
+        for event_request in request.requests {
+            let _topics = parse_topics(event_request.topics)?;
+        }
+        Ok(tonic::Response::new(BatchGetEventAbisResponse {
+            responses: vec![],
+        }))
     }
+}
+
+fn parse_topics(topics: String) -> Result<Vec<H256>, tonic::Status> {
+    topics
+        .split(',')
+        .map(|topic| {
+            let hex = decode(topic)?;
+            if hex.len() != 32 {
+                return Err(tonic::Status::invalid_argument(
+                    "topic len must be 32 bytes",
+                ));
+            }
+            Ok(H256::from_slice(&hex))
+        })
+        .collect()
 }

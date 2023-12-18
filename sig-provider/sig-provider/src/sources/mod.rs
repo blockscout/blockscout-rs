@@ -8,6 +8,14 @@ use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use std::time::Duration;
 
+fn hash(hex: &str) -> String {
+    if hex.starts_with("0x") {
+        hex.to_owned()
+    } else {
+        "0x".to_owned() + hex
+    }
+}
+
 #[automock]
 #[async_trait]
 pub trait SignatureSource {
@@ -16,6 +24,18 @@ pub trait SignatureSource {
     async fn get_function_signatures(&self, hex: &str) -> Result<Vec<String>, anyhow::Error>;
     // Resulting signatures should be sorted in priority descending order (first - max priority)
     async fn get_event_signatures(&self, hex: &str) -> Result<Vec<String>, anyhow::Error>;
+
+    // for errors
+    fn source(&self) -> String;
+}
+
+#[automock]
+#[async_trait]
+pub trait CompleteSignatureSource {
+    async fn get_event_signatures(
+        &self,
+        hex: &str,
+    ) -> Result<Vec<alloy_json_abi::Event>, anyhow::Error>;
 
     // for errors
     fn source(&self) -> String;

@@ -29,7 +29,7 @@ impl ConfigSettings for Settings {
 pub struct SourcesSettings {
     pub fourbyte: url::Url,
     pub sigeth: url::Url,
-    // pub eth_bytecode_db: url::Url,
+    pub eth_bytecode_db: EthBytecodeDbSettings,
 }
 
 impl Default for SourcesSettings {
@@ -37,13 +37,23 @@ impl Default for SourcesSettings {
         Self {
             fourbyte: url::Url::parse("https://www.4byte.directory/").unwrap(),
             sigeth: url::Url::parse("https://sig.eth.samczsun.com/").unwrap(),
-            // eth_bytecode_db: url::Url::parse("https://eth-bytecode-db.services.blockscout.com/").unwrap(),
+            eth_bytecode_db: Default::default(),
         }
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct EthBytecodeDbSettings {
     pub enabled: bool,
     pub url: url::Url,
+}
+
+impl Default for EthBytecodeDbSettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            url: url::Url::parse("https://eth-bytecode-db.services.blockscout.com/").unwrap(),
+        }
+    }
 }

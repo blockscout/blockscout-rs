@@ -39,7 +39,7 @@ paths:
       tags:
         - AbiService
   /api/v1/abi/events:batch-get:
-    get:
+    post:
       operationId: AbiService_BatchGetEventAbis
       responses:
         "200":
@@ -50,6 +50,12 @@ paths:
           description: An unexpected error response.
           schema:
             $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1BatchGetEventAbisRequest'
       tags:
         - AbiService
   /api/v1/abi/function:
@@ -173,6 +179,14 @@ definitions:
       value:
         type: string
         title: decoded value
+  v1BatchGetEventAbisRequest:
+    type: object
+    properties:
+      requests:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1GetEventAbiRequest'
   v1BatchGetEventAbisResponse:
     type: object
     properties:
