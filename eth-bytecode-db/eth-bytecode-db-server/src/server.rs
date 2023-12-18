@@ -77,20 +77,25 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let health = Arc::new(HealthService::default());
 
-    let mut connect_options = ConnectOptions::new(settings.database.url);
-    connect_options.sqlx_logging_level(::tracing::log::LevelFilter::Debug);
+    let db_connection = {
+        let mut connect_options = ConnectOptions::new(settings.database.url);
+        connect_options.sqlx_logging_level(::tracing::log::LevelFilter::Debug);
 
-    let db_connection = database::initialize_postgres::<Migrator>(
-        connect_options,
-        settings.database.create_database,
-        settings.database.run_migrations,
-    )
-    .await?;
+        database::initialize_postgres::<Migrator>(
+            connect_options,
+            settings.database.create_database,
+            settings.database.run_migrations,
+        )
+        .await?
+    };
 
     let mut client = Client::new(db_connection, settings.verifier.uri).await?;
     if settings.verifier_alliance_database.enabled {
-        let alliance_db_connection =
-            sea_orm::Database::connect(settings.verifier_alliance_database.url).await?;
+        let alliance_db_connection = {
+            let mut connect_options = ConnectOptions::new(settings.verifier_alliance_database.url);
+            connect_options.sqlx_logging_level(::tracing::log::LevelFilter::Debug);
+            sea_orm::Database::connect(connect_options).await?
+        };
         client = client.with_alliance_db(alliance_db_connection);
     }
 
