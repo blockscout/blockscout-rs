@@ -382,7 +382,7 @@ mod tests {
                 });
             let source = Arc::new(source);
 
-            let agg = Arc::new(SourceAggregator::new(vec![source.clone()]));
+            let agg = Arc::new(SourceAggregator::new(vec![source.clone()], vec![]));
 
             let function = agg
                 .get_function_abi(&hex::decode(input).unwrap())
@@ -433,7 +433,7 @@ mod tests {
             });
         let source = Arc::new(source);
 
-        let agg = Arc::new(SourceAggregator::new(vec![source.clone()]));
+        let agg = Arc::new(SourceAggregator::new(vec![source.clone()], vec![]));
 
         let function = agg
             .get_function_abi(&hex::decode(input).unwrap())
@@ -682,7 +682,7 @@ mod tests {
                 .returning(|_| Ok(vec![sig.into()]));
             let source = Arc::new(source);
 
-            let agg = Arc::new(SourceAggregator::new(vec![source.clone()]));
+            let agg = Arc::new(SourceAggregator::new(vec![source.clone()], vec![]));
 
             let event = agg.get_event_abi(input).await.unwrap();
             assert_eq!(abi, event[0]);
@@ -741,7 +741,7 @@ mod tests {
             .returning(|_| Ok(vec![sig.into()]));
         let source = Arc::new(source);
 
-        let agg = Arc::new(SourceAggregator::new(vec![source.clone()]));
+        let agg = Arc::new(SourceAggregator::new(vec![source.clone()], vec![]));
 
         let event = agg.get_event_abi(input).await.unwrap();
         assert_eq!(abi, event[0]);
@@ -815,7 +815,7 @@ mod tests {
             .returning(|_| Ok(vec![sig.into()]));
         let source = Arc::new(source);
 
-        let agg = Arc::new(SourceAggregator::new(vec![source.clone()]));
+        let agg = Arc::new(SourceAggregator::new(vec![source.clone()], vec![]));
 
         let event = agg.get_event_abi(input).await.unwrap();
         assert_eq!(abi, event[0]);
