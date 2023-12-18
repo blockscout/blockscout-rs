@@ -276,6 +276,19 @@ async fn batch_get_events() {
         })
     };
     {
+        let eth_bytecode_db_request = serde_json::json!({"selector":"0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"});
+        let eth_bytecode_db_response = serde_json::json!({"eventDescriptions":[]});
+        mocks.eth_bytecode_db_mock(|when, then| {
+            when.method(httpmock::Method::POST)
+                .path("/api/v2/event-descriptions:search")
+                .header("Content-type", "application/json")
+                .json_body(eth_bytecode_db_request);
+            then.status(200)
+                .header("Content-type", "application/json")
+                .json_body(eth_bytecode_db_response);
+        })
+    }
+    {
         let eth_bytecode_db_request = serde_json::json!({"selector":"0x6e9ed8cf1494d7312e7618c9411ab219f27a9840ed74dda9581992ca7575eb86"});
         let eth_bytecode_db_response = serde_json::json!({"eventDescriptions":[{"type":"event","name":"C","inputs":"[{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"c\",\"type\":\"uint256\"}]"}]});
         mocks.eth_bytecode_db_mock(|when, then| {
@@ -294,7 +307,7 @@ async fn batch_get_events() {
     let route = "/api/v1/abi/events:batch-get";
     let request = serde_json::json!({"requests":[
         {"data":"0x0000000000000000000000000000000000000000000000000000000000000001","topics":"0x6e9ed8cf1494d7312e7618c9411ab219f27a9840ed74dda9581992ca7575eb86"},
-        {"data":"0x00000000000000000000000000000c000000000000000000000000000006acfc0","topics":"0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef,000000000000000000000000b8ace4d9bc469ddc8e788e636e817c299a1a8150,000000000000000000000000f76c5b19e86c256482f4aad1dae620a0c3ac0cd6"},
+        {"data":"0x00000000000000000000000000000c000000000000000000000000000006acfc","topics":"0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef,000000000000000000000000b8ace4d9bc469ddc8e788e636e817c299a1a8150,000000000000000000000000f76c5b19e86c256482f4aad1dae620a0c3ac0cd6"},
         {"data":"0x","topics":"0x83f86eb20c894914ecf65cefc94682009cdb5066a609e8428699fa87b19b5c57,0x0000000000000000000000000000000000000000000000000000000000000001,0x0000000000000000000000000000000000000000000000000000000000000002"}
     ]});
     let response: serde_json::Value = test_server::send_post_request(&base, route, &request).await;
@@ -302,14 +315,14 @@ async fn batch_get_events() {
     mocks.assert();
 
     assert_eq!(
-        serde_json::json!([
-            [{"inputs":[{"components":[],"indexed":false,"name":"c","type":"uint256","value":"0x0000000000000000000000000000000000000000000000000000000000000001"}],"name":"C"}],
-            [],
-            [
-                {"inputs":[{"components":[],"indexed":true,"name":"a","type":"uint256","value":"0x0000000000000000000000000000000000000000000000000000000000000001"},{"components":[],"indexed":true,"name":"b","type":"uint256","value":"0x0000000000000000000000000000000000000000000000000000000000000002"}],"name":"A"},
-                {"inputs":[{"components":[],"indexed":true,"name":"a2","type":"uint256","value":"0x0000000000000000000000000000000000000000000000000000000000000001"},{"components":[],"indexed":true,"name":"b2","type":"uint256","value":"0x0000000000000000000000000000000000000000000000000000000000000002"}],"name":"A"},
-            ],
-        ]),
+        serde_json::json!({"responses": [
+            {"abi": [{"inputs":[{"components":[],"indexed":false,"name":"c","type":"uint256","value":"1"}],"name":"C"}] },
+            {"abi": [] },
+            {"abi": [
+                {"inputs":[{"components":[],"indexed":true,"name":"a","type":"uint256","value":"1"},{"components":[],"indexed":true,"name":"b","type":"uint256","value":"2"}],"name":"A"},
+                {"inputs":[{"components":[],"indexed":true,"name":"a2","type":"uint256","value":"1"},{"components":[],"indexed":true,"name":"b2","type":"uint256","value":"2"}],"name":"A"},
+            ]},
+        ]}),
         response,
     );
 }

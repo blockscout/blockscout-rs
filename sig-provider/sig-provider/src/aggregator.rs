@@ -100,68 +100,92 @@ impl SourceAggregator {
     }
 
     pub async fn get_event_abi(&self, raw: RawLog) -> Result<Vec<Abi>, anyhow::Error> {
-        if raw.topics.is_empty() {
-            anyhow::bail!("log should contain at least one topic");
-        }
-        let hex_sig = hex::encode(raw.topics[0].as_bytes());
+        get_event_abi(&self.complete_sources, &self.sources, raw).await
+    }
 
-        let complete_sigs = get_event_signatures!(&self.complete_sources, &hex_sig);
-        let complete_abis: Vec<_> = complete_sigs.into_iter().filter_map(|alloy_event| {
-            let ethabi_event = try_from_alloy_event_to_ethabi_event(alloy_event.clone())
-                .map_err(|err| tracing::error!("converting alloy_json_abi::Event into ethabi::Event failed for {alloy_event:?}; err={err:#}")).ok()?;
-            ethabi_event.parse_log_whole(raw.clone()).ok()
-                .map(|event| {
-                    let mut names = Vec::new();
-                    let mut values = Vec::new();
-                    for param in event.params.into_iter() {
-                        names.push(param.name);
-                        values.push(param.value);
-                    }
-                    let indexed: Vec<_> = ethabi_event.inputs.iter().map(|param| param.indexed).collect();
-                    let args: Vec<_> = ethabi_event.inputs.into_iter().map(|param| param.kind).collect();
-                    let mut inputs = parse_args_with_names(&names, &args, &values);
-                    for (input, indexed) in inputs.iter_mut().zip(indexed) {
-                        input.indexed = Some(indexed);
-                    }
-                    Abi {
-                        name: ethabi_event.name,
-                        inputs,
-                    }
-                })
-        }).collect();
+    pub async fn batch_get_event_abi(&self, raw: RawLog) -> Result<Vec<Abi>, anyhow::Error> {
+        let complete_sources: Vec<_> = self
+            .complete_sources
+            .iter()
+            .filter(|source| source.supports_batches())
+            .cloned()
+            .collect();
+        let sources: Vec<_> = self
+            .sources
+            .iter()
+            .filter(|source| source.supports_batches())
+            .cloned()
+            .collect();
+        get_event_abi(&complete_sources, &sources, raw).await
+    }
+}
 
-        let sigs = get_event_signatures!(&self.sources, &hex_sig);
-        let abis: Vec<_> = sigs
-            .into_iter()
-            .filter_map(|sig| {
-                let (name, args) = parse_signature(&sig)?;
-                let (values, indexed) = decode_log(name.to_string(), &args, raw.clone())?;
-                let mut inputs = parse_args("arg".into(), &args, &values);
+async fn get_event_abi(
+    complete_sources: &[Arc<dyn CompleteSignatureSource + Send + Sync + 'static>],
+    sources: &[Arc<dyn SignatureSource + Send + Sync + 'static>],
+    raw: RawLog,
+) -> Result<Vec<Abi>, anyhow::Error> {
+    if raw.topics.is_empty() {
+        anyhow::bail!("log should contain at least one topic");
+    }
+    let hex_sig = hex::encode(raw.topics[0].as_bytes());
+
+    let complete_sigs = get_event_signatures!(complete_sources, &hex_sig);
+    let complete_abis: Vec<_> = complete_sigs.into_iter().filter_map(|alloy_event| {
+        let ethabi_event = try_from_alloy_event_to_ethabi_event(alloy_event.clone())
+            .map_err(|err| tracing::error!("converting alloy_json_abi::Event into ethabi::Event failed for {alloy_event:?}; err={err:#}")).ok()?;
+        ethabi_event.parse_log_whole(raw.clone()).ok()
+            .map(|event| {
+                let mut names = Vec::new();
+                let mut values = Vec::new();
+                for param in event.params.into_iter() {
+                    names.push(param.name);
+                    values.push(param.value);
+                }
+                let indexed: Vec<_> = ethabi_event.inputs.iter().map(|param| param.indexed).collect();
+                let args: Vec<_> = ethabi_event.inputs.into_iter().map(|param| param.kind).collect();
+                let mut inputs = parse_args_with_names(&names, &args, &values);
                 for (input, indexed) in inputs.iter_mut().zip(indexed) {
                     input.indexed = Some(indexed);
                 }
-                Some(Abi {
-                    name: name.into(),
+                Abi {
+                    name: ethabi_event.name,
                     inputs,
-                })
-            })
-            .collect();
-
-        let mut seen_abis = HashSet::new();
-        let result: Vec<_> = complete_abis
-            .into_iter()
-            .chain(abis)
-            .filter_map(|abi| {
-                if !seen_abis.contains(&abi) {
-                    seen_abis.insert(abi.clone());
-                    Some(abi)
-                } else {
-                    None
                 }
             })
-            .collect();
-        Ok(result)
-    }
+    }).collect();
+
+    let sigs = get_event_signatures!(sources, &hex_sig);
+    let abis: Vec<_> = sigs
+        .into_iter()
+        .filter_map(|sig| {
+            let (name, args) = parse_signature(&sig)?;
+            let (values, indexed) = decode_log(name.to_string(), &args, raw.clone())?;
+            let mut inputs = parse_args("arg".into(), &args, &values);
+            for (input, indexed) in inputs.iter_mut().zip(indexed) {
+                input.indexed = Some(indexed);
+            }
+            Some(Abi {
+                name: name.into(),
+                inputs,
+            })
+        })
+        .collect();
+
+    let mut seen_abis = HashSet::new();
+    let result: Vec<_> = complete_abis
+        .into_iter()
+        .chain(abis)
+        .filter_map(|abi| {
+            if !seen_abis.contains(&abi) {
+                seen_abis.insert(abi.clone());
+                Some(abi)
+            } else {
+                None
+            }
+        })
+        .collect();
+    Ok(result)
 }
 
 fn parse_signature(sig: &str) -> Option<(&str, Vec<ParamType>)> {

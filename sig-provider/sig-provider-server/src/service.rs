@@ -2,12 +2,12 @@ use async_trait::async_trait;
 use ethabi::{ethereum_types::H256, RawLog};
 use sig_provider::SourceAggregator;
 use sig_provider_proto::blockscout::sig_provider::v1::{
-    abi_service_server::AbiService, signature_service_server::SignatureService,
+    abi_service_server::AbiService, signature_service_server::SignatureService, Abi,
     BatchGetEventAbisRequest, BatchGetEventAbisResponse, CreateSignaturesRequest,
     CreateSignaturesResponse, GetEventAbiRequest, GetEventAbiResponse, GetFunctionAbiRequest,
     GetFunctionAbiResponse,
 };
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
 
 #[derive(Clone)]
 pub struct Service {
@@ -60,15 +60,10 @@ impl AbiService for Service {
         request: tonic::Request<GetEventAbiRequest>,
     ) -> Result<tonic::Response<GetEventAbiResponse>, tonic::Status> {
         let request = request.into_inner();
-        let topics = parse_topics(request.topics)?;
-        self.agg
-            .get_event_abi(RawLog {
-                data: decode(&request.data)?,
-                topics,
-            })
+        let process_function = |raw| async { self.agg.get_event_abi(raw).await };
+        self.get_event_abi_internal(request, process_function)
             .await
-            .map(|abi| tonic::Response::new(GetEventAbiResponse { abi }))
-            .map_err(|e| tonic::Status::internal(e.to_string()))
+            .map(tonic::Response::new)
     }
 
     async fn batch_get_event_abis(
@@ -76,12 +71,40 @@ impl AbiService for Service {
         request: tonic::Request<BatchGetEventAbisRequest>,
     ) -> Result<tonic::Response<BatchGetEventAbisResponse>, tonic::Status> {
         let request = request.into_inner();
+
+        let process_function = |raw| async { self.agg.batch_get_event_abi(raw).await };
+
+        let mut responses = Vec::new();
         for event_request in request.requests {
-            let _topics = parse_topics(event_request.topics)?;
+            let response = self
+                .get_event_abi_internal(event_request, process_function)
+                .await?;
+            responses.push(response);
         }
         Ok(tonic::Response::new(BatchGetEventAbisResponse {
-            responses: vec![],
+            responses,
         }))
+    }
+}
+
+impl Service {
+    async fn get_event_abi_internal<F, Output>(
+        &self,
+        request: GetEventAbiRequest,
+        process_function: F,
+    ) -> Result<GetEventAbiResponse, tonic::Status>
+    where
+        F: Fn(RawLog) -> Output,
+        Output: Future<Output = Result<Vec<Abi>, anyhow::Error>>,
+    {
+        let topics = parse_topics(request.topics)?;
+        process_function(RawLog {
+            data: decode(&request.data)?,
+            topics,
+        })
+        .await
+        .map(|abi| GetEventAbiResponse { abi })
+        .map_err(|e| tonic::Status::internal(e.to_string()))
     }
 }
 
