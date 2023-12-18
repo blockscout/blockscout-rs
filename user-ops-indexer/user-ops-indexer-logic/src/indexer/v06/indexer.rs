@@ -1,4 +1,4 @@
-use std::{future, ops::Div, pin::Pin, time::Duration};
+use std::{future, ops::Div, time::Duration};
 
 use anyhow::{anyhow, bail};
 use ethers::prelude::{BigEndianHash, EthEvent, Middleware, Provider, PubsubClient};
@@ -6,7 +6,8 @@ use ethers_core::{
     abi::{AbiDecode, AbiEncode},
     types::{Action, Address, Bytes, Filter, Log},
 };
-use futures::{stream, Stream, StreamExt};
+use futures::stream::BoxStream;
+use futures::{stream, StreamExt};
 use keccak_hash::H256;
 use sea_orm::DatabaseConnection;
 use tokio::time::sleep;
@@ -48,7 +49,7 @@ impl<C: PubsubClient> IndexerV06<C> {
         past_db_logs_start_block: i32,
         past_db_logs_end_block: i32,
     ) -> anyhow::Result<()> {
-        let mut stream_txs: Pin<Box<dyn Stream<Item = H256> + Send>> = Box::pin(stream::empty());
+        let mut stream_txs: BoxStream<H256> = Box::pin(stream::empty());
 
         let filter = Filter::new()
             .address(*ENTRYPOINT_V06)

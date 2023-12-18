@@ -14,8 +14,10 @@ async fn main() -> Result<(), anyhow::Error> {
         &settings.jaeger,
     )?;
 
+    let mut connect_options = sea_orm::ConnectOptions::new(&settings.database.url);
+    connect_options.sqlx_logging_level(tracing::log::LevelFilter::Debug);
     let db_connection = database::initialize_postgres::<Migrator>(
-        &settings.database.url,
+        connect_options,
         settings.database.create_database,
         settings.database.run_migrations,
     )
