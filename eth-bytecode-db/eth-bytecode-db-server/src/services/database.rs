@@ -15,6 +15,7 @@ use eth_bytecode_db::{
     verification::sourcify_from_etherscan,
 };
 use std::str::FromStr;
+use tracing::instrument;
 
 pub struct DatabaseService {
     pub client: verification::Client,
@@ -32,6 +33,7 @@ impl DatabaseService {
 
 #[async_trait]
 impl Database for DatabaseService {
+    #[instrument(skip_all)]
     async fn search_sources(
         &self,
         request: tonic::Request<SearchSourcesRequest>,
@@ -46,11 +48,16 @@ impl Database for DatabaseService {
         Ok(tonic::Response::new(SearchSourcesResponse { sources }))
     }
 
+    #[instrument(skip_all)]
     async fn search_sourcify_sources(
         &self,
         request: tonic::Request<SearchSourcifySourcesRequest>,
     ) -> Result<tonic::Response<SearchSourcesResponse>, tonic::Status> {
         let request = request.into_inner();
+        super::trace_request_metadata!(
+            chain_id = request.chain,
+            contract_address = request.address
+        );
 
         let chain_id = request.chain;
         let contract_address = request.address;
@@ -64,11 +71,16 @@ impl Database for DatabaseService {
         }))
     }
 
+    #[instrument(skip_all)]
     async fn search_all_sources(
         &self,
         request: tonic::Request<SearchAllSourcesRequest>,
     ) -> Result<tonic::Response<SearchAllSourcesResponse>, tonic::Status> {
         let request = request.into_inner();
+        super::trace_request_metadata!(
+            chain_id = request.chain,
+            contract_address = request.address
+        );
 
         let bytecode_type = request.bytecode_type();
         let bytecode = request.bytecode;

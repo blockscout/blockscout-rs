@@ -30,6 +30,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "actix-cors"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0346d8c1f762b41b458ed3145eea914966bb9ad20b9be0d6d463b20d45586370"
+dependencies = [
+ "actix-utils",
+ "actix-web",
+ "derive_more",
+ "futures-util",
+ "log",
+ "once_cell",
+ "smallvec",
+]
+
+[[package]]
 name = "actix-http"
 version = "3.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -842,9 +857,9 @@ dependencies = [
 [[package]]
 name = "blockscout-service-launcher"
 version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "662512331ca49faf635aab7d25d29b2e66c020a807354d8cbd3d8a921600aa24"
+source = "git+https://github.com/blockscout/blockscout-rs/?branch=rimrakhimov/verifier/tracing-logs#02e6f3552ae25890caa457e59ae694dabe2d5318"
 dependencies = [
+ "actix-cors",
  "actix-web",
  "actix-web-prom",
  "anyhow",
@@ -852,6 +867,7 @@ dependencies = [
  "config",
  "futures",
  "keccak-hash",
+ "once_cell",
  "opentelemetry",
  "opentelemetry-jaeger",
  "prometheus",
@@ -859,12 +875,15 @@ dependencies = [
  "sea-orm",
  "sea-orm-migration",
  "serde",
+ "serde_json",
  "tokio",
  "tonic",
  "tracing",
+ "tracing-actix-web",
  "tracing-opentelemetry",
  "tracing-subscriber",
  "url",
+ "uuid 1.6.1",
 ]
 
 [[package]]
@@ -3251,6 +3270,12 @@ name = "multimap"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
+
+[[package]]
+name = "mutually_exclusive_features"
+version = "0.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d02c0b00610773bb7fc61d85e13d86c7858cbdf00e1a120bfc41bc055dbaa0e"
 
 [[package]]
 name = "native-tls"
@@ -6074,6 +6099,18 @@ dependencies = [
  "pin-project-lite",
  "tracing-attributes",
  "tracing-core",
+]
+
+[[package]]
+name = "tracing-actix-web"
+version = "0.7.9"
+source = "git+https://github.com/blockscout/tracing-actix-web?branch=rimrakhimov/update-traces-for-services#66479b061021745b523eb48d0f5ae377233606e9"
+dependencies = [
+ "actix-web",
+ "mutually_exclusive_features",
+ "pin-project",
+ "tracing",
+ "uuid 1.6.1",
 ]
 
 [[package]]

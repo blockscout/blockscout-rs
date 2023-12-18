@@ -57,7 +57,7 @@ impl VerifierService<VerificationRequest<MultiPartFiles>> for MockVyperVerifierS
         client: Client,
         request: VerificationRequest<MultiPartFiles>,
     ) -> Result<Source, Error> {
-        vyper_multi_part::verify(client, request, blockscout_display_bytes::Bytes::from([])).await
+        vyper_multi_part::verify(client, request).await
     }
 }
 

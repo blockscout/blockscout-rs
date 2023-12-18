@@ -35,19 +35,22 @@ fn is_key_authorized(
     Ok(is_authorized)
 }
 
-macro_rules! trace_verification_request {
-    ($prefix:expr, $contract_address:expr, $chain_id:expr) => {{
-        let request_id = blockscout_display_bytes::Bytes::from(uuid::Uuid::new_v4().as_bytes());
+macro_rules! trace_request_metadata {
+    ($($field:ident=$value:expr),+) => {
         tracing::info!(
-            request_id = request_id.to_string(),
+            $($field = $value,)+
+        )
+    };
+}
+
+macro_rules! trace_verification_request {
+    ($contract_address:expr, $chain_id:expr) => {{
+        $crate::services::trace_request_metadata!(
             chain_id = $chain_id,
-            contract_address = $contract_address,
-            "{} verification request received",
-            $prefix
-        );
-        request_id
+            contract_address = $contract_address
+        )
     }};
-    ($prefix:expr, $request:expr) => {{
+    ($request:expr) => {{
         let chain_id = $request
             .metadata
             .as_ref()
@@ -58,15 +61,9 @@ macro_rules! trace_verification_request {
             .as_ref()
             .and_then(|metadata| metadata.contract_address.clone())
             .unwrap_or_default();
-        let request_id = blockscout_display_bytes::Bytes::from(uuid::Uuid::new_v4().as_bytes());
-        tracing::info!(
-            request_id = request_id.to_string(),
-            chain_id = chain_id,
-            contract_address = contract_address,
-            "{} verification request received",
-            $prefix
-        );
-        request_id
+        $crate::services::trace_verification_request!(chain_id, contract_address)
     }};
 }
+
+use trace_request_metadata;
 use trace_verification_request;
