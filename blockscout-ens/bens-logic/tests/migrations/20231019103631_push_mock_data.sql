@@ -7,7 +7,21 @@ VALUES
 
 INSERT INTO public.deployment_schemas (id, subgraph, name, version, shard, network, active, created_at) 
 VALUES 
-(1, 'QmbC5yc1XdEtmQaELfGYik2GM5PYMXHvWu9bVBbtQJCh6N', 'sgd1', 1, 'primary', 'mainnet', true, '2023-10-12 08:42:16.971774+00')
+(1, 'Qmb_1', 'sgd1', 1, 'primary', 'mainnet', true, '2023-10-11 08:42:16.971774+00')
+(2, 'Qmb_2', 'sgd2', 1, 'primary', 'mainnet', true, '2023-10-12 08:42:16.971774+00')
+;
+
+
+INSERT INTO subgraphs.subgraph (id, name, current_version, pending_version, created_at, vid, block_range) 
+VALUES
+('1a0b1a6160e366e63cf4f695f5cb9d8f','ens-subgraph','4946a781afb9361744a65c96ada6b10d',NULL,1697132880,1,'[-1,)'),
+('4f5c9696084b65c23a7658d7aae1d291','yet-another-ens-subgraph','e5270653b1e8bc5272405fd05983bd52',NULL,1702874471,2,'[-1,)')
+;
+
+INSERT INTO subgraphs.subgraph_version (id, subgraph, deployment, created_at, vid, block_range)
+VALUES
+('4946a781afb9361744a65c96ada6b10d','1a0b1a6160e366e63cf4f695f5cb9d8f','Qmb_1',1697134143,1,'[-1,)'),
+('e5270653b1e8bc5272405fd05983bd52','4f5c9696084b65c23a7658d7aae1d291','Qmb_2',1702878223,2,'[-1,)')
 ;
 
 

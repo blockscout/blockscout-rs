@@ -1,4 +1,4 @@
-use crate::subgraphs_reader::blockscout::BlockscoutClient;
+use crate::subgraphs_reader::{blockscout::BlockscoutClient, NetworkInfo};
 use ethers::types::TxHash;
 use std::collections::HashMap;
 use wiremock::{
@@ -73,7 +73,7 @@ lazy_static::lazy_static! {
     };
 }
 
-pub async fn mocked_blockscout_clients() -> HashMap<i64, BlockscoutClient> {
+pub async fn mocked_networks_with_blockscout() -> HashMap<i64, NetworkInfo> {
     let mock_server = MockServer::start().await;
     for (tx_hash, tx) in TXNS.iter() {
         let mock =
@@ -85,5 +85,5 @@ pub async fn mocked_blockscout_clients() -> HashMap<i64, BlockscoutClient> {
     let url = mock_server.uri().parse().unwrap();
 
     let client = BlockscoutClient::new(url, 1, 30);
-    HashMap::from_iter([(1, client)])
+    HashMap::from_iter([(1, NetworkInfo::from_client(client))])
 }

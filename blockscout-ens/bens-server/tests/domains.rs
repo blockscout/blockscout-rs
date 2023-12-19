@@ -1,5 +1,5 @@
 use bens_logic::test_utils::*;
-use bens_server::{NetworkConfig, Settings};
+use bens_server::{BlockscoutSettings, NetworkSettings, Settings};
 use blockscout_service_launcher::{
     launcher::ConfigSettings,
     test_server::{get_test_server_settings, init_server, send_get_request, send_post_request},
@@ -17,23 +17,26 @@ async fn basic_domain_extracting_works(pool: PgPool) {
         pool.connect_options().get_database().unwrap()
     );
     std::env::set_var("BENS__DATABASE__CONNECT__URL", db_url);
-    let clients = mocked_blockscout_clients().await;
+    let clients = mocked_networks_with_blockscout().await;
     std::env::set_var("BENS__CONFIG", "./tests/config.test.toml");
     let mut settings = Settings::build().expect("Failed to build settings");
     let (server_settings, base) = get_test_server_settings();
     settings.server = server_settings;
-    settings.blockscout.networks = clients
+    settings.subgraphs.networks = clients
         .into_iter()
         .map(|(id, client)| {
             (
                 id,
-                NetworkConfig {
-                    url: client.url().clone(),
+                NetworkSettings {
+                    blockscout: BlockscoutSettings {
+                        url: client.blockscout_client.url().clone(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
                 },
             )
         })
         .collect();
-    settings.subgraph.cache_enabled = true;
 
     // first start with enabled cache
     check_basic_scenario(settings.clone(), base.clone()).await;
@@ -41,7 +44,7 @@ async fn basic_domain_extracting_works(pool: PgPool) {
     // that creation of cache tables works fine
     check_basic_scenario(settings.clone(), base.clone()).await;
     // third start with disabled cache
-    settings.subgraph.cache_enabled = false;
+    settings.subgraphs.cache_enabled = false;
     check_basic_scenario(settings, base).await;
 }
 
