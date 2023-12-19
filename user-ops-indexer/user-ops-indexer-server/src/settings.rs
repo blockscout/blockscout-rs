@@ -1,4 +1,5 @@
 use blockscout_service_launcher::{
+    database::{DatabaseConnectSettings, DatabaseSettings},
     launcher::{ConfigSettings, MetricsSettings, ServerSettings},
     tracing::{JaegerSettings, TracingSettings},
 };
@@ -25,16 +26,6 @@ pub struct Settings {
 
 impl ConfigSettings for Settings {
     const SERVICE_NAME: &'static str = "USER_OPS_INDEXER";
-}
-
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-pub struct DatabaseSettings {
-    pub url: String,
-    #[serde(default)]
-    pub create_database: bool,
-    #[serde(default)]
-    pub run_migrations: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -125,7 +116,7 @@ impl Settings {
             tracing: Default::default(),
             jaeger: Default::default(),
             database: DatabaseSettings {
-                url: database_url,
+                connect: DatabaseConnectSettings::Url(database_url),
                 create_database: false,
                 run_migrations: false,
             },

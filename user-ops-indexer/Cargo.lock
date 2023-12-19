@@ -30,6 +30,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "actix-cors"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0346d8c1f762b41b458ed3145eea914966bb9ad20b9be0d6d463b20d45586370"
+dependencies = [
+ "actix-utils",
+ "actix-web",
+ "derive_more",
+ "futures-util",
+ "log",
+ "once_cell",
+ "smallvec",
+]
+
+[[package]]
 name = "actix-http"
 version = "3.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -918,7 +933,6 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-jaeger",
  "prometheus",
- "reqwest",
  "sea-orm",
  "sea-orm-migration",
  "serde",
@@ -928,6 +942,36 @@ dependencies = [
  "tracing-opentelemetry",
  "tracing-subscriber",
  "url",
+]
+
+[[package]]
+name = "blockscout-service-launcher"
+version = "0.10.0"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=22ba428#22ba428341212b9169e20a434702e38c229b2731"
+dependencies = [
+ "actix-cors",
+ "actix-web",
+ "actix-web-prom",
+ "anyhow",
+ "cfg-if",
+ "config",
+ "futures",
+ "once_cell",
+ "opentelemetry",
+ "opentelemetry-jaeger",
+ "prometheus",
+ "sea-orm",
+ "sea-orm-migration",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tonic",
+ "tracing",
+ "tracing-actix-web",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+ "url",
+ "uuid 1.6.1",
 ]
 
 [[package]]
@@ -3210,6 +3254,12 @@ name = "multimap"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
+
+[[package]]
+name = "mutually_exclusive_features"
+version = "0.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d02c0b00610773bb7fc61d85e13d86c7858cbdf00e1a120bfc41bc055dbaa0e"
 
 [[package]]
 name = "native-tls"
@@ -6149,6 +6199,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "tracing-actix-web"
+version = "0.7.9"
+source = "git+https://github.com/blockscout/tracing-actix-web?branch=rimrakhimov/update-traces-for-services#66479b061021745b523eb48d0f5ae377233606e9"
+dependencies = [
+ "actix-web",
+ "mutually_exclusive_features",
+ "pin-project",
+ "tracing",
+ "uuid 1.6.1",
+]
+
+[[package]]
 name = "tracing-attributes"
 version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6401,7 +6463,7 @@ dependencies = [
  "atoi",
  "blockscout-db",
  "blockscout-display-bytes",
- "blockscout-service-launcher",
+ "blockscout-service-launcher 0.9.0",
  "bytes",
  "ethabi",
  "ethers",
@@ -6469,7 +6531,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "blockscout-display-bytes",
- "blockscout-service-launcher",
+ "blockscout-service-launcher 0.10.0",
  "bytes",
  "config",
  "ethers",

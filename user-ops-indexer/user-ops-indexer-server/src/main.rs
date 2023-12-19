@@ -14,7 +14,8 @@ async fn main() -> Result<(), anyhow::Error> {
         &settings.jaeger,
     )?;
 
-    let mut connect_options = sea_orm::ConnectOptions::new(&settings.database.url);
+    let database_url = settings.database.connect.clone().url();
+    let mut connect_options = sea_orm::ConnectOptions::new(&database_url);
     connect_options.sqlx_logging_level(tracing::log::LevelFilter::Debug);
     let db_connection = database::initialize_postgres::<Migrator>(
         connect_options,
@@ -26,7 +27,7 @@ async fn main() -> Result<(), anyhow::Error> {
     tokio::spawn(run_indexer(settings.clone(), db_connection));
 
     let db_connection =
-        database::initialize_postgres::<Migrator>(&settings.database.url, false, false).await?;
+        database::initialize_postgres::<Migrator>(&database_url, false, false).await?;
 
     run_server(settings, db_connection).await
 }
