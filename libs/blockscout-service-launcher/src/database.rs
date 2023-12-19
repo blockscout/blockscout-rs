@@ -1,4 +1,5 @@
 use anyhow::Context;
+use serde::Deserialize;
 use std::str::FromStr;
 
 cfg_if::cfg_if! {
@@ -101,4 +102,60 @@ fn with_connect_options(url: impl Into<String>, source_options: &ConnectOptions)
     options.sqlx_logging(source_options.get_sqlx_logging());
     options.sqlx_logging_level(source_options.get_sqlx_logging_level());
     options
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct DatabaseSettings {
+    pub connect: DatabaseConnectSettings,
+    #[serde(default)]
+    pub create_database: bool,
+    #[serde(default)]
+    pub run_migrations: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields, rename_all = "lowercase")]
+pub enum DatabaseConnectSettings {
+    Url(String),
+    Kv(DatabaseKvConnection),
+}
+
+impl DatabaseConnectSettings {
+    pub fn url(self) -> String {
+        match self {
+            DatabaseConnectSettings::Url(s) => s,
+            DatabaseConnectSettings::Kv(kv) => kv.url(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct DatabaseKvConnection {
+    pub host: String,
+    pub port: u16,
+    pub user: String,
+    pub password: String,
+    #[serde(default)]
+    pub dbname: Option<String>,
+    #[serde(default)]
+    pub options: Option<String>,
+}
+
+impl DatabaseKvConnection {
+    pub fn url(self) -> String {
+        let dbname = self
+            .dbname
+            .map(|dbname| format!("/{dbname}"))
+            .unwrap_or_default();
+        let options = self
+            .options
+            .map(|options| format!("?{options}"))
+            .unwrap_or_default();
+        format!(
+            "postgresql://{}:{}@{}:{}{}{}",
+            self.user, self.password, self.host, self.port, dbname, options
+        )
+    }
 }
