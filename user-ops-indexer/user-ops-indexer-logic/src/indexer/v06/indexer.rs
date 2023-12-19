@@ -6,8 +6,7 @@ use ethers_core::{
     abi::{AbiDecode, AbiEncode},
     types::{Action, Address, Bytes, Filter, Log},
 };
-use futures::stream::BoxStream;
-use futures::{stream, StreamExt};
+use futures::{stream, stream::BoxStream, StreamExt};
 use keccak_hash::H256;
 use sea_orm::DatabaseConnection;
 use tokio::time::sleep;
