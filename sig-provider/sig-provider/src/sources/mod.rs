@@ -34,10 +34,6 @@ pub trait SignatureSource {
 
     // for errors
     fn source(&self) -> String;
-
-    fn supports_batches(&self) -> bool {
-        false
-    }
 }
 
 #[automock]
@@ -57,10 +53,6 @@ pub trait CompleteSignatureSource {
 
     // for errors
     fn source(&self) -> String;
-
-    fn supports_batches(&self) -> bool {
-        false
-    }
 }
 
 pub fn new_client() -> ClientWithMiddleware {

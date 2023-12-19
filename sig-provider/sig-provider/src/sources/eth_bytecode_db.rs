@@ -113,10 +113,6 @@ impl CompleteSignatureSource for Source {
     fn source(&self) -> String {
         self.host.to_string()
     }
-
-    fn supports_batches(&self) -> bool {
-        true
-    }
 }
 
 mod json {
