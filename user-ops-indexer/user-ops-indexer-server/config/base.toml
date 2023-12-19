@@ -12,7 +12,7 @@ max_page_size = 1000
 
 [indexer]
 rpc_url = "ws://127.0.0.1:8545"
-concurrency = 10
+concurrency = 20
 
 [indexer.entrypoints]
 v06 = true
@@ -22,7 +22,7 @@ enabled = true
 
 [indexer.past_rpc_logs_indexer]
 enabled = true
-block_range = 100
+block_range = 1000
 
 [indexer.past_db_logs_indexer]
 enabled = true
@@ -30,12 +30,12 @@ start_block = -100000
 end_block = 0
 
 [database]
-url = "postgres://postgres:admin@127.0.0.1:9432/blockscout" # (required) no default value available
-create_database = false
-run_migrations = false
+connect.url = "postgres://postgres:admin@127.0.0.1:9432/blockscout" # (required) no default value available
+create_database = true
+run_migrations = true
 
 [metrics]
-enabled = false
+enabled = true
 addr = "0.0.0.0:6060"
 route = "/metrics"
 
