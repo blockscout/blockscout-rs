@@ -12,6 +12,8 @@ service Database {
   rpc SearchAllSources(SearchAllSourcesRequest) returns (SearchAllSourcesResponse) {}
 
   rpc SearchEventDescriptions(SearchEventDescriptionsRequest) returns (SearchEventDescriptionsResponse) {}
+
+  rpc BatchSearchEventDescriptions(BatchSearchEventDescriptionsRequest) returns (BatchSearchEventDescriptionsResponse) {}
 }
 
 service SolidityVerifier {
@@ -241,15 +243,17 @@ message SearchEventDescriptionsRequest {
 }
 
 message SearchEventDescriptionsResponse {
-  message EventDescription {
-    /// Will always be "event"
-    string type = 1;
-    /// The name of the event
-    string name = 2;
-    /// Json encoded array of objects each describing one of the event arguments
-    string inputs = 3;
-  }
   repeated EventDescription event_descriptions = 1;
+}
+
+message BatchSearchEventDescriptionsRequest {
+  // The selectors of the events to look for.
+  // A maximum of 100 selectors can be retrieved in a batch.
+  repeated string selectors = 1;
+}
+
+message BatchSearchEventDescriptionsResponse {
+  repeated SearchEventDescriptionsResponse responses = 1;
 }
 
 message VerifySourcifyRequest {
@@ -280,4 +284,13 @@ message ListCompilerVersionsRequest {}
 message ListCompilerVersionsResponse {
   /// Compiler versions available
   repeated string compiler_versions = 1;
+}
+
+message EventDescription {
+  /// Will always be "event"
+  string type = 1;
+  /// The name of the event
+  string name = 2;
+  /// Json encoded array of objects each describing one of the event arguments
+  string inputs = 3;
 }

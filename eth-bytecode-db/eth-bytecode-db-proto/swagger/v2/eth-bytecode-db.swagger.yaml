@@ -73,6 +73,26 @@ paths:
             $ref: '#/definitions/v2SearchSourcifySourcesRequest'
       tags:
         - Database
+  /api/v2/event-descriptions:batch-search:
+    post:
+      operationId: Database_BatchSearchEventDescriptions
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v2BatchSearchEventDescriptionsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v2BatchSearchEventDescriptionsRequest'
+      tags:
+        - Database
   /api/v2/event-descriptions:search:
     post:
       operationId: Database_SearchEventDescriptions
@@ -273,18 +293,6 @@ definitions:
       - SERVICE_UNKNOWN
     default: UNKNOWN
     description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
-  SearchEventDescriptionsResponseEventDescription:
-    type: object
-    properties:
-      type:
-        type: string
-        title: / Will always be "event"
-      name:
-        type: string
-        title: / The name of the event
-      inputs:
-        type: string
-        title: / Json encoded array of objects each describing one of the event arguments
   SourceMatchType:
     type: string
     enum:
@@ -321,6 +329,24 @@ definitions:
       '@type':
         type: string
     additionalProperties: {}
+  v2BatchSearchEventDescriptionsRequest:
+    type: object
+    properties:
+      selectors:
+        type: array
+        items:
+          type: string
+        description: |-
+          The selectors of the events to look for.
+          A maximum of 100 selectors can be retrieved in a batch.
+  v2BatchSearchEventDescriptionsResponse:
+    type: object
+    properties:
+      responses:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v2SearchEventDescriptionsResponse'
   v2BytecodeType:
     type: string
     enum:
@@ -328,6 +354,18 @@ definitions:
       - CREATION_INPUT
       - DEPLOYED_BYTECODE
     default: BYTECODE_TYPE_UNSPECIFIED
+  v2EventDescription:
+    type: object
+    properties:
+      type:
+        type: string
+        title: / Will always be "event"
+      name:
+        type: string
+        title: / The name of the event
+      inputs:
+        type: string
+        title: / Json encoded array of objects each describing one of the event arguments
   v2HealthCheckResponse:
     type: object
     properties:
@@ -385,7 +423,7 @@ definitions:
         type: array
         items:
           type: object
-          $ref: '#/definitions/SearchEventDescriptionsResponseEventDescription'
+          $ref: '#/definitions/v2EventDescription'
   v2SearchSourcesRequest:
     type: object
     properties:

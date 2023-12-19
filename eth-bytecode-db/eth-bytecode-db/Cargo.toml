@@ -35,6 +35,7 @@ smart-contract-verifier-proto = { git = "https://github.com/blockscout/blockscou
 solidity-metadata = "1.0"
 thiserror = "1.0"
 tokio = "1.22"
+tokio-stream = { version = "0.1" }
 tonic = { version = "0.8", features = ["tls-roots"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"]}
