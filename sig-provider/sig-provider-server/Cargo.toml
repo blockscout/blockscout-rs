@@ -15,7 +15,6 @@ serde = { version = "1", features = ["derive"] }
 serde_with = { version = "2.0", features = ["hex", "base64"] }
 bytes = "1.2"
 tokio = { version = "1", features = ["rt-multi-thread"] }
-tokio-stream = "0.1.14"
 config = "0.13"
 opentelemetry = { version = "0.18", features = ["rt-tokio"] }
 opentelemetry-jaeger = { version = "0.17", features = ["rt-tokio"] }

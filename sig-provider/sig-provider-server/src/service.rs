@@ -1,14 +1,13 @@
 use async_trait::async_trait;
 use ethabi::{ethereum_types::H256, RawLog};
-use futures::StreamExt;
 use sig_provider::SourceAggregator;
 use sig_provider_proto::blockscout::sig_provider::v1::{
-    abi_service_server::AbiService, signature_service_server::SignatureService, Abi,
+    abi_service_server::AbiService, signature_service_server::SignatureService,
     BatchGetEventAbisRequest, BatchGetEventAbisResponse, CreateSignaturesRequest,
     CreateSignaturesResponse, GetEventAbiRequest, GetEventAbiResponse, GetFunctionAbiRequest,
     GetFunctionAbiResponse,
 };
-use std::{future::Future, sync::Arc};
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct Service {
@@ -61,9 +60,16 @@ impl AbiService for Service {
         request: tonic::Request<GetEventAbiRequest>,
     ) -> Result<tonic::Response<GetEventAbiResponse>, tonic::Status> {
         let request = request.into_inner();
-        let process_function = |raw| async { self.agg.get_event_abi(raw).await };
-        self.get_event_abi_internal(request, process_function)
+
+        let topics = parse_topics(request.topics)?;
+        self.agg
+            .get_event_abi(RawLog {
+                data: decode(&request.data)?,
+                topics,
+            })
             .await
+            .map(|abi| GetEventAbiResponse { abi })
+            .map_err(|e| tonic::Status::internal(e.to_string()))
             .map(tonic::Response::new)
     }
 
@@ -71,43 +77,31 @@ impl AbiService for Service {
         &self,
         request: tonic::Request<BatchGetEventAbisRequest>,
     ) -> Result<tonic::Response<BatchGetEventAbisResponse>, tonic::Status> {
-        let request = request.into_inner();
+        let batch_request = request.into_inner();
 
-        let process_function = |raw| async { self.agg.batch_get_event_abi(raw).await };
+        let mut raw_logs = Vec::new();
+        for request in batch_request.requests {
+            let topics = parse_topics(request.topics)?;
+            raw_logs.push(RawLog {
+                data: decode(&request.data)?,
+                topics,
+            });
+        }
 
-        let responses = tokio_stream::iter(request.requests.into_iter().map(|request| async {
-            self.get_event_abi_internal(request, process_function)
-                .await
-                .unwrap_or_default()
-        }))
-        .buffered(10)
-        .collect::<Vec<_>>()
-        .await;
+        let batch_abis = self
+            .agg
+            .batch_get_event_abi(raw_logs)
+            .await
+            .map_err(|e| tonic::Status::internal(e.to_string()))?;
+
+        let mut responses = Vec::new();
+        for abi in batch_abis {
+            responses.push(GetEventAbiResponse { abi })
+        }
 
         Ok(tonic::Response::new(BatchGetEventAbisResponse {
             responses,
         }))
-    }
-}
-
-impl Service {
-    async fn get_event_abi_internal<F, Output>(
-        &self,
-        request: GetEventAbiRequest,
-        process_function: F,
-    ) -> Result<GetEventAbiResponse, tonic::Status>
-    where
-        F: Fn(RawLog) -> Output,
-        Output: Future<Output = Result<Vec<Abi>, anyhow::Error>>,
-    {
-        let topics = parse_topics(request.topics)?;
-        process_function(RawLog {
-            data: decode(&request.data)?,
-            topics,
-        })
-        .await
-        .map(|abi| GetEventAbiResponse { abi })
-        .map_err(|e| tonic::Status::internal(e.to_string()))
     }
 }
 

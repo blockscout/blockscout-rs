@@ -100,38 +100,64 @@ impl SourceAggregator {
     }
 
     pub async fn get_event_abi(&self, raw: RawLog) -> Result<Vec<Abi>, anyhow::Error> {
-        get_event_abi(&self.complete_sources, &self.sources, raw).await
+        if raw.topics.is_empty() {
+            anyhow::bail!("log should contain at least one topic");
+        }
+        let hex_sig = hex::encode(raw.topics[0].as_bytes());
+
+        let complete_sigs = get_event_signatures!(&self.complete_sources, &hex_sig);
+        let sigs = get_event_signatures!(&self.sources, &hex_sig);
+
+        process_event_signatures(&raw, complete_sigs, sigs).await
     }
 
-    pub async fn batch_get_event_abi(&self, raw: RawLog) -> Result<Vec<Abi>, anyhow::Error> {
-        let complete_sources: Vec<_> = self
-            .complete_sources
-            .iter()
-            .filter(|source| source.supports_batches())
-            .cloned()
-            .collect();
-        let sources: Vec<_> = self
-            .sources
-            .iter()
-            .filter(|source| source.supports_batches())
-            .cloned()
-            .collect();
-        get_event_abi(&complete_sources, &sources, raw).await
+    pub async fn batch_get_event_abi(
+        &self,
+        raw_logs: Vec<RawLog>,
+    ) -> Result<Vec<Vec<Abi>>, anyhow::Error> {
+        let mut hex_sigs = Vec::new();
+        for raw in &raw_logs {
+            if raw.topics.is_empty() {
+                anyhow::bail!("log should contain at least one topic")
+            }
+            hex_sigs.push(hex::encode(raw.topics[0].as_bytes()));
+        }
+
+        let complete_responses = proxy!(
+            &self.complete_sources,
+            &hex_sigs,
+            batch_get_event_signatures
+        );
+        let responses = proxy!(&self.sources, &hex_sigs, batch_get_event_signatures);
+
+        let mut results = Vec::new();
+        for (index, raw_log) in raw_logs.iter().enumerate() {
+            let batch_complete_signatures: Vec<_> = complete_responses
+                .iter()
+                .map(|response| response.get(index).cloned().unwrap_or_default())
+                .collect();
+            let complete_signatures = SourceAggregator::merge_signatures(batch_complete_signatures);
+
+            let batch_signatures: Vec<_> = responses
+                .iter()
+                .map(|response| response.get(index).cloned().unwrap_or_default())
+                .collect();
+            let signatures = SourceAggregator::merge_signatures(batch_signatures);
+
+            let abis = process_event_signatures(raw_log, complete_signatures, signatures).await?;
+            results.push(abis)
+        }
+
+        Ok(results)
     }
 }
 
-async fn get_event_abi(
-    complete_sources: &[Arc<dyn CompleteSignatureSource + Send + Sync + 'static>],
-    sources: &[Arc<dyn SignatureSource + Send + Sync + 'static>],
-    raw: RawLog,
+async fn process_event_signatures(
+    raw: &RawLog,
+    complete_signatures: Vec<alloy_json_abi::Event>,
+    signatures: Vec<String>,
 ) -> Result<Vec<Abi>, anyhow::Error> {
-    if raw.topics.is_empty() {
-        anyhow::bail!("log should contain at least one topic");
-    }
-    let hex_sig = hex::encode(raw.topics[0].as_bytes());
-
-    let complete_sigs = get_event_signatures!(complete_sources, &hex_sig);
-    let complete_abis: Vec<_> = complete_sigs.into_iter().filter_map(|alloy_event| {
+    let complete_abis: Vec<_> = complete_signatures.into_iter().filter_map(|alloy_event| {
         let ethabi_event = try_from_alloy_event_to_ethabi_event(alloy_event.clone())
             .map_err(|err| tracing::error!("converting alloy_json_abi::Event into ethabi::Event failed for {alloy_event:?}; err={err:#}")).ok()?;
         ethabi_event.parse_log_whole(raw.clone()).ok()
@@ -155,8 +181,7 @@ async fn get_event_abi(
             })
     }).collect();
 
-    let sigs = get_event_signatures!(sources, &hex_sig);
-    let abis: Vec<_> = sigs
+    let abis: Vec<_> = signatures
         .into_iter()
         .filter_map(|sig| {
             let (name, args) = parse_signature(&sig)?;

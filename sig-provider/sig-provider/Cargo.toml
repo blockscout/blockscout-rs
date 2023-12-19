@@ -7,6 +7,7 @@ edition = "2021"
 sig-provider-proto = { path = "../sig-provider-proto" }
 alloy-json-abi = { git = "https://github.com/alloy-rs/core", rev = "398d7e2", features = ["serde_json"] }
 tokio = "1"
+tokio-stream = "0.1"
 async-trait = "0.1"
 anyhow = "1.0"
 tracing = "0.1"

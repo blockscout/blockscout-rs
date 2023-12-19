@@ -25,6 +25,13 @@ pub trait SignatureSource {
     // Resulting signatures should be sorted in priority descending order (first - max priority)
     async fn get_event_signatures(&self, hex: &str) -> Result<Vec<String>, anyhow::Error>;
 
+    async fn batch_get_event_signatures(
+        &self,
+        hex: &[String],
+    ) -> Result<Vec<Vec<String>>, anyhow::Error> {
+        Ok(vec![vec![]; hex.len()])
+    }
+
     // for errors
     fn source(&self) -> String;
 
@@ -40,6 +47,13 @@ pub trait CompleteSignatureSource {
         &self,
         hex: &str,
     ) -> Result<Vec<alloy_json_abi::Event>, anyhow::Error>;
+
+    async fn batch_get_event_signatures(
+        &self,
+        hex: &[String],
+    ) -> Result<Vec<Vec<alloy_json_abi::Event>>, anyhow::Error> {
+        Ok(vec![vec![]; hex.len()])
+    }
 
     // for errors
     fn source(&self) -> String;

@@ -263,44 +263,26 @@ async fn batch_get_events() {
     let mocks = SourceMocks::new();
 
     {
-        let eth_bytecode_db_request = serde_json::json!({"selector":"0x83f86eb20c894914ecf65cefc94682009cdb5066a609e8428699fa87b19b5c57"});
-        let eth_bytecode_db_response = serde_json::json!({"eventDescriptions":[{"type":"event","name":"A","inputs":"[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"a\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"b\",\"type\":\"uint256\"}]"},{"type":"event","name":"A","inputs":"[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"a2\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"b2\",\"type\":\"uint256\"}]"}]});
+        let eth_bytecode_db_request = serde_json::json!({"selectors":[
+            "0x6e9ed8cf1494d7312e7618c9411ab219f27a9840ed74dda9581992ca7575eb86",
+            "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+            "0x83f86eb20c894914ecf65cefc94682009cdb5066a609e8428699fa87b19b5c57",
+        ]});
+        let eth_bytecode_db_response = serde_json::json!({"responses": [
+            {"eventDescriptions":[{"type":"event","name":"C","inputs":"[{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"c\",\"type\":\"uint256\"}]"}]},
+            {"eventDescriptions":[]},
+            {"eventDescriptions":[{"type":"event","name":"A","inputs":"[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"a\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"b\",\"type\":\"uint256\"}]"},{"type":"event","name":"A","inputs":"[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"a2\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"b2\",\"type\":\"uint256\"}]"}]},
+        ]});
         mocks.eth_bytecode_db_mock(|when, then| {
             when.method(httpmock::Method::POST)
-                .path("/api/v2/event-descriptions:search")
+                .path("/api/v2/event-descriptions:batch-search")
                 .header("Content-type", "application/json")
                 .json_body(eth_bytecode_db_request);
             then.status(200)
                 .header("Content-type", "application/json")
                 .json_body(eth_bytecode_db_response);
-        })
-    };
-    {
-        let eth_bytecode_db_request = serde_json::json!({"selector":"0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"});
-        let eth_bytecode_db_response = serde_json::json!({"eventDescriptions":[]});
-        mocks.eth_bytecode_db_mock(|when, then| {
-            when.method(httpmock::Method::POST)
-                .path("/api/v2/event-descriptions:search")
-                .header("Content-type", "application/json")
-                .json_body(eth_bytecode_db_request);
-            then.status(200)
-                .header("Content-type", "application/json")
-                .json_body(eth_bytecode_db_response);
-        })
+        });
     }
-    {
-        let eth_bytecode_db_request = serde_json::json!({"selector":"0x6e9ed8cf1494d7312e7618c9411ab219f27a9840ed74dda9581992ca7575eb86"});
-        let eth_bytecode_db_response = serde_json::json!({"eventDescriptions":[{"type":"event","name":"C","inputs":"[{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"c\",\"type\":\"uint256\"}]"}]});
-        mocks.eth_bytecode_db_mock(|when, then| {
-            when.method(httpmock::Method::POST)
-                .path("/api/v2/event-descriptions:search")
-                .header("Content-type", "application/json")
-                .json_body(eth_bytecode_db_request);
-            then.status(200)
-                .header("Content-type", "application/json")
-                .json_body(eth_bytecode_db_response);
-        })
-    };
 
     let base = run_server(&mocks).await;
 
