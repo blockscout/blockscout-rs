@@ -284,14 +284,6 @@ paths:
       tags:
         - Health
 definitions:
-  BatchSearchEventDescriptionsResponseEventDescriptions:
-    type: object
-    properties:
-      eventDescriptions:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v2EventDescription'
   HealthCheckResponseServingStatus:
     type: string
     enum:
@@ -354,7 +346,7 @@ definitions:
         type: array
         items:
           type: object
-          $ref: '#/definitions/BatchSearchEventDescriptionsResponseEventDescriptions'
+          $ref: '#/definitions/v2SearchEventDescriptionsResponse'
   v2BytecodeType:
     type: string
     enum:

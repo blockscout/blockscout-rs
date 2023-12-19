@@ -133,29 +133,47 @@ impl Database for DatabaseService {
         let selector = H256::from_str(&request.selector).map_err(|err| {
             tonic::Status::invalid_argument(format!("selector is not valid: {err}"))
         })?;
+
         let event_descriptions =
-            search::find_event_descriptions(self.client.db_client.as_ref(), selector)
+            search::find_event_descriptions(self.client.db_client.as_ref(), vec![selector])
                 .await
+                .remove(0)
                 .map_err(|err| tonic::Status::internal(err.to_string()))?;
 
-        let response = SearchEventDescriptionsResponse {
-            event_descriptions: event_descriptions
-                .into_iter()
-                .map(|event| EventDescriptionWrapper::from(event).into())
-                .collect(),
-        };
-
-        Ok(tonic::Response::new(response))
+        Ok(tonic::Response::new(event_descriptions_to_search_response(
+            event_descriptions,
+        )))
     }
 
     async fn batch_search_event_descriptions(
         &self,
         request: tonic::Request<BatchSearchEventDescriptionsRequest>,
     ) -> Result<tonic::Response<BatchSearchEventDescriptionsResponse>, tonic::Status> {
-        let _request = request.into_inner();
+        const BATCH_LIMIT: usize = 100;
 
-        let response = BatchSearchEventDescriptionsResponse { responses: vec![] };
-        Ok(tonic::Response::new(response))
+        let request = request.into_inner();
+        let selectors = request
+            .selectors
+            .into_iter()
+            .take(BATCH_LIMIT)
+            .map(|selector| {
+                H256::from_str(&selector).map_err(|err| {
+                    tonic::Status::invalid_argument(format!("selector is not valid: {err}"))
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let responses: Vec<_> =
+            search::find_event_descriptions(self.client.db_client.as_ref(), selectors)
+                .await
+                .into_iter()
+                .map(|event_descriptions| event_descriptions.unwrap_or_default())
+                .map(event_descriptions_to_search_response)
+                .collect();
+
+        Ok(tonic::Response::new(BatchSearchEventDescriptionsResponse {
+            responses,
+        }))
     }
 }
 
@@ -254,5 +272,16 @@ fn process_sourcify_error(
             // `EmptyCustomError` enum has no variants and cannot be initialized
             unreachable!()
         }
+    }
+}
+
+fn event_descriptions_to_search_response(
+    event_descriptions: Vec<eth_bytecode_db::search::EventDescription>,
+) -> SearchEventDescriptionsResponse {
+    SearchEventDescriptionsResponse {
+        event_descriptions: event_descriptions
+            .into_iter()
+            .map(|event| EventDescriptionWrapper::from(event).into())
+            .collect(),
     }
 }

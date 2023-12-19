@@ -9,10 +9,10 @@ use eth_bytecode_db::{verification, verification::MatchType};
 use eth_bytecode_db_proto::blockscout::eth_bytecode_db::{
     v2 as eth_bytecode_db_v2,
     v2::{
-        batch_search_event_descriptions_response, BatchSearchEventDescriptionsRequest,
-        BatchSearchEventDescriptionsResponse, EventDescription, SearchAllSourcesRequest,
-        SearchAllSourcesResponse, SearchEventDescriptionsRequest, SearchEventDescriptionsResponse,
-        SearchSourcesResponse, SearchSourcifySourcesRequest, Source,
+        BatchSearchEventDescriptionsRequest, BatchSearchEventDescriptionsResponse,
+        EventDescription, SearchAllSourcesRequest, SearchAllSourcesResponse,
+        SearchEventDescriptionsRequest, SearchEventDescriptionsResponse, SearchSourcesResponse,
+        SearchSourcifySourcesRequest, Source,
     },
 };
 use pretty_assertions::assert_eq;
@@ -410,7 +410,7 @@ async fn batch_search_event_descriptions() {
 
     let expected_response = BatchSearchEventDescriptionsResponse {
         responses: vec![
-            batch_search_event_descriptions_response::EventDescriptions {
+            SearchEventDescriptionsResponse {
                 event_descriptions: vec![
                     EventDescription {
                         r#type: "event".into(),
@@ -419,7 +419,7 @@ async fn batch_search_event_descriptions() {
                     },
                 ]
             },
-            batch_search_event_descriptions_response::EventDescriptions {
+            SearchEventDescriptionsResponse  {
                 event_descriptions: vec![
                     EventDescription {
                         r#type: "event".into(),
@@ -429,7 +429,7 @@ async fn batch_search_event_descriptions() {
                     },
                 ]
             },
-            batch_search_event_descriptions_response::EventDescriptions {
+            SearchEventDescriptionsResponse {
                 event_descriptions: vec![]
             },
         ],

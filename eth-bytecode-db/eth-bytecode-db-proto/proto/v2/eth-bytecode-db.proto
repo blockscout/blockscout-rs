@@ -253,11 +253,7 @@ message BatchSearchEventDescriptionsRequest {
 }
 
 message BatchSearchEventDescriptionsResponse {
-  message EventDescriptions {
-    repeated EventDescription event_descriptions = 1;
-  }
-
-  repeated EventDescriptions responses = 1;
+  repeated SearchEventDescriptionsResponse responses = 1;
 }
 
 message VerifySourcifyRequest {
