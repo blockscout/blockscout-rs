@@ -58,7 +58,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             .context("database connect")?,
     );
     let networks = settings
-        .subgraphs
+        .subgraphs_reader
         .networks
         .into_iter()
         .map(|(id, network)| {
@@ -95,11 +95,11 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     );
     let domains_extractor = Arc::new(DomainsExtractorService::new(subgraph_reader.clone()));
 
-    if settings.subgraphs.cache_enabled {
+    if settings.subgraphs_reader.cache_enabled {
         let scheduler = JobScheduler::new().await?;
         scheduler
             .add(Job::new_async(
-                settings.subgraphs.refresh_cache_schedule.as_str(),
+                settings.subgraphs_reader.refresh_cache_schedule.as_str(),
                 move |_uuid, mut _l| {
                     let reader = subgraph_reader.clone();
                     Box::pin(async move {

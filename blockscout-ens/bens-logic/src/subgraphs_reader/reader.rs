@@ -10,10 +10,10 @@ use crate::{
         domain::{DetailedDomain, Domain},
         domain_event::{DomainEvent, DomainEventTransaction},
     },
-    hash_name::hex,
+    hash_name::{domain_id, hex},
 };
 use anyhow::Context;
-use ethers::types::TxHash;
+use ethers::types::{Bytes, TxHash};
 use sqlx::postgres::PgPool;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -43,7 +43,7 @@ pub struct Subgraph {
 #[derive(Debug, Clone, Default)]
 pub struct SubgraphSettings {
     pub use_cache: bool,
-    pub base_node_hash: Option<String>,
+    pub empty_label_hash: Option<Bytes>,
 }
 
 #[derive(Debug, Clone)]
@@ -64,7 +64,7 @@ impl NetworkInfo {
 impl SubgraphReader {
     pub async fn initialize(
         pool: Arc<PgPool>,
-        mut networks: HashMap<i64, NetworkInfo>,
+        mut network_infos: HashMap<i64, NetworkInfo>,
     ) -> Result<Self, anyhow::Error> {
         let deployments = subgraph_deployments(&pool).await?;
         tracing::info!(deployments =? deployments, "found subgraph deployments");
@@ -72,7 +72,7 @@ impl SubgraphReader {
             .into_iter()
             .filter(|(_, d)| !d.is_empty())
             .filter_map(|(id, deployments)| {
-                let maybe_network = networks.remove(&id).map(|info| {
+                let maybe_network = network_infos.remove(&id).map(|info| {
                     let subgraphs: Vec<Subgraph> = deployments
                         .into_iter()
                         .map(|d| {
@@ -111,7 +111,7 @@ impl SubgraphReader {
                 maybe_network
             })
             .collect::<HashMap<_, _>>();
-        for (id, info) in networks.iter() {
+        for (id, info) in network_infos.iter() {
             tracing::warn!("no chain found for blockscout url with chain_id {id} and url {}, skip this network", info.blockscout_client.url())
         }
         let this = Self::new(pool, networks);
@@ -170,12 +170,9 @@ impl SubgraphReader {
             .networks
             .get(&input.network_id)
             .ok_or_else(|| SubgraphReadError::NetworkNotFound(input.network_id))?;
-        sql::get_domain(
-            self.pool.as_ref(),
-            &network.default_subgraph.schema_name,
-            &input,
-        )
-        .await
+        let subgraph = &network.default_subgraph;
+        let id = domain_id(&input.name, subgraph.settings.empty_label_hash.clone());
+        sql::get_domain(self.pool.as_ref(), &id, &subgraph.schema_name, &input).await
     }
 
     pub async fn get_domain_history(
@@ -186,12 +183,11 @@ impl SubgraphReader {
             .networks
             .get(&input.network_id)
             .ok_or_else(|| SubgraphReadError::NetworkNotFound(input.network_id))?;
-        let domain_txns: Vec<DomainEventTransaction> = sql::find_transaction_events(
-            self.pool.as_ref(),
-            &network.default_subgraph.schema_name,
-            &input,
-        )
-        .await?;
+        let subgraph = &network.default_subgraph;
+        let id = domain_id(&input.name, subgraph.settings.empty_label_hash.clone());
+        let domain_txns: Vec<DomainEventTransaction> =
+            sql::find_transaction_events(self.pool.as_ref(), &subgraph.schema_name, &id, &input)
+                .await?;
         let domain_events =
             events_from_transactions(network.blockscout_client.clone(), domain_txns).await?;
         Ok(domain_events)
@@ -205,9 +201,12 @@ impl SubgraphReader {
             .networks
             .get(&input.network_id)
             .ok_or_else(|| SubgraphReadError::NetworkNotFound(input.network_id))?;
+        let subgraph = &network.default_subgraph;
+        let id = domain_id(&input.name, subgraph.settings.empty_label_hash.clone());
         sql::find_domains(
             self.pool.as_ref(),
             &network.default_subgraph.schema_name,
+            &id,
             &input,
         )
         .await
@@ -391,8 +390,8 @@ mod tests {
             .await
             .expect("failed to get vitalik domains");
         assert_eq!(
+            vec![Some("vitalik.eth")],
             result.iter().map(|d| d.name.as_deref()).collect::<Vec<_>>(),
-            vec![Some("vitalik.eth")]
         );
     }
 

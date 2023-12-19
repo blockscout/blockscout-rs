@@ -2,26 +2,30 @@ INSERT INTO public.chains (id, name, net_version, genesis_block_hash, shard, nam
 VALUES 
 (1, 'goerli', '5', 'bf7e331f7f7c1dd2e05159666b3bf8bc7a8a3a9eb1d518969eab529dd9b88c1a', 'primary', 'chain1'),
 (2, 'mainnet', '1', 'd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3', 'primary', 'chain2'),
-(3, 'rootstock', '30', 'f88529d4ab262c0f4d042e9d8d3f2472848eaafe1a9b7213f57617eb40a9f9e0', 'primary', 'chain3')
+(3, 'rootstock', '30', 'f88529d4ab262c0f4d042e9d8d3f2472848eaafe1a9b7213f57617eb40a9f9e0', 'primary', 'chain3'),
+(4, 'gnosis','10200','ada44fd8d2ecab8b08f256af07ad3e777f17fb434f8f8e678b312f576212ba9a','primary','chain4')
 ;
 
 INSERT INTO public.deployment_schemas (id, subgraph, name, version, shard, network, active, created_at) 
 VALUES 
-(1, 'Qmb_1', 'sgd1', 1, 'primary', 'mainnet', true, '2023-10-11 08:42:16.971774+00')
-(2, 'Qmb_2', 'sgd2', 1, 'primary', 'mainnet', true, '2023-10-12 08:42:16.971774+00')
+(1, 'Qmb_1', 'sgd1', 1, 'primary', 'mainnet', true, '2023-10-11 08:42:16.971774+00'),
+(2, 'Qmb_2', 'sgd2', 1, 'primary', 'gnosis', true, '2023-10-12 08:42:16.971774+00'),
+(3, 'Qmb_3', 'sgd3', 1, 'primary', 'mainnet', true, '2023-10-12 08:42:16.971774+00')
 ;
 
 
 INSERT INTO subgraphs.subgraph (id, name, current_version, pending_version, created_at, vid, block_range) 
 VALUES
 ('1a0b1a6160e366e63cf4f695f5cb9d8f','ens-subgraph','4946a781afb9361744a65c96ada6b10d',NULL,1697132880,1,'[-1,)'),
-('4f5c9696084b65c23a7658d7aae1d291','yet-another-ens-subgraph','e5270653b1e8bc5272405fd05983bd52',NULL,1702874471,2,'[-1,)')
+('4f5c9696084b65c23a7658d7aae1d291','genome-subgraph','bc5bbe7ce00d24fa522faf9b72dffb59',NULL,1702874471,2,'[-1,)'),
+('db384be9037d895bffd27b9faf225af4','yet-another-ens-subgraph','e5270653b1e8bc5272405fd05983bd52',NULL,1702874471,3,'[-1,)')
 ;
 
 INSERT INTO subgraphs.subgraph_version (id, subgraph, deployment, created_at, vid, block_range)
 VALUES
 ('4946a781afb9361744a65c96ada6b10d','1a0b1a6160e366e63cf4f695f5cb9d8f','Qmb_1',1697134143,1,'[-1,)'),
-('e5270653b1e8bc5272405fd05983bd52','4f5c9696084b65c23a7658d7aae1d291','Qmb_2',1702878223,2,'[-1,)')
+('bc5bbe7ce00d24fa522faf9b72dffb59','4f5c9696084b65c23a7658d7aae1d291','Qmb_2',1697134143,2,'[-1,)'),
+('e5270653b1e8bc5272405fd05983bd52','db384be9037d895bffd27b9faf225af4','Qmb_3',1702878223,3,'[-1,)')
 ;
 
 

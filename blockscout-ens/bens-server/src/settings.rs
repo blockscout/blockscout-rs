@@ -2,6 +2,7 @@ use blockscout_service_launcher::{
     launcher::{ConfigSettings, MetricsSettings, ServerSettings},
     tracing::{JaegerSettings, TracingSettings},
 };
+use ethers::types::Bytes;
 use serde::Deserialize;
 use std::collections::HashMap;
 use url::Url;
@@ -18,7 +19,7 @@ pub struct Settings {
     #[serde(default)]
     pub jaeger: JaegerSettings,
     #[serde(default)]
-    pub subgraphs: SubgraphsSettings,
+    pub subgraphs_reader: SubgraphsReaderSettings,
     pub database: DatabaseSettings,
 }
 
@@ -28,8 +29,7 @@ impl ConfigSettings for Settings {
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
-pub struct SubgraphsSettings {
-    #[serde(default = "default_networks")]
+pub struct SubgraphsReaderSettings {
     pub networks: HashMap<i64, NetworkSettings>,
     #[serde(default = "default_refresh_cache_schedule")]
     pub refresh_cache_schedule: String,
@@ -37,96 +37,35 @@ pub struct SubgraphsSettings {
     pub cache_enabled: bool,
 }
 
-fn default_networks() -> HashMap<i64, NetworkSettings> {
-    HashMap::from_iter([
-        (
-            1,
-            NetworkSettings {
-                blockscout: BlockscoutSettings {
-                    url: "https://eth.blockscout.com".parse().unwrap(),
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-        ),
-        (
-            30,
-            NetworkSettings {
-                blockscout: BlockscoutSettings {
-                    url: "https://rootstock.blockscout.com".parse().unwrap(),
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-        ),
-    ])
-}
-
 fn default_cache_enabled() -> bool {
     true
 }
 
-impl Default for SubgraphsSettings {
+fn default_refresh_cache_schedule() -> String {
+    "0 0 * * * *".to_string() // every hour
+}
+
+impl Default for SubgraphsReaderSettings {
     fn default() -> Self {
         Self {
-            networks: default_networks(),
+            networks: Default::default(),
             refresh_cache_schedule: default_refresh_cache_schedule(),
             cache_enabled: default_cache_enabled(),
         }
     }
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq, Default)]
 pub struct NetworkSettings {
     pub blockscout: BlockscoutSettings,
-    #[serde(default = "default_subgraphs")]
     pub subgraphs: HashMap<String, SubgraphSettings>,
-}
-
-impl Default for NetworkSettings {
-    fn default() -> Self {
-        Self {
-            blockscout: Default::default(),
-            subgraphs: default_subgraphs(),
-        }
-    }
-}
-
-fn default_subgraphs() -> HashMap<String, SubgraphSettings> {
-    HashMap::from_iter([
-        (
-            "ens-subgraph".to_string(),
-            SubgraphSettings {
-                use_cache: true,
-                base_node_hash: None,
-            },
-        ),
-        (
-            "rns-subgraph".to_string(),
-            SubgraphSettings {
-                use_cache: true,
-                base_node_hash: None,
-            },
-        ),
-        (
-            "genome-subgraph".to_string(),
-            SubgraphSettings {
-                use_cache: true,
-                base_node_hash: Some("".to_string()),
-            },
-        ),
-    ])
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct SubgraphSettings {
     #[serde(default = "default_use_cache")]
     pub use_cache: bool,
-    pub base_node_hash: Option<String>,
-}
-
-fn default_refresh_cache_schedule() -> String {
-    "0 0 * * * *".to_string() // every hour
+    pub empty_label_hash: Option<Bytes>,
 }
 
 fn default_use_cache() -> bool {
@@ -137,7 +76,7 @@ impl From<SubgraphSettings> for bens_logic::subgraphs_reader::SubgraphSettings {
     fn from(value: SubgraphSettings) -> Self {
         Self {
             use_cache: value.use_cache,
-            base_node_hash: value.base_node_hash,
+            empty_label_hash: value.empty_label_hash,
         }
     }
 }
@@ -234,7 +173,7 @@ impl Settings {
             metrics: Default::default(),
             tracing: Default::default(),
             jaeger: Default::default(),
-            subgraphs: Default::default(),
+            subgraphs_reader: Default::default(),
             database: DatabaseSettings {
                 connect: DatabaseConnectSettings::Url(database_url),
             },
