@@ -81,12 +81,12 @@ impl<C: PubsubClient> IndexerV06<C> {
             let from_block = if past_db_logs_start_block > 0 {
                 past_db_logs_start_block as u64
             } else {
-                rpc_refetch_block_number.saturating_sub((-past_db_logs_start_block) as u32) as u64
+                rpc_refetch_block_number.saturating_add_signed(past_db_logs_start_block) as u64
             };
             let to_block = if past_db_logs_end_block > 0 {
                 past_db_logs_end_block as u64
             } else {
-                rpc_refetch_block_number.saturating_sub((-past_db_logs_end_block) as u32) as u64
+                rpc_refetch_block_number.saturating_add_signed(past_db_logs_end_block) as u64
             };
             tracing::info!(from_block, to_block, "fetching missed tx hashes in db");
             let txs = repository::user_op::find_unprocessed_logs_tx_hashes(
