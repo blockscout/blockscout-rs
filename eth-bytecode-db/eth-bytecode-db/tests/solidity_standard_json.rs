@@ -135,3 +135,11 @@ async fn test_verification_of_updated_source_replace_the_old_result() {
     )
     .await;
 }
+
+#[rstest]
+#[tokio::test]
+#[ignore = "Needs database to run"]
+async fn test_verification_inserts_event_descriptions() {
+    verification_test_helpers::test_verification_inserts_event_descriptions(DB_PREFIX, service)
+        .await;
+}

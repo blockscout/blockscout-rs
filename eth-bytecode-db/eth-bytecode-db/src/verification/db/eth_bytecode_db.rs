@@ -5,7 +5,7 @@ use super::{
 use crate::verification::VerificationMetadata;
 use anyhow::Context;
 use entity::{
-    bytecode_parts, bytecodes, files, parts, sea_orm_active_enums, source_files, sources,
+    bytecode_parts, bytecodes, events, files, parts, sea_orm_active_enums, source_files, sources,
     verified_contracts,
 };
 use sea_orm::{
@@ -95,6 +95,42 @@ pub(crate) async fn insert_verified_contract_data(
     .insert(db_client)
     .await
     .context("insert into verified contracts")?;
+
+    Ok(())
+}
+
+pub(crate) async fn insert_event_descriptions(
+    db_client: &DatabaseConnection,
+    events: Vec<alloy_json_abi::Event>,
+) -> Result<(), anyhow::Error> {
+    let active_models: Vec<_> = events
+        .into_iter()
+        .filter_map(|event| {
+            let selector = event.selector();
+            serde_json::to_value(event.inputs)
+                .map_err(|err| {
+                    tracing::error!("{:x} event input serialization failed: {err}", selector)
+                })
+                .ok()
+                .map(|inputs| events::ActiveModel {
+                    selector: Set(selector.to_vec()),
+                    name: Set(event.name),
+                    inputs: Set(inputs),
+                    ..Default::default()
+                })
+        })
+        .collect();
+
+    let result = events::Entity::insert_many(active_models)
+        .on_conflict(OnConflict::new().do_nothing().to_owned())
+        .exec(db_client)
+        .await;
+    match result {
+        Ok(_) | Err(DbErr::RecordNotInserted) => {}
+        Err(err) => {
+            return Err(err).context("insert into \"events\"");
+        }
+    }
 
     Ok(())
 }

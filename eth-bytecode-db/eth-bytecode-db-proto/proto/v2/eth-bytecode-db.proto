@@ -10,6 +10,10 @@ service Database {
   rpc SearchSourcifySources(SearchSourcifySourcesRequest) returns (SearchSourcesResponse) {}
 
   rpc SearchAllSources(SearchAllSourcesRequest) returns (SearchAllSourcesResponse) {}
+
+  rpc SearchEventDescriptions(SearchEventDescriptionsRequest) returns (SearchEventDescriptionsResponse) {}
+
+  rpc BatchSearchEventDescriptions(BatchSearchEventDescriptionsRequest) returns (BatchSearchEventDescriptionsResponse) {}
 }
 
 service SolidityVerifier {
@@ -231,6 +235,27 @@ message SearchAllSourcesResponse {
   repeated Source sourcify_sources = 2;
 }
 
+message SearchEventDescriptionsRequest {
+  /// For non-anonymous events, this is a bytes32 value
+  /// containing the keccak256 hash of the event signature,
+  /// as used in the default topic.
+  string selector = 1;
+}
+
+message SearchEventDescriptionsResponse {
+  repeated EventDescription event_descriptions = 1;
+}
+
+message BatchSearchEventDescriptionsRequest {
+  // The selectors of the events to look for.
+  // A maximum of 100 selectors can be retrieved in a batch.
+  repeated string selectors = 1;
+}
+
+message BatchSearchEventDescriptionsResponse {
+  repeated SearchEventDescriptionsResponse responses = 1;
+}
+
 message VerifySourcifyRequest {
   /// Address of the contract to be verified
   string address = 1;
@@ -259,4 +284,13 @@ message ListCompilerVersionsRequest {}
 message ListCompilerVersionsResponse {
   /// Compiler versions available
   repeated string compiler_versions = 1;
+}
+
+message EventDescription {
+  /// Will always be "event"
+  string type = 1;
+  /// The name of the event
+  string name = 2;
+  /// Json encoded array of objects each describing one of the event arguments
+  string inputs = 3;
 }
