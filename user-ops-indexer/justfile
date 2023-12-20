@@ -1,0 +1,47 @@
+# just is like `make` but better https://github.com/casey/just
+
+# list all recipes
+default:
+    just --list --unsorted
+
+db-host := "localhost"
+db-port := "9432"
+db-user := "postgres"
+db-password := "admin"
+db-name := "blockscout"
+migration-dir := "./user-ops-indexer-migration"
+export DATABASE_URL := "postgres://" + db-user + ":" + db-password + "@" + db-host + ":" + db-port + "/" + db-name
+
+docker-name := "user-ops-indexer-postgres"
+test-db-port := "9433"
+
+
+start-postgres:
+    # we run it in --rm mode, so all data will be deleted after stopping
+    docker run -p {{db-port}}:5432 --name {{docker-name}} -e POSTGRES_PASSWORD={{db-password}} -e POSTGRES_USER={{db-user}} --rm -d postgres
+    sleep 3
+    # wait for postgres to start, but only if db_name is not empty
+    $SHELL -c '[[ -z "{{db-name}}" ]] || docker exec -it {{docker-name}} psql -U postgres -c "create database {{db-name}};"'
+
+stop-postgres:
+    docker kill {{docker-name}}
+
+migrate-up:
+    sea-orm-cli migrate up --migration-dir {{migration-dir}}
+
+migrate-down:
+    sea-orm-cli migrate down --migration-dir {{migration-dir}}
+
+new-migration name:
+    sea-orm-cli migrate generate {{name}} --migration-dir {{migration-dir}}
+
+generate-entities:
+    sea-orm-cli generate entity --lib -o user-ops-indexer-entity/src --tables user_operations
+
+test:
+    cargo test -- --include-ignored
+
+test-with-db:
+    just db-port="{{test-db-port}}" db-name="" docker-name="{{docker-name}}-test" start-postgres
+    just db-port="{{test-db-port}}" db-name=""                                    test
+    just                            docker-name="{{docker-name}}-test" stop-postgres

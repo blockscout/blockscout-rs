@@ -1,0 +1,31 @@
+type: google.api.Service
+config_version: 3
+
+http:
+  rules:
+    - selector: blockscout.userOpsIndexer.v1.UserOpsService.GetAccount
+      get: /api/v1/accounts/{address}
+    - selector: blockscout.userOpsIndexer.v1.UserOpsService.GetUserOp
+      get: /api/v1/userOps/{hash}
+    - selector: blockscout.userOpsIndexer.v1.UserOpsService.GetBundler
+      get: /api/v1/bundlers/{address}
+    - selector: blockscout.userOpsIndexer.v1.UserOpsService.GetPaymaster
+      get: /api/v1/paymasters/{address}
+    - selector: blockscout.userOpsIndexer.v1.UserOpsService.GetFactory
+      get: /api/v1/factories/{address}
+
+    - selector: blockscout.userOpsIndexer.v1.UserOpsService.ListAccounts
+      get: /api/v1/accounts
+    - selector: blockscout.userOpsIndexer.v1.UserOpsService.ListBundles
+      get: /api/v1/bundles
+    - selector: blockscout.userOpsIndexer.v1.UserOpsService.ListUserOps
+      get: /api/v1/userOps
+    - selector: blockscout.userOpsIndexer.v1.UserOpsService.ListBundlers
+      get: /api/v1/bundlers
+    - selector: blockscout.userOpsIndexer.v1.UserOpsService.ListPaymasters
+      get: /api/v1/paymasters
+    - selector: blockscout.userOpsIndexer.v1.UserOpsService.ListFactories
+      get: /api/v1/factories
+
+    - selector: blockscout.userOpsIndexer.v1.Health.Check
+      get: /health

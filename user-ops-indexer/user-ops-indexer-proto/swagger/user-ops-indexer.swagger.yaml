@@ -1,0 +1,570 @@
+swagger: "2.0"
+info:
+  title: user-ops-indexer.proto
+  version: version not set
+tags:
+  - name: UserOpsService
+  - name: Health
+consumes:
+  - application/json
+produces:
+  - application/json
+paths:
+  /api/v1/accounts:
+    get:
+      operationId: UserOpsService_ListAccounts
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListAccountsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: factory
+          in: query
+          required: false
+          type: string
+        - name: pageSize
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: pageToken
+          in: query
+          required: false
+          type: string
+      tags:
+        - UserOpsService
+  /api/v1/accounts/{address}:
+    get:
+      operationId: UserOpsService_GetAccount
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1Account'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: address
+          in: path
+          required: true
+          type: string
+      tags:
+        - UserOpsService
+  /api/v1/bundlers:
+    get:
+      operationId: UserOpsService_ListBundlers
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListBundlersResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: pageSize
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: pageToken
+          in: query
+          required: false
+          type: string
+      tags:
+        - UserOpsService
+  /api/v1/bundlers/{address}:
+    get:
+      operationId: UserOpsService_GetBundler
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1Bundler'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: address
+          in: path
+          required: true
+          type: string
+      tags:
+        - UserOpsService
+  /api/v1/bundles:
+    get:
+      operationId: UserOpsService_ListBundles
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListBundlesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: bundler
+          in: query
+          required: false
+          type: string
+        - name: entryPoint
+          in: query
+          required: false
+          type: string
+        - name: pageSize
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: pageToken
+          in: query
+          required: false
+          type: string
+      tags:
+        - UserOpsService
+  /api/v1/factories:
+    get:
+      operationId: UserOpsService_ListFactories
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListFactoriesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: pageSize
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: pageToken
+          in: query
+          required: false
+          type: string
+      tags:
+        - UserOpsService
+  /api/v1/factories/{address}:
+    get:
+      operationId: UserOpsService_GetFactory
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1Factory'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: address
+          in: path
+          required: true
+          type: string
+      tags:
+        - UserOpsService
+  /api/v1/paymasters:
+    get:
+      operationId: UserOpsService_ListPaymasters
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListPaymastersResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: pageSize
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: pageToken
+          in: query
+          required: false
+          type: string
+      tags:
+        - UserOpsService
+  /api/v1/paymasters/{address}:
+    get:
+      operationId: UserOpsService_GetPaymaster
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1Paymaster'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: address
+          in: path
+          required: true
+          type: string
+      tags:
+        - UserOpsService
+  /api/v1/userOps:
+    get:
+      operationId: UserOpsService_ListUserOps
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListUserOpsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: sender
+          in: query
+          required: false
+          type: string
+        - name: bundler
+          in: query
+          required: false
+          type: string
+        - name: paymaster
+          in: query
+          required: false
+          type: string
+        - name: factory
+          in: query
+          required: false
+          type: string
+        - name: transactionHash
+          in: query
+          required: false
+          type: string
+        - name: entryPoint
+          in: query
+          required: false
+          type: string
+        - name: bundleIndex
+          in: query
+          required: false
+          type: string
+          format: uint64
+        - name: blockNumber
+          in: query
+          required: false
+          type: string
+          format: uint64
+        - name: pageSize
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: pageToken
+          in: query
+          required: false
+          type: string
+      tags:
+        - UserOpsService
+  /api/v1/userOps/{hash}:
+    get:
+      operationId: UserOpsService_GetUserOp
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1UserOp'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: hash
+          in: path
+          required: true
+          type: string
+      tags:
+        - UserOpsService
+  /health:
+    get:
+      summary: |-
+        If the requested service is unknown, the call will fail with status
+        NOT_FOUND.
+      operationId: Health_Check
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1HealthCheckResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: service
+          in: query
+          required: false
+          type: string
+      tags:
+        - Health
+definitions:
+  HealthCheckResponseServingStatus:
+    type: string
+    enum:
+      - UNKNOWN
+      - SERVING
+      - NOT_SERVING
+      - SERVICE_UNKNOWN
+    default: UNKNOWN
+    description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
+  protobufAny:
+    type: object
+    properties:
+      '@type':
+        type: string
+    additionalProperties: {}
+  rpcStatus:
+    type: object
+    properties:
+      code:
+        type: integer
+        format: int32
+      message:
+        type: string
+      details:
+        type: array
+        items:
+          $ref: '#/definitions/protobufAny'
+  v1Account:
+    type: object
+    properties:
+      address:
+        type: string
+      factory:
+        type: string
+      creationTransactionHash:
+        type: string
+      creationOpHash:
+        type: string
+      creationTimestamp:
+        type: string
+        format: uint64
+      totalOps:
+        type: integer
+        format: int64
+  v1Bundle:
+    type: object
+    properties:
+      transactionHash:
+        type: string
+      bundler:
+        type: string
+      blockNumber:
+        type: string
+        format: uint64
+      bundleIndex:
+        type: string
+        format: uint64
+      timestamp:
+        type: string
+        format: uint64
+      totalOps:
+        type: integer
+        format: int64
+  v1Bundler:
+    type: object
+    properties:
+      address:
+        type: string
+      totalBundles:
+        type: integer
+        format: int64
+      totalOps:
+        type: integer
+        format: int64
+  v1Factory:
+    type: object
+    properties:
+      address:
+        type: string
+      totalAccounts:
+        type: integer
+        format: int64
+  v1HealthCheckResponse:
+    type: object
+    properties:
+      status:
+        $ref: '#/definitions/HealthCheckResponseServingStatus'
+  v1ListAccountsResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          $ref: '#/definitions/v1Account'
+      nextPageToken:
+        type: string
+  v1ListBundlersResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          $ref: '#/definitions/v1Bundler'
+      nextPageToken:
+        type: string
+  v1ListBundlesResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          $ref: '#/definitions/v1Bundle'
+      nextPageToken:
+        type: string
+  v1ListFactoriesResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          $ref: '#/definitions/v1Factory'
+      nextPageToken:
+        type: string
+  v1ListPaymastersResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          $ref: '#/definitions/v1Paymaster'
+      nextPageToken:
+        type: string
+  v1ListUserOp:
+    type: object
+    properties:
+      hash:
+        type: string
+      blockNumber:
+        type: string
+        format: uint64
+      transactionHash:
+        type: string
+      address:
+        type: string
+      timestamp:
+        type: string
+        format: uint64
+      status:
+        type: boolean
+      fee:
+        type: string
+  v1ListUserOpsResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          $ref: '#/definitions/v1ListUserOp'
+      nextPageToken:
+        type: string
+  v1Paymaster:
+    type: object
+    properties:
+      address:
+        type: string
+      totalOps:
+        type: integer
+        format: int64
+  v1UserOp:
+    type: object
+    properties:
+      hash:
+        type: string
+      sender:
+        type: string
+      nonce:
+        type: string
+      initCode:
+        type: string
+      callData:
+        type: string
+      callGasLimit:
+        type: string
+        format: uint64
+      verificationGasLimit:
+        type: string
+        format: uint64
+      preVerificationGas:
+        type: string
+        format: uint64
+      maxFeePerGas:
+        type: string
+      maxPriorityFeePerGas:
+        type: string
+      paymasterAndData:
+        type: string
+      signature:
+        type: string
+      aggregator:
+        type: string
+      aggregatorSignature:
+        type: string
+      entryPoint:
+        type: string
+      transactionHash:
+        type: string
+      blockNumber:
+        type: string
+        format: uint64
+      blockHash:
+        type: string
+      bundler:
+        type: string
+      bundleIndex:
+        type: string
+        format: uint64
+      index:
+        type: string
+        format: uint64
+      factory:
+        type: string
+      paymaster:
+        type: string
+      status:
+        type: boolean
+      revertReason:
+        type: string
+      gas:
+        type: string
+        format: uint64
+      gasPrice:
+        type: string
+      gasUsed:
+        type: string
+        format: uint64
+      sponsorType:
+        type: string
+      userLogsStartIndex:
+        type: string
+        format: uint64
+      userLogsCount:
+        type: string
+        format: uint64
+      fee:
+        type: string
+      consensus:
+        type: boolean
+      timestamp:
+        type: string
+        format: uint64

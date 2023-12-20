@@ -1,0 +1,9 @@
+[workspace]
+resolver = "2"
+members = [
+    "user-ops-indexer-entity",
+    "user-ops-indexer-logic",
+    "user-ops-indexer-migration",
+    "user-ops-indexer-proto",
+    "user-ops-indexer-server",
+]

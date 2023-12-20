@@ -1,0 +1,48 @@
+[server.http]
+enabled = true
+addr = "0.0.0.0:8050"
+max_body_size = 2097152
+
+[server.grpc]
+enabled = false
+addr = "0.0.0.0:8051"
+
+[api]
+max_page_size = 1000
+
+[indexer]
+rpc_url = "ws://127.0.0.1:8545"
+concurrency = 20
+
+[indexer.entrypoints]
+v06 = true
+
+[indexer.realtime]
+enabled = true
+
+[indexer.past_rpc_logs_indexer]
+enabled = true
+block_range = 1000
+
+[indexer.past_db_logs_indexer]
+enabled = true
+start_block = -100000
+end_block = 0
+
+[database]
+connect.url = "postgres://postgres:admin@127.0.0.1:9432/blockscout" # (required) no default value available
+create_database = true
+run_migrations = true
+
+[metrics]
+enabled = true
+addr = "0.0.0.0:6060"
+route = "/metrics"
+
+[jaeger]
+enabled = false
+agent_endpoint = "localhost:6831"
+
+[tracing]
+enabled = true
+format = "default"
