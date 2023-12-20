@@ -1,4 +1,5 @@
-use crate::SignatureSource;
+use crate::{sources::CompleteSignatureSource, SignatureSource};
+use anyhow::Context;
 use ethabi::{Event, EventParam, ParamType, RawLog, Token};
 use itertools::Itertools;
 use sig_provider_proto::blockscout::sig_provider::v1::{Abi, Argument};
@@ -6,10 +7,11 @@ use std::{collections::HashSet, sync::Arc};
 
 pub struct SourceAggregator {
     sources: Vec<Arc<dyn SignatureSource + Send + Sync + 'static>>,
+    complete_sources: Vec<Arc<dyn CompleteSignatureSource + Send + Sync + 'static>>,
 }
 
 macro_rules! proxy {
-    ($sources:ident, $request:ident, $fn:ident) => {{
+    ($sources:expr, $request:expr, $fn:ident) => {{
         let tasks = $sources.iter().map(|source| source.$fn($request));
         let responses: Vec<_> = futures::future::join_all(tasks)
             .await
@@ -32,16 +34,32 @@ macro_rules! proxy {
     }};
 }
 
+macro_rules! get_event_signatures {
+    ($sources:expr, $request:expr) => {{
+        let responses = proxy!($sources, $request, get_event_signatures);
+        crate::aggregator::SourceAggregator::merge_signatures(responses)
+    }};
+}
+
 impl SourceAggregator {
     // You should provide sources in priority descending order (first - max priority)
-    pub fn new(sources: Vec<Arc<dyn SignatureSource + Send + Sync + 'static>>) -> SourceAggregator {
-        SourceAggregator { sources }
+    pub fn new(
+        sources: Vec<Arc<dyn SignatureSource + Send + Sync + 'static>>,
+        complete_sources: Vec<Arc<dyn CompleteSignatureSource + Send + Sync + 'static>>,
+    ) -> SourceAggregator {
+        SourceAggregator {
+            sources,
+            complete_sources,
+        }
     }
 
-    fn merge_signatures<I: IntoIterator<Item = String>, II: IntoIterator<Item = I>>(
+    fn merge_signatures<T, I: IntoIterator<Item = T>, II: IntoIterator<Item = I>>(
         sigs: II,
-    ) -> Vec<String> {
-        let mut content: HashSet<String> = HashSet::default();
+    ) -> Vec<T>
+    where
+        T: Clone + Eq + std::hash::Hash,
+    {
+        let mut content: HashSet<T> = HashSet::default();
         sigs.into_iter()
             .flatten()
             .filter(|sig| content.insert(sig.clone()))
@@ -57,13 +75,6 @@ impl SourceAggregator {
     pub async fn get_function_signatures(&self, hex: &str) -> Result<Vec<String>, anyhow::Error> {
         let sources = &self.sources;
         let responses = proxy!(sources, hex, get_function_signatures);
-        let signatures = Self::merge_signatures(responses);
-        Ok(signatures)
-    }
-
-    pub async fn get_event_signatures(&self, hex: &str) -> Result<Vec<String>, anyhow::Error> {
-        let sources = &self.sources;
-        let responses = proxy!(sources, hex, get_event_signatures);
         let signatures = Self::merge_signatures(responses);
         Ok(signatures)
     }
@@ -93,23 +104,113 @@ impl SourceAggregator {
             anyhow::bail!("log should contain at least one topic");
         }
         let hex_sig = hex::encode(raw.topics[0].as_bytes());
-        let sigs = self.get_event_signatures(&hex_sig).await?;
-        Ok(sigs
-            .into_iter()
-            .filter_map(|sig| {
-                let (name, args) = parse_signature(&sig)?;
-                let (values, indexed) = decode_log(name.to_string(), &args, raw.clone())?;
-                let mut inputs = parse_args("arg".into(), &args, &values);
+
+        let complete_sigs = get_event_signatures!(&self.complete_sources, &hex_sig);
+        let sigs = get_event_signatures!(&self.sources, &hex_sig);
+
+        process_event_signatures(&raw, complete_sigs, sigs).await
+    }
+
+    pub async fn batch_get_event_abi(
+        &self,
+        raw_logs: Vec<RawLog>,
+    ) -> Result<Vec<Vec<Abi>>, anyhow::Error> {
+        let mut hex_sigs = Vec::new();
+        for raw in &raw_logs {
+            if raw.topics.is_empty() {
+                anyhow::bail!("log should contain at least one topic")
+            }
+            hex_sigs.push(hex::encode(raw.topics[0].as_bytes()));
+        }
+
+        let complete_responses = proxy!(
+            &self.complete_sources,
+            &hex_sigs,
+            batch_get_event_signatures
+        );
+        let responses = proxy!(&self.sources, &hex_sigs, batch_get_event_signatures);
+
+        let mut results = Vec::new();
+        for (index, raw_log) in raw_logs.iter().enumerate() {
+            let batch_complete_signatures: Vec<_> = complete_responses
+                .iter()
+                .map(|response| response.get(index).cloned().unwrap_or_default())
+                .collect();
+            let complete_signatures = SourceAggregator::merge_signatures(batch_complete_signatures);
+
+            let batch_signatures: Vec<_> = responses
+                .iter()
+                .map(|response| response.get(index).cloned().unwrap_or_default())
+                .collect();
+            let signatures = SourceAggregator::merge_signatures(batch_signatures);
+
+            let abis = process_event_signatures(raw_log, complete_signatures, signatures).await?;
+            results.push(abis)
+        }
+
+        Ok(results)
+    }
+}
+
+async fn process_event_signatures(
+    raw: &RawLog,
+    complete_signatures: Vec<alloy_json_abi::Event>,
+    signatures: Vec<String>,
+) -> Result<Vec<Abi>, anyhow::Error> {
+    let complete_abis: Vec<_> = complete_signatures.into_iter().filter_map(|alloy_event| {
+        let ethabi_event = try_from_alloy_event_to_ethabi_event(alloy_event.clone())
+            .map_err(|err| tracing::error!("converting alloy_json_abi::Event into ethabi::Event failed for {alloy_event:?}; err={err:#}")).ok()?;
+        ethabi_event.parse_log_whole(raw.clone()).ok()
+            .map(|event| {
+                let mut names = Vec::new();
+                let mut values = Vec::new();
+                for param in event.params.into_iter() {
+                    names.push(param.name);
+                    values.push(param.value);
+                }
+                let indexed: Vec<_> = ethabi_event.inputs.iter().map(|param| param.indexed).collect();
+                let args: Vec<_> = ethabi_event.inputs.into_iter().map(|param| param.kind).collect();
+                let mut inputs = parse_args_with_names(&names, &args, &values);
                 for (input, indexed) in inputs.iter_mut().zip(indexed) {
                     input.indexed = Some(indexed);
                 }
-                Some(Abi {
-                    name: name.into(),
+                Abi {
+                    name: ethabi_event.name,
                     inputs,
-                })
+                }
             })
-            .collect())
-    }
+    }).collect();
+
+    let abis: Vec<_> = signatures
+        .into_iter()
+        .filter_map(|sig| {
+            let (name, args) = parse_signature(&sig)?;
+            let (values, indexed) = decode_log(name.to_string(), &args, raw.clone())?;
+            let mut inputs = parse_args("arg".into(), &args, &values);
+            for (input, indexed) in inputs.iter_mut().zip(indexed) {
+                input.indexed = Some(indexed);
+            }
+            Some(Abi {
+                name: name.into(),
+                inputs,
+            })
+        })
+        .collect();
+
+    let mut seen_abis = HashSet::new();
+    let result: Vec<_> = complete_abis
+        .into_iter()
+        .chain(abis)
+        .filter_map(|abi| {
+            if !seen_abis.contains(&abi) {
+                seen_abis.insert(abi.clone());
+                Some(abi)
+            } else {
+                None
+            }
+        })
+        .collect();
+    Ok(result)
 }
 
 fn parse_signature(sig: &str) -> Option<(&str, Vec<ParamType>)> {
@@ -195,14 +296,30 @@ fn parse_arg(name: String, param: &ParamType, value: &Token) -> Argument {
     }
 }
 
-fn parse_args(pref: String, args: &[ParamType], values: &[Token]) -> Vec<Argument> {
-    let inputs = args
+fn parse_args_with_names(names: &[String], args: &[ParamType], values: &[Token]) -> Vec<Argument> {
+    let inputs = names
         .iter()
+        .zip(args.iter())
         .zip(values.iter())
-        .enumerate()
-        .map(|(index, (arg, value))| parse_arg(format!("{pref}{index}"), arg, value))
+        .map(|((name, arg), value)| parse_arg(name.clone(), arg, value))
         .collect();
     inputs
+}
+
+fn parse_args(pref: String, args: &[ParamType], values: &[Token]) -> Vec<Argument> {
+    let names = (0..args.len())
+        .map(|index| format!("{pref}{index}"))
+        .collect::<Vec<_>>();
+    parse_args_with_names(&names, args, values)
+}
+
+fn try_from_alloy_event_to_ethabi_event(
+    alloy_event: alloy_json_abi::Event,
+) -> Result<ethabi::Event, anyhow::Error> {
+    serde_json::from_value(
+        serde_json::to_value(alloy_event).context("serializing alloy_json_abi::Event")?,
+    )
+    .context("deserializing ethabi::Event")
 }
 
 #[cfg(test)]
@@ -290,7 +407,7 @@ mod tests {
                 });
             let source = Arc::new(source);
 
-            let agg = Arc::new(SourceAggregator::new(vec![source.clone()]));
+            let agg = Arc::new(SourceAggregator::new(vec![source.clone()], vec![]));
 
             let function = agg
                 .get_function_abi(&hex::decode(input).unwrap())
@@ -341,7 +458,7 @@ mod tests {
             });
         let source = Arc::new(source);
 
-        let agg = Arc::new(SourceAggregator::new(vec![source.clone()]));
+        let agg = Arc::new(SourceAggregator::new(vec![source.clone()], vec![]));
 
         let function = agg
             .get_function_abi(&hex::decode(input).unwrap())
@@ -590,7 +707,7 @@ mod tests {
                 .returning(|_| Ok(vec![sig.into()]));
             let source = Arc::new(source);
 
-            let agg = Arc::new(SourceAggregator::new(vec![source.clone()]));
+            let agg = Arc::new(SourceAggregator::new(vec![source.clone()], vec![]));
 
             let event = agg.get_event_abi(input).await.unwrap();
             assert_eq!(abi, event[0]);
@@ -649,7 +766,7 @@ mod tests {
             .returning(|_| Ok(vec![sig.into()]));
         let source = Arc::new(source);
 
-        let agg = Arc::new(SourceAggregator::new(vec![source.clone()]));
+        let agg = Arc::new(SourceAggregator::new(vec![source.clone()], vec![]));
 
         let event = agg.get_event_abi(input).await.unwrap();
         assert_eq!(abi, event[0]);
@@ -723,7 +840,7 @@ mod tests {
             .returning(|_| Ok(vec![sig.into()]));
         let source = Arc::new(source);
 
-        let agg = Arc::new(SourceAggregator::new(vec![source.clone()]));
+        let agg = Arc::new(SourceAggregator::new(vec![source.clone()], vec![]));
 
         let event = agg.get_event_abi(input).await.unwrap();
         assert_eq!(abi, event[0]);

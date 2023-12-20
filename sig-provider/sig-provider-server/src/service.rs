@@ -3,8 +3,9 @@ use ethabi::{ethereum_types::H256, RawLog};
 use sig_provider::SourceAggregator;
 use sig_provider_proto::blockscout::sig_provider::v1::{
     abi_service_server::AbiService, signature_service_server::SignatureService,
-    CreateSignaturesRequest, CreateSignaturesResponse, GetEventAbiRequest, GetEventAbiResponse,
-    GetFunctionAbiRequest, GetFunctionAbiResponse,
+    BatchGetEventAbisRequest, BatchGetEventAbisResponse, CreateSignaturesRequest,
+    CreateSignaturesResponse, GetEventAbiRequest, GetEventAbiResponse, GetFunctionAbiRequest,
+    GetFunctionAbiResponse,
 };
 use std::sync::Arc;
 
@@ -59,27 +60,62 @@ impl AbiService for Service {
         request: tonic::Request<GetEventAbiRequest>,
     ) -> Result<tonic::Response<GetEventAbiResponse>, tonic::Status> {
         let request = request.into_inner();
-        let topics: Result<Vec<_>, _> = request
-            .topics
-            .split(',')
-            .map(|topic| {
-                let hex = decode(topic)?;
-                if hex.len() != 32 {
-                    return Err(tonic::Status::invalid_argument(
-                        "topic len must be 32 bytes",
-                    ));
-                }
-                Ok(H256::from_slice(&hex))
-            })
-            .collect();
-        let topics = topics?;
+
+        let topics = parse_topics(request.topics)?;
         self.agg
             .get_event_abi(RawLog {
                 data: decode(&request.data)?,
                 topics,
             })
             .await
-            .map(|abi| tonic::Response::new(GetEventAbiResponse { abi }))
+            .map(|abi| GetEventAbiResponse { abi })
             .map_err(|e| tonic::Status::internal(e.to_string()))
+            .map(tonic::Response::new)
     }
+
+    async fn batch_get_event_abis(
+        &self,
+        request: tonic::Request<BatchGetEventAbisRequest>,
+    ) -> Result<tonic::Response<BatchGetEventAbisResponse>, tonic::Status> {
+        let batch_request = request.into_inner();
+
+        let mut raw_logs = Vec::new();
+        for request in batch_request.requests {
+            let topics = parse_topics(request.topics)?;
+            raw_logs.push(RawLog {
+                data: decode(&request.data)?,
+                topics,
+            });
+        }
+
+        let batch_abis = self
+            .agg
+            .batch_get_event_abi(raw_logs)
+            .await
+            .map_err(|e| tonic::Status::internal(e.to_string()))?;
+
+        let mut responses = Vec::new();
+        for abi in batch_abis {
+            responses.push(GetEventAbiResponse { abi })
+        }
+
+        Ok(tonic::Response::new(BatchGetEventAbisResponse {
+            responses,
+        }))
+    }
+}
+
+fn parse_topics(topics: String) -> Result<Vec<H256>, tonic::Status> {
+    topics
+        .split(',')
+        .map(|topic| {
+            let hex = decode(topic)?;
+            if hex.len() != 32 {
+                return Err(tonic::Status::invalid_argument(
+                    "topic len must be 32 bytes",
+                ));
+            }
+            Ok(H256::from_slice(&hex))
+        })
+        .collect()
 }

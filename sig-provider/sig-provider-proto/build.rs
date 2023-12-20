@@ -16,7 +16,8 @@ fn compile(
         .protoc_arg("--openapiv2_opt")
         .protoc_arg("grpc_api_configuration=proto/api_config_http.yaml,output_format=yaml,allow_merge=true,merge_file_name=sig-provider")
         .bytes(["."])
-        .type_attribute(".", "#[actix_prost_macros::serde]");
+        .type_attribute(".", "#[actix_prost_macros::serde]")
+        .message_attribute(".", "#[derive(Eq, Hash)]");
     config.compile_protos(protos, includes)?;
     Ok(())
 }
