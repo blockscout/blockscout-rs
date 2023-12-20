@@ -19,6 +19,10 @@ fn compile(
         .btree_map(["."])
         .type_attribute(".", "#[actix_prost_macros::serde]")
         .field_attribute(
+            ".blockscout.bens.v1.GetDomainRequest.only_active",
+            "#[serde(default)]"
+        )
+        .field_attribute(
             ".blockscout.bens.v1.ListDomainEventsRequest.sort",
             "#[serde(default)]"
         )

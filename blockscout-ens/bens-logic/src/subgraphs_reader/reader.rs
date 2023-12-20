@@ -1,5 +1,6 @@
 use super::{
     blockscout::{self, BlockscoutClient},
+    domain_name::fix_domain_name,
     schema_selector::subgraph_deployments,
     sql::{self},
     BatchResolveAddressNamesInput, GetDomainHistoryInput, GetDomainInput, LookupAddressInput,
@@ -175,17 +176,16 @@ impl SubgraphReader {
         let id = domain_id(&input.name, subgraph.settings.empty_label_hash.clone());
         let domain = sql::get_domain(self.pool.as_ref(), &id, &subgraph.schema_name, &input)
             .await?
-            .map(|mut domain| {
-                domain.other_addresses = sqlx::types::Json(
-                    domain
-                        .other_addresses
-                        .0
-                        .into_iter()
-                        .map(|(coin_type, address)| (coin_name(&coin_type), address))
-                        .collect(),
-                );
-                domain
+            .map(|domain| {
+                patch_detailed_domain(
+                    self.pool.clone(),
+                    &subgraph.schema_name,
+                    domain,
+                    &input.name,
+                    &id,
+                )
             });
+
         Ok(domain)
     }
 
@@ -217,13 +217,21 @@ impl SubgraphReader {
             .ok_or_else(|| SubgraphReadError::NetworkNotFound(input.network_id))?;
         let subgraph = &network.default_subgraph;
         let id = domain_id(&input.name, subgraph.settings.empty_label_hash.clone());
-        sql::find_domains(
-            self.pool.as_ref(),
-            &network.default_subgraph.schema_name,
-            &id,
-            &input,
-        )
-        .await
+        let domains = sql::find_domains(self.pool.as_ref(), &subgraph.schema_name, &id, &input)
+            .await?
+            .into_iter()
+            .map(|domain| {
+                patch_domain(
+                    self.pool.clone(),
+                    &subgraph.schema_name,
+                    domain,
+                    &input.name,
+                    &id,
+                )
+            })
+            .collect();
+
+        Ok(domains)
     }
 
     pub async fn lookup_address(
@@ -311,13 +319,75 @@ async fn events_from_transactions(
     Ok(events)
 }
 
+macro_rules! build_fix_domain_name_function {
+    ($fn_name:tt, $struct_name:ident) => {
+        fn $fn_name(
+            pool: Arc<PgPool>,
+            schema: &str,
+            mut domain: $struct_name,
+            input_name: &str,
+            input_id: &str,
+        ) -> $struct_name {
+            if domain.name.as_deref() != Some(input_name) && input_id == domain.id {
+                tracing::warn!(
+                    domain_id = domain.id,
+                    input_name = input_name,
+                    domain_name = domain.name,
+                    "domain has invalid name, creating task to fix to"
+                );
+                domain.name = Some(input_name.to_string());
+                let input_name = input_name.to_string();
+                let input_id = input_id.to_string();
+                let schema = schema.to_string();
+                tokio::spawn(async move {
+                    fix_domain_name(pool, &schema, &input_name, &input_id).await;
+                });
+            }
+            domain
+        }
+    };
+}
+
+build_fix_domain_name_function!(fix_domain_main, Domain);
+fn patch_domain(
+    pool: Arc<PgPool>,
+    schema: &str,
+    domain: Domain,
+    input_name: &str,
+    input_id: &str,
+) -> Domain {
+    fix_domain_main(pool, schema, domain, input_name, input_id)
+}
+
+build_fix_domain_name_function!(fix_detailed_domain_name, DetailedDomain);
+fn patch_detailed_domain(
+    pool: Arc<PgPool>,
+    schema: &str,
+    domain: DetailedDomain,
+    input_name: &str,
+    input_id: &str,
+) -> DetailedDomain {
+    let mut domain = fix_detailed_domain_name(pool, schema, domain, input_name, input_id);
+    domain.other_addresses = sqlx::types::Json(
+        domain
+            .other_addresses
+            .0
+            .into_iter()
+            .map(|(coin_type, address)| (coin_name(&coin_type), address))
+            .collect(),
+    );
+    domain
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::test_utils::mocked_networks_with_blockscout;
-
     use super::*;
+    use crate::{subgraphs_reader::sql, test_utils::mocked_networks_with_blockscout};
     use ethers::types::Address;
     use pretty_assertions::assert_eq;
+
+    const DEFAULT_CHAIN_ID: i64 = 1;
+    const DEFAULT_SCHEMA: &str = "sgd1";
 
     #[sqlx::test(migrations = "tests/migrations")]
     async fn get_domain_works(pool: PgPool) {
@@ -331,7 +401,7 @@ mod tests {
         let name = "vitalik.eth".to_string();
         let result = reader
             .get_domain(GetDomainInput {
-                network_id: 1,
+                network_id: DEFAULT_CHAIN_ID,
                 name,
                 only_active: false,
             })
@@ -354,7 +424,7 @@ mod tests {
         let name = "expired.eth".to_string();
         let result = reader
             .get_domain(GetDomainInput {
-                network_id: 1,
+                network_id: DEFAULT_CHAIN_ID,
                 name: name.clone(),
                 only_active: false,
             })
@@ -372,7 +442,7 @@ mod tests {
         // get expired domain with only_active filter
         let result = reader
             .get_domain(GetDomainInput {
-                network_id: 1,
+                network_id: DEFAULT_CHAIN_ID,
                 name,
                 only_active: true,
             })
@@ -395,7 +465,7 @@ mod tests {
 
         let result = reader
             .lookup_domain(LookupDomainInput {
-                network_id: 1,
+                network_id: DEFAULT_CHAIN_ID,
                 name: "vitalik.eth".to_string(),
                 only_active: false,
                 sort: Default::default(),
@@ -419,7 +489,7 @@ mod tests {
 
         let result = reader
             .lookup_address(LookupAddressInput {
-                network_id: 1,
+                network_id: DEFAULT_CHAIN_ID,
                 address: addr("0xd8da6bf26964af9d7eed9e03e53415d37aa96045"),
                 resolved_to: true,
                 owned_by: false,
@@ -436,7 +506,7 @@ mod tests {
 
         let result = reader
             .lookup_address(LookupAddressInput {
-                network_id: 1,
+                network_id: DEFAULT_CHAIN_ID,
                 address: addr("0xd8da6bf26964af9d7eed9e03e53415d37aa96045"),
                 resolved_to: false,
                 owned_by: true,
@@ -454,7 +524,7 @@ mod tests {
         // search for expired address
         let result = reader
             .lookup_address(LookupAddressInput {
-                network_id: 1,
+                network_id: DEFAULT_CHAIN_ID,
                 address: addr("0x9f7f7ddbfb8e14d1756580ba8037530da0880b99"),
                 resolved_to: true,
                 owned_by: true,
@@ -472,7 +542,7 @@ mod tests {
         // search for expired address with only_active
         let result = reader
             .lookup_address(LookupAddressInput {
-                network_id: 1,
+                network_id: DEFAULT_CHAIN_ID,
                 address: addr("0x9f7f7ddbfb8e14d1756580ba8037530da0880b99"),
                 resolved_to: true,
                 owned_by: true,
@@ -499,7 +569,7 @@ mod tests {
         let name = "vitalik.eth".to_string();
         let history = reader
             .get_domain_history(GetDomainHistoryInput {
-                network_id: 1,
+                network_id: DEFAULT_CHAIN_ID,
                 name,
                 sort: Default::default(),
                 order: Default::default(),
@@ -595,6 +665,8 @@ mod tests {
             "0x9c996076a85b46061d9a70ff81f013853a86b619",
             // not in database
             "0x0000000000000000000000000000000000000000",
+            // unresolved domain (labelname is not resolved)
+            "0x0101010101010101010101010101010101010101",
         ]
         .into_iter()
         .map(addr)
@@ -607,12 +679,70 @@ mod tests {
         .unwrap();
         let domains = reader
             .batch_resolve_address_names(BatchResolveAddressNamesInput {
-                network_id: 1,
+                network_id: DEFAULT_CHAIN_ID,
                 addresses,
             })
             .await
             .expect("failed to resolve addresess");
         assert_eq!(domains, expected_domains);
+    }
+
+    #[sqlx::test(migrations = "tests/migrations")]
+    async fn fix_domain_name_works(pool: PgPool) {
+        let unresolved = "you-dont-know-this-label.eth";
+        let pool = Arc::new(pool);
+        let networks = mocked_networks_with_blockscout().await;
+        let reader = SubgraphReader::initialize(pool.clone(), networks)
+            .await
+            .expect("failed to init reader");
+
+        // Make sure that database contains unresolved domain
+        let domain = sql::get_domain(
+            pool.as_ref(),
+            &domain_id(unresolved, None),
+            DEFAULT_SCHEMA,
+            &GetDomainInput {
+                network_id: DEFAULT_CHAIN_ID,
+                name: unresolved.to_string(),
+                only_active: false,
+            },
+        )
+        .await
+        .expect("failed to get domain")
+        .expect("unresolved domain not found using sql");
+        assert_eq!(
+            domain.name.as_deref(),
+            Some("[0b0e081f36b3970ff8e337f0ff7bdfad321a702fa00916b6ccfc47877144f7ad].eth")
+        );
+
+        // After reader requests domain should be resolved
+        let domain = reader
+            .get_domain(GetDomainInput {
+                network_id: DEFAULT_CHAIN_ID,
+                name: unresolved.to_string(),
+                only_active: false,
+            })
+            .await
+            .expect("failed to get domain")
+            .expect("unresolved domain not found using reader");
+        assert_eq!(domain.name.as_deref(), Some(unresolved));
+
+        // Make sure that unresolved name in database became resolved
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        let domain = sql::get_domain(
+            pool.as_ref(),
+            &domain_id(unresolved, None),
+            DEFAULT_SCHEMA,
+            &GetDomainInput {
+                network_id: DEFAULT_CHAIN_ID,
+                name: unresolved.to_string(),
+                only_active: false,
+            },
+        )
+        .await
+        .expect("failed to get domain")
+        .expect("unresolved domain not found using sql");
+        assert_eq!(domain.name.as_deref(), Some(unresolved));
     }
 
     fn addr(a: &str) -> Address {

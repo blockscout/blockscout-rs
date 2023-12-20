@@ -8,7 +8,7 @@ use bens_proto::blockscout::bens::v1::{
     domains_extractor_server::DomainsExtractor, BatchResolveAddressNamesRequest,
     BatchResolveAddressNamesResponse, DetailedDomain, Domain, DomainEvent, GetDomainRequest,
     ListDomainEventsRequest, ListDomainEventsResponse, LookupAddressRequest, LookupAddressResponse,
-    LookupDomainNameRequest, LookupDomainNameResponse, Pagination,
+    LookupDomainNameRequest, LookupDomainNameResponse,
 };
 use std::sync::Arc;
 
@@ -60,9 +60,7 @@ impl DomainsExtractor for DomainsExtractorService {
             .collect::<Result<_, _>>()
             .map_err(map_convertion_error)?;
         let response = ListDomainEventsResponse {
-            pagination: Some(Pagination {
-                total_records: events.len() as u32,
-            }),
+            total_records: events.len() as u32,
             items: events,
         };
         Ok(tonic::Response::new(response))
@@ -78,9 +76,7 @@ impl DomainsExtractor for DomainsExtractorService {
         let result = self.subgraph_reader.lookup_domain(input).await;
         let domains = from_resolved_domains_result(result)?;
         let response = LookupDomainNameResponse {
-            pagination: Some(Pagination {
-                total_records: domains.len() as u32,
-            }),
+            total_records: domains.len() as u32,
             items: domains,
         };
         Ok(tonic::Response::new(response))
@@ -95,9 +91,7 @@ impl DomainsExtractor for DomainsExtractorService {
         let result = self.subgraph_reader.lookup_address(input).await;
         let items = from_resolved_domains_result(result)?;
         let response = LookupAddressResponse {
-            pagination: Some(Pagination {
-                total_records: items.len() as u32,
-            }),
+            total_records: items.len() as u32,
             items,
         };
         Ok(tonic::Response::new(response))

@@ -2,7 +2,10 @@ use crate::subgraphs_reader::SubgraphReadError;
 use sqlx::{postgres::PgPool, Executor};
 use tracing::instrument;
 
-use super::{DOMAIN_DEFAULT_WHERE_CLAUSE, DOMAIN_NOT_EXPIRED_WHERE_CLAUSE};
+use super::{
+    DOMAIN_BLOCK_RANGE_WHERE_CLAUSE, DOMAIN_NONEMPTY_LABEL_WHERE_CLAUSE,
+    DOMAIN_NOT_EXPIRED_WHERE_CLAUSE,
+};
 
 #[instrument(
     name = "create_address_names_view",
@@ -27,7 +30,8 @@ pub async fn create_address_names_view(
         where
             resolved_address IS NOT NULL
             AND name NOT LIKE '%[%'
-            AND {DOMAIN_DEFAULT_WHERE_CLAUSE}
+            AND {DOMAIN_BLOCK_RANGE_WHERE_CLAUSE}
+            AND {DOMAIN_NONEMPTY_LABEL_WHERE_CLAUSE}
             AND {DOMAIN_NOT_EXPIRED_WHERE_CLAUSE}
         ORDER BY resolved_address, created_at
         "#,

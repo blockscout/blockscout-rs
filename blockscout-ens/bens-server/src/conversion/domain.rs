@@ -19,7 +19,7 @@ pub fn get_domain_input_from_inner(
     Ok(GetDomainInput {
         network_id: inner.chain_id,
         name: inner.name,
-        only_active: true,
+        only_active: inner.only_active,
     })
 }
 

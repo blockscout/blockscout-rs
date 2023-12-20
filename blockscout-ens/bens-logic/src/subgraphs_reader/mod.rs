@@ -1,4 +1,5 @@
 pub mod blockscout;
+mod domain_name;
 mod reader;
 mod schema_selector;
 mod sql;
