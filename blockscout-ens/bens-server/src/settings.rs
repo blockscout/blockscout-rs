@@ -30,6 +30,7 @@ impl ConfigSettings for Settings {
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct SubgraphsReaderSettings {
+    #[serde(default)]
     pub networks: HashMap<i64, NetworkSettings>,
     #[serde(default = "default_refresh_cache_schedule")]
     pub refresh_cache_schedule: String,
@@ -58,6 +59,7 @@ impl Default for SubgraphsReaderSettings {
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq, Default)]
 pub struct NetworkSettings {
     pub blockscout: BlockscoutSettings,
+    #[serde(default)]
     pub subgraphs: HashMap<String, SubgraphSettings>,
 }
 
@@ -65,6 +67,7 @@ pub struct NetworkSettings {
 pub struct SubgraphSettings {
     #[serde(default = "default_use_cache")]
     pub use_cache: bool,
+    #[serde(default)]
     pub empty_label_hash: Option<Bytes>,
 }
 
