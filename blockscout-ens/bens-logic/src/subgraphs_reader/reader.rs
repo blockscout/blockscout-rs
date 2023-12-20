@@ -176,11 +176,11 @@ impl SubgraphReader {
         let id = domain_id(&input.name, subgraph.settings.empty_label_hash.clone());
         let domain = sql::get_domain(self.pool.as_ref(), &id, &subgraph.schema_name, &input)
             .await?
-            .map(|d| {
+            .map(|domain| {
                 patch_detailed_domain(
                     self.pool.clone(),
                     &subgraph.schema_name,
-                    d,
+                    domain,
                     &input.name,
                     &id,
                 )
@@ -220,11 +220,11 @@ impl SubgraphReader {
         let domains = sql::find_domains(self.pool.as_ref(), &subgraph.schema_name, &id, &input)
             .await?
             .into_iter()
-            .map(|d| {
+            .map(|domain| {
                 patch_domain(
                     self.pool.clone(),
                     &subgraph.schema_name,
-                    d,
+                    domain,
                     &input.name,
                     &id,
                 )
