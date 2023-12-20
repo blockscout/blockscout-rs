@@ -29,14 +29,14 @@ pub struct RawUserOperation {
     pub aggregator_signature: Option<Bytes>,
 }
 
-pub struct IndexerV06<C: PubsubClient> {
+pub struct IndexerV06<'a, C: PubsubClient> {
     client: Provider<C>,
 
-    db: DatabaseConnection,
+    db: &'a DatabaseConnection,
 }
 
-impl<C: PubsubClient> IndexerV06<C> {
-    pub fn new(client: Provider<C>, db: DatabaseConnection) -> Self {
+impl<'a, C: PubsubClient> IndexerV06<'a, C> {
+    pub fn new(client: Provider<C>, db: &'a DatabaseConnection) -> Self {
         Self { client, db }
     }
 
@@ -90,7 +90,7 @@ impl<C: PubsubClient> IndexerV06<C> {
             };
             tracing::info!(from_block, to_block, "fetching missed tx hashes in db");
             let txs = repository::user_op::find_unprocessed_logs_tx_hashes(
-                &self.db,
+                self.db,
                 *ENTRYPOINT_V06,
                 UserOperationEventFilter::signature(),
                 from_block,
@@ -316,7 +316,7 @@ impl<C: PubsubClient> IndexerV06<C> {
             missed = total - parsed,
             "found and parsed user ops",
         );
-        repository::user_op::upsert_many(&self.db, user_ops).await?;
+        repository::user_op::upsert_many(self.db, user_ops).await?;
 
         Ok(())
     }
@@ -432,11 +432,10 @@ fn none_if_empty(b: Bytes) -> Option<Bytes> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ethabi::ethereum_types::U256;
+    use crate::repository::tests::get_shared_db;
     use ethers::prelude::{JsonRpcClient, MockProvider, Provider};
-    use ethers_core::types::{Transaction, TransactionReceipt};
+    use ethers_core::types::{Transaction, TransactionReceipt, U256};
     use futures::stream::{empty, Empty};
-    use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult};
     use serde::{de::DeserializeOwned, Serialize};
     use serde_json::value::RawValue;
     use std::{fmt::Debug, future::Future, pin::Pin, str::FromStr};
@@ -482,12 +481,7 @@ mod tests {
 
     #[tokio::test]
     async fn handle_tx_ok() {
-        let db: DatabaseConnection = MockDatabase::new(DatabaseBackend::Postgres)
-            .append_exec_results([MockExecResult {
-                last_insert_id: 1,
-                rows_affected: 1,
-            }])
-            .into_connection();
+        let db = get_shared_db().await;
         let client = MockProvider::new();
 
         // just some random tx from mainnet
@@ -500,7 +494,49 @@ mod tests {
         client.push(receipt).unwrap();
         client.push(tx).unwrap();
 
-        let indexer = IndexerV06::new(Provider::new(PubSubMockProvider(client)), db);
+        let indexer = IndexerV06::new(Provider::new(PubSubMockProvider(client)), &db);
         indexer.handle_tx(tx_hash).await.unwrap();
+
+        let op_hash =
+            H256::from_str("2D5F7A884E9A99CFE2445DB2AF140A8851FBD860852B668F2F199190F68ADF87")
+                .unwrap();
+        let user_op = repository::user_op::find_user_op_by_op_hash(&db, op_hash)
+            .await
+            .unwrap();
+        assert_eq!(user_op, Some(UserOp {
+            hash: op_hash,
+            sender: Address::from_str("0xeae4d85f7733ad522f601ce7ad4f595704a2d677").unwrap(),
+            nonce: H256::zero(),
+            init_code: None,
+            call_data: Bytes::from_str("0x70641a22000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044095ea7b30000000000000000000000001e0049783f008a0085193e00003d00cd54003c71ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00000000000000000000000000000000000000000000000000000000").unwrap(),
+            call_gas_limit: 92599,
+            verification_gas_limit: 87149,
+            pre_verification_gas: 49900,
+            max_fee_per_gas: U256::from(53825000000u64),
+            max_priority_fee_per_gas: U256::from(500000000u64),
+            paymaster_and_data: None,
+            signature: Bytes::from_str("0x000000000000000000000000000000000000000000000000000000000065793a092c25c7a7c5e4bc46467324e2845caf1ccae767786e07806ca720f8a6b83356bc7d43a63a96b34507cfe7c424db37f351d71851ae9318e8d5c3d9f17c8bdb744c1c").unwrap(),
+            aggregator: None,
+            aggregator_signature: None,
+            entry_point: *ENTRYPOINT_V06,
+            transaction_hash: tx_hash,
+            block_number: 18774992,
+            block_hash: H256::from_str("0xe90aa1d6038c87b029a0666148ac2058ab8397f9c53594cc5a38c0113a48eab4").unwrap(),
+            bundler: Address::from_str("0x2df993cd76bb8dbda50546eef00eee2e6331a2c8").unwrap(),
+            bundle_index: 0,
+            index: 0,
+            factory: None,
+            paymaster: None,
+            status: true,
+            revert_reason: None,
+            gas: 229648,
+            gas_price: U256::from(37400206579u64),
+            gas_used: 165030,
+            sponsor_type: SponsorType::WalletDeposit,
+            user_logs_start_index: 268,
+            user_logs_count: 1,
+            consensus: None,
+            timestamp: None,
+        }))
     }
 }
