@@ -173,7 +173,7 @@ impl SubgraphReader {
             .ok_or_else(|| SubgraphReadError::NetworkNotFound(input.network_id))?;
         let subgraph = &network.default_subgraph;
         let id = domain_id(&input.name, subgraph.settings.empty_label_hash.clone());
-        let domain = sql::get_domain(self.pool.as_ref(), &network.schema_name, &input)
+        let domain = sql::get_domain(self.pool.as_ref(), &id, &subgraph.schema_name, &input)
             .await?
             .map(|mut domain| {
                 domain.other_addresses = sqlx::types::Json(
