@@ -5,6 +5,7 @@ use ethers::prelude::{Address, Bytes, H256, U256};
 use ethers_core::{abi::AbiEncode, utils::to_checksum};
 use num_traits::cast::ToPrimitive;
 use sea_orm::{prelude::BigDecimal, ActiveEnum};
+use std::ops::Mul;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct UserOp {
@@ -39,6 +40,7 @@ pub struct UserOp {
     pub sponsor_type: SponsorType,
     pub user_logs_start_index: u64,
     pub user_logs_count: u64,
+    pub fee: U256,
 
     pub consensus: Option<bool>,
     pub timestamp: Option<u64>,
@@ -51,6 +53,8 @@ pub struct ListUserOp {
     pub sender: Address,
     pub transaction_hash: H256,
     pub timestamp: u64,
+    pub status: bool,
+    pub fee: U256,
 }
 
 impl From<UserOp> for Model {
@@ -127,6 +131,7 @@ impl From<Model> for UserOp {
             sponsor_type: v.sponsor_type.clone(),
             user_logs_start_index: v.user_logs_start_index as u64,
             user_logs_count: v.user_logs_count as u64,
+            fee: U256::from(v.gas_price.mul(v.gas_used).to_u128().unwrap_or(0)),
 
             consensus: None,
             timestamp: None,
@@ -168,6 +173,7 @@ impl From<UserOp> for user_ops_indexer_proto::blockscout::user_ops_indexer::v1::
             sponsor_type: v.sponsor_type.to_value().to_string(),
             user_logs_start_index: v.user_logs_start_index,
             user_logs_count: v.user_logs_count,
+            fee: v.fee.to_string(),
 
             consensus: v.consensus,
             timestamp: v.timestamp,
@@ -183,6 +189,8 @@ impl From<ListUserOpDB> for ListUserOp {
             sender: Address::from_slice(&v.sender),
             transaction_hash: H256::from_slice(&v.transaction_hash),
             timestamp: v.timestamp.timestamp() as u64,
+            status: v.status,
+            fee: U256::from(v.gas_price.mul(v.gas_used).to_u128().unwrap_or(0)),
         }
     }
 }
@@ -195,6 +203,8 @@ impl From<ListUserOp> for user_ops_indexer_proto::blockscout::user_ops_indexer::
             transaction_hash: v.transaction_hash.encode_hex(),
             address: to_checksum(&v.sender, None),
             timestamp: v.timestamp,
+            status: v.status,
+            fee: v.fee.to_string(),
         }
     }
 }

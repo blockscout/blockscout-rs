@@ -176,9 +176,10 @@ message UserOp {
   string sponsor_type = 29;
   uint64 user_logs_start_index = 30;
   uint64 user_logs_count = 31;
+  string fee = 32;
 
-  optional bool consensus = 32;
-  optional uint64 timestamp = 33;
+  optional bool consensus = 33;
+  optional uint64 timestamp = 34;
 }
 
 message ListUserOp {
@@ -187,4 +188,6 @@ message ListUserOp {
   string transaction_hash = 3;
   string address = 4;
   uint64 timestamp = 5;
+  bool status = 6;
+  string fee = 7;
 }

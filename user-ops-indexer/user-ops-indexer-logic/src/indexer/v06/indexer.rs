@@ -413,6 +413,7 @@ fn build_user_op_model(
             .first()
             .map_or(0, |l| l.log_index.map_or(0, |v| v.as_u64())),
         user_logs_count: user_logs_count as u64,
+        fee: user_op_event.actual_gas_cost,
 
         consensus: None,
         timestamp: None,
@@ -496,12 +497,13 @@ mod tests {
         indexer.handle_tx(tx_hash).await.unwrap();
 
         let op_hash =
-            H256::from_str("2D5F7A884E9A99CFE2445DB2AF140A8851FBD860852B668F2F199190F68ADF87")
+            H256::from_str("0x2d5f7a884e9a99cfe2445db2af140a8851fbd860852b668f2f199190f68adf87")
                 .unwrap();
         let user_op = repository::user_op::find_user_op_by_op_hash(&db, op_hash)
             .await
+            .unwrap()
             .unwrap();
-        assert_eq!(user_op, Some(UserOp {
+        assert_eq!(user_op, UserOp {
             hash: op_hash,
             sender: Address::from_str("0xeae4d85f7733ad522f601ce7ad4f595704a2d677").unwrap(),
             nonce: H256::zero(),
@@ -533,8 +535,9 @@ mod tests {
             sponsor_type: SponsorType::WalletDeposit,
             user_logs_start_index: 268,
             user_logs_count: 1,
+            fee: U256::from(6172156091732370u64),
             consensus: None,
             timestamp: None,
-        }))
+        })
     }
 }

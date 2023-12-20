@@ -3,7 +3,7 @@ use blockscout_db::entity::blocks;
 use entity::user_operations::{ActiveModel, Column, Entity, Model};
 use ethers::prelude::{Address, H256};
 use sea_orm::{
-    prelude::DateTime,
+    prelude::{BigDecimal, DateTime},
     sea_query::{Expr, IntoCondition, OnConflict},
     ActiveValue, ColumnTrait, ConnectionTrait, DatabaseConnection, DbBackend, EntityTrait,
     FromQueryResult, IntoSimpleExpr, Iterable, JoinType, QueryFilter, QueryOrder, QuerySelect,
@@ -22,6 +22,9 @@ pub struct ListUserOpDB {
     pub sender: Vec<u8>,
     pub transaction_hash: Vec<u8>,
     pub timestamp: DateTime,
+    pub status: bool,
+    pub gas_price: BigDecimal,
+    pub gas_used: BigDecimal,
 }
 
 pub fn user_ops_blocks_rel() -> RelationDef {
@@ -94,6 +97,9 @@ pub async fn list_user_ops(
             Column::BlockNumber,
             Column::Sender,
             Column::TransactionHash,
+            Column::Status,
+            Column::GasPrice,
+            Column::GasUsed,
         ])
         .column(blocks::Column::Timestamp)
         .join_rev(JoinType::Join, user_ops_blocks_rel());
@@ -213,6 +219,7 @@ WHERE logs.address_hash    = $1
 mod tests {
     use super::*;
     use crate::repository::tests::get_shared_db;
+    use ethers::prelude::U256;
     use pretty_assertions::assert_eq;
     use std::str::FromStr;
 
@@ -307,6 +314,8 @@ mod tests {
                     sender: Address::from_low_u64_be(0x0502),
                     transaction_hash: H256::from_low_u64_be(0x0504),
                     timestamp: 1704067200,
+                    status: true,
+                    fee: U256::from(56001575011025u64),
                 },
                 ListUserOp {
                     hash: H256::from_low_u64_be(0x0501),
@@ -314,6 +323,8 @@ mod tests {
                     sender: Address::from_low_u64_be(0x0502),
                     transaction_hash: H256::from_low_u64_be(0x0504),
                     timestamp: 1704067200,
+                    status: true,
+                    fee: U256::from(56000075000025u64),
                 }
             ]
         );
