@@ -30,3 +30,6 @@ test *args:
 test-with-db *args:
     -just db-port="{{test-db-port}}" db-name="" docker-name="{{docker-name}}-test" start-postgres
     just db-port="{{test-db-port}}" db-name=""                                     test {{args}}
+
+add-test-migration name:
+    sqlx migrate add {{name}} --source bens-logic/tests/migrations/

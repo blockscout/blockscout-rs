@@ -1,6 +1,5 @@
 use crate::{
     entity::subgraph::domain_event::DomainEventTransaction,
-    hash_name::domain_id,
     subgraphs_reader::{EventSort, GetDomainHistoryInput, Order, SubgraphReadError},
 };
 use lazy_static::lazy_static;
@@ -9,7 +8,7 @@ use tera::{Context, Tera};
 use tracing::instrument;
 
 #[instrument(
-    name = "find_owned_addresses",
+    name = "find_transaction_events",
     skip(pool),
     err(level = "error"),
     level = "info"
@@ -17,11 +16,11 @@ use tracing::instrument;
 pub async fn find_transaction_events(
     pool: &PgPool,
     schema: &str,
+    id: &str,
     input: &GetDomainHistoryInput,
 ) -> Result<Vec<DomainEventTransaction>, SubgraphReadError> {
     let sort = input.sort;
     let order = input.order;
-    let id = domain_id(&input.name);
     let sql = sql_events_of_domain(schema, sort, order)
         .map_err(|e| SubgraphReadError::Internal(e.to_string()))?;
     let transactions: Vec<DomainEventTransaction> =

@@ -1,0 +1,554 @@
+[
+  {
+    "name": "BTC",
+    "coinType": "0"
+  },
+  {
+    "name": "LTC",
+    "coinType": "2"
+  },
+  {
+    "name": "DOGE",
+    "coinType": "3"
+  },
+  {
+    "name": "RDD",
+    "coinType": "4"
+  },
+  {
+    "name": "DASH",
+    "coinType": "5"
+  },
+  {
+    "name": "PPC",
+    "coinType": "6"
+  },
+  {
+    "name": "NMC",
+    "coinType": "7"
+  },
+  {
+    "name": "VIA",
+    "coinType": "14"
+  },
+  {
+    "name": "GRS",
+    "coinType": "17"
+  },
+  {
+    "name": "DGB",
+    "coinType": "20"
+  },
+  {
+    "name": "MONA",
+    "coinType": "22"
+  },
+  {
+    "name": "DCR",
+    "coinType": "42"
+  },
+  {
+    "name": "XEM",
+    "coinType": "43"
+  },
+  {
+    "name": "AIB",
+    "coinType": "55"
+  },
+  {
+    "name": "SYS",
+    "coinType": "57"
+  },
+  {
+    "name": "ETH",
+    "coinType": "60"
+  },
+  {
+    "name": "ETC_LEGACY",
+    "coinType": "61"
+  },
+  {
+    "name": "ICX",
+    "coinType": "74"
+  },
+  {
+    "name": "XVG",
+    "coinType": "77"
+  },
+  {
+    "name": "STRAT",
+    "coinType": "105"
+  },
+  {
+    "name": "ARK",
+    "coinType": "111"
+  },
+  {
+    "name": "ATOM",
+    "coinType": "118"
+  },
+  {
+    "name": "ZIL",
+    "coinType": "119"
+  },
+  {
+    "name": "EGLD",
+    "coinType": "120"
+  },
+  {
+    "name": "ZEN",
+    "coinType": "121"
+  },
+  {
+    "name": "XMR",
+    "coinType": "128"
+  },
+  {
+    "name": "ZEC",
+    "coinType": "133"
+  },
+  {
+    "name": "LSK",
+    "coinType": "134"
+  },
+  {
+    "name": "STEEM",
+    "coinType": "135"
+  },
+  {
+    "name": "FIRO",
+    "coinType": "136"
+  },
+  {
+    "name": "RSK",
+    "coinType": "137"
+  },
+  {
+    "name": "KMD",
+    "coinType": "141"
+  },
+  {
+    "name": "XRP",
+    "coinType": "144"
+  },
+  {
+    "name": "BCH",
+    "coinType": "145"
+  },
+  {
+    "name": "XLM",
+    "coinType": "148"
+  },
+  {
+    "name": "BTM",
+    "coinType": "153"
+  },
+  {
+    "name": "BTG",
+    "coinType": "156"
+  },
+  {
+    "name": "NANO",
+    "coinType": "165"
+  },
+  {
+    "name": "RVN",
+    "coinType": "175"
+  },
+  {
+    "name": "POA_LEGACY",
+    "coinType": "178"
+  },
+  {
+    "name": "LCC",
+    "coinType": "192"
+  },
+  {
+    "name": "EOS",
+    "coinType": "194"
+  },
+  {
+    "name": "TRX",
+    "coinType": "195"
+  },
+  {
+    "name": "BCN",
+    "coinType": "204"
+  },
+  {
+    "name": "FIO",
+    "coinType": "235"
+  },
+  {
+    "name": "BSV",
+    "coinType": "236"
+  },
+  {
+    "name": "NEO",
+    "coinType": "239"
+  },
+  {
+    "name": "NIM",
+    "coinType": "242"
+  },
+  {
+    "name": "EWT_LEGACY",
+    "coinType": "246"
+  },
+  {
+    "name": "ALGO",
+    "coinType": "283"
+  },
+  {
+    "name": "IOST",
+    "coinType": "291"
+  },
+  {
+    "name": "DIVI",
+    "coinType": "301"
+  },
+  {
+    "name": "IOTX",
+    "coinType": "304"
+  },
+  {
+    "name": "BTS",
+    "coinType": "308"
+  },
+  {
+    "name": "CKB",
+    "coinType": "309"
+  },
+  {
+    "name": "MRX",
+    "coinType": "326"
+  },
+  {
+    "name": "LUNA",
+    "coinType": "330"
+  },
+  {
+    "name": "DOT",
+    "coinType": "354"
+  },
+  {
+    "name": "VSYS",
+    "coinType": "360"
+  },
+  {
+    "name": "ABBC",
+    "coinType": "367"
+  },
+  {
+    "name": "NEAR",
+    "coinType": "397"
+  },
+  {
+    "name": "ETN",
+    "coinType": "415"
+  },
+  {
+    "name": "AION",
+    "coinType": "425"
+  },
+  {
+    "name": "KSM",
+    "coinType": "434"
+  },
+  {
+    "name": "AE",
+    "coinType": "457"
+  },
+  {
+    "name": "KAVA",
+    "coinType": "459"
+  },
+  {
+    "name": "FIL",
+    "coinType": "461"
+  },
+  {
+    "name": "AR",
+    "coinType": "472"
+  },
+  {
+    "name": "CCA",
+    "coinType": "489"
+  },
+  {
+    "name": "THETA_LEGACY",
+    "coinType": "500"
+  },
+  {
+    "name": "SOL",
+    "coinType": "501"
+  },
+  {
+    "name": "XHV",
+    "coinType": "535"
+  },
+  {
+    "name": "FLOW",
+    "coinType": "539"
+  },
+  {
+    "name": "IRIS",
+    "coinType": "566"
+  },
+  {
+    "name": "LRG",
+    "coinType": "568"
+  },
+  {
+    "name": "SERO",
+    "coinType": "569"
+  },
+  {
+    "name": "BDX",
+    "coinType": "570"
+  },
+  {
+    "name": "CCXX",
+    "coinType": "571"
+  },
+  {
+    "name": "SRM",
+    "coinType": "573"
+  },
+  {
+    "name": "VLX",
+    "coinType": "574"
+  },
+  {
+    "name": "BPS",
+    "coinType": "576"
+  },
+  {
+    "name": "TFUEL",
+    "coinType": "589"
+  },
+  {
+    "name": "GRIN",
+    "coinType": "592"
+  },
+  {
+    "name": "GNO_LEGACY",
+    "coinType": "700"
+  },
+  {
+    "name": "VET",
+    "coinType": "703"
+  },
+  {
+    "name": "BNB",
+    "coinType": "714"
+  },
+  {
+    "name": "CLO_LEGACY",
+    "coinType": "820"
+  },
+  {
+    "name": "HIVE",
+    "coinType": "825"
+  },
+  {
+    "name": "TOMO_LEGACY",
+    "coinType": "889"
+  },
+  {
+    "name": "HNT",
+    "coinType": "904"
+  },
+  {
+    "name": "RUNE",
+    "coinType": "931"
+  },
+  {
+    "name": "BCD",
+    "coinType": "999"
+  },
+  {
+    "name": "TT_LEGACY",
+    "coinType": "1001"
+  },
+  {
+    "name": "FTM_LEGACY",
+    "coinType": "1007"
+  },
+  {
+    "name": "ONE",
+    "coinType": "1023"
+  },
+  {
+    "name": "ONT",
+    "coinType": "1024"
+  },
+  {
+    "name": "NOSTR",
+    "coinType": "1237"
+  },
+  {
+    "name": "XTZ",
+    "coinType": "1729"
+  },
+  {
+    "name": "ADA",
+    "coinType": "1815"
+  },
+  {
+    "name": "SC",
+    "coinType": "1991"
+  },
+  {
+    "name": "QTUM",
+    "coinType": "2301"
+  },
+  {
+    "name": "GXC",
+    "coinType": "2303"
+  },
+  {
+    "name": "ELA",
+    "coinType": "2305"
+  },
+  {
+    "name": "NAS",
+    "coinType": "2718"
+  },
+  {
+    "name": "HBAR",
+    "coinType": "3030"
+  },
+  {
+    "name": "IOTA",
+    "coinType": "4218"
+  },
+  {
+    "name": "HNS",
+    "coinType": "5353"
+  },
+  {
+    "name": "STX",
+    "coinType": "5757"
+  },
+  {
+    "name": "GO_LEGACY",
+    "coinType": "6060"
+  },
+  {
+    "name": "XCH",
+    "coinType": "8444"
+  },
+  {
+    "name": "NULS",
+    "coinType": "8964"
+  },
+  {
+    "name": "AVAX",
+    "coinType": "9000"
+  },
+  {
+    "name": "STRK",
+    "coinType": "9004"
+  },
+  {
+    "name": "NRG_LEGACY",
+    "coinType": "9797"
+  },
+  {
+    "name": "ARDR",
+    "coinType": "16754"
+  },
+  {
+    "name": "ZEL",
+    "coinType": "19167"
+  },
+  {
+    "name": "CELO_LEGACY",
+    "coinType": "52752"
+  },
+  {
+    "name": "WICC",
+    "coinType": "99999"
+  },
+  {
+    "name": "WAN",
+    "coinType": "5718350"
+  },
+  {
+    "name": "WAVES",
+    "coinType": "5741564"
+  },
+  {
+    "name": "OP",
+    "coinType": "2147483658"
+  },
+  {
+    "name": "CRO",
+    "coinType": "2147483673"
+  },
+  {
+    "name": "BSC",
+    "coinType": "2147483704"
+  },
+  {
+    "name": "GO",
+    "coinType": "2147483708"
+  },
+  {
+    "name": "ETC",
+    "coinType": "2147483709"
+  },
+  {
+    "name": "TOMO",
+    "coinType": "2147483736"
+  },
+  {
+    "name": "POA",
+    "coinType": "2147483747"
+  },
+  {
+    "name": "GNO",
+    "coinType": "2147483748"
+  },
+  {
+    "name": "TT",
+    "coinType": "2147483756"
+  },
+  {
+    "name": "MATIC",
+    "coinType": "2147483785"
+  },
+  {
+    "name": "EWT",
+    "coinType": "2147483894"
+  },
+  {
+    "name": "FTM",
+    "coinType": "2147483898"
+  },
+  {
+    "name": "THETA",
+    "coinType": "2147484009"
+  },
+  {
+    "name": "CLO",
+    "coinType": "2147484468"
+  },
+  {
+    "name": "NRG",
+    "coinType": "2147523445"
+  },
+  {
+    "name": "ARB1",
+    "coinType": "2147525809"
+  },
+  {
+    "name": "CELO",
+    "coinType": "2147525868"
+  },
+  {
+    "name": "AVAXC",
+    "coinType": "2147526762"
+  }
+]

@@ -1,0 +1,1487 @@
+[
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "previousAdmin",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "newAdmin",
+        "type": "address"
+      }
+    ],
+    "name": "AdminChanged",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "beacon",
+        "type": "address"
+      }
+    ],
+    "name": "BeaconUpgraded",
+    "type": "event"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "duration",
+        "type": "uint256"
+      }
+    ],
+    "name": "DurationTooShort",
+    "type": "error"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "version",
+        "type": "uint8"
+      }
+    ],
+    "name": "Initialized",
+    "type": "event"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "name",
+        "type": "string"
+      }
+    ],
+    "name": "NameNotAvailable",
+    "type": "error"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "label",
+        "type": "bytes32"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "owner",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "baseCost",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "expires",
+        "type": "uint256"
+      }
+    ],
+    "name": "NameRegistered",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "label",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "cost",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "expires",
+        "type": "uint256"
+      }
+    ],
+    "name": "NameRenewed",
+    "type": "event"
+  },
+  {
+    "inputs": [],
+    "name": "NotQualifiedRegister",
+    "type": "error"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "bool",
+        "name": "hasMintCap",
+        "type": "bool"
+      }
+    ],
+    "name": "SetHasMintCap",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "maxDomainLength",
+        "type": "uint256"
+      }
+    ],
+    "name": "SetMaxDomainLength",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "minDomainLength",
+        "type": "uint256"
+      }
+    ],
+    "name": "SetMinDomainLength",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "minRegistrationDuration",
+        "type": "uint256"
+      }
+    ],
+    "name": "SetMinRegistrationDuration",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "minRenewDuration",
+        "type": "uint256"
+      }
+    ],
+    "name": "SetMinRenewDuration",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "mintCap",
+        "type": "uint256"
+      }
+    ],
+    "name": "SetMintCap",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "hook",
+        "type": "address"
+      }
+    ],
+    "name": "SetPointHook",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "hook",
+        "type": "address"
+      }
+    ],
+    "name": "SetPriceHook",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "hook",
+        "type": "address"
+      }
+    ],
+    "name": "SetQualificationHook",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "hook",
+        "type": "address"
+      }
+    ],
+    "name": "SetRenewPointHook",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "hook",
+        "type": "address"
+      }
+    ],
+    "name": "SetRenewPriceHook",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "hook",
+        "type": "address"
+      }
+    ],
+    "name": "SetRenewRewardHook",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "hook",
+        "type": "address"
+      }
+    ],
+    "name": "SetRewardHook",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "base",
+        "type": "address"
+      }
+    ],
+    "name": "SetTldBase",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "priceOracle",
+        "type": "address"
+      }
+    ],
+    "name": "SetTldPriceOracle",
+    "type": "event"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "realPrice",
+        "type": "uint256"
+      }
+    ],
+    "name": "SimulatePrice",
+    "type": "error"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "implementation",
+        "type": "address"
+      }
+    ],
+    "name": "Upgraded",
+    "type": "event"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "name",
+        "type": "string"
+      }
+    ],
+    "name": "available",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string[]",
+        "name": "names",
+        "type": "string[]"
+      },
+      {
+        "internalType": "address",
+        "name": "owner",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "duration",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "resolver",
+        "type": "address"
+      },
+      {
+        "internalType": "bool",
+        "name": "setTldName",
+        "type": "bool"
+      },
+      {
+        "internalType": "bytes[]",
+        "name": "extraData",
+        "type": "bytes[]"
+      }
+    ],
+    "name": "bulkRegister",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string[]",
+        "name": "names",
+        "type": "string[]"
+      },
+      {
+        "internalType": "address",
+        "name": "owner",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "duration",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "resolver",
+        "type": "address"
+      },
+      {
+        "internalType": "bool",
+        "name": "setTldName",
+        "type": "bool"
+      },
+      {
+        "internalType": "bytes[]",
+        "name": "extraData",
+        "type": "bytes[]"
+      }
+    ],
+    "name": "bulkRegisterSimulate",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string[]",
+        "name": "names",
+        "type": "string[]"
+      },
+      {
+        "internalType": "uint256",
+        "name": "duration",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes[]",
+        "name": "extraData",
+        "type": "bytes[]"
+      }
+    ],
+    "name": "bulkRenew",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string[]",
+        "name": "names",
+        "type": "string[]"
+      },
+      {
+        "internalType": "uint256",
+        "name": "duration",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "initiatedBy",
+        "type": "address"
+      },
+      {
+        "internalType": "bytes[]",
+        "name": "extraData",
+        "type": "bytes[]"
+      }
+    ],
+    "name": "bulkRenewSimulate",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string[]",
+        "name": "names",
+        "type": "string[]"
+      },
+      {
+        "internalType": "uint256",
+        "name": "duration",
+        "type": "uint256"
+      }
+    ],
+    "name": "bulkRentPrice",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "total",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "inputs": [],
+    "name": "defaultPriceOracle",
+    "outputs": [
+      {
+        "internalType": "contract IPriceOracle",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      }
+    ],
+    "name": "getPriceOracle",
+    "outputs": [
+      {
+        "internalType": "contract IPriceOracle",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "contract ISANN",
+        "name": "_sann",
+        "type": "address"
+      },
+      {
+        "internalType": "contract IPlatformConfig",
+        "name": "_platformConfig",
+        "type": "address"
+      },
+      {
+        "internalType": "contract IPrepaidPlatformFee",
+        "name": "_prepaidPlatformFee",
+        "type": "address"
+      },
+      {
+        "internalType": "contract IPriceOracle",
+        "name": "_priceOracle",
+        "type": "address"
+      },
+      {
+        "internalType": "contract IReverseRegistrar",
+        "name": "_reverseRegistrar",
+        "type": "address"
+      }
+    ],
+    "name": "initialize",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "platformConfig",
+    "outputs": [
+      {
+        "internalType": "contract IPlatformConfig",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "platformFeeBalance",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "prepaidPlatformFee",
+    "outputs": [
+      {
+        "internalType": "contract IPrepaidPlatformFee",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "_name",
+        "type": "string"
+      },
+      {
+        "internalType": "address",
+        "name": "_buyer",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_duration",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes",
+        "name": "_extraData",
+        "type": "bytes"
+      }
+    ],
+    "name": "priceAfterDiscount",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "cost",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "proxiableUUID",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "stateMutability": "payable",
+    "type": "receive"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_token",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_to",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "recoverFunds",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "duration",
+        "type": "uint256"
+      }
+    ],
+    "name": "rentPrice",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "base",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "premium",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct IPriceOracle.Price",
+        "name": "price",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "duration",
+        "type": "uint256"
+      }
+    ],
+    "name": "rentPriceInUSD",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "base",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "premium",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct IPriceOracle.Price",
+        "name": "price",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "reverseRegistrar",
+    "outputs": [
+      {
+        "internalType": "contract IReverseRegistrar",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "sann",
+    "outputs": [
+      {
+        "internalType": "contract ISANN",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_maxDomainLength",
+        "type": "uint256"
+      }
+    ],
+    "name": "setMaxDomainLength",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_minDomainLength",
+        "type": "uint256"
+      }
+    ],
+    "name": "setMinDomainLength",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_minRegistrationDuration",
+        "type": "uint256"
+      }
+    ],
+    "name": "setMinRegistrationDuration",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_minRenewDuration",
+        "type": "uint256"
+      }
+    ],
+    "name": "setMinRenewDuration",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_mintCap",
+        "type": "uint256"
+      }
+    ],
+    "name": "setMintCap",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "_hook",
+        "type": "address"
+      }
+    ],
+    "name": "setPointHook",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "_hook",
+        "type": "address"
+      }
+    ],
+    "name": "setPriceHook",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "_hook",
+        "type": "address"
+      }
+    ],
+    "name": "setQualificationHook",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "_hook",
+        "type": "address"
+      }
+    ],
+    "name": "setRenewPointHook",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "_hook",
+        "type": "address"
+      }
+    ],
+    "name": "setRenewPriceHook",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "_hook",
+        "type": "address"
+      }
+    ],
+    "name": "setRenewRewardHook",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "_hook",
+        "type": "address"
+      }
+    ],
+    "name": "setRewardHook",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "minDomainLength",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "maxDomainLength",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "minRegistrationDuration",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "minRenewDuration",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "mintCap",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct TldConfig",
+        "name": "_config",
+        "type": "tuple"
+      }
+    ],
+    "name": "setTldConfigs",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "_qualificationHook",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_priceHook",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_rewardHook",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_renewPriceHook",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_renewRewardHook",
+        "type": "address"
+      }
+    ],
+    "name": "setTldHooks",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "priceOracle",
+        "type": "address"
+      }
+    ],
+    "name": "setTldPriceOracle",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "tldConfigs",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "minDomainLength",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "maxDomainLength",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "minRegistrationDuration",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "minRenewDuration",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "mintCap",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "tldHooks",
+    "outputs": [
+      {
+        "internalType": "contract IQualificationHook",
+        "name": "qualificationHook",
+        "type": "address"
+      },
+      {
+        "internalType": "contract IPriceHook",
+        "name": "priceHook",
+        "type": "address"
+      },
+      {
+        "internalType": "contract IPointHook",
+        "name": "pointHook",
+        "type": "address"
+      },
+      {
+        "internalType": "contract IRewardHook",
+        "name": "rewardHook",
+        "type": "address"
+      },
+      {
+        "internalType": "contract IRenewPriceHook",
+        "name": "renewPriceHook",
+        "type": "address"
+      },
+      {
+        "internalType": "contract IRenewPointHook",
+        "name": "renewPointHook",
+        "type": "address"
+      },
+      {
+        "internalType": "contract IRenewRewardHook",
+        "name": "renewRewardHook",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "tldPriceOracles",
+    "outputs": [
+      {
+        "internalType": "contract IPriceOracle",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "tldRevenues",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "newImplementation",
+        "type": "address"
+      }
+    ],
+    "name": "upgradeTo",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "newImplementation",
+        "type": "address"
+      },
+      {
+        "internalType": "bytes",
+        "name": "data",
+        "type": "bytes"
+      }
+    ],
+    "name": "upgradeToAndCall",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "identifier",
+        "type": "uint256"
+      }
+    ],
+    "name": "withdraw",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "withdrawPlatformFee",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+]

@@ -5,5 +5,5 @@ mod schema_selector;
 mod sql;
 mod types;
 
-pub use reader::{SubgraphReadError, SubgraphReader};
+pub use reader::{NetworkInfo, SubgraphReadError, SubgraphReader, SubgraphSettings};
 pub use types::*;

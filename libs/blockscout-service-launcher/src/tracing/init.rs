@@ -6,7 +6,7 @@ use opentelemetry::{
 };
 use std::marker::Send;
 use tracing_subscriber::{
-    filter::LevelFilter, fmt::format::FmtSpan, layer::SubscriberExt, prelude::*, Layer, Registry,
+    filter::LevelFilter, fmt::format::FmtSpan, layer::SubscriberExt, prelude::*, Layer,
 };
 
 pub fn init_logs(
@@ -19,44 +19,52 @@ pub fn init_logs(
         return Ok(());
     }
 
-    let stdout: Box<(dyn Layer<Registry> + Sync + Send + 'static)> = match tracing_settings.format {
-        TracingFormat::Default => Box::new(
-            tracing_subscriber::fmt::layer()
-                .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
-                .with_filter(
-                    tracing_subscriber::EnvFilter::builder()
-                        .with_default_directive(LevelFilter::INFO.into())
-                        .from_env_lossy(),
-                ),
-        ),
-        TracingFormat::Json => Box::new(
-            tracing_subscriber::fmt::layer()
-                .json()
-                .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
-                .with_filter(
-                    tracing_subscriber::EnvFilter::builder()
-                        .with_default_directive(LevelFilter::INFO.into())
-                        .from_env_lossy(),
-                ),
-        ),
-    };
+    let mut layers: Vec<_> = vec![];
 
-    let registry = tracing_subscriber::registry()
-        // output logs (tracing) to stdout with log level taken from env (default is INFO)
-        .with(stdout);
+    #[cfg(feature = "actix-request-id")]
+    {
+        if let TracingFormat::Json = tracing_settings.format {
+            layers.push(super::request_id_layer::layer().boxed());
+        }
+    }
+
+    let stdout_layer: Box<dyn Layer<_> + Sync + Send + 'static> = match tracing_settings.format {
+        TracingFormat::Default => tracing_subscriber::fmt::layer()
+            .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
+            .with_filter(
+                tracing_subscriber::EnvFilter::builder()
+                    .with_default_directive(LevelFilter::INFO.into())
+                    .from_env_lossy(),
+            )
+            .boxed(),
+        TracingFormat::Json => tracing_subscriber::fmt::layer()
+            .json()
+            // .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
+            .flatten_event(true)
+            .with_current_span(true)
+            .with_span_list(false)
+            .with_filter(
+                tracing_subscriber::EnvFilter::builder()
+                    .with_default_directive(LevelFilter::INFO.into())
+                    .from_env_lossy(),
+            )
+            .boxed(),
+    };
+    layers.push(stdout_layer);
+
     if jaeger_settings.enabled {
         let tracer = init_jaeger_tracer(service_name, &jaeger_settings.agent_endpoint)?;
-        registry
-            // output traces to jaeger with default log level (default is DEBUG)
-            .with(
-                tracing_opentelemetry::layer()
-                    .with_tracer(tracer)
-                    .with_filter(LevelFilter::DEBUG),
-            )
-            .try_init()
-    } else {
-        registry.try_init()
-    }?;
+        // output traces to jaeger with default log level (default is DEBUG)
+        let jaeger_layer = tracing_opentelemetry::layer()
+            .with_tracer(tracer)
+            .with_filter(LevelFilter::DEBUG)
+            .boxed();
+        layers.push(jaeger_layer)
+    }
+
+    let registry = tracing_subscriber::registry().with(layers);
+    registry.try_init()?;
+
     Ok(())
 }
 

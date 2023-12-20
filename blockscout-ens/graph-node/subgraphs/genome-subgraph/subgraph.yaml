@@ -1,0 +1,125 @@
+specVersion: 0.0.4
+description: Subgraph to index Genome subgraph
+repository: https://github.com/blockscout/blokcscout-rs
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum/contract
+    name: Registry
+    network: gnosis-chiado
+    source:
+      abi: Registry
+      address: "0x5dC881dDA4e4a8d312be3544AD13118D1a04Cb17"
+      startBlock: 7085080
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./src/Registry.ts
+      entities:
+        - Domain
+        - Account
+        - Resolver
+      abis:
+        - name: Registry
+          file: ./abis/Registry.json
+      eventHandlers:
+        - event: Transfer(indexed bytes32,address)
+          handler: handleTransfer
+        - event: NewOwner(indexed bytes32,indexed bytes32,address)
+          handler: handleNewOwner
+        - event: NewResolver(indexed bytes32,address)
+          handler: handleNewResolver
+        - event: NewTTL(indexed bytes32,uint64)
+          handler: handleNewTTL
+  - kind: ethereum/contract
+    name: Resolver
+    network: gnosis-chiado
+    source:
+      abi: Resolver
+      startBlock: 7085139
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./src/Resolver.ts
+      entities:
+        - AddrChanged
+        - MulticoinAddrChanged
+        - NameChanged
+        - AbiChanged
+        - PubkeyChanged
+        - Textchanged
+        - ContenthashChanged
+        - InterfaceChanged
+        - AuthorisationChanged
+      abis:
+        - name: Resolver
+          file: ./abis/Resolver.json
+      eventHandlers:
+        - event: ABIChanged(indexed bytes32,indexed uint256)
+          handler: handleABIChanged
+        - event: AddrChanged(indexed bytes32,address)
+          handler: handleAddrChanged
+        - event: AddressChanged(indexed bytes32,uint256,bytes)
+          handler: handleMulticoinAddrChanged
+        - event: ContenthashChanged(indexed bytes32,bytes)
+          handler: handleContentHashChanged
+        - event: InterfaceChanged(indexed bytes32,indexed bytes4,address)
+          handler: handleInterfaceChanged
+        - event: NameChanged(indexed bytes32,string)
+          handler: handleNameChanged
+        - event: PubkeyChanged(indexed bytes32,bytes32,bytes32)
+          handler: handlePubkeyChanged
+        - event: TextChanged(indexed bytes32,indexed string,string,string)
+          handler: handleTextChanged
+  - kind: ethereum/contract
+    name: Base
+    network: gnosis-chiado
+    source:
+      abi: Base
+      address: "0xfd3d666db2557983f3f04d61f90e35cc696f6d60"
+      startBlock: 7085981
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./src/Base.ts
+      entities:
+        - Registration
+        - NameRegistered
+        - NameRenewed
+        - NameTransferred
+      abis:
+        - name: Base
+          file: ./abis/Base.json
+      eventHandlers:
+        - event: NameRegistered(indexed uint256,indexed address,uint256)
+          handler: handleNameRegistered
+        - event: NameRenewed(indexed uint256,uint256)
+          handler: handleNameRenewed
+        - event: Transfer(indexed address,indexed address,indexed uint256)
+          handler: handleNameTransferred
+  - kind: ethereum/contract
+    name: RegistrarController
+    network: gnosis-chiado
+    source:
+      abi: RegistrarController
+      address: "0xD7b837A0E388B4c25200983bdAa3EF3A83ca86b7"
+      startBlock: 7085111
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./src/RegistrarController.ts
+      entities:
+        - Registration
+      abis:
+        - name: RegistrarController
+          file: ./abis/RegistrarController.json
+      eventHandlers:
+        - event: NameRegistered(uint256,string,indexed bytes32,indexed
+            address,uint256,uint256)
+          handler: handleNameRegisteredByController
+        - event: NameRenewed(uint256,string,indexed bytes32,uint256,uint256)
+          handler: handleNameRenewedByController
