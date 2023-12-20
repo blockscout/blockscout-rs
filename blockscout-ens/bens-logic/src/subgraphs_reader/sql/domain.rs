@@ -1,6 +1,6 @@
 use crate::{
     entity::subgraph::domain::{DetailedDomain, Domain, DomainWithAddress},
-    hash_name::{domain_id, hex},
+    hash_name::hex,
     subgraphs_reader::{GetDomainInput, LookupAddressInput, LookupDomainInput, SubgraphReadError},
 };
 use sqlx::postgres::PgPool;
@@ -55,6 +55,7 @@ pub const DOMAIN_NOT_EXPIRED_WHERE_CLAUSE: &str = r#"
 #[instrument(name = "get_domain", skip(pool), err(level = "error"), level = "info")]
 pub async fn get_domain(
     pool: &PgPool,
+    id: &str,
     schema: &str,
     input: &GetDomainInput,
 ) -> Result<Option<DetailedDomain>, SubgraphReadError> {
@@ -62,7 +63,6 @@ pub async fn get_domain(
         .only_active
         .then(|| format!("AND {DOMAIN_NOT_EXPIRED_WHERE_CLAUSE}"))
         .unwrap_or_default();
-    let id = domain_id(&input.name);
     let maybe_domain = sqlx::query_as(&format!(
         r#"
         SELECT
@@ -105,6 +105,7 @@ pub async fn get_domain(
 pub async fn find_domains(
     pool: &PgPool,
     schema: &str,
+    id: &str,
     input: &LookupDomainInput,
 ) -> Result<Vec<Domain>, SubgraphReadError> {
     let only_active_clause = input
@@ -113,7 +114,6 @@ pub async fn find_domains(
         .unwrap_or_default();
     let sort = input.sort;
     let order = input.order;
-    let id = domain_id(&input.name);
     let domains = sqlx::query_as(&format!(
         r#"
         SELECT {DOMAIN_DEFAULT_SELECT_CLAUSE}
@@ -125,7 +125,7 @@ pub async fn find_domains(
         ORDER BY {sort} {order}
         "#,
     ))
-    .bind(&id)
+    .bind(id)
     .fetch_all(pool)
     .await?;
     Ok(domains)

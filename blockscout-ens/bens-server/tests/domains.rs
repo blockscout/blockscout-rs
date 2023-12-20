@@ -1,5 +1,5 @@
 use bens_logic::test_utils::*;
-use bens_server::{NetworkConfig, Settings};
+use bens_server::{BlockscoutSettings, NetworkSettings, Settings};
 use blockscout_service_launcher::{
     launcher::ConfigSettings,
     test_server::{get_test_server_settings, init_server, send_get_request, send_post_request},
@@ -17,35 +17,38 @@ async fn basic_domain_extracting_works(pool: PgPool) {
         pool.connect_options().get_database().unwrap()
     );
     std::env::set_var("BENS__DATABASE__CONNECT__URL", db_url);
-    let clients = mocked_blockscout_clients().await;
+    let clients = mocked_networks_with_blockscout().await;
     std::env::set_var("BENS__CONFIG", "./tests/config.test.toml");
     let mut settings = Settings::build().expect("Failed to build settings");
     let (server_settings, base) = get_test_server_settings();
     settings.server = server_settings;
-    settings.blockscout.networks = clients
+    settings.subgraphs_reader.networks = clients
         .into_iter()
         .map(|(id, client)| {
             (
                 id,
-                NetworkConfig {
-                    url: client.url().clone(),
+                NetworkSettings {
+                    blockscout: BlockscoutSettings {
+                        url: client.blockscout_client.url().clone(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
                 },
             )
         })
         .collect();
-    settings.subgraph.cache_enabled = true;
 
     // first start with enabled cache
-    check_basic_scenario(settings.clone(), base.clone()).await;
+    check_basic_scenario_eth(settings.clone(), base.clone()).await;
     // second start with same settings to check
     // that creation of cache tables works fine
-    check_basic_scenario(settings.clone(), base.clone()).await;
+    check_basic_scenario_eth(settings.clone(), base.clone()).await;
     // third start with disabled cache
-    settings.subgraph.cache_enabled = false;
-    check_basic_scenario(settings, base).await;
+    settings.subgraphs_reader.cache_enabled = false;
+    check_basic_scenario_eth(settings.clone(), base.clone()).await;
 }
 
-async fn check_basic_scenario(settings: Settings, base: Url) {
+async fn check_basic_scenario_eth(settings: Settings, base: Url) {
     init_server(
         || async {
             bens_server::run(settings).await.unwrap();
@@ -239,6 +242,71 @@ async fn check_basic_scenario(settings: Settings, base: Url) {
                 "0xd8da6bf26964af9d7eed9e03e53415d37aa96045": "vitalik.eth",
                 "0xeefb13c7d42efcc655e528da6d6f7bbcf9a2251d": "test.eth",
             }
+        })
+    );
+}
+
+#[sqlx::test(migrations = "../bens-logic/tests/migrations")]
+async fn basic_gno_domain_extracting_works(pool: PgPool) {
+    let network_id = "10200";
+    let postgres_url = std::env::var("DATABASE_URL").expect("env should be here from sqlx::test");
+    let db_url = format!(
+        "{postgres_url}{}",
+        pool.connect_options().get_database().unwrap()
+    );
+    std::env::set_var("BENS__DATABASE__CONNECT__URL", db_url);
+    std::env::set_var("BENS__CONFIG", "./tests/config.test.toml");
+    let mut settings = Settings::build().expect("Failed to build settings");
+    let (server_settings, base) = get_test_server_settings();
+    settings.server = server_settings;
+
+    let gnosis_client = mocked_blockscout_client().await;
+    settings.subgraphs_reader.networks = serde_json::from_value(serde_json::json!(
+        {
+            network_id: {
+                "blockscout": {
+                    "url": gnosis_client.url()
+                },
+                "subgraphs": {
+                    "genome-subgraph": {
+                        "empty_label_hash": "0x1a13b687a5ff1d8ab1a9e189e1507a6abe834a9296cc8cff937905e3dee0c4f6"
+                    }
+                }
+            }
+        }
+    )).unwrap();
+
+    init_server(
+        || async {
+            bens_server::run(settings).await.unwrap();
+            Ok(())
+        },
+        &base,
+    )
+    .await;
+    // Sleep until server will start and calculate all values
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+    let request: Value =
+        send_get_request(&base, &format!("/api/v1/{network_id}/domains/levvv.gno")).await;
+    assert_eq!(
+        request,
+        json!({
+            "expiryDate": "2025-02-26T14:58:37.000Z",
+            "id": "0xa3504cdec527495c69c760c85d5be9996252f853b91fd0df04c5b6aa2deb3347",
+            "name": "levvv.gno",
+            "otherAddresses": {},
+            "owner": {
+                "hash": "0xc0de20a37e2dac848f81a93bd85fe4acdde7c0de",
+            },
+            "registrant":{
+                "hash": "0xc0de20a37e2dac848f81a93bd85fe4acdde7c0de",
+            },
+            "registrationDate": "2023-11-29T09:09:25.000Z",
+            "resolvedAddress":{
+                "hash": "0xc0de20a37e2dac848f81a93bd85fe4acdde7c0de",
+            },
+            "tokenId": "0x1a8247ca2a4190d90c748b31fa6517e5560c1b7a680f03ff73dbbc3ed2c0ed66",
         })
     );
 }

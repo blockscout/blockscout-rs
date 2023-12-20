@@ -1,0 +1,28 @@
+{
+  "subgraphs_reader": {
+    "cache_enabled": true,
+    "refresh_cache_schedule": "0 0 * * * *",
+    "networks": {
+      "5": {
+        "blockscout": {
+          "url": "https://eth-goerli.blockscout.com"
+        },
+        "subgraphs": {
+          "ens-subgraph": {
+            "use_cache": true
+          }
+        }
+      },
+      "10200": {
+        "blockscout": {
+          "url": "https://gnosis-chiado.blockscout.com"
+        },
+        "subgraphs": {
+          "genome-subgraph": {
+            "empty_label_hash": "0x1a13b687a5ff1d8ab1a9e189e1507a6abe834a9296cc8cff937905e3dee0c4f6"
+          }
+        }
+      }
+    }
+  }
+}

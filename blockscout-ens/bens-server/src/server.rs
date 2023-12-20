@@ -3,7 +3,7 @@ use crate::{
     settings::Settings,
 };
 use anyhow::Context;
-use bens_logic::subgraphs_reader::{blockscout::BlockscoutClient, SubgraphReader};
+use bens_logic::subgraphs_reader::{blockscout::BlockscoutClient, NetworkInfo, SubgraphReader};
 use bens_proto::blockscout::bens::v1::{
     domains_extractor_actix::route_domains_extractor,
     domains_extractor_server::DomainsExtractorServer, health_actix::route_health,
@@ -57,36 +57,49 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             .await
             .context("database connect")?,
     );
-    let blockscout_clients = settings
-        .blockscout
+    let networks = settings
+        .subgraphs_reader
         .networks
         .into_iter()
         .map(|(id, network)| {
+            let blockscout_client = BlockscoutClient::new(
+                network.blockscout.url,
+                network.blockscout.max_concurrent_requests,
+                network.blockscout.timeout,
+            );
             (
                 id,
-                BlockscoutClient::new(
-                    network.url,
-                    settings.blockscout.max_concurrent_requests,
-                    settings.blockscout.timeout,
-                ),
+                NetworkInfo {
+                    blockscout_client,
+                    subgraph_configs: network
+                        .subgraphs
+                        .into_iter()
+                        .map(|(name, settings)| {
+                            (
+                                name,
+                                bens_logic::subgraphs_reader::SubgraphSettings::from(settings),
+                            )
+                        })
+                        .collect(),
+                },
             )
         })
         .collect();
 
-    tracing::info!("found blockscout clients from config: {blockscout_clients:?}");
+    tracing::info!("found networks from config: {networks:?}");
 
     let subgraph_reader = Arc::new(
-        SubgraphReader::initialize(pool, blockscout_clients, settings.subgraph.cache_enabled)
+        SubgraphReader::initialize(pool, networks)
             .await
             .context("failed to initialize subgraph-reader")?,
     );
     let domains_extractor = Arc::new(DomainsExtractorService::new(subgraph_reader.clone()));
 
-    if settings.subgraph.cache_enabled {
+    if settings.subgraphs_reader.cache_enabled {
         let scheduler = JobScheduler::new().await?;
         scheduler
             .add(Job::new_async(
-                settings.subgraph.refresh_cache_schedule.as_str(),
+                settings.subgraphs_reader.refresh_cache_schedule.as_str(),
                 move |_uuid, mut _l| {
                     let reader = subgraph_reader.clone();
                     Box::pin(async move {
