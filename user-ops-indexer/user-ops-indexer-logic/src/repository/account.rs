@@ -1,7 +1,6 @@
+use crate::types::account::Account;
 use ethers::prelude::Address;
 use sea_orm::{prelude::DateTime, ConnectionTrait, DatabaseConnection, FromQueryResult, Statement};
-
-use crate::types::account::Account;
 
 #[derive(FromQueryResult)]
 pub struct AccountDB {

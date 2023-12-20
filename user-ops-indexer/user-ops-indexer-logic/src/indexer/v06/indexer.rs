@@ -1,16 +1,3 @@
-use std::{future, ops::Div, time::Duration};
-
-use anyhow::{anyhow, bail};
-use ethers::prelude::{BigEndianHash, EthEvent, Middleware, Provider, PubsubClient};
-use ethers_core::{
-    abi::{AbiDecode, AbiEncode},
-    types::{Action, Address, Bytes, Filter, Log},
-};
-use futures::{stream, stream::BoxStream, StreamExt};
-use keccak_hash::H256;
-use sea_orm::DatabaseConnection;
-use tokio::time::sleep;
-
 use crate::{
     indexer::v06::constants::{
         matches_entrypoint_event, parse_event, BeforeExecutionFilter, DepositedFilter,
@@ -20,6 +7,17 @@ use crate::{
     repository,
     types::user_op::{SponsorType, UserOp},
 };
+use anyhow::{anyhow, bail};
+use ethers::prelude::{BigEndianHash, EthEvent, Middleware, Provider, PubsubClient};
+use ethers_core::{
+    abi::{AbiDecode, AbiEncode},
+    types::{Action, Address, Bytes, Filter, Log},
+};
+use futures::{stream, stream::BoxStream, StreamExt};
+use keccak_hash::H256;
+use sea_orm::DatabaseConnection;
+use std::{future, ops::Div, time::Duration};
+use tokio::time::sleep;
 
 pub struct RawUserOperation {
     pub user_op: UserOperation,

@@ -1,12 +1,10 @@
+use crate::{repository::user_op::user_ops_blocks_rel, types::paymaster::Paymaster};
+use entity::user_operations::{Column, Entity};
 use ethers::prelude::Address;
 use sea_orm::{
     prelude::Expr, sea_query::IntoCondition, ColumnTrait, DatabaseConnection, EntityTrait,
     FromQueryResult, IntoSimpleExpr, JoinType, QueryFilter, QueryOrder, QuerySelect,
 };
-
-use entity::user_operations::{Column, Entity};
-
-use crate::{repository::user_op::user_ops_blocks_rel, types::paymaster::Paymaster};
 
 #[derive(FromQueryResult, Clone)]
 pub struct PaymasterDB {

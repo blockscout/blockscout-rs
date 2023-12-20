@@ -1,7 +1,6 @@
+use crate::types::bundler::Bundler;
 use ethers::prelude::Address;
 use sea_orm::{ConnectionTrait, DatabaseConnection, FromQueryResult, Statement};
-
-use crate::types::bundler::Bundler;
 
 #[derive(FromQueryResult, Clone)]
 pub struct BundlerDB {

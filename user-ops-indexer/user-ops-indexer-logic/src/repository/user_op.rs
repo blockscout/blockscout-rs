@@ -1,4 +1,6 @@
+use crate::types::user_op::{ListUserOp, UserOp};
 use blockscout_db::entity::blocks;
+use entity::user_operations::{ActiveModel, Column, Entity, Model};
 use ethers::prelude::{Address, H256};
 use sea_orm::{
     prelude::DateTime,
@@ -7,10 +9,6 @@ use sea_orm::{
     FromQueryResult, IntoSimpleExpr, Iterable, JoinType, QueryFilter, QueryOrder, QuerySelect,
     QueryTrait, RelationDef, Statement,
 };
-
-use entity::user_operations::{ActiveModel, Column, Entity, Model};
-
-use crate::types::user_op::{ListUserOp, UserOp};
 
 #[derive(FromQueryResult)]
 struct TxHash {

@@ -1,5 +1,4 @@
 use crate::settings::Settings;
-
 use ethers::prelude::{Provider, Ws};
 use sea_orm::DatabaseConnection;
 

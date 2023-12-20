@@ -1,13 +1,12 @@
-use std::str::FromStr;
-
+use crate::{proto::user_ops_service_server::UserOpsService as UserOps, settings::ApiSettings};
 use ethers::{
     abi::{AbiEncode, Address},
     prelude::H256,
     utils::to_checksum,
 };
 use sea_orm::DatabaseConnection;
+use std::str::FromStr;
 use tonic::{Request, Response, Status};
-
 use user_ops_indexer_logic::repository;
 use user_ops_indexer_proto::blockscout::user_ops_indexer::v1::{
     Account, Bundler, Factory, GetAccountRequest, GetBundlerRequest, GetFactoryRequest,
@@ -16,8 +15,6 @@ use user_ops_indexer_proto::blockscout::user_ops_indexer::v1::{
     ListFactoriesRequest, ListFactoriesResponse, ListPaymastersRequest, ListPaymastersResponse,
     ListUserOpsRequest, ListUserOpsResponse, Paymaster, UserOp,
 };
-
-use crate::{proto::user_ops_service_server::UserOpsService as UserOps, settings::ApiSettings};
 
 const DEFAULT_PAGE_SIZE: u32 = 10;
 

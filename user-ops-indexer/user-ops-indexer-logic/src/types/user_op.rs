@@ -1,12 +1,10 @@
+use crate::{repository::user_op::ListUserOpDB, types::common::u256_to_decimal};
+pub use entity::sea_orm_active_enums::SponsorType;
+use entity::user_operations::Model;
 use ethers::prelude::{Address, Bytes, H256, U256};
 use ethers_core::{abi::AbiEncode, utils::to_checksum};
 use num_traits::cast::ToPrimitive;
 use sea_orm::{prelude::BigDecimal, ActiveEnum};
-
-pub use entity::sea_orm_active_enums::SponsorType;
-use entity::user_operations::Model;
-
-use crate::{repository::user_op::ListUserOpDB, types::common::u256_to_decimal};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct UserOp {

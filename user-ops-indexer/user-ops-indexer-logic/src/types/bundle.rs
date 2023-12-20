@@ -1,9 +1,7 @@
+use crate::repository::bundle::BundleDB;
+pub use entity::sea_orm_active_enums::SponsorType;
 use ethers::prelude::{Address, H256};
 use ethers_core::{abi::AbiEncode, utils::to_checksum};
-
-pub use entity::sea_orm_active_enums::SponsorType;
-
-use crate::repository::bundle::BundleDB;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Bundle {

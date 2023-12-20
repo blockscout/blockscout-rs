@@ -1,7 +1,6 @@
+use crate::types::bundle::Bundle;
 use ethers::prelude::{Address, H256};
 use sea_orm::{prelude::DateTime, ConnectionTrait, DatabaseConnection, FromQueryResult, Statement};
-
-use crate::types::bundle::Bundle;
 
 #[derive(FromQueryResult)]
 pub struct BundleDB {

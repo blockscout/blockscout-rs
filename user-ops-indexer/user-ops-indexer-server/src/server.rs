@@ -8,7 +8,6 @@ use crate::{
     settings::Settings,
 };
 use blockscout_service_launcher::{launcher, launcher::LaunchSettings};
-
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 
