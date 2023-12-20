@@ -1,6 +1,6 @@
 [package]
 name = "blockscout-service-launcher"
-version = "0.9.0"
+version = "0.10.0"
 description = "Allows to launch blazingly fast blockscout rust services"
 license = "MIT"
 repository = "https://github.com/blockscout/blockscout-rs"
@@ -19,17 +19,22 @@ config = { version = "0.13", optional = true }
 futures = { version = "0.3", optional = true }
 cfg-if = { version = "1.0.0", optional = true }
 keccak-hash = { version = "0.10.0", optional = true }
+once_cell = { version = "1", optional = true }
 opentelemetry = { version = "0.19", optional = true }
 opentelemetry-jaeger = { version = "0.18", features = ["rt-tokio"], optional = true }
 prometheus = { version = "0.13", optional = true }
 reqwest = { version = "0.11", features = ["json"], optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
+serde_json = {version = "1", optional = true }
 tokio = { version = "1", optional = true }
 tonic = { version = "0.8", optional = true }
 tracing = { version = "0.1", optional = true }
+#tracing-actix-web = { version = "0.7.9", optional = true }
+tracing-actix-web = { git = "https://github.com/blockscout/tracing-actix-web", branch = "rimrakhimov/update-traces-for-services", optional = true }
 tracing-opentelemetry = { version = "0.19", optional = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"], optional = true }
 url = { version = "2.3.1", optional = true }
+uuid = {version = "1", features = ["v4"], optional = true}
 
 # Dependencies required for database initialization
 
@@ -43,7 +48,7 @@ sea-orm-0_12 = { package = "sea-orm", version = "0.12.2", optional = true }
 sea-orm-migration-0_12 = { package = "sea-orm-migration", version = "0.12.2", optional = true }
 
 [features]
-default = ["launcher", "tracing"]
+default = ["launcher", "tracing", "actix-request-id"]
 launcher = [
     "dep:actix-web",
     "dep:actix-web-prom",
@@ -51,19 +56,24 @@ launcher = [
     "dep:anyhow",
     "dep:config",
     "dep:futures",
+    "dep:once_cell",
     "dep:prometheus",
     "dep:serde",
     "dep:tokio",
     "dep:tonic",
     "dep:tracing",
+    "dep:tracing-actix-web",
 ]
 tracing = [
     "dep:anyhow",
     "dep:opentelemetry",
     "dep:opentelemetry-jaeger",
     "dep:serde",
+    "dep:serde_json",
+    "dep:tracing",
     "dep:tracing-opentelemetry",
     "dep:tracing-subscriber",
+    "dep:uuid",
 ]
 
 # Cannot be used without corresponding sea-orm dependency.
@@ -89,6 +99,8 @@ database-0_10 = [
     "dep:sea-orm-0_10",
     "dep:sea-orm-migration-0_10",
 ]
+
+actix-request-id = []
 
 test-server = [
     "launcher",

@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use bens_logic::subgraphs_reader::{
-    blockscout::BlockscoutClient, BatchResolveAddressNamesInput, SubgraphReader,
+    blockscout::BlockscoutClient, BatchResolveAddressNamesInput, NetworkInfo, SubgraphReader,
 };
 use sqlx::postgres::PgPoolOptions;
 use std::{collections::HashMap, sync::Arc, time::Instant};
@@ -29,9 +29,11 @@ async fn main() -> Result<(), anyhow::Error> {
     let eth_client = BlockscoutClient::new("https://eth.blockscout.com".parse().unwrap(), 5, 30);
     let rootstock_client =
         BlockscoutClient::new("https://rootstock.blockscout.com".parse().unwrap(), 5, 30);
-    let clients: HashMap<i64, BlockscoutClient> =
-        HashMap::from_iter([(1, eth_client), (30, rootstock_client)]);
-    let reader = SubgraphReader::initialize(pool.clone(), clients, true).await?;
+    let networks = HashMap::from_iter([
+        (1, NetworkInfo::from_client(eth_client)),
+        (30, NetworkInfo::from_client(rootstock_client)),
+    ]);
+    let reader = SubgraphReader::initialize(pool.clone(), networks).await?;
 
     let addresses = vec![
         "0x0292f204513eeafe8c032ffc4cb4c7e10eca908c",

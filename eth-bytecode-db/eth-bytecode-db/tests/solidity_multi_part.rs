@@ -62,8 +62,7 @@ impl VerifierService<VerificationRequest<MultiPartFiles>> for MockSolidityVerifi
         client: Client,
         request: VerificationRequest<MultiPartFiles>,
     ) -> Result<Source, Error> {
-        solidity_multi_part::verify(client, request, blockscout_display_bytes::Bytes::from([]))
-            .await
+        solidity_multi_part::verify(client, request).await
     }
 }
 

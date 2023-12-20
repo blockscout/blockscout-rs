@@ -1,6 +1,6 @@
 use super::{
     blockscout::{self, BlockscoutClient},
-    schema_selector::schema_names,
+    schema_selector::subgraph_deployments,
     sql::{self},
     BatchResolveAddressNamesInput, GetDomainHistoryInput, GetDomainInput, LookupAddressInput,
     LookupDomainInput,
@@ -11,10 +11,10 @@ use crate::{
         domain::{DetailedDomain, Domain},
         domain_event::{DomainEvent, DomainEventTransaction},
     },
-    hash_name::hex,
+    hash_name::{domain_id, hex},
 };
 use anyhow::Context;
-use ethers::types::TxHash;
+use ethers::types::{Bytes, TxHash};
 use sqlx::postgres::PgPool;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -23,78 +23,132 @@ use std::{
 use thiserror::Error;
 use tracing::instrument;
 
-#[derive(Debug, Clone)]
-pub struct NetworkConfig {
-    schema_name: String,
-    blockscout_client: Arc<BlockscoutClient>,
-}
-
 pub struct SubgraphReader {
     pool: Arc<PgPool>,
-    networks: HashMap<i64, NetworkConfig>,
-    use_cache: bool,
+    networks: HashMap<i64, Network>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Network {
+    blockscout_client: Arc<BlockscoutClient>,
+    subgraphs: Vec<Subgraph>,
+    default_subgraph: Subgraph,
+}
+
+#[derive(Debug, Clone)]
+pub struct Subgraph {
+    schema_name: String,
+    settings: SubgraphSettings,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct SubgraphSettings {
+    pub use_cache: bool,
+    pub empty_label_hash: Option<Bytes>,
+}
+
+#[derive(Debug, Clone)]
+pub struct NetworkInfo {
+    pub blockscout_client: BlockscoutClient,
+    pub subgraph_configs: HashMap<String, SubgraphSettings>,
+}
+
+impl NetworkInfo {
+    pub fn from_client(blockscout_client: BlockscoutClient) -> Self {
+        Self {
+            blockscout_client,
+            subgraph_configs: Default::default(),
+        }
+    }
 }
 
 impl SubgraphReader {
     pub async fn initialize(
         pool: Arc<PgPool>,
-        mut blockscout_clients: HashMap<i64, BlockscoutClient>,
-        use_cache: bool,
+        mut network_infos: HashMap<i64, NetworkInfo>,
     ) -> Result<Self, anyhow::Error> {
-        let schema_names = schema_names(&pool).await?;
-        tracing::info!(schema_names =? schema_names, "found subgraph schemas");
-        let networks = schema_names
+        let deployments = subgraph_deployments(&pool).await?;
+        tracing::info!(deployments =? deployments, "found subgraph deployments");
+        let networks = deployments
             .into_iter()
-            .filter_map(|(id, schema_name)| {
-                let maybe_config = blockscout_clients.remove(&id).map(|blockscout_client| {
+            .filter(|(_, d)| !d.is_empty())
+            .filter_map(|(id, deployments)| {
+                let maybe_network = network_infos.remove(&id).map(|info| {
+                    let subgraphs: Vec<Subgraph> = deployments
+                        .into_iter()
+                        .map(|d| {
+                            let settings = match info.subgraph_configs.get(&d.subgraph_name) {
+                                Some(c) => c.clone(),
+                                None => {
+                                    tracing::warn!(
+                                        "no settings found for subgraph '{}', use default",
+                                        d.subgraph_name
+                                    );
+                                    Default::default()
+                                }
+                            };
+                            Subgraph {
+                                schema_name: d.schema_name,
+                                settings,
+                            }
+                        })
+                        .collect();
+                    let default_subgraph = subgraphs
+                        .first()
+                        .expect("at least one deployment persist")
+                        .to_owned();
                     (
                         id,
-                        NetworkConfig {
-                            schema_name,
-                            blockscout_client: Arc::new(blockscout_client),
+                        Network {
+                            blockscout_client: Arc::new(info.blockscout_client),
+                            subgraphs,
+                            default_subgraph,
                         },
                     )
                 });
-                if maybe_config.is_none() {
+                if maybe_network.is_none() {
                     tracing::warn!("no blockscout url for chain {id}, skip this network")
                 }
-                maybe_config
+                maybe_network
             })
             .collect::<HashMap<_, _>>();
-        for (id, client) in blockscout_clients {
-            tracing::warn!("no chain found for blockscout url with chain_id {id} and url {}, skip this network", client.url())
+        for (id, info) in network_infos.iter() {
+            tracing::warn!("no chain found for blockscout url with chain_id {id} and url {}, skip this network", info.blockscout_client.url())
         }
-
-        if use_cache {
-            for config in networks.values() {
-                let schema = &config.schema_name;
-                sql::create_address_names_view(pool.as_ref(), schema)
-                    .await
-                    .context(format!(
-                        "failed to create address_names view for schema {schema}"
-                    ))?
-            }
-        }
-        tracing::info!(networks =? networks.keys().collect::<Vec<_>>(), "initialized subgraph reader");
-        Ok(Self::new(pool, networks, use_cache))
+        let this = Self::new(pool, networks);
+        this.init_cache().await.context("init cache tables")?;
+        tracing::info!(networks =? this.networks.keys().collect::<Vec<_>>(), "initialized subgraph reader");
+        Ok(this)
     }
 
-    pub fn new(pool: Arc<PgPool>, networks: HashMap<i64, NetworkConfig>, use_cache: bool) -> Self {
-        Self {
-            pool,
-            networks,
-            use_cache,
-        }
+    pub fn new(pool: Arc<PgPool>, networks: HashMap<i64, Network>) -> Self {
+        Self { pool, networks }
     }
 
     pub async fn refresh_cache(&self) -> Result<(), anyhow::Error> {
-        for config in self.networks.values() {
-            let schema = &config.schema_name;
+        for subgraph in self.iter_subgraphs().filter(|s| s.settings.use_cache) {
+            let schema = &subgraph.schema_name;
             sql::refresh_address_names_view(self.pool.as_ref(), schema)
                 .await
                 .context(format!("failed to update {schema}_address_names"))?;
         }
         Ok(())
+    }
+
+    pub async fn init_cache(&self) -> Result<(), anyhow::Error> {
+        for subgraph in self.iter_subgraphs().filter(|s| s.settings.use_cache) {
+            let schema = &subgraph.schema_name;
+            sql::create_address_names_view(self.pool.as_ref(), schema)
+                .await
+                .context(format!(
+                    "failed to create address_names view for schema {schema}"
+                ))?
+        }
+        Ok(())
+    }
+
+    pub fn iter_subgraphs(&self) -> impl Iterator<Item = &Subgraph> {
+        self.networks.values().flat_map(|n| &n.subgraphs)
     }
 }
 
@@ -117,6 +171,8 @@ impl SubgraphReader {
             .networks
             .get(&input.network_id)
             .ok_or_else(|| SubgraphReadError::NetworkNotFound(input.network_id))?;
+        let subgraph = &network.default_subgraph;
+        let id = domain_id(&input.name, subgraph.settings.empty_label_hash.clone());
         let domain = sql::get_domain(self.pool.as_ref(), &network.schema_name, &input)
             .await?
             .map(|mut domain| {
@@ -130,7 +186,6 @@ impl SubgraphReader {
                 );
                 domain
             });
-
         Ok(domain)
     }
 
@@ -142,8 +197,11 @@ impl SubgraphReader {
             .networks
             .get(&input.network_id)
             .ok_or_else(|| SubgraphReadError::NetworkNotFound(input.network_id))?;
+        let subgraph = &network.default_subgraph;
+        let id = domain_id(&input.name, subgraph.settings.empty_label_hash.clone());
         let domain_txns: Vec<DomainEventTransaction> =
-            sql::find_transaction_events(self.pool.as_ref(), &network.schema_name, &input).await?;
+            sql::find_transaction_events(self.pool.as_ref(), &subgraph.schema_name, &id, &input)
+                .await?;
         let domain_events =
             events_from_transactions(network.blockscout_client.clone(), domain_txns).await?;
         Ok(domain_events)
@@ -157,7 +215,15 @@ impl SubgraphReader {
             .networks
             .get(&input.network_id)
             .ok_or_else(|| SubgraphReadError::NetworkNotFound(input.network_id))?;
-        sql::find_domains(self.pool.as_ref(), &network.schema_name, &input).await
+        let subgraph = &network.default_subgraph;
+        let id = domain_id(&input.name, subgraph.settings.empty_label_hash.clone());
+        sql::find_domains(
+            self.pool.as_ref(),
+            &network.default_subgraph.schema_name,
+            &id,
+            &input,
+        )
+        .await
     }
 
     pub async fn lookup_address(
@@ -168,7 +234,12 @@ impl SubgraphReader {
             .networks
             .get(&input.network_id)
             .ok_or_else(|| SubgraphReadError::NetworkNotFound(input.network_id))?;
-        sql::find_resolved_addresses(self.pool.as_ref(), &network.schema_name, &input).await
+        sql::find_resolved_addresses(
+            self.pool.as_ref(),
+            &network.default_subgraph.schema_name,
+            &input,
+        )
+        .await
     }
 
     pub async fn batch_resolve_address_names(
@@ -179,14 +250,15 @@ impl SubgraphReader {
             .networks
             .get(&input.network_id)
             .ok_or_else(|| SubgraphReadError::NetworkNotFound(input.network_id))?;
+        let subgraph = &network.default_subgraph;
         // remove duplicates
         let addresses: HashSet<String> = input.addresses.into_iter().map(hex).collect();
         let addreses_str: Vec<&str> = addresses.iter().map(String::as_str).collect::<Vec<_>>();
-        let result = if self.use_cache {
-            sql::batch_search_addresses_cached(&self.pool, &network.schema_name, &addreses_str)
+        let result = if subgraph.settings.use_cache {
+            sql::batch_search_addresses_cached(&self.pool, &subgraph.schema_name, &addreses_str)
                 .await?
         } else {
-            sql::batch_search_addresses(&self.pool, &network.schema_name, &addreses_str).await?
+            sql::batch_search_addresses(&self.pool, &subgraph.schema_name, &addreses_str).await?
         };
 
         let address_to_name = result
@@ -241,7 +313,7 @@ async fn events_from_transactions(
 
 #[cfg(test)]
 mod tests {
-    use crate::test_utils::mocked_blockscout_clients;
+    use crate::test_utils::mocked_networks_with_blockscout;
 
     use super::*;
     use ethers::types::Address;
@@ -250,8 +322,8 @@ mod tests {
     #[sqlx::test(migrations = "tests/migrations")]
     async fn get_domain_works(pool: PgPool) {
         let pool = Arc::new(pool);
-        let clients = mocked_blockscout_clients().await;
-        let reader = SubgraphReader::initialize(pool.clone(), clients, true)
+        let networks = mocked_networks_with_blockscout().await;
+        let reader = SubgraphReader::initialize(pool.clone(), networks)
             .await
             .expect("failed to init reader");
 
@@ -316,8 +388,8 @@ mod tests {
     #[sqlx::test(migrations = "tests/migrations")]
     async fn lookup_domain_name_works(pool: PgPool) {
         let pool = Arc::new(pool);
-        let clients = mocked_blockscout_clients().await;
-        let reader = SubgraphReader::initialize(pool.clone(), clients, true)
+        let networks = mocked_networks_with_blockscout().await;
+        let reader = SubgraphReader::initialize(pool.clone(), networks)
             .await
             .expect("failed to init reader");
 
@@ -332,16 +404,16 @@ mod tests {
             .await
             .expect("failed to get vitalik domains");
         assert_eq!(
+            vec![Some("vitalik.eth")],
             result.iter().map(|d| d.name.as_deref()).collect::<Vec<_>>(),
-            vec![Some("vitalik.eth")]
         );
     }
 
     #[sqlx::test(migrations = "tests/migrations")]
     async fn lookup_addresses_works(pool: PgPool) {
         let pool = Arc::new(pool);
-        let clients = mocked_blockscout_clients().await;
-        let reader = SubgraphReader::initialize(pool.clone(), clients, true)
+        let networks = mocked_networks_with_blockscout().await;
+        let reader = SubgraphReader::initialize(pool.clone(), networks)
             .await
             .expect("failed to init reader");
 
@@ -420,8 +492,8 @@ mod tests {
     #[sqlx::test(migrations = "tests/migrations")]
     async fn get_domain_history_works(pool: PgPool) {
         let pool = Arc::new(pool);
-        let clients = mocked_blockscout_clients().await;
-        let reader = SubgraphReader::initialize(pool.clone(), clients, true)
+        let networks = mocked_networks_with_blockscout().await;
+        let reader = SubgraphReader::initialize(pool.clone(), networks)
             .await
             .expect("failed to init reader");
         let name = "vitalik.eth".to_string();
@@ -503,8 +575,8 @@ mod tests {
     #[sqlx::test(migrations = "tests/migrations")]
     async fn batch_search_works(pool: PgPool) {
         let pool = Arc::new(pool);
-        let clients = mocked_blockscout_clients().await;
-        let reader = SubgraphReader::initialize(pool.clone(), clients, true)
+        let networks = mocked_networks_with_blockscout().await;
+        let reader = SubgraphReader::initialize(pool.clone(), networks)
             .await
             .expect("failed to init reader");
 

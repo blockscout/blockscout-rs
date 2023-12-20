@@ -1,0 +1,138 @@
+specVersion: 0.0.4
+description: Subgraph to index {{cookiecutter.project_name}}
+repository: https://github.com/blockscout/blokcscout-rs
+schema:
+  file: ./schema.graphql
+dataSources:
+  {%- if cookiecutter.registry %}
+  - kind: ethereum/contract
+    name: {{ cookiecutter.registry_name}}
+    network: {{ cookiecutter.network }}
+    source:
+      abi: {{ cookiecutter.registry_name}}
+      address: "{{ cookiecutter.registry_address}}"
+      startBlock: {{ cookiecutter.registry_start_block}}
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./src/{{ cookiecutter.registry_name}}.ts
+      entities:
+        - Domain
+        - Account
+        - Resolver
+      abis:
+        - name: {{ cookiecutter.registry_name}}
+          file: ./abis/{{ cookiecutter.registry_name}}.json
+      eventHandlers:
+        - event: Transfer(indexed bytes32,address)
+          handler: handleTransfer
+        - event: NewOwner(indexed bytes32,indexed bytes32,address)
+          handler: handleNewOwner
+        - event: NewResolver(indexed bytes32,address)
+          handler: handleNewResolver
+        - event: NewTTL(indexed bytes32,uint64)
+          handler: handleNewTTL
+  {% endif %}
+  {% if cookiecutter.resolver %}
+  - kind: ethereum/contract
+    name: {{ cookiecutter.resolver_name }}
+    network: {{ cookiecutter.network }}
+    source:
+      abi: {{ cookiecutter.resolver_name }}
+      startBlock: {{ cookiecutter.resolver_start_block }}
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./src/{{ cookiecutter.resolver_name }}.ts
+      entities:
+        - AddrChanged
+        - MulticoinAddrChanged
+        - NameChanged
+        - AbiChanged
+        - PubkeyChanged
+        - Textchanged
+        - ContenthashChanged
+        - InterfaceChanged
+        - AuthorisationChanged
+      abis:
+        - name: {{ cookiecutter.resolver_name }}
+          file: ./abis/{{ cookiecutter.resolver_name }}.json
+      eventHandlers:
+        - event: ABIChanged(indexed bytes32,indexed uint256)
+          handler: handleABIChanged
+        - event: AddrChanged(indexed bytes32,address)
+          handler: handleAddrChanged
+        - event: AddressChanged(indexed bytes32,uint256,bytes)
+          handler: handleMulticoinAddrChanged
+        - event: AuthorisationChanged(indexed bytes32,indexed address,indexed address,bool)
+          handler: handleAuthorisationChanged
+        - event: ContenthashChanged(indexed bytes32,bytes)
+          handler: handleContentHashChanged
+        - event: InterfaceChanged(indexed bytes32,indexed bytes4,address)
+          handler: handleInterfaceChanged
+        - event: NameChanged(indexed bytes32,string)
+          handler: handleNameChanged
+        - event: PubkeyChanged(indexed bytes32,bytes32,bytes32)
+          handler: handlePubkeyChanged
+        - event: TextChanged(indexed bytes32,indexed string,string)
+          handler: handleTextChanged
+        - event: TextChanged(indexed bytes32,indexed string,string,string)
+          handler: handleTextChangedWithValue
+        - event: VersionChanged(indexed bytes32,uint64)
+          handler: handleVersionChanged
+    {%- endif %}
+    {%- if cookiecutter.base %}
+  - kind: ethereum/contract
+    name: {{ cookiecutter.base_name }}
+    network: {{ cookiecutter.network }}
+    source:
+      abi: {{ cookiecutter.base_name }}
+      address: "{{ cookiecutter.base_address }}"
+      startBlock: {{ cookiecutter.base_start_block }}
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./src/{{ cookiecutter.base_name }}.ts
+      entities:
+        - Registration
+        - NameRegistered
+        - NameRenewed
+        - NameTransferred
+      abis:
+        - name: {{ cookiecutter.base_name }}
+          file: ./abis/{{ cookiecutter.base_name }}.json
+      eventHandlers:
+        - event: NameRegistered(indexed uint256,indexed address,uint256)
+          handler: handleNameRegistered
+        - event: NameRenewed(indexed uint256,uint256)
+          handler: handleNameRenewed
+        - event: Transfer(indexed address,indexed address,indexed uint256)
+          handler: handleNameTransferred
+    {%- endif %}
+    {% if cookiecutter.controller %}
+  - kind: ethereum/contract
+    name: {{ cookiecutter.controller_name }}
+    network: {{ cookiecutter.network }}
+    source:
+      abi: {{ cookiecutter.controller_name }}
+      address: "{{ cookiecutter.controller_address }}"
+      startBlock: {{ cookiecutter.controller_start_block }}
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./src/{{ cookiecutter.controller_name }}.ts
+      entities:
+        - Registration
+      abis:
+        - name: {{ cookiecutter.controller_name }}
+          file: ./abis/{{ cookiecutter.controller_name }}.json
+      eventHandlers:
+        - event: NameRegistered(string,indexed bytes32,indexed address,uint256,uint256,uint256)
+          handler: handleNameRegisteredByController
+        - event: NameRenewed(string,indexed bytes32,uint256,uint256)
+          handler: handleNameRenewedByController
+    {%- endif %}
