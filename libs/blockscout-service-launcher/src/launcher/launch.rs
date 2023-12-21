@@ -78,6 +78,9 @@ where
 {
     tracing::info!("starting http server on addr {}", settings.addr);
 
+    // Initialize the tracing logger not to print http request and response messages on health endpoint
+    CompactRootSpanBuilder::init_skip_http_trace_paths(["/health"]);
+
     let json_cfg = actix_web::web::JsonConfig::default().limit(settings.max_body_size);
     let cors_settings = settings.cors.clone();
     let cors_enabled = cors_settings.enabled;

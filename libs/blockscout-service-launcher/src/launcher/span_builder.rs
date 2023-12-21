@@ -2,21 +2,48 @@ use actix_web::{
     body::MessageBody,
     dev::{ServiceRequest, ServiceResponse},
     http::StatusCode,
-    Error, ResponseError,
+    Error, HttpMessage, ResponseError,
 };
 use once_cell::sync::Lazy;
-use std::{collections::HashMap, sync::Mutex, time::Instant};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::{Mutex, RwLock},
+    time::Instant,
+};
 use tracing::{Id, Span};
 use tracing_actix_web::root_span;
 
 static REQUEST_TIMINGS: Lazy<Mutex<HashMap<Id, Instant>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 
+static SKIP_HTTP_TRACE_PATHS: Lazy<RwLock<HashSet<String>>> =
+    Lazy::new(|| RwLock::new(HashSet::new()));
+
 #[derive(Default)]
 pub struct CompactRootSpanBuilder;
 
+impl CompactRootSpanBuilder {
+    pub fn init_skip_http_trace_paths<S: Into<String>>(
+        skip_http_trace_paths: impl IntoIterator<Item = S>,
+    ) {
+        *SKIP_HTTP_TRACE_PATHS.write().unwrap() = skip_http_trace_paths
+            .into_iter()
+            .map(|path| path.into())
+            .collect();
+    }
+}
+
 impl tracing_actix_web::RootSpanBuilder for CompactRootSpanBuilder {
     fn on_request_start(request: &ServiceRequest) -> Span {
+        if SKIP_HTTP_TRACE_PATHS
+            .read()
+            .unwrap()
+            .contains(request.path())
+        {
+            request
+                .extensions_mut()
+                .insert(tracing_actix_web::SkipHttpTrace);
+        }
         let span = root_span!(
             request,
             duration = tracing::field::Empty,
