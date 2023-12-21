@@ -56,6 +56,7 @@ url = "2.4.0"
 [features]
 # When activated includes helper methods for tests and benchmarking
 test-utils = []
+tokio-rt = ["tokio/rt-multi-thread"]
 
 [[bin]]
 name = "database_populate"
@@ -64,3 +65,7 @@ required-features = ["test-utils"]
 [[bin]]
 name = "database_search"
 required-features = ["test-utils"]
+
+[[bin]]
+name = "import_abis"
+required-features = ["tokio-rt"]

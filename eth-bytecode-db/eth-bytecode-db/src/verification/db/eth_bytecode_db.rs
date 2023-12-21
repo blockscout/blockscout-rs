@@ -121,14 +121,16 @@ pub(crate) async fn insert_event_descriptions(
         })
         .collect();
 
-    let result = events::Entity::insert_many(active_models)
-        .on_conflict(OnConflict::new().do_nothing().to_owned())
-        .exec(db_client)
-        .await;
-    match result {
-        Ok(_) | Err(DbErr::RecordNotInserted) => {}
-        Err(err) => {
-            return Err(err).context("insert into \"events\"");
+    if !active_models.is_empty() {
+        let result = events::Entity::insert_many(active_models)
+            .on_conflict(OnConflict::new().do_nothing().to_owned())
+            .exec(db_client)
+            .await;
+        match result {
+            Ok(_) | Err(DbErr::RecordNotInserted) => {}
+            Err(err) => {
+                return Err(err).context("insert into \"events\"");
+            }
         }
     }
 
