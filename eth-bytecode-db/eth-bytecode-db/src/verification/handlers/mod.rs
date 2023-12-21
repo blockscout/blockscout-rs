@@ -1,4 +1,5 @@
 pub mod compiler_versions;
+pub mod import_existing_abis;
 pub mod solidity_multi_part;
 pub mod solidity_standard_json;
 pub mod sourcify;
