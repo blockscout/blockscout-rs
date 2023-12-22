@@ -111,7 +111,7 @@ dependencies = [
 [[package]]
 name = "actix-prost-build"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/actix-prost#a060c2fe886d4551ed7350fa445d3d2bc02758f4"
+source = "git+https://github.com/blockscout/actix-prost#85a6450ee7e8b90944ecfcdc81c28e1373780fc2"
 dependencies = [
  "prettyplease 0.1.25",
  "proc-macro2",

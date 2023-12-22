@@ -14,9 +14,9 @@ fn compile(
         .compile_well_known_types()
         .protoc_arg("--openapiv2_out=swagger")
         .protoc_arg("--openapiv2_opt")
-        .protoc_arg("grpc_api_configuration=proto/api_config_http.yaml,output_format=yaml,allow_merge=true,merge_file_name=user-ops-indexer")
+        .protoc_arg("grpc_api_configuration=proto/api_config_http.yaml,output_format=yaml,allow_merge=true,merge_file_name=user-ops-indexer,json_names_for_fields=false")
         .bytes(["."])
-        .type_attribute(".", "#[actix_prost_macros::serde]");
+        .type_attribute(".", "#[actix_prost_macros::serde(rename_all=\"snake_case\")]");
 
     config.compile_protos(protos, includes)?;
     Ok(())
