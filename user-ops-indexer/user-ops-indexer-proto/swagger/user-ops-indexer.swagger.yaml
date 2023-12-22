@@ -27,12 +27,12 @@ paths:
           in: query
           required: false
           type: string
-        - name: pageSize
+        - name: page_size
           in: query
           required: false
           type: integer
           format: int64
-        - name: pageToken
+        - name: page_token
           in: query
           required: false
           type: string
@@ -70,12 +70,12 @@ paths:
           schema:
             $ref: '#/definitions/rpcStatus'
       parameters:
-        - name: pageSize
+        - name: page_size
           in: query
           required: false
           type: integer
           format: int64
-        - name: pageToken
+        - name: page_token
           in: query
           required: false
           type: string
@@ -117,16 +117,16 @@ paths:
           in: query
           required: false
           type: string
-        - name: entryPoint
+        - name: entry_point
           in: query
           required: false
           type: string
-        - name: pageSize
+        - name: page_size
           in: query
           required: false
           type: integer
           format: int64
-        - name: pageToken
+        - name: page_token
           in: query
           required: false
           type: string
@@ -145,12 +145,12 @@ paths:
           schema:
             $ref: '#/definitions/rpcStatus'
       parameters:
-        - name: pageSize
+        - name: page_size
           in: query
           required: false
           type: integer
           format: int64
-        - name: pageToken
+        - name: page_token
           in: query
           required: false
           type: string
@@ -188,12 +188,12 @@ paths:
           schema:
             $ref: '#/definitions/rpcStatus'
       parameters:
-        - name: pageSize
+        - name: page_size
           in: query
           required: false
           type: integer
           format: int64
-        - name: pageToken
+        - name: page_token
           in: query
           required: false
           type: string
@@ -247,30 +247,30 @@ paths:
           in: query
           required: false
           type: string
-        - name: transactionHash
+        - name: transaction_hash
           in: query
           required: false
           type: string
-        - name: entryPoint
+        - name: entry_point
           in: query
           required: false
           type: string
-        - name: bundleIndex
-          in: query
-          required: false
-          type: string
-          format: uint64
-        - name: blockNumber
+        - name: bundle_index
           in: query
           required: false
           type: string
           format: uint64
-        - name: pageSize
+        - name: block_number
+          in: query
+          required: false
+          type: string
+          format: uint64
+        - name: page_size
           in: query
           required: false
           type: integer
           format: int64
-        - name: pageToken
+        - name: page_token
           in: query
           required: false
           type: string
@@ -352,33 +352,33 @@ definitions:
         type: string
       factory:
         type: string
-      creationTransactionHash:
+      creation_transaction_hash:
         type: string
-      creationOpHash:
+      creation_op_hash:
         type: string
-      creationTimestamp:
+      creation_timestamp:
         type: string
         format: uint64
-      totalOps:
+      total_ops:
         type: integer
         format: int64
   v1Bundle:
     type: object
     properties:
-      transactionHash:
+      transaction_hash:
         type: string
       bundler:
         type: string
-      blockNumber:
+      block_number:
         type: string
         format: uint64
-      bundleIndex:
+      bundle_index:
         type: string
         format: uint64
       timestamp:
         type: string
         format: uint64
-      totalOps:
+      total_ops:
         type: integer
         format: int64
   v1Bundler:
@@ -386,10 +386,10 @@ definitions:
     properties:
       address:
         type: string
-      totalBundles:
+      total_bundles:
         type: integer
         format: int64
-      totalOps:
+      total_ops:
         type: integer
         format: int64
   v1Factory:
@@ -397,7 +397,7 @@ definitions:
     properties:
       address:
         type: string
-      totalAccounts:
+      total_accounts:
         type: integer
         format: int64
   v1HealthCheckResponse:
@@ -412,7 +412,7 @@ definitions:
         type: array
         items:
           $ref: '#/definitions/v1Account'
-      nextPageToken:
+      next_page_token:
         type: string
   v1ListBundlersResponse:
     type: object
@@ -421,7 +421,7 @@ definitions:
         type: array
         items:
           $ref: '#/definitions/v1Bundler'
-      nextPageToken:
+      next_page_token:
         type: string
   v1ListBundlesResponse:
     type: object
@@ -430,7 +430,7 @@ definitions:
         type: array
         items:
           $ref: '#/definitions/v1Bundle'
-      nextPageToken:
+      next_page_token:
         type: string
   v1ListFactoriesResponse:
     type: object
@@ -439,7 +439,7 @@ definitions:
         type: array
         items:
           $ref: '#/definitions/v1Factory'
-      nextPageToken:
+      next_page_token:
         type: string
   v1ListPaymastersResponse:
     type: object
@@ -448,17 +448,17 @@ definitions:
         type: array
         items:
           $ref: '#/definitions/v1Paymaster'
-      nextPageToken:
+      next_page_token:
         type: string
   v1ListUserOp:
     type: object
     properties:
       hash:
         type: string
-      blockNumber:
+      block_number:
         type: string
         format: uint64
-      transactionHash:
+      transaction_hash:
         type: string
       address:
         type: string
@@ -476,14 +476,14 @@ definitions:
         type: array
         items:
           $ref: '#/definitions/v1ListUserOp'
-      nextPageToken:
+      next_page_token:
         type: string
   v1Paymaster:
     type: object
     properties:
       address:
         type: string
-      totalOps:
+      total_ops:
         type: integer
         format: int64
   v1UserOp:
@@ -495,43 +495,43 @@ definitions:
         type: string
       nonce:
         type: string
-      initCode:
+      init_code:
         type: string
-      callData:
+      call_data:
         type: string
-      callGasLimit:
-        type: string
-        format: uint64
-      verificationGasLimit:
+      call_gas_limit:
         type: string
         format: uint64
-      preVerificationGas:
+      verification_gas_limit:
         type: string
         format: uint64
-      maxFeePerGas:
+      pre_verification_gas:
         type: string
-      maxPriorityFeePerGas:
+        format: uint64
+      max_fee_per_gas:
         type: string
-      paymasterAndData:
+      max_priority_fee_per_gas:
+        type: string
+      paymaster_and_data:
         type: string
       signature:
         type: string
       aggregator:
         type: string
-      aggregatorSignature:
+      aggregator_signature:
         type: string
-      entryPoint:
+      entry_point:
         type: string
-      transactionHash:
+      transaction_hash:
         type: string
-      blockNumber:
+      block_number:
         type: string
         format: uint64
-      blockHash:
+      block_hash:
         type: string
       bundler:
         type: string
-      bundleIndex:
+      bundle_index:
         type: string
         format: uint64
       index:
@@ -543,22 +543,22 @@ definitions:
         type: string
       status:
         type: boolean
-      revertReason:
+      revert_reason:
         type: string
       gas:
         type: string
         format: uint64
-      gasPrice:
+      gas_price:
         type: string
-      gasUsed:
-        type: string
-        format: uint64
-      sponsorType:
-        type: string
-      userLogsStartIndex:
+      gas_used:
         type: string
         format: uint64
-      userLogsCount:
+      sponsor_type:
+        type: string
+      user_logs_start_index:
+        type: string
+        format: uint64
+      user_logs_count:
         type: string
         format: uint64
       fee:
