@@ -1,6 +1,5 @@
-use super::Result;
+use super::{config, Result};
 use crate::blockscout::smart_contract_verifier::v2 as proto;
-use super::config;
 
 #[derive(Clone, Debug)]
 pub struct Client {
@@ -35,19 +34,19 @@ impl Client {
         url: U,
         request: &Request,
     ) -> Result<Response>
-        where
-            U: reqwest::IntoUrl,
-            Request: serde::Serialize + ?Sized,
-            Response: serde::de::DeserializeOwned,
+    where
+        U: reqwest::IntoUrl,
+        Request: serde::Serialize + ?Sized,
+        Response: serde::de::DeserializeOwned,
     {
         let response = self.request_client.post(url).json(&request).send().await;
         Self::process_response(response).await
     }
 
     async fn get_request<U, Response>(&self, url: U) -> Result<Response>
-        where
-            U: reqwest::IntoUrl,
-            Response: serde::de::DeserializeOwned,
+    where
+        U: reqwest::IntoUrl,
+        Response: serde::de::DeserializeOwned,
     {
         let response = self.request_client.get(url).send().await;
         Self::process_response(response).await
@@ -56,8 +55,8 @@ impl Client {
     async fn process_response<Response>(
         response: reqwest_middleware::Result<reqwest::Response>,
     ) -> Result<Response>
-        where
-            Response: serde::de::DeserializeOwned,
+    where
+        Response: serde::de::DeserializeOwned,
     {
         match response {
             Ok(response) => {
