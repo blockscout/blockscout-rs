@@ -2081,6 +2081,7 @@ dependencies = [
  "tokio-stream",
  "tonic",
  "tracing",
+ "url",
  "uuid 1.6.1",
  "verifier-alliance-entity",
  "verifier-alliance-migration",

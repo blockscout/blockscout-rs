@@ -89,12 +89,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         .await?
     };
 
-    let mut client = Client::new(
-        db_connection,
-        settings.verifier.http_uri.to_string(),
-        settings.verifier.uri,
-    )
-    .await?;
+    let mut client = Client::new(db_connection, settings.verifier.http_url.to_string()).await?;
     if settings.verifier_alliance_database.enabled {
         let alliance_db_connection = {
             let mut connect_options = ConnectOptions::new(settings.verifier_alliance_database.url);

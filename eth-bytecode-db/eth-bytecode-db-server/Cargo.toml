@@ -26,6 +26,7 @@ sourcify = { git = "https://github.com/blockscout/blockscout-rs", rev = "6a12a22
 tokio = { version = "1.23", features = [ "rt-multi-thread", "macros" ] }
 tonic = "0.8"
 tracing = "0.1"
+url = { version = "2.5.0" }
 uuid = { version = "1.6.1", features = ["v4"] }
 
 [dev-dependencies]

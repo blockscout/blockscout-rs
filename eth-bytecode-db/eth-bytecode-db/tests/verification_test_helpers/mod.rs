@@ -79,9 +79,9 @@ where
     // Initialize server
     let server_addr = service.build_server().start().await;
 
-    let uri = Uri::from_str(&format!("http://{}", server_addr.to_string().as_str()))
-        .expect("Returned server address is invalid Uri");
-    Client::new_arc(db_client, uri)
+    let url = url::Url::from_str(&format!("http://{}", server_addr.to_string().as_str()))
+        .expect("Returned server address is invalid Url");
+    Client::new_arc(db_client, url)
         .await
         .expect("Client initialization failed")
 }
