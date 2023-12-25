@@ -6,6 +6,7 @@ use super::{
     process_verify_response, EthBytecodeDbAction, VerifierAllianceDbAction,
 };
 use serde::{Deserialize, Serialize};
+use smart_contract_verifier_proto::http_client::sourcify_verifier_client;
 use std::{collections::BTreeMap, str::FromStr};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -39,15 +40,11 @@ impl<'a> From<&'a VerificationRequest> for VerificationMetadata {
     }
 }
 
-pub async fn verify(mut client: Client, request: VerificationRequest) -> Result<Source, Error> {
+pub async fn verify(client: Client, request: VerificationRequest) -> Result<Source, Error> {
     let verification_metadata = VerificationMetadata::from(&request);
     let request: VerifySourcifyRequest = request.into();
-    let response = client
-        .sourcify_client
-        .verify(request)
-        .await
-        .map_err(Error::from)?
-        .into_inner();
+
+    let response = sourcify_verifier_client::verify(&client.verifier_http_client, request).await?;
 
     process_verify_response(
         response,

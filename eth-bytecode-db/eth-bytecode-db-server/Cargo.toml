@@ -29,7 +29,8 @@ tracing = "0.1"
 uuid = { version = "1.6.1", features = ["v4"] }
 
 [dev-dependencies]
-smart-contract-verifier-proto = { git = "https://github.com/blockscout/blockscout-rs", rev = "2480b20" }
+#smart-contract-verifier-proto = { git = "https://github.com/blockscout/blockscout-rs", rev = "2480b20" }
+smart-contract-verifier-proto = { path = "../../smart-contract-verifier/smart-contract-verifier-proto", features = ["http-client", "mock"] }
 verifier-alliance-entity = { path = "../eth-bytecode-db/verifier-alliance-entity" }
 verifier-alliance-migration = { path = "../eth-bytecode-db/verifier-alliance-migration" }
 

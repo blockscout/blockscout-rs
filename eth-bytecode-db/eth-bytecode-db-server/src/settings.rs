@@ -48,6 +48,8 @@ pub struct DatabaseSettings {
 #[serde(deny_unknown_fields)]
 pub struct VerifierSettings {
     #[serde_as(as = "DisplayFromStr")]
+    pub http_uri: tonic::transport::Uri,
+    #[serde_as(as = "DisplayFromStr")]
     pub uri: tonic::transport::Uri,
 }
 
@@ -93,7 +95,10 @@ impl Settings {
                 create_database: false,
                 run_migrations: false,
             },
-            verifier: VerifierSettings { uri: verifier_uri },
+            verifier: VerifierSettings {
+                http_uri: verifier_uri.clone(),
+                uri: verifier_uri,
+            },
             sourcify: Default::default(),
             verifier_alliance_database: Default::default(),
             authorized_keys: Default::default(),

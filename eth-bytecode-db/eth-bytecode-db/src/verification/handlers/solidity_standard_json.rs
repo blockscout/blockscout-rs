@@ -8,6 +8,7 @@ use super::{
     process_verify_response, EthBytecodeDbAction, VerifierAllianceDbAction,
 };
 use serde::{Deserialize, Serialize};
+use smart_contract_verifier_proto::http_client::solidity_verifier_client;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StandardJson {
@@ -22,12 +23,13 @@ impl From<VerificationRequest<StandardJson>> for VerifySolidityStandardJsonReque
             compiler_version: request.compiler_version,
             input: request.content.input,
             metadata: request.metadata.map(|metadata| metadata.into()),
+            post_actions: vec![],
         }
     }
 }
 
 pub async fn verify(
-    mut client: Client,
+    client: Client,
     request: VerificationRequest<StandardJson>,
 ) -> Result<Source, Error> {
     let is_authorized = request.is_authorized;
@@ -40,12 +42,9 @@ pub async fn verify(
 
     let request: VerifySolidityStandardJsonRequest = request.into();
     tracing::info!("sending request to the verifier");
-    let response = client
-        .solidity_client
-        .verify_standard_json(request)
-        .await
-        .map_err(Error::from)?
-        .into_inner();
+    let response =
+        solidity_verifier_client::verify_standard_json(&client.verifier_http_client, request)
+            .await?;
     tracing::info!(
         status = response.status,
         response_message = response.message,
@@ -105,6 +104,7 @@ mod tests {
                 chain_id: Some("1".to_string()),
                 contract_address: Some("0x0101010101010101010101010101010101010101".to_string()),
             }),
+            post_actions: vec![],
         };
         assert_eq!(
             expected,
@@ -138,6 +138,7 @@ mod tests {
                 chain_id: Some("1".to_string()),
                 contract_address: Some("0x0101010101010101010101010101010101010101".to_string()),
             }),
+            post_actions: vec![],
         };
         assert_eq!(
             expected,
