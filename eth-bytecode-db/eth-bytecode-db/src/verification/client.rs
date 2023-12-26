@@ -12,17 +12,20 @@ impl Client {
     pub async fn new(
         db_client: DatabaseConnection,
         http_verifier_uri: impl Into<String>,
+        max_retries: u32,
     ) -> Result<Self, anyhow::Error> {
-        Self::new_arc(Arc::new(db_client), http_verifier_uri).await
+        Self::new_arc(Arc::new(db_client), http_verifier_uri, max_retries).await
     }
 
     pub async fn new_arc(
         db_client: Arc<DatabaseConnection>,
         http_verifier_uri: impl Into<String>,
+        max_retries: u32,
     ) -> Result<Self, anyhow::Error> {
         let verifier_http_client_config =
-            smart_contract_verifier_proto::http_client::Config::builder(http_verifier_uri.into())
-                .build();
+            smart_contract_verifier_proto::http_client::Config::new(http_verifier_uri.into())
+                .with_retry_middleware(max_retries);
+
         let verifier_http_client =
             smart_contract_verifier_proto::http_client::Client::new(verifier_http_client_config);
 

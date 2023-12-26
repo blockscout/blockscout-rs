@@ -49,6 +49,12 @@ pub struct DatabaseSettings {
 pub struct VerifierSettings {
     #[serde_as(as = "DisplayFromStr")]
     pub http_url: url::Url,
+    #[serde(default = "default_verifier_max_retries")]
+    pub max_retries: u32,
+}
+
+fn default_verifier_max_retries() -> u32 {
+    3
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -95,6 +101,7 @@ impl Settings {
             },
             verifier: VerifierSettings {
                 http_url: verifier_http_url,
+                max_retries: 3
             },
             sourcify: Default::default(),
             verifier_alliance_database: Default::default(),
