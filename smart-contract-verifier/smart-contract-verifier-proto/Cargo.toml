@@ -29,6 +29,10 @@ actix-prost-build = { git = "https://github.com/blockscout/actix-prost" }
 tonic-build = "0.8"
 prost-build = "0.11"
 
+[dev-dependencies]
+smart-contract-verifier-proto = { path = ".", features = ["http-client", "mock"] }
+tokio = { version = "1", features = ["rt"] }
+
 [features]
 http-client = [
     "dep:anyhow",

@@ -1,4 +1,4 @@
-use super::{config, Result};
+use super::{config, Error, Result};
 use crate::blockscout::smart_contract_verifier::v2 as proto;
 
 #[derive(Clone, Debug)]
@@ -59,14 +59,9 @@ impl Client {
         Response: serde::de::DeserializeOwned,
     {
         match response {
-            Ok(response) => {
-                let response = response.json().await;
-                match response {
-                    Ok(response) => Ok(response),
-                    Err(err) => Err(err.into()),
-                }
-            }
-            Err(err) => Err(err),
+            Ok(response) if response.status().is_success() => Ok(response.json().await?),
+            Ok(response) => Err(Error::StatusCode(response)),
+            Err(err) => Err(err.into()),
         }
     }
 }

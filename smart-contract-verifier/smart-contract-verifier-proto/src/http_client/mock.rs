@@ -82,21 +82,23 @@ impl SmartContractVerifierServer {
         self
     }
 
-    pub async fn start(self) -> SocketAddr {
+    pub async fn start(&self) -> SocketAddr {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();
 
+        let solidity_service = self.solidity_service.clone();
+        let vyper_service = self.vyper_service.clone();
+        let sourcify_service = self.sourcify_service.clone();
+
         let configure_router = move |service_config: &mut actix_web::web::ServiceConfig| {
-            if let Some(solidity) = &self.solidity_service {
-                service_config
-                    .configure(|config| route_solidity_verifier(config, solidity.clone()));
+            if let Some(solidity) = solidity_service.clone() {
+                service_config.configure(|config| route_solidity_verifier(config, solidity));
             }
-            if let Some(vyper) = &self.vyper_service {
-                service_config.configure(|config| route_vyper_verifier(config, vyper.clone()));
+            if let Some(vyper) = vyper_service.clone() {
+                service_config.configure(|config| route_vyper_verifier(config, vyper));
             }
-            if let Some(sourcify) = &self.sourcify_service {
-                service_config
-                    .configure(|config| route_sourcify_verifier(config, sourcify.clone()));
+            if let Some(sourcify) = sourcify_service.clone() {
+                service_config.configure(|config| route_sourcify_verifier(config, sourcify));
             }
         };
 
@@ -105,8 +107,8 @@ impl SmartContractVerifierServer {
                 .listen(listener)
                 .expect("failed to bind server")
                 .run();
-
         tokio::spawn(server);
+
         addr
     }
 }
