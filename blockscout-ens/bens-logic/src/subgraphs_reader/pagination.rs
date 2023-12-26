@@ -7,6 +7,15 @@ pub struct PaginatedList<I, P> {
     pub next_page_token: Option<P>,
 }
 
+impl<I, P> PaginatedList<I, P> {
+    pub fn empty() -> Self {
+        Self {
+            items: vec![],
+            next_page_token: None,
+        }
+    }
+}
+
 macro_rules! paginate_list {
     ($items:ident, $page_size:expr, $order_field:ident) => {{
         let mut items = $items;

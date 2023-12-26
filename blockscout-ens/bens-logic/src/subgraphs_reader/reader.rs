@@ -16,14 +16,27 @@ use crate::{
     hash_name::{domain_id, hex},
 };
 use anyhow::Context;
-use ethers::types::{Bytes, TxHash};
+use ethers::types::{Bytes, TxHash, H160};
 use sqlx::postgres::PgPool;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
+    default::Default,
+    str::FromStr,
     sync::Arc,
 };
 use thiserror::Error;
 use tracing::instrument;
+
+lazy_static::lazy_static! {
+    static ref UNRESOLVABLE_ADDRESSES: Vec<H160> = {
+        vec![
+            "0x0000000000000000000000000000000000000000",
+        ]
+        .into_iter()
+        .map(|a| H160::from_str(a).unwrap())
+        .collect()
+    };
+}
 
 pub struct SubgraphReader {
     pool: Arc<PgPool>,
@@ -186,7 +199,6 @@ impl SubgraphReader {
                     &id,
                 )
             });
-
         Ok(domain)
     }
 
@@ -249,6 +261,9 @@ impl SubgraphReader {
             .networks
             .get(&input.network_id)
             .ok_or_else(|| SubgraphReadError::NetworkNotFound(input.network_id))?;
+        if UNRESOLVABLE_ADDRESSES.contains(&input.address) {
+            return Ok(PaginatedList::empty());
+        }
         let domains: Vec<Domain> = sql::find_resolved_addresses(
             self.pool.as_ref(),
             &network.default_subgraph.schema_name,
@@ -269,7 +284,10 @@ impl SubgraphReader {
             .ok_or_else(|| SubgraphReadError::NetworkNotFound(input.network_id))?;
         let subgraph = &network.default_subgraph;
         // remove duplicates
-        let addresses: HashSet<String> = input.addresses.into_iter().map(hex).collect();
+        let addresses: Vec<String> = remove_addresses_from_batch(input.addresses)
+            .into_iter()
+            .map(hex)
+            .collect();
         let addreses_str: Vec<&str> = addresses.iter().map(String::as_str).collect::<Vec<_>>();
         let result = if subgraph.settings.use_cache {
             sql::batch_search_addresses_cached(&self.pool, &subgraph.schema_name, &addreses_str)
@@ -278,12 +296,22 @@ impl SubgraphReader {
             sql::batch_search_addresses(&self.pool, &subgraph.schema_name, &addreses_str).await?
         };
 
-        let address_to_name = result
+        let address_to_name: BTreeMap<String, String> = result
             .into_iter()
             .map(|d| (d.resolved_address, d.domain_name))
             .collect();
+        tracing::info!(address_to_name =? address_to_name, "{}/{} names found from batch request", address_to_name.len(), addresses.len());
         Ok(address_to_name)
     }
+}
+
+fn remove_addresses_from_batch(addresses: impl IntoIterator<Item = H160>) -> Vec<H160> {
+    // remove duplicates
+    let addresses: HashSet<H160> = addresses
+        .into_iter()
+        .filter(|a| !UNRESOLVABLE_ADDRESSES.contains(a))
+        .collect();
+    addresses.into_iter().collect()
 }
 
 #[instrument(name = "events_from_transactions", skip_all, fields(job_size = txns.len()), err, level = "info")]
