@@ -7,7 +7,7 @@ pub mod mock;
 pub use client::{
     solidity_verifier_client, sourcify_verifier_client, vyper_verifier_client, Client,
 };
-pub use config::{Config, ConfigBuilder};
+pub use config::Config;
 
 pub type Result<T> = std::result::Result<T, Error>;
 

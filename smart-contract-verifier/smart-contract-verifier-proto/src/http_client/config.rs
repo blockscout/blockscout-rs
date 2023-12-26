@@ -1,32 +1,43 @@
-use std::str::FromStr;
+use reqwest_middleware::Middleware;
+use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
+use std::{str::FromStr, sync::Arc};
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone)]
 pub struct Config {
     url: String,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct ConfigBuilder {
-    url: String,
+    middleware_stack: Vec<Arc<dyn Middleware>>,
 }
 
 impl Config {
-    pub fn builder(url: String) -> ConfigBuilder {
-        ConfigBuilder { url }
+    pub fn new(url: String) -> Self {
+        Self {
+            url,
+            middleware_stack: vec![],
+        }
+    }
+
+    pub fn with_retry_middleware(self, max_retries: u32) -> Self {
+        let retry_policy = ExponentialBackoff::builder().build_with_max_retries(max_retries);
+        let middleware = RetryTransientMiddleware::new_with_policy(retry_policy);
+        self.with_middleware(middleware)
+    }
+
+    pub fn with_middleware<M: Middleware>(self, middleware: M) -> Self {
+        self.with_arc_middleware(Arc::new(middleware))
+    }
+
+    pub fn with_arc_middleware<M: Middleware>(mut self, middleware: Arc<M>) -> Self {
+        self.middleware_stack.push(middleware);
+        self
     }
 }
 
-impl ConfigBuilder {
-    pub fn build(self) -> Config {
-        Config { url: self.url }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone)]
 pub(super) struct ValidatedConfig {
     pub url: url::Url,
+    pub middleware_stack: Vec<Arc<dyn Middleware>>,
 }
 
 impl TryFrom<Config> for ValidatedConfig {
@@ -35,6 +46,9 @@ impl TryFrom<Config> for ValidatedConfig {
     fn try_from(value: Config) -> std::result::Result<Self, Self::Error> {
         let url = url::Url::from_str(&value.url)?;
 
-        Ok(Self { url })
+        Ok(Self {
+            url,
+            middleware_stack: value.middleware_stack,
+        })
     }
 }

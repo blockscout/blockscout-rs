@@ -15,7 +15,13 @@ impl Client {
         };
 
         let client = reqwest::Client::new();
-        let client_with_middleware = reqwest_middleware::ClientBuilder::new(client).build();
+        let client_with_middleware = {
+            let mut client = reqwest_middleware::ClientBuilder::new(client);
+            for middleware in config.middleware_stack {
+                client = client.with_arc(middleware);
+            }
+            client.build()
+        };
 
         Self {
             base_url: config.url,
