@@ -155,3 +155,15 @@ pub mod sourcify_verifier_client {
         client.post_request(client.build_url(path), &request).await
     }
 }
+
+pub mod health_client {
+    use super::{proto, Client, Result};
+
+    pub async fn health(
+        client: &Client,
+        _request: proto::HealthCheckRequest,
+    ) -> Result<proto::HealthCheckResponse> {
+        let path = "/health";
+        client.get_request(client.build_url(path)).await
+    }
+}
