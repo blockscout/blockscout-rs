@@ -42,6 +42,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"]}
 
 [dev-dependencies]
+actix-web = "4.2"
 async-trait = "0.1"
 blockscout-service-launcher = { workspace = true, features = [ "test-database", "database-0_12" ] }
 migration = {path = "./migration"}

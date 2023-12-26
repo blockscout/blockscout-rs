@@ -2,16 +2,15 @@
 
 use mockall::mock;
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
-    solidity_verifier_server::{SolidityVerifier, SolidityVerifierServer},
-    sourcify_verifier_server::{SourcifyVerifier, SourcifyVerifierServer},
-    vyper_verifier_server::{VyperVerifier, VyperVerifierServer},
-    ListCompilerVersionsRequest, ListCompilerVersionsResponse, VerifyFromEtherscanSourcifyRequest,
-    VerifyResponse, VerifySolidityMultiPartRequest, VerifySolidityStandardJsonRequest,
-    VerifySourcifyRequest, VerifyVyperMultiPartRequest, VerifyVyperStandardJsonRequest,
+    solidity_verifier_actix::route_solidity_verifier, solidity_verifier_server::SolidityVerifier,
+    sourcify_verifier_actix::route_sourcify_verifier, sourcify_verifier_server::SourcifyVerifier,
+    vyper_verifier_actix::route_vyper_verifier, vyper_verifier_server::VyperVerifier,
+    ListCompilerVersionsRequest, ListCompilerVersionsResponse, LookupMethodsRequest,
+    LookupMethodsResponse, VerifyFromEtherscanSourcifyRequest, VerifyResponse,
+    VerifySolidityMultiPartRequest, VerifySolidityStandardJsonRequest, VerifySourcifyRequest,
+    VerifyVyperMultiPartRequest, VerifyVyperStandardJsonRequest,
 };
-use std::net::SocketAddr;
-use tokio::net::TcpListener;
-use tonic::transport::Server;
+use std::{net::SocketAddr, sync::Arc};
 
 mock! {
     pub SolidityVerifierService {}
@@ -23,10 +22,13 @@ mock! {
         async fn verify_standard_json(&self, request: tonic::Request<VerifySolidityStandardJsonRequest>) -> Result<tonic::Response<VerifyResponse>, tonic::Status>;
 
         async fn list_compiler_versions(&self, request: tonic::Request<ListCompilerVersionsRequest>) -> Result<tonic::Response<ListCompilerVersionsResponse>, tonic::Status>;
+
+        async fn lookup_methods(&self,request: tonic::Request<LookupMethodsRequest>) -> Result<tonic::Response<LookupMethodsResponse>, tonic::Status>;
     }
 }
 
 mock! {
+    #[derive(Clone)]
     pub VyperVerifierService {}
 
     #[async_trait::async_trait]
@@ -40,6 +42,7 @@ mock! {
 }
 
 mock! {
+    #[derive(Clone)]
     pub SourcifyVerifierService {}
 
     #[async_trait::async_trait]
@@ -50,11 +53,31 @@ mock! {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct SmartContractVerifierServer {
-    solidity_service: Option<MockSolidityVerifierService>,
-    vyper_service: Option<MockVyperVerifierService>,
-    sourcify_service: Option<MockSourcifyVerifierService>,
+    solidity_service: Option<Arc<MockSolidityVerifierService>>,
+    vyper_service: Option<Arc<MockVyperVerifierService>>,
+    sourcify_service: Option<Arc<MockSourcifyVerifierService>>,
+}
+
+impl blockscout_service_launcher::launcher::HttpRouter for SmartContractVerifierServer {
+    fn register_routes(&self, service_config: &mut actix_web::web::ServiceConfig) {
+        if let Some(solidity) = &self.solidity_service {
+            service_config.configure(|config| route_solidity_verifier(config, solidity.clone()));
+        }
+        if let Some(vyper) = &self.vyper_service {
+            service_config.configure(|config| route_vyper_verifier(config, vyper.clone()));
+        }
+        if let Some(sourcify) = &self.sourcify_service {
+            service_config.configure(|config| route_sourcify_verifier(config, sourcify.clone()));
+        }
+    }
+}
+
+pub fn configure_router(
+    router: &impl blockscout_service_launcher::launcher::HttpRouter,
+) -> impl FnOnce(&mut actix_web::web::ServiceConfig) + '_ {
+    |service_config| router.register_routes(service_config)
 }
 
 impl SmartContractVerifierServer {
@@ -67,34 +90,32 @@ impl SmartContractVerifierServer {
     }
 
     pub fn solidity_service(mut self, solidity_service: MockSolidityVerifierService) -> Self {
-        self.solidity_service = Some(solidity_service);
+        self.solidity_service = Some(Arc::new(solidity_service));
         self
     }
 
     pub fn vyper_service(mut self, vyper_service: MockVyperVerifierService) -> Self {
-        self.vyper_service = Some(vyper_service);
+        self.vyper_service = Some(Arc::new(vyper_service));
         self
     }
 
     pub fn sourcify_service(mut self, sourcify_service: MockSourcifyVerifierService) -> Self {
-        self.sourcify_service = Some(sourcify_service);
+        self.sourcify_service = Some(Arc::new(sourcify_service));
         self
     }
 
     pub async fn start(self) -> SocketAddr {
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();
 
-        tokio::spawn(async move {
-            Server::builder()
-                .add_optional_service(self.solidity_service.map(SolidityVerifierServer::new))
-                .add_optional_service(self.vyper_service.map(VyperVerifierServer::new))
-                .add_optional_service(self.sourcify_service.map(SourcifyVerifierServer::new))
-                .serve_with_incoming(tokio_stream::wrappers::TcpListenerStream::new(listener))
-                .await
-                .unwrap();
-        });
+        let server = actix_web::HttpServer::new(move || {
+            actix_web::App::new().configure(configure_router(&self))
+        })
+        .listen(listener)
+        .expect("failed to bind server")
+        .run();
 
+        tokio::spawn(server);
         addr
     }
 }

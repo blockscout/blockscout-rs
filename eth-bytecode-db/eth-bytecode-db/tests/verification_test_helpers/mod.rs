@@ -21,7 +21,6 @@ use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::Veri
 use smart_contract_veriifer_mock::SmartContractVerifierServer;
 use std::{collections::HashSet, str::FromStr, sync::Arc};
 use test_input_data::TestInputData;
-use tonic::transport::Uri;
 
 #[async_trait]
 pub trait VerifierService<Request> {

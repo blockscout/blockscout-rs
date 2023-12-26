@@ -34,11 +34,13 @@ impl From<smart_contract_verifier_proto::http_client::Error> for Error {
                         return Self::InvalidArgument(err.to_string());
                     }
                 }
+                println!("\nALKFAFMAL: {err}\n:");
                 Self::Internal(
                     anyhow::anyhow!(err.to_string()).context("verifier service connection"),
                 )
             }
             smart_contract_verifier_proto::http_client::Error::Middleware(err) => {
+                println!("\npklaksfafopok\n");
                 Self::Internal(err.context("verifier service connection"))
             }
         }

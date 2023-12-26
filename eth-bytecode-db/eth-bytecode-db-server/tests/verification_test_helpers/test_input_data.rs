@@ -33,6 +33,7 @@ impl TestInputData {
                 deployed_bytecode_artifacts: source.deployed_bytecode_artifacts.clone(),
             }),
             extra_data: Some(extra_data),
+            post_action_responses: None,
         };
 
         let eth_bytecode_db_response = eth_bytecode_db_v2::VerifyResponse {

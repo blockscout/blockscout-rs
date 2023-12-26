@@ -15,7 +15,6 @@ use reqwest::Url;
 use smart_contract_verifer_mock::SmartContractVerifierServer;
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2 as smart_contract_verifier_v2;
 use std::{collections::HashMap, net::SocketAddr, str::FromStr};
-use tonic::transport::Uri;
 
 const DB_PREFIX: &str = "server";
 
@@ -66,7 +65,7 @@ pub async fn init_eth_bytecode_db_server_with_settings_setup<F>(
 where
     F: Fn(Settings) -> Settings,
 {
-    let verifier_uri = Uri::from_str(&format!("http://{verifier_addr}")).unwrap();
+    let verifier_uri = url::Url::from_str(&format!("http://{verifier_addr}")).unwrap();
     let (settings, base) = {
         let mut settings = Settings::default(db_url, verifier_uri);
         let (server_settings, base) = test_server::get_test_server_settings();
