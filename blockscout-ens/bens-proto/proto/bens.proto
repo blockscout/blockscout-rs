@@ -71,8 +71,14 @@ message Address {
 
 
 enum Order {
-  ASC = 0;
-  DESC = 1;
+  ORDER_UNSPECIFIED = 0;
+  ASC = 1;
+  DESC = 2;
+}
+
+message Pagination {
+  optional string next_page_token = 1;
+  uint32 page_size = 2;
 }
 
 /************************************************/
@@ -93,33 +99,36 @@ message ListDomainEventsRequest {
   int64 chain_id = 2;
   // Sorting field. Default is `timestamp`
   string sort = 4;
-  // Order direction. Default is ASC
+  // Order direction. Default is DESC
   Order order = 5;
 }
 
 message ListDomainEventsResponse {
   repeated DomainEvent items = 1;
-  uint32 total_records = 2;
 }
 
 message LookupDomainNameRequest {
-  // Name of domain, for example vitalik.eth
-  string name = 1;
+  // Optinonal. Name of domain, for example vitalik.eth. None means lookup for any name
+  optional string name = 1;
   // The chain (network) where domain search should be done
   int64 chain_id = 2;
   // Filtering field to remove expired domains
   bool only_active = 3;
   // Sorting field. Default is `registration_date`
   string sort = 4;
-  // Order direction. Default is ASC
+  // Order direction. Default is DESC
   Order order = 5;
+  // Optional. Max number of items in single response. Default is 50
+  optional uint32 page_size = 6;
+  // Optional. Value of `.pagination.next_page_token` from previous response
+  optional string next_page_token = 7;
 }
 
 message LookupDomainNameResponse {
   // List of domains that resolved to or owned by requested address
   // Sorted by relevance, so first address could be displayed as main resolved address
   repeated Domain items = 1;
-  uint32 total_records = 2;
+  Pagination next_page_params = 2;
 }
 
 message LookupAddressRequest {
@@ -135,15 +144,19 @@ message LookupAddressRequest {
   bool only_active = 6;
   // Sorting field. Default is `registration_date`
   string sort = 7;
-  // Order direction. Defaut is ASC
+  // Order direction. Defaut is DESC
   Order order = 8;
+  // Optional. Max number of items in single response. Default is 50
+  optional uint32 page_size = 9;
+  // Optional. Value of `.pagination.next_page_token` from previous response
+  optional string next_page_token = 10;
 }
 
 message LookupAddressResponse {
   // List of domains that resolved to or owned by requested address
   // Sorted by relevance, so first address could be displayed as main resolved address
   repeated Domain items = 1;
-  uint32 total_records = 2;
+  Pagination next_page_params = 2;
 }
 
 message BatchResolveAddressNamesRequest {

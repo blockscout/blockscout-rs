@@ -24,6 +24,8 @@ tracing = "0.1"
 futures = "0.3"
 cached = { version = "0.46.1", features = ["proc_macro", "tokio", "async", "async_tokio_rt_multi_thread"] }
 wiremock = {version = "0.5", optional = true }
+sea-query = "0.30.5"
+sea-orm = "0.12.10"
 
 [dependencies.sqlx]
 version = "0.7"

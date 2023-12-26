@@ -1,4 +1,5 @@
 use ethers::types::Address;
+use sea_query::{Alias, IntoIden};
 use serde::Deserialize;
 use std::fmt::Display;
 
@@ -20,10 +21,9 @@ pub struct GetDomainHistoryInput {
 #[derive(Debug, Clone)]
 pub struct LookupDomainInput {
     pub network_id: i64,
-    pub name: String,
+    pub name: Option<String>,
     pub only_active: bool,
-    pub sort: DomainSort,
-    pub order: Order,
+    pub sorting: DomainSorting,
 }
 
 #[derive(Debug, Clone)]
@@ -33,8 +33,26 @@ pub struct LookupAddressInput {
     pub resolved_to: bool,
     pub owned_by: bool,
     pub only_active: bool,
-    pub sort: DomainSort,
+    pub sorting: DomainSorting,
+}
+
+#[derive(Debug, Clone)]
+pub struct DomainSorting {
+    pub sort: DomainSortField,
     pub order: Order,
+    pub page_size: u32,
+    pub page_token: Option<String>,
+}
+
+impl Default for DomainSorting {
+    fn default() -> Self {
+        Self {
+            sort: Default::default(),
+            order: Default::default(),
+            page_size: 50,
+            page_token: Default::default(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -44,16 +62,17 @@ pub struct BatchResolveAddressNamesInput {
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Default)]
-pub enum DomainSort {
+pub enum DomainSortField {
     #[default]
     RegistrationDate,
 }
 
-impl Display for DomainSort {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            DomainSort::RegistrationDate => write!(f, "registration_date"),
-        }
+impl DomainSortField {
+    pub fn to_database_field(&self) -> sea_query::ColumnRef {
+        let col = match self {
+            DomainSortField::RegistrationDate => "created_at",
+        };
+        sea_query::ColumnRef::Column(Alias::new(col).into_iden())
     }
 }
 
@@ -76,6 +95,19 @@ pub enum Order {
     #[default]
     Asc,
     Desc,
+}
+
+impl Order {
+    pub fn is_desc(&self) -> bool {
+        matches!(self, Order::Desc)
+    }
+
+    pub fn to_database_field(&self) -> sea_query::Order {
+        match self {
+            Order::Asc => sea_query::Order::Asc,
+            Order::Desc => sea_query::Order::Desc,
+        }
+    }
 }
 
 impl Display for Order {

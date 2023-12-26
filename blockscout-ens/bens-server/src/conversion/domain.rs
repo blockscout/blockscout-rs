@@ -6,12 +6,14 @@ use bens_logic::{
     entity::subgraph::domain::{DetailedDomain, Domain},
     hash_name::hex,
     subgraphs_reader::{
-        BatchResolveAddressNamesInput, DomainSort, GetDomainInput, LookupAddressInput,
-        LookupDomainInput,
+        BatchResolveAddressNamesInput, DomainSortField, DomainSorting, GetDomainInput,
+        LookupAddressInput, LookupDomainInput,
     },
 };
 use bens_proto::blockscout::bens::v1 as proto;
 use ethers::types::Address;
+
+const DEFAULT_PAGE_SIZE: u32 = 50;
 
 pub fn get_domain_input_from_inner(
     inner: proto::GetDomainRequest,
@@ -32,8 +34,12 @@ pub fn lookup_domain_name_from_inner(
         network_id: inner.chain_id,
         name: inner.name,
         only_active: inner.only_active,
-        sort,
-        order,
+        sorting: DomainSorting {
+            sort,
+            order,
+            page_size: page_size_from_inner(inner.page_size),
+            page_token: inner.next_page_token,
+        },
     })
 }
 
@@ -49,14 +55,18 @@ pub fn lookup_address_from_inner(
         resolved_to: inner.resolved_to,
         owned_by: inner.owned_by,
         only_active: inner.only_active,
-        sort,
-        order,
+        sorting: DomainSorting {
+            sort,
+            order,
+            page_size: page_size_from_inner(inner.page_size),
+            page_token: inner.next_page_token,
+        },
     })
 }
 
-pub fn domain_sort_from_inner(inner: &str) -> Result<DomainSort, ConversionError> {
+pub fn domain_sort_from_inner(inner: &str) -> Result<DomainSortField, ConversionError> {
     match inner {
-        "" | "registration_date" => Ok(DomainSort::RegistrationDate),
+        "" | "registration_date" | "registrationDate" => Ok(DomainSortField::RegistrationDate),
         _ => Err(ConversionError::UserRequest(format!(
             "unknow sort field '{inner}'"
         ))),
@@ -118,6 +128,10 @@ pub fn domain_from_logic(d: Domain) -> Result<proto::Domain, ConversionError> {
 fn address_from_str_inner(addr: &str) -> Result<Address, ConversionError> {
     Address::from_str(addr)
         .map_err(|e| ConversionError::UserRequest(format!("invalid address '{addr}': {e}")))
+}
+
+fn page_size_from_inner(page_size: Option<u32>) -> u32 {
+    page_size.unwrap_or(DEFAULT_PAGE_SIZE).clamp(1, 100)
 }
 
 fn date_from_logic(d: chrono::DateTime<chrono::Utc>) -> String {

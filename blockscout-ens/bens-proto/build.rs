@@ -55,8 +55,13 @@ fn compile(
             "#[serde(default)]"
         )
         ;
+    fix_lookup_pagination_snake_case(&mut config);
     config.compile_protos(protos, includes)?;
     Ok(())
+}
+
+fn fix_lookup_pagination_snake_case(config: &mut Config) {
+    // TODO
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
