@@ -1,7 +1,8 @@
 mod client;
 mod config;
+
 #[cfg(feature = "mock")]
-mod mock;
+pub mod mock;
 
 pub use client::{
     solidity_verifier_client, sourcify_verifier_client, vyper_verifier_client, Client,

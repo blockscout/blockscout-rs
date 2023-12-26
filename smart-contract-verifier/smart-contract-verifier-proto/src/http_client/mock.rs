@@ -1,79 +1,112 @@
-use crate::blockscout::smart_contract_verifier::v2 as proto;
-use std::net::SocketAddr;
-use wiremock::matchers;
+use crate::blockscout::smart_contract_verifier::v2::{
+    solidity_verifier_actix::route_solidity_verifier, solidity_verifier_server::SolidityVerifier,
+    sourcify_verifier_actix::route_sourcify_verifier, sourcify_verifier_server::SourcifyVerifier,
+    vyper_verifier_actix::route_vyper_verifier, vyper_verifier_server::VyperVerifier,
+    ListCompilerVersionsRequest, ListCompilerVersionsResponse, LookupMethodsRequest,
+    LookupMethodsResponse, VerifyFromEtherscanSourcifyRequest, VerifyResponse,
+    VerifySolidityMultiPartRequest, VerifySolidityStandardJsonRequest, VerifySourcifyRequest,
+    VerifyVyperMultiPartRequest, VerifyVyperStandardJsonRequest,
+};
+use mockall::mock;
+use std::{net::SocketAddr, sync::Arc};
 
-pub struct Mock {
-    inner: wiremock::MockServer,
-}
+mock! {
+    pub SolidityVerifierService {}
 
-impl Mock {
-    pub fn address(&self) -> &SocketAddr {
-        self.inner.address()
+    #[async_trait::async_trait]
+    impl SolidityVerifier for SolidityVerifierService {
+        async fn verify_multi_part(&self, request: tonic::Request<VerifySolidityMultiPartRequest>) -> Result<tonic::Response<VerifyResponse>, tonic::Status>;
+
+        async fn verify_standard_json(&self, request: tonic::Request<VerifySolidityStandardJsonRequest>) -> Result<tonic::Response<VerifyResponse>, tonic::Status>;
+
+        async fn list_compiler_versions(&self, request: tonic::Request<ListCompilerVersionsRequest>) -> Result<tonic::Response<ListCompilerVersionsResponse>, tonic::Status>;
+
+        async fn lookup_methods(&self,request: tonic::Request<LookupMethodsRequest>) -> Result<tonic::Response<LookupMethodsResponse>, tonic::Status>;
     }
 }
 
-pub struct MockBuilder {
-    inner: wiremock::MockServer,
+mock! {
+    #[derive(Clone)]
+    pub VyperVerifierService {}
+
+    #[async_trait::async_trait]
+    impl VyperVerifier for VyperVerifierService {
+        async fn verify_multi_part(&self, request: tonic::Request<VerifyVyperMultiPartRequest>) -> Result<tonic::Response<VerifyResponse>, tonic::Status>;
+
+        async fn verify_standard_json(&self, request: tonic::Request<VerifyVyperStandardJsonRequest>) -> Result<tonic::Response<VerifyResponse>, tonic::Status>;
+
+        async fn list_compiler_versions(&self, request: tonic::Request<ListCompilerVersionsRequest>) -> Result<tonic::Response<ListCompilerVersionsResponse>, tonic::Status>;
+    }
 }
 
-impl MockBuilder {
-    pub async fn new() -> Self {
+mock! {
+    #[derive(Clone)]
+    pub SourcifyVerifierService {}
+
+    #[async_trait::async_trait]
+    impl SourcifyVerifier for SourcifyVerifierService {
+        async fn verify(&self, request: tonic::Request<VerifySourcifyRequest>) -> Result<tonic::Response<VerifyResponse>, tonic::Status>;
+
+        async fn verify_from_etherscan(&self, request: tonic::Request<VerifyFromEtherscanSourcifyRequest>) -> Result<tonic::Response<VerifyResponse>, tonic::Status>;
+    }
+}
+
+#[derive(Default, Clone)]
+pub struct SmartContractVerifierServer {
+    solidity_service: Option<Arc<MockSolidityVerifierService>>,
+    vyper_service: Option<Arc<MockVyperVerifierService>>,
+    sourcify_service: Option<Arc<MockSourcifyVerifierService>>,
+}
+
+impl SmartContractVerifierServer {
+    pub fn new() -> Self {
         Self {
-            inner: wiremock::MockServer::start().await,
+            solidity_service: None,
+            vyper_service: None,
+            sourcify_service: None,
         }
     }
 
-    pub fn build(self) -> Mock {
-        Mock { inner: self.inner }
+    pub fn solidity_service(mut self, solidity_service: MockSolidityVerifierService) -> Self {
+        self.solidity_service = Some(Arc::new(solidity_service));
+        self
     }
-}
 
-pub mod solidity_verifier_client {
-    use super::{matchers, proto, MockBuilder};
-
-    pub async fn verify_multi_part(
-        mock_builder: &mut MockBuilder,
-        request: proto::VerifySolidityMultiPartRequest,
-        response: proto::VerifyResponse,
-    ) {
-        let mock = wiremock::Mock::given(matchers::method("POST"))
-            .and(matchers::path(
-                "/api/v2/verifier/solidity/sources:verify-multi-part",
-            ))
-            .and(matchers::body_json(request))
-            .respond_with(wiremock::ResponseTemplate::new(200).set_body_json(response))
-            .up_to_n_times(1)
-            .expect(1);
-
-        mock_builder.inner.register(mock).await;
+    pub fn vyper_service(mut self, vyper_service: MockVyperVerifierService) -> Self {
+        self.vyper_service = Some(Arc::new(vyper_service));
+        self
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::http_client::{self, Client, Config};
+    pub fn sourcify_service(mut self, sourcify_service: MockSourcifyVerifierService) -> Self {
+        self.sourcify_service = Some(Arc::new(sourcify_service));
+        self
+    }
 
-    #[tokio::test]
-    async fn solidity_verify_multi_part() {
-        let mut mock_builder = MockBuilder::new().await;
-        let request = proto::VerifySolidityMultiPartRequest::default();
-        let response = proto::VerifyResponse::default();
-        solidity_verifier_client::verify_multi_part(
-            &mut mock_builder,
-            request.clone(),
-            response.clone(),
-        )
-        .await;
-        let mock = mock_builder.build();
+    pub async fn start(self) -> SocketAddr {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
 
-        let address = mock.address();
-        let client = Client::new(Config::builder(format!("http://{address}/")).build());
-        let actual_response =
-            http_client::solidity_verifier_client::verify_multi_part(&client, request.clone())
-                .await
-                .expect("sending http request");
+        let configure_router = move |service_config: &mut actix_web::web::ServiceConfig| {
+            if let Some(solidity) = &self.solidity_service {
+                service_config
+                    .configure(|config| route_solidity_verifier(config, solidity.clone()));
+            }
+            if let Some(vyper) = &self.vyper_service {
+                service_config.configure(|config| route_vyper_verifier(config, vyper.clone()));
+            }
+            if let Some(sourcify) = &self.sourcify_service {
+                service_config
+                    .configure(|config| route_sourcify_verifier(config, sourcify.clone()));
+            }
+        };
 
-        assert_eq!(response, actual_response, "Invalid response");
+        let server =
+            actix_web::HttpServer::new(move || actix_web::App::new().configure(&configure_router))
+                .listen(listener)
+                .expect("failed to bind server")
+                .run();
+
+        tokio::spawn(server);
+        addr
     }
 }
