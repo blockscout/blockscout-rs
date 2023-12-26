@@ -35,8 +35,8 @@ impl Config {
         self
     }
 
-    pub fn validate_url(mut self) -> Self {
-        self.validate_url = true;
+    pub fn validate_url(mut self, value: bool) -> Self {
+        self.validate_url = value;
         self
     }
 }
