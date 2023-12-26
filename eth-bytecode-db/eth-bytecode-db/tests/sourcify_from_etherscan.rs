@@ -6,14 +6,12 @@ use eth_bytecode_db::verification::{
     SourceType, VerificationMetadata,
 };
 use rstest::{fixture, rstest};
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
-    VerifyFromEtherscanSourcifyRequest, VerifyResponse,
+use smart_contract_verifier_proto::{
+    blockscout::smart_contract_verifier::v2::{VerifyFromEtherscanSourcifyRequest, VerifyResponse},
+    http_client::mock::{MockSourcifyVerifierService, SmartContractVerifierServer},
 };
 use tonic::Response;
-use verification_test_helpers::{
-    smart_contract_veriifer_mock::{MockSourcifyVerifierService, SmartContractVerifierServer},
-    VerifierService,
-};
+use verification_test_helpers::VerifierService;
 
 const DB_PREFIX: &str = "sourcify_from_etherscan";
 

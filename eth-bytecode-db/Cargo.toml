@@ -12,3 +12,4 @@ members = [
 
 [workspace.dependencies]
 blockscout-service-launcher = "0.10.0"
+smart-contract-verifier-proto = { path = "../smart-contract-verifier/smart-contract-verifier-proto" }

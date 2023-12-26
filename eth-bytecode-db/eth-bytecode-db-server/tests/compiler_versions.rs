@@ -1,15 +1,15 @@
 mod verification_test_helpers;
 
-use crate::verification_test_helpers::{
-    smart_contract_verifer_mock::{
-        MockSolidityVerifierService, MockVyperVerifierService, SmartContractVerifierServer,
-    },
-    VerifierService,
-};
+use crate::verification_test_helpers::VerifierService;
 use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2 as eth_bytecode_db_v2;
 use pretty_assertions::assert_eq;
 use rstest::rstest;
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2 as smart_contract_verifier_v2;
+use smart_contract_verifier_proto::{
+    blockscout::smart_contract_verifier::v2 as smart_contract_verifier_v2,
+    http_client::mock::{
+        MockSolidityVerifierService, MockVyperVerifierService, SmartContractVerifierServer,
+    },
+};
 use tonic::Response;
 
 const TEST_SUITE_NAME: &str = "compiler_versions";

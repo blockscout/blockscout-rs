@@ -17,13 +17,13 @@ use eth_bytecode_db_proto::blockscout::eth_bytecode_db::{
 };
 use pretty_assertions::assert_eq;
 use rstest::{fixture, rstest};
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2 as smart_contract_verifier_v2;
+use smart_contract_verifier_proto::{
+    blockscout::smart_contract_verifier::v2 as smart_contract_verifier_v2,
+    http_client::mock::{MockSolidityVerifierService, SmartContractVerifierServer},
+};
 use std::collections::BTreeMap;
 use tonic::Response;
-use verification_test_helpers::{
-    smart_contract_verifer_mock::{MockSolidityVerifierService, SmartContractVerifierServer},
-    test_input_data, VerifierService,
-};
+use verification_test_helpers::{test_input_data, VerifierService};
 
 const TEST_SUITE_NAME: &str = "database_search";
 

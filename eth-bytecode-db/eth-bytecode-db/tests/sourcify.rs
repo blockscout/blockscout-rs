@@ -6,14 +6,12 @@ use eth_bytecode_db::verification::{
     VerificationMetadata,
 };
 use rstest::{fixture, rstest};
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
-    VerifyResponse, VerifySourcifyRequest,
+use smart_contract_verifier_proto::{
+    blockscout::smart_contract_verifier::v2::{VerifyResponse, VerifySourcifyRequest},
+    http_client::mock::{MockSourcifyVerifierService, SmartContractVerifierServer},
 };
 use tonic::Response;
-use verification_test_helpers::{
-    smart_contract_veriifer_mock::{MockSourcifyVerifierService, SmartContractVerifierServer},
-    VerifierService,
-};
+use verification_test_helpers::VerifierService;
 
 const DB_PREFIX: &str = "sourcify";
 

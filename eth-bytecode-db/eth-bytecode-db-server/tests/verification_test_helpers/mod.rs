@@ -1,6 +1,5 @@
 #![allow(unused_imports, dead_code)]
 
-pub mod smart_contract_verifer_mock;
 pub mod test_input_data;
 
 pub mod verifier_alliance_types;
@@ -12,8 +11,10 @@ use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2 as eth_bytecode_db_v2
 use eth_bytecode_db_server::Settings;
 use migration::MigratorTrait;
 use reqwest::Url;
-use smart_contract_verifer_mock::SmartContractVerifierServer;
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2 as smart_contract_verifier_v2;
+use smart_contract_verifier_proto::{
+    blockscout::smart_contract_verifier::v2 as smart_contract_verifier_v2,
+    http_client::mock::SmartContractVerifierServer,
+};
 use std::{collections::HashMap, net::SocketAddr, str::FromStr};
 
 const DB_PREFIX: &str = "server";

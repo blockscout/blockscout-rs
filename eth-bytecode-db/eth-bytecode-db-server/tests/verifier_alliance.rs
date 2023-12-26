@@ -14,14 +14,15 @@ use sea_orm::{
     ColumnTrait, DatabaseConnection, DatabaseTransaction, EntityTrait, QueryFilter,
     TransactionTrait,
 };
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2 as smart_contract_verifier_v2;
+use smart_contract_verifier_proto::{
+    blockscout::smart_contract_verifier::v2 as smart_contract_verifier_v2,
+    http_client::mock::{MockSolidityVerifierService, SmartContractVerifierServer},
+};
 use std::{collections::HashMap, future::Future, path::PathBuf, str::FromStr, sync::Arc};
 use tonic::Response;
 use verification_test_helpers::{
     init_db, init_db_raw, init_eth_bytecode_db_server_with_settings_setup, init_verifier_server,
-    smart_contract_verifer_mock::{MockSolidityVerifierService, SmartContractVerifierServer},
-    verifier_alliance_types::TestCase,
-    VerifierService,
+    verifier_alliance_types::TestCase, VerifierService,
 };
 use verifier_alliance_entity::{
     code, compiled_contracts, contract_deployments, contracts, verified_contracts,
