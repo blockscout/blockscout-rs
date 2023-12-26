@@ -77,7 +77,7 @@ enum Order {
 }
 
 message Pagination {
-  optional string next_page_token = 1;
+  optional string page_token = 1;
   uint32 page_size = 2;
 }
 
@@ -120,8 +120,8 @@ message LookupDomainNameRequest {
   Order order = 5;
   // Optional. Max number of items in single response. Default is 50
   optional uint32 page_size = 6;
-  // Optional. Value of `.pagination.next_page_token` from previous response
-  optional string next_page_token = 7;
+  // Optional. Value of `.pagination.page_token` from previous response
+  optional string page_token = 7;
 }
 
 message LookupDomainNameResponse {
@@ -148,8 +148,8 @@ message LookupAddressRequest {
   Order order = 8;
   // Optional. Max number of items in single response. Default is 50
   optional uint32 page_size = 9;
-  // Optional. Value of `.pagination.next_page_token` from previous response
-  optional string next_page_token = 10;
+  // Optional. Value of `.pagination.page_token` from previous response
+  optional string page_token = 10;
 }
 
 message LookupAddressResponse {

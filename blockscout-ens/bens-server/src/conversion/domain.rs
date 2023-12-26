@@ -38,7 +38,7 @@ pub fn lookup_domain_name_from_inner(
             sort,
             order,
             page_size: page_size_from_inner(inner.page_size),
-            page_token: inner.next_page_token,
+            page_token: inner.page_token,
         },
     })
 }
@@ -59,7 +59,7 @@ pub fn lookup_address_from_inner(
             sort,
             order,
             page_size: page_size_from_inner(inner.page_size),
-            page_token: inner.next_page_token,
+            page_token: inner.page_token,
         },
     })
 }

@@ -18,15 +18,13 @@ impl<I, P> PaginatedList<I, P> {
 
 macro_rules! paginate_list {
     ($items:ident, $page_size:expr, $order_field:ident) => {{
-        let mut items = $items;
-        let next_page_token = if items.len() > $page_size as usize {
-            let next_page_token = items
-                .drain($page_size as usize..)
-                .last()
-                .map(|item| item.$order_field);
-            next_page_token
-        } else {
-            None
+        let page_size = $page_size as usize;
+        let (items, next_page_token) = match $items.get(page_size) {
+            Some(item) => (
+                $items[0..page_size].to_vec(),
+                Some(item.$order_field.clone()),
+            ),
+            None => ($items, None),
         };
 
         PaginatedList {

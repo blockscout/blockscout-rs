@@ -76,12 +76,12 @@ impl DomainsExtractor for DomainsExtractorService {
             .lookup_domain_name(input)
             .await
             .map_err(map_subgraph_error)?;
-        let next_page_token = result.next_page_token;
+        let page_token = result.next_page_token;
         let domains = from_resolved_domains_result(result.items)?;
         let response = LookupDomainNameResponse {
             items: domains,
             next_page_params: Some(Pagination {
-                next_page_token,
+                page_token,
                 page_size,
             }),
         };
@@ -100,12 +100,12 @@ impl DomainsExtractor for DomainsExtractorService {
             .lookup_address(input)
             .await
             .map_err(map_subgraph_error)?;
-        let next_page_token = result.next_page_token;
+        let page_token = result.next_page_token;
         let items = from_resolved_domains_result(result.items)?;
         let response = LookupAddressResponse {
             items,
             next_page_params: Some(Pagination {
-                next_page_token,
+                page_token,
                 page_size,
             }),
         };

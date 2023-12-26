@@ -104,8 +104,8 @@ paths:
           required: false
           type: integer
           format: int64
-        - name: next_page_token
-          description: Optional. Value of `.pagination.next_page_token` from previous response
+        - name: page_token
+          description: Optional. Value of `.pagination.page_token` from previous response
           in: query
           required: false
           type: string
@@ -236,8 +236,8 @@ paths:
           required: false
           type: integer
           format: int64
-        - name: next_page_token
-          description: Optional. Value of `.pagination.next_page_token` from previous response
+        - name: page_token
+          description: Optional. Value of `.pagination.page_token` from previous response
           in: query
           required: false
           type: string
@@ -425,7 +425,7 @@ definitions:
   v1Pagination:
     type: object
     properties:
-      next_page_token:
+      page_token:
         type: string
       page_size:
         type: integer

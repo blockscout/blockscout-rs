@@ -91,67 +91,117 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
     // get events
     let expected_events = json!([
         {
-            "action": "finalizeAuction",
+            "action": "setResolver",
             "from_address": {
-                "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
+                "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045"
             },
-            "timestamp": "2017-06-18T08:39:14.000000Z",
-            "transaction_hash": "0xdd16deb1ea750037c3ed1cae5ca20ff9db0e664a5146e5a030137d277a9247f3",
-        },
-        {
-            "action": "transferRegistrars",
-            "from_address": {
-                "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
-            },
-            "timestamp": "2019-07-10T05:58:51.000000Z",
-            "transaction_hash": "0xea30bda97a7e9afcca208d5a648e8ec1e98b245a8884bf589dec8f4aa332fb14",
-        },
-        {
-            "action": "setAddr",
-            "from_address": {
-                "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
-            },
-            "timestamp": "2019-10-29T13:47:34.000000Z",
-            "transaction_hash": "0x09922ac0caf1efcc8f68ce004f382b46732258870154d8805707a1d4b098dfd0",
-        },
-        {
-            "action": "migrateAll",
-            "from_address": {
-                "hash": "0x0904dac3347ea47d208f3fd67402d039a3b99859",
-            },
-            "timestamp": "2020-02-06T18:23:40.000000Z",
-            "transaction_hash": "0xc3f86218c67bee8256b74b9b65d746a40bb5318a8b57948b804dbbbc3d0d7864",
+            "timestamp": "2021-02-15T17:19:17.000000Z",
+            "transaction_hash": "0xbb13efab7f1f798f63814a4d184e903e050b38c38aa407f9294079ee7b3110c9"
         },
         {
             "action": "multicall",
             "from_address": {
-                "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
+                "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045"
             },
             "timestamp": "2021-02-15T17:19:09.000000Z",
-            "transaction_hash": "0x160ef4492c731ac6b59beebe1e234890cd55d4c556f8847624a0b47125fe4f84",
+            "transaction_hash": "0x160ef4492c731ac6b59beebe1e234890cd55d4c556f8847624a0b47125fe4f84"
         },
         {
-            "action": "setResolver",
+            "action": "migrateAll",
             "from_address": {
-                "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
+                "hash": "0x0904dac3347ea47d208f3fd67402d039a3b99859"
             },
-            "timestamp": "2021-02-15T17:19:17.000000Z",
-            "transaction_hash": "0xbb13efab7f1f798f63814a4d184e903e050b38c38aa407f9294079ee7b3110c9",
+            "timestamp": "2020-02-06T18:23:40.000000Z",
+            "transaction_hash": "0xc3f86218c67bee8256b74b9b65d746a40bb5318a8b57948b804dbbbc3d0d7864"
         },
+        {
+            "action": "setAddr",
+            "from_address": {
+                "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045"
+            },
+            "timestamp": "2019-10-29T13:47:34.000000Z",
+            "transaction_hash": "0x09922ac0caf1efcc8f68ce004f382b46732258870154d8805707a1d4b098dfd0"
+        },
+        {
+            "action": "transferRegistrars",
+            "from_address": {
+                "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045"
+            },
+            "timestamp": "2019-07-10T05:58:51.000000Z",
+            "transaction_hash": "0xea30bda97a7e9afcca208d5a648e8ec1e98b245a8884bf589dec8f4aa332fb14"
+        },
+        {
+            "action": "finalizeAuction",
+            "from_address": {
+                "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045"
+            },
+            "timestamp": "2017-06-18T08:39:14.000000Z",
+            "transaction_hash": "0xdd16deb1ea750037c3ed1cae5ca20ff9db0e664a5146e5a030137d277a9247f3"
+        }
     ]);
     let expected_events = expected_events.as_array().unwrap().clone();
     expect_list_results(
         &base,
         "/api/v1/1/domains/vitalik.eth/events",
-        "/api/v1/1/domains/vitalik.eth/events?order=DESC",
+        Default::default(),
         expected_events.clone(),
+        None,
     )
     .await;
     expect_list_results(
         &base,
-        "/api/v1/1/domains/vitalik.eth/events?sort=timestamp",
-        "/api/v1/1/domains/vitalik.eth/events?sort=timestamp&order=DESC",
+        "/api/v1/1/domains/vitalik.eth/events",
+        HashMap::from_iter([("sort".to_owned(), "timestamp".to_owned())]),
         expected_events.clone(),
+        None,
+    )
+    .await;
+
+    // all domains lookup
+    let expected_domains = vec![
+        json!({
+            "expiry_date": "2024-03-23T22:02:21.000Z",
+            "id": "0x68b620f61c87062cf680144f898582a631c90e39dd1badb35c241be0a7284fff",
+            "name": "sashaxyz.eth",
+            "owner": {
+                "hash": "0x66a6f7744ce4dea450910b81a7168588f992eafb",
+            },
+            "registration_date": "2021-12-24T10:23:57.000Z",
+            "resolved_address": {
+                "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
+            },
+        }),
+        json!({
+            "expiry_date": "2027-02-10T16:42:46.000Z",
+            "id": "0x5d438d292de31e08576d5bcd8a93aa41b401b9d9aeaba57da1a32c003e5fd5f5",
+            "name": "wa🇬🇲i.eth",
+            "owner": {
+                "hash": "0x9c996076a85b46061d9a70ff81f013853a86b619",
+            },
+            "registration_date": "2021-11-12T11:36:46.000Z",
+            "resolved_address": {
+                "hash": "0x9c996076a85b46061d9a70ff81f013853a86b619",
+            },
+        }),
+        json!({
+            "expiry_date": "2025-01-21T06:43:35.000Z",
+            "id": "0xeb4f647bea6caa36333c816d7b46fdcb05f9466ecacc140ea8c66faf15b3d9f1",
+            "name": "test.eth",
+            "owner": {
+                "hash": "0xbd6bbe64bf841b81fc5a6e2b760029e316f2783b",
+            },
+            "registration_date": "2019-10-24T07:26:47.000Z",
+            "resolved_address": {
+                "hash": "0xeefb13c7d42efcc655e528da6d6f7bbcf9a2251d",
+            },
+        }),
+    ];
+    expect_list_results(
+        &base,
+        "/api/v1/1/domains:lookup",
+        HashMap::from_iter([("page_size".into(), "3".into())]),
+        expected_domains,
+        Some((3, Some("1499479914".into()))),
     )
     .await;
 
@@ -170,11 +220,12 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
             "expiry_date": "2024-03-23T22:02:21.000Z"
         }
     )];
-    expect_lookup_results(
+    expect_list_results(
         &base,
         "/api/v1/1/domains:lookup",
         HashMap::from_iter([("name".into(), "sashaxyz.eth".into())]),
         expected_domains.clone(),
+        Some((50, None)),
     )
     .await;
 
@@ -196,7 +247,7 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
     .into_iter()
     .chain(expected_domains)
     .collect();
-    expect_lookup_results(
+    expect_list_results(
         &base,
         "/api/v1/1/addresses:lookup",
         HashMap::from_iter([
@@ -206,23 +257,11 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
             ),
             ("resolved_to".into(), "true".into()),
             ("owned_by".into(), "true".into()),
-        ]),
-        expected_addresses.clone(),
-    )
-    .await;
-    expect_lookup_results(
-        &base,
-        "/api/v1/1/addresses:lookup",
-        HashMap::from_iter([
-            (
-                "address".into(),
-                "0xd8da6bf26964af9d7eed9e03e53415d37aa96045".into(),
-            ),
-            ("resolved_to".into(), "true".into()),
-            ("owned_by".into(), "true".into()),
+            ("order".into(), "ASC".into()),
             ("sort".into(), "registration_date".into()),
         ]),
-        expected_addresses,
+        expected_addresses.clone(),
+        Some((50, None)),
     )
     .await;
 
@@ -318,63 +357,38 @@ async fn basic_gno_domain_extracting_works(pool: PgPool) {
     );
 }
 
-async fn expect_list_results(base: &Url, route: &str, route_desc: &str, items: Vec<Value>) {
-    let request: Value = send_get_request(base, route).await;
-    assert_eq!(
-        request,
-        json!({
-            "items": items,
-            "total_records": items.len()
-        })
-    );
-
-    let request: Value = send_get_request(base, route_desc).await;
-    let mut reversed_items = items.clone();
-    reversed_items.reverse();
-    assert_eq!(
-        request,
-        json!({
-            "items": reversed_items,
-            "total_records": reversed_items.len()
-        })
-    );
-}
-
-async fn expect_lookup_results(
+async fn expect_list_results(
     base: &Url,
     route: &str,
-    mut query_params: HashMap<String, String>,
-    items: Vec<Value>,
+    query_params: HashMap<String, String>,
+    expected_items: Vec<Value>,
+    maybe_expected_paginated: Option<(u32, Option<String>)>,
 ) {
-    let query = query_params
-        .iter()
-        .map(|(k, v)| format!("{k}={v}"))
-        .collect::<Vec<_>>()
-        .join("&");
-    let route_with_query = format!("{route}?{query}");
+    let route_with_query = build_query(route, &query_params);
     let request: Value = send_get_request(base, &route_with_query).await;
-    assert_eq!(
-        request,
-        json!({
-            "items": items,
-            "total_records": items.len()
-        })
-    );
-    query_params.insert("order".to_string(), "DESC".to_string());
-    let query = query_params
-        .iter()
-        .map(|(k, v)| format!("{k}={v}"))
-        .collect::<Vec<_>>()
-        .join("&");
-    let route_with_query = format!("{route}?{query}");
-    let request: Value = send_get_request(base, &route_with_query).await;
-    let mut reversed_items = items.clone();
-    reversed_items.reverse();
-    assert_eq!(
-        request,
-        json!({
-            "items": reversed_items,
-            "total_records": reversed_items.len()
-        })
-    );
+    let mut expected: HashMap<String, Value> =
+        HashMap::from_iter([("items".to_owned(), json!(expected_items))]);
+    if let Some((page_size, page_token)) = maybe_expected_paginated {
+        expected.insert(
+            "next_page_params".to_owned(),
+            json!({
+                "page_token": page_token,
+                "page_size": page_size,
+            }),
+        );
+    }
+    assert_eq!(request, json!(expected));
+}
+
+fn build_query(route: &str, query_params: &HashMap<String, String>) -> String {
+    if !query_params.is_empty() {
+        let query = query_params
+            .iter()
+            .map(|(k, v)| format!("{k}={v}"))
+            .collect::<Vec<_>>()
+            .join("&");
+        format!("{route}?{query}")
+    } else {
+        route.to_string()
+    }
 }
