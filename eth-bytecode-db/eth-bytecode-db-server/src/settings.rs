@@ -101,7 +101,7 @@ impl Settings {
             },
             verifier: VerifierSettings {
                 http_url: verifier_http_url,
-                max_retries: 3
+                max_retries: 3,
             },
             sourcify: Default::default(),
             verifier_alliance_database: Default::default(),

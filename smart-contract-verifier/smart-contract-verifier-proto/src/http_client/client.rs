@@ -8,30 +8,43 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(config: config::Config) -> Self {
+    pub async fn new(config: config::Config) -> Self {
         let config = match config::ValidatedConfig::try_from(config) {
             Ok(config) => config,
             Err(err) => panic!("Invalid client configuration: {err}"),
         };
 
-        let client = reqwest::Client::new();
-        let client_with_middleware = {
-            let mut client = reqwest_middleware::ClientBuilder::new(client);
+        let request_client = {
+            let client = reqwest::Client::new();
+            let mut client_with_middleware = reqwest_middleware::ClientBuilder::new(client);
             for middleware in config.middleware_stack {
-                client = client.with_arc(middleware);
+                client_with_middleware = client_with_middleware.with_arc(middleware);
             }
-            client.build()
+            client_with_middleware.build()
         };
 
-        Self {
+        let client = Self {
             base_url: config.url,
-            request_client: client_with_middleware,
+            request_client,
+        };
+
+        if config.validate_url {
+            if let Err(err) = health_client::health(&client, Default::default()).await {
+                panic!("Cannot establish a connection with smart-contract-verifier client: {err}")
+            }
         }
+
+        client
     }
 
     fn build_url(&self, path: &str) -> url::Url {
+        self.build_url_with_query(path, None)
+    }
+
+    fn build_url_with_query(&self, path: &str, query: Option<&str>) -> url::Url {
         let mut url = self.base_url.clone();
         url.set_path(path);
+        url.set_query(query);
         url
     }
 
@@ -161,9 +174,12 @@ pub mod health_client {
 
     pub async fn health(
         client: &Client,
-        _request: proto::HealthCheckRequest,
+        request: proto::HealthCheckRequest,
     ) -> Result<proto::HealthCheckResponse> {
         let path = "/health";
-        client.get_request(client.build_url(path)).await
+        let query = Some(format!("service={}", request.service));
+        client
+            .get_request(client.build_url_with_query(path, query.as_deref()))
+            .await
     }
 }

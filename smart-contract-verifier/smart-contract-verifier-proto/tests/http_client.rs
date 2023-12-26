@@ -20,7 +20,7 @@ macro_rules! set_expectation {
 async fn build_client(server: mock::SmartContractVerifierServer) -> Client {
     let server_addr = server.start().await;
     let config = Config::new(format!("http://{server_addr}"));
-    Client::new(config)
+    Client::new(config).await
 }
 
 #[tokio::test]

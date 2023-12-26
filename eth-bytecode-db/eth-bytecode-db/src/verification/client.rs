@@ -24,10 +24,12 @@ impl Client {
     ) -> Result<Self, anyhow::Error> {
         let verifier_http_client_config =
             smart_contract_verifier_proto::http_client::Config::new(http_verifier_uri.into())
-                .with_retry_middleware(max_retries);
+                .with_retry_middleware(max_retries)
+                .validate_url();
 
         let verifier_http_client =
-            smart_contract_verifier_proto::http_client::Client::new(verifier_http_client_config);
+            smart_contract_verifier_proto::http_client::Client::new(verifier_http_client_config)
+                .await;
 
         Ok(Self {
             db_client,
