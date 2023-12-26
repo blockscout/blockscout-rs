@@ -379,6 +379,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "anstyle"
+version = "1.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7079075b41f533b8c61d2a4d073c4676e1f8b249ff94a393b0595db304e0dd87"
+
+[[package]]
 name = "anyhow"
 version = "1.0.76"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2365,8 +2371,23 @@ dependencies = [
  "downcast",
  "fragile",
  "lazy_static",
- "mockall_derive",
- "predicates",
+ "mockall_derive 0.11.4",
+ "predicates 2.1.5",
+ "predicates-tree",
+]
+
+[[package]]
+name = "mockall"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "43766c2b5203b10de348ffe19f7e54564b64f3d6018ff7648d1e2d6d3a0f0a48"
+dependencies = [
+ "cfg-if",
+ "downcast",
+ "fragile",
+ "lazy_static",
+ "mockall_derive 0.12.1",
+ "predicates 3.0.4",
  "predicates-tree",
 ]
 
@@ -2380,6 +2401,18 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "mockall_derive"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af7cbce79ec385a1d4f54baa90a76401eb15d9cab93685f62e7e9f942aa00ae2"
+dependencies = [
+ "cfg-if",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.42",
 ]
 
 [[package]]
@@ -3115,6 +3148,17 @@ dependencies = [
  "normalize-line-endings",
  "predicates-core",
  "regex",
+]
+
+[[package]]
+name = "predicates"
+version = "3.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6dfc28575c2e3f19cb3c73b93af36460ae898d426eba6fc15b9bd2a5220758a0"
+dependencies = [
+ "anstyle",
+ "itertools 0.11.0",
+ "predicates-core",
 ]
 
 [[package]]
@@ -4276,7 +4320,7 @@ dependencies = [
  "lazy_static",
  "minicbor",
  "mismatch",
- "mockall",
+ "mockall 0.11.4",
  "parking_lot 0.12.1",
  "pretty_assertions",
  "primitive-types",
@@ -4352,6 +4396,7 @@ dependencies = [
  "actix-web",
  "anyhow",
  "async-trait",
+ "mockall 0.12.1",
  "prost",
  "prost-build",
  "reqwest",
@@ -4364,7 +4409,6 @@ dependencies = [
  "tonic",
  "tonic-build",
  "url",
- "wiremock",
 ]
 
 [[package]]
