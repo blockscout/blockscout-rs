@@ -14,10 +14,10 @@ fn compile(
         .compile_well_known_types()
         .protoc_arg("--openapiv2_out=swagger/")
         .protoc_arg("--openapiv2_opt")
-        .protoc_arg("grpc_api_configuration=proto/api_config_http.yaml,output_format=yaml,allow_merge=true,merge_file_name=bens")
+        .protoc_arg("grpc_api_configuration=proto/api_config_http.yaml,output_format=yaml,allow_merge=true,merge_file_name=bens,json_names_for_fields=false")
         .bytes(["."])
         .btree_map(["."])
-        .type_attribute(".", "#[actix_prost_macros::serde]")
+        .type_attribute(".", "#[actix_prost_macros::serde(rename_all=\"snake_case\")]")
         .field_attribute(
             ".blockscout.bens.v1.GetDomainRequest.only_active",
             "#[serde(default)]"
