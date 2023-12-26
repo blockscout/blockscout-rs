@@ -80,7 +80,7 @@ where
 
     let url = url::Url::from_str(&format!("http://{}", server_addr.to_string().as_str()))
         .expect("Returned server address is invalid Url");
-    Client::new_arc(db_client, url, 1)
+    Client::new_arc(db_client, url, 1, false)
         .await
         .expect("Client initialization failed")
 }
