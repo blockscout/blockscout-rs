@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use bens_logic::test_utils::*;
 use bens_server::{BlockscoutSettings, NetworkSettings, Settings};
 use blockscout_service_launcher::{
@@ -65,10 +67,10 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
     assert_eq!(
         request,
         json!({
-            "expiryDate": "2032-08-01T21:50:24.000Z",
+            "expiry_date": "2032-08-01T21:50:24.000Z",
             "id": "0xee6c4522aab0003e8d14cd40a6af439055fd2577951148c14b6cea9a53475835",
             "name": "vitalik.eth",
-            "otherAddresses": {
+            "other_addresses": {
                 "RSK": "f0d485009714ce586358e3761754929904d76b9d",
                 "ETH": "d8da6bf26964af9d7eed9e03e53415d37aa96045",
             },
@@ -78,11 +80,11 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
             "registrant": {
                 "hash": "0x220866b1a2219f40e72f5c628b65d54268ca3a9d",
             },
-            "registrationDate": "2017-06-18T08:39:14.000Z",
-            "resolvedAddress": {
+            "registration_date": "2017-06-18T08:39:14.000Z",
+            "resolved_address": {
                 "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
             },
-            "tokenId": "0xaf2caa1c2ca1d027f1ac823b529d0a67cd144264b2789fa2ea4d63a67c7103cc",
+            "token_id": "0xaf2caa1c2ca1d027f1ac823b529d0a67cd144264b2789fa2ea4d63a67c7103cc",
         })
     );
 
@@ -90,51 +92,51 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
     let expected_events = json!([
         {
             "action": "finalizeAuction",
-            "fromAddress": {
+            "from_address": {
                 "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
             },
             "timestamp": "2017-06-18T08:39:14.000000Z",
-            "transactionHash": "0xdd16deb1ea750037c3ed1cae5ca20ff9db0e664a5146e5a030137d277a9247f3",
+            "transaction_hash": "0xdd16deb1ea750037c3ed1cae5ca20ff9db0e664a5146e5a030137d277a9247f3",
         },
         {
             "action": "transferRegistrars",
-            "fromAddress": {
+            "from_address": {
                 "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
             },
             "timestamp": "2019-07-10T05:58:51.000000Z",
-            "transactionHash": "0xea30bda97a7e9afcca208d5a648e8ec1e98b245a8884bf589dec8f4aa332fb14",
+            "transaction_hash": "0xea30bda97a7e9afcca208d5a648e8ec1e98b245a8884bf589dec8f4aa332fb14",
         },
         {
             "action": "setAddr",
-            "fromAddress": {
+            "from_address": {
                 "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
             },
             "timestamp": "2019-10-29T13:47:34.000000Z",
-            "transactionHash": "0x09922ac0caf1efcc8f68ce004f382b46732258870154d8805707a1d4b098dfd0",
+            "transaction_hash": "0x09922ac0caf1efcc8f68ce004f382b46732258870154d8805707a1d4b098dfd0",
         },
         {
             "action": "migrateAll",
-            "fromAddress": {
+            "from_address": {
                 "hash": "0x0904dac3347ea47d208f3fd67402d039a3b99859",
             },
             "timestamp": "2020-02-06T18:23:40.000000Z",
-            "transactionHash": "0xc3f86218c67bee8256b74b9b65d746a40bb5318a8b57948b804dbbbc3d0d7864",
+            "transaction_hash": "0xc3f86218c67bee8256b74b9b65d746a40bb5318a8b57948b804dbbbc3d0d7864",
         },
         {
             "action": "multicall",
-            "fromAddress": {
+            "from_address": {
                 "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
             },
             "timestamp": "2021-02-15T17:19:09.000000Z",
-            "transactionHash": "0x160ef4492c731ac6b59beebe1e234890cd55d4c556f8847624a0b47125fe4f84",
+            "transaction_hash": "0x160ef4492c731ac6b59beebe1e234890cd55d4c556f8847624a0b47125fe4f84",
         },
         {
             "action": "setResolver",
-            "fromAddress": {
+            "from_address": {
                 "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
             },
             "timestamp": "2021-02-15T17:19:17.000000Z",
-            "transactionHash": "0xbb13efab7f1f798f63814a4d184e903e050b38c38aa407f9294079ee7b3110c9",
+            "transaction_hash": "0xbb13efab7f1f798f63814a4d184e903e050b38c38aa407f9294079ee7b3110c9",
         },
     ]);
     let expected_events = expected_events.as_array().unwrap().clone();
@@ -158,22 +160,20 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
         {
             "id": "0x68b620f61c87062cf680144f898582a631c90e39dd1badb35c241be0a7284fff",
             "name": "sashaxyz.eth",
-            "resolvedAddress": {
+            "resolved_address": {
                 "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045"
             },
             "owner": {
                 "hash": "0x66a6f7744ce4dea450910b81a7168588f992eafb"
             },
-            "registrationDate": "2021-12-24T10:23:57.000Z",
-            "expiryDate": "2024-03-23T22:02:21.000Z"
+            "registration_date": "2021-12-24T10:23:57.000Z",
+            "expiry_date": "2024-03-23T22:02:21.000Z"
         }
     )];
     expect_lookup_results(
         &base,
         "/api/v1/1/domains:lookup",
-        json!({
-            "name": "sashaxyz.eth"
-        }),
+        HashMap::from_iter([("name".into(), "sashaxyz.eth".into())]),
         expected_domains.clone(),
     )
     .await;
@@ -183,14 +183,14 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
         {
             "id": "0xee6c4522aab0003e8d14cd40a6af439055fd2577951148c14b6cea9a53475835",
             "name": "vitalik.eth",
-            "resolvedAddress": {
+            "resolved_address": {
                 "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045"
             },
             "owner": {
                 "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045"
             },
-            "registrationDate": "2017-06-18T08:39:14.000Z",
-            "expiryDate": "2032-08-01T21:50:24.000Z"
+            "registration_date": "2017-06-18T08:39:14.000Z",
+            "expiry_date": "2032-08-01T21:50:24.000Z"
         }
     )]
     .into_iter()
@@ -199,22 +199,29 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
     expect_lookup_results(
         &base,
         "/api/v1/1/addresses:lookup",
-        json!({
-            "address": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
-            "resolvedTo": true,
-            "ownedBy": true,
-        }),
+        HashMap::from_iter([
+            (
+                "address".into(),
+                "0xd8da6bf26964af9d7eed9e03e53415d37aa96045".into(),
+            ),
+            ("resolved_to".into(), "true".into()),
+            ("owned_by".into(), "true".into()),
+        ]),
         expected_addresses.clone(),
     )
     .await;
     expect_lookup_results(
         &base,
-        "/api/v1/1/addresses:lookup?sort=registration_date",
-        json!({
-            "address": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
-            "resolvedTo": true,
-            "ownedBy": true,
-        }),
+        "/api/v1/1/addresses:lookup",
+        HashMap::from_iter([
+            (
+                "address".into(),
+                "0xd8da6bf26964af9d7eed9e03e53415d37aa96045".into(),
+            ),
+            ("resolved_to".into(), "true".into()),
+            ("owned_by".into(), "true".into()),
+            ("sort".into(), "registration_date".into()),
+        ]),
         expected_addresses,
     )
     .await;
@@ -292,21 +299,21 @@ async fn basic_gno_domain_extracting_works(pool: PgPool) {
     assert_eq!(
         request,
         json!({
-            "expiryDate": "2025-02-26T14:58:37.000Z",
+            "expiry_date": "2025-02-26T14:58:37.000Z",
             "id": "0xa3504cdec527495c69c760c85d5be9996252f853b91fd0df04c5b6aa2deb3347",
             "name": "levvv.gno",
-            "otherAddresses": {},
+            "other_addresses": {},
             "owner": {
                 "hash": "0xc0de20a37e2dac848f81a93bd85fe4acdde7c0de",
             },
             "registrant":{
                 "hash": "0xc0de20a37e2dac848f81a93bd85fe4acdde7c0de",
             },
-            "registrationDate": "2023-11-29T09:09:25.000Z",
-            "resolvedAddress":{
+            "registration_date": "2023-11-29T09:09:25.000Z",
+            "resolved_address":{
                 "hash": "0xc0de20a37e2dac848f81a93bd85fe4acdde7c0de",
             },
-            "tokenId": "0x1a8247ca2a4190d90c748b31fa6517e5560c1b7a680f03ff73dbbc3ed2c0ed66",
+            "token_id": "0x1a8247ca2a4190d90c748b31fa6517e5560c1b7a680f03ff73dbbc3ed2c0ed66",
         })
     );
 }
@@ -317,7 +324,7 @@ async fn expect_list_results(base: &Url, route: &str, route_desc: &str, items: V
         request,
         json!({
             "items": items,
-            "totalRecords": items.len()
+            "total_records": items.len()
         })
     );
 
@@ -328,32 +335,46 @@ async fn expect_list_results(base: &Url, route: &str, route_desc: &str, items: V
         request,
         json!({
             "items": reversed_items,
-            "totalRecords": reversed_items.len()
+            "total_records": reversed_items.len()
         })
     );
 }
 
-async fn expect_lookup_results(base: &Url, route: &str, mut payload: Value, items: Vec<Value>) {
-    let request: Value = send_post_request(base, route, &payload).await;
+async fn expect_lookup_results(
+    base: &Url,
+    route: &str,
+    mut query_params: HashMap<String, String>,
+    items: Vec<Value>,
+) {
+    let query = query_params
+        .iter()
+        .map(|(k, v)| format!("{k}={v}"))
+        .collect::<Vec<_>>()
+        .join("&");
+    let route_with_query = format!("{route}?{query}");
+    let request: Value = send_get_request(base, &route_with_query).await;
     assert_eq!(
         request,
         json!({
             "items": items,
-            "totalRecords": items.len()
+            "total_records": items.len()
         })
     );
-    payload
-        .as_object_mut()
-        .unwrap()
-        .insert("order".to_string(), serde_json::json!("DESC"));
-    let request: Value = send_post_request(base, route, &payload).await;
+    query_params.insert("order".to_string(), "DESC".to_string());
+    let query = query_params
+        .iter()
+        .map(|(k, v)| format!("{k}={v}"))
+        .collect::<Vec<_>>()
+        .join("&");
+    let route_with_query = format!("{route}?{query}");
+    let request: Value = send_get_request(base, &route_with_query).await;
     let mut reversed_items = items.clone();
     reversed_items.reverse();
     assert_eq!(
         request,
         json!({
             "items": reversed_items,
-            "totalRecords": reversed_items.len()
+            "total_records": reversed_items.len()
         })
     );
 }

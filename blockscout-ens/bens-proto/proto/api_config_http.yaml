@@ -11,12 +11,10 @@ http:
       get: /api/v1/{chain_id}/domains/{name}/events
 
     - selector: blockscout.bens.v1.DomainsExtractor.LookupDomainName
-      post: /api/v1/{chain_id}/domains:lookup
-      body: "*"
+      get: /api/v1/{chain_id}/domains:lookup
 
     - selector: blockscout.bens.v1.DomainsExtractor.LookupAddress
-      post: /api/v1/{chain_id}/addresses:lookup
-      body: "*"
+      get: /api/v1/{chain_id}/addresses:lookup
 
     - selector: blockscout.bens.v1.DomainsExtractor.BatchResolveAddressNames
       post: /api/v1/{chain_id}/addresses:batch-resolve-names
