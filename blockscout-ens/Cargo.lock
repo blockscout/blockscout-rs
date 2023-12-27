@@ -758,12 +758,13 @@ dependencies = [
 [[package]]
 name = "blockscout-service-launcher"
 version = "0.10.0"
-source = "git+https://github.com/blockscout/blockscout-rs?rev=22ba428#22ba428341212b9169e20a434702e38c229b2731"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=bad8909#bad890945329ee9a6b4e23be0c3ca67b77af81d9"
 dependencies = [
  "actix-cors",
  "actix-web",
  "actix-web-prom",
  "anyhow",
+ "blockscout-tracing-actix-web",
  "cfg-if",
  "config",
  "futures",
@@ -779,10 +780,22 @@ dependencies = [
  "tokio",
  "tonic",
  "tracing",
- "tracing-actix-web",
  "tracing-opentelemetry",
  "tracing-subscriber",
  "url",
+ "uuid 1.5.0",
+]
+
+[[package]]
+name = "blockscout-tracing-actix-web"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e9c18637c495cd78f0ba302727ca0be4f068a3a03633371c5bd1d8c0e9f1e6c"
+dependencies = [
+ "actix-web",
+ "mutually_exclusive_features",
+ "pin-project",
+ "tracing",
  "uuid 1.5.0",
 ]
 
@@ -5922,18 +5935,6 @@ dependencies = [
  "pin-project-lite",
  "tracing-attributes",
  "tracing-core",
-]
-
-[[package]]
-name = "tracing-actix-web"
-version = "0.7.9"
-source = "git+https://github.com/blockscout/tracing-actix-web?branch=rimrakhimov/update-traces-for-services#66479b061021745b523eb48d0f5ae377233606e9"
-dependencies = [
- "actix-web",
- "mutually_exclusive_features",
- "pin-project",
- "tracing",
- "uuid 1.5.0",
 ]
 
 [[package]]

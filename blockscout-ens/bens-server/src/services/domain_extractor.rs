@@ -1,4 +1,4 @@
-use crate::conversion::{self, batch_resolve_from_inner, ConversionError};
+use crate::conversion::{self, batch_resolve_from_inner, pagination_from_logic, ConversionError};
 use async_trait::async_trait;
 use bens_logic::{
     entity,
@@ -8,7 +8,7 @@ use bens_proto::blockscout::bens::v1::{
     domains_extractor_server::DomainsExtractor, BatchResolveAddressNamesRequest,
     BatchResolveAddressNamesResponse, DetailedDomain, Domain, DomainEvent, GetDomainRequest,
     ListDomainEventsRequest, ListDomainEventsResponse, LookupAddressRequest, LookupAddressResponse,
-    LookupDomainNameRequest, LookupDomainNameResponse, Pagination,
+    LookupDomainNameRequest, LookupDomainNameResponse,
 };
 use std::sync::Arc;
 
@@ -76,14 +76,10 @@ impl DomainsExtractor for DomainsExtractorService {
             .lookup_domain_name(input)
             .await
             .map_err(map_subgraph_error)?;
-        let page_token = result.next_page_token;
         let domains = from_resolved_domains_result(result.items)?;
         let response = LookupDomainNameResponse {
             items: domains,
-            next_page_params: Some(Pagination {
-                page_token,
-                page_size,
-            }),
+            next_page_params: pagination_from_logic(result.next_page_token, page_size),
         };
         Ok(tonic::Response::new(response))
     }
@@ -100,14 +96,10 @@ impl DomainsExtractor for DomainsExtractorService {
             .lookup_address(input)
             .await
             .map_err(map_subgraph_error)?;
-        let page_token = result.next_page_token;
         let items = from_resolved_domains_result(result.items)?;
         let response = LookupAddressResponse {
             items,
-            next_page_params: Some(Pagination {
-                page_token,
-                page_size,
-            }),
+            next_page_params: pagination_from_logic(result.next_page_token, page_size),
         };
         Ok(tonic::Response::new(response))
     }
