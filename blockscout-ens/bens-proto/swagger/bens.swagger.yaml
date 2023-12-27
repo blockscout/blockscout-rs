@@ -323,19 +323,19 @@ definitions:
         title: The account that owns the domain
       resolved_address:
         $ref: '#/definitions/v1Address'
-        title: Optinal. Resolved address of this domain
+        title: Optional. Resolved address of this domain
       registrant:
         $ref: '#/definitions/v1Address'
-        title: Optinal. The account that owns the ERC721 NFT for the domain
+        title: Optional. The account that owns the ERC721 NFT for the domain
       wrapped_owner:
         $ref: '#/definitions/v1Address'
-        title: Optinal. Owner of NameWrapper NFT
+        title: Optional. Owner of NameWrapper NFT
       registration_date:
         type: string
-        description: Optinal. RFC 3339 datetime  of expiry date.
+        description: Optional. RFC 3339 datetime  of expiry date.
       expiry_date:
         type: string
-        title: Optinal. RFC 3339 datetime  of expiry date. None means never expires
+        title: Optional. RFC 3339 datetime  of expiry date. None means never expires
       other_addresses:
         type: object
         additionalProperties:
@@ -354,19 +354,19 @@ definitions:
         title: The human readable name, if known. Unknown portions replaced with hash in square brackets (eg, foo.[1234].eth)
       resolved_address:
         $ref: '#/definitions/v1Address'
-        title: Optinal. Resolved address of this domain
+        title: Optional. Resolved address of this domain
       owner:
         $ref: '#/definitions/v1Address'
         title: The account that owns the domain
       wrapped_owner:
         $ref: '#/definitions/v1Address'
-        title: Optinal. Owner of NameWrapper NFT
+        title: Optional. Owner of NameWrapper NFT
       registration_date:
         type: string
-        description: Optinal. RFC 3339 datetime of expiry date.
+        description: Optional. RFC 3339 datetime of expiry date.
       expiry_date:
         type: string
-        title: Optinal. RFC 3339 datetime  of expiry date. None means never expires
+        title: Optional. RFC 3339 datetime  of expiry date. None means never expires
   v1DomainEvent:
     type: object
     properties:
@@ -381,7 +381,7 @@ definitions:
         title: /Sender of transaction
       action:
         type: string
-        title: Optinal. Action name
+        title: Optional. Action name
   v1HealthCheckResponse:
     type: object
     properties:

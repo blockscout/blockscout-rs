@@ -6,6 +6,7 @@ use crate::{
         SubgraphReadError,
     },
 };
+use anyhow::Context;
 use sea_query::{Alias, Condition, Expr, PostgresQueryBuilder, SelectStatement};
 use sqlx::postgres::{PgPool, PgQueryResult};
 use tracing::instrument;
@@ -163,14 +164,9 @@ pub async fn find_domains(
     id: Option<&str>,
     input: &LookupDomainInput,
 ) -> Result<Vec<Domain>, SubgraphReadError> {
-    let maybe_page_filter = input
-        .pagination
-        .build_database_filter()
-        .map_err(|e| SubgraphReadError::Internal(e.to_string()))?;
     let mut query = sql_gen::domain_select(schema);
     let mut q = query
         .with_block_range()
-        .and_where_option(maybe_page_filter)
         .order_by(
             input.pagination.sort.to_database_field(),
             input.pagination.order.to_database_field(),
@@ -184,6 +180,11 @@ pub async fn find_domains(
     } else {
         q = q.with_non_empty_label().with_resolved_names();
     }
+    input
+        .pagination
+        .add_to_query(q)
+        .context("adding pagination to query")
+        .map_err(|e| SubgraphReadError::Internal(e.to_string()))?;
     let sql = q.to_string(PostgresQueryBuilder);
     let mut query = sqlx::query_as(&sql);
     tracing::debug!(sql = sql, "build SQL query for 'find_domains'");
@@ -205,16 +206,11 @@ pub async fn find_resolved_addresses(
     schema: &str,
     input: &LookupAddressInput,
 ) -> Result<Vec<Domain>, SubgraphReadError> {
-    let maybe_page_filter = input
-        .pagination
-        .build_database_filter()
-        .map_err(|e| SubgraphReadError::Internal(e.to_string()))?;
     let mut query = sql_gen::domain_select(schema);
     let mut q = query
         .with_block_range()
         .with_non_empty_label()
         .with_resolved_names()
-        .and_where_option(maybe_page_filter)
         .order_by(
             input.pagination.sort.to_database_field(),
             input.pagination.order.to_database_field(),
@@ -233,8 +229,13 @@ pub async fn find_resolved_addresses(
         main_cond = main_cond.add(Expr::cust("owner = $1"));
         main_cond = main_cond.add(Expr::cust("wrapped_owner = $1"));
     }
-
     q = q.cond_where(main_cond);
+
+    input
+        .pagination
+        .add_to_query(q)
+        .context("adding pagination to query")
+        .map_err(|e| SubgraphReadError::Internal(e.to_string()))?;
 
     let sql = q.to_string(PostgresQueryBuilder);
     tracing::debug!(sql = sql, "build SQL query for 'find_resolved_addresses'");

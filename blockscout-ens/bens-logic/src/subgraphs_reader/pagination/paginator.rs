@@ -2,7 +2,7 @@ use serde::Deserialize;
 use std::fmt::Display;
 
 pub trait Paginator<I> {
-    fn build_database_filter(&self) -> Result<Option<sea_query::SimpleExpr>, anyhow::Error>;
+    fn add_to_query(&self, query: &mut sea_query::SelectStatement) -> Result<(), anyhow::Error>;
 
     fn paginate_result(&self, items: Vec<I>) -> Result<PaginatedList<I>, anyhow::Error>;
 }

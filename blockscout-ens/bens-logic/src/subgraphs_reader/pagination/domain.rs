@@ -1,7 +1,7 @@
 use super::{paginate_list, Order, PaginatedList, PaginationInput, Paginator};
 use crate::{entity::subgraph::domain::Domain, subgraphs_reader::DomainSortField};
 use anyhow::Context;
-use sea_query::{Expr, SimpleExpr};
+use sea_query::{Expr, SelectStatement, SimpleExpr};
 
 pub type DomainPaginationInput = PaginationInput<DomainSortField>;
 
@@ -14,7 +14,14 @@ impl Paginator<Domain> for DomainPaginationInput {
         Ok(list)
     }
 
-    fn build_database_filter(&self) -> Result<Option<sea_query::SimpleExpr>, anyhow::Error> {
+    fn add_to_query(&self, query: &mut SelectStatement) -> Result<(), anyhow::Error> {
+        query
+            .order_by(
+                self.sort.to_database_field(),
+                self.order.to_database_field(),
+            )
+            .limit(self.page_size as u64 + 1);
+
         if let Some(page_token) = self.page_token.as_ref() {
             let page_token = match self.sort {
                 DomainSortField::RegistrationDate => SimpleExpr::from(
@@ -28,9 +35,9 @@ impl Paginator<Domain> for DomainPaginationInput {
                 Order::Asc => Expr::col(col).gte(page_token),
                 Order::Desc => Expr::col(col).lte(page_token),
             };
-            Ok(Some(expr))
-        } else {
-            Ok(None)
-        }
+            query.and_where(expr);
+        };
+
+        Ok(())
     }
 }
