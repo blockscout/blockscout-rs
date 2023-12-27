@@ -10,6 +10,7 @@ pub use events::*;
 
 pub fn order_direction_from_inner(inner: proto::Order) -> Order {
     match inner {
+        proto::Order::Unspecified => Order::Desc,
         proto::Order::Asc => Order::Asc,
         proto::Order::Desc => Order::Desc,
     }

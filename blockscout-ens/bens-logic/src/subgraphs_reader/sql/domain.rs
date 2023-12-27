@@ -1,10 +1,63 @@
 use crate::{
     entity::subgraph::domain::{DetailedDomain, Domain, DomainWithAddress},
     hash_name::hex,
-    subgraphs_reader::{GetDomainInput, LookupAddressInput, LookupDomainInput, SubgraphReadError},
+    subgraphs_reader::{
+        pagination::Paginator, GetDomainInput, LookupAddressInput, LookupDomainInput,
+        SubgraphReadError,
+    },
 };
+use anyhow::Context;
+use sea_query::{Alias, Condition, Expr, PostgresQueryBuilder, SelectStatement};
 use sqlx::postgres::{PgPool, PgQueryResult};
 use tracing::instrument;
+
+mod sql_gen {
+    use super::*;
+
+    pub trait QueryBuilderExt {
+        fn with_block_range(&mut self) -> &mut Self;
+
+        fn with_non_empty_label(&mut self) -> &mut Self;
+
+        fn with_not_expired(&mut self) -> &mut Self;
+
+        fn with_resolved_names(&mut self) -> &mut Self;
+    }
+
+    impl QueryBuilderExt for sea_query::SelectStatement {
+        fn with_block_range(&mut self) -> &mut SelectStatement {
+            self.and_where(Expr::cust(DOMAIN_BLOCK_RANGE_WHERE_CLAUSE))
+        }
+
+        fn with_non_empty_label(&mut self) -> &mut SelectStatement {
+            self.and_where(Expr::cust(DOMAIN_NONEMPTY_LABEL_WHERE_CLAUSE))
+        }
+
+        fn with_not_expired(&mut self) -> &mut SelectStatement {
+            self.and_where(Expr::cust(DOMAIN_NOT_EXPIRED_WHERE_CLAUSE))
+        }
+
+        fn with_resolved_names(&mut self) -> &mut SelectStatement {
+            self.and_where(Expr::cust("name NOT LIKE '%[%'"))
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn detailed_domain_select(schema: &str) -> SelectStatement {
+        sea_query::Query::select()
+            .expr(Expr::cust(DETAILED_DOMAIN_DEFAULT_SELECT_CLAUSE))
+            .from((Alias::new(schema), Alias::new("domain")))
+            .to_owned()
+    }
+
+    pub fn domain_select(schema: &str) -> SelectStatement {
+        sea_query::Query::select()
+            .expr(Expr::cust(DOMAIN_DEFAULT_SELECT_CLAUSE))
+            .from((Alias::new(schema), Alias::new("domain")))
+            .to_owned()
+    }
+}
+use sql_gen::QueryBuilderExt;
 
 const DETAILED_DOMAIN_DEFAULT_SELECT_CLAUSE: &str = r#"
 vid,
@@ -19,6 +72,7 @@ resolved_address,
 resolver,
 to_timestamp(ttl) as ttl,
 is_migrated,
+created_at,
 to_timestamp(created_at) as registration_date,
 owner,
 registrant,
@@ -31,8 +85,10 @@ const DOMAIN_DEFAULT_SELECT_CLAUSE: &str = r#"
 id,
 name,
 resolved_address,
+created_at,
 to_timestamp(created_at) as registration_date,
 owner,
+wrapped_owner,
 to_timestamp(expiry_date) as expiry_date,
 COALESCE(to_timestamp(expiry_date) < now(), false) AS is_expired
 "#;
@@ -51,6 +107,7 @@ pub const DOMAIN_NOT_EXPIRED_WHERE_CLAUSE: &str = r#"
 )
 "#;
 
+// TODO: rewrite to sea_query generation
 #[instrument(name = "get_domain", skip(pool), err(level = "error"), level = "info")]
 pub async fn get_domain(
     pool: &PgPool,
@@ -69,7 +126,7 @@ pub async fn get_domain(
             COALESCE(
                 multi_coin_addresses.coin_to_addr,
                 '{{}}'::json
-            )as other_addresses
+            ) as other_addresses
         FROM {schema}.domain
         LEFT JOIN (
             SELECT 
@@ -104,29 +161,31 @@ pub async fn get_domain(
 pub async fn find_domains(
     pool: &PgPool,
     schema: &str,
-    id: &str,
+    id: Option<&str>,
     input: &LookupDomainInput,
 ) -> Result<Vec<Domain>, SubgraphReadError> {
-    let only_active_clause = input
-        .only_active
-        .then(|| format!("AND {DOMAIN_NOT_EXPIRED_WHERE_CLAUSE}"))
-        .unwrap_or_default();
-    let sort = input.sort;
-    let order = input.order;
-    let domains = sqlx::query_as(&format!(
-        r#"
-        SELECT {DOMAIN_DEFAULT_SELECT_CLAUSE}
-        FROM {schema}.domain
-        WHERE
-            id = $1 
-            AND {DOMAIN_BLOCK_RANGE_WHERE_CLAUSE}
-            {only_active_clause}
-        ORDER BY {sort} {order}
-        "#,
-    ))
-    .bind(id)
-    .fetch_all(pool)
-    .await?;
+    let mut query = sql_gen::domain_select(schema);
+    let mut q = query.with_block_range();
+    if input.only_active {
+        q = q.with_not_expired();
+    };
+    if id.is_some() {
+        q = q.and_where(Expr::cust("id = $1"));
+    } else {
+        q = q.with_non_empty_label().with_resolved_names();
+    }
+    input
+        .pagination
+        .add_to_query(q)
+        .context("adding pagination to query")
+        .map_err(|e| SubgraphReadError::Internal(e.to_string()))?;
+    let sql = q.to_string(PostgresQueryBuilder);
+    let mut query = sqlx::query_as(&sql);
+    tracing::debug!(sql = sql, "build SQL query for 'find_domains'");
+    if let Some(id) = id {
+        query = query.bind(id)
+    };
+    let domains = query.fetch_all(pool).await?;
     Ok(domains)
 }
 
@@ -141,46 +200,42 @@ pub async fn find_resolved_addresses(
     schema: &str,
     input: &LookupAddressInput,
 ) -> Result<Vec<Domain>, SubgraphReadError> {
-    let only_active_clause = input
-        .only_active
-        .then(|| format!("AND {DOMAIN_NOT_EXPIRED_WHERE_CLAUSE}"))
-        .unwrap_or_default();
-    let address = hex(input.address);
-    let resolved_to_clause = input
-        .resolved_to
-        .then_some("OR resolved_address = $1")
-        .unwrap_or_default();
-    let owned_by_clause = input
-        .owned_by
-        .then_some("OR owner = $1 OR wrapped_owner = $1")
-        .unwrap_or_default();
-    let sort = input.sort;
-    let order = input.order;
+    let mut query = sql_gen::domain_select(schema);
+    let mut q = query
+        .with_block_range()
+        .with_non_empty_label()
+        .with_resolved_names();
+    if input.only_active {
+        q = q.with_not_expired();
+    };
 
-    let resolved_domains: Vec<Domain> = sqlx::query_as(&format!(
-        r#"
-        SELECT {DOMAIN_DEFAULT_SELECT_CLAUSE}
-        FROM {schema}.domain
-        WHERE 
-            (
-                FALSE
-                {resolved_to_clause}
-                {owned_by_clause}
-            )
-            AND {DOMAIN_BLOCK_RANGE_WHERE_CLAUSE}
-            AND {DOMAIN_NONEMPTY_LABEL_WHERE_CLAUSE}
-            {only_active_clause}
-        ORDER BY {sort} {order}
-        LIMIT 100
-        "#,
-    ))
-    .bind(address)
-    .fetch_all(pool)
-    .await?;
+    // Trick: in resolved_to and owned_by are not provided, binding still exists and `cond` will be false
+    let mut main_cond = Condition::any().add(Expr::cust("$1 <> $1"));
+    if input.resolved_to {
+        main_cond = main_cond.add(Expr::cust("resolved_address = $1"));
+    }
+    if input.owned_by {
+        main_cond = main_cond.add(Expr::cust("owner = $1"));
+        main_cond = main_cond.add(Expr::cust("wrapped_owner = $1"));
+    }
+    q = q.cond_where(main_cond);
 
-    Ok(resolved_domains)
+    input
+        .pagination
+        .add_to_query(q)
+        .context("adding pagination to query")
+        .map_err(|e| SubgraphReadError::Internal(e.to_string()))?;
+
+    let sql = q.to_string(PostgresQueryBuilder);
+    tracing::debug!(sql = sql, "build SQL query for 'find_resolved_addresses'");
+    let domains = sqlx::query_as(&sql)
+        .bind(hex(input.address))
+        .fetch_all(pool)
+        .await?;
+    Ok(domains)
 }
 
+// TODO: rewrite to sea_query generation
 #[instrument(
     name = "batch_search_addresses",
     skip(pool, addresses),
@@ -213,6 +268,7 @@ pub async fn batch_search_addresses(
     Ok(domains)
 }
 
+// TODO: rewrite to sea_query generation
 #[instrument(
     name = "batch_search_addresses_cached",
     skip(pool, addresses),
@@ -240,6 +296,7 @@ pub async fn batch_search_addresses_cached(
     Ok(domains)
 }
 
+// TODO: rewrite to sea_query generation
 #[instrument(
     name = "update_domain_name",
     skip(pool),

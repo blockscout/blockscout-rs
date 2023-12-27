@@ -1,6 +1,6 @@
-use std::collections::HashMap;
-
 use chrono::Utc;
+use sqlx::types::BigDecimal;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, Eq, sqlx::FromRow)]
 pub struct DetailedDomain {
@@ -18,6 +18,7 @@ pub struct DetailedDomain {
     pub owner: String,
     pub registrant: Option<String>,
     pub wrapped_owner: Option<String>,
+    pub created_at: BigDecimal,
     pub expiry_date: Option<chrono::DateTime<Utc>>,
     pub is_expired: bool,
     #[sqlx(default)]
@@ -31,6 +32,8 @@ pub struct Domain {
     pub resolved_address: Option<String>,
     pub registration_date: chrono::DateTime<Utc>,
     pub owner: String,
+    pub wrapped_owner: Option<String>,
+    pub created_at: BigDecimal,
     pub expiry_date: Option<chrono::DateTime<Utc>>,
     pub is_expired: bool,
 }

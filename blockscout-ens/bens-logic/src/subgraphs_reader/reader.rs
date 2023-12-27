@@ -1,9 +1,9 @@
 use super::{
     blockscout::{self, BlockscoutClient},
     domain_name::fix_domain_name,
+    pagination::{PaginatedList, Paginator},
     schema_selector::subgraph_deployments,
-    sql::{self},
-    BatchResolveAddressNamesInput, GetDomainHistoryInput, GetDomainInput, LookupAddressInput,
+    sql, BatchResolveAddressNamesInput, GetDomainHistoryInput, GetDomainInput, LookupAddressInput,
     LookupDomainInput,
 };
 use crate::{
@@ -15,14 +15,27 @@ use crate::{
     hash_name::{domain_id, hex},
 };
 use anyhow::Context;
-use ethers::types::{Bytes, TxHash};
+use ethers::types::{Bytes, TxHash, H160};
 use sqlx::postgres::PgPool;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
+    default::Default,
+    str::FromStr,
     sync::Arc,
 };
 use thiserror::Error;
 use tracing::instrument;
+
+lazy_static::lazy_static! {
+    static ref UNRESOLVABLE_ADDRESSES: Vec<H160> = {
+        vec![
+            "0x0000000000000000000000000000000000000000",
+        ]
+        .into_iter()
+        .map(|a| H160::from_str(a).unwrap())
+        .collect()
+    };
+}
 
 pub struct SubgraphReader {
     pool: Arc<PgPool>,
@@ -185,7 +198,6 @@ impl SubgraphReader {
                     &id,
                 )
             });
-
         Ok(domain)
     }
 
@@ -207,47 +219,64 @@ impl SubgraphReader {
         Ok(domain_events)
     }
 
-    pub async fn lookup_domain(
+    pub async fn lookup_domain_name(
         &self,
         input: LookupDomainInput,
-    ) -> Result<Vec<Domain>, SubgraphReadError> {
+    ) -> Result<PaginatedList<Domain>, SubgraphReadError> {
         let network = self
             .networks
             .get(&input.network_id)
             .ok_or_else(|| SubgraphReadError::NetworkNotFound(input.network_id))?;
         let subgraph = &network.default_subgraph;
-        let id = domain_id(&input.name, subgraph.settings.empty_label_hash.clone());
-        let domains = sql::find_domains(self.pool.as_ref(), &subgraph.schema_name, &id, &input)
-            .await?
-            .into_iter()
-            .map(|domain| {
-                patch_domain(
-                    self.pool.clone(),
-                    &subgraph.schema_name,
-                    domain,
-                    &input.name,
-                    &id,
-                )
-            })
-            .collect();
+        let id = input
+            .name
+            .as_ref()
+            .map(|name| domain_id(name, subgraph.settings.empty_label_hash.clone()));
 
-        Ok(domains)
+        let domains: Vec<Domain> = sql::find_domains(
+            self.pool.as_ref(),
+            &subgraph.schema_name,
+            id.as_deref(),
+            &input,
+        )
+        .await?
+        .into_iter()
+        .map(|domain| match (&id, &input.name) {
+            (Some(id), Some(name)) => {
+                patch_domain(self.pool.clone(), &subgraph.schema_name, domain, name, id)
+            }
+            _ => domain,
+        })
+        .collect();
+        let paginated = input
+            .pagination
+            .paginate_result(domains)
+            .map_err(|e| SubgraphReadError::Internal(format!("cannot paginate result: {e}")))?;
+        Ok(paginated)
     }
 
     pub async fn lookup_address(
         &self,
         input: LookupAddressInput,
-    ) -> Result<Vec<Domain>, SubgraphReadError> {
+    ) -> Result<PaginatedList<Domain>, SubgraphReadError> {
         let network = self
             .networks
             .get(&input.network_id)
             .ok_or_else(|| SubgraphReadError::NetworkNotFound(input.network_id))?;
-        sql::find_resolved_addresses(
+        if UNRESOLVABLE_ADDRESSES.contains(&input.address) {
+            return Ok(PaginatedList::empty());
+        }
+        let domains: Vec<Domain> = sql::find_resolved_addresses(
             self.pool.as_ref(),
             &network.default_subgraph.schema_name,
             &input,
         )
-        .await
+        .await?;
+        let paginated = input
+            .pagination
+            .paginate_result(domains)
+            .map_err(|e| SubgraphReadError::Internal(format!("cannot paginate result: {e}")))?;
+        Ok(paginated)
     }
 
     pub async fn batch_resolve_address_names(
@@ -260,7 +289,10 @@ impl SubgraphReader {
             .ok_or_else(|| SubgraphReadError::NetworkNotFound(input.network_id))?;
         let subgraph = &network.default_subgraph;
         // remove duplicates
-        let addresses: HashSet<String> = input.addresses.into_iter().map(hex).collect();
+        let addresses: Vec<String> = remove_addresses_from_batch(input.addresses)
+            .into_iter()
+            .map(hex)
+            .collect();
         let addreses_str: Vec<&str> = addresses.iter().map(String::as_str).collect::<Vec<_>>();
         let result = if subgraph.settings.use_cache {
             sql::batch_search_addresses_cached(&self.pool, &subgraph.schema_name, &addreses_str)
@@ -269,12 +301,22 @@ impl SubgraphReader {
             sql::batch_search_addresses(&self.pool, &subgraph.schema_name, &addreses_str).await?
         };
 
-        let address_to_name = result
+        let address_to_name: BTreeMap<String, String> = result
             .into_iter()
             .map(|d| (d.resolved_address, d.domain_name))
             .collect();
+        tracing::info!(address_to_name =? address_to_name, "{}/{} names found from batch request", address_to_name.len(), addresses.len());
         Ok(address_to_name)
     }
+}
+
+fn remove_addresses_from_batch(addresses: impl IntoIterator<Item = H160>) -> Vec<H160> {
+    // remove duplicates
+    let addresses: HashSet<H160> = addresses
+        .into_iter()
+        .filter(|a| !UNRESOLVABLE_ADDRESSES.contains(a))
+        .collect();
+    addresses.into_iter().collect()
 }
 
 #[instrument(name = "events_from_transactions", skip_all, fields(job_size = txns.len()), err, level = "info")]
@@ -464,15 +506,16 @@ mod tests {
             .expect("failed to init reader");
 
         let result = reader
-            .lookup_domain(LookupDomainInput {
+            .lookup_domain_name(LookupDomainInput {
                 network_id: DEFAULT_CHAIN_ID,
-                name: "vitalik.eth".to_string(),
+                name: Some("vitalik.eth".to_string()),
                 only_active: false,
-                sort: Default::default(),
-                order: Default::default(),
+                pagination: Default::default(),
             })
             .await
             .expect("failed to get vitalik domains");
+        assert_eq!(result.next_page_token, None);
+        let result = result.items;
         assert_eq!(
             vec![Some("vitalik.eth")],
             result.iter().map(|d| d.name.as_deref()).collect::<Vec<_>>(),
@@ -494,11 +537,12 @@ mod tests {
                 resolved_to: true,
                 owned_by: false,
                 only_active: false,
-                sort: Default::default(),
-                order: Default::default(),
+                pagination: Default::default(),
             })
             .await
             .expect("failed to get vitalik domains");
+        assert_eq!(result.next_page_token, None);
+        let result = result.items;
         assert_eq!(
             result.iter().map(|d| d.name.as_deref()).collect::<Vec<_>>(),
             vec![Some("vitalik.eth"), Some("sashaxyz.eth")]
@@ -511,11 +555,12 @@ mod tests {
                 resolved_to: false,
                 owned_by: true,
                 only_active: false,
-                sort: Default::default(),
-                order: Default::default(),
+                pagination: Default::default(),
             })
             .await
             .expect("failed to get vitalik domains");
+        assert_eq!(result.next_page_token, None);
+        let result = result.items;
         assert_eq!(
             result.iter().map(|d| d.name.as_deref()).collect::<Vec<_>>(),
             vec![Some("vitalik.eth")]
@@ -529,11 +574,12 @@ mod tests {
                 resolved_to: true,
                 owned_by: true,
                 only_active: false,
-                sort: Default::default(),
-                order: Default::default(),
+                pagination: Default::default(),
             })
             .await
             .expect("failed to get expired domains");
+        assert_eq!(result.next_page_token, None);
+        let result = result.items;
         // expired domain shoudn't be returned as resolved
         assert_eq!(
             result.iter().map(|d| d.name.as_deref()).collect::<Vec<_>>(),
@@ -547,11 +593,12 @@ mod tests {
                 resolved_to: true,
                 owned_by: true,
                 only_active: true,
-                sort: Default::default(),
-                order: Default::default(),
+                pagination: Default::default(),
             })
             .await
             .expect("failed to get expired domains");
+        assert_eq!(result.next_page_token, None);
+        let result = result.items;
         // expired domain shoudn't be returned as resolved
         assert_eq!(
             result.iter().map(|d| d.name.as_deref()).collect::<Vec<_>>(),
