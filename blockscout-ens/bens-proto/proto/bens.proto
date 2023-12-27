@@ -26,6 +26,8 @@ message Domain {
   optional Address resolved_address = 3;
   // The account that owns the domain
   Address owner = 4;
+  // Optinal. Owner of NameWrapper NFT
+  Address wrapped_owner = 7;
   // Optinal. RFC 3339 datetime of expiry date.
   string registration_date = 5;
   // Optinal. RFC 3339 datetime  of expiry date. None means never expires
@@ -45,6 +47,8 @@ message DetailedDomain {
   optional Address resolved_address = 5;
   // Optinal. The account that owns the ERC721 NFT for the domain
   optional Address registrant = 6;
+  // Optinal. Owner of NameWrapper NFT
+  Address wrapped_owner = 10;
   // Optinal. RFC 3339 datetime  of expiry date.
   string registration_date = 7;
   // Optinal. RFC 3339 datetime  of expiry date. None means never expires

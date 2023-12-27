@@ -327,6 +327,9 @@ definitions:
       registrant:
         $ref: '#/definitions/v1Address'
         title: Optinal. The account that owns the ERC721 NFT for the domain
+      wrapped_owner:
+        $ref: '#/definitions/v1Address'
+        title: Optinal. Owner of NameWrapper NFT
       registration_date:
         type: string
         description: Optinal. RFC 3339 datetime  of expiry date.
@@ -355,6 +358,9 @@ definitions:
       owner:
         $ref: '#/definitions/v1Address'
         title: The account that owns the domain
+      wrapped_owner:
+        $ref: '#/definitions/v1Address'
+        title: Optinal. Owner of NameWrapper NFT
       registration_date:
         type: string
         description: Optinal. RFC 3339 datetime of expiry date.

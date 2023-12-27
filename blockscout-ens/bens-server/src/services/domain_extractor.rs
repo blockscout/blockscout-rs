@@ -70,7 +70,7 @@ impl DomainsExtractor for DomainsExtractorService {
         let request = request.into_inner();
         let input =
             conversion::lookup_domain_name_from_inner(request).map_err(map_convertion_error)?;
-        let page_size = input.sorting.page_size;
+        let page_size = input.pagination.page_size;
         let result = self
             .subgraph_reader
             .lookup_domain_name(input)
@@ -94,7 +94,7 @@ impl DomainsExtractor for DomainsExtractorService {
     ) -> Result<tonic::Response<LookupAddressResponse>, tonic::Status> {
         let request = request.into_inner();
         let input = conversion::lookup_address_from_inner(request).map_err(map_convertion_error)?;
-        let page_size = input.sorting.page_size;
+        let page_size = input.pagination.page_size;
         let result = self
             .subgraph_reader
             .lookup_address(input)

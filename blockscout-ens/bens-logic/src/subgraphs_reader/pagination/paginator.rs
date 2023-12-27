@@ -1,13 +1,27 @@
-use super::DomainSortField;
-use crate::entity::subgraph::domain::Domain;
+use serde::Deserialize;
+use std::fmt::Display;
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct PaginatedList<I, P> {
-    pub items: Vec<I>,
-    pub next_page_token: Option<P>,
+pub trait Paginator<I> {
+    fn build_database_filter(&self) -> Result<Option<sea_query::SimpleExpr>, anyhow::Error>;
+
+    fn paginate_result(&self, items: Vec<I>) -> Result<PaginatedList<I>, anyhow::Error>;
 }
 
-impl<I, P> PaginatedList<I, P> {
+#[derive(Debug, Clone)]
+pub struct PaginationInput<S> {
+    pub sort: S,
+    pub order: Order,
+    pub page_size: u32,
+    pub page_token: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PaginatedList<I> {
+    pub items: Vec<I>,
+    pub next_page_token: Option<String>,
+}
+
+impl<I> PaginatedList<I> {
     pub fn empty() -> Self {
         Self {
             items: vec![],
@@ -22,7 +36,7 @@ macro_rules! paginate_list {
         let (items, next_page_token) = match $items.get(page_size) {
             Some(item) => (
                 $items[0..page_size].to_vec(),
-                Some(item.$order_field.clone()),
+                Some(item.$order_field.clone().to_string()),
             ),
             None => ($items, None),
         };
@@ -33,21 +47,33 @@ macro_rules! paginate_list {
         }
     }};
 }
+pub(crate) use paginate_list;
 
-pub fn paginate_domains(
-    items: Vec<Domain>,
-    sort: DomainSortField,
-    page_size: u32,
-) -> PaginatedList<Domain, String> {
-    match sort {
-        DomainSortField::RegistrationDate => {
-            let paginated = paginate_list!(items, page_size, created_at);
-            PaginatedList {
-                items: paginated.items,
-                next_page_token: paginated
-                    .next_page_token
-                    .map(|created_at| created_at.to_string()),
-            }
+#[derive(Debug, Clone, Copy, Deserialize, Default)]
+pub enum Order {
+    #[default]
+    Asc,
+    Desc,
+}
+
+impl Order {
+    pub fn is_desc(&self) -> bool {
+        matches!(self, Order::Desc)
+    }
+
+    pub fn to_database_field(&self) -> sea_query::Order {
+        match self {
+            Order::Asc => sea_query::Order::Asc,
+            Order::Desc => sea_query::Order::Desc,
+        }
+    }
+}
+
+impl Display for Order {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Order::Asc => write!(f, "asc"),
+            Order::Desc => write!(f, "desc"),
         }
     }
 }
@@ -85,7 +111,7 @@ mod tests {
                 2,
                 PaginatedList {
                     items: vec![A::new(1, 2), A::new(2, 3)],
-                    next_page_token: Some(3),
+                    next_page_token: Some("3".to_string()),
                 },
             ),
             (

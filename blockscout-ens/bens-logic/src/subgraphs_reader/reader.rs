@@ -1,11 +1,10 @@
 use super::{
     blockscout::{self, BlockscoutClient},
     domain_name::fix_domain_name,
-    pagination::paginate_domains,
+    pagination::{PaginatedList, Paginator},
     schema_selector::subgraph_deployments,
-    sql::{self},
-    BatchResolveAddressNamesInput, GetDomainHistoryInput, GetDomainInput, LookupAddressInput,
-    LookupDomainInput, PaginatedList,
+    sql, BatchResolveAddressNamesInput, GetDomainHistoryInput, GetDomainInput, LookupAddressInput,
+    LookupDomainInput,
 };
 use crate::{
     coin_type::coin_name,
@@ -223,7 +222,7 @@ impl SubgraphReader {
     pub async fn lookup_domain_name(
         &self,
         input: LookupDomainInput,
-    ) -> Result<PaginatedList<Domain, String>, SubgraphReadError> {
+    ) -> Result<PaginatedList<Domain>, SubgraphReadError> {
         let network = self
             .networks
             .get(&input.network_id)
@@ -249,14 +248,17 @@ impl SubgraphReader {
             _ => domain,
         })
         .collect();
-        let paginated = paginate_domains(domains, input.sorting.sort, input.sorting.page_size);
+        let paginated = input
+            .pagination
+            .paginate_result(domains)
+            .map_err(|e| SubgraphReadError::Internal(format!("cannot paginate result: {e}")))?;
         Ok(paginated)
     }
 
     pub async fn lookup_address(
         &self,
         input: LookupAddressInput,
-    ) -> Result<PaginatedList<Domain, String>, SubgraphReadError> {
+    ) -> Result<PaginatedList<Domain>, SubgraphReadError> {
         let network = self
             .networks
             .get(&input.network_id)
@@ -270,7 +272,10 @@ impl SubgraphReader {
             &input,
         )
         .await?;
-        let paginated = paginate_domains(domains, input.sorting.sort, input.sorting.page_size);
+        let paginated = input
+            .pagination
+            .paginate_result(domains)
+            .map_err(|e| SubgraphReadError::Internal(format!("cannot paginate result: {e}")))?;
         Ok(paginated)
     }
 
@@ -505,7 +510,7 @@ mod tests {
                 network_id: DEFAULT_CHAIN_ID,
                 name: Some("vitalik.eth".to_string()),
                 only_active: false,
-                sorting: Default::default(),
+                pagination: Default::default(),
             })
             .await
             .expect("failed to get vitalik domains");
@@ -532,7 +537,7 @@ mod tests {
                 resolved_to: true,
                 owned_by: false,
                 only_active: false,
-                sorting: Default::default(),
+                pagination: Default::default(),
             })
             .await
             .expect("failed to get vitalik domains");
@@ -550,7 +555,7 @@ mod tests {
                 resolved_to: false,
                 owned_by: true,
                 only_active: false,
-                sorting: Default::default(),
+                pagination: Default::default(),
             })
             .await
             .expect("failed to get vitalik domains");
@@ -569,7 +574,7 @@ mod tests {
                 resolved_to: true,
                 owned_by: true,
                 only_active: false,
-                sorting: Default::default(),
+                pagination: Default::default(),
             })
             .await
             .expect("failed to get expired domains");
@@ -588,7 +593,7 @@ mod tests {
                 resolved_to: true,
                 owned_by: true,
                 only_active: true,
-                sorting: Default::default(),
+                pagination: Default::default(),
             })
             .await
             .expect("failed to get expired domains");

@@ -6,7 +6,7 @@ use bens_logic::{
     entity::subgraph::domain::{DetailedDomain, Domain},
     hash_name::hex,
     subgraphs_reader::{
-        BatchResolveAddressNamesInput, DomainSortField, DomainSorting, GetDomainInput,
+        BatchResolveAddressNamesInput, DomainPaginationInput, DomainSortField, GetDomainInput,
         LookupAddressInput, LookupDomainInput,
     },
 };
@@ -34,7 +34,7 @@ pub fn lookup_domain_name_from_inner(
         network_id: inner.chain_id,
         name: inner.name,
         only_active: inner.only_active,
-        sorting: DomainSorting {
+        pagination: DomainPaginationInput {
             sort,
             order,
             page_size: page_size_from_inner(inner.page_size),
@@ -55,7 +55,7 @@ pub fn lookup_address_from_inner(
         resolved_to: inner.resolved_to,
         owned_by: inner.owned_by,
         only_active: inner.only_active,
-        sorting: DomainSorting {
+        pagination: DomainPaginationInput {
             sort,
             order,
             page_size: page_size_from_inner(inner.page_size),
@@ -94,6 +94,9 @@ pub fn detailed_domain_from_logic(
     let resolved_address = d.resolved_address.map(|resolved_address| proto::Address {
         hash: resolved_address,
     });
+    let wrapped_owner = d.wrapped_owner.map(|wrapped_owner| proto::Address {
+        hash: wrapped_owner,
+    });
     let registrant = d
         .registrant
         .map(|registrant| proto::Address { hash: registrant });
@@ -104,6 +107,7 @@ pub fn detailed_domain_from_logic(
         owner,
         resolved_address,
         registrant,
+        wrapped_owner,
         expiry_date: d.expiry_date.map(date_from_logic),
         registration_date: date_from_logic(d.registration_date),
         other_addresses: d.other_addresses.0.into_iter().collect(),
@@ -115,10 +119,14 @@ pub fn domain_from_logic(d: Domain) -> Result<proto::Domain, ConversionError> {
     let resolved_address = d.resolved_address.map(|resolved_address| proto::Address {
         hash: resolved_address,
     });
+    let wrapped_owner = d.wrapped_owner.map(|wrapped_owner| proto::Address {
+        hash: wrapped_owner,
+    });
     Ok(proto::Domain {
         id: d.id,
         name: d.name.unwrap_or_default(),
         owner,
+        wrapped_owner,
         resolved_address,
         expiry_date: d.expiry_date.map(date_from_logic),
         registration_date: date_from_logic(d.registration_date),

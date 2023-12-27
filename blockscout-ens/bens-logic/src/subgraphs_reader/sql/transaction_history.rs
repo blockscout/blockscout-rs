@@ -1,6 +1,6 @@
 use crate::{
     entity::subgraph::domain_event::DomainEventTransaction,
-    subgraphs_reader::{EventSort, GetDomainHistoryInput, Order, SubgraphReadError},
+    subgraphs_reader::{pagination::Order, EventSort, GetDomainHistoryInput, SubgraphReadError},
 };
 use lazy_static::lazy_static;
 use sqlx::postgres::PgPool;

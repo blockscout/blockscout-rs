@@ -6,6 +6,6 @@ mod schema_selector;
 mod sql;
 mod types;
 
-pub use pagination::PaginatedList;
+pub use pagination::*;
 pub use reader::{NetworkInfo, SubgraphReadError, SubgraphReader, SubgraphSettings};
 pub use types::*;

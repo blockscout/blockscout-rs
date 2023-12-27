@@ -1,3 +1,4 @@
+use super::pagination::{DomainPaginationInput, Order};
 use ethers::types::Address;
 use sea_query::{Alias, IntoIden};
 use serde::Deserialize;
@@ -23,7 +24,7 @@ pub struct LookupDomainInput {
     pub network_id: i64,
     pub name: Option<String>,
     pub only_active: bool,
-    pub sorting: DomainSorting,
+    pub pagination: DomainPaginationInput,
 }
 
 #[derive(Debug, Clone)]
@@ -33,18 +34,10 @@ pub struct LookupAddressInput {
     pub resolved_to: bool,
     pub owned_by: bool,
     pub only_active: bool,
-    pub sorting: DomainSorting,
+    pub pagination: DomainPaginationInput,
 }
 
-#[derive(Debug, Clone)]
-pub struct DomainSorting {
-    pub sort: DomainSortField,
-    pub order: Order,
-    pub page_size: u32,
-    pub page_token: Option<String>,
-}
-
-impl Default for DomainSorting {
+impl Default for DomainPaginationInput {
     fn default() -> Self {
         Self {
             sort: Default::default(),
@@ -86,35 +79,6 @@ impl Display for EventSort {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             EventSort::BlockNumber => write!(f, "block_number"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, Deserialize, Default)]
-pub enum Order {
-    #[default]
-    Asc,
-    Desc,
-}
-
-impl Order {
-    pub fn is_desc(&self) -> bool {
-        matches!(self, Order::Desc)
-    }
-
-    pub fn to_database_field(&self) -> sea_query::Order {
-        match self {
-            Order::Asc => sea_query::Order::Asc,
-            Order::Desc => sea_query::Order::Desc,
-        }
-    }
-}
-
-impl Display for Order {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Order::Asc => write!(f, "asc"),
-            Order::Desc => write!(f, "desc"),
         }
     }
 }

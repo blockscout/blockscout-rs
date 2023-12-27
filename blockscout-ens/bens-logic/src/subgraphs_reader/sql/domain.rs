@@ -2,7 +2,7 @@ use crate::{
     entity::subgraph::domain::{DetailedDomain, Domain, DomainWithAddress},
     hash_name::hex,
     subgraphs_reader::{
-        DomainSorting, GetDomainInput, LookupAddressInput, LookupDomainInput, Order,
+        pagination::Paginator, GetDomainInput, LookupAddressInput, LookupDomainInput,
         SubgraphReadError,
     },
 };
@@ -87,6 +87,7 @@ resolved_address,
 created_at,
 to_timestamp(created_at) as registration_date,
 owner,
+wrapped_owner,
 to_timestamp(expiry_date) as expiry_date,
 COALESCE(to_timestamp(expiry_date) < now(), false) AS is_expired
 "#;
@@ -162,15 +163,19 @@ pub async fn find_domains(
     id: Option<&str>,
     input: &LookupDomainInput,
 ) -> Result<Vec<Domain>, SubgraphReadError> {
+    let maybe_page_filter = input
+        .pagination
+        .build_database_filter()
+        .map_err(|e| SubgraphReadError::Internal(e.to_string()))?;
     let mut query = sql_gen::domain_select(schema);
     let mut q = query
         .with_block_range()
-        .and_where_option(maybe_domain_page_filter(&input.sorting))
+        .and_where_option(maybe_page_filter)
         .order_by(
-            input.sorting.sort.to_database_field(),
-            input.sorting.order.to_database_field(),
+            input.pagination.sort.to_database_field(),
+            input.pagination.order.to_database_field(),
         )
-        .limit(input.sorting.page_size as u64 + 1);
+        .limit(input.pagination.page_size as u64 + 1);
     if input.only_active {
         q = q.with_not_expired();
     };
@@ -200,32 +205,36 @@ pub async fn find_resolved_addresses(
     schema: &str,
     input: &LookupAddressInput,
 ) -> Result<Vec<Domain>, SubgraphReadError> {
+    let maybe_page_filter = input
+        .pagination
+        .build_database_filter()
+        .map_err(|e| SubgraphReadError::Internal(e.to_string()))?;
     let mut query = sql_gen::domain_select(schema);
     let mut q = query
         .with_block_range()
         .with_non_empty_label()
         .with_resolved_names()
-        .and_where_option(maybe_domain_page_filter(&input.sorting))
+        .and_where_option(maybe_page_filter)
         .order_by(
-            input.sorting.sort.to_database_field(),
-            input.sorting.order.to_database_field(),
+            input.pagination.sort.to_database_field(),
+            input.pagination.order.to_database_field(),
         )
-        .limit(input.sorting.page_size as u64 + 1);
+        .limit(input.pagination.page_size as u64 + 1);
     if input.only_active {
         q = q.with_not_expired();
     };
 
     // Trick: in resolved_to and owned_by are not provided, binding still exists and `cond` will be false
-    let mut cond = Condition::any().add(Expr::cust("$1 <> $1"));
+    let mut main_cond = Condition::any().add(Expr::cust("$1 <> $1"));
     if input.resolved_to {
-        cond = cond.add(Expr::cust("resolved_address = $1"));
+        main_cond = main_cond.add(Expr::cust("resolved_address = $1"));
     }
     if input.owned_by {
-        cond = cond.add(Expr::cust("owner = $1"));
-        cond = cond.add(Expr::cust("wrapped_owner = $1"));
+        main_cond = main_cond.add(Expr::cust("owner = $1"));
+        main_cond = main_cond.add(Expr::cust("wrapped_owner = $1"));
     }
 
-    q = q.cond_where(cond);
+    q = q.cond_where(main_cond);
 
     let sql = q.to_string(PostgresQueryBuilder);
     tracing::debug!(sql = sql, "build SQL query for 'find_resolved_addresses'");
@@ -318,14 +327,4 @@ pub async fn update_domain_name(
     .execute(pool)
     .await?;
     Ok(result)
-}
-
-fn maybe_domain_page_filter(ordering: &DomainSorting) -> Option<sea_query::SimpleExpr> {
-    ordering.page_token.as_ref().map(|page_token| {
-        let col = ordering.sort.to_database_field();
-        match ordering.order {
-            Order::Asc => Expr::col(col).gt(page_token),
-            Order::Desc => Expr::col(col).lt(page_token),
-        }
-    })
 }

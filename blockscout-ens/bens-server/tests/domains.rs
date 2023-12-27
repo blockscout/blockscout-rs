@@ -80,6 +80,7 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
             "registrant": {
                 "hash": "0x220866b1a2219f40e72f5c628b65d54268ca3a9d",
             },
+            "wrapped_owner": null,
             "registration_date": "2017-06-18T08:39:14.000Z",
             "resolved_address": {
                 "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
@@ -157,7 +158,7 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
     )
     .await;
 
-    // all domains lookup
+    // all domains lookup + check pagination
     let expected_domains = vec![
         json!({
             "expiry_date": "2024-03-23T22:02:21.000Z",
@@ -166,6 +167,7 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
             "owner": {
                 "hash": "0x66a6f7744ce4dea450910b81a7168588f992eafb",
             },
+            "wrapped_owner": null,
             "registration_date": "2021-12-24T10:23:57.000Z",
             "resolved_address": {
                 "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
@@ -176,6 +178,9 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
             "id": "0x5d438d292de31e08576d5bcd8a93aa41b401b9d9aeaba57da1a32c003e5fd5f5",
             "name": "wa🇬🇲i.eth",
             "owner": {
+                "hash": "0x9c996076a85b46061d9a70ff81f013853a86b619",
+            },
+            "wrapped_owner": {
                 "hash": "0x9c996076a85b46061d9a70ff81f013853a86b619",
             },
             "registration_date": "2021-11-12T11:36:46.000Z",
@@ -190,18 +195,42 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
             "owner": {
                 "hash": "0xbd6bbe64bf841b81fc5a6e2b760029e316f2783b",
             },
+            "wrapped_owner": null,
             "registration_date": "2019-10-24T07:26:47.000Z",
             "resolved_address": {
                 "hash": "0xeefb13c7d42efcc655e528da6d6f7bbcf9a2251d",
             },
         }),
+        json!({
+            "expiry_date": null,
+            "id": "0x6db3aa7fbaf005b22a12dd698aa41e3456ea93d2ab312796ee29fca980c99dcd",
+            "name": "biglobe.eth",
+            "owner": {
+                "hash": "0x916a3bc6f0306426adaaa101fe28fea7a5f69b06",
+            },
+            "registration_date": "2017-07-08T02:11:54.000Z",
+            "resolved_address": null,
+            "wrapped_owner": null,
+        }),
     ];
+    let page_token = "1571902007".to_string();
     expect_list_results(
         &base,
         "/api/v1/1/domains:lookup",
-        HashMap::from_iter([("page_size".into(), "3".into())]),
-        expected_domains,
-        Some((3, Some("1499479914".into()))),
+        HashMap::from_iter([("page_size".into(), "2".into())]),
+        expected_domains[0..2].to_vec(),
+        Some((2, Some(page_token.clone()))),
+    )
+    .await;
+    expect_list_results(
+        &base,
+        "/api/v1/1/domains:lookup",
+        HashMap::from_iter([
+            ("page_size".into(), "2".into()),
+            ("page_token".into(), page_token.to_string()),
+        ]),
+        expected_domains[2..4].to_vec(),
+        Some((2, Some("1499286330".into()))),
     )
     .await;
 
@@ -216,6 +245,7 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
             "owner": {
                 "hash": "0x66a6f7744ce4dea450910b81a7168588f992eafb"
             },
+            "wrapped_owner": null,
             "registration_date": "2021-12-24T10:23:57.000Z",
             "expiry_date": "2024-03-23T22:02:21.000Z"
         }
@@ -240,6 +270,7 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
             "owner": {
                 "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045"
             },
+            "wrapped_owner": null,
             "registration_date": "2017-06-18T08:39:14.000Z",
             "expiry_date": "2032-08-01T21:50:24.000Z"
         }
@@ -345,6 +376,7 @@ async fn basic_gno_domain_extracting_works(pool: PgPool) {
             "owner": {
                 "hash": "0xc0de20a37e2dac848f81a93bd85fe4acdde7c0de",
             },
+            "wrapped_owner": null,
             "registrant":{
                 "hash": "0xc0de20a37e2dac848f81a93bd85fe4acdde7c0de",
             },
