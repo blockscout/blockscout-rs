@@ -401,13 +401,17 @@ async fn expect_list_results(
     let mut expected: HashMap<String, Value> =
         HashMap::from_iter([("items".to_owned(), json!(expected_items))]);
     if let Some((page_size, page_token)) = maybe_expected_paginated {
-        expected.insert(
-            "next_page_params".to_owned(),
-            json!({
-                "page_token": page_token,
-                "page_size": page_size,
-            }),
-        );
+        if let Some(page_token) = page_token {
+            expected.insert(
+                "next_page_params".to_owned(),
+                json!({
+                    "page_token": page_token,
+                    "page_size": page_size,
+                }),
+            );
+        } else {
+            expected.insert("next_page_params".to_owned(), json!(null));
+        }
     }
     assert_eq!(request, json!(expected));
 }
