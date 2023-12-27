@@ -156,8 +156,8 @@ impl UserOps for UserOpsService {
 
         let res = ListAccountsResponse {
             items: accounts.into_iter().map(|acc| acc.into()).collect(),
-            next_page_params: Some(Pagination {
-                page_token: next_page_token.map(|a| to_checksum(&a, None)),
+            next_page_params: next_page_token.map(|a| Pagination {
+                page_token: to_checksum(&a, None),
                 page_size,
             }),
         };
@@ -193,9 +193,8 @@ impl UserOps for UserOpsService {
 
         let res = ListBundlesResponse {
             items: bundles.into_iter().map(|b| b.into()).collect(),
-            next_page_params: Some(Pagination {
-                page_token: next_page_token
-                    .map(|(b, t, i)| format!("{},{},{}", b, t.encode_hex(), i)),
+            next_page_params: next_page_token.map(|(b, t, i)| Pagination {
+                page_token: format!("{},{},{}", b, t.encode_hex(), i),
                 page_size,
             }),
         };
@@ -242,8 +241,8 @@ impl UserOps for UserOpsService {
 
         let res = ListUserOpsResponse {
             items: ops.into_iter().map(|acc| acc.into()).collect(),
-            next_page_params: Some(Pagination {
-                page_token: next_page_token.map(|(b, o)| format!("{},{}", b, o.encode_hex())),
+            next_page_params: next_page_token.map(|(b, o)| Pagination {
+                page_token: format!("{},{}", b, o.encode_hex()),
                 page_size,
             }),
         };
@@ -271,9 +270,8 @@ impl UserOps for UserOpsService {
 
         let res = ListBundlersResponse {
             items: bundlers.into_iter().map(|b| b.into()).collect(),
-            next_page_params: Some(Pagination {
-                page_token: next_page_token
-                    .map(|(t, f)| format!("{},{}", t, to_checksum(&f, None))),
+            next_page_params: next_page_token.map(|(t, f)| Pagination {
+                page_token: format!("{},{}", t, to_checksum(&f, None)),
                 page_size,
             }),
         };
@@ -301,9 +299,8 @@ impl UserOps for UserOpsService {
 
         let res = ListPaymastersResponse {
             items: paymasters.into_iter().map(|b| b.into()).collect(),
-            next_page_params: Some(Pagination {
-                page_token: next_page_token
-                    .map(|(t, f)| format!("{},{}", t, to_checksum(&f, None))),
+            next_page_params: next_page_token.map(|(t, f)| Pagination {
+                page_token: format!("{},{}", t, to_checksum(&f, None)),
                 page_size,
             }),
         };
@@ -331,9 +328,8 @@ impl UserOps for UserOpsService {
 
         let res = ListFactoriesResponse {
             items: factories.into_iter().map(|b| b.into()).collect(),
-            next_page_params: Some(Pagination {
-                page_token: next_page_token
-                    .map(|(t, f)| format!("{},{}", t, to_checksum(&f, None))),
+            next_page_params: next_page_token.map(|(t, f)| Pagination {
+                page_token: format!("{},{}", t, to_checksum(&f, None)),
                 page_size,
             }),
         };

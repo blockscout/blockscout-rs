@@ -20,7 +20,7 @@ service UserOpsService {
 }
 
 message Pagination {
-  optional string page_token = 1;
+  string page_token = 1;
   uint32 page_size = 2;
 }
 
