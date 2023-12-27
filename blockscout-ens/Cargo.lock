@@ -609,7 +609,6 @@ dependencies = [
  "reqwest",
  "reqwest-middleware",
  "reqwest-retry",
- "sea-orm",
  "sea-query",
  "serde",
  "serde_json",
