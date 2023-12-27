@@ -165,13 +165,7 @@ pub async fn find_domains(
     input: &LookupDomainInput,
 ) -> Result<Vec<Domain>, SubgraphReadError> {
     let mut query = sql_gen::domain_select(schema);
-    let mut q = query
-        .with_block_range()
-        .order_by(
-            input.pagination.sort.to_database_field(),
-            input.pagination.order.to_database_field(),
-        )
-        .limit(input.pagination.page_size as u64 + 1);
+    let mut q = query.with_block_range();
     if input.only_active {
         q = q.with_not_expired();
     };
@@ -210,12 +204,7 @@ pub async fn find_resolved_addresses(
     let mut q = query
         .with_block_range()
         .with_non_empty_label()
-        .with_resolved_names()
-        .order_by(
-            input.pagination.sort.to_database_field(),
-            input.pagination.order.to_database_field(),
-        )
-        .limit(input.pagination.page_size as u64 + 1);
+        .with_resolved_names();
     if input.only_active {
         q = q.with_not_expired();
     };
