@@ -12,7 +12,7 @@ bens-logic = { path = "../bens-logic" }
 actix-web = "4.2"
 anyhow = "1.0"
 blockscout-display-bytes = "1.0"
-blockscout-service-launcher = { git = "https://github.com/blockscout/blockscout-rs", rev = "22ba428", features = ["database-0_12"] }
+blockscout-service-launcher = { git = "https://github.com/blockscout/blockscout-rs", rev = "bad8909", features = ["database-0_12"] }
 config = "0.13"
 ethers = "2.0.0"
 serde = "1.0"
@@ -38,6 +38,6 @@ features = [
 
 [dev-dependencies]
 bens-logic = { path = "../bens-logic", features = ["test-utils"] }
-blockscout-service-launcher = { git = "https://github.com/blockscout/blockscout-rs", rev = "22ba428", features = [ "database-0_12", "test-server" ] }
+blockscout-service-launcher = { git = "https://github.com/blockscout/blockscout-rs", rev = "bad8909", features = [ "database-0_12", "test-server" ] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 pretty_assertions = "1.4.0"
