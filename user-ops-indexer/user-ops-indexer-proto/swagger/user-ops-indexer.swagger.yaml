@@ -412,8 +412,8 @@ definitions:
         type: array
         items:
           $ref: '#/definitions/v1Account'
-      next_page_token:
-        type: string
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
   v1ListBundlersResponse:
     type: object
     properties:
@@ -421,8 +421,8 @@ definitions:
         type: array
         items:
           $ref: '#/definitions/v1Bundler'
-      next_page_token:
-        type: string
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
   v1ListBundlesResponse:
     type: object
     properties:
@@ -430,8 +430,8 @@ definitions:
         type: array
         items:
           $ref: '#/definitions/v1Bundle'
-      next_page_token:
-        type: string
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
   v1ListFactoriesResponse:
     type: object
     properties:
@@ -439,8 +439,8 @@ definitions:
         type: array
         items:
           $ref: '#/definitions/v1Factory'
-      next_page_token:
-        type: string
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
   v1ListPaymastersResponse:
     type: object
     properties:
@@ -448,8 +448,8 @@ definitions:
         type: array
         items:
           $ref: '#/definitions/v1Paymaster'
-      next_page_token:
-        type: string
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
   v1ListUserOp:
     type: object
     properties:
@@ -476,8 +476,16 @@ definitions:
         type: array
         items:
           $ref: '#/definitions/v1ListUserOp'
-      next_page_token:
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
+  v1Pagination:
+    type: object
+    properties:
+      page_token:
         type: string
+      page_size:
+        type: integer
+        format: int64
   v1Paymaster:
     type: object
     properties:
