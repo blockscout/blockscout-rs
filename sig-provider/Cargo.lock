@@ -875,29 +875,6 @@ dependencies = [
 
 [[package]]
 name = "blockscout-service-launcher"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "662512331ca49faf635aab7d25d29b2e66c020a807354d8cbd3d8a921600aa24"
-dependencies = [
- "actix-web",
- "actix-web-prom",
- "anyhow",
- "config",
- "futures",
- "opentelemetry 0.19.0",
- "opentelemetry-jaeger 0.18.0",
- "prometheus",
- "reqwest",
- "serde",
- "tokio",
- "tonic",
- "tracing",
- "tracing-opentelemetry 0.19.0",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "blockscout-service-launcher"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "545355abddfc1617d40529141b7e849feed732328ccf54850f691dc31cf24856"
@@ -913,6 +890,7 @@ dependencies = [
  "opentelemetry 0.19.0",
  "opentelemetry-jaeger 0.18.0",
  "prometheus",
+ "reqwest",
  "serde",
  "serde_json",
  "tokio",
@@ -3705,8 +3683,7 @@ dependencies = [
  "actix-web-prom",
  "anyhow",
  "async-trait",
- "blockscout-service-launcher 0.10.0",
- "blockscout-service-launcher 0.9.0",
+ "blockscout-service-launcher",
  "bytes",
  "config",
  "ethabi",
