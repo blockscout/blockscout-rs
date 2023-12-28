@@ -13,7 +13,6 @@ use crate::{
 use smart_contract_verifier::{sourcify as sc_sourcify, sourcify::Error, SourcifyApiClient};
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
-use uuid::Uuid;
 
 pub struct SourcifyVerifierService {
     client: Arc<SourcifyApiClient>,
@@ -56,16 +55,13 @@ impl SourcifyVerifier for SourcifyVerifierService {
     ) -> Result<Response<VerifyResponse>, Status> {
         let request: VerifySourcifyRequestWrapper = request.into_inner().into();
 
-        let request_id = blockscout_display_bytes::Bytes::from(Uuid::new_v4().as_bytes());
         tracing::info!(
-            request_id = request_id.to_string(),
             chain_id = request.chain,
             contract_address = request.address,
             "Sourcify verification request received"
         );
 
         tracing::debug!(
-            request_id = request_id.to_string(),
             files = ?request.files,
             chosen_contract = request.chosen_contract,
             "Request details"
@@ -92,9 +88,7 @@ impl SourcifyVerifier for SourcifyVerifierService {
     ) -> Result<Response<VerifyResponse>, Status> {
         let request: VerifyFromEtherscanSourcifyRequestWrapper = request.into_inner().into();
 
-        let request_id = blockscout_display_bytes::Bytes::from(Uuid::new_v4().as_bytes());
         tracing::info!(
-            request_id = request_id.to_string(),
             chain_id = request.chain,
             contract_address = request.address,
             "Sourcify verification via etherscan request received"

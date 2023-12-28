@@ -7,3 +7,6 @@ members = [
     "smart-contract-verifier-server",
     "sig-provider-extension",
 ]
+
+[workspace.dependencies]
+blockscout-service-launcher = "0.10.0"
