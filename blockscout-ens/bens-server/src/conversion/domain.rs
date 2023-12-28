@@ -133,6 +133,16 @@ pub fn domain_from_logic(d: Domain) -> Result<proto::Domain, ConversionError> {
     })
 }
 
+pub fn pagination_from_logic(
+    page_token: Option<String>,
+    page_size: u32,
+) -> Option<proto::Pagination> {
+    page_token.map(|page_token| proto::Pagination {
+        page_size,
+        page_token,
+    })
+}
+
 fn address_from_str_inner(addr: &str) -> Result<Address, ConversionError> {
     Address::from_str(addr)
         .map_err(|e| ConversionError::UserRequest(format!("invalid address '{addr}': {e}")))
