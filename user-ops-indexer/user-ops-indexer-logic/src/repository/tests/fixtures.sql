@@ -8,7 +8,9 @@ SELECT true,
        '\x',
        n,
        '\x',
-       '2024-01-01 00:00:00'::timestamp + interval '12 seconds' * n, now(), now()
+       '2024-01-01 00:00:00'::timestamp + interval '12 seconds' * n,
+       now(),
+       now()
 FROM generate_series(0, 999) n;
 
 INSERT INTO user_operations (hash, sender, nonce, call_data, call_gas_limit, verification_gas_limit,
@@ -74,9 +76,9 @@ SET paymaster    = '\x00000000000000000000000000000000000000e2',
     sponsor_type = 'paymaster_sponsor'
 WHERE block_number = 21;
 
-INSERT INTO logs (data, index, type, first_topic, second_topic, third_topic, fourth_topic, inserted_at, updated_at,
+INSERT INTO logs (data, index, first_topic, second_topic, third_topic, fourth_topic, inserted_at, updated_at,
                   address_hash, transaction_hash, block_hash, block_number)
-VALUES ('\x', 0, NULL, '0x49628fd1471006c1482da88028e9ce4dbb080b815c9b0344d39e5a8e6ec1419f', NULL, NULL, NULL, now(),
+VALUES ('\x', 0, '\x49628fd1471006c1482da88028e9ce4dbb080b815c9b0344d39e5a8e6ec1419f', NULL, NULL, NULL, now(),
         now(), '\x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789',
         '\x000000000000000000000000000000000000000000000000000000000000ffff',
         '\x000000000000000000000000000000000000000000000000000000000000ff00', 123);

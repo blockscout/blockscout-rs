@@ -198,19 +198,24 @@ pub async fn find_unprocessed_logs_tx_hashes(
 SELECT DISTINCT logs.transaction_hash as transaction_hash
 FROM logs
          JOIN blocks ON logs.block_hash = blocks.hash AND blocks.consensus
-         LEFT JOIN user_operations ON logs.second_topic = '0x' || ENCODE(user_operations.hash, 'hex')
+         LEFT JOIN user_operations ON logs.second_topic = user_operations.hash
 WHERE logs.address_hash    = $1
-  AND logs.first_topic     = '0x' || ENCODE($2, 'hex')
+  AND logs.first_topic     = $2
   AND logs.block_number    >= $3
   AND logs.block_number    <= $4
   AND user_operations.hash IS NULL"#,
-        [addr.as_bytes().into(), topic.as_bytes().into(), from_block.into(), to_block.into()],
+        [
+            addr.as_bytes().into(),
+            topic.as_bytes().into(),
+            from_block.into(),
+            to_block.into(),
+        ],
     ))
-        .all(db)
-        .await?
-        .into_iter()
-        .map(|tx| H256::from_slice(&tx.transaction_hash))
-        .collect();
+    .all(db)
+    .await?
+    .into_iter()
+    .map(|tx| H256::from_slice(&tx.transaction_hash))
+    .collect();
 
     Ok(tx_hashes)
 }
