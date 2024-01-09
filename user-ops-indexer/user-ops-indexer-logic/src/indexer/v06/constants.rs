@@ -13,7 +13,7 @@ lazy_static! {
 abigen!(IEntrypointV06, "./src/indexer/v06/abi.json");
 
 pub fn matches_entrypoint_event<T: EthEvent>(log: &Log) -> bool {
-    log.address == *ENTRYPOINT_V06 && log.topics.get(0) == Some(&T::signature())
+    log.address == *ENTRYPOINT_V06 && log.topics.first() == Some(&T::signature())
 }
 
 pub fn parse_event<T: EthEvent>(log: &Log) -> Result<T, Error> {
