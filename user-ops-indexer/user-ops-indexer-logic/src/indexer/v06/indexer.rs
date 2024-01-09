@@ -60,7 +60,7 @@ impl<'a, C: PubsubClient> IndexerV06<'a, C> {
                     .subscribe_logs(&filter)
                     .await?
                     .filter_map(|log| {
-                        future::ready(if log.removed == Some(true) {
+                        future::ready(if log.removed != Some(true) {
                             log.transaction_hash
                         } else {
                             None

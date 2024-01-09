@@ -8,7 +8,7 @@ pub async fn run(
 ) -> Result<(), anyhow::Error> {
     tracing::info!("connecting to rpc");
 
-    let ws_client = Ws::connect_with_reconnects(settings.indexer.rpc_url, 3).await?;
+    let ws_client = Ws::connect_with_reconnects(settings.indexer.rpc_url, 20).await?;
     let client = Provider::new(ws_client);
 
     if settings.indexer.entrypoints.v06 {
