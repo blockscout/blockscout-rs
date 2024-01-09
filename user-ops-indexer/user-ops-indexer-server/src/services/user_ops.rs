@@ -13,10 +13,10 @@ use user_ops_indexer_proto::blockscout::user_ops_indexer::v1::{
     GetPaymasterRequest, GetUserOpRequest, ListAccountsRequest, ListAccountsResponse,
     ListBundlersRequest, ListBundlersResponse, ListBundlesRequest, ListBundlesResponse,
     ListFactoriesRequest, ListFactoriesResponse, ListPaymastersRequest, ListPaymastersResponse,
-    ListUserOpsRequest, ListUserOpsResponse, Paymaster, UserOp,
+    ListUserOpsRequest, ListUserOpsResponse, Pagination, Paymaster, UserOp,
 };
 
-const DEFAULT_PAGE_SIZE: u32 = 10;
+const DEFAULT_PAGE_SIZE: u32 = 50;
 
 pub struct UserOpsService {
     db: DatabaseConnection,
@@ -29,9 +29,9 @@ impl UserOpsService {
         Self { db, settings }
     }
 
-    fn normalize_page_size(&self, size: Option<u32>) -> u64 {
+    fn normalize_page_size(&self, size: Option<u32>) -> u32 {
         size.unwrap_or(DEFAULT_PAGE_SIZE)
-            .clamp(1, self.settings.max_page_size) as u64
+            .clamp(1, self.settings.max_page_size)
     }
 }
 
@@ -142,17 +142,24 @@ impl UserOps for UserOpsService {
         let page_token = inner.page_token.map(parse_filter).transpose()?;
         let page_size = self.normalize_page_size(inner.page_size);
 
-        let (accounts, next_page_token) =
-            repository::account::list_accounts(&self.db, factory_filter, page_token, page_size)
-                .await
-                .map_err(|err| {
-                    tracing::error!(error = ?err, "failed to query accounts");
-                    Status::internal("failed to query accounts")
-                })?;
+        let (accounts, next_page_token) = repository::account::list_accounts(
+            &self.db,
+            factory_filter,
+            page_token,
+            page_size as u64,
+        )
+        .await
+        .map_err(|err| {
+            tracing::error!(error = ?err, "failed to query accounts");
+            Status::internal("failed to query accounts")
+        })?;
 
         let res = ListAccountsResponse {
             items: accounts.into_iter().map(|acc| acc.into()).collect(),
-            next_page_token: next_page_token.map(|a| to_checksum(&a, None)),
+            next_page_params: next_page_token.map(|a| Pagination {
+                page_token: to_checksum(&a, None),
+                page_size,
+            }),
         };
 
         Ok(Response::new(res))
@@ -176,7 +183,7 @@ impl UserOps for UserOpsService {
             bundler_filter,
             entry_point_filter,
             page_token,
-            page_size,
+            page_size as u64,
         )
         .await
         .map_err(|err| {
@@ -186,8 +193,10 @@ impl UserOps for UserOpsService {
 
         let res = ListBundlesResponse {
             items: bundles.into_iter().map(|b| b.into()).collect(),
-            next_page_token: next_page_token
-                .map(|(b, t, i)| format!("{},{},{}", b, t.encode_hex(), i)),
+            next_page_params: next_page_token.map(|(b, t, i)| Pagination {
+                page_token: format!("{},{},{}", b, t.encode_hex(), i),
+                page_size,
+            }),
         };
 
         Ok(Response::new(res))
@@ -222,7 +231,7 @@ impl UserOps for UserOpsService {
             bundle_index_filter,
             block_number_filter,
             page_token,
-            page_size,
+            page_size as u64,
         )
         .await
         .map_err(|err| {
@@ -232,7 +241,10 @@ impl UserOps for UserOpsService {
 
         let res = ListUserOpsResponse {
             items: ops.into_iter().map(|acc| acc.into()).collect(),
-            next_page_token: next_page_token.map(|(b, o)| format!("{},{}", b, o.encode_hex())),
+            next_page_params: next_page_token.map(|(b, o)| Pagination {
+                page_token: format!("{},{}", b, o.encode_hex()),
+                page_size,
+            }),
         };
 
         Ok(Response::new(res))
@@ -249,7 +261,7 @@ impl UserOps for UserOpsService {
         let page_size = self.normalize_page_size(inner.page_size);
 
         let (bundlers, next_page_token) =
-            repository::bundler::list_bundlers(&self.db, page_token, page_size)
+            repository::bundler::list_bundlers(&self.db, page_token, page_size as u64)
                 .await
                 .map_err(|err| {
                     tracing::error!(error = ?err, "failed to query bundlers");
@@ -258,8 +270,10 @@ impl UserOps for UserOpsService {
 
         let res = ListBundlersResponse {
             items: bundlers.into_iter().map(|b| b.into()).collect(),
-            next_page_token: next_page_token
-                .map(|(t, f)| format!("{},{}", t, to_checksum(&f, None))),
+            next_page_params: next_page_token.map(|(t, f)| Pagination {
+                page_token: format!("{},{}", t, to_checksum(&f, None)),
+                page_size,
+            }),
         };
 
         Ok(Response::new(res))
@@ -276,7 +290,7 @@ impl UserOps for UserOpsService {
         let page_size = self.normalize_page_size(inner.page_size);
 
         let (paymasters, next_page_token) =
-            repository::paymaster::list_paymasters(&self.db, page_token, page_size)
+            repository::paymaster::list_paymasters(&self.db, page_token, page_size as u64)
                 .await
                 .map_err(|err| {
                     tracing::error!(error = ?err, "failed to query paymasters");
@@ -285,8 +299,10 @@ impl UserOps for UserOpsService {
 
         let res = ListPaymastersResponse {
             items: paymasters.into_iter().map(|b| b.into()).collect(),
-            next_page_token: next_page_token
-                .map(|(t, f)| format!("{},{}", t, to_checksum(&f, None))),
+            next_page_params: next_page_token.map(|(t, f)| Pagination {
+                page_token: format!("{},{}", t, to_checksum(&f, None)),
+                page_size,
+            }),
         };
 
         Ok(Response::new(res))
@@ -303,7 +319,7 @@ impl UserOps for UserOpsService {
         let page_size = self.normalize_page_size(inner.page_size);
 
         let (factories, next_page_token) =
-            repository::factory::list_factories(&self.db, page_token, page_size)
+            repository::factory::list_factories(&self.db, page_token, page_size as u64)
                 .await
                 .map_err(|err| {
                     tracing::error!(error = ?err, "failed to query factories");
@@ -312,8 +328,10 @@ impl UserOps for UserOpsService {
 
         let res = ListFactoriesResponse {
             items: factories.into_iter().map(|b| b.into()).collect(),
-            next_page_token: next_page_token
-                .map(|(t, f)| format!("{},{}", t, to_checksum(&f, None))),
+            next_page_params: next_page_token.map(|(t, f)| Pagination {
+                page_token: format!("{},{}", t, to_checksum(&f, None)),
+                page_size,
+            }),
         };
 
         Ok(Response::new(res))
