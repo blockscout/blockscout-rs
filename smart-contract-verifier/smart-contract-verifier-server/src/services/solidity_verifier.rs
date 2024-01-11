@@ -6,11 +6,7 @@ use crate::{
         VerifySolidityStandardJsonRequest,
     },
     settings::{Extensions, FetcherSettings, S3FetcherSettings, SoliditySettings},
-    types::{
-        LookupMethodsRequestWrapper, LookupMethodsResponseWrapper, StandardJsonParseError,
-        VerifyResponseWrapper, VerifySolidityMultiPartRequestWrapper,
-        VerifySolidityStandardJsonRequestWrapper,
-    },
+    types::{LookupMethodsRequestWrapper, LookupMethodsResponseWrapper, VerifyResponseWrapper},
 };
 use s3::{creds::Credentials, Bucket, Region};
 use smart_contract_verifier::{
@@ -89,7 +85,7 @@ impl SolidityVerifier for SolidityVerifierService {
         &self,
         request: Request<VerifySolidityMultiPartRequest>,
     ) -> Result<Response<VerifyResponse>, Status> {
-        let request: VerifySolidityMultiPartRequestWrapper = request.into_inner().into();
+        let request = request.into_inner();
         let chain_id = request
             .metadata
             .as_ref()
@@ -160,7 +156,8 @@ impl SolidityVerifier for SolidityVerifierService {
         &self,
         request: Request<VerifySolidityStandardJsonRequest>,
     ) -> Result<Response<VerifyResponse>, Status> {
-        let request: VerifySolidityStandardJsonRequestWrapper = request.into_inner().into();
+        // let request: VerifySolidityStandardJsonRequestWrapper = request.into_inner().into();
+        let request = request.into_inner();
         let chain_id = request
             .metadata
             .as_ref()
@@ -191,17 +188,19 @@ impl SolidityVerifier for SolidityVerifierService {
         );
 
         let verification_request = {
-            let request: Result<_, StandardJsonParseError> = request.try_into();
+            let request = request.try_into();
             if let Err(err) = request {
                 match err {
-                    StandardJsonParseError::InvalidContent(_) => {
+                    solidity::standard_json::proto::StandardJsonParseError::InvalidContent(_) => {
                         let response = VerifyResponseWrapper::err(err).into_inner();
                         tracing::info!(request_id=request_id.to_string(), response=?response, "Request processed");
                         return Ok(Response::new(response));
                     }
-                    StandardJsonParseError::BadRequest(_) => {
-                        tracing::info!(request_id=request_id.to_string(), err=%err, "Bad request");
-                        return Err(Status::invalid_argument(err.to_string()));
+                    solidity::standard_json::proto::StandardJsonParseError::InvalidArgument(
+                        error,
+                    ) => {
+                        tracing::info!(request_id=request_id.to_string(), err=%error, "Bad request");
+                        return Err(error.into());
                     }
                 }
             }

@@ -226,3 +226,196 @@ mod tests {
         test_to_input(multi_part, vec![expected_solidity, expected_yul]);
     }
 }
+
+mod proto {
+    use super::{MultiFileContent, VerificationRequest};
+    use crate::Version;
+    use blockscout_display_bytes::Bytes as DisplayBytes;
+    use conversion_primitives::InvalidArgument;
+    use ethers_solc::EvmVersion;
+    use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
+        BytecodeType, VerifySolidityMultiPartRequest,
+    };
+    use std::{collections::BTreeMap, path::PathBuf, str::FromStr};
+
+    impl TryFrom<VerifySolidityMultiPartRequest> for VerificationRequest {
+        type Error = InvalidArgument;
+
+        fn try_from(request: VerifySolidityMultiPartRequest) -> Result<Self, Self::Error> {
+            let bytecode = DisplayBytes::from_str(&request.bytecode)
+                .map_err(|err| InvalidArgument::new(format!("Invalid bytecode: {err:?}")))?
+                .0;
+            let (creation_bytecode, deployed_bytecode) = match request.bytecode_type() {
+                BytecodeType::Unspecified => {
+                    Err(InvalidArgument::new("bytecode type is unspecified"))?
+                }
+                BytecodeType::CreationInput => (Some(bytecode), bytes::Bytes::new()),
+                BytecodeType::DeployedBytecode => (None, bytecode),
+            };
+
+            let compiler_version = Version::from_str(&request.compiler_version)
+                .map_err(|err| InvalidArgument::new(format!("Invalid compiler version: {err}")))?;
+
+            let sources: BTreeMap<PathBuf, String> = request
+                .source_files
+                .into_iter()
+                .map(|(name, content)| {
+                    (
+                        PathBuf::from_str(&name).unwrap(), /* TODO: why unwrap? */
+                        content,
+                    )
+                })
+                .collect();
+
+            let evm_version = match request.evm_version {
+                Some(version) if version != "default" => {
+                    Some(EvmVersion::from_str(&version).map_err(InvalidArgument::new)?)
+                }
+                _ => None,
+            };
+
+            Ok(Self {
+                deployed_bytecode,
+                creation_bytecode,
+                compiler_version,
+                content: MultiFileContent {
+                    sources,
+                    evm_version,
+                    optimization_runs: request.optimization_runs.map(|i| i as usize),
+                    contract_libraries: Some(request.libraries.into_iter().collect()),
+                },
+                chain_id: request.metadata.and_then(|metadata| metadata.chain_id),
+            })
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use pretty_assertions::assert_eq;
+        use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::VerificationMetadata;
+
+        #[test]
+        fn try_into_verification_request() {
+            /********** Creation Input **********/
+
+            let mut request = VerifySolidityMultiPartRequest {
+                bytecode: "0x1234".to_string(),
+                bytecode_type: BytecodeType::CreationInput.into(),
+                compiler_version: "v0.8.17+commit.8df45f5f".to_string(),
+                source_files: BTreeMap::from([("source_path".into(), "source_content".into())]),
+                evm_version: Some("london".to_string()),
+                optimization_runs: Some(200),
+                libraries: BTreeMap::from([("Lib".into(), "0xcafe".into())]),
+                metadata: Some(VerificationMetadata {
+                    chain_id: Some("1".into()),
+                    contract_address: Some("0xcafecafecafecafecafecafecafecafecafecafe".into()),
+                }),
+                post_actions: vec![],
+            };
+
+            let mut expected = VerificationRequest {
+                creation_bytecode: Some(DisplayBytes::from_str("0x1234").unwrap().0),
+                deployed_bytecode: DisplayBytes::from_str("").unwrap().0,
+                compiler_version: Version::from_str("v0.8.17+commit.8df45f5f").unwrap(),
+                content: MultiFileContent {
+                    sources: BTreeMap::from([("source_path".into(), "source_content".into())]),
+                    evm_version: Some(EvmVersion::London),
+                    optimization_runs: Some(200),
+                    contract_libraries: Some(BTreeMap::from([("Lib".into(), "0xcafe".into())])),
+                },
+                chain_id: Some("1".into()),
+            };
+
+            let verification_request: VerificationRequest = request
+                .clone()
+                .try_into()
+                .expect("Creation input: try_into verification request failed");
+            assert_eq!(expected, verification_request, "Creation input");
+
+            /********** Deployed Bytecode **********/
+
+            request.bytecode_type = BytecodeType::DeployedBytecode.into();
+            expected.deployed_bytecode = expected.creation_bytecode.take().unwrap();
+
+            let verification_request: VerificationRequest = request
+                .try_into()
+                .expect("Deployed bytecode: try_into verification request failed");
+            assert_eq!(expected, verification_request, "Deployed bytecode");
+        }
+
+        #[test]
+        // 'default' should result in None in MultiFileContent
+        fn default_evm_version() {
+            let request = VerifySolidityMultiPartRequest {
+                bytecode: "".to_string(),
+                bytecode_type: BytecodeType::CreationInput.into(),
+                compiler_version: "v0.8.17+commit.8df45f5f".to_string(),
+                source_files: Default::default(),
+                evm_version: Some("default".to_string()),
+                optimization_runs: None,
+                libraries: Default::default(),
+                metadata: None,
+                post_actions: vec![],
+            };
+
+            let verification_request: VerificationRequest = request
+                .try_into()
+                .expect("Try_into verification request failed");
+
+            assert_eq!(
+                None, verification_request.content.evm_version,
+                "'default' should result in `None`"
+            )
+        }
+
+        #[test]
+        // 'null' should result in None in MultiFileContent
+        fn null_evm_version() {
+            let request = VerifySolidityMultiPartRequest {
+                bytecode: "".to_string(),
+                bytecode_type: BytecodeType::CreationInput.into(),
+                compiler_version: "v0.8.17+commit.8df45f5f".to_string(),
+                source_files: Default::default(),
+                evm_version: None,
+                optimization_runs: None,
+                libraries: Default::default(),
+                metadata: None,
+                post_actions: vec![],
+            };
+
+            let verification_request: VerificationRequest = request
+                .try_into()
+                .expect("Try_into verification request failed");
+
+            assert_eq!(
+                None, verification_request.content.evm_version,
+                "Absent evm_version should result in `None`"
+            )
+        }
+
+        #[test]
+        fn empty_metadata() {
+            let request = VerifySolidityMultiPartRequest {
+                bytecode: "".to_string(),
+                bytecode_type: BytecodeType::CreationInput.into(),
+                compiler_version: "v0.8.17+commit.8df45f5f".to_string(),
+                source_files: Default::default(),
+                evm_version: None,
+                optimization_runs: None,
+                libraries: Default::default(),
+                metadata: None,
+                post_actions: vec![],
+            };
+
+            let verification_request: VerificationRequest = request
+                .try_into()
+                .expect("Try_into verification request failed");
+
+            assert_eq!(
+                None, verification_request.chain_id,
+                "Absent verification metadata should result in chain_id=None"
+            )
+        }
+    }
+}

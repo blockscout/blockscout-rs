@@ -4,6 +4,7 @@ members = [
     "blockscout-auth",
     "blockscout-db",
     "blockscout-service-launcher",
+    "conversion-error",
     "display-bytes",
     "mismatch",
     "reqwest-rate-limiter",
