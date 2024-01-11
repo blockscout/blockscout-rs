@@ -112,7 +112,7 @@ impl Client {
 
         let tx_hash = response
             .result
-            .get(0)
+            .first()
             .ok_or_else(|| anyhow::anyhow!("result is empty"))?
             .tx_hash
             .clone();
