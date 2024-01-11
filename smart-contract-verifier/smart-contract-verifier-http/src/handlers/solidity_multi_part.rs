@@ -57,12 +57,6 @@ impl TryFrom<MultiPartFiles> for solidity::multi_part::MultiFileContent {
     type Error = actix_web::Error;
 
     fn try_from(value: MultiPartFiles) -> Result<Self, Self::Error> {
-        let sources: BTreeMap<PathBuf, String> = value
-            .sources
-            .into_iter()
-            .map(|(name, content)| (name, content))
-            .collect();
-
         let evm_version = if value.evm_version != "default" {
             Some(EvmVersion::from_str(&value.evm_version).map_err(error::ErrorBadRequest)?)
         } else {
@@ -70,7 +64,7 @@ impl TryFrom<MultiPartFiles> for solidity::multi_part::MultiFileContent {
         };
 
         Ok(Self {
-            sources,
+            sources: value.sources,
             evm_version,
             optimization_runs: value.optimization_runs,
             contract_libraries: value.contract_libraries,

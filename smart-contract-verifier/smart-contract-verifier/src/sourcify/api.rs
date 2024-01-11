@@ -116,7 +116,7 @@ pub async fn verify_from_etherscan(
 /// In case of success returns corresponding match type.
 fn validate_verification_result(result: Vec<ResultItem>) -> Result<MatchType, Error> {
     let item = result
-        .get(0)
+        .first()
         .ok_or_else(|| {
             anyhow::anyhow!("invalid number of result items returned while verification succeeded")
         })
