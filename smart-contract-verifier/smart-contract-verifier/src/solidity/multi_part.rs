@@ -173,7 +173,7 @@ mod tests {
     }
 
     fn test_to_input(multi_part: MultiFileContent, expected: Vec<&str>) {
-        let inputs: Vec<CompilerInput> = multi_part.try_into().unwrap();
+        let inputs: Vec<CompilerInput> = multi_part.into();
         assert_eq!(
             inputs.len(),
             expected.len(),

@@ -1,7 +1,7 @@
 use anyhow::Context;
 use serde::Deserialize;
 
-pub use cbor_auxdata::{parse as parse_cbor_auxdata, CborAuxdata};
+pub use cbor_auxdata::parse as parse_cbor_auxdata;
 mod cbor_auxdata {
     use super::*;
     use blockscout_display_bytes::Bytes as DisplayBytes;
@@ -30,7 +30,7 @@ mod cbor_auxdata {
     }
 }
 
-pub use immutable_references::{parse as parse_immutable_references, ImmutableReferences};
+pub use immutable_references::parse as parse_immutable_references;
 mod immutable_references {
     use super::*;
     use std::collections::BTreeMap;
@@ -58,7 +58,7 @@ mod immutable_references {
     }
 }
 
-pub use link_references::{parse as parse_link_references, LinkReferences};
+pub use link_references::parse as parse_link_references;
 mod link_references {
     use super::*;
     use std::collections::BTreeMap;
@@ -89,8 +89,10 @@ mod link_references {
 #[cfg(test)]
 mod tests {
     use super::{
-        cbor_auxdata::CborAuxdataValue, immutable_references::ImmutableReferenceValue,
-        link_references::LinkReferenceValue, *,
+        cbor_auxdata::{CborAuxdata, CborAuxdataValue},
+        immutable_references::{ImmutableReferenceValue, ImmutableReferences},
+        link_references::{LinkReferenceValue, LinkReferences},
+        *,
     };
     use blockscout_display_bytes::Bytes as DisplayBytes;
     use pretty_assertions::assert_eq;

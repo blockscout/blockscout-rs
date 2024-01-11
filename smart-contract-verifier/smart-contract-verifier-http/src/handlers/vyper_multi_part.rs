@@ -55,12 +55,6 @@ impl TryFrom<MultiPartFiles> for vyper::multi_part::MultiFileContent {
     type Error = actix_web::Error;
 
     fn try_from(value: MultiPartFiles) -> Result<Self, Self::Error> {
-        let sources: BTreeMap<PathBuf, String> = value
-            .sources
-            .into_iter()
-            .map(|(name, content)| (name, content))
-            .collect();
-
         let evm_version = if let Some(version) = value.evm_version {
             Some(EvmVersion::from_str(&version).map_err(error::ErrorBadRequest)?)
         } else {
@@ -68,7 +62,7 @@ impl TryFrom<MultiPartFiles> for vyper::multi_part::MultiFileContent {
         };
 
         Ok(Self {
-            sources,
+            sources: value.sources,
             interfaces: Default::default(),
             evm_version,
         })

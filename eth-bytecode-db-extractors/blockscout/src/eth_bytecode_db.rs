@@ -1,7 +1,5 @@
 pub use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2::{
-    solidity_verifier_client::SolidityVerifierClient, verify_response,
-    vyper_verifier_client::VyperVerifierClient, BytecodeType, SearchSourcesRequest,
-    SearchSourcesResponse, Source, VerificationMetadata, VerifyResponse,
+    verify_response, SearchSourcesRequest, SearchSourcesResponse, Source, VerifyResponse,
     VerifySolidityMultiPartRequest, VerifySolidityStandardJsonRequest, VerifyVyperMultiPartRequest,
 };
 

@@ -33,7 +33,7 @@ pub async fn verify(
     sourcify_client: web::Data<SourcifyApiClient>,
     params: Json<ApiRequest>,
 ) -> Result<Json<VerificationResponse>, actix_web::Error> {
-    let request = params.into_inner().try_into()?;
+    let request = params.into_inner().into();
 
     let response = api::verify(sourcify_client.into_inner(), request).await;
     let response = match response {
