@@ -358,7 +358,6 @@ definitions:
         type: string
       creation_timestamp:
         type: string
-        format: uint64
       total_ops:
         type: integer
         format: int64
@@ -377,7 +376,6 @@ definitions:
         format: uint64
       timestamp:
         type: string
-        format: uint64
       total_ops:
         type: integer
         format: int64
@@ -464,7 +462,6 @@ definitions:
         type: string
       timestamp:
         type: string
-        format: uint64
       status:
         type: boolean
       fee:
@@ -575,4 +572,3 @@ definitions:
         type: boolean
       timestamp:
         type: string
-        format: uint64

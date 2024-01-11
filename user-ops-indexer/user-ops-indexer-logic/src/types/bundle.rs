@@ -9,7 +9,7 @@ pub struct Bundle {
     pub bundle_index: u64,
     pub block_number: u64,
     pub bundler: Address,
-    pub timestamp: u64,
+    pub timestamp: String,
     pub total_ops: u32,
 }
 
@@ -21,7 +21,10 @@ impl From<BundleDB> for Bundle {
             block_number: v.block_number as u64,
             bundler: Address::from_slice(&v.bundler),
             total_ops: v.total_ops as u32,
-            timestamp: v.timestamp.timestamp() as u64,
+            timestamp: v
+                .timestamp
+                .and_utc()
+                .to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
         }
     }
 }

@@ -120,7 +120,7 @@ message Account {
   optional string factory = 2;
   optional string creation_transaction_hash = 3;
   optional string creation_op_hash = 4;
-  optional uint64 creation_timestamp = 5;
+  optional string creation_timestamp = 5;
   uint32 total_ops = 6;
 }
 
@@ -129,7 +129,7 @@ message Bundle {
   string bundler = 2;
   uint64 block_number = 3;
   uint64 bundle_index = 4;
-  uint64 timestamp = 5;
+  string timestamp = 5;
   uint32 total_ops = 6;
 }
 
@@ -184,7 +184,7 @@ message UserOp {
   string fee = 32;
 
   optional bool consensus = 33;
-  optional uint64 timestamp = 34;
+  optional string timestamp = 34;
 }
 
 message ListUserOp {
@@ -192,7 +192,7 @@ message ListUserOp {
   uint64 block_number = 2;
   string transaction_hash = 3;
   string address = 4;
-  uint64 timestamp = 5;
+  string timestamp = 5;
   bool status = 6;
   string fee = 7;
 }

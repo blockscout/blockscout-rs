@@ -134,7 +134,7 @@ mod tests {
                 factory: Some(Address::from_low_u64_be(0xf1)),
                 creation_transaction_hash: Some(H256::from_low_u64_be(0x3204)),
                 creation_op_hash: Some(H256::from_low_u64_be(0x3201)),
-                creation_timestamp: Some(1704067260),
+                creation_timestamp: Some("2024-01-01T00:01:00.000000Z".to_string()),
                 total_ops: 100,
             })
         );

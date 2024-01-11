@@ -43,7 +43,7 @@ pub struct UserOp {
     pub fee: U256,
 
     pub consensus: Option<bool>,
-    pub timestamp: Option<u64>,
+    pub timestamp: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -52,7 +52,7 @@ pub struct ListUserOp {
     pub block_number: u64,
     pub sender: Address,
     pub transaction_hash: H256,
-    pub timestamp: u64,
+    pub timestamp: String,
     pub status: bool,
     pub fee: U256,
 }
@@ -188,7 +188,10 @@ impl From<ListUserOpDB> for ListUserOp {
             block_number: v.block_number as u64,
             sender: Address::from_slice(&v.sender),
             transaction_hash: H256::from_slice(&v.transaction_hash),
-            timestamp: v.timestamp.timestamp() as u64,
+            timestamp: v
+                .timestamp
+                .and_utc()
+                .to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
             status: v.status,
             fee: U256::from(v.gas_price.mul(v.gas_used).to_u128().unwrap_or(0)),
         }
