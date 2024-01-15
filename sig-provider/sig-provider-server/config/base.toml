@@ -3,6 +3,14 @@ enabled = true
 addr = "0.0.0.0:8050"
 max_body_size = 2097152
 
+[server.http.cors]
+enabled = false
+allowed_origin = ""
+allowed_methods = "PUT, GET, POST, OPTIONS, DELETE, PATCH"
+allowed_credentials = true
+max_age = 3600
+block_on_origin_mismatch = false
+
 [server.grpc]
 enabled = false
 addr = "0.0.0.0:8051"

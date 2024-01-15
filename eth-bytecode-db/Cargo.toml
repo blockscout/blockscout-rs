@@ -9,3 +9,6 @@ members = [
     "eth-bytecode-db-server",
     "eth-bytecode-db-proto",
 ]
+
+[workspace.dependencies]
+blockscout-service-launcher = "0.10.0"
