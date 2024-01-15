@@ -52,7 +52,7 @@ pub struct VerifierSettings {
     #[serde(default = "default_verifier_max_retries")]
     pub max_retries: u32,
     #[serde(default)]
-    pub validate_url: bool,
+    pub probe_url: bool,
 }
 
 fn default_verifier_max_retries() -> u32 {
@@ -104,7 +104,7 @@ impl Settings {
             verifier: VerifierSettings {
                 http_url: verifier_http_url,
                 max_retries: 3,
-                validate_url: false,
+                probe_url: false,
             },
             sourcify: Default::default(),
             verifier_alliance_database: Default::default(),

@@ -93,7 +93,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         db_connection,
         settings.verifier.http_url.to_string(),
         settings.verifier.max_retries,
-        settings.verifier.validate_url,
+        settings.verifier.probe_url,
     )
     .await?;
     if settings.verifier_alliance_database.enabled {

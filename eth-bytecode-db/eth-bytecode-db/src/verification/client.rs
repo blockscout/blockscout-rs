@@ -13,13 +13,13 @@ impl Client {
         db_client: DatabaseConnection,
         http_verifier_uri: impl Into<String>,
         max_retries: u32,
-        validate_url: bool,
+        probe_url: bool,
     ) -> Result<Self, anyhow::Error> {
         Self::new_arc(
             Arc::new(db_client),
             http_verifier_uri,
             max_retries,
-            validate_url,
+            probe_url,
         )
         .await
     }
@@ -28,12 +28,12 @@ impl Client {
         db_client: Arc<DatabaseConnection>,
         http_verifier_uri: impl Into<String>,
         max_retries: u32,
-        validate_url: bool,
+        probe_url: bool,
     ) -> Result<Self, anyhow::Error> {
         let verifier_http_client_config =
             smart_contract_verifier_proto::http_client::Config::new(http_verifier_uri.into())
                 .with_retry_middleware(max_retries)
-                .validate_url(validate_url);
+                .probe_url(probe_url);
 
         let verifier_http_client =
             smart_contract_verifier_proto::http_client::Client::new(verifier_http_client_config)
