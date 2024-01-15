@@ -8,7 +8,7 @@ type BoxError = Box<dyn std::error::Error + Send + Sync>;
 pub struct Config {
     url: String,
     middleware_stack: Vec<Arc<dyn Middleware>>,
-    validate_url: bool,
+    probe_url: bool,
 }
 
 impl Config {
@@ -16,7 +16,7 @@ impl Config {
         Self {
             url,
             middleware_stack: vec![],
-            validate_url: false,
+            probe_url: false,
         }
     }
 
@@ -35,8 +35,8 @@ impl Config {
         self
     }
 
-    pub fn validate_url(mut self, value: bool) -> Self {
-        self.validate_url = value;
+    pub fn probe_url(mut self, value: bool) -> Self {
+        self.probe_url = value;
         self
     }
 }
@@ -45,7 +45,7 @@ impl Config {
 pub(super) struct ValidatedConfig {
     pub url: url::Url,
     pub middleware_stack: Vec<Arc<dyn Middleware>>,
-    pub validate_url: bool,
+    pub probe_url: bool,
 }
 
 impl TryFrom<Config> for ValidatedConfig {
@@ -57,7 +57,7 @@ impl TryFrom<Config> for ValidatedConfig {
         Ok(Self {
             url,
             middleware_stack: value.middleware_stack,
-            validate_url: value.validate_url,
+            probe_url: value.probe_url,
         })
     }
 }

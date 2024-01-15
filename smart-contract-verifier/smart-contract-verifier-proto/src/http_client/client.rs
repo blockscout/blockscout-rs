@@ -28,7 +28,7 @@ impl Client {
             request_client,
         };
 
-        if config.validate_url {
+        if config.probe_url {
             if let Err(err) = health_client::health(&client, Default::default()).await {
                 panic!("Cannot establish a connection with smart-contract-verifier client: {err}")
             }
