@@ -414,7 +414,7 @@ mod tests {
         );
         let other_addresses: HashMap<String, String> = serde_json::from_value(serde_json::json!({
             "ETH": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
-            "RSK": "0xF0D485009714ce586358E3761754929904d76b9D",
+            "RSK": "0xf0d485009714cE586358E3761754929904D76B9D",
         }))
         .unwrap();
         assert_eq!(result.other_addresses, other_addresses.into());

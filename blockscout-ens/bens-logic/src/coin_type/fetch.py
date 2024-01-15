@@ -6,9 +6,15 @@ SLIP44_MSB = 0x80000000
 ALL_COINS_URL = 'https://raw.githubusercontent.com/ensdomains/address-encoder/a2e171b59757a7444fceac0cc4d60a7d992c94bf/src/__tests__/index.test.ts'
 ENCODING_URL = 'https://raw.githubusercontent.com/ensdomains/address-encoder/master/README.md'
 
-def convert_encoding(encoding): 
+# https://eips.ethereum.org/EIPS/eip-1191
+EIP_1191_COIN_NAMES = {
+    "RSK": 30
+}
+
+def convert_encoding(encoding, coin_name):
+    maybe_chain_id = EIP_1191_COIN_NAMES.get(coin_name)
     return {
-        "checksummed-hex": "checkSummedHex",
+        "checksummed-hex": {"checkSummedHex": maybe_chain_id},
     }.get(encoding)
 
 content = requests.get(ALL_COINS_URL).text
@@ -32,7 +38,7 @@ print(f'found {len(coins)} encodings')
 
 for r in encodings:
     coin_name, encoding = r.group(1), r.group(2)
-    encoding = convert_encoding(encoding)
+    encoding = convert_encoding(encoding, coin_name)
     
     maybe_coin = result.get(coin_name)
     if maybe_coin:
