@@ -76,7 +76,9 @@
   {
     "name": "ETH",
     "coinType": "60",
-    "encoding": "checkSummedHex"
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "ETC_LEGACY",
@@ -149,7 +151,9 @@
   {
     "name": "RSK",
     "coinType": "137",
-    "encoding": "checkSummedHex"
+    "encoding": {
+      "checkSummedHex": 30
+    }
   },
   {
     "name": "KMD",
@@ -398,7 +402,9 @@
   {
     "name": "TFUEL",
     "coinType": "589",
-    "encoding": "checkSummedHex"
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "GRIN",
@@ -412,7 +418,9 @@
   {
     "name": "VET",
     "coinType": "703",
-    "encoding": "checkSummedHex"
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "BNB",
@@ -570,7 +578,9 @@
   {
     "name": "WAN",
     "coinType": "5718350",
-    "encoding": "checkSummedHex"
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "WAVES",
@@ -580,62 +590,86 @@
   {
     "name": "OP",
     "coinType": "2147483658",
-    "encoding": "checkSummedHex"
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "CRO",
     "coinType": "2147483673",
-    "encoding": "checkSummedHex"
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "BSC",
     "coinType": "2147483704",
-    "encoding": "checkSummedHex"
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "GO",
     "coinType": "2147483708",
-    "encoding": "checkSummedHex"
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "ETC",
     "coinType": "2147483709",
-    "encoding": "checkSummedHex"
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "TOMO",
     "coinType": "2147483736",
-    "encoding": "checkSummedHex"
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "POA",
     "coinType": "2147483747",
-    "encoding": "checkSummedHex"
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "GNO",
     "coinType": "2147483748",
-    "encoding": "checkSummedHex"
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "TT",
     "coinType": "2147483756",
-    "encoding": "checkSummedHex"
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "MATIC",
     "coinType": "2147483785",
-    "encoding": "checkSummedHex"
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "EWT",
     "coinType": "2147483894",
-    "encoding": "checkSummedHex"
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "FTM",
     "coinType": "2147483898",
-    "encoding": "checkSummedHex"
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "THETA",
@@ -645,26 +679,36 @@
   {
     "name": "CLO",
     "coinType": "2147484468",
-    "encoding": "checkSummedHex"
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "NRG",
     "coinType": "2147523445",
-    "encoding": "checkSummedHex"
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "ARB1",
     "coinType": "2147525809",
-    "encoding": "checkSummedHex"
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "CELO",
     "coinType": "2147525868",
-    "encoding": "checkSummedHex"
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "AVAXC",
     "coinType": "2147526762",
-    "encoding": "checkSummedHex"
+    "encoding": {
+      "checkSummedHex": null
+    }
   }
 ]

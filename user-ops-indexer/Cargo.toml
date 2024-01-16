@@ -7,3 +7,6 @@ members = [
     "user-ops-indexer-proto",
     "user-ops-indexer-server",
 ]
+
+[workspace.dependencies]
+blockscout-service-launcher = "0.10.0"

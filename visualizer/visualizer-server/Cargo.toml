@@ -16,7 +16,7 @@ actix-web = "4"
 amplify = { version = "3.13.0", features = ["derive"] }
 anyhow = "1.0"
 async-trait = "0.1"
-blockscout-service-launcher = { version = "0.8.0" }
+blockscout-service-launcher = { version = "0.10.0" }
 bytes = "1.2"
 config = "0.13"
 lazy_static = "1.3"

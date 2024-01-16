@@ -44,7 +44,7 @@ itertools = "0.11.0"
 
 [dev-dependencies]
 async-trait = "0.1"
-blockscout-service-launcher = { version = "0.9.0", features = ["test-database", "database-0_12"] }
+blockscout-service-launcher = { workspace = true, features = ["test-database", "database-0_12"] }
 user-ops-indexer-migration = { path = "../user-ops-indexer-migration" }
 mockall = "0.11"
 pretty_assertions = "1.3"
