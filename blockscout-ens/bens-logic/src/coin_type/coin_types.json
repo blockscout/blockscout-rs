@@ -1,51 +1,63 @@
 [
   {
     "name": "BTC",
-    "coinType": "0"
+    "coinType": "0",
+    "encoding": null
   },
   {
     "name": "LTC",
-    "coinType": "2"
+    "coinType": "2",
+    "encoding": null
   },
   {
     "name": "DOGE",
-    "coinType": "3"
+    "coinType": "3",
+    "encoding": null
   },
   {
     "name": "RDD",
-    "coinType": "4"
+    "coinType": "4",
+    "encoding": null
   },
   {
     "name": "DASH",
-    "coinType": "5"
+    "coinType": "5",
+    "encoding": null
   },
   {
     "name": "PPC",
-    "coinType": "6"
+    "coinType": "6",
+    "encoding": null
   },
   {
     "name": "NMC",
-    "coinType": "7"
+    "coinType": "7",
+    "encoding": null
   },
   {
     "name": "VIA",
-    "coinType": "14"
+    "coinType": "14",
+    "encoding": null
   },
   {
     "name": "GRS",
-    "coinType": "17"
+    "coinType": "17",
+    "encoding": null
   },
   {
     "name": "DGB",
-    "coinType": "20"
+    "coinType": "20",
+    "encoding": null
   },
   {
     "name": "MONA",
-    "coinType": "22"
+    "coinType": "22",
+    "encoding": null
   },
   {
     "name": "DCR",
-    "coinType": "42"
+    "coinType": "42",
+    "encoding": null
   },
   {
     "name": "XEM",
@@ -53,15 +65,20 @@
   },
   {
     "name": "AIB",
-    "coinType": "55"
+    "coinType": "55",
+    "encoding": null
   },
   {
     "name": "SYS",
-    "coinType": "57"
+    "coinType": "57",
+    "encoding": null
   },
   {
     "name": "ETH",
-    "coinType": "60"
+    "coinType": "60",
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "ETC_LEGACY",
@@ -73,87 +90,110 @@
   },
   {
     "name": "XVG",
-    "coinType": "77"
+    "coinType": "77",
+    "encoding": null
   },
   {
     "name": "STRAT",
-    "coinType": "105"
+    "coinType": "105",
+    "encoding": null
   },
   {
     "name": "ARK",
-    "coinType": "111"
+    "coinType": "111",
+    "encoding": null
   },
   {
     "name": "ATOM",
-    "coinType": "118"
+    "coinType": "118",
+    "encoding": null
   },
   {
     "name": "ZIL",
-    "coinType": "119"
+    "coinType": "119",
+    "encoding": null
   },
   {
     "name": "EGLD",
-    "coinType": "120"
+    "coinType": "120",
+    "encoding": null
   },
   {
     "name": "ZEN",
-    "coinType": "121"
+    "coinType": "121",
+    "encoding": null
   },
   {
     "name": "XMR",
-    "coinType": "128"
+    "coinType": "128",
+    "encoding": null
   },
   {
     "name": "ZEC",
-    "coinType": "133"
+    "coinType": "133",
+    "encoding": null
   },
   {
     "name": "LSK",
-    "coinType": "134"
+    "coinType": "134",
+    "encoding": null
   },
   {
     "name": "STEEM",
-    "coinType": "135"
+    "coinType": "135",
+    "encoding": null
   },
   {
     "name": "FIRO",
-    "coinType": "136"
+    "coinType": "136",
+    "encoding": null
   },
   {
     "name": "RSK",
-    "coinType": "137"
+    "coinType": "137",
+    "encoding": {
+      "checkSummedHex": 30
+    }
   },
   {
     "name": "KMD",
-    "coinType": "141"
+    "coinType": "141",
+    "encoding": null
   },
   {
     "name": "XRP",
-    "coinType": "144"
+    "coinType": "144",
+    "encoding": null
   },
   {
     "name": "BCH",
-    "coinType": "145"
+    "coinType": "145",
+    "encoding": null
   },
   {
     "name": "XLM",
-    "coinType": "148"
+    "coinType": "148",
+    "encoding": null
   },
   {
     "name": "BTM",
-    "coinType": "153"
+    "coinType": "153",
+    "encoding": null
   },
   {
     "name": "BTG",
-    "coinType": "156"
+    "coinType": "156",
+    "encoding": null
   },
   {
     "name": "NANO",
-    "coinType": "165"
+    "coinType": "165",
+    "encoding": null
   },
   {
     "name": "RVN",
-    "coinType": "175"
+    "coinType": "175",
+    "encoding": null
   },
   {
     "name": "POA_LEGACY",
@@ -161,31 +201,38 @@
   },
   {
     "name": "LCC",
-    "coinType": "192"
+    "coinType": "192",
+    "encoding": null
   },
   {
     "name": "EOS",
-    "coinType": "194"
+    "coinType": "194",
+    "encoding": null
   },
   {
     "name": "TRX",
-    "coinType": "195"
+    "coinType": "195",
+    "encoding": null
   },
   {
     "name": "BCN",
-    "coinType": "204"
+    "coinType": "204",
+    "encoding": null
   },
   {
     "name": "FIO",
-    "coinType": "235"
+    "coinType": "235",
+    "encoding": null
   },
   {
     "name": "BSV",
-    "coinType": "236"
+    "coinType": "236",
+    "encoding": null
   },
   {
     "name": "NEO",
-    "coinType": "239"
+    "coinType": "239",
+    "encoding": null
   },
   {
     "name": "NIM",
@@ -197,39 +244,48 @@
   },
   {
     "name": "ALGO",
-    "coinType": "283"
+    "coinType": "283",
+    "encoding": null
   },
   {
     "name": "IOST",
-    "coinType": "291"
+    "coinType": "291",
+    "encoding": null
   },
   {
     "name": "DIVI",
-    "coinType": "301"
+    "coinType": "301",
+    "encoding": null
   },
   {
     "name": "IOTX",
-    "coinType": "304"
+    "coinType": "304",
+    "encoding": null
   },
   {
     "name": "BTS",
-    "coinType": "308"
+    "coinType": "308",
+    "encoding": null
   },
   {
     "name": "CKB",
-    "coinType": "309"
+    "coinType": "309",
+    "encoding": null
   },
   {
     "name": "MRX",
-    "coinType": "326"
+    "coinType": "326",
+    "encoding": null
   },
   {
     "name": "LUNA",
-    "coinType": "330"
+    "coinType": "330",
+    "encoding": null
   },
   {
     "name": "DOT",
-    "coinType": "354"
+    "coinType": "354",
+    "encoding": null
   },
   {
     "name": "VSYS",
@@ -237,7 +293,8 @@
   },
   {
     "name": "ABBC",
-    "coinType": "367"
+    "coinType": "367",
+    "encoding": null
   },
   {
     "name": "NEAR",
@@ -245,35 +302,43 @@
   },
   {
     "name": "ETN",
-    "coinType": "415"
+    "coinType": "415",
+    "encoding": null
   },
   {
     "name": "AION",
-    "coinType": "425"
+    "coinType": "425",
+    "encoding": null
   },
   {
     "name": "KSM",
-    "coinType": "434"
+    "coinType": "434",
+    "encoding": null
   },
   {
     "name": "AE",
-    "coinType": "457"
+    "coinType": "457",
+    "encoding": null
   },
   {
     "name": "KAVA",
-    "coinType": "459"
+    "coinType": "459",
+    "encoding": null
   },
   {
     "name": "FIL",
-    "coinType": "461"
+    "coinType": "461",
+    "encoding": null
   },
   {
     "name": "AR",
-    "coinType": "472"
+    "coinType": "472",
+    "encoding": null
   },
   {
     "name": "CCA",
-    "coinType": "489"
+    "coinType": "489",
+    "encoding": null
   },
   {
     "name": "THETA_LEGACY",
@@ -281,55 +346,70 @@
   },
   {
     "name": "SOL",
-    "coinType": "501"
+    "coinType": "501",
+    "encoding": null
   },
   {
     "name": "XHV",
-    "coinType": "535"
+    "coinType": "535",
+    "encoding": null
   },
   {
     "name": "FLOW",
-    "coinType": "539"
+    "coinType": "539",
+    "encoding": null
   },
   {
     "name": "IRIS",
-    "coinType": "566"
+    "coinType": "566",
+    "encoding": null
   },
   {
     "name": "LRG",
-    "coinType": "568"
+    "coinType": "568",
+    "encoding": null
   },
   {
     "name": "SERO",
-    "coinType": "569"
+    "coinType": "569",
+    "encoding": null
   },
   {
     "name": "BDX",
-    "coinType": "570"
+    "coinType": "570",
+    "encoding": null
   },
   {
     "name": "CCXX",
-    "coinType": "571"
+    "coinType": "571",
+    "encoding": null
   },
   {
     "name": "SRM",
-    "coinType": "573"
+    "coinType": "573",
+    "encoding": null
   },
   {
     "name": "VLX",
-    "coinType": "574"
+    "coinType": "574",
+    "encoding": null
   },
   {
     "name": "BPS",
-    "coinType": "576"
+    "coinType": "576",
+    "encoding": null
   },
   {
     "name": "TFUEL",
-    "coinType": "589"
+    "coinType": "589",
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "GRIN",
-    "coinType": "592"
+    "coinType": "592",
+    "encoding": null
   },
   {
     "name": "GNO_LEGACY",
@@ -337,11 +417,15 @@
   },
   {
     "name": "VET",
-    "coinType": "703"
+    "coinType": "703",
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "BNB",
-    "coinType": "714"
+    "coinType": "714",
+    "encoding": null
   },
   {
     "name": "CLO_LEGACY",
@@ -349,7 +433,8 @@
   },
   {
     "name": "HIVE",
-    "coinType": "825"
+    "coinType": "825",
+    "encoding": null
   },
   {
     "name": "TOMO_LEGACY",
@@ -357,15 +442,18 @@
   },
   {
     "name": "HNT",
-    "coinType": "904"
+    "coinType": "904",
+    "encoding": null
   },
   {
     "name": "RUNE",
-    "coinType": "931"
+    "coinType": "931",
+    "encoding": null
   },
   {
     "name": "BCD",
-    "coinType": "999"
+    "coinType": "999",
+    "encoding": null
   },
   {
     "name": "TT_LEGACY",
@@ -377,11 +465,13 @@
   },
   {
     "name": "ONE",
-    "coinType": "1023"
+    "coinType": "1023",
+    "encoding": null
   },
   {
     "name": "ONT",
-    "coinType": "1024"
+    "coinType": "1024",
+    "encoding": null
   },
   {
     "name": "NOSTR",
@@ -389,27 +479,33 @@
   },
   {
     "name": "XTZ",
-    "coinType": "1729"
+    "coinType": "1729",
+    "encoding": null
   },
   {
     "name": "ADA",
-    "coinType": "1815"
+    "coinType": "1815",
+    "encoding": null
   },
   {
     "name": "SC",
-    "coinType": "1991"
+    "coinType": "1991",
+    "encoding": null
   },
   {
     "name": "QTUM",
-    "coinType": "2301"
+    "coinType": "2301",
+    "encoding": null
   },
   {
     "name": "GXC",
-    "coinType": "2303"
+    "coinType": "2303",
+    "encoding": null
   },
   {
     "name": "ELA",
-    "coinType": "2305"
+    "coinType": "2305",
+    "encoding": null
   },
   {
     "name": "NAS",
@@ -421,7 +517,8 @@
   },
   {
     "name": "IOTA",
-    "coinType": "4218"
+    "coinType": "4218",
+    "encoding": null
   },
   {
     "name": "HNS",
@@ -429,7 +526,8 @@
   },
   {
     "name": "STX",
-    "coinType": "5757"
+    "coinType": "5757",
+    "encoding": null
   },
   {
     "name": "GO_LEGACY",
@@ -437,19 +535,23 @@
   },
   {
     "name": "XCH",
-    "coinType": "8444"
+    "coinType": "8444",
+    "encoding": null
   },
   {
     "name": "NULS",
-    "coinType": "8964"
+    "coinType": "8964",
+    "encoding": null
   },
   {
     "name": "AVAX",
-    "coinType": "9000"
+    "coinType": "9000",
+    "encoding": null
   },
   {
     "name": "STRK",
-    "coinType": "9004"
+    "coinType": "9004",
+    "encoding": null
   },
   {
     "name": "NRG_LEGACY",
@@ -461,7 +563,8 @@
   },
   {
     "name": "ZEL",
-    "coinType": "19167"
+    "coinType": "19167",
+    "encoding": null
   },
   {
     "name": "CELO_LEGACY",
@@ -469,86 +572,143 @@
   },
   {
     "name": "WICC",
-    "coinType": "99999"
+    "coinType": "99999",
+    "encoding": null
   },
   {
     "name": "WAN",
-    "coinType": "5718350"
+    "coinType": "5718350",
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "WAVES",
-    "coinType": "5741564"
+    "coinType": "5741564",
+    "encoding": null
   },
   {
     "name": "OP",
-    "coinType": "2147483658"
+    "coinType": "2147483658",
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "CRO",
-    "coinType": "2147483673"
+    "coinType": "2147483673",
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "BSC",
-    "coinType": "2147483704"
+    "coinType": "2147483704",
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "GO",
-    "coinType": "2147483708"
+    "coinType": "2147483708",
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "ETC",
-    "coinType": "2147483709"
+    "coinType": "2147483709",
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "TOMO",
-    "coinType": "2147483736"
+    "coinType": "2147483736",
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "POA",
-    "coinType": "2147483747"
+    "coinType": "2147483747",
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "GNO",
-    "coinType": "2147483748"
+    "coinType": "2147483748",
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "TT",
-    "coinType": "2147483756"
+    "coinType": "2147483756",
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "MATIC",
-    "coinType": "2147483785"
+    "coinType": "2147483785",
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "EWT",
-    "coinType": "2147483894"
+    "coinType": "2147483894",
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "FTM",
-    "coinType": "2147483898"
+    "coinType": "2147483898",
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "THETA",
-    "coinType": "2147484009"
+    "coinType": "2147484009",
+    "encoding": null
   },
   {
     "name": "CLO",
-    "coinType": "2147484468"
+    "coinType": "2147484468",
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "NRG",
-    "coinType": "2147523445"
+    "coinType": "2147523445",
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "ARB1",
-    "coinType": "2147525809"
+    "coinType": "2147525809",
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "CELO",
-    "coinType": "2147525868"
+    "coinType": "2147525868",
+    "encoding": {
+      "checkSummedHex": null
+    }
   },
   {
     "name": "AVAXC",
-    "coinType": "2147526762"
+    "coinType": "2147526762",
+    "encoding": {
+      "checkSummedHex": null
+    }
   }
 ]

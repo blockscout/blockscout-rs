@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use super::ConversionError;
 use crate::conversion::order_direction_from_inner;
 use bens_logic::{
@@ -12,15 +10,17 @@ use bens_logic::{
 };
 use bens_proto::blockscout::bens::v1 as proto;
 use ethers::types::Address;
+use std::str::FromStr;
 
 const DEFAULT_PAGE_SIZE: u32 = 50;
 
 pub fn get_domain_input_from_inner(
     inner: proto::GetDomainRequest,
 ) -> Result<GetDomainInput, ConversionError> {
+    let name = name_from_inner(inner.name)?;
     Ok(GetDomainInput {
         network_id: inner.chain_id,
-        name: inner.name,
+        name,
         only_active: inner.only_active,
     })
 }
@@ -30,9 +30,10 @@ pub fn lookup_domain_name_from_inner(
 ) -> Result<LookupDomainInput, ConversionError> {
     let sort = domain_sort_from_inner(&inner.sort)?;
     let order = order_direction_from_inner(inner.order());
+    let name = inner.name.map(name_from_inner).transpose()?;
     Ok(LookupDomainInput {
         network_id: inner.chain_id,
-        name: inner.name,
+        name,
         only_active: inner.only_active,
         pagination: DomainPaginationInput {
             sort,
@@ -146,6 +147,16 @@ pub fn pagination_from_logic(
 fn address_from_str_inner(addr: &str) -> Result<Address, ConversionError> {
     Address::from_str(addr)
         .map_err(|e| ConversionError::UserRequest(format!("invalid address '{addr}': {e}")))
+}
+
+fn name_from_inner(name: String) -> Result<String, ConversionError> {
+    let name = name.trim_matches('.');
+    if name.is_empty() {
+        return Err(ConversionError::UserRequest(
+            "empty name provided".to_string(),
+        ));
+    };
+    Ok(name.to_string())
 }
 
 fn page_size_from_inner(page_size: Option<u32>) -> u32 {

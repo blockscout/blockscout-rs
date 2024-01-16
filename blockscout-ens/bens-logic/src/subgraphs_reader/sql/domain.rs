@@ -2,8 +2,8 @@ use crate::{
     entity::subgraph::domain::{DetailedDomain, Domain, DomainWithAddress},
     hash_name::hex,
     subgraphs_reader::{
-        pagination::Paginator, GetDomainInput, LookupAddressInput, LookupDomainInput,
-        SubgraphReadError,
+        domain_name::DomainName, pagination::Paginator, GetDomainInput, LookupAddressInput,
+        LookupDomainInput, SubgraphReadError,
     },
 };
 use anyhow::Context;
@@ -111,7 +111,7 @@ pub const DOMAIN_NOT_EXPIRED_WHERE_CLAUSE: &str = r#"
 #[instrument(name = "get_domain", skip(pool), err(level = "error"), level = "info")]
 pub async fn get_domain(
     pool: &PgPool,
-    id: &str,
+    domain_name: &DomainName,
     schema: &str,
     input: &GetDomainInput,
 ) -> Result<Option<DetailedDomain>, SubgraphReadError> {
@@ -146,7 +146,7 @@ pub async fn get_domain(
         {only_active_clause}
         ;"#,
     ))
-    .bind(id)
+    .bind(&domain_name.id)
     .fetch_optional(pool)
     .await?;
     Ok(maybe_domain)
@@ -161,7 +161,7 @@ pub async fn get_domain(
 pub async fn find_domains(
     pool: &PgPool,
     schema: &str,
-    id: Option<&str>,
+    domain_name: Option<&DomainName>,
     input: &LookupDomainInput,
 ) -> Result<Vec<Domain>, SubgraphReadError> {
     let mut query = sql_gen::domain_select(schema);
@@ -169,7 +169,7 @@ pub async fn find_domains(
     if input.only_active {
         q = q.with_not_expired();
     };
-    if id.is_some() {
+    if domain_name.is_some() {
         q = q.and_where(Expr::cust("id = $1"));
     } else {
         q = q.with_non_empty_label().with_resolved_names();
@@ -182,8 +182,8 @@ pub async fn find_domains(
     let sql = q.to_string(PostgresQueryBuilder);
     let mut query = sqlx::query_as(&sql);
     tracing::debug!(sql = sql, "build SQL query for 'find_domains'");
-    if let Some(id) = id {
-        query = query.bind(id)
+    if let Some(domain_name) = domain_name {
+        query = query.bind(&domain_name.id)
     };
     let domains = query.fetch_all(pool).await?;
     Ok(domains)
@@ -306,14 +306,14 @@ pub async fn batch_search_addresses_cached(
 pub async fn update_domain_name(
     pool: &PgPool,
     schema: &str,
-    id: &str,
-    name: &str,
+    name: &DomainName,
 ) -> Result<PgQueryResult, sqlx::Error> {
     let result = sqlx::query(&format!(
-        "UPDATE {schema}.domain SET name = $1 WHERE id = $2;"
+        "UPDATE {schema}.domain SET name = $1, label_name = $2 WHERE id = $3;"
     ))
-    .bind(name)
-    .bind(id)
+    .bind(&name.name)
+    .bind(&name.label_name)
+    .bind(&name.id)
     .execute(pool)
     .await?;
     Ok(result)

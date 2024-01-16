@@ -71,8 +71,8 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
             "id": "0xee6c4522aab0003e8d14cd40a6af439055fd2577951148c14b6cea9a53475835",
             "name": "vitalik.eth",
             "other_addresses": {
-                "RSK": "f0d485009714ce586358e3761754929904d76b9d",
-                "ETH": "d8da6bf26964af9d7eed9e03e53415d37aa96045",
+                "RSK": "0xf0d485009714cE586358E3761754929904D76B9D",
+                "ETH": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
             },
             "owner": {
                 "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
