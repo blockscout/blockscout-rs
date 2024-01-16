@@ -2,7 +2,7 @@ use chrono::Utc;
 use sqlx::types::BigDecimal;
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, PartialEq, Eq, sqlx::FromRow)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, sqlx::FromRow)]
 pub struct DetailedDomain {
     pub id: String,
     pub name: Option<String>,
@@ -25,7 +25,7 @@ pub struct DetailedDomain {
     pub other_addresses: sqlx::types::Json<HashMap<String, String>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, sqlx::FromRow)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, sqlx::FromRow)]
 pub struct Domain {
     pub id: String,
     pub name: Option<String>,

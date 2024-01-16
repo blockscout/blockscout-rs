@@ -1,7 +1,5 @@
-use std::collections::HashMap;
-
 use bens_logic::test_utils::*;
-use bens_server::{BlockscoutSettings, NetworkSettings, Settings};
+use bens_server::Settings;
 use blockscout_service_launcher::{
     launcher::ConfigSettings,
     test_server::{get_test_server_settings, init_server, send_get_request, send_post_request},
@@ -9,36 +7,39 @@ use blockscout_service_launcher::{
 use pretty_assertions::assert_eq;
 use serde_json::{json, Value};
 use sqlx::PgPool;
+use std::collections::HashMap;
 use url::Url;
 
 #[sqlx::test(migrations = "../bens-logic/tests/migrations")]
 async fn basic_domain_extracting_works(pool: PgPool) {
+    let network_id = "1";
     let postgres_url = std::env::var("DATABASE_URL").expect("env should be here from sqlx::test");
     let db_url = format!(
         "{postgres_url}{}",
         pool.connect_options().get_database().unwrap()
     );
     std::env::set_var("BENS__DATABASE__CONNECT__URL", db_url);
-    let clients = mocked_networks_with_blockscout().await;
     std::env::set_var("BENS__CONFIG", "./tests/config.test.toml");
     let mut settings = Settings::build().expect("Failed to build settings");
     let (server_settings, base) = get_test_server_settings();
+
     settings.server = server_settings;
-    settings.subgraphs_reader.networks = clients
-        .into_iter()
-        .map(|(id, client)| {
-            (
-                id,
-                NetworkSettings {
-                    blockscout: BlockscoutSettings {
-                        url: client.blockscout_client.url().clone(),
-                        ..Default::default()
-                    },
-                    ..Default::default()
+    let eth_client = mocked_blockscout_client().await;
+    settings.subgraphs_reader.networks = serde_json::from_value(serde_json::json!(
+        {
+            network_id: {
+                "blockscout": {
+                    "url": eth_client.url()
                 },
-            )
-        })
-        .collect();
+                "subgraphs": {
+                    "ens-subgraph": {
+                        "native_token_contract": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85"
+                    }
+                }
+            }
+        }
+    ))
+    .unwrap();
 
     // first start with enabled cache
     check_basic_scenario_eth(settings.clone(), base.clone()).await;
@@ -85,7 +86,49 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
             "resolved_address": {
                 "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
             },
-            "token_id": "0xaf2caa1c2ca1d027f1ac823b529d0a67cd144264b2789fa2ea4d63a67c7103cc",
+            "tokens": [
+                {
+                    "id": "79233663829379634837589865448569342784712482819484549289560981379859480642508",
+                    "contract": "0x57f1887a8bf19b14fc0df6fd9b2acc9af147ea85",
+                    "type": "NATIVE_DOMAIN_TOKEN",
+                }
+            ],
+        })
+    );
+    // get detailed domain with emojied name and with wrapped token
+    let request: Value = send_get_request(&base, "/api/v1/1/domains/wa🇬🇲i.eth").await;
+    assert_eq!(
+        request,
+        json!({
+            "expiry_date": "2027-02-10T16:42:46.000Z",
+            "id": "0x5d438d292de31e08576d5bcd8a93aa41b401b9d9aeaba57da1a32c003e5fd5f5",
+            "name": "wa🇬🇲i.eth",
+            "other_addresses": {},
+            "owner": {
+                "hash": "0xd4416b13d2b3a9abae7acd5d6c2bbdbe25686401",
+            },
+            "registrant": {
+                "hash": "0x9c996076a85b46061d9a70ff81f013853a86b619",
+            },
+            "registration_date": "2021-11-12T11:36:46.000Z",
+            "resolved_address": {
+                "hash": "0x9c996076a85b46061d9a70ff81f013853a86b619",
+            },
+            "tokens": [
+                {
+                    "contract": "0x57f1887a8bf19b14fc0df6fd9b2acc9af147ea85",
+                    "id": "46567936673033819165815925923418529171479684343878036049875289456825310839168",
+                    "type": "NATIVE_DOMAIN_TOKEN",
+                },
+                {
+                    "contract": "0xd4416b13d2b3a9abae7acd5d6c2bbdbe25686401",
+                    "id": "42184447928009120460686389475560276149795188091233200941948299907753855407605",
+                    "type": "WRAPPED_DOMAIN_TOKEN",
+                },
+            ],
+            "wrapped_owner": {
+                "hash": "0x9c996076a85b46061d9a70ff81f013853a86b619",
+            },
         })
     );
 
@@ -178,7 +221,7 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
             "id": "0x5d438d292de31e08576d5bcd8a93aa41b401b9d9aeaba57da1a32c003e5fd5f5",
             "name": "wa🇬🇲i.eth",
             "owner": {
-                "hash": "0x9c996076a85b46061d9a70ff81f013853a86b619",
+                "hash": "0xd4416b13d2b3a9abae7acd5d6c2bbdbe25686401",
             },
             "wrapped_owner": {
                 "hash": "0x9c996076a85b46061d9a70ff81f013853a86b619",
@@ -346,7 +389,8 @@ async fn basic_gno_domain_extracting_works(pool: PgPool) {
                 },
                 "subgraphs": {
                     "genome-subgraph": {
-                        "empty_label_hash": "0x1a13b687a5ff1d8ab1a9e189e1507a6abe834a9296cc8cff937905e3dee0c4f6"
+                        "empty_label_hash": "0x1a13b687a5ff1d8ab1a9e189e1507a6abe834a9296cc8cff937905e3dee0c4f6",
+                        "native_token_contract": "0xfd3d666dB2557983F3F04d61f90E35cc696f6D60"
                     }
                 }
             }
@@ -384,7 +428,13 @@ async fn basic_gno_domain_extracting_works(pool: PgPool) {
             "resolved_address":{
                 "hash": "0xc0de20a37e2dac848f81a93bd85fe4acdde7c0de",
             },
-            "token_id": "0x1a8247ca2a4190d90c748b31fa6517e5560c1b7a680f03ff73dbbc3ed2c0ed66",
+            "tokens": [
+                {
+                    "id": "11990319655936053415661126359086567018700354293176496925267203544835860524390",
+                    "contract": "0xfd3d666db2557983f3f04d61f90e35cc696f6d60",
+                    "type": "NATIVE_DOMAIN_TOKEN",
+                }
+            ]
         })
     );
 }

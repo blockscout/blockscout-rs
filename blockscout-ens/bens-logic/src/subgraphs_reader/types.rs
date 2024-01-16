@@ -90,14 +90,14 @@ pub struct GetDomainOutput {
     pub tokens: Vec<DomainToken>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DomainToken {
     pub id: String,
     pub contract: Address,
     pub _type: DomainTokenType,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DomainTokenType {
     Native,
     Wrapped,

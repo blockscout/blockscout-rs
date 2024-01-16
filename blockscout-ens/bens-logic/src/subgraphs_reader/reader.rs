@@ -10,7 +10,7 @@ use super::{
 };
 use crate::{
     entity::subgraph::{
-        domain::Domain,
+        domain::{DetailedDomain, Domain},
         domain_event::{DomainEvent, DomainEventTransaction},
     },
     hash_name::{domain_id, hex},
@@ -191,7 +191,7 @@ impl SubgraphReader {
         let empty_label_hash = subgraph.settings.empty_label_hash.clone();
         let domain_name = DomainName::new(&input.name, empty_label_hash)
             .map_err(|e| SubgraphReadError::Internal(e.to_string()))?;
-        let maybe_domain = sql::get_domain(
+        let maybe_domain: Option<DetailedDomain> = sql::get_domain(
             self.pool.as_ref(),
             &domain_name,
             &subgraph.schema_name,
@@ -206,15 +206,14 @@ impl SubgraphReader {
                 &domain_name,
             )
         });
-        let output = if let Some(domain) = maybe_domain {
+        if let Some(domain) = maybe_domain {
             let tokens = extract_tokens_from_domain(&domain, &subgraph.settings).map_err(|e| {
-                SubgraphReadError::Internal(format!("failed to extract tokens: {e}"))
+                SubgraphReadError::Internal(format!("failed to extract domain tokens: {e}"))
             })?;
-            Some(GetDomainOutput { tokens, domain })
+            Ok(Some(GetDomainOutput { tokens, domain }))
         } else {
-            None
-        };
-        Ok(output)
+            Ok(None)
+        }
     }
 
     pub async fn get_domain_history(
@@ -425,7 +424,7 @@ mod tests {
         );
         let other_addresses: HashMap<String, String> = serde_json::from_value(serde_json::json!({
             "ETH": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
-            "RSK": "0xF0D485009714ce586358E3761754929904d76b9D",
+            "RSK": "0xf0d485009714cE586358E3761754929904D76B9D",
         }))
         .unwrap();
         assert_eq!(domain.other_addresses, other_addresses.into());
