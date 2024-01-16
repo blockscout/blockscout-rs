@@ -225,9 +225,9 @@ async fn insert_contract_deployment(txn: &DatabaseTransaction, test_case: &TestC
         chain_id: Set(test_case.chain_id.into()),
         address: Set(test_case.address.to_vec()),
         transaction_hash: Set(test_case.transaction_hash.to_vec()),
-        block_number: Set(Some(test_case.block_number.into())),
-        txindex: Set(Some(test_case.transaction_index.into())),
-        deployer: Set(Some(test_case.deployer.to_vec())),
+        block_number: Set(test_case.block_number.into()),
+        txindex: Set(test_case.transaction_index.into()),
+        deployer: Set(test_case.deployer.to_vec()),
         contract_id: Set(contract_id),
     }
     .insert(txn)
@@ -335,17 +335,15 @@ async fn check_contract_deployment(db: &DatabaseConnection, test_case: &TestCase
         "Invalid contract_deployments.transaction_hash"
     );
     assert_eq!(
-        Some(test_case_block_number),
-        contract_deployment.block_number,
+        test_case_block_number, contract_deployment.block_number,
         "Invalid contract_deployments.block_number"
     );
     assert_eq!(
-        Some(test_case_transaction_index),
-        contract_deployment.txindex,
+        test_case_transaction_index, contract_deployment.txindex,
         "Invalid contract_deployments.txindex"
     );
     assert_eq!(
-        Some(test_case.deployer.to_vec()),
+        test_case.deployer.to_vec(),
         contract_deployment.deployer,
         "Invalid contract_deployments.deployer"
     );

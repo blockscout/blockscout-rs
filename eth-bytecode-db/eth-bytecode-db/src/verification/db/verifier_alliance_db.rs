@@ -6,7 +6,7 @@ use anyhow::Context;
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use sea_orm::{
     entity::prelude::ColumnTrait, ActiveValue::Set, DatabaseConnection, DatabaseTransaction,
-    EntityTrait, JoinType, QueryFilter, QuerySelect, RelationTrait, TransactionTrait,
+    EntityTrait, QueryFilter, TransactionTrait,
 };
 use verifier_alliance_entity::{
     code, compiled_contracts, contract_deployments, contracts, verified_contracts,
@@ -33,26 +33,35 @@ pub(crate) async fn insert_data(
         .await
         .context("begin database transaction")?;
 
-    let contract = retrieve_contract(&txn, &deployment_data)
+    let contract_deployment = retrieve_contract_deployment(&txn, &deployment_data)
         .await
-        .context("retrieve contract")?
+        .context("retrieve contract contract_deployment")?
         .ok_or_else(|| {
             anyhow::anyhow!(
-                "contract was not found: chain_id={}, address={}, transaction_hash={}",
+                "contract deployment was not found: chain_id={}, address={}, transaction_hash={}",
                 deployment_data.chain_id,
                 DisplayBytes::from(deployment_data.contract_address.clone()),
                 DisplayBytes::from(deployment_data.transaction_hash.clone())
             )
         })?;
 
+    let contract = retrieve_contract(&txn, &contract_deployment)
+        .await
+        .context("retrieve contract")?;
+
     let compiled_contract = insert_compiled_contract(&txn, source_response)
         .await
         .context("insert compiled_contract")?;
 
-    let _verified_contract =
-        insert_verified_contract(&deployment_data, &txn, &contract, &compiled_contract)
-            .await
-            .context("insert verified_contract")?;
+    let _verified_contract = insert_verified_contract(
+        &deployment_data,
+        &txn,
+        &contract,
+        &contract_deployment,
+        &compiled_contract,
+    )
+    .await
+    .context("insert verified_contract")?;
 
     txn.commit().await.context("commit transaction")?;
 
@@ -85,15 +94,11 @@ pub(crate) async fn insert_deployment_data(
     Ok(())
 }
 
-async fn retrieve_contract(
+async fn retrieve_contract_deployment(
     txn: &DatabaseTransaction,
     deployment_data: &ContractDeploymentData,
-) -> Result<Option<contracts::Model>, anyhow::Error> {
-    contracts::Entity::find()
-        .join(
-            JoinType::Join,
-            contracts::Relation::ContractDeployments.def(),
-        )
+) -> Result<Option<contract_deployments::Model>, anyhow::Error> {
+    contract_deployments::Entity::find()
         .filter(contract_deployments::Column::ChainId.eq(deployment_data.chain_id))
         .filter(contract_deployments::Column::Address.eq(deployment_data.contract_address.clone()))
         .filter(
@@ -102,7 +107,23 @@ async fn retrieve_contract(
         )
         .one(txn)
         .await
-        .context("select from \"contracts\" joined with \"contract_deployments\"")
+        .context("select from \"contract_deployments\"")
+}
+
+async fn retrieve_contract(
+    txn: &DatabaseTransaction,
+    contract_deployment: &contract_deployments::Model,
+) -> Result<contracts::Model, anyhow::Error> {
+    contracts::Entity::find_by_id(contract_deployment.contract_id)
+        .one(txn)
+        .await
+        .context("select from \"contracts\" by id")?
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "contract was not found, though referring contract deployment exists; contract_id={}",
+                contract_deployment.contract_id
+            )
+        })
 }
 
 async fn retrieve_code(
@@ -170,6 +191,7 @@ async fn insert_verified_contract(
     deployment_data: &ContractDeploymentData,
     txn: &DatabaseTransaction,
     contract: &contracts::Model,
+    contract_deployment: &contract_deployments::Model,
     compiled_contract: &compiled_contracts::Model,
 ) -> Result<verified_contracts::Model, anyhow::Error> {
     let (creation_match, creation_values, creation_transformations) = check_code_match(
@@ -201,8 +223,10 @@ async fn insert_verified_contract(
 
     let active_model = verified_contracts::ActiveModel {
         id: Default::default(),
+        created_at: Default::default(),
+        updated_at: Default::default(),
+        deployment_id: Set(contract_deployment.id),
         compilation_id: Set(compiled_contract.id),
-        contract_id: Set(contract.id),
         creation_match: Set(creation_match),
         creation_values: Set(creation_values),
         creation_transformations: Set(creation_transformations),
@@ -218,7 +242,7 @@ async fn insert_verified_contract(
         false,
         [
             (CompilationId, compiled_contract.id),
-            (ContractId, contract.id),
+            (DeploymentId, contract_deployment.id),
         ]
     )?;
 
@@ -258,6 +282,8 @@ async fn insert_compiled_contract(
 
     let active_model = compiled_contracts::ActiveModel {
         id: Default::default(),
+        created_at: Default::default(),
+        updated_at: Default::default(),
         compiler: Set(compiler.to_string()),
         version: Set(source.compiler_version),
         language: Set(language.to_string()),
@@ -297,9 +323,11 @@ async fn insert_contract_deployment(
         chain_id: Set(deployment_data.chain_id.into()),
         address: Set(deployment_data.contract_address.clone()),
         transaction_hash: Set(deployment_data.transaction_hash.clone()),
-        block_number: Set(deployment_data.block_number.map(|v| v.into())),
-        txindex: Set(deployment_data.transaction_index.map(|v| v.into())),
-        deployer: Set(deployment_data.deployer),
+        block_number: Set(deployment_data.block_number.unwrap_or(-1).into()),
+        txindex: Set(deployment_data.transaction_index.unwrap_or(-1).into()),
+        deployer: Set(deployment_data
+            .deployer
+            .unwrap_or(ethers_core::types::Address::zero().0.to_vec())),
         contract_id: Set(contract.id),
     };
     let (contract_deployment, _inserted) = insert_then_select!(
