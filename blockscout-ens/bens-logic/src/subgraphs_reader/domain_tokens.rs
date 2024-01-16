@@ -95,6 +95,25 @@ mod tests {
         let wrapped_contract = "0x0987654321098765432109876543210987654321";
         let owner = "0x1111111111111111111111111111111111111111";
         for (domain, native_token_contract, expected_tokens) in [
+            // No native contract provided
+            (
+                domain("levvv.eth", "0x0200", "0x0100", owner, None),
+                None,
+                vec![],
+            ),
+            // Native contract provided, but domain is third level
+            (
+                domain(
+                    "this_is_third_level_domain.levvv.eth",
+                    "0x0200",
+                    "0x0100",
+                    owner,
+                    None,
+                ),
+                addr(native_contract),
+                vec![],
+            ),
+            // Native contract provided, no wrapped owner
             (
                 domain("levvv.eth", "0x0200", "0x0100", owner, None),
                 addr(native_contract),
@@ -105,6 +124,24 @@ mod tests {
                     _type: DomainTokenType::Native,
                 }],
             ),
+            // Native contract provided, wrapped owner provided, but third level domain, so only wrapped token
+            (
+                domain(
+                    "this_is_third_level_domain.levvv.eth",
+                    "0x0200",
+                    "0x0100",
+                    wrapped_contract,
+                    Some(owner),
+                ),
+                addr(native_contract),
+                vec![DomainToken {
+                    id: "512".to_string(),
+                    contract: Address::from_str(wrapped_contract)
+                        .expect("invalid wrapped_contract provided"),
+                    _type: DomainTokenType::Wrapped,
+                }],
+            ),
+            // Everything is provided
             (
                 domain(
                     "levvv.eth",
