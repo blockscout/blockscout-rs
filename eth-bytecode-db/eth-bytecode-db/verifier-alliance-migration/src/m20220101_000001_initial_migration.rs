@@ -196,7 +196,7 @@ impl MigrationTrait for Migration {
             CREATE TABLE verified_contracts
             (
                 /* an opaque id, but sequentially ordered */
-                id  BIGSERIAL NOT NULL,
+                id  BIGSERIAL NOT NULL PRIMARY KEY,
 
                 /* timestamps */
                 created_at  timestamptz NOT NULL DEFAULT NOW(),
