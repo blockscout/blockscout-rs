@@ -3,7 +3,7 @@ use blockscout_service_launcher::{
     launcher::{ConfigSettings, MetricsSettings, ServerSettings},
     tracing::{JaegerSettings, TracingSettings},
 };
-use ethers::types::Bytes;
+use ethers::types::{Address, Bytes};
 use serde::Deserialize;
 use std::collections::HashMap;
 use url::Url;
@@ -70,6 +70,8 @@ pub struct SubgraphSettings {
     pub use_cache: bool,
     #[serde(default)]
     pub empty_label_hash: Option<Bytes>,
+    #[serde(default)]
+    pub native_token_contract: Option<Address>,
 }
 
 fn default_use_cache() -> bool {
@@ -81,6 +83,7 @@ impl From<SubgraphSettings> for bens_logic::subgraphs_reader::SubgraphSettings {
         Self {
             use_cache: value.use_cache,
             empty_label_hash: value.empty_label_hash,
+            native_token_contract: value.native_token_contract,
         }
     }
 }

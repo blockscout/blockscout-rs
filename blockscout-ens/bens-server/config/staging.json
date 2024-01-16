@@ -9,7 +9,8 @@
         },
         "subgraphs": {
           "ens-subgraph": {
-            "use_cache": true
+            "use_cache": true,
+            "native_token_contract": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85"
           }
         }
       },
@@ -19,7 +20,8 @@
         },
         "subgraphs": {
           "genome-subgraph": {
-            "empty_label_hash": "0x1a13b687a5ff1d8ab1a9e189e1507a6abe834a9296cc8cff937905e3dee0c4f6"
+            "empty_label_hash": "0x1a13b687a5ff1d8ab1a9e189e1507a6abe834a9296cc8cff937905e3dee0c4f6",
+            "native_token_contract": "0xfd3d666dB2557983F3F04d61f90E35cc696f6D60"
           }
         }
       }
