@@ -444,7 +444,7 @@ definitions:
     properties:
       id:
         type: string
-      contract:
+      contract_hash:
         type: string
       type:
         $ref: '#/definitions/v1TokenType'

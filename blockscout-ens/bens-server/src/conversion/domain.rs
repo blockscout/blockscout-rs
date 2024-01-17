@@ -177,7 +177,7 @@ fn date_from_logic(d: chrono::DateTime<chrono::Utc>) -> String {
 fn domain_token_from_logic(t: DomainToken) -> proto::Token {
     proto::Token {
         id: t.id,
-        contract: format!("{:#x}", t.contract),
+        contract_hash: format!("{:#x}", t.contract),
         r#type: domain_token_type_from_logic(t._type).into(),
     }
 }

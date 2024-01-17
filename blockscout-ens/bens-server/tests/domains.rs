@@ -89,7 +89,7 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
             "tokens": [
                 {
                     "id": "79233663829379634837589865448569342784712482819484549289560981379859480642508",
-                    "contract": "0x57f1887a8bf19b14fc0df6fd9b2acc9af147ea85",
+                    "contract_hash": "0x57f1887a8bf19b14fc0df6fd9b2acc9af147ea85",
                     "type": "NATIVE_DOMAIN_TOKEN",
                 }
             ],
@@ -116,12 +116,12 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
             },
             "tokens": [
                 {
-                    "contract": "0x57f1887a8bf19b14fc0df6fd9b2acc9af147ea85",
+                    "contract_hash": "0x57f1887a8bf19b14fc0df6fd9b2acc9af147ea85",
                     "id": "46567936673033819165815925923418529171479684343878036049875289456825310839168",
                     "type": "NATIVE_DOMAIN_TOKEN",
                 },
                 {
-                    "contract": "0xd4416b13d2b3a9abae7acd5d6c2bbdbe25686401",
+                    "contract_hash": "0xd4416b13d2b3a9abae7acd5d6c2bbdbe25686401",
                     "id": "42184447928009120460686389475560276149795188091233200941948299907753855407605",
                     "type": "WRAPPED_DOMAIN_TOKEN",
                 },
@@ -431,7 +431,7 @@ async fn basic_gno_domain_extracting_works(pool: PgPool) {
             "tokens": [
                 {
                     "id": "11990319655936053415661126359086567018700354293176496925267203544835860524390",
-                    "contract": "0xfd3d666db2557983f3f04d61f90e35cc696f6d60",
+                    "contract_hash": "0xfd3d666db2557983f3f04d61f90e35cc696f6d60",
                     "type": "NATIVE_DOMAIN_TOKEN",
                 }
             ]

@@ -71,7 +71,7 @@ message DomainEvent {
 
 message Token {
   string id = 1;
-  string contract = 2;
+  string contract_hash = 2;
   TokenType type = 3;
 }
 
