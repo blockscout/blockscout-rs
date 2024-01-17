@@ -33,9 +33,8 @@ RUN cargo build --release
 
 FROM node:16-bullseye-slim
 WORKDIR /usr/src/
-# sol2uml needed phantom which installation needed bzip2
-RUN apt-get update && apt-get install bzip2 \
-    && npm install phantom \
+
+RUN apt-get update && apt-get install -y chromium \
     && npm link sol2uml@2.1 --only=production
 
 COPY --from=build /app/target/release/visualizer-server ./

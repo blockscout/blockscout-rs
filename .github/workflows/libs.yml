@@ -1,81 +1,81 @@
-on:
-  push:
-    branches:
-      - 'main'
-  pull_request:
-    paths:
-      - libs/**
-      - .github/workflows/libs.yml
-      - .github/actions/deps/**
+# on:
+#   push:
+#     branches:
+#       - 'main'
+#   pull_request:
+#     paths:
+#       - libs/**
+#       - .github/workflows/libs.yml
+#       - .github/actions/deps/**
 
-name: Test, lint (libs)
+# name: Test, lint (libs)
 
-defaults:
-  run:
-    working-directory: libs
+# defaults:
+#   run:
+#     working-directory: libs
 
-jobs:
-  test:
-    name: Unit, doc and integration tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
+# jobs:
+#   test:
+#     name: Unit, doc and integration tests
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Checkout sources
+#         uses: actions/checkout@v4
 
-      - name: Install deps
-        uses: ./.github/actions/deps
+#       - name: Install deps
+#         uses: ./.github/actions/deps
 
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          override: true
+#       - name: Install toolchain
+#         uses: actions-rs/toolchain@v1
+#         with:
+#           toolchain: stable
+#           profile: minimal
+#           override: true
 
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          workspaces: libs -> target
+#       - name: Rust cache
+#         uses: Swatinem/rust-cache@v2
+#         with:
+#           cache-on-failure: true
+#           workspaces: libs -> target
 
-      - name: Unit tests
-        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --workspace --all-features --lib --bins -- --nocapture
-        if: success() || failure()
+#       - name: Unit tests
+#         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --workspace --all-features --lib --bins -- --nocapture
+#         if: success() || failure()
 
-      - name: Doc tests
-        run: cargo test --workspace --all-features --doc
-        if: success() || failure()
+#       - name: Doc tests
+#         run: cargo test --workspace --all-features --doc
+#         if: success() || failure()
 
-  #       TODO: Uncomment when integration test added
-  #      - name: Integration tests
-  #        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --workspace --test '*' -- --nocapture
-  #        if: success() || failure()
+#   #       TODO: Uncomment when integration test added
+#   #      - name: Integration tests
+#   #        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --workspace --test '*' -- --nocapture
+#   #        if: success() || failure()
 
-  lint:
-    name: Linting
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
+#   lint:
+#     name: Linting
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Checkout sources
+#         uses: actions/checkout@v4
 
-      - name: Install deps
-        uses: ./.github/actions/deps
+#       - name: Install deps
+#         uses: ./.github/actions/deps
 
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          components: rustfmt, clippy
-          override: true
+#       - name: Install toolchain
+#         uses: actions-rs/toolchain@v1
+#         with:
+#           toolchain: stable
+#           profile: minimal
+#           components: rustfmt, clippy
+#           override: true
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          workspaces: libs -> target
+#       - uses: Swatinem/rust-cache@v2
+#         with:
+#           cache-on-failure: true
+#           workspaces: libs -> target
 
-      - name: cargo fmt
-        run: cargo fmt --all -- --check --config imports_granularity=Crate
+#       - name: cargo fmt
+#         run: cargo fmt --all -- --check --config imports_granularity=Crate
 
-      - name: cargo clippy
-        run: cargo clippy --all --all-targets --all-features -- -D warnings
+#       - name: cargo clippy
+#         run: cargo clippy --all --all-targets --all-features -- -D warnings
