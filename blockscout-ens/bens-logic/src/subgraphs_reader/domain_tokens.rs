@@ -8,7 +8,10 @@ use std::str::FromStr;
 #[tracing::instrument(
     level = "info",
     skip(domain, subgraph_settings),
-    fields(domain_name = domain.name),
+    fields(
+        domain_name = domain.name,
+        native_token_contract =? subgraph_settings.native_token_contract,
+    ),
     err,
 )]
 pub fn extract_tokens_from_domain(
