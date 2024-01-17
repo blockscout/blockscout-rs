@@ -1,0 +1,38 @@
+{
+  "base-mainnet": {
+    "ENSRegistry": {
+      "address": "0xeCBaE6E54bAA669005b93342E5650d5886D54fc7",
+      "startBlock": 2346359
+    },
+    "PublicResolver": {
+      "startBlock": 2346395
+    },
+    "BASERegistrarController": {
+      "address": "0x4079d84889e0E1AC22beec60dc8e5E7b621bf55D",
+      "startBlock": 2346381
+    },
+    "BaseRegistrarImplementation": {
+      "address": "0xaCe5602d169Edeb874bfE584a651801B8ac67093",
+      "startBlock": 2346370
+    },
+    "": ""
+  },
+  "base-goerli": {
+    "ENSRegistry": {
+      "address": "0xAFCc9Ba1ac174CB5347c07FaeddE8BF8b4aBa40a",
+      "startBlock": 7910473
+    },
+    "PublicResolver": {
+      "startBlock": 7910507
+    },
+    "BASERegistrarController": {
+      "address": "0x3f1bFFb4d1AF0F448ccB2706945a0140921bd1dC",
+      "startBlock": 7910495
+    },
+    "BaseRegistrarImplementation": {
+      "address": "0x707Db367E3E1e0d503924160E32D3981AD86C80e",
+      "startBlock": 7910484
+    },
+    "": ""
+  }
+}
