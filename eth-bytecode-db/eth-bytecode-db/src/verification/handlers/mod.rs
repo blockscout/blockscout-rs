@@ -375,16 +375,12 @@ async fn process_verifier_alliance_db_action(
                 .context("Converting source into database ready version")?;
 
             // At least one of creation and runtime code should exist to add the contract into the database.
-            if creation_code.is_none() && runtime_code.is_none() {
-                anyhow::bail!("Both creation and runtime codes are nulls")
-            }
-
             let transaction_hash = derive_transaction_hash(
                 transaction_hash.clone(),
                 creation_code.clone(),
                 runtime_code.clone(),
             )
-            .expect("At least one of creation or runtime codes must exist");
+            .ok_or_else(|| anyhow::anyhow!("Both creation and runtime codes are nulls"))?;
 
             let deployment_data = db::verifier_alliance_db::ContractDeploymentData {
                 chain_id,
