@@ -37,9 +37,15 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
+        volumes:
+          - /tmp/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
+
+      - name: Copy entrypoint scripts to the volume
+        run: sudo cp -r ../.github/volumes/docker-entrypoint-initdb.d/* /tmp/docker-entrypoint-initdb.d/
+        continue-on-error: false
 
       - name: Install deps
         uses: ./.github/actions/deps

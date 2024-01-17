@@ -94,13 +94,15 @@ enum VerifierAllianceDbAction<'a> {
         db_client: &'a DatabaseConnection,
         chain_id: i64,
         contract_address: bytes::Bytes,
-        transaction_hash: bytes::Bytes,
+        transaction_hash: Option<bytes::Bytes>,
+        creation_code: Option<bytes::Bytes>,
+        runtime_code: Option<bytes::Bytes>,
     },
     SaveWithDeploymentData {
         db_client: &'a DatabaseConnection,
         chain_id: i64,
         contract_address: bytes::Bytes,
-        transaction_hash: bytes::Bytes,
+        transaction_hash: Option<bytes::Bytes>,
         block_number: Option<i64>,
         transaction_index: Option<i64>,
         deployer: Option<bytes::Bytes>,
@@ -121,7 +123,7 @@ impl<'a> VerifierAllianceDbAction<'a> {
                 Some(VerificationMetadata {
                     chain_id: Some(chain_id),
                     contract_address: Some(contract_address),
-                    transaction_hash: Some(transaction_hash),
+                    transaction_hash,
                     block_number,
                     transaction_index,
                     deployer,
@@ -147,6 +149,8 @@ impl<'a> VerifierAllianceDbAction<'a> {
                         chain_id,
                         contract_address,
                         transaction_hash,
+                        creation_code,
+                        runtime_code,
                     }
                 }
             }
@@ -298,6 +302,24 @@ async fn process_verifier_alliance_db_action(
     source: Source,
     action: VerifierAllianceDbAction<'_>,
 ) -> Result<(), anyhow::Error> {
+    let derive_transaction_hash =
+        |transaction_hash: Option<bytes::Bytes>,
+         creation_code: Option<bytes::Bytes>,
+         runtime_code: Option<bytes::Bytes>| {
+            match transaction_hash {
+                Some(hash) => Some(hash.to_vec()),
+                None if creation_code.is_some() || runtime_code.is_some() => {
+                    let combined_hash: Vec<_> = creation_code
+                        .unwrap_or_default()
+                        .into_iter()
+                        .chain(runtime_code.unwrap_or_default())
+                        .collect();
+                    Some(keccak_hash::keccak(combined_hash).0.to_vec())
+                }
+                None => None,
+            }
+        };
+
     match action {
         VerifierAllianceDbAction::IgnoreDb => {}
         VerifierAllianceDbAction::SaveIfDeploymentExists {
@@ -305,14 +327,33 @@ async fn process_verifier_alliance_db_action(
             chain_id,
             contract_address,
             transaction_hash,
+            creation_code,
+            runtime_code,
         } => {
             let database_source = DatabaseReadySource::try_from(source)
                 .context("Converting source into database ready version")?;
 
+            let transaction_hash = match derive_transaction_hash(
+                transaction_hash,
+                creation_code,
+                runtime_code,
+            ) {
+                Some(hash) => hash,
+                // If no transaction hash can be derived,
+                // consider it like no active deployment exists.
+                None => {
+                    tracing::warn!(
+                        chain_id=chain_id,
+                        contract_address=blockscout_display_bytes::Bytes::from(contract_address.to_vec()).to_string(),
+                        "Trying to save contract without transaction hash and creation and runtime codes"
+                    );
+                    return Ok(());
+                }
+            };
             let deployment_data = db::verifier_alliance_db::ContractDeploymentData {
                 chain_id,
                 contract_address: contract_address.to_vec(),
-                transaction_hash: transaction_hash.to_vec(),
+                transaction_hash,
                 ..Default::default()
             };
             db::verifier_alliance_db::insert_data(db_client, database_source, deployment_data)
@@ -334,13 +375,13 @@ async fn process_verifier_alliance_db_action(
                 .context("Converting source into database ready version")?;
 
             // At least one of creation and runtime code should exist to add the contract into the database.
-            if creation_code.is_none() && runtime_code.is_none() {
-                anyhow::bail!("Both creation and runtime codes are nulls")
-            }
+            let transaction_hash = derive_transaction_hash(
+                transaction_hash.clone(),
+                creation_code.clone(),
+                runtime_code.clone(),
+            )
+            .ok_or_else(|| anyhow::anyhow!("Both creation and runtime codes are nulls"))?;
 
-            // TODO: make transaction_hash input argument optional, and calculate it
-            //       as `keccak256(creation_code || runtime_code)` in that case
-            let transaction_hash = transaction_hash.to_vec();
             let deployment_data = db::verifier_alliance_db::ContractDeploymentData {
                 chain_id,
                 contract_address: contract_address.to_vec(),
@@ -348,23 +389,13 @@ async fn process_verifier_alliance_db_action(
                 block_number,
                 transaction_index,
                 deployer: deployer.map(|deployer| deployer.to_vec()),
-                creation_code: creation_code
-                    .as_ref()
-                    .map(|creation_code| creation_code.to_vec()),
-                runtime_code: runtime_code
-                    .as_ref()
-                    .map(|runtime_code| runtime_code.to_vec()),
+                creation_code: creation_code.map(|code| code.to_vec()),
+                runtime_code: runtime_code.map(|code| code.to_vec()),
             };
 
-            // At least one of creation and runtime code should exist to add the contract into the database.
-            if creation_code.is_some() || runtime_code.is_some() {
-                db::verifier_alliance_db::insert_deployment_data(
-                    db_client,
-                    deployment_data.clone(),
-                )
+            db::verifier_alliance_db::insert_deployment_data(db_client, deployment_data.clone())
                 .await
                 .context("Insert deployment data into verifier alliance database")?;
-            }
 
             db::verifier_alliance_db::insert_data(db_client, database_source, deployment_data)
                 .await

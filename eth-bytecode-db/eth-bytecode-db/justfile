@@ -17,7 +17,7 @@ test-db-port := "9433"
 
 start-postgres:
     # we run it in --rm mode, so all data will be deleted after stopping
-    docker run -p {{db-port}}:5432 --name {{docker-name}} -e POSTGRES_PASSWORD={{db-password}} -e POSTGRES_USER={{db-user}} --rm -d postgres
+    docker run -p {{db-port}}:5432 --name {{docker-name}} -e POSTGRES_PASSWORD={{db-password}} -e POSTGRES_USER={{db-user}} -c max_connections=500 --rm -d postgres
     sleep 3
     # wait for postgres to start, but only if db_name is not empty
     $SHELL -c '[[ -z "{{db-name}}" ]] || docker exec -it {{docker-name}} psql -U postgres -c "create database {{db-name}};"'

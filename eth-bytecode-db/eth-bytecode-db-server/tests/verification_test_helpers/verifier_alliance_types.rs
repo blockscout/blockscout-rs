@@ -9,7 +9,7 @@ use std::{collections::BTreeMap, path::Path, str::FromStr};
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct TestCase {
-    pub deployed_creation_code: DisplayBytes,
+    pub deployed_creation_code: Option<DisplayBytes>,
     pub deployed_runtime_code: DisplayBytes,
 
     pub compiled_creation_code: DisplayBytes,
@@ -26,31 +26,28 @@ pub struct TestCase {
     pub runtime_code_artifacts: serde_json::Value,
 
     pub creation_match: bool,
-    pub creation_values: serde_json::Value,
-    pub creation_transformations: serde_json::Value,
+    pub creation_values: Option<serde_json::Value>,
+    pub creation_transformations: Option<serde_json::Value>,
 
     pub runtime_match: bool,
-    pub runtime_values: serde_json::Value,
-    pub runtime_transformations: serde_json::Value,
+    pub runtime_values: Option<serde_json::Value>,
+    pub runtime_transformations: Option<serde_json::Value>,
 
-    #[serde(skip_deserializing)]
     #[serde(default = "default_chain_id")]
     pub chain_id: usize,
-    #[serde(skip_deserializing)]
     #[serde(default = "default_address")]
     pub address: DisplayBytes,
-    #[serde(skip_deserializing)]
     #[serde(default = "default_transaction_hash")]
     pub transaction_hash: DisplayBytes,
-    #[serde(skip_deserializing)]
     #[serde(default = "default_block_number")]
-    pub block_number: usize,
-    #[serde(skip_deserializing)]
+    pub block_number: i64,
     #[serde(default = "default_transaction_index")]
-    pub transaction_index: usize,
-    #[serde(skip_deserializing)]
+    pub transaction_index: i64,
     #[serde(default = "default_deployer")]
     pub deployer: DisplayBytes,
+
+    #[serde(default)]
+    pub is_genesis: bool,
 }
 
 fn default_chain_id() -> usize {
@@ -63,10 +60,10 @@ fn default_transaction_hash() -> DisplayBytes {
     DisplayBytes::from_str("0xcafecafecafecafecafecafecafecafecafecafecafecafecafecafecafecafe")
         .unwrap()
 }
-fn default_block_number() -> usize {
+fn default_block_number() -> i64 {
     1
 }
-fn default_transaction_index() -> usize {
+fn default_transaction_index() -> i64 {
     0
 }
 fn default_deployer() -> DisplayBytes {
@@ -106,9 +103,13 @@ impl TestCase {
             .map(|abi| abi.to_string());
         let constructor_arguments = self
             .creation_values
-            .as_object()
-            .expect("`creation_values` must be an object")
-            .get("constructorArguments")
+            .as_ref()
+            .and_then(|values| {
+                values
+                    .as_object()
+                    .expect("`creation_values` must be an object")
+                    .get("constructorArguments")
+            })
             .map(|args| {
                 args.as_str()
                     .expect("`constructorArguments` must be a string")
@@ -116,9 +117,8 @@ impl TestCase {
             });
         let match_type = if self
             .creation_values
-            .as_object()
-            .unwrap()
-            .get("cborAuxdata")
+            .as_ref()
+            .and_then(|values| values.as_object().unwrap().get("cborAuxdata"))
             .is_some()
         {
             smart_contract_verifier_v2::source::MatchType::Partial
