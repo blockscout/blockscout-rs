@@ -333,10 +333,18 @@ async fn process_verifier_alliance_db_action(
             let database_source = DatabaseReadySource::try_from(source)
                 .context("Converting source into database ready version")?;
 
+            // At least one of creation and runtime code should exist to add the contract into the database.
+            if creation_code.is_none() && runtime_code.is_none() {
+                anyhow::bail!("Both creation and runtime codes are nulls")
+            }
+
+            // TODO: make transaction_hash input argument optional, and calculate it
+            //       as `keccak256(creation_code || runtime_code)` in that case
+            let transaction_hash = transaction_hash.to_vec();
             let deployment_data = db::verifier_alliance_db::ContractDeploymentData {
                 chain_id,
                 contract_address: contract_address.to_vec(),
-                transaction_hash: transaction_hash.to_vec(),
+                transaction_hash,
                 block_number,
                 transaction_index,
                 deployer: deployer.map(|deployer| deployer.to_vec()),
@@ -357,6 +365,7 @@ async fn process_verifier_alliance_db_action(
                 .await
                 .context("Insert deployment data into verifier alliance database")?;
             }
+
             db::verifier_alliance_db::insert_data(db_client, database_source, deployment_data)
                 .await
                 .context("Insert data into verifier alliance database")?;
