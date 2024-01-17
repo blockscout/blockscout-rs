@@ -1,11 +1,10 @@
 use super::ConversionError;
 use crate::conversion::order_direction_from_inner;
 use bens_logic::{
-    entity::subgraph::domain::{DetailedDomain, Domain},
-    hash_name::hex,
+    entity::subgraph::domain::Domain,
     subgraphs_reader::{
-        BatchResolveAddressNamesInput, DomainPaginationInput, DomainSortField, GetDomainInput,
-        LookupAddressInput, LookupDomainInput,
+        BatchResolveAddressNamesInput, DomainPaginationInput, DomainSortField, DomainToken,
+        DomainTokenType, GetDomainInput, GetDomainOutput, LookupAddressInput, LookupDomainInput,
     },
 };
 use bens_proto::blockscout::bens::v1 as proto;
@@ -89,29 +88,37 @@ pub fn batch_resolve_from_inner(
 }
 
 pub fn detailed_domain_from_logic(
-    d: DetailedDomain,
+    output: GetDomainOutput,
 ) -> Result<proto::DetailedDomain, ConversionError> {
-    let owner = Some(proto::Address { hash: d.owner });
-    let resolved_address = d.resolved_address.map(|resolved_address| proto::Address {
-        hash: resolved_address,
-    });
-    let wrapped_owner = d.wrapped_owner.map(|wrapped_owner| proto::Address {
+    let domain = output.domain;
+    let owner = Some(proto::Address { hash: domain.owner });
+    let resolved_address = domain
+        .resolved_address
+        .map(|resolved_address| proto::Address {
+            hash: resolved_address,
+        });
+    let wrapped_owner = domain.wrapped_owner.map(|wrapped_owner| proto::Address {
         hash: wrapped_owner,
     });
-    let registrant = d
+    let registrant = domain
         .registrant
         .map(|registrant| proto::Address { hash: registrant });
+    let tokens = output
+        .tokens
+        .into_iter()
+        .map(domain_token_from_logic)
+        .collect();
     Ok(proto::DetailedDomain {
-        id: d.id,
-        name: d.name.unwrap_or_default(),
-        token_id: d.labelhash.map(hex).unwrap_or_default(),
+        id: domain.id,
+        name: domain.name.unwrap_or_default(),
         owner,
         resolved_address,
         registrant,
         wrapped_owner,
-        expiry_date: d.expiry_date.map(date_from_logic),
-        registration_date: date_from_logic(d.registration_date),
-        other_addresses: d.other_addresses.0.into_iter().collect(),
+        expiry_date: domain.expiry_date.map(date_from_logic),
+        registration_date: date_from_logic(domain.registration_date),
+        other_addresses: domain.other_addresses.0.into_iter().collect(),
+        tokens,
     })
 }
 
@@ -165,4 +172,19 @@ fn page_size_from_inner(page_size: Option<u32>) -> u32 {
 
 fn date_from_logic(d: chrono::DateTime<chrono::Utc>) -> String {
     d.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+}
+
+fn domain_token_from_logic(t: DomainToken) -> proto::Token {
+    proto::Token {
+        id: t.id,
+        contract_hash: format!("{:#x}", t.contract),
+        r#type: domain_token_type_from_logic(t._type).into(),
+    }
+}
+
+fn domain_token_type_from_logic(t: DomainTokenType) -> proto::TokenType {
+    match t {
+        DomainTokenType::Native => proto::TokenType::NativeDomainToken,
+        DomainTokenType::Wrapped => proto::TokenType::WrappedDomainToken,
+    }
 }

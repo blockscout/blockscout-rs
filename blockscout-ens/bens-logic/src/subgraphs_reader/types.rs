@@ -1,4 +1,5 @@
 use super::pagination::{DomainPaginationInput, Order};
+use crate::entity::subgraph::domain::DetailedDomain;
 use ethers::types::Address;
 use sea_query::{Alias, IntoIden};
 use serde::Deserialize;
@@ -81,4 +82,23 @@ impl Display for EventSort {
             EventSort::BlockNumber => write!(f, "block_number"),
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct GetDomainOutput {
+    pub domain: DetailedDomain,
+    pub tokens: Vec<DomainToken>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DomainToken {
+    pub id: String,
+    pub contract: Address,
+    pub _type: DomainTokenType,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DomainTokenType {
+    Native,
+    Wrapped,
 }

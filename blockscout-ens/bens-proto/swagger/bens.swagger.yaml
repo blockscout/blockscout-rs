@@ -315,9 +315,12 @@ definitions:
       name:
         type: string
         title: The human readable name, if known. Unknown portions replaced with hash in square brackets (eg, foo.[1234].eth)
-      token_id:
-        type: string
-        title: Hex representation of labelhash
+      tokens:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Token'
+        title: List of NFT tokens related to this domain
       owner:
         $ref: '#/definitions/v1Address'
         title: The account that owns the domain
@@ -436,3 +439,18 @@ definitions:
       page_size:
         type: integer
         format: int64
+  v1Token:
+    type: object
+    properties:
+      id:
+        type: string
+      contract_hash:
+        type: string
+      type:
+        $ref: '#/definitions/v1TokenType'
+  v1TokenType:
+    type: string
+    enum:
+      - NATIVE_DOMAIN_TOKEN
+      - WRAPPED_DOMAIN_TOKEN
+    default: NATIVE_DOMAIN_TOKEN
