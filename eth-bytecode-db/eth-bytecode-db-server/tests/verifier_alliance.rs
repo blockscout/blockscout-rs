@@ -45,14 +45,22 @@ const API_KEY_NAME: &str = "x-api-key";
 const API_KEY: &str = "some api key";
 
 fn verify_request(test_case: &TestCase) -> eth_bytecode_db_v2::VerifySolidityStandardJsonRequest {
+    let transaction_hash =
+        (!test_case.is_genesis).then_some(test_case.transaction_hash.to_string());
+    let block_number = (!test_case.is_genesis).then_some(test_case.block_number);
+    let transaction_index = (!test_case.is_genesis).then_some(test_case.transaction_index);
+    let deployer = (!test_case.is_genesis).then_some(test_case.deployer.to_string());
     let metadata = eth_bytecode_db_v2::VerificationMetadata {
         chain_id: Some(format!("{}", test_case.chain_id)),
         contract_address: Some(test_case.address.to_string()),
-        transaction_hash: Some(test_case.transaction_hash.to_string()),
-        block_number: Some(test_case.block_number as i64),
-        transaction_index: Some(test_case.transaction_index as i64),
-        deployer: Some(test_case.deployer.to_string()),
-        creation_code: Some(test_case.deployed_creation_code.to_string()),
+        transaction_hash,
+        block_number,
+        transaction_index,
+        deployer,
+        creation_code: test_case
+            .deployed_creation_code
+            .as_ref()
+            .map(ToString::to_string),
         runtime_code: Some(test_case.deployed_runtime_code.to_string()),
     };
 
@@ -214,7 +222,7 @@ pub async fn success_with_existing_deployment(
 #[tokio::test]
 #[ignore = "Needs database to run"]
 pub async fn success_without_existing_deployment(
-    #[files("tests/alliance_test_cases/full_match.json")] test_case_path: PathBuf,
+    #[files("tests/alliance_test_cases/*.json")] test_case_path: PathBuf,
 ) {
     const TEST_PREFIX: &str = "success_without_existing_deployment";
 
@@ -232,7 +240,7 @@ pub async fn success_without_existing_deployment(
 #[tokio::test]
 #[ignore = "Needs database to run"]
 pub async fn failure_without_existing_deployment_not_authorized(
-    #[files("tests/alliance_test_cases/full_match.json")] test_case_path: PathBuf,
+    #[files("tests/alliance_test_cases/*.json")] test_case_path: PathBuf,
 ) {
     const TEST_PREFIX: &str = "failure_without_existing_deployment_not_authorized";
 
@@ -266,7 +274,7 @@ pub async fn failure_without_existing_deployment_not_authorized(
 async fn insert_contract_deployment(txn: &DatabaseTransaction, test_case: &TestCase) -> Uuid {
     let contract_id = insert_contract(
         txn,
-        test_case.deployed_creation_code.to_vec(),
+        test_case.deployed_creation_code.as_deref().map(Vec::from),
         test_case.deployed_runtime_code.to_vec(),
     )
     .await;
@@ -295,25 +303,30 @@ async fn insert_contract_deployment(txn: &DatabaseTransaction, test_case: &TestC
 
 async fn insert_contract(
     txn: &DatabaseTransaction,
-    creation_code: Vec<u8>,
+    creation_code: Option<Vec<u8>>,
     runtime_code: Vec<u8>,
 ) -> Uuid {
-    let creation_code_hash = insert_code(txn, creation_code).await;
-    let runtime_code_hash = insert_code(txn, runtime_code).await;
+    let creation_code_hash = match creation_code {
+        Some(creation_code) => insert_code(txn, creation_code).await.0.to_vec(),
+        None => Vec::new(),
+    };
+    let runtime_code_hash = insert_code(txn, runtime_code).await.0.to_vec();
 
     contracts::ActiveModel {
         id: Default::default(),
-        creation_code_hash: Set(creation_code_hash.0.to_vec()),
-        runtime_code_hash: Set(runtime_code_hash.0.to_vec()),
+        creation_code_hash: Set(creation_code_hash.clone()),
+        runtime_code_hash: Set(runtime_code_hash.clone()),
     }
     .insert(txn)
     .await
     .unwrap_or_else(|err| {
         panic!(
             "insertion of a contract failed; \
-            creation_code_hash: {creation_code_hash}, \
-            runtime_code_hash: {runtime_code_hash}, \
-            err: {err}"
+            creation_code_hash: {}, \
+            runtime_code_hash: {}, \
+            err: {err}",
+            blockscout_display_bytes::Bytes::from(creation_code_hash),
+            blockscout_display_bytes::Bytes::from(runtime_code_hash),
         )
     })
     .id
@@ -338,7 +351,7 @@ async fn check_contract(db: &DatabaseConnection, contract: contracts::Model, tes
         .unwrap()
         .unwrap();
     assert_eq!(
-        Some(test_case.deployed_creation_code.to_vec()),
+        test_case.deployed_creation_code.as_deref().map(Vec::from),
         creation_code.code,
         "Invalid creation_code for deployed contract"
     );
@@ -486,21 +499,16 @@ async fn check_verified_contract(db: &DatabaseConnection, test_case: &TestCase) 
         .await
         .expect("The data has not been added into `verified_contracts` table");
 
-    let test_case_creation_values = Some(test_case.creation_values.clone());
-    let test_case_creation_transformations = Some(test_case.creation_transformations.clone());
-    let test_case_runtime_values = Some(test_case.runtime_values.clone());
-    let test_case_runtime_transformations = Some(test_case.runtime_transformations.clone());
-
     assert_eq!(
         test_case.creation_match, verified_contract.creation_match,
         "Invalid creation_match"
     );
     assert_eq!(
-        test_case_creation_values, verified_contract.creation_values,
+        test_case.creation_values, verified_contract.creation_values,
         "Invalid creation_values"
     );
     assert_eq!(
-        test_case_creation_transformations, verified_contract.creation_transformations,
+        test_case.creation_transformations, verified_contract.creation_transformations,
         "Invalid creation_transformations"
     );
     assert_eq!(
@@ -508,11 +516,11 @@ async fn check_verified_contract(db: &DatabaseConnection, test_case: &TestCase) 
         "Invalid runtime_match"
     );
     assert_eq!(
-        test_case_runtime_values, verified_contract.runtime_values,
+        test_case.runtime_values, verified_contract.runtime_values,
         "Invalid runtime_values"
     );
     assert_eq!(
-        test_case_runtime_transformations, verified_contract.runtime_transformations,
+        test_case.runtime_transformations, verified_contract.runtime_transformations,
         "Invalid runtime_transformations"
     );
 }
