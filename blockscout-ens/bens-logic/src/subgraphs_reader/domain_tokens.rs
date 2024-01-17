@@ -145,21 +145,21 @@ mod tests {
             (
                 domain(
                     "levvv.eth",
-                    "0x0200",
-                    "0x0100",
+                    "0x38a7804a53792b0cdefe3e7271b0b85422d620ea4a82df7b7bf750a6d4b297a4",
+                    "0x1a8247ca2a4190d90c748b31fa6517e5560c1b7a680f03ff73dbbc3ed2c0ed66",
                     wrapped_contract,
                     Some(owner),
                 ),
                 addr(native_contract),
                 vec![
                     DomainToken {
-                        id: "256".to_string(),
+                        id: "11990319655936053415661126359086567018700354293176496925267203544835860524390".to_string(),
                         contract: Address::from_str(native_contract)
                             .expect("invalid native_contract provided"),
                         _type: DomainTokenType::Native,
                     },
                     DomainToken {
-                        id: "512".to_string(),
+                        id: "25625468407840116393736812939389551247551040926951238633020744494000165263268".to_string(),
                         contract: Address::from_str(wrapped_contract)
                             .expect("invalid wrapped_contract provided"),
                         _type: DomainTokenType::Wrapped,
