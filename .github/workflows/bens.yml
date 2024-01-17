@@ -113,7 +113,7 @@ jobs:
       always() &&
       (needs.test.result == 'success' || needs.test.result == 'cancelled') &&
       (needs.lint.result == 'success' || needs.lint.result == 'cancelled')
-    timeout-minutes: 60
+    timeout-minutes: 90
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
