@@ -1,11 +1,12 @@
 use super::{
     blockscout::{self, BlockscoutClient},
     domain_name::DomainName,
+    domain_tokens::extract_tokens_from_domain,
     pagination::{PaginatedList, Paginator},
     patch::{patch_detailed_domain, patch_domain},
     schema_selector::subgraph_deployments,
-    sql, BatchResolveAddressNamesInput, GetDomainHistoryInput, GetDomainInput, LookupAddressInput,
-    LookupDomainInput,
+    sql, BatchResolveAddressNamesInput, GetDomainHistoryInput, GetDomainInput, GetDomainOutput,
+    LookupAddressInput, LookupDomainInput,
 };
 use crate::{
     entity::subgraph::{
@@ -15,7 +16,7 @@ use crate::{
     hash_name::{domain_id, hex},
 };
 use anyhow::Context;
-use ethers::types::{Bytes, TxHash, H160};
+use ethers::types::{Address, Bytes, TxHash, H160};
 use sqlx::postgres::PgPool;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -59,6 +60,7 @@ pub struct Subgraph {
 pub struct SubgraphSettings {
     pub use_cache: bool,
     pub empty_label_hash: Option<Bytes>,
+    pub native_token_contract: Option<Address>,
 }
 
 #[derive(Debug, Clone)]
@@ -180,7 +182,7 @@ impl SubgraphReader {
     pub async fn get_domain(
         &self,
         input: GetDomainInput,
-    ) -> Result<Option<DetailedDomain>, SubgraphReadError> {
+    ) -> Result<Option<GetDomainOutput>, SubgraphReadError> {
         let network = self
             .networks
             .get(&input.network_id)
@@ -189,7 +191,7 @@ impl SubgraphReader {
         let empty_label_hash = subgraph.settings.empty_label_hash.clone();
         let domain_name = DomainName::new(&input.name, empty_label_hash)
             .map_err(|e| SubgraphReadError::Internal(e.to_string()))?;
-        let domain = sql::get_domain(
+        let maybe_domain: Option<DetailedDomain> = sql::get_domain(
             self.pool.as_ref(),
             &domain_name,
             &subgraph.schema_name,
@@ -204,7 +206,14 @@ impl SubgraphReader {
                 &domain_name,
             )
         });
-        Ok(domain)
+        if let Some(domain) = maybe_domain {
+            let tokens = extract_tokens_from_domain(&domain, &subgraph.settings).map_err(|e| {
+                SubgraphReadError::Internal(format!("failed to extract domain tokens: {e}"))
+            })?;
+            Ok(Some(GetDomainOutput { tokens, domain }))
+        } else {
+            Ok(None)
+        }
     }
 
     pub async fn get_domain_history(
@@ -407,9 +416,10 @@ mod tests {
             .await
             .expect("failed to get vitalik domain")
             .expect("domain not found");
-        assert_eq!(result.name.as_deref(), Some("vitalik.eth"));
+        let domain = result.domain;
+        assert_eq!(domain.name.as_deref(), Some("vitalik.eth"));
         assert_eq!(
-            result.resolved_address.as_deref(),
+            domain.resolved_address.as_deref(),
             Some("0xd8da6bf26964af9d7eed9e03e53415d37aa96045")
         );
         let other_addresses: HashMap<String, String> = serde_json::from_value(serde_json::json!({
@@ -417,7 +427,7 @@ mod tests {
             "RSK": "0xf0d485009714cE586358E3761754929904D76B9D",
         }))
         .unwrap();
-        assert_eq!(result.other_addresses, other_addresses.into());
+        assert_eq!(domain.other_addresses, other_addresses.into());
 
         // get expired domain
         let name = "expired.eth".to_string();
@@ -430,13 +440,14 @@ mod tests {
             .await
             .expect("failed to get expired domain")
             .expect("expired domain not found");
+        let domain = result.domain;
         assert!(
-            result.is_expired,
+            domain.is_expired,
             "expired domain has is_expired=false: {:?}",
-            result
+            domain
         );
         // since no info in multicoin_addr_changed
-        assert!(result.other_addresses.is_empty());
+        assert!(domain.other_addresses.is_empty());
 
         // get expired domain with only_active filter
         let result = reader
@@ -722,7 +733,7 @@ mod tests {
         assert_eq!(domain.label_name, None,);
 
         // After reader requests domain should be resolved
-        let domain = reader
+        let result = reader
             .get_domain(GetDomainInput {
                 network_id: DEFAULT_CHAIN_ID,
                 name: unresolved.to_string(),
@@ -731,6 +742,7 @@ mod tests {
             .await
             .expect("failed to get domain")
             .expect("unresolved domain not found using reader");
+        let domain = result.domain;
         assert_eq!(domain.name.as_deref(), Some(unresolved));
         assert_eq!(domain.label_name.as_deref(), Some(unresolved_label));
 

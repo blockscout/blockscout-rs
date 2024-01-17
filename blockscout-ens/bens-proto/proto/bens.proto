@@ -39,8 +39,8 @@ message DetailedDomain {
   string id = 1;
   // The human readable name, if known. Unknown portions replaced with hash in square brackets (eg, foo.[1234].eth)
   string name = 2;
-  // Hex representation of labelhash
-  string token_id = 3;
+  // List of NFT tokens related to this domain
+  repeated Token tokens = 11;
   // The account that owns the domain
   Address owner = 4;
   // Optional. Resolved address of this domain
@@ -67,6 +67,17 @@ message DomainEvent {
   Address from_address = 3;
   // Optional. Action name
   optional string action = 4;
+}
+
+message Token {
+  string id = 1;
+  string contract_hash = 2;
+  TokenType type = 3;
+}
+
+enum TokenType {
+  NATIVE_DOMAIN_TOKEN = 0;
+  WRAPPED_DOMAIN_TOKEN = 1;
 }
 
 message Address {

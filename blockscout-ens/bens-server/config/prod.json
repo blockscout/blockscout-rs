@@ -3,9 +3,9 @@
     "cache_enabled": true,
     "refresh_cache_schedule": "0 0 * * * *",
     "networks": {
-      "5": {
+      "1": {
         "blockscout": {
-          "url": "https://eth-goerli.blockscout.com"
+          "url": "https://eth.blockscout.com"
         },
         "subgraphs": {
           "ens-subgraph": {
@@ -14,14 +14,14 @@
           }
         }
       },
-      "10200": {
+      "30": {
         "blockscout": {
-          "url": "https://gnosis-chiado.blockscout.com"
+          "url": "https://rootstock.blockscout.com"
         },
         "subgraphs": {
-          "genome-subgraph": {
-            "empty_label_hash": "0x1a13b687a5ff1d8ab1a9e189e1507a6abe834a9296cc8cff937905e3dee0c4f6",
-            "native_token_contract": "0xfd3d666dB2557983F3F04d61f90E35cc696f6D60"
+          "rns-subgraph": {
+            "use_cache": true,
+            "native_token_contract": "0x45d3E4fB311982a06ba52359d44cB4f5980e0ef1"
           }
         }
       }
