@@ -2,11 +2,12 @@ on:
   push:
     branches:
       - 'main'
-  pull_request:
-    paths:
+    paths: &paths
       - libs/**
       - .github/workflows/libs.yml
       - .github/actions/deps/**
+  pull_request:
+    paths: *paths
 
 name: Test, lint (libs)
 

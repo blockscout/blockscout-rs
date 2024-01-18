@@ -2,10 +2,11 @@ on:
   push:
     branches:
       - 'main'
-  pull_request:
-    paths:
+    paths: &paths
       - eth-bytecode-db-extractors/**
       - .github/workflows/eth-bytecode-db-extractors.yml
+  pull_request:
+    paths: *paths
 
 name: Lint (eth-bytecode-db-extractors)
 

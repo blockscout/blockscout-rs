@@ -4,12 +4,12 @@ on:
       - 'main'
     tags:
       - 'sig-provider/v*'
-  pull_request:
-    paths:
+    paths: &paths
       - sig-provider/**
       - .github/workflows/sig-provider.yml
       - .github/actions/deps/**
-
+  pull_request:
+    paths: *paths
 
 name: Test, lint and docker (sig-provider)
 

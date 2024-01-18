@@ -4,11 +4,12 @@ on:
       - 'main'
     tags:
       - 'bens/v*'
-  pull_request:
-    paths:
+    paths: &paths
       - blockscout-ens/**
       - .github/workflows/bens.yml
       - .github/actions/deps/**
+  pull_request:
+    paths: *paths
 
 name: Test, lint and docker (bens)
 

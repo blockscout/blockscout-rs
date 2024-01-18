@@ -4,11 +4,11 @@ on:
       - 'main'
     tags:
       - 'multichain-search/v*'
-  pull_request:
-    paths:
+    paths: &paths
       - multichain-search/**
       - .github/workflows/multichain-search.yml
-
+  pull_request:
+    paths: *paths
 
 name: Test, lint and docker (multichain-search)
 

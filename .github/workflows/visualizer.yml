@@ -4,17 +4,12 @@ on:
       - 'main'
     tags:
       - 'visualizer/v*'
-    paths:
+    paths: &paths
       - visualizer/**
       - .github/workflows/visualizer.yml
       - .github/actions/deps/**
-
   pull_request:
-    paths:
-      - visualizer/**
-      - .github/workflows/visualizer.yml
-      - .github/actions/deps/**
-
+    paths: *paths
 
 name: Test, lint and docker (visualizer)
 

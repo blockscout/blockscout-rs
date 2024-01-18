@@ -4,11 +4,12 @@ on:
       - 'main'
     tags:
       - 'eth-bytecode-db/v*'
-  pull_request:
-    paths:
+    paths: &paths
       - eth-bytecode-db/**
       - .github/workflows/eth-bytecode-db.yml
       - .github/actions/deps/**
+  pull_request:
+    paths: *paths
 
 name: Test, lint and docker (eth-bytecode-db)
 

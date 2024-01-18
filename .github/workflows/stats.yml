@@ -4,12 +4,12 @@ on:
       - 'main'
     tags:
       - 'stats/v*'
-  pull_request:
-    paths:
+    paths: &paths
       - stats/**
       - .github/workflows/stats.yml
       - .github/actions/deps/**
-
+  pull_request:
+    paths: *paths
 
 name: Test, lint and docker (stats)
 
