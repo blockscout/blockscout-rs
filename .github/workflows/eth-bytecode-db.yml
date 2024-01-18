@@ -1,164 +1,164 @@
-# on:
-#   push:
-#     branches:
-#       - 'main'
-#     tags:
-#       - 'eth-bytecode-db/v*'
-#   pull_request:
-#     paths:
-#       - eth-bytecode-db/**
-#       - .github/workflows/eth-bytecode-db.yml
-#       - .github/actions/deps/**
+on:
+  push:
+    branches:
+      - 'main'
+    tags:
+      - 'eth-bytecode-db/v*'
+  pull_request:
+    paths:
+      - eth-bytecode-db/**
+      - .github/workflows/eth-bytecode-db.yml
+      - .github/actions/deps/**
 
-# name: Test, lint and docker (eth-bytecode-db)
+name: Test, lint and docker (eth-bytecode-db)
 
-# env:
-#   REGISTRY: ghcr.io
-#   IMAGE_NAME: blockscout/eth-bytecode-db
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: blockscout/eth-bytecode-db
 
-# defaults:
-#   run:
-#     working-directory: eth-bytecode-db
+defaults:
+  run:
+    working-directory: eth-bytecode-db
 
-# jobs:
-#   test:
-#     name: Unit, doc and integration tests
-#     runs-on: ubuntu-latest
-#     services:
-#       postgres:
-#         image: postgres
-#         env:
-#           POSTGRES_PASSWORD: admin
-#           POSTGRES_USER: postgres
-#         options: >-
-#           --health-cmd pg_isready
-#           --health-interval 10s
-#           --health-timeout 5s
-#           --health-retries 5
-#         ports:
-#           - 5432:5432
-#         volumes:
-#           - /tmp/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
-#     steps:
-#       - name: Checkout sources
-#         uses: actions/checkout@v4
+jobs:
+  test:
+    name: Unit, doc and integration tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: admin
+          POSTGRES_USER: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+        volumes:
+          - /tmp/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
 
-#       - name: Copy entrypoint scripts to the volume
-#         run: sudo cp -r ../.github/volumes/docker-entrypoint-initdb.d/* /tmp/docker-entrypoint-initdb.d/
-#         continue-on-error: false
+      - name: Copy entrypoint scripts to the volume
+        run: sudo cp -r ../.github/volumes/docker-entrypoint-initdb.d/* /tmp/docker-entrypoint-initdb.d/
+        continue-on-error: false
 
-#       - name: Install deps
-#         uses: ./.github/actions/deps
+      - name: Install deps
+        uses: ./.github/actions/deps
 
-#       - name: Install toolchain
-#         uses: actions-rs/toolchain@v1
-#         with:
-#           toolchain: stable
-#           profile: minimal
-#           override: true
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
 
-#       - name: Rust cache
-#         uses: Swatinem/rust-cache@v2
-#         with:
-#           cache-on-failure: true
-#           workspaces: eth-bytecode-db -> target
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          workspaces: eth-bytecode-db -> target
 
-#       - name: Unit tests
-#         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture
-#         if: success() || failure()
+      - name: Unit tests
+        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture
+        if: success() || failure()
 
-#       - name: Doc tests
-#         run: cargo test --locked --workspace --all-features --doc
-#         if: success() || failure()
+      - name: Doc tests
+        run: cargo test --locked --workspace --all-features --doc
+        if: success() || failure()
 
-#       - name: Integration tests
-#         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --test '*' -- --nocapture --include-ignored
-#         if: success() || failure()
-#         env:
-#           DATABASE_URL: postgres://postgres:admin@localhost:5432/
+      - name: Integration tests
+        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --test '*' -- --nocapture --include-ignored
+        if: success() || failure()
+        env:
+          DATABASE_URL: postgres://postgres:admin@localhost:5432/
 
-#   lint:
-#     name: Linting
-#     runs-on: ubuntu-latest
-#     steps:
-#       - name: Checkout sources
-#         uses: actions/checkout@v4
+  lint:
+    name: Linting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
 
-#       - name: Install deps
-#         uses: ./.github/actions/deps
+      - name: Install deps
+        uses: ./.github/actions/deps
 
-#       - name: Install toolchain
-#         uses: actions-rs/toolchain@v1
-#         with:
-#           toolchain: stable
-#           profile: minimal
-#           components: rustfmt, clippy
-#           override: true
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          components: rustfmt, clippy
+          override: true
 
-#       - uses: Swatinem/rust-cache@v2
-#         with:
-#           cache-on-failure: true
-#           workspaces: eth-bytecode-db -> target
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          workspaces: eth-bytecode-db -> target
 
-#       - name: cargo fmt
-#         run: cargo fmt --all -- --check --config imports_granularity=Crate
+      - name: cargo fmt
+        run: cargo fmt --all -- --check --config imports_granularity=Crate
 
-#       - name: cargo clippy
-#         run: cargo clippy --all --all-targets --all-features -- -D warnings
+      - name: cargo clippy
+        run: cargo clippy --all --all-targets --all-features -- -D warnings
 
-#   push:
-#     name: Docker build and docker push
-#     needs:
-#       - test
-#       - lint
-#     if: |
-#       always() &&
-#       (needs.test.result == 'success' || needs.test.result == 'cancelled') &&
-#       (needs.lint.result == 'success' || needs.lint.result == 'cancelled')
-#     timeout-minutes: 90
-#     runs-on: ubuntu-latest
-#     steps:
-#       - name: Checkout repository
-#         uses: actions/checkout@v4
+  push:
+    name: Docker build and docker push
+    needs:
+      - test
+      - lint
+    if: |
+      always() &&
+      (needs.test.result == 'success' || needs.test.result == 'cancelled') &&
+      (needs.lint.result == 'success' || needs.lint.result == 'cancelled')
+    timeout-minutes: 300
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-#       - uses: actions-ecosystem/action-regex-match@v2
-#         id: regex
-#         with:
-#           text: ${{ github.ref }}
-#           regex: '^(refs\/tags\/eth-bytecode-db\/(v\d+\.\d+\.\d+))|(refs\/heads\/(main))$'
+      - uses: actions-ecosystem/action-regex-match@v2
+        id: regex
+        with:
+          text: ${{ github.ref }}
+          regex: '^(refs\/tags\/eth-bytecode-db\/(v\d+\.\d+\.\d+))|(refs\/heads\/(main))$'
 
-#       - name: Extract tag name
-#         id: tags_extractor
-#         run: |
-#           t=${{ steps.regex.outputs.group2 }}
-#           m=${{ steps.regex.outputs.group4 }}
-#           (if ! [[ "$t" == "" ]]; then echo tags=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$t, ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest; elif ! [[ "$m" == "" ]]; then echo tags=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$m; else echo tags=; fi) >> $GITHUB_OUTPUT
+      - name: Extract tag name
+        id: tags_extractor
+        run: |
+          t=${{ steps.regex.outputs.group2 }}
+          m=${{ steps.regex.outputs.group4 }}
+          (if ! [[ "$t" == "" ]]; then echo tags=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$t, ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest; elif ! [[ "$m" == "" ]]; then echo tags=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$m; else echo tags=; fi) >> $GITHUB_OUTPUT
 
-#       - name: Login to GitHub Container Registry
-#         uses: docker/login-action@v2
-#         with:
-#           registry: ${{ env.REGISTRY }}
-#           username: ${{ github.actor }}
-#           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-#       - name: Extract metadata for Docker
-#         id: meta
-#         uses: docker/metadata-action@v5
-#         with:
-#           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
 
-#       - name: Set up Docker Buildx
-#         uses: docker/setup-buildx-action@v3
-#       - name: Build and push
-#         uses: docker/build-push-action@v5
-#         with:
-#           context: "eth-bytecode-db"
-#           file: "eth-bytecode-db/eth-bytecode-db-server/Dockerfile"
-#           push: ${{ steps.tags_extractor.outputs.tags != '' }}
-#           tags: ${{ steps.tags_extractor.outputs.tags }}
-#           platforms: |
-#             linux/amd64
-#             linux/arm64/v8
-#           labels: ${{ steps.meta.outputs.labels }}
-#           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:build-cache
-#           cache-to: ${{ github.ref == 'refs/heads/main' && format('type=registry,ref={0}/{1}:build-cache,mode=max', env.REGISTRY, env.IMAGE_NAME) || '' }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: "eth-bytecode-db"
+          file: "eth-bytecode-db/eth-bytecode-db-server/Dockerfile"
+          push: ${{ steps.tags_extractor.outputs.tags != '' }}
+          tags: ${{ steps.tags_extractor.outputs.tags }}
+          platforms: |
+            linux/amd64
+            linux/arm64/v8
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:build-cache
+          cache-to: ${{ github.ref == 'refs/heads/main' && format('type=registry,ref={0}/{1}:build-cache,mode=max', env.REGISTRY, env.IMAGE_NAME) || '' }}
