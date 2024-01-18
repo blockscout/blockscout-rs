@@ -4,12 +4,15 @@ on:
       - 'main'
     tags:
       - 'visualizer/v*'
-    paths: &paths
+    paths:
       - visualizer/**
       - .github/workflows/visualizer.yml
       - .github/actions/deps/**
   pull_request:
-    paths: *paths
+    paths:
+      - visualizer/**
+      - .github/workflows/visualizer.yml
+      - .github/actions/deps/**
 
 name: Test, lint and docker (visualizer)
 
@@ -151,3 +154,4 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:build-cache
           cache-to: ${{ github.ref == 'refs/heads/main' && format('type=registry,ref={0}/{1}:build-cache,mode=max', env.REGISTRY, env.IMAGE_NAME) || '' }}
+

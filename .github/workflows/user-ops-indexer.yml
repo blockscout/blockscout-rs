@@ -4,12 +4,15 @@ on:
       - 'main'
     tags:
       - 'user-ops-indexer/v*'
-    paths: &paths
+    paths:
       - user-ops-indexer/**
       - .github/workflows/user-ops-indexer.yml
       - .github/actions/deps/**
   pull_request:
-    paths: *paths
+    paths:
+      - user-ops-indexer/**
+      - .github/workflows/user-ops-indexer.yml
+      - .github/actions/deps/**
 
 name: Test, lint and docker (user-ops-indexer)
 
