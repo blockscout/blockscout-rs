@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package blockscout.userOpsIndexer.v1;
 
+import "google/protobuf/struct.proto";
+
 option go_package = "github.com/blockscout/blockscout-rs/user-ops-indexer";
 
 service UserOpsService {
@@ -149,22 +151,36 @@ message Factory {
   uint32 total_accounts = 2;
 }
 
+message RawUserOp {
+  string sender = 1;
+  string nonce = 2;
+  string init_code = 3;
+  string call_data = 4;
+  uint64 call_gas_limit = 5;
+  uint64 verification_gas_limit = 6;
+  uint64 pre_verification_gas = 7;
+  string max_fee_per_gas = 8;
+  string max_priority_fee_per_gas = 9;
+  string paymaster_and_data = 10;
+  string signature = 11;
+}
+
 message UserOp {
   string hash = 1;
   string sender = 2;
   string nonce = 3;
-  optional string init_code = 4;
-  string call_data = 5;
-  uint64 call_gas_limit = 6;
-  uint64 verification_gas_limit = 7;
-  uint64 pre_verification_gas = 8;
-  string max_fee_per_gas = 9;
-  string max_priority_fee_per_gas = 10;
-  optional string paymaster_and_data = 11;
-  string signature = 12;
-  optional string aggregator = 13;
-  optional string aggregator_signature = 14;
-  string entry_point = 15;
+  string call_data = 4;
+  uint64 call_gas_limit = 5;
+  uint64 verification_gas_limit = 6;
+  uint64 pre_verification_gas = 7;
+  string max_fee_per_gas = 8;
+  string max_priority_fee_per_gas = 9;
+  string signature = 10;
+  RawUserOp raw = 11;
+  optional string aggregator = 12;
+  optional string aggregator_signature = 13;
+  string entry_point = 14;
+  string entry_point_version = 15;
   string transaction_hash = 16;
   uint64 block_number = 17;
   string block_hash = 18;
