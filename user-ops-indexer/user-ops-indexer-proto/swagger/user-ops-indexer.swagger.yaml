@@ -258,8 +258,8 @@ paths:
         - name: bundle_index
           in: query
           required: false
-          type: string
-          format: uint64
+          type: integer
+          format: int64
         - name: block_number
           in: query
           required: false
@@ -372,8 +372,8 @@ definitions:
         type: string
         format: uint64
       bundle_index:
-        type: string
-        format: uint64
+        type: integer
+        format: int64
       timestamp:
         type: string
       total_ops:
@@ -565,11 +565,11 @@ definitions:
       bundler:
         type: string
       bundle_index:
-        type: string
-        format: uint64
+        type: integer
+        format: int64
       index:
-        type: string
-        format: uint64
+        type: integer
+        format: int64
       factory:
         type: string
       paymaster:
@@ -589,11 +589,11 @@ definitions:
       sponsor_type:
         type: string
       user_logs_start_index:
-        type: string
-        format: uint64
+        type: integer
+        format: int64
       user_logs_count:
-        type: string
-        format: uint64
+        type: integer
+        format: int64
       fee:
         type: string
       consensus:

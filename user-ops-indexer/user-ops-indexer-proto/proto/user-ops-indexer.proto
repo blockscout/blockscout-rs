@@ -76,7 +76,7 @@ message ListUserOpsRequest {
   optional string factory = 4;
   optional string transaction_hash = 5;
   optional string entry_point = 6;
-  optional uint64 bundle_index = 7;
+  optional uint32 bundle_index = 7;
   optional uint64 block_number = 8;
   optional uint32 page_size = 9;
   optional string page_token = 10;
@@ -130,7 +130,7 @@ message Bundle {
   string transaction_hash = 1;
   string bundler = 2;
   uint64 block_number = 3;
-  uint64 bundle_index = 4;
+  uint32 bundle_index = 4;
   string timestamp = 5;
   uint32 total_ops = 6;
 }
@@ -185,8 +185,8 @@ message UserOp {
   uint64 block_number = 17;
   string block_hash = 18;
   string bundler = 19;
-  uint64 bundle_index = 20;
-  uint64 index = 21;
+  uint32 bundle_index = 20;
+  uint32 index = 21;
   optional string factory = 22;
   optional string paymaster = 23;
   bool status = 24;
@@ -195,8 +195,8 @@ message UserOp {
   string gas_price = 27;
   uint64 gas_used = 28;
   string sponsor_type = 29;
-  uint64 user_logs_start_index = 30;
-  uint64 user_logs_count = 31;
+  uint32 user_logs_start_index = 30;
+  uint32 user_logs_count = 31;
   string fee = 32;
 
   optional bool consensus = 33;

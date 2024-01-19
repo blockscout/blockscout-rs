@@ -85,7 +85,7 @@ pub async fn list_user_ops(
     factory_filter: Option<Address>,
     tx_hash_filter: Option<H256>,
     entry_point_filter: Option<Address>,
-    bundle_index_filter: Option<u64>,
+    bundle_index_filter: Option<u32>,
     block_number_filter: Option<u64>,
     page_token: Option<(u64, H256)>,
     limit: u64,
