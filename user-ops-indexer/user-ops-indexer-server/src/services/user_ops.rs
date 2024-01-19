@@ -174,7 +174,7 @@ impl UserOps for UserOpsService {
         let bundler_filter = inner.bundler.map(parse_filter).transpose()?;
         let entry_point_filter = inner.entry_point.map(parse_filter).transpose()?;
 
-        let page_token: Option<(u64, H256, u64)> =
+        let page_token: Option<(u64, H256, u32)> =
             inner.page_token.map(parse_filter_3).transpose()?;
         let page_size = self.normalize_page_size(inner.page_size);
 

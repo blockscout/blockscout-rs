@@ -275,8 +275,8 @@ impl<'a, C: PubsubClient> IndexerV06<'a, C> {
                     .filter_map(|(j, (raw_user_op, logs))| {
                         match build_user_op_model(
                             bundler,
-                            i as u64,
-                            j as u64,
+                            i as u32,
+                            j as u32,
                             raw_user_op,
                             logs,
                             &tx_deposits,
@@ -322,8 +322,8 @@ impl<'a, C: PubsubClient> IndexerV06<'a, C> {
 
 fn build_user_op_model(
     bundler: Address,
-    bundle_index: u64,
-    index: u64,
+    bundle_index: u32,
+    index: u32,
     raw_user_op: RawUserOperation,
     logs: &[Log],
     tx_deposits: &[DepositedFilter],
@@ -411,8 +411,8 @@ fn build_user_op_model(
         sponsor_type,
         user_logs_start_index: logs
             .first()
-            .map_or(0, |l| l.log_index.map_or(0, |v| v.as_u64())),
-        user_logs_count: user_logs_count as u64,
+            .map_or(0, |l| l.log_index.map_or(0, |v| v.as_u32())),
+        user_logs_count: user_logs_count as u32,
         fee: user_op_event.actual_gas_cost,
 
         consensus: None,
