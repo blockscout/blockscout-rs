@@ -55,6 +55,7 @@ jobs:
             exit 1
           fi
     
+          # E.g, chef-0.1.62-rust-1.75-buster-protoc-25.2-openapi-2.19.0
           TAG=chef-${CARGO_CHEF_TAG}-protoc-${PROTOC_VERSION}-openapi-${PROTOC_GEN_OPENAPIV2_VERSION}
           echo "TAG=$TAG"
     
@@ -67,11 +68,13 @@ jobs:
           TAG: ${{ steps.get_image_tag.outputs.tag }}
         run: |
           TOKEN=$(echo ${{ secrets.GITHUB_TOKEN }} | base64)
-          EXISTING_TAGS=$(curl -H "Authorization: Bearer ${TOKEN}" https://ghcr.io/v2/${IMAGE_NAME}/tags/list)
+          TAGS_RESPONSE=$(curl -H "Authorization: Bearer ${TOKEN}" https://ghcr.io/v2/${IMAGE_NAME}/tags/list)
           
-          echo "Existing tags: ${EXISTING_TAGS}"
+          # E.g, {"name":"blockscout/services-base","tags":["latest","chef-0.1.62-rust-1.75-buster-protoc-25.2-openapi-2.19.0"]}
+          #   or {"errors":[{"code":"NAME_UNKNOWN","message":"repository name not known to registry"}]}
+          echo "List tags response: ${TAGS_RESPONSE}"
           
-          if echo "${EXISTING_TAGS}" | jq -e "if has(\"tags\") then .tags else [] end | map(select(. == \"$TAG\")) | length > 0" > /dev/null; then
+          if echo "${TAGS_RESPONSE}" | jq -e "if has(\"tags\") then .tags else [] end | map(select(. == \"$TAG\")) | length > 0" > /dev/null; then
             echo "There is already a pushed image with ${TAG} as tag. Skipping."
             echo "is_new=false" >> $GITHUB_OUTPUT
           else
