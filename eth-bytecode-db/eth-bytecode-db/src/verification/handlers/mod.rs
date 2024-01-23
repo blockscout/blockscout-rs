@@ -131,7 +131,8 @@ impl<'a> VerifierAllianceDbAction<'a> {
                     runtime_code,
                 }),
             ) => {
-                if is_authorized {
+                // Contract deployment must have at least one of creation/runtime code to exist
+                if is_authorized && (creation_code.is_some() || runtime_code.is_some()) {
                     Self::SaveWithDeploymentData {
                         db_client,
                         chain_id,
@@ -320,8 +321,8 @@ async fn process_verifier_alliance_db_action(
             }
         };
 
-    match action {
-        VerifierAllianceDbAction::IgnoreDb => {}
+    let (db_client, deployment_data) = match action {
+        VerifierAllianceDbAction::IgnoreDb => return Ok(()),
         VerifierAllianceDbAction::SaveIfDeploymentExists {
             db_client,
             chain_id,
@@ -330,9 +331,6 @@ async fn process_verifier_alliance_db_action(
             creation_code,
             runtime_code,
         } => {
-            let database_source = DatabaseReadySource::try_from(source)
-                .context("Converting source into database ready version")?;
-
             let transaction_hash = match derive_transaction_hash(
                 transaction_hash,
                 creation_code,
@@ -356,9 +354,8 @@ async fn process_verifier_alliance_db_action(
                 transaction_hash,
                 ..Default::default()
             };
-            db::verifier_alliance_db::insert_data(db_client, database_source, deployment_data)
-                .await
-                .context("Insert data into verifier alliance database")?;
+
+            (db_client, deployment_data)
         }
         VerifierAllianceDbAction::SaveWithDeploymentData {
             db_client,
@@ -371,9 +368,6 @@ async fn process_verifier_alliance_db_action(
             creation_code,
             runtime_code,
         } => {
-            let database_source = DatabaseReadySource::try_from(source)
-                .context("Converting source into database ready version")?;
-
             // At least one of creation and runtime code should exist to add the contract into the database.
             let transaction_hash = derive_transaction_hash(
                 transaction_hash.clone(),
@@ -397,13 +391,16 @@ async fn process_verifier_alliance_db_action(
                 .await
                 .context("Insert deployment data into verifier alliance database")?;
 
-            db::verifier_alliance_db::insert_data(db_client, database_source, deployment_data)
-                .await
-                .context("Insert data into verifier alliance database")?;
+            (db_client, deployment_data)
         }
-    }
+    };
 
-    Ok(())
+    let database_source = DatabaseReadySource::try_from(source)
+        .context("Converting source into database ready version")?;
+
+    db::verifier_alliance_db::insert_data(db_client, database_source, deployment_data)
+        .await
+        .context("Insert data into verifier alliance database")
 }
 
 async fn process_abi_data(

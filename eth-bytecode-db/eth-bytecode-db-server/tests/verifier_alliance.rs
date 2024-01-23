@@ -63,7 +63,7 @@ pub async fn success_with_existing_deployment(
 
     let (alliance_db, test_case) = Setup::new(TEST_PREFIX)
         .setup_db(prepare_alliance_database)
-        .setup_from_path(test_case_path)
+        .setup(test_case_path)
         .await;
 
     let contract_deployment =
@@ -92,7 +92,7 @@ pub async fn success_without_existing_deployment(
 
     let (alliance_db, test_case) = Setup::new(TEST_PREFIX)
         .authorized()
-        .setup_from_path(test_case_path)
+        .setup(test_case_path)
         .await;
 
     let contract_deployment =
@@ -116,9 +116,7 @@ pub async fn failure_without_existing_deployment_not_authorized(
 ) {
     const TEST_PREFIX: &str = "failure_without_existing_deployment_not_authorized";
 
-    let (alliance_db, _test_case) = Setup::new(TEST_PREFIX)
-        .setup_from_path(test_case_path)
-        .await;
+    let (alliance_db, _test_case) = Setup::new(TEST_PREFIX).setup(test_case_path).await;
 
     assert_eq!(
         None,
@@ -150,8 +148,7 @@ pub async fn verification_with_different_sources(
     let mut setup = Setup::new(TEST_PREFIX).authorized();
 
     /********** Add first partial matched contract **********/
-    let (alliance_db, partial_match_1_test_case) =
-        setup.setup_from_path(partial_match_1_path).await;
+    let (alliance_db, partial_match_1_test_case) = setup.setup(partial_match_1_path).await;
     let db_client_owned = alliance_db.client();
     let db_client = db_client_owned.as_ref();
 
@@ -178,7 +175,7 @@ pub async fn verification_with_different_sources(
 
     /********** Add second partial matched contract (should not be added) **********/
     setup = setup.alliance_db(alliance_db.clone());
-    setup.setup_from_path(partial_match_2_path).await;
+    setup.setup(partial_match_2_path).await;
 
     let contract_deployments_partial_match_2 = retrieve_contract_deployments(db_client).await;
     assert_eq!(
@@ -199,7 +196,7 @@ pub async fn verification_with_different_sources(
     );
 
     /********** Add full matched contract **********/
-    let (_, full_match_test_case) = setup.setup_from_path(full_match_path).await;
+    let (_, full_match_test_case) = setup.setup(full_match_path).await;
 
     let contract_deployment_partial_match_1 =
         check_contract_deployment(db_client, &partial_match_1_test_case).await;
@@ -349,12 +346,9 @@ impl<'a> Setup<'a> {
         }
     }
 
-    pub async fn setup_from_path(&self, test_case_path: PathBuf) -> (TestDbGuard, TestCase) {
+    pub async fn setup(&self, test_case_path: PathBuf) -> (TestDbGuard, TestCase) {
         let test_case = TestCase::from_file(test_case_path);
-        self.setup(test_case).await
-    }
 
-    pub async fn setup(&self, test_case: TestCase) -> (TestDbGuard, TestCase) {
         let service = MockSolidityVerifierService::new();
 
         let test_name = format!("{}_{}", self.test_prefix, test_case.test_case_name,);
