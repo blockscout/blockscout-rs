@@ -5,7 +5,6 @@ use blockscout_service_launcher::test_database::TestDbGuard;
 use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2 as eth_bytecode_db_v2;
 use eth_bytecode_db_server::Settings;
 use futures::future::BoxFuture;
-use pretty_assertions::assert_eq;
 use rstest::rstest;
 use sea_orm::{
     prelude::{Decimal, Uuid},
@@ -66,10 +65,9 @@ pub async fn success_with_existing_deployment(
         .setup_from_path(test_case_path)
         .await;
 
-    let contract_deployment =
-        retrieve_contract_deployment(alliance_db.client().as_ref(), Some(&test_case))
-            .await
-            .expect("contract deployment does not exist");
+    let contract_deployment = retrieve_contract_deployment(alliance_db.client().as_ref(), Some(&test_case))
+        .await
+        .expect("contract deployment does not exist");
 
     let compiled_contract =
         check_compiled_contract(alliance_db.client().as_ref(), &test_case).await;
@@ -79,7 +77,7 @@ pub async fn success_with_existing_deployment(
         &contract_deployment,
         &compiled_contract,
     )
-    .await;
+        .await;
 }
 
 #[rstest]
@@ -105,7 +103,7 @@ pub async fn success_without_existing_deployment(
         &contract_deployment,
         &compiled_contract,
     )
-    .await;
+        .await;
 }
 
 #[rstest]
@@ -141,68 +139,39 @@ pub async fn failure_without_existing_deployment_not_authorized(
 #[tokio::test]
 #[ignore = "Needs database to run"]
 pub async fn verification_with_different_sources(
-    // #[files("tests/alliance_test_cases/full_match.json")] full_match_path: PathBuf,
-    #[files("tests/alliance_test_cases/partial_match.json")] partial_match_1_path: PathBuf,
-    #[files("tests/alliance_test_cases/partial_match_2.json")] partial_match_2_path: PathBuf,
+    #[files("tests/alliance_test_cases/full_match.json")] test_case_path: PathBuf,
 ) {
     const TEST_PREFIX: &str = "verification_with_different_sources";
+
+    let full_match_test_case = TestCase::from_file(test_case_path);
+    let partial_match_test_case_1 = {
+        let mut test_case = full_match_test_case.clone();
+        test_case
+            .sources
+            .values_mut()
+            .for_each(|content| content.push_str(" "));
+        test_case
+    };
+    let partial_match_test_case_2 = {
+        let mut test_case = full_match_test_case.clone();
+        test_case
+            .sources
+            .values_mut()
+            .for_each(|content| content.push_str("  "));
+        test_case
+    };
 
     let mut setup = Setup::new(TEST_PREFIX).authorized();
 
     /********** Add first partial matched contract **********/
-    let (alliance_db, _) = setup.setup_from_path(partial_match_1_path).await;
+    let (alliance_db, _) = setup.setup(partial_match_test_case_1).await;
 
-    let contract_deployments_partial_match_1 =
-        retrieve_contract_deployments(alliance_db.client().as_ref()).await;
-    assert_eq!(
-        1,
-        contract_deployments_partial_match_1.len(),
-        "Invalid number of contract deployments"
-    );
-
-    let compiled_contracts_partial_match_1 =
-        retrieve_compiled_contracts(alliance_db.client().as_ref()).await;
-    assert_eq!(
-        1,
-        compiled_contracts_partial_match_1.len(),
-        "Invalid number of compiled contracts"
-    );
-
-    let verified_contracts_partial_match_1 =
-        retrieve_verified_contracts(alliance_db.client().as_ref()).await;
-    assert_eq!(
-        1,
-        verified_contracts_partial_match_1.len(),
-        "Invalid number of verified contracts"
-    );
-
-    /********** Add second partial matched contract (should not be added) **********/
-    setup = setup.alliance_db(alliance_db.clone());
-    setup.setup_from_path(partial_match_2_path).await;
-
-    let contract_deployments_partial_match_2 =
-        retrieve_contract_deployments(alliance_db.client().as_ref()).await;
-    assert_eq!(
-        contract_deployments_partial_match_1, contract_deployments_partial_match_2,
-        "Invalid contract deployments after second partial match insertion"
-    );
-
-    let compiled_contracts_partial_match_2 =
-        retrieve_compiled_contracts(alliance_db.client().as_ref()).await;
-    assert_eq!(
-        compiled_contracts_partial_match_1, compiled_contracts_partial_match_2,
-        "Invalid compiled contracts after second partial match insertion"
-    );
-
-    let verified_contracts_partial_match_2 =
-        retrieve_verified_contracts(alliance_db.client().as_ref()).await;
-    assert_eq!(
-        verified_contracts_partial_match_1, verified_contracts_partial_match_2,
-        "Invalid verified contracts after second partial match insertion"
-    );
-
-    // /********** Add full matched contract **********/
-    // setup.setup_from_path(full_match_path).await;
+//     /********** Add second partial matched contract (should not be added) **********/
+//     setup = setup.alliance_db(alliance_db);
+//     setup.setup(partial_match_test_case_2).await;
+//
+//     /********** Add full matched contract **********/
+//     setup.setup(full_match_test_case).await;
 }
 
 fn verify_request(test_case: &TestCase) -> eth_bytecode_db_v2::VerifySolidityStandardJsonRequest {
@@ -493,15 +462,6 @@ async fn check_contract(db: &DatabaseConnection, contract: contracts::Model, tes
     );
 }
 
-async fn retrieve_contract_deployments(
-    db: &DatabaseConnection,
-) -> Vec<contract_deployments::Model> {
-    contract_deployments::Entity::find()
-        .all(db)
-        .await
-        .expect("Error while retrieving contract deployments")
-}
-
 // `test_case` is None if we would like to retrieve any model
 // (useful when want to check that no data has been inserted)
 async fn retrieve_contract_deployment(
@@ -570,13 +530,6 @@ async fn check_contract_deployment(
     check_contract(db, contract, test_case).await;
 
     contract_deployment
-}
-
-async fn retrieve_compiled_contracts(db: &DatabaseConnection) -> Vec<compiled_contracts::Model> {
-    compiled_contracts::Entity::find()
-        .all(db)
-        .await
-        .expect("Error while retrieving compiled contracts")
 }
 
 async fn retrieve_compiled_contract(
@@ -664,13 +617,6 @@ async fn check_compiled_contract(
     compiled_contract
 }
 
-async fn retrieve_verified_contracts(db: &DatabaseConnection) -> Vec<verified_contracts::Model> {
-    verified_contracts::Entity::find()
-        .all(db)
-        .await
-        .expect("Error while retrieving verified contracts")
-}
-
 async fn retrieve_verified_contract(
     db: &DatabaseConnection,
     contract_deployment: Option<&contract_deployments::Model>,
@@ -678,10 +624,12 @@ async fn retrieve_verified_contract(
 ) -> Option<verified_contracts::Model> {
     let mut query = verified_contracts::Entity::find();
     if let Some(contract_deployment) = contract_deployment {
-        query = query.filter(verified_contracts::Column::DeploymentId.eq(contract_deployment.id))
+        query = query
+            .filter(verified_contracts::Column::DeploymentId.eq(contract_deployment.id.clone()))
     }
     if let Some(compiled_contract) = compiled_contract {
-        query = query.filter(verified_contracts::Column::CompilationId.eq(compiled_contract.id))
+        query =
+            query.filter(verified_contracts::Column::CompilationId.eq(compiled_contract.id.clone()))
     }
     query
         .one(db)

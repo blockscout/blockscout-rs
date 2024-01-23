@@ -35,6 +35,7 @@ verifier-alliance-migration = { path = "../eth-bytecode-db/verifier-alliance-mig
 
 blockscout-service-launcher = { workspace = true, features = [ "test-server", "test-database", "database-0_12" ] }
 bytes = "1.5.0"
+futures = "0.3"
 hex = "0.4.3"
 mockall = "0.11"
 keccak-hash = "0.10.0"
