@@ -12,7 +12,7 @@ use verifier_alliance_entity::{
     code, compiled_contracts, contract_deployments, contracts, verified_contracts,
 };
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct ContractDeploymentData {
     pub chain_id: i64,
     pub contract_address: Vec<u8>,
@@ -23,6 +23,14 @@ pub(crate) struct ContractDeploymentData {
     pub creation_code: Option<Vec<u8>>,
     pub runtime_code: Option<Vec<u8>>,
 }
+
+#[derive(Clone, Debug, PartialOrd, Ord, PartialEq, Eq)]
+enum TransformationStatus {
+    NoMatch,
+    WithAuxdata,
+    WithoutAuxdata,
+}
+
 pub(crate) async fn insert_data(
     db_client: &DatabaseConnection,
     source_response: types::DatabaseReadySource,
@@ -49,6 +57,23 @@ pub(crate) async fn insert_data(
         .await
         .context("retrieve contract")?;
 
+    let deployment_verified_contracts =
+        retrieve_deployment_verified_contracts(&txn, &contract_deployment)
+            .await
+            .context("retrieve deployment verified contracts")?;
+    let max_statuses = deployment_verified_contracts
+        .iter()
+        .map(retrieve_transformation_statuses)
+        .fold(
+            (TransformationStatus::NoMatch, TransformationStatus::NoMatch),
+            |statuses, current_status| {
+                let creation_code_status = std::cmp::max(statuses.0, current_status.0);
+                let runtime_code_status = std::cmp::max(statuses.1, current_status.1);
+
+                (creation_code_status, runtime_code_status)
+            },
+        );
+
     let compiled_contract = insert_compiled_contract(&txn, source_response)
         .await
         .context("insert compiled_contract")?;
@@ -59,6 +84,7 @@ pub(crate) async fn insert_data(
         &contract,
         &contract_deployment,
         &compiled_contract,
+        max_statuses,
     )
     .await
     .context("insert verified_contract")?;
@@ -108,6 +134,17 @@ async fn retrieve_contract_deployment(
         .one(txn)
         .await
         .context("select from \"contract_deployments\"")
+}
+
+async fn retrieve_deployment_verified_contracts(
+    txn: &DatabaseTransaction,
+    contract_deployment: &contract_deployments::Model,
+) -> Result<Vec<verified_contracts::Model>, anyhow::Error> {
+    verified_contracts::Entity::find()
+        .filter(verified_contracts::Column::DeploymentId.eq(contract_deployment.id))
+        .all(txn)
+        .await
+        .context("select from \"verified_contracts\" by deployment id")
 }
 
 async fn retrieve_contract(
@@ -187,12 +224,64 @@ where
     Ok((creation_match, creation_values, creation_transformations))
 }
 
+fn retrieve_transformation_statuses(
+    verified_contract: &verified_contracts::Model,
+) -> (TransformationStatus, TransformationStatus) {
+    let creation_code_status = retrieve_code_transformation_status(
+        Some(verified_contract.id),
+        true,
+        verified_contract.creation_match,
+        verified_contract.creation_values.as_ref(),
+    );
+    let runtime_code_status = retrieve_code_transformation_status(
+        Some(verified_contract.id),
+        false,
+        verified_contract.runtime_match,
+        verified_contract.runtime_values.as_ref(),
+    );
+
+    (creation_code_status, runtime_code_status)
+}
+
+fn retrieve_code_transformation_status(
+    id: Option<i64>,
+    is_creation_code: bool,
+    code_match: bool,
+    code_values: Option<&serde_json::Value>,
+) -> TransformationStatus {
+    if code_match {
+        if let Some(values) = code_values {
+            if let Some(object) = values.as_object() {
+                if object.contains_key("cborAuxdata") {
+                    return TransformationStatus::WithAuxdata;
+                } else {
+                    return TransformationStatus::WithoutAuxdata;
+                }
+            } else {
+                tracing::warn!(is_creation_code=is_creation_code,
+                    verified_contract=?id,
+                    "Transformation values is not an object")
+            }
+        } else {
+            tracing::warn!(is_creation_code=is_creation_code,
+                    verified_contract=?id,
+                    "Was matched, but transformation values are null");
+        }
+    }
+
+    TransformationStatus::NoMatch
+}
+
 async fn insert_verified_contract(
     deployment_data: &ContractDeploymentData,
     txn: &DatabaseTransaction,
     contract: &contracts::Model,
     contract_deployment: &contract_deployments::Model,
     compiled_contract: &compiled_contracts::Model,
+    (existing_creation_code_status, existing_runtime_code_status): (
+        TransformationStatus,
+        TransformationStatus,
+    ),
 ) -> Result<verified_contracts::Model, anyhow::Error> {
     let (creation_match, creation_values, creation_transformations) = check_code_match(
         deployment_data,
@@ -218,6 +307,18 @@ async fn insert_verified_contract(
     if !(creation_match || runtime_match) {
         return Err(anyhow::anyhow!(
             "neither creation code nor runtime code have not matched"
+        ));
+    }
+
+    let creation_code_status =
+        retrieve_code_transformation_status(None, true, creation_match, creation_values.as_ref());
+    let runtime_code_status =
+        retrieve_code_transformation_status(None, false, runtime_match, runtime_values.as_ref());
+    if existing_creation_code_status >= creation_code_status
+        && existing_runtime_code_status >= runtime_code_status
+    {
+        return Err(anyhow::anyhow!(
+            "New verified contract is not better than existing for the given contract deployment"
         ));
     }
 
