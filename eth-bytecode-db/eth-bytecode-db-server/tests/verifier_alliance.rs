@@ -483,8 +483,6 @@ async fn insert_code(txn: &DatabaseTransaction, code: Vec<u8>) -> keccak_hash::H
     code_hash
 }
 
-// async fn
-
 async fn check_contract(db: &DatabaseConnection, contract: contracts::Model, test_case: &TestCase) {
     let creation_code = code::Entity::find_by_id(contract.creation_code_hash)
         .one(db)
