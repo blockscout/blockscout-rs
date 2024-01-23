@@ -14,6 +14,7 @@ use super::{
     errors::Error,
     smart_contract_verifier,
     types::{BytecodeType, DatabaseReadySource, Source, VerificationMetadata, VerificationType},
+    verifier_alliance,
 };
 use anyhow::Context;
 use sea_orm::DatabaseConnection;
@@ -321,7 +322,7 @@ async fn process_verifier_alliance_db_action(
             }
         };
 
-    let (db_client, deployment_data) = match action {
+    let (db_client, contract_deployment) = match action {
         VerifierAllianceDbAction::IgnoreDb => return Ok(()),
         VerifierAllianceDbAction::SaveIfDeploymentExists {
             db_client,
@@ -355,7 +356,19 @@ async fn process_verifier_alliance_db_action(
                 ..Default::default()
             };
 
-            (db_client, deployment_data)
+            let contract_deployment = db::verifier_alliance_db::retrieve_contract_deployment(db_client, &deployment_data)
+                .await
+                .context("retrieve contract contract_deployment")?
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "contract deployment was not found: chain_id={}, address={}, transaction_hash={}",
+                        deployment_data.chain_id,
+                        format!("0x{}", hex::encode(&deployment_data.contract_address)),
+                        format!("0x{}", hex::encode(&deployment_data.transaction_hash)),
+                    )
+                })?;
+
+            (db_client, contract_deployment)
         }
         VerifierAllianceDbAction::SaveWithDeploymentData {
             db_client,
@@ -387,20 +400,119 @@ async fn process_verifier_alliance_db_action(
                 runtime_code: runtime_code.map(|code| code.to_vec()),
             };
 
-            db::verifier_alliance_db::insert_deployment_data(db_client, deployment_data.clone())
-                .await
-                .context("Insert deployment data into verifier alliance database")?;
+            let contract_deployment = db::verifier_alliance_db::insert_deployment_data(
+                db_client,
+                deployment_data.clone(),
+            )
+            .await
+            .context("Insert deployment data into verifier alliance database")?;
 
-            (db_client, deployment_data)
+            (db_client, contract_deployment)
         }
     };
 
     let database_source = DatabaseReadySource::try_from(source)
         .context("Converting source into database ready version")?;
 
-    db::verifier_alliance_db::insert_data(db_client, database_source, deployment_data)
-        .await
-        .context("Insert data into verifier alliance database")
+    let (deployed_creation_code, deployed_runtime_code) =
+        db::verifier_alliance_db::retrieve_contract_codes(db_client, &contract_deployment)
+            .await
+            .context("retrieve deployment contract codes")?;
+
+    let creation_code_match = verifier_alliance::verify_creation_code(
+        &contract_deployment,
+        deployed_creation_code.code.clone(),
+        database_source.raw_creation_code.clone(),
+        database_source.creation_code_artifacts.clone(),
+    )
+    .context("verify if creation code match")?;
+
+    let runtime_code_match = verifier_alliance::verify_runtime_code(
+        &contract_deployment,
+        deployed_runtime_code.code.clone(),
+        database_source.raw_runtime_code.clone(),
+        database_source.runtime_code_artifacts.clone(),
+    )
+    .context("verify if creation code match")?;
+
+    if !(creation_code_match.does_match || runtime_code_match.does_match) {
+        return Err(anyhow::anyhow!(
+            "Neither creation code nor runtime code have not matched"
+        ));
+    }
+
+    let (creation_code_max_status, runtime_code_max_status) = {
+        let deployment_verified_contracts =
+            db::verifier_alliance_db::retrieve_deployment_verified_contracts(
+                db_client,
+                &contract_deployment,
+            )
+            .await
+            .context("retrieve deployment verified contracts")?;
+
+        let calculate_max_status = |is_creation_code: bool| {
+            deployment_verified_contracts
+                .iter()
+                .map(|verified_contract| {
+                    let (does_match, values) = if is_creation_code {
+                        (
+                            verified_contract.creation_match,
+                            verified_contract.creation_values.as_ref(),
+                        )
+                    } else {
+                        (
+                            verified_contract.runtime_match,
+                            verified_contract.runtime_values.as_ref(),
+                        )
+                    };
+
+                    verifier_alliance::retrieve_code_transformation_status(
+                        Some(verified_contract.id),
+                        is_creation_code,
+                        does_match,
+                        values,
+                    )
+                })
+                .max()
+                .unwrap_or(verifier_alliance::TransformationStatus::NoMatch)
+        };
+
+        (calculate_max_status(true), calculate_max_status(false))
+    };
+
+    let (creation_code_status, runtime_code_status) = {
+        let creation_code_status = verifier_alliance::retrieve_code_transformation_status(
+            None,
+            true,
+            creation_code_match.does_match,
+            creation_code_match.values.as_ref(),
+        );
+        let runtime_code_status = verifier_alliance::retrieve_code_transformation_status(
+            None,
+            false,
+            runtime_code_match.does_match,
+            runtime_code_match.values.as_ref(),
+        );
+        (creation_code_status, runtime_code_status)
+    };
+
+    if creation_code_max_status >= creation_code_status
+        && runtime_code_max_status >= runtime_code_status
+    {
+        return Err(anyhow::anyhow!(
+            "New verified contract is not better than existing for the given contract deployment"
+        ));
+    }
+
+    db::verifier_alliance_db::insert_data(
+        db_client,
+        database_source,
+        contract_deployment,
+        creation_code_match,
+        runtime_code_match,
+    )
+    .await
+    .context("Insert data into verifier alliance database")
 }
 
 async fn process_abi_data(

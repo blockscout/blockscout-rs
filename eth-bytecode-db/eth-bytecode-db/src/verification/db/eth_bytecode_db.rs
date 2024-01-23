@@ -195,13 +195,13 @@ async fn insert_source_details(
         compiler_settings: Set(source.compiler_settings.clone()),
         file_name: Set(source.file_name.clone()),
         contract_name: Set(source.contract_name.clone()),
-        raw_creation_input: Set(source.raw_creation_input.clone()),
-        raw_deployed_bytecode: Set(source.raw_deployed_bytecode.clone()),
+        raw_creation_input: Set(source.raw_creation_code.clone()),
+        raw_deployed_bytecode: Set(source.raw_runtime_code.clone()),
         abi: Set(source.abi.clone()),
         file_ids_hash: Set(file_ids_hash),
         compilation_artifacts: Set(source.compilation_artifacts),
-        creation_input_artifacts: Set(source.creation_input_artifacts),
-        deployed_bytecode_artifacts: Set(source.deployed_bytecode_artifacts),
+        creation_input_artifacts: Set(source.creation_code_artifacts),
+        deployed_bytecode_artifacts: Set(source.runtime_code_artifacts),
         ..Default::default()
     };
     insert_then_select!(
