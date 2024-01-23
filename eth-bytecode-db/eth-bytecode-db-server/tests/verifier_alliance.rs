@@ -141,7 +141,7 @@ pub async fn failure_without_existing_deployment_not_authorized(
 #[tokio::test]
 #[ignore = "Needs database to run"]
 pub async fn verification_with_different_sources(
-    // #[files("tests/alliance_test_cases/full_match.json")] full_match_path: PathBuf,
+    #[files("tests/alliance_test_cases/full_match.json")] full_match_path: PathBuf,
     #[files("tests/alliance_test_cases/partial_match.json")] partial_match_1_path: PathBuf,
     #[files("tests/alliance_test_cases/partial_match_2.json")] partial_match_2_path: PathBuf,
 ) {
@@ -150,26 +150,26 @@ pub async fn verification_with_different_sources(
     let mut setup = Setup::new(TEST_PREFIX).authorized();
 
     /********** Add first partial matched contract **********/
-    let (alliance_db, _) = setup.setup_from_path(partial_match_1_path).await;
+    let (alliance_db, partial_match_1_test_case) =
+        setup.setup_from_path(partial_match_1_path).await;
+    let db_client_owned = alliance_db.client();
+    let db_client = db_client_owned.as_ref();
 
-    let contract_deployments_partial_match_1 =
-        retrieve_contract_deployments(alliance_db.client().as_ref()).await;
+    let contract_deployments_partial_match_1 = retrieve_contract_deployments(db_client).await;
     assert_eq!(
         1,
         contract_deployments_partial_match_1.len(),
         "Invalid number of contract deployments"
     );
 
-    let compiled_contracts_partial_match_1 =
-        retrieve_compiled_contracts(alliance_db.client().as_ref()).await;
+    let compiled_contracts_partial_match_1 = retrieve_compiled_contracts(db_client).await;
     assert_eq!(
         1,
         compiled_contracts_partial_match_1.len(),
         "Invalid number of compiled contracts"
     );
 
-    let verified_contracts_partial_match_1 =
-        retrieve_verified_contracts(alliance_db.client().as_ref()).await;
+    let verified_contracts_partial_match_1 = retrieve_verified_contracts(db_client).await;
     assert_eq!(
         1,
         verified_contracts_partial_match_1.len(),
@@ -180,29 +180,51 @@ pub async fn verification_with_different_sources(
     setup = setup.alliance_db(alliance_db.clone());
     setup.setup_from_path(partial_match_2_path).await;
 
-    let contract_deployments_partial_match_2 =
-        retrieve_contract_deployments(alliance_db.client().as_ref()).await;
+    let contract_deployments_partial_match_2 = retrieve_contract_deployments(db_client).await;
     assert_eq!(
         contract_deployments_partial_match_1, contract_deployments_partial_match_2,
         "Invalid contract deployments after second partial match insertion"
     );
 
-    let compiled_contracts_partial_match_2 =
-        retrieve_compiled_contracts(alliance_db.client().as_ref()).await;
+    let compiled_contracts_partial_match_2 = retrieve_compiled_contracts(db_client).await;
     assert_eq!(
         compiled_contracts_partial_match_1, compiled_contracts_partial_match_2,
         "Invalid compiled contracts after second partial match insertion"
     );
 
-    let verified_contracts_partial_match_2 =
-        retrieve_verified_contracts(alliance_db.client().as_ref()).await;
+    let verified_contracts_partial_match_2 = retrieve_verified_contracts(db_client).await;
     assert_eq!(
         verified_contracts_partial_match_1, verified_contracts_partial_match_2,
         "Invalid verified contracts after second partial match insertion"
     );
 
-    // /********** Add full matched contract **********/
-    // setup.setup_from_path(full_match_path).await;
+    /********** Add full matched contract **********/
+    let (_, full_match_test_case) = setup.setup_from_path(full_match_path).await;
+
+    let contract_deployment_partial_match_1 =
+        check_contract_deployment(db_client, &partial_match_1_test_case).await;
+    let contract_deployment_full_match =
+        check_contract_deployment(db_client, &full_match_test_case).await;
+
+    let compiled_contract_partial_match_1 =
+        check_compiled_contract(db_client, &partial_match_1_test_case).await;
+    let compiled_contract_full_match =
+        check_compiled_contract(db_client, &full_match_test_case).await;
+
+    check_verified_contract(
+        db_client,
+        &partial_match_1_test_case,
+        &contract_deployment_partial_match_1,
+        &compiled_contract_partial_match_1,
+    )
+    .await;
+    check_verified_contract(
+        db_client,
+        &full_match_test_case,
+        &contract_deployment_full_match,
+        &compiled_contract_full_match,
+    )
+    .await;
 }
 
 fn verify_request(test_case: &TestCase) -> eth_bytecode_db_v2::VerifySolidityStandardJsonRequest {
