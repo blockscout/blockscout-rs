@@ -1,5 +1,8 @@
+mod action_helpers;
 mod parsers;
 mod transformations;
+
+pub use action_helpers::*;
 
 /**********************************************/
 
@@ -46,35 +49,6 @@ pub fn verify_runtime_code(
         code_artifacts,
         transformations::process_runtime_code,
     )
-}
-
-pub fn retrieve_code_transformation_status(
-    id: Option<i64>,
-    is_creation_code: bool,
-    code_match: bool,
-    code_values: Option<&serde_json::Value>,
-) -> TransformationStatus {
-    if code_match {
-        if let Some(values) = code_values {
-            if let Some(object) = values.as_object() {
-                if object.contains_key("cborAuxdata") {
-                    return TransformationStatus::WithAuxdata;
-                } else {
-                    return TransformationStatus::WithoutAuxdata;
-                }
-            } else {
-                tracing::warn!(is_creation_code=is_creation_code,
-                    verified_contract=?id,
-                    "Transformation values is not an object")
-            }
-        } else {
-            tracing::warn!(is_creation_code=is_creation_code,
-                    verified_contract=?id,
-                    "Was matched, but transformation values are null");
-        }
-    }
-
-    TransformationStatus::NoMatch
 }
 
 fn verify_code<F>(
