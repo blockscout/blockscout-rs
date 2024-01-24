@@ -5,10 +5,12 @@ on:
     paths:
       - eth-bytecode-db-extractors/**
       - .github/workflows/eth-bytecode-db-extractors.yml
+      - .github/actions/deps/**
   pull_request:
     paths:
       - eth-bytecode-db-extractors/**
       - .github/workflows/eth-bytecode-db-extractors.yml
+      - .github/actions/deps/**
 
 name: Lint (eth-bytecode-db-extractors)
 
