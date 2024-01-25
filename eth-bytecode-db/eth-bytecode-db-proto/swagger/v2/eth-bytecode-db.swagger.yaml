@@ -53,6 +53,26 @@ paths:
             $ref: '#/definitions/v2SearchAllSourcesRequest'
       tags:
         - Database
+  /api/v2/bytecodes/sources:search-alliance:
+    post:
+      operationId: Database_SearchAllianceSources
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v2SearchSourcesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v2SearchAllianceSourcesRequest'
+      tags:
+        - Database
   /api/v2/bytecodes/sources:search-sourcify:
     post:
       operationId: Database_SearchSourcifySources
@@ -407,6 +427,15 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v2Source'
+  v2SearchAllianceSourcesRequest:
+    type: object
+    properties:
+      chain:
+        type: string
+        title: / Id of the chain the contract should be verified on
+      address:
+        type: string
+        title: / The address of the contract being verified
   v2SearchEventDescriptionsRequest:
     type: object
     properties:

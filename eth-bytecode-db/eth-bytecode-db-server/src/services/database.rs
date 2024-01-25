@@ -2,9 +2,9 @@ use crate::{
     proto::{
         database_server::Database, BatchSearchEventDescriptionsRequest,
         BatchSearchEventDescriptionsResponse, BytecodeType, SearchAllSourcesRequest,
-        SearchAllSourcesResponse, SearchEventDescriptionsRequest, SearchEventDescriptionsResponse,
-        SearchSourcesRequest, SearchSourcesResponse, SearchSourcifySourcesRequest, Source,
-        VerifyResponse,
+        SearchAllSourcesResponse, SearchAllianceSourcesRequest, SearchEventDescriptionsRequest,
+        SearchEventDescriptionsResponse, SearchSourcesRequest, SearchSourcesResponse,
+        SearchSourcifySourcesRequest, Source, VerifyResponse,
     },
     types::{BytecodeTypeWrapper, EventDescriptionWrapper, SourceWrapper, VerifyResponseWrapper},
 };
@@ -72,6 +72,14 @@ impl Database for DatabaseService {
         Ok(tonic::Response::new(SearchSourcesResponse {
             sources: source.map_or(vec![], |source| vec![source]),
         }))
+    }
+
+    #[instrument(skip_all)]
+    async fn search_alliance_sources(
+        &self,
+        _request: tonic::Request<SearchAllianceSourcesRequest>,
+    ) -> Result<tonic::Response<SearchSourcesResponse>, tonic::Status> {
+        todo!()
     }
 
     #[instrument(skip_all)]

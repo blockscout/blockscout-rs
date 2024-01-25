@@ -9,6 +9,8 @@ service Database {
 
   rpc SearchSourcifySources(SearchSourcifySourcesRequest) returns (SearchSourcesResponse) {}
 
+  rpc SearchAllianceSources(SearchAllianceSourcesRequest) returns (SearchSourcesResponse) {}
+
   rpc SearchAllSources(SearchAllSourcesRequest) returns (SearchAllSourcesResponse) {}
 
   rpc SearchEventDescriptions(SearchEventDescriptionsRequest) returns (SearchEventDescriptionsResponse) {}
@@ -208,6 +210,12 @@ message SearchSourcesRequest {
 }
 
 message SearchSourcifySourcesRequest {
+  /// Id of the chain the contract should be verified on
+  string chain = 1;
+  /// The address of the contract being verified
+  string address = 2;
+}
+message SearchAllianceSourcesRequest {
   /// Id of the chain the contract should be verified on
   string chain = 1;
   /// The address of the contract being verified
