@@ -3,11 +3,11 @@ on:
     branches:
       - 'main'
     paths:
-      - .github/workflows/base-image.yml
+      - .github/workflows/services-base.yml
       - docker/base.Dockerfile
   pull_request:
     paths:
-      - .github/workflows/base-image.yml
+      - .github/workflows/services-base.yml
       - docker/base.Dockerfile
 
 name: Build (services base)
