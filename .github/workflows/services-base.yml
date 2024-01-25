@@ -10,6 +10,8 @@ on:
       - .github/workflows/base-image.yml
       - docker/base.Dockerfile
 
+name: Build (services base)
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: blockscout/services-base
