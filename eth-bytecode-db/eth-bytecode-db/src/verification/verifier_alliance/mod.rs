@@ -1,12 +1,34 @@
+mod action_helpers;
 mod parsers;
 mod transformations;
 
-pub fn process_creation_code(
-    deployed_code: &[u8],
+pub use action_helpers::*;
+
+/**********************************************/
+
+use verifier_alliance_entity::contract_deployments;
+
+pub struct CodeMatch {
+    pub does_match: bool,
+    pub values: Option<serde_json::Value>,
+    pub transformations: Option<serde_json::Value>,
+}
+
+#[derive(Clone, Debug, PartialOrd, Ord, PartialEq, Eq)]
+pub enum TransformationStatus {
+    NoMatch,
+    WithAuxdata,
+    WithoutAuxdata,
+}
+
+pub fn verify_creation_code(
+    contract_deployment: &contract_deployments::Model,
+    deployed_code: Option<Vec<u8>>,
     compiled_code: Vec<u8>,
-    code_artifacts: serde_json::Value,
-) -> Result<(serde_json::Value, serde_json::Value), anyhow::Error> {
-    process_code(
+    code_artifacts: Option<serde_json::Value>,
+) -> Result<CodeMatch, anyhow::Error> {
+    verify_code(
+        contract_deployment,
         deployed_code,
         compiled_code,
         code_artifacts,
@@ -14,17 +36,71 @@ pub fn process_creation_code(
     )
 }
 
-pub fn process_runtime_code(
-    deployed_code: &[u8],
+pub fn verify_runtime_code(
+    contract_deployment: &contract_deployments::Model,
+    deployed_code: Option<Vec<u8>>,
     compiled_code: Vec<u8>,
-    code_artifacts: serde_json::Value,
-) -> Result<(serde_json::Value, serde_json::Value), anyhow::Error> {
-    process_code(
+    code_artifacts: Option<serde_json::Value>,
+) -> Result<CodeMatch, anyhow::Error> {
+    verify_code(
+        contract_deployment,
         deployed_code,
         compiled_code,
         code_artifacts,
         transformations::process_runtime_code,
     )
+}
+
+fn verify_code<F>(
+    contract_deployment: &contract_deployments::Model,
+    deployed_code: Option<Vec<u8>>,
+    compiled_code: Vec<u8>,
+    code_artifacts: Option<serde_json::Value>,
+    transformations: F,
+) -> Result<CodeMatch, anyhow::Error>
+where
+    F: Fn(
+        &[u8],
+        Vec<u8>,
+        serde_json::Value,
+    ) -> Result<(Vec<u8>, serde_json::Value, serde_json::Value), anyhow::Error>,
+{
+    let code_artifacts = code_artifacts.ok_or(anyhow::anyhow!("code artifacts are missing"))?;
+    let code_match_details = deployed_code.and_then(|deployed_code| {
+        let result = process_code(
+            &deployed_code,
+            compiled_code,
+            code_artifacts,
+            transformations,
+        );
+
+        match result {
+            Ok(res) => Some(res),
+            Err(err) => {
+                let contract_address = format!("0x{}", hex::encode(&contract_deployment.address));
+                tracing::warn!(
+                    contract_address = contract_address.to_string(),
+                    chain_id = contract_deployment.chain_id.to_string(),
+                    "code processing failed; err={err:#}"
+                );
+                None
+            }
+        }
+    });
+
+    let code_match = match code_match_details {
+        None => CodeMatch {
+            does_match: false,
+            transformations: None,
+            values: None,
+        },
+        Some((values, transformations)) => CodeMatch {
+            does_match: true,
+            transformations: Some(transformations),
+            values: Some(values),
+        },
+    };
+    Ok(code_match)
 }
 
 fn process_code<F>(

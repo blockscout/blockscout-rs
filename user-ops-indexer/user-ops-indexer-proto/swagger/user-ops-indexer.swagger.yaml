@@ -258,8 +258,8 @@ paths:
         - name: bundle_index
           in: query
           required: false
-          type: string
-          format: uint64
+          type: integer
+          format: int64
         - name: block_number
           in: query
           required: false
@@ -358,7 +358,6 @@ definitions:
         type: string
       creation_timestamp:
         type: string
-        format: uint64
       total_ops:
         type: integer
         format: int64
@@ -373,11 +372,10 @@ definitions:
         type: string
         format: uint64
       bundle_index:
-        type: string
-        format: uint64
+        type: integer
+        format: int64
       timestamp:
         type: string
-        format: uint64
       total_ops:
         type: integer
         format: int64
@@ -464,7 +462,6 @@ definitions:
         type: string
       timestamp:
         type: string
-        format: uint64
       status:
         type: boolean
       fee:
@@ -494,11 +491,9 @@ definitions:
       total_ops:
         type: integer
         format: int64
-  v1UserOp:
+  v1RawUserOp:
     type: object
     properties:
-      hash:
-        type: string
       sender:
         type: string
       nonce:
@@ -524,11 +519,41 @@ definitions:
         type: string
       signature:
         type: string
+  v1UserOp:
+    type: object
+    properties:
+      hash:
+        type: string
+      sender:
+        type: string
+      nonce:
+        type: string
+      call_data:
+        type: string
+      call_gas_limit:
+        type: string
+        format: uint64
+      verification_gas_limit:
+        type: string
+        format: uint64
+      pre_verification_gas:
+        type: string
+        format: uint64
+      max_fee_per_gas:
+        type: string
+      max_priority_fee_per_gas:
+        type: string
+      signature:
+        type: string
+      raw:
+        $ref: '#/definitions/v1RawUserOp'
       aggregator:
         type: string
       aggregator_signature:
         type: string
       entry_point:
+        type: string
+      entry_point_version:
         type: string
       transaction_hash:
         type: string
@@ -540,11 +565,11 @@ definitions:
       bundler:
         type: string
       bundle_index:
-        type: string
-        format: uint64
+        type: integer
+        format: int64
       index:
-        type: string
-        format: uint64
+        type: integer
+        format: int64
       factory:
         type: string
       paymaster:
@@ -564,15 +589,14 @@ definitions:
       sponsor_type:
         type: string
       user_logs_start_index:
-        type: string
-        format: uint64
+        type: integer
+        format: int64
       user_logs_count:
-        type: string
-        format: uint64
+        type: integer
+        format: int64
       fee:
         type: string
       consensus:
         type: boolean
       timestamp:
         type: string
-        format: uint64

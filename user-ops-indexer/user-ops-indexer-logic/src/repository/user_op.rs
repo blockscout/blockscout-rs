@@ -65,9 +65,10 @@ pub async fn find_user_op_by_op_hash(
             let user_op = Model::from_query_result(&res, "")?;
             let mut user_op = UserOp::from(user_op);
             user_op.consensus = res.try_get("", "consensus")?;
-            user_op.timestamp = res
-                .try_get::<Option<DateTime>>("", "timestamp")?
-                .map(|t| t.timestamp() as u64);
+            user_op.timestamp = res.try_get::<Option<DateTime>>("", "timestamp")?.map(|t| {
+                t.and_utc()
+                    .to_rfc3339_opts(chrono::SecondsFormat::Micros, true)
+            });
             Some(user_op)
         }
     };
@@ -84,7 +85,7 @@ pub async fn list_user_ops(
     factory_filter: Option<Address>,
     tx_hash_filter: Option<H256>,
     entry_point_filter: Option<Address>,
-    bundle_index_filter: Option<u64>,
+    bundle_index_filter: Option<u32>,
     block_number_filter: Option<u64>,
     page_token: Option<(u64, H256)>,
     limit: u64,
@@ -318,7 +319,7 @@ mod tests {
                     block_number: 0,
                     sender: Address::from_low_u64_be(0x0502),
                     transaction_hash: H256::from_low_u64_be(0x0504),
-                    timestamp: 1704067200,
+                    timestamp: "2024-01-01T00:00:00.000000Z".to_string(),
                     status: true,
                     fee: U256::from(56001575011025u64),
                 },
@@ -327,7 +328,7 @@ mod tests {
                     block_number: 0,
                     sender: Address::from_low_u64_be(0x0502),
                     transaction_hash: H256::from_low_u64_be(0x0504),
-                    timestamp: 1704067200,
+                    timestamp: "2024-01-01T00:00:00.000000Z".to_string(),
                     status: true,
                     fee: U256::from(56000075000025u64),
                 }

@@ -16,9 +16,9 @@ pub async fn list_bundles(
     db: &DatabaseConnection,
     bundler_filter: Option<Address>,
     entry_point_filter: Option<Address>,
-    page_token: Option<(u64, H256, u64)>,
+    page_token: Option<(u64, H256, u32)>,
     limit: u64,
-) -> Result<(Vec<Bundle>, Option<(u64, H256, u64)>), anyhow::Error> {
+) -> Result<(Vec<Bundle>, Option<(u64, H256, u32)>), anyhow::Error> {
     let page_token = page_token.unwrap_or((i64::MAX as u64, H256::zero(), 0));
     let bundles: Vec<Bundle> = BundleDB::find_by_statement(Statement::from_sql_and_values(
         db.get_database_backend(),

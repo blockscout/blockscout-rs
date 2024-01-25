@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package blockscout.userOpsIndexer.v1;
 
+import "google/protobuf/struct.proto";
+
 option go_package = "github.com/blockscout/blockscout-rs/user-ops-indexer";
 
 service UserOpsService {
@@ -74,7 +76,7 @@ message ListUserOpsRequest {
   optional string factory = 4;
   optional string transaction_hash = 5;
   optional string entry_point = 6;
-  optional uint64 bundle_index = 7;
+  optional uint32 bundle_index = 7;
   optional uint64 block_number = 8;
   optional uint32 page_size = 9;
   optional string page_token = 10;
@@ -120,7 +122,7 @@ message Account {
   optional string factory = 2;
   optional string creation_transaction_hash = 3;
   optional string creation_op_hash = 4;
-  optional uint64 creation_timestamp = 5;
+  optional string creation_timestamp = 5;
   uint32 total_ops = 6;
 }
 
@@ -128,8 +130,8 @@ message Bundle {
   string transaction_hash = 1;
   string bundler = 2;
   uint64 block_number = 3;
-  uint64 bundle_index = 4;
-  uint64 timestamp = 5;
+  uint32 bundle_index = 4;
+  string timestamp = 5;
   uint32 total_ops = 6;
 }
 
@@ -149,28 +151,42 @@ message Factory {
   uint32 total_accounts = 2;
 }
 
+message RawUserOp {
+  string sender = 1;
+  string nonce = 2;
+  string init_code = 3;
+  string call_data = 4;
+  uint64 call_gas_limit = 5;
+  uint64 verification_gas_limit = 6;
+  uint64 pre_verification_gas = 7;
+  string max_fee_per_gas = 8;
+  string max_priority_fee_per_gas = 9;
+  string paymaster_and_data = 10;
+  string signature = 11;
+}
+
 message UserOp {
   string hash = 1;
   string sender = 2;
   string nonce = 3;
-  optional string init_code = 4;
-  string call_data = 5;
-  uint64 call_gas_limit = 6;
-  uint64 verification_gas_limit = 7;
-  uint64 pre_verification_gas = 8;
-  string max_fee_per_gas = 9;
-  string max_priority_fee_per_gas = 10;
-  optional string paymaster_and_data = 11;
-  string signature = 12;
-  optional string aggregator = 13;
-  optional string aggregator_signature = 14;
-  string entry_point = 15;
+  string call_data = 4;
+  uint64 call_gas_limit = 5;
+  uint64 verification_gas_limit = 6;
+  uint64 pre_verification_gas = 7;
+  string max_fee_per_gas = 8;
+  string max_priority_fee_per_gas = 9;
+  string signature = 10;
+  RawUserOp raw = 11;
+  optional string aggregator = 12;
+  optional string aggregator_signature = 13;
+  string entry_point = 14;
+  string entry_point_version = 15;
   string transaction_hash = 16;
   uint64 block_number = 17;
   string block_hash = 18;
   string bundler = 19;
-  uint64 bundle_index = 20;
-  uint64 index = 21;
+  uint32 bundle_index = 20;
+  uint32 index = 21;
   optional string factory = 22;
   optional string paymaster = 23;
   bool status = 24;
@@ -179,12 +195,12 @@ message UserOp {
   string gas_price = 27;
   uint64 gas_used = 28;
   string sponsor_type = 29;
-  uint64 user_logs_start_index = 30;
-  uint64 user_logs_count = 31;
+  uint32 user_logs_start_index = 30;
+  uint32 user_logs_count = 31;
   string fee = 32;
 
   optional bool consensus = 33;
-  optional uint64 timestamp = 34;
+  optional string timestamp = 34;
 }
 
 message ListUserOp {
@@ -192,7 +208,7 @@ message ListUserOp {
   uint64 block_number = 2;
   string transaction_hash = 3;
   string address = 4;
-  uint64 timestamp = 5;
+  string timestamp = 5;
   bool status = 6;
   string fee = 7;
 }

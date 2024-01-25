@@ -2033,6 +2033,7 @@ dependencies = [
  "eth-bytecode-db",
  "eth-bytecode-db-proto",
  "ethers",
+ "futures",
  "hex",
  "keccak-hash",
  "migration",

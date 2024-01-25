@@ -3,16 +3,15 @@ use super::{
     insert_then_select,
 };
 use anyhow::Context;
-use blockscout_display_bytes::Bytes as DisplayBytes;
 use sea_orm::{
-    entity::prelude::ColumnTrait, ActiveValue::Set, DatabaseConnection, DatabaseTransaction,
+    entity::prelude::ColumnTrait, ActiveValue::Set, ConnectionTrait, DatabaseConnection,
     EntityTrait, QueryFilter, TransactionTrait,
 };
 use verifier_alliance_entity::{
     code, compiled_contracts, contract_deployments, contracts, verified_contracts,
 };
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct ContractDeploymentData {
     pub chain_id: i64,
     pub contract_address: Vec<u8>,
@@ -23,42 +22,29 @@ pub(crate) struct ContractDeploymentData {
     pub creation_code: Option<Vec<u8>>,
     pub runtime_code: Option<Vec<u8>>,
 }
+
 pub(crate) async fn insert_data(
     db_client: &DatabaseConnection,
     source_response: types::DatabaseReadySource,
-    deployment_data: ContractDeploymentData,
+    contract_deployment: contract_deployments::Model,
+    creation_code_match: verifier_alliance::CodeMatch,
+    runtime_code_match: verifier_alliance::CodeMatch,
 ) -> Result<(), anyhow::Error> {
     let txn = db_client
         .begin()
         .await
         .context("begin database transaction")?;
 
-    let contract_deployment = retrieve_contract_deployment(&txn, &deployment_data)
-        .await
-        .context("retrieve contract contract_deployment")?
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "contract deployment was not found: chain_id={}, address={}, transaction_hash={}",
-                deployment_data.chain_id,
-                DisplayBytes::from(deployment_data.contract_address.clone()),
-                DisplayBytes::from(deployment_data.transaction_hash.clone())
-            )
-        })?;
-
-    let contract = retrieve_contract(&txn, &contract_deployment)
-        .await
-        .context("retrieve contract")?;
-
     let compiled_contract = insert_compiled_contract(&txn, source_response)
         .await
         .context("insert compiled_contract")?;
 
     let _verified_contract = insert_verified_contract(
-        &deployment_data,
         &txn,
-        &contract,
         &contract_deployment,
         &compiled_contract,
+        creation_code_match,
+        runtime_code_match,
     )
     .await
     .context("insert verified_contract")?;
@@ -71,7 +57,7 @@ pub(crate) async fn insert_data(
 pub(crate) async fn insert_deployment_data(
     db_client: &DatabaseConnection,
     mut deployment_data: ContractDeploymentData,
-) -> Result<(), anyhow::Error> {
+) -> Result<contract_deployments::Model, anyhow::Error> {
     let txn = db_client
         .begin()
         .await
@@ -85,17 +71,17 @@ pub(crate) async fn insert_deployment_data(
     .await
     .context("insert contract")?;
 
-    let _contract_deployment = insert_contract_deployment(&txn, deployment_data, &contract)
+    let contract_deployment = insert_contract_deployment(&txn, deployment_data, &contract)
         .await
         .context("insert contract deployment")?;
 
     txn.commit().await.context("commit transaction")?;
 
-    Ok(())
+    Ok(contract_deployment)
 }
 
-async fn retrieve_contract_deployment(
-    txn: &DatabaseTransaction,
+pub(crate) async fn retrieve_contract_deployment<C: ConnectionTrait>(
+    db: &C,
     deployment_data: &ContractDeploymentData,
 ) -> Result<Option<contract_deployments::Model>, anyhow::Error> {
     contract_deployments::Entity::find()
@@ -105,17 +91,51 @@ async fn retrieve_contract_deployment(
             contract_deployments::Column::TransactionHash
                 .eq(deployment_data.transaction_hash.clone()),
         )
-        .one(txn)
+        .one(db)
         .await
         .context("select from \"contract_deployments\"")
 }
 
-async fn retrieve_contract(
-    txn: &DatabaseTransaction,
+pub(crate) async fn retrieve_deployment_verified_contracts<C: ConnectionTrait>(
+    db: &C,
+    contract_deployment: &contract_deployments::Model,
+) -> Result<Vec<verified_contracts::Model>, anyhow::Error> {
+    verified_contracts::Entity::find()
+        .filter(verified_contracts::Column::DeploymentId.eq(contract_deployment.id))
+        .all(db)
+        .await
+        .context("select from \"verified_contracts\" by deployment id")
+}
+
+pub(crate) async fn retrieve_contract_codes<C: ConnectionTrait>(
+    db: &C,
+    contract_deployment: &contract_deployments::Model,
+) -> Result<(code::Model, code::Model), anyhow::Error> {
+    let contract = retrieve_contract(db, contract_deployment)
+        .await
+        .context("retrieve contract")?;
+    let creation_code = retrieve_code(db, contract.creation_code_hash.clone())
+        .await
+        .context("retrieve creation code")?
+        .expect(
+            "\"contracts\".\"creation_code_hash\" has a foreign key constraint on \"code\".\"code_hash\"",
+        );
+    let runtime_code = retrieve_code(db, contract.runtime_code_hash.clone())
+        .await
+        .context("retrieve runtime code")?
+        .expect(
+            "\"contracts\".\"runtime_code_hash\" has a foreign key constraint on \"code\".\"code_hash\"",
+        );
+
+    Ok((creation_code, runtime_code))
+}
+
+pub(crate) async fn retrieve_contract<C: ConnectionTrait>(
+    db: &C,
     contract_deployment: &contract_deployments::Model,
 ) -> Result<contracts::Model, anyhow::Error> {
     contracts::Entity::find_by_id(contract_deployment.contract_id)
-        .one(txn)
+        .one(db)
         .await
         .context("select from \"contracts\" by id")?
         .ok_or_else(|| {
@@ -126,117 +146,39 @@ async fn retrieve_contract(
         })
 }
 
-async fn retrieve_code(
-    txn: &DatabaseTransaction,
+pub(crate) async fn retrieve_code<C: ConnectionTrait>(
+    db: &C,
     code_hash: Vec<u8>,
 ) -> Result<Option<code::Model>, anyhow::Error> {
     code::Entity::find_by_id(code_hash)
-        .one(txn)
+        .one(db)
         .await
         .context("select from \"code\"")
 }
 
-async fn check_code_match<F>(
-    deployment_data: &ContractDeploymentData,
-    txn: &DatabaseTransaction,
-    deployed_code_hash: Vec<u8>,
-    compiled_code_hash: Vec<u8>,
-    code_artifacts: serde_json::Value,
-    processing_function: F,
-) -> Result<(bool, Option<serde_json::Value>, Option<serde_json::Value>), anyhow::Error>
-where
-    F: Fn(
-        &[u8],
-        Vec<u8>,
-        serde_json::Value,
-    ) -> Result<(serde_json::Value, serde_json::Value), anyhow::Error>,
-{
-    let deployed_code = retrieve_code(txn, deployed_code_hash)
-        .await
-        .context("retrieve deployed code")?
-        .expect(
-            "\"contracts\".\"code_hash\" has a foreign key constraint on \"code\".\"code_hash\"",
-        );
-    let compiled_code = retrieve_code(txn, compiled_code_hash).await.context("retrieve compiled code")?
-        .expect("\"compiled_contracts\".\"code_hash\" has a foreign key constraint on \"code\".\"code_hash\"");
-
-    let code_match_details = match (deployed_code.code, compiled_code.code) {
-        (Some(deployed_code), Some(compiled_code)) => {
-            match processing_function(&deployed_code, compiled_code, code_artifacts) {
-                Ok(res) => Some(res),
-                Err(err) => {
-                    let contract_address =
-                        DisplayBytes::from(deployment_data.contract_address.clone());
-                    tracing::warn!(
-                        contract_address = contract_address.to_string(),
-                        chain_id = deployment_data.chain_id,
-                        "code processing failed; err={err:#}"
-                    );
-                    None
-                }
-            }
-        }
-        _ => None,
-    };
-
-    let (creation_match, creation_values, creation_transformations) = match code_match_details {
-        None => (false, None, None),
-        Some((values, transformations)) => (true, Some(values), Some(transformations)),
-    };
-
-    Ok((creation_match, creation_values, creation_transformations))
-}
-
-async fn insert_verified_contract(
-    deployment_data: &ContractDeploymentData,
-    txn: &DatabaseTransaction,
-    contract: &contracts::Model,
+async fn insert_verified_contract<C: ConnectionTrait>(
+    db: &C,
     contract_deployment: &contract_deployments::Model,
     compiled_contract: &compiled_contracts::Model,
+    creation_code_match: verifier_alliance::CodeMatch,
+    runtime_code_match: verifier_alliance::CodeMatch,
 ) -> Result<verified_contracts::Model, anyhow::Error> {
-    let (creation_match, creation_values, creation_transformations) = check_code_match(
-        deployment_data,
-        txn,
-        contract.creation_code_hash.clone(),
-        compiled_contract.creation_code_hash.clone(),
-        compiled_contract.creation_code_artifacts.clone(),
-        verifier_alliance::process_creation_code,
-    )
-    .await
-    .context("check creation code match")?;
-    let (runtime_match, runtime_values, runtime_transformations) = check_code_match(
-        deployment_data,
-        txn,
-        contract.runtime_code_hash.clone(),
-        compiled_contract.runtime_code_hash.clone(),
-        compiled_contract.runtime_code_artifacts.clone(),
-        verifier_alliance::process_runtime_code,
-    )
-    .await
-    .context("check runtime code match")?;
-
-    if !(creation_match || runtime_match) {
-        return Err(anyhow::anyhow!(
-            "neither creation code nor runtime code have not matched"
-        ));
-    }
-
     let active_model = verified_contracts::ActiveModel {
         id: Default::default(),
         created_at: Default::default(),
         updated_at: Default::default(),
         deployment_id: Set(contract_deployment.id),
         compilation_id: Set(compiled_contract.id),
-        creation_match: Set(creation_match),
-        creation_values: Set(creation_values),
-        creation_transformations: Set(creation_transformations),
-        runtime_match: Set(runtime_match),
-        runtime_values: Set(runtime_values),
-        runtime_transformations: Set(runtime_transformations),
+        creation_match: Set(creation_code_match.does_match),
+        creation_values: Set(creation_code_match.values),
+        creation_transformations: Set(creation_code_match.transformations),
+        runtime_match: Set(runtime_code_match.does_match),
+        runtime_values: Set(runtime_code_match.values),
+        runtime_transformations: Set(runtime_code_match.transformations),
     };
 
     let (verified_contract, _inserted) = insert_then_select!(
-        txn,
+        db,
         verified_contracts,
         active_model,
         false,
@@ -249,8 +191,8 @@ async fn insert_verified_contract(
     Ok(verified_contract)
 }
 
-async fn insert_compiled_contract(
-    txn: &DatabaseTransaction,
+async fn insert_compiled_contract<C: ConnectionTrait>(
+    db: &C,
     source: types::DatabaseReadySource,
 ) -> Result<compiled_contracts::Model, anyhow::Error> {
     let (compiler, language) = match source.source_type {
@@ -265,17 +207,17 @@ async fn insert_compiled_contract(
         .compilation_artifacts
         .ok_or(anyhow::anyhow!("compilation artifacts are missing"))?;
     let creation_code_artifacts = source
-        .creation_input_artifacts
+        .creation_code_artifacts
         .ok_or(anyhow::anyhow!("creation code artifacts are missing"))?;
     let runtime_code_artifacts = source
-        .deployed_bytecode_artifacts
+        .runtime_code_artifacts
         .ok_or(anyhow::anyhow!("runtime code artifacts are missing"))?;
 
-    let creation_code_hash = insert_code(txn, source.raw_creation_input)
+    let creation_code_hash = insert_code(db, source.raw_creation_code)
         .await
         .context("insert creation code")?
         .code_hash;
-    let runtime_code_hash = insert_code(txn, source.raw_deployed_bytecode)
+    let runtime_code_hash = insert_code(db, source.raw_runtime_code)
         .await
         .context("insert runtime code")?
         .code_hash;
@@ -298,7 +240,7 @@ async fn insert_compiled_contract(
         runtime_code_artifacts: Set(runtime_code_artifacts),
     };
     let (compiled_contract, _inserted) = insert_then_select!(
-        txn,
+        db,
         compiled_contracts,
         active_model,
         false,
@@ -313,8 +255,8 @@ async fn insert_compiled_contract(
     Ok(compiled_contract)
 }
 
-async fn insert_contract_deployment(
-    txn: &DatabaseTransaction,
+async fn insert_contract_deployment<C: ConnectionTrait>(
+    db: &C,
     deployment_data: ContractDeploymentData,
     contract: &contracts::Model,
 ) -> Result<contract_deployments::Model, anyhow::Error> {
@@ -331,7 +273,7 @@ async fn insert_contract_deployment(
         contract_id: Set(contract.id),
     };
     let (contract_deployment, _inserted) = insert_then_select!(
-        txn,
+        db,
         contract_deployments,
         active_model,
         false,
@@ -345,8 +287,8 @@ async fn insert_contract_deployment(
     Ok(contract_deployment)
 }
 
-async fn insert_contract(
-    txn: &DatabaseTransaction,
+async fn insert_contract<C: ConnectionTrait>(
+    db: &C,
     creation_code: Option<Vec<u8>>,
     runtime_code: Option<Vec<u8>>,
 ) -> Result<contracts::Model, anyhow::Error> {
@@ -357,7 +299,7 @@ async fn insert_contract(
     }
     let creation_code = if let Some(creation_code) = creation_code {
         Some(
-            insert_code(txn, creation_code)
+            insert_code(db, creation_code)
                 .await
                 .context("insert creation code")?,
         )
@@ -366,7 +308,7 @@ async fn insert_contract(
     };
     let runtime_code = if let Some(runtime_code) = runtime_code {
         Some(
-            insert_code(txn, runtime_code)
+            insert_code(db, runtime_code)
                 .await
                 .context("insert runtime code")?,
         )
@@ -383,7 +325,7 @@ async fn insert_contract(
         runtime_code_hash: Set(runtime_code_hash.clone()),
     };
     let (contract, _inserted) = insert_then_select!(
-        txn,
+        db,
         contracts,
         active_model,
         false,
@@ -396,8 +338,8 @@ async fn insert_contract(
     Ok(contract)
 }
 
-async fn insert_code(
-    txn: &DatabaseTransaction,
+async fn insert_code<C: ConnectionTrait>(
+    db: &C,
     code: Vec<u8>,
 ) -> Result<code::Model, anyhow::Error> {
     let code_hash = keccak_hash::keccak(&code);
@@ -407,7 +349,7 @@ async fn insert_code(
         code: Set(Some(code)),
     };
     let (code, _inserted) = insert_then_select!(
-        txn,
+        db,
         code,
         active_model,
         false,
