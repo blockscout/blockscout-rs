@@ -4,6 +4,10 @@ on:
       - 'main'
     tags:
       - 'eth-bytecode-db/v*'
+    paths:
+      - eth-bytecode-db/**
+      - .github/workflows/eth-bytecode-db.yml
+      - .github/actions/deps/**
   pull_request:
     paths:
       - eth-bytecode-db/**
