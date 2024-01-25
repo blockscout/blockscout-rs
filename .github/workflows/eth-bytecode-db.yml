@@ -35,17 +35,26 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+          --name postgres
         ports:
           - 5432:5432
-        volumes:
-          - /tmp/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
+
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
 
-      - name: Copy entrypoint scripts to the volume
-        run: sudo cp -r ../.github/volumes/docker-entrypoint-initdb.d/* /tmp/docker-entrypoint-initdb.d/
-        continue-on-error: false
+      - name: Set postgres max_connections
+        run: |
+          psql -h localhost -p 5432 -c "ALTER SYSTEM SET max_connections = 500;" -d postgres
+        env:
+          PGPASSWORD: admin
+          PGUSER: postgres
+
+      - name: Restart postgres
+        # Restart Postgres so that new system parameters to be applied
+        uses: docker://docker
+        with:
+          args: docker restart postgres
 
       - name: Install deps
         uses: ./.github/actions/deps
