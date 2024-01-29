@@ -24,6 +24,17 @@
             "native_token_contract": "0x45d3E4fB311982a06ba52359d44cB4f5980e0ef1"
           }
         }
+      },
+      "8453": {
+        "blockscout": {
+          "url": "https://base.blockscout.com"
+        },
+        "subgraphs": {
+          "base-name-service-subgraph": {
+            "use_cache": true,
+            "native_token_contract": "0xaCe5602d169Edeb874bfE584a651801B8ac67093"
+          }
+        }
       }
     }
   }
