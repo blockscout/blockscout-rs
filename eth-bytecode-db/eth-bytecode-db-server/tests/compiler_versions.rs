@@ -21,11 +21,8 @@ async fn test_versions(
     verifier_response: smart_contract_verifier_v2::ListCompilerVersionsResponse,
 ) {
     let db = verification_test_helpers::init_db(TEST_SUITE_NAME, test_name).await;
-    let verifier_addr = verification_test_helpers::init_verifier_server(
-        verifier,
-        verifier_response.clone(),
-    )
-    .await;
+    let verifier_addr =
+        verification_test_helpers::init_verifier_server(verifier, verifier_response.clone()).await;
     let eth_bytecode_db_base =
         verification_test_helpers::init_eth_bytecode_db_server(db.db_url(), verifier_addr).await;
 

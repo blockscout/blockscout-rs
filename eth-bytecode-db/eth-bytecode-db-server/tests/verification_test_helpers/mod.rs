@@ -2,7 +2,7 @@
 
 pub mod test_input_data;
 
-mod verifier_alliance_setup;
+pub mod verifier_alliance_setup;
 pub mod verifier_alliance_types;
 mod verifier_service;
 
@@ -107,8 +107,7 @@ pub mod test_cases {
         let test_data = test_input_data::basic(source_type, MatchType::Partial);
 
         let db_url = db.db_url();
-        let verifier_addr =
-            init_verifier_server(service, test_data.verifier_response).await;
+        let verifier_addr = init_verifier_server(service, test_data.verifier_response).await;
 
         let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
 
@@ -138,8 +137,7 @@ pub mod test_cases {
         let deployed_bytecode = test_data.deployed_bytecode().unwrap();
 
         let db_url = db.db_url();
-        let verifier_addr =
-            init_verifier_server(service, test_data.verifier_response).await;
+        let verifier_addr = init_verifier_server(service, test_data.verifier_response).await;
 
         let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
 
@@ -211,8 +209,7 @@ pub mod test_cases {
         let creation_input = test_data.creation_input().unwrap();
 
         let db_url = db.db_url();
-        let verifier_addr =
-            init_verifier_server(service, test_data.verifier_response).await;
+        let verifier_addr = init_verifier_server(service, test_data.verifier_response).await;
 
         let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
 
@@ -263,8 +260,7 @@ pub mod test_cases {
         verification_request: Request,
         source_type: SourceType,
     ) where
-        Service:
-            Default + VerifierService<Request, smart_contract_verifier_v2::VerifyResponse>,
+        Service: Default + VerifierService<Request, smart_contract_verifier_v2::VerifyResponse>,
         Request: Serialize,
     {
         let db = init_db(
@@ -289,11 +285,8 @@ pub mod test_cases {
 
         let db_url = db.db_url();
 
-        let verifier_addr = init_verifier_server(
-            Service::default(),
-            full_match_test_data.verifier_response,
-        )
-        .await;
+        let verifier_addr =
+            init_verifier_server(Service::default(), full_match_test_data.verifier_response).await;
         let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url.clone(), verifier_addr).await;
         let _verification_response: eth_bytecode_db_v2::VerifyResponse =
             test_server::send_post_request(&eth_bytecode_db_base, route, &verification_request)
@@ -347,8 +340,7 @@ pub mod test_cases {
         verification_request: Request,
         source_type: SourceType,
     ) where
-        Service:
-            Default + VerifierService<Request, smart_contract_verifier_v2::VerifyResponse>,
+        Service: Default + VerifierService<Request, smart_contract_verifier_v2::VerifyResponse>,
         Request: Serialize + Clone,
     {
         let db = init_db(
@@ -400,8 +392,7 @@ pub mod test_cases {
         verification_request: Request,
         source_type: SourceType,
     ) where
-        Service:
-            Default + VerifierService<Request, smart_contract_verifier_v2::VerifyResponse>,
+        Service: Default + VerifierService<Request, smart_contract_verifier_v2::VerifyResponse>,
         Request: Serialize,
     {
         let db = init_db(test_suite_name, "test_update_source_then_search").await;
@@ -410,8 +401,7 @@ pub mod test_cases {
             let test_data = test_input_data::basic(source_type, MatchType::Full);
 
             let verifier_addr =
-                init_verifier_server(Service::default(), test_data.verifier_response)
-                    .await;
+                init_verifier_server(Service::default(), test_data.verifier_response).await;
             let eth_bytecode_db_base =
                 init_eth_bytecode_db_server(db.db_url(), verifier_addr).await;
 
@@ -444,8 +434,7 @@ pub mod test_cases {
         let creation_input = updated_test_data.creation_input().unwrap();
 
         let verifier_addr =
-            init_verifier_server(Service::default(), updated_test_data.verifier_response)
-                .await;
+            init_verifier_server(Service::default(), updated_test_data.verifier_response).await;
         let eth_bytecode_db_base = init_eth_bytecode_db_server(db.db_url(), verifier_addr).await;
 
         let verification_response: eth_bytecode_db_v2::VerifyResponse =
