@@ -4,6 +4,10 @@ on:
       - 'main'
     tags:
       - 'bens/v*'
+    paths:
+      - blockscout-ens/**
+      - .github/workflows/bens.yml
+      - .github/actions/deps/**
   pull_request:
     paths:
       - blockscout-ens/**

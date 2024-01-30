@@ -28,8 +28,8 @@ pub struct UserOp {
     pub block_number: u64,
     pub block_hash: H256,
     pub bundler: Address,
-    pub bundle_index: u64,
-    pub index: u64,
+    pub bundle_index: u32,
+    pub index: u32,
     pub factory: Option<Address>,
     pub paymaster: Option<Address>,
     pub status: bool,
@@ -38,12 +38,12 @@ pub struct UserOp {
     pub gas_price: U256,
     pub gas_used: u64,
     pub sponsor_type: SponsorType,
-    pub user_logs_start_index: u64,
-    pub user_logs_count: u64,
+    pub user_logs_start_index: u32,
+    pub user_logs_count: u32,
     pub fee: U256,
 
     pub consensus: Option<bool>,
-    pub timestamp: Option<u64>,
+    pub timestamp: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -52,7 +52,7 @@ pub struct ListUserOp {
     pub block_number: u64,
     pub sender: Address,
     pub transaction_hash: H256,
-    pub timestamp: u64,
+    pub timestamp: String,
     pub status: bool,
     pub fee: U256,
 }
@@ -119,8 +119,8 @@ impl From<Model> for UserOp {
             block_number: v.block_number as u64,
             block_hash: H256::from_slice(&v.block_hash),
             bundler: Address::from_slice(&v.bundler),
-            bundle_index: v.bundle_index as u64,
-            index: v.index as u64,
+            bundle_index: v.bundle_index as u32,
+            index: v.index as u32,
             factory: v.factory.clone().map(|a| Address::from_slice(&a)),
             paymaster: v.paymaster.clone().map(|a| Address::from_slice(&a)),
             status: v.status,
@@ -129,8 +129,8 @@ impl From<Model> for UserOp {
             gas_price: U256::from(v.gas_price.to_u128().unwrap_or(0)),
             gas_used: v.gas_used.to_u64().unwrap_or(0),
             sponsor_type: v.sponsor_type.clone(),
-            user_logs_start_index: v.user_logs_start_index as u64,
-            user_logs_count: v.user_logs_count as u64,
+            user_logs_start_index: v.user_logs_start_index as u32,
+            user_logs_count: v.user_logs_count as u32,
             fee: U256::from(v.gas_price.mul(v.gas_used).to_u128().unwrap_or(0)),
 
             consensus: None,
@@ -145,18 +145,34 @@ impl From<UserOp> for user_ops_indexer_proto::blockscout::user_ops_indexer::v1::
             hash: v.hash.encode_hex(),
             sender: to_checksum(&v.sender, None),
             nonce: v.nonce.encode_hex(),
-            init_code: v.init_code.map(|b| b.to_string()),
             call_data: v.call_data.to_string(),
             call_gas_limit: v.call_gas_limit,
             verification_gas_limit: v.verification_gas_limit,
             pre_verification_gas: v.pre_verification_gas,
             max_fee_per_gas: v.max_fee_per_gas.to_string(),
             max_priority_fee_per_gas: v.max_priority_fee_per_gas.to_string(),
-            paymaster_and_data: v.paymaster_and_data.map(|b| b.to_string()),
             signature: v.signature.to_string(),
+            raw: Some(
+                user_ops_indexer_proto::blockscout::user_ops_indexer::v1::RawUserOp {
+                    sender: to_checksum(&v.sender, None),
+                    nonce: U256::from(v.nonce.as_fixed_bytes()).to_string(),
+                    init_code: v.init_code.map_or("0x".to_string(), |b| b.to_string()),
+                    call_data: v.call_data.to_string(),
+                    call_gas_limit: v.call_gas_limit,
+                    verification_gas_limit: v.verification_gas_limit,
+                    pre_verification_gas: v.pre_verification_gas,
+                    max_fee_per_gas: v.max_fee_per_gas.to_string(),
+                    max_priority_fee_per_gas: v.max_priority_fee_per_gas.to_string(),
+                    paymaster_and_data: v
+                        .paymaster_and_data
+                        .map_or("0x".to_string(), |b| b.to_string()),
+                    signature: v.signature.to_string(),
+                },
+            ),
             aggregator: v.aggregator.map(|a| to_checksum(&a, None)),
             aggregator_signature: v.aggregator_signature.map(|b| b.to_string()),
             entry_point: to_checksum(&v.entry_point, None),
+            entry_point_version: "v0.6".to_string(),
             transaction_hash: v.transaction_hash.encode_hex(),
             block_number: v.block_number,
             block_hash: v.block_hash.encode_hex(),
@@ -188,7 +204,10 @@ impl From<ListUserOpDB> for ListUserOp {
             block_number: v.block_number as u64,
             sender: Address::from_slice(&v.sender),
             transaction_hash: H256::from_slice(&v.transaction_hash),
-            timestamp: v.timestamp.timestamp() as u64,
+            timestamp: v
+                .timestamp
+                .and_utc()
+                .to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
             status: v.status,
             fee: U256::from(v.gas_price.mul(v.gas_used).to_u128().unwrap_or(0)),
         }

@@ -1,22 +1,5 @@
-FROM lukemathwalker/cargo-chef:0.1.62-rust-1.74-buster as chef
+FROM ghcr.io/blockscout/services-base:latest as chef
 
-WORKDIR /app
-ARG TARGETARCH
-RUN case ${TARGETARCH} in \
-        "arm64") TARGETARCH=aarch_64 ;; \
-        "amd64") TARGETARCH=x86_64 ;; \
-    esac \
-    && wget https://github.com/protocolbuffers/protobuf/releases/download/v21.12/protoc-21.12-linux-$TARGETARCH.zip -O ./protoc.zip \
-    && unzip protoc.zip \
-    && mv ./include/* /usr/include/ \
-    && mv ./bin/protoc /usr/bin/protoc
-
-RUN case ${TARGETARCH} in \
-        "amd64") TARGETARCH=x86_64 ;; \
-    esac \
-    && wget https://github.com/grpc-ecosystem/grpc-gateway/releases/download/v2.15.0/protoc-gen-openapiv2-v2.15.0-linux-$TARGETARCH -O ./protoc-gen-openapiv2 \
-    && chmod +x protoc-gen-openapiv2 \
-    && mv ./protoc-gen-openapiv2 /usr/bin/protoc-gen-openapiv2
 FROM chef AS plan
 COPY . .
 RUN cargo chef prepare --recipe-path recipe.json

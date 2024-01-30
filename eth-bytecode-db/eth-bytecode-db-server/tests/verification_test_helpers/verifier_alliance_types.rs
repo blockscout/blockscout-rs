@@ -5,10 +5,17 @@ use eth_bytecode_db::verification::{BytecodeType, VerificationMetadata, Verifica
 use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2 as eth_bytecode_db_v2;
 use serde::Deserialize;
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2 as smart_contract_verifier_v2;
-use std::{collections::BTreeMap, path::Path, str::FromStr};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct TestCase {
+    #[serde(skip)]
+    pub test_case_name: String,
+
     pub deployed_creation_code: Option<DisplayBytes>,
     pub deployed_runtime_code: DisplayBytes,
 
@@ -72,8 +79,20 @@ fn default_deployer() -> DisplayBytes {
 
 impl TestCase {
     pub fn from_file<P: AsRef<Path>>(path: P) -> Self {
+        // e.g. "tests/alliance_test_cases/full_match.json" => "full_match"
+        let test_case_name = PathBuf::from(path.as_ref())
+            .file_stem()
+            .as_ref()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
+
         let content = std::fs::read_to_string(path).expect("failed to read file");
-        serde_json::from_str(&content).expect("invalid test case format")
+        let mut test_case: TestCase =
+            serde_json::from_str(&content).expect("invalid test case format");
+        test_case.test_case_name = test_case_name;
+        test_case
     }
 
     pub fn to_test_input_data(&self) -> TestInputData {
