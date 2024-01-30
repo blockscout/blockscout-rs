@@ -8,8 +8,6 @@ use verification_test_helpers::test_cases;
 
 const TEST_SUITE_NAME: &str = "sourcify";
 
-const ROUTE: &str = "/api/v2/verifier/sourcify/sources:verify";
-
 #[fixture]
 fn service() -> MockSourcifyVerifierService {
     MockSourcifyVerifierService::new()
@@ -27,12 +25,6 @@ async fn test_returns_valid_source(service: MockSourcifyVerifierService) {
         chosen_contract: None,
     };
     let source_type = verification::SourceType::Solidity;
-    test_cases::test_returns_valid_source(
-        TEST_SUITE_NAME,
-        service,
-        ROUTE,
-        default_request,
-        source_type,
-    )
-    .await;
+    test_cases::test_returns_valid_source(TEST_SUITE_NAME, service, default_request, source_type)
+        .await;
 }

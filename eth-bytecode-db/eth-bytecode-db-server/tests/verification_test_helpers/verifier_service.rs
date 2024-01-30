@@ -11,6 +11,8 @@ use tonic::Response;
 
 #[async_trait]
 pub trait VerifierService<Request, Response> {
+    const ROUTE: &'static str;
+
     fn add_into_service(&mut self, response: Response);
 
     fn build_server(self) -> SmartContractVerifierServer;
@@ -23,6 +25,8 @@ impl
         smart_contract_verifier_v2::VerifyResponse,
     > for MockSolidityVerifierService
 {
+    const ROUTE: &'static str = "/api/v2/verifier/solidity/sources:verify-multi-part";
+
     fn add_into_service(&mut self, response: smart_contract_verifier_v2::VerifyResponse) {
         self.expect_verify_multi_part()
             .returning(move |_| Ok(Response::new(response.clone())));
@@ -40,6 +44,8 @@ impl
         smart_contract_verifier_v2::VerifyResponse,
     > for MockSolidityVerifierService
 {
+    const ROUTE: &'static str = "/api/v2/verifier/solidity/sources:verify-standard-json";
+
     fn add_into_service(&mut self, response: smart_contract_verifier_v2::VerifyResponse) {
         self.expect_verify_standard_json()
             .returning(move |_| Ok(Response::new(response.clone())));
@@ -57,6 +63,8 @@ impl
         smart_contract_verifier_v2::ListCompilerVersionsResponse,
     > for MockSolidityVerifierService
 {
+    const ROUTE: &'static str = "/api/v2/verifier/solidity/versions";
+
     fn add_into_service(
         &mut self,
         response: smart_contract_verifier_v2::ListCompilerVersionsResponse,
@@ -77,6 +85,8 @@ impl
         smart_contract_verifier_v2::VerifyResponse,
     > for MockVyperVerifierService
 {
+    const ROUTE: &'static str = "/api/v2/verifier/vyper/sources:verify-multi-part";
+
     fn add_into_service(&mut self, response: smart_contract_verifier_v2::VerifyResponse) {
         self.expect_verify_multi_part()
             .returning(move |_| Ok(Response::new(response.clone())));
@@ -94,6 +104,8 @@ impl
         smart_contract_verifier_v2::VerifyResponse,
     > for MockVyperVerifierService
 {
+    const ROUTE: &'static str = "/api/v2/verifier/vyper/sources:verify-standard-json";
+
     fn add_into_service(&mut self, response: smart_contract_verifier_v2::VerifyResponse) {
         self.expect_verify_standard_json()
             .returning(move |_| Ok(Response::new(response.clone())));
@@ -111,6 +123,8 @@ impl
         smart_contract_verifier_v2::ListCompilerVersionsResponse,
     > for MockVyperVerifierService
 {
+    const ROUTE: &'static str = "/api/v2/verifier/vyper/versions";
+
     fn add_into_service(
         &mut self,
         response: smart_contract_verifier_v2::ListCompilerVersionsResponse,
@@ -131,6 +145,8 @@ impl
         smart_contract_verifier_v2::VerifyResponse,
     > for MockSourcifyVerifierService
 {
+    const ROUTE: &'static str = "/api/v2/verifier/sourcify/sources:verify";
+
     fn add_into_service(&mut self, response: smart_contract_verifier_v2::VerifyResponse) {
         self.expect_verify()
             .returning(move |_| Ok(Response::new(response.clone())));
@@ -148,6 +164,8 @@ impl
         smart_contract_verifier_v2::VerifyResponse,
     > for MockSourcifyVerifierService
 {
+    const ROUTE: &'static str = "/api/v2/verifier/sourcify/sources:verify-from-etherscan";
+
     fn add_into_service(&mut self, response: smart_contract_verifier_v2::VerifyResponse) {
         self.expect_verify_from_etherscan()
             .returning(move |_| Ok(Response::new(response.clone())));

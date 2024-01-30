@@ -10,8 +10,6 @@ use verification_test_helpers::test_cases;
 
 const TEST_SUITE_NAME: &str = "solidity_standard_json";
 
-const ROUTE: &str = "/api/v2/verifier/solidity/sources:verify-standard-json";
-
 #[fixture]
 fn service() -> MockSolidityVerifierService {
     MockSolidityVerifierService::new()
@@ -30,14 +28,8 @@ async fn test_returns_valid_source(service: MockSolidityVerifierService) {
         metadata: None,
     };
     let source_type = verification::SourceType::Solidity;
-    test_cases::test_returns_valid_source(
-        TEST_SUITE_NAME,
-        service,
-        ROUTE,
-        default_request,
-        source_type,
-    )
-    .await;
+    test_cases::test_returns_valid_source(TEST_SUITE_NAME, service, default_request, source_type)
+        .await;
 }
 
 #[rstest]
@@ -53,14 +45,8 @@ async fn test_verify_then_search(service: MockSolidityVerifierService) {
         metadata: None,
     };
     let source_type = verification::SourceType::Solidity;
-    test_cases::test_verify_then_search(
-        TEST_SUITE_NAME,
-        service,
-        ROUTE,
-        default_request,
-        source_type,
-    )
-    .await;
+    test_cases::test_verify_then_search(TEST_SUITE_NAME, service, default_request, source_type)
+        .await;
 }
 
 #[rstest]
@@ -79,7 +65,6 @@ async fn test_verify_same_source_twice(service: MockSolidityVerifierService) {
     test_cases::test_verify_same_source_twice(
         TEST_SUITE_NAME,
         service,
-        ROUTE,
         default_request,
         source_type,
     )
@@ -101,7 +86,6 @@ async fn test_search_returns_full_matches_only_if_any() {
     let source_type = verification::SourceType::Solidity;
     test_cases::test_search_returns_full_matches_only_if_any::<MockSolidityVerifierService, _>(
         TEST_SUITE_NAME,
-        ROUTE,
         default_request,
         source_type,
     )
@@ -123,7 +107,6 @@ async fn test_accepts_partial_verification_metadata_in_input() {
     let source_type = verification::SourceType::Solidity;
     test_cases::test_accepts_partial_verification_metadata_in_input::<MockSolidityVerifierService, _>(
         TEST_SUITE_NAME,
-        ROUTE,
         default_request,
         source_type,
     )
@@ -145,7 +128,6 @@ async fn test_update_source_then_search() {
     let source_type = verification::SourceType::Solidity;
     test_cases::test_update_source_then_search::<MockSolidityVerifierService, _>(
         TEST_SUITE_NAME,
-        ROUTE,
         default_request,
         source_type,
     )

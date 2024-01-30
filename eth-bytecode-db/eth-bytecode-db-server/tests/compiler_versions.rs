@@ -11,15 +11,16 @@ use smart_contract_verifier_proto::{
 
 const TEST_SUITE_NAME: &str = "compiler_versions";
 
-async fn test_versions(
+async fn test_versions<Service>(
     test_name: &str,
-    route: &str,
-    verifier: impl VerifierService<
+    verifier: Service,
+    verifier_response: smart_contract_verifier_v2::ListCompilerVersionsResponse,
+) where
+    Service: VerifierService<
         eth_bytecode_db_v2::ListCompilerVersionsRequest,
         smart_contract_verifier_v2::ListCompilerVersionsResponse,
     >,
-    verifier_response: smart_contract_verifier_v2::ListCompilerVersionsResponse,
-) {
+{
     let db = verification_test_helpers::init_db(TEST_SUITE_NAME, test_name).await;
     let verifier_addr =
         verification_test_helpers::init_verifier_server(verifier, verifier_response.clone()).await;
@@ -27,7 +28,7 @@ async fn test_versions(
         verification_test_helpers::init_eth_bytecode_db_server(db.db_url(), verifier_addr).await;
 
     let response = reqwest::Client::new()
-        .get(eth_bytecode_db_base.join(route).unwrap())
+        .get(eth_bytecode_db_base.join(Service::ROUTE).unwrap())
         .send()
         .await
         .expect("Failed to send request");
@@ -57,7 +58,6 @@ async fn test_versions(
 async fn solidity() {
     const TEST_NAME: &str = "solidity";
 
-    let route = "/api/v2/verifier/solidity/versions";
     let verifier = MockSolidityVerifierService::new();
     let verifier_response = smart_contract_verifier_v2::ListCompilerVersionsResponse {
         compiler_versions: vec![
@@ -66,7 +66,7 @@ async fn solidity() {
             "v0.8.7+commit.e28d00a7".into(),
         ],
     };
-    test_versions(TEST_NAME, route, verifier, verifier_response).await;
+    test_versions(TEST_NAME, verifier, verifier_response).await;
 }
 #[rstest]
 #[tokio::test]
@@ -75,7 +75,6 @@ async fn solidity() {
 async fn vyper() {
     const TEST_NAME: &str = "vyper";
 
-    let route = "/api/v2/verifier/vyper/versions";
     let verifier = MockVyperVerifierService::new();
     let verifier_response = smart_contract_verifier_v2::ListCompilerVersionsResponse {
         compiler_versions: vec![
@@ -83,5 +82,5 @@ async fn vyper() {
             "v0.3.6+commit.4a2124d0".into(),
         ],
     };
-    test_versions(TEST_NAME, route, verifier, verifier_response).await;
+    test_versions(TEST_NAME, verifier, verifier_response).await;
 }
