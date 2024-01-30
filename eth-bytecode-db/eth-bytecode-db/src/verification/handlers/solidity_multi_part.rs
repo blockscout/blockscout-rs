@@ -8,6 +8,7 @@ use super::{
     process_verify_response, EthBytecodeDbAction, VerifierAllianceDbAction,
 };
 use serde::{Deserialize, Serialize};
+use smart_contract_verifier_proto::http_client::solidity_verifier_client;
 use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -29,12 +30,13 @@ impl From<VerificationRequest<MultiPartFiles>> for VerifySolidityMultiPartReques
             optimization_runs: request.content.optimization_runs,
             libraries: request.content.libraries,
             metadata: request.metadata.map(|metadata| metadata.into()),
+            post_actions: vec![],
         }
     }
 }
 
 pub async fn verify(
-    mut client: Client,
+    client: Client,
     request: VerificationRequest<MultiPartFiles>,
 ) -> Result<Source, Error> {
     let is_authorized = request.is_authorized;
@@ -46,12 +48,9 @@ pub async fn verify(
 
     let request: VerifySolidityMultiPartRequest = request.into();
     tracing::info!("sending request to the verifier");
-    let response = client
-        .solidity_client
-        .verify_multi_part(request)
-        .await
-        .map_err(Error::from)?
-        .into_inner();
+    let response =
+        solidity_verifier_client::verify_multi_part(&client.verifier_http_client, request).await?;
+
     tracing::info!(
         status = response.status,
         response_message = response.message,
@@ -123,6 +122,7 @@ mod tests {
                 chain_id: Some("1".to_string()),
                 contract_address: Some("0x0101010101010101010101010101010101010101".to_string()),
             }),
+            post_actions: vec![],
         };
         assert_eq!(
             expected,
@@ -168,6 +168,7 @@ mod tests {
                 chain_id: Some("1".to_string()),
                 contract_address: Some("0x0101010101010101010101010101010101010101".to_string()),
             }),
+            post_actions: vec![],
         };
         assert_eq!(
             expected,

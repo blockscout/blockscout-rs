@@ -1,8 +1,6 @@
 #![allow(dead_code)]
 
-pub mod smart_contract_veriifer_mock;
 pub mod test_input_data;
-
 pub mod verifier_alliance_types;
 
 use async_trait::async_trait;
@@ -17,11 +15,12 @@ use eth_bytecode_db::verification::{
 };
 use pretty_assertions::assert_eq;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::VerifyResponse;
-use smart_contract_veriifer_mock::SmartContractVerifierServer;
+use smart_contract_verifier_proto::{
+    blockscout::smart_contract_verifier::v2::VerifyResponse,
+    http_client::mock::SmartContractVerifierServer,
+};
 use std::{collections::HashSet, str::FromStr, sync::Arc};
 use test_input_data::TestInputData;
-use tonic::transport::Uri;
 
 #[async_trait]
 pub trait VerifierService<Request> {
@@ -79,9 +78,9 @@ where
     // Initialize server
     let server_addr = service.build_server().start().await;
 
-    let uri = Uri::from_str(&format!("http://{}", server_addr.to_string().as_str()))
-        .expect("Returned server address is invalid Uri");
-    Client::new_arc(db_client, uri)
+    let url = url::Url::from_str(&format!("http://{}", server_addr.to_string().as_str()))
+        .expect("Returned server address is invalid Url");
+    Client::new_arc(db_client, url, 1, false)
         .await
         .expect("Client initialization failed")
 }

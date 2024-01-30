@@ -8,6 +8,7 @@ use super::{
     process_verify_response, EthBytecodeDbAction, VerifierAllianceDbAction,
 };
 use serde::{Deserialize, Serialize};
+use smart_contract_verifier_proto::http_client::vyper_verifier_client;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StandardJson {
@@ -26,7 +27,7 @@ impl From<VerificationRequest<StandardJson>> for VerifyVyperStandardJsonRequest 
 }
 
 pub async fn verify(
-    mut client: Client,
+    client: Client,
     request: VerificationRequest<StandardJson>,
 ) -> Result<Source, Error> {
     let is_authorized = request.is_authorized;
@@ -38,12 +39,8 @@ pub async fn verify(
 
     let request: VerifyVyperStandardJsonRequest = request.into();
     tracing::info!("sending request to the verifier");
-    let response = client
-        .vyper_client
-        .verify_standard_json(request)
-        .await
-        .map_err(Error::from)?
-        .into_inner();
+    let response =
+        vyper_verifier_client::verify_standard_json(&client.verifier_http_client, request).await?;
     tracing::info!(
         status = response.status,
         response_message = response.message,

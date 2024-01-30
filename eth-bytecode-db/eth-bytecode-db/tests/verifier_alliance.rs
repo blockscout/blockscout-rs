@@ -15,16 +15,13 @@ use sea_orm::{
     ActiveValue::Set,
     DatabaseConnection, DatabaseTransaction, EntityTrait, TransactionTrait,
 };
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
-    VerifyResponse, VerifySolidityStandardJsonRequest,
+use smart_contract_verifier_proto::{
+    blockscout::smart_contract_verifier::v2::{VerifyResponse, VerifySolidityStandardJsonRequest},
+    http_client::mock::{MockSolidityVerifierService, SmartContractVerifierServer},
 };
 use std::{future::Future, path::PathBuf, sync::Arc};
 use verification_test_helpers::{
-    init_db,
-    smart_contract_veriifer_mock::{MockSolidityVerifierService, SmartContractVerifierServer},
-    start_server_and_init_client,
-    verifier_alliance_types::TestCase,
-    VerifierService,
+    init_db, start_server_and_init_client, verifier_alliance_types::TestCase, VerifierService,
 };
 use verifier_alliance_entity::{
     code, compiled_contracts, contract_deployments, contracts, verified_contracts,

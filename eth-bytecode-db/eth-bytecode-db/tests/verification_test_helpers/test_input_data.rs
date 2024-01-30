@@ -52,6 +52,7 @@ impl<T> TestInputData<T> {
             status: smart_contract_verifier_v2::verify_response::Status::Success.into(),
             source: Some(verifier_source),
             extra_data: Some(verifier_extra_data),
+            post_action_responses: None,
         };
 
         Self {

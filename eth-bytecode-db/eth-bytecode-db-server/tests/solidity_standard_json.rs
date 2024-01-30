@@ -6,12 +6,12 @@ use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2::{
     BytecodeType, VerifySolidityStandardJsonRequest,
 };
 use rstest::{fixture, rstest};
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2 as smart_contract_verifier_v2;
-use tonic::Response;
-use verification_test_helpers::{
-    smart_contract_verifer_mock::{MockSolidityVerifierService, SmartContractVerifierServer},
-    test_cases, VerifierService,
+use smart_contract_verifier_proto::{
+    blockscout::smart_contract_verifier::v2 as smart_contract_verifier_v2,
+    http_client::mock::{MockSolidityVerifierService, SmartContractVerifierServer},
 };
+use tonic::Response;
+use verification_test_helpers::{test_cases, VerifierService};
 
 const TEST_SUITE_NAME: &str = "solidity_standard_json";
 
