@@ -1,6 +1,6 @@
 mod verification_test_helpers;
 
-use async_trait::async_trait;
+use crate::verification_test_helpers::init_verifier_server_mod_todo;
 use blockscout_service_launcher::test_database::TestDbGuard;
 use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2 as eth_bytecode_db_v2;
 use eth_bytecode_db_server::Settings;
@@ -14,31 +14,15 @@ use sea_orm::{
     ColumnTrait, DatabaseConnection, DatabaseTransaction, EntityTrait, QueryFilter,
     TransactionTrait,
 };
-use smart_contract_verifier_proto::{
-    blockscout::smart_contract_verifier::v2 as smart_contract_verifier_v2,
-    http_client::mock::{MockSolidityVerifierService, SmartContractVerifierServer},
-};
+use smart_contract_verifier_proto::http_client::mock::MockSolidityVerifierService;
 use std::{collections::HashMap, future::Future, path::PathBuf, str::FromStr, sync::Arc};
-use tonic::Response;
 use verification_test_helpers::{
-    init_db, init_db_raw, init_eth_bytecode_db_server_with_settings_setup, init_verifier_server,
-    verifier_alliance_types::TestCase, VerifierService,
+    init_alliance_db, init_db, init_eth_bytecode_db_server_with_settings_setup,
+    verifier_alliance_types::TestCase,
 };
 use verifier_alliance_entity::{
     code, compiled_contracts, contract_deployments, contracts, verified_contracts,
 };
-
-#[async_trait]
-impl VerifierService<smart_contract_verifier_v2::VerifyResponse> for MockSolidityVerifierService {
-    fn add_into_service(&mut self, response: smart_contract_verifier_v2::VerifyResponse) {
-        self.expect_verify_standard_json()
-            .returning(move |_| Ok(Response::new(response.clone())));
-    }
-
-    fn build_server(self) -> SmartContractVerifierServer {
-        SmartContractVerifierServer::new().solidity_service(self)
-    }
-}
 
 const TEST_SUITE_NAME: &str = "verifier_alliance";
 
@@ -254,11 +238,6 @@ fn verify_request(test_case: &TestCase) -> eth_bytecode_db_v2::VerifySoliditySta
     }
 }
 
-async fn init_alliance_db(test_suite_name: &str, test_name: &str) -> TestDbGuard {
-    let test_name = format!("{test_name}_alliance");
-    init_db_raw::<verifier_alliance_migration::Migrator>(test_suite_name, &test_name).await
-}
-
 pub struct RequestWrapper<'a, Request> {
     inner: &'a Request,
     headers: reqwest::header::HeaderMap,
@@ -367,7 +346,12 @@ impl<'a> Setup<'a> {
             .await;
 
         let db_url = db.db_url();
-        let verifier_addr = init_verifier_server(service, test_input_data.verifier_response).await;
+        let verifier_addr = init_verifier_server_mod_todo::<
+            _,
+            eth_bytecode_db_v2::VerifySolidityStandardJsonRequest,
+            _,
+        >(service, test_input_data.verifier_response)
+        .await;
 
         let settings_setup = |mut settings: Settings| {
             settings.verifier_alliance_database.enabled = true;

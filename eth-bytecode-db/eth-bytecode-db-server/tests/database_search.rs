@@ -1,9 +1,8 @@
 mod verification_test_helpers;
 
 use crate::verification_test_helpers::{
-    init_db, init_eth_bytecode_db_server, init_verifier_server,
+    init_db, init_eth_bytecode_db_server, init_verifier_server_mod_todo,
 };
-use async_trait::async_trait;
 use blockscout_service_launcher::test_server;
 use eth_bytecode_db::{verification, verification::MatchType};
 use eth_bytecode_db_proto::blockscout::eth_bytecode_db::{
@@ -19,11 +18,10 @@ use pretty_assertions::assert_eq;
 use rstest::{fixture, rstest};
 use smart_contract_verifier_proto::{
     blockscout::smart_contract_verifier::v2 as smart_contract_verifier_v2,
-    http_client::mock::{MockSolidityVerifierService, SmartContractVerifierServer},
+    http_client::mock::MockSolidityVerifierService,
 };
 use std::collections::BTreeMap;
-use tonic::Response;
-use verification_test_helpers::{test_input_data, VerifierService};
+use verification_test_helpers::test_input_data;
 
 const TEST_SUITE_NAME: &str = "database_search";
 
@@ -39,18 +37,6 @@ fn default_verify_request() -> eth_bytecode_db_v2::VerifySolidityMultiPartReques
         source_files: Default::default(),
         libraries: Default::default(),
         metadata: None,
-    }
-}
-
-#[async_trait]
-impl VerifierService<smart_contract_verifier_v2::VerifyResponse> for MockSolidityVerifierService {
-    fn add_into_service(&mut self, response: smart_contract_verifier_v2::VerifyResponse) {
-        self.expect_verify_multi_part()
-            .returning(move |_| Ok(Response::new(response.clone())));
-    }
-
-    fn build_server(self) -> SmartContractVerifierServer {
-        SmartContractVerifierServer::new().solidity_service(self)
     }
 }
 
@@ -71,7 +57,12 @@ async fn search_sourcify_sources(service: MockSolidityVerifierService) {
     let test_data = test_input_data::basic(verification::SourceType::Solidity, MatchType::Partial);
 
     let db_url = db.db_url();
-    let verifier_addr = init_verifier_server(service, test_data.verifier_response).await;
+    let verifier_addr = init_verifier_server_mod_todo::<
+        _,
+        eth_bytecode_db_v2::VerifySolidityMultiPartRequest,
+        _,
+    >(service, test_data.verifier_response)
+    .await;
 
     let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
 
@@ -150,7 +141,12 @@ async fn search_all_sources(service: MockSolidityVerifierService) {
     };
 
     let db_url = db.db_url();
-    let verifier_addr = init_verifier_server(service, test_data.verifier_response).await;
+    let verifier_addr = init_verifier_server_mod_todo::<
+        _,
+        eth_bytecode_db_v2::VerifySolidityMultiPartRequest,
+        _,
+    >(service, test_data.verifier_response)
+    .await;
 
     let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
 
@@ -203,6 +199,23 @@ async fn search_all_sources(service: MockSolidityVerifierService) {
     );
 }
 
+// #[rstest]
+// #[tokio::test]
+// #[timeout(std::time::Duration::from_secs(60))]
+// #[ignore = "Needs database to run"]
+// async fn search_alliance_sources(
+//     service: MockSolidityVerifierService,
+//     #[files("tests/alliance_test_cases/full_match.json")] test_case_path: PathBuf,
+// ) {
+//     const TEST_NAME: &str = "search_alliance_sources";
+//     const ROUTE: &str = "/api/v2/bytecodes/sources:search-alliance";
+//
+//     let db = init_db(TEST_SUITE_NAME, TEST_NAME).await;
+//     let alliance_db = init_alliance_db(TEST_SUITE_NAME, TEST_NAME).await;
+//
+//     let test_case = TestCase::from_file(test_case_path);
+// }
+
 #[rstest]
 #[tokio::test]
 #[timeout(std::time::Duration::from_secs(60))]
@@ -247,7 +260,12 @@ async fn search_sources_returns_latest_contract() {
         build_test_data("cafecafecafecafecafecafecafecafecafecafecafecafecafecafecafecafecafe");
     {
         let db_url = db.db_url();
-        let verifier_addr = init_verifier_server(service(), test_data_old.verifier_response).await;
+        let verifier_addr = init_verifier_server_mod_todo::<
+            _,
+            eth_bytecode_db_v2::VerifySolidityMultiPartRequest,
+            _,
+        >(service(), test_data_old.verifier_response)
+        .await;
 
         let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
 
@@ -271,7 +289,12 @@ async fn search_sources_returns_latest_contract() {
     };
 
     let db_url = db.db_url();
-    let verifier_addr = init_verifier_server(service(), test_data_new.verifier_response).await;
+    let verifier_addr = init_verifier_server_mod_todo::<
+        _,
+        eth_bytecode_db_v2::VerifySolidityMultiPartRequest,
+        _,
+    >(service(), test_data_new.verifier_response)
+    .await;
 
     let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
 
@@ -328,7 +351,12 @@ async fn search_event_descriptions() {
     };
 
     let db_url = db.db_url();
-    let verifier_addr = init_verifier_server(service(), test_data.verifier_response).await;
+    let verifier_addr = init_verifier_server_mod_todo::<
+        _,
+        eth_bytecode_db_v2::VerifySolidityMultiPartRequest,
+        _,
+    >(service(), test_data.verifier_response)
+    .await;
 
     let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
 
@@ -383,7 +411,12 @@ async fn batch_search_event_descriptions() {
     };
 
     let db_url = db.db_url();
-    let verifier_addr = init_verifier_server(service(), test_data.verifier_response).await;
+    let verifier_addr = init_verifier_server_mod_todo::<
+        _,
+        eth_bytecode_db_v2::VerifySolidityMultiPartRequest,
+        _,
+    >(service(), test_data.verifier_response)
+    .await;
 
     let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
 

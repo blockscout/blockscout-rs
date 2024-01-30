@@ -1,33 +1,16 @@
 mod verification_test_helpers;
 
-use async_trait::async_trait;
 use eth_bytecode_db::verification;
 use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2::{
     BytecodeType, VerifyVyperStandardJsonRequest,
 };
 use rstest::{fixture, rstest};
-use smart_contract_verifier_proto::{
-    blockscout::smart_contract_verifier::v2 as smart_contract_verifier_v2,
-    http_client::mock::{MockVyperVerifierService, SmartContractVerifierServer},
-};
-use tonic::Response;
-use verification_test_helpers::{test_cases, VerifierService};
+use smart_contract_verifier_proto::http_client::mock::MockVyperVerifierService;
+use verification_test_helpers::test_cases;
 
 const TEST_SUITE_NAME: &str = "vyper_standard_json";
 
 const ROUTE: &str = "/api/v2/verifier/vyper/sources:verify-standard-json";
-
-#[async_trait]
-impl VerifierService<smart_contract_verifier_v2::VerifyResponse> for MockVyperVerifierService {
-    fn add_into_service(&mut self, response: smart_contract_verifier_v2::VerifyResponse) {
-        self.expect_verify_standard_json()
-            .returning(move |_| Ok(Response::new(response.clone())));
-    }
-
-    fn build_server(self) -> SmartContractVerifierServer {
-        SmartContractVerifierServer::new().vyper_service(self)
-    }
-}
 
 #[fixture]
 fn service() -> MockVyperVerifierService {

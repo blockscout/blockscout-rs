@@ -1,31 +1,14 @@
 mod verification_test_helpers;
 
-use async_trait::async_trait;
 use eth_bytecode_db::verification;
 use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2::VerifySourcifyRequest;
 use rstest::{fixture, rstest};
-use smart_contract_verifier_proto::{
-    blockscout::smart_contract_verifier::v2 as smart_contract_verifier_v2,
-    http_client::mock::{MockSourcifyVerifierService, SmartContractVerifierServer},
-};
-use tonic::Response;
-use verification_test_helpers::{test_cases, VerifierService};
+use smart_contract_verifier_proto::http_client::mock::MockSourcifyVerifierService;
+use verification_test_helpers::test_cases;
 
 const TEST_SUITE_NAME: &str = "sourcify";
 
 const ROUTE: &str = "/api/v2/verifier/sourcify/sources:verify";
-
-#[async_trait]
-impl VerifierService<smart_contract_verifier_v2::VerifyResponse> for MockSourcifyVerifierService {
-    fn add_into_service(&mut self, response: smart_contract_verifier_v2::VerifyResponse) {
-        self.expect_verify()
-            .returning(move |_| Ok(Response::new(response.clone())));
-    }
-
-    fn build_server(self) -> SmartContractVerifierServer {
-        SmartContractVerifierServer::new().sourcify_service(self)
-    }
-}
 
 #[fixture]
 fn service() -> MockSourcifyVerifierService {
