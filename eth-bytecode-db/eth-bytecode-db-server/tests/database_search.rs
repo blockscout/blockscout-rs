@@ -1,8 +1,5 @@
 mod verification_test_helpers;
 
-use crate::verification_test_helpers::{
-    init_db, init_eth_bytecode_db_server, init_verifier_server,
-};
 use blockscout_service_launcher::test_server;
 use eth_bytecode_db::{verification, verification::MatchType};
 use eth_bytecode_db_proto::blockscout::eth_bytecode_db::{
@@ -10,8 +7,9 @@ use eth_bytecode_db_proto::blockscout::eth_bytecode_db::{
     v2::{
         BatchSearchEventDescriptionsRequest, BatchSearchEventDescriptionsResponse,
         EventDescription, SearchAllSourcesRequest, SearchAllSourcesResponse,
-        SearchEventDescriptionsRequest, SearchEventDescriptionsResponse, SearchSourcesResponse,
-        SearchSourcifySourcesRequest, Source,
+        SearchAllianceSourcesRequest, SearchEventDescriptionsRequest,
+        SearchEventDescriptionsResponse, SearchSourcesResponse, SearchSourcifySourcesRequest,
+        Source,
     },
 };
 use pretty_assertions::assert_eq;
@@ -20,8 +18,11 @@ use smart_contract_verifier_proto::{
     blockscout::smart_contract_verifier::v2 as smart_contract_verifier_v2,
     http_client::mock::MockSolidityVerifierService,
 };
-use std::collections::BTreeMap;
-use verification_test_helpers::test_input_data;
+use std::{collections::BTreeMap, path::PathBuf};
+use verification_test_helpers::{
+    init_db, init_eth_bytecode_db_server, init_verifier_server, test_input_data,
+    verifier_alliance_setup,
+};
 
 const TEST_SUITE_NAME: &str = "database_search";
 
@@ -172,7 +173,7 @@ async fn search_all_sources(service: MockSolidityVerifierService) {
         test_server::send_post_request(&eth_bytecode_db_base, ROUTE, &request).await;
 
     let expected_response = SearchAllSourcesResponse {
-      eth_bytecode_db_sources: vec![
+        eth_bytecode_db_sources: vec![
               test_data.eth_bytecode_db_response.source.unwrap()
           ],
         sourcify_sources: vec![
@@ -199,22 +200,43 @@ async fn search_all_sources(service: MockSolidityVerifierService) {
     );
 }
 
-// #[rstest]
-// #[tokio::test]
-// #[timeout(std::time::Duration::from_secs(60))]
-// #[ignore = "Needs database to run"]
-// async fn search_alliance_sources(
-//     service: MockSolidityVerifierService,
-//     #[files("tests/alliance_test_cases/full_match.json")] test_case_path: PathBuf,
-// ) {
-//     const TEST_NAME: &str = "search_alliance_sources";
-//     const ROUTE: &str = "/api/v2/bytecodes/sources:search-alliance";
-//
-//     let db = init_db(TEST_SUITE_NAME, TEST_NAME).await;
-//     let alliance_db = init_alliance_db(TEST_SUITE_NAME, TEST_NAME).await;
-//
-//     let test_case = TestCase::from_file(test_case_path);
-// }
+#[rstest]
+#[tokio::test]
+#[timeout(std::time::Duration::from_secs(60))]
+#[ignore = "Needs database to run"]
+async fn search_alliance_sources(
+    #[files("tests/alliance_test_cases/full_match.json")] test_case_path: PathBuf,
+) {
+    const TEST_NAME: &str = "search_alliance_sources";
+    const ROUTE: &str = "/api/v2/bytecodes/sources:search-alliance";
+
+    let setup_data = verifier_alliance_setup::Setup::new(TEST_NAME)
+        .authorized()
+        .setup(TEST_SUITE_NAME, test_case_path)
+        .await;
+
+    let request = SearchAllianceSourcesRequest {
+        chain: setup_data.test_case.chain_id.to_string(),
+        address: setup_data.test_case.address.to_string(),
+    };
+
+    let verification_response: SearchSourcesResponse =
+        test_server::send_post_request(&setup_data.eth_bytecode_db_base, ROUTE, &request).await;
+
+    let expected_response = SearchSourcesResponse {
+        sources: vec![setup_data
+            .test_case
+            .to_test_input_data()
+            .eth_bytecode_db_response
+            .source
+            .unwrap()],
+    };
+
+    assert_eq!(
+        expected_response, verification_response,
+        "Invalid response returned"
+    );
+}
 
 #[rstest]
 #[tokio::test]

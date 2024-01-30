@@ -11,7 +11,8 @@ use sea_orm::{
 };
 use std::{path::PathBuf, sync::Arc};
 use verification_test_helpers::{
-    verifier_alliance_setup::Setup, verifier_alliance_types::TestCase,
+    verifier_alliance_setup::{Setup, SetupData},
+    verifier_alliance_types::TestCase,
 };
 use verifier_alliance_entity::{
     code, compiled_contracts, contract_deployments, contracts, verified_contracts,
@@ -33,7 +34,11 @@ pub async fn success_with_existing_deployment(
         txn.commit().await.expect("committing transaction failed");
     };
 
-    let (alliance_db, test_case) = Setup::new(TEST_PREFIX)
+    let SetupData {
+        alliance_db,
+        test_case,
+        ..
+    } = Setup::new(TEST_PREFIX)
         .setup_db(prepare_alliance_database)
         .setup(TEST_SUITE_NAME, test_case_path)
         .await;
@@ -62,7 +67,11 @@ pub async fn success_without_existing_deployment(
 ) {
     const TEST_PREFIX: &str = "success_without_existing_deployment";
 
-    let (alliance_db, test_case) = Setup::new(TEST_PREFIX)
+    let SetupData {
+        alliance_db,
+        test_case,
+        ..
+    } = Setup::new(TEST_PREFIX)
         .authorized()
         .setup(TEST_SUITE_NAME, test_case_path)
         .await;
@@ -88,7 +97,7 @@ pub async fn failure_without_existing_deployment_not_authorized(
 ) {
     const TEST_PREFIX: &str = "failure_without_existing_deployment_not_authorized";
 
-    let (alliance_db, _test_case) = Setup::new(TEST_PREFIX)
+    let SetupData { alliance_db, .. } = Setup::new(TEST_PREFIX)
         .setup(TEST_SUITE_NAME, test_case_path)
         .await;
 
@@ -122,8 +131,11 @@ pub async fn verification_with_different_sources(
     let mut setup = Setup::new(TEST_PREFIX).authorized();
 
     /********** Add first partial matched contract **********/
-    let (alliance_db, partial_match_1_test_case) =
-        setup.setup(TEST_SUITE_NAME, partial_match_1_path).await;
+    let SetupData {
+        alliance_db,
+        test_case: partial_match_1_test_case,
+        ..
+    } = setup.setup(TEST_SUITE_NAME, partial_match_1_path).await;
     let db_client_owned = alliance_db.client();
     let db_client = db_client_owned.as_ref();
 
@@ -171,7 +183,10 @@ pub async fn verification_with_different_sources(
     );
 
     /********** Add full matched contract **********/
-    let (_, full_match_test_case) = setup.setup(TEST_SUITE_NAME, full_match_path).await;
+    let SetupData {
+        test_case: full_match_test_case,
+        ..
+    } = setup.setup(TEST_SUITE_NAME, full_match_path).await;
 
     let contract_deployment_partial_match_1 =
         check_contract_deployment(db_client, &partial_match_1_test_case).await;

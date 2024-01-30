@@ -120,6 +120,13 @@ where
     }
 }
 
+pub struct SetupData {
+    pub eth_bytecode_db_base: url::Url,
+    pub eth_bytecode_db: TestDbGuard,
+    pub alliance_db: TestDbGuard,
+    pub test_case: TestCase,
+}
+
 pub struct Setup<'a> {
     test_prefix: &'a str,
     setup_db: Box<dyn SetupDbFn>,
@@ -138,11 +145,7 @@ impl<'a> Setup<'a> {
         }
     }
 
-    pub async fn setup(
-        &self,
-        test_suite_name: &str,
-        test_case_path: PathBuf,
-    ) -> (TestDbGuard, TestCase) {
+    pub async fn setup(&self, test_suite_name: &str, test_case_path: PathBuf) -> SetupData {
         let test_case = TestCase::from_file(test_case_path);
 
         let service = MockSolidityVerifierService::new();
@@ -192,7 +195,12 @@ impl<'a> Setup<'a> {
                 send_request(&eth_bytecode_db_base, VERIFICATION_ROUTE, &wrapped_request).await;
         }
 
-        (alliance_db, test_case)
+        SetupData {
+            eth_bytecode_db_base,
+            eth_bytecode_db: db,
+            alliance_db,
+            test_case,
+        }
     }
 
     pub fn setup_db(mut self, function: impl SetupDbFn + 'static) -> Self {
