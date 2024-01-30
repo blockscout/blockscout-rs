@@ -1,7 +1,7 @@
 mod verification_test_helpers;
 
 use crate::verification_test_helpers::{
-    init_db, init_eth_bytecode_db_server, init_verifier_server_mod_todo,
+    init_db, init_eth_bytecode_db_server, init_verifier_server,
 };
 use blockscout_service_launcher::test_server;
 use eth_bytecode_db::{verification, verification::MatchType};
@@ -57,7 +57,7 @@ async fn search_sourcify_sources(service: MockSolidityVerifierService) {
     let test_data = test_input_data::basic(verification::SourceType::Solidity, MatchType::Partial);
 
     let db_url = db.db_url();
-    let verifier_addr = init_verifier_server_mod_todo::<
+    let verifier_addr = init_verifier_server::<
         _,
         eth_bytecode_db_v2::VerifySolidityMultiPartRequest,
         _,
@@ -141,7 +141,7 @@ async fn search_all_sources(service: MockSolidityVerifierService) {
     };
 
     let db_url = db.db_url();
-    let verifier_addr = init_verifier_server_mod_todo::<
+    let verifier_addr = init_verifier_server::<
         _,
         eth_bytecode_db_v2::VerifySolidityMultiPartRequest,
         _,
@@ -260,7 +260,7 @@ async fn search_sources_returns_latest_contract() {
         build_test_data("cafecafecafecafecafecafecafecafecafecafecafecafecafecafecafecafecafe");
     {
         let db_url = db.db_url();
-        let verifier_addr = init_verifier_server_mod_todo::<
+        let verifier_addr = init_verifier_server::<
             _,
             eth_bytecode_db_v2::VerifySolidityMultiPartRequest,
             _,
@@ -289,7 +289,7 @@ async fn search_sources_returns_latest_contract() {
     };
 
     let db_url = db.db_url();
-    let verifier_addr = init_verifier_server_mod_todo::<
+    let verifier_addr = init_verifier_server::<
         _,
         eth_bytecode_db_v2::VerifySolidityMultiPartRequest,
         _,
@@ -351,7 +351,7 @@ async fn search_event_descriptions() {
     };
 
     let db_url = db.db_url();
-    let verifier_addr = init_verifier_server_mod_todo::<
+    let verifier_addr = init_verifier_server::<
         _,
         eth_bytecode_db_v2::VerifySolidityMultiPartRequest,
         _,
@@ -411,7 +411,7 @@ async fn batch_search_event_descriptions() {
     };
 
     let db_url = db.db_url();
-    let verifier_addr = init_verifier_server_mod_todo::<
+    let verifier_addr = init_verifier_server::<
         _,
         eth_bytecode_db_v2::VerifySolidityMultiPartRequest,
         _,

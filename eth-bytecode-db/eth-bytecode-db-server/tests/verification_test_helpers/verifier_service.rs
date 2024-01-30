@@ -10,7 +10,7 @@ use smart_contract_verifier_proto::{
 use tonic::Response;
 
 #[async_trait]
-pub trait VerifierServiceModTodo<Request, Response> {
+pub trait VerifierService<Request, Response> {
     fn add_into_service(&mut self, response: Response);
 
     fn build_server(self) -> SmartContractVerifierServer;
@@ -18,7 +18,7 @@ pub trait VerifierServiceModTodo<Request, Response> {
 
 #[async_trait]
 impl
-    VerifierServiceModTodo<
+    VerifierService<
         eth_bytecode_db_v2::VerifySolidityMultiPartRequest,
         smart_contract_verifier_v2::VerifyResponse,
     > for MockSolidityVerifierService
@@ -35,7 +35,7 @@ impl
 
 #[async_trait]
 impl
-    VerifierServiceModTodo<
+    VerifierService<
         eth_bytecode_db_v2::VerifySolidityStandardJsonRequest,
         smart_contract_verifier_v2::VerifyResponse,
     > for MockSolidityVerifierService
@@ -52,7 +52,7 @@ impl
 
 #[async_trait]
 impl
-    VerifierServiceModTodo<
+    VerifierService<
         eth_bytecode_db_v2::ListCompilerVersionsRequest,
         smart_contract_verifier_v2::ListCompilerVersionsResponse,
     > for MockSolidityVerifierService
@@ -72,7 +72,7 @@ impl
 
 #[async_trait]
 impl
-    VerifierServiceModTodo<
+    VerifierService<
         eth_bytecode_db_v2::VerifyVyperMultiPartRequest,
         smart_contract_verifier_v2::VerifyResponse,
     > for MockVyperVerifierService
@@ -89,7 +89,7 @@ impl
 
 #[async_trait]
 impl
-    VerifierServiceModTodo<
+    VerifierService<
         eth_bytecode_db_v2::VerifyVyperStandardJsonRequest,
         smart_contract_verifier_v2::VerifyResponse,
     > for MockVyperVerifierService
@@ -106,7 +106,7 @@ impl
 
 #[async_trait]
 impl
-    VerifierServiceModTodo<
+    VerifierService<
         eth_bytecode_db_v2::ListCompilerVersionsRequest,
         smart_contract_verifier_v2::ListCompilerVersionsResponse,
     > for MockVyperVerifierService
@@ -126,7 +126,7 @@ impl
 
 #[async_trait]
 impl
-    VerifierServiceModTodo<
+    VerifierService<
         eth_bytecode_db_v2::VerifySourcifyRequest,
         smart_contract_verifier_v2::VerifyResponse,
     > for MockSourcifyVerifierService
@@ -143,7 +143,7 @@ impl
 
 #[async_trait]
 impl
-    VerifierServiceModTodo<
+    VerifierService<
         eth_bytecode_db_v2::VerifyFromEtherscanSourcifyRequest,
         smart_contract_verifier_v2::VerifyResponse,
     > for MockSourcifyVerifierService

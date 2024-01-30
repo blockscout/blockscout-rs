@@ -1,6 +1,6 @@
 mod verification_test_helpers;
 
-use crate::verification_test_helpers::init_verifier_server_mod_todo;
+use crate::verification_test_helpers::init_verifier_server;
 use blockscout_service_launcher::test_database::TestDbGuard;
 use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2 as eth_bytecode_db_v2;
 use eth_bytecode_db_server::Settings;
@@ -346,7 +346,7 @@ impl<'a> Setup<'a> {
             .await;
 
         let db_url = db.db_url();
-        let verifier_addr = init_verifier_server_mod_todo::<
+        let verifier_addr = init_verifier_server::<
             _,
             eth_bytecode_db_v2::VerifySolidityStandardJsonRequest,
             _,
