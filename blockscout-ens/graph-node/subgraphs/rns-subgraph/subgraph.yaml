@@ -21,6 +21,8 @@ dataSources:
       abis:
         - name: RnsRegistry
           file: ./abis/RnsRegistry.json
+        - name: PublicResolver
+          file: ./abis/PublicResolver.json
       eventHandlers:
         - event: NewOwner(indexed bytes32,indexed bytes32,address)
           handler: handleNewOwner
