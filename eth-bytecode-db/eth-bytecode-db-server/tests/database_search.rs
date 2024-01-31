@@ -205,7 +205,7 @@ async fn search_all_sources(service: MockSolidityVerifierService) {
 #[timeout(std::time::Duration::from_secs(60))]
 #[ignore = "Needs database to run"]
 async fn search_alliance_sources(
-    #[files("tests/alliance_test_cases/full_match.json")] test_case_path: PathBuf,
+    #[files("tests/alliance_test_cases/*.json")] test_case_path: PathBuf,
 ) {
     const TEST_NAME: &str = "search_alliance_sources";
     const ROUTE: &str = "/api/v2/bytecodes/sources:search-alliance";

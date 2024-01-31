@@ -17,7 +17,8 @@ use eth_bytecode_db::{
     verification::sourcify_from_etherscan,
 };
 use ethers::types::H256;
-use std::str::FromStr;
+use sea_orm::DatabaseConnection;
+use std::{str::FromStr, sync::Arc};
 use tracing::instrument;
 
 pub struct DatabaseService {
@@ -77,9 +78,22 @@ impl Database for DatabaseService {
     #[instrument(skip_all)]
     async fn search_alliance_sources(
         &self,
-        _request: tonic::Request<SearchAllianceSourcesRequest>,
+        request: tonic::Request<SearchAllianceSourcesRequest>,
     ) -> Result<tonic::Response<SearchSourcesResponse>, tonic::Status> {
-        todo!()
+        let request = request.into_inner();
+        super::trace_request_metadata!(
+            chain_id = request.chain,
+            contract_address = request.address
+        );
+
+        let mut sources = vec![];
+        if let Some(alliance_db_client) = self.client.alliance_db_client.clone() {
+            sources = self
+                .search_alliance_sources(alliance_db_client, &request.chain, &request.address)
+                .await?;
+        }
+
+        Ok(tonic::Response::new(SearchSourcesResponse { sources }))
     }
 
     #[instrument(skip_all)]
@@ -210,9 +224,10 @@ impl DatabaseService {
                 .0,
         };
 
-        let mut matches = search::find_contract(self.client.db_client.as_ref(), &bytecode_remote)
-            .await
-            .map_err(|err| tonic::Status::internal(err.to_string()))?;
+        let mut matches =
+            search::eth_bytecode_db_find_contract(self.client.db_client.as_ref(), &bytecode_remote)
+                .await
+                .map_err(|err| tonic::Status::internal(err.to_string()))?;
         matches.sort_by_key(|m| m.updated_at);
 
         let sources = matches
@@ -251,6 +266,34 @@ impl DatabaseService {
         };
 
         Ok(result)
+    }
+
+    async fn search_alliance_sources(
+        &self,
+        alliance_db_client: Arc<DatabaseConnection>,
+        chain_id: &str,
+        contract_address: &str,
+    ) -> Result<Vec<Source>, tonic::Status> {
+        let chain_id = i64::from_str(chain_id)
+            .map_err(|err| tonic::Status::invalid_argument(format!("Invalid chain id: {err}")))?;
+        let contract_address = DisplayBytes::from_str(contract_address)
+            .map_err(|err| {
+                tonic::Status::invalid_argument(format!("Invalid contract address: {err}"))
+            })?
+            .0;
+
+        let sources = search::alliance_db_find_contract(
+            alliance_db_client.as_ref(),
+            chain_id,
+            contract_address.to_vec(),
+        )
+        .await
+        .map_err(|err| tonic::Status::internal(err.to_string()))?
+        .into_iter()
+        .map(|source| SourceWrapper::from(source).into_inner())
+        .collect();
+
+        Ok(sources)
     }
 }
 
