@@ -130,7 +130,6 @@ impl Database for DatabaseService {
             ));
         let search_sourcify_sources_task =
             futures::future::OptionFuture::from((!only_local).then(|| {
-                println!("\n HEEY ONLY LOCAL");
                 self.search_sourcify_sources(&chain_id, &contract_address)
             }));
 
