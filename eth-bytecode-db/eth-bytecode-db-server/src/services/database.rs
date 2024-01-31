@@ -111,6 +111,7 @@ impl Database for DatabaseService {
         let bytecode = request.bytecode;
         let chain_id = request.chain;
         let contract_address = request.address;
+        let only_local = request.only_local.unwrap_or_default();
 
         tracing::debug!(
             contract_address = contract_address,
@@ -128,7 +129,10 @@ impl Database for DatabaseService {
                 },
             ));
         let search_sourcify_sources_task =
-            self.search_sourcify_sources(&chain_id, &contract_address);
+            futures::future::OptionFuture::from((!only_local).then(|| {
+                println!("\n HEEY ONLY LOCAL");
+                self.search_sourcify_sources(&chain_id, &contract_address)
+            }));
 
         let (eth_bytecode_db_sources, alliance_sources, sourcify_source) = tokio::join!(
             search_sources_task,
@@ -137,11 +141,12 @@ impl Database for DatabaseService {
         );
         let eth_bytecode_db_sources = eth_bytecode_db_sources?;
         let alliance_sources = alliance_sources.transpose()?.unwrap_or_default();
-        let mut sourcify_source = sourcify_source?;
+        let mut sourcify_source = sourcify_source.transpose()?.flatten();
 
         // Importing contracts from etherscan may be quite expensive operation.
         // For that reason, we try to use that approach only if no other sources have been found.
-        if eth_bytecode_db_sources.is_empty()
+        if !only_local
+            && eth_bytecode_db_sources.is_empty()
             && alliance_sources.is_empty()
             && sourcify_source.is_none()
         {

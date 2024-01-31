@@ -108,9 +108,10 @@ async fn search_sourcify_sources(service: MockSolidityVerifierService) {
 #[ignore = "Needs database to run"]
 async fn search_all_sources(
     service: MockSolidityVerifierService,
+    #[values(None, Some(false), Some(true))] only_local: Option<bool>,
     #[files("tests/alliance_test_cases/full_match.json")] test_case_path: PathBuf,
 ) {
-    const TEST_NAME: &str = "search_all_sources";
+    let test_name = format!("search_all_sources_{only_local:?}");
     const ROUTE: &str = "/api/v2/bytecodes/sources:search-all";
 
     let chain_id = "5";
@@ -128,7 +129,7 @@ async fn search_all_sources(
         eth_bytecode_db: db,
         test_case,
         ..
-    } = verifier_alliance_setup::Setup::new(TEST_NAME)
+    } = verifier_alliance_setup::Setup::new(&test_name)
         .authorized()
         .setup_test_case(TEST_SUITE_NAME, test_case)
         .await;
@@ -187,34 +188,41 @@ async fn search_all_sources(
         bytecode_type: eth_bytecode_db_v2::BytecodeType::CreationInput.into(),
         chain: chain_id.to_string(),
         address: contract_address.to_string(),
+        only_local,
     };
 
     let verification_response: SearchAllSourcesResponse =
         test_server::send_post_request(&eth_bytecode_db_with_alliance_base, ROUTE, &request).await;
 
+    let expected_sourcify_sources = match only_local {
+        Some(true) => vec![],
+        None | Some(false) =>
+            vec![
+                Source {
+                    file_name: "contracts/project:/ExternalTestMultiple.sol".to_string(),
+                    contract_name: "ExternalTestMultiple".to_string(),
+                    compiler_version: "0.6.8+commit.0bbfe453".to_string(),
+                    compiler_settings: "{\"evmVersion\":\"istanbul\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":true,\"runs\":300},\"remappings\":[]}".to_string(),
+                    source_type: eth_bytecode_db_v2::source::SourceType::Solidity.into(),
+                    source_files: BTreeMap::from([("contracts/project_/ExternalTestMultiple.sol".to_string(), "//SPDX-License-Identifier: MIT\r\npragma solidity ^0.6.8;\r\n\r\nlibrary ExternalTestLibraryMultiple {\r\n  function pop(address[] storage list) external returns (address out) {\r\n    out = list[list.length - 1];\r\n    list.pop();\r\n  }\r\n}\r\n".to_string())]),
+                    abi: Some("[{\"anonymous\":false,\"inputs\":[],\"name\":\"SourcifySolidity14\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"input\",\"type\":\"address\"}],\"name\":\"identity\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]".to_string()),
+                    constructor_arguments: None,
+                    match_type: eth_bytecode_db_v2::source::MatchType::Full.into(),
+                    compilation_artifacts: None,
+                    creation_input_artifacts: None,
+                    deployed_bytecode_artifacts: None,
+                }
+            ]
+    };
+
     let expected_response = SearchAllSourcesResponse {
-        eth_bytecode_db_sources: vec![
-              test_data.eth_bytecode_db_response.source.unwrap()
-          ],
-        sourcify_sources: vec![
-            Source {
-                file_name: "contracts/project:/ExternalTestMultiple.sol".to_string(),
-                contract_name: "ExternalTestMultiple".to_string(),
-                compiler_version: "0.6.8+commit.0bbfe453".to_string(),
-                compiler_settings: "{\"evmVersion\":\"istanbul\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":true,\"runs\":300},\"remappings\":[]}".to_string(),
-                source_type: eth_bytecode_db_v2::source::SourceType::Solidity.into(),
-                source_files: BTreeMap::from([("contracts/project_/ExternalTestMultiple.sol".to_string(), "//SPDX-License-Identifier: MIT\r\npragma solidity ^0.6.8;\r\n\r\nlibrary ExternalTestLibraryMultiple {\r\n  function pop(address[] storage list) external returns (address out) {\r\n    out = list[list.length - 1];\r\n    list.pop();\r\n  }\r\n}\r\n".to_string())]),
-                abi: Some("[{\"anonymous\":false,\"inputs\":[],\"name\":\"SourcifySolidity14\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"input\",\"type\":\"address\"}],\"name\":\"identity\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]".to_string()),
-                constructor_arguments: None,
-                match_type: eth_bytecode_db_v2::source::MatchType::Full.into(),
-                compilation_artifacts: None,
-                creation_input_artifacts: None,
-                deployed_bytecode_artifacts: None,
-            }
-        ],
-        alliance_sources: vec![
-            test_case.to_test_input_data().eth_bytecode_db_response.source.unwrap()
-        ],
+        eth_bytecode_db_sources: vec![test_data.eth_bytecode_db_response.source.unwrap()],
+        sourcify_sources: expected_sourcify_sources,
+        alliance_sources: vec![test_case
+            .to_test_input_data()
+            .eth_bytecode_db_response
+            .source
+            .unwrap()],
     };
 
     assert_eq!(
@@ -359,6 +367,7 @@ async fn search_sources_returns_latest_contract() {
         bytecode_type: eth_bytecode_db_v2::BytecodeType::CreationInput.into(),
         chain: chain_id,
         address: contract_address,
+        only_local: None,
     };
 
     let verification_response: SearchSourcesResponse =

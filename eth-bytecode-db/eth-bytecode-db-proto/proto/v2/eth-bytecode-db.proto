@@ -231,6 +231,9 @@ message SearchAllSourcesRequest {
   string chain = 3;
   /// The address of the contract being verified
   string address = 4;
+  /// If set and is `false`, will not try to obtain sources from 3rd party services
+  /// (e.g., Sourcify and Etherscan)
+  optional bool only_local = 5;
 }
 
 message SearchSourcesResponse {
