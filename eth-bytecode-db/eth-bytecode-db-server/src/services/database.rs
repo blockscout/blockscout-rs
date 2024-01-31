@@ -121,26 +121,39 @@ impl Database for DatabaseService {
         );
 
         let search_sources_task = self.search_sources(bytecode_type, &bytecode);
+        let search_alliance_sources_task =
+            futures::future::OptionFuture::from(self.client.alliance_db_client.clone().map(
+                |alliance_db_client| {
+                    self.search_alliance_sources(alliance_db_client, &chain_id, &contract_address)
+                },
+            ));
         let search_sourcify_sources_task =
             self.search_sourcify_sources(&chain_id, &contract_address);
 
-        let (eth_bytecode_db_sources, sourcify_source) =
-            tokio::join!(search_sources_task, search_sourcify_sources_task);
+        let (eth_bytecode_db_sources, alliance_sources, sourcify_source) = tokio::join!(
+            search_sources_task,
+            search_alliance_sources_task,
+            search_sourcify_sources_task
+        );
         let eth_bytecode_db_sources = eth_bytecode_db_sources?;
+        let alliance_sources = alliance_sources.transpose()?.unwrap_or_default();
         let mut sourcify_source = sourcify_source?;
 
         // Importing contracts from etherscan may be quite expensive operation.
         // For that reason, we try to use that approach only if no other sources have been found.
-        if eth_bytecode_db_sources.is_empty() && sourcify_source.is_none() {
+        if eth_bytecode_db_sources.is_empty()
+            && alliance_sources.is_empty()
+            && sourcify_source.is_none()
+        {
             tracing::info!(
                 contract_address = contract_address,
                 chain_id = chain_id,
-                "no sources have been found neither in eth-bytecode-db nor in sourcify.\
+                "no sources have been found neither in eth-bytecode-db, nor in verifier-alliance, nor in sourcify.\
                 Trying to verify from etherscan"
             );
             let verification_request = sourcify_from_etherscan::VerificationRequest {
-                address: contract_address,
-                chain: chain_id,
+                address: contract_address.clone(),
+                chain: chain_id.clone(),
             };
             let result =
                 sourcify_from_etherscan::verify(self.client.clone(), verification_request).await;
@@ -154,6 +167,7 @@ impl Database for DatabaseService {
         let response = SearchAllSourcesResponse {
             eth_bytecode_db_sources,
             sourcify_sources: sourcify_source.map_or(vec![], |source| vec![source]),
+            alliance_sources,
         };
 
         Ok(tonic::Response::new(response))

@@ -147,7 +147,10 @@ impl<'a> Setup<'a> {
 
     pub async fn setup(&self, test_suite_name: &str, test_case_path: PathBuf) -> SetupData {
         let test_case = TestCase::from_file(test_case_path);
+        self.setup_test_case(test_suite_name, test_case).await
+    }
 
+    pub async fn setup_test_case(&self, test_suite_name: &str, test_case: TestCase) -> SetupData {
         let service = MockSolidityVerifierService::new();
 
         let test_name = format!("{}_{}", self.test_prefix, test_case.test_case_name,);

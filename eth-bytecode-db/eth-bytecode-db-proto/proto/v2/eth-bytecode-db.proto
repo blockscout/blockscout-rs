@@ -241,6 +241,8 @@ message SearchAllSourcesResponse {
   repeated Source eth_bytecode_db_sources = 1;
 
   repeated Source sourcify_sources = 2;
+
+  repeated Source alliance_sources = 3;
 }
 
 message SearchEventDescriptionsRequest {

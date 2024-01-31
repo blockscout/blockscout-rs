@@ -427,6 +427,11 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v2Source'
+      allianceSources:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v2Source'
   v2SearchAllianceSourcesRequest:
     type: object
     properties:
