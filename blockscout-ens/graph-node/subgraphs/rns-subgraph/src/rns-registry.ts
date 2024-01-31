@@ -6,6 +6,7 @@ import {
   NewResolver as NewResolverEvent,
   NewTTL as NewTTLEvent
 } from "../generated/RnsRegistry/RnsRegistry"
+import { PublicResolver } from "../generated/PublicResolver/PublicResolver"
 import { NewOwner, Transfer, NewResolver, NewTTL, Domain, Account, Resolver } from "../generated/schema"
 import { EMPTY_ADDRESS, EMPTY_ADDRESS_BYTEARRAY, ROOT_NODE, concat, createEventID } from "./utils";
 
@@ -177,10 +178,24 @@ export function handleNewResolver(event: NewResolverEvent): void {
       // since this is a new resolver entity, there can't be a resolved address yet so set to null
       domain.resolvedAddress = null;
     } else {
-      domain.resolvedAddress = resolver.addr;
+      if (resolver.addr) {
+        domain.resolvedAddress = resolver.addr;
+      }
     }
   } else {
     domain.resolvedAddress = null;
+  }
+
+  // rootstock resolver contract has a bug and sometimes it doesnt produce AddrChanged event
+  // so we have to make heavy `eth_call` request to handle this bug
+  if (!domain.resolvedAddress && event.params.resolverAddress) {
+    const resolverInstance = PublicResolver.bind(event.params.resolverAddress);
+    const addrResult = resolverInstance.try_addr(event.params.node);
+    if (!addrResult.reverted) {
+      domain.resolvedAddress = addrResult.value.toHexString();
+    } else {
+      domain.resolvedAddress = null;
+    }
   }
   saveDomain(domain);
 
