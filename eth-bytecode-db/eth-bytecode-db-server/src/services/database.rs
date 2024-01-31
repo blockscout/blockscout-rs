@@ -128,10 +128,9 @@ impl Database for DatabaseService {
                     self.search_alliance_sources(alliance_db_client, &chain_id, &contract_address)
                 },
             ));
-        let search_sourcify_sources_task =
-            futures::future::OptionFuture::from((!only_local).then(|| {
-                self.search_sourcify_sources(&chain_id, &contract_address)
-            }));
+        let search_sourcify_sources_task = futures::future::OptionFuture::from(
+            (!only_local).then(|| self.search_sourcify_sources(&chain_id, &contract_address)),
+        );
 
         let (eth_bytecode_db_sources, alliance_sources, sourcify_source) = tokio::join!(
             search_sources_task,
