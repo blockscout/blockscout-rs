@@ -59,7 +59,11 @@ export function handleAddrChanged(event: AddrChangedEvent): void {
 export function handleMulticoinAddrChanged(event: AddressChangedEvent): void {
   let resolver = getOrCreateResolver(event.params.node, event.address);
 
+
+  // TODO: if protocol doesn't emit AddrChanged event you can check that
+  // coin_type is equal to native coin type and update resolved_address of domain manually
   let coinType = event.params.coinType;
+  
   if (resolver.coinTypes == null) {
     resolver.coinTypes = [coinType];
     resolver.save();
