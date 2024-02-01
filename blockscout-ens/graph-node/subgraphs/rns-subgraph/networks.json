@@ -10,6 +10,10 @@
     },
     "PublicResolver": {
       "startBlock": 905027
+    },
+    "RSKOwner": {
+      "address": "0x45d3e4fb311982a06ba52359d44cb4f5980e0ef1",
+      "startBlock": 1891388
     }
   },
   "rootstock-testnet": {
@@ -23,6 +27,10 @@
     },
     "PublicResolver": {
       "startBlock": 385322
+    },
+    "RSKOwner": {
+      "address": "0xca0a477e19bac7e0e172ccfd2e3c28a7200bdb71",
+      "startBlock": 385433
     }
   }
 }
