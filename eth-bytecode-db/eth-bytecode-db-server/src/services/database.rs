@@ -47,7 +47,9 @@ impl Database for DatabaseService {
         let bytecode_type = request.bytecode_type();
         let bytecode = request.bytecode;
 
-        let sources = self.search_sources(bytecode_type, &bytecode).await?;
+        let sources = self
+            .search_sources_internal(bytecode_type, &bytecode)
+            .await?;
 
         Ok(tonic::Response::new(SearchSourcesResponse { sources }))
     }
@@ -67,7 +69,7 @@ impl Database for DatabaseService {
         let contract_address = request.address;
 
         let source = self
-            .search_sourcify_sources(&chain_id, &contract_address)
+            .search_sourcify_sources_internal(&chain_id, &contract_address)
             .await?;
 
         Ok(tonic::Response::new(SearchSourcesResponse {
@@ -89,7 +91,11 @@ impl Database for DatabaseService {
         let mut sources = vec![];
         if let Some(alliance_db_client) = self.client.alliance_db_client.clone() {
             sources = self
-                .search_alliance_sources(alliance_db_client, &request.chain, &request.address)
+                .search_alliance_sources_internal(
+                    alliance_db_client,
+                    &request.chain,
+                    &request.address,
+                )
                 .await?;
         }
 
@@ -121,15 +127,20 @@ impl Database for DatabaseService {
             "search all sources request"
         );
 
-        let search_sources_task = self.search_sources(bytecode_type, &bytecode);
+        let search_sources_task = self.search_sources_internal(bytecode_type, &bytecode);
         let search_alliance_sources_task =
             futures::future::OptionFuture::from(self.client.alliance_db_client.clone().map(
                 |alliance_db_client| {
-                    self.search_alliance_sources(alliance_db_client, &chain_id, &contract_address)
+                    self.search_alliance_sources_internal(
+                        alliance_db_client,
+                        &chain_id,
+                        &contract_address,
+                    )
                 },
             ));
         let search_sourcify_sources_task = futures::future::OptionFuture::from(
-            (!only_local).then(|| self.search_sourcify_sources(&chain_id, &contract_address)),
+            (!only_local)
+                .then(|| self.search_sourcify_sources_internal(&chain_id, &contract_address)),
         );
 
         let (eth_bytecode_db_sources, alliance_sources, sourcify_source) = tokio::join!(
@@ -229,7 +240,7 @@ impl Database for DatabaseService {
 }
 
 impl DatabaseService {
-    async fn search_sources(
+    async fn search_sources_internal(
         &self,
         bytecode_type: BytecodeType,
         bytecode: &str,
@@ -256,7 +267,7 @@ impl DatabaseService {
         Ok(sources)
     }
 
-    async fn search_sourcify_sources(
+    async fn search_sourcify_sources_internal(
         &self,
         chain_id: &str,
         contract_address: &str,
@@ -285,7 +296,7 @@ impl DatabaseService {
         Ok(result)
     }
 
-    async fn search_alliance_sources(
+    async fn search_alliance_sources_internal(
         &self,
         alliance_db_client: Arc<DatabaseConnection>,
         chain_id: &str,
