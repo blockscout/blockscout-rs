@@ -48,10 +48,10 @@ You can take a look at that subgraph and understand structure of our project mor
     yarn graph test -d
     ```
 
-2. Now build subgraph code
+1. Now build subgraph code
   
     ```bash
     just build
     ```
 
-3. Now you should run your subgraph by submitting it to graph-node: read [deploy subgraphs to graph-node](../subgraphs/README.md#deploy-subgraph-to-graph-node)
+1. Now you should run your subgraph by submitting it to graph-node: read [deploy subgraphs to graph-node](../subgraphs/README.md#deploy-subgraph-to-graph-node)
