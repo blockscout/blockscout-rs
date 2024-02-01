@@ -37,8 +37,8 @@ dataSources:
     name: NameResolver
     network: rootstock
     source:
-      address: "0x4b1a11BF6723e60b9D2e02AA3ecE34E24Bde77d9"
       abi: NameResolver
+      address: "0x4b1a11BF6723e60b9D2e02AA3ecE34E24Bde77d9"
       startBlock: 1721969
     mapping:
       kind: ethereum/events
@@ -97,3 +97,23 @@ dataSources:
         - event: VersionChanged(indexed bytes32,uint64)
           handler: handleVersionChanged
       file: ./src/public-resolver.ts
+  - kind: ethereum/contract
+    name: RSKOwner
+    network: rootstock
+    source:
+      abi: RSKOwner
+      address: "0x45d3e4fb311982a06ba52359d44cb4f5980e0ef1"
+      startBlock: 1891388
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      file: ./src/rsk-owner.ts
+      entities:
+        - ExpiryExtended
+      abis:
+        - name: RSKOwner
+          file: ./abis/RSKOwner.json
+      eventHandlers:
+        - event: ExpirationChanged(uint256,uint256)
+          handler: handleExpirationChanged
