@@ -417,7 +417,7 @@ definitions:
       onlyLocal:
         type: boolean
         title: |-
-          / If set and is `false`, will not try to obtain sources from 3rd party services
+          / If set and is `true`, will not try to obtain sources from 3rd party services
           / (e.g., Sourcify and Etherscan)
   v2SearchAllSourcesResponse:
     type: object
