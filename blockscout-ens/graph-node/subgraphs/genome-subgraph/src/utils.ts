@@ -101,7 +101,7 @@ export function concat(a: ByteArray, b: ByteArray): ByteArray {
 
 
 export function maybeSaveDomainName(name: string): void {
-  const nodehash = hashNyName(name);
+  const nodehash = hashByName(name);
   const domain = Domain.load(nodehash.toHex());
   if (domain != null) {
     const label = labelFromName(name);
@@ -112,12 +112,12 @@ export function maybeSaveDomainName(name: string): void {
   }
 }
 
-export function hashNyName(name: string): ByteArray {
-  if (name == 'gno') {
+export function hashByName(name: string): ByteArray {
+  if (name === BASE_NODE.slice(1)) {
     return byteArrayFromHex(BASE_NODE_HASH)
   }
   else if (!name) {
-    return byteArrayFromHex(ROOT_NODE)
+    return byteArrayFromHex(ROOT_NODE.slice(2))
   } else {
     const partition = splitStringOnce(name, '.');
     const label = partition[0];
@@ -125,7 +125,7 @@ export function hashNyName(name: string): ByteArray {
 
     return crypto.keccak256(
       concat(
-        hashNyName(remainder),
+        hashByName(remainder),
         keccakFromStr(label)
       )
     )
