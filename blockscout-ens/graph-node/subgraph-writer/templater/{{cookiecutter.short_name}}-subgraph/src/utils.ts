@@ -104,7 +104,9 @@ export function maybeSaveDomainName(name: string): void {
 }
 
 export function hashByName(name: string): ByteArray {
-  if (!name) {
+  if (name === BASE_NODE.slice(1)) {
+    return byteArrayFromHex(BASE_NODE_HASH)
+  } else if (!name) {
     return byteArrayFromHex(ROOT_NODE.slice(2))
   } else {
     const partition = splitStringOnce(name, '.');
