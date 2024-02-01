@@ -41,10 +41,17 @@ You can take a look at that subgraph and understand structure of our project mor
 
 1. Write your mappings: read [official subgraph guide](https://thegraph.com/docs/en/developing/creating-a-subgraph/#writing-mappings). You have to handle events of your protocol properly in order to index all blockchain data. You can use default mapping from generated template, however make sure that code is written correctly.
 
-1. Now build subgraph code
+1. Run default tests that will check name hashing logic
+
+    ```bash
+    # you can ommit -d flag to run tests without docker, but in case of MacOS we suggest you to use docker
+    yarn graph test -d
+    ```
+
+2. Now build subgraph code
   
     ```bash
     just build
     ```
 
-1. Now you should run your subgraph by submitting it to graph-node: read [deploy subgraphs to graph-node](../subgraphs/README.md#deploy-subgraph-to-graph-node)
+3. Now you should run your subgraph by submitting it to graph-node: read [deploy subgraphs to graph-node](../subgraphs/README.md#deploy-subgraph-to-graph-node)
