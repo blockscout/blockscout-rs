@@ -88,18 +88,24 @@ impl Database for DatabaseService {
             contract_address = request.address
         );
 
-        let mut sources = vec![];
-        if let Some(alliance_db_client) = self.client.alliance_db_client.clone() {
-            sources = self
-                .search_alliance_sources_internal(
-                    alliance_db_client,
-                    &request.chain,
-                    &request.address,
-                )
-                .await?;
+        match self.client.alliance_db_client.clone() {
+            None => {
+                tracing::trace!("Unavailable: verifier alliance is not enabled");
+                Err(tonic::Status::unavailable(
+                    "Verifier alliance is not enabled",
+                ))
+            }
+            Some(alliance_db_client) => {
+                let sources = self
+                    .search_alliance_sources_internal(
+                        alliance_db_client,
+                        &request.chain,
+                        &request.address,
+                    )
+                    .await?;
+                Ok(tonic::Response::new(SearchSourcesResponse { sources }))
+            }
         }
-
-        Ok(tonic::Response::new(SearchSourcesResponse { sources }))
     }
 
     #[instrument(skip_all)]
