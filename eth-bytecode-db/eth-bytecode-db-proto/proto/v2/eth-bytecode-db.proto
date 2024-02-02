@@ -9,6 +9,8 @@ service Database {
 
   rpc SearchSourcifySources(SearchSourcifySourcesRequest) returns (SearchSourcesResponse) {}
 
+  rpc SearchAllianceSources(SearchAllianceSourcesRequest) returns (SearchSourcesResponse) {}
+
   rpc SearchAllSources(SearchAllSourcesRequest) returns (SearchAllSourcesResponse) {}
 
   rpc SearchEventDescriptions(SearchEventDescriptionsRequest) returns (SearchEventDescriptionsResponse) {}
@@ -213,6 +215,12 @@ message SearchSourcifySourcesRequest {
   /// The address of the contract being verified
   string address = 2;
 }
+message SearchAllianceSourcesRequest {
+  /// Id of the chain the contract should be verified on
+  string chain = 1;
+  /// The address of the contract being verified
+  string address = 2;
+}
 
 message SearchAllSourcesRequest {
   /// Bytecode to search the sources for
@@ -223,6 +231,9 @@ message SearchAllSourcesRequest {
   string chain = 3;
   /// The address of the contract being verified
   string address = 4;
+  /// If set and is `true`, will not try to obtain sources from 3rd party services
+  /// (e.g., Sourcify and Etherscan)
+  optional bool only_local = 5;
 }
 
 message SearchSourcesResponse {
@@ -233,6 +244,8 @@ message SearchAllSourcesResponse {
   repeated Source eth_bytecode_db_sources = 1;
 
   repeated Source sourcify_sources = 2;
+
+  repeated Source alliance_sources = 3;
 }
 
 message SearchEventDescriptionsRequest {
