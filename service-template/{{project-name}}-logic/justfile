@@ -1,0 +1,18 @@
+export DATABASE_URL := env_var('DATABASE_URL')
+
+{% if entity %}
+generate-entities:
+    sea-orm-cli generate entity --lib -o entity/src
+{% endif %}
+{% if migrations %}
+{% raw -%}
+new-migration name:
+    sea-orm-cli migrate generate {{name}}
+{% endraw -%}
+
+migrate-up:
+    sea-orm-cli migrate up
+
+migrate-down:
+    sea-orm-cli migrate down
+{% endif %}

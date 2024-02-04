@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package blockscout.{{projectName}}.v1;
+
+option go_package = "github.com/blockscout/blockscout-rs/{{project-name}}";
+
+{% if proto_ex %}
+service {{ProtoExName}} {
+  rpc {{ProtoExName}}Create({{ProtoExName}}CreateRequest) returns ({{ProtoExName}}CreateResponse) {}
+  rpc {{ProtoExName}}Search({{ProtoExName}}SearchRequest) returns ({{ProtoExName}}SearchResponse) {}
+  
+}
+
+message Item {
+  string id = 1;
+  string name = 2;
+}
+
+message {{ProtoExName}}CreateRequest {
+  string foo = 1;
+  optional string bar = 2;
+  int64 timestamp = 3;
+  map<string, string> map = 4;
+}
+
+message {{ProtoExName}}CreateResponse {
+  Item item = 1;
+}
+
+
+
+message {{ProtoExName}}SearchRequest {
+  string filter_1 = 1;
+  string filter_2 = 2;
+  string filter_3 = 3;
+}
+
+message {{ProtoExName}}SearchResponse {
+  repeated Item items = 1;
+}
+
+
+
+{% endif %}
