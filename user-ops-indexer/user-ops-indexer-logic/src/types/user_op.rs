@@ -1,5 +1,5 @@
 use crate::{repository::user_op::ListUserOpDB, types::common::u256_to_decimal};
-pub use entity::sea_orm_active_enums::SponsorType;
+pub use entity::sea_orm_active_enums::{EntryPointVersion, SponsorType};
 use entity::user_operations::Model;
 use ethers::prelude::{Address, Bytes, H256, U256};
 use ethers_core::{abi::AbiEncode, utils::to_checksum};
@@ -24,6 +24,7 @@ pub struct UserOp {
     pub aggregator: Option<Address>,
     pub aggregator_signature: Option<Bytes>,
     pub entry_point: Address,
+    pub entry_point_version: EntryPointVersion,
     pub transaction_hash: H256,
     pub block_number: u64,
     pub block_hash: H256,
@@ -75,6 +76,7 @@ impl From<UserOp> for Model {
             aggregator: v.aggregator.map(|a| a.as_bytes().to_vec()),
             aggregator_signature: v.aggregator_signature.clone().map(|a| a.to_vec()),
             entry_point: v.entry_point.as_bytes().to_vec(),
+            entry_point_version: v.entry_point_version.clone(),
             transaction_hash: v.transaction_hash.as_bytes().to_vec(),
             block_number: v.block_number as i32,
             block_hash: v.block_hash.as_bytes().to_vec(),
@@ -115,6 +117,7 @@ impl From<Model> for UserOp {
             aggregator: v.aggregator.clone().map(|a| Address::from_slice(&a)),
             aggregator_signature: v.aggregator_signature.clone().map(Bytes::from),
             entry_point: Address::from_slice(&v.entry_point),
+            entry_point_version: v.entry_point_version.clone(),
             transaction_hash: H256::from_slice(&v.transaction_hash),
             block_number: v.block_number as u64,
             block_hash: H256::from_slice(&v.block_hash),
@@ -153,26 +156,28 @@ impl From<UserOp> for user_ops_indexer_proto::blockscout::user_ops_indexer::v1::
             max_priority_fee_per_gas: v.max_priority_fee_per_gas.to_string(),
             signature: v.signature.to_string(),
             raw: Some(
-                user_ops_indexer_proto::blockscout::user_ops_indexer::v1::RawUserOp {
-                    sender: to_checksum(&v.sender, None),
-                    nonce: U256::from(v.nonce.as_fixed_bytes()).to_string(),
-                    init_code: v.init_code.map_or("0x".to_string(), |b| b.to_string()),
-                    call_data: v.call_data.to_string(),
-                    call_gas_limit: v.call_gas_limit,
-                    verification_gas_limit: v.verification_gas_limit,
-                    pre_verification_gas: v.pre_verification_gas,
-                    max_fee_per_gas: v.max_fee_per_gas.to_string(),
-                    max_priority_fee_per_gas: v.max_priority_fee_per_gas.to_string(),
-                    paymaster_and_data: v
-                        .paymaster_and_data
-                        .map_or("0x".to_string(), |b| b.to_string()),
-                    signature: v.signature.to_string(),
-                },
+                user_ops_indexer_proto::blockscout::user_ops_indexer::v1::user_op::Raw::RawV06(
+                    user_ops_indexer_proto::blockscout::user_ops_indexer::v1::RawUserOpV06 {
+                        sender: to_checksum(&v.sender, None),
+                        nonce: U256::from(v.nonce.as_fixed_bytes()).to_string(),
+                        init_code: v.init_code.map_or("0x".to_string(), |b| b.to_string()),
+                        call_data: v.call_data.to_string(),
+                        call_gas_limit: v.call_gas_limit,
+                        verification_gas_limit: v.verification_gas_limit,
+                        pre_verification_gas: v.pre_verification_gas,
+                        max_fee_per_gas: v.max_fee_per_gas.to_string(),
+                        max_priority_fee_per_gas: v.max_priority_fee_per_gas.to_string(),
+                        paymaster_and_data: v
+                            .paymaster_and_data
+                            .map_or("0x".to_string(), |b| b.to_string()),
+                        signature: v.signature.to_string(),
+                    },
+                ),
             ),
             aggregator: v.aggregator.map(|a| to_checksum(&a, None)),
             aggregator_signature: v.aggregator_signature.map(|b| b.to_string()),
             entry_point: to_checksum(&v.entry_point, None),
-            entry_point_version: "v0.6".to_string(),
+            entry_point_version: v.entry_point_version.to_value().to_string(),
             transaction_hash: v.transaction_hash.encode_hex(),
             block_number: v.block_number,
             block_hash: v.block_hash.encode_hex(),

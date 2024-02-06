@@ -491,7 +491,7 @@ definitions:
       total_ops:
         type: integer
         format: int64
-  v1RawUserOp:
+  v1RawUserOpV06:
     type: object
     properties:
       sender:
@@ -517,6 +517,31 @@ definitions:
         type: string
       paymaster_and_data:
         type: string
+      signature:
+        type: string
+  v1RawUserOpV07:
+    type: object
+    properties:
+      sender:
+        type: string
+      nonce:
+        type: string
+      init_code:
+        type: string
+      call_data:
+        type: string
+      accountGasLimits:
+        type: string
+        title: call_gas_limit + verification_gas_limit
+      pre_verification_gas:
+        type: string
+        format: uint64
+      gas_fees:
+        type: string
+        title: max_fee_per_gas + max_priority_fee_per_gas
+      paymaster_and_data:
+        type: string
+        title: paymaster + paymaster_verification_gas_limit + post_op_gas_limit + paymaster_data
       signature:
         type: string
   v1UserOp:
@@ -545,8 +570,10 @@ definitions:
         type: string
       signature:
         type: string
-      raw:
-        $ref: '#/definitions/v1RawUserOp'
+      rawV06:
+        $ref: '#/definitions/v1RawUserOpV06'
+      rawV07:
+        $ref: '#/definitions/v1RawUserOpV07'
       aggregator:
         type: string
       aggregator_signature:

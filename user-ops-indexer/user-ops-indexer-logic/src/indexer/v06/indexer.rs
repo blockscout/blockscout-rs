@@ -5,7 +5,7 @@ use crate::{
         UserOperationEventFilter, UserOperationRevertReasonFilter, ENTRYPOINT_V06,
     },
     repository,
-    types::user_op::{SponsorType, UserOp},
+    types::user_op::{EntryPointVersion, SponsorType, UserOp},
 };
 use anyhow::{anyhow, bail};
 use ethers::prelude::{BigEndianHash, EthEvent, Middleware, Provider, PubsubClient};
@@ -391,6 +391,7 @@ fn build_user_op_model(
         aggregator: raw_user_op.aggregator,
         aggregator_signature: raw_user_op.aggregator_signature,
         entry_point: *ENTRYPOINT_V06,
+        entry_point_version: EntryPointVersion::V06,
         transaction_hash: user_op_log.transaction_hash.unwrap_or(H256::zero()),
         block_number: user_op_log.block_number.map_or(0, |n| n.as_u64()),
         block_hash: user_op_log.block_hash.unwrap_or(H256::zero()),
