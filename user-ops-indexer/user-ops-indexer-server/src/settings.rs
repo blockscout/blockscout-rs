@@ -54,6 +54,7 @@ pub struct IndexerSettings {
 #[serde(deny_unknown_fields)]
 pub struct EntrypointsSettings {
     pub v06: bool,
+    pub v07: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -124,7 +125,10 @@ impl Settings {
             indexer: IndexerSettings {
                 rpc_url: "ws://127.0.0.1:8546".to_string(),
                 concurrency: 10,
-                entrypoints: EntrypointsSettings { v06: true },
+                entrypoints: EntrypointsSettings {
+                    v06: true,
+                    v07: true,
+                },
                 realtime: RealtimeIndexerSettings { enabled: true },
                 past_rpc_logs_indexer: PastRpcLogsIndexerSettings {
                     enabled: false,

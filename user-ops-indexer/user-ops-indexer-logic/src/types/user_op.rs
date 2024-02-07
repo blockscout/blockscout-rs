@@ -50,6 +50,8 @@ pub struct UserOp {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ListUserOp {
     pub hash: H256,
+    pub entry_point: Address,
+    pub entry_point_version: EntryPointVersion,
     pub block_number: u64,
     pub sender: Address,
     pub transaction_hash: H256,
@@ -206,6 +208,8 @@ impl From<ListUserOpDB> for ListUserOp {
     fn from(v: ListUserOpDB) -> Self {
         Self {
             hash: H256::from_slice(&v.hash),
+            entry_point: Address::from_slice(&v.entry_point),
+            entry_point_version: v.entry_point_version.clone(),
             block_number: v.block_number as u64,
             sender: Address::from_slice(&v.sender),
             transaction_hash: H256::from_slice(&v.transaction_hash),
@@ -223,6 +227,8 @@ impl From<ListUserOp> for user_ops_indexer_proto::blockscout::user_ops_indexer::
     fn from(v: ListUserOp) -> Self {
         user_ops_indexer_proto::blockscout::user_ops_indexer::v1::ListUserOp {
             hash: v.hash.encode_hex(),
+            entry_point: to_checksum(&v.entry_point, None),
+            entry_point_version: v.entry_point_version.to_value().to_string(),
             block_number: v.block_number,
             transaction_hash: v.transaction_hash.encode_hex(),
             address: to_checksum(&v.sender, None),

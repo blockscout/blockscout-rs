@@ -1,44 +1,65 @@
-use crate::{
-    indexer::v06::constants::{
-        matches_entrypoint_event, parse_event, BeforeExecutionFilter, DepositedFilter,
-        HandleAggregatedOpsCall, HandleOpsCall, IEntrypointV06Calls, UserOperation,
-        UserOperationEventFilter, UserOperationRevertReasonFilter, ENTRYPOINT_V06,
-    },
-    repository,
-    types::user_op::{EntryPointVersion, SponsorType, UserOp},
-};
+use crate::{repository, types::user_op::UserOp};
 use anyhow::{anyhow, bail};
-use ethers::prelude::{BigEndianHash, EthEvent, Middleware, Provider, PubsubClient};
-use ethers_core::{
-    abi::{AbiDecode, AbiEncode},
+use ethers::prelude::{
+    abi::AbiEncode,
     types::{Action, Address, Bytes, Filter, Log},
+    Middleware, Provider, PubsubClient,
 };
 use futures::{stream, stream::BoxStream, StreamExt};
 use keccak_hash::H256;
 use sea_orm::DatabaseConnection;
-use std::{future, ops::Div, time::Duration};
+use std::{future, time::Duration};
 use tokio::time::sleep;
+use tracing::instrument;
 
-pub struct RawUserOperation {
-    pub user_op: UserOperation,
+pub trait IndexerLogic {
+    fn entry_point() -> Address;
+    fn version() -> &'static str;
 
-    pub aggregator: Option<Address>,
+    fn user_operation_event_signature() -> H256;
 
-    pub aggregator_signature: Option<Bytes>,
+    fn before_execution_signature() -> H256;
+
+    fn matches_handler_calldata(calldata: &Bytes) -> bool;
+
+    fn parse_deposited_event(log: &Log) -> Option<Address>;
+
+    fn parse_user_ops(
+        bundle_index: usize,
+        tx_hash: H256,
+        tx_deposits: &[Address],
+        calldata: &Bytes,
+        log_bundle: &[&[Log]],
+    ) -> anyhow::Result<Vec<UserOp>>;
+    fn user_operation_event_matcher(log: &Log) -> bool {
+        log.address == Self::entry_point()
+            && log.topics.first() == Some(&Self::user_operation_event_signature())
+    }
+
+    fn before_execution_matcher(log: &Log) -> bool {
+        log.address == Self::entry_point()
+            && log.topics.first() == Some(&Self::before_execution_signature())
+    }
+    fn base_tx_logs_filter() -> Filter {
+        Filter::new()
+            .address(Self::entry_point())
+            .topic0(Self::before_execution_signature())
+    }
 }
 
-pub struct IndexerV06<'a, C: PubsubClient> {
+pub struct Indexer<'a, C: PubsubClient> {
     client: Provider<C>,
 
     db: &'a DatabaseConnection,
 }
 
-impl<'a, C: PubsubClient> IndexerV06<'a, C> {
+impl<'a, C: PubsubClient> Indexer<'a, C> {
     pub fn new(client: Provider<C>, db: &'a DatabaseConnection) -> Self {
         Self { client, db }
     }
 
-    pub async fn start(
+    #[instrument(name = "indexer", skip_all, level = "info", fields(version = L::version()))]
+    pub async fn start<L: IndexerLogic>(
         &self,
         concurrency: u32,
         realtime: bool,
@@ -48,9 +69,7 @@ impl<'a, C: PubsubClient> IndexerV06<'a, C> {
     ) -> anyhow::Result<()> {
         let mut stream_txs: BoxStream<H256> = Box::pin(stream::empty());
 
-        let filter = Filter::new()
-            .address(*ENTRYPOINT_V06)
-            .topic0(BeforeExecutionFilter::signature());
+        let filter = L::base_tx_logs_filter();
 
         if realtime {
             // subscribe to a stream of new logs starting at the current block
@@ -89,8 +108,8 @@ impl<'a, C: PubsubClient> IndexerV06<'a, C> {
             tracing::info!(from_block, to_block, "fetching missed tx hashes in db");
             let txs = repository::user_op::find_unprocessed_logs_tx_hashes(
                 self.db,
-                *ENTRYPOINT_V06,
-                UserOperationEventFilter::signature(),
+                L::entry_point(),
+                L::user_operation_event_signature(),
                 from_block,
                 to_block,
             )
@@ -137,7 +156,7 @@ impl<'a, C: PubsubClient> IndexerV06<'a, C> {
         stream_txs
             .for_each_concurrent(Some(concurrency as usize), |tx| async move {
                 let mut backoff = vec![1, 5, 20].into_iter().map(Duration::from_secs);
-                while let Err(err) = &self.handle_tx(tx).await {
+                while let Err(err) = &self.handle_tx::<L>(tx).await {
                     match backoff.next() {
                         None => {
                             tracing::error!(error = ?err, tx_hash = ?tx, "tx handler failed, skipping");
@@ -155,8 +174,8 @@ impl<'a, C: PubsubClient> IndexerV06<'a, C> {
         Ok(())
     }
 
-    async fn handle_tx(&self, tx_hash: H256) -> anyhow::Result<()> {
-        tracing::info!(tx_hash = ?tx_hash, "processing tx");
+    #[instrument(name = "indexer::handle_tx", skip(self), level = "info")]
+    async fn handle_tx<L: IndexerLogic>(&self, tx_hash: H256) -> anyhow::Result<()> {
         let tx = self
             .client
             .get_transaction(tx_hash)
@@ -173,32 +192,29 @@ impl<'a, C: PubsubClient> IndexerV06<'a, C> {
         // then we split each bundle into logs batches for respective user operations
         let log_bundles: Vec<Vec<&[Log]>> = receipt
             .logs
-            .split(matches_entrypoint_event::<BeforeExecutionFilter>)
+            .split(L::before_execution_matcher)
             .skip(1)
             .map(|logs| {
-                logs.split_inclusive(matches_entrypoint_event::<UserOperationEventFilter>)
-                    .filter(|logs| {
-                        logs.last()
-                            .is_some_and(matches_entrypoint_event::<UserOperationEventFilter>)
-                    })
+                logs.split_inclusive(L::user_operation_event_matcher)
+                    .filter(|logs| logs.last().is_some_and(L::user_operation_event_matcher))
                     .collect()
             })
             .collect();
-        tracing::info!(tx_hash = ?tx_hash, bundles_count = log_bundles.len(), "found user op bundles for");
+        tracing::info!(bundles_count = log_bundles.len(), "found user op bundles");
 
-        let calldatas: Vec<Bytes> = if log_bundles.len() == 1 && tx.to == Some(*ENTRYPOINT_V06) {
+        let calldatas: Vec<Bytes> = if log_bundles.len() == 1 && tx.to == Some(L::entry_point()) {
             vec![tx.input]
         } else {
-            tracing::info!(tx_hash = ?tx_hash, "tx contains more than one bundle or was sent indirectly, fetching tx trace");
+            tracing::info!(
+                "tx contains more than one bundle or was sent indirectly, fetching tx trace"
+            );
             self.client
                 .trace_transaction(tx_hash)
                 .await?
                 .into_iter()
                 .filter_map(|t| {
                     if let Action::Call(cd) = t.action {
-                        if cd.to == *ENTRYPOINT_V06 && HandleOpsCall::decode(&cd.input).is_ok()
-                            || HandleAggregatedOpsCall::decode(&cd.input).is_ok()
-                        {
+                        if cd.to == L::entry_point() && L::matches_handler_calldata(&cd.input) {
                             Some(cd.input)
                         } else {
                             None
@@ -219,10 +235,10 @@ impl<'a, C: PubsubClient> IndexerV06<'a, C> {
             )
         }
 
-        let tx_deposits: Vec<DepositedFilter> = receipt
+        let tx_deposits: Vec<Address> = receipt
             .logs
             .iter()
-            .filter_map(|log| parse_event::<DepositedFilter>(log).ok())
+            .filter_map(L::parse_deposited_event)
             .collect();
 
         let user_ops: Vec<UserOp> = calldatas
@@ -230,76 +246,7 @@ impl<'a, C: PubsubClient> IndexerV06<'a, C> {
             .zip(log_bundles.iter())
             .enumerate()
             .map(|(i, (calldata, log_bundle))| {
-                let calldata = IEntrypointV06Calls::decode(calldata)?;
-                let (bundler, raw_user_ops): (Address, Vec<RawUserOperation>) = match calldata {
-                    IEntrypointV06Calls::HandleAggregatedOps(cd) => (
-                        cd.beneficiary,
-                        cd.ops_per_aggregator
-                            .into_iter()
-                            .flat_map(|agg_ops| {
-                                agg_ops
-                                    .user_ops
-                                    .into_iter()
-                                    .map(move |op| RawUserOperation {
-                                        user_op: op,
-                                        aggregator: Some(agg_ops.aggregator),
-                                        aggregator_signature: Some(agg_ops.signature.clone()),
-                                    })
-                            })
-                            .collect(),
-                    ),
-                    IEntrypointV06Calls::HandleOps(cd) => (
-                        cd.beneficiary,
-                        cd.ops
-                            .into_iter()
-                            .map(|op| RawUserOperation {
-                                user_op: op,
-                                aggregator: None,
-                                aggregator_signature: None,
-                            })
-                            .collect(),
-                    ),
-                    _ => bail!("can't recognize calldata selector in {}", calldata),
-                };
-                if raw_user_ops.len() != log_bundle.len() {
-                    bail!(
-                        "number of user ops in calldata and logs don't match {} != {}",
-                        raw_user_ops.len(),
-                        log_bundle.len()
-                    )
-                }
-                Ok(raw_user_ops
-                    .into_iter()
-                    .zip(log_bundle.iter())
-                    .enumerate()
-                    .filter_map(|(j, (raw_user_op, logs))| {
-                        match build_user_op_model(
-                            bundler,
-                            i as u32,
-                            j as u32,
-                            raw_user_op,
-                            logs,
-                            &tx_deposits,
-                        ) {
-                            Ok(model) => Some(model),
-                            Err(err) => {
-                                let logs_start_index =
-                                    logs.first().and_then(|l| l.log_index).map(|i| i.as_u64());
-                                let logs_count = logs.len();
-                                tracing::error!(
-                                    tx_hash = ?tx_hash,
-                                    bundle_index = i,
-                                    op_index = j,
-                                    logs_start_index,
-                                    logs_count,
-                                    error = ?err,
-                                    "failed to parse user op",
-                                );
-                                None
-                            }
-                        }
-                    })
-                    .collect::<Vec<_>>())
+                L::parse_user_ops(i, tx_hash, &tx_deposits, calldata, log_bundle)
             })
             .filter_map(|b| b.ok())
             .flatten()
@@ -308,7 +255,6 @@ impl<'a, C: PubsubClient> IndexerV06<'a, C> {
         let total = log_bundles.iter().flatten().count();
         let parsed = user_ops.len();
         tracing::info!(
-            tx_hash = ?tx_hash,
             total,
             parsed,
             missed = total - parsed,
@@ -320,119 +266,11 @@ impl<'a, C: PubsubClient> IndexerV06<'a, C> {
     }
 }
 
-fn build_user_op_model(
-    bundler: Address,
-    bundle_index: u32,
-    index: u32,
-    raw_user_op: RawUserOperation,
-    logs: &[Log],
-    tx_deposits: &[DepositedFilter],
-) -> anyhow::Result<UserOp> {
-    let user_op_log = logs.last().ok_or(anyhow!("last log missing"))?;
-    let user_op_event = parse_event::<UserOperationEventFilter>(user_op_log)?;
-    let revert_event = logs
-        .iter()
-        .find(|&log| matches_entrypoint_event::<UserOperationRevertReasonFilter>(log));
-    let revert_event = if let Some(revert_event) = revert_event {
-        Some(parse_event::<UserOperationRevertReasonFilter>(
-            revert_event,
-        )?)
-    } else {
-        None
-    };
-
-    let (call_gas_limit, verification_gas_limit, pre_verification_gas) = (
-        raw_user_op.user_op.call_gas_limit.as_u64(),
-        raw_user_op.user_op.verification_gas_limit.as_u64(),
-        raw_user_op.user_op.pre_verification_gas.as_u64(),
-    );
-
-    let factory = if raw_user_op.user_op.init_code.len() >= 20 {
-        Some(Address::from_slice(&raw_user_op.user_op.init_code[..20]))
-    } else {
-        None
-    };
-    let paymaster = if raw_user_op.user_op.paymaster_and_data.len() >= 20 {
-        Some(Address::from_slice(
-            &raw_user_op.user_op.paymaster_and_data[..20],
-        ))
-    } else {
-        None
-    };
-    let sender = raw_user_op.user_op.sender;
-    let sender_deposit = tx_deposits.iter().any(|e| e.account == sender);
-    let paymaster_deposit = tx_deposits.iter().any(|e| Some(e.account) == paymaster);
-    let sponsor_type = match (paymaster, sender_deposit, paymaster_deposit) {
-        (None, false, _) => SponsorType::WalletBalance,
-        (None, true, _) => SponsorType::WalletDeposit,
-        (Some(_), _, false) => SponsorType::PaymasterSponsor,
-        (Some(_), _, true) => SponsorType::PaymasterHybrid,
-    };
-    let mut user_logs_count = logs.len();
-    while user_logs_count > 0
-        && (logs[user_logs_count - 1].address == *ENTRYPOINT_V06
-            || Some(logs[user_logs_count - 1].address) == paymaster)
-    {
-        user_logs_count -= 1;
-    }
-    Ok(UserOp {
-        hash: H256::from(user_op_event.user_op_hash),
-        sender,
-        nonce: H256::from_uint(&raw_user_op.user_op.nonce),
-        init_code: none_if_empty(raw_user_op.user_op.init_code),
-        call_data: raw_user_op.user_op.call_data,
-        call_gas_limit,
-        verification_gas_limit,
-        pre_verification_gas,
-        max_fee_per_gas: raw_user_op.user_op.max_fee_per_gas,
-        max_priority_fee_per_gas: raw_user_op.user_op.max_priority_fee_per_gas,
-        paymaster_and_data: none_if_empty(raw_user_op.user_op.paymaster_and_data),
-        signature: raw_user_op.user_op.signature,
-        aggregator: raw_user_op.aggregator,
-        aggregator_signature: raw_user_op.aggregator_signature,
-        entry_point: *ENTRYPOINT_V06,
-        entry_point_version: EntryPointVersion::V06,
-        transaction_hash: user_op_log.transaction_hash.unwrap_or(H256::zero()),
-        block_number: user_op_log.block_number.map_or(0, |n| n.as_u64()),
-        block_hash: user_op_log.block_hash.unwrap_or(H256::zero()),
-        bundler,
-        bundle_index,
-        index,
-        factory,
-        paymaster,
-        status: user_op_event.success,
-        revert_reason: revert_event.map(|e| e.revert_reason),
-        gas: call_gas_limit
-            + verification_gas_limit * if paymaster.is_none() { 1 } else { 3 }
-            + pre_verification_gas,
-        gas_price: user_op_event
-            .actual_gas_cost
-            .div(user_op_event.actual_gas_used),
-        gas_used: user_op_event.actual_gas_used.as_u64(),
-        sponsor_type,
-        user_logs_start_index: logs
-            .first()
-            .map_or(0, |l| l.log_index.map_or(0, |v| v.as_u32())),
-        user_logs_count: user_logs_count as u32,
-        fee: user_op_event.actual_gas_cost,
-
-        consensus: None,
-        timestamp: None,
-    })
-}
-
-fn none_if_empty(b: Bytes) -> Option<Bytes> {
-    if b.is_empty() {
-        None
-    } else {
-        Some(b)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::repository::tests::get_shared_db;
+    use crate::{indexer::v06, repository::tests::get_shared_db};
+    use entity::sea_orm_active_enums::{EntryPointVersion, SponsorType};
     use ethers::prelude::{JsonRpcClient, MockProvider, Provider};
     use ethers_core::types::{Transaction, TransactionReceipt, U256};
     use futures::stream::{empty, Empty};
@@ -494,8 +332,8 @@ mod tests {
         client.push(receipt).unwrap();
         client.push(tx).unwrap();
 
-        let indexer = IndexerV06::new(Provider::new(PubSubMockProvider(client)), &db);
-        indexer.handle_tx(tx_hash).await.unwrap();
+        let indexer = Indexer::new(Provider::new(PubSubMockProvider(client)), &db);
+        indexer.handle_tx::<v06::IndexerV06>(tx_hash).await.unwrap();
 
         let op_hash =
             H256::from_str("0x2d5f7a884e9a99cfe2445db2af140a8851fbd860852b668f2f199190f68adf87")
@@ -519,7 +357,8 @@ mod tests {
             signature: Bytes::from_str("0x000000000000000000000000000000000000000000000000000000000065793a092c25c7a7c5e4bc46467324e2845caf1ccae767786e07806ca720f8a6b83356bc7d43a63a96b34507cfe7c424db37f351d71851ae9318e8d5c3d9f17c8bdb744c1c").unwrap(),
             aggregator: None,
             aggregator_signature: None,
-            entry_point: *ENTRYPOINT_V06,
+            entry_point: v06::IndexerV06::entry_point(),
+            entry_point_version: EntryPointVersion::V06,
             transaction_hash: tx_hash,
             block_number: 18774992,
             block_hash: H256::from_str("0xe90aa1d6038c87b029a0666148ac2058ab8397f9c53594cc5a38c0113a48eab4").unwrap(),

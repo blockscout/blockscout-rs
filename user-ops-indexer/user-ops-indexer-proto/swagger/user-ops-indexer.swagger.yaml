@@ -453,6 +453,10 @@ definitions:
     properties:
       hash:
         type: string
+      entry_point:
+        type: string
+      entry_point_version:
+        type: string
       block_number:
         type: string
         format: uint64

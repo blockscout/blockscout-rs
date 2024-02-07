@@ -220,10 +220,12 @@ message UserOp {
 
 message ListUserOp {
   string hash = 1;
-  uint64 block_number = 2;
-  string transaction_hash = 3;
-  string address = 4;
-  string timestamp = 5;
-  bool status = 6;
-  string fee = 7;
+  string entry_point = 2;
+  string entry_point_version = 3;
+  uint64 block_number = 4;
+  string transaction_hash = 5;
+  string address = 6;
+  string timestamp = 7;
+  bool status = 8;
+  string fee = 9;
 }

@@ -1,6 +1,7 @@
 use crate::settings::Settings;
 use ethers::prelude::{Provider, Ws};
 use sea_orm::DatabaseConnection;
+use user_ops_indexer_logic::indexer::v06;
 
 pub async fn run(
     settings: Settings,
@@ -12,11 +13,10 @@ pub async fn run(
     let client = Provider::new(ws_client);
 
     if settings.indexer.entrypoints.v06 {
-        let indexer =
-            user_ops_indexer_logic::indexer::v06::indexer::IndexerV06::new(client, &db_connection);
+        let indexer = user_ops_indexer_logic::indexer::Indexer::new(client, &db_connection);
 
         indexer
-            .start(
+            .start::<v06::IndexerV06>(
                 settings.indexer.concurrency,
                 settings.indexer.realtime.enabled,
                 settings.indexer.past_rpc_logs_indexer.get_block_range(),

@@ -1,6 +1,9 @@
 use crate::types::user_op::{ListUserOp, UserOp};
 use blockscout_db::entity::blocks;
-use entity::user_operations::{ActiveModel, Column, Entity, Model};
+use entity::{
+    sea_orm_active_enums::EntryPointVersion,
+    user_operations::{ActiveModel, Column, Entity, Model},
+};
 use ethers::prelude::{Address, H256};
 use sea_orm::{
     prelude::{BigDecimal, DateTime},
@@ -18,6 +21,8 @@ struct TxHash {
 #[derive(FromQueryResult, Clone)]
 pub struct ListUserOpDB {
     pub hash: Vec<u8>,
+    pub entry_point: Vec<u8>,
+    pub entry_point_version: EntryPointVersion,
     pub block_number: i32,
     pub sender: Vec<u8>,
     pub transaction_hash: Vec<u8>,
@@ -95,6 +100,8 @@ pub async fn list_user_ops(
         .select_only()
         .columns([
             Column::Hash,
+            Column::EntryPoint,
+            Column::EntryPointVersion,
             Column::BlockNumber,
             Column::Sender,
             Column::TransactionHash,
@@ -262,6 +269,7 @@ mod tests {
     #[tokio::test]
     async fn list_user_ops_ok() {
         let db = get_shared_db().await;
+        let entrypoint = Address::from_str("0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789").unwrap();
 
         let (items, next_page_token) = list_user_ops(
             &db, None, None, None, None, None, None, None, None, None, 5000,
@@ -316,6 +324,8 @@ mod tests {
             [
                 ListUserOp {
                     hash: H256::from_low_u64_be(0x6901),
+                    entry_point: entrypoint,
+                    entry_point_version: EntryPointVersion::V06,
                     block_number: 0,
                     sender: Address::from_low_u64_be(0x0502),
                     transaction_hash: H256::from_low_u64_be(0x0504),
@@ -325,6 +335,8 @@ mod tests {
                 },
                 ListUserOp {
                     hash: H256::from_low_u64_be(0x0501),
+                    entry_point: entrypoint,
+                    entry_point_version: EntryPointVersion::V06,
                     block_number: 0,
                     sender: Address::from_low_u64_be(0x0502),
                     transaction_hash: H256::from_low_u64_be(0x0504),
