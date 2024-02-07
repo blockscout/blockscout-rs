@@ -1,7 +1,7 @@
 use crate::settings::Settings;
 use ethers::prelude::{Provider, Ws};
 use sea_orm::DatabaseConnection;
-use user_ops_indexer_logic::indexer::v06;
+use user_ops_indexer_logic::indexer::{v06, v07};
 
 pub async fn run(
     settings: Settings,
@@ -13,7 +13,7 @@ pub async fn run(
     let client = Provider::new(ws_client);
 
     if settings.indexer.entrypoints.v06 {
-        let indexer = user_ops_indexer_logic::indexer::Indexer::new(client, &db_connection);
+        let indexer = user_ops_indexer_logic::indexer::Indexer::new(client.clone(), &db_connection);
 
         indexer
             .start::<v06::IndexerV06>(
@@ -25,7 +25,25 @@ pub async fn run(
             )
             .await
             .map_err(|err| {
-                tracing::error!("failed to start indexer: {err}");
+                tracing::error!("failed to start indexer for v0.6: {err}");
+                err
+            })?;
+    }
+
+    if settings.indexer.entrypoints.v07 {
+        let indexer = user_ops_indexer_logic::indexer::Indexer::new(client.clone(), &db_connection);
+
+        indexer
+            .start::<v07::IndexerV07>(
+                settings.indexer.concurrency,
+                settings.indexer.realtime.enabled,
+                settings.indexer.past_rpc_logs_indexer.get_block_range(),
+                settings.indexer.past_db_logs_indexer.get_start_block(),
+                settings.indexer.past_db_logs_indexer.get_end_block(),
+            )
+            .await
+            .map_err(|err| {
+                tracing::error!("failed to start indexer for v0.7: {err}");
                 err
             })?;
     }

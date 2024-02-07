@@ -3,10 +3,9 @@ use anyhow::{anyhow, bail};
 use ethers::prelude::{
     abi::AbiEncode,
     types::{Action, Address, Bytes, Filter, Log},
-    Middleware, Provider, PubsubClient,
+    Middleware, Provider, PubsubClient, H256,
 };
 use futures::{stream, stream::BoxStream, StreamExt};
-use keccak_hash::H256;
 use sea_orm::DatabaseConnection;
 use std::{future, time::Duration};
 use tokio::time::sleep;
@@ -18,7 +17,11 @@ pub trait IndexerLogic {
 
     fn user_operation_event_signature() -> H256;
 
+    fn user_operation_revert_reason_signature() -> H256;
+
     fn before_execution_signature() -> H256;
+
+    fn deposited_signature() -> H256;
 
     fn matches_handler_calldata(calldata: &Bytes) -> bool;
 
@@ -36,9 +39,19 @@ pub trait IndexerLogic {
             && log.topics.first() == Some(&Self::user_operation_event_signature())
     }
 
+    fn user_operation_revert_reason_matcher(log: &Log) -> bool {
+        log.address == Self::entry_point()
+            && log.topics.first() == Some(&Self::user_operation_revert_reason_signature())
+    }
+
     fn before_execution_matcher(log: &Log) -> bool {
         log.address == Self::entry_point()
             && log.topics.first() == Some(&Self::before_execution_signature())
+    }
+
+    fn deposited_matcher(log: &Log) -> bool {
+        log.address == Self::entry_point()
+            && log.topics.first() == Some(&Self::deposited_signature())
     }
     fn base_tx_logs_filter() -> Filter {
         Filter::new()
@@ -238,6 +251,7 @@ impl<'a, C: PubsubClient> Indexer<'a, C> {
         let tx_deposits: Vec<Address> = receipt
             .logs
             .iter()
+            .filter(|&l| L::deposited_matcher(l))
             .filter_map(L::parse_deposited_event)
             .collect();
 
