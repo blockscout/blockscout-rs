@@ -1,12 +1,5 @@
 use entity::sea_orm_active_enums::SponsorType;
-use ethers::prelude::{
-    abi::{Error, RawLog},
-    Address, Bytes, EthEvent, Log, U256,
-};
-
-pub fn parse_event<T: EthEvent>(log: &Log) -> Result<T, Error> {
-    T::decode_log(&RawLog::from(log.clone()))
-}
+use ethers::prelude::{Address, Bytes, Log, U256};
 
 pub fn extract_address(b: &Bytes) -> Option<Address> {
     if b.len() >= 20 {

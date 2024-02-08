@@ -1,9 +1,10 @@
 use crate::{repository, types::user_op::UserOp};
 use anyhow::{anyhow, bail};
 use ethers::prelude::{
-    abi::AbiEncode,
-    types::{Action, Address, Bytes, Filter, Log},
-    Middleware, Provider, PubsubClient, H256,
+    abi::{AbiEncode, Error},
+    parse_log,
+    types::{Action, Address, Bytes, Filter, Log, TransactionReceipt},
+    EthEvent, Middleware, Provider, PubsubClient, H256,
 };
 use futures::{stream, stream::BoxStream, StreamExt};
 use sea_orm::DatabaseConnection;
@@ -17,20 +18,13 @@ pub trait IndexerLogic {
 
     fn user_operation_event_signature() -> H256;
 
-    fn user_operation_revert_reason_signature() -> H256;
-
     fn before_execution_signature() -> H256;
-
-    fn deposited_signature() -> H256;
 
     fn matches_handler_calldata(calldata: &Bytes) -> bool;
 
-    fn parse_deposited_event(log: &Log) -> Option<Address>;
-
     fn parse_user_ops(
+        receipt: &TransactionReceipt,
         bundle_index: usize,
-        tx_hash: H256,
-        tx_deposits: &[Address],
         calldata: &Bytes,
         log_bundle: &[&[Log]],
     ) -> anyhow::Result<Vec<UserOp>>;
@@ -39,19 +33,17 @@ pub trait IndexerLogic {
             && log.topics.first() == Some(&Self::user_operation_event_signature())
     }
 
-    fn user_operation_revert_reason_matcher(log: &Log) -> bool {
-        log.address == Self::entry_point()
-            && log.topics.first() == Some(&Self::user_operation_revert_reason_signature())
-    }
-
     fn before_execution_matcher(log: &Log) -> bool {
         log.address == Self::entry_point()
             && log.topics.first() == Some(&Self::before_execution_signature())
     }
 
-    fn deposited_matcher(log: &Log) -> bool {
-        log.address == Self::entry_point()
-            && log.topics.first() == Some(&Self::deposited_signature())
+    fn match_and_parse<T: EthEvent>(log: &Log) -> Option<Result<T, Error>> {
+        if log.address == Self::entry_point() && log.topics.first() == Some(&T::signature()) {
+            Some(parse_log::<T>(log.clone()))
+        } else {
+            None
+        }
     }
     fn base_tx_logs_filter() -> Filter {
         Filter::new()
@@ -248,20 +240,11 @@ impl<'a, C: PubsubClient> Indexer<'a, C> {
             )
         }
 
-        let tx_deposits: Vec<Address> = receipt
-            .logs
-            .iter()
-            .filter(|&l| L::deposited_matcher(l))
-            .filter_map(L::parse_deposited_event)
-            .collect();
-
         let user_ops: Vec<UserOp> = calldatas
             .iter()
             .zip(log_bundles.iter())
             .enumerate()
-            .map(|(i, (calldata, log_bundle))| {
-                L::parse_user_ops(i, tx_hash, &tx_deposits, calldata, log_bundle)
-            })
+            .map(|(i, (calldata, log_bundle))| L::parse_user_ops(&receipt, i, calldata, log_bundle))
             .filter_map(|b| b.ok())
             .flatten()
             .collect();
