@@ -9,6 +9,8 @@ pub struct Model {
     pub id: i64,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
+    pub created_by: String,
+    pub updated_by: String,
     pub deployment_id: Uuid,
     pub compilation_id: Uuid,
     pub creation_match: bool,
