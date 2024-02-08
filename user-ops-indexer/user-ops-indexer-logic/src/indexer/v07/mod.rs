@@ -183,13 +183,6 @@ fn build_user_op_model(
         + pre_verification_gas
         + paymaster_verification_gas_limit
         + paymaster_post_op_gas_limit;
-    let gas_used = user_op_event.actual_gas_used.as_u64();
-    let gas_used = gas_used
-        + if gas > gas_used {
-            (gas - gas_used) / 10
-        } else {
-            0
-        };
 
     let (max_fee_per_gas, max_priority_fee_per_gas) =
         unpack_uints(&raw_user_op.user_op.gas_fees[..]);
@@ -227,8 +220,8 @@ fn build_user_op_model(
         status: user_op_event.success,
         revert_reason: revert_event.map(|e| e.revert_reason),
         gas,
-        gas_price: user_op_event.actual_gas_cost.div(gas_used),
-        gas_used,
+        gas_price: user_op_event.actual_gas_cost.div(user_op_event.actual_gas_used),
+        gas_used: user_op_event.actual_gas_used.as_u64(),
         sponsor_type: extract_sponsor_type(sender, paymaster, tx_deposits),
         user_logs_start_index,
         user_logs_count,
