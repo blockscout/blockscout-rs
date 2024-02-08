@@ -8,7 +8,7 @@ use ethers::prelude::{
 };
 use futures::{stream, stream::BoxStream, StreamExt};
 use sea_orm::DatabaseConnection;
-use std::{future, time::Duration};
+use std::{future, sync::Arc, time::Duration};
 use tokio::time::sleep;
 use tracing::instrument;
 
@@ -52,14 +52,14 @@ pub trait IndexerLogic {
     }
 }
 
-pub struct Indexer<'a, C: PubsubClient> {
+pub struct Indexer<C: PubsubClient> {
     client: Provider<C>,
 
-    db: &'a DatabaseConnection,
+    db: Arc<DatabaseConnection>,
 }
 
-impl<'a, C: PubsubClient> Indexer<'a, C> {
-    pub fn new(client: Provider<C>, db: &'a DatabaseConnection) -> Self {
+impl<C: PubsubClient> Indexer<C> {
+    pub fn new(client: Provider<C>, db: Arc<DatabaseConnection>) -> Self {
         Self { client, db }
     }
 
@@ -112,7 +112,7 @@ impl<'a, C: PubsubClient> Indexer<'a, C> {
             };
             tracing::info!(from_block, to_block, "fetching missed tx hashes in db");
             let txs = repository::user_op::find_unprocessed_logs_tx_hashes(
-                self.db,
+                &self.db,
                 L::entry_point(),
                 L::user_operation_event_signature(),
                 from_block,
@@ -257,7 +257,7 @@ impl<'a, C: PubsubClient> Indexer<'a, C> {
             missed = total - parsed,
             "found and parsed user ops",
         );
-        repository::user_op::upsert_many(self.db, user_ops).await?;
+        repository::user_op::upsert_many(&self.db, user_ops).await?;
 
         Ok(())
     }
@@ -329,7 +329,7 @@ mod tests {
         client.push(receipt).unwrap();
         client.push(tx).unwrap();
 
-        let indexer = Indexer::new(Provider::new(PubSubMockProvider(client)), &db);
+        let indexer = Indexer::new(Provider::new(PubSubMockProvider(client)), db.clone());
         indexer.handle_tx::<v06::IndexerV06>(tx_hash).await.unwrap();
 
         let op_hash =
