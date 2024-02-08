@@ -245,7 +245,11 @@ impl<C: PubsubClient> Indexer<C> {
             .zip(log_bundles.iter())
             .enumerate()
             .map(|(i, (calldata, log_bundle))| L::parse_user_ops(&receipt, i, calldata, log_bundle))
-            .filter_map(|b| b.ok())
+            .filter_map(|b| {
+                // user ops parsing logic won't be retried, since we don't propagate the error here
+                b.map_err(|err| tracing::error!(error = ?err, "failed to parse user ops"))
+                    .ok()
+            })
             .flatten()
             .collect();
 
@@ -257,7 +261,9 @@ impl<C: PubsubClient> Indexer<C> {
             missed = total - parsed,
             "found and parsed user ops",
         );
-        repository::user_op::upsert_many(&self.db, user_ops).await?;
+        if parsed > 0 {
+            repository::user_op::upsert_many(&self.db, user_ops).await?;
+        }
 
         Ok(())
     }

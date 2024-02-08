@@ -116,7 +116,7 @@ impl IndexerLogic for IndexerV06 {
                             logs_start_index,
                             logs_count,
                             error = ?err,
-                            "failed to parse user op",
+                            "failed to build user op",
                         );
                         None
                     }
