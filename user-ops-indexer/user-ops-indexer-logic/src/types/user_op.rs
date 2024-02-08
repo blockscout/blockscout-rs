@@ -1,7 +1,7 @@
 use crate::{repository::user_op::ListUserOpDB, types::common::u256_to_decimal};
 pub use entity::sea_orm_active_enums::{EntryPointVersion, SponsorType};
 use entity::user_operations::Model;
-use ethers::prelude::{Address, Bytes, H256, U256};
+use ethers::prelude::{Address, BigEndianHash, Bytes, H128, H256, U256};
 use ethers_core::{abi::AbiEncode, utils::to_checksum};
 use num_traits::cast::ToPrimitive;
 use sea_orm::{prelude::BigDecimal, ActiveEnum};
@@ -146,18 +146,8 @@ impl From<Model> for UserOp {
 
 impl From<UserOp> for user_ops_indexer_proto::blockscout::user_ops_indexer::v1::UserOp {
     fn from(v: UserOp) -> Self {
-        user_ops_indexer_proto::blockscout::user_ops_indexer::v1::UserOp {
-            hash: v.hash.encode_hex(),
-            sender: to_checksum(&v.sender, None),
-            nonce: v.nonce.encode_hex(),
-            call_data: v.call_data.to_string(),
-            call_gas_limit: v.call_gas_limit,
-            verification_gas_limit: v.verification_gas_limit,
-            pre_verification_gas: v.pre_verification_gas,
-            max_fee_per_gas: v.max_fee_per_gas.to_string(),
-            max_priority_fee_per_gas: v.max_priority_fee_per_gas.to_string(),
-            signature: v.signature.to_string(),
-            raw: Some(
+        let raw = match v.entry_point_version {
+            EntryPointVersion::V06 => {
                 user_ops_indexer_proto::blockscout::user_ops_indexer::v1::user_op::Raw::RawV06(
                     user_ops_indexer_proto::blockscout::user_ops_indexer::v1::RawUserOpV06 {
                         sender: to_checksum(&v.sender, None),
@@ -174,8 +164,55 @@ impl From<UserOp> for user_ops_indexer_proto::blockscout::user_ops_indexer::v1::
                             .map_or("0x".to_string(), |b| b.to_string()),
                         signature: v.signature.to_string(),
                     },
-                ),
-            ),
+                )
+            }
+            EntryPointVersion::V07 => {
+                user_ops_indexer_proto::blockscout::user_ops_indexer::v1::user_op::Raw::RawV07(
+                    user_ops_indexer_proto::blockscout::user_ops_indexer::v1::RawUserOpV07 {
+                        sender: to_checksum(&v.sender, None),
+                        nonce: U256::from(v.nonce.as_fixed_bytes()).to_string(),
+                        init_code: v.init_code.map_or("0x".to_string(), |b| b.to_string()),
+                        call_data: v.call_data.to_string(),
+                        account_gas_limits: H256::from_slice(
+                            [
+                                H128::from_low_u64_be(v.verification_gas_limit).as_bytes(),
+                                H128::from_low_u64_be(v.call_gas_limit).as_bytes(),
+                            ]
+                            .concat()
+                            .as_slice(),
+                        )
+                        .to_string(),
+                        pre_verification_gas: v.pre_verification_gas,
+                        gas_fees: H256::from_slice(
+                            [
+                                &H256::from_uint(&v.max_fee_per_gas).as_bytes()[16..],
+                                &H256::from_uint(&v.max_priority_fee_per_gas).as_bytes()[16..],
+                            ]
+                            .concat()
+                            .as_slice(),
+                        )
+                        .to_string(),
+                        paymaster_and_data: v
+                            .paymaster_and_data
+                            .map_or("0x".to_string(), |b| b.to_string()),
+                        signature: v.signature.to_string(),
+                    },
+                )
+            }
+        };
+
+        user_ops_indexer_proto::blockscout::user_ops_indexer::v1::UserOp {
+            hash: v.hash.encode_hex(),
+            sender: to_checksum(&v.sender, None),
+            nonce: v.nonce.encode_hex(),
+            call_data: v.call_data.to_string(),
+            call_gas_limit: v.call_gas_limit,
+            verification_gas_limit: v.verification_gas_limit,
+            pre_verification_gas: v.pre_verification_gas,
+            max_fee_per_gas: v.max_fee_per_gas.to_string(),
+            max_priority_fee_per_gas: v.max_priority_fee_per_gas.to_string(),
+            signature: v.signature.to_string(),
+            raw: Some(raw),
             aggregator: v.aggregator.map(|a| to_checksum(&a, None)),
             aggregator_signature: v.aggregator_signature.map(|b| b.to_string()),
             entry_point: to_checksum(&v.entry_point, None),
