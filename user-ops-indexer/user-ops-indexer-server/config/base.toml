@@ -16,6 +16,7 @@ concurrency = 20
 
 [indexer.entrypoints]
 v06 = true
+v07 = true
 
 [indexer.realtime]
 enabled = true
