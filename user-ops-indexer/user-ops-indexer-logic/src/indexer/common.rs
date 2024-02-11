@@ -29,18 +29,19 @@ pub fn extract_user_logs_boundaries(
     entry_point: Address,
     paymaster: Option<Address>,
 ) -> (u32, u32) {
-    let mut user_logs_count = logs.len();
-    while user_logs_count > 0
-        && (logs[user_logs_count - 1].address == entry_point
-            || Some(logs[user_logs_count - 1].address) == paymaster)
-    {
-        user_logs_count -= 1;
+    let (mut l, mut r) = (0usize, logs.len());
+    while l < r && (logs[r - 1].address == entry_point || Some(logs[r - 1].address) == paymaster) {
+        r -= 1
     }
-
-    let user_logs_start_index = logs
-        .first()
-        .map_or(0, |l| l.log_index.map_or(0, |v| v.as_u32()));
-    (user_logs_start_index, user_logs_count as u32)
+    while l < r && logs[l].address == entry_point {
+        l += 1
+    }
+    (
+        logs.get(l)
+            .and_then(|l| l.log_index)
+            .map_or(0, |v| v.as_u32()),
+        (r - l) as u32,
+    )
 }
 
 pub fn unpack_uints(data: &[u8]) -> (U256, U256) {
@@ -55,5 +56,67 @@ pub fn none_if_empty(b: Bytes) -> Option<Bytes> {
         None
     } else {
         Some(b)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::indexer::common::extract_user_logs_boundaries;
+    use ethers::prelude::{types::Log, Address, U256};
+
+    #[test]
+    fn test_extract_user_logs_boundaries() {
+        let entry_point = Address::from_low_u64_be(1);
+        let paymaster = Address::from_low_u64_be(2);
+        let other = Address::from_low_u64_be(3);
+        let logs = vec![
+            entry_point,
+            entry_point,
+            other,
+            entry_point,
+            paymaster,
+            entry_point,
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(i, a)| Log {
+            address: a,
+            topics: vec![],
+            data: Default::default(),
+            block_hash: None,
+            block_number: None,
+            transaction_hash: None,
+            transaction_index: None,
+            log_index: Some(U256::from(i + 10)),
+            transaction_log_index: None,
+            log_type: None,
+            removed: None,
+        })
+        .collect::<Vec<_>>();
+
+        assert_eq!(
+            extract_user_logs_boundaries(&logs, entry_point, Some(paymaster)),
+            (12, 1)
+        );
+        assert_eq!(
+            extract_user_logs_boundaries(&logs[..0], entry_point, Some(paymaster)),
+            (0, 0)
+        );
+        assert_eq!(
+            extract_user_logs_boundaries(&logs[..2], entry_point, Some(paymaster)),
+            (10, 0)
+        );
+        assert_eq!(
+            extract_user_logs_boundaries(&logs[2..], entry_point, Some(paymaster)),
+            (12, 1)
+        );
+        assert_eq!(
+            extract_user_logs_boundaries(&logs[2..3], entry_point, Some(paymaster)),
+            (12, 1)
+        );
+        assert_eq!(
+            extract_user_logs_boundaries(&logs[..3], entry_point, Some(paymaster)),
+            (12, 1)
+        );
     }
 }
