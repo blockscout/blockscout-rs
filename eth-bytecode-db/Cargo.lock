@@ -2004,12 +2004,22 @@ dependencies = [
  "actix-prost-build",
  "actix-prost-macros",
  "actix-web",
+ "anyhow",
+ "async-trait",
+ "eth-bytecode-db-proto",
+ "mockall",
  "prost",
  "prost-build",
+ "reqwest",
+ "reqwest-middleware",
+ "reqwest-retry",
  "serde",
  "serde_with",
+ "thiserror",
+ "tokio",
  "tonic",
  "tonic-build",
+ "url",
 ]
 
 [[package]]

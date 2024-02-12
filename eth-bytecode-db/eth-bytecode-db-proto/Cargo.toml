@@ -14,7 +14,35 @@ serde = { version = "1" }
 serde_with = { version = "2.0" }
 tonic = "0.8"
 
+anyhow = { version = "1", optional = true }
+async-trait = { version = "0.1", optional = true }
+reqwest = { version = "0.11", optional = true }
+reqwest-middleware = { version = "0.2", optional = true }
+reqwest-retry = { version = "0.3", optional = true }
+thiserror = { version = "1", optional = true }
+url = { version = "2", optional = true }
+mockall = { version = "0.12", optional = true }
+tokio = { version = "1", optional = true }
+
 [build-dependencies]
 actix-prost-build = { git = "https://github.com/blockscout/actix-prost" }
 prost-build = "0.11"
 tonic-build = "0.8"
+
+[dev-dependencies]
+eth-bytecode-db-proto = { path = ".", features = [ "http-client", "mock" ] }
+
+[features]
+http-client = [
+    "dep:anyhow",
+    "dep:reqwest",
+    "dep:reqwest-middleware",
+    "dep:reqwest-retry",
+    "dep:thiserror",
+    "dep:url",
+]
+mock = [
+    "dep:async-trait",
+    "dep:mockall",
+    "dep:tokio",
+]
