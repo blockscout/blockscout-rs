@@ -44,3 +44,9 @@ pub struct DomainWithAddress {
     pub domain_name: String,
     pub resolved_address: String,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, sqlx::FromRow)]
+pub struct ReverseRecord {
+    pub addr_reverse_id: String,
+    pub reversed_name: String,
+}

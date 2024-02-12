@@ -1,5 +1,5 @@
 use crate::hash_name::domain_id;
-use ethers::types::Bytes;
+use ethers::types::{Address, Bytes};
 
 #[derive(Debug, Clone)]
 pub struct DomainName {
@@ -22,6 +22,18 @@ impl DomainName {
             name: name.to_string(),
         })
     }
+
+    pub fn addr_reverse(addr: &Address) -> Self {
+        let label_name = format!("{:x}", addr);
+        let name = format!("{}.addr.reverse", label_name);
+        // note that addr.reverse doesn't need empty_label_hash
+        let id = domain_id(&name, None);
+        Self {
+            id,
+            label_name,
+            name,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -29,6 +41,7 @@ mod tests {
     use super::*;
     use hex::FromHex;
     use pretty_assertions::assert_eq;
+    use std::str::FromStr;
 
     #[test]
     fn it_works() {
@@ -80,5 +93,19 @@ mod tests {
             assert_eq!(domain_name.label_name, expected_label);
             assert_eq!(domain_name.name, expected_name)
         }
+    }
+
+    #[test]
+    fn reverse_works() {
+        let addr = Address::from_str("0x43C960FA130e3Eb58e7AaF65f46F76B5C607C3a9").unwrap();
+        let domain_name = DomainName::addr_reverse(&addr);
+        assert_eq!(
+            domain_name.id,
+            "0x397426edefbcd650b9878aabf579977fd0b2c4dd5b09beca41e055ca2273e743",
+        );
+        assert_eq!(
+            domain_name.label_name,
+            "43c960fa130e3eb58e7aaf65f46f76b5c607c3a9"
+        )
     }
 }

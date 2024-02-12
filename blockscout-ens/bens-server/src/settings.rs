@@ -1,3 +1,4 @@
+use bens_logic::subgraphs_reader::AddressResolveTechnique;
 use blockscout_service_launcher::{
     database::{DatabaseConnectSettings, DatabaseSettings},
     launcher::{ConfigSettings, MetricsSettings, ServerSettings},
@@ -68,6 +69,8 @@ pub struct NetworkSettings {
 pub struct SubgraphSettings {
     #[serde(default = "default_use_cache")]
     pub use_cache: bool,
+    #[serde(default = "default_address_resolve_technique")]
+    pub address_resolve_technique: AddressResolveTechnique,
     #[serde(default)]
     pub empty_label_hash: Option<Bytes>,
     #[serde(default)]
@@ -78,10 +81,15 @@ fn default_use_cache() -> bool {
     true
 }
 
+fn default_address_resolve_technique() -> AddressResolveTechnique {
+    AddressResolveTechnique::ReverseRegistry
+}
+
 impl From<SubgraphSettings> for bens_logic::subgraphs_reader::SubgraphSettings {
     fn from(value: SubgraphSettings) -> Self {
         Self {
             use_cache: value.use_cache,
+            address_resolve_technique: value.address_resolve_technique,
             empty_label_hash: value.empty_label_hash,
             native_token_contract: value.native_token_contract,
         }

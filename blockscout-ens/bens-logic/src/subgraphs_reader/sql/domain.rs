@@ -1,9 +1,9 @@
 use crate::{
-    entity::subgraph::domain::{DetailedDomain, Domain, DomainWithAddress},
+    entity::subgraph::domain::{DetailedDomain, Domain, DomainWithAddress, ReverseRecord},
     hash_name::hex,
     subgraphs_reader::{
         domain_name::DomainName, pagination::Paginator, GetDomainInput, LookupAddressInput,
-        LookupDomainInput, SubgraphReadError,
+        SubgraphReadError,
     },
 };
 use anyhow::Context;
@@ -57,6 +57,7 @@ mod sql_gen {
             .to_owned()
     }
 }
+use crate::subgraphs_reader::DomainPaginationInput;
 use sql_gen::QueryBuilderExt;
 
 const DETAILED_DOMAIN_DEFAULT_SELECT_CLAUSE: &str = r#"
@@ -161,29 +162,38 @@ pub async fn get_domain(
 pub async fn find_domains(
     pool: &PgPool,
     schema: &str,
-    domain_name: Option<&DomainName>,
-    input: &LookupDomainInput,
+    domain_names: Option<Vec<&DomainName>>,
+    only_active: bool,
+    pagination: Option<&DomainPaginationInput>,
 ) -> Result<Vec<Domain>, SubgraphReadError> {
     let mut query = sql_gen::domain_select(schema);
     let mut q = query.with_block_range();
-    if input.only_active {
+    if only_active {
         q = q.with_not_expired();
     };
-    if domain_name.is_some() {
-        q = q.and_where(Expr::cust("id = $1"));
+    if domain_names.is_some() {
+        q = q.and_where(Expr::cust("id = ANY($1)"));
     } else {
         q = q.with_non_empty_label().with_resolved_names();
     }
-    input
-        .pagination
-        .add_to_query(q)
-        .context("adding pagination to query")
-        .map_err(|e| SubgraphReadError::Internal(e.to_string()))?;
+
+    if let Some(pagination) = pagination {
+        pagination
+            .add_to_query(q)
+            .context("adding pagination to query")
+            .map_err(|e| SubgraphReadError::Internal(e.to_string()))?;
+    }
+
     let sql = q.to_string(PostgresQueryBuilder);
     let mut query = sqlx::query_as(&sql);
     tracing::debug!(sql = sql, "build SQL query for 'find_domains'");
-    if let Some(domain_name) = domain_name {
-        query = query.bind(&domain_name.id)
+    if let Some(domain_names) = domain_names {
+        query = query.bind(
+            domain_names
+                .iter()
+                .map(|d| d.id.as_str())
+                .collect::<Vec<_>>(),
+        );
     };
     let domains = query.fetch_all(pool).await?;
     Ok(domains)
@@ -246,11 +256,11 @@ pub async fn find_resolved_addresses(
 pub async fn batch_search_addresses(
     pool: &PgPool,
     schema: &str,
-    addresses: &[&str],
+    addresses: &[impl AsRef<str>],
 ) -> Result<Vec<DomainWithAddress>, SubgraphReadError> {
     let domains: Vec<DomainWithAddress> = sqlx::query_as(&format!(
         r#"
-        SELECT DISTINCT ON (resolved_address) id, name AS domain_name, resolved_address 
+        SELECT DISTINCT ON (resolved_address) id, name AS domain_name, resolved_address
         FROM {schema}.domain
         WHERE
             resolved_address = ANY($1)
@@ -261,7 +271,7 @@ pub async fn batch_search_addresses(
         ORDER BY resolved_address, created_at
         "#,
     ))
-    .bind(addresses)
+    .bind(bind_string_list(addresses))
     .fetch_all(pool)
     .await?;
 
@@ -279,7 +289,7 @@ pub async fn batch_search_addresses(
 pub async fn batch_search_addresses_cached(
     pool: &PgPool,
     schema: &str,
-    addresses: &[&str],
+    addresses: &[impl AsRef<str>],
 ) -> Result<Vec<DomainWithAddress>, SubgraphReadError> {
     let domains: Vec<DomainWithAddress> = sqlx::query_as(&format!(
         r#"
@@ -289,11 +299,39 @@ pub async fn batch_search_addresses_cached(
             resolved_address = ANY($1)
         "#,
     ))
-    .bind(addresses)
+    .bind(bind_string_list(addresses))
     .fetch_all(pool)
     .await?;
 
     Ok(domains)
+}
+
+pub async fn batch_search_addresses_reverse_registry(
+    pool: &PgPool,
+    schema: &str,
+    addr_reverse_hashes: &[impl AsRef<str>],
+) -> Result<Vec<ReverseRecord>, SubgraphReadError> {
+    let domains: Vec<ReverseRecord> = sqlx::query_as(&format!(
+        r#"
+        SELECT d.id as addr_reverse_id, nc.name as reversed_name
+        FROM {schema}.domain d
+        JOIN {schema}.name_changed nc ON nc.resolver = d.resolver
+        WHERE d.id = ANY($1)
+            AND d.block_range @> 2147483647
+        ORDER BY nc.block_number DESC;
+        "#,
+    ))
+    .bind(bind_string_list(addr_reverse_hashes))
+    .fetch_all(pool)
+    .await?;
+
+    Ok(domains)
+}
+
+fn bind_string_list(list: &[impl AsRef<str>]) -> Vec<String> {
+    list.iter()
+        .map(|s| s.as_ref().to_string())
+        .collect::<Vec<_>>()
 }
 
 // TODO: rewrite to sea_query generation
