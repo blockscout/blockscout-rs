@@ -1,0 +1,41 @@
+type: google.api.Service
+config_version: 3
+
+http:
+  rules:
+      #################### Proxy ####################
+
+    - selector: blockscout.proxyVerifier.v1.Proxy.ListChains
+      get: /api/v1/chains
+
+      #################### Solidity Verifier ####################
+
+    - selector: blockscout.proxyVerifier.v1.SolidityVerifier.VerifyMultiPart
+      post: /api/v1/solidity/sources:verify-multi-part
+      body: "*"
+
+    - selector: blockscout.proxyVerifier.v1.SolidityVerifier.VerifyStandardJson
+      post: /api/v1/solidity/sources:verify-standard-json
+      body: "*"
+
+    - selector: blockscout.proxyVerifier.v1.SolidityVerifier.ListCompilers
+      get: /api/v1/solidity/compilers
+
+      #################### Vyper Verifier ####################
+
+    - selector: blockscout.proxyVerifier.v1.VyperVerifier.VerifyMultiPart
+      post: /api/v1/vyper/sources:verify-multi-part
+      body: "*"
+
+    - selector: blockscout.proxyVerifier.v1.VyperVerifier.VerifyStandardJson
+      post: /api/v1/vyper/sources:verify-standard-json
+      body: "*"
+
+    - selector: blockscout.proxyVerifier.v1.VyperVerifier.ListCompilers
+      get: /api/v1/vyper/compilers
+
+      #################### Health ####################
+
+    - selector: blockscout.proxyVerifier.v1.Health.Check
+      get: /health
+
