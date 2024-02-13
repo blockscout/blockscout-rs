@@ -13,6 +13,18 @@ pub struct AddressDetails {
     pub runtime_code: types::Bytes,
 }
 
+pub async fn batch_retrieve_address_details(
+    contracts: &[(&blockscout_client::Client, types::Address)],
+) -> Vec<Result<AddressDetails, Error>> {
+    let mut contract_details = vec![];
+    for (client, contract_address) in contracts {
+        let details = retrieve_address_details(client, *contract_address).await;
+
+        contract_details.push(details);
+    }
+    contract_details
+}
+
 pub async fn retrieve_address_details(
     client: &blockscout_client::Client,
     contract_address: types::Address,

@@ -17,14 +17,14 @@ pub struct Settings {
     #[serde(default)]
     pub jaeger: JaegerSettings,
 
-    #[serde(default = "chains_config_default")]
+    #[serde(default = "default_chains_config")]
     pub chains_config: PathBuf,
 
     #[serde(default)]
     pub eth_bytecode_db: EthBytecodeDbSettings,
 }
 
-fn chains_config_default() -> PathBuf {
+fn default_chains_config() -> PathBuf {
     PathBuf::from("config/chains.json")
 }
 

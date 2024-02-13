@@ -30,7 +30,7 @@ where
         Output = eth_bytecode_db_proto::http_client::Result<eth_bytecode_db_v2::VerifyResponse>,
     >,
 {
-    let contract_details = retrieve_contract_details(&contracts).await;
+    let contract_details = address_details::batch_retrieve_address_details(&contracts).await;
     if let Some(response) = check_invalid_contracts(&contract_details) {
         return response;
     }
@@ -59,18 +59,6 @@ where
     }
 
     VerificationResponse::Results(results)
-}
-
-async fn retrieve_contract_details(
-    contracts: &[(&blockscout_client::Client, ethers_core::types::Address)],
-) -> Vec<Result<AddressDetails, Error>> {
-    let mut contract_details = vec![];
-    for (client, contract_address) in contracts {
-        let details = address_details::retrieve_address_details(client, *contract_address).await;
-
-        contract_details.push(details);
-    }
-    contract_details
 }
 
 fn check_invalid_contracts(
