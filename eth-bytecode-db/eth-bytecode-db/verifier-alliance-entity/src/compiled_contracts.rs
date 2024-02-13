@@ -9,6 +9,8 @@ pub struct Model {
     pub id: Uuid,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
+    pub created_by: String,
+    pub updated_by: String,
     pub compiler: String,
     pub version: String,
     pub language: String,

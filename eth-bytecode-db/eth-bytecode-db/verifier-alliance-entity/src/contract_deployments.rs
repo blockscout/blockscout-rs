@@ -13,7 +13,7 @@ pub struct Model {
     #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
     pub transaction_hash: Vec<u8>,
     pub block_number: Decimal,
-    pub txindex: Decimal,
+    pub transaction_index: Decimal,
     #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
     pub deployer: Vec<u8>,
     pub contract_id: Uuid,

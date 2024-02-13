@@ -167,6 +167,8 @@ async fn insert_verified_contract<C: ConnectionTrait>(
         id: Default::default(),
         created_at: Default::default(),
         updated_at: Default::default(),
+        created_by: Default::default(),
+        updated_by: Default::default(),
         deployment_id: Set(contract_deployment.id),
         compilation_id: Set(compiled_contract.id),
         creation_match: Set(creation_code_match.does_match),
@@ -226,6 +228,8 @@ async fn insert_compiled_contract<C: ConnectionTrait>(
         id: Default::default(),
         created_at: Default::default(),
         updated_at: Default::default(),
+        created_by: Default::default(),
+        updated_by: Default::default(),
         compiler: Set(compiler.to_string()),
         version: Set(source.compiler_version),
         language: Set(language.to_string()),
@@ -266,7 +270,7 @@ async fn insert_contract_deployment<C: ConnectionTrait>(
         address: Set(deployment_data.contract_address.clone()),
         transaction_hash: Set(deployment_data.transaction_hash.clone()),
         block_number: Set(deployment_data.block_number.unwrap_or(-1).into()),
-        txindex: Set(deployment_data.transaction_index.unwrap_or(-1).into()),
+        transaction_index: Set(deployment_data.transaction_index.unwrap_or(-1).into()),
         deployer: Set(deployment_data
             .deployer
             .unwrap_or(ethers_core::types::Address::zero().0.to_vec())),
