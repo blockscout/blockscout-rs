@@ -670,7 +670,9 @@ mod tests {
             .expect("failed to init reader");
 
         let addresses = [
-            // test.eth
+            // `test.eth` has resolved_address of this address
+            // however `{addr}.addr.reverse` contains `this-is-not-test.eth` in reverse record
+            // so it should not be resolved as any name
             "0xeefb13c7d42efcc655e528da6d6f7bbcf9a2251d",
             // is was address of test.eth until 13294741 block
             "0x226159d592e2b063810a10ebf6dcbada94ed68b8",
@@ -693,7 +695,6 @@ mod tests {
         let expected_domains = serde_json::from_value(serde_json::json!({
             "0x9c996076a85b46061d9a70ff81f013853a86b619": "wa🇬🇲i.eth",
             "0xd8da6bf26964af9d7eed9e03e53415d37aa96045": "vitalik.eth",
-            "0xeefb13c7d42efcc655e528da6d6f7bbcf9a2251d": "test.eth",
         }))
         .unwrap();
         let domains = reader

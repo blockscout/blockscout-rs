@@ -360,7 +360,6 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
             "names": {
                 "0x9c996076a85b46061d9a70ff81f013853a86b619": "wa🇬🇲i.eth",
                 "0xd8da6bf26964af9d7eed9e03e53415d37aa96045": "vitalik.eth",
-                "0xeefb13c7d42efcc655e528da6d6f7bbcf9a2251d": "test.eth",
             }
         })
     );

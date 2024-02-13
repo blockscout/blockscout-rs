@@ -39,8 +39,8 @@ async fn resolve_addresses_using_reverse_registry(
         .map(|addr| DomainName::addr_reverse(addr).id)
         .collect::<Vec<String>>();
 
-    // hash(`{addr}.addr.reverse`) -> DomainName
-    let reverse_id_to_name: HashMap<String, DomainName> =
+    // hash(`{addr}.addr.reverse`) -> domain name
+    let reversed_names: HashMap<String, DomainName> =
         sql::batch_search_addresses_reverse_registry(
             pool,
             &subgraph.schema_name,
@@ -59,11 +59,11 @@ async fn resolve_addresses_using_reverse_registry(
         })
         .collect();
 
-    //
+    // hash(name(`{addr}.addr.reverse`)) -> Domain of name(`{addr}.addr.reverse`)
     let reversed_domains: HashMap<String, Domain> = sql::find_domains(
         pool,
         &subgraph.schema_name,
-        Some(reverse_id_to_name.values().collect()),
+        Some(reversed_names.values().collect()),
         true,
         None,
     )
@@ -72,11 +72,11 @@ async fn resolve_addresses_using_reverse_registry(
     .map(|domain| (domain.id.clone(), domain))
     .collect();
 
-    Ok(addresses
+    let domains = addresses
         .into_iter()
         .filter_map(|addr| {
             let addr_reverse = DomainName::addr_reverse(&addr);
-            let reversed_name = reverse_id_to_name.get(&addr_reverse.id)?;
+            let reversed_name = reversed_names.get(&addr_reverse.id)?;
             let reversed_domain = reversed_domains.get(&reversed_name.id)?;
             if let Some(resolved_address) = &reversed_domain.resolved_address {
                 if Address::from_str(resolved_address).ok()? == addr {
@@ -89,5 +89,7 @@ async fn resolve_addresses_using_reverse_registry(
             }
             None
         })
-        .collect::<Vec<_>>())
+        .collect::<Vec<_>>();
+
+    Ok(domains)
 }
