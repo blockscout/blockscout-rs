@@ -346,6 +346,41 @@ impl SubgraphReader {
         Ok(paginated)
     }
 
+    pub async fn get_address(
+        &self,
+        network_id: i64,
+        address: Address,
+    ) -> Result<Option<GetDomainOutput>, SubgraphReadError> {
+        let network = self
+            .networks
+            .get(&network_id)
+            .ok_or_else(|| SubgraphReadError::NetworkNotFound(network_id))?;
+        let subgraph = &network.default_subgraph;
+        let maybe_domain_name = resolve_addresses(self.pool.as_ref(), subgraph, vec![address])
+            .await?
+            .into_iter()
+            .next()
+            .map(|d| d.domain_name);
+        if let Some(domain_name) = maybe_domain_name {
+            let result = self
+                .get_domain(GetDomainInput {
+                    network_id,
+                    name: domain_name,
+                    only_active: true,
+                })
+                .await?
+                .ok_or_else(|| {
+                    SubgraphReadError::Internal(
+                        "batch search found domain for address, but detailed domain info not found"
+                            .to_string(),
+                    )
+                })?;
+            Ok(Some(result))
+        } else {
+            Ok(None)
+        }
+    }
+
     pub async fn batch_resolve_address_names(
         &self,
         input: BatchResolveAddressNamesInput,

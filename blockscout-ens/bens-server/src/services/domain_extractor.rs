@@ -6,9 +6,9 @@ use bens_logic::{
 };
 use bens_proto::blockscout::bens::v1::{
     domains_extractor_server::DomainsExtractor, BatchResolveAddressNamesRequest,
-    BatchResolveAddressNamesResponse, DetailedDomain, Domain, DomainEvent, GetDomainRequest,
-    ListDomainEventsRequest, ListDomainEventsResponse, LookupAddressRequest, LookupAddressResponse,
-    LookupDomainNameRequest, LookupDomainNameResponse,
+    BatchResolveAddressNamesResponse, DetailedDomain, Domain, DomainEvent, GetAddressRequest,
+    GetDomainRequest, ListDomainEventsRequest, ListDomainEventsResponse, LookupAddressRequest,
+    LookupAddressResponse, LookupDomainNameRequest, LookupDomainNameResponse,
 };
 use std::sync::Arc;
 
@@ -102,6 +102,27 @@ impl DomainsExtractor for DomainsExtractorService {
             next_page_params: pagination_from_logic(result.next_page_token, page_size),
         };
         Ok(tonic::Response::new(response))
+    }
+
+    async fn get_address(
+        &self,
+        request: tonic::Request<GetAddressRequest>,
+    ) -> Result<tonic::Response<DetailedDomain>, tonic::Status> {
+        let request = request.into_inner();
+        let network_id = request.chain_id;
+        let address =
+            conversion::address_from_str_inner(&request.address).map_err(map_convertion_error)?;
+
+        let domain = self
+            .subgraph_reader
+            .get_address(network_id, address)
+            .await
+            .map_err(map_subgraph_error)?
+            .map(conversion::detailed_domain_from_logic)
+            .transpose()
+            .map_err(map_convertion_error)?
+            .ok_or_else(|| tonic::Status::not_found("address not found"))?;
+        Ok(tonic::Response::new(domain))
     }
 
     async fn batch_resolve_address_names(
