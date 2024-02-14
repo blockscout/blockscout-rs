@@ -14,7 +14,7 @@ use crate::{
         domain_event::{DomainEvent, DomainEventTransaction},
     },
     hash_name::domain_id,
-    subgraphs_reader::resolve_addresses::resolve_addresses,
+    subgraphs_reader::{resolve_addresses::resolve_addresses, sql::CachedView},
 };
 use anyhow::Context;
 use ethers::types::{Address, Bytes, TxHash, H160};
@@ -155,9 +155,22 @@ impl SubgraphReader {
     pub async fn refresh_cache(&self) -> Result<(), anyhow::Error> {
         for subgraph in self.iter_subgraphs().filter(|s| s.settings.use_cache) {
             let schema = &subgraph.schema_name;
-            sql::refresh_address_names_view(self.pool.as_ref(), schema)
-                .await
-                .context(format!("failed to update {schema}_address_names"))?;
+            match subgraph.settings.address_resolve_technique {
+                AddressResolveTechnique::ReverseRegistry => {
+                    sql::AddrReverseNamesView::refresh_view(self.pool.as_ref(), schema)
+                        .await
+                        .context(format!(
+                            "failed to update AddrReverseNamesView for schema {schema}"
+                        ))?;
+                }
+                AddressResolveTechnique::AllDomains => {
+                    sql::AddressNamesView::refresh_view(self.pool.as_ref(), schema)
+                        .await
+                        .context(format!(
+                            "failed to update AddressNamesView for schema {schema}"
+                        ))?;
+                }
+            }
         }
         Ok(())
     }
@@ -165,11 +178,22 @@ impl SubgraphReader {
     pub async fn init_cache(&self) -> Result<(), anyhow::Error> {
         for subgraph in self.iter_subgraphs().filter(|s| s.settings.use_cache) {
             let schema = &subgraph.schema_name;
-            sql::create_address_names_view(self.pool.as_ref(), schema)
-                .await
-                .context(format!(
-                    "failed to create address_names view for schema {schema}"
-                ))?
+            match subgraph.settings.address_resolve_technique {
+                AddressResolveTechnique::ReverseRegistry => {
+                    sql::AddrReverseNamesView::create_view(self.pool.as_ref(), schema)
+                        .await
+                        .context(format!(
+                            "failed to create AddrReverseNamesView for schema {schema}"
+                        ))?;
+                }
+                AddressResolveTechnique::AllDomains => {
+                    sql::AddressNamesView::create_view(self.pool.as_ref(), schema)
+                        .await
+                        .context(format!(
+                            "failed to create AddressNamesView for schema {schema}"
+                        ))?;
+                }
+            }
         }
         Ok(())
     }

@@ -24,6 +24,7 @@ impl DomainName {
     }
 
     pub fn addr_reverse(addr: &Address) -> Self {
+        // label name is hexed address without 0x prefix
         let label_name = format!("{:x}", addr);
         let name = format!("{}.addr.reverse", label_name);
         // note that addr.reverse doesn't need empty_label_hash

@@ -57,7 +57,7 @@ mod sql_gen {
             .to_owned()
     }
 }
-use crate::subgraphs_reader::DomainPaginationInput;
+use crate::subgraphs_reader::{sql::bind_string_list, DomainPaginationInput};
 use sql_gen::QueryBuilderExt;
 
 const DETAILED_DOMAIN_DEFAULT_SELECT_CLAUSE: &str = r#"
@@ -278,35 +278,14 @@ pub async fn batch_search_addresses(
     Ok(domains)
 }
 
-// TODO: rewrite to sea_query generation
 #[instrument(
-    name = "batch_search_addresses_cached",
-    skip(pool, addresses),
-    fields(job_size = addresses.len()),
+    name = "batch_search_addr_reverse_names",
+    skip(pool, addr_reverse_hashes),
+    fields(job_size = addr_reverse_hashes.len()),
     err(level = "error"),
     level = "info",
 )]
-pub async fn batch_search_addresses_cached(
-    pool: &PgPool,
-    schema: &str,
-    addresses: &[impl AsRef<str>],
-) -> Result<Vec<DomainWithAddress>, SubgraphReadError> {
-    let domains: Vec<DomainWithAddress> = sqlx::query_as(&format!(
-        r#"
-        SELECT id, domain_name, resolved_address
-        FROM {schema}.address_names
-        where
-            resolved_address = ANY($1)
-        "#,
-    ))
-    .bind(bind_string_list(addresses))
-    .fetch_all(pool)
-    .await?;
-
-    Ok(domains)
-}
-
-pub async fn batch_search_addresses_reverse_registry(
+pub async fn batch_search_addr_reverse_names(
     pool: &PgPool,
     schema: &str,
     addr_reverse_hashes: &[impl AsRef<str>],
@@ -326,12 +305,6 @@ pub async fn batch_search_addresses_reverse_registry(
     .await?;
 
     Ok(domains)
-}
-
-fn bind_string_list(list: &[impl AsRef<str>]) -> Vec<String> {
-    list.iter()
-        .map(|s| s.as_ref().to_string())
-        .collect::<Vec<_>>()
 }
 
 // TODO: rewrite to sea_query generation

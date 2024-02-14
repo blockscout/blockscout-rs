@@ -18,18 +18,59 @@ pub async fn resolve_addresses(
     match subgraph.settings.address_resolve_technique {
         AddressResolveTechnique::AllDomains => match subgraph.settings.use_cache {
             true => {
-                sql::batch_search_addresses_cached(pool, &subgraph.schema_name, &addresses_str)
-                    .await
+                sql::AddressNamesView::batch_search_addresses(
+                    pool,
+                    &subgraph.schema_name,
+                    &addresses_str,
+                )
+                .await
             }
             false => sql::batch_search_addresses(pool, &subgraph.schema_name, &addresses_str).await,
         },
-        AddressResolveTechnique::ReverseRegistry => {
-            resolve_addresses_using_reverse_registry(pool, subgraph, addresses).await
-        }
+        AddressResolveTechnique::ReverseRegistry => match subgraph.settings.use_cache {
+            true => resolve_addr_reverse_cached(pool, subgraph, addresses).await,
+            false => resolve_addr_reverse(pool, subgraph, addresses).await,
+        },
     }
 }
 
-async fn resolve_addresses_using_reverse_registry(
+async fn resolve_addr_reverse_cached(
+    pool: &PgPool,
+    subgraph: &Subgraph,
+    addresses: Vec<Address>,
+) -> Result<Vec<DomainWithAddress>, SubgraphReadError> {
+    let addr_reverse_hashes = addresses
+        .iter()
+        .map(|addr| DomainName::addr_reverse(addr).id)
+        .collect::<Vec<String>>();
+    let addr_reverse_domains = sql::AddrReverseNamesView::batch_search_addresses(
+        pool,
+        &subgraph.schema_name,
+        &addr_reverse_hashes,
+    )
+    .await?;
+
+    let domains: Vec<DomainWithAddress> = addr_reverse_domains
+        .into_iter()
+        .filter_map(|row| {
+            let addr = Address::from_str(&row.resolved_address).ok()?;
+            let addr_reverse_id = DomainName::addr_reverse(&addr).id;
+            if addr_reverse_id == row.reversed_domain_id {
+                Some(DomainWithAddress {
+                    id: row.domain_id,
+                    domain_name: row.name,
+                    resolved_address: row.resolved_address,
+                })
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    Ok(domains)
+}
+
+async fn resolve_addr_reverse(
     pool: &PgPool,
     subgraph: &Subgraph,
     addresses: Vec<Address>,
@@ -39,9 +80,10 @@ async fn resolve_addresses_using_reverse_registry(
         .map(|addr| DomainName::addr_reverse(addr).id)
         .collect::<Vec<String>>();
 
+    // mapping of
     // hash(`{addr}.addr.reverse`) -> domain name
     let reversed_names: HashMap<String, DomainName> =
-        sql::batch_search_addresses_reverse_registry(
+        sql::batch_search_addr_reverse_names(
             pool,
             &subgraph.schema_name,
             &addr_reverse_hashes,
@@ -59,6 +101,7 @@ async fn resolve_addresses_using_reverse_registry(
         })
         .collect();
 
+    // mapping of
     // hash(name(`{addr}.addr.reverse`)) -> Domain of name(`{addr}.addr.reverse`)
     let reversed_domains: HashMap<String, Domain> = sql::find_domains(
         pool,
