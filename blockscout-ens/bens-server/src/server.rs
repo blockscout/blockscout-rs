@@ -1,4 +1,5 @@
 use crate::{
+    jobs,
     services::{domain_extractor::DomainsExtractorService, health::HealthService},
     settings::Settings,
 };
@@ -12,7 +13,7 @@ use bens_proto::blockscout::bens::v1::{
 use blockscout_service_launcher::{launcher, launcher::LaunchSettings};
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
-use tokio_cron_scheduler::{Job, JobScheduler};
+use tokio_cron_scheduler::JobScheduler;
 
 const SERVICE_NAME: &str = "bens";
 
@@ -98,20 +99,9 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     if settings.subgraphs_reader.cache_enabled {
         let scheduler = JobScheduler::new().await?;
         scheduler
-            .add(Job::new_async(
-                settings.subgraphs_reader.refresh_cache_schedule.as_str(),
-                move |_uuid, mut _l| {
-                    let reader = subgraph_reader.clone();
-                    Box::pin(async move {
-                        tracing::info!("refresh subgraph cache");
-                        match reader.as_ref().refresh_cache().await {
-                            Ok(_) => {}
-                            Err(e) => {
-                                tracing::error!("error during refreshing subgraph: {e}");
-                            }
-                        };
-                    })
-                },
+            .add(jobs::refresh_cache_job(
+                &settings.subgraphs_reader.refresh_cache_schedule,
+                subgraph_reader.clone(),
             )?)
             .await?;
         scheduler.start().await?;

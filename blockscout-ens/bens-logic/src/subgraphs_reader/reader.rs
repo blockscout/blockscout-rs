@@ -155,7 +155,12 @@ impl SubgraphReader {
     pub async fn refresh_cache(&self) -> Result<(), anyhow::Error> {
         for subgraph in self.iter_subgraphs().filter(|s| s.settings.use_cache) {
             let schema = &subgraph.schema_name;
-            match subgraph.settings.address_resolve_technique {
+            let address_resolve_technique = &subgraph.settings.address_resolve_technique;
+            tracing::info!(
+                address_resolve_technique =? address_resolve_technique,
+                "refreshing cache table for schema {schema}"
+            );
+            match address_resolve_technique {
                 AddressResolveTechnique::ReverseRegistry => {
                     sql::AddrReverseNamesView::refresh_view(self.pool.as_ref(), schema)
                         .await
