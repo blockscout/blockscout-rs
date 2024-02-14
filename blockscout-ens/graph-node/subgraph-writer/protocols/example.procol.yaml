@@ -1,8 +1,8 @@
 default_context:
   project_name: "YetAnotherNameService Subgraph"
   short_name: "yans"
-  network: "mainnet"
-  network_test: "goerli"
+  network: "eth-mainnet"
+  network_test: "eth-goerli"
 
   registry: true
   registry_name: 'YansRegistry'

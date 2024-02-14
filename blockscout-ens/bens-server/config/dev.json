@@ -1,0 +1,16 @@
+{
+    "subgraphs_reader": {
+        "networks": {
+            "5": {
+                "blockscout": {
+                    "url": "https://eth-goerli.blockscout.com"
+                },
+                "subgraphs": {
+                "ens-subgraph": {
+                    "native_token_contract": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85"
+                    }
+                }
+            }
+        }
+    }
+}

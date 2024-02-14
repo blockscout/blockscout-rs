@@ -2,10 +2,21 @@
 
 ## To start locally
 
-1. Compile and run:
+1. Configuration
+    1. Prepare env variables
+
+        ```bash
+        # graph-node database url
+        BENS__DATABASE__CONNECT__URL=postgresql://graph-node:let-me-in@localhost:5432/graph-node?sslmode=disable
+        # path to json config
+        BENS__CONFIG=./config/dev.json
+        ```
+
+    2. You can change `dev.json` config and describe your protocols
+
+2. Compile and run:
 
     ```bash
-    export BENS__DATABASE__CONNECT__URL="<database-url>"
-    export BENS__BLOCKSCOUT__NETWORKS__<chain_id>__URL=<blockscout_url>
+    # add env variables before
     cargo run --bin bens-server
     ```
