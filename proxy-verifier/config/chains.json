@@ -1,0 +1,12 @@
+{
+  "1": {
+    "name": "Ethereum Mainnet",
+    "api_url": "https://eth.blockscout.com/api/",
+    "sensitive_api_key": null
+  },
+  "10": {
+    "name": "Base Mainnet",
+    "api_url": "https://base.blockscout.com/api/",
+    "sensitive_api_key": null
+  }
+}

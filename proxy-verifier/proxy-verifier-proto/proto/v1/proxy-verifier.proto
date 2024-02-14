@@ -1,0 +1,147 @@
+syntax = "proto3";
+
+package blockscout.proxyVerifier.v1;
+
+import "convert_options.proto";
+
+option go_package = "github.com/blockscout/blockscout-rs/proxy-verifier";
+
+service Proxy {
+  rpc ListChains(ListChainsRequest) returns (ListChainsResponse) {}
+}
+
+service SolidityVerifier {
+  rpc VerifyMultiPart(SolidityVerifyMultiPartRequest) returns (VerificationResponse) {}
+
+  rpc VerifyStandardJson(SolidityVerifyStandardJsonRequest) returns (VerificationResponse) {}
+
+  rpc ListCompilers(ListCompilersRequest) returns (ListCompilersResponse) {}
+}
+
+service VyperVerifier {
+  rpc VerifyMultiPart(VyperVerifyMultiPartRequest) returns (VerificationResponse) {}
+
+  rpc VerifyStandardJson(VyperVerifyStandardJsonRequest) returns (VerificationResponse) {}
+
+  rpc ListCompilers(ListCompilersRequest) returns (ListCompilersResponse) {}
+}
+
+message ListChainsRequest {}
+
+message ListChainsResponse {
+  message Chain {
+    string id = 1;
+    string name = 2;
+  }
+
+  /// List of supported chains
+  repeated Chain chains = 1;
+}
+
+message SolidityVerifyMultiPartRequest {
+  /// List of contracts the source code should verify
+  repeated Contract contracts = 1;
+
+  /// Compiler version used to compile the contract
+  string compiler = 2;
+  /// Version of the EVM to compile for. If absent results in default EVM version
+  optional string evm_version = 3;
+  /// If present, optimizations are enabled with specified number of runs,
+  /// otherwise optimizations are disabled
+  optional int32 optimization_runs = 4;
+  /// Map from a source file name to the actual source code
+  map<string, string> source_files = 5;
+  /// Map from a library name to its address
+  map<string, string> libraries = 6;
+}
+
+message SolidityVerifyStandardJsonRequest {
+  /// List of contracts the source code should verify
+  repeated Contract contracts = 1;
+
+  /// Compiler version used to compile the contract
+  string compiler = 2;
+  /// https://docs.soliditylang.org/en/latest/using-the-compiler.html#input-description
+  string input = 3;
+}
+
+message VyperVerifyMultiPartRequest {
+  /// List of contracts the source code should verify
+  repeated Contract contracts = 1;
+
+  /// Compiler version used to compile the contract
+  string compiler = 2;
+  /// Version of the EVM to compile for. If absent results in default EVM version
+  optional string evm_version = 3;
+  /// Map from a source file name to the actual source code
+  map<string, string> source_files = 4;
+  /// Map from an interface names to the actual interfaces.
+  /// If non-specified, no interfaces are considered.
+  map<string, string> interfaces = 5;
+}
+
+message VyperVerifyStandardJsonRequest {
+  /// List of contracts the source code should verify
+  repeated Contract contracts = 1;
+
+  /// Compiler version used to compile the contract
+  string compiler = 2;
+  /// https://docs.vyperlang.org/en/stable/compiling-a-contract.html#input-json-description
+  string input = 3;
+}
+
+message VerificationResponse {
+  message ContractVerificationResults {
+    message ContractVerificationResult {
+      string message = 1;
+
+      enum Status {
+        STATUS_UNSPECIFIED = 0;
+        SUCCESS = 1;
+        FAILURE = 2;
+        INTERNAL_ERROR = 3;
+      }
+      Status status = 2;
+    }
+
+    repeated ContractVerificationResult items = 1;
+  }
+
+  message ContractValidationResults {
+    message ContractValidationResult {
+      string message = 1;
+
+      enum Status {
+        STATUS_UNSPECIFIED = 0;
+        VALID = 1;
+        INVALID = 2;
+        INTERNAL_ERROR = 3;
+      }
+      Status status = 2;
+    }
+
+    repeated ContractValidationResult items = 1;
+  }
+
+  message CompilationFailure {
+    string message = 1;
+  }
+
+  oneof verification_status {
+    ContractVerificationResults contract_verification_results = 1;
+    ContractValidationResults contract_validation_results = 2;
+    CompilationFailure compilation_failure = 3;
+  }
+}
+
+message Contract {
+  string chain_id = 1;
+  string address = 2;
+}
+
+message ListCompilersRequest {}
+
+message ListCompilersResponse {
+  /// List of supported compiler versions
+  repeated string compilers = 1;
+}
