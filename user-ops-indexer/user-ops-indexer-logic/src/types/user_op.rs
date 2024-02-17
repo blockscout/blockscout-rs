@@ -1,8 +1,9 @@
 use crate::{repository::user_op::ListUserOpDB, types::common::u256_to_decimal};
 pub use entity::sea_orm_active_enums::{EntryPointVersion, SponsorType};
 use entity::user_operations::Model;
-use ethers::prelude::{Address, BigEndianHash, Bytes, H128, H256, U256};
-use ethers_core::{abi::AbiEncode, utils::to_checksum};
+use ethers::prelude::{
+    abi::AbiEncode, core::utils::to_checksum, Address, BigEndianHash, Bytes, H128, H256, U256,
+};
 use num_traits::cast::ToPrimitive;
 use sea_orm::{prelude::BigDecimal, ActiveEnum};
 use std::ops::Mul;
