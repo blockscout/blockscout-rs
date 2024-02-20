@@ -7,7 +7,7 @@ use pretty_assertions::assert_eq;
 async fn test_startup_works() {
     let config_file = helpers::create_temp_config(serde_json::json!({}));
     let base = helpers::init_proxy_verifier_server(|mut settings| {
-        settings.chains_config = config_file.as_ref().to_path_buf();
+        settings.chains_config = Some(config_file.as_ref().to_path_buf());
         settings
     })
     .await;

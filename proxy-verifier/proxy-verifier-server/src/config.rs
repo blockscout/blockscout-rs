@@ -6,16 +6,18 @@ use std::{collections::BTreeMap, path::PathBuf};
 pub struct ChainsSettings(BTreeMap<String, ChainSettings>);
 
 impl ChainsSettings {
-    pub fn new(path: PathBuf) -> Result<Self, anyhow::Error> {
-        let settings: Self = config::Config::builder()
-            .add_source(config::File::from(path))
-            .add_source(
-                config::Environment::with_prefix("PROXY_VERIFIER_CHAINS")
-                    .separator("__")
-                    .try_parsing(true),
-            )
-            .build()?
-            .try_deserialize()?;
+    pub fn new(path: Option<PathBuf>) -> Result<Self, anyhow::Error> {
+        let mut builder = config::Config::builder();
+        if let Some(path) = path {
+            builder = builder.add_source(config::File::from(path))
+        }
+        builder = builder.add_source(
+            config::Environment::with_prefix("PROXY_VERIFIER_CHAINS")
+                .separator("__")
+                .try_parsing(true),
+        );
+
+        let settings: Self = builder.build()?.try_deserialize()?;
 
         settings.validate()?;
 
