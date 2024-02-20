@@ -111,13 +111,13 @@ fn parse_selectors(abi: Abi) -> BTreeMap<String, [u8; 4]> {
         .collect()
 }
 
-fn prepend_selector(partial_selector: &Vec<u8>) -> anyhow::Result<Vec<u8>> {
+fn prepend_selector(partial_selector: &[u8]) -> anyhow::Result<Vec<u8>> {
     if partial_selector.len() > 4 {
         return Err(anyhow::anyhow!("selector is too long"));
     };
 
     // prepend selector with 0s if it's shorter than 4 bytes
-    let mut selector = partial_selector.clone();
+    let mut selector = partial_selector.to_owned();
     selector.splice(..0, repeat(0).take(4 - partial_selector.len()));
     Ok(selector)
 }
@@ -128,11 +128,8 @@ mod tests {
 
     #[test]
     fn test_prepend_selector() {
-        assert_eq!(
-            prepend_selector(&vec![1, 2, 3, 4]).unwrap(),
-            vec![1, 2, 3, 4]
-        );
-        assert_eq!(prepend_selector(&vec![1, 2]).unwrap(), vec![0, 0, 1, 2]);
-        assert!(prepend_selector(&vec![1, 2, 3, 4, 5]).is_err());
+        assert_eq!(prepend_selector(&[1, 2, 3, 4]).unwrap(), vec![1, 2, 3, 4]);
+        assert_eq!(prepend_selector(&[1, 2]).unwrap(), vec![0, 0, 1, 2]);
+        assert!(prepend_selector(&[1, 2, 3, 4, 5]).is_err());
     }
 }
