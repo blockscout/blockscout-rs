@@ -58,36 +58,34 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
 
     // get detailed domain
     let request: Value = send_get_request(&base, "/api/v1/1/domains/vitalik.eth").await;
-    assert_eq!(
-        request,
-        json!({
-            "expiry_date": "2032-08-01T21:50:24.000Z",
-            "id": "0xee6c4522aab0003e8d14cd40a6af439055fd2577951148c14b6cea9a53475835",
-            "name": "vitalik.eth",
-            "other_addresses": {
-                "RSK": "0xf0d485009714cE586358E3761754929904D76B9D",
-                "ETH": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
-            },
-            "owner": {
-                "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
-            },
-            "registrant": {
-                "hash": "0x220866b1a2219f40e72f5c628b65d54268ca3a9d",
-            },
-            "wrapped_owner": null,
-            "registration_date": "2017-06-18T08:39:14.000Z",
-            "resolved_address": {
-                "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
-            },
-            "tokens": [
-                {
-                    "id": "79233663829379634837589865448569342784712482819484549289560981379859480642508",
-                    "contract_hash": "0x57f1887a8bf19b14fc0df6fd9b2acc9af147ea85",
-                    "type": "NATIVE_DOMAIN_TOKEN",
-                }
-            ],
-        })
-    );
+    let vitalik_detailed_json = json!({
+        "expiry_date": "2032-08-01T21:50:24.000Z",
+        "id": "0xee6c4522aab0003e8d14cd40a6af439055fd2577951148c14b6cea9a53475835",
+        "name": "vitalik.eth",
+        "other_addresses": {
+            "RSK": "0xf0d485009714cE586358E3761754929904D76B9D",
+            "ETH": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+        },
+        "owner": {
+            "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
+        },
+        "registrant": {
+            "hash": "0x220866b1a2219f40e72f5c628b65d54268ca3a9d",
+        },
+        "wrapped_owner": null,
+        "registration_date": "2017-06-18T08:39:14.000Z",
+        "resolved_address": {
+            "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
+        },
+        "tokens": [
+            {
+                "id": "79233663829379634837589865448569342784712482819484549289560981379859480642508",
+                "contract_hash": "0x57f1887a8bf19b14fc0df6fd9b2acc9af147ea85",
+                "type": "NATIVE_DOMAIN_TOKEN",
+            }
+        ],
+    });
+    assert_eq!(request, vitalik_detailed_json.clone());
     // get detailed domain with emojied name and with wrapped token
     let request: Value = send_get_request(&base, "/api/v1/1/domains/wa🇬🇲i.eth").await;
     assert_eq!(
@@ -354,6 +352,18 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
                 "0x9c996076a85b46061d9a70ff81f013853a86b619": "wa🇬🇲i.eth",
                 "0xd8da6bf26964af9d7eed9e03e53415d37aa96045": "vitalik.eth",
             }
+        })
+    );
+
+    let response: Value = send_get_request(
+        &base,
+        "/api/v1/1/addresses/0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
+    )
+    .await;
+    assert_eq!(
+        response,
+        json!({
+            "domain": vitalik_detailed_json
         })
     );
 }

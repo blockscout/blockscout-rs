@@ -18,7 +18,7 @@ paths:
         "200":
           description: A successful response.
           schema:
-            $ref: '#/definitions/v1DetailedDomain'
+            $ref: '#/definitions/v1GetAddressResponse'
         default:
           description: An unexpected error response.
           schema:
@@ -412,6 +412,11 @@ definitions:
       action:
         type: string
         title: Optional. Action name
+  v1GetAddressResponse:
+    type: object
+    properties:
+      domain:
+        $ref: '#/definitions/v1DetailedDomain'
   v1HealthCheckResponse:
     type: object
     properties:

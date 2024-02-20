@@ -26,6 +26,8 @@ impl CachedView for AddrReverseNamesView {
     }
 
     fn table_sql(schema: &str) -> String {
+        // Filter all domain that has
+        // parent = hashname('addr.reverse') = 0x91d1777781884d03a6757a803996e38de2a42967fb37eeaca72729271025a9e2
         format!(
             r#"
         SELECT

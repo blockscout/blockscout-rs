@@ -14,7 +14,7 @@ service DomainsExtractor {
   // Get basic info about address for ens-lookup and blockscout quick-search. Sorted by `registration_date`
   rpc LookupAddress(LookupAddressRequest) returns (LookupAddressResponse) {}
   // Get detailed information about main domain of requested address
-  rpc GetAddress(GetAddressRequest) returns (DetailedDomain) {}
+  rpc GetAddress(GetAddressRequest) returns (GetAddressResponse) {}
   // Perform batch resolving of list of address for blockscout backend requests
   rpc BatchResolveAddressNames(BatchResolveAddressNamesRequest) returns (BatchResolveAddressNamesResponse) {}
 }
@@ -179,6 +179,10 @@ message LookupAddressResponse {
 message GetAddressRequest {
   string address = 1;
   int64 chain_id = 2;
+}
+
+message GetAddressResponse {
+  DetailedDomain domain = 1;
 }
 
 message BatchResolveAddressNamesRequest {
