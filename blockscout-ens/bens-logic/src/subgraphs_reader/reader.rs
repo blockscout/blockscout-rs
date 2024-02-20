@@ -13,10 +13,12 @@ use crate::{
         domain::{DetailedDomain, Domain},
         domain_event::{DomainEvent, DomainEventTransaction},
     },
-    hash_name::{domain_id, hex},
+    hash_name::domain_id,
+    subgraphs_reader::{resolve_addresses::resolve_addresses, sql::CachedView},
 };
 use anyhow::Context;
 use ethers::types::{Address, Bytes, TxHash, H160};
+use serde::Deserialize;
 use sqlx::postgres::PgPool;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -50,17 +52,26 @@ pub struct Network {
     default_subgraph: Subgraph,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct Subgraph {
-    schema_name: String,
-    settings: SubgraphSettings,
+    pub schema_name: String,
+    pub settings: SubgraphSettings,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq, Default)]
 pub struct SubgraphSettings {
     pub use_cache: bool,
+    pub address_resolve_technique: AddressResolveTechnique,
     pub empty_label_hash: Option<Bytes>,
     pub native_token_contract: Option<Address>,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum AddressResolveTechnique {
+    #[default]
+    ReverseRegistry,
+    AllDomains,
 }
 
 #[derive(Debug, Clone)]
@@ -144,9 +155,27 @@ impl SubgraphReader {
     pub async fn refresh_cache(&self) -> Result<(), anyhow::Error> {
         for subgraph in self.iter_subgraphs().filter(|s| s.settings.use_cache) {
             let schema = &subgraph.schema_name;
-            sql::refresh_address_names_view(self.pool.as_ref(), schema)
-                .await
-                .context(format!("failed to update {schema}_address_names"))?;
+            let address_resolve_technique = &subgraph.settings.address_resolve_technique;
+            tracing::info!(
+                address_resolve_technique =? address_resolve_technique,
+                "refreshing cache table for schema {schema}"
+            );
+            match address_resolve_technique {
+                AddressResolveTechnique::ReverseRegistry => {
+                    sql::AddrReverseNamesView::refresh_view(self.pool.as_ref(), schema)
+                        .await
+                        .context(format!(
+                            "failed to update AddrReverseNamesView for schema {schema}"
+                        ))?;
+                }
+                AddressResolveTechnique::AllDomains => {
+                    sql::AddressNamesView::refresh_view(self.pool.as_ref(), schema)
+                        .await
+                        .context(format!(
+                            "failed to update AddressNamesView for schema {schema}"
+                        ))?;
+                }
+            }
         }
         Ok(())
     }
@@ -154,11 +183,22 @@ impl SubgraphReader {
     pub async fn init_cache(&self) -> Result<(), anyhow::Error> {
         for subgraph in self.iter_subgraphs().filter(|s| s.settings.use_cache) {
             let schema = &subgraph.schema_name;
-            sql::create_address_names_view(self.pool.as_ref(), schema)
-                .await
-                .context(format!(
-                    "failed to create address_names view for schema {schema}"
-                ))?
+            match subgraph.settings.address_resolve_technique {
+                AddressResolveTechnique::ReverseRegistry => {
+                    sql::AddrReverseNamesView::create_view(self.pool.as_ref(), schema)
+                        .await
+                        .context(format!(
+                            "failed to create AddrReverseNamesView for schema {schema}"
+                        ))?;
+                }
+                AddressResolveTechnique::AllDomains => {
+                    sql::AddressNamesView::create_view(self.pool.as_ref(), schema)
+                        .await
+                        .context(format!(
+                            "failed to create AddressNamesView for schema {schema}"
+                        ))?;
+                }
+            }
         }
         Ok(())
     }
@@ -256,8 +296,9 @@ impl SubgraphReader {
         let domains: Vec<Domain> = sql::find_domains(
             self.pool.as_ref(),
             &subgraph.schema_name,
-            maybe_domain_name.as_ref(),
-            &input,
+            maybe_domain_name.as_ref().map(|name| vec![name]),
+            input.only_active,
+            Some(&input.pagination),
         )
         .await?
         .into_iter()
@@ -305,6 +346,41 @@ impl SubgraphReader {
         Ok(paginated)
     }
 
+    pub async fn get_address(
+        &self,
+        network_id: i64,
+        address: Address,
+    ) -> Result<Option<GetDomainOutput>, SubgraphReadError> {
+        let network = self
+            .networks
+            .get(&network_id)
+            .ok_or_else(|| SubgraphReadError::NetworkNotFound(network_id))?;
+        let subgraph = &network.default_subgraph;
+        let maybe_domain_name = resolve_addresses(self.pool.as_ref(), subgraph, vec![address])
+            .await?
+            .into_iter()
+            .next()
+            .map(|d| d.domain_name);
+        if let Some(domain_name) = maybe_domain_name {
+            let result = self
+                .get_domain(GetDomainInput {
+                    network_id,
+                    name: domain_name,
+                    only_active: true,
+                })
+                .await?
+                .ok_or_else(|| {
+                    SubgraphReadError::Internal(
+                        "batch search found domain for address, but detailed domain info not found"
+                            .to_string(),
+                    )
+                })?;
+            Ok(Some(result))
+        } else {
+            Ok(None)
+        }
+    }
+
     pub async fn batch_resolve_address_names(
         &self,
         input: BatchResolveAddressNamesInput,
@@ -315,23 +391,15 @@ impl SubgraphReader {
             .ok_or_else(|| SubgraphReadError::NetworkNotFound(input.network_id))?;
         let subgraph = &network.default_subgraph;
         // remove duplicates
-        let addresses: Vec<String> = remove_addresses_from_batch(input.addresses)
-            .into_iter()
-            .map(hex)
-            .collect();
-        let addreses_str: Vec<&str> = addresses.iter().map(String::as_str).collect::<Vec<_>>();
-        let result = if subgraph.settings.use_cache {
-            sql::batch_search_addresses_cached(&self.pool, &subgraph.schema_name, &addreses_str)
-                .await?
-        } else {
-            sql::batch_search_addresses(&self.pool, &subgraph.schema_name, &addreses_str).await?
-        };
+        let addresses = remove_addresses_from_batch(input.addresses);
+        let addresses_len = addresses.len();
+        let result = resolve_addresses(self.pool.as_ref(), subgraph, addresses).await?;
 
         let address_to_name: BTreeMap<String, String> = result
             .into_iter()
             .map(|d| (d.resolved_address, d.domain_name))
             .collect();
-        tracing::info!(address_to_name =? address_to_name, "{}/{} names found from batch request", address_to_name.len(), addresses.len());
+        tracing::info!(address_to_name =? address_to_name, "{}/{addresses_len} names found from batch request", address_to_name.len());
         Ok(address_to_name)
     }
 }
@@ -666,7 +734,9 @@ mod tests {
             .expect("failed to init reader");
 
         let addresses = [
-            // test.eth
+            // `test.eth` has resolved_address of this address
+            // however `{addr}.addr.reverse` contains `this-is-not-test.eth` in reverse record
+            // so it should not be resolved as any name
             "0xeefb13c7d42efcc655e528da6d6f7bbcf9a2251d",
             // is was address of test.eth until 13294741 block
             "0x226159d592e2b063810a10ebf6dcbada94ed68b8",
@@ -689,7 +759,6 @@ mod tests {
         let expected_domains = serde_json::from_value(serde_json::json!({
             "0x9c996076a85b46061d9a70ff81f013853a86b619": "wa🇬🇲i.eth",
             "0xd8da6bf26964af9d7eed9e03e53415d37aa96045": "vitalik.eth",
-            "0xeefb13c7d42efcc655e528da6d6f7bbcf9a2251d": "test.eth",
         }))
         .unwrap();
         let domains = reader

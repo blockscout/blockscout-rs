@@ -16,6 +16,9 @@ http:
     - selector: blockscout.bens.v1.DomainsExtractor.LookupAddress
       get: /api/v1/{chain_id}/addresses:lookup
 
+    - selector: blockscout.bens.v1.DomainsExtractor.GetAddress
+      get: /api/v1/{chain_id}/addresses/{address}
+
     - selector: blockscout.bens.v1.DomainsExtractor.BatchResolveAddressNames
       post: /api/v1/{chain_id}/addresses:batch-resolve-names
       body: "*"

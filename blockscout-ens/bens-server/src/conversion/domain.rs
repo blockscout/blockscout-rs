@@ -151,7 +151,7 @@ pub fn pagination_from_logic(
     })
 }
 
-fn address_from_str_inner(addr: &str) -> Result<Address, ConversionError> {
+pub fn address_from_str_inner(addr: &str) -> Result<Address, ConversionError> {
     Address::from_str(addr)
         .map_err(|e| ConversionError::UserRequest(format!("invalid address '{addr}': {e}")))
 }

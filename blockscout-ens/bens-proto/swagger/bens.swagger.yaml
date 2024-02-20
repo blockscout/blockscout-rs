@@ -10,6 +10,31 @@ consumes:
 produces:
   - application/json
 paths:
+  /api/v1/{chain_id}/addresses/{address}:
+    get:
+      summary: Get detailed information about main domain of requested address
+      operationId: DomainsExtractor_GetAddress
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetAddressResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: chain_id
+          in: path
+          required: true
+          type: string
+          format: int64
+        - name: address
+          in: path
+          required: true
+          type: string
+      tags:
+        - DomainsExtractor
   /api/v1/{chain_id}/addresses:batch-resolve-names:
     post:
       summary: Perform batch resolving of list of address for blockscout backend requests
@@ -387,6 +412,11 @@ definitions:
       action:
         type: string
         title: Optional. Action name
+  v1GetAddressResponse:
+    type: object
+    properties:
+      domain:
+        $ref: '#/definitions/v1DetailedDomain'
   v1HealthCheckResponse:
     type: object
     properties:

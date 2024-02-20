@@ -26,6 +26,7 @@ cached = { version = "0.46.1", features = ["proc_macro", "tokio", "async", "asyn
 wiremock = {version = "0.5", optional = true }
 sea-query = "0.30.5"
 bigdecimal = "0.4"
+async-trait = "0.1"
 
 [dependencies.sqlx]
 version = "0.7"

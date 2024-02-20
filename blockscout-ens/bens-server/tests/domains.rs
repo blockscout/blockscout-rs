@@ -12,35 +12,26 @@ use url::Url;
 
 #[sqlx::test(migrations = "../bens-logic/tests/migrations")]
 async fn basic_domain_extracting_works(pool: PgPool) {
-    let network_id = "1";
     let postgres_url = std::env::var("DATABASE_URL").expect("env should be here from sqlx::test");
     let db_url = format!(
         "{postgres_url}{}",
         pool.connect_options().get_database().unwrap()
     );
+    let blockscout_client = mocked_blockscout_client().await;
     std::env::set_var("BENS__DATABASE__CONNECT__URL", db_url);
-    std::env::set_var("BENS__CONFIG", "./tests/config.test.toml");
+    std::env::set_var("BENS__CONFIG", "./tests/config.test.json");
+    std::env::set_var(
+        "BENS__SUBGRAPHS_READER__NETWORKS__1__BLOCKSCOUT__URL",
+        blockscout_client.url().to_string(),
+    );
+    std::env::set_var(
+        "BENS__SUBGRAPHS_READER__NETWORKS__10200__BLOCKSCOUT__URL",
+        blockscout_client.url().to_string(),
+    );
     let mut settings = Settings::build().expect("Failed to build settings");
     let (server_settings, base) = get_test_server_settings();
 
     settings.server = server_settings;
-    let eth_client = mocked_blockscout_client().await;
-    settings.subgraphs_reader.networks = serde_json::from_value(serde_json::json!(
-        {
-            network_id: {
-                "blockscout": {
-                    "url": eth_client.url()
-                },
-                "subgraphs": {
-                    "ens-subgraph": {
-                        "native_token_contract": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85"
-                    }
-                }
-            }
-        }
-    ))
-    .unwrap();
-
     // first start with enabled cache
     check_basic_scenario_eth(settings.clone(), base.clone()).await;
     // second start with same settings to check
@@ -49,6 +40,8 @@ async fn basic_domain_extracting_works(pool: PgPool) {
     // third start with disabled cache
     settings.subgraphs_reader.cache_enabled = false;
     check_basic_scenario_eth(settings.clone(), base.clone()).await;
+    settings.subgraphs_reader.cache_enabled = true;
+    check_basic_scenario_gno(settings.clone(), base.clone()).await;
 }
 
 async fn check_basic_scenario_eth(settings: Settings, base: Url) {
@@ -65,36 +58,34 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
 
     // get detailed domain
     let request: Value = send_get_request(&base, "/api/v1/1/domains/vitalik.eth").await;
-    assert_eq!(
-        request,
-        json!({
-            "expiry_date": "2032-08-01T21:50:24.000Z",
-            "id": "0xee6c4522aab0003e8d14cd40a6af439055fd2577951148c14b6cea9a53475835",
-            "name": "vitalik.eth",
-            "other_addresses": {
-                "RSK": "0xf0d485009714cE586358E3761754929904D76B9D",
-                "ETH": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
-            },
-            "owner": {
-                "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
-            },
-            "registrant": {
-                "hash": "0x220866b1a2219f40e72f5c628b65d54268ca3a9d",
-            },
-            "wrapped_owner": null,
-            "registration_date": "2017-06-18T08:39:14.000Z",
-            "resolved_address": {
-                "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
-            },
-            "tokens": [
-                {
-                    "id": "79233663829379634837589865448569342784712482819484549289560981379859480642508",
-                    "contract_hash": "0x57f1887a8bf19b14fc0df6fd9b2acc9af147ea85",
-                    "type": "NATIVE_DOMAIN_TOKEN",
-                }
-            ],
-        })
-    );
+    let vitalik_detailed_json = json!({
+        "expiry_date": "2032-08-01T21:50:24.000Z",
+        "id": "0xee6c4522aab0003e8d14cd40a6af439055fd2577951148c14b6cea9a53475835",
+        "name": "vitalik.eth",
+        "other_addresses": {
+            "RSK": "0xf0d485009714cE586358E3761754929904D76B9D",
+            "ETH": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+        },
+        "owner": {
+            "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
+        },
+        "registrant": {
+            "hash": "0x220866b1a2219f40e72f5c628b65d54268ca3a9d",
+        },
+        "wrapped_owner": null,
+        "registration_date": "2017-06-18T08:39:14.000Z",
+        "resolved_address": {
+            "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
+        },
+        "tokens": [
+            {
+                "id": "79233663829379634837589865448569342784712482819484549289560981379859480642508",
+                "contract_hash": "0x57f1887a8bf19b14fc0df6fd9b2acc9af147ea85",
+                "type": "NATIVE_DOMAIN_TOKEN",
+            }
+        ],
+    });
+    assert_eq!(request, vitalik_detailed_json.clone());
     // get detailed domain with emojied name and with wrapped token
     let request: Value = send_get_request(&base, "/api/v1/1/domains/wa🇬🇲i.eth").await;
     assert_eq!(
@@ -360,43 +351,25 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
             "names": {
                 "0x9c996076a85b46061d9a70ff81f013853a86b619": "wa🇬🇲i.eth",
                 "0xd8da6bf26964af9d7eed9e03e53415d37aa96045": "vitalik.eth",
-                "0xeefb13c7d42efcc655e528da6d6f7bbcf9a2251d": "test.eth",
             }
+        })
+    );
+
+    let response: Value = send_get_request(
+        &base,
+        "/api/v1/1/addresses/0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
+    )
+    .await;
+    assert_eq!(
+        response,
+        json!({
+            "domain": vitalik_detailed_json
         })
     );
 }
 
-#[sqlx::test(migrations = "../bens-logic/tests/migrations")]
-async fn basic_gno_domain_extracting_works(pool: PgPool) {
+async fn check_basic_scenario_gno(settings: Settings, base: Url) {
     let network_id = "10200";
-    let postgres_url = std::env::var("DATABASE_URL").expect("env should be here from sqlx::test");
-    let db_url = format!(
-        "{postgres_url}{}",
-        pool.connect_options().get_database().unwrap()
-    );
-    std::env::set_var("BENS__DATABASE__CONNECT__URL", db_url);
-    std::env::set_var("BENS__CONFIG", "./tests/config.test.toml");
-    let mut settings = Settings::build().expect("Failed to build settings");
-    let (server_settings, base) = get_test_server_settings();
-    settings.server = server_settings;
-
-    let gnosis_client = mocked_blockscout_client().await;
-    settings.subgraphs_reader.networks = serde_json::from_value(serde_json::json!(
-        {
-            network_id: {
-                "blockscout": {
-                    "url": gnosis_client.url()
-                },
-                "subgraphs": {
-                    "genome-subgraph": {
-                        "empty_label_hash": "0x1a13b687a5ff1d8ab1a9e189e1507a6abe834a9296cc8cff937905e3dee0c4f6",
-                        "native_token_contract": "0xfd3d666dB2557983F3F04d61f90E35cc696f6D60"
-                    }
-                }
-            }
-        }
-    )).unwrap();
-
     init_server(
         || async {
             bens_server::run(settings).await.unwrap();
