@@ -69,7 +69,7 @@ pub struct NetworkSettings {
 pub struct SubgraphSettings {
     #[serde(default = "default_use_cache")]
     pub use_cache: bool,
-    #[serde(default = "default_address_resolve_technique")]
+    #[serde(default)]
     pub address_resolve_technique: AddressResolveTechnique,
     #[serde(default)]
     pub empty_label_hash: Option<Bytes>,
@@ -79,10 +79,6 @@ pub struct SubgraphSettings {
 
 fn default_use_cache() -> bool {
     true
-}
-
-fn default_address_resolve_technique() -> AddressResolveTechnique {
-    AddressResolveTechnique::ReverseRegistry
 }
 
 impl From<SubgraphSettings> for bens_logic::subgraphs_reader::SubgraphSettings {

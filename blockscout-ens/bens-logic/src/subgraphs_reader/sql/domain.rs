@@ -136,7 +136,7 @@ pub async fn get_domain(
             LEFT JOIN {schema}.multicoin_addr_changed mac ON d.resolver = mac.resolver
             WHERE 
                 d.id = $1
-                AND d.block_range @> 2147483647
+                AND d.{DOMAIN_BLOCK_RANGE_WHERE_CLAUSE}
                 AND mac.coin_type IS NOT NULL
                 AND mac.addr IS NOT NULL
             GROUP BY d.id
@@ -296,7 +296,7 @@ pub async fn batch_search_addr_reverse_names(
         FROM {schema}.domain d
         JOIN {schema}.name_changed nc ON nc.resolver = d.resolver
         WHERE d.id = ANY($1)
-            AND d.block_range @> 2147483647
+            AND d.{DOMAIN_BLOCK_RANGE_WHERE_CLAUSE}
         ORDER BY nc.block_number DESC;
         "#,
     ))

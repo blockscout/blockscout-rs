@@ -1,7 +1,10 @@
 use super::CachedView;
 use crate::{
     entity::subgraph::domain::AddrReverseDomainWithActualName,
-    subgraphs_reader::{sql::bind_string_list, SubgraphReadError},
+    subgraphs_reader::{
+        sql::{bind_string_list, DOMAIN_BLOCK_RANGE_WHERE_CLAUSE},
+        SubgraphReadError,
+    },
 };
 use sqlx::PgPool;
 use tracing::instrument;
@@ -39,10 +42,9 @@ impl CachedView for AddrReverseNamesView {
         JOIN {schema}.domain domain ON domain.name = nc.name
         WHERE true
         AND addr_reversed_domain.parent = '0x91d1777781884d03a6757a803996e38de2a42967fb37eeaca72729271025a9e2'
-        AND domain.name = nc.name
-        AND addr_reversed_domain.block_range @> 2147483647
-        AND domain.block_range @> 2147483647
-        AND nc.block_range @> 2147483647
+        AND addr_reversed_domain.{DOMAIN_BLOCK_RANGE_WHERE_CLAUSE}
+        AND domain.{DOMAIN_BLOCK_RANGE_WHERE_CLAUSE}
+        AND nc.{DOMAIN_BLOCK_RANGE_WHERE_CLAUSE}
         "#
         )
     }
