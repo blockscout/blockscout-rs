@@ -7,6 +7,7 @@ use crate::{
     },
 };
 use anyhow::Context;
+use ethers::addressbook::Address;
 use sea_query::{Alias, Condition, Expr, PostgresQueryBuilder, SelectStatement};
 use sqlx::postgres::{PgPool, PgQueryResult};
 use tracing::instrument;
@@ -51,8 +52,12 @@ mod sql_gen {
     }
 
     pub fn domain_select(schema: &str) -> SelectStatement {
+        domain_select_custom(schema, DOMAIN_DEFAULT_SELECT_CLAUSE)
+    }
+
+    pub fn domain_select_custom(schema: &str, select: &str) -> SelectStatement {
         sea_query::Query::select()
-            .expr(Expr::cust(DOMAIN_DEFAULT_SELECT_CLAUSE))
+            .expr(Expr::cust(select))
             .from((Alias::new(schema), Alias::new("domain")))
             .to_owned()
     }
@@ -210,39 +215,93 @@ pub async fn find_resolved_addresses(
     schema: &str,
     input: &LookupAddressInput,
 ) -> Result<Vec<Domain>, SubgraphReadError> {
-    let mut query = sql_gen::domain_select(schema);
-    let mut q = query
-        .with_block_range()
-        .with_non_empty_label()
-        .with_resolved_names();
-    if input.only_active {
-        q = q.with_not_expired();
-    };
+    let sql = gen_sql_select_domains_by_address(
+        schema,
+        None,
+        input.only_active,
+        input.resolved_to,
+        input.owned_by,
+        Some(&input.pagination),
+    )?;
 
-    // Trick: in resolved_to and owned_by are not provided, binding still exists and `cond` will be false
-    let mut main_cond = Condition::any().add(Expr::cust("$1 <> $1"));
-    if input.resolved_to {
-        main_cond = main_cond.add(Expr::cust("resolved_address = $1"));
-    }
-    if input.owned_by {
-        main_cond = main_cond.add(Expr::cust("owner = $1"));
-        main_cond = main_cond.add(Expr::cust("wrapped_owner = $1"));
-    }
-    q = q.cond_where(main_cond);
-
-    input
-        .pagination
-        .add_to_query(q)
-        .context("adding pagination to query")
-        .map_err(|e| SubgraphReadError::Internal(e.to_string()))?;
-
-    let sql = q.to_string(PostgresQueryBuilder);
-    tracing::debug!(sql = sql, "build SQL query for 'find_resolved_addresses'");
     let domains = sqlx::query_as(&sql)
         .bind(hex(input.address))
         .fetch_all(pool)
         .await?;
     Ok(domains)
+}
+
+#[instrument(
+    name = "count_domains_by_address",
+    skip(pool),
+    err(level = "error"),
+    level = "info"
+)]
+pub async fn count_domains_by_address(
+    pool: &PgPool,
+    schema: &str,
+    address: Address,
+    only_active: bool,
+    resolved_to: bool,
+    owned_by: bool,
+) -> Result<i64, SubgraphReadError> {
+    let sql = gen_sql_select_domains_by_address(
+        schema,
+        Some("COUNT(*)"),
+        only_active,
+        resolved_to,
+        owned_by,
+        None,
+    )?;
+
+    let count: i64 = sqlx::query_scalar(&sql)
+        .bind(hex(address))
+        .fetch_one(pool)
+        .await?;
+    Ok(count)
+}
+
+fn gen_sql_select_domains_by_address(
+    schema: &str,
+    select_clause: Option<&str>,
+    only_active: bool,
+    resolved_to: bool,
+    owned_by: bool,
+    pagination: Option<&DomainPaginationInput>,
+) -> Result<String, SubgraphReadError> {
+    let mut query = if let Some(select_clause) = select_clause {
+        sql_gen::domain_select_custom(schema, select_clause)
+    } else {
+        sql_gen::domain_select(schema)
+    };
+
+    let mut q = query
+        .with_block_range()
+        .with_non_empty_label()
+        .with_resolved_names();
+    if only_active {
+        q = q.with_not_expired();
+    };
+
+    // Trick: in resolved_to and owned_by are not provided, binding still exists and `cond` will be false
+    let mut main_cond = Condition::any().add(Expr::cust("$1 <> $1"));
+    if resolved_to {
+        main_cond = main_cond.add(Expr::cust("resolved_address = $1"));
+    }
+    if owned_by {
+        main_cond = main_cond.add(Expr::cust("owner = $1"));
+        main_cond = main_cond.add(Expr::cust("wrapped_owner = $1"));
+    }
+    q = q.cond_where(main_cond);
+
+    if let Some(pagination) = pagination {
+        pagination
+            .add_to_query(q)
+            .context("adding pagination to query")
+            .map_err(|e| SubgraphReadError::Internal(e.to_string()))?;
+    }
+
+    Ok(q.to_string(PostgresQueryBuilder))
 }
 
 // TODO: rewrite to sea_query generation

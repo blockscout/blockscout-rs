@@ -183,6 +183,7 @@ message GetAddressRequest {
 
 message GetAddressResponse {
   DetailedDomain domain = 1;
+  int32 resolved_domains_count = 2;
 }
 
 message BatchResolveAddressNamesRequest {

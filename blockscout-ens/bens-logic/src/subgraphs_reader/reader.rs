@@ -381,6 +381,31 @@ impl SubgraphReader {
         }
     }
 
+    pub async fn count_domains_by_address(
+        &self,
+        network_id: i64,
+        address: Address,
+        resolved_to: bool,
+        owned_by: bool,
+    ) -> Result<i64, SubgraphReadError> {
+        let network = self
+            .networks
+            .get(&network_id)
+            .ok_or_else(|| SubgraphReadError::NetworkNotFound(network_id))?;
+        let subgraph = &network.default_subgraph;
+        let only_active = true;
+        let count = sql::count_domains_by_address(
+            self.pool.as_ref(),
+            &subgraph.schema_name,
+            address,
+            only_active,
+            resolved_to,
+            owned_by,
+        )
+        .await?;
+        Ok(count)
+    }
+
     pub async fn batch_resolve_address_names(
         &self,
         input: BatchResolveAddressNamesInput,
