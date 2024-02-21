@@ -1,7 +1,8 @@
 use crate::{
     metrics,
     proto::{
-        solidity_verifier_server::SolidityVerifier, ListCompilerVersionsRequest,
+        solidity_verifier_server::SolidityVerifier, BatchVerifyResponse,
+        BatchVerifySolidityStandardJsonRequest, ListCompilerVersionsRequest,
         ListCompilerVersionsResponse, VerifyResponse, VerifySolidityMultiPartRequest,
         VerifySolidityStandardJsonRequest,
     },
@@ -227,6 +228,13 @@ impl SolidityVerifier for SolidityVerifierService {
             "standard-json",
         );
         Ok(Response::new(response.into_inner()))
+    }
+
+    async fn batch_verify_standard_json(
+        &self,
+        _request: Request<BatchVerifySolidityStandardJsonRequest>,
+    ) -> Result<Response<BatchVerifyResponse>, Status> {
+        todo!()
     }
 
     async fn list_compiler_versions(

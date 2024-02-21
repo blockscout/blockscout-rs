@@ -32,6 +32,26 @@ paths:
             $ref: '#/definitions/v2LookupMethodsRequest'
       tags:
         - SolidityVerifier
+  /api/v2/verifier/solidity/sources:batch-verify-standard-json:
+    post:
+      operationId: SolidityVerifier_BatchVerifyStandardJson
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v2BatchVerifyResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v2BatchVerifySolidityStandardJsonRequest'
+      tags:
+        - SolidityVerifier
   /api/v2/verifier/solidity/sources:verify-multi-part:
     post:
       operationId: SolidityVerifier_VerifyMultiPart
@@ -203,6 +223,29 @@ paths:
       tags:
         - Health
 definitions:
+  BatchVerifyResponseContractVerificationResults:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v2ContractVerificationResult'
+  ContractVerificationResultCompilerCompiler:
+    type: string
+    enum:
+      - UNSPECIFIED
+      - SOLC
+      - VYPER
+    default: UNSPECIFIED
+  ContractVerificationResultLanguageLanguage:
+    type: string
+    enum:
+      - UNSPECIFIED
+      - SOLIDITY
+      - YUL
+      - VYPER
+    default: UNSPECIFIED
   ExtraDataBytecodePart:
     type: object
     properties:
@@ -293,6 +336,28 @@ definitions:
       '@type':
         type: string
     additionalProperties: {}
+  v2BatchVerifyResponse:
+    type: object
+    properties:
+      compilationFailure:
+        $ref: '#/definitions/v2CompilationFailure'
+      contractVerificationResults:
+        $ref: '#/definitions/BatchVerifyResponseContractVerificationResults'
+  v2BatchVerifySolidityStandardJsonRequest:
+    type: object
+    properties:
+      contracts:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v2Contract'
+        title: / Contracts to be verified
+      compilerVersion:
+        type: string
+        title: / Compiler version used to compile the contract
+      input:
+        type: string
+        title: / https://docs.soliditylang.org/en/latest/using-the-compiler.html#input-description
   v2BytecodeType:
     type: string
     enum:
@@ -300,6 +365,69 @@ definitions:
       - CREATION_INPUT
       - DEPLOYED_BYTECODE
     default: BYTECODE_TYPE_UNSPECIFIED
+  v2CompilationFailure:
+    type: object
+    properties:
+      message:
+        type: string
+  v2Contract:
+    type: object
+    properties:
+      creationCode:
+        type: string
+      runtimeCode:
+        type: string
+      metadata:
+        $ref: '#/definitions/v2VerificationMetadata'
+        title: / An optional field with metadata used for logging purposes
+  v2ContractVerificationResult:
+    type: object
+    properties:
+      creationCode:
+        type: string
+      runtimeCode:
+        type: string
+      compiler:
+        $ref: '#/definitions/ContractVerificationResultCompilerCompiler'
+      compilerVersion:
+        type: string
+      language:
+        $ref: '#/definitions/ContractVerificationResultLanguageLanguage'
+      fileName:
+        type: string
+      contractName:
+        type: string
+      sources:
+        type: object
+        additionalProperties:
+          type: string
+        title: |-
+          / Map of path to source code
+          / (includes only files related to the verified contracts)
+      compilerSettings:
+        type: string
+        title: / Compiler-specific settings such as optimization, linking, etc (json)
+      compilationArtifacts:
+        type: string
+        title: / General and compiler-specific artifacts (abi, userdoc, devdoc, licenses, etc) (json)
+      creationCodeArtifacts:
+        type: string
+        title: / Store info about the creation code (sourcemaps, linkreferences) (json)
+      runtimeCodeArtifacts:
+        type: string
+        title: / Store info about the runtime code (sourcemaps, linkreferences, immutables) (json)
+      creationMatch:
+        type: boolean
+      creationValues:
+        type: string
+      creationTransformations:
+        type: string
+      runtimeMatch:
+        type: boolean
+      runtimeValues:
+        type: string
+      runtimeTransformations:
+        type: string
   v2HealthCheckResponse:
     type: object
     properties:
