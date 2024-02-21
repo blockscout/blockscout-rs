@@ -121,7 +121,16 @@ impl DomainsExtractor for DomainsExtractorService {
             .map(conversion::detailed_domain_from_logic)
             .transpose()
             .map_err(map_convertion_error)?;
-        Ok(tonic::Response::new(GetAddressResponse { domain }))
+
+        let resolved_domains_count = self
+            .subgraph_reader
+            .count_domains_by_address(network_id, address, true, false)
+            .await
+            .map_err(map_subgraph_error)? as i32;
+        Ok(tonic::Response::new(GetAddressResponse {
+            domain,
+            resolved_domains_count,
+        }))
     }
 
     async fn batch_resolve_address_names(

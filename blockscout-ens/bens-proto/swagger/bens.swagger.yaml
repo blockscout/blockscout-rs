@@ -417,6 +417,9 @@ definitions:
     properties:
       domain:
         $ref: '#/definitions/v1DetailedDomain'
+      resolved_domains_count:
+        type: integer
+        format: int32
   v1HealthCheckResponse:
     type: object
     properties:

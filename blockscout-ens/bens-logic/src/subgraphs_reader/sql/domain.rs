@@ -7,6 +7,7 @@ use crate::{
     },
 };
 use anyhow::Context;
+use ethers::addressbook::Address;
 use sea_query::{Alias, Condition, Expr, PostgresQueryBuilder, SelectStatement};
 use sqlx::postgres::{PgPool, PgQueryResult};
 use tracing::instrument;
@@ -51,8 +52,12 @@ mod sql_gen {
     }
 
     pub fn domain_select(schema: &str) -> SelectStatement {
+        domain_select_custom(schema, DOMAIN_DEFAULT_SELECT_CLAUSE)
+    }
+
+    pub fn domain_select_custom(schema: &str, select: &str) -> SelectStatement {
         sea_query::Query::select()
-            .expr(Expr::cust(DOMAIN_DEFAULT_SELECT_CLAUSE))
+            .expr(Expr::cust(select))
             .from((Alias::new(schema), Alias::new("domain")))
             .to_owned()
     }
@@ -215,34 +220,29 @@ pub async fn find_resolved_addresses(
         .with_block_range()
         .with_non_empty_label()
         .with_resolved_names();
-    if input.only_active {
+    if only_active {
         q = q.with_not_expired();
     };
 
     // Trick: in resolved_to and owned_by are not provided, binding still exists and `cond` will be false
     let mut main_cond = Condition::any().add(Expr::cust("$1 <> $1"));
-    if input.resolved_to {
+    if resolved_to {
         main_cond = main_cond.add(Expr::cust("resolved_address = $1"));
     }
-    if input.owned_by {
+    if owned_by {
         main_cond = main_cond.add(Expr::cust("owner = $1"));
         main_cond = main_cond.add(Expr::cust("wrapped_owner = $1"));
     }
     q = q.cond_where(main_cond);
 
-    input
-        .pagination
-        .add_to_query(q)
-        .context("adding pagination to query")
-        .map_err(|e| SubgraphReadError::Internal(e.to_string()))?;
+    if let Some(pagination) = pagination {
+        pagination
+            .add_to_query(q)
+            .context("adding pagination to query")
+            .map_err(|e| SubgraphReadError::Internal(e.to_string()))?;
+    }
 
-    let sql = q.to_string(PostgresQueryBuilder);
-    tracing::debug!(sql = sql, "build SQL query for 'find_resolved_addresses'");
-    let domains = sqlx::query_as(&sql)
-        .bind(hex(input.address))
-        .fetch_all(pool)
-        .await?;
-    Ok(domains)
+    Ok(q.to_string(PostgresQueryBuilder))
 }
 
 // TODO: rewrite to sea_query generation
