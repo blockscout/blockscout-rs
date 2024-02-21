@@ -363,7 +363,8 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
     assert_eq!(
         response,
         json!({
-            "domain": vitalik_detailed_json
+            "domain": vitalik_detailed_json,
+            "resolved_domains_count": 2,
         })
     );
 }

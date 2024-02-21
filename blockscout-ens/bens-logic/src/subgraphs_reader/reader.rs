@@ -393,10 +393,12 @@ impl SubgraphReader {
             .get(&network_id)
             .ok_or_else(|| SubgraphReadError::NetworkNotFound(network_id))?;
         let subgraph = &network.default_subgraph;
+        let only_active = true;
         let count = sql::count_domains_by_address(
             self.pool.as_ref(),
             &subgraph.schema_name,
             address,
+            only_active,
             resolved_to,
             owned_by,
         )

@@ -215,7 +215,66 @@ pub async fn find_resolved_addresses(
     schema: &str,
     input: &LookupAddressInput,
 ) -> Result<Vec<Domain>, SubgraphReadError> {
-    let mut query = sql_gen::domain_select(schema);
+    let sql = gen_sql_select_domains_by_address(
+        schema,
+        None,
+        input.only_active,
+        input.resolved_to,
+        input.owned_by,
+        Some(&input.pagination),
+    )?;
+
+    let domains = sqlx::query_as(&sql)
+        .bind(hex(input.address))
+        .fetch_all(pool)
+        .await?;
+    Ok(domains)
+}
+
+#[instrument(
+    name = "count_domains_by_address",
+    skip(pool),
+    err(level = "error"),
+    level = "info"
+)]
+pub async fn count_domains_by_address(
+    pool: &PgPool,
+    schema: &str,
+    address: Address,
+    only_active: bool,
+    resolved_to: bool,
+    owned_by: bool,
+) -> Result<i64, SubgraphReadError> {
+    let sql = gen_sql_select_domains_by_address(
+        schema,
+        Some("COUNT(*)"),
+        only_active,
+        resolved_to,
+        owned_by,
+        None,
+    )?;
+
+    let count: i64 = sqlx::query_scalar(&sql)
+        .bind(hex(address))
+        .fetch_one(pool)
+        .await?;
+    Ok(count)
+}
+
+fn gen_sql_select_domains_by_address(
+    schema: &str,
+    select_clause: Option<&str>,
+    only_active: bool,
+    resolved_to: bool,
+    owned_by: bool,
+    pagination: Option<&DomainPaginationInput>,
+) -> Result<String, SubgraphReadError> {
+    let mut query = if let Some(select_clause) = select_clause {
+        sql_gen::domain_select_custom(schema, select_clause)
+    } else {
+        sql_gen::domain_select(schema)
+    };
+
     let mut q = query
         .with_block_range()
         .with_non_empty_label()
