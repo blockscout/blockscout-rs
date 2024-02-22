@@ -1,16 +1,55 @@
-use crate::{repository, types::user_op::UserOp};
+use crate::{indexer::settings::IndexerSettings, repository, types::user_op::UserOp};
 use anyhow::{anyhow, bail};
 use ethers::prelude::{
     abi::{AbiEncode, Error},
     parse_log,
     types::{Action, Address, Bytes, Filter, Log, TransactionReceipt},
-    EthEvent, Middleware, Provider, PubsubClient, H256,
+    EthEvent, Middleware, Provider, ProviderError, PubsubClient, H256,
 };
-use futures::{stream, stream::BoxStream, StreamExt};
+use futures::{
+    stream,
+    stream::{repeat_with, BoxStream},
+    Stream, StreamExt,
+};
 use sea_orm::DatabaseConnection;
-use std::{future, sync::Arc, time::Duration};
+use std::{future, num::NonZeroUsize, sync::Arc, time, time::Duration};
 use tokio::time::sleep;
 use tracing::instrument;
+
+#[derive(Hash, Eq, PartialEq)]
+struct Job {
+    tx_hash: H256,
+    block_hash: H256,
+}
+
+impl From<H256> for Job {
+    fn from(hash: H256) -> Self {
+        Self {
+            tx_hash: hash,
+            block_hash: H256::zero(),
+        }
+    }
+}
+
+impl TryFrom<Log> for Job {
+    type Error = anyhow::Error;
+
+    fn try_from(log: Log) -> Result<Self, Self::Error> {
+        if log.removed == Some(true) {
+            bail!("unexpected pending log")
+        }
+        let tx_hash = log
+            .transaction_hash
+            .ok_or(anyhow::anyhow!("unexpected pending log"))?;
+        let block_hash = log
+            .block_hash
+            .ok_or(anyhow::anyhow!("unexpected pending log"))?;
+        Ok(Self {
+            tx_hash,
+            block_hash,
+        })
+    }
+}
 
 pub trait IndexerLogic {
     fn entry_point() -> Address;
@@ -56,50 +95,53 @@ pub struct Indexer<C: PubsubClient> {
     client: Provider<C>,
 
     db: Arc<DatabaseConnection>,
+
+    settings: IndexerSettings,
 }
 
 impl<C: PubsubClient> Indexer<C> {
-    pub fn new(client: Provider<C>, db: Arc<DatabaseConnection>) -> Self {
-        Self { client, db }
+    pub fn new(
+        client: Provider<C>,
+        db: Arc<DatabaseConnection>,
+        settings: IndexerSettings,
+    ) -> Self {
+        Self {
+            client,
+            db,
+            settings,
+        }
     }
 
     #[instrument(name = "indexer", skip_all, level = "info", fields(version = L::version()))]
-    pub async fn start<L: IndexerLogic>(
-        &self,
-        concurrency: u32,
-        realtime: bool,
-        past_rpc_logs_range: u32,
-        past_db_logs_start_block: i32,
-        past_db_logs_end_block: i32,
-    ) -> anyhow::Result<()> {
-        let mut stream_txs: BoxStream<H256> = Box::pin(stream::empty());
+    pub async fn start<L: IndexerLogic>(&self, supports_subscriptions: bool) -> anyhow::Result<()> {
+        let mut stream_jobs: Vec<BoxStream<Job>> = Vec::new();
 
-        let filter = L::base_tx_logs_filter();
-
-        if realtime {
-            // subscribe to a stream of new logs starting at the current block
-            tracing::info!("subscribing to BeforeExecution logs from rpc");
-            let realtime_stream_txs =
-                self.client
-                    .subscribe_logs(&filter)
+        if self.settings.realtime.enabled {
+            if supports_subscriptions {
+                // subscribe to a stream of new logs starting at the current block
+                tracing::info!("subscribing to BeforeExecution logs from rpc");
+                let realtime_stream_jobs = self
+                    .client
+                    .subscribe_logs(&L::base_tx_logs_filter())
                     .await?
-                    .filter_map(|log| {
-                        future::ready(if log.removed != Some(true) {
-                            log.transaction_hash
-                        } else {
-                            None
-                        })
-                    });
+                    .filter_map(|log| async { Job::try_from(log).ok() });
 
-            stream_txs = Box::pin(stream_txs.chain(realtime_stream_txs));
+                stream_jobs.push(Box::pin(realtime_stream_jobs));
+            } else {
+                tracing::info!("starting polling of past BeforeExecution logs from rpc");
+                stream_jobs.push(Box::pin(self.poll_for_jobs::<L>()));
+            }
         }
 
         tracing::debug!("fetching latest block number");
         let block_number = self.client.get_block_number().await?.as_u32();
         tracing::info!(block_number, "latest block number");
 
-        let rpc_refetch_block_number = block_number.saturating_sub(past_rpc_logs_range);
-        if past_db_logs_start_block != 0 || past_db_logs_end_block != 0 {
+        let rpc_refetch_block_number =
+            block_number.saturating_sub(self.settings.past_rpc_logs_indexer.block_range);
+        if self.settings.past_db_logs_indexer.enabled {
+            let past_db_logs_start_block = self.settings.past_db_logs_indexer.start_block;
+            let past_db_logs_end_block = self.settings.past_db_logs_indexer.end_block;
             let from_block = if past_db_logs_start_block > 0 {
                 past_db_logs_start_block as u64
             } else {
@@ -121,45 +163,38 @@ impl<C: PubsubClient> Indexer<C> {
             .await?;
             tracing::info!(count = txs.len(), "found missed txs in db");
 
-            stream_txs = Box::pin(stream::iter(txs).chain(stream_txs));
+            stream_jobs.push(Box::pin(stream::iter(txs).map(Job::from)));
         }
 
-        if past_rpc_logs_range > 0 {
-            tracing::info!(
-                from_block = rpc_refetch_block_number + 1,
-                to_block = block_number,
-                "fetching past BeforeExecution logs from rpc"
-            );
-            let filter = filter
-                .from_block(rpc_refetch_block_number + 1)
-                .to_block(block_number);
-            let txs: Vec<H256> = self
-                .client
-                .get_logs(&filter)
-                .await?
-                .iter()
-                .filter_map(|log| log.transaction_hash)
-                .collect();
-            tracing::info!(count = txs.len(), "fetched past BeforeExecution logs");
+        if self.settings.past_rpc_logs_indexer.enabled {
+            let jobs = self
+                .fetch_jobs_for_block_range::<L>(rpc_refetch_block_number + 1, block_number)
+                .await?;
 
-            stream_txs = Box::pin(stream::iter(txs).chain(stream_txs));
+            stream_jobs.push(Box::pin(stream::iter(jobs)));
         }
 
-        // map to transactions hashes containing user ops, with deduplicated transaction hashes
+        let cache_size =
+            NonZeroUsize::new(self.settings.deduplication_cache_size).unwrap_or(NonZeroUsize::MIN);
+        let cache = lru::LruCache::new(cache_size);
+        // map to transactions hashes containing user ops, deduplicate transaction hashes through LRU cache
         // e.g. [A, A, B, B, B, C, C] -> [A, B, C]
-        let stream_txs = stream_txs
-            .scan(H256::zero(), |prev, tx_hash| {
-                if *prev == tx_hash {
-                    future::ready(Some(None))
-                } else {
-                    *prev = tx_hash;
-                    future::ready(Some(Some(tx_hash)))
+        let stream_txs = stream::select_all(stream_jobs)
+            .scan(cache, |cache, job| {
+                let now = time::Instant::now();
+                let tx_hash = job.tx_hash;
+                match cache.put(job, now) {
+                    // if LRU cache has seen the same tx hash recently, we skip it
+                    Some(ts) if now < ts + self.settings.deduplication_interval => {
+                        future::ready(Some(None))
+                    }
+                    _ => future::ready(Some(Some(tx_hash))),
                 }
             })
             .filter_map(|tx_hash| async move { tx_hash });
 
         stream_txs
-            .for_each_concurrent(Some(concurrency as usize), |tx| async move {
+            .for_each_concurrent(Some(self.settings.concurrency as usize), |tx| async move {
                 let mut backoff = vec![1, 5, 20].into_iter().map(Duration::from_secs);
                 while let Err(err) = &self.handle_tx::<L>(tx).await {
                     match backoff.next() {
@@ -177,6 +212,51 @@ impl<C: PubsubClient> Indexer<C> {
             .await;
 
         Ok(())
+    }
+
+    async fn fetch_jobs_for_block_range<L: IndexerLogic>(
+        &self,
+        from_block: u32,
+        to_block: u32,
+    ) -> Result<Vec<Job>, ProviderError> {
+        let filter = L::base_tx_logs_filter()
+            .from_block(from_block)
+            .to_block(to_block);
+
+        tracing::info!(
+            from_block,
+            to_block,
+            "fetching past BeforeExecution logs from rpc"
+        );
+        let jobs: Vec<Job> = self
+            .client
+            .get_logs(&filter)
+            .await?
+            .into_iter()
+            .filter_map(|log| Job::try_from(log).ok())
+            .collect();
+        tracing::info!(count = jobs.len(), "fetched past BeforeExecution logs");
+
+        Ok(jobs)
+    }
+
+    fn poll_for_jobs<L: IndexerLogic>(&self) -> impl Stream<Item = Job> + '_ {
+        repeat_with(|| async {
+            sleep(self.settings.realtime.polling_interval).await;
+            tracing::debug!("fetching latest block number");
+            let block_number = self.client.get_block_number().await?.as_u32();
+            tracing::info!(block_number, "latest block number");
+
+            let from_block =
+                block_number.saturating_sub(self.settings.realtime.polling_block_range);
+            let jobs = self
+                .fetch_jobs_for_block_range::<L>(from_block, block_number)
+                .await?;
+
+            Ok::<Vec<Job>, ProviderError>(jobs)
+        })
+        .filter_map(|fut| async { fut.await.ok() })
+        .flat_map(stream::iter)
     }
 
     #[instrument(name = "indexer::handle_tx", skip(self), level = "info")]
@@ -335,7 +415,11 @@ mod tests {
         client.push(receipt).unwrap();
         client.push(tx).unwrap();
 
-        let indexer = Indexer::new(Provider::new(PubSubMockProvider(client)), db.clone());
+        let indexer = Indexer::new(
+            Provider::new(PubSubMockProvider(client)),
+            db.clone(),
+            Default::default(),
+        );
         indexer.handle_tx::<v06::IndexerV06>(tx_hash).await.unwrap();
 
         let op_hash =

@@ -42,6 +42,9 @@ ethers = { version = "2.0.11", features = ["ws"] }
 num-traits = "0.2.17"
 itertools = "0.11.0"
 chrono = "0.4.31"
+lru = "0.12.2"
+async-trait = "0.1.77"
+serde_with = "3.6.1"
 
 [dev-dependencies]
 async-trait = "0.1"

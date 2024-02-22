@@ -1,8 +1,8 @@
 use crate::settings::Settings;
-use ethers::prelude::{Provider, Ws};
+use ethers::prelude::Provider;
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
-use user_ops_indexer_logic::indexer::{v06, v07};
+use user_ops_indexer_logic::indexer::{common_transport::CommonTransport, v06, v07};
 
 pub async fn run(
     settings: Settings,
@@ -11,23 +11,21 @@ pub async fn run(
     tracing::info!("connecting to rpc");
 
     let db_connection = Arc::new(db_connection);
-    let ws_client = Ws::connect_with_reconnects(settings.indexer.rpc_url.clone(), 20).await?;
-    let client = Provider::new(ws_client);
+
+    let transport = CommonTransport::new(settings.indexer.rpc_url.clone()).await?;
+    let supports_subscriptions = matches!(transport, CommonTransport::Ws(_));
+    let client = Provider::new(transport);
 
     if settings.indexer.entrypoints.v06 {
-        let indexer =
-            user_ops_indexer_logic::indexer::Indexer::new(client.clone(), db_connection.clone());
+        let indexer = user_ops_indexer_logic::indexer::Indexer::new(
+            client.clone(),
+            db_connection.clone(),
+            settings.indexer.clone(),
+        );
 
-        let settings = settings.clone();
         tokio::spawn(async move {
             indexer
-                .start::<v06::IndexerV06>(
-                    settings.indexer.concurrency,
-                    settings.indexer.realtime.enabled,
-                    settings.indexer.past_rpc_logs_indexer.get_block_range(),
-                    settings.indexer.past_db_logs_indexer.get_start_block(),
-                    settings.indexer.past_db_logs_indexer.get_end_block(),
-                )
+                .start::<v06::IndexerV06>(supports_subscriptions)
                 .await
                 .map_err(|err| {
                     tracing::error!("failed to start indexer for v0.6: {err}");
@@ -39,18 +37,15 @@ pub async fn run(
     }
 
     if settings.indexer.entrypoints.v07 {
-        let indexer =
-            user_ops_indexer_logic::indexer::Indexer::new(client.clone(), db_connection.clone());
+        let indexer = user_ops_indexer_logic::indexer::Indexer::new(
+            client.clone(),
+            db_connection.clone(),
+            settings.indexer.clone(),
+        );
 
         tokio::spawn(async move {
             indexer
-                .start::<v07::IndexerV07>(
-                    settings.indexer.concurrency,
-                    settings.indexer.realtime.enabled,
-                    settings.indexer.past_rpc_logs_indexer.get_block_range(),
-                    settings.indexer.past_db_logs_indexer.get_start_block(),
-                    settings.indexer.past_db_logs_indexer.get_end_block(),
-                )
+                .start::<v07::IndexerV07>(supports_subscriptions)
                 .await
                 .map_err(|err| {
                     tracing::error!("failed to start indexer for v0.7: {err}");
