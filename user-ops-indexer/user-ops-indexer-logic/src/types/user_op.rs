@@ -182,7 +182,7 @@ impl From<UserOp> for user_ops_indexer_proto::blockscout::user_ops_indexer::v1::
                             .concat()
                             .as_slice(),
                         )
-                        .to_string(),
+                        .encode_hex(),
                         pre_verification_gas: v.pre_verification_gas,
                         gas_fees: H256::from_slice(
                             [
@@ -192,7 +192,7 @@ impl From<UserOp> for user_ops_indexer_proto::blockscout::user_ops_indexer::v1::
                             .concat()
                             .as_slice(),
                         )
-                        .to_string(),
+                        .encode_hex(),
                         paymaster_and_data: v
                             .paymaster_and_data
                             .map_or("0x".to_string(), |b| b.to_string()),

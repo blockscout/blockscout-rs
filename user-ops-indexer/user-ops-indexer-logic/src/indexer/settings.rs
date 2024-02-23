@@ -18,8 +18,10 @@ pub struct IndexerSettings {
 
     pub past_db_logs_indexer: PastDbLogsIndexerSettings,
 
+    #[serde(default = "default_deduplication_cache_size")]
     pub deduplication_cache_size: usize,
 
+    #[serde(default = "default_deduplication_interval")]
     #[serde_as(as = "serde_with::DurationSeconds<u64>")]
     pub deduplication_interval: time::Duration,
 }
@@ -37,9 +39,11 @@ pub struct EntrypointsSettings {
 pub struct RealtimeIndexerSettings {
     pub enabled: bool,
 
+    #[serde(default = "default_polling_interval")]
     #[serde_as(as = "serde_with::DurationSeconds<u64>")]
     pub polling_interval: time::Duration,
 
+    #[serde(default = "default_polling_block_range")]
     pub polling_block_range: u32,
 }
 
@@ -61,6 +65,22 @@ pub struct PastDbLogsIndexerSettings {
     pub end_block: i32,
 }
 
+fn default_polling_interval() -> time::Duration {
+    time::Duration::from_secs(6)
+}
+
+fn default_polling_block_range() -> u32 {
+    6
+}
+
+fn default_deduplication_cache_size() -> usize {
+    1000
+}
+
+fn default_deduplication_interval() -> time::Duration {
+    time::Duration::from_secs(600)
+}
+
 impl Default for IndexerSettings {
     fn default() -> Self {
         Self {
@@ -72,8 +92,8 @@ impl Default for IndexerSettings {
             },
             realtime: RealtimeIndexerSettings {
                 enabled: true,
-                polling_interval: time::Duration::from_secs(12),
-                polling_block_range: 6,
+                polling_interval: default_polling_interval(),
+                polling_block_range: default_polling_block_range(),
             },
             past_rpc_logs_indexer: PastRpcLogsIndexerSettings {
                 enabled: false,
@@ -84,8 +104,8 @@ impl Default for IndexerSettings {
                 start_block: 0,
                 end_block: 0,
             },
-            deduplication_cache_size: 1000,
-            deduplication_interval: time::Duration::from_secs(600),
+            deduplication_cache_size: default_deduplication_cache_size(),
+            deduplication_interval: default_deduplication_interval(),
         }
     }
 }
