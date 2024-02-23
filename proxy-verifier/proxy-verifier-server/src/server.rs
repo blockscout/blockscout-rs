@@ -55,9 +55,6 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let chains = ChainsSettings::new(settings.chains_config)?;
 
-    let health = Arc::new(HealthService::default());
-    let proxy = Arc::new(ProxyService::new(&chains));
-
     let eth_bytecode_db_client = {
         let config = eth_bytecode_db_proto::http_client::Config::new(
             settings.eth_bytecode_db.http_url.into(),
@@ -68,6 +65,9 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
         Arc::new(eth_bytecode_db_proto::http_client::Client::new(config).await)
     };
+
+    let health = Arc::new(HealthService::default());
+    let proxy = Arc::new(ProxyService::new(&chains, eth_bytecode_db_client.clone()));
 
     let blockscout_clients = {
         let mut clients = BTreeMap::new();

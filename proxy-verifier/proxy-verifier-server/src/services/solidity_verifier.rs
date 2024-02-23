@@ -73,10 +73,13 @@ impl SolidityVerifier for SolidityVerifierService {
         &self,
         _request: Request<ListCompilersRequest>,
     ) -> Result<Response<ListCompilersResponse>, Status> {
-        super::list_compilers(
+        let compilers = super::list_compilers(
             self.eth_bytecode_db_client.as_ref(),
             eth_bytecode_db_proto::http_client::solidity_verifier_client::list_compiler_versions,
+            super::SOLIDITY_EVM_VERSIONS,
         )
-        .await
+        .await?;
+
+        Ok(Response::new(ListCompilersResponse { compilers }))
     }
 }
