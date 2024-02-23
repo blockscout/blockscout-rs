@@ -8,6 +8,9 @@ http:
     - selector: blockscout.proxyVerifier.v1.Proxy.ListChains
       get: /api/v1/chains
 
+    - selector: blockscout.proxyVerifier.v1.Proxy.GetVerificationConfig
+      get: /api/v1/verification/config
+
       #################### Solidity Verifier ####################
 
     - selector: blockscout.proxyVerifier.v1.SolidityVerifier.VerifyMultiPart

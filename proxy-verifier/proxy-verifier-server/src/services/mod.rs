@@ -20,6 +20,32 @@ use proxy_verifier_proto::blockscout::proxy_verifier::v1::{
 use std::collections::BTreeMap;
 use tonic::{Response, Status};
 
+pub(crate) const SOLIDITY_EVM_VERSIONS: [&str; 12] = [
+    "homestead",
+    "tangerineWhistle",
+    "spuriousDragon",
+    "byzantium",
+    "constantinople",
+    "petersburg",
+    "istanbul",
+    "berlin",
+    "london",
+    "paris",
+    "shanghai",
+    "default",
+];
+
+pub(crate) const VYPER_EVM_VERSIONS: [&str; 8] = [
+    "byzantium",
+    "constantinople",
+    "petersburg",
+    "istanbul",
+    "berlin",
+    "paris",
+    "shanghai",
+    "default",
+];
+
 pub(crate) async fn verify<'a, Request, Verify, VerifyOutput>(
     blockscout_clients: &'a BTreeMap<String, blockscout_client::Client>,
     eth_bytecode_db_client: &'a eth_bytecode_db_proto::http_client::Client,
@@ -45,10 +71,11 @@ where
     )))
 }
 
-pub(crate) async fn list_compilers<'a, List, ListOutput>(
+pub(crate) async fn list_compilers<'a, List, ListOutput, EvmVersion: Into<String>>(
     eth_bytecode_db_client: &'a eth_bytecode_db_proto::http_client::Client,
     list_compiler_versions: List,
-) -> Result<Response<proxy_verifier_proto_v1::ListCompilersResponse>, Status>
+    evm_versions: impl IntoIterator<Item = EvmVersion>,
+) -> Result<Vec<proxy_verifier_proto_v1::Compiler>, Status>
 where
     List: Fn(
         &'a eth_bytecode_db_proto::http_client::Client,
@@ -70,11 +97,15 @@ where
                 ))
             })?;
 
-    Ok(Response::new(
-        proxy_verifier_proto_v1::ListCompilersResponse {
-            compilers: eth_bytecode_db_response.compiler_versions,
-        },
-    ))
+    let evm_versions: Vec<_> = evm_versions.into_iter().map(Into::<String>::into).collect();
+    Ok(eth_bytecode_db_response
+        .compiler_versions
+        .into_iter()
+        .map(|version| proxy_verifier_proto_v1::Compiler {
+            version,
+            evm_versions: evm_versions.clone(),
+        })
+        .collect())
 }
 
 pub fn contracts_proto_to_inner<'a>(

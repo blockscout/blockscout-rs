@@ -8,6 +8,8 @@ option go_package = "github.com/blockscout/blockscout-rs/proxy-verifier";
 
 service Proxy {
   rpc ListChains(ListChainsRequest) returns (ListChainsResponse) {}
+
+  rpc GetVerificationConfig(GetVerificationConfigRequest) returns (VerificationConfig) {}
 }
 
 service SolidityVerifier {
@@ -29,13 +31,16 @@ service VyperVerifier {
 message ListChainsRequest {}
 
 message ListChainsResponse {
-  message Chain {
-    string id = 1;
-    string name = 2;
-  }
-
   /// List of supported chains
   repeated Chain chains = 1;
+}
+
+message GetVerificationConfigRequest {}
+
+message VerificationConfig {
+  repeated Chain chains = 1;
+  repeated Compiler solidity_compilers = 3;
+  repeated Compiler vyper_compilers = 4;
 }
 
 message SolidityVerifyMultiPartRequest {
@@ -134,14 +139,24 @@ message VerificationResponse {
   }
 }
 
+message ListCompilersRequest {}
+
+message ListCompilersResponse {
+  /// List of supported compiler versions
+  repeated Compiler compilers = 1;
+}
+
+message Chain {
+  string id = 1;
+  string name = 2;
+}
+
 message Contract {
   string chain_id = 1;
   string address = 2;
 }
 
-message ListCompilersRequest {}
-
-message ListCompilersResponse {
-  /// List of supported compiler versions
-  repeated string compilers = 1;
+message Compiler {
+  string version = 1;
+  repeated string evm_versions = 2;
 }
