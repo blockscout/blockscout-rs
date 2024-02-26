@@ -255,7 +255,11 @@ impl<C: PubsubClient> Indexer<C> {
 
             Ok::<Vec<Job>, ProviderError>(jobs)
         })
-        .filter_map(|fut| async { fut.await.ok() })
+        .filter_map(|fut| async {
+            fut.await
+                .map_err(|err| tracing::error!(error = ?err, "failed to poll for logs"))
+                .ok()
+        })
         .flat_map(stream::iter)
     }
 
