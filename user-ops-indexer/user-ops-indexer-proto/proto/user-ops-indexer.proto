@@ -170,7 +170,7 @@ message RawUserOpV07 {
   string nonce = 2;
   string init_code = 3;
   string call_data = 4;
-  string accountGasLimits = 5; // call_gas_limit + verification_gas_limit
+  string account_gas_limits = 5; // call_gas_limit + verification_gas_limit
   uint64 pre_verification_gas = 6;
   string gas_fees = 7; // max_fee_per_gas + max_priority_fee_per_gas
   string paymaster_and_data = 8; // paymaster + paymaster_verification_gas_limit + post_op_gas_limit + paymaster_data

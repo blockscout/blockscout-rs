@@ -534,7 +534,7 @@ definitions:
         type: string
       call_data:
         type: string
-      accountGasLimits:
+      account_gas_limits:
         type: string
         title: call_gas_limit + verification_gas_limit
       pre_verification_gas:
