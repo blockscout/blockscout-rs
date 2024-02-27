@@ -318,7 +318,7 @@ async fn _test_error<T: TestCase>(
 
 mod success_tests {
     use super::*;
-    use solidity_types::Flattened;
+    use solidity_types::{Flattened, StandardJson};
 
     #[tokio::test]
     async fn returns_compilation_related_artifacts() {
@@ -344,6 +344,13 @@ mod success_tests {
     #[tokio::test]
     async fn verifies_runtime_code_with_immutables() {
         let test_case = solidity_types::from_file::<Flattened>("immutables");
+        test_success(&test_case, BytecodeType::CreationInput).await;
+        test_success(&test_case, BytecodeType::DeployedBytecode).await;
+    }
+
+    #[tokio::test]
+    async fn supports_cancun_evm_version() {
+        let test_case = solidity_types::from_file::<StandardJson>("cancun");
         test_success(&test_case, BytecodeType::CreationInput).await;
         test_success(&test_case, BytecodeType::DeployedBytecode).await;
     }
