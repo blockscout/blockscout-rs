@@ -1,6 +1,6 @@
 use crate::proto::{BytecodeType, VerifySolidityMultiPartRequest};
 use blockscout_display_bytes::Bytes as DisplayBytes;
-use ethers_solc::EvmVersion;
+use foundry_compilers::EvmVersion;
 use serde::{Deserialize, Serialize};
 use smart_contract_verifier::{
     solidity::multi_part::{MultiFileContent, VerificationRequest},

@@ -8,7 +8,7 @@ use ethers_solc::CompilerOutput;
 
 #[derive(Clone, Debug)]
 pub struct Success {
-    pub compiler_input: ethers_solc::CompilerInput,
+    pub compiler_input: foundry_compilers::CompilerInput,
     pub compiler_output: CompilerOutput,
     pub compiler_version: compiler::Version,
     pub file_path: String,
@@ -22,8 +22,10 @@ pub struct Success {
     pub deployed_bytecode_artifacts: serde_json::Value,
 }
 
-impl From<(ethers_solc::CompilerInput, verifier::Success)> for Success {
-    fn from((compiler_input, success): (ethers_solc::CompilerInput, verifier::Success)) -> Self {
+impl From<(foundry_compilers::CompilerInput, verifier::Success)> for Success {
+    fn from(
+        (compiler_input, success): (foundry_compilers::CompilerInput, verifier::Success),
+    ) -> Self {
         Self {
             compiler_input,
             compiler_output: success.compiler_output,

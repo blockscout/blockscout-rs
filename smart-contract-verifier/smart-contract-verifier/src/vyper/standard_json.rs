@@ -4,7 +4,7 @@ use crate::{
     verifier::{ContractVerifier, Error},
 };
 use bytes::Bytes;
-use ethers_solc::artifacts::output_selection::OutputSelection;
+use foundry_compilers::artifacts::output_selection::OutputSelection;
 use std::sync::Arc;
 
 pub struct VerificationRequest {

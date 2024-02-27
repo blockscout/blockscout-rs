@@ -7,8 +7,9 @@
 use ethers_solc::{
     artifacts::Severity,
     error::{SolcError, SolcIoError},
-    CompilerInput, CompilerOutput,
+    CompilerOutput,
 };
+use foundry_compilers::CompilerInput;
 use std::{collections::BTreeMap, path::Path, process::Stdio};
 use tokio::process::Command;
 
@@ -28,11 +29,8 @@ mod serde_helpers {
 
 mod types {
     use super::serde_helpers;
-    use ethers_solc::{
-        artifacts::{Contract, Libraries},
-        error::SolcError,
-        CompilerInput, CompilerOutput,
-    };
+    use ethers_solc::{artifacts::Contract, error::SolcError, CompilerOutput};
+    use foundry_compilers::{artifacts::Libraries, CompilerInput};
     use serde::{Deserialize, Serialize};
     use std::{
         collections::{BTreeMap, HashMap},
@@ -271,10 +269,8 @@ pub async fn compile_using_cli(
 mod tests {
     use super::*;
     use crate::compiler::{Fetcher, ListFetcher, Version};
-    use ethers_solc::{
-        artifacts::{Settings, Source},
-        Artifact,
-    };
+    use ethers_solc::Artifact;
+    use foundry_compilers::artifacts::{Settings, Source};
     use hex::ToHex;
     use pretty_assertions::assert_eq;
     use std::{collections::HashSet, env::temp_dir, path::PathBuf, str::FromStr};

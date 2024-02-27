@@ -97,7 +97,7 @@ mod tests {
         compiler::{self, Compilers, ListFetcher},
         consts::DEFAULT_VYPER_COMPILER_LIST,
     };
-    use ethers_solc::artifacts::Source;
+    use foundry_compilers::artifacts::Source;
     use std::{
         collections::{BTreeMap, HashSet},
         env::temp_dir,
