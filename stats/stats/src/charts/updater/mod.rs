@@ -7,7 +7,7 @@ mod dependent;
 mod full;
 mod partial;
 
-pub use batch::ChartBatchUpdater;
+pub use batch::{generate_date_ranges, ChartBatchUpdater};
 pub use dependent::{last_point, parse_and_growth, parse_and_sum, ChartDependentUpdater};
 pub use full::ChartFullUpdater;
 pub use partial::ChartPartialUpdater;
@@ -76,10 +76,12 @@ pub async fn get_last_row<C>(
     min_blockscout_block: i64,
     db: &DatabaseConnection,
     force_full: bool,
+    offset: Option<u64>,
 ) -> Result<Option<DateValue>, UpdateError>
 where
     C: Chart + ?Sized,
 {
+    let offset = offset.unwrap_or(0);
     let last_row = if force_full {
         tracing::info!(
             min_blockscout_block = min_blockscout_block,
@@ -94,7 +96,7 @@ where
             .column(chart_data::Column::MinBlockscoutBlock)
             .filter(chart_data::Column::ChartId.eq(chart_id))
             .order_by_desc(chart_data::Column::Date)
-            .offset(1)
+            .offset(offset)
             .into_model()
             .one(db)
             .await
@@ -108,6 +110,7 @@ where
                             min_blockscout_block = min_blockscout_block,
                             min_chart_block = block,
                             chart = chart.name(),
+                            row = ?row,
                             "running partial update"
                         );
                         Some(DateValue {

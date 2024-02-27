@@ -1736,6 +1736,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba291022dbbd398a455acf126c1e341954079855bc60dfdda641363bd6922569"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3428,11 +3437,13 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 name = "stats"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "blockscout-db",
  "blockscout-service-launcher 0.9.0",
  "chrono",
  "entity",
+ "itertools 0.12.1",
  "lazy_static",
  "migration",
  "pretty_assertions",
