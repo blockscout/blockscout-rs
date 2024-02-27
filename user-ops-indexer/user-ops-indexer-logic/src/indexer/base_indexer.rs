@@ -364,45 +364,10 @@ mod tests {
         indexer::{v06, v07},
         repository::tests::get_shared_db,
     };
-    use async_trait::async_trait;
     use entity::sea_orm_active_enums::{EntryPointVersion, SponsorType};
-    use ethers::prelude::{JsonRpcClient, MockProvider, Provider, PubsubClient};
+    use ethers::prelude::{MockProvider, Provider};
     use ethers_core::types::{Transaction, TransactionReceipt, U256};
-    use futures::stream::{empty, Empty};
-    use serde::{de::DeserializeOwned, Serialize};
-    use serde_json::value::RawValue;
-    use std::{fmt::Debug, str::FromStr};
-
-    #[derive(Debug)]
-    struct PubSubMockProvider<M: JsonRpcClient>(M);
-
-    #[async_trait]
-    impl<M: JsonRpcClient> JsonRpcClient for PubSubMockProvider<M> {
-        type Error = M::Error;
-
-        async fn request<T, R>(&self, method: &str, params: T) -> Result<R, Self::Error>
-        where
-            T: Debug + Serialize + Send + Sync,
-            R: DeserializeOwned + Send,
-        {
-            self.0.request(method, params).await
-        }
-    }
-
-    impl PubsubClient for PubSubMockProvider<MockProvider> {
-        type NotificationStream = Empty<Box<RawValue>>;
-
-        fn subscribe<T: Into<U256>>(
-            &self,
-            _id: T,
-        ) -> Result<Self::NotificationStream, Self::Error> {
-            Ok(empty())
-        }
-
-        fn unsubscribe<T: Into<U256>>(&self, _id: T) -> Result<(), Self::Error> {
-            Ok(())
-        }
-    }
+    use std::str::FromStr;
 
     #[tokio::test]
     async fn handle_tx_v06_ok() {
@@ -420,7 +385,7 @@ mod tests {
         client.push(tx).unwrap();
 
         let indexer = Indexer::new(
-            Provider::new(PubSubMockProvider(client)),
+            Provider::new(CommonTransport::Mock(client)),
             db.clone(),
             Default::default(),
         );
@@ -488,7 +453,7 @@ mod tests {
         client.push(tx).unwrap();
 
         let indexer = Indexer::new(
-            Provider::new(PubSubMockProvider(client)),
+            Provider::new(CommonTransport::Mock(client)),
             db.clone(),
             Default::default(),
         );

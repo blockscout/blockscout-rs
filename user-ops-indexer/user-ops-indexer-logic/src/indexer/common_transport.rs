@@ -4,10 +4,15 @@ use ethers::prelude::{Http, JsonRpcClient, ProviderError, PubsubClient, Ws};
 use serde::{de::DeserializeOwned, Serialize};
 use std::{fmt::Debug, str::FromStr};
 
+#[cfg(test)]
+use ethers::prelude::MockProvider;
+
 #[derive(Clone, Debug)]
 pub enum CommonTransport {
     Ws(Ws),
     Http(Http),
+    #[cfg(test)]
+    Mock(MockProvider),
 }
 
 impl CommonTransport {
@@ -22,10 +27,7 @@ impl CommonTransport {
     }
 
     pub fn supports_subscriptions(&self) -> bool {
-        match self {
-            CommonTransport::Ws(_) => true,
-            CommonTransport::Http(_) => false,
-        }
+        matches!(self, CommonTransport::Ws(_))
     }
 }
 
@@ -47,6 +49,11 @@ impl JsonRpcClient for CommonTransport {
                 .request(method, params)
                 .await
                 .map_err(ProviderError::from),
+            #[cfg(test)]
+            CommonTransport::Mock(mock) => mock
+                .request(method, params)
+                .await
+                .map_err(ProviderError::from),
         }
     }
 }
@@ -57,14 +64,14 @@ impl PubsubClient for CommonTransport {
     fn subscribe<T: Into<U256>>(&self, id: T) -> Result<Self::NotificationStream, Self::Error> {
         match self {
             CommonTransport::Ws(ws) => ws.subscribe(id).map_err(ProviderError::from),
-            CommonTransport::Http(_) => Err(ProviderError::UnsupportedRPC),
+            _ => Err(ProviderError::UnsupportedRPC),
         }
     }
 
     fn unsubscribe<T: Into<U256>>(&self, id: T) -> Result<(), Self::Error> {
         match self {
             CommonTransport::Ws(ws) => ws.unsubscribe(id).map_err(ProviderError::from),
-            CommonTransport::Http(_) => Err(ProviderError::UnsupportedRPC),
+            _ => Err(ProviderError::UnsupportedRPC),
         }
     }
 }
