@@ -7,7 +7,7 @@ mod dependent;
 mod full;
 mod partial;
 
-pub use batch::{generate_date_ranges, ChartBatchUpdater};
+pub use batch::ChartBatchUpdater;
 pub use dependent::{last_point, parse_and_growth, parse_and_sum, ChartDependentUpdater};
 pub use full::ChartFullUpdater;
 pub use partial::ChartPartialUpdater;
