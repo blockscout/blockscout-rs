@@ -76,14 +76,21 @@ impl crate::Chart for NativeCoinHoldersGrowth {
         let offset = Some(0);
         let last_row =
             get_last_row(self, chart_id, min_blockscout_block, db, force_full, offset).await?;
-        self.update_sequentially(db, blockscout, last_row, chart_id, min_blockscout_block)
-            .await?;
+        self.update_sequentially_with_support_table(
+            db,
+            blockscout,
+            last_row,
+            chart_id,
+            min_blockscout_block,
+        )
+        .await?;
         Ok(())
     }
 }
 
+// TODO: move common logic to new updater trait
 impl NativeCoinHoldersGrowth {
-    pub async fn update_sequentially(
+    pub async fn update_sequentially_with_support_table(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
@@ -115,6 +122,8 @@ impl NativeCoinHoldersGrowth {
                 last = ?last,
                 "start fethcing data for days"
             );
+            // NOTE: we update support table and chart data in one transaction
+            // to support invariant that support table has information about last day in chart data
             let db_tx = db.begin().await.map_err(UpdateError::StatsDB)?;
             let data: Vec<entity::chart_data::ActiveModel> = self
                 .calculate_days_using_support_table(&db_tx, blockscout, days.iter().copied())
@@ -148,13 +157,11 @@ impl NativeCoinHoldersGrowth {
             .map_err(|e| UpdateError::Internal(format!("cannot get new holders: {e}")))?;
 
         for (date, holders) in new_holders_by_date {
-            if holders
-                .iter()
-                .map(|h| &h.address)
-                .collect::<HashSet<_>>()
-                .len()
-                != holders.len()
-            {
+            // this check shouldnt be triggered if data in blockscout is correct,
+            // but just in case...
+            let addresses = holders.iter().map(|h| &h.address).collect::<HashSet<_>>();
+            if addresses.len() != holders.len() {
+                tracing::error!(addresses = ?addresses, date = ?date, "duplicate addresses in holders");
                 return Err(UpdateError::Internal(
                     "duplicate addresses in holders".to_string(),
                 ));
