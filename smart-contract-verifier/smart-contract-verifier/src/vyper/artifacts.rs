@@ -1,7 +1,7 @@
 use crate::verifier;
-use ethers_solc::artifacts::{
+use foundry_compilers::artifacts::{
     output_selection::{FileOutputSelection, OutputSelection},
-    serde_helpers,
+    serde_helpers, Source, Sources,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -16,7 +16,7 @@ pub type Interfaces = BTreeMap<PathBuf, Interface>;
 #[serde(rename_all = "camelCase")]
 pub struct CompilerInput {
     pub language: String,
-    pub sources: ethers_solc::artifacts::Sources,
+    pub sources: Sources,
     #[serde(default)]
     pub interfaces: Interfaces,
     #[serde(default)]
@@ -42,7 +42,7 @@ pub struct Settings {
         with = "serde_helpers::display_from_str_opt",
         skip_serializing_if = "Option::is_none"
     )]
-    pub evm_version: Option<ethers_solc::EvmVersion>,
+    pub evm_version: Option<foundry_compilers::EvmVersion>,
     /// Indicates whether or not optimizations are turned on.
     /// This is true by default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -89,7 +89,7 @@ mod interfaces {
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 #[serde(untagged)]
 pub enum Interface {
-    Vyper(ethers_solc::artifacts::Source),
+    Vyper(Source),
     Abi(interfaces::AbiSource),
     ContractTypes(interfaces::ContractTypesSource),
 }
@@ -120,9 +120,7 @@ impl Interface {
                 _ => Err(anyhow::anyhow!("\"{path:?}\" is an invalid interface")),
             }
         } else {
-            Ok(Interface::Vyper(ethers_solc::artifacts::Source::new(
-                content,
-            )))
+            Ok(Interface::Vyper(Source::new(content)))
         }
     }
 
@@ -229,7 +227,7 @@ mod tests {
             (
                 vyper_data.0,
                 vyper_data.1.to_string(),
-                Interface::Vyper(ethers_solc::artifacts::Source::new(vyper_data.1)),
+                Interface::Vyper(Source::new(vyper_data.1)),
             ),
             (
                 contract_types_data.0,
@@ -274,7 +272,7 @@ mod tests {
 
         let test_data = [
             (
-                Interface::Vyper(ethers_solc::artifacts::Source::new(vyper_content)),
+                Interface::Vyper(Source::new(vyper_content)),
                 "@external\r\n@payable\r\ndef exchange_multiple(_route: address[9], _swap_params: uint256[3][4], _amount: uint256, _expected: uint256, _pools: address[4]) -> uint256: \r\n    pass\r\n\r\n@external\r\n@view\r\ndef get_exchange_multiple_amount(_route: address[9], _swap_params: uint256[3][4], _amount: uint256, _pools: address[4]) -> uint256: \r\n    pass"
             ),
             (

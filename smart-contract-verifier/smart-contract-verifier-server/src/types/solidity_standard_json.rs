@@ -2,7 +2,7 @@ use super::StandardJsonParseError;
 use crate::proto::{BytecodeType, VerifySolidityStandardJsonRequest};
 use anyhow::anyhow;
 use blockscout_display_bytes::Bytes as DisplayBytes;
-use ethers_solc::CompilerInput;
+use foundry_compilers::CompilerInput;
 use serde::{Deserialize, Serialize};
 use smart_contract_verifier::{
     solidity::standard_json::{StandardJsonContent, VerificationRequest},

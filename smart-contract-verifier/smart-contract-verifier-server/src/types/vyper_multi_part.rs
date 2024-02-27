@@ -1,6 +1,6 @@
 use crate::proto::{BytecodeType, VerifyVyperMultiPartRequest};
 use blockscout_display_bytes::Bytes as DisplayBytes;
-use ethers_solc::EvmVersion;
+use foundry_compilers::EvmVersion;
 use serde::{Deserialize, Serialize};
 use smart_contract_verifier::{
     vyper::multi_part::{MultiFileContent, VerificationRequest},

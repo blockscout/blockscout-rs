@@ -46,7 +46,7 @@ pub fn from_solidity_success(value: SoliditySuccess) -> Source {
         "Yul" => source::SourceType::Yul,
         _ => source::SourceType::Unspecified,
     };
-    let extract_source_files = |compiler_input: ethers_solc::CompilerInput| {
+    let extract_source_files = |compiler_input: foundry_compilers::CompilerInput| {
         compiler_input
             .sources
             .into_iter()
@@ -108,9 +108,9 @@ pub fn from_sourcify_success(value: SourcifySuccess) -> Source {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ethers_solc::{
-        artifacts::{self, Libraries, Optimizer},
-        EvmVersion,
+    use foundry_compilers::{
+        artifacts::{self, Libraries, Optimizer, Settings},
+        CompilerInput, EvmVersion,
     };
     use pretty_assertions::assert_eq;
     use smart_contract_verifier::{vyper, Version};
@@ -118,7 +118,7 @@ mod tests {
 
     #[test]
     fn test_from_solidity_success() {
-        let compiler_settings = ethers_solc::artifacts::Settings {
+        let compiler_settings = Settings {
             optimizer: Optimizer {
                 enabled: Some(true),
                 runs: Some(200),
@@ -134,7 +134,7 @@ mod tests {
             ..Default::default()
         };
         let verification_success = SoliditySuccess {
-            compiler_input: ethers_solc::CompilerInput {
+            compiler_input: CompilerInput {
                 language: "Solidity".to_string(),
                 sources: BTreeMap::from([("file_name".into(), artifacts::Source::new("content"))]),
                 settings: compiler_settings.clone(),

@@ -7,6 +7,10 @@ repository = "https://github.com/blockscout/blockscout-rs"
 keywords = ["ethereum", "web3", "solidity"]
 
 [dependencies]
+alloy-dyn-abi = "0.6.3"
+alloy-json-abi = "0.6.3"
+foundry-compilers = "0.3.9"
+
 anyhow = "1.0"
 async-trait = "0.1"
 blockscout-display-bytes = { version = "1.0" }

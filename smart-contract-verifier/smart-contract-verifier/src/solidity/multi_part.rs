@@ -4,7 +4,7 @@ use crate::{
     verifier::{ContractVerifier, Error},
 };
 use bytes::Bytes;
-use ethers_solc::{
+use foundry_compilers::{
     artifacts::{
         output_selection::OutputSelection, BytecodeHash, Libraries, Settings, SettingsMetadata,
         Source, Sources,

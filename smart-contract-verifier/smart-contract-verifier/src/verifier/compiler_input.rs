@@ -4,7 +4,7 @@ pub trait CompilerInput {
     fn modify(self) -> Self;
 }
 
-impl CompilerInput for ethers_solc::CompilerInput {
+impl CompilerInput for foundry_compilers::CompilerInput {
     fn modify(mut self) -> Self {
         // TODO: could we update some other field to avoid copying strings?
         self.sources.iter_mut().for_each(|(_file, source)| {
