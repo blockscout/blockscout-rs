@@ -13,7 +13,6 @@ pub async fn run(
     let db_connection = Arc::new(db_connection);
 
     let transport = CommonTransport::new(settings.indexer.rpc_url.clone()).await?;
-    let supports_subscriptions = matches!(transport, CommonTransport::Ws(_));
     let client = Provider::new(transport);
 
     if settings.indexer.entrypoints.v06 {
@@ -24,13 +23,10 @@ pub async fn run(
         );
 
         tokio::spawn(async move {
-            indexer
-                .start::<v06::IndexerV06>(supports_subscriptions)
-                .await
-                .map_err(|err| {
-                    tracing::error!("failed to start indexer for v0.6: {err}");
-                    err
-                })
+            indexer.start::<v06::IndexerV06>().await.map_err(|err| {
+                tracing::error!("failed to start indexer for v0.6: {err}");
+                err
+            })
         });
     } else {
         tracing::warn!("indexer for v0.6 is disabled in settings");
@@ -44,13 +40,10 @@ pub async fn run(
         );
 
         tokio::spawn(async move {
-            indexer
-                .start::<v07::IndexerV07>(supports_subscriptions)
-                .await
-                .map_err(|err| {
-                    tracing::error!("failed to start indexer for v0.7: {err}");
-                    err
-                })
+            indexer.start::<v07::IndexerV07>().await.map_err(|err| {
+                tracing::error!("failed to start indexer for v0.7: {err}");
+                err
+            })
         });
     } else {
         tracing::warn!("indexer for v0.7 is disabled in settings");

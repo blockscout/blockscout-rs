@@ -20,6 +20,13 @@ impl CommonTransport {
             ))
         }
     }
+
+    pub fn supports_subscriptions(&self) -> bool {
+        match self {
+            CommonTransport::Ws(_) => true,
+            CommonTransport::Http(_) => false,
+        }
+    }
 }
 
 #[async_trait]

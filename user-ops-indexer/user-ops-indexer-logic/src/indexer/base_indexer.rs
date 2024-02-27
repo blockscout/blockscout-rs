@@ -1,10 +1,14 @@
-use crate::{indexer::settings::IndexerSettings, repository, types::user_op::UserOp};
+use crate::{
+    indexer::{common_transport::CommonTransport, settings::IndexerSettings},
+    repository,
+    types::user_op::UserOp,
+};
 use anyhow::{anyhow, bail};
 use ethers::prelude::{
     abi::{AbiEncode, Error},
     parse_log,
     types::{Action, Address, Bytes, Filter, Log, TransactionReceipt},
-    EthEvent, Middleware, Provider, ProviderError, PubsubClient, H256,
+    EthEvent, Middleware, Provider, ProviderError, H256,
 };
 use futures::{
     stream,
@@ -91,17 +95,17 @@ pub trait IndexerLogic {
     }
 }
 
-pub struct Indexer<C: PubsubClient> {
-    client: Provider<C>,
+pub struct Indexer {
+    client: Provider<CommonTransport>,
 
     db: Arc<DatabaseConnection>,
 
     settings: IndexerSettings,
 }
 
-impl<C: PubsubClient> Indexer<C> {
+impl Indexer {
     pub fn new(
-        client: Provider<C>,
+        client: Provider<CommonTransport>,
         db: Arc<DatabaseConnection>,
         settings: IndexerSettings,
     ) -> Self {
@@ -113,11 +117,11 @@ impl<C: PubsubClient> Indexer<C> {
     }
 
     #[instrument(name = "indexer", skip_all, level = "info", fields(version = L::version()))]
-    pub async fn start<L: IndexerLogic>(&self, supports_subscriptions: bool) -> anyhow::Result<()> {
+    pub async fn start<L: IndexerLogic>(&self) -> anyhow::Result<()> {
         let mut stream_jobs: Vec<BoxStream<Job>> = Vec::new();
 
         if self.settings.realtime.enabled {
-            if supports_subscriptions {
+            if self.client.as_ref().supports_subscriptions() {
                 // subscribe to a stream of new logs starting at the current block
                 tracing::info!("subscribing to BeforeExecution logs from rpc");
                 let realtime_stream_jobs = self
@@ -362,7 +366,7 @@ mod tests {
     };
     use async_trait::async_trait;
     use entity::sea_orm_active_enums::{EntryPointVersion, SponsorType};
-    use ethers::prelude::{JsonRpcClient, MockProvider, Provider};
+    use ethers::prelude::{JsonRpcClient, MockProvider, Provider, PubsubClient};
     use ethers_core::types::{Transaction, TransactionReceipt, U256};
     use futures::stream::{empty, Empty};
     use serde::{de::DeserializeOwned, Serialize};
