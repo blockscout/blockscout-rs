@@ -149,6 +149,7 @@ message ListCompilersResponse {
 message Chain {
   string id = 1;
   string name = 2;
+  string icon_url = 3;
 }
 
 message Contract {

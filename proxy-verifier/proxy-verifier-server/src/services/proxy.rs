@@ -1,5 +1,5 @@
 use crate::{
-    config::ChainsSettings,
+    config::{ChainSettings, ChainsSettings},
     proto::{
         proxy_server::Proxy, Chain, GetVerificationConfigRequest, ListChainsRequest,
         ListChainsResponse, VerificationConfig,
@@ -12,7 +12,7 @@ use tonic::{Request, Response, Status};
 
 pub struct ProxyService {
     /// Mapping from supported chain ids to chain names
-    chains: BTreeMap<String, String>,
+    chains: BTreeMap<String, ChainSettings>,
     eth_bytecode_db_client: Arc<eth_bytecode_db_proto::http_client::Client>,
 }
 
@@ -24,7 +24,11 @@ impl ProxyService {
         let chains = chains_settings
             .inner()
             .iter()
-            .map(|(chain_id, settings)| (chain_id.clone(), settings.name.clone()))
+            .map(|(chain_id, settings)| {
+                let mut chain_settings = settings.clone();
+                chain_settings.sensitive_api_key = None;
+                (chain_id.clone(), chain_settings)
+            })
             .collect();
         Self {
             chains,
@@ -76,6 +80,20 @@ async fn list_chains(proxy: &ProxyService) -> Vec<Chain> {
         .chains
         .clone()
         .into_iter()
-        .map(|(id, name)| Chain { id, name })
+        .map(|(id, settings)| {
+            let icon_url = if let Some(icon_url) = settings.icon_url {
+                icon_url.to_string()
+            } else {
+                let mut url = settings.api_url;
+                url.set_path("favicon/apple-touch-icon-180x180.png");
+                url.to_string()
+            };
+
+            Chain {
+                id,
+                name: settings.name,
+                icon_url,
+            }
+        })
         .collect()
 }

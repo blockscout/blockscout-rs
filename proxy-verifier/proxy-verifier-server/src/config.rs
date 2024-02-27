@@ -54,5 +54,6 @@ impl ChainsSettings {
 pub struct ChainSettings {
     pub name: String,
     pub api_url: url::Url,
+    pub icon_url: Option<url::Url>,
     pub sensitive_api_key: Option<String>,
 }
