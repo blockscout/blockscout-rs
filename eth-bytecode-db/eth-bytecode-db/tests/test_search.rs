@@ -3,7 +3,7 @@
 use blockscout_service_launcher::test_database::TestDbGuard;
 use entity::{sea_orm_active_enums::BytecodeType, sources};
 use eth_bytecode_db::{
-    search::{find_contract, BytecodeRemote},
+    search::{eth_bytecode_db_find_contract, BytecodeRemote},
     tests::verifier_mock::{
         generate_and_insert, BytecodePart, ContractInfo, ContractType, PartTy, VerificationResult,
     },
@@ -89,7 +89,7 @@ async fn check_bytecode_search(
         data,
         bytecode_type,
     };
-    let partial_matches = find_contract(db, &search)
+    let partial_matches = eth_bytecode_db_find_contract(db, &search)
         .await
         .expect("error during contract search");
 
@@ -211,7 +211,7 @@ async fn test_partial_search_bytecodes() {
         data,
         bytecode_type: BytecodeType::CreationInput,
     };
-    let partial_matches = find_contract(db.as_ref(), &search)
+    let partial_matches = eth_bytecode_db_find_contract(db.as_ref(), &search)
         .await
         .expect("error during contract search");
     assert_eq!(partial_matches.len(), repeated_amount);
@@ -246,7 +246,7 @@ async fn test_partial_search_bytecodes() {
                 bytecode_type: BytecodeType::CreationInput,
             };
 
-            let partial_matches = find_contract(db.as_ref(), &search)
+            let partial_matches = eth_bytecode_db_find_contract(db.as_ref(), &search)
                 .await
                 .expect("unkown contract should not give error");
             assert!(
@@ -266,7 +266,7 @@ async fn test_partial_search_bytecodes() {
             bytecode_type: BytecodeType::CreationInput,
         };
 
-        let partial_matches = find_contract(db.as_ref(), &search)
+        let partial_matches = eth_bytecode_db_find_contract(db.as_ref(), &search)
             .await
             .expect("random string should not give error");
         assert!(

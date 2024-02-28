@@ -12,7 +12,7 @@ use crate::{
     },
     settings::Settings,
 };
-use blockscout_service_launcher::LaunchSettings;
+use blockscout_service_launcher::launcher::{self, LaunchSettings};
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 
@@ -24,7 +24,7 @@ struct HttpRouter {
     health: Arc<HealthService>,
 }
 
-impl blockscout_service_launcher::HttpRouter for HttpRouter {
+impl launcher::HttpRouter for HttpRouter {
     fn register_routes(&self, service_config: &mut actix_web::web::ServiceConfig) {
         let service_config =
             service_config.configure(|config| route_health(config, self.health.clone()));
@@ -112,11 +112,11 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         metrics: settings.metrics,
     };
 
-    blockscout_service_launcher::init_logs(
+    blockscout_service_launcher::tracing::init_logs(
         &launch_settings.service_name,
         &settings.tracing,
         &settings.jaeger,
     )?;
 
-    blockscout_service_launcher::launch(&launch_settings, http_router, grpc_router).await
+    launcher::launch(&launch_settings, http_router, grpc_router).await
 }

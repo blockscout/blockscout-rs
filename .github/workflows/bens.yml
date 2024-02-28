@@ -4,6 +4,10 @@ on:
       - 'main'
     tags:
       - 'bens/v*'
+    paths:
+      - blockscout-ens/**
+      - .github/workflows/bens.yml
+      - .github/actions/deps/**
   pull_request:
     paths:
       - blockscout-ens/**
@@ -66,14 +70,14 @@ jobs:
           DATABASE_URL: postgres://graph-node:admin@localhost:5432/
           SQLX_OFFLINE: true
 
-      # - name: Integration tests
-      #   run: cargo test --locked --workspace --test '*' -- --nocapture --include-ignored
-      #   if: success() || failure()
-      #   env:
-      #     RUST_BACKTRACE: 1
-      #     RUST_LOG: info
-      #     DATABASE_URL: postgres://graph-node:admin@localhost:5432/
-      #     SQLX_OFFLINE: true
+      - name: Integration tests
+        run: cargo test --locked --workspace --test '*' -- --nocapture --include-ignored
+        if: success() || failure()
+        env:
+          RUST_BACKTRACE: 1
+          RUST_LOG: info
+          DATABASE_URL: postgres://graph-node:admin@localhost:5432/
+          SQLX_OFFLINE: true
 
   lint:
     name: Linting
@@ -104,56 +108,56 @@ jobs:
       - name: cargo clippy
         run: cargo clippy --all --all-targets --all-features -- -D warnings
 
-  # push:
-  #   name: Docker build and docker push
-  #   needs:
-  #     - test
-  #     - lint
-  #   if: |
-  #     always() &&
-  #     (needs.test.result == 'success' || needs.test.result == 'cancelled') &&
-  #     (needs.lint.result == 'success' || needs.lint.result == 'cancelled')
-  #   timeout-minutes: 30
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@v2
+  push:
+    name: Docker build and docker push
+    needs:
+      - test
+      - lint
+    if: |
+      always() &&
+      (needs.test.result == 'success' || needs.test.result == 'cancelled') &&
+      (needs.lint.result == 'success' || needs.lint.result == 'cancelled')
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
 
-  #     - uses: actions-ecosystem/action-regex-match@v2
-  #       id: regex
-  #       with:
-  #         text: ${{ github.ref }}
-  #         regex: '^(refs\/tags\/eth-bytecode-db\/(v\d+\.\d+\.\d+))|(refs\/heads\/(main))$'
+      - uses: actions-ecosystem/action-regex-match@v2
+        id: regex
+        with:
+          text: ${{ github.ref }}
+          regex: '^(refs\/tags\/bens\/(v\d+\.\d+\.\d+))|(refs\/heads\/(main))$'
 
-  #     - name: Extract tag name
-  #       id: tags_extractor
-  #       run: |
-  #         t=${{ steps.regex.outputs.group2 }}
-  #         m=${{ steps.regex.outputs.group4 }}
-  #         (if ! [[ "$t" == "" ]]; then echo tags=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$t, ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest; elif ! [[ "$m" == "" ]]; then echo tags=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$m; else echo tags=; fi) >> $GITHUB_OUTPUT
+      - name: Extract tag name
+        id: tags_extractor
+        run: |
+          t=${{ steps.regex.outputs.group2 }}
+          m=${{ steps.regex.outputs.group4 }}
+          (if ! [[ "$t" == "" ]]; then echo tags=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$t, ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest; elif ! [[ "$m" == "" ]]; then echo tags=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$m; else echo tags=; fi) >> $GITHUB_OUTPUT
 
-  #     - name: Login to GitHub Container Registry
-  #       uses: docker/login-action@v1
-  #       with:
-  #         registry: ${{ env.REGISTRY }}
-  #         username: ${{ github.actor }}
-  #         password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v1
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-  #     - name: Extract metadata for Docker
-  #       id: meta
-  #       uses: docker/metadata-action@v3
-  #       with:
-  #         images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v3
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
 
-  #     - name: Set up Docker Buildx
-  #       uses: docker/setup-buildx-action@v1
-  #     - name: Build and push
-  #       uses: docker/build-push-action@v2
-  #       with:
-  #         context: "eth-bytecode-db"
-  #         file: "eth-bytecode-db/eth-bytecode-db-server/Dockerfile"
-  #         push: ${{ steps.tags_extractor.outputs.tags != '' }}
-  #         tags: ${{ steps.tags_extractor.outputs.tags }}
-  #         labels: ${{ steps.meta.outputs.labels }}
-  #         cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:build-cache
-  #         cache-to: ${{ github.ref == 'refs/heads/main' && format('type=registry,ref={0}/{1}:build-cache,mode=max', env.REGISTRY, env.IMAGE_NAME) || '' }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      - name: Build and push
+        uses: docker/build-push-action@v2
+        with:
+          context: "blockscout-ens"
+          file: "blockscout-ens/Dockerfile"
+          push: ${{ steps.tags_extractor.outputs.tags != '' }}
+          tags: ${{ steps.tags_extractor.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:build-cache
+          cache-to: ${{ github.ref == 'refs/heads/main' && format('type=registry,ref={0}/{1}:build-cache,mode=max', env.REGISTRY, env.IMAGE_NAME) || '' }}

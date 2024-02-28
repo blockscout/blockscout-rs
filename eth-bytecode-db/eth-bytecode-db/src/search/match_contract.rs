@@ -4,12 +4,16 @@ use anyhow::Context;
 use bytes::Bytes;
 use entity::{files, sea_orm_active_enums::BytecodeType, sources};
 use ethabi::Constructor;
-use sea_orm::{prelude::DbErr, ConnectionTrait, EntityTrait};
+use sea_orm::{
+    prelude::{DateTime, DbErr},
+    ConnectionTrait, EntityTrait,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MatchContract {
+    pub updated_at: DateTime,
     pub file_name: String,
     pub contract_name: String,
     pub compiler_version: String,
@@ -77,6 +81,7 @@ impl MatchContract {
             .map(|f| (f.name, f.content))
             .collect();
         let match_contract = MatchContract {
+            updated_at: source.updated_at,
             file_name: source.file_name,
             contract_name: source.contract_name,
             compiler_version: source.compiler_version,

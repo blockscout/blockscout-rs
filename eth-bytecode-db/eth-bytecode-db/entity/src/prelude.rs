@@ -2,6 +2,7 @@
 
 pub use super::{
     bytecode_parts::Entity as BytecodeParts, bytecodes::Entity as Bytecodes,
-    files::Entity as Files, parts::Entity as Parts, source_files::Entity as SourceFiles,
-    sources::Entity as Sources, verified_contracts::Entity as VerifiedContracts,
+    events::Entity as Events, files::Entity as Files, parts::Entity as Parts,
+    source_files::Entity as SourceFiles, sources::Entity as Sources,
+    verified_contracts::Entity as VerifiedContracts,
 };

@@ -33,6 +33,7 @@ impl TestInputData {
                 deployed_bytecode_artifacts: source.deployed_bytecode_artifacts.clone(),
             }),
             extra_data: Some(extra_data),
+            post_action_responses: None,
         };
 
         let eth_bytecode_db_response = eth_bytecode_db_v2::VerifyResponse {
@@ -104,6 +105,15 @@ impl TestInputData {
                 (part.r#type == "meta")
                     .then(|| part.data.replace_range(18..18 + 68, metadata_hash));
             });
+    }
+
+    pub fn set_abi(&mut self, abi: String) {
+        if let Some(source) = self.verifier_response.source.as_mut() {
+            source.abi = Some(abi.clone())
+        }
+        if let Some(source) = self.eth_bytecode_db_response.source.as_mut() {
+            source.abi = Some(abi)
+        }
     }
 
     pub fn add_source_file(&mut self, file_name: String, content: String) {

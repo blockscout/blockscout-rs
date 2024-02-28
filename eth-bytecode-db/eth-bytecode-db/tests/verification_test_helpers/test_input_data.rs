@@ -52,6 +52,7 @@ impl<T> TestInputData<T> {
             status: smart_contract_verifier_v2::verify_response::Status::Success.into(),
             source: Some(verifier_source),
             extra_data: Some(verifier_extra_data),
+            post_action_responses: None,
         };
 
         Self {
@@ -107,6 +108,16 @@ impl<T> TestInputData<T> {
             .into_iter()
             .flat_map(|part| part.data_owned())
             .collect()
+    }
+}
+
+impl<T> TestInputData<T> {
+    pub fn with_abi(mut self, abi: String) -> Self {
+        self.eth_bytecode_db_source.abi = Some(abi.clone());
+        if let Some(source) = self.verifier_response.source.as_mut() {
+            source.abi = Some(abi)
+        }
+        self
     }
 }
 

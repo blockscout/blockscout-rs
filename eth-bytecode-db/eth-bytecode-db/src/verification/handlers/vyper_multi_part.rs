@@ -8,6 +8,7 @@ use super::{
     process_verify_response, EthBytecodeDbAction, VerifierAllianceDbAction,
 };
 use serde::{Deserialize, Serialize};
+use smart_contract_verifier_proto::http_client::vyper_verifier_client;
 use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -32,7 +33,7 @@ impl From<VerificationRequest<MultiPartFiles>> for VerifyVyperMultiPartRequest {
 }
 
 pub async fn verify(
-    mut client: Client,
+    client: Client,
     request: VerificationRequest<MultiPartFiles>,
 ) -> Result<Source, Error> {
     let is_authorized = request.is_authorized;
@@ -43,12 +44,14 @@ pub async fn verify(
     let verification_metadata = request.metadata.clone();
 
     let request: VerifyVyperMultiPartRequest = request.into();
-    let response = client
-        .vyper_client
-        .verify_multi_part(request)
-        .await
-        .map_err(Error::from)?
-        .into_inner();
+    tracing::info!("sending request to the verifier");
+    let response =
+        vyper_verifier_client::verify_multi_part(&client.verifier_http_client, request).await?;
+    tracing::info!(
+        status = response.status,
+        response_message = response.message,
+        "response from the verifier"
+    );
 
     let verifier_alliance_db_action = VerifierAllianceDbAction::from_db_client_and_metadata(
         client.alliance_db_client.as_deref(),

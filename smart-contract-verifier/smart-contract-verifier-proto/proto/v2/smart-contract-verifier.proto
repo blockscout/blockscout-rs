@@ -10,6 +10,8 @@ service SolidityVerifier {
   rpc VerifyStandardJson(VerifySolidityStandardJsonRequest) returns (VerifyResponse) {}
 
   rpc ListCompilerVersions(ListCompilerVersionsRequest) returns (ListCompilerVersionsResponse) {}
+
+  rpc LookupMethods(LookupMethodsRequest) returns (LookupMethodsResponse) {}
 }
 
 service VyperVerifier {
@@ -111,6 +113,10 @@ message VerifySolidityMultiPartRequest {
 
   /// An optional field to be filled by explorers
   optional VerificationMetadata metadata = 8;
+
+  /// Additional actions the client wants the result to be returned.
+  /// Currently supports only: "lookup-methods" for Solidity contracts.
+  repeated string post_actions = 9;
 }
 
 message VerifySolidityStandardJsonRequest {
@@ -125,6 +131,10 @@ message VerifySolidityStandardJsonRequest {
 
   /// An optional field to be filled by explorers
   optional VerificationMetadata metadata = 5;
+
+  /// Additional actions the client wants the result to be returned.
+  /// Currently supports only: "lookup-methods" for Solidity contracts.
+  repeated string post_actions = 9;
 }
 
 message VerifyVyperMultiPartRequest {
@@ -188,6 +198,13 @@ message VerifyResponse {
     repeated BytecodePart local_deployed_bytecode_parts = 2;
   }
   ExtraData extra_data = 4;
+
+  message PostActionResponses {
+    /// If requested, will contain the response for
+    /// 'lookup-methods' processing applied to the verified contract.
+    optional LookupMethodsResponse lookup_methods = 1;
+  }
+  PostActionResponses post_action_responses = 5;
 }
 
 message VerifySourcifyRequest {
@@ -217,4 +234,20 @@ message ListCompilerVersionsRequest {}
 message ListCompilerVersionsResponse {
   /// Compiler versions available
   repeated string compiler_versions = 1;
+}
+
+message LookupMethodsRequest {
+  string bytecode = 1;
+  string abi = 2;
+  string source_map = 3;
+  map<uint32, string> file_ids = 4;
+}
+
+message LookupMethodsResponse {
+  message Method {
+    string file_name = 1;
+    uint32 file_offset = 2;
+    uint32 length = 3;
+  }
+  map<string, Method> methods = 1;
 }

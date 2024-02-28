@@ -4,12 +4,15 @@ on:
       - 'main'
     tags:
       - 'smart-contract-verifier/v*'
+    paths:
+      - smart-contract-verifier/**
+      - .github/workflows/smart-contract-verifier.yml
+      - .github/actions/deps/**
   pull_request:
     paths:
       - smart-contract-verifier/**
       - .github/workflows/smart-contract-verifier.yml
       - .github/actions/deps/**
-
 
 name: Test, lint and docker (smart-contract-verifier)
 

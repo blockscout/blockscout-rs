@@ -7,14 +7,18 @@ use crate::{
     },
     settings::{Extensions, FetcherSettings, S3FetcherSettings, SoliditySettings},
     types::{
-        StandardJsonParseError, VerifyResponseWrapper, VerifySolidityMultiPartRequestWrapper,
+        LookupMethodsRequestWrapper, LookupMethodsResponseWrapper, StandardJsonParseError,
+        VerifyResponseWrapper, VerifySolidityMultiPartRequestWrapper,
         VerifySolidityStandardJsonRequestWrapper,
     },
 };
 use s3::{creds::Credentials, Bucket, Region};
 use smart_contract_verifier::{
-    solidity, Compilers, Fetcher, ListFetcher, S3Fetcher, SolcValidator, SolidityClient,
-    SolidityCompiler, VerificationError,
+    find_methods, solidity, Compilers, Fetcher, ListFetcher, S3Fetcher, SolcValidator,
+    SolidityClient, SolidityCompiler, VerificationError,
+};
+use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
+    BytecodeType, LookupMethodsRequest, LookupMethodsResponse,
 };
 use std::{str::FromStr, sync::Arc};
 use tokio::sync::Semaphore;
@@ -90,18 +94,43 @@ impl SolidityVerifier for SolidityVerifierService {
             .as_ref()
             .and_then(|metadata| metadata.chain_id.clone())
             .unwrap_or_default();
+        let contract_address = request
+            .metadata
+            .as_ref()
+            .and_then(|metadata| metadata.contract_address.clone())
+            .unwrap_or_default();
+        tracing::info!(
+            chain_id = chain_id,
+            contract_address = contract_address,
+            "Solidity multi-part verification request received"
+        );
+
+        tracing::debug!(
+            bytecode = request.bytecode,
+            bytecode_type = BytecodeType::from_i32(request.bytecode_type)
+                .unwrap()
+                .as_str_name(),
+            compiler_version = request.compiler_version,
+            evm_version = request.evm_version,
+            optimization_runs = request.optimization_runs,
+            source_files = ?request.source_files,
+            libraries = ?request.libraries,
+            "Request details"
+        );
+
         let result = solidity::multi_part::verify(self.client.clone(), request.try_into()?).await;
 
         let response = if let Ok(verification_success) = result {
+            tracing::info!(match_type=?verification_success.match_type, "Request processed successfully");
             VerifyResponseWrapper::ok(verification_success)
         } else {
             let err = result.unwrap_err();
+            tracing::info!(err=%err, "Request processing failed");
             match err {
                 VerificationError::Compilation(_)
                 | VerificationError::NoMatchingContracts
                 | VerificationError::CompilerVersionMismatch(_) => VerifyResponseWrapper::err(err),
                 VerificationError::Initialization(_) | VerificationError::VersionNotFound(_) => {
-                    tracing::debug!("invalid argument: {err:#?}");
                     return Err(Status::invalid_argument(err.to_string()));
                 }
                 VerificationError::Internal(err) => {
@@ -130,15 +159,39 @@ impl SolidityVerifier for SolidityVerifierService {
             .as_ref()
             .and_then(|metadata| metadata.chain_id.clone())
             .unwrap_or_default();
+        let contract_address = request
+            .metadata
+            .as_ref()
+            .and_then(|metadata| metadata.contract_address.clone())
+            .unwrap_or_default();
+        tracing::info!(
+            chain_id = chain_id,
+            contract_address = contract_address,
+            "Solidity standard-json verification request received"
+        );
+
+        tracing::debug!(
+            bytecode = request.bytecode,
+            bytecode_type = BytecodeType::from_i32(request.bytecode_type)
+                .unwrap()
+                .as_str_name(),
+            compiler_version = request.compiler_version,
+            input = request.input,
+            "Request details"
+        );
+
         let verification_request = {
             let request: Result<_, StandardJsonParseError> = request.try_into();
             if let Err(err) = request {
                 match err {
                     StandardJsonParseError::InvalidContent(_) => {
-                        return Ok(Response::new(VerifyResponseWrapper::err(err).into_inner()))
+                        let response = VerifyResponseWrapper::err(err).into_inner();
+                        tracing::info!(response=?response, "Request processed");
+                        return Ok(Response::new(response));
                     }
                     StandardJsonParseError::BadRequest(_) => {
-                        return Err(Status::invalid_argument(err.to_string()))
+                        tracing::info!(err=%err, "Bad request");
+                        return Err(Status::invalid_argument(err.to_string()));
                     }
                 }
             }
@@ -148,15 +201,16 @@ impl SolidityVerifier for SolidityVerifierService {
             solidity::standard_json::verify(self.client.clone(), verification_request).await;
 
         let response = if let Ok(verification_success) = result {
+            tracing::info!(match_type=?verification_success.match_type, "Request processed successfully");
             VerifyResponseWrapper::ok(verification_success)
         } else {
             let err = result.unwrap_err();
+            tracing::info!(err=%err, "Request processing failed");
             match err {
                 VerificationError::Compilation(_)
                 | VerificationError::NoMatchingContracts
                 | VerificationError::CompilerVersionMismatch(_) => VerifyResponseWrapper::err(err),
                 VerificationError::Initialization(_) | VerificationError::VersionNotFound(_) => {
-                    tracing::debug!("invalid argument: {err:#?}");
                     return Err(Status::invalid_argument(err.to_string()));
                 }
                 VerificationError::Internal(err) => {
@@ -183,6 +237,16 @@ impl SolidityVerifier for SolidityVerifierService {
         Ok(Response::new(ListCompilerVersionsResponse {
             compiler_versions,
         }))
+    }
+
+    async fn lookup_methods(
+        &self,
+        request: Request<LookupMethodsRequest>,
+    ) -> Result<Response<LookupMethodsResponse>, Status> {
+        let request: LookupMethodsRequestWrapper = request.into_inner().into();
+        let methods = find_methods(request.try_into()?);
+        let response = LookupMethodsResponseWrapper::from(methods);
+        Ok(Response::new(response.into()))
     }
 }
 

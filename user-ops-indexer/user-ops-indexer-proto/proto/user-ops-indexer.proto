@@ -1,0 +1,231 @@
+syntax = "proto3";
+
+package blockscout.userOpsIndexer.v1;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "github.com/blockscout/blockscout-rs/user-ops-indexer";
+
+service UserOpsService {
+  rpc GetAccount(GetAccountRequest) returns (Account);
+  rpc GetUserOp(GetUserOpRequest) returns (UserOp);
+  rpc GetBundler(GetBundlerRequest) returns (Bundler);
+  rpc GetPaymaster(GetPaymasterRequest) returns (Paymaster);
+  rpc GetFactory(GetFactoryRequest) returns (Factory);
+
+  rpc ListAccounts(ListAccountsRequest) returns (ListAccountsResponse);
+  rpc ListBundles(ListBundlesRequest) returns (ListBundlesResponse);
+  rpc ListUserOps(ListUserOpsRequest) returns (ListUserOpsResponse);
+  rpc ListBundlers(ListBundlersRequest) returns (ListBundlersResponse);
+  rpc ListPaymasters(ListPaymastersRequest) returns (ListPaymastersResponse);
+  rpc ListFactories(ListFactoriesRequest) returns (ListFactoriesResponse);
+}
+
+message Pagination {
+  string page_token = 1;
+  uint32 page_size = 2;
+}
+
+message GetAccountRequest {
+  string address = 1;
+}
+
+message GetUserOpRequest {
+  string hash = 1;
+}
+
+message GetBundlerRequest {
+  string address = 1;
+}
+
+message GetPaymasterRequest {
+  string address = 1;
+}
+
+message GetFactoryRequest {
+  string address = 1;
+}
+
+message ListAccountsRequest {
+  optional string factory = 1;
+  optional uint32 page_size = 2;
+  optional string page_token = 3;
+}
+
+message ListAccountsResponse {
+  repeated Account items = 1;
+  Pagination next_page_params = 2;
+}
+
+message ListBundlesRequest {
+  optional string bundler = 1;
+  optional string entry_point = 2;
+  optional uint32 page_size = 3;
+  optional string page_token = 4;
+}
+
+message ListBundlesResponse {
+  repeated Bundle items = 1;
+  Pagination next_page_params = 2;
+}
+
+message ListUserOpsRequest {
+  optional string sender = 1;
+  optional string bundler = 2;
+  optional string paymaster = 3;
+  optional string factory = 4;
+  optional string transaction_hash = 5;
+  optional string entry_point = 6;
+  optional uint32 bundle_index = 7;
+  optional uint64 block_number = 8;
+  optional uint32 page_size = 9;
+  optional string page_token = 10;
+}
+
+message ListUserOpsResponse {
+  repeated ListUserOp items = 1;
+  Pagination next_page_params = 2;
+}
+
+message ListBundlersRequest {
+  optional uint32 page_size = 1;
+  optional string page_token = 2;
+}
+
+message ListBundlersResponse {
+  repeated Bundler items = 1;
+  Pagination next_page_params = 2;
+}
+
+message ListPaymastersRequest {
+  optional uint32 page_size = 1;
+  optional string page_token = 2;
+}
+
+message ListPaymastersResponse {
+  repeated Paymaster items = 1;
+  Pagination next_page_params = 2;
+}
+
+message ListFactoriesRequest {
+  optional uint32 page_size = 1;
+  optional string page_token = 2;
+}
+
+message ListFactoriesResponse {
+  repeated Factory items = 1;
+  Pagination next_page_params = 2;
+}
+
+message Account {
+  string address = 1;
+  optional string factory = 2;
+  optional string creation_transaction_hash = 3;
+  optional string creation_op_hash = 4;
+  optional string creation_timestamp = 5;
+  uint32 total_ops = 6;
+}
+
+message Bundle {
+  string transaction_hash = 1;
+  string bundler = 2;
+  uint64 block_number = 3;
+  uint32 bundle_index = 4;
+  string timestamp = 5;
+  uint32 total_ops = 6;
+}
+
+message Bundler {
+  string address = 1;
+  uint32 total_bundles = 2;
+  uint32 total_ops = 3;
+}
+
+message Paymaster {
+  string address = 1;
+  uint32 total_ops = 2;
+}
+
+message Factory {
+  string address = 1;
+  uint32 total_accounts = 2;
+}
+
+message RawUserOpV06 {
+  string sender = 1;
+  string nonce = 2;
+  string init_code = 3;
+  string call_data = 4;
+  uint64 call_gas_limit = 5;
+  uint64 verification_gas_limit = 6;
+  uint64 pre_verification_gas = 7;
+  string max_fee_per_gas = 8;
+  string max_priority_fee_per_gas = 9;
+  string paymaster_and_data = 10;
+  string signature = 11;
+}
+
+message RawUserOpV07 {
+  string sender = 1;
+  string nonce = 2;
+  string init_code = 3;
+  string call_data = 4;
+  string account_gas_limits = 5; // call_gas_limit + verification_gas_limit
+  uint64 pre_verification_gas = 6;
+  string gas_fees = 7; // max_fee_per_gas + max_priority_fee_per_gas
+  string paymaster_and_data = 8; // paymaster + paymaster_verification_gas_limit + post_op_gas_limit + paymaster_data
+  string signature = 9;
+}
+
+message UserOp {
+  string hash = 1;
+  string sender = 2;
+  string nonce = 3;
+  string call_data = 4;
+  uint64 call_gas_limit = 5;
+  uint64 verification_gas_limit = 6;
+  uint64 pre_verification_gas = 7;
+  string max_fee_per_gas = 8;
+  string max_priority_fee_per_gas = 9;
+  string signature = 10;
+  oneof raw {
+    RawUserOpV06 rawV06 = 11;
+    RawUserOpV07 rawV07 = 35;
+  }
+  optional string aggregator = 12;
+  optional string aggregator_signature = 13;
+  string entry_point = 14;
+  string entry_point_version = 15;
+  string transaction_hash = 16;
+  uint64 block_number = 17;
+  string block_hash = 18;
+  string bundler = 19;
+  uint32 bundle_index = 20;
+  uint32 index = 21;
+  optional string factory = 22;
+  optional string paymaster = 23;
+  bool status = 24;
+  optional string revert_reason = 25;
+  uint64 gas = 26;
+  string gas_price = 27;
+  uint64 gas_used = 28;
+  string sponsor_type = 29;
+  uint32 user_logs_start_index = 30;
+  uint32 user_logs_count = 31;
+  string fee = 32;
+
+  optional bool consensus = 33;
+  optional string timestamp = 34;
+}
+
+message ListUserOp {
+  string hash = 1;
+  string entry_point = 2;
+  string entry_point_version = 3;
+  uint64 block_number = 4;
+  string transaction_hash = 5;
+  string address = 6;
+  string timestamp = 7;
+  bool status = 8;
+  string fee = 9;
+}

@@ -1,6 +1,6 @@
 use entity::sea_orm_active_enums::BytecodeType;
 use eth_bytecode_db::{
-    search::{find_contract, BytecodeRemote},
+    search::{eth_bytecode_db_find_contract, BytecodeRemote},
     tests::verifier_mock::{ContractInfo, ContractType, VerificationResult},
 };
 use sea_orm::{Database, DatabaseConnection};
@@ -36,7 +36,7 @@ async fn main() {
             data,
             bytecode_type: BytecodeType::CreationInput,
         };
-        let contract = find_contract(&db, &search).await;
+        let contract = eth_bytecode_db_find_contract(&db, &search).await;
         println!("{contract:?}");
     }
     println!("AVG time: {}", now.elapsed().as_secs_f64() / (n as f64));

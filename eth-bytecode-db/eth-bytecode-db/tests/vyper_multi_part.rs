@@ -7,15 +7,12 @@ use eth_bytecode_db::verification::{
     VerificationMetadata, VerificationRequest,
 };
 use rstest::{fixture, rstest};
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
-    VerifyResponse, VerifyVyperMultiPartRequest,
+use smart_contract_verifier_proto::{
+    blockscout::smart_contract_verifier::v2::{VerifyResponse, VerifyVyperMultiPartRequest},
+    http_client::mock::{MockVyperVerifierService, SmartContractVerifierServer},
 };
 use tonic::Response;
-use verification_test_helpers::{
-    generate_verification_request,
-    smart_contract_veriifer_mock::{MockVyperVerifierService, SmartContractVerifierServer},
-    VerifierService,
-};
+use verification_test_helpers::{generate_verification_request, VerifierService};
 
 const DB_PREFIX: &str = "vyper_multi_part";
 
@@ -122,4 +119,22 @@ async fn test_verification_of_same_source_results_stored_once(service: MockVyper
         DB_PREFIX, service,
     )
     .await;
+}
+
+#[rstest]
+#[tokio::test]
+#[ignore = "Needs database to run"]
+async fn test_verification_of_updated_source_replace_the_old_result() {
+    verification_test_helpers::test_verification_of_updated_source_replace_the_old_result(
+        DB_PREFIX, service,
+    )
+    .await;
+}
+
+#[rstest]
+#[tokio::test]
+#[ignore = "Needs database to run"]
+async fn test_verification_inserts_event_descriptions() {
+    verification_test_helpers::test_verification_inserts_event_descriptions(DB_PREFIX, service)
+        .await;
 }

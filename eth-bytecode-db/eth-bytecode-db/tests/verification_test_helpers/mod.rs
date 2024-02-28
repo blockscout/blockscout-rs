@@ -1,15 +1,13 @@
 #![allow(dead_code)]
 
-pub mod smart_contract_veriifer_mock;
 pub mod test_input_data;
-
 pub mod verifier_alliance_types;
 
 use async_trait::async_trait;
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use blockscout_service_launcher::test_database::TestDbGuard;
 use entity::{
-    bytecode_parts, bytecodes, files, parts, sea_orm_active_enums, source_files, sources,
+    bytecode_parts, bytecodes, events, files, parts, sea_orm_active_enums, source_files, sources,
     verified_contracts,
 };
 use eth_bytecode_db::verification::{
@@ -17,11 +15,12 @@ use eth_bytecode_db::verification::{
 };
 use pretty_assertions::assert_eq;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::VerifyResponse;
-use smart_contract_veriifer_mock::SmartContractVerifierServer;
+use smart_contract_verifier_proto::{
+    blockscout::smart_contract_verifier::v2::VerifyResponse,
+    http_client::mock::SmartContractVerifierServer,
+};
 use std::{collections::HashSet, str::FromStr, sync::Arc};
 use test_input_data::TestInputData;
-use tonic::transport::Uri;
 
 #[async_trait]
 pub trait VerifierService<Request> {
@@ -79,9 +78,9 @@ where
     // Initialize server
     let server_addr = service.build_server().start().await;
 
-    let uri = Uri::from_str(&format!("http://{}", server_addr.to_string().as_str()))
-        .expect("Returned server address is invalid Uri");
-    Client::new_arc(db_client, uri)
+    let url = url::Url::from_str(&format!("http://{}", server_addr.to_string().as_str()))
+        .expect("Returned server address is invalid Url");
+    Client::new_arc(db_client, url, 1, false)
         .await
         .expect("Client initialization failed")
 }
@@ -650,4 +649,220 @@ pub async fn test_verification_of_same_source_results_stored_once<Service, Reque
         "Invalid number of bytecode parts returned. Expected 4, actual {}",
         bytecode_parts.len()
     );
+}
+
+pub async fn test_verification_of_updated_source_replace_the_old_result<Service, Request>(
+    db_prefix: &str,
+    service_generator: impl Fn() -> Service,
+) where
+    Request: Clone,
+    Service: VerifierService<Request>,
+{
+    let db = init_db(
+        db_prefix,
+        "test_verification_of_updated_source_replace_the_old_result",
+    )
+    .await;
+
+    {
+        let service = service_generator();
+        let source_type = service.source_type();
+        let input_data =
+            test_input_data::input_data_1(service.generate_request(1, None), source_type);
+        let client =
+            start_server_and_init_client(db.client().clone(), service, vec![input_data.clone()])
+                .await;
+        let _source = Service::verify(client.clone(), input_data.eth_bytecode_db_request.clone())
+            .await
+            .expect("Verification failed");
+    }
+
+    let updated_service = service_generator();
+    let source_type = updated_service.source_type();
+    let updated_input_data = {
+        let TestInputData {
+            eth_bytecode_db_request,
+            verifier_response: mut updated_verifier_response,
+            ..
+        } = test_input_data::input_data_1(updated_service.generate_request(1, None), source_type);
+        if let Some(source) = updated_verifier_response.source.as_mut() {
+            let mut compilation_artifacts: serde_json::Value =
+                serde_json::from_str(source.compilation_artifacts()).unwrap();
+            compilation_artifacts
+                .as_object_mut()
+                .unwrap()
+                .insert("additionalValue".to_string(), serde_json::Value::default());
+            source.compilation_artifacts = Some(compilation_artifacts.to_string());
+        }
+
+        TestInputData::from_verifier_source_and_extra_data(
+            eth_bytecode_db_request,
+            updated_verifier_response.source.unwrap(),
+            updated_verifier_response.extra_data.unwrap(),
+        )
+    };
+    let client = start_server_and_init_client(
+        db.client().clone(),
+        updated_service,
+        vec![updated_input_data.clone()],
+    )
+    .await;
+    let source = Service::verify(
+        client.clone(),
+        updated_input_data.eth_bytecode_db_request.clone(),
+    )
+    .await
+    .expect("Verification failed");
+
+    assert_eq!(
+        updated_input_data.eth_bytecode_db_source, source,
+        "Invalid source"
+    );
+
+    let db_client = db.client();
+    let db_client_ref = db_client.as_ref();
+
+    /* Assert inserted into "sources" */
+
+    let db_source = sources::Entity::find()
+        .one(db_client_ref)
+        .await
+        .expect("Error while reading source")
+        .expect("No sources when there should be one");
+
+    assert_eq!(
+        updated_input_data
+            .verifier_response
+            .source
+            .unwrap()
+            .compilation_artifacts
+            .as_ref()
+            .map(|v| serde_json::from_str(v).unwrap()),
+        db_source.compilation_artifacts,
+        "Invalid compilation artifacts"
+    );
+}
+
+pub async fn test_verification_inserts_event_descriptions<Service, Request>(
+    db_prefix: &str,
+    service_generator: impl Fn() -> Service,
+) where
+    Request: Clone,
+    Service: VerifierService<Request>,
+{
+    #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+    struct Event {
+        pub selector: Vec<u8>,
+        pub name: String,
+        pub inputs: String,
+    }
+
+    impl From<events::Model> for Event {
+        fn from(value: events::Model) -> Self {
+            Self {
+                selector: value.selector,
+                name: value.name,
+                inputs: value.inputs.to_string(),
+            }
+        }
+    }
+
+    let db = init_db(db_prefix, "test_verification_inserts_event_descriptions").await;
+
+    let service = service_generator();
+    let source_type = service.source_type();
+    let input_data = test_input_data::input_data_1(service.generate_request(1, None), source_type);
+
+    let mut expected_events = HashSet::new();
+    {
+        let abi = r#"[{"inputs":[{"internalType":"uint256","name":"val","type":"uint256"}],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"uint256","name":"a","type":"uint256"}],"name":"A","type":"event"},{"anonymous":true,"inputs":[{"indexed":false,"internalType":"uint256","name":"start","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"middle","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"end","type":"uint256"}],"name":"Anonymous","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"string","name":"a","type":"string"},{"indexed":true,"internalType":"uint256","name":"b","type":"uint256"},{"indexed":true,"internalType":"uint256","name":"c","type":"uint256"},{"indexed":true,"internalType":"bytes","name":"d","type":"bytes"}],"name":"B","type":"event"},{"stateMutability":"payable","type":"fallback"},{"inputs":[],"name":"f","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"stateMutability":"payable","type":"receive"}]"#;
+        expected_events.insert(Event {
+            selector: blockscout_display_bytes::Bytes::from_str(
+                "0xa17a9e66f0c355e3aa3b9ea969991204d6b1d2e62a47877f612cb2371d79e06a",
+            )
+            .unwrap()
+            .to_vec(),
+            name: "A".to_string(),
+            inputs: serde_json::Value::from_str(
+                r#"[{"indexed":true,"internalType":"uint256","name":"a","type":"uint256"}]"#,
+            )
+            .unwrap()
+            .to_string(),
+        });
+        expected_events.insert(Event {
+            selector: blockscout_display_bytes::Bytes::from_str("0xbcf5c814cb65249e306ec7aeaef6fc1ca35e1b8e18c08b054c9f9c76160bc923").unwrap().to_vec(),
+            name: "B".to_string(),
+            inputs: serde_json::Value::from_str(r#"[{"indexed":false,"internalType":"string","name":"a","type":"string"},{"indexed":true,"internalType":"uint256","name":"b","type":"uint256"},{"indexed":true,"internalType":"uint256","name":"c","type":"uint256"},{"indexed":true,"internalType":"bytes","name":"d","type":"bytes"}]"#).unwrap().to_string(),
+        });
+
+        let input_data = input_data.clone().with_abi(abi.to_string());
+        let client = start_server_and_init_client(
+            db.client().clone(),
+            service_generator(),
+            vec![input_data.clone()],
+        )
+        .await;
+        let _source = Service::verify(client.clone(), input_data.eth_bytecode_db_request)
+            .await
+            .expect("Verification failed");
+
+        let db_events: HashSet<_> = events::Entity::find()
+            .all(db.client().as_ref())
+            .await
+            .expect("Error while reading events")
+            .into_iter()
+            .map(Event::from)
+            .collect();
+
+        assert_eq!(
+            expected_events, db_events,
+            "Events after first submission do not match"
+        );
+    }
+
+    {
+        let abi = r#"[{"inputs":[{"internalType":"uint256","name":"val","type":"uint256"}],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":true,"inputs":[{"indexed":false,"internalType":"uint256","name":"start","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"middle","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"end","type":"uint256"}],"name":"Anonymous","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"string","name":"a","type":"string"},{"indexed":false,"internalType":"uint256","name":"b","type":"uint256"},{"indexed":true,"internalType":"uint256","name":"c","type":"uint256"},{"indexed":true,"internalType":"bytes","name":"d","type":"bytes"}],"name":"B","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"string","name":"c","type":"string"}],"name":"C","type":"event"},{"stateMutability":"payable","type":"fallback"},{"stateMutability":"payable","type":"receive"},{"inputs":[],"name":"f","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}]"#;
+        expected_events.insert(Event {
+            selector: blockscout_display_bytes::Bytes::from_str("0xbcf5c814cb65249e306ec7aeaef6fc1ca35e1b8e18c08b054c9f9c76160bc923").unwrap().to_vec(),
+            name: "B".to_string(),
+            inputs: serde_json::Value::from_str(r#"[{"indexed":true,"internalType":"string","name":"a","type":"string"},{"indexed":false,"internalType":"uint256","name":"b","type":"uint256"},{"indexed":true,"internalType":"uint256","name":"c","type":"uint256"},{"indexed":true,"internalType":"bytes","name":"d","type":"bytes"}]"#).unwrap().to_string(),
+        });
+        expected_events.insert(Event {
+            selector: blockscout_display_bytes::Bytes::from_str(
+                "0x7076fab50c7b30ea53db9880b1c8ea59a80cdaf0341135a4c2ec691b8cdd4a9a",
+            )
+            .unwrap()
+            .to_vec(),
+            name: "C".to_string(),
+            inputs: serde_json::Value::from_str(
+                r#"[{"indexed":false,"internalType":"string","name":"c","type":"string"}]"#,
+            )
+            .unwrap()
+            .to_string(),
+        });
+
+        let input_data = input_data.clone().with_abi(abi.to_string());
+        let client = start_server_and_init_client(
+            db.client().clone(),
+            service_generator(),
+            vec![input_data.clone()],
+        )
+        .await;
+        let _source = Service::verify(client.clone(), input_data.eth_bytecode_db_request)
+            .await
+            .expect("Verification failed");
+
+        let db_events: HashSet<_> = events::Entity::find()
+            .all(db.client().as_ref())
+            .await
+            .expect("Error while reading events")
+            .into_iter()
+            .map(Event::from)
+            .collect();
+
+        assert_eq!(
+            expected_events, db_events,
+            "Events after second submission do not match"
+        );
+    }
 }

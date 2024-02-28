@@ -4,6 +4,10 @@ on:
       - 'main'
     tags:
       - 'eth-bytecode-db/v*'
+    paths:
+      - eth-bytecode-db/**
+      - .github/workflows/eth-bytecode-db.yml
+      - .github/actions/deps/**
   pull_request:
     paths:
       - eth-bytecode-db/**
@@ -35,11 +39,26 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+          --name postgres
         ports:
           - 5432:5432
+
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
+
+      - name: Set postgres max_connections
+        run: |
+          psql -h localhost -p 5432 -c "ALTER SYSTEM SET max_connections = 500;" -d postgres
+        env:
+          PGPASSWORD: admin
+          PGUSER: postgres
+
+      - name: Restart postgres
+        # Restart Postgres so that new system parameters to be applied
+        uses: docker://docker
+        with:
+          args: docker restart postgres
 
       - name: Install deps
         uses: ./.github/actions/deps

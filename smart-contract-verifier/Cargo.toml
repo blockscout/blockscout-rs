@@ -2,8 +2,10 @@
 resolver = "2"
 members = [
     "smart-contract-verifier",
-    "smart-contract-verifier-http",
     "smart-contract-verifier-proto",
     "smart-contract-verifier-server",
     "sig-provider-extension",
 ]
+
+[workspace.dependencies]
+blockscout-service-launcher = "0.10.0"

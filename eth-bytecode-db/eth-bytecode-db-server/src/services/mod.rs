@@ -34,3 +34,36 @@ fn is_key_authorized(
         .unwrap_or_default();
     Ok(is_authorized)
 }
+
+macro_rules! trace_request_metadata {
+    ($($field:ident=$value:expr),+) => {
+        tracing::info!(
+            $($field = $value,)+
+        )
+    };
+}
+
+macro_rules! trace_verification_request {
+    ($contract_address:expr, $chain_id:expr) => {{
+        $crate::services::trace_request_metadata!(
+            chain_id = $chain_id,
+            contract_address = $contract_address
+        )
+    }};
+    ($request:expr) => {{
+        let chain_id = $request
+            .metadata
+            .as_ref()
+            .and_then(|metadata| metadata.chain_id.clone())
+            .unwrap_or_default();
+        let contract_address = $request
+            .metadata
+            .as_ref()
+            .and_then(|metadata| metadata.contract_address.clone())
+            .unwrap_or_default();
+        $crate::services::trace_verification_request!(chain_id, contract_address)
+    }};
+}
+
+use trace_request_metadata;
+use trace_verification_request;

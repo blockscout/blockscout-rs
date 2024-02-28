@@ -14,14 +14,46 @@ fn compile(
         .compile_well_known_types()
         .protoc_arg("--openapiv2_out=swagger/")
         .protoc_arg("--openapiv2_opt")
-        .protoc_arg("grpc_api_configuration=proto/api_config_http.yaml,output_format=yaml,allow_merge=true,merge_file_name=bens")
+        .protoc_arg("grpc_api_configuration=proto/api_config_http.yaml,output_format=yaml,allow_merge=true,merge_file_name=bens,json_names_for_fields=false")
         .bytes(["."])
         .btree_map(["."])
-        .type_attribute(".", "#[actix_prost_macros::serde]")
-        // .field_attribute(
-        //     ".blockscout.ethBytecodeDb.v2.VerifyVyperMultiPartRequest.interfaces",
-        //     "#[serde(default)]"
-        // )
+        .type_attribute(".", "#[actix_prost_macros::serde(rename_all=\"snake_case\")]")
+        .field_attribute(
+            ".blockscout.bens.v1.GetDomainRequest.only_active",
+            "#[serde(default)]"
+        )
+        .field_attribute(
+            ".blockscout.bens.v1.ListDomainEventsRequest.sort",
+            "#[serde(default)]"
+        )
+        .field_attribute(
+            ".blockscout.bens.v1.ListDomainEventsRequest.order",
+            "#[serde(default)]"
+        )
+        .field_attribute(
+            ".blockscout.bens.v1.LookupDomainNameRequest.sort",
+            "#[serde(default)]"
+        )
+        .field_attribute(
+            ".blockscout.bens.v1.LookupDomainNameRequest.order",
+            "#[serde(default)]"
+        )
+        .field_attribute(
+            ".blockscout.bens.v1.LookupDomainNameRequest.only_active",
+            "#[serde(default)]"
+        )
+        .field_attribute(
+            ".blockscout.bens.v1.LookupAddressRequest.sort",
+            "#[serde(default)]"
+        )
+        .field_attribute(
+            ".blockscout.bens.v1.LookupAddressRequest.order",
+            "#[serde(default)]"
+        )
+        .field_attribute(
+            ".blockscout.bens.v1.LookupAddressRequest.only_active",
+            "#[serde(default)]"
+        )
         ;
     config.compile_protos(protos, includes)?;
     Ok(())

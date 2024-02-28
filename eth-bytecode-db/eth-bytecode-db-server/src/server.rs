@@ -16,6 +16,7 @@ use crate::{
 use blockscout_service_launcher::{database, launcher, launcher::LaunchSettings, tracing};
 use eth_bytecode_db::verification::Client;
 use migration::Migrator;
+use sea_orm::ConnectOptions;
 use std::{collections::HashSet, sync::Arc};
 
 const SERVICE_NAME: &str = "eth_bytecode_db";
@@ -76,17 +77,31 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let health = Arc::new(HealthService::default());
 
-    let db_connection = database::initialize_postgres::<Migrator>(
-        &settings.database.url,
-        settings.database.create_database,
-        settings.database.run_migrations,
+    let db_connection = {
+        let mut connect_options = ConnectOptions::new(settings.database.url);
+        connect_options.sqlx_logging_level(::tracing::log::LevelFilter::Debug);
+
+        database::initialize_postgres::<Migrator>(
+            connect_options,
+            settings.database.create_database,
+            settings.database.run_migrations,
+        )
+        .await?
+    };
+
+    let mut client = Client::new(
+        db_connection,
+        settings.verifier.http_url.to_string(),
+        settings.verifier.max_retries,
+        settings.verifier.probe_url,
     )
     .await?;
-
-    let mut client = Client::new(db_connection, settings.verifier.uri).await?;
     if settings.verifier_alliance_database.enabled {
-        let alliance_db_connection =
-            sea_orm::Database::connect(settings.verifier_alliance_database.url).await?;
+        let alliance_db_connection = {
+            let mut connect_options = ConnectOptions::new(settings.verifier_alliance_database.url);
+            connect_options.sqlx_logging_level(::tracing::log::LevelFilter::Debug);
+            sea_orm::Database::connect(connect_options).await?
+        };
         client = client.with_alliance_db(alliance_db_connection);
     }
 

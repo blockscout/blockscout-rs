@@ -1,0 +1,18 @@
+type: google.api.Service
+config_version: 3
+
+http:
+  rules:
+    {% if proto_ex %}
+    - selector: blockscout.{{projectName}}.v1.{{ProtoExName}}.{{ProtoExName}}Create
+      post: /api/v1/{{proto_ex_name}}:create
+      body: "*"
+
+    - selector: blockscout.{{projectName}}.v1.{{ProtoExName}}.{{ProtoExName}}Search
+      get: /api/v1/{{proto_ex_name}}:search
+    {% endif %}
+    #################### Health ####################
+
+    - selector: blockscout.{{projectName}}.v1.Health.Check
+      get: /health
+

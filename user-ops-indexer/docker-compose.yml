@@ -1,0 +1,35 @@
+version: "3"
+services:
+  database:
+    image: postgres:15
+    container_name: 'user-ops-indexer-postgres'
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: ''
+      POSTGRES_USER: 'postgres'
+      POSTGRES_HOST_AUTH_METHOD: 'trust'
+    ports:
+      - "9432:5432"
+  user-ops-indexer:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    container_name: 'user-ops-indexer'
+    restart: always
+    depends_on:
+      - database
+    ports:
+      - "8050:8050"
+      - "8051:8051"
+    environment:
+      ## optional: if provided, would be used as a configuration file
+      USER_OPS_INDEXER__CONFIG: /app/config.toml
+      USER_OPS_INDEXER__DATABASE__URL: postgres://postgres:@database:5432/blockscout
+      USER_OPS_INDEXER__DATABASE__CREATE_DATABASE: true
+      USER_OPS_INDEXER__DATABASE__RUN_MIGRATIONS: true
+    env_file:
+      ## optional: if provided, would overwrite values from configuration file
+      - ./user-ops-indexer-server/config/base.env
+    volumes:
+      ## optional: you can use default config or provide custom via file
+      - ./user-ops-indexer-server/config/base.toml:/app/config.toml

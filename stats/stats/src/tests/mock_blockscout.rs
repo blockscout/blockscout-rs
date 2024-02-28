@@ -328,7 +328,7 @@ fn mock_transaction(
     block: &blocks::ActiveModel,
     gas: i64,
     gas_price: i64,
-    address_list: &Vec<addresses::ActiveModel>,
+    address_list: &[addresses::ActiveModel],
     index: i32,
     tx_type: TxType,
 ) -> transactions::ActiveModel {

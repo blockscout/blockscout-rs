@@ -607,7 +607,7 @@ dependencies = [
 [[package]]
 name = "blockscout-db"
 version = "4.1.8"
-source = "git+https://github.com/blockscout/blockscout-rs#e4409334a8d050821a665e8e67f242472eac4c6e"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=e440933#e4409334a8d050821a665e8e67f242472eac4c6e"
 dependencies = [
  "blockscout-db-entity",
  "blockscout-db-migration",
@@ -616,7 +616,7 @@ dependencies = [
 [[package]]
 name = "blockscout-db-entity"
 version = "4.1.8"
-source = "git+https://github.com/blockscout/blockscout-rs#e4409334a8d050821a665e8e67f242472eac4c6e"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=e440933#e4409334a8d050821a665e8e67f242472eac4c6e"
 dependencies = [
  "sea-orm",
 ]
@@ -624,7 +624,7 @@ dependencies = [
 [[package]]
 name = "blockscout-db-migration"
 version = "4.1.8"
-source = "git+https://github.com/blockscout/blockscout-rs#e4409334a8d050821a665e8e67f242472eac4c6e"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=e440933#e4409334a8d050821a665e8e67f242472eac4c6e"
 dependencies = [
  "async-std",
  "sea-orm-migration",
@@ -659,16 +659,19 @@ dependencies = [
 
 [[package]]
 name = "blockscout-service-launcher"
-version = "0.9.0"
-source = "git+https://github.com/blockscout/blockscout-rs?rev=3cdbb47#3cdbb475deef2776267cf83ceca7613c48e63dde"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "545355abddfc1617d40529141b7e849feed732328ccf54850f691dc31cf24856"
 dependencies = [
  "actix-cors",
  "actix-web",
  "actix-web-prom",
  "anyhow",
+ "blockscout-tracing-actix-web",
  "cfg-if",
  "config",
  "futures",
+ "once_cell",
  "opentelemetry",
  "opentelemetry-jaeger",
  "prometheus",
@@ -676,12 +679,27 @@ dependencies = [
  "sea-orm",
  "sea-orm-migration",
  "serde",
+ "serde_json",
  "tokio",
  "tonic",
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
  "url",
+ "uuid",
+]
+
+[[package]]
+name = "blockscout-tracing-actix-web"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e9c18637c495cd78f0ba302727ca0be4f068a3a03633371c5bd1d8c0e9f1e6c"
+dependencies = [
+ "actix-web",
+ "mutually_exclusive_features",
+ "pin-project",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]
@@ -2002,6 +2020,12 @@ name = "multimap"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
+
+[[package]]
+name = "mutually_exclusive_features"
+version = "0.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d02c0b00610773bb7fc61d85e13d86c7858cbdf00e1a120bfc41bc055dbaa0e"
 
 [[package]]
 name = "native-tls"
@@ -3406,7 +3430,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "blockscout-db",
- "blockscout-service-launcher 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "blockscout-service-launcher 0.9.0",
  "chrono",
  "entity",
  "lazy_static",
@@ -3446,7 +3470,7 @@ dependencies = [
  "actix-web",
  "anyhow",
  "async-trait",
- "blockscout-service-launcher 0.9.0 (git+https://github.com/blockscout/blockscout-rs?rev=3cdbb47)",
+ "blockscout-service-launcher 0.10.0",
  "bytes",
  "chrono",
  "config",

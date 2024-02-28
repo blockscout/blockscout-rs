@@ -1,4 +1,5 @@
 pub mod compiler_versions;
+pub mod import_existing_abis;
 pub mod solidity_multi_part;
 pub mod solidity_standard_json;
 pub mod sourcify;
@@ -13,12 +14,18 @@ use super::{
     errors::Error,
     smart_contract_verifier,
     types::{BytecodeType, DatabaseReadySource, Source, VerificationMetadata, VerificationType},
+    verifier_alliance,
 };
+use crate::verification::verifier_alliance::CodeMatch;
 use anyhow::Context;
 use sea_orm::DatabaseConnection;
+use verifier_alliance_entity::contract_deployments;
 
 enum EthBytecodeDbAction<'a> {
-    IgnoreDb,
+    SaveOnlyAbiData {
+        db_client: &'a DatabaseConnection,
+        verification_metadata: Option<VerificationMetadata>,
+    },
     SaveData {
         db_client: &'a DatabaseConnection,
         bytecode_type: BytecodeType,
@@ -29,19 +36,76 @@ enum EthBytecodeDbAction<'a> {
     },
 }
 
+impl<'a> EthBytecodeDbAction<'a> {
+    fn db_client(&self) -> &'a DatabaseConnection {
+        match self {
+            EthBytecodeDbAction::SaveOnlyAbiData { db_client, .. } => db_client,
+            EthBytecodeDbAction::SaveData { db_client, .. } => db_client,
+        }
+    }
+    fn contract_address(&self) -> Option<blockscout_display_bytes::Bytes> {
+        let contract_address = match self {
+            EthBytecodeDbAction::SaveOnlyAbiData {
+                verification_metadata:
+                    Some(VerificationMetadata {
+                        contract_address: Some(contract_address),
+                        ..
+                    }),
+                ..
+            } => Some(contract_address),
+            EthBytecodeDbAction::SaveData {
+                verification_metadata:
+                    Some(VerificationMetadata {
+                        contract_address: Some(contract_address),
+                        ..
+                    }),
+                ..
+            } => Some(contract_address),
+            _ => None,
+        };
+        contract_address.map(|contract_address| {
+            blockscout_display_bytes::Bytes::from(contract_address.to_vec())
+        })
+    }
+
+    fn chain_id(&self) -> Option<i64> {
+        match self {
+            EthBytecodeDbAction::SaveOnlyAbiData {
+                verification_metadata:
+                    Some(VerificationMetadata {
+                        chain_id: Some(chain_id),
+                        ..
+                    }),
+                ..
+            } => Some(*chain_id),
+            EthBytecodeDbAction::SaveData {
+                verification_metadata:
+                    Some(VerificationMetadata {
+                        chain_id: Some(chain_id),
+                        ..
+                    }),
+                ..
+            } => Some(*chain_id),
+            _ => None,
+        }
+    }
+}
+
 enum VerifierAllianceDbAction<'a> {
     IgnoreDb,
     SaveIfDeploymentExists {
         db_client: &'a DatabaseConnection,
         chain_id: i64,
         contract_address: bytes::Bytes,
-        transaction_hash: bytes::Bytes,
+        transaction_hash: Option<bytes::Bytes>,
+        creation_code: Option<bytes::Bytes>,
+        runtime_code: Option<bytes::Bytes>,
     },
     SaveWithDeploymentData {
         db_client: &'a DatabaseConnection,
         chain_id: i64,
         contract_address: bytes::Bytes,
-        transaction_hash: bytes::Bytes,
+        transaction_hash: Option<bytes::Bytes>,
         block_number: Option<i64>,
         transaction_index: Option<i64>,
         deployer: Option<bytes::Bytes>,
@@ -62,7 +126,7 @@ impl<'a> VerifierAllianceDbAction<'a> {
                 Some(VerificationMetadata {
                     chain_id: Some(chain_id),
                     contract_address: Some(contract_address),
-                    transaction_hash: Some(transaction_hash),
+                    transaction_hash,
                     block_number,
                     transaction_index,
                     deployer,
@@ -70,7 +134,8 @@ impl<'a> VerifierAllianceDbAction<'a> {
                     runtime_code,
                 }),
             ) => {
-                if is_authorized {
+                // Contract deployment must have at least one of creation/runtime code to exist
+                if is_authorized && (creation_code.is_some() || runtime_code.is_some()) {
                     Self::SaveWithDeploymentData {
                         db_client,
                         chain_id,
@@ -88,10 +153,35 @@ impl<'a> VerifierAllianceDbAction<'a> {
                         chain_id,
                         contract_address,
                         transaction_hash,
+                        creation_code,
+                        runtime_code,
                     }
                 }
             }
             _ => Self::IgnoreDb,
+        }
+    }
+}
+
+impl<'a> VerifierAllianceDbAction<'a> {
+    fn contract_address(&self) -> Option<blockscout_display_bytes::Bytes> {
+        match self {
+            VerifierAllianceDbAction::IgnoreDb => None,
+            VerifierAllianceDbAction::SaveIfDeploymentExists {
+                contract_address, ..
+            } => Some(contract_address),
+            VerifierAllianceDbAction::SaveWithDeploymentData {
+                contract_address, ..
+            } => Some(contract_address),
+        }
+        .map(|contract_address| blockscout_display_bytes::Bytes::from(contract_address.to_vec()))
+    }
+
+    fn chain_id(&self) -> Option<i64> {
+        match self {
+            VerifierAllianceDbAction::IgnoreDb => None,
+            VerifierAllianceDbAction::SaveIfDeploymentExists { chain_id, .. } => Some(*chain_id),
+            VerifierAllianceDbAction::SaveWithDeploymentData { chain_id, .. } => Some(*chain_id),
         }
     }
 }
@@ -103,6 +193,15 @@ async fn process_verify_response(
 ) -> Result<Source, Error> {
     let source = from_response_to_source(response).await?;
 
+    let eth_bytecode_db_action_contract_address = eth_bytecode_db_action.contract_address();
+    let eth_bytecode_db_action_chain_id = eth_bytecode_db_action.chain_id();
+
+    let alliance_db_action_contract_address = alliance_db_action.contract_address();
+    let alliance_db_action_chain_id = alliance_db_action.chain_id();
+
+    let process_abi_data_future =
+        process_abi_data(source.abi.clone(), eth_bytecode_db_action.db_client());
+
     let process_eth_bytecode_db_future =
         process_eth_bytecode_db_action(source.clone(), eth_bytecode_db_action);
 
@@ -110,15 +209,31 @@ async fn process_verify_response(
         process_verifier_alliance_db_action(source.clone(), alliance_db_action);
 
     // We may process insertion into both databases concurrently, as they are independent from one another.
-    let (process_eth_bytecode_db_result, process_alliance_db_result) =
-        futures::future::join(process_eth_bytecode_db_future, process_alliance_db_future).await;
+    let (process_abi_data_result, process_eth_bytecode_db_result, process_alliance_db_result) =
+        futures::future::join3(
+            process_abi_data_future,
+            process_eth_bytecode_db_future,
+            process_alliance_db_future,
+        )
+        .await;
+    let _ = process_abi_data_result.map_err(|err: anyhow::Error| {
+        tracing::error!(
+            ?eth_bytecode_db_action_contract_address,
+            ?eth_bytecode_db_action_chain_id,
+            "Error while inserting abi data into database: {err:#}"
+        )
+    });
     let _ = process_eth_bytecode_db_result.map_err(|err: anyhow::Error| {
-        println!("Error while inserting contract data into database: {err:#}");
-        tracing::error!("Error while inserting contract data into database: {err:#}")
+        tracing::error!(
+            ?eth_bytecode_db_action_contract_address,
+            ?eth_bytecode_db_action_chain_id,
+            "Error while inserting contract data into database: {err:#}"
+        )
     });
     let _ = process_alliance_db_result.map_err(|err: anyhow::Error| {
-        println!("Error while inserting contract data into verifier alliance database: {err:#}");
         tracing::error!(
+            ?alliance_db_action_contract_address,
+            ?alliance_db_action_chain_id,
             "Error while inserting contract data into verifier alliance database: {err:#}"
         )
     });
@@ -154,7 +269,7 @@ async fn process_eth_bytecode_db_action(
     action: EthBytecodeDbAction<'_>,
 ) -> Result<(), anyhow::Error> {
     match action {
-        EthBytecodeDbAction::IgnoreDb => {}
+        EthBytecodeDbAction::SaveOnlyAbiData { .. } => {}
         EthBytecodeDbAction::SaveData {
             db_client,
             bytecode_type,
@@ -191,26 +306,111 @@ async fn process_verifier_alliance_db_action(
     source: Source,
     action: VerifierAllianceDbAction<'_>,
 ) -> Result<(), anyhow::Error> {
+    let (db_client, contract_deployment) = match retrieve_deployment_from_action(action).await? {
+        None => return Ok(()),
+        Some(result) => result,
+    };
+
+    let database_source = DatabaseReadySource::try_from(source)
+        .context("Converting source into database ready version")?;
+
+    let (creation_code_match, runtime_code_match) =
+        check_code_matches(db_client, &database_source, &contract_deployment).await?;
+
+    check_match_statuses(
+        db_client,
+        &contract_deployment,
+        &creation_code_match,
+        &runtime_code_match,
+    )
+    .await?;
+
+    db::verifier_alliance_db::insert_data(
+        db_client,
+        database_source,
+        contract_deployment,
+        creation_code_match,
+        runtime_code_match,
+    )
+    .await
+    .context("Insert data into verifier alliance database")
+}
+
+async fn process_abi_data(
+    abi: Option<String>,
+    db_client: &DatabaseConnection,
+) -> Result<(), anyhow::Error> {
+    if abi.is_none() {
+        return Ok(());
+    }
+
+    // We use `alloy_json_abi::JsonAbi` and not `ethabi::Contract` because
+    // `ethabi::Contract` lose the notion of internal type during deserialization
+    let abi = alloy_json_abi::JsonAbi::from_json_str(&abi.unwrap()).context("Parse abi")?;
+
+    let events = abi
+        .events
+        .into_values()
+        .flatten()
+        .filter(|event| !event.anonymous)
+        .collect();
+    db::eth_bytecode_db::insert_event_descriptions(db_client, events)
+        .await
+        .context("Insert event descriptions into database")?;
+
+    Ok(())
+}
+
+async fn retrieve_deployment_from_action(
+    action: VerifierAllianceDbAction<'_>,
+) -> Result<Option<(&DatabaseConnection, contract_deployments::Model)>, anyhow::Error> {
     match action {
-        VerifierAllianceDbAction::IgnoreDb => {}
+        VerifierAllianceDbAction::IgnoreDb => Ok(None),
         VerifierAllianceDbAction::SaveIfDeploymentExists {
             db_client,
             chain_id,
             contract_address,
             transaction_hash,
+            creation_code,
+            runtime_code,
         } => {
-            let database_source = DatabaseReadySource::try_from(source)
-                .context("Converting source into database ready version")?;
-
+            let transaction_hash = match verifier_alliance::derive_transaction_hash(
+                transaction_hash,
+                creation_code,
+                runtime_code,
+            ) {
+                Some(hash) => hash,
+                // If no transaction hash can be derived,
+                // consider it like no active deployment exists.
+                None => {
+                    tracing::warn!(
+                        chain_id=chain_id,
+                        contract_address=blockscout_display_bytes::Bytes::from(contract_address.to_vec()).to_string(),
+                        "Trying to save contract without transaction hash and creation and runtime codes"
+                    );
+                    return Ok(None);
+                }
+            };
             let deployment_data = db::verifier_alliance_db::ContractDeploymentData {
                 chain_id,
                 contract_address: contract_address.to_vec(),
-                transaction_hash: transaction_hash.to_vec(),
+                transaction_hash,
                 ..Default::default()
             };
-            db::verifier_alliance_db::insert_data(db_client, database_source, deployment_data)
+
+            let contract_deployment = db::verifier_alliance_db::retrieve_contract_deployment(db_client, &deployment_data)
                 .await
-                .context("Insert data into verifier alliance database")?;
+                .context("retrieve contract contract_deployment")?
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "contract deployment was not found: chain_id={}, address={}, transaction_hash={}",
+                        deployment_data.chain_id,
+                        format!("0x{}", hex::encode(&deployment_data.contract_address)),
+                        format!("0x{}", hex::encode(&deployment_data.transaction_hash)),
+                    )
+                })?;
+
+            Ok(Some((db_client, contract_deployment)))
         }
         VerifierAllianceDbAction::SaveWithDeploymentData {
             db_client,
@@ -223,37 +423,115 @@ async fn process_verifier_alliance_db_action(
             creation_code,
             runtime_code,
         } => {
-            let database_source = DatabaseReadySource::try_from(source)
-                .context("Converting source into database ready version")?;
+            // At least one of creation and runtime code should exist to add the contract into the database.
+            let transaction_hash = verifier_alliance::derive_transaction_hash(
+                transaction_hash.clone(),
+                creation_code.clone(),
+                runtime_code.clone(),
+            )
+            .ok_or_else(|| anyhow::anyhow!("Both creation and runtime codes are nulls"))?;
 
             let deployment_data = db::verifier_alliance_db::ContractDeploymentData {
                 chain_id,
                 contract_address: contract_address.to_vec(),
-                transaction_hash: transaction_hash.to_vec(),
+                transaction_hash,
                 block_number,
                 transaction_index,
                 deployer: deployer.map(|deployer| deployer.to_vec()),
-                creation_code: creation_code
-                    .as_ref()
-                    .map(|creation_code| creation_code.to_vec()),
-                runtime_code: runtime_code
-                    .as_ref()
-                    .map(|runtime_code| runtime_code.to_vec()),
+                creation_code: creation_code.map(|code| code.to_vec()),
+                runtime_code: runtime_code.map(|code| code.to_vec()),
             };
 
-            // At least one of creation and runtime code should exist to add the contract into the database.
-            if creation_code.is_some() || runtime_code.is_some() {
-                db::verifier_alliance_db::insert_deployment_data(
-                    db_client,
-                    deployment_data.clone(),
-                )
-                .await
-                .context("Insert deployment data into verifier alliance database")?;
-            }
-            db::verifier_alliance_db::insert_data(db_client, database_source, deployment_data)
-                .await
-                .context("Insert data into verifier alliance database")?;
+            let contract_deployment = db::verifier_alliance_db::insert_deployment_data(
+                db_client,
+                deployment_data.clone(),
+            )
+            .await
+            .context("Insert deployment data into verifier alliance database")?;
+
+            Ok(Some((db_client, contract_deployment)))
         }
+    }
+}
+
+async fn check_code_matches(
+    db_client: &DatabaseConnection,
+    database_source: &DatabaseReadySource,
+    contract_deployment: &contract_deployments::Model,
+) -> Result<(CodeMatch, CodeMatch), anyhow::Error> {
+    let (deployed_creation_code, deployed_runtime_code) =
+        db::verifier_alliance_db::retrieve_contract_codes(db_client, contract_deployment)
+            .await
+            .context("retrieve deployment contract codes")?;
+
+    let creation_code_match = verifier_alliance::verify_creation_code(
+        contract_deployment,
+        deployed_creation_code.code.clone(),
+        database_source.raw_creation_code.clone(),
+        database_source.creation_code_artifacts.clone(),
+    )
+    .context("verify if creation code match")?;
+
+    let runtime_code_match = verifier_alliance::verify_runtime_code(
+        contract_deployment,
+        deployed_runtime_code.code.clone(),
+        database_source.raw_runtime_code.clone(),
+        database_source.runtime_code_artifacts.clone(),
+    )
+    .context("verify if creation code match")?;
+
+    if !(creation_code_match.does_match || runtime_code_match.does_match) {
+        return Err(anyhow::anyhow!(
+            "Neither creation code nor runtime code have not matched"
+        ));
+    }
+
+    Ok((creation_code_match, runtime_code_match))
+}
+
+async fn check_match_statuses(
+    db_client: &DatabaseConnection,
+    contract_deployment: &contract_deployments::Model,
+    creation_code_match: &CodeMatch,
+    runtime_code_match: &CodeMatch,
+) -> Result<(), anyhow::Error> {
+    let (creation_code_max_status, runtime_code_max_status) = {
+        let deployment_verified_contracts =
+            db::verifier_alliance_db::retrieve_deployment_verified_contracts(
+                db_client,
+                contract_deployment,
+            )
+            .await
+            .context("retrieve deployment verified contracts")?;
+
+        (
+            verifier_alliance::calculate_max_status(&deployment_verified_contracts, true),
+            verifier_alliance::calculate_max_status(&deployment_verified_contracts, false),
+        )
+    };
+
+    let (creation_code_status, runtime_code_status) = {
+        let creation_code_status = verifier_alliance::retrieve_code_transformation_status(
+            None,
+            true,
+            creation_code_match.does_match,
+            creation_code_match.values.as_ref(),
+        );
+        let runtime_code_status = verifier_alliance::retrieve_code_transformation_status(
+            None,
+            false,
+            runtime_code_match.does_match,
+            runtime_code_match.values.as_ref(),
+        );
+        (creation_code_status, runtime_code_status)
+    };
+
+    if creation_code_max_status >= creation_code_status
+        && runtime_code_max_status >= runtime_code_status
+    {
+        return Err(anyhow::anyhow!(
+            "New verified contract is not better than existing for the given contract deployment"
+        ));
     }
 
     Ok(())

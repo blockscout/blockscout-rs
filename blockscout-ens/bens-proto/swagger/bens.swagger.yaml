@@ -10,9 +10,130 @@ consumes:
 produces:
   - application/json
 paths:
-  /api/v1/{chainId}/domains:search:
+  /api/v1/{chain_id}/addresses/{address}:
+    get:
+      summary: Get detailed information about main domain of requested address
+      operationId: DomainsExtractor_GetAddress
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetAddressResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: chain_id
+          in: path
+          required: true
+          type: string
+          format: int64
+        - name: address
+          in: path
+          required: true
+          type: string
+      tags:
+        - DomainsExtractor
+  /api/v1/{chain_id}/addresses:batch-resolve-names:
     post:
-      operationId: DomainsExtractor_SearchDomain
+      summary: Perform batch resolving of list of address for blockscout backend requests
+      operationId: DomainsExtractor_BatchResolveAddressNames
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1BatchResolveAddressNamesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: chain_id
+          description: The chain (network) where domain search should be done
+          in: path
+          required: true
+          type: string
+          format: int64
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/DomainsExtractorBatchResolveAddressNamesBody'
+      tags:
+        - DomainsExtractor
+  /api/v1/{chain_id}/addresses:lookup:
+    get:
+      summary: Get basic info about address for ens-lookup and blockscout quick-search. Sorted by `registration_date`
+      operationId: DomainsExtractor_LookupAddress
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1LookupAddressResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: chain_id
+          description: The chain (network) where domain search should be done
+          in: path
+          required: true
+          type: string
+          format: int64
+        - name: address
+          description: Address of EOA or contract
+          in: query
+          required: false
+          type: string
+        - name: resolved_to
+          description: Include domains resolved to the address
+          in: query
+          required: false
+          type: boolean
+        - name: owned_by
+          description: Include domains owned by the address
+          in: query
+          required: false
+          type: boolean
+        - name: only_active
+          description: Filtering field to remove expired domains
+          in: query
+          required: false
+          type: boolean
+        - name: sort
+          description: Sorting field. Default is `registration_date`
+          in: query
+          required: false
+          type: string
+        - name: order
+          description: Order direction. Defaut is DESC
+          in: query
+          required: false
+          type: string
+          enum:
+            - ORDER_UNSPECIFIED
+            - ASC
+            - DESC
+          default: ORDER_UNSPECIFIED
+        - name: page_size
+          description: Optional. Max number of items in single response. Default is 50
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          description: Optional. Value of `.pagination.page_token` from previous response
+          in: query
+          required: false
+          type: string
+      tags:
+        - DomainsExtractor
+  /api/v1/{chain_id}/domains/{name}:
+    get:
+      summary: Get detailed information about domain for Detailed domain page
+      operationId: DomainsExtractor_GetDomain
       responses:
         "200":
           description: A successful response.
@@ -23,60 +144,155 @@ paths:
           schema:
             $ref: '#/definitions/rpcStatus'
       parameters:
-        - name: chainId
-          description: / The chain (network) where domain search should be done
+        - name: chain_id
+          description: The chain (network) where domain search should be done
           in: path
           required: true
           type: string
-          format: uint64
-        - name: body
-          in: body
+          format: int64
+        - name: name
+          description: Name of domain, for example vitalik.eth
+          in: path
           required: true
-          schema:
-            type: object
-            properties:
-              name:
-                type: string
-                title: / Name of domain, for example vitalik.eth
+          type: string
+        - name: only_active
+          description: Filtering field to remove expired domains
+          in: query
+          required: false
+          type: boolean
       tags:
         - DomainsExtractor
-  /api/v1/{chainId}/domains:search-reverse:
-    post:
-      operationId: DomainsExtractor_SearchReverseDomain
+  /api/v1/{chain_id}/domains/{name}/events:
+    get:
+      summary: Get list of events of domain for Detailed domain page
+      operationId: DomainsExtractor_ListDomainEvents
       responses:
         "200":
           description: A successful response.
           schema:
-            $ref: '#/definitions/v1SearchReverseDomainResponse'
+            $ref: '#/definitions/v1ListDomainEventsResponse'
         default:
           description: An unexpected error response.
           schema:
             $ref: '#/definitions/rpcStatus'
       parameters:
-        - name: chainId
-          description: / The chain (network) where domain search should be done
+        - name: chain_id
+          description: The chain (network) where domain search should be done
           in: path
           required: true
           type: string
-          format: uint64
-        - name: body
-          in: body
+          format: int64
+        - name: name
+          description: Name of domain, for example vitalik.eth
+          in: path
           required: true
-          schema:
-            type: object
-            properties:
-              address:
-                type: string
-                title: / Address of EOA or contract
-              resolvedTo:
-                type: boolean
-                title: / Include domains resolved to the address
-              ownedBy:
-                type: boolean
-                title: / Include domains owned by the address
+          type: string
+        - name: sort
+          description: Sorting field. Default is `timestamp`
+          in: query
+          required: false
+          type: string
+        - name: order
+          description: Order direction. Default is DESC
+          in: query
+          required: false
+          type: string
+          enum:
+            - ORDER_UNSPECIFIED
+            - ASC
+            - DESC
+          default: ORDER_UNSPECIFIED
       tags:
         - DomainsExtractor
+  /api/v1/{chain_id}/domains:lookup:
+    get:
+      summary: Get basic info about domain for ens-lookup and blockscout quick-search. Sorted by `registration_date`
+      operationId: DomainsExtractor_LookupDomainName
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1LookupDomainNameResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: chain_id
+          description: The chain (network) where domain search should be done
+          in: path
+          required: true
+          type: string
+          format: int64
+        - name: name
+          description: Optional. Name of domain, for example vitalik.eth. None means lookup for any name
+          in: query
+          required: false
+          type: string
+        - name: only_active
+          description: Filtering field to remove expired domains
+          in: query
+          required: false
+          type: boolean
+        - name: sort
+          description: Sorting field. Default is `registration_date`
+          in: query
+          required: false
+          type: string
+        - name: order
+          description: Order direction. Default is DESC
+          in: query
+          required: false
+          type: string
+          enum:
+            - ORDER_UNSPECIFIED
+            - ASC
+            - DESC
+          default: ORDER_UNSPECIFIED
+        - name: page_size
+          description: Optional. Max number of items in single response. Default is 50
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          description: Optional. Value of `.pagination.page_token` from previous response
+          in: query
+          required: false
+          type: string
+      tags:
+        - DomainsExtractor
+  /health:
+    get:
+      summary: |-
+        If the requested service is unknown, the call will fail with status
+        NOT_FOUND.
+      operationId: Health_Check
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1HealthCheckResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: service
+          in: query
+          required: false
+          type: string
+      tags:
+        - Health
 definitions:
+  DomainsExtractorBatchResolveAddressNamesBody:
+    type: object
+    properties:
+      addresses:
+        type: array
+        items:
+          type: string
+        title: List of requested addresses
   HealthCheckResponseServingStatus:
     type: string
     enum:
@@ -105,90 +321,171 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/protobufAny'
+  v1Address:
+    type: object
+    properties:
+      hash:
+        type: string
+  v1BatchResolveAddressNamesResponse:
+    type: object
+    properties:
+      names:
+        type: object
+        additionalProperties:
+          type: string
   v1DetailedDomain:
     type: object
     properties:
-      domain:
-        $ref: '#/definitions/v1Domain'
-        title: / Optinal. Basic domain info
-      history:
+      id:
+        type: string
+        title: Unique id for the domain, also known as nodehash
+      name:
+        type: string
+        title: The human readable name, if known. Unknown portions replaced with hash in square brackets (eg, foo.[1234].eth)
+      tokens:
         type: array
         items:
           type: object
-          $ref: '#/definitions/v1DomainEvent'
-        title: / List of domain events
+          $ref: '#/definitions/v1Token'
+        title: List of NFT tokens related to this domain
+      owner:
+        $ref: '#/definitions/v1Address'
+        title: The account that owns the domain
+      resolved_address:
+        $ref: '#/definitions/v1Address'
+        title: Optional. Resolved address of this domain
+      registrant:
+        $ref: '#/definitions/v1Address'
+        title: Optional. The account that owns the ERC721 NFT for the domain
+      wrapped_owner:
+        $ref: '#/definitions/v1Address'
+        title: Optional. Owner of NameWrapper NFT
+      registration_date:
+        type: string
+        description: Optional. RFC 3339 datetime  of expiry date.
+      expiry_date:
+        type: string
+        title: Optional. RFC 3339 datetime  of expiry date. None means never expires
+      other_addresses:
+        type: object
+        additionalProperties:
+          type: string
+        title: |-
+          Map chain -> resolved_address that contains other blockchain addresses.
+          This map will contain `current_chain_id` -> `resovled_address` if `resovled_address` is not None
   v1Domain:
     type: object
     properties:
       id:
         type: string
-        title: / Unique id for the domain, also known as nodehash
+        title: Unique id for the domain, also known as nodehash
       name:
         type: string
-        title: / The human readable name, if known. Unknown portions replaced with hash in square brackets (eg, foo.[1234].eth)
-      tokenId:
-        type: string
-        format: uint64
-        title: / Integer representation of labelhash
+        title: The human readable name, if known. Unknown portions replaced with hash in square brackets (eg, foo.[1234].eth)
+      resolved_address:
+        $ref: '#/definitions/v1Address'
+        title: Optional. Resolved address of this domain
       owner:
+        $ref: '#/definitions/v1Address'
+        title: The account that owns the domain
+      wrapped_owner:
+        $ref: '#/definitions/v1Address'
+        title: Optional. Owner of NameWrapper NFT
+      registration_date:
         type: string
-        title: / The account that owns the domain
-      resolvedAddress:
+        description: Optional. RFC 3339 datetime of expiry date.
+      expiry_date:
         type: string
-        title: / Optinal. Resolved address of this domain
-      registrant:
-        type: string
-        title: / Optinal. The account that owns the ERC721 NFT for the domain
-      expiryDate:
-        type: string
-        format: uint64
-        title: / Optinal. Unix timestamp of expiry date. None means never expires
-      registrationDate:
-        type: string
-        format: uint64
-        title: / Unix timestamp of regisration date
-      otherAddress:
-        type: object
-        additionalProperties:
-          type: string
-        title: |-
-          / Map chain -> resolved_address that contains other blockchain addresses.
-          / This map will contain `current_chain_id` -> `resovled_address` if `resovled_address` is not None
+        title: Optional. RFC 3339 datetime  of expiry date. None means never expires
   v1DomainEvent:
     type: object
     properties:
-      transactionHash:
+      transaction_hash:
         type: string
-        title: / Transaction hash where action occured
+        title: Transaction hash where action occured
       timestamp:
         type: string
-        format: uint64
-        title: / Timestamp of this transaction
-      fromAddress:
-        type: string
-        title: / Sender of transaction
+        title: Timestamp of this transaction
+      from_address:
+        $ref: '#/definitions/v1Address'
+        title: /Sender of transaction
       action:
         type: string
-        title: / Optinal. Action name
+        title: Optional. Action name
+  v1GetAddressResponse:
+    type: object
+    properties:
+      domain:
+        $ref: '#/definitions/v1DetailedDomain'
+      resolved_domains_count:
+        type: integer
+        format: int32
   v1HealthCheckResponse:
     type: object
     properties:
       status:
         $ref: '#/definitions/HealthCheckResponseServingStatus'
-  v1SearchReverseDomainResponse:
+  v1ListDomainEventsResponse:
     type: object
     properties:
-      resolvedTo:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1DomainEvent'
+  v1LookupAddressResponse:
+    type: object
+    properties:
+      items:
         type: array
         items:
           type: object
           $ref: '#/definitions/v1Domain'
         title: |-
-          List of domains that resolved to requested address
+          List of domains that resolved to or owned by requested address
           Sorted by relevance, so first address could be displayed as main resolved address
-      ownedBy:
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
+  v1LookupDomainNameResponse:
+    type: object
+    properties:
+      items:
         type: array
         items:
           type: object
           $ref: '#/definitions/v1Domain'
-        title: List of domains owned by requested address
+        title: |-
+          List of domains that resolved to or owned by requested address
+          Sorted by relevance, so first address could be displayed as main resolved address
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
+  v1Order:
+    type: string
+    enum:
+      - ORDER_UNSPECIFIED
+      - ASC
+      - DESC
+    default: ORDER_UNSPECIFIED
+  v1Pagination:
+    type: object
+    properties:
+      page_token:
+        type: string
+      page_size:
+        type: integer
+        format: int64
+  v1Token:
+    type: object
+    properties:
+      id:
+        type: string
+      contract_hash:
+        type: string
+      type:
+        $ref: '#/definitions/v1TokenType'
+  v1TokenType:
+    type: string
+    enum:
+      - NATIVE_DOMAIN_TOKEN
+      - WRAPPED_DOMAIN_TOKEN
+    default: NATIVE_DOMAIN_TOKEN

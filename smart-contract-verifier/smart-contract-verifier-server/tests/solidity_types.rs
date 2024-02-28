@@ -1,16 +1,16 @@
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use serde::{de::DeserializeOwned, Deserialize};
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
-    source::MatchType, BytecodeType,
-};
+use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::source::MatchType;
 use std::{borrow::Cow, collections::BTreeMap};
+
+pub use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::BytecodeType;
 
 const TEST_CASES_DIR: &str = "tests/test_cases_solidity";
 
 pub trait TestCase {
     fn route() -> &'static str;
 
-    fn to_request(&self) -> serde_json::Value;
+    fn to_request(&self, bytecode_type: BytecodeType) -> serde_json::Value;
 
     fn is_yul(&self) -> bool;
 
@@ -90,11 +90,17 @@ impl TestCase for Flattened {
         "/api/v2/verifier/solidity/sources:verify-multi-part"
     }
 
-    fn to_request(&self) -> serde_json::Value {
+    fn to_request(&self, bytecode_type: BytecodeType) -> serde_json::Value {
         let extension = if self.is_yul() { "yul" } else { "sol" };
+        let bytecode = match bytecode_type {
+            BytecodeType::Unspecified | BytecodeType::CreationInput => {
+                self.creation_bytecode.as_str()
+            }
+            BytecodeType::DeployedBytecode => self.deployed_bytecode.as_str(),
+        };
         serde_json::json!({
-            "bytecode": self.creation_bytecode,
-            "bytecodeType": BytecodeType::CreationInput.as_str_name(),
+            "bytecode": bytecode,
+            "bytecodeType": bytecode_type.as_str_name(),
             "compilerVersion": self.compiler_version,
             "evmVersion": self.evm_version,
             "optimization_runs": self.optimization_runs,
@@ -223,10 +229,16 @@ impl TestCase for StandardJson {
         "/api/v2/verifier/solidity/sources:verify-standard-json"
     }
 
-    fn to_request(&self) -> serde_json::Value {
+    fn to_request(&self, bytecode_type: BytecodeType) -> serde_json::Value {
+        let bytecode = match bytecode_type {
+            BytecodeType::Unspecified | BytecodeType::CreationInput => {
+                self.creation_bytecode.as_str()
+            }
+            BytecodeType::DeployedBytecode => self.deployed_bytecode.as_str(),
+        };
         serde_json::json!({
-            "bytecode": self.creation_bytecode,
-            "bytecodeType": BytecodeType::CreationInput.as_str_name(),
+            "bytecode": bytecode,
+            "bytecodeType": bytecode_type.as_str_name(),
             "compilerVersion": self.compiler_version,
             "input": self.input,
             "metadata": {

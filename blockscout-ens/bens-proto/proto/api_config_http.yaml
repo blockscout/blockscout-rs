@@ -4,15 +4,26 @@ config_version: 3
 http:
   rules:
     #################### DomainsExtractor ####################
-    - selector: blockscout.bens.v1.DomainsExtractor.SearchReverseDomain
-      post: /api/v1/{chain_id}/domains:search-reverse
-      body: "*"
+    - selector: blockscout.bens.v1.DomainsExtractor.GetDomain
+      get: /api/v1/{chain_id}/domains/{name}
 
-    - selector: blockscout.bens.v1.DomainsExtractor.SearchDomain
-      post: /api/v1/{chain_id}/domains:search
+    - selector: blockscout.bens.v1.DomainsExtractor.ListDomainEvents
+      get: /api/v1/{chain_id}/domains/{name}/events
+
+    - selector: blockscout.bens.v1.DomainsExtractor.LookupDomainName
+      get: /api/v1/{chain_id}/domains:lookup
+
+    - selector: blockscout.bens.v1.DomainsExtractor.LookupAddress
+      get: /api/v1/{chain_id}/addresses:lookup
+
+    - selector: blockscout.bens.v1.DomainsExtractor.GetAddress
+      get: /api/v1/{chain_id}/addresses/{address}
+
+    - selector: blockscout.bens.v1.DomainsExtractor.BatchResolveAddressNames
+      post: /api/v1/{chain_id}/addresses:batch-resolve-names
       body: "*"
 
     #################### Health ####################
 
-    - selector: blockscout.ethBytecodeDb.v2.Health.Check
+    - selector: blockscout.bens.v1.Health.Check
       get: /health

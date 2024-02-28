@@ -9,3 +9,7 @@ members = [
     "eth-bytecode-db-server",
     "eth-bytecode-db-proto",
 ]
+
+[workspace.dependencies]
+blockscout-service-launcher = "0.10.0"
+smart-contract-verifier-proto = { git = "https://github.com/blockscout/blockscout-rs", rev = "d2cb1974" }

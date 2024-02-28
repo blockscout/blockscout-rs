@@ -55,6 +55,18 @@ impl SourcifyVerifier for SourcifyVerifierService {
     ) -> Result<Response<VerifyResponse>, Status> {
         let request: VerifySourcifyRequestWrapper = request.into_inner().into();
 
+        tracing::info!(
+            chain_id = request.chain,
+            contract_address = request.address,
+            "Sourcify verification request received"
+        );
+
+        tracing::debug!(
+            files = ?request.files,
+            chosen_contract = request.chosen_contract,
+            "Request details"
+        );
+
         let chain_id = request.chain.clone();
 
         let result = process_verification_result(
@@ -75,6 +87,12 @@ impl SourcifyVerifier for SourcifyVerifierService {
         request: Request<VerifyFromEtherscanSourcifyRequest>,
     ) -> Result<Response<VerifyResponse>, Status> {
         let request: VerifyFromEtherscanSourcifyRequestWrapper = request.into_inner().into();
+
+        tracing::info!(
+            chain_id = request.chain,
+            contract_address = request.address,
+            "Sourcify verification via etherscan request received"
+        );
 
         let chain_id = request.chain.clone();
 

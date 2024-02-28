@@ -4,6 +4,7 @@ pub mod prelude;
 
 pub mod bytecode_parts;
 pub mod bytecodes;
+pub mod events;
 pub mod files;
 pub mod parts;
 pub mod sea_orm_active_enums;

@@ -5,7 +5,7 @@ use super::{
 use crate::verification::VerificationMetadata;
 use anyhow::Context;
 use entity::{
-    bytecode_parts, bytecodes, files, parts, sea_orm_active_enums, source_files, sources,
+    bytecode_parts, bytecodes, events, files, parts, sea_orm_active_enums, source_files, sources,
     verified_contracts,
 };
 use sea_orm::{
@@ -99,6 +99,44 @@ pub(crate) async fn insert_verified_contract_data(
     Ok(())
 }
 
+pub(crate) async fn insert_event_descriptions(
+    db_client: &DatabaseConnection,
+    events: Vec<alloy_json_abi::Event>,
+) -> Result<(), anyhow::Error> {
+    let active_models: Vec<_> = events
+        .into_iter()
+        .filter_map(|event| {
+            let selector = event.selector();
+            serde_json::to_value(event.inputs)
+                .map_err(|err| {
+                    tracing::error!("{:x} event input serialization failed: {err}", selector)
+                })
+                .ok()
+                .map(|inputs| events::ActiveModel {
+                    selector: Set(selector.to_vec()),
+                    name: Set(event.name),
+                    inputs: Set(inputs),
+                    ..Default::default()
+                })
+        })
+        .collect();
+
+    if !active_models.is_empty() {
+        let result = events::Entity::insert_many(active_models)
+            .on_conflict(OnConflict::new().do_nothing().to_owned())
+            .exec(db_client)
+            .await;
+        match result {
+            Ok(_) | Err(DbErr::RecordNotInserted) => {}
+            Err(err) => {
+                return Err(err).context("insert into \"events\"");
+            }
+        }
+    }
+
+    Ok(())
+}
+
 async fn insert_files(
     txn: &DatabaseTransaction,
     files: BTreeMap<String, String>,
@@ -110,8 +148,13 @@ async fn insert_files(
             content: Set(content.clone()),
             ..Default::default()
         };
-        let (file, _inserted) =
-            insert_then_select!(txn, files, active_model, [(Name, name), (Content, content)])?;
+        let (file, _inserted) = insert_then_select!(
+            txn,
+            files,
+            active_model,
+            true,
+            [(Name, name), (Content, content)]
+        )?;
 
         result.push(file);
     }
@@ -152,19 +195,20 @@ async fn insert_source_details(
         compiler_settings: Set(source.compiler_settings.clone()),
         file_name: Set(source.file_name.clone()),
         contract_name: Set(source.contract_name.clone()),
-        raw_creation_input: Set(source.raw_creation_input.clone()),
-        raw_deployed_bytecode: Set(source.raw_deployed_bytecode.clone()),
+        raw_creation_input: Set(source.raw_creation_code.clone()),
+        raw_deployed_bytecode: Set(source.raw_runtime_code.clone()),
         abi: Set(source.abi.clone()),
         file_ids_hash: Set(file_ids_hash),
         compilation_artifacts: Set(source.compilation_artifacts),
-        creation_input_artifacts: Set(source.creation_input_artifacts),
-        deployed_bytecode_artifacts: Set(source.deployed_bytecode_artifacts),
+        creation_input_artifacts: Set(source.creation_code_artifacts),
+        deployed_bytecode_artifacts: Set(source.runtime_code_artifacts),
         ..Default::default()
     };
     insert_then_select!(
         txn,
         sources,
         active_model,
+        true,
         [
             (CompilerVersion, source.compiler_version),
             (CompilerSettings, source.compiler_settings),
@@ -214,6 +258,7 @@ async fn insert_bytecodes(
             txn,
             bytecodes,
             active_model,
+            true,
             [(SourceId, source_id), (BytecodeType, bytecode_type)]
         )?;
         bytecode
@@ -232,6 +277,7 @@ async fn insert_bytecodes(
                 txn,
                 parts,
                 active_model,
+                true,
                 [(Data, part.data()), (PartType, part_type)]
             )?;
             part

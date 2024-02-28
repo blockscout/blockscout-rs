@@ -1,6 +1,11 @@
 [workspace]
+resolver = "2"
 
 members = [
     "bens-logic",
     "bens-proto",
+    "bens-server",
 ]
+
+[workspace.dependencies]
+blockscout-service-launcher = "0.10.0"

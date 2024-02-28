@@ -2,11 +2,13 @@ use super::{
     metrics::Metrics,
     router::{configure_router, HttpRouter},
     settings::{MetricsSettings, ServerSettings},
+    span_builder::CompactRootSpanBuilder,
     HttpServerSettings,
 };
 use actix_web::{middleware::Condition, App, HttpServer};
 use actix_web_prom::PrometheusMetrics;
 use std::net::SocketAddr;
+use tracing_actix_web::TracingLogger;
 
 pub struct LaunchSettings {
     pub service_name: String,
@@ -76,6 +78,9 @@ where
 {
     tracing::info!("starting http server on addr {}", settings.addr);
 
+    // Initialize the tracing logger not to print http request and response messages on health endpoint
+    CompactRootSpanBuilder::init_skip_http_trace_paths(["/health"]);
+
     let json_cfg = actix_web::web::JsonConfig::default().limit(settings.max_body_size);
     let cors_settings = settings.cors.clone();
     let cors_enabled = cors_settings.enabled;
@@ -83,6 +88,7 @@ where
         HttpServer::new(move || {
             let cors = cors_settings.clone().build();
             App::new()
+                .wrap(TracingLogger::<CompactRootSpanBuilder>::new())
                 .wrap(metrics.clone())
                 .wrap(Condition::new(cors_enabled, cors))
                 .app_data(json_cfg.clone())
@@ -95,6 +101,7 @@ where
         HttpServer::new(move || {
             let cors = cors_settings.clone().build();
             App::new()
+                .wrap(TracingLogger::<CompactRootSpanBuilder>::new())
                 .wrap(Condition::new(cors_enabled, cors))
                 .app_data(json_cfg.clone())
                 .configure(configure_router(&http))
