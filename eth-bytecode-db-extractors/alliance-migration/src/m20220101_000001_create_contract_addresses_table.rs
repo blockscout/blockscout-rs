@@ -8,6 +8,7 @@ impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let create_contract_addresses_table = r#"
             CREATE TABLE "contract_addresses" (
+                "id" bigserial PRIMARY KEY,
                 "chain_id" numeric NOT NULL,
                 "address" bytea NOT NULL,
 
@@ -18,9 +19,7 @@ impl MigrationTrait for Migration {
                 "sources" jsonb NOT NULL,
                 "compiler_settings" jsonb NOT NULL,
 
-                "_job_id" uuid NOT NULL REFERENCES "_job_queue" ("id"),
-
-                PRIMARY KEY ("chain_id", "address")
+                "_job_id" uuid NOT NULL REFERENCES "_job_queue" ("id")
             );
         "#;
 

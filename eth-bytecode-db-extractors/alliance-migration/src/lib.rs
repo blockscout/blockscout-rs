@@ -25,8 +25,8 @@ pub async fn from_statements(
             manager.get_database_backend(),
             statement.to_string(),
         ))
-            .await
-            .map_err(|err| DbErr::Migration(format!("{err}\nQuery: {statement}")))?;
+        .await
+        .map_err(|err| DbErr::Migration(format!("{err}\nQuery: {statement}")))?;
     }
     txn.commit().await
 }

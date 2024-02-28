@@ -5,13 +5,10 @@ use sea_orm::entity::prelude::*;
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
 #[sea_orm(table_name = "contract_addresses")]
 pub struct Model {
-    #[sea_orm(primary_key, auto_increment = false)]
+    #[sea_orm(primary_key)]
+    pub id: i64,
     pub chain_id: Decimal,
-    #[sea_orm(
-        primary_key,
-        auto_increment = false,
-        column_type = "Binary(BlobSize::Blob(None))"
-    )]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
     pub address: Vec<u8>,
     pub compiler: String,
     pub version: String,
