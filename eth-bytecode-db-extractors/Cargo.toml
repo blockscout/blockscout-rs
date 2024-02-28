@@ -1,6 +1,8 @@
 [workspace]
 resolver = "2"
 members = [
+    "alliance-entity",
+    "alliance-migration",
     "blockscout",
     "blockscout-entity",
     "blockscout-migration",
