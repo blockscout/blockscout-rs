@@ -24,8 +24,9 @@ pub struct NativeCoinHoldersGrowth {}
 mod db_address_balances {
     use sea_orm::prelude::*;
 
+    // `nchg` is native_coin_holders_growth
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-    #[sea_orm(table_name = "support_nchd_addresses_balances")]
+    #[sea_orm(table_name = "support_nchg_addresses_balances")]
     pub struct Model {
         #[sea_orm(primary_key)]
         pub address: Vec<u8>,
@@ -198,26 +199,31 @@ impl NativeCoinHoldersGrowth {
     {
         let days = days.into_iter().collect::<Vec<_>>();
         let all_holders = {
-            // fetch all holders for input days max per query is `max_rows_per_iteration`
-            let mut all_rows = vec![];
+            // use BTreeMap to prevent address duplicates due to several queries
+            let mut all_rows: BTreeMap<Vec<u8>, address_coin_balances_daily::Model> =
+                BTreeMap::new();
             let limit = self.max_rows_fetch_per_iteration();
+            let mut offset = 0;
             loop {
                 let rows = address_coin_balances_daily::Entity::find()
                     .filter(address_coin_balances_daily::Column::Day.is_in(days.clone()))
+                    .order_by_asc(address_coin_balances_daily::Column::AddressHash)
                     .limit(limit)
-                    .offset(all_rows.len() as u64)
+                    .offset(offset)
                     .all(blockscout)
                     .await?;
                 let n = rows.len() as u64;
-                all_rows.extend(rows);
+
+                all_rows.extend(&mut rows.into_iter().map(|row| (row.address_hash.clone(), row)));
                 if n < limit {
                     break;
                 }
+                offset += n;
             }
             all_rows
         };
         let holders_grouped: BTreeMap<NaiveDate, Vec<db_address_balances::Model>> = all_holders
-            .into_iter()
+            .into_values()
             .map(|row| {
                 (
                     row.day,
