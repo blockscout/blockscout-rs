@@ -11,5 +11,3 @@ mod macros;
 
 #[cfg(feature = "logic")]
 pub use functions::*;
-#[cfg(feature = "logic")]
-pub use macros::*;
