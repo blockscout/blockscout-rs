@@ -151,7 +151,7 @@ message Factory {
   uint32 total_accounts = 2;
 }
 
-message RawUserOp {
+message RawUserOpV06 {
   string sender = 1;
   string nonce = 2;
   string init_code = 3;
@@ -165,6 +165,18 @@ message RawUserOp {
   string signature = 11;
 }
 
+message RawUserOpV07 {
+  string sender = 1;
+  string nonce = 2;
+  string init_code = 3;
+  string call_data = 4;
+  string account_gas_limits = 5; // call_gas_limit + verification_gas_limit
+  uint64 pre_verification_gas = 6;
+  string gas_fees = 7; // max_fee_per_gas + max_priority_fee_per_gas
+  string paymaster_and_data = 8; // paymaster + paymaster_verification_gas_limit + post_op_gas_limit + paymaster_data
+  string signature = 9;
+}
+
 message UserOp {
   string hash = 1;
   string sender = 2;
@@ -176,7 +188,10 @@ message UserOp {
   string max_fee_per_gas = 8;
   string max_priority_fee_per_gas = 9;
   string signature = 10;
-  RawUserOp raw = 11;
+  oneof raw {
+    RawUserOpV06 rawV06 = 11;
+    RawUserOpV07 rawV07 = 35;
+  }
   optional string aggregator = 12;
   optional string aggregator_signature = 13;
   string entry_point = 14;
@@ -205,10 +220,12 @@ message UserOp {
 
 message ListUserOp {
   string hash = 1;
-  uint64 block_number = 2;
-  string transaction_hash = 3;
-  string address = 4;
-  string timestamp = 5;
-  bool status = 6;
-  string fee = 7;
+  string entry_point = 2;
+  string entry_point_version = 3;
+  uint64 block_number = 4;
+  string transaction_hash = 5;
+  string address = 6;
+  string timestamp = 7;
+  bool status = 8;
+  string fee = 9;
 }

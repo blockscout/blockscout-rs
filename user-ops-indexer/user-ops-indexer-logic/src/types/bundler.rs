@@ -1,5 +1,4 @@
 use crate::repository::bundler::BundlerDB;
-pub use entity::sea_orm_active_enums::SponsorType;
 use ethers::prelude::Address;
 use ethers_core::utils::to_checksum;
 

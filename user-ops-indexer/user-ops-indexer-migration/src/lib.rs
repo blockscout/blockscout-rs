@@ -2,6 +2,7 @@ pub use sea_orm_migration::prelude::*;
 use sea_orm_migration::sea_orm::{Statement, TransactionTrait};
 mod m20220101_000001_initial_tables;
 mod m20231117_093738_add_indexes;
+mod m20240206_150422_add_entrypoint_version;
 
 pub struct Migrator;
 
@@ -11,6 +12,7 @@ impl MigratorTrait for Migrator {
         vec![
             Box::new(m20220101_000001_initial_tables::Migration),
             Box::new(m20231117_093738_add_indexes::Migration),
+            Box::new(m20240206_150422_add_entrypoint_version::Migration),
         ]
     }
     fn migration_table_name() -> DynIden {

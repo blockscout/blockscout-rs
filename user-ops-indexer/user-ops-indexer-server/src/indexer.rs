@@ -1,6 +1,8 @@
 use crate::settings::Settings;
-use ethers::prelude::{Provider, Ws};
+use ethers::prelude::Provider;
 use sea_orm::DatabaseConnection;
+use std::sync::Arc;
+use user_ops_indexer_logic::indexer::{common_transport::CommonTransport, v06, v07};
 
 pub async fn run(
     settings: Settings,
@@ -8,26 +10,43 @@ pub async fn run(
 ) -> Result<(), anyhow::Error> {
     tracing::info!("connecting to rpc");
 
-    let ws_client = Ws::connect_with_reconnects(settings.indexer.rpc_url, 20).await?;
-    let client = Provider::new(ws_client);
+    let db_connection = Arc::new(db_connection);
+
+    let transport = CommonTransport::new(settings.indexer.rpc_url.clone()).await?;
+    let client = Provider::new(transport);
 
     if settings.indexer.entrypoints.v06 {
-        let indexer =
-            user_ops_indexer_logic::indexer::v06::indexer::IndexerV06::new(client, &db_connection);
+        let indexer = user_ops_indexer_logic::indexer::Indexer::new(
+            client.clone(),
+            db_connection.clone(),
+            settings.indexer.clone(),
+        );
 
-        indexer
-            .start(
-                settings.indexer.concurrency,
-                settings.indexer.realtime.enabled,
-                settings.indexer.past_rpc_logs_indexer.get_block_range(),
-                settings.indexer.past_db_logs_indexer.get_start_block(),
-                settings.indexer.past_db_logs_indexer.get_end_block(),
-            )
-            .await
-            .map_err(|err| {
-                tracing::error!("failed to start indexer: {err}");
+        tokio::spawn(async move {
+            indexer.start::<v06::IndexerV06>().await.map_err(|err| {
+                tracing::error!("failed to start indexer for v0.6: {err}");
                 err
-            })?;
+            })
+        });
+    } else {
+        tracing::warn!("indexer for v0.6 is disabled in settings");
+    }
+
+    if settings.indexer.entrypoints.v07 {
+        let indexer = user_ops_indexer_logic::indexer::Indexer::new(
+            client.clone(),
+            db_connection.clone(),
+            settings.indexer.clone(),
+        );
+
+        tokio::spawn(async move {
+            indexer.start::<v07::IndexerV07>().await.map_err(|err| {
+                tracing::error!("failed to start indexer for v0.7: {err}");
+                err
+            })
+        });
+    } else {
+        tracing::warn!("indexer for v0.7 is disabled in settings");
     }
 
     Ok(())

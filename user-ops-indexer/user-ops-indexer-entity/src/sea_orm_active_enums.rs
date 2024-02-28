@@ -3,6 +3,18 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
+#[sea_orm(
+    rs_type = "String",
+    db_type = "Enum",
+    enum_name = "entry_point_version"
+)]
+pub enum EntryPointVersion {
+    #[sea_orm(string_value = "v0.6")]
+    V06,
+    #[sea_orm(string_value = "v0.7")]
+    V07,
+}
+#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "sponsor_type")]
 pub enum SponsorType {
     #[sea_orm(string_value = "paymaster_hybrid")]

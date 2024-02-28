@@ -1,5 +1,4 @@
 use crate::repository::paymaster::PaymasterDB;
-pub use entity::sea_orm_active_enums::SponsorType;
 use ethers::prelude::Address;
 use ethers_core::utils::to_checksum;
 

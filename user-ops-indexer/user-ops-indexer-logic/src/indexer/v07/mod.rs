@@ -3,6 +3,7 @@ use crate::{
         base_indexer::IndexerLogic,
         common::{
             extract_address, extract_sponsor_type, extract_user_logs_boundaries, none_if_empty,
+            unpack_uints,
         },
     },
     types::user_op::UserOp,
@@ -19,29 +20,29 @@ use lazy_static::lazy_static;
 use std::ops::Div;
 
 lazy_static! {
-    static ref ENTRYPOINT: ethers::types::Address = "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789"
+    static ref ENTRYPOINT: ethers::types::Address = "0x0000000071727De22E5E9d8BAf0edAc6f37da032"
         .parse()
         .unwrap();
 }
 
-abigen!(IEntrypointV06, "./src/indexer/v06/abi.json");
+abigen!(IEntrypointV07, "./src/indexer/v07/abi.json");
 
-pub struct IndexerV06;
+pub struct IndexerV07;
 
 struct ExtendedUserOperation {
-    user_op: UserOperation,
+    user_op: PackedUserOperation,
     bundler: Address,
     aggregator: Option<Address>,
     aggregator_signature: Option<Bytes>,
 }
 
-impl IndexerLogic for IndexerV06 {
+impl IndexerLogic for IndexerV07 {
     fn entry_point() -> Address {
         *ENTRYPOINT
     }
 
     fn version() -> &'static str {
-        "v0.6"
+        "v0.7"
     }
 
     fn user_operation_event_signature() -> H256 {
@@ -62,9 +63,9 @@ impl IndexerLogic for IndexerV06 {
         calldata: &Bytes,
         log_bundle: &[&[Log]],
     ) -> anyhow::Result<Vec<UserOp>> {
-        let decoded_calldata = IEntrypointV06Calls::decode(calldata)?;
+        let decoded_calldata = IEntrypointV07Calls::decode(calldata)?;
         let user_ops: Vec<ExtendedUserOperation> = match decoded_calldata {
-            IEntrypointV06Calls::HandleAggregatedOps(cd) => cd
+            IEntrypointV07Calls::HandleAggregatedOps(cd) => cd
                 .ops_per_aggregator
                 .into_iter()
                 .flat_map(|agg_ops| {
@@ -79,7 +80,7 @@ impl IndexerLogic for IndexerV06 {
                         })
                 })
                 .collect(),
-            IEntrypointV06Calls::HandleOps(cd) => cd
+            IEntrypointV07Calls::HandleOps(cd) => cd
                 .ops
                 .into_iter()
                 .map(|op| ExtendedUserOperation {
@@ -135,25 +136,41 @@ fn build_user_op_model(
 ) -> anyhow::Result<UserOp> {
     let user_op_event = logs
         .last()
-        .and_then(IndexerV06::match_and_parse::<UserOperationEventFilter>)
+        .and_then(IndexerV07::match_and_parse::<UserOperationEventFilter>)
         .transpose()?
         .ok_or(anyhow!("last log doesn't match UserOperationEvent"))?;
     let revert_event = logs
         .iter()
-        .find_map(IndexerV06::match_and_parse::<UserOperationRevertReasonFilter>)
+        .find_map(IndexerV07::match_and_parse::<UserOperationRevertReasonFilter>)
         .transpose()?;
 
     let tx_deposits: Vec<Address> = receipt
         .logs
         .iter()
-        .filter_map(IndexerV06::match_and_parse::<DepositedFilter>)
+        .filter_map(IndexerV07::match_and_parse::<DepositedFilter>)
         .filter_map(Result::ok)
         .map(|e| e.account)
         .collect();
 
-    let call_gas_limit = user_op.user_op.call_gas_limit.as_u64();
-    let verification_gas_limit = user_op.user_op.verification_gas_limit.as_u64();
+    let (verification_gas_limit, call_gas_limit) =
+        unpack_uints(&user_op.user_op.account_gas_limits[..]);
+    let verification_gas_limit = verification_gas_limit.as_u64();
+    let call_gas_limit = call_gas_limit.as_u64();
     let pre_verification_gas = user_op.user_op.pre_verification_gas.as_u64();
+    let (paymaster_verification_gas_limit, paymaster_post_op_gas_limit) =
+        if user_op.user_op.paymaster_and_data.len() >= 52 {
+            let (a, b) = unpack_uints(&user_op.user_op.paymaster_and_data[20..52]);
+            (a.as_u64(), b.as_u64())
+        } else {
+            (0, 0)
+        };
+    let gas = call_gas_limit
+        + verification_gas_limit
+        + pre_verification_gas
+        + paymaster_verification_gas_limit
+        + paymaster_post_op_gas_limit;
+
+    let (max_fee_per_gas, max_priority_fee_per_gas) = unpack_uints(&user_op.user_op.gas_fees[..]);
 
     let factory = extract_address(&user_op.user_op.init_code);
     let paymaster = extract_address(&user_op.user_op.paymaster_and_data);
@@ -169,14 +186,14 @@ fn build_user_op_model(
         call_gas_limit,
         verification_gas_limit,
         pre_verification_gas,
-        max_fee_per_gas: user_op.user_op.max_fee_per_gas,
-        max_priority_fee_per_gas: user_op.user_op.max_priority_fee_per_gas,
+        max_fee_per_gas,
+        max_priority_fee_per_gas,
         paymaster_and_data: none_if_empty(user_op.user_op.paymaster_and_data),
         signature: user_op.user_op.signature,
         aggregator: user_op.aggregator,
         aggregator_signature: user_op.aggregator_signature,
         entry_point: *ENTRYPOINT,
-        entry_point_version: EntryPointVersion::V06,
+        entry_point_version: EntryPointVersion::V07,
         transaction_hash: receipt.transaction_hash,
         block_number: receipt.block_number.map_or(0, |n| n.as_u64()),
         block_hash: receipt.block_hash.unwrap_or(H256::zero()),
@@ -187,9 +204,7 @@ fn build_user_op_model(
         paymaster,
         status: user_op_event.success,
         revert_reason: revert_event.map(|e| e.revert_reason),
-        gas: call_gas_limit
-            + verification_gas_limit * if paymaster.is_none() { 1 } else { 3 }
-            + pre_verification_gas,
+        gas,
         gas_price: user_op_event
             .actual_gas_cost
             .div(user_op_event.actual_gas_used),

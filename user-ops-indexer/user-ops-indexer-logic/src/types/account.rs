@@ -1,5 +1,4 @@
 use crate::repository::account::AccountDB;
-pub use entity::sea_orm_active_enums::SponsorType;
 use ethers::prelude::{Address, H256};
 use ethers_core::{abi::AbiEncode, utils::to_checksum};
 

@@ -24,7 +24,7 @@ async fn main() -> Result<(), anyhow::Error> {
     )
     .await?;
 
-    tokio::spawn(run_indexer(settings.clone(), db_connection));
+    run_indexer(settings.clone(), db_connection).await?;
 
     let db_connection =
         database::initialize_postgres::<Migrator>(&database_url, false, false).await?;
