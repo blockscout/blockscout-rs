@@ -14,7 +14,7 @@ impl SolidityCompiler {
 
 #[async_trait::async_trait]
 impl EvmCompiler for SolidityCompiler {
-    type CompilerInput = ethers_solc::CompilerInput;
+    type CompilerInput = foundry_compilers::CompilerInput;
 
     async fn compile(
         &self,

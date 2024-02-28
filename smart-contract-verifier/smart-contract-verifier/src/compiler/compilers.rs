@@ -148,7 +148,7 @@ where
 mod tests {
     use super::{super::list_fetcher::ListFetcher, *};
     use crate::{consts::DEFAULT_SOLIDITY_COMPILER_LIST, solidity::SolidityCompiler};
-    use ethers_solc::{
+    use foundry_compilers::{
         artifacts::{Source, Sources},
         CompilerInput,
     };
