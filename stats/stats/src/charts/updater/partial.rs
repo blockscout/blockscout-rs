@@ -30,7 +30,10 @@ pub trait ChartPartialUpdater: Chart {
         let min_blockscout_block = get_min_block_blockscout(blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?;
-        let last_row = get_last_row(self, chart_id, min_blockscout_block, db, force_full).await?;
+        // set offset to 1 because actual last row can be partially calculated
+        let offset = Some(1);
+        let last_row =
+            get_last_row(self, chart_id, min_blockscout_block, db, force_full, offset).await?;
         let values = {
             let _timer = metrics::CHART_FETCH_NEW_DATA_TIME
                 .with_label_values(&[self.name()])
