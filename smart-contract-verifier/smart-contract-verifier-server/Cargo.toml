@@ -10,10 +10,6 @@ smart-contract-verifier = { path = "../smart-contract-verifier" }
 smart-contract-verifier-proto = { path = "../smart-contract-verifier-proto" }
 sig-provider-extension = { path = "../sig-provider-extension", optional = true }
 
-alloy-dyn-abi = "0.6.3"
-alloy-json-abi = "0.6.3"
-foundry-compilers = "0.3.9"
-
 actix-web = "4"
 actix-web-prom = "0.6"
 amplify = { version = "3.13.0", features = ["derive"] }
@@ -26,6 +22,7 @@ config = "0.13"
 cron = "0.11"
 ethers-solc = "2.0.10"
 ethers-core = "2.0.10"
+foundry-compilers = "0.3.9"
 futures = "0.3"
 lazy_static = "1"
 opentelemetry = { version = "0.18", features = ["rt-tokio"] }
