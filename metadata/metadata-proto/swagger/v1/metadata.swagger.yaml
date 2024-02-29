@@ -1,0 +1,173 @@
+swagger: "2.0"
+info:
+  title: v1/metadata.proto
+  version: version not set
+tags:
+  - name: Metadata
+  - name: Health
+consumes:
+  - application/json
+produces:
+  - application/json
+paths:
+  /api/v1/metadata:
+    post:
+      operationId: Metadata_GetMetadata
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetMetadataResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1GetMetadataRequest'
+      tags:
+        - Metadata
+  /health:
+    get:
+      summary: |-
+        If the requested service is unknown, the call will fail with status
+        NOT_FOUND.
+      operationId: Health_Check
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1HealthCheckResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: service
+          in: query
+          required: false
+          type: string
+      tags:
+        - Health
+definitions:
+  HealthCheckResponseServingStatus:
+    type: string
+    enum:
+      - UNKNOWN
+      - SERVING
+      - NOT_SERVING
+      - SERVICE_UNKNOWN
+    default: UNKNOWN
+    description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
+  protobufAny:
+    type: object
+    properties:
+      '@type':
+        type: string
+    additionalProperties: {}
+  rpcStatus:
+    type: object
+    properties:
+      code:
+        type: integer
+        format: int32
+      message:
+        type: string
+      details:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/protobufAny'
+  v1GetMetadataRequest:
+    type: object
+    properties:
+      address:
+        type: string
+      chainId:
+        type: integer
+        format: int32
+      tags:
+        $ref: '#/definitions/v1TagsRequest'
+      notes:
+        $ref: '#/definitions/v1NotesRequest'
+      reputation:
+        $ref: '#/definitions/v1ReputationRequest'
+  v1GetMetadataResponse:
+    type: object
+    properties:
+      tags:
+        $ref: '#/definitions/v1TagsResponse'
+      notes:
+        $ref: '#/definitions/v1NotesResponse'
+      reputation:
+        $ref: '#/definitions/v1ReputationResponse'
+  v1HealthCheckResponse:
+    type: object
+    properties:
+      status:
+        $ref: '#/definitions/HealthCheckResponseServingStatus'
+  v1Note:
+    type: object
+    properties:
+      text:
+        type: string
+      severity:
+        type: string
+      ordinal:
+        type: integer
+        format: int32
+      meta:
+        type: string
+  v1NotesRequest:
+    type: object
+    properties:
+      limit:
+        type: string
+        format: uint64
+  v1NotesResponse:
+    type: object
+    properties:
+      values:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Note'
+  v1ReputationRequest:
+    type: object
+  v1ReputationResponse:
+    type: object
+    properties:
+      score:
+        type: integer
+        format: int32
+  v1Tag:
+    type: object
+    properties:
+      slug:
+        type: string
+      name:
+        type: string
+      tagType:
+        type: string
+      ordinal:
+        type: integer
+        format: int32
+      meta:
+        type: string
+  v1TagsRequest:
+    type: object
+    properties:
+      limit:
+        type: string
+        format: uint64
+  v1TagsResponse:
+    type: object
+    properties:
+      values:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Tag'

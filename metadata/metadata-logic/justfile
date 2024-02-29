@@ -1,0 +1,16 @@
+export DATABASE_URL := env_var('DATABASE_URL')
+
+dir := "../metadata-migration"
+
+generate-entities:
+    sea-orm-cli generate entity --lib -o entity/src
+
+
+new-migration name:
+    sea-orm-cli migrate generate {{name}}
+migrate-up:
+    sea-orm-cli migrate -d {{dir}} up
+
+migrate-down:
+    sea-orm-cli migrate -d {{dir}} down
+

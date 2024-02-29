@@ -1,0 +1,17 @@
+type: google.api.Service
+config_version: 3
+
+http:
+  rules:
+    #################### Metadata ####################
+
+    - selector: blockscout.metadata.v1.Metadata.GetMetadata
+      post: /api/v1/metadata
+      body: "*"
+
+    
+    #################### Health ####################
+
+    - selector: blockscout.metadata.v1.Health.Check
+      get: /health
+
