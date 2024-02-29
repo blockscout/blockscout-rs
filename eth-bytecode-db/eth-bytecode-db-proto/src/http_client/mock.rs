@@ -3,13 +3,13 @@ use crate::blockscout::eth_bytecode_db::v2::{
     solidity_verifier_actix::route_solidity_verifier, solidity_verifier_server::SolidityVerifier,
     sourcify_verifier_actix::route_sourcify_verifier, sourcify_verifier_server::SourcifyVerifier,
     vyper_verifier_actix::route_vyper_verifier, vyper_verifier_server::VyperVerifier,
-    BatchSearchEventDescriptionsRequest, BatchSearchEventDescriptionsResponse,
-    ListCompilerVersionsRequest, ListCompilerVersionsResponse, SearchAllSourcesRequest,
-    SearchAllSourcesResponse, SearchAllianceSourcesRequest, SearchEventDescriptionsRequest,
-    SearchEventDescriptionsResponse, SearchSourcesRequest, SearchSourcesResponse,
-    SearchSourcifySourcesRequest, VerifyFromEtherscanSourcifyRequest, VerifyResponse,
-    VerifySolidityMultiPartRequest, VerifySolidityStandardJsonRequest, VerifySourcifyRequest,
-    VerifyVyperMultiPartRequest, VerifyVyperStandardJsonRequest,
+    AllianceStats, BatchSearchEventDescriptionsRequest, BatchSearchEventDescriptionsResponse,
+    GetAllianceStatsRequest, ListCompilerVersionsRequest, ListCompilerVersionsResponse,
+    SearchAllSourcesRequest, SearchAllSourcesResponse, SearchAllianceSourcesRequest,
+    SearchEventDescriptionsRequest, SearchEventDescriptionsResponse, SearchSourcesRequest,
+    SearchSourcesResponse, SearchSourcifySourcesRequest, VerifyFromEtherscanSourcifyRequest,
+    VerifyResponse, VerifySolidityMultiPartRequest, VerifySolidityStandardJsonRequest,
+    VerifySourcifyRequest, VerifyVyperMultiPartRequest, VerifyVyperStandardJsonRequest,
 };
 use mockall::mock;
 use std::{net::SocketAddr, sync::Arc};
@@ -30,6 +30,8 @@ mock! {
         async fn search_event_descriptions(&self, request: tonic::Request<SearchEventDescriptionsRequest>) -> Result<tonic::Response<SearchEventDescriptionsResponse>, tonic::Status>;
 
         async fn batch_search_event_descriptions(&self, request: tonic::Request<BatchSearchEventDescriptionsRequest>) -> Result<tonic::Response<BatchSearchEventDescriptionsResponse>, tonic::Status>;
+
+        async fn get_alliance_stats(&self, request: tonic::Request<GetAllianceStatsRequest>) -> Result<tonic::Response<AllianceStats>, tonic::Status>;
     }
 }
 

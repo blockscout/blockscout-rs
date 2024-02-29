@@ -349,6 +349,17 @@ definitions:
       '@type':
         type: string
     additionalProperties: {}
+  v2AllianceStats:
+    type: object
+    properties:
+      totalContracts:
+        type: string
+        format: uint64
+      contractsPerProvider:
+        type: object
+        additionalProperties:
+          type: string
+          format: uint64
   v2BatchSearchEventDescriptionsRequest:
     type: object
     properties:
