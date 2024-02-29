@@ -20,7 +20,7 @@ services:
       postgres_pass: let-me-in
       postgres_db: graph-node
       ipfs: 'ipfs:5001'
-      ethereum: 'mainnet:https://api.zmok.io/mainnet/oaen6dy8ff6hju9k gnosis-chiado:https://rpc.eu-central-2.gateway.fm/v3/gnosis/archival/chiado'
+      ethereum: 'mainnet:https://api.zmok.io/mainnet/oaen6dy8ff6hju9k gnosis-chiado:https://rpc.eu-central-2.gateway.fm/v4/gnosis/archival/chiado mode-sepolia:https://sepolia.mode.network'
       GRAPH_LOG: info
     volumes:
       - ./gn-config.toml:/root/gn-config.toml
