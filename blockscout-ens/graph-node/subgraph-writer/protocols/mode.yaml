@@ -40,5 +40,5 @@ default_context:
   # however mode procol uses another approach, so tld hash is nodehash(mode.<chain_indentifier>)
   # so, for testnet this value will be different
   # mode-mainnet:  2f0e9a68fa134a18a7181045c3549d639665fe43df78e882d8adea865a4bb153
-  # mode-testnet:  2f0e9a68fa134a18a7181045c3549d639665fe43df78e882d8adea865a4bb153
+  # mode-testnet:  9217c94fd014da21f5c43a1fcae4154a2bbfce43eb48bb33f7f6473c68ee16b6
   base_tld_hash: '9217c94fd014da21f5c43a1fcae4154a2bbfce43eb48bb33f7f6473c68ee16b6'

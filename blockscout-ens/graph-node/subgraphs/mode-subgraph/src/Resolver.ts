@@ -25,7 +25,7 @@ import {
   Domain,
   MulticoinAddrChanged
 } from "../generated/schema"
-import { COIN_TYPE, createEventID, maybeSaveDomainName } from "./utils";
+import { COIN_TYPE, COIN_TYPE_SEPOLIA, createEventID, maybeSaveDomainName } from "./utils";
 
 export function handleAddrChanged(event: AddrChangedEvent): void {
   let account = new Account(event.params.a.toHexString());
@@ -55,7 +55,7 @@ export function handleAddrChanged(event: AddrChangedEvent): void {
 
 export function handleMulticoinAddrChanged(event: AddressChangedEvent): void {
   let coinType = event.params.coinType;
-  if (coinType.toI64() == COIN_TYPE) {
+  if (coinType.toI64() == COIN_TYPE || coinType.toI64() == COIN_TYPE_SEPOLIA) {
     let account = new Account(event.params.newAddress.toHexString());
     account.save();
 

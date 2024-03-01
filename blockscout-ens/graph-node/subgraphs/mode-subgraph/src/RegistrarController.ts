@@ -33,7 +33,7 @@ export function handleNameRegisteredByController(
     setNamePreimage(
       event.params.name,
       event.params.label,
-      event.params.baseCost,
+      event.params.baseCost
     );
   }
   
