@@ -1,10 +1,10 @@
 use crate::{
     proto::{
-        database_server::Database, BatchSearchEventDescriptionsRequest,
-        BatchSearchEventDescriptionsResponse, BytecodeType, SearchAllSourcesRequest,
-        SearchAllSourcesResponse, SearchAllianceSourcesRequest, SearchEventDescriptionsRequest,
-        SearchEventDescriptionsResponse, SearchSourcesRequest, SearchSourcesResponse,
-        SearchSourcifySourcesRequest, Source, VerifyResponse,
+        database_server::Database, AllianceStats, BatchSearchEventDescriptionsRequest,
+        BatchSearchEventDescriptionsResponse, BytecodeType, GetAllianceStatsRequest,
+        SearchAllSourcesRequest, SearchAllSourcesResponse, SearchAllianceSourcesRequest,
+        SearchEventDescriptionsRequest, SearchEventDescriptionsResponse, SearchSourcesRequest,
+        SearchSourcesResponse, SearchSourcifySourcesRequest, Source, VerifyResponse,
     },
     types::{BytecodeTypeWrapper, EventDescriptionWrapper, SourceWrapper, VerifyResponseWrapper},
 };
@@ -242,6 +242,26 @@ impl Database for DatabaseService {
         Ok(tonic::Response::new(BatchSearchEventDescriptionsResponse {
             responses,
         }))
+    }
+
+    async fn get_alliance_stats(
+        &self,
+        _request: tonic::Request<GetAllianceStatsRequest>,
+    ) -> Result<tonic::Response<AllianceStats>, tonic::Status> {
+        let result = verification::alliance_stats::stats(self.client.clone())
+            .await
+            .map_err(|err| {
+                tonic::Status::internal(format!(
+                    "Error while retrieving verifier alliance stats: {err}"
+                ))
+            })?
+            .map(|stats| AllianceStats {
+                total_contracts: stats.total_contracts,
+                contracts_per_provider: stats.contracts_per_provider,
+            })
+            .unwrap_or_default();
+
+        Ok(tonic::Response::new(result))
     }
 }
 

@@ -1,3 +1,4 @@
+pub mod alliance_stats;
 pub mod compiler_versions;
 pub mod import_existing_abis;
 pub mod solidity_multi_part;

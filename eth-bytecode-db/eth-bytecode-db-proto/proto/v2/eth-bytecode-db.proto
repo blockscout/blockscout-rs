@@ -16,6 +16,8 @@ service Database {
   rpc SearchEventDescriptions(SearchEventDescriptionsRequest) returns (SearchEventDescriptionsResponse) {}
 
   rpc BatchSearchEventDescriptions(BatchSearchEventDescriptionsRequest) returns (BatchSearchEventDescriptionsResponse) {}
+
+  rpc GetAllianceStats(GetAllianceStatsRequest) returns (AllianceStats) {}
 }
 
 service SolidityVerifier {
@@ -267,6 +269,13 @@ message BatchSearchEventDescriptionsRequest {
 
 message BatchSearchEventDescriptionsResponse {
   repeated SearchEventDescriptionsResponse responses = 1;
+}
+
+message GetAllianceStatsRequest {}
+
+message AllianceStats {
+  uint64 total_contracts = 1;
+  map<string, uint64> contracts_per_provider = 2;
 }
 
 message VerifySourcifyRequest {
