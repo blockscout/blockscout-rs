@@ -293,10 +293,17 @@ impl SubgraphReader {
             })
             .transpose()?;
 
+        let domain_names = maybe_domain_name.as_ref().map(|name| {
+            if name.is_child_of_tld() {
+                vec![name]
+            } else {
+                vec![]
+            }
+        });
         let domains: Vec<Domain> = sql::find_domains(
             self.pool.as_ref(),
             &subgraph.schema_name,
-            maybe_domain_name.as_ref().map(|name| vec![name]),
+            domain_names,
             input.only_active,
             Some(&input.pagination),
         )

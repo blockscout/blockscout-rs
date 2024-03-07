@@ -35,6 +35,13 @@ impl DomainName {
             name,
         }
     }
+
+    // Returns true if the domain name is a child of a TLD
+    // e.g. `vitalik.eth`, `test.vitalik.eth`, `test.test.vitalik.eth` are children of `eth`
+    // `eth` and `vitalik` are not children of any TLD
+    pub fn is_child_of_tld(&self) -> bool {
+        self.name.chars().filter(|c| *c == '.').count() > 0
+    }
 }
 
 #[cfg(test)]
