@@ -14,6 +14,7 @@ If you want to add your name service procol to blockscout you should:
 
 1. Clone this `blockscout-rs` repo to add new protocol.
 1. Write subraph code: read [subgraph writer guide](./graph-node/subgraph-writer/README.md#howto-create-subgraph-for-your-domain-name-protocol)
+1. [OPTIONAL] if your protocol is based on SpaceID, read [SpaceID integration](./graph-node/subgraphs/README.md#spaceid-integration) section.
 1. Start graph-node: read [graph-node guide](./graph-node/README.md#start-locally-using-docker-compose)
 1. Deploy subgraph to graph-node: read [how to deploy subgraphs guide](./graph-node/subgraphs/README.md#deploy-subgraph-to-graph-node)
 1. Update default config of BENS server for [production](../../bens-server/config/prod.json) and [staging](../../bens-server/config/staging.json)

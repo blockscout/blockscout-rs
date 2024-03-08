@@ -68,8 +68,6 @@ Read guide [How to add new subgraph](../subgraph-writer/README.md)
 
    + Run `bens-server` API and send requests to check results of subgraph: read [bens-server docs](../../bens-server/README.md)
 
-
-
 ## SpaceID integration
 
 Developing subgraph for protocol based on space-id contracts requires providing additional information.
