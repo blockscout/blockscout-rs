@@ -2,11 +2,13 @@
 
 ## Current supported domains
 
-+ `ens-subgraph`: Ethereum (.eth)
-+ `rns-subgraph`: Rootstock (.rsk)
-+ `genome-subgraph`: Gnosis [SPACE-ID] (.gno)
-+ `bns-subgraph`: Base (.base)
-+ `mode-subgraph`: Mode network [SPACE-ID] (.mode)
+| Subgraph Name | Network | TLD | Note |
+|--------------|---------|-----|------|
+| ens-subgraph | Ethereum | .eth |      |
+| rns-subgraph | Rootstock | .rsk |      |
+| genome-subgraph | Gnosis | .gno | SpaceID contracts |
+| bns-subgraph | Base | .base |      |
+| mode-subgraph | Mode | .mode | SpaceID contracts |
 
 ## Add your own subgraph
 
