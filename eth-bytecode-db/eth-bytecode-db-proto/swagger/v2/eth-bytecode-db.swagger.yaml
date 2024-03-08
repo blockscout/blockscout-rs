@@ -14,7 +14,7 @@ produces:
   - application/json
 paths:
   /api/v2/alliance/stats:
-    post:
+    get:
       operationId: Database_GetAllianceStats
       responses:
         "200":
@@ -25,12 +25,6 @@ paths:
           description: An unexpected error response.
           schema:
             $ref: '#/definitions/googlerpcStatus'
-      parameters:
-        - name: body
-          in: body
-          required: true
-          schema:
-            $ref: '#/definitions/v2GetAllianceStatsRequest'
       tags:
         - Database
   /api/v2/bytecodes/sources:search:
@@ -417,8 +411,6 @@ definitions:
       inputs:
         type: string
         title: / Json encoded array of objects each describing one of the event arguments
-  v2GetAllianceStatsRequest:
-    type: object
   v2HealthCheckResponse:
     type: object
     properties:

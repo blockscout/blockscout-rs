@@ -30,8 +30,7 @@ http:
       body: "*"
 
     - selector: blockscout.ethBytecodeDb.v2.Database.GetAllianceStats
-      post: /api/v2/alliance/stats
-      body: "*"
+      get: /api/v2/alliance/stats
 
     #################### SolidityVerifier ####################
 
