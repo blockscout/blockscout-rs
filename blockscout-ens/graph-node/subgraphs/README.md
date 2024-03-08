@@ -94,10 +94,10 @@ To obtain it, you need to make `eth_call` to Base contract (contract with NFT):
     RPC_URL=https://sepolia.mode.network \
     CONTRACT=0xCa3a57e014937C29526De98e4A8A334a7D04792b \
     python3 tools/fetch-space-id.py
-
+    
+    OUTPUTS:
     identifier:       '0x00000397771a7e69f683e17e0a875fa64daac091518ba318ceef13579652bd79'
     empty_label_hash: '0xea1eb1136f380e6643b69866632ce3b493100790c9c84416f2769d996a1c38b1'
-    base_node:        'mode'
     base_node_hash:   '0x9217c94fd014da21f5c43a1fcae4154a2bbfce43eb48bb33f7f6473c68ee16b6'
     ```
 
@@ -105,12 +105,13 @@ To obtain it, you need to make `eth_call` to Base contract (contract with NFT):
 
     ```bash
     RPC_URL=https://mainnet.mode.network \
-    CONTRACT=0x2ad86eeec513ac16804bb05310214c3fd496835b \ 
+    CONTRACT=0x2ad86eeec513ac16804bb05310214c3fd496835b \
+    BASE_NODE=mode \
     python3 tools/fetch-space-id.py
 
+    OUTPUTS:
     identifier:       '0x0000868b771a7e69f683e17e0a875fa64daac091518ba318ceef13579652bd79'
     empty_label_hash: '0x2fd69f9e5bec9de9ebf3468dafc549eca0bc7d17dfbc09869c2cfc3997d5d038'
-    base_node:        'mode'
     base_node_hash:   '0x2f0e9a68fa134a18a7181045c3549d639665fe43df78e882d8adea865a4bb153'
     ```
 
