@@ -12,9 +12,9 @@
         BENS__CONFIG=./config/dev.json
         ```
 
-    2. You can change `dev.json` config and describe your protocols
+    1. You can change `dev.json` config and describe your protocols
 
-2. Compile and run:
+1. Compile and run:
 
     ```bash
     # add env variables before
