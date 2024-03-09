@@ -51,6 +51,19 @@
             "native_token_contract": "0x707Db367E3E1e0d503924160E32D3981AD86C80e"
           }
         }
+      },
+      "919": {
+        "blockscout": {
+          "url": "https://sepolia.explorer.mode.network"
+        },
+        "subgraphs": {
+          "mode-subgraph": {
+            "use_cache": true,
+            "address_resolve_technique": "reverse_registry",
+            "native_token_contract": "0xCa3a57e014937C29526De98e4A8A334a7D04792b",
+            "empty_label_hash": "0xea1eb1136f380e6643b69866632ce3b493100790c9c84416f2769d996a1c38b1"
+          }
+        }
       }
     }
   }

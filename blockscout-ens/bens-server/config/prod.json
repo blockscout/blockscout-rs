@@ -38,6 +38,19 @@
             "native_token_contract": "0xaCe5602d169Edeb874bfE584a651801B8ac67093"
           }
         }
+      },
+      "34443": {
+        "blockscout": {
+          "url": "https://explorer.mode.network"
+        },
+        "subgraphs": {
+          "mode-subgraph": {
+            "use_cache": true,
+            "address_resolve_technique": "reverse_registry",
+            "native_token_contract": "0x2ad86eeec513ac16804bb05310214c3fd496835b",
+            "empty_label_hash": "0x2fd69f9e5bec9de9ebf3468dafc549eca0bc7d17dfbc09869c2cfc3997d5d038"
+          }
+        }
       }
     }
   }

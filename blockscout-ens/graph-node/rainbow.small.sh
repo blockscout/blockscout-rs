@@ -29,6 +29,7 @@ CREATE TABLE public.ens_names (
 --
 
 COPY public.ens_names (hash, name) FROM stdin;
+0x93ad29622c7a43be4ba50a1e97ec04a11d86740d6e621d111f2e1b8ce170acae	mode
 0x6817c00f03de8b5bd58d2016b59d251c13056b989171c5852949903bc043bc27	get
 0x7a9332fa0d910db7dd4d354d0e6667ab1ebcb9fdcc6a0025433332ec7fa15e2e	blogger
 0xc0da3fe9cba3aac3696e9a7fb1f0aadd23e31f6deeca7d3d74c8d9d0e7621cd8	microsoft
