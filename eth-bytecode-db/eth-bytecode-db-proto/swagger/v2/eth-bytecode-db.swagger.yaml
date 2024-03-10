@@ -13,6 +13,20 @@ consumes:
 produces:
   - application/json
 paths:
+  /api/v2/alliance/stats:
+    get:
+      operationId: Database_GetAllianceStats
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v2AllianceStats'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      tags:
+        - Database
   /api/v2/bytecodes/sources:search:
     post:
       operationId: Database_SearchSources
