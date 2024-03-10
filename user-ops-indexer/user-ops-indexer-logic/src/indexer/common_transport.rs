@@ -18,7 +18,10 @@ pub enum CommonTransport {
 impl CommonTransport {
     pub async fn new(rpc_url: String) -> Result<Self, ProviderError> {
         if rpc_url.trim().starts_with("ws") {
-            Ok(Self::Ws(Ws::connect_with_reconnects(rpc_url, 20).await?))
+            // ethers-rs does not handle ws reconnects well, neither it can guarantee that no
+            // events would be lost even if reconnect is successful, so it's better to restart
+            // the whole indexer at once instead of trying to reconnect.
+            Ok(Self::Ws(Ws::connect_with_reconnects(rpc_url, 0).await?))
         } else {
             Ok(Self::Http(
                 Http::from_str(&rpc_url).map_err(|e| ProviderError::CustomError(e.to_string()))?,

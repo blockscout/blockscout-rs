@@ -118,7 +118,7 @@ impl Indexer {
 
     #[instrument(name = "indexer", skip_all, level = "info", fields(version = L::version()))]
     pub async fn start<L: IndexerLogic>(&self) -> anyhow::Result<()> {
-        let mut stream_jobs: Vec<BoxStream<Job>> = Vec::new();
+        let mut stream_jobs = stream::SelectAll::<BoxStream<Job>>::new();
 
         if self.settings.realtime.enabled {
             if self.client.as_ref().supports_subscriptions() {
@@ -130,6 +130,12 @@ impl Indexer {
                     .await?
                     .filter_map(|log| async { Job::try_from(log).ok() });
 
+                // That's the only infinite stream in the SelectAll set. If the ws connection
+                // unexpectedly disconnects, this stream will terminate,
+                // so will the whole SelectAll set with for_each_concurrent on it.
+                // ethers-rs does not handle ws reconnects well, neither it can guarantee that no
+                // events would be lost even if reconnect is successful, so it's better to restart
+                // the whole indexer at once instead of trying to reconnect.
                 stream_jobs.push(Box::pin(realtime_stream_jobs));
             } else {
                 tracing::info!("starting polling of past BeforeExecution logs from rpc");
@@ -157,7 +163,7 @@ impl Indexer {
                 rpc_refetch_block_number.saturating_add_signed(past_db_logs_end_block) as u64
             };
             tracing::info!(from_block, to_block, "fetching missed tx hashes in db");
-            let txs = repository::user_op::find_unprocessed_logs_tx_hashes(
+            let missed_txs = repository::user_op::stream_unprocessed_logs_tx_hashes(
                 &self.db,
                 L::entry_point(),
                 L::user_operation_event_signature(),
@@ -165,9 +171,8 @@ impl Indexer {
                 to_block,
             )
             .await?;
-            tracing::info!(count = txs.len(), "found missed txs in db");
 
-            stream_jobs.push(Box::pin(stream::iter(txs).map(Job::from)));
+            stream_jobs.push(Box::pin(missed_txs.map(Job::from)));
         }
 
         if self.settings.past_rpc_logs_indexer.enabled {
@@ -183,7 +188,7 @@ impl Indexer {
         let cache = lru::LruCache::new(cache_size);
         // map to transactions hashes containing user ops, deduplicate transaction hashes through LRU cache
         // e.g. [A, A, B, B, B, C, C] -> [A, B, C]
-        let stream_txs = stream::select_all(stream_jobs)
+        let stream_txs = stream_jobs
             .scan(cache, |cache, job| {
                 let now = time::Instant::now();
                 let tx_hash = job.tx_hash;
@@ -199,7 +204,7 @@ impl Indexer {
 
         stream_txs
             .for_each_concurrent(Some(self.settings.concurrency as usize), |tx| async move {
-                let mut backoff = vec![1, 5, 20].into_iter().map(Duration::from_secs);
+                let mut backoff = vec![5, 20, 120].into_iter().map(Duration::from_secs);
                 while let Err(err) = &self.handle_tx::<L>(tx).await {
                     match backoff.next() {
                         None => {
