@@ -38,16 +38,19 @@ run:
 
 
 {% if entity %}
-generate-entities: 
-    just {{project-name}}-logic/generate-entities
-{% endif -%}
+generate-entities:
+    sea-orm-cli generate entity --lib -o {{project-name}}-entity/src
+{% endif %}
 {% if migrations %}
+{% raw -%}
 new-migration name:
-    just {{project-name}}-logic/new-migration {% raw -%}{{name}}{% endraw %}
+    sea-orm-cli migrate generate -d {{project-name}}-migration {{name}}
+{% endraw -%}
 
 migrate-up:
-    just {{project-name}}-logic/migrate-up
+    sea-orm-cli migrate -d {{project-name}}-migration up
 
 migrate-down:
-    just {{project-name}}-logic/migrate-down
+    sea-orm-cli migrate {{project-name}}-migration down
 {% endif %}
+
