@@ -257,13 +257,13 @@ message LookupMethodsResponse {
 /*************** Batch related messages ***************/
 
 message Contract {
-  string creation_code = 1;
-  string runtime_code = 2;
+  optional string creation_code = 1;
+  optional string runtime_code = 2;
   /// An optional field with metadata used for logging purposes
   optional VerificationMetadata metadata = 3;
 }
 
-message ContractVerificationResult {
+message ContractVerificationSuccess {
   string creation_code = 1;
   string runtime_code = 2;
 
@@ -315,6 +315,17 @@ message ContractVerificationResult {
   bool runtime_match = 16;
   string runtime_values = 17;
   string runtime_transformations = 18;
+}
+
+message ContractVerificationFailure {
+
+}
+
+message ContractVerificationResult {
+  oneof verification_result {
+    ContractVerificationFailure failure = 1;
+    ContractVerificationSuccess success = 2;
+  }
 }
 
 message CompilationFailure {

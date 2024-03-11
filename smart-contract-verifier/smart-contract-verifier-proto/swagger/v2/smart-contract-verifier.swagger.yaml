@@ -231,14 +231,14 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v2ContractVerificationResult'
-  ContractVerificationResultCompilerCompiler:
+  ContractVerificationSuccessCompilerCompiler:
     type: string
     enum:
       - UNSPECIFIED
       - SOLC
       - VYPER
     default: UNSPECIFIED
-  ContractVerificationResultLanguageLanguage:
+  ContractVerificationSuccessLanguageLanguage:
     type: string
     enum:
       - UNSPECIFIED
@@ -380,7 +380,16 @@ definitions:
       metadata:
         $ref: '#/definitions/v2VerificationMetadata'
         title: / An optional field with metadata used for logging purposes
+  v2ContractVerificationFailure:
+    type: object
   v2ContractVerificationResult:
+    type: object
+    properties:
+      failure:
+        $ref: '#/definitions/v2ContractVerificationFailure'
+      success:
+        $ref: '#/definitions/v2ContractVerificationSuccess'
+  v2ContractVerificationSuccess:
     type: object
     properties:
       creationCode:
@@ -388,11 +397,11 @@ definitions:
       runtimeCode:
         type: string
       compiler:
-        $ref: '#/definitions/ContractVerificationResultCompilerCompiler'
+        $ref: '#/definitions/ContractVerificationSuccessCompilerCompiler'
       compilerVersion:
         type: string
       language:
-        $ref: '#/definitions/ContractVerificationResultLanguageLanguage'
+        $ref: '#/definitions/ContractVerificationSuccessLanguageLanguage'
       fileName:
         type: string
       contractName:

@@ -1,12 +1,11 @@
-use std::collections::BTreeMap;
 use pretty_assertions::assert_eq;
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Deserializer};
+use serde::{de::DeserializeOwned, Deserialize, Deserializer};
 use serde_json::Value;
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
     self as proto, batch_verify_response, BatchVerifyResponse,
     BatchVerifySolidityStandardJsonRequest,
 };
+use std::collections::BTreeMap;
 
 const TEST_CASES_DIR: &str = "tests/test_cases_batch_solidity";
 
@@ -53,7 +52,7 @@ impl TestCaseRequest for StandardJson {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Response<T> {
-    response: T
+    response: T,
 }
 
 impl<T: TestCaseResponse> TestCaseResponse for Response<T> {
@@ -64,18 +63,20 @@ impl<T: TestCaseResponse> TestCaseResponse for Response<T> {
 
 pub type CompilationFailure = Response<compilation_failure::CompilationFailure>;
 mod compilation_failure {
-    use serde::{Deserialize, Deserializer};
-    use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{self as proto, batch_verify_response, BatchVerifyResponse};
     use crate::TestCaseResponse;
+    use serde::{Deserialize, Deserializer};
+    use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
+        self as proto, batch_verify_response, BatchVerifyResponse,
+    };
 
     #[derive(Clone, Debug, Deserialize)]
-    #[serde(rename_all="camelCase")]
+    #[serde(rename_all = "camelCase")]
     pub struct CompilationFailure {
         compilation_failure: CompilationFailureInternal,
     }
 
     #[derive(Clone, Debug, Deserialize)]
-    #[serde(rename_all="camelCase")]
+    #[serde(rename_all = "camelCase")]
     struct CompilationFailureInternal {
         message: String,
     }
@@ -106,22 +107,27 @@ mod compilation_failure {
     }
 }
 
-pub type ContractVerificationSuccess = Response<contract_verification_success::ContractVerificationSuccess>;
+pub type ContractVerificationSuccess =
+    Response<contract_verification_success::ContractVerificationSuccess>;
 mod contract_verification_success {
     use super::TestCaseResponse;
-    use std::collections::BTreeMap;
+    use pretty_assertions::assert_eq;
     use serde::Deserialize;
     use serde_json::Value;
-    use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::BatchVerifyResponse;
+    use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
+        self as proto, batch_verify_response, contract_verification_result,
+        contract_verification_success, BatchVerifyResponse,
+    };
+    use std::collections::BTreeMap;
 
     #[derive(Clone, Debug, Deserialize)]
-    #[serde(rename_all="camelCase")]
+    #[serde(rename_all = "camelCase")]
     pub struct ContractVerificationSuccess {
         pub success: ContractVerificationSuccessInternal,
     }
 
     #[derive(Clone, Debug, Deserialize)]
-    #[serde(rename_all="camelCase")]
+    #[serde(rename_all = "camelCase")]
     pub struct ContractVerificationSuccessInternal {
         pub creation_code: String,
         pub runtime_code: String,
@@ -145,26 +151,54 @@ mod contract_verification_success {
 
     impl TestCaseResponse for ContractVerificationSuccess {
         fn check(&self, actual_response: BatchVerifyResponse) -> () {
-            // let result = actual_response
-            //     .verification_result
-            //     .expect("verification result is missing from response");
-            // match result {
-            //     batch_verify_response::VerificationResult::CompilationFailure(
-            //         proto::CompilationFailure {
-            //             message: actual_message,
-            //         },
-            //     ) => {
-            //         if !actual_message.contains(&self.0.message) {
-            //             panic!(
-            //                 "invalid compilation failure message; expected={}, actual={actual_message}",
-            //                 self.0.message
-            //             )
-            //         }
-            //     }
-            //     result => panic!(
-            //         "invalid verification result; expected CompilationFailure, actual={result:?}"
-            //     ),
-            // }
+            let result = actual_response
+                .verification_result
+                .expect("verification result is missing from response");
+            match result {
+                batch_verify_response::VerificationResult::ContractVerificationResults(
+                    batch_verify_response::ContractVerificationResults { items },
+                ) => {
+                    assert_eq!(1, items.len(), "only 1 contract expected inside results");
+                    let item = items[0].clone();
+                    match item {
+                        proto::ContractVerificationResult {
+                            verification_result: Some(
+                                contract_verification_result::VerificationResult::Success(
+                                    proto::ContractVerificationSuccess {
+                                        creation_code, runtime_code, compiler, compiler_version, language, file_name, contract_name, sources, compiler_settings, compilation_artifacts, creation_code_artifacts, runtime_code_artifacts, creation_match, creation_values, creation_transformations, runtime_match, runtime_values, runtime_transformations
+                                    }
+                                ),
+                            )
+                        }  => {
+                            let compiler = contract_verification_success::compiler::Compiler::from_i32(compiler).unwrap().as_str_name();
+                            let language = contract_verification_success::language::Language::from_i32(language).unwrap().as_str_name();
+
+                            assert_eq!(self.success.creation_code, creation_code, "invalid creation_code");
+                            assert_eq!(self.success.runtime_code, runtime_code, "invalid runtime_code");
+                            assert_eq!(self.success.compiler, compiler, "invalid compiler");
+                            assert_eq!(self.success.compiler_version, compiler_version, "invalid compiler_version");
+                            assert_eq!(self.success.language, language, "invalid language");
+                            assert_eq!(self.success.file_name, file_name, "invalid file_name");
+                            assert_eq!(self.success.contract_name, contract_name, "invalid contract_name");
+                            assert_eq!(self.success.sources, sources, "invalid sources");
+                            assert_eq!(self.success.compiler_settings, compiler_settings, "invalid compiler_settings");
+                            assert_eq!(self.success.compilation_artifacts, compilation_artifacts, "invalid compilation_artifacts");
+                            assert_eq!(self.success.creation_code_artifacts, creation_code_artifacts, "invalid creation_code_artifacts");
+                            assert_eq!(self.success.runtime_code_artifacts, runtime_code_artifacts, "invalid runtime_code_artifacts");
+                            assert_eq!(self.success.creation_match, creation_match, "invalid creation_match");
+                            assert_eq!(self.success.creation_values, creation_values, "invalid creation_values");
+                            assert_eq!(self.success.creation_transformations, creation_transformations, "invalid creation_transformations");
+                            assert_eq!(self.success.runtime_match, runtime_match, "invalid runtime_match");
+                            assert_eq!(self.success.runtime_values, runtime_values, "invalid runtime_values");
+                            assert_eq!(self.success.runtime_transformations, runtime_transformations, "invalid runtime_transformations");
+                        }
+                        result => panic!("invalid contract verification result; expected Success, actual={result:?}")
+                    }
+                }
+                result => panic!(
+                    "invalid verification result; expected CompilationFailure, actual={result:?}"
+                ),
+            }
         }
     }
 }

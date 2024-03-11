@@ -1,15 +1,17 @@
 mod batch_solidity_types;
 
-use actix_web::dev::ServiceResponse;
-use actix_web::test::{read_body, read_body_json, TestRequest};
-use actix_web::{test, App};
+use actix_web::{
+    dev::ServiceResponse,
+    test,
+    test::{read_body, read_body_json, TestRequest},
+    App,
+};
 use batch_solidity_types::{TestCaseRequest, TestCaseResponse};
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
     solidity_verifier_actix::route_solidity_verifier, BatchVerifyResponse,
 };
 use smart_contract_verifier_server::{Settings, SolidityVerifierService};
-use std::str::from_utf8;
-use std::sync::Arc;
+use std::{str::from_utf8, sync::Arc};
 use tokio::sync::{OnceCell, Semaphore};
 
 async fn global_service() -> &'static Arc<SolidityVerifierService> {
@@ -62,15 +64,13 @@ async fn test_success<Request: TestCaseRequest, Response: TestCaseResponse>(
 
 mod success_tests {
     use super::*;
+    use crate::batch_solidity_types::ContractVerificationSuccess;
     use batch_solidity_types::{CompilationFailure, StandardJson};
-    use crate::batch_solidity_types::{ContractVerificationSuccess};
 
     #[tokio::test]
     async fn basic() {
-        let (test_case_request, test_case_response) = batch_solidity_types::from_file::<
-            StandardJson,
-            ContractVerificationSuccess,
-        >("basic");
+        let (test_case_request, test_case_response) =
+            batch_solidity_types::from_file::<StandardJson, ContractVerificationSuccess>("basic");
         println!("SMBKSGFOPA: {test_case_response:?}");
         test_success(&test_case_request, &test_case_response).await;
     }
