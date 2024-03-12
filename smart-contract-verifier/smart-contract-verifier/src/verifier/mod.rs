@@ -9,6 +9,6 @@ mod contract_verifier;
 pub mod lossless_compiler_output;
 
 pub use base::LocalBytecodeParts;
-pub use bytecode::{BytecodePart, split};
+pub use bytecode::{split, BytecodePart};
 pub use compiler_input::CompilerInput;
 pub use contract_verifier::{ContractVerifier, Error, Success};

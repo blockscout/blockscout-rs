@@ -188,11 +188,13 @@ impl<T> LocalBytecode<T> {
         let creation_tx_input_parts = split(
             creation_tx_input.bytecode(),
             creation_tx_input_modified.bytecode(),
-        ).map_err(|err| VerificationErrorKind::InternalError(format!("{err:#}")))?;
+        )
+        .map_err(|err| VerificationErrorKind::InternalError(format!("{err:#}")))?;
         let deployed_bytecode_parts = split(
             deployed_bytecode.bytecode(),
             deployed_bytecode_modified.bytecode(),
-        ).map_err(|err| VerificationErrorKind::InternalError(format!("{err:#}")))?;
+        )
+        .map_err(|err| VerificationErrorKind::InternalError(format!("{err:#}")))?;
 
         Ok(Self {
             creation_tx_input,
@@ -230,10 +232,7 @@ impl<T> LocalBytecode<T> {
 ///
 /// Any error here is [`VerificationErrorKind::InternalError`], as both original
 /// and modified bytecodes are obtained as a result of local compilation.
-pub fn split(
-    raw: &Bytes,
-    raw_modified: &Bytes,
-) -> Result<Vec<BytecodePart>, anyhow::Error> {
+pub fn split(raw: &Bytes, raw_modified: &Bytes) -> Result<Vec<BytecodePart>, anyhow::Error> {
     if raw.len() != raw_modified.len() {
         anyhow::bail!(
             "bytecode and modified bytecode length mismatch: {}",
@@ -241,9 +240,8 @@ pub fn split(
         )
     }
 
-    let parts_total_size = |parts: &Vec<BytecodePart>| -> usize {
-        parts.iter().fold(0, |size, el| size + el.size())
-    };
+    let parts_total_size =
+        |parts: &Vec<BytecodePart>| -> usize { parts.iter().fold(0, |size, el| size + el.size()) };
 
     let mut result = Vec::new();
 
@@ -303,9 +301,7 @@ fn parse_bytecode_parts(
             while result.is_err() {
                 // It is the beginning of the bytecode segment but no metadata hash has been parsed
                 if i == 0 {
-                    anyhow::bail!(
-                        "failed to parse bytecode part",
-                    )
+                    anyhow::bail!("failed to parse bytecode part",)
                 }
                 i -= 1;
 

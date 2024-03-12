@@ -1,23 +1,21 @@
-use crate::verifier::lossless_compiler_output;
-use crate::{BatchError, Version};
+use super::artifacts::{self};
+use crate::{verifier::lossless_compiler_output, Version};
 use anyhow::Context;
 use bytes::Bytes;
-use std::collections::BTreeMap;
 use ethers_solc::artifacts::Offsets;
-use super::artifacts::cbor_auxdata::{CborAuxdata};
+use std::collections::BTreeMap;
 
 type LinkReferences = BTreeMap<String, BTreeMap<String, Vec<Offsets>>>;
 
 #[derive(Clone, Debug)]
 pub struct ParsedSolidityContract {
-    pub _contract: lossless_compiler_output::Contract,
     pub file_name: String,
     pub contract_name: String,
     pub creation_code: Bytes,
-    pub compilation_artifacts: super::artifacts::compilation_artifacts::CompilationArtifacts,
-    pub creation_code_artifacts: super::artifacts::creation_code_artifacts::CreationCodeArtifacts,
+    pub compilation_artifacts: artifacts::compilation_artifacts::CompilationArtifacts,
+    pub creation_code_artifacts: artifacts::creation_code_artifacts::CreationCodeArtifacts,
     pub runtime_code: Bytes,
-    pub runtime_code_artifacts: super::artifacts::runtime_code_artifacts::RuntimeCodeArtifacts,
+    pub runtime_code_artifacts: artifacts::runtime_code_artifacts::RuntimeCodeArtifacts,
 }
 
 #[derive(Clone, Debug)]
@@ -37,9 +35,11 @@ fn to_lossless_output(
         .map_err(|err| anyhow::anyhow!("cannot parse compiler output in lossless format: {err}"))
 }
 
+pub use solidity::parse_contracts as parse_solidity_contracts;
 mod solidity {
-    use crate::batch_verifier::decode_hex;
     use super::*;
+    use crate::batch_verifier::decode_hex;
+    use artifacts::cbor_auxdata::{self, CborAuxdata};
 
     pub fn parse_contracts(
         compiler_version: Version,
@@ -66,7 +66,7 @@ mod solidity {
             }
 
             for ((contract_name, contract), (modified_contract_name, modified_contract)) in
-            contracts.into_iter().zip(modified_contracts)
+                contracts.into_iter().zip(modified_contracts)
             {
                 if contract_name != modified_contract_name {
                     anyhow::bail!(
@@ -75,23 +75,25 @@ mod solidity {
                 )
                 }
 
-                // parsed_contracts.push(
-                //     crate::batch_verifier::batch_contract_verifier::ContractToParse {
-                //         file_name: file_name.clone(),
-                //         contract_name,
-                //         contract,
-                //         modified_contract,
-                //         source_files: compiler_output.sources.clone(),
-                //     }
-                //     .parse()?,
-                // );
+                let parsed_contract = parse_contract(
+                    file_name.clone(),
+                    contract_name.clone(),
+                    &compiler_output.sources.clone(),
+                    &contract,
+                    &modified_contract,
+                )
+                .context(format!(
+                    "parsing contract; file={file_name}, contract={contract_name}"
+                ))?;
+
+                parsed_contracts.push(parsed_contract);
             }
         }
 
         Ok(CompilationResult {
-            compiler: "SOLC".to_string(),
+            compiler: "solc".to_string(),
             compiler_version: compiler_version.to_string(),
-            language: compiler_input.language.clone().to_uppercase(),
+            language: compiler_input.language.clone(),
             compiler_settings: serde_json::to_value(compiler_input.settings.clone())
                 .expect("settings should serialize into valid json"),
             sources: compiler_input
@@ -108,49 +110,52 @@ mod solidity {
         })
     }
 
-    pub fn parse_contract() -> Result<ParsedSolidityContract, anyhow::Error> {
-        // let (creation_code, creation_cbor_auxdata) = parse_creation_code_details()?;
-        // let (runtime_code, runtime_cbor_auxdata) = parse_runtime_code_details()?;
-        //
-        // let compilation_artifacts =
-        //     super::artifacts::compilation_artifacts::generate(&self.contract, &self.source_files);
-        // let creation_code_artifacts = super::artifacts::creation_code_artifacts::generate(
-        //     &self.contract,
-        //     creation_cbor_auxdata,
-        // );
-        // let runtime_code_artifacts = super::artifacts::runtime_code_artifacts::generate(
-        //     &self.contract,
-        //     runtime_cbor_auxdata,
-        // );
-        //
-        // Ok(ParsedSolidityContract {
-        //     _contract: self.contract,
-        //     file_name: self.file_name,
-        //     contract_name: self.contract_name,
-        //     compilation_artifacts,
-        //     creation_code,
-        //     creation_code_artifacts,
-        //     runtime_code,
-        //     runtime_code_artifacts,
-        // })
+    fn parse_contract(
+        file_name: String,
+        contract_name: String,
+        source_files: &lossless_compiler_output::SourceFiles,
+        contract: &lossless_compiler_output::Contract,
+        modified_contract: &lossless_compiler_output::Contract,
+    ) -> Result<ParsedSolidityContract, anyhow::Error> {
+        let (creation_code, creation_cbor_auxdata) =
+            parse_code_details(&contract.evm.bytecode, &modified_contract.evm.bytecode)
+                .context("parse creation code details")?;
+        let (runtime_code, runtime_cbor_auxdata) = parse_code_details(
+            &contract.evm.deployed_bytecode.bytecode,
+            &modified_contract.evm.deployed_bytecode.bytecode,
+        )
+        .context("parse runtime code details")?;
 
-        todo!()
+        let compilation_artifacts =
+            artifacts::compilation_artifacts::generate(contract, source_files);
+        let creation_code_artifacts =
+            artifacts::creation_code_artifacts::generate(contract, creation_cbor_auxdata);
+        let runtime_code_artifacts =
+            artifacts::runtime_code_artifacts::generate(contract, runtime_cbor_auxdata);
+
+        Ok(ParsedSolidityContract {
+            file_name,
+            contract_name,
+            compilation_artifacts,
+            creation_code,
+            creation_code_artifacts,
+            runtime_code,
+            runtime_code_artifacts,
+        })
     }
 
-    pub fn parse_runtime_code_details(contract: &lossless_compiler_output::Contract,
-                                      modified_contract: &lossless_compiler_output::Contract,
+    fn parse_code_details(
+        code: &lossless_compiler_output::Bytecode,
+        modified_code: &lossless_compiler_output::Bytecode,
     ) -> Result<(Bytes, CborAuxdata), anyhow::Error> {
-        let code =
-            preprocess_code(&contract.evm.deployed_bytecode.bytecode).context("original runtime code")?;
-        let modified_code = preprocess_code(
-            &modified_contract.evm.deployed_bytecode.bytecode
-        ).context("modified runtime code")?;
+        let code = preprocess_code(code).context("preprocess original output")?;
+        let modified_code = preprocess_code(modified_code).context("preprocess modified output")?;
 
-        // let cbor_auxdata = split(&self.file_name, &self.contract_name, &code, &modified_code)?;
-        //
-        // Ok((code, cbor_auxdata))
+        let bytecode_parts =
+            crate::verifier::split(&code, &modified_code).context("split on bytecode parts")?;
+        let cbor_auxdata = cbor_auxdata::generate(&bytecode_parts);
 
-        todo!()
+        Ok((code, cbor_auxdata))
     }
 
     fn preprocess_code(
@@ -161,16 +166,13 @@ mod solidity {
             .as_ref()
             .map(|references| serde_json::from_value::<LinkReferences>(references.clone()))
             .transpose()
-            .map_err(|err| {
-                anyhow::anyhow!("deserializing code link references failed: {err}")
-            })?
+            .map_err(|err| anyhow::anyhow!("deserializing code link references failed: {err}"))?
             .unwrap_or_default();
         let code = match code_bytecode.object.clone() {
             foundry_compilers::artifacts::BytecodeObject::Bytecode(bytes) => bytes.0,
-            foundry_compilers::artifacts::BytecodeObject::Unlinked(value) => nullify_libraries(
-                value,
-                code_link_references,
-            ).context("nullify libraries")?,
+            foundry_compilers::artifacts::BytecodeObject::Unlinked(value) => {
+                nullify_libraries(value, code_link_references).context("nullify libraries")?
+            }
         };
         Ok(code)
     }
@@ -194,9 +196,8 @@ mod solidity {
             code.replace_range(start..start + length, &"0".repeat(length));
         }
 
-        let result = decode_hex(&code).map_err(|err| {
-            anyhow::anyhow!("cannot format bytecode as bytes {err}")
-        })?;
+        let result = decode_hex(&code)
+            .map_err(|err| anyhow::anyhow!("cannot format bytecode as bytes {err}"))?;
 
         Ok(Bytes::from(result))
     }
@@ -223,25 +224,9 @@ mod solidity {
             )]);
 
             let expected = Bytes::from_str("608060405234801561000f575f80fd5b506101d78061001d5f395ff3fe608060405234801561000f575f80fd5b5060043610610029575f3560e01c80631003e2d21461002d575b5f80fd5b61004760048036038101906100429190610101565b610049565b005b73000000000000000000000000000000000000000063cad0899b5f54836040518363ffffffff1660e01b815260040161008392919061013b565b602060405180830381865af415801561009e573d5f803e3d5ffd5b505050506040513d601f19601f820116820180604052508101906100c29190610176565b5f8190555050565b5f80fd5b5f819050919050565b6100e0816100ce565b81146100ea575f80fd5b50565b5f813590506100fb816100d7565b92915050565b5f60208284031215610116576101156100ca565b5b5f610123848285016100ed565b91505092915050565b610135816100ce565b82525050565b5f60408201905061014e5f83018561012c565b61015b602083018461012c565b9392505050565b5f81519050610170816100d7565b92915050565b5f6020828403121561018b5761018a6100ca565b5b5f61019884828501610162565b9150509291505056fea26469706673582212209b4b28e8ef54b8fa1f251c01babde84cbe2a44a99d5bffe3cab53ee14c9addd164736f6c63430008180033").unwrap();
-            let actual = nullify_libraries(
-                code.to_string(),
-                link_references,
-            )
-                .expect("should succeed");
+            let actual =
+                nullify_libraries(code.to_string(), link_references).expect("should succeed");
             assert_eq!(expected, actual)
         }
     }
-
-}
-
-pub fn parse_creation_code_details() -> Result<(Bytes, CborAuxdata), BatchError> {
-    // let code = self.preprocess_code(&self.contract.evm.bytecode, "creation")?;
-    // let modified_code =
-    //     self.preprocess_code(&self.modified_contract.evm.bytecode, "modified creation")?;
-    //
-    // let cbor_auxdata = split(&self.file_name, &self.contract_name, &code, &modified_code)?;
-    //
-    // Ok((code, cbor_auxdata))
-
-    todo!()
 }

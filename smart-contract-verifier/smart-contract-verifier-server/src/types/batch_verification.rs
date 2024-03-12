@@ -82,11 +82,11 @@ fn process_verification_result(
         }
         BatchVerificationResult::Success(success) => {
             let compiler = proto::contract_verification_success::compiler::Compiler::from_str_name(
-                &success.compiler,
+                &success.compiler.to_uppercase(),
             )
             .ok_or_else(|| Status::internal("invalid compiler returned internally"))?;
             let language = proto::contract_verification_success::language::Language::from_str_name(
-                &success.language,
+                &success.language.to_uppercase(),
             )
             .ok_or_else(|| Status::internal("invalid language returned internally"))?;
             proto::contract_verification_result::VerificationResult::Success(
