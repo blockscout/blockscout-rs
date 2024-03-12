@@ -4728,6 +4728,7 @@ dependencies = [
  "ethers-solc",
  "foundry-compilers",
  "futures",
+ "hex",
  "lazy_static",
  "opentelemetry 0.18.0",
  "opentelemetry-jaeger 0.17.0",

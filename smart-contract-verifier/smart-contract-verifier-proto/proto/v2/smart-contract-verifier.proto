@@ -309,12 +309,12 @@ message ContractVerificationSuccess {
   string runtime_code_artifacts = 12;
 
   bool creation_match = 13;
-  string creation_values = 14;
-  string creation_transformations = 15;
+  optional string creation_values = 14;
+  optional string creation_transformations = 15;
 
   bool runtime_match = 16;
-  string runtime_values = 17;
-  string runtime_transformations = 18;
+  optional string runtime_values = 17;
+  optional string runtime_transformations = 18;
 }
 
 message ContractVerificationFailure {

@@ -24,6 +24,7 @@ ethers-solc = "2.0.10"
 ethers-core = "2.0.10"
 foundry-compilers = "0.3.9"
 futures = "0.3"
+hex = "0.4.3"
 lazy_static = "1"
 opentelemetry = { version = "0.18", features = ["rt-tokio"] }
 opentelemetry-jaeger = { version = "0.17", features = ["rt-tokio"] }

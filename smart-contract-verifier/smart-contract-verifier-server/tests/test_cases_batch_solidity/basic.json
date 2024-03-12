@@ -43,7 +43,7 @@
                 "sourceMap": "141:229:0:-:0;;;;;;;;;;;;;;;;;;;",
                 "linkReferences": {},
                 "cborAuxdata": {
-                    "0": {
+                    "1": {
                         "offset": 270,
                         "value": "0xa26469706673582212200ce375a1503aa9f07d83d54dfcc0ded3493001e84afc210a302a735399ecd43164736f6c63430008180033"
                     }
@@ -54,7 +54,7 @@
                 "linkReferences": {},
                 "immutableReferences": {},
                 "cborAuxdata": {
-                    "0": {
+                    "1": {
                         "offset": 241,
                         "value": "0xa26469706673582212200ce375a1503aa9f07d83d54dfcc0ded3493001e84afc210a302a735399ecd43164736f6c63430008180033"
                     }

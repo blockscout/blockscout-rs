@@ -1,0 +1,176 @@
+use super::{TestCaseRequest, TestCaseResponse};
+use blockscout_display_bytes::Bytes as DisplayBytes;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
+    BatchVerifyResponse, BatchVerifySolidityStandardJsonRequest, Contract,
+};
+use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TestCase {
+    pub deployed_creation_code: DisplayBytes,
+    pub deployed_runtime_code: DisplayBytes,
+
+    pub compiled_creation_code: DisplayBytes,
+    pub compiled_runtime_code: DisplayBytes,
+    pub compiler: String,
+    pub version: String,
+    pub language: String,
+    pub name: String,
+    pub fully_qualified_name: String,
+    pub sources: BTreeMap<String, String>,
+    pub compiler_settings: Value,
+    pub compilation_artifacts: Value,
+    pub creation_code_artifacts: Value,
+    pub runtime_code_artifacts: Value,
+
+    pub creation_match: bool,
+    pub creation_values: Value,
+    pub creation_transformations: Value,
+
+    pub runtime_match: bool,
+    pub runtime_values: Value,
+    pub runtime_transformations: Value,
+}
+
+impl TestCaseRequest for TestCase {
+    fn route() -> &'static str {
+        "/api/v2/verifier/solidity/sources:batch-verify-standard-json"
+    }
+
+    fn to_request(&self) -> Value {
+        #[derive(Clone, Debug, Serialize)]
+        struct CompilerInput {
+            language: String,
+            sources: foundry_compilers::artifacts::Sources,
+            settings: Value,
+        }
+
+        let sources = self
+            .sources
+            .clone()
+            .into_iter()
+            .map(|(file, content)| {
+                (
+                    PathBuf::from(file),
+                    foundry_compilers::artifacts::Source {
+                        content: Arc::new(content),
+                    },
+                )
+            })
+            .collect();
+
+        let request = BatchVerifySolidityStandardJsonRequest {
+            contracts: vec![Contract {
+                creation_code: Some(self.deployed_creation_code.to_string()),
+                runtime_code: Some(self.deployed_runtime_code.to_string()),
+                metadata: None,
+            }],
+            compiler_version: self.version.clone(),
+            input: serde_json::to_string(&CompilerInput {
+                language: "Solidity".to_string(),
+                sources,
+                settings: self.compiler_settings.clone(),
+            })
+            .expect("cannot serialize compiler input to string"),
+        };
+
+        serde_json::to_value(request).expect("cannot serialize request into value")
+    }
+}
+
+impl TestCaseResponse for TestCase {
+    type Response = BatchVerifyResponse;
+
+    fn check(&self, actual_response: Self::Response) {
+        let super::batch_solidity::ParsedSuccessItem {
+            creation_code,
+            runtime_code,
+            compiler,
+            compiler_version,
+            language,
+            file_name,
+            contract_name,
+            sources,
+            compiler_settings,
+            compilation_artifacts,
+            creation_code_artifacts,
+            runtime_code_artifacts,
+            creation_match,
+            creation_values,
+            creation_transformations,
+            runtime_match,
+            runtime_values,
+            runtime_transformations,
+        } = super::batch_solidity::retrieve_success_item(actual_response);
+
+        let expected_file_name = {
+            let names = self.fully_qualified_name.split(':').collect::<Vec<_>>();
+            names[..names.len() - 1].join(":")
+        };
+
+        pretty_assertions::assert_eq!(
+            self.compiled_creation_code,
+            creation_code,
+            "invalid creation_code"
+        );
+        pretty_assertions::assert_eq!(
+            self.compiled_runtime_code,
+            runtime_code,
+            "invalid runtime_code"
+        );
+        pretty_assertions::assert_eq!(self.compiler.to_uppercase(), compiler, "invalid compiler");
+        pretty_assertions::assert_eq!(self.version, compiler_version, "invalid compiler_version");
+        pretty_assertions::assert_eq!(self.language.to_uppercase(), language, "invalid language");
+        pretty_assertions::assert_eq!(expected_file_name, file_name, "invalid file_name");
+        pretty_assertions::assert_eq!(self.name, contract_name, "invalid contract_name");
+        pretty_assertions::assert_eq!(self.sources, sources, "invalid sources");
+        pretty_assertions::assert_eq!(
+            self.compiler_settings,
+            compiler_settings,
+            "invalid compiler_settings"
+        );
+        pretty_assertions::assert_eq!(
+            self.compilation_artifacts,
+            compilation_artifacts,
+            "invalid compilation_artifacts"
+        );
+        pretty_assertions::assert_eq!(
+            self.creation_code_artifacts,
+            creation_code_artifacts,
+            "invalid creation_code_artifacts"
+        );
+        pretty_assertions::assert_eq!(
+            self.runtime_code_artifacts,
+            runtime_code_artifacts,
+            "invalid runtime_code_artifacts"
+        );
+        pretty_assertions::assert_eq!(
+            self.creation_match,
+            creation_match,
+            "invalid creation_match"
+        );
+        pretty_assertions::assert_eq!(
+            Some(self.creation_values.clone()),
+            creation_values,
+            "invalid creation_values"
+        );
+        pretty_assertions::assert_eq!(
+            Some(self.creation_transformations.clone()),
+            creation_transformations,
+            "invalid creation_transformations"
+        );
+        pretty_assertions::assert_eq!(self.runtime_match, runtime_match, "invalid runtime_match");
+        pretty_assertions::assert_eq!(
+            Some(self.runtime_values.clone()),
+            runtime_values,
+            "invalid runtime_values"
+        );
+        pretty_assertions::assert_eq!(
+            Some(self.runtime_transformations.clone()),
+            runtime_transformations,
+            "invalid runtime_transformations"
+        );
+    }
+}

@@ -12,6 +12,7 @@ mod metrics;
 mod scheduler;
 mod verifier;
 
+mod batch_verifier;
 #[cfg(test)]
 mod tests;
 
@@ -24,7 +25,8 @@ pub use consts::{
 pub use middleware::Middleware;
 
 pub use crate::sourcify::Error as SourcifyError;
-pub use common_types::MatchType;
+pub use batch_verifier::{BatchError, BatchMatch, BatchSuccess, BatchVerificationResult};
+pub use common_types::{Contract, MatchType};
 pub use compiler::{Compilers, Fetcher, ListFetcher, S3Fetcher, Version};
 pub use verifier::{BytecodePart, Error as VerificationError};
 
