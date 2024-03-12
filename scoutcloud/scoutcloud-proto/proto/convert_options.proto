@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package convert_options;
+option go_package = "github.com/blockscout/actix-prost/convert_options";
+
+import "google/protobuf/descriptor.proto";
+
+message ConvertOptions {
+  string type = 1;
+  string override = 2;
+  bool required = 3;
+}
+
+message ExtraFieldOptions {
+  string name = 1;
+  string type = 2;
+}
+
+extend google.protobuf.MessageOptions { repeated ExtraFieldOptions extra_fields = 50000; }
+extend google.protobuf.FieldOptions { optional ConvertOptions convert = 50001; }
