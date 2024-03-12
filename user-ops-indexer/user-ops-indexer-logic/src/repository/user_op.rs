@@ -5,6 +5,7 @@ use entity::{
     user_operations::{ActiveModel, Column, Entity, Model},
 };
 use ethers::prelude::{Address, H256};
+use futures::{Stream, StreamExt};
 use sea_orm::{
     prelude::{BigDecimal, DateTime},
     sea_query::{Expr, IntoCondition, OnConflict},
@@ -193,14 +194,14 @@ pub async fn upsert_many(
     Ok(())
 }
 
-pub async fn find_unprocessed_logs_tx_hashes(
+pub async fn stream_unprocessed_logs_tx_hashes(
     db: &DatabaseConnection,
     addr: Address,
     topic: H256,
     from_block: u64,
     to_block: u64,
-) -> Result<Vec<H256>, anyhow::Error> {
-    let tx_hashes = TxHash::find_by_statement(Statement::from_sql_and_values(
+) -> Result<impl Stream<Item = H256> + '_, anyhow::Error> {
+    let missed_tx_stream = TxHash::find_by_statement(Statement::from_sql_and_values(
         DbBackend::Postgres,
         r#"
 SELECT DISTINCT logs.transaction_hash as transaction_hash
@@ -219,13 +220,19 @@ WHERE logs.address_hash    = $1
             to_block.into(),
         ],
     ))
-    .all(db)
+    .stream(db)
     .await?
-    .into_iter()
-    .map(|tx| H256::from_slice(&tx.transaction_hash))
-    .collect();
+    .filter_map(|tx| async {
+        match tx {
+            Ok(tx) => Some(H256::from_slice(&tx.transaction_hash)),
+            Err(err) => {
+                tracing::error!(error = ?err, "error during missed tx hash retrieval");
+                None
+            }
+        }
+    });
 
-    Ok(tx_hashes)
+    Ok(missed_tx_stream)
 }
 
 #[cfg(test)]
@@ -356,9 +363,11 @@ mod tests {
         let topic =
             H256::from_str("0x49628fd1471006c1482da88028e9ce4dbb080b815c9b0344d39e5a8e6ec1419f")
                 .unwrap();
-        let items = find_unprocessed_logs_tx_hashes(&db, entrypoint, topic, 100, 150)
+        let items: Vec<H256> = stream_unprocessed_logs_tx_hashes(&db, entrypoint, topic, 100, 150)
             .await
-            .unwrap();
+            .unwrap()
+            .collect()
+            .await;
         assert_eq!(items, [H256::from_low_u64_be(0xffff)]);
     }
 }
