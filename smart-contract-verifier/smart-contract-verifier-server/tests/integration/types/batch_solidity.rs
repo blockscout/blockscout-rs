@@ -216,6 +216,32 @@ mod contract_verification_success {
     }
 }
 
+pub type ContractVerificationFailure =
+    Response<contract_verification_failure::ContractVerificationFailure>;
+mod contract_verification_failure {
+    use super::*;
+    use serde::Deserialize;
+    use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::BatchVerifyResponse;
+
+    #[derive(Clone, Debug, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct ContractVerificationFailure {
+        pub failure: ContractVerificationFailureInternal,
+    }
+
+    #[derive(Clone, Debug, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct ContractVerificationFailureInternal {}
+
+    impl TestCaseResponse for ContractVerificationFailure {
+        type Response = BatchVerifyResponse;
+
+        fn check(&self, actual_response: Self::Response) {
+            retrieve_failure_item(actual_response);
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct ParsedSuccessItem {
     pub creation_code: DisplayBytes,
@@ -323,6 +349,26 @@ impl From<proto::ContractVerificationSuccess> for ParsedSuccessItem {
 }
 
 pub fn retrieve_success_item(response: BatchVerifyResponse) -> ParsedSuccessItem {
+    match retrieve_verification_result_item(response) {
+        contract_verification_result::VerificationResult::Success(value) => value.into(),
+        result => {
+            panic!("invalid contract verification result; expected Success, actual={result:?}")
+        }
+    }
+}
+
+pub fn retrieve_failure_item(response: BatchVerifyResponse) -> proto::ContractVerificationFailure {
+    match retrieve_verification_result_item(response) {
+        contract_verification_result::VerificationResult::Failure(value) => value,
+        result => {
+            panic!("invalid contract verification result; expected Failure, actual={result:?}")
+        }
+    }
+}
+
+fn retrieve_verification_result_item(
+    response: BatchVerifyResponse,
+) -> contract_verification_result::VerificationResult {
     let result = response
         .verification_result
         .expect("verification result is missing from response");
@@ -338,12 +384,11 @@ pub fn retrieve_success_item(response: BatchVerifyResponse) -> ParsedSuccessItem
             let item = items[0].clone();
             match item {
                 proto::ContractVerificationResult {
-                    verification_result:
-                        Some(contract_verification_result::VerificationResult::Success(success)),
-                } => success.into(),
-                result => panic!(
-                    "invalid contract verification result; expected Success, actual={result:?}"
-                ),
+                    verification_result: Some(verification_result),
+                } => verification_result,
+                result => {
+                    panic!("invalid contract verification result; expected any, got {result:?}")
+                }
             }
         }
         result => {

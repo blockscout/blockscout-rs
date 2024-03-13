@@ -2,19 +2,21 @@ use std::fmt::{Display, Formatter};
 use thiserror::Error;
 
 /// Enumerates errors that may occur during a single contract verification.
-#[derive(Error, Clone, Debug, PartialEq, Eq)]
+#[derive(Error, Debug)]
 pub enum VerificationErrorKind {
-    #[error("internal error: {0}")]
-    InternalError(String),
+    #[error("internal error: {0:#}")]
+    InternalError(#[from] anyhow::Error),
     #[error("neither creation nor runtime code do not have a match")]
     CodeMismatch,
+    #[error("invalid constructor arguments: {0}")]
+    InvalidConstructorArguments(blockscout_display_bytes::Bytes),
 }
 
 /// Error obtained as a result of a single contract verification.
 /// Is used to return more details about verification process to the caller.
 ///
 /// Returns the contract for which error occurred and the error itself.
-#[derive(Error, Clone, Debug, PartialEq, Eq)]
+#[derive(Error, Debug)]
 pub struct VerificationError {
     pub file_path: String,
     pub contract_name: String,

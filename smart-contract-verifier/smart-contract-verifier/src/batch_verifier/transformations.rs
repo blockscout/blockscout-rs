@@ -1,4 +1,6 @@
-use super::parsers;
+use super::{artifacts::compilation_artifacts::CompilationArtifacts, parsers};
+use crate::batch_verifier::errors::VerificationErrorKind;
+use alloy_dyn_abi::JsonAbiExt;
 use anyhow::Context;
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use serde::{Deserialize, Serialize};
@@ -70,42 +72,62 @@ impl Transformation {
 pub fn process_creation_code(
     deployed_code: &[u8],
     compiled_code: Vec<u8>,
+    compilation_artifacts: &CompilationArtifacts,
     code_artifacts: serde_json::Value,
-) -> Result<(Vec<u8>, serde_json::Value, serde_json::Value), anyhow::Error> {
+) -> Result<(Vec<u8>, serde_json::Value, serde_json::Value), VerificationErrorKind> {
     let processors = vec![
         process_libraries,
         process_cbor_auxdata,
         process_constructor_arguments,
     ];
 
-    process_code(deployed_code, compiled_code, code_artifacts, processors)
+    process_code(
+        deployed_code,
+        compiled_code,
+        compilation_artifacts,
+        code_artifacts,
+        processors,
+    )
 }
 
 pub fn process_runtime_code(
     deployed_code: &[u8],
     compiled_code: Vec<u8>,
+    compilation_artifacts: &CompilationArtifacts,
     code_artifacts: serde_json::Value,
-) -> Result<(Vec<u8>, serde_json::Value, serde_json::Value), anyhow::Error> {
+) -> Result<(Vec<u8>, serde_json::Value, serde_json::Value), VerificationErrorKind> {
     let processors = vec![process_immutables, process_libraries, process_cbor_auxdata];
 
-    process_code(deployed_code, compiled_code, code_artifacts, processors)
+    process_code(
+        deployed_code,
+        compiled_code,
+        compilation_artifacts,
+        code_artifacts,
+        processors,
+    )
 }
 
 fn process_code<F>(
     deployed_code: &[u8],
     compiled_code: Vec<u8>,
+    compilation_artifacts: &CompilationArtifacts,
     code_artifacts: serde_json::Value,
     processors: Vec<F>,
-) -> Result<(Vec<u8>, serde_json::Value, serde_json::Value), anyhow::Error>
+) -> Result<(Vec<u8>, serde_json::Value, serde_json::Value), VerificationErrorKind>
 where
-    F: Fn(&[u8], Vec<u8>, serde_json::Value) -> Result<ProcessingResult, anyhow::Error>,
+    F: Fn(
+        &[u8],
+        Vec<u8>,
+        &CompilationArtifacts,
+        serde_json::Value,
+    ) -> Result<ProcessingResult, VerificationErrorKind>,
 {
     // Just to ensure that further access by indexes will not certainly panic.
     // Not sure, if that condition may actually be true.
     if deployed_code.len() < compiled_code.len() {
-        return Err(anyhow::anyhow!(
-            "deployed code length is less than the result of compilation"
-        ));
+        return Err(
+            anyhow::anyhow!("deployed code length is less than the result of compilation").into(),
+        );
     }
 
     let mut values: BTreeMap<String, serde_json::Value> = BTreeMap::new();
@@ -113,8 +135,13 @@ where
 
     let mut transforming_code = compiled_code;
     for processor in processors {
-        let result = processor(deployed_code, transforming_code, code_artifacts.clone())
-            .context("code processing failed")?;
+        let result = processor(
+            deployed_code,
+            transforming_code,
+            compilation_artifacts,
+            code_artifacts.clone(),
+        )
+        .context("code processing failed")?;
 
         transforming_code = result.transformed_code;
         // will iterate through the Option and will not add anything if the value is `None`
@@ -138,8 +165,9 @@ struct ProcessingResult {
 fn process_cbor_auxdata(
     deployed_code: &[u8],
     mut compiled_code: Vec<u8>,
+    _compilation_artifacts: &CompilationArtifacts,
     code_artifacts: serde_json::Value,
-) -> Result<ProcessingResult, anyhow::Error> {
+) -> Result<ProcessingResult, VerificationErrorKind> {
     let mut auxdata_values: BTreeMap<String, DisplayBytes> = BTreeMap::new();
     let mut transformations = vec![];
 
@@ -174,25 +202,47 @@ fn process_cbor_auxdata(
 fn process_constructor_arguments(
     deployed_code: &[u8],
     mut compiled_code: Vec<u8>,
+    compilation_artifacts: &CompilationArtifacts,
     _code_artifacts: serde_json::Value,
-) -> Result<ProcessingResult, anyhow::Error> {
+) -> Result<ProcessingResult, VerificationErrorKind> {
     let offset = compiled_code.len();
 
     let (_, arguments) = deployed_code.split_at(offset);
 
-    let (values, transformations) = if arguments.is_empty() {
-        (None, vec![])
-    } else {
-        let transformations = vec![Transformation::constructor(offset)];
-        let values = Some((
-            "constructorArguments".to_string(),
-            serde_json::to_value(DisplayBytes::from(arguments.to_vec())).unwrap(),
-        ));
-
-        (values, transformations)
+    let constructor = match compilation_artifacts.abi.as_ref() {
+        Some(abi) => {
+            alloy_json_abi::JsonAbi::from_json_str(&abi.to_string())
+                .context("parse json abi from compilation artifacts")?
+                .constructor
+        }
+        None => None,
     };
 
-    compiled_code.extend(arguments);
+    let invalid_constructor_arguments = || {
+        Err(VerificationErrorKind::InvalidConstructorArguments(
+            DisplayBytes::from(arguments.to_vec()),
+        ))
+    };
+    let (values, transformations) = match constructor {
+        None if !arguments.is_empty() => return invalid_constructor_arguments(),
+        Some(_constructor) if arguments.is_empty() => return invalid_constructor_arguments(),
+        None => (None, vec![]),
+        Some(constructor) => {
+            if let Err(_err) = constructor.abi_decode_input(arguments, true) {
+                return invalid_constructor_arguments();
+            }
+
+            let transformations = vec![Transformation::constructor(offset)];
+            let values = Some((
+                "constructorArguments".to_string(),
+                serde_json::to_value(DisplayBytes::from(arguments.to_vec())).unwrap(),
+            ));
+
+            compiled_code.extend(arguments);
+
+            (values, transformations)
+        }
+    };
 
     Ok(ProcessingResult {
         transformed_code: compiled_code,
@@ -204,8 +254,9 @@ fn process_constructor_arguments(
 fn process_libraries(
     deployed_code: &[u8],
     mut compiled_code: Vec<u8>,
+    _compilation_artifacts: &CompilationArtifacts,
     code_artifacts: serde_json::Value,
-) -> Result<ProcessingResult, anyhow::Error> {
+) -> Result<ProcessingResult, VerificationErrorKind> {
     let mut library_values: BTreeMap<String, DisplayBytes> = BTreeMap::new();
     let mut transformations = vec![];
 
@@ -249,8 +300,9 @@ fn process_libraries(
 fn process_immutables(
     deployed_code: &[u8],
     mut compiled_code: Vec<u8>,
+    _compilation_artifacts: &CompilationArtifacts,
     code_artifacts: serde_json::Value,
-) -> Result<ProcessingResult, anyhow::Error> {
+) -> Result<ProcessingResult, VerificationErrorKind> {
     let mut immutable_values: BTreeMap<String, DisplayBytes> = BTreeMap::new();
     let mut transformations = vec![];
 
@@ -301,12 +353,39 @@ mod tests {
         processors: Vec<F>,
     }
 
+    fn compilation_artifacts() -> CompilationArtifacts {
+        CompilationArtifacts {
+            abi: Some(serde_json::json!([
+                {
+                    "inputs": [
+                        {
+                            "internalType": "uint256",
+                            "name": "_a",
+                            "type": "uint256"
+                        }
+                    ],
+                    "stateMutability": "nonpayable",
+                    "type": "constructor"
+                }
+            ])),
+            devdoc: None,
+            userdoc: None,
+            storage_layout: None,
+            sources: Default::default(),
+        }
+    }
+
     fn test_processing_function<F>(
         input_data: TestInput<'_, F>,
         expected_values: serde_json::Value,
         expected_transformations: serde_json::Value,
     ) where
-        F: Fn(&[u8], Vec<u8>, serde_json::Value) -> Result<ProcessingResult, anyhow::Error>,
+        F: Fn(
+            &[u8],
+            Vec<u8>,
+            &CompilationArtifacts,
+            serde_json::Value,
+        ) -> Result<ProcessingResult, VerificationErrorKind>,
     {
         let deployed_code = DisplayBytes::from_str(input_data.deployed_code)
             .expect("Invalid deployed code")
@@ -318,6 +397,7 @@ mod tests {
         let (transformed_code, values, transformations) = process_code(
             &deployed_code,
             compiled_code,
+            &compilation_artifacts(),
             input_data.code_artifacts,
             input_data.processors,
         )

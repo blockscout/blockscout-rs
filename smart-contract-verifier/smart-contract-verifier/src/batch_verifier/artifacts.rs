@@ -1,3 +1,8 @@
+use std::collections::BTreeMap;
+
+pub type LinkReferences =
+    BTreeMap<String, BTreeMap<String, Vec<foundry_compilers::artifacts::Offsets>>>;
+
 pub mod cbor_auxdata {
     use crate::BytecodePart;
     use blockscout_display_bytes::Bytes as DisplayBytes;
@@ -77,6 +82,7 @@ pub mod compilation_artifacts {
 }
 
 pub mod creation_code_artifacts {
+    use super::*;
     use crate::verifier::lossless_compiler_output;
     use std::collections::BTreeMap;
 
@@ -88,12 +94,12 @@ pub mod creation_code_artifacts {
         #[serde(skip_serializing_if = "Option::is_none")]
         pub link_references: Option<serde_json::Value>,
         #[serde(skip_serializing_if = "BTreeMap::is_empty")]
-        pub cbor_auxdata: super::cbor_auxdata::CborAuxdata,
+        pub cbor_auxdata: cbor_auxdata::CborAuxdata,
     }
 
     pub fn generate(
         raw_contract: &lossless_compiler_output::Contract,
-        cbor_auxdata: super::cbor_auxdata::CborAuxdata,
+        cbor_auxdata: cbor_auxdata::CborAuxdata,
     ) -> CreationCodeArtifacts {
         let bytecode = &raw_contract.evm.bytecode;
         CreationCodeArtifacts {

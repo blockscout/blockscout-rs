@@ -9,7 +9,6 @@ use crate::{
     verifier::CompilerInput,
     Compilers, Contract, SolidityCompiler, Version,
 };
-use anyhow::{anyhow, Context};
 use std::collections::BTreeMap;
 use thiserror::Error;
 
@@ -28,7 +27,7 @@ impl From<compiler::Error> for BatchError {
         match error {
             compiler::Error::VersionNotFound(version) => BatchError::VersionNotFound(version),
             compiler::Error::Compilation(details) => BatchError::Compilation(details),
-            err => BatchError::Internal(anyhow!(err)),
+            err => BatchError::Internal(anyhow::anyhow!(err)),
         }
     }
 }
@@ -39,7 +38,7 @@ pub struct Match {
     pub transformations: serde_json::Value,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum VerificationResult {
     Success(BatchSuccess),
     Failure(Vec<VerificationError>),
@@ -106,11 +105,14 @@ fn verify_contract(
     let mut successes: Vec<BatchSuccess> = Vec::new();
     let mut failures: Vec<VerificationError> = Vec::new();
     for parsed_contract in &compilation_result.parsed_contracts {
-        let convert_error = |err| {
+        let convert_error = |mut kind, context: &'static str| {
+            if let VerificationErrorKind::InternalError(err) = kind {
+                kind = VerificationErrorKind::InternalError(err.context(context))
+            }
             VerificationError::new(
                 parsed_contract.file_name.clone(),
                 parsed_contract.contract_name.clone(),
-                VerificationErrorKind::InternalError(format!("{err:#}")),
+                kind,
             )
         };
 
@@ -121,15 +123,14 @@ fn verify_contract(
                 match transformations::process_creation_code(
                     contract_code,
                     parsed_contract.creation_code.to_vec(),
+                    &parsed_contract.compilation_artifacts,
                     serde_json::to_value(parsed_contract.creation_code_artifacts.clone()).unwrap(),
-                )
-                .context("process creation code")
-                {
+                ) {
                     Ok((processed_code, values, transformations)) => {
                         (&processed_code == contract_code, values, transformations)
                     }
                     Err(err) => {
-                        failures.push(convert_error(err));
+                        failures.push(convert_error(err, "process creation code"));
                         continue;
                     }
                 }
@@ -144,15 +145,14 @@ fn verify_contract(
                 match transformations::process_runtime_code(
                     contract_code,
                     parsed_contract.runtime_code.to_vec(),
+                    &parsed_contract.compilation_artifacts,
                     serde_json::to_value(parsed_contract.runtime_code_artifacts.clone()).unwrap(),
-                )
-                .context("process runtime code")
-                {
+                ) {
                     Ok((processed_code, values, transformations)) => {
                         (&processed_code == contract_code, values, transformations)
                     }
                     Err(err) => {
-                        failures.push(convert_error(err));
+                        failures.push(convert_error(err, "process runtime code"));
                         continue;
                     }
                 }

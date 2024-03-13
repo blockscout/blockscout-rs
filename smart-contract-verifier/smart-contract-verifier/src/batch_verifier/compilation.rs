@@ -1,20 +1,18 @@
 use super::artifacts::{self};
 use crate::{verifier::lossless_compiler_output, Version};
 use anyhow::Context;
+use artifacts::LinkReferences;
 use bytes::Bytes;
-use ethers_solc::artifacts::Offsets;
 use std::collections::BTreeMap;
 
-type LinkReferences = BTreeMap<String, BTreeMap<String, Vec<Offsets>>>;
-
 #[derive(Clone, Debug)]
-pub struct ParsedSolidityContract {
+pub struct ParsedContract {
     pub file_name: String,
     pub contract_name: String,
     pub creation_code: Bytes,
+    pub runtime_code: Bytes,
     pub compilation_artifacts: artifacts::compilation_artifacts::CompilationArtifacts,
     pub creation_code_artifacts: artifacts::creation_code_artifacts::CreationCodeArtifacts,
-    pub runtime_code: Bytes,
     pub runtime_code_artifacts: artifacts::runtime_code_artifacts::RuntimeCodeArtifacts,
 }
 
@@ -25,7 +23,7 @@ pub struct CompilationResult {
     pub language: String,
     pub compiler_settings: serde_json::Value,
     pub sources: BTreeMap<String, String>,
-    pub parsed_contracts: Vec<ParsedSolidityContract>,
+    pub parsed_contracts: Vec<ParsedContract>,
 }
 
 fn to_lossless_output(
@@ -116,7 +114,7 @@ mod solidity {
         source_files: &lossless_compiler_output::SourceFiles,
         contract: &lossless_compiler_output::Contract,
         modified_contract: &lossless_compiler_output::Contract,
-    ) -> Result<ParsedSolidityContract, anyhow::Error> {
+    ) -> Result<ParsedContract, anyhow::Error> {
         let (creation_code, creation_cbor_auxdata) =
             parse_code_details(&contract.evm.bytecode, &modified_contract.evm.bytecode)
                 .context("parse creation code details")?;
@@ -133,7 +131,7 @@ mod solidity {
         let runtime_code_artifacts =
             artifacts::runtime_code_artifacts::generate(contract, runtime_cbor_auxdata);
 
-        Ok(ParsedSolidityContract {
+        Ok(ParsedContract {
             file_name,
             contract_name,
             compilation_artifacts,
@@ -216,7 +214,7 @@ mod solidity {
                 "contracts/Libs.sol".to_string(),
                 BTreeMap::from([(
                     "Sum".to_string(),
-                    vec![Offsets {
+                    vec![foundry_compilers::artifacts::Offsets {
                         start: 104,
                         length: 20,
                     }],

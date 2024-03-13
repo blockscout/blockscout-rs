@@ -1,7 +1,10 @@
 use crate::{
     test_success,
     types::{
-        batch_solidity::{CompilationFailure, ContractVerificationSuccess, StandardJson},
+        batch_solidity::{
+            CompilationFailure, ContractVerificationFailure, ContractVerificationSuccess,
+            StandardJson,
+        },
         from_file,
     },
 };
@@ -26,5 +29,24 @@ async fn compilation_error() {
 async fn invalid_standard_json() {
     let (test_case_request, test_case_response) =
         from_file::<StandardJson, CompilationFailure>(TEST_CASES_DIR, "invalid_standard_json");
+    test_success(&test_case_request, &test_case_response).await;
+}
+
+#[tokio::test]
+async fn failure_invalid_constructor_arguments() {
+    let (test_case_request, test_case_response) =
+        from_file::<StandardJson, ContractVerificationFailure>(
+            TEST_CASES_DIR,
+            "failure_invalid_constructor_arguments",
+        );
+    test_success(&test_case_request, &test_case_response).await;
+}
+
+#[tokio::test]
+async fn failure_abstract_contract() {
+    let (test_case_request, test_case_response) = from_file::<
+        StandardJson,
+        ContractVerificationFailure,
+    >(TEST_CASES_DIR, "failure_abstract_contract");
     test_success(&test_case_request, &test_case_response).await;
 }
