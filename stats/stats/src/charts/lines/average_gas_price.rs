@@ -27,7 +27,15 @@ impl ChartPartialUpdater for AverageGasPrice {
                 r#"
                     SELECT
                         blocks.timestamp::date as date,
-                        (AVG(gas_price) / $1)::float as value
+                        (AVG(
+                            COALESCE(
+                                transactions.gas_price,
+                                blocks.base_fee_per_gas + LEAST(
+                                    transactions.max_priority_fee_per_gas,
+                                    transactions.max_fee_per_gas - blocks.base_fee_per_gas
+                                )
+                            )
+                        ) / $1)::float as value
                     FROM transactions
                     JOIN blocks ON transactions.block_hash = blocks.hash
                     WHERE 
@@ -43,7 +51,15 @@ impl ChartPartialUpdater for AverageGasPrice {
                 r#"
                     SELECT
                         blocks.timestamp::date as date,
-                        (AVG(gas_price) / $1)::float as value
+                        (AVG(
+                            COALESCE(
+                                transactions.gas_price,
+                                blocks.base_fee_per_gas + LEAST(
+                                    transactions.max_priority_fee_per_gas,
+                                    transactions.max_fee_per_gas - blocks.base_fee_per_gas
+                                )
+                            )
+                        ) / $1)::float as value
                     FROM transactions
                     JOIN blocks ON transactions.block_hash = blocks.hash
                     WHERE 
