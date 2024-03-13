@@ -7,8 +7,8 @@ use sea_orm::entity::prelude::*;
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
-    pub token_value: Option<Uuid>,
-    pub user_id: Option<i32>,
+    pub token_value: Uuid,
+    pub user_id: i32,
     pub deleted: bool,
     pub created_at: DateTime,
 }

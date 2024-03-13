@@ -1,5 +1,5 @@
 use blockscout_service_launcher::launcher::ConfigSettings;
-use scoutcloud_server::{run, Settings};
+use scoutcloud::server::{run, Settings};
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {

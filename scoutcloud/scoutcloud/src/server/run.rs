@@ -1,4 +1,4 @@
-use crate::{
+use crate::server::{
     proto::{
         health_actix::route_health, health_server::HealthServer, scoutcloud_actix::route_scoutcloud,
     },
@@ -6,9 +6,7 @@ use crate::{
     settings::Settings,
 };
 use blockscout_service_launcher::{database, launcher, launcher::LaunchSettings, tracing};
-
 use migration::Migrator;
-
 use scoutcloud_proto::blockscout::scoutcloud::v1::scoutcloud_server::ScoutcloudServer;
 use std::sync::Arc;
 

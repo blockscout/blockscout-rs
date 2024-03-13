@@ -9,7 +9,7 @@ pub struct Model {
     pub id: i32,
     #[sea_orm(unique)]
     pub external_id: Option<Uuid>,
-    pub creator_token_id: Option<i32>,
+    pub creator_token_id: i32,
     pub slug: String,
     #[sea_orm(column_type = "JsonBinary")]
     pub user_config: Json,

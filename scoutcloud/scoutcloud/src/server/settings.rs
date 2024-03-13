@@ -16,6 +16,7 @@ pub struct Settings {
     #[serde(default)]
     pub jaeger: JaegerSettings,
     pub database: DatabaseSettings,
+    pub github: GithubSettings,
 }
 
 impl ConfigSettings for Settings {
@@ -32,6 +33,14 @@ pub struct DatabaseSettings {
     pub run_migrations: bool,
 }
 
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct GithubSettings {
+    pub token: String,
+    pub owner: String,
+    pub repo: String,
+}
+
 impl Settings {
     pub fn default(database_url: String) -> Self {
         Self {
@@ -43,6 +52,11 @@ impl Settings {
                 url: database_url,
                 create_database: false,
                 run_migrations: false,
+            },
+            github: GithubSettings {
+                token: "".to_string(),
+                owner: "".to_string(),
+                repo: "".to_string(),
             },
         }
     }

@@ -1,6 +1,6 @@
 use blockscout_service_launcher::{test_database::TestDbGuard, test_server};
 use reqwest::Url;
-use scoutcloud_server::Settings;
+use scoutcloud::server::Settings;
 
 pub async fn init_db(db_prefix: &str, test_name: &str) -> TestDbGuard {
     let db_name = format!("{db_prefix}_{test_name}");
@@ -22,6 +22,6 @@ where
         (settings_setup(settings), base)
     };
 
-    test_server::init_server(|| scoutcloud_server::run(settings), &base).await;
+    test_server::init_server(|| scoutcloud::server::run(settings), &base).await;
     base
 }

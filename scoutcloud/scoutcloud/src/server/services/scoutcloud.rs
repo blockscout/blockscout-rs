@@ -1,4 +1,4 @@
-use crate::proto::scoutcloud_server::Scoutcloud;
+use crate::server::proto::scoutcloud_server::Scoutcloud;
 use scoutcloud_proto::blockscout::scoutcloud::v1::{
     CreateInstanceRequest, CreateInstanceResponse, Deployment, GetCurrentDeploymentRequest,
     GetDeploymentRequest, GetInstanceRequest, Instance, ListDeploymentsRequest,

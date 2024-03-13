@@ -1,8 +1,8 @@
 [workspace]
 resolver = "2"
 members = [
-    "scoutcloud-logic",
+    "scoutcloud",
     "scoutcloud-entity",
+    "scoutcloud-migration",
     "scoutcloud-proto",
-    "scoutcloud-server",
 ]

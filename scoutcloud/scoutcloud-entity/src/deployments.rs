@@ -8,8 +8,8 @@ use sea_orm::entity::prelude::*;
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
-    pub instance_id: Option<i32>,
-    pub server_spec_id: Option<i32>,
+    pub instance_id: i32,
+    pub server_spec_id: i32,
     #[sea_orm(column_type = "JsonBinary")]
     pub user_config: Json,
     #[sea_orm(column_type = "JsonBinary")]

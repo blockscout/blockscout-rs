@@ -7,7 +7,7 @@ use sea_orm::entity::prelude::*;
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
-    pub token_id: Option<i32>,
+    pub token_id: i32,
     pub created_at: DateTime,
     pub action: String,
     #[sea_orm(column_type = "JsonBinary")]

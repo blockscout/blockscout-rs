@@ -1,4 +1,4 @@
-use crate::proto::{
+use crate::server::proto::{
     health_check_response, health_server::Health, HealthCheckRequest, HealthCheckResponse,
 };
 
