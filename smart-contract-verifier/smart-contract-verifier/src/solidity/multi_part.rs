@@ -238,7 +238,7 @@ mod tests {
             optimization_runs: None,
             contract_libraries: None,
         };
-        let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":""}},"settings":{"optimizer":{"enabled":false},"outputSelection":{"*":{"":["*"],"*":["*"]}},"evmVersion":"spuriousDragon","libraries":{}}}"#;
+        let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":""}},"settings":{"optimizer":{"enabled":false,"runs":200},"outputSelection":{"*":{"":["*"],"*":["*"]}},"evmVersion":"spuriousDragon","libraries":{}}}"#;
         test_to_input(multi_part, vec![expected]);
     }
 
