@@ -1,4 +1,3 @@
-use serde::de::DeserializeOwned;
 use serde_json::Value;
 
 pub trait TestCaseRequest {
@@ -14,8 +13,8 @@ pub trait TestCaseResponse {
 
 pub fn from_file<Request, Response>(test_cases_dir: &str, test_case: &str) -> (Request, Response)
 where
-    Request: TestCaseRequest + DeserializeOwned,
-    Response: TestCaseResponse + DeserializeOwned,
+    Request: TestCaseRequest + for<'de> serde::Deserialize<'de>,
+    Response: TestCaseResponse + for<'de> serde::Deserialize<'de>,
 {
     let test_case_path = format!("{test_cases_dir}/{test_case}.json");
     let content = std::fs::read_to_string(test_case_path).expect("failed to read file");

@@ -3,7 +3,7 @@ use crate::{
     types::{
         batch_solidity::{
             CompilationFailure, ContractVerificationFailure, ContractVerificationSuccess,
-            StandardJson,
+            MultiPart, StandardJson,
         },
         from_file,
     },
@@ -12,9 +12,18 @@ use crate::{
 const TEST_CASES_DIR: &str = "tests/test_cases_batch_solidity";
 
 #[tokio::test]
-async fn basic() {
+async fn basic_multi_part() {
     let (test_case_request, test_case_response) =
-        from_file::<StandardJson, ContractVerificationSuccess>(TEST_CASES_DIR, "basic");
+        from_file::<MultiPart, ContractVerificationSuccess>(TEST_CASES_DIR, "basic_multi_part");
+    test_success(&test_case_request, &test_case_response).await;
+}
+
+#[tokio::test]
+async fn basic_standard_json() {
+    let (test_case_request, test_case_response) = from_file::<
+        StandardJson,
+        ContractVerificationSuccess,
+    >(TEST_CASES_DIR, "basic_standard_json");
     test_success(&test_case_request, &test_case_response).await;
 }
 

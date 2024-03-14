@@ -9,6 +9,8 @@ service SolidityVerifier {
 
   rpc VerifyStandardJson(VerifySolidityStandardJsonRequest) returns (VerifyResponse) {}
 
+  rpc BatchVerifyMultiPart(BatchVerifySolidityMultiPartRequest) returns (BatchVerifyResponse) {}
+
   rpc BatchVerifyStandardJson(BatchVerifySolidityStandardJsonRequest) returns (BatchVerifyResponse) {}
 
   rpc ListCompilerVersions(ListCompilerVersionsRequest) returns (ListCompilerVersionsResponse) {}
@@ -256,11 +258,60 @@ message LookupMethodsResponse {
 
 /*************** Batch related messages ***************/
 
+message BatchVerifySolidityMultiPartRequest {
+  /// Contracts to be verified
+  repeated Contract contracts = 1;
+
+  /// Compiler version used to compile the contract
+  string compiler_version = 2;
+  /// Map from a source file name to the actual source code
+  map<string, string> sources = 3;
+  /// Version of the EVM to compile for. If absent results in default EVM version
+  optional string evm_version = 4;
+  /// If present, optimizations are enabled with specified number of runs,
+  /// otherwise optimizations are disabled
+  optional uint32 optimization_runs = 5;
+  /// Map from a library name to its address
+  map<string, string> libraries = 6;
+}
+
+message BatchVerifySolidityStandardJsonRequest {
+  /// Contracts to be verified
+  repeated Contract contracts = 1;
+
+  /// Compiler version used to compile the contract
+  string compiler_version = 2;
+  /// https://docs.soliditylang.org/en/latest/using-the-compiler.html#input-description
+  string input = 3;
+}
+
+message BatchVerifyResponse {
+  message ContractVerificationResults {
+    repeated ContractVerificationResult items = 1;
+  }
+
+  oneof verification_result {
+    CompilationFailure compilation_failure = 1;
+    ContractVerificationResults contract_verification_results = 2;
+  }
+}
+
 message Contract {
   optional string creation_code = 1;
   optional string runtime_code = 2;
   /// An optional field with metadata used for logging purposes
   optional VerificationMetadata metadata = 3;
+}
+
+message CompilationFailure {
+  string message = 1;
+}
+
+message ContractVerificationResult {
+  oneof verification_result {
+    ContractVerificationFailure failure = 1;
+    ContractVerificationSuccess success = 2;
+  }
 }
 
 message ContractVerificationSuccess {
@@ -317,38 +368,4 @@ message ContractVerificationSuccess {
   optional string runtime_transformations = 18;
 }
 
-message ContractVerificationFailure {
-
-}
-
-message ContractVerificationResult {
-  oneof verification_result {
-    ContractVerificationFailure failure = 1;
-    ContractVerificationSuccess success = 2;
-  }
-}
-
-message CompilationFailure {
-  string message = 1;
-}
-
-message BatchVerifySolidityStandardJsonRequest {
-  /// Contracts to be verified
-  repeated Contract contracts = 1;
-
-  /// Compiler version used to compile the contract
-  string compiler_version = 2;
-  /// https://docs.soliditylang.org/en/latest/using-the-compiler.html#input-description
-  string input = 3;
-}
-
-message BatchVerifyResponse {
-  message ContractVerificationResults {
-    repeated ContractVerificationResult items = 1;
-  }
-
-  oneof verification_result {
-    CompilationFailure compilation_failure = 1;
-    ContractVerificationResults contract_verification_results = 2;
-  }
-}
+message ContractVerificationFailure {}

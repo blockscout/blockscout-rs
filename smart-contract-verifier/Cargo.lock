@@ -4814,6 +4814,7 @@ dependencies = [
  "sig-provider-extension",
  "smart-contract-verifier",
  "smart-contract-verifier-proto",
+ "stdext",
  "thiserror",
  "tokio",
  "tonic",
@@ -4950,6 +4951,12 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
+
+[[package]]
+name = "stdext"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6012f6ef4d674ce7021a8b0f5093f7e339f54d4ba04fc1f9c901659459b4f35b"
 
 [[package]]
 name = "string_cache"

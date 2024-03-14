@@ -1,63 +1,63 @@
-use crate::{
-    test_success,
-    types::{from_file, transformations::TestCase},
+use crate::types::{
+    from_file,
+    transformations::{TestCase, TestCaseMultiPart, TestCaseStandardJson},
+    TestCaseRequest,
 };
 
 const TEST_CASES_DIR: &str = "tests/test_cases_solidity_transformations";
 
+async fn test_success<Request: TestCaseRequest + for<'de> serde::Deserialize<'de>>(
+    test_case: &str,
+) {
+    let (test_case_request, test_case_response) =
+        from_file::<Request, TestCase>(TEST_CASES_DIR, test_case);
+    crate::test_success(&test_case_request, &test_case_response).await;
+}
+
+async fn test_success_multi_part_and_standard_json(test_case: &str) {
+    println!("Starting multi-part test case..");
+    test_success::<TestCaseMultiPart>(test_case).await;
+    println!("Multi-part test case succeeded, starting standard-json test case..");
+    test_success::<TestCaseStandardJson>(test_case).await;
+}
+
 #[tokio::test]
 async fn constructor_arguments() {
-    let (test_case_request, test_case_response) =
-        from_file::<TestCase, TestCase>(TEST_CASES_DIR, "constructor_arguments");
-    test_success(&test_case_request, &test_case_response).await;
+    test_success_multi_part_and_standard_json("constructor_arguments").await
 }
 
 #[tokio::test]
 async fn full_match() {
-    let (test_case_request, test_case_response) =
-        from_file::<TestCase, TestCase>(TEST_CASES_DIR, "full_match");
-    test_success(&test_case_request, &test_case_response).await;
+    test_success_multi_part_and_standard_json("full_match").await
 }
 
 #[tokio::test]
 async fn immutables() {
-    let (test_case_request, test_case_response) =
-        from_file::<TestCase, TestCase>(TEST_CASES_DIR, "immutables");
-    test_success(&test_case_request, &test_case_response).await;
+    test_success_multi_part_and_standard_json("immutables").await
 }
 
 #[tokio::test]
 async fn libraries_linked_by_compiler() {
-    let (test_case_request, test_case_response) =
-        from_file::<TestCase, TestCase>(TEST_CASES_DIR, "libraries_linked_by_compiler");
-    test_success(&test_case_request, &test_case_response).await;
+    test_success_multi_part_and_standard_json("libraries_linked_by_compiler").await
 }
 
 #[tokio::test]
 async fn libraries_manually_linked() {
-    let (test_case_request, test_case_response) =
-        from_file::<TestCase, TestCase>(TEST_CASES_DIR, "libraries_manually_linked");
-    test_success(&test_case_request, &test_case_response).await;
+    test_success_multi_part_and_standard_json("libraries_manually_linked").await
 }
 
 // TODO: no auxdata is parsed right now when `metadataHash` is "none"
 // #[tokio::test]
 // async fn metadata_hash_absent() {
-//     let (test_case_request, test_case_response) =
-//         from_file::<TestCase, TestCase>(TEST_CASES_DIR, "metadata_hash_absent");
-//     test_success(&test_case_request, &test_case_response).await;
+//     test_success::<TestCaseStandardJson>("metadata_hash_absent").await;
 // }
 
 #[tokio::test]
 async fn partial_match() {
-    let (test_case_request, test_case_response) =
-        from_file::<TestCase, TestCase>(TEST_CASES_DIR, "partial_match");
-    test_success(&test_case_request, &test_case_response).await;
+    test_success_multi_part_and_standard_json("partial_match").await
 }
 
 #[tokio::test]
 async fn partial_match_double_auxdata() {
-    let (test_case_request, test_case_response) =
-        from_file::<TestCase, TestCase>(TEST_CASES_DIR, "partial_match_double_auxdata");
-    test_success(&test_case_request, &test_case_response).await;
+    test_success_multi_part_and_standard_json("partial_match_double_auxdata").await
 }

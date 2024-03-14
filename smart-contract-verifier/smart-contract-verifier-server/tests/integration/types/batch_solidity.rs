@@ -4,23 +4,42 @@ use serde::Deserialize;
 use serde_json::Value;
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
     self as proto, batch_verify_response, contract_verification_result, BatchVerifyResponse,
-    BatchVerifySolidityStandardJsonRequest,
+    BatchVerifySolidityMultiPartRequest, BatchVerifySolidityStandardJsonRequest,
 };
 use std::{collections::BTreeMap, str::FromStr};
 
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct StandardJson {
-    request: BatchVerifySolidityStandardJsonRequest,
-}
+pub type MultiPart = requests::Request<BatchVerifySolidityMultiPartRequest>;
+pub type StandardJson = requests::Request<BatchVerifySolidityStandardJsonRequest>;
+mod requests {
+    use super::*;
+    use crate::types::TestCaseRequest;
+    use serde::Deserialize;
+    use serde_json::Value;
 
-impl TestCaseRequest for StandardJson {
-    fn route() -> &'static str {
-        "/api/v2/verifier/solidity/sources:batch-verify-standard-json"
+    #[derive(Debug, Clone, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct Request<T> {
+        request: T,
     }
 
-    fn to_request(&self) -> Value {
-        serde_json::to_value(self.request.clone()).expect("request serialization failed")
+    impl TestCaseRequest for Request<BatchVerifySolidityMultiPartRequest> {
+        fn route() -> &'static str {
+            "/api/v2/verifier/solidity/sources:batch-verify-multi-part"
+        }
+
+        fn to_request(&self) -> Value {
+            serde_json::to_value(self.request.clone()).expect("request serialization failed")
+        }
+    }
+
+    impl TestCaseRequest for Request<BatchVerifySolidityStandardJsonRequest> {
+        fn route() -> &'static str {
+            "/api/v2/verifier/solidity/sources:batch-verify-standard-json"
+        }
+
+        fn to_request(&self) -> Value {
+            serde_json::to_value(self.request.clone()).expect("request serialization failed")
+        }
     }
 }
 

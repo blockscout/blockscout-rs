@@ -2,6 +2,7 @@ use super::{client::Client, types::Success};
 use crate::{
     compiler::Version,
     verifier::{ContractVerifier, Error},
+    BatchError, BatchVerificationResult, Contract,
 };
 use bytes::Bytes;
 use foundry_compilers::{
@@ -38,8 +39,10 @@ pub struct MultiFileContent {
 impl From<MultiFileContent> for Vec<CompilerInput> {
     fn from(content: MultiFileContent) -> Self {
         let mut settings = Settings::default();
-        settings.optimizer.enabled = Some(content.optimization_runs.is_some());
-        settings.optimizer.runs = content.optimization_runs;
+        if let Some(optimization_runs) = content.optimization_runs {
+            settings.optimizer.enabled = Some(true);
+            settings.optimizer.runs = Some(optimization_runs);
+        }
 
         settings.output_selection = OutputSelection::complete_output_selection();
 
@@ -158,6 +161,36 @@ fn input_from_sources(sources: Sources) -> Vec<CompilerInput> {
         });
     }
     res
+}
+
+pub struct BatchVerificationRequest {
+    pub contracts: Vec<Contract>,
+    pub compiler_version: Version,
+    pub content: MultiFileContent,
+}
+
+pub async fn batch_verify(
+    client: Arc<Client>,
+    request: BatchVerificationRequest,
+) -> Result<Vec<BatchVerificationResult>, BatchError> {
+    let compiler_inputs: Vec<CompilerInput> = request.content.into();
+
+    if compiler_inputs.len() != 1 {
+        return Err(BatchError::Compilation(vec![
+            "Either `.sol` or `.yul` files should exist. Not both.".to_string(),
+        ]));
+    }
+    let compiler_input = compiler_inputs.into_iter().next().unwrap();
+
+    let verification_result = crate::batch_verifier::verify_solidity(
+        client.compilers(),
+        request.compiler_version,
+        request.contracts,
+        &compiler_input,
+    )
+    .await?;
+
+    Ok(verification_result)
 }
 
 #[cfg(test)]

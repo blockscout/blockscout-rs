@@ -32,6 +32,26 @@ paths:
             $ref: '#/definitions/v2LookupMethodsRequest'
       tags:
         - SolidityVerifier
+  /api/v2/verifier/solidity/sources:batch-verify-multi-part:
+    post:
+      operationId: SolidityVerifier_BatchVerifyMultiPart
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v2BatchVerifyResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v2BatchVerifySolidityMultiPartRequest'
+      tags:
+        - SolidityVerifier
   /api/v2/verifier/solidity/sources:batch-verify-standard-json:
     post:
       operationId: SolidityVerifier_BatchVerifyStandardJson
@@ -343,6 +363,37 @@ definitions:
         $ref: '#/definitions/v2CompilationFailure'
       contractVerificationResults:
         $ref: '#/definitions/BatchVerifyResponseContractVerificationResults'
+  v2BatchVerifySolidityMultiPartRequest:
+    type: object
+    properties:
+      contracts:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v2Contract'
+        title: / Contracts to be verified
+      compilerVersion:
+        type: string
+        title: / Compiler version used to compile the contract
+      sources:
+        type: object
+        additionalProperties:
+          type: string
+        title: / Map from a source file name to the actual source code
+      evmVersion:
+        type: string
+        title: / Version of the EVM to compile for. If absent results in default EVM version
+      optimizationRuns:
+        type: integer
+        format: int64
+        title: |-
+          / If present, optimizations are enabled with specified number of runs,
+          / otherwise optimizations are disabled
+      libraries:
+        type: object
+        additionalProperties:
+          type: string
+        title: / Map from a library name to its address
   v2BatchVerifySolidityStandardJsonRequest:
     type: object
     properties:

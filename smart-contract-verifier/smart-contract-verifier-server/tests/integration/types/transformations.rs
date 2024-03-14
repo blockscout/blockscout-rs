@@ -3,7 +3,8 @@ use blockscout_display_bytes::Bytes as DisplayBytes;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
-    BatchVerifyResponse, BatchVerifySolidityStandardJsonRequest, Contract,
+    BatchVerifyResponse, BatchVerifySolidityMultiPartRequest,
+    BatchVerifySolidityStandardJsonRequest, Contract,
 };
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
@@ -34,7 +35,61 @@ pub struct TestCase {
     pub runtime_transformations: Value,
 }
 
-impl TestCaseRequest for TestCase {
+#[derive(Debug, Clone, Deserialize)]
+pub struct TestCaseMultiPart(TestCase);
+
+impl TestCaseRequest for TestCaseMultiPart {
+    fn route() -> &'static str {
+        "/api/v2/verifier/solidity/sources:batch-verify-multi-part"
+    }
+
+    fn to_request(&self) -> Value {
+        let test_case = &self.0;
+
+        let compiler_settings: foundry_compilers::artifacts::Settings =
+            serde_json::from_value(test_case.compiler_settings.clone())
+                .expect("cannot deserialize compiler settings");
+
+        let libraries = compiler_settings
+            .libraries
+            .libs
+            .clone()
+            .clone()
+            .into_values()
+            .flatten()
+            .collect();
+
+        let optimization_runs = compiler_settings
+            .optimizer
+            .enabled
+            .unwrap_or_default()
+            .then_some(compiler_settings.optimizer.runs.map(|value| value as u32))
+            .flatten();
+
+        let request = BatchVerifySolidityMultiPartRequest {
+            contracts: vec![Contract {
+                creation_code: Some(test_case.deployed_creation_code.to_string()),
+                runtime_code: Some(test_case.deployed_runtime_code.to_string()),
+                metadata: None,
+            }],
+            compiler_version: test_case.version.clone(),
+            sources: test_case.sources.clone(),
+            evm_version: compiler_settings
+                .evm_version
+                .as_ref()
+                .map(|value| value.to_string()),
+            optimization_runs,
+            libraries,
+        };
+
+        serde_json::to_value(request).expect("cannot serialize request into value")
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TestCaseStandardJson(TestCase);
+
+impl TestCaseRequest for TestCaseStandardJson {
     fn route() -> &'static str {
         "/api/v2/verifier/solidity/sources:batch-verify-standard-json"
     }
@@ -48,6 +103,7 @@ impl TestCaseRequest for TestCase {
         }
 
         let sources = self
+            .0
             .sources
             .clone()
             .into_iter()
@@ -63,15 +119,15 @@ impl TestCaseRequest for TestCase {
 
         let request = BatchVerifySolidityStandardJsonRequest {
             contracts: vec![Contract {
-                creation_code: Some(self.deployed_creation_code.to_string()),
-                runtime_code: Some(self.deployed_runtime_code.to_string()),
+                creation_code: Some(self.0.deployed_creation_code.to_string()),
+                runtime_code: Some(self.0.deployed_runtime_code.to_string()),
                 metadata: None,
             }],
-            compiler_version: self.version.clone(),
+            compiler_version: self.0.version.clone(),
             input: serde_json::to_string(&CompilerInput {
                 language: "Solidity".to_string(),
                 sources,
-                settings: self.compiler_settings.clone(),
+                settings: self.0.compiler_settings.clone(),
             })
             .expect("cannot serialize compiler input to string"),
         };

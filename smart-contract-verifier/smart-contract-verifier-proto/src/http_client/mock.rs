@@ -2,7 +2,8 @@ use crate::blockscout::smart_contract_verifier::v2::{
     solidity_verifier_actix::route_solidity_verifier, solidity_verifier_server::SolidityVerifier,
     sourcify_verifier_actix::route_sourcify_verifier, sourcify_verifier_server::SourcifyVerifier,
     vyper_verifier_actix::route_vyper_verifier, vyper_verifier_server::VyperVerifier,
-    BatchVerifyResponse, BatchVerifySolidityStandardJsonRequest, ListCompilerVersionsRequest,
+    BatchVerifyResponse, BatchVerifySolidityMultiPartRequest,
+    BatchVerifySolidityStandardJsonRequest, ListCompilerVersionsRequest,
     ListCompilerVersionsResponse, LookupMethodsRequest, LookupMethodsResponse,
     VerifyFromEtherscanSourcifyRequest, VerifyResponse, VerifySolidityMultiPartRequest,
     VerifySolidityStandardJsonRequest, VerifySourcifyRequest, VerifyVyperMultiPartRequest,
@@ -19,6 +20,8 @@ mock! {
         async fn verify_multi_part(&self, request: tonic::Request<VerifySolidityMultiPartRequest>) -> Result<tonic::Response<VerifyResponse>, tonic::Status>;
 
         async fn verify_standard_json(&self, request: tonic::Request<VerifySolidityStandardJsonRequest>) -> Result<tonic::Response<VerifyResponse>, tonic::Status>;
+
+        async fn batch_verify_multi_part(&self, request: tonic::Request<BatchVerifySolidityMultiPartRequest>) -> Result<tonic::Response<BatchVerifyResponse>, tonic::Status>;
 
         async fn batch_verify_standard_json(&self, request: tonic::Request<BatchVerifySolidityStandardJsonRequest>) -> Result<tonic::Response<BatchVerifyResponse>, tonic::Status>;
 

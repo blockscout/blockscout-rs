@@ -1,9 +1,9 @@
-use smart_contract_verifier::{BatchError, BatchVerificationResult, Version};
+use smart_contract_verifier::{solidity, BatchError, BatchVerificationResult, Version};
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::{
     v2 as proto,
     v2::{BatchVerifyResponse, CompilationFailure},
 };
-use std::str::FromStr;
+use std::{collections::BTreeMap, path::PathBuf, str::FromStr};
 use tonic::{Response, Status};
 
 pub fn from_proto_contracts_to_inner(
@@ -29,6 +29,31 @@ pub fn from_proto_contracts_to_inner(
 pub fn from_proto_compiler_version_to_inner(proto: &str) -> Result<Version, Status> {
     Version::from_str(proto)
         .map_err(|err| Status::invalid_argument(format!("Invalid compiler version: {}", err)))
+}
+
+pub fn from_proto_solidity_multi_part_content_to_inner(
+    sources: BTreeMap<String, String>,
+    evm_version: Option<String>,
+    optimization_runs: Option<u32>,
+    libraries: BTreeMap<String, String>,
+) -> Result<solidity::multi_part::MultiFileContent, Status> {
+    let sources = sources
+        .into_iter()
+        .map(|(file, content)| (PathBuf::from(file), content))
+        .collect();
+
+    let evm_version = evm_version
+        .as_ref()
+        .map(|value| foundry_compilers::EvmVersion::from_str(value))
+        .transpose()
+        .map_err(|err| Status::invalid_argument(format!("Invalid evm version: {}", err)))?;
+
+    Ok(solidity::multi_part::MultiFileContent {
+        sources,
+        evm_version,
+        optimization_runs: optimization_runs.map(|value| value as usize),
+        contract_libraries: (!libraries.is_empty()).then_some(libraries),
+    })
 }
 
 pub fn compilation_error(message: impl Into<String>) -> Response<BatchVerifyResponse> {

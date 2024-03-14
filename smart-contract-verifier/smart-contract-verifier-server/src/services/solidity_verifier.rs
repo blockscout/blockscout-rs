@@ -2,9 +2,9 @@ use crate::{
     metrics,
     proto::{
         solidity_verifier_server::SolidityVerifier, BatchVerifyResponse,
-        BatchVerifySolidityStandardJsonRequest, ListCompilerVersionsRequest,
-        ListCompilerVersionsResponse, VerifyResponse, VerifySolidityMultiPartRequest,
-        VerifySolidityStandardJsonRequest,
+        BatchVerifySolidityMultiPartRequest, BatchVerifySolidityStandardJsonRequest,
+        ListCompilerVersionsRequest, ListCompilerVersionsResponse, VerifyResponse,
+        VerifySolidityMultiPartRequest, VerifySolidityStandardJsonRequest,
     },
     settings::{Extensions, FetcherSettings, S3FetcherSettings, SoliditySettings},
     types,
@@ -229,6 +229,40 @@ impl SolidityVerifier for SolidityVerifierService {
             "standard-json",
         );
         Ok(Response::new(response.into_inner()))
+    }
+
+    async fn batch_verify_multi_part(
+        &self,
+        request: Request<BatchVerifySolidityMultiPartRequest>,
+    ) -> Result<Response<BatchVerifyResponse>, Status> {
+        let request = request.into_inner();
+
+        let contracts =
+            types::batch_verification::from_proto_contracts_to_inner(&request.contracts)?;
+        let compiler_version = types::batch_verification::from_proto_compiler_version_to_inner(
+            &request.compiler_version,
+        )?;
+
+        let content = types::batch_verification::from_proto_solidity_multi_part_content_to_inner(
+            request.sources,
+            request.evm_version,
+            request.optimization_runs,
+            request.libraries,
+        )?;
+
+        let verification_request = solidity::multi_part::BatchVerificationRequest {
+            contracts,
+            compiler_version,
+            content,
+        };
+
+        let result =
+            solidity::multi_part::batch_verify(self.client.clone(), verification_request).await;
+
+        match result {
+            Ok(results) => types::batch_verification::process_verification_results(results),
+            Err(err) => types::batch_verification::process_batch_error(err),
+        }
     }
 
     async fn batch_verify_standard_json(
