@@ -1,6 +1,6 @@
 graph_node_url := "http://127.0.0.1:8020"
 ipfs_url := "http://127.0.0.1:5001"
-network := "lightlink-phoniex-dev"
+network := "lightlink-phoniex"
 name := "lightlink-subgraph"
 
 init:
