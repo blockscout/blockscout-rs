@@ -2,9 +2,9 @@ syntax = "proto3";
 
 package blockscout.scoutcloud.v1;
 
-option go_package = "github.com/blockscout/blockscout-rs/scoutcloud";
-
 import "convert_options.proto";
+
+option go_package = "github.com/blockscout/blockscout-rs/scoutcloud";
 
 service Scoutcloud {
   rpc CreateInstance(CreateInstanceRequest) returns (CreateInstanceResponse) {}
@@ -15,39 +15,42 @@ service Scoutcloud {
   rpc ListInstances(ListInstancesRequest) returns (ListInstancesResponse) {}
   rpc GetDeployment(GetDeploymentRequest) returns (Deployment) {}
   rpc GetCurrentDeployment(GetCurrentDeploymentRequest) returns (Deployment) {}
-  rpc ListDeployments(ListDeploymentsRequest) returns (ListDeploymentsResponse) {} 
+  rpc ListDeployments(ListDeploymentsRequest) returns (ListDeploymentsResponse) {}
 }
 
 message DeployConfig {
-    string rpc_url = 1 [ (convert_options.convert) = { type : "url::Url" } ];
-    string server_size = 2;
-    optional string chain_type = 3;
-    optional string chain_id = 4;
-    optional string token_symbol = 5;
-    optional string instance_url = 6;
-    optional string logo_link = 7 [ (convert_options.convert) = { type : "Option<url::Url>" } ];
-    optional string chain_name = 8;
-    optional string icon_link = 9 [ (convert_options.convert) = { type : "Option<url::Url>" } ];
-    optional string homeplate_backgroup = 10;
-    optional string homeplace_text_color = 11;
+  string rpc_url = 1 [(convert_options.convert) = {type: "url::Url"}];
+  string server_size = 2;
+  optional string chain_type = 3;
+  optional string chain_id = 4;
+  optional string token_symbol = 5;
+  optional string instance_url = 6;
+  optional string logo_link = 7 [(convert_options.convert) = {type: "Option<url::Url>"}];
+  optional string chain_name = 8;
+  optional string icon_link = 9 [(convert_options.convert) = {type: "Option<url::Url>"}];
+  optional string homeplate_backgroup = 10;
+  optional string homeplace_text_color = 11;
 }
 
 message DeployConfigPartial {
-    optional string rpc_url = 1 [ (convert_options.convert) = { type : "Option<url::Url>" } ];
-	optional string server_size = 2;
-	optional string chain_type = 3;
-	optional string chain_id = 4;
-	optional string token_symbol = 5;
-	optional string instance_url = 6;
-	optional string logo_link = 7 [ (convert_options.convert) = { type : "Option<url::Url>" } ];
-	optional string chain_name = 8;
-	optional string icon_link = 9 [ (convert_options.convert) = { type : "Option<url::Url>" } ];
-	optional string homeplate_backgroup = 10;
-	optional string homeplace_text_color = 11;
+  optional string rpc_url = 1 [(convert_options.convert) = {type: "Option<url::Url>"}];
+  optional string server_size = 2;
+  optional string chain_type = 3;
+  optional string chain_id = 4;
+  optional string token_symbol = 5;
+  optional string instance_url = 6;
+  optional string logo_link = 7 [(convert_options.convert) = {type: "Option<url::Url>"}];
+  optional string chain_name = 8;
+  optional string icon_link = 9 [(convert_options.convert) = {type: "Option<url::Url>"}];
+  optional string homeplate_backgroup = 10;
+  optional string homeplace_text_color = 11;
 }
 
 message CreateInstanceRequest {
-  option (convert_options.extra_fields) = { name: "auth_token", type: "String" };
+  option (convert_options.extra_fields) = {
+    name: "auth_token",
+    type: "String"
+  };
 
   string name = 1;
   // initial config
@@ -59,18 +62,24 @@ message CreateInstanceResponse {
 }
 
 message UpdateConfigRequest {
-  option (convert_options.extra_fields) = { name: "auth_token", type: "String" };
+  option (convert_options.extra_fields) = {
+    name: "auth_token",
+    type: "String"
+  };
 
   string instance_id = 1;
   DeployConfig config = 2;
 }
 
 message UpdateConfigResponse {
-	DeployConfig config = 1;
+  DeployConfig config = 1;
 }
 
 message UpdateConfigPartialRequest {
-  option (convert_options.extra_fields) = { name: "auth_token", type: "String" };
+  option (convert_options.extra_fields) = {
+    name: "auth_token",
+    type: "String"
+  };
 
   string instance_id = 1;
   DeployConfigPartial config = 2;
@@ -78,12 +87,12 @@ message UpdateConfigPartialRequest {
 
 enum DeploymentStatus {
   NO_STATUS = 0;
-	CREATED = 1;
-	PENDING = 2;	
-	RUNNING = 3;
-	STOPPING = 4;
-	STOPPED = 5;
-	FAILED = 6;
+  CREATED = 1;
+  PENDING = 2;
+  RUNNING = 3;
+  STOPPING = 4;
+  STOPPED = 5;
+  FAILED = 6;
 }
 
 enum UpdateInstanceAction {
@@ -93,29 +102,32 @@ enum UpdateInstanceAction {
 }
 
 message UpdateInstanceStatusRequest {
-  option (convert_options.extra_fields) = { name: "auth_token", type: "String" };
+  option (convert_options.extra_fields) = {
+    name: "auth_token",
+    type: "String"
+  };
 
-	string instance_id = 1;
+  string instance_id = 1;
   UpdateInstanceAction action = 2;
 }
 
 message UpdateInstanceStatusResponse {
-	DeploymentStatus status = 1;
-	string deployment_id = 2;
+  DeploymentStatus status = 1;
+  string deployment_id = 2;
 }
 
 message Instance {
-	string instance_id = 1;
+  string instance_id = 1;
   string deployment_id = 2;
   string name = 3;
-	string created_at = 4;
+  string created_at = 4;
   DeployConfig config = 5;
   DeploymentStatus deployment_status = 6;
 }
 
 message Deployment {
   string deployment_id = 1;
-	string instance_id = 2;
+  string instance_id = 2;
   DeploymentStatus status = 3;
   optional string error = 4;
   string created_at = 5;
@@ -124,13 +136,19 @@ message Deployment {
 }
 
 message GetInstanceRequest {
-  option (convert_options.extra_fields) = { name: "auth_token", type: "String" };
+  option (convert_options.extra_fields) = {
+    name: "auth_token",
+    type: "String"
+  };
 
   string instance_id = 1;
 }
 
 message ListInstancesRequest {
-  option (convert_options.extra_fields) = { name: "auth_token", type: "String" };
+  option (convert_options.extra_fields) = {
+    name: "auth_token",
+    type: "String"
+  };
 }
 
 message ListInstancesResponse {
@@ -138,27 +156,32 @@ message ListInstancesResponse {
 }
 
 message GetDeploymentRequest {
-  option (convert_options.extra_fields) = { name: "auth_token", type: "String" };
+  option (convert_options.extra_fields) = {
+    name: "auth_token",
+    type: "String"
+  };
 
   string deployment_id = 1;
 }
 
 message ListDeploymentsRequest {
-  option (convert_options.extra_fields) = { name: "auth_token", type: "String" };
+  option (convert_options.extra_fields) = {
+    name: "auth_token",
+    type: "String"
+  };
 
   string instance_id = 1;
 }
 
 message ListDeploymentsResponse {
-	repeated Deployment items = 1;
+  repeated Deployment items = 1;
 }
 
 message GetCurrentDeploymentRequest {
-  option (convert_options.extra_fields) = { name: "auth_token", type: "String" };
+  option (convert_options.extra_fields) = {
+    name: "auth_token",
+    type: "String"
+  };
 
   string instance_id = 1;
 }
-
-
-
-
