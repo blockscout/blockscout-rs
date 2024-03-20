@@ -21,7 +21,7 @@ impl CreateBlobRequest {
     }
 }
 
-pub type BlobResponse = OnlySha;
+pub type CreateBlobResponse = OnlySha;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct CreateTreeRequest {
@@ -54,7 +54,7 @@ pub struct TreeItem {
     pub sha: String,
 }
 
-pub type TreeResponse = OnlySha;
+pub type CreateTreeResponse = OnlySha;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct CreateCommitRequest {

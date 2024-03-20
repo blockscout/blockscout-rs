@@ -103,8 +103,8 @@ impl GithubClient {
         Ok(pages.take_items().into_iter().next())
     }
 
-    async fn create_blob(&self, content: &str) -> Result<types::BlobResponse, Error> {
-        let blob: types::BlobResponse = self
+    async fn create_blob(&self, content: &str) -> Result<types::CreateBlobResponse, Error> {
+        let blob: types::CreateBlobResponse = self
             .client
             .post(
                 format!(
@@ -123,8 +123,8 @@ impl GithubClient {
         base_tree: &str,
         path: &str,
         blob_sha: &str,
-    ) -> Result<types::TreeResponse, Error> {
-        let tree: types::TreeResponse = self
+    ) -> Result<types::CreateTreeResponse, Error> {
+        let tree: types::CreateTreeResponse = self
             .client
             .post(
                 format!(

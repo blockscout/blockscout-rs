@@ -46,9 +46,13 @@ impl GithubClient {
             mutex: Arc::new(tokio::sync::Mutex::new(())),
         })
     }
+}
 
-    #[cfg(test)]
-    pub fn from_mock(mock: &MockedGithubRepo) -> Result<Self, octocrab::Error> {
+#[cfg(test)]
+impl TryFrom<&MockedGithubRepo> for GithubClient {
+    type Error = octocrab::Error;
+
+    fn try_from(mock: &MockedGithubRepo) -> Result<Self, Self::Error> {
         Self::new(
             mock.token.clone(),
             mock.owner.clone(),

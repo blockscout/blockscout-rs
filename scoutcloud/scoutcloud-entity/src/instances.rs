@@ -8,7 +8,7 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
     #[sea_orm(unique)]
-    pub external_id: Option<Uuid>,
+    pub external_id: Uuid,
     pub creator_token_id: i32,
     pub slug: String,
     #[sea_orm(column_type = "JsonBinary")]

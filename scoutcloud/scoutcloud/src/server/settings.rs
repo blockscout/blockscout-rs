@@ -1,4 +1,5 @@
 use blockscout_service_launcher::{
+    database::{DatabaseConnectSettings, DatabaseSettings},
     launcher::{ConfigSettings, MetricsSettings, ServerSettings},
     tracing::{JaegerSettings, TracingSettings},
 };
@@ -25,16 +26,6 @@ impl ConfigSettings for Settings {
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
-pub struct DatabaseSettings {
-    pub url: String,
-    #[serde(default)]
-    pub create_database: bool,
-    #[serde(default)]
-    pub run_migrations: bool,
-}
-
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
 pub struct GithubSettings {
     pub token: String,
     pub owner: String,
@@ -49,7 +40,7 @@ impl Settings {
             tracing: Default::default(),
             jaeger: Default::default(),
             database: DatabaseSettings {
-                url: database_url,
+                connect: DatabaseConnectSettings::Url(database_url),
                 create_database: false,
                 run_migrations: false,
             },
