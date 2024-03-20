@@ -81,7 +81,7 @@ mod tests {
         let mock_repo = MockedGithubRepo::default();
         let handles = mock_repo.build_mock_handlers();
 
-        let client = GithubClient::from_mock(&mock_repo).unwrap();
+        let client = GithubClient::try_from(&mock_repo).unwrap();
 
         let deploy = DeployWorkflow {
             client: "test-client".to_string(),
