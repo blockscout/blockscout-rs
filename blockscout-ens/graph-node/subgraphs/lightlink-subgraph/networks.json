@@ -1,5 +1,5 @@
 {
-  "lightlink-phoniex": {
+  "lightlink-phoenix": {
     "Registry": {
       "address": "0x5dC881dDA4e4a8d312be3544AD13118D1a04Cb17",
       "startBlock": 66729304
@@ -17,7 +17,7 @@
     },
     "": ""
   },
-  "lightlink-phoniex-dev": {
+  "lightlink-phoenix-dev": {
     "Registry": {
       "address": "0xbF736C9845FaeC121D2E9c07F1419CBA068EC232",
       "startBlock": 66545597

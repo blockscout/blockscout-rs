@@ -1,8 +1,8 @@
 default_context:
   project_name: 'Lightlink subgraph'
   short_name: 'lightlink'
-  network: 'lightlink-phoniex'
-  network_test: 'lightlink-phoniex-dev'
+  network: 'lightlink-phoenix'
+  network_test: 'lightlink-phoenix-dev'
   
   registry: true
   registry_name: Registry

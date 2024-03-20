@@ -6,7 +6,7 @@ schema:
 dataSources:
   - kind: ethereum/contract
     name: Registry
-    network: lightlink-phoniex
+    network: lightlink-phoenix
     source:
       abi: Registry
       address: "0x5dC881dDA4e4a8d312be3544AD13118D1a04Cb17"
@@ -36,7 +36,7 @@ dataSources:
   
   - kind: ethereum/contract
     name: Resolver
-    network: lightlink-phoniex
+    network: lightlink-phoenix
     source:
       abi: Resolver
       startBlock: 66730242
@@ -76,7 +76,7 @@ dataSources:
           handler: handleTextChanged
   - kind: ethereum/contract
     name: Base
-    network: lightlink-phoniex
+    network: lightlink-phoenix
     source:
       abi: Base
       address: "0x5183ba1dee9770760360533cf00b9d8e26495927"
@@ -104,7 +104,7 @@ dataSources:
     
   - kind: ethereum/contract
     name: RegistrarController
-    network: lightlink-phoniex
+    network: lightlink-phoenix
     source:
       abi: RegistrarController
       address: "0xd7b837a0e388b4c25200983bdaa3ef3a83ca86b7"
