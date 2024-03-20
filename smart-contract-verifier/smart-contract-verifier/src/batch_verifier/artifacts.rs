@@ -1,7 +1,52 @@
+use anyhow::Context;
 use std::collections::BTreeMap;
 
 pub type LinkReferences =
     BTreeMap<String, BTreeMap<String, Vec<foundry_compilers::artifacts::Offsets>>>;
+
+pub type ImmutableReferences = BTreeMap<String, Vec<foundry_compilers::artifacts::Offsets>>;
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CodeArtifacts {
+    CreationCodeArtifacts(creation_code_artifacts::CreationCodeArtifacts),
+    RuntimeCodeArtifacts(runtime_code_artifacts::RuntimeCodeArtifacts),
+}
+
+impl CodeArtifacts {
+    pub fn cbor_auxdata(&self) -> cbor_auxdata::CborAuxdata {
+        match self {
+            CodeArtifacts::CreationCodeArtifacts(artifacts) => artifacts.cbor_auxdata.clone(),
+            CodeArtifacts::RuntimeCodeArtifacts(artifacts) => artifacts.cbor_auxdata.clone(),
+        }
+    }
+
+    pub fn try_link_references(&self) -> Result<LinkReferences, anyhow::Error> {
+        let value = match self {
+            CodeArtifacts::CreationCodeArtifacts(artifacts) => artifacts.link_references.clone(),
+            CodeArtifacts::RuntimeCodeArtifacts(artifacts) => artifacts.link_references.clone(),
+        };
+        match value {
+            None => Ok(Default::default()),
+            Some(value) => {
+                serde_json::from_value::<LinkReferences>(value).context("deserialization failed")
+            }
+        }
+    }
+
+    pub fn try_immutable_references(&self) -> Result<ImmutableReferences, anyhow::Error> {
+        let value = match self {
+            CodeArtifacts::CreationCodeArtifacts(_artifacts) => None,
+            CodeArtifacts::RuntimeCodeArtifacts(artifacts) => {
+                artifacts.immutable_references.clone()
+            }
+        };
+        match value {
+            None => Ok(Default::default()),
+            Some(value) => serde_json::from_value::<ImmutableReferences>(value)
+                .context("deserialization failed"),
+        }
+    }
+}
 
 pub mod cbor_auxdata {
     use crate::BytecodePart;
@@ -10,10 +55,10 @@ pub mod cbor_auxdata {
 
     pub type CborAuxdata = BTreeMap<String, CborAuxdataValue>;
 
-    #[derive(Clone, Debug, serde::Serialize, Eq, PartialEq)]
+    #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
     pub struct CborAuxdataValue {
-        offset: usize,
-        value: DisplayBytes,
+        pub offset: usize,
+        pub value: DisplayBytes,
     }
 
     pub fn generate(bytecode_parts: &[BytecodePart]) -> CborAuxdata {
@@ -45,7 +90,7 @@ pub mod compilation_artifacts {
         id: u32,
     }
 
-    #[derive(Clone, Debug, serde::Serialize, Eq, PartialEq)]
+    #[derive(Clone, Debug, Default, serde::Serialize, Eq, PartialEq)]
     #[serde(rename_all = "camelCase")]
     pub struct CompilationArtifacts {
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -86,14 +131,14 @@ pub mod creation_code_artifacts {
     use crate::verifier::lossless_compiler_output;
     use std::collections::BTreeMap;
 
-    #[derive(Clone, Debug, serde::Serialize, Eq, PartialEq)]
+    #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
     #[serde(rename_all = "camelCase")]
     pub struct CreationCodeArtifacts {
         #[serde(skip_serializing_if = "Option::is_none")]
         pub source_map: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         pub link_references: Option<serde_json::Value>,
-        #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+        #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
         pub cbor_auxdata: cbor_auxdata::CborAuxdata,
     }
 
@@ -114,7 +159,7 @@ pub mod runtime_code_artifacts {
     use crate::verifier::lossless_compiler_output;
     use std::collections::BTreeMap;
 
-    #[derive(Clone, Debug, serde::Serialize, Eq, PartialEq)]
+    #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
     #[serde(rename_all = "camelCase")]
     pub struct RuntimeCodeArtifacts {
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -123,7 +168,7 @@ pub mod runtime_code_artifacts {
         pub link_references: Option<serde_json::Value>,
         #[serde(skip_serializing_if = "Option::is_none")]
         pub immutable_references: Option<serde_json::Value>,
-        #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+        #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
         pub cbor_auxdata: super::cbor_auxdata::CborAuxdata,
     }
 

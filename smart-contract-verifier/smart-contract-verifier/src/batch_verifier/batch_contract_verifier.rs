@@ -1,6 +1,7 @@
 use super::compilation;
 use crate::{
     batch_verifier::{
+        artifacts::CodeArtifacts,
         compilation::CompilationResult,
         errors::{VerificationError, VerificationErrorKind},
         transformations,
@@ -116,49 +117,51 @@ fn verify_contract(
             )
         };
 
-        let (does_creation_match, creation_values, creation_transformations) = match &contract
-            .creation_code
-        {
-            Some(contract_code) => {
-                match transformations::process_creation_code(
-                    contract_code,
-                    parsed_contract.creation_code.to_vec(),
-                    &parsed_contract.compilation_artifacts,
-                    serde_json::to_value(parsed_contract.creation_code_artifacts.clone()).unwrap(),
-                ) {
-                    Ok((processed_code, values, transformations)) => {
-                        (&processed_code == contract_code, values, transformations)
-                    }
-                    Err(err) => {
-                        failures.push(convert_error(err, "process creation code"));
-                        continue;
+        let (does_creation_match, creation_values, creation_transformations) =
+            match &contract.creation_code {
+                Some(contract_code) => {
+                    match transformations::process_creation_code(
+                        contract_code,
+                        parsed_contract.creation_code.to_vec(),
+                        &parsed_contract.compilation_artifacts,
+                        CodeArtifacts::CreationCodeArtifacts(
+                            parsed_contract.creation_code_artifacts.clone(),
+                        ),
+                    ) {
+                        Ok((processed_code, values, transformations)) => {
+                            (&processed_code == contract_code, values, transformations)
+                        }
+                        Err(err) => {
+                            failures.push(convert_error(err, "process creation code"));
+                            continue;
+                        }
                     }
                 }
-            }
-            None => (false, Default::default(), Default::default()),
-        };
+                None => (false, Default::default(), Default::default()),
+            };
 
-        let (does_runtime_match, runtime_values, runtime_transformations) = match &contract
-            .runtime_code
-        {
-            Some(contract_code) => {
-                match transformations::process_runtime_code(
-                    contract_code,
-                    parsed_contract.runtime_code.to_vec(),
-                    &parsed_contract.compilation_artifacts,
-                    serde_json::to_value(parsed_contract.runtime_code_artifacts.clone()).unwrap(),
-                ) {
-                    Ok((processed_code, values, transformations)) => {
-                        (&processed_code == contract_code, values, transformations)
-                    }
-                    Err(err) => {
-                        failures.push(convert_error(err, "process runtime code"));
-                        continue;
+        let (does_runtime_match, runtime_values, runtime_transformations) =
+            match &contract.runtime_code {
+                Some(contract_code) => {
+                    match transformations::process_runtime_code(
+                        contract_code,
+                        parsed_contract.runtime_code.to_vec(),
+                        &parsed_contract.compilation_artifacts,
+                        CodeArtifacts::RuntimeCodeArtifacts(
+                            parsed_contract.runtime_code_artifacts.clone(),
+                        ),
+                    ) {
+                        Ok((processed_code, values, transformations)) => {
+                            (&processed_code == contract_code, values, transformations)
+                        }
+                        Err(err) => {
+                            failures.push(convert_error(err, "process runtime code"));
+                            continue;
+                        }
                     }
                 }
-            }
-            None => (false, Default::default(), Default::default()),
-        };
+                None => (false, Default::default(), Default::default()),
+            };
 
         if !does_creation_match && !does_runtime_match {
             failures.push(VerificationError::new(

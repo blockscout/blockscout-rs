@@ -2,7 +2,6 @@ mod artifacts;
 mod batch_contract_verifier;
 mod compilation;
 mod errors;
-mod parsers;
 mod transformations;
 
 pub use batch_contract_verifier::{
