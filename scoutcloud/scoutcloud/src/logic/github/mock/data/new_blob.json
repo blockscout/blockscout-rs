@@ -1,0 +1,10 @@
+{
+  "filename": "new_blob.json",
+  "url": "/repos/{owner}/{repo}/git/blobs",
+  "method": "POST",
+  "status": 201,
+  "response": {
+    "sha": "929246f65aab4d636cb229c790f966afc332c124",
+    "url": "https://api.github.com/repos/sevenzing/test/git/blobs/929246f65aab4d636cb229c790f966afc332c124"
+  }
+}

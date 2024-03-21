@@ -1,0 +1,9 @@
+DROP TABLE IF EXISTS "balance_expenses";
+DROP TABLE IF EXISTS "balance_changes";
+DROP TABLE IF EXISTS "deployments";
+DROP TABLE IF EXISTS "server_specs";
+DROP TABLE IF EXISTS "instances";
+DROP TABLE IF EXISTS "user_actions";
+DROP TABLE IF EXISTS "auth_tokens";
+DROP TABLE IF EXISTS "users";
+DROP TYPE IF EXISTS "deployment_status_type";
