@@ -64,6 +64,18 @@
             "empty_label_hash": "0xea1eb1136f380e6643b69866632ce3b493100790c9c84416f2769d996a1c38b1"
           }
         }
+      },
+      "943": {
+        "blockscout": {
+          "url": "https://scan.v4.testnet.pulsechain.com/#"
+        },
+        "subgraphs": {
+          "pns-subgraph": {
+            "use_cache": true,
+            "address_resolve_technique": "reverse_registry",
+            "native_token_contract": "0xaDB38309aF7F85034FDC35bd6E6B45d1216CfB56"
+          }
+        }
       }
     }
   }

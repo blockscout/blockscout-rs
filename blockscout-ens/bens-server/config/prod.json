@@ -51,6 +51,18 @@
             "empty_label_hash": "0x2fd69f9e5bec9de9ebf3468dafc549eca0bc7d17dfbc09869c2cfc3997d5d038"
           }
         }
+      },
+      "369": {
+        "blockscout": {
+          "url": "https://scan.mypinata.cloud/ipfs/bafybeidn64pd2u525lmoipjl4nh3ooa2imd7huionjsdepdsphl5slfowy/#"
+        },
+        "subgraphs": {
+          "pns-subgraph": {
+            "use_cache": true,
+            "address_resolve_technique": "reverse_registry",
+            "native_token_contract": "0x65Cf7f7aa5A4a2c20120B445cA4F05F63E2628C4"
+          }
+        }
       }
     }
   }
