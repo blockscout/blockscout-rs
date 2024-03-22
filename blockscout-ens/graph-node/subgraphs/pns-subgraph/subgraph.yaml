@@ -1,0 +1,163 @@
+specVersion: 0.0.4
+description: >-
+  A secure & decentralized way to address resources on and off the blockchain
+  using simple, human-readable names. Access domains and transfer history.
+repository: "https://github.com/pulsedomains/pns-subgraph"
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum/contract
+    name: ENSRegistry
+    network: pulsechain-mainnet
+    source:
+      address: "0xbd5133993FCDED5945c5539D9f032261F0d13170"
+      abi: EnsRegistry
+      startBlock: 19400537
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./src/ensRegistry.ts
+      entities:
+        - Domain
+        - Account
+        - Resolver
+      abis:
+        - name: EnsRegistry
+          file: ./abis/Registry.json
+      eventHandlers:
+        - event: "Transfer(indexed bytes32,address)"
+          handler: handleTransfer
+        - event: "NewOwner(indexed bytes32,indexed bytes32,address)"
+          handler: handleNewOwner
+        - event: "NewResolver(indexed bytes32,address)"
+          handler: handleNewResolver
+        - event: "NewTTL(indexed bytes32,uint64)"
+          handler: handleNewTTL
+  - kind: ethereum/contract
+    name: Resolver
+    network: pulsechain-mainnet
+    source:
+      abi: Resolver
+      startBlock: 19400610
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./src/resolver.ts
+      entities:
+        - AddrChanged
+        - MulticoinAddrChanged
+        - NameChanged
+        - AbiChanged
+        - PubkeyChanged
+        - Textchanged
+        - ContenthashChanged
+        - InterfaceChanged
+      abis:
+        - name: Resolver
+          file: ./abis/PublicResolver.json
+      eventHandlers:
+        - event: "ABIChanged(indexed bytes32,indexed uint256)"
+          handler: handleABIChanged
+        - event: "AddrChanged(indexed bytes32,address)"
+          handler: handleAddrChanged
+        - event: "AddressChanged(indexed bytes32,uint256,bytes)"
+          handler: handleMulticoinAddrChanged
+        - event: "ContenthashChanged(indexed bytes32,bytes)"
+          handler: handleContentHashChanged
+        - event: "InterfaceChanged(indexed bytes32,indexed bytes4,address)"
+          handler: handleInterfaceChanged
+        - event: "NameChanged(indexed bytes32,string)"
+          handler: handleNameChanged
+        - event: "PubkeyChanged(indexed bytes32,bytes32,bytes32)"
+          handler: handlePubkeyChanged
+        - event: "TextChanged(indexed bytes32,indexed string,string,string)"
+          handler: handleTextChangedWithValue
+        - event: "VersionChanged(indexed bytes32,uint64)"
+          handler: handleVersionChanged
+  - kind: ethereum/contract
+    name: BaseRegistrar
+    network: pulsechain-mainnet
+    source:
+      address: "0x65Cf7f7aa5A4a2c20120B445cA4F05F63E2628C4"
+      abi: BaseRegistrar
+      startBlock: 19400567
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./src/ethRegistrar.ts
+      entities:
+        - Registration
+        - NameRegistered
+        - NameRenewed
+        - NameTransferred
+      abis:
+        - name: BaseRegistrar
+          file: ./abis/BaseRegistrar.json
+      eventHandlers:
+        - event: "NameRegistered(indexed uint256,indexed address,uint256)"
+          handler: handleNameRegistered
+        - event: "NameRenewed(indexed uint256,uint256)"
+          handler: handleNameRenewed
+        - event: "Transfer(indexed address,indexed address,indexed uint256)"
+          handler: handleNameTransferred
+  - kind: ethereum/contract
+    name: EthRegistrarController
+    network: pulsechain-mainnet
+    source:
+      address: "0xEDE92828a143cFC966a47d60604825655f7c79e8"
+      abi: EthRegistrarController
+      startBlock: 19400602
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./src/ethRegistrar.ts
+      entities:
+        - Registration
+      abis:
+        - name: EthRegistrarController
+          file: ./abis/EthRegistrarController.json
+      eventHandlers:
+        - event: >-
+            NameRegistered(string,indexed bytes32,indexed
+            address,uint256,uint256,uint256)
+          handler: handleNameRegisteredByController
+        - event: "NameRenewed(string,indexed bytes32,uint256,uint256)"
+          handler: handleNameRenewedByController
+        - event: "BlacklistChanged(indexed address,bool)"
+          handler: handleBlacklistChanged
+        - event: "ReferralFeeReceived(indexed address,uint256)"
+          handler: handleReferralFeeReceived
+  - kind: ethereum/contract
+    name: NameWrapper
+    network: pulsechain-mainnet
+    source:
+      address: "0x4feFb26934705C1661aC04aF8303548b850d562F"
+      abi: NameWrapper
+      startBlock: 19400595
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./src/nameWrapper.ts
+      entities:
+        - NameWrapper
+      abis:
+        - name: NameWrapper
+          file: ./abis/NameWrapper.json
+      eventHandlers:
+        - event: "NameWrapped(indexed bytes32,bytes,address,uint32,uint64)"
+          handler: handleNameWrapped
+        - event: "NameUnwrapped(indexed bytes32,address)"
+          handler: handleNameUnwrapped
+        - event: "FusesSet(indexed bytes32,uint32)"
+          handler: handleFusesSet
+        - event: "ExpiryExtended(indexed bytes32,uint64)"
+          handler: handleExpiryExtended
+        - event: TransferSingle(indexed address,indexed address,indexed address,uint256,uint256)
+          handler: handleTransferSingle
+        - event: TransferBatch(indexed address,indexed address,indexed address,uint256[],uint256[])
+          handler: handleTransferBatch
