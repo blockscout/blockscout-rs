@@ -14,6 +14,7 @@ use eth_bytecode_db_proto::{
     blockscout::eth_bytecode_db::v2 as eth_bytecode_db_proto_v2,
     http_client as eth_bytecode_db_http,
 };
+use proxy_verifier_logic::VerificationSuccess;
 use proxy_verifier_proto::blockscout::proxy_verifier::v1::{
     self as proxy_verifier_proto_v1, verification_response,
 };
@@ -188,7 +189,7 @@ fn process_invalid_contracts_response(
 }
 
 fn process_results_response(
-    results: Vec<Result<String, proxy_verifier_logic::Error>>,
+    results: Vec<Result<VerificationSuccess, proxy_verifier_logic::Error>>,
 ) -> verification_response::VerificationStatus {
     use verification_response::{
         contract_validation_results::contract_validation_result,
@@ -199,10 +200,18 @@ fn process_results_response(
     let items = results
         .into_iter()
         .map(|result| match result {
-            Ok(url) => ContractVerificationResult {
-                message: url,
-                status: contract_verification_result::Status::Success.into(),
-            },
+            Ok(success) => {
+                let status = match success.match_type {
+                    eth_bytecode_db_proto_v2::source::MatchType::Full => {
+                        contract_verification_result::Status::FullyVerified
+                    }
+                    _ => contract_verification_result::Status::PartiallyVerified,
+                };
+                ContractVerificationResult {
+                    message: success.url,
+                    status: status.into(),
+                }
+            }
             Err(err) if err.is_internal_error() => ContractVerificationResult {
                 message: err.to_string(),
                 status: contract_validation_result::Status::InternalError.into(),
