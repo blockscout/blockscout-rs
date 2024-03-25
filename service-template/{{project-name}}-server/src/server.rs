@@ -45,7 +45,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     {% if database and migrations %}
     let _db_connection = database::initialize_postgres::<Migrator>(
-        &settings.database.url,
+        &settings.database.connect.url(),
         settings.database.create_database,
         settings.database.run_migrations,
     )
