@@ -1,4 +1,5 @@
 use blockscout_service_launcher::{
+    database::{DatabaseConnectSettings, DatabaseSettings},
     launcher::{ConfigSettings, MetricsSettings, ServerSettings},
     tracing::{JaegerSettings, TracingSettings},
 };
@@ -24,17 +25,7 @@ pub struct Settings {
 impl ConfigSettings for Settings {
     const SERVICE_NAME: &'static str = "{{PROJECT_NAME}}";
 }
-{% if database %}
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-pub struct DatabaseSettings {
-    pub url: String,
-    #[serde(default)]
-    pub create_database: bool,
-    #[serde(default)]
-    pub run_migrations: bool,
-}
-{% endif %}
+
 impl Settings {
     pub fn default(
         {% if database %}
@@ -48,9 +39,9 @@ impl Settings {
             jaeger: Default::default(),
             {% if database -%}
             database: DatabaseSettings {
-                url: database_url,
-                create_database: false,
-                run_migrations: false,
+                connect: DatabaseConnectSettings::Url(database_url),
+                create_database: Default::default(),
+                run_migrations: Default::default(),
             },{% endif %}
         }
     }
