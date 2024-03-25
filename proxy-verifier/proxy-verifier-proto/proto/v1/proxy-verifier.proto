@@ -102,9 +102,10 @@ message VerificationResponse {
 
       enum Status {
         STATUS_UNSPECIFIED = 0;
-        SUCCESS = 1;
-        FAILURE = 2;
-        INTERNAL_ERROR = 3;
+        PARTIALLY_VERIFIED = 1;
+        FULLY_VERIFIED = 2;
+        FAILURE = 3;
+        INTERNAL_ERROR = 4;
       }
       Status status = 2;
     }
