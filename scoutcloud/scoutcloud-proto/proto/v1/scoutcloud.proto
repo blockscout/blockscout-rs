@@ -22,6 +22,7 @@ message DeployConfig {
   string rpc_url = 1 [(convert_options.convert) = {type: "url::Url"}];
   string server_size = 2;
   optional string chain_type = 3;
+  optional string node_type = 12;
   optional string chain_id = 4;
   optional string token_symbol = 5;
   optional string instance_url = 6;
@@ -36,6 +37,7 @@ message DeployConfigPartial {
   optional string rpc_url = 1 [(convert_options.convert) = {type: "Option<url::Url>"}];
   optional string server_size = 2;
   optional string chain_type = 3;
+  optional string node_type = 12;
   optional string chain_id = 4;
   optional string token_symbol = 5;
   optional string instance_url = 6;

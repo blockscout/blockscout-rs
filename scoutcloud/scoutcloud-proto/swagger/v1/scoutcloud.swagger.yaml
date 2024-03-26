@@ -278,6 +278,8 @@ definitions:
         type: string
       chain_type:
         type: string
+      node_type:
+        type: string
       chain_id:
         type: string
       token_symbol:
@@ -302,6 +304,8 @@ definitions:
       server_size:
         type: string
       chain_type:
+        type: string
+      node_type:
         type: string
       chain_id:
         type: string
