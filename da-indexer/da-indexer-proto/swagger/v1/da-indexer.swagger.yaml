@@ -1,0 +1,114 @@
+swagger: "2.0"
+info:
+  title: v1/da-indexer.proto
+  version: version not set
+tags:
+  - name: DaService
+  - name: Health
+consumes:
+  - application/json
+produces:
+  - application/json
+paths:
+  /api/v1/celestia/blob:
+    get:
+      operationId: DaService_GetCelestiaBlob
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1Blob'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: height
+          in: query
+          required: false
+          type: string
+          format: uint64
+        - name: commitment
+          in: query
+          required: false
+          type: string
+        - name: skipData
+          in: query
+          required: false
+          type: boolean
+      tags:
+        - DaService
+  /health:
+    get:
+      summary: |-
+        If the requested service is unknown, the call will fail with status
+        NOT_FOUND.
+      operationId: Health_Check
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1HealthCheckResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: service
+          in: query
+          required: false
+          type: string
+      tags:
+        - Health
+definitions:
+  HealthCheckResponseServingStatus:
+    type: string
+    enum:
+      - UNKNOWN
+      - SERVING
+      - NOT_SERVING
+      - SERVICE_UNKNOWN
+    default: UNKNOWN
+    description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
+  protobufAny:
+    type: object
+    properties:
+      '@type':
+        type: string
+    additionalProperties: {}
+  rpcStatus:
+    type: object
+    properties:
+      code:
+        type: integer
+        format: int32
+      message:
+        type: string
+      details:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/protobufAny'
+  v1Blob:
+    type: object
+    properties:
+      height:
+        type: string
+        format: uint64
+      namespace:
+        type: string
+      commitment:
+        type: string
+      timestamp:
+        type: string
+        format: uint64
+      size:
+        type: string
+        format: uint64
+      data:
+        type: string
+  v1HealthCheckResponse:
+    type: object
+    properties:
+      status:
+        $ref: '#/definitions/HealthCheckResponseServingStatus'
