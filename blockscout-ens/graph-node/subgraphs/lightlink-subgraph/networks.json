@@ -1,0 +1,38 @@
+{
+  "lightlink-phoenix": {
+    "Registry": {
+      "address": "0x5dC881dDA4e4a8d312be3544AD13118D1a04Cb17",
+      "startBlock": 66729304
+    },
+    "Resolver": {
+      "startBlock": 66730242
+    },
+    "RegistrarController": {
+      "address": "0xd7b837a0e388b4c25200983bdaa3ef3a83ca86b7",
+      "startBlock": 66729807
+    },
+    "Base": {
+      "address": "0x5183ba1dee9770760360533cf00b9d8e26495927",
+      "startBlock": 66743322
+    },
+    "": ""
+  },
+  "lightlink-phoenix-dev": {
+    "Registry": {
+      "address": "0xbF736C9845FaeC121D2E9c07F1419CBA068EC232",
+      "startBlock": 66545597
+    },
+    "Resolver": {
+      "startBlock": 66546546
+    },
+    "RegistrarController": {
+      "address": "0xc5005a0027ccd013622940202693795973991dd4",
+      "startBlock": 66545986
+    },
+    "Base": {
+      "address": "0xe4000a31a831af758161132b619cf0d99a16e36b",
+      "startBlock": 66554293
+    },
+    "": ""
+  }
+}
