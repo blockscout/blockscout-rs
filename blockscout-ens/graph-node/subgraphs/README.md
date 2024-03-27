@@ -9,8 +9,8 @@
 | genome-subgraph | Gnosis | .gno | SpaceID contracts |
 | bns-subgraph | Base | .base |      |
 | mode-subgraph | Mode | .mode | SpaceID contracts |
-| bns-subgraph | PulseChain | .pls |      |
 | lightlink-subgraph | Lightlink | .ll | SpaceID contracts |
+| pns-subgraph | PulseChain | .pls |      |
 
 ## Add your own subgraph
 
