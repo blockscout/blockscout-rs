@@ -127,10 +127,6 @@ dataSources:
           handler: handleNameRegisteredByController
         - event: "NameRenewed(string,indexed bytes32,uint256,uint256)"
           handler: handleNameRenewedByController
-        - event: "BlacklistChanged(indexed address,bool)"
-          handler: handleBlacklistChanged
-        - event: "ReferralFeeReceived(indexed address,uint256)"
-          handler: handleReferralFeeReceived
   - kind: ethereum/contract
     name: NameWrapper
     network: pulsechain-mainnet

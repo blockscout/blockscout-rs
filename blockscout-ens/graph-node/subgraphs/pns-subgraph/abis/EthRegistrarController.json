@@ -129,25 +129,6 @@
     "anonymous": false,
     "inputs": [
       {
-        "indexed": true,
-        "internalType": "address",
-        "name": "account",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "bool",
-        "name": "banned",
-        "type": "bool"
-      }
-    ],
-    "name": "BlacklistChanged",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
         "indexed": false,
         "internalType": "string",
         "name": "name",
@@ -238,25 +219,6 @@
     "type": "event"
   },
   {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "referrer",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      }
-    ],
-    "name": "ReferralFeeReceived",
-    "type": "event"
-  },
-  {
     "inputs": [],
     "name": "MIN_REGISTRATION_DURATION",
     "outputs": [
@@ -291,32 +253,6 @@
   {
     "inputs": [
       {
-        "internalType": "address",
-        "name": "_newPrices",
-        "type": "address"
-      }
-    ],
-    "name": "changePricesFeed",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "_newBasisPoints",
-        "type": "uint256"
-      }
-    ],
-    "name": "changeReferralBasisPoints",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
         "internalType": "bytes32",
         "name": "commitment",
         "type": "bytes32"
@@ -344,19 +280,6 @@
       }
     ],
     "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "bool",
-        "name": "_newState",
-        "type": "bool"
-      }
-    ],
-    "name": "enableReferral",
-    "outputs": [],
-    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -514,32 +437,6 @@
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "referralEnabled",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "referralFeeBasisPoints",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
     "inputs": [
       {
         "components": [
@@ -671,24 +568,6 @@
       }
     ],
     "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "wallet",
-        "type": "address"
-      },
-      {
-        "internalType": "bool",
-        "name": "isBlacklist",
-        "type": "bool"
-      }
-    ],
-    "name": "setReferrerBlacklist",
-    "outputs": [],
-    "stateMutability": "nonpayable",
     "type": "function"
   },
   {

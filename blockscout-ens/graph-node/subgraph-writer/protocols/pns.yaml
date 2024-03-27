@@ -1,5 +1,5 @@
 default_context:
-  project_name: "PulseChain Name Service Subgraph"
+  project_name: "PNS Subgraph"
   short_name: "pns"
   network: "pulsechain-mainnet"
   network_test: "pulsechain-testnet"
