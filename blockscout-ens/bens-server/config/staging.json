@@ -3,9 +3,9 @@
     "cache_enabled": true,
     "refresh_cache_schedule": "0 0 * * * *",
     "networks": {
-      "5": {
+      "11155111": {
         "blockscout": {
-          "url": "https://eth-goerli.blockscout.com"
+          "url": "https://eth-sepolia.blockscout.com"
         },
         "subgraphs": {
           "ens-subgraph": {

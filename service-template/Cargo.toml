@@ -13,3 +13,6 @@ members = [
     "{{project-name}}-proto",
     "{{project-name}}-server",
 ]
+
+[workspace.dependencies]
+blockscout-service-launcher = "0.10.0"

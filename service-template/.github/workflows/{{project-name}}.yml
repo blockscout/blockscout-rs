@@ -4,6 +4,10 @@ on:
       - 'main'
     tags:
       - '{{project-name}}/v*'
+    paths:
+      - {{project-name}}/**
+      - .github/workflows/{{project-name}}.yml
+      - .github/actions/deps/**
   pull_request:
     paths:
       - {{project-name}}/**
@@ -152,7 +156,7 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           context: "{{project-name}}"
-          file: "{{project-name}}/{{project-name}}-server/Dockerfile"
+          file: "{{project-name}}/Dockerfile"
           {% raw -%}
           push: ${{ steps.tags_extractor.outputs.tags != '' }}
           tags: ${{ steps.tags_extractor.outputs.tags }}
