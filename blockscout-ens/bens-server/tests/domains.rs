@@ -59,7 +59,7 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
     // get detailed domain
     let request: Value = send_get_request(&base, "/api/v1/1/domains/vitalik.eth").await;
     let vitalik_detailed_json = json!({
-        "expiry_date": "2032-08-01T21:50:24.000Z",
+        "expiry_date": "2038-01-19T03:14:07.000Z",
         "id": "0xee6c4522aab0003e8d14cd40a6af439055fd2577951148c14b6cea9a53475835",
         "name": "vitalik.eth",
         "other_addresses": {
@@ -91,7 +91,7 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
     assert_eq!(
         request,
         json!({
-            "expiry_date": "2027-02-10T16:42:46.000Z",
+            "expiry_date": "2038-01-19T03:14:07.000Z",
             "id": "0x5d438d292de31e08576d5bcd8a93aa41b401b9d9aeaba57da1a32c003e5fd5f5",
             "name": "wa🇬🇲i.eth",
             "other_addresses": {},
@@ -193,9 +193,9 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
     .await;
 
     // all domains lookup + check pagination
-    let expected_domains = vec![
+    let expected_domains = [
         json!({
-            "expiry_date": "2024-03-23T22:02:21.000Z",
+            "expiry_date": "2038-01-19T03:14:07.000Z",
             "id": "0x68b620f61c87062cf680144f898582a631c90e39dd1badb35c241be0a7284fff",
             "name": "sashaxyz.eth",
             "owner": {
@@ -208,7 +208,7 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
             },
         }),
         json!({
-            "expiry_date": "2027-02-10T16:42:46.000Z",
+            "expiry_date": "2038-01-19T03:14:07.000Z",
             "id": "0x5d438d292de31e08576d5bcd8a93aa41b401b9d9aeaba57da1a32c003e5fd5f5",
             "name": "wa🇬🇲i.eth",
             "owner": {
@@ -223,7 +223,7 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
             },
         }),
         json!({
-            "expiry_date": "2025-01-21T06:43:35.000Z",
+            "expiry_date": "2038-01-19T03:14:07.000Z",
             "id": "0xeb4f647bea6caa36333c816d7b46fdcb05f9466ecacc140ea8c66faf15b3d9f1",
             "name": "test.eth",
             "owner": {
@@ -281,7 +281,7 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
             },
             "wrapped_owner": null,
             "registration_date": "2021-12-24T10:23:57.000Z",
-            "expiry_date": "2024-03-23T22:02:21.000Z"
+            "expiry_date": "2038-01-19T03:14:07.000Z"
         }
     )];
     expect_list_results(
@@ -306,7 +306,7 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
             },
             "wrapped_owner": null,
             "registration_date": "2017-06-18T08:39:14.000Z",
-            "expiry_date": "2032-08-01T21:50:24.000Z"
+            "expiry_date": "2038-01-19T03:14:07.000Z"
         }
     )]
     .into_iter()
