@@ -1,20 +1,20 @@
 use crate::logic::config::{ParsedVariable, ParsedVariableKey, UserVariable};
-use serde::Deserialize;
+use serde::{de::IntoDeserializer, Deserialize, Serialize};
 
 pub struct ServerSize;
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum ServerSizeType {
+pub enum ServerSizeEnum {
     Small,
     Medium,
     Large,
 }
 
-impl ServerSizeType {
-    pub fn resources(&self) -> serde_yaml::Value {
-        let json = match self {
-            ServerSizeType::Small => serde_json::json!({
+impl ServerSizeEnum {
+    pub fn resources(&self) -> serde_json::Value {
+        match self {
+            ServerSizeEnum::Small => serde_json::json!({
               "limits": {
                 "memory": "4Gi",
                 "cpu": "2"
@@ -24,7 +24,7 @@ impl ServerSizeType {
                 "cpu": "1"
               }
             }),
-            ServerSizeType::Medium => serde_json::json!({
+            ServerSizeEnum::Medium => serde_json::json!({
               "limits": {
                 "memory": "8Gi",
                 "cpu": "4"
@@ -34,7 +34,7 @@ impl ServerSizeType {
                 "cpu": "2"
               }
             }),
-            ServerSizeType::Large => serde_json::json!({
+            ServerSizeEnum::Large => serde_json::json!({
               "limits": {
                 "memory": "16Gi",
                 "cpu": "8"
@@ -44,18 +44,17 @@ impl ServerSizeType {
                 "cpu": "4"
               }
             }),
-        };
-        serde_json::from_value(json).expect("valid json2yaml object")
+        }
     }
 }
 
 #[async_trait::async_trait]
 impl UserVariable<String> for ServerSize {
-    async fn parse_from_value(v: String) -> Result<Vec<ParsedVariable>, anyhow::Error> {
-        let ty = serde_json::from_str::<ServerSizeType>(&v)
-            .map_err(|e| anyhow::anyhow!("unknown server size: '{}'", v))?;
+    async fn build_config_vars(v: String) -> Result<Vec<ParsedVariable>, anyhow::Error> {
+        let ty = ServerSizeEnum::deserialize(v.clone().into_deserializer())
+            .map_err(|_: serde_json::Error| anyhow::anyhow!("unknown server_size: '{}'", v))?;
         Ok(vec![(
-            ParsedVariableKey::ConfigPath(".".to_string()),
+            ParsedVariableKey::ConfigPath("blockscout.resources".to_string()),
             ty.resources(),
         )])
     }
