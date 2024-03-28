@@ -1,5 +1,5 @@
 {
-  "name": "whatsabi",
+  "name": "smart-guessr",
   "version": "1.0.50",
   "scripts": {
     "dev": "bun --watch src/index.ts",

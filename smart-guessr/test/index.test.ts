@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'bun:test'
-import { edenTreaty } from '@elysiajs/eden'
-import { initApp } from "../src";
+import {getPort, initApp} from "../src";
 
-const port = process.env.WHATSABI__PORT | 3000;
+const port = getPort();
 const app = initApp(port);
-
-const apiClient = edenTreaty<typeof app>(`http://localhost:${port}`);
 
 describe('Processing abi requests', () => {
     async function makeRequest(address: string | null, provider: string | null) {

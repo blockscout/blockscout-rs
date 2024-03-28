@@ -4,7 +4,13 @@ import { whatsabi } from "@shazow/whatsabi";
 import { ethers } from "ethers";
 import { logger } from "@bogeychan/elysia-logger";
 
-const port = process.env.WHATSABI__PORT;
+export function getPort() {
+    let port = process.env.SMART_GUESSR__PORT;
+    if (port == undefined) {
+        port = "3000";
+    }
+    return port;
+}
 
 const signatureLookup = new whatsabi.loaders.MultiSignatureLookup([
     new whatsabi.loaders.OpenChainSignatureLookup(),
@@ -41,8 +47,8 @@ export function initApp(port: string | number) {
         .listen(port);
 }
 
+const port = getPort();
 let app = initApp(port);
-export type App = typeof app;
 
 console.log(
     `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`
