@@ -1,4 +1,4 @@
-use crate::logic::config::{ParsedVariable, ParsedVariableKey, UserVariable};
+use crate::logic::{ParsedVariable, ParsedVariableKey, UserVariable};
 use anyhow::Context;
 use ethers::{prelude::*, providers::Provider, types::BlockNumber};
 use url::Url;

@@ -286,15 +286,15 @@ definitions:
         type: string
       instance_url:
         type: string
-      logo_link:
+      logo_url:
         type: string
       chain_name:
         type: string
-      icon_link:
+      icon_url:
         type: string
-      homeplate_backgroup:
+      homeplate_background:
         type: string
-      homeplace_text_color:
+      homeplate_text_color:
         type: string
   v1DeployConfigPartial:
     type: object
@@ -313,15 +313,15 @@ definitions:
         type: string
       instance_url:
         type: string
-      logo_link:
+      logo_url:
         type: string
       chain_name:
         type: string
-      icon_link:
+      icon_url:
         type: string
-      homeplate_backgroup:
+      homeplate_background:
         type: string
-      homeplace_text_color:
+      homeplate_text_color:
         type: string
   v1Deployment:
     type: object

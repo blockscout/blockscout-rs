@@ -1,4 +1,4 @@
-use crate::logic::config::{variables, ParsedVariableKey, UserVariable};
+use crate::logic::{config::variables, ParsedVariableKey, UserVariable};
 use anyhow::Context;
 use scoutcloud_proto::blockscout::scoutcloud::v1::{
     DeployConfigInternal, DeployConfigPartialInternal,
@@ -10,7 +10,7 @@ pub struct ValidatedInstanceConfig {
     pub vars: BTreeMap<ParsedVariableKey, serde_json::Value>,
 }
 
-macro_rules! parse_config_var {
+macro_rules! parse_config_vars {
     ($config:ident, $validated_config:ident, $is_partial_config:ident, { $($var:ident),* $(,)? }) => {
         paste::item! {
             $({
@@ -36,11 +36,18 @@ macro_rules! parse_config_var {
 
 macro_rules! parse_config_all_vars {
     ($config:ident, $validated_config:ident, $is_partial:ident) => {
-        parse_config_var!($config, $validated_config, $is_partial, {
+        parse_config_vars!($config, $validated_config, $is_partial, {
+            ChainId,
+            ChainName,
+            ChainType,
+            HomeplateBackground,
+            HomeplateTextColor,
+            IconUrl,
+            InstanceUrl,
+            NodeType,
             RpcUrl,
             ServerSize,
-            NodeType,
-            ChainId,
+            TokenSymbol,
         });
     };
 }

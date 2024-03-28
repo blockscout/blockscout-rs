@@ -1,7 +1,7 @@
 blockscout:
   enabled: true
   image:
-    tag: 5.3.1
+    tag: 6.3.0
 
   ingress:
     enabled: true
@@ -16,10 +16,9 @@ blockscout:
     POOL_SIZE: 200
     POOL_SIZE_API: 10
     ACCOUNT_POOL_SIZE: 10
-    DISPLAY_TOKEN_ICONS: 'true'
     FETCH_REWARDS_WAY: manual
     MICROSERVICE_SIG_PROVIDER_ENABLED: 'false'
-    INDEXER_MEMORY_LIMIT: 3
+    INDEXER_MEMORY_LIMIT: '3g'
     ETHEREUM_JSONRPC_DEBUG_TRACE_TRANSACTION_TIMEOUT: '20s'
     INDEXER_CATCHUP_BLOCKS_CONCURRENCY: 10
     INDEXER_CATCHUP_BLOCKS_BATCH_SIZE: 20

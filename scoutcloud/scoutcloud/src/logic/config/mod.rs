@@ -1,8 +1,13 @@
-pub mod generated;
-pub mod validated;
+mod generated;
+pub mod macros;
+mod types;
+mod validated;
 pub mod variables;
 
-pub use crate::logic::config::variables::{ParsedVariable, ParsedVariableKey, UserVariable};
+pub use generated::GeneratedInstanceConfig;
+pub use types::{ParsedVariable, ParsedVariableKey, UserVariable};
+pub use validated::ValidatedInstanceConfig;
+
 use thiserror::Error;
 
 #[derive(Error, Debug)]

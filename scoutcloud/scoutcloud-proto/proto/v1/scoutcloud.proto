@@ -26,11 +26,11 @@ message DeployConfig {
   optional string chain_id = 4;
   optional string token_symbol = 5;
   optional string instance_url = 6;
-  optional string logo_link = 7 [(convert_options.convert) = {type: "Option<url::Url>"}];
+  optional string logo_url = 7 [(convert_options.convert) = {type: "Option<url::Url>"}];
   optional string chain_name = 8;
-  optional string icon_link = 9 [(convert_options.convert) = {type: "Option<url::Url>"}];
-  optional string homeplate_backgroup = 10;
-  optional string homeplace_text_color = 11;
+  optional string icon_url = 9 [(convert_options.convert) = {type: "Option<url::Url>"}];
+  optional string homeplate_background = 10;
+  optional string homeplate_text_color = 11;
 }
 
 message DeployConfigPartial {
@@ -41,11 +41,11 @@ message DeployConfigPartial {
   optional string chain_id = 4;
   optional string token_symbol = 5;
   optional string instance_url = 6;
-  optional string logo_link = 7 [(convert_options.convert) = {type: "Option<url::Url>"}];
+  optional string logo_url = 7 [(convert_options.convert) = {type: "Option<url::Url>"}];
   optional string chain_name = 8;
-  optional string icon_link = 9 [(convert_options.convert) = {type: "Option<url::Url>"}];
-  optional string homeplate_backgroup = 10;
-  optional string homeplace_text_color = 11;
+  optional string icon_url = 9 [(convert_options.convert) = {type: "Option<url::Url>"}];
+  optional string homeplate_background = 10;
+  optional string homeplate_text_color = 11;
 }
 
 message CreateInstanceRequest {
