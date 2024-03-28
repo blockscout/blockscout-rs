@@ -18,7 +18,9 @@ export function initApp(port: string | number) {
         )
         .get("/api/v1/abi", async ( { request, log, query }) => {
             log.info(request, "New request");
-            return await processAbi(query.address, query.provider)
+            const result = await processAbi(query.address, query.provider);
+            log.info(request, `Found ${result.length} abi items`);
+            return result;
         }, {
             query: t.Object({
                 address: t.String(),
