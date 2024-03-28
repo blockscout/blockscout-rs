@@ -6,6 +6,11 @@ import { logger } from "@bogeychan/elysia-logger";
 
 const port = process.env.WHATSABI__PORT;
 
+const signatureLookup = new whatsabi.loaders.MultiSignatureLookup([
+    new whatsabi.loaders.OpenChainSignatureLookup(),
+    new whatsabi.loaders.FourByteSignatureLookup(),
+]);
+
 export function initApp(port: string | number) {
     return new Elysia()
         .use(swagger({
@@ -45,15 +50,11 @@ console.log(
 
 async function processAbi(address: string, provider_url: string) {
     const provider = ethers.getDefaultProvider(provider_url);
-    const signatureLookup = new whatsabi.loaders.MultiSignatureLookup([
-        new whatsabi.loaders.OpenChainSignatureLookup(),
-        new whatsabi.loaders.SamczunSignatureLookup(),
-        new whatsabi.loaders.FourByteSignatureLookup(),
-    ]);
 
     let abi = await whatsabi.autoload(address, {
         provider: provider,
         signatureLookup: signatureLookup,
+        abiLoader: false
     });
 
     return abi.abi
