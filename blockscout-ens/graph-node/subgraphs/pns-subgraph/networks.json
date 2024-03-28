@@ -1,0 +1,38 @@
+{
+  "pulsechain-mainnet": {
+    "ENSRegistry": {
+      "address": "0xbd5133993FCDED5945c5539D9f032261F0d13170",
+      "startBlock": 19400537
+    },
+    "PublicResolver": {
+      "startBlock": 19400610
+    },
+    "EthRegistrarController": {
+      "address": "0xEDE92828a143cFC966a47d60604825655f7c79e8",
+      "startBlock": 19400602
+    },
+    "BaseRegistrar": {
+      "address": "0x65Cf7f7aa5A4a2c20120B445cA4F05F63E2628C4",
+      "startBlock": 19400567
+    },
+    "": ""
+  },
+  "pulsechain-testnet": {
+    "ENSRegistry": {
+      "address": "0x20256721c9543eC129C1202c047eB7b194d4703E",
+      "startBlock": 18358152
+    },
+    "PublicResolver": {
+      "startBlock": 18358189
+    },
+    "EthRegistrarController": {
+      "address": "0xE35059d08fA35d42bb8f397F5BD6DCBAa8F37832",
+      "startBlock": 18358186
+    },
+    "BaseRegistrar": {
+      "address": "0xaDB38309aF7F85034FDC35bd6E6B45d1216CfB56",
+      "startBlock": 18358165
+    },
+    "": ""
+  }
+}
