@@ -2,8 +2,6 @@ use actix_prost_build::{ActixGenerator, GeneratorList};
 use prost_build::{Config, ServiceGenerator};
 use std::path::Path;
 
-
-
 // custom function to include custom generator
 fn compile(
     protos: &[impl AsRef<Path>],

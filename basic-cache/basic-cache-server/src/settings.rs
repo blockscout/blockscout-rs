@@ -17,18 +17,14 @@ pub struct Settings {
     #[serde(default)]
     pub jaeger: JaegerSettings,
     pub database: DatabaseSettings,
-    }
+}
 
 impl ConfigSettings for Settings {
     const SERVICE_NAME: &'static str = "BASIC_CACHE";
 }
 
 impl Settings {
-    pub fn default(
-        
-        database_url: String,
-        
-    ) -> Self {
+    pub fn default(database_url: String) -> Self {
         Self {
             server: Default::default(),
             metrics: Default::default(),

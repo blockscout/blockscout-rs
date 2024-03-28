@@ -1,5 +1,5 @@
+use basic_cache_server::{run, Settings};
 use blockscout_service_launcher::launcher::ConfigSettings;
-use basic_cache_server::{Settings, run};
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {

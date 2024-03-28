@@ -1,15 +1,9 @@
 use crate::{
-    proto::{
-        health_actix::route_health, health_server::HealthServer,
-    },
-    services::{
-        HealthService
-    },
+    proto::{health_actix::route_health, health_server::HealthServer},
+    services::HealthService,
     settings::Settings,
 };
-use blockscout_service_launcher::{
-    database,
-    launcher, launcher::LaunchSettings, tracing};
+use blockscout_service_launcher::{database, launcher, launcher::LaunchSettings, tracing};
 
 use std::sync::Arc;
 
@@ -23,8 +17,7 @@ struct Router {
 
 impl Router {
     pub fn grpc_router(&self) -> tonic::transport::server::Router {
-        tonic::transport::Server::builder()
-            .add_service(HealthServer::from_arc(self.health.clone()))
+        tonic::transport::Server::builder().add_service(HealthServer::from_arc(self.health.clone()))
     }
 }
 
@@ -39,13 +32,9 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let health = Arc::new(HealthService::default());
 
-    
-
     // TODO: init services here
 
-    let router = Router {
-        health,
-    };
+    let router = Router { health };
 
     let grpc_router = router.grpc_router();
     let http_router = router;

@@ -2,10 +2,7 @@
 pub mod blockscout {
     pub mod basic_cache {
         pub mod v1 {
-            include!(concat!(
-                env!("OUT_DIR"),
-                "/blockscout.basic_cache.v1.rs"
-            ));
+            include!(concat!(env!("OUT_DIR"), "/blockscout.basic_cache.v1.rs"));
         }
     }
 }
