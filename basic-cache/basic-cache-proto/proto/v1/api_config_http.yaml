@@ -1,0 +1,18 @@
+type: google.api.Service
+config_version: 3
+
+http:
+  rules:
+    
+    - selector: blockscout.basicCache.v1.TestService.TestServiceCreate
+      post: /api/v1/TestService:create
+      body: "*"
+
+    - selector: blockscout.basicCache.v1.TestService.TestServiceSearch
+      get: /api/v1/TestService:search
+    
+    #################### Health ####################
+
+    - selector: blockscout.basicCache.v1.Health.Check
+      get: /health
+

@@ -1,0 +1,10 @@
+[workspace]
+resolver = "2"
+members = [
+    "basic-cache-logic",
+    "basic-cache-proto",
+    "basic-cache-server",
+]
+
+[workspace.dependencies]
+blockscout-service-launcher = "0.10.0"
