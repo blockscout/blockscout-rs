@@ -1,11 +1,13 @@
 use crate::{
     metrics,
     proto::{
-        solidity_verifier_server::SolidityVerifier, ListCompilerVersionsRequest,
-        ListCompilerVersionsResponse, VerifyResponse, VerifySolidityMultiPartRequest,
-        VerifySolidityStandardJsonRequest,
+        solidity_verifier_server::SolidityVerifier, BatchVerifyResponse,
+        BatchVerifySolidityMultiPartRequest, BatchVerifySolidityStandardJsonRequest,
+        ListCompilerVersionsRequest, ListCompilerVersionsResponse, VerifyResponse,
+        VerifySolidityMultiPartRequest, VerifySolidityStandardJsonRequest,
     },
     settings::{Extensions, FetcherSettings, S3FetcherSettings, SoliditySettings},
+    types,
     types::{
         LookupMethodsRequestWrapper, LookupMethodsResponseWrapper, StandardJsonParseError,
         VerifyResponseWrapper, VerifySolidityMultiPartRequestWrapper,
@@ -227,6 +229,76 @@ impl SolidityVerifier for SolidityVerifierService {
             "standard-json",
         );
         Ok(Response::new(response.into_inner()))
+    }
+
+    async fn batch_verify_multi_part(
+        &self,
+        request: Request<BatchVerifySolidityMultiPartRequest>,
+    ) -> Result<Response<BatchVerifyResponse>, Status> {
+        let request = request.into_inner();
+
+        let contracts =
+            types::batch_verification::from_proto_contracts_to_inner(&request.contracts)?;
+        let compiler_version = types::batch_verification::from_proto_compiler_version_to_inner(
+            &request.compiler_version,
+        )?;
+
+        let content = types::batch_verification::from_proto_solidity_multi_part_content_to_inner(
+            request.sources,
+            request.evm_version,
+            request.optimization_runs,
+            request.libraries,
+        )?;
+
+        let verification_request = solidity::multi_part::BatchVerificationRequest {
+            contracts,
+            compiler_version,
+            content,
+        };
+
+        let result =
+            solidity::multi_part::batch_verify(self.client.clone(), verification_request).await;
+
+        match result {
+            Ok(results) => types::batch_verification::process_verification_results(results),
+            Err(err) => types::batch_verification::process_batch_error(err),
+        }
+    }
+
+    async fn batch_verify_standard_json(
+        &self,
+        request: Request<BatchVerifySolidityStandardJsonRequest>,
+    ) -> Result<Response<BatchVerifyResponse>, Status> {
+        let request = request.into_inner();
+
+        let contracts =
+            types::batch_verification::from_proto_contracts_to_inner(&request.contracts)?;
+        let compiler_version = types::batch_verification::from_proto_compiler_version_to_inner(
+            &request.compiler_version,
+        )?;
+
+        let input = match serde_json::from_str::<foundry_compilers::CompilerInput>(&request.input) {
+            Ok(input) => input,
+            Err(err) => {
+                return Ok(types::batch_verification::compilation_error(format!(
+                    "Invalid standard json: {err}"
+                )))
+            }
+        };
+
+        let verification_request = solidity::standard_json::BatchVerificationRequest {
+            contracts,
+            compiler_version,
+            content: solidity::standard_json::StandardJsonContent { input },
+        };
+
+        let result =
+            solidity::standard_json::batch_verify(self.client.clone(), verification_request).await;
+
+        match result {
+            Ok(results) => types::batch_verification::process_verification_results(results),
+            Err(err) => types::batch_verification::process_batch_error(err),
+        }
     }
 
     async fn list_compiler_versions(

@@ -14,3 +14,8 @@ impl From<sourcify::MatchType> for MatchType {
         }
     }
 }
+
+pub struct Contract {
+    pub creation_code: Option<Vec<u8>>,
+    pub runtime_code: Option<Vec<u8>>,
+}

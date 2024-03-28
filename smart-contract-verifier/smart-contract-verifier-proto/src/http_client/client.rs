@@ -104,6 +104,22 @@ pub mod solidity_verifier_client {
         client.post_request(client.build_url(path), &request).await
     }
 
+    pub async fn batch_verify_multi_part(
+        client: &Client,
+        request: proto::BatchVerifySolidityMultiPartRequest,
+    ) -> Result<proto::BatchVerifyResponse> {
+        let path = "/api/v2/verifier/solidity/sources:batch-verify-multi-part";
+        client.post_request(client.build_url(path), &request).await
+    }
+
+    pub async fn batch_verify_standard_json(
+        client: &Client,
+        request: proto::BatchVerifySolidityStandardJsonRequest,
+    ) -> Result<proto::BatchVerifyResponse> {
+        let path = "/api/v2/verifier/solidity/sources:batch-verify-standard-json";
+        client.post_request(client.build_url(path), &request).await
+    }
+
     pub async fn list_compiler_versions(
         client: &Client,
         _request: proto::ListCompilerVersionsRequest,

@@ -1,7 +1,9 @@
 use super::{client::Client, types::Success};
 use crate::{
+    batch_verifier::BatchError,
     compiler::Version,
     verifier::{ContractVerifier, Error},
+    BatchVerificationResult, Contract,
 };
 use bytes::Bytes;
 use foundry_compilers::{artifacts::output_selection::OutputSelection, CompilerInput};
@@ -54,4 +56,27 @@ pub async fn verify(client: Arc<Client>, request: VerificationRequest) -> Result
     }
 
     Ok(success)
+}
+
+pub struct BatchVerificationRequest {
+    pub contracts: Vec<Contract>,
+    pub compiler_version: Version,
+    pub content: StandardJsonContent,
+}
+
+pub async fn batch_verify(
+    client: Arc<Client>,
+    request: BatchVerificationRequest,
+) -> Result<Vec<BatchVerificationResult>, BatchError> {
+    let compiler_input = CompilerInput::from(request.content);
+
+    let verification_result = crate::batch_verifier::verify_solidity(
+        client.compilers(),
+        request.compiler_version,
+        request.contracts,
+        &compiler_input,
+    )
+    .await?;
+
+    Ok(verification_result)
 }

@@ -41,6 +41,18 @@ async fn solidity_service() {
         );
         set_expectation!(
             mock_service,
+            expect_batch_verify_multi_part,
+            proto::BatchVerifySolidityMultiPartRequest,
+            proto::BatchVerifyResponse
+        );
+        set_expectation!(
+            mock_service,
+            expect_batch_verify_standard_json,
+            proto::BatchVerifySolidityStandardJsonRequest,
+            proto::BatchVerifyResponse
+        );
+        set_expectation!(
+            mock_service,
             expect_list_compiler_versions,
             proto::ListCompilerVersionsRequest,
             proto::ListCompilerVersionsResponse
@@ -67,6 +79,18 @@ async fn solidity_service() {
     assert!(solidity_verifier_client::verify_standard_json(
         &client,
         proto::VerifySolidityStandardJsonRequest::default()
+    )
+    .await
+    .is_ok());
+    assert!(solidity_verifier_client::batch_verify_multi_part(
+        &client,
+        proto::BatchVerifySolidityMultiPartRequest::default()
+    )
+    .await
+    .is_ok());
+    assert!(solidity_verifier_client::batch_verify_standard_json(
+        &client,
+        proto::BatchVerifySolidityStandardJsonRequest::default()
     )
     .await
     .is_ok());
