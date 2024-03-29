@@ -10,6 +10,50 @@ consumes:
 produces:
   - application/json
 paths:
+  /api/v1/chains/{chainId}/smart-contracts/{address}:get:
+    get:
+      operationId: CacheService_GetSmartContract
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1SmartContract'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: chainId
+          description: identifier of a smart contract is (chain_id, address)
+          in: path
+          required: true
+          type: string
+        - name: address
+          in: path
+          required: true
+          type: string
+      tags:
+        - CacheService
+  /api/v1/smart-contracts:create:
+    post:
+      operationId: CacheService_CreateSmartContract
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1SmartContract'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1CreateSmartContractRequest'
+      tags:
+        - CacheService
   /health:
     get:
       summary: |-
@@ -61,6 +105,16 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/protobufAny'
+  v1CreateSmartContractRequest:
+    type: object
+    properties:
+      chainId:
+        type: string
+        title: identifier of a smart contract is (chain_id, address)
+      address:
+        type: string
+      smartContract:
+        $ref: '#/definitions/v1SmartContract'
   v1HealthCheckResponse:
     type: object
     properties:
@@ -76,13 +130,6 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1SourceFile'
-  v1SmartContractId:
-    type: object
-    properties:
-      chainId:
-        type: string
-      address:
-        type: string
   v1SourceFile:
     type: object
     properties:

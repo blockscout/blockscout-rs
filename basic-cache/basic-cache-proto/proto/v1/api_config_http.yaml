@@ -4,12 +4,12 @@ config_version: 3
 http:
   rules:
     
-    - selector: blockscout.basicCache.v1.TestService.TestServiceCreate
-      post: /api/v1/TestService:create
+    - selector: blockscout.basicCache.v1.CacheService.CreateSmartContract
+      post: /api/v1/smart-contracts:create
       body: "*"
 
-    - selector: blockscout.basicCache.v1.TestService.TestServiceSearch
-      get: /api/v1/TestService:search
+    - selector: blockscout.basicCache.v1.CacheService.GetSmartContract
+      get: /api/v1/chains/{chain_id}/smart-contracts/{address}:get
     
     #################### Health ####################
 

@@ -10,10 +10,13 @@ service CacheService {
   rpc GetSmartContract(GetSmartContractRequest) returns (SmartContract) {}
 }
 
-message SmartContractId {
-  string chain_id = 1;
-  string address = 2;
-}
+// could not use struct for id because `actix-prost` cannot work with setting
+// such parameters from query :((
+//
+// message SmartContractId {
+//   string chain_id = 1;
+//   string address = 2;
+// }
 
 message SourceFile {
   string name = 1;
@@ -25,11 +28,16 @@ message SmartContract {
   repeated SourceFile sources = 2;
 }
 
+
 message CreateSmartContractRequest {
-  SmartContractId smart_contract_id = 1;
-  SmartContract smart_contract = 2;
+  // identifier of a smart contract is (chain_id, address)
+  string chain_id = 1;
+  string address = 2;
+  SmartContract smart_contract = 3;
 }
 
 message GetSmartContractRequest {
-  SmartContractId smart_contract_id = 1;
+  // identifier of a smart contract is (chain_id, address)
+  string chain_id = 1;
+  string address = 2;
 }
