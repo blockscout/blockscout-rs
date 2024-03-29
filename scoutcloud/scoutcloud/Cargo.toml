@@ -39,6 +39,8 @@ serde_yaml = "0.9.34"
 lazy_static = "1.4.0"
 ethers = { version = "2.0.14", features = ["ws"] }
 json_dotpath = "1.1.0"
+serde_plain = "1.0.2"
+num-bigint = { version = "0.4.4", features = ["serde"] }
 
 ## Uncomment this if needed
 #ethabi = "18.0"

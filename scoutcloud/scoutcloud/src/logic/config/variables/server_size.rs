@@ -1,5 +1,7 @@
-use crate::logic::{ParsedVariable, ParsedVariableKey, UserVariable};
-use serde::{de::IntoDeserializer, Deserialize, Serialize};
+use crate::logic::{config::Error, ParsedVariable, ParsedVariableKey, UserVariable};
+use serde::{Deserialize, Serialize};
+use serde_plain::derive_fromstr_from_deserialize;
+use std::str::FromStr;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -8,6 +10,7 @@ pub enum ServerSize {
     Medium,
     Large,
 }
+derive_fromstr_from_deserialize!(ServerSize);
 
 impl ServerSize {
     pub fn resources(&self) -> serde_json::Value {
@@ -48,12 +51,14 @@ impl ServerSize {
 
 #[async_trait::async_trait]
 impl UserVariable<String> for ServerSize {
-    async fn build_config_vars(v: String) -> Result<Vec<ParsedVariable>, anyhow::Error> {
-        let ty = Self::deserialize(v.clone().into_deserializer())
-            .map_err(|_: serde_json::Error| anyhow::anyhow!("unknown server_size: '{}'", v))?;
+    fn new(v: String) -> Result<Self, Error> {
+        Self::from_str(&v).map_err(|_| Error::Validation(format!("unknown server_size: '{}'", v)))
+    }
+
+    async fn build_config_vars(&self) -> Result<Vec<ParsedVariable>, Error> {
         Ok(vec![(
             ParsedVariableKey::ConfigPath("blockscout.resources".to_string()),
-            ty.resources(),
+            self.resources(),
         )])
     }
 }

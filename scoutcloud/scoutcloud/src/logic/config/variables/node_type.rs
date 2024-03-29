@@ -1,5 +1,7 @@
-use crate::logic::config::macros;
-use serde::{de::IntoDeserializer, Deserialize, Serialize};
+use crate::logic::config::{macros, Error};
+use serde::{Deserialize, Serialize};
+use serde_plain::{derive_display_from_serialize, derive_fromstr_from_deserialize};
+use std::str::FromStr;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -10,18 +12,18 @@ pub enum NodeType {
     Besu,
     Ganache,
 }
+derive_display_from_serialize!(NodeType);
+derive_fromstr_from_deserialize!(NodeType);
 
-macros::single_env_var!(
+macros::custom_env_var!(
     NodeType,
     String,
     backend,
     "NODE_TYPE",
     Some("geth".to_string()),
     {
-        fn validate(v: String) -> Result<(), anyhow::Error> {
-            Self::deserialize(v.clone().into_deserializer())
-                .map_err(|_: serde_json::Error| anyhow::anyhow!("unknown node_type: '{}'", v))?;
-            Ok(())
+        fn new(v: String) -> Result<Self, Error> {
+            Self::from_str(&v).map_err(|_| Error::Validation(format!("unknown node_type: '{}'", v)))
         }
     }
 );

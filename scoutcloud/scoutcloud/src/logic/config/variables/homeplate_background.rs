@@ -1,8 +1,6 @@
 use crate::logic::config::macros;
 
-pub struct HomeplateBackground {}
-
-macros::single_env_var!(
+macros::simple_env_var!(
     HomeplateBackground,
     String,
     frontend,

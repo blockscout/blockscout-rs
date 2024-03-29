@@ -13,7 +13,7 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("failed to validate config: {0}")]
-    Validation(anyhow::Error),
+    Validation(String),
 
     #[error("internal error: {0}")]
     Internal(anyhow::Error),

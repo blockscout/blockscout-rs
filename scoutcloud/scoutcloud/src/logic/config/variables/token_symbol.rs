@@ -1,23 +1,22 @@
-use crate::logic::{ParsedVariable, ParsedVariableKey, UserVariable};
+use crate::logic::config::{macros, Error};
+use serde::{Deserialize, Serialize};
+use serde_plain::derive_display_from_serialize;
 
-pub struct TokenSymbol {}
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TokenSymbol(String);
+derive_display_from_serialize!(TokenSymbol);
 
-#[async_trait::async_trait]
-impl UserVariable<String> for TokenSymbol {
-    async fn build_config_vars(v: String) -> Result<Vec<ParsedVariable>, anyhow::Error> {
-        Ok(vec![
-            (
-                ParsedVariableKey::ConfigPath("config.network.currency.name".to_string()),
-                serde_json::json!(v),
-            ),
-            (
-                ParsedVariableKey::ConfigPath("config.network.currency.symbol".to_string()),
-                serde_json::json!(v),
-            ),
-        ])
+macros::custom_env_var!(
+    TokenSymbol,
+    String,
+    [
+        (config, "config.network.currency.symbol"),
+        (config, "config.network.currency.name")
+    ],
+    Some("ETH".to_string()),
+    {
+        fn new(v: String) -> Result<Self, Error> {
+            Ok(Self(v))
+        }
     }
-
-    fn maybe_default() -> Option<String> {
-        Some("ETH".to_string())
-    }
-}
+);

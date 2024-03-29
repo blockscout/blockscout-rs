@@ -1,3 +1,5 @@
+use crate::logic::config::Error;
+
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum ParsedVariableKey {
     BackendEnv(String),
@@ -22,11 +24,11 @@ pub trait UserVariable<V>: Send + Sync
 where
     V: Send + Sync,
 {
-    async fn build_config_vars(v: V) -> Result<Vec<ParsedVariable>, anyhow::Error>;
+    fn new(v: V) -> Result<Self, Error>
+    where
+        Self: Sized;
 
-    fn validate(_v: V) -> Result<(), anyhow::Error> {
-        Ok(())
-    }
+    async fn build_config_vars(&self) -> Result<Vec<ParsedVariable>, Error>;
 
     fn maybe_default() -> Option<V> {
         None

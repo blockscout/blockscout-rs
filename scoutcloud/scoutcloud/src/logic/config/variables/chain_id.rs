@@ -1,11 +1,16 @@
-use crate::logic::config::macros;
+use crate::logic::config::{macros, Error};
+use num_bigint::BigInt;
+use serde::{Deserialize, Serialize};
+use serde_plain::derive_display_from_serialize;
 
-pub struct ChainId {}
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ChainId(String);
+derive_display_from_serialize!(ChainId);
 
-macros::single_env_var!(ChainId, String, backend, "CHAIN_ID", None, {
-    fn validate(v: String) -> Result<(), anyhow::Error> {
-        v.parse::<u64>()
-            .map_err(|_| anyhow::anyhow!("invalid chain_id: '{}'", v))?;
-        Ok(())
+macros::custom_env_var!(ChainId, String, backend, "CHAIN_ID", None, {
+    fn new(v: String) -> Result<Self, Error> {
+        v.parse::<BigInt>()
+            .map_err(|_| Error::Validation("invalid chain_id".to_string()))?;
+        Ok(Self(v))
     }
 });

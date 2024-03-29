@@ -1,23 +1,30 @@
-use crate::logic::{ParsedVariable, ParsedVariableKey, UserVariable};
+use crate::logic::{config::Error, ParsedVariable, ParsedVariableKey, UserVariable};
 use anyhow::Context;
 use ethers::{prelude::*, providers::Provider, types::BlockNumber};
 use url::Url;
 
-pub struct RpcUrl;
+pub struct RpcUrl(Url);
 
 #[async_trait::async_trait]
 impl UserVariable<Url> for RpcUrl {
-    async fn build_config_vars(url: Url) -> Result<Vec<ParsedVariable>, anyhow::Error> {
+    fn new(v: Url) -> Result<Self, Error> {
+        Ok(Self(v))
+    }
+
+    async fn build_config_vars(&self) -> Result<Vec<ParsedVariable>, Error> {
         let mut parsed = vec![];
 
         // check json rpc
-        let provider =
-            Provider::<Http>::try_from(url.as_str()).context("failed to parse url as http")?;
+        let provider = Provider::<Http>::try_from(self.0.as_str())
+            .context("failed to parse url as http")
+            .map_err(|e| Error::Validation(e.to_string()))?;
 
-        check_jsonrpc_health(&provider).await?;
+        check_jsonrpc_health(&provider)
+            .await
+            .map_err(|e| Error::Validation(e.to_string()))?;
         parsed.push((
             ParsedVariableKey::BackendEnv("ETHEREUM_JSONRPC_HTTP_URL".to_string()),
-            serde_json::Value::String(url.to_string()),
+            serde_json::Value::String(self.0.to_string()),
         ));
 
         // check trace method
@@ -26,7 +33,7 @@ impl UserVariable<Url> for RpcUrl {
             Ok(()) => {
                 parsed.push((
                     ParsedVariableKey::BackendEnv("ETHEREUM_JSONRPC_TRACE_URL".to_string()),
-                    serde_json::Value::String(url.to_string()),
+                    serde_json::Value::String(self.0.to_string()),
                 ));
                 parsed.push((
                     ParsedVariableKey::BackendEnv(
@@ -50,7 +57,10 @@ impl UserVariable<Url> for RpcUrl {
         };
 
         // check websocket
-        if let Some(ws_url) = get_any_healthy_ws_url(url.clone()).await? {
+        if let Some(ws_url) = get_any_healthy_ws_url(self.0.clone())
+            .await
+            .map_err(Error::Internal)?
+        {
             parsed.push((
                 ParsedVariableKey::BackendEnv("ETHEREUM_JSONRPC_WS_URL".to_string()),
                 serde_json::Value::String(ws_url.to_string()),

@@ -1,5 +1,7 @@
-use crate::logic::{config::variables, ParsedVariableKey, UserVariable};
-use anyhow::Context;
+use crate::logic::{
+    config::{variables, Error},
+    ParsedVariableKey, UserVariable,
+};
 use scoutcloud_proto::blockscout::scoutcloud::v1::{
     DeployConfigInternal, DeployConfigPartialInternal,
 };
@@ -21,12 +23,9 @@ macro_rules! parse_config_vars {
                     (true, None) => None,
                 };
                 if let Some(value) = maybe_value {
-                    variables::[<$var:snake>]::[<$var:camel>]::validate(value.clone()).with_context(|| {
-                        format!("failed to validate {}", std::stringify!($var))
-                    })?;
-                    let parsed_vars = variables::[<$var:snake>]::[<$var:camel>]::build_config_vars(value).await.with_context(|| {
-                        format!("failed to build config variable for '{}'", std::stringify!([<$var:snake>]))
-                    })?;
+                    let parsed_vars = variables::[<$var:snake>]::[<$var:camel>]::new(value)?
+                        .build_config_vars()
+                        .await?;
                     $validated_config.vars.extend(parsed_vars);
                 }
             })*
@@ -55,14 +54,14 @@ macro_rules! parse_config_all_vars {
 impl ValidatedInstanceConfig {
     pub async fn try_from_config_partial(
         config: DeployConfigPartialInternal,
-    ) -> Result<Self, anyhow::Error> {
+    ) -> Result<Self, Error> {
         let mut this = Self::default();
         let is_partial = true;
         parse_config_all_vars!(config, this, is_partial);
         Ok(this)
     }
 
-    pub async fn try_from_config(config: DeployConfigInternal) -> Result<Self, anyhow::Error> {
+    pub async fn try_from_config(config: DeployConfigInternal) -> Result<Self, Error> {
         let mut this = Self::default();
         let is_partial = false;
         parse_config_all_vars!(config, this, is_partial);
