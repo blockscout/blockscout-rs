@@ -4,6 +4,7 @@ blockscout:
     tag: 6.3.0
 
   ingress:
+    hostname: &host .k8s-dev.blockscout.com
     enabled: true
 
   resources:
