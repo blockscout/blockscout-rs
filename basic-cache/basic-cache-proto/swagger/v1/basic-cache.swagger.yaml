@@ -3,60 +3,13 @@ info:
   title: v1/basic-cache.proto
   version: version not set
 tags:
-  - name: TestService
+  - name: CacheService
   - name: Health
 consumes:
   - application/json
 produces:
   - application/json
 paths:
-  /api/v1/TestService:create:
-    post:
-      operationId: TestService_TestServiceCreate
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1TestServiceCreateResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/rpcStatus'
-      parameters:
-        - name: body
-          in: body
-          required: true
-          schema:
-            $ref: '#/definitions/v1TestServiceCreateRequest'
-      tags:
-        - TestService
-  /api/v1/TestService:search:
-    get:
-      operationId: TestService_TestServiceSearch
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1TestServiceSearchResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/rpcStatus'
-      parameters:
-        - name: filter1
-          in: query
-          required: false
-          type: string
-        - name: filter2
-          in: query
-          required: false
-          type: string
-        - name: filter3
-          in: query
-          required: false
-          type: string
-      tags:
-        - TestService
   /health:
     get:
       summary: |-
@@ -113,37 +66,27 @@ definitions:
     properties:
       status:
         $ref: '#/definitions/HealthCheckResponseServingStatus'
-  v1Item:
+  v1SmartContract:
     type: object
     properties:
-      id:
+      url:
         type: string
-      name:
-        type: string
-  v1TestServiceCreateRequest:
-    type: object
-    properties:
-      foo:
-        type: string
-      bar:
-        type: string
-      timestamp:
-        type: string
-        format: int64
-      map:
-        type: object
-        additionalProperties:
-          type: string
-  v1TestServiceCreateResponse:
-    type: object
-    properties:
-      item:
-        $ref: '#/definitions/v1Item'
-  v1TestServiceSearchResponse:
-    type: object
-    properties:
-      items:
+      sources:
         type: array
         items:
           type: object
-          $ref: '#/definitions/v1Item'
+          $ref: '#/definitions/v1SourceFile'
+  v1SmartContractId:
+    type: object
+    properties:
+      chainId:
+        type: string
+      address:
+        type: string
+  v1SourceFile:
+    type: object
+    properties:
+      name:
+        type: string
+      content:
+        type: string

@@ -5,39 +5,31 @@ package blockscout.basicCache.v1;
 option go_package = "github.com/blockscout/blockscout-rs/basic-cache";
 
 
-service TestService {
-  rpc TestServiceCreate(TestServiceCreateRequest) returns (TestServiceCreateResponse) {}
-  rpc TestServiceSearch(TestServiceSearchRequest) returns (TestServiceSearchResponse) {}
-  
+service CacheService {
+  rpc CreateSmartContract(CreateSmartContractRequest) returns (SmartContract) {}  
+  rpc GetSmartContract(GetSmartContractRequest) returns (SmartContract) {}
 }
 
-message Item {
-  string id = 1;
-  string name = 2;
+message SmartContractId {
+  string chain_id = 1;
+  string address = 2;
 }
 
-message TestServiceCreateRequest {
-  string foo = 1;
-  optional string bar = 2;
-  int64 timestamp = 3;
-  map<string, string> map = 4;
+message SourceFile {
+  string name = 1;
+  string content = 2;
 }
 
-message TestServiceCreateResponse {
-  Item item = 1;
+message SmartContract {
+  string url = 1;
+  repeated SourceFile sources = 2;
 }
 
-
-
-message TestServiceSearchRequest {
-  string filter_1 = 1;
-  string filter_2 = 2;
-  string filter_3 = 3;
+message CreateSmartContractRequest {
+  SmartContractId smart_contract_id = 1;
+  SmartContract smart_contract = 2;
 }
 
-message TestServiceSearchResponse {
-  repeated Item items = 1;
+message GetSmartContractRequest {
+  SmartContractId smart_contract_id = 1;
 }
-
-
-
