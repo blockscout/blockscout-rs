@@ -1,4 +1,7 @@
-use crate::logic::config::{macros, Error};
+use crate::logic::{
+    config::{macros, Error},
+    ConfigValidationContext,
+};
 use serde::{Deserialize, Serialize};
 use serde_plain::derive_display_from_serialize;
 
@@ -13,10 +16,13 @@ macros::custom_env_var!(
         (config, "config.network.currency.symbol"),
         (config, "config.network.currency.name")
     ],
-    Some("ETH".to_string()),
     {
-        fn new(v: String) -> Result<Self, Error> {
+        fn new(v: String, _config: &ConfigValidationContext) -> Result<Self, Error> {
             Ok(Self(v))
+        }
+
+        fn maybe_default(_context: &ConfigValidationContext) -> Option<String> {
+            Some("ETH".to_string())
         }
     }
 );

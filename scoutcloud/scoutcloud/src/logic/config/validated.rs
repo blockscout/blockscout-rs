@@ -1,5 +1,5 @@
 use crate::logic::{
-    config::{variables, Error},
+    config::{types::ConfigValidationContext, variables, Error},
     ParsedVariableKey, UserVariable,
 };
 use scoutcloud_proto::blockscout::scoutcloud::v1::{
@@ -13,18 +13,18 @@ pub struct ValidatedInstanceConfig {
 }
 
 macro_rules! parse_config_vars {
-    ($config:ident, $validated_config:ident, $is_partial_config:ident, { $($var:ident),* $(,)? }) => {
+    ($config:ident, $context:ident, $validated_config:ident, $is_partial_config:ident, { $($var:ident),* $(,)? }) => {
         paste::item! {
             $({
                 let value: Option<_> = $config.[<$var:snake>].into();
                 let maybe_value = match ($is_partial_config, value) {
                     (_, Some(value)) => Some(value),
-                    (false, None) => <variables::[<$var:snake>]::[<$var:camel>] as UserVariable<_>>::maybe_default(),
+                    (false, None) => <variables::[<$var:snake>]::[<$var:camel>] as UserVariable<_>>::maybe_default(&$context),
                     (true, None) => None,
                 };
                 if let Some(value) = maybe_value {
-                    let parsed_vars = variables::[<$var:snake>]::[<$var:camel>]::new(value)?
-                        .build_config_vars()
+                    let parsed_vars = variables::[<$var:snake>]::[<$var:camel>]::new(value, &$context)?
+                        .build_config_vars(&$context)
                         .await?;
                     $validated_config.vars.extend(parsed_vars);
                 }
@@ -34,8 +34,8 @@ macro_rules! parse_config_vars {
 }
 
 macro_rules! parse_config_all_vars {
-    ($config:ident, $validated_config:ident, $is_partial:ident) => {
-        parse_config_vars!($config, $validated_config, $is_partial, {
+    ($config:ident, $context:ident, $validated_config:ident, $is_partial:ident) => {
+        parse_config_vars!($config, $context, $validated_config, $is_partial, {
             ChainId,
             ChainName,
             ChainType,
@@ -54,17 +54,21 @@ macro_rules! parse_config_all_vars {
 impl ValidatedInstanceConfig {
     pub async fn try_from_config_partial(
         config: DeployConfigPartialInternal,
+        context: ConfigValidationContext,
     ) -> Result<Self, Error> {
         let mut this = Self::default();
         let is_partial = true;
-        parse_config_all_vars!(config, this, is_partial);
+        parse_config_all_vars!(config, context, this, is_partial);
         Ok(this)
     }
 
-    pub async fn try_from_config(config: DeployConfigInternal) -> Result<Self, Error> {
+    pub async fn try_from_config(
+        config: DeployConfigInternal,
+        context: ConfigValidationContext,
+    ) -> Result<Self, Error> {
         let mut this = Self::default();
         let is_partial = false;
-        parse_config_all_vars!(config, this, is_partial);
+        parse_config_all_vars!(config, context, this, is_partial);
         Ok(this)
     }
 }

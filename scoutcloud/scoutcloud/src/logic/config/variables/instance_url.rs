@@ -1,4 +1,7 @@
-use crate::logic::config::{macros, Error};
+use crate::logic::{
+    config::{macros, Error},
+    ConfigValidationContext,
+};
 use std::fmt::{Display, Formatter};
 
 pub enum InstanceUrl {
@@ -18,16 +21,21 @@ impl Display for InstanceUrl {
 macros::custom_env_var!(
     InstanceUrl,
     String,
-    config,
-    "blockscout.ingress.hostname",
-    None,
+    [
+        (config, "blockscout.ingress.hostname"),
+        (config, "frontend.ingress.hostname")
+    ],
     {
-        fn new(v: String) -> Result<Self, Error> {
-            if v.parse::<url::Url>().is_ok() {
+        fn new(v: String, _context: &ConfigValidationContext) -> Result<Self, Error> {
+            if v.contains('.') {
                 Ok(Self::Host(v))
             } else {
                 Ok(Self::Prefix(v))
             }
+        }
+
+        fn maybe_default(context: &ConfigValidationContext) -> Option<String> {
+            Some(format!("{}.blockscout.com", context.client_name))
         }
     }
 );

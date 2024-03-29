@@ -24,13 +24,21 @@ pub trait UserVariable<V>: Send + Sync
 where
     V: Send + Sync,
 {
-    fn new(v: V) -> Result<Self, Error>
+    fn new(v: V, context: &ConfigValidationContext) -> Result<Self, Error>
     where
         Self: Sized;
 
-    async fn build_config_vars(&self) -> Result<Vec<ParsedVariable>, Error>;
+    async fn build_config_vars(
+        &self,
+        context: &ConfigValidationContext,
+    ) -> Result<Vec<ParsedVariable>, Error>;
 
-    fn maybe_default() -> Option<V> {
+    fn maybe_default(_context: &ConfigValidationContext) -> Option<V> {
         None
     }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ConfigValidationContext {
+    pub client_name: String,
 }

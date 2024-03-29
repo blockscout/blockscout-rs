@@ -18,16 +18,29 @@ pub use var_key;
 
 #[macro_export]
 macro_rules! simple_env_var {
-         ($var_name:ident, $var_ty:ty, $key_type:ident, $key:expr, $maybe_default:expr) => {
+        ($var_name:ident, $var_ty:ty, $key_type:ident, $key:expr) => {
+            $crate::logic::config::macros::simple_env_var!(
+                $var_name,
+                $var_ty,
+                $key_type,
+                $key,
+                {}
+            );
+        };
+        ($var_name:ident, $var_ty:ty, $key_type:ident, $key:expr, {$($extra_body:tt)*}) => {
              paste::item!{
                  #[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
                  pub struct [<$var_name:camel>]($var_ty);
                  serde_plain::derive_display_from_serialize!([<$var_name:camel>]);
 
-                 $crate::logic::config::macros::custom_env_var!($var_name, $var_ty, $key_type, $key, $maybe_default, {
-                    fn new(v: $var_ty) -> Result<Self, $crate::logic::config::Error> {
+                 $crate::logic::config::macros::custom_env_var!($var_name, $var_ty, $key_type, $key, {
+                    fn new(
+                        v: $var_ty,
+                        _context: &$crate::logic::ConfigValidationContext
+                    ) -> Result<Self, $crate::logic::config::Error> {
                         Ok(Self(v))
                     }
+                    $($extra_body)*
                  });
              }
          };
@@ -36,21 +49,20 @@ pub use simple_env_var;
 
 #[macro_export]
 macro_rules! custom_env_var {
-    ($var_name:ident, $var_ty:ty, $key_type:ident, $key:expr, $maybe_default:expr, {$extra_body:item}) => {
+    ($var_name:ident, $var_ty:ty, $key_type:ident, $key:expr, {$($extra_body:tt)*}) => {
         $crate::logic::config::macros::custom_env_var!(
             $var_name,
             $var_ty,
             [($key_type, $key)],
-            $maybe_default,
-            {$extra_body}
+            {$($extra_body)*}
         );
     };
-    ($var_name:ident, $var_ty:ty, [ $( ($key_type:ident, $key:expr) ),* ], $maybe_default:expr, {$extra_body:item}) => {
+    ($var_name:ident, $var_ty:ty, [ $( ($key_type:ident, $key:expr) ),* ], {$($extra_body:tt)*}) => {
         paste::item! {
             #[allow(clippy::vec_init_then_push)]
             #[async_trait::async_trait]
             impl $crate::logic::UserVariable<$var_ty> for [<$var_name:camel>] {
-                async fn build_config_vars(&self) -> Result<Vec<
+                async fn build_config_vars(&self, _context: &$crate::logic::ConfigValidationContext) -> Result<Vec<
                     $crate::logic::ParsedVariable>,
                     $crate::logic::config::Error
                 > {
@@ -64,10 +76,7 @@ macro_rules! custom_env_var {
                     Ok(config_vars)
                 }
 
-                fn maybe_default() -> Option<$var_ty> {
-                    $maybe_default
-                }
-               $extra_body
+               $($extra_body)*
 
            }
 

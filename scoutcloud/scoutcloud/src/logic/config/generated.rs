@@ -78,8 +78,9 @@ fn merge(a: &mut serde_json::Value, b: &serde_json::Value) {
 
 #[cfg(test)]
 mod tests {
-    use crate::logic::config::{
-        generated::GeneratedInstanceConfig, validated::ValidatedInstanceConfig,
+    use crate::logic::{
+        config::{generated::GeneratedInstanceConfig, validated::ValidatedInstanceConfig},
+        ConfigValidationContext,
     };
     use httpmock::{Method::*, MockServer};
     use pretty_assertions::assert_eq;
@@ -126,13 +127,16 @@ mod tests {
     async fn config_parse_works() {
         let server = mock_rpc();
         let config = test_deploy_instance_config(&server);
-        let validated = ValidatedInstanceConfig::try_from_config(config)
+        let context = ConfigValidationContext {
+            client_name: "test-client".to_string(),
+        };
+        let validated = ValidatedInstanceConfig::try_from_config(config, context)
             .await
             .expect("failed to parse config");
 
         assert_eq!(
             validated.vars.len(),
-            14,
+            15,
             "invalid parsed config: {:?}",
             validated
         );
@@ -168,6 +172,9 @@ mod tests {
                     }
                 },
                 "frontend": {
+                    "ingress": {
+                        "hostname": "hostname-test.k8s-dev.blockscout.com",
+                    },
                     "env": {
                         "NEXT_PUBLIC_HOMEPAGE_PLATE_BACKGROUND": "#111111",
                         "NEXT_PUBLIC_HOMEPAGE_PLATE_TEXT_COLOR": "#222222",
@@ -204,14 +211,16 @@ mod tests {
             homeplate_background: None,
             homeplate_text_color: None,
         };
-
-        let validated = ValidatedInstanceConfig::try_from_config(config)
+        let context = ConfigValidationContext {
+            client_name: "test-client".to_string(),
+        };
+        let validated = ValidatedInstanceConfig::try_from_config(config, context)
             .await
             .expect("failed to parse config");
 
         assert_eq!(
             validated.vars.len(),
-            6,
+            8,
             "invalid parsed config: {:?}",
             validated
         );
@@ -222,6 +231,9 @@ mod tests {
             generated.raw,
             json!({
                 "blockscout": {
+                    "ingress": {
+                        "hostname": "test-client.blockscout.com",
+                    },
                     "env": {
                         "NODE_TYPE": "geth",
                         "ETHEREUM_JSONRPC_HTTP_URL": server.url("/"),
@@ -237,6 +249,11 @@ mod tests {
                         "cpu": "2"
                       }
                     }
+                },
+                "frontend": {
+                    "ingress": {
+                        "hostname": "test-client.blockscout.com",
+                    },
                 },
                 "config": {
                     "network": {
@@ -266,8 +283,10 @@ mod tests {
             homeplate_background: None,
             homeplate_text_color: None,
         };
-
-        let validated = ValidatedInstanceConfig::try_from_config_partial(config)
+        let context = ConfigValidationContext {
+            client_name: "test-client".to_string(),
+        };
+        let validated = ValidatedInstanceConfig::try_from_config_partial(config, context)
             .await
             .expect("failed to parse config");
 
@@ -294,7 +313,10 @@ mod tests {
         let server = mock_rpc();
         let config = test_deploy_instance_config(&server);
         let server_url = server.url("/").to_string();
-        let validated = ValidatedInstanceConfig::try_from_config(config)
+        let context = ConfigValidationContext {
+            client_name: "test-client".to_string(),
+        };
+        let validated = ValidatedInstanceConfig::try_from_config(config, context)
             .await
             .expect("failed to parse config");
         let raw_yaml = GeneratedInstanceConfig::try_from(validated)
@@ -377,6 +399,7 @@ frontend:
     tag: latest
   ingress:
     enabled: true
+    hostname: hostname-test.k8s-dev.blockscout.com
   replicas:
     app: 2
   resources: null

@@ -3,6 +3,6 @@ pub mod github;
 pub mod users;
 
 pub use config::{
-    GeneratedInstanceConfig, ParsedVariable, ParsedVariableKey, UserVariable,
-    ValidatedInstanceConfig,
+    ConfigValidationContext, GeneratedInstanceConfig, ParsedVariable, ParsedVariableKey,
+    UserVariable, ValidatedInstanceConfig,
 };

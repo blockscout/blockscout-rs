@@ -5,7 +5,7 @@ mod validated;
 pub mod variables;
 
 pub use generated::GeneratedInstanceConfig;
-pub use types::{ParsedVariable, ParsedVariableKey, UserVariable};
+pub use types::{ConfigValidationContext, ParsedVariable, ParsedVariableKey, UserVariable};
 pub use validated::ValidatedInstanceConfig;
 
 use thiserror::Error;

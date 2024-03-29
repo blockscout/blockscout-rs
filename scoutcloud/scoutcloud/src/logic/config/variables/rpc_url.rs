@@ -1,4 +1,6 @@
-use crate::logic::{config::Error, ParsedVariable, ParsedVariableKey, UserVariable};
+use crate::logic::{
+    config::Error, ConfigValidationContext, ParsedVariable, ParsedVariableKey, UserVariable,
+};
 use anyhow::Context;
 use ethers::{prelude::*, providers::Provider, types::BlockNumber};
 use url::Url;
@@ -7,11 +9,14 @@ pub struct RpcUrl(Url);
 
 #[async_trait::async_trait]
 impl UserVariable<Url> for RpcUrl {
-    fn new(v: Url) -> Result<Self, Error> {
+    fn new(v: Url, _config: &ConfigValidationContext) -> Result<Self, Error> {
         Ok(Self(v))
     }
 
-    async fn build_config_vars(&self) -> Result<Vec<ParsedVariable>, Error> {
+    async fn build_config_vars(
+        &self,
+        _config: &ConfigValidationContext,
+    ) -> Result<Vec<ParsedVariable>, Error> {
         let mut parsed = vec![];
 
         // check json rpc

@@ -1,4 +1,6 @@
-use crate::logic::{config::Error, ParsedVariable, ParsedVariableKey, UserVariable};
+use crate::logic::{
+    config::Error, ConfigValidationContext, ParsedVariable, ParsedVariableKey, UserVariable,
+};
 use serde::{Deserialize, Serialize};
 use serde_plain::derive_fromstr_from_deserialize;
 use std::str::FromStr;
@@ -51,11 +53,14 @@ impl ServerSize {
 
 #[async_trait::async_trait]
 impl UserVariable<String> for ServerSize {
-    fn new(v: String) -> Result<Self, Error> {
+    fn new(v: String, _config: &ConfigValidationContext) -> Result<Self, Error> {
         Self::from_str(&v).map_err(|_| Error::Validation(format!("unknown server_size: '{}'", v)))
     }
 
-    async fn build_config_vars(&self) -> Result<Vec<ParsedVariable>, Error> {
+    async fn build_config_vars(
+        &self,
+        _config: &ConfigValidationContext,
+    ) -> Result<Vec<ParsedVariable>, Error> {
         Ok(vec![(
             ParsedVariableKey::ConfigPath("blockscout.resources".to_string()),
             self.resources(),
