@@ -5,6 +5,8 @@ use crate::{
 };
 use blockscout_service_launcher::{database, launcher, launcher::LaunchSettings, tracing};
 
+use migration::Migrator;
+
 use std::sync::Arc;
 
 const SERVICE_NAME: &str = "basic_cache";
@@ -31,6 +33,13 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     tracing::init_logs(SERVICE_NAME, &settings.tracing, &settings.jaeger)?;
 
     let health = Arc::new(HealthService::default());
+
+    let _db_connection = database::initialize_postgres::<Migrator>(
+        &settings.database.connect.url(),
+        settings.database.create_database,
+        settings.database.run_migrations,
+    )
+    .await?;
 
     // TODO: init services here
 

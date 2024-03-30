@@ -36,5 +36,16 @@ run:
 
 
 
+generate-entities:
+    sea-orm-cli generate entity --lib -o basic-cache-entity/src
+
+
+new-migration name:
+    sea-orm-cli migrate generate -d {{project-name}}-migration {{name}}
+migrate-up:
+    sea-orm-cli migrate -d basic-cache-migration up
+
+migrate-down:
+    sea-orm-cli migrate basic-cache-migration down
 
 

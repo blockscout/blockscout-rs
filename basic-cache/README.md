@@ -17,6 +17,26 @@ just
 just start-postgres
 ```
 
++ For ORM codegen and migrations install [sea-orm-cli](https://www.sea-ql.org/SeaORM/docs/generate-entity/sea-orm-cli/)
+
+
++ Write initial migration inside `basic-cache-logic/migration/src/m20220101_000001_create_table`.
++ If you want you can create another migration by just typing:
+
+```bash
+just new-migration <name>
+```
++ Apply migration by just typing:
+
+```bash
+just migrate-up
+```
+
++ Generate ORM codegen by just typing:
+
+```bash
+just generate-entities
+```
 + Now you ready to start API server! Just run it:
 ```
 just run

@@ -7,6 +7,7 @@ edition = "2021"
 [dependencies]
 basic-cache-proto = { path = "../basic-cache-proto" }
 basic-cache-logic = { path = "../basic-cache-logic" }
+basic-cache-migration = { path = "../basic-cache-migration" }
 actix-web = "4.2"
 anyhow = "1.0"
 async-trait = "0.1"
