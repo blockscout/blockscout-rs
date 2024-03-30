@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "basic-cache-logic",
     "basic-cache-entity",
+    "basic-cache-migration",
     "basic-cache-proto",
     "basic-cache-server",
 ]
