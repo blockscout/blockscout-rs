@@ -10,7 +10,7 @@ consumes:
 produces:
   - application/json
 paths:
-  /api/v1/chains/{chainId}/smart-contracts/{address}:get:
+  /api/v1/chains/{chainId}/smart-contracts/{address}:
     get:
       operationId: Cache_GetSmartContract
       responses:

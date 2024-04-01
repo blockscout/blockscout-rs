@@ -9,7 +9,7 @@ http:
       body: "*"
 
     - selector: blockscout.basicCache.v1.Cache.GetSmartContract
-      get: /api/v1/chains/{chain_id}/smart-contracts/{address}:get
+      get: /api/v1/chains/{chain_id}/smart-contracts/{address}
     
     #################### Health ####################
 
