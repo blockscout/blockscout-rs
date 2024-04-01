@@ -5,7 +5,7 @@ package blockscout.basicCache.v1;
 option go_package = "github.com/blockscout/blockscout-rs/basic-cache";
 
 
-service CacheService {
+service Cache {
   rpc CreateSmartContract(CreateSmartContractRequest) returns (SmartContract) {}  
   rpc GetSmartContract(GetSmartContractRequest) returns (SmartContract) {}
 }

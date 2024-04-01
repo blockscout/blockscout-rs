@@ -3,7 +3,7 @@ info:
   title: v1/basic-cache.proto
   version: version not set
 tags:
-  - name: CacheService
+  - name: Cache
   - name: Health
 consumes:
   - application/json
@@ -12,7 +12,7 @@ produces:
 paths:
   /api/v1/chains/{chainId}/smart-contracts/{address}:get:
     get:
-      operationId: CacheService_GetSmartContract
+      operationId: Cache_GetSmartContract
       responses:
         "200":
           description: A successful response.
@@ -33,10 +33,10 @@ paths:
           required: true
           type: string
       tags:
-        - CacheService
-  /api/v1/smart-contracts:create:
+        - Cache
+  /api/v1/smart-contracts:
     post:
-      operationId: CacheService_CreateSmartContract
+      operationId: Cache_CreateSmartContract
       responses:
         "200":
           description: A successful response.
@@ -53,7 +53,7 @@ paths:
           schema:
             $ref: '#/definitions/v1CreateSmartContractRequest'
       tags:
-        - CacheService
+        - Cache
   /health:
     get:
       summary: |-
