@@ -31,19 +31,18 @@ test-with-db *args:
 
 stop-test-postgres:
     just docker-name="{{docker-name}}-test" stop-postgres
-{% endraw -%}
-
+{% endraw %}
 run:
     {% if database -%}
     {{crate_name| upcase}}__DATABASE__CONNECT__URL={% raw %}{{DATABASE_URL}}{% endraw %} \
     {% endif -%}
     cargo run --bin {{project-name}}-server
 
-{% if entity %}
+{% if entity -%}
 generate-entities:
     sea-orm-cli generate entity --lib -o {{project-name}}-entity/src
 {% endif %}
-{% if migrations %}
+{% if migrations -%}
 new-migration name:
     sea-orm-cli migrate generate -d {{project-name}}-migration {% raw %}{{name}}{% endraw %}
 
