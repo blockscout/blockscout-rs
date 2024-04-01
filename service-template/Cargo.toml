@@ -7,7 +7,7 @@ members = [
     {% if entity -%}
     "{{project-name}}-entity",
     {% endif -%}
-    {% if migration -%}
+    {% if migrations -%}
     "{{project-name}}-migration",
     {% endif -%}
     "{{project-name}}-proto",
