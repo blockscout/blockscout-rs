@@ -33,7 +33,7 @@ stop-test-postgres:
     just docker-name="{{docker-name}}-test" stop-postgres
 
 run:
-    SCOUTCLOUD__DATABASE__URL={{DATABASE_URL}} cargo run --bin scoutcloud-server
+    SCOUTCLOUD__DATABASE__CONNECT__URL={{DATABASE_URL}} cargo run --bin scoutcloud-server
 
 generate-entities:
     sea-orm-cli generate entity --lib -o scoutcloud-entity/src
