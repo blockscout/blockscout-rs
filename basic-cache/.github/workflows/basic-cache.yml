@@ -123,7 +123,7 @@ jobs:
         id: regex
         with:
           text: ${{ github.ref }}
-          regex: '^(refs\/tags\/{{project-name}}\/(v\d+\.\d+\.\d+))|(refs\/heads\/(main))$'
+          regex: '^(refs\/tags\/basic-cache\/(v\d+\.\d+\.\d+))|(refs\/heads\/(main))$'
 
       - name: Extract tag name
         id: tags_extractor
