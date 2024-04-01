@@ -41,7 +41,7 @@ generate-entities:
 
 
 new-migration name:
-    sea-orm-cli migrate generate -d {{project-name}}-migration {{name}}
+    sea-orm-cli migrate generate -d basic-cache-migration {{name}}
 migrate-up:
     sea-orm-cli migrate -d basic-cache-migration up
 
