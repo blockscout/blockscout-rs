@@ -1,4 +1,4 @@
-use super::{types, Error, GithubClient};
+use super::{types, GithubClient, GithubError};
 use anyhow::Context;
 use chrono::Utc;
 use octocrab::{models as octo_types, Page};
@@ -9,9 +9,9 @@ impl GithubClient {
     #[instrument(skip(self, content), fields(content_len = content.len()))]
     pub async fn create_or_update_file(
         &self,
-        content: &str,
         path: &str,
-    ) -> Result<(), anyhow::Error> {
+        content: &str,
+    ) -> Result<(), GithubError> {
         let _lock = self.mutex.lock().await;
         let latest_commit = self
             .get_latest_commit()
@@ -32,7 +32,9 @@ impl GithubClient {
         Ok(())
     }
 
-    pub async fn get_latest_commit(&self) -> Result<octocrab::models::repos::RepoCommit, Error> {
+    pub async fn get_latest_commit(
+        &self,
+    ) -> Result<octocrab::models::repos::RepoCommit, GithubError> {
         let latest_commit = self
             .client
             .commits(self.owner.clone(), self.repo.clone())
@@ -46,7 +48,7 @@ impl GithubClient {
         workflow_id: impl Into<String>,
         _ref: impl Into<String>,
         inputs: P,
-    ) -> Result<(), Error> {
+    ) -> Result<(), GithubError> {
         let _lock = self.mutex.lock().await;
         let workflow_dispatch = types::WorkflowDispatchRequest {
             _ref: _ref.into(),
@@ -69,7 +71,7 @@ impl GithubClient {
     pub async fn get_workflow_runs(
         &self,
         workflow_id: impl Into<String>,
-    ) -> Result<Vec<octo_types::workflows::Run>, Error> {
+    ) -> Result<Vec<octo_types::workflows::Run>, GithubError> {
         let runs = self
             .client
             .workflows(self.owner.clone(), self.repo.clone())
@@ -84,7 +86,7 @@ impl GithubClient {
         &self,
         workflow_id: impl Into<String>,
         created_from: Option<chrono::DateTime<Utc>>,
-    ) -> Result<Option<octo_types::workflows::Run>, Error> {
+    ) -> Result<Option<octo_types::workflows::Run>, GithubError> {
         let workflow_id = workflow_id.into();
         let url = format!(
             "/repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs",
@@ -103,7 +105,7 @@ impl GithubClient {
         Ok(pages.take_items().into_iter().next())
     }
 
-    async fn create_blob(&self, content: &str) -> Result<types::CreateBlobResponse, Error> {
+    async fn create_blob(&self, content: &str) -> Result<types::CreateBlobResponse, GithubError> {
         let blob: types::CreateBlobResponse = self
             .client
             .post(
@@ -123,7 +125,7 @@ impl GithubClient {
         base_tree: &str,
         path: &str,
         blob_sha: &str,
-    ) -> Result<types::CreateTreeResponse, Error> {
+    ) -> Result<types::CreateTreeResponse, GithubError> {
         let tree: types::CreateTreeResponse = self
             .client
             .post(
@@ -145,7 +147,7 @@ impl GithubClient {
         tree_sha: String,
         message: String,
         parent_sha: String,
-    ) -> Result<types::CreateCommitResponse, Error> {
+    ) -> Result<types::CreateCommitResponse, GithubError> {
         let commit = self
             .client
             .post(
@@ -164,7 +166,7 @@ impl GithubClient {
         Ok(commit)
     }
 
-    async fn update_branch(&self, commit_sha: &str) -> Result<(), Error> {
+    async fn update_branch(&self, commit_sha: &str) -> Result<(), GithubError> {
         let _: serde_json::Value = self
             .client
             .patch(
@@ -199,7 +201,7 @@ mod tests {
         let client = GithubClient::try_from(&mock_repo).unwrap();
 
         client
-            .create_or_update_file("content2", "file_name")
+            .create_or_update_file("file_name", "content2")
             .await
             .expect("create or update file");
         handles.assert("main");

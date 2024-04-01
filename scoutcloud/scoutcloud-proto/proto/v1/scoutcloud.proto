@@ -49,11 +49,6 @@ message DeployConfigPartial {
 }
 
 message CreateInstanceRequest {
-  option (convert_options.extra_fields) = {
-    name: "auth_token",
-    type: "String"
-  };
-
   string name = 1;
   // initial config
   DeployConfig config = 2;
@@ -64,11 +59,6 @@ message CreateInstanceResponse {
 }
 
 message UpdateConfigRequest {
-  option (convert_options.extra_fields) = {
-    name: "auth_token",
-    type: "String"
-  };
-
   string instance_id = 1;
   DeployConfig config = 2;
 }
@@ -78,11 +68,6 @@ message UpdateConfigResponse {
 }
 
 message UpdateConfigPartialRequest {
-  option (convert_options.extra_fields) = {
-    name: "auth_token",
-    type: "String"
-  };
-
   string instance_id = 1;
   DeployConfigPartial config = 2;
 }
@@ -104,11 +89,6 @@ enum UpdateInstanceAction {
 }
 
 message UpdateInstanceStatusRequest {
-  option (convert_options.extra_fields) = {
-    name: "auth_token",
-    type: "String"
-  };
-
   string instance_id = 1;
   UpdateInstanceAction action = 2;
 }
@@ -138,19 +118,10 @@ message Deployment {
 }
 
 message GetInstanceRequest {
-  option (convert_options.extra_fields) = {
-    name: "auth_token",
-    type: "String"
-  };
-
   string instance_id = 1;
 }
 
 message ListInstancesRequest {
-  option (convert_options.extra_fields) = {
-    name: "auth_token",
-    type: "String"
-  };
 }
 
 message ListInstancesResponse {
@@ -158,20 +129,10 @@ message ListInstancesResponse {
 }
 
 message GetDeploymentRequest {
-  option (convert_options.extra_fields) = {
-    name: "auth_token",
-    type: "String"
-  };
-
   string deployment_id = 1;
 }
 
 message ListDeploymentsRequest {
-  option (convert_options.extra_fields) = {
-    name: "auth_token",
-    type: "String"
-  };
-
   string instance_id = 1;
 }
 
@@ -180,10 +141,5 @@ message ListDeploymentsResponse {
 }
 
 message GetCurrentDeploymentRequest {
-  option (convert_options.extra_fields) = {
-    name: "auth_token",
-    type: "String"
-  };
-
   string instance_id = 1;
 }

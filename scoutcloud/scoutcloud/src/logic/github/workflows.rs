@@ -1,4 +1,4 @@
-use super::{Error, GithubClient};
+use super::{GithubClient, GithubError};
 use chrono::Utc;
 use octocrab::models::workflows::Run;
 use serde::{Deserialize, Serialize};
@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 pub trait Workflow: Serialize + Send + Sync {
     fn id() -> &'static str;
 
-    async fn run(&self, client: &GithubClient) -> Result<(), Error> {
+    async fn run(&self, client: &GithubClient) -> Result<(), GithubError> {
         client
             .run_workflow(Self::id(), &client.default_branch_name, self)
             .await
@@ -15,7 +15,7 @@ pub trait Workflow: Serialize + Send + Sync {
     async fn get_latest_run(
         client: &GithubClient,
         created_from: Option<chrono::DateTime<Utc>>,
-    ) -> Result<Option<Run>, Error> {
+    ) -> Result<Option<Run>, GithubError> {
         client
             .get_latest_workflow_run(Self::id(), created_from)
             .await
@@ -25,7 +25,7 @@ pub trait Workflow: Serialize + Send + Sync {
         &self,
         client: &GithubClient,
         max_try: u8,
-    ) -> Result<Option<Run>, Error> {
+    ) -> Result<Option<Run>, GithubError> {
         let now = chrono::Utc::now();
         self.run(client).await?;
         for _ in 0..max_try {

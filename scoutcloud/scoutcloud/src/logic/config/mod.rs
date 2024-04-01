@@ -11,7 +11,7 @@ pub use validated::ValidatedInstanceConfig;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub enum Error {
+pub enum ConfigError {
     #[error("failed to validate config: {0}")]
     Validation(String),
 

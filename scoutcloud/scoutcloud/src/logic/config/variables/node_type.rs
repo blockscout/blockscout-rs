@@ -1,5 +1,5 @@
 use crate::logic::{
-    config::{macros, Error},
+    config::{macros, ConfigError},
     ConfigValidationContext,
 };
 use serde::{Deserialize, Serialize};
@@ -19,7 +19,7 @@ derive_display_from_serialize!(NodeType);
 derive_fromstr_from_deserialize!(NodeType);
 
 macros::custom_env_var!(NodeType, String, BackendEnv, "ETHEREUM_JSONRPC_VARIANT", {
-    fn new(v: String, _config: &ConfigValidationContext) -> Result<Self, Error> {
-        Self::from_str(&v).map_err(|_| Error::Validation(format!("unknown node_type: '{}'", v)))
+    fn new(v: String, _config: &ConfigValidationContext) -> Result<Self, ConfigError> {
+        Self::from_str(&v).map_err(|_| ConfigError::Validation(format!("unknown node_type: '{}'", v)))
     }
 });

@@ -1,4 +1,4 @@
-use crate::logic::config::Error;
+use crate::logic::config::ConfigError;
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum ParsedVariableKey {
@@ -23,14 +23,14 @@ pub type ParsedVariable = (ParsedVariableKey, serde_json::Value);
 pub trait UserVariable: Send + Sync {
     type SourceType: Send + Sync;
 
-    fn new(v: Self::SourceType, context: &ConfigValidationContext) -> Result<Self, Error>
+    fn new(v: Self::SourceType, context: &ConfigValidationContext) -> Result<Self, ConfigError>
     where
         Self: Sized;
 
     async fn build_config_vars(
         &self,
         context: &ConfigValidationContext,
-    ) -> Result<Vec<ParsedVariable>, Error>;
+    ) -> Result<Vec<ParsedVariable>, ConfigError>;
 
     fn maybe_default(_context: &ConfigValidationContext) -> Option<Self::SourceType> {
         None

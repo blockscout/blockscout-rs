@@ -1,6 +1,9 @@
-use super::Error;
-use crate::logic::ValidatedInstanceConfig;
+use super::ConfigError;
+use crate::logic::{ConfigValidationContext, ValidatedInstanceConfig};
 use json_dotpath::DotPaths;
+use scoutcloud_proto::blockscout::scoutcloud::v1::{
+    DeployConfigInternal, DeployConfigPartialInternal,
+};
 
 lazy_static::lazy_static! {
     pub static ref DEFAULT_CONFIG: serde_json::Value = {
@@ -16,14 +19,14 @@ pub struct GeneratedInstanceConfig {
 }
 
 impl TryFrom<ValidatedInstanceConfig> for GeneratedInstanceConfig {
-    type Error = Error;
+    type Error = ConfigError;
 
     fn try_from(validated: ValidatedInstanceConfig) -> Result<Self, Self::Error> {
         let mut this = Self::default();
         for (key, value) in validated.vars {
             let path = key.get_path();
             update_json_by_path(&mut this.raw, &path, value).map_err(|e| {
-                Error::Internal(anyhow::anyhow!("failed to update json '{path}' path: {e}"))
+                ConfigError::Internal(anyhow::anyhow!("failed to update json '{path}' path: {e}"))
             })?;
         }
 
@@ -32,6 +35,39 @@ impl TryFrom<ValidatedInstanceConfig> for GeneratedInstanceConfig {
 }
 
 impl GeneratedInstanceConfig {
+    pub fn new(raw: serde_json::Value) -> Self {
+        Self { raw }
+    }
+
+    pub async fn try_from_config(
+        config: DeployConfigInternal,
+        client_name: impl Into<String>,
+    ) -> Result<Self, ConfigError> {
+        let context = ConfigValidationContext {
+            client_name: client_name.into(),
+        };
+        let validated = ValidatedInstanceConfig::try_from_config(config, context).await?;
+        Self::try_from(validated)
+    }
+
+    pub async fn try_from_config_partial(
+        config: DeployConfigPartialInternal,
+        client_name: impl Into<String>,
+    ) -> Result<Self, ConfigError> {
+        let context = ConfigValidationContext {
+            client_name: client_name.into(),
+        };
+        let validated = ValidatedInstanceConfig::try_from_config_partial(config, context).await?;
+        Self::try_from(validated)
+    }
+
+    pub fn from_yaml(yaml: &str) -> Result<Self, ConfigError> {
+        let raw = serde_yaml::from_str(yaml).map_err(|e| {
+            ConfigError::Internal(anyhow::anyhow!("failed to parse saved config: {e}"))
+        })?;
+        Ok(Self { raw })
+    }
+
     pub fn from_default_file() -> Self {
         let raw = DEFAULT_CONFIG.clone();
         Self { raw }
@@ -51,9 +87,9 @@ impl GeneratedInstanceConfig {
         self
     }
 
-    pub fn to_yaml(&self) -> Result<String, Error> {
+    pub fn to_yaml(&self) -> Result<String, ConfigError> {
         serde_yaml::to_string(&self.raw).map_err(|e| {
-            Error::Internal(anyhow::anyhow!("failed to serialize config to yaml: {e}"))
+            ConfigError::Internal(anyhow::anyhow!("failed to serialize config to yaml: {e}"))
         })
     }
 }

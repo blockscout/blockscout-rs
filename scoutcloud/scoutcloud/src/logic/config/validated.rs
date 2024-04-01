@@ -1,5 +1,5 @@
 use crate::logic::{
-    config::{types::ConfigValidationContext, variables, Error},
+    config::{types::ConfigValidationContext, variables, ConfigError},
     ParsedVariableKey, UserVariable,
 };
 use scoutcloud_proto::blockscout::scoutcloud::v1::{
@@ -57,7 +57,7 @@ impl ValidatedInstanceConfig {
     pub async fn try_from_config_partial(
         config: DeployConfigPartialInternal,
         context: ConfigValidationContext,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, ConfigError> {
         let mut this = Self::default();
         let is_partial = true;
         parse_config_all_vars!(config, context, this, is_partial);
@@ -67,7 +67,7 @@ impl ValidatedInstanceConfig {
     pub async fn try_from_config(
         config: DeployConfigInternal,
         context: ConfigValidationContext,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, ConfigError> {
         let mut this = Self::default();
         let is_partial = false;
         parse_config_all_vars!(config, context, this, is_partial);

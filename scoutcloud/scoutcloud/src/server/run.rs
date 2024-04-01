@@ -1,9 +1,13 @@
-use crate::server::{
-    proto::{
-        health_actix::route_health, health_server::HealthServer, scoutcloud_actix::route_scoutcloud,
+use crate::{
+    logic::GithubClient,
+    server::{
+        proto::{
+            health_actix::route_health, health_server::HealthServer,
+            scoutcloud_actix::route_scoutcloud,
+        },
+        services::{HealthService, ScoutcloudService},
+        settings::Settings,
     },
-    services::{HealthService, ScoutcloudService},
-    settings::Settings,
 };
 use blockscout_service_launcher::{database, launcher, launcher::LaunchSettings, tracing};
 use migration::Migrator;
@@ -14,7 +18,6 @@ const SERVICE_NAME: &str = "scoutcloud";
 
 #[derive(Clone)]
 struct Router {
-    // TODO: add services here
     health: Arc<HealthService>,
     scoutcloud: Arc<ScoutcloudService>,
 }
@@ -40,14 +43,21 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let health = Arc::new(HealthService::default());
 
-    let _db_connection = database::initialize_postgres::<Migrator>(
-        &settings.database.connect.url(),
-        settings.database.create_database,
-        settings.database.run_migrations,
-    )
-    .await?;
+    let db_connection = Arc::new(
+        database::initialize_postgres::<Migrator>(
+            &settings.database.connect.url(),
+            settings.database.create_database,
+            settings.database.run_migrations,
+        )
+        .await?,
+    );
 
-    let scoutcloud = Arc::new(ScoutcloudService::default());
+    let github = Arc::new(GithubClient::from_settings(&settings.github)?);
+
+    let scoutcloud = Arc::new(ScoutcloudService::new(
+        db_connection.clone(),
+        github.clone(),
+    ));
 
     let router = Router { health, scoutcloud };
 

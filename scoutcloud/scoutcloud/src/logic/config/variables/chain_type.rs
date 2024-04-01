@@ -1,5 +1,5 @@
 use crate::logic::{
-    config::Error, ConfigValidationContext, ParsedVariable, ParsedVariableKey, UserVariable,
+    config::ConfigError, ConfigValidationContext, ParsedVariable, ParsedVariableKey, UserVariable,
 };
 use serde::{Deserialize, Serialize};
 use serde_plain::{derive_display_from_serialize, derive_fromstr_from_deserialize};
@@ -46,14 +46,13 @@ impl ChainType {
 impl UserVariable for ChainType {
     type SourceType = String;
 
-    fn new(v: String, _context: &ConfigValidationContext) -> Result<Self, Error> {
-        Self::from_str(&v).map_err(|_| Error::Validation(format!("unknown chain_type: '{}'", v)))
+    fn new(v: String, _context: &ConfigValidationContext) -> Result<Self, ConfigError> {
+        Self::from_str(&v).map_err(|_| ConfigError::Validation(format!("unknown chain_type: '{}'", v)))
     }
-
     async fn build_config_vars(
         &self,
         _context: &ConfigValidationContext,
-    ) -> Result<Vec<ParsedVariable>, Error> {
+    ) -> Result<Vec<ParsedVariable>, ConfigError> {
         let mut vars = vec![(
             ParsedVariableKey::BackendEnv("CHAIN_TYPE".to_string()),
             serde_json::Value::String(self.to_string()),
@@ -67,9 +66,5 @@ impl UserVariable for ChainType {
         };
 
         Ok(vars)
-    }
-
-    fn maybe_default(_context: &ConfigValidationContext) -> Option<String> {
-        Some("ethereum".to_string())
     }
 }

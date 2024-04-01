@@ -1,11 +1,14 @@
-use anyhow::Context;
+use anyhow::anyhow;
 use scoutcloud_entity::{auth_tokens, users};
 use sea_orm::{
-    prelude::*, sea_query::Expr, ActiveModelTrait, ActiveValue::Set, ColumnTrait,
-    DatabaseConnection, QueryFilter,
+    prelude::*,
+    sea_query::{Alias, Expr},
+    ActiveModelTrait,
+    ActiveValue::Set,
+    ColumnTrait, DatabaseConnection, QueryFilter,
 };
-use std::collections::HashMap;
 use thiserror::Error;
+use tonic::codegen::http::HeaderMap;
 
 const AUTH_TOKEN_NAME: &str = "x-api-key";
 
@@ -19,26 +22,38 @@ pub enum AuthError {
     Internal(#[from] anyhow::Error),
 }
 
+#[derive(Clone, Debug)]
+pub struct UserToken {
+    pub user: users::Model,
+    pub token: auth_tokens::Model,
+}
+
 pub async fn authenticate(
     db: &DatabaseConnection,
-    headers: &HashMap<String, String>,
-) -> Result<(auth_tokens::Model, users::Model), AuthError> {
+    headers: &HeaderMap,
+) -> Result<UserToken, AuthError> {
     let token_value = headers
         .get(AUTH_TOKEN_NAME)
         .or(headers.get(&AUTH_TOKEN_NAME.to_uppercase()))
-        .ok_or_else(|| AuthError::NoToken)?;
+        .ok_or_else(|| AuthError::NoToken)?
+        .to_str()
+        .map_err(|e| anyhow::anyhow!(e))?;
 
     let (token, user) = auth_tokens::Entity::find()
         .find_also_related(users::Entity)
         .filter(auth_tokens::Column::Deleted.eq(false))
-        .filter(auth_tokens::Column::TokenValue.eq(token_value))
+        .filter(
+            Expr::col(auth_tokens::Column::TokenValue)
+                .cast_as(Alias::new("text"))
+                .eq(token_value),
+        )
         .one(db)
         .await
-        .context("fetching token")?
+        .map_err(|e| anyhow!(e))?
         .ok_or_else(|| AuthError::TokenNotFound)?;
     let user = user.ok_or_else(|| anyhow::anyhow!("token doesn't have user_id"))?;
 
-    Ok((token, user))
+    Ok(UserToken { user, token })
 }
 
 pub async fn create_token(
