@@ -34,7 +34,7 @@ stop-test-postgres:
 {% endraw -%}
 
 run:
-    {{crate_name| upcase}}__DATABASE__URL={% raw %}{{DATABASE_URL}}{% endraw %} cargo run --bin {{project-name}}-server
+    {{crate_name| upcase}}__DATABASE__CONNECT__URL={% raw %}{{DATABASE_URL}}{% endraw %} cargo run --bin {{project-name}}-server
 
 
 {% if entity %}
