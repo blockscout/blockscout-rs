@@ -44,15 +44,15 @@ impl<T: JsonRpcClient> CallTracer for Provider<T> {
                     .debug_trace_transaction(
                         tx_hash,
                         GethDebugTracingOptions {
-                            disable_storage: None,
-                            disable_stack: None,
-                            enable_memory: None,
-                            enable_return_data: None,
+                            disable_storage: Some(true),
+                            disable_stack: Some(true),
+                            enable_memory: Some(false),
+                            enable_return_data: Some(false),
                             tracer: Some(GethDebugTracerType::BuiltInTracer(
                                 GethDebugBuiltInTracerType::CallTracer,
                             )),
                             tracer_config: None,
-                            timeout: None,
+                            timeout: Some("60s".to_string()),
                         },
                     )
                     .await?;
