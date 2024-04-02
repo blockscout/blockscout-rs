@@ -14,7 +14,6 @@ const SERVICE_NAME: &str = "basic_cache";
 
 #[derive(Clone)]
 struct Router {
-    // TODO: add services here
     health: Arc<HealthService>,
     cache: Arc<CacheService>,
 }

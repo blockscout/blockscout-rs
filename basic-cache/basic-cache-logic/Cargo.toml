@@ -9,6 +9,7 @@ basic-cache-entity = { path = "../basic-cache-entity" }
 anyhow = "1.0"
 blockscout-display-bytes = "1.0"
 tracing = "0.1"
+trait-variant = "0.1.2"
 
 sea-orm = { version = "0.12.2", features = [
     "sqlx-postgres",
@@ -37,10 +38,6 @@ sea-orm = { version = "0.12.2", features = [
 #tracing-subscriber = { version = "0.3", features = ["env-filter"]}
 
 [dev-dependencies]
-blockscout-service-launcher = { version = "0.9.0", features = [ 
-    
-    "test-database", "database-0_12"
-    
-] }
+blockscout-service-launcher = { version = "0.9.0", features = [ "test-database", "database-0_12" ] }
 pretty_assertions = "1.3"
 basic-cache-migration = {path = "../basic-cache-migration"}
