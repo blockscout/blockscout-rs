@@ -22,8 +22,4 @@ macros::custom_env_var!(NodeType, String, BackendEnv, "ETHEREUM_JSONRPC_VARIANT"
     fn new(v: String, _config: &ConfigValidationContext) -> Result<Self, Error> {
         Self::from_str(&v).map_err(|_| Error::Validation(format!("unknown node_type: '{}'", v)))
     }
-
-    fn maybe_default(_context: &ConfigValidationContext) -> Option<String> {
-        Some("ganache".to_string())
-    }
 });

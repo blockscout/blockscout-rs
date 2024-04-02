@@ -158,7 +158,7 @@ mod tests {
                     "env": {
                         "CHAIN_ID": "77",
                         "CHAIN_TYPE": "stability",
-                        "NODE_TYPE": "geth",
+                        "ETHEREUM_JSONRPC_VARIANT": "geth",
                         "ETHEREUM_JSONRPC_HTTP_URL": server.url("/"),
                         "INDEXER_DISABLE_INTERNAL_TRANSACTIONS_FETCHER": "true",
                     },
@@ -223,7 +223,7 @@ mod tests {
 
         assert_eq!(
             validated.vars.len(),
-            9,
+            8,
             "invalid parsed config: {:?}",
             validated
         );
@@ -239,7 +239,6 @@ mod tests {
                     },
                     "env": {
                         "CHAIN_TYPE": "ethereum",
-                        "NODE_TYPE": "ganache",
                         "ETHEREUM_JSONRPC_HTTP_URL": server.url("/"),
                         "INDEXER_DISABLE_INTERNAL_TRANSACTIONS_FETCHER": "true",
                     },
@@ -341,6 +340,7 @@ mod tests {
     DISABLE_EXCHANGE_RATES: 'true'
     ETHEREUM_JSONRPC_DEBUG_TRACE_TRANSACTION_TIMEOUT: 20s
     ETHEREUM_JSONRPC_HTTP_URL: {server_url}
+    ETHEREUM_JSONRPC_VARIANT: geth
     FETCH_REWARDS_WAY: manual
     GRAPHIQL_TRANSACTION: 0xbf69c7abc4fee283b59a9633dadfdaedde5c5ee0fba3e80a08b5b8a3acbd4363
     HEALTHY_BLOCKS_PERIOD: 60
@@ -354,7 +354,6 @@ mod tests {
     INDEXER_MEMORY_LIMIT: 3g
     INDEXER_RECEIPTS_BATCH_SIZE: 50
     MICROSERVICE_SIG_PROVIDER_ENABLED: 'false'
-    NODE_TYPE: geth
     POOL_SIZE: 200
     POOL_SIZE_API: 10
     SOURCIFY_INTEGRATION_ENABLED: 'true'

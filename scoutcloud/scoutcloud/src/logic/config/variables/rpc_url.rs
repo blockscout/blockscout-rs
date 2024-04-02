@@ -37,7 +37,7 @@ impl UserVariable for RpcUrl {
         // check trace method
         // TODO: check trace method according to node_type
         match check_any_trace_method(&provider).await {
-            Ok(()) => {
+            Ok(method) => {
                 parsed.push((
                     ParsedVariableKey::BackendEnv("ETHEREUM_JSONRPC_TRACE_URL".to_string()),
                     serde_json::Value::String(self.0.to_string()),
@@ -48,6 +48,15 @@ impl UserVariable for RpcUrl {
                     ),
                     serde_json::Value::String("false".to_string()),
                 ));
+
+                if matches!(method, TraceMethod::DebugTraceBlockByNumber) {
+                    parsed.push((
+                        ParsedVariableKey::BackendEnv(
+                            "ETHEREUM_JSONRPC_GETH_TRACE_BY_BLOCK".to_string(),
+                        ),
+                        serde_json::Value::String("true".to_string()),
+                    ));
+                }
             }
             Err(err) => {
                 tracing::warn!(
@@ -89,18 +98,18 @@ async fn check_jsonrpc_health(provider: &Provider<Http>) -> Result<(), anyhow::E
     Ok(())
 }
 
-async fn check_any_trace_method(provider: &Provider<Http>) -> Result<(), anyhow::Error> {
-    let err = match provider.trace_block(BlockNumber::Latest).await {
-        Ok(_) => return Ok(()),
-        Err(e) => e,
-    };
+enum TraceMethod {
+    DebugTraceBlockByNumber,
+    DebugTraceTransaction,
+}
 
-    if provider
+async fn check_any_trace_method(provider: &Provider<Http>) -> Result<TraceMethod, anyhow::Error> {
+    let err = match provider
         .debug_trace_block_by_number(None, GethDebugTracingOptions::default())
         .await
-        .is_ok()
     {
-        return Ok(());
+        Ok(_) => return Ok(TraceMethod::DebugTraceBlockByNumber),
+        Err(e) => e,
     };
 
     let block = provider
@@ -113,8 +122,12 @@ async fn check_any_trace_method(provider: &Provider<Http>) -> Result<(), anyhow:
         .cloned()
         .context("no transactions in blockchain")?;
 
-    if provider.trace_transaction(transaction).await.is_ok() {
-        return Ok(());
+    if provider
+        .debug_trace_transaction(transaction, GethDebugTracingOptions::default())
+        .await
+        .is_ok()
+    {
+        return Ok(TraceMethod::DebugTraceTransaction);
     };
 
     Err(err)?
