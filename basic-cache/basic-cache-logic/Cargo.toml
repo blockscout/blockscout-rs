@@ -10,6 +10,7 @@ anyhow = "1.0"
 blockscout-display-bytes = "1.0"
 tracing = "0.1"
 trait-variant = "0.1.2"
+url = "2.4"
 
 sea-orm = { version = "0.12.2", features = [
     "sqlx-postgres",
@@ -21,7 +22,7 @@ sea-orm = { version = "0.12.2", features = [
 
 ## Uncomment this if needed
 #ethabi = "18.0"
-#ethers-core = "2.0.0"
+ethers-core = "2.0.0"
 #futures = "0.3"
 #hex = "0.4"
 #keccak-hash = "0.10.0"
