@@ -8,7 +8,9 @@ use url::Url;
 pub struct RpcUrl(Url);
 
 #[async_trait::async_trait]
-impl UserVariable<Url> for RpcUrl {
+impl UserVariable for RpcUrl {
+    type SourceType = Url;
+
     fn new(v: Url, _config: &ConfigValidationContext) -> Result<Self, Error> {
         Ok(Self(v))
     }

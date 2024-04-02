@@ -43,26 +43,33 @@ impl ChainType {
 }
 
 #[async_trait::async_trait]
-impl UserVariable<String> for ChainType {
+impl UserVariable for ChainType {
+    type SourceType = String;
+
     fn new(v: String, _context: &ConfigValidationContext) -> Result<Self, Error> {
         Self::from_str(&v).map_err(|_| Error::Validation(format!("unknown chain_type: '{}'", v)))
     }
+
     async fn build_config_vars(
         &self,
         _context: &ConfigValidationContext,
     ) -> Result<Vec<ParsedVariable>, Error> {
         let mut vars = vec![(
             ParsedVariableKey::BackendEnv("CHAIN_TYPE".to_string()),
-            serde_json::json!(self),
+            serde_json::Value::String(self.to_string()),
         )];
 
         if let Some(image) = self.maybe_custom_image() {
             vars.push((
                 ParsedVariableKey::ConfigPath("blockscout.image.repository".to_string()),
-                serde_json::json!(image),
+                serde_json::Value::String(image),
             ));
         };
 
         Ok(vars)
+    }
+
+    fn maybe_default(_context: &ConfigValidationContext) -> Option<String> {
+        Some("ethereum".to_string())
     }
 }

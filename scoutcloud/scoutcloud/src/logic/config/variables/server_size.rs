@@ -52,7 +52,9 @@ impl ServerSize {
 }
 
 #[async_trait::async_trait]
-impl UserVariable<String> for ServerSize {
+impl UserVariable for ServerSize {
+    type SourceType = String;
+
     fn new(v: String, _config: &ConfigValidationContext) -> Result<Self, Error> {
         Self::from_str(&v).map_err(|_| Error::Validation(format!("unknown server_size: '{}'", v)))
     }

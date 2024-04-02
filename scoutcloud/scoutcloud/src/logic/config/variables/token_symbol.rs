@@ -13,8 +13,8 @@ macros::custom_env_var!(
     TokenSymbol,
     String,
     [
-        (config, "config.network.currency.symbol"),
-        (config, "config.network.currency.name")
+        (ConfigPath, "config.network.currency.symbol"),
+        (ConfigPath, "config.network.currency.name")
     ],
     {
         fn new(v: String, _config: &ConfigValidationContext) -> Result<Self, Error> {

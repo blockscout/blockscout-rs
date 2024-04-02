@@ -20,11 +20,10 @@ impl ParsedVariableKey {
 pub type ParsedVariable = (ParsedVariableKey, serde_json::Value);
 
 #[async_trait::async_trait]
-pub trait UserVariable<V>: Send + Sync
-where
-    V: Send + Sync,
-{
-    fn new(v: V, context: &ConfigValidationContext) -> Result<Self, Error>
+pub trait UserVariable: Send + Sync {
+    type SourceType: Send + Sync;
+
+    fn new(v: Self::SourceType, context: &ConfigValidationContext) -> Result<Self, Error>
     where
         Self: Sized;
 
@@ -33,7 +32,7 @@ where
         context: &ConfigValidationContext,
     ) -> Result<Vec<ParsedVariable>, Error>;
 
-    fn maybe_default(_context: &ConfigValidationContext) -> Option<V> {
+    fn maybe_default(_context: &ConfigValidationContext) -> Option<Self::SourceType> {
         None
     }
 }

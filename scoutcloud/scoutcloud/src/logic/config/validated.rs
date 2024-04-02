@@ -7,6 +7,7 @@ use scoutcloud_proto::blockscout::scoutcloud::v1::{
 };
 use std::collections::BTreeMap;
 
+// Validated config contains list of parsed variables
 #[derive(Default, Debug, Clone, Eq, PartialEq)]
 pub struct ValidatedInstanceConfig {
     pub vars: BTreeMap<ParsedVariableKey, serde_json::Value>,
@@ -19,7 +20,7 @@ macro_rules! parse_config_vars {
                 let value: Option<_> = $config.[<$var:snake>].into();
                 let maybe_value = match ($is_partial_config, value) {
                     (_, Some(value)) => Some(value),
-                    (false, None) => <variables::[<$var:snake>]::[<$var:camel>] as UserVariable<_>>::maybe_default(&$context),
+                    (false, None) => <variables::[<$var:snake>]::[<$var:camel>] as UserVariable>::maybe_default(&$context),
                     (true, None) => None,
                 };
                 if let Some(value) = maybe_value {
@@ -43,6 +44,7 @@ macro_rules! parse_config_all_vars {
             HomeplateTextColor,
             IconUrl,
             InstanceUrl,
+            LogoUrl,
             NodeType,
             RpcUrl,
             ServerSize,

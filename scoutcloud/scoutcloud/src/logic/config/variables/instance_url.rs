@@ -22,8 +22,8 @@ macros::custom_env_var!(
     InstanceUrl,
     String,
     [
-        (config, "blockscout.ingress.hostname"),
-        (config, "frontend.ingress.hostname")
+        (ConfigPath, "blockscout.ingress.hostname"),
+        (ConfigPath, "frontend.ingress.hostname")
     ],
     {
         fn new(v: String, _context: &ConfigValidationContext) -> Result<Self, Error> {

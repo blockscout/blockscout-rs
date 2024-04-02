@@ -8,6 +8,8 @@ lazy_static::lazy_static! {
     };
 }
 
+// Generated config is a final config that is used to merge different config together,
+// handles default config and can generate yaml config file
 #[derive(Default, Debug, Clone, Eq, PartialEq)]
 pub struct GeneratedInstanceConfig {
     pub raw: serde_json::Value,
@@ -90,7 +92,7 @@ mod tests {
     use serde_json::json;
 
     fn mock_rpc() -> MockServer {
-        let server = httpmock::MockServer::start();
+        let server = MockServer::start();
         let _mock = server.mock(|when, then| {
             when.method(POST)
                 .path("/")
@@ -115,9 +117,9 @@ mod tests {
             chain_id: Some("77".to_string()),
             token_symbol: Some("EEE".to_string()),
             instance_url: Some("hostname-test".to_string()),
-            logo_url: Some("http://example.com".parse().unwrap()),
+            logo_url: Some("http://example.com/logo".parse().unwrap()),
             chain_name: Some("chain-test".to_string()),
-            icon_url: Some("http://example.com".parse().unwrap()),
+            icon_url: Some("http://example.com/icon".parse().unwrap()),
             homeplate_background: Some("#111111".to_string()),
             homeplate_text_color: Some("#222222".to_string()),
         }
@@ -136,7 +138,7 @@ mod tests {
 
         assert_eq!(
             validated.vars.len(),
-            15,
+            16,
             "invalid parsed config: {:?}",
             validated
         );
@@ -178,7 +180,8 @@ mod tests {
                     "env": {
                         "NEXT_PUBLIC_HOMEPAGE_PLATE_BACKGROUND": "#111111",
                         "NEXT_PUBLIC_HOMEPAGE_PLATE_TEXT_COLOR": "#222222",
-                        "NEXT_PUBLIC_NETWORK_ICON": "http://example.com/",
+                        "NEXT_PUBLIC_NETWORK_ICON": "http://example.com/icon",
+                        "NEXT_PUBLIC_NETWORK_LOGO": "http://example.com/logo",
                         "NEXT_PUBLIC_NETWORK_NAME": "chain-test",
                     }
                 },
@@ -220,7 +223,7 @@ mod tests {
 
         assert_eq!(
             validated.vars.len(),
-            8,
+            9,
             "invalid parsed config: {:?}",
             validated
         );
@@ -235,7 +238,8 @@ mod tests {
                         "hostname": "test-client.blockscout.com",
                     },
                     "env": {
-                        "NODE_TYPE": "geth",
+                        "CHAIN_TYPE": "ethereum",
+                        "NODE_TYPE": "ganache",
                         "ETHEREUM_JSONRPC_HTTP_URL": server.url("/"),
                         "INDEXER_DISABLE_INTERNAL_TRANSACTIONS_FETCHER": "true",
                     },
@@ -383,7 +387,8 @@ frontend:
     NEXT_PUBLIC_HOMEPAGE_CHARTS: '[''daily_txs'']'
     NEXT_PUBLIC_HOMEPAGE_PLATE_BACKGROUND: '#111111'
     NEXT_PUBLIC_HOMEPAGE_PLATE_TEXT_COLOR: '#222222'
-    NEXT_PUBLIC_NETWORK_ICON: http://example.com/
+    NEXT_PUBLIC_NETWORK_ICON: http://example.com/icon
+    NEXT_PUBLIC_NETWORK_LOGO: http://example.com/logo
     NEXT_PUBLIC_NETWORK_NAME: chain-test
     NEXT_PUBLIC_NETWORK_VERIFICATION_TYPE: validation
     NEXT_PUBLIC_VISUALIZE_API_HOST: https://visualizer.services.blockscout.com
