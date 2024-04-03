@@ -1,5 +1,34 @@
 use entity::sea_orm_active_enums::SponsorType;
-use ethers::prelude::{Address, Bytes, Log, U256};
+use ethers::prelude::{
+    abi::{decode, parse_abi, ParamType, Token},
+    Address, Bytes, Log, U256,
+};
+use lazy_static::lazy_static;
+
+lazy_static! {
+    pub static ref EXECUTE_SELECTORS: Vec<[u8; 4]> = parse_abi(&[
+        "function execute(address,uint256,bytes,uint8) external",
+        "function execute(address,uint256,bytes) external",
+        "function execute_ncC(address,uint256,bytes) external",
+        "function execTransactionFromEntrypoint(address,uint256,bytes) external",
+        "function executeAndRevert(address,uint256,bytes,uint8) external",
+        "function execFromEntryPoint(address,uint256,bytes) external",
+        "function execTransactionFromEntrypoint(address,uint256,bytes,uint8,address,address,uint256)",
+        "function executeCall(address,uint256,bytes)",
+        "function executeUserOp(address,uint256,bytes,uint8)",
+        "struct ExecStruct { address arg1; address arg2; uint256 arg3;}",
+        "function execFromEntryPointWithFee(address,uint256,bytes,ExecStruct)",
+        "function execTransactionFromEntrypoint(address,uint256,bytes,uint8)",
+        "function send(address,uint256,bytes)",
+        "function execute(address,uint256,bytes,bytes)",
+        "function callContract(address,uint256,bytes,bool)",
+        "function exec(address,uint256,bytes)",
+    ])
+    .unwrap()
+    .functions()
+    .map(|f| f.short_signature())
+    .collect();
+}
 
 pub fn extract_address(b: &Bytes) -> Option<Address> {
     if b.len() >= 20 {
@@ -59,10 +88,44 @@ pub fn none_if_empty(b: Bytes) -> Option<Bytes> {
     }
 }
 
+pub fn decode_execute_call_data(call_data: &Bytes) -> (Option<Address>, Option<Bytes>) {
+    if EXECUTE_SELECTORS
+        .iter()
+        .any(|sig| call_data.starts_with(sig))
+    {
+        match decode(
+            &[ParamType::Address, ParamType::Uint(256), ParamType::Bytes],
+            &call_data[4..],
+        )
+        .as_deref()
+        {
+            Ok([Token::Address(execute_target), _, Token::Bytes(execute_call_data)]) => (
+                Some(*execute_target),
+                Some(Bytes::from(execute_call_data.clone())),
+            ),
+            Ok(_) => {
+                tracing::warn!(
+                    call_data = call_data.to_string(),
+                    "failed to match call_data parsing result"
+                );
+                (None, None)
+            }
+            Err(err) => {
+                tracing::warn!(error = ?err, call_data = call_data.to_string(), "failed to parse call_data");
+                (None, None)
+            }
+        }
+    } else {
+        (None, None)
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::indexer::common::extract_user_logs_boundaries;
+    use crate::indexer::common::{decode_execute_call_data, extract_user_logs_boundaries};
     use ethers::prelude::{types::Log, Address, U256};
+    use ethers_core::types::Bytes;
+    use std::str::FromStr;
 
     #[test]
     fn test_extract_user_logs_boundaries() {
@@ -118,5 +181,20 @@ mod tests {
             extract_user_logs_boundaries(&logs[..3], entry_point, Some(paymaster)),
             (12, 1)
         );
+    }
+
+    #[test]
+    fn test_decode_execute_call_data() {
+        let call_data = Bytes::from_str("0x5194544700000000000000000000000014778860e937f509e651192a90589de711fb88a90000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000044a9059cbb0000000000000000000000001d993968fbd7669690384eab1b4d23aeb1132bf40000000000000000000000000000000000000000000000004563918244f4000000000000000000000000000000000000000000000000000000000000").unwrap();
+        let (execute_target, execute_call_data) = decode_execute_call_data(&call_data);
+        assert_eq!(
+            execute_target,
+            Some(Address::from_str("0x14778860E937f509e651192a90589dE711Fb88a9").unwrap())
+        );
+        assert_eq!(execute_call_data, Some(Bytes::from_str("0xa9059cbb0000000000000000000000001d993968fbd7669690384eab1b4d23aeb1132bf40000000000000000000000000000000000000000000000004563918244f40000").unwrap()));
+        let (execute_target, execute_call_data) =
+            decode_execute_call_data(&execute_call_data.unwrap());
+        assert_eq!(execute_target, None);
+        assert_eq!(execute_call_data, None);
     }
 }
