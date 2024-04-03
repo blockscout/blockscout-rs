@@ -1,10 +1,12 @@
-use std::{collections::HashMap, hash::Hash};
+use std::{collections::HashMap, hash::Hash, sync::Mutex};
 
 use crate::CacheManager;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct HashMapCache<K, V> {
-    inner: HashMap<K, V>,
+    // need interior mutability because usual work with DB is done
+    // via immutable reference
+    inner: Mutex<HashMap<K, V>>,
 }
 
 impl<K, V> Default for HashMapCache<K, V> {
@@ -17,7 +19,9 @@ impl<K, V> Default for HashMapCache<K, V> {
 
 impl<K, V> From<HashMap<K, V>> for HashMapCache<K, V> {
     fn from(value: HashMap<K, V>) -> Self {
-        Self { inner: value }
+        Self {
+            inner: Mutex::new(value),
+        }
     }
 }
 
@@ -26,15 +30,18 @@ where
     K: Eq + Hash + Send + Sync,
     V: Clone + Send + Sync,
 {
-    async fn insert(&mut self, key: K, value: V) -> Option<V> {
-        self.inner.insert(key, value)
+    async fn insert(&self, key: K, value: V) -> Option<V> {
+        // test-only code, ok to unwrap
+        self.inner.try_lock().unwrap().insert(key, value)
     }
 
     async fn get(&self, key: &K) -> Option<V> {
-        self.inner.get(key).cloned()
+        // test-only code, ok to unwrap
+        self.inner.try_lock().unwrap().get(key).cloned()
     }
 
-    async fn remove(&mut self, key: &K) -> Option<V> {
-        self.inner.remove(&key)
+    async fn remove(&self, key: &K) -> Option<V> {
+        // test-only code, ok to unwrap
+        self.inner.try_lock().unwrap().remove(&key)
     }
 }

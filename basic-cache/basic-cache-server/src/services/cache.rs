@@ -1,6 +1,6 @@
 use crate::proto::{
     cache_server::Cache, CreateSmartContractRequest, CreateSmartContractRequestInternal,
-    GetSmartContractRequest, SmartContract, SourceFile,
+    GetSmartContractRequest, SmartContract,
 };
 use convert_trait::TryConvert;
 
@@ -31,6 +31,14 @@ where
             basic_cache_logic::types::SmartContract::try_from(request).map_err(|err| {
                 tonic::Status::invalid_argument(format!("invalid submission request: {}", err))
             })?;
+        let existing_contract = self
+            .implementation
+            .insert(contract.id.clone(), contract.clone())
+            .await;
+        match existing_contract {
+            Some(_) => tracing::info!("overwritten contract at {:?}", contract.id),
+            None => tracing::info!("saved contract at {:?}", &contract.id),
+        }
         Ok(tonic::Response::new(contract.into()))
     }
 
