@@ -6,6 +6,7 @@ edition = "2021"
 
 [dependencies]
 basic-cache-entity = { path = "../basic-cache-entity" }
+basic-cache-proto = { path = "../basic-cache-proto" }
 anyhow = "1.0"
 blockscout-display-bytes = "1.0"
 tracing = "0.1"
@@ -33,7 +34,7 @@ ethers-core = "2.0.0"
 #semver = "1.0"
 #serde = "1.0"
 #serde_json = "1.0"
-#thiserror = "1.0"
+thiserror = "1.0"
 #tokio = "1.22"
 #tonic = { version = "0.8", features = ["tls-roots"] }
 #tracing-subscriber = { version = "0.3", features = ["env-filter"]}

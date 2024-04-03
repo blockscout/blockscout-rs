@@ -15,7 +15,14 @@ const SERVICE_NAME: &str = "basic_cache";
 #[derive(Clone)]
 struct Router {
     health: Arc<HealthService>,
-    cache: Arc<CacheService>,
+    cache: Arc<
+        CacheService<
+            basic_cache_logic::in_memory_cache::HashMapCache<
+                basic_cache_logic::types::SmartContractId,
+                basic_cache_logic::types::SmartContract,
+            >,
+        >,
+    >,
 }
 
 impl Router {
@@ -47,7 +54,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     )
     .await?;
 
-    let cache = Arc::new(CacheService::default());
+    let cache = Arc::new(CacheService::<_>::default());
 
     let router = Router { health, cache };
 

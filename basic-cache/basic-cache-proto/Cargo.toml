@@ -5,14 +5,17 @@ edition = "2021"
 
 [dependencies]
 actix-web = "4"
-actix-prost = { git = "https://github.com/blockscout/actix-prost" }
-actix-prost-macros = { git = "https://github.com/blockscout/actix-prost" }
+actix-prost = { git = "https://github.com/blockscout/actix-prost", tag = "v1.0.0"  }
+actix-prost-macros = { git = "https://github.com/blockscout/actix-prost", tag = "v1.0.0"  }
+convert-trait = { git = "https://github.com/blockscout/actix-prost", tag = "v1.0.0" }
+ethers = { version = "2.0.14", default-features = false }
 prost = "0.11"
+tonic = "0.8"
 serde = { version = "1" }
 serde_with = { version = "2.0" }
-tonic = "0.8"
+url = "2.4.0"
 
 [build-dependencies]
-actix-prost-build = { git = "https://github.com/blockscout/actix-prost" }
+actix-prost-build = { git = "https://github.com/blockscout/actix-prost", tag = "v1.0.0", features = ["conversions"] }
 prost-build = "0.11"
 tonic-build = "0.8"

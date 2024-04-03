@@ -2,9 +2,17 @@ use std::{collections::HashMap, hash::Hash};
 
 use crate::CacheManager;
 
-#[derive(Debug, Default, Clone)]
-struct HashMapCache<K, V> {
+#[derive(Debug, Clone)]
+pub struct HashMapCache<K, V> {
     inner: HashMap<K, V>,
+}
+
+impl<K, V> Default for HashMapCache<K, V> {
+    fn default() -> Self {
+        Self {
+            inner: Default::default(),
+        }
+    }
 }
 
 impl<K, V> From<HashMap<K, V>> for HashMapCache<K, V> {

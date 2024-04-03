@@ -1,6 +1,7 @@
 use actix_prost_build::{ActixGenerator, GeneratorList};
 use prost_build::{Config, ServiceGenerator};
-use std::path::Path;
+use std::env;
+use std::path::{Path, PathBuf};
 
 // custom function to include custom generator
 fn compile(
@@ -11,6 +12,10 @@ fn compile(
     let mut config = Config::new();
     config
         .service_generator(generator)
+        .file_descriptor_set_path(
+            PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR environment variable not set"))
+                .join("file_descriptor_set.bin"),
+        )
         .compile_well_known_types()
         .protoc_arg("--openapiv2_out=swagger/v1")
         .protoc_arg("--openapiv2_opt")

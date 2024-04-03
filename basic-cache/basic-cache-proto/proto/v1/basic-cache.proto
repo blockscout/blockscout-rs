@@ -4,6 +4,7 @@ package blockscout.basicCache.v1;
 
 option go_package = "github.com/blockscout/blockscout-rs/basic-cache";
 
+import "v1/convert_options.proto";
 
 service Cache {
   rpc CreateSmartContract(CreateSmartContractRequest) returns (SmartContract) {}  
@@ -24,7 +25,8 @@ message SourceFile {
 }
 
 message SmartContract {
-  string url = 1;
+  string url = 1
+    [ (convert_options.convert) = {type: "url::Url"} ];
   repeated SourceFile sources = 2;
 }
 
@@ -32,12 +34,14 @@ message SmartContract {
 message CreateSmartContractRequest {
   // identifier of a smart contract is (chain_id, address)
   string chain_id = 1;
-  string address = 2;
+  string address = 2
+    [ (convert_options.convert) = {type: "ethers::types::Address"} ];
   SmartContract smart_contract = 3;
 }
 
 message GetSmartContractRequest {
   // identifier of a smart contract is (chain_id, address)
   string chain_id = 1;
-  string address = 2;
+  string address = 2
+  [ (convert_options.convert) = {type: "ethers::types::Address"} ];
 }
