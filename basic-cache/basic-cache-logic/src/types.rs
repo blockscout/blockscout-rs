@@ -1,3 +1,4 @@
+use basic_cache_proto::blockscout::basic_cache::v1::CreateSmartContractRequestInternal;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -25,14 +26,10 @@ pub enum ContractParsingError {
     MissingContract,
 }
 
-impl TryFrom<basic_cache_proto::blockscout::basic_cache::v1::CreateSmartContractRequestInternal>
-    for SmartContract
-{
+impl TryFrom<CreateSmartContractRequestInternal> for SmartContract {
     type Error = ContractParsingError;
 
-    fn try_from(
-        value: basic_cache_proto::blockscout::basic_cache::v1::CreateSmartContractRequestInternal,
-    ) -> Result<Self, Self::Error> {
+    fn try_from(value: CreateSmartContractRequestInternal) -> Result<Self, Self::Error> {
         let contract = value
             .smart_contract
             .ok_or(ContractParsingError::MissingContract)?;
@@ -79,5 +76,80 @@ impl From<basic_cache_proto::blockscout::basic_cache::v1::GetSmartContractReques
             chain_id: value.chain_id,
             address: value.address,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use basic_cache_proto::blockscout::basic_cache::v1::{
+        CreateSmartContractRequestInternal, SourceFile,
+    };
+    use ethers_core::types::H160;
+
+    #[test]
+    fn from_smart_contract() {
+        let url = url::Url::parse("https://info.cern.ch/").unwrap();
+        let sources = vec![
+            SourceFile {
+                name: "juju.ts".to_owned(),
+                content: "const strongest = 'G'".to_owned(),
+            },
+            SourceFile {
+                name: "lets.go".to_owned(),
+                content: "package lets".to_owned(),
+            },
+        ];
+        let input = super::SmartContract {
+            id: super::SmartContractId {
+                chain_id: "".to_owned(),
+                address: H160::from_str("0x0000000000000000000000000000000000000000").unwrap(),
+            },
+            blockscout_url: url.clone(),
+            sources: sources
+                .clone()
+                .into_iter()
+                .map(|f| (f.name, f.content))
+                .collect(),
+        };
+        let expected = basic_cache_proto::blockscout::basic_cache::v1::SmartContract {
+            url: url.to_string(),
+            sources,
+        };
+        assert_eq!(expected, input.into())
+    }
+
+    #[test]
+    fn try_from_internal_create_request() {
+        let chain_id = "aboba".to_owned();
+        let address = H160::from_str("0x0000000000000000000000000000000000000000").unwrap();
+        let url = url::Url::parse("https://info.cern.ch/").unwrap();
+        let sources = vec![
+            SourceFile {
+                name: "juju.ts".to_owned(),
+                content: "const strongest = 'G'".to_owned(),
+            },
+            SourceFile {
+                name: "lets.go".to_owned(),
+                content: "package lets".to_owned(),
+            },
+        ];
+        let request = CreateSmartContractRequestInternal {
+            chain_id: chain_id.clone(),
+            address: address.clone(),
+            smart_contract: Some(
+                basic_cache_proto::blockscout::basic_cache::v1::SmartContractInternal {
+                    url: url.clone(),
+                    sources: sources.clone(),
+                },
+            ),
+        };
+        let expected = super::SmartContract {
+            id: super::SmartContractId { chain_id, address },
+            blockscout_url: url,
+            sources: sources.into_iter().map(|f| (f.name, f.content)).collect(),
+        };
+        assert_eq!(expected, request.try_into().unwrap())
     }
 }

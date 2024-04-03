@@ -712,6 +712,7 @@ dependencies = [
  "blockscout-display-bytes",
  "blockscout-service-launcher 0.9.0",
  "ethers-core",
+ "hex",
  "pretty_assertions",
  "sea-orm",
  "thiserror",
