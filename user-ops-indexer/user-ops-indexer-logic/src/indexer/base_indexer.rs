@@ -1,5 +1,9 @@
 use crate::{
-    indexer::{common_transport::CommonTransport, settings::IndexerSettings},
+    indexer::{
+        common_transport::CommonTransport,
+        rpc_utils::{CallTracer, TraceType},
+        settings::IndexerSettings,
+    },
     repository,
     types::user_op::UserOp,
 };
@@ -7,7 +11,7 @@ use anyhow::{anyhow, bail};
 use ethers::prelude::{
     abi::{AbiEncode, Error},
     parse_log,
-    types::{Action, Address, Bytes, Filter, Log, TransactionReceipt},
+    types::{Address, Bytes, Filter, Log, TransactionReceipt},
     EthEvent, Middleware, Provider, ProviderError, H256,
 };
 use futures::{
@@ -307,16 +311,15 @@ impl Indexer {
                 "tx contains more than one bundle or was sent indirectly, fetching tx trace"
             );
             self.client
-                .trace_transaction(tx_hash)
+                .common_trace_transaction(tx_hash)
                 .await?
                 .into_iter()
                 .filter_map(|t| {
-                    if let Action::Call(cd) = t.action {
-                        if cd.to == L::entry_point() && L::matches_handler_calldata(&cd.input) {
-                            Some(cd.input)
-                        } else {
-                            None
-                        }
+                    if t.typ == TraceType::Call
+                        && t.to == Some(L::entry_point())
+                        && L::matches_handler_calldata(&t.input)
+                    {
+                        Some(t.input)
                     } else {
                         None
                     }

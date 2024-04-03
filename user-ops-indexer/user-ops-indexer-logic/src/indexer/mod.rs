@@ -1,6 +1,7 @@
 mod base_indexer;
 mod common;
 pub mod common_transport;
+pub mod rpc_utils;
 pub mod settings;
 pub mod v06;
 pub mod v07;
