@@ -2,6 +2,7 @@ use crate::proto::{
     cache_server::Cache, CreateSmartContractRequest, CreateSmartContractRequestInternal,
     GetSmartContractRequest, SmartContract,
 };
+use basic_cache_proto::blockscout::basic_cache::v1::GetSmartContractRequestInternal;
 use convert_trait::TryConvert;
 
 #[derive(Default)]
@@ -24,13 +25,9 @@ where
         request: tonic::Request<CreateSmartContractRequest>,
     ) -> Result<tonic::Response<SmartContract>, tonic::Status> {
         let request = CreateSmartContractRequestInternal::try_convert(request.into_inner())
-            .map_err(|err| {
-                tonic::Status::invalid_argument(format!("invalid submission request: {}", err))
-            })?;
-        let contract =
-            basic_cache_logic::types::SmartContract::try_from(request).map_err(|err| {
-                tonic::Status::invalid_argument(format!("invalid submission request: {}", err))
-            })?;
+            .map_err(|err| tonic::Status::invalid_argument(format!("invalid request: {}", err)))?;
+        let contract = basic_cache_logic::types::SmartContract::try_from(request)
+            .map_err(|err| tonic::Status::invalid_argument(format!("invalid request: {}", err)))?;
         let existing_contract = self
             .implementation
             .insert(contract.id.clone(), contract.clone())
@@ -44,11 +41,18 @@ where
 
     async fn get_smart_contract(
         &self,
-        _request: tonic::Request<GetSmartContractRequest>,
+        request: tonic::Request<GetSmartContractRequest>,
     ) -> Result<tonic::Response<SmartContract>, tonic::Status> {
-        Ok(tonic::Response::new(SmartContract {
-            url: "some_contract_haha".into(),
-            sources: vec![],
-        }))
+        let request = GetSmartContractRequestInternal::try_convert(request.into_inner())
+            .map_err(|err| tonic::Status::invalid_argument(format!("invalid request: {}", err)))?;
+        let contract_id = basic_cache_logic::types::SmartContractId::from(request);
+        let contract =
+            self.implementation
+                .get(&contract_id)
+                .await
+                .ok_or(tonic::Status::not_found(
+                    "did not find contract with given chain id and address",
+                ))?;
+        Ok(tonic::Response::new(contract.into()))
     }
 }

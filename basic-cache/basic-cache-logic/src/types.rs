@@ -68,3 +68,16 @@ impl From<SmartContract> for basic_cache_proto::blockscout::basic_cache::v1::Sma
         }
     }
 }
+
+impl From<basic_cache_proto::blockscout::basic_cache::v1::GetSmartContractRequestInternal>
+    for SmartContractId
+{
+    fn from(
+        value: basic_cache_proto::blockscout::basic_cache::v1::GetSmartContractRequestInternal,
+    ) -> Self {
+        Self {
+            chain_id: value.chain_id,
+            address: value.address,
+        }
+    }
+}
