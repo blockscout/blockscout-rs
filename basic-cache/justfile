@@ -32,7 +32,7 @@ test-with-db *args:
 stop-test-postgres:
     just docker-name="{{docker-name}}-test" stop-postgres
 run:
-    BASIC_CACHE__DATABASE__URL={{DATABASE_URL}} cargo run --bin basic-cache-server
+    BASIC_CACHE__DATABASE__CONNECT__URL={{DATABASE_URL}} cargo run --bin basic-cache-server
 
 
 
