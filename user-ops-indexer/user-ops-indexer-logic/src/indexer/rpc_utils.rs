@@ -113,10 +113,11 @@ fn flatten_geth_trace(root: CallFrame) -> Vec<CommonCallTrace> {
                     "STATICCALL" => TraceType::StaticCall,
                     "DELEGATECALL" => TraceType::DelegateCall,
                     "CREATE" => TraceType::Create,
+                    "CREATE2" => TraceType::Create,
                     _ => TraceType::Other,
                 },
                 from: frame.from,
-                to: frame.to.clone().and_then(|to| to.as_address().cloned()),
+                to: frame.to.as_ref().and_then(|to| to.as_address().cloned()),
                 input: frame.input.clone(),
             });
         }
