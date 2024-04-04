@@ -11,13 +11,19 @@ pub struct SmartContractId {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct SmartContract {
-    pub id: SmartContractId,
+pub struct SmartContractValue {
     /// url which leads to the contract on th corresponding blocksocut instance
     /// (e.g., https://blockscout.com/address/0xc3279442a5acacf0a2ecb015d1cddbb3e0f3f775)
     pub blockscout_url: url::Url,
     /// contract source code stored as a mapping from file name to the content
     pub sources: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SmartContract {
+    pub id: SmartContractId,
+
+    pub value: SmartContractValue,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -38,18 +44,20 @@ impl TryFrom<CreateSmartContractRequestInternal> for SmartContract {
                 chain_id: value.chain_id,
                 address: value.address,
             },
-            blockscout_url: contract.url,
-            sources: contract
-                .sources
-                .into_iter()
-                .map(|f| (f.name, f.content))
-                .collect(),
+            value: SmartContractValue {
+                blockscout_url: contract.url,
+                sources: contract
+                    .sources
+                    .into_iter()
+                    .map(|f| (f.name, f.content))
+                    .collect(),
+            },
         })
     }
 }
 
-impl From<SmartContract> for basic_cache_proto::blockscout::basic_cache::v1::SmartContract {
-    fn from(value: SmartContract) -> Self {
+impl From<SmartContractValue> for basic_cache_proto::blockscout::basic_cache::v1::SmartContract {
+    fn from(value: SmartContractValue) -> Self {
         Self {
             url: value.blockscout_url.to_string(),
             sources: value
@@ -89,7 +97,7 @@ mod tests {
     use ethers_core::types::H160;
 
     #[test]
-    fn from_smart_contract() {
+    fn from_smart_contract_value() {
         let url = url::Url::parse("https://info.cern.ch/").unwrap();
         let sources = vec![
             SourceFile {
@@ -106,18 +114,20 @@ mod tests {
                 chain_id: "".to_owned(),
                 address: H160::from_str("0x0000000000000000000000000000000000000000").unwrap(),
             },
-            blockscout_url: url.clone(),
-            sources: sources
-                .clone()
-                .into_iter()
-                .map(|f| (f.name, f.content))
-                .collect(),
+            value: super::SmartContractValue {
+                blockscout_url: url.clone(),
+                sources: sources
+                    .clone()
+                    .into_iter()
+                    .map(|f| (f.name, f.content))
+                    .collect(),
+            },
         };
         let expected = basic_cache_proto::blockscout::basic_cache::v1::SmartContract {
             url: url.to_string(),
             sources,
         };
-        assert_eq!(expected, input.into())
+        assert_eq!(expected, input.value.into())
     }
 
     #[test]
@@ -147,8 +157,10 @@ mod tests {
         };
         let expected = super::SmartContract {
             id: super::SmartContractId { chain_id, address },
-            blockscout_url: url,
-            sources: sources.into_iter().map(|f| (f.name, f.content)).collect(),
+            value: super::SmartContractValue {
+                blockscout_url: url,
+                sources: sources.into_iter().map(|f| (f.name, f.content)).collect(),
+            },
         };
         assert_eq!(expected, request.try_into().unwrap())
     }

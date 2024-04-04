@@ -31,17 +31,17 @@ where
     V: Clone + Send + Sync,
 {
     async fn insert(&self, key: K, value: V) -> Option<V> {
-        // test-only code, ok to unwrap
+        // test-only code, ok to panic
         self.inner.try_lock().unwrap().insert(key, value)
     }
 
     async fn get(&self, key: &K) -> Option<V> {
-        // test-only code, ok to unwrap
+        // test-only code, ok to panic
         self.inner.try_lock().unwrap().get(key).cloned()
     }
 
     async fn remove(&self, key: &K) -> Option<V> {
-        // test-only code, ok to unwrap
+        // test-only code, ok to panic
         self.inner.try_lock().unwrap().remove(&key)
     }
 }

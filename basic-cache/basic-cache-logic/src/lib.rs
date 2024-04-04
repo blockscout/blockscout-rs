@@ -1,5 +1,3 @@
-//! code for talking to DB and etc. I suppose...
-
 pub mod db_cache;
 // todo: test only
 pub mod in_memory_cache;

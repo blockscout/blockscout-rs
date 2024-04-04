@@ -36,7 +36,7 @@ where
             Some(_) => tracing::info!("overwritten contract at {:?}", contract.id),
             None => tracing::info!("saved contract at {:?}", &contract.id),
         }
-        Ok(tonic::Response::new(contract.into()))
+        Ok(tonic::Response::new(contract.value.into()))
     }
 
     async fn get_smart_contract(
@@ -53,6 +53,6 @@ where
                 .ok_or(tonic::Status::not_found(
                     "did not find contract with given chain id and address",
                 ))?;
-        Ok(tonic::Response::new(contract.into()))
+        Ok(tonic::Response::new(contract.value.into()))
     }
 }
