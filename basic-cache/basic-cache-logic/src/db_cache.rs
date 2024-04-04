@@ -1,7 +1,11 @@
 use std::collections::BTreeMap;
 
 use basic_cache_entity::{contract_sources, contract_url};
-use sea_orm::{ActiveValue::Set, DatabaseConnection, DbErr, EntityTrait};
+
+use sea_orm::{
+    sea_query::OnConflict, ActiveValue::Set, ConnectionTrait, DatabaseConnection, DbErr,
+    EntityTrait, Iterable, Statement,
+};
 
 use crate::{
     types::{SmartContractId, SmartContractValue},
@@ -35,12 +39,37 @@ impl CacheManager<SmartContractId, SmartContractValue> for PostgresCache {
         value: SmartContractValue,
     ) -> Result<(), Self::Error> {
         contract_url::Entity::insert(contract_url::ActiveModel {
-            chain_id: Set(key.chain_id),
+            chain_id: Set(key.chain_id.clone()),
             address: Set(key.address.to_string()),
             url: Set(value.blockscout_url.to_string()),
         })
+        .on_conflict(
+            OnConflict::columns(contract_url::PrimaryKey::iter())
+                .update_column(contract_url::Column::Url)
+                .to_owned(),
+        )
         .exec(&self.db)
         .await?;
+
+        let sources_models =
+            value
+                .sources
+                .into_iter()
+                .map(|(filename, contents)| contract_sources::ActiveModel {
+                    chain_id: Set(key.chain_id.clone()),
+                    address: Set(key.address.to_string()),
+                    filename: Set(filename),
+                    contents: Set(contents),
+                });
+
+        contract_sources::Entity::insert_many(sources_models)
+            .on_conflict(
+                OnConflict::columns(contract_sources::PrimaryKey::iter())
+                    .update_column(contract_sources::Column::Contents)
+                    .to_owned(),
+            )
+            .exec(&self.db)
+            .await?;
         Ok(())
     }
 
