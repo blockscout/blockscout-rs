@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use basic_cache_entity::{contract_sources, contract_url};
 
 use sea_orm::{
-    sea_query::OnConflict, ActiveValue::Set, ColumnTrait, Condition, ConnectionTrait,
-    DatabaseConnection, DbErr, EntityTrait, Iterable, QueryFilter, Statement,
+    sea_query::OnConflict, ActiveValue::Set, ColumnTrait, DatabaseConnection, DbErr, EntityTrait,
+    Iterable, QueryFilter,
 };
 
 use crate::{
@@ -47,6 +47,16 @@ impl PostgresCache {
         Ok(())
     }
 
+    async fn get_url(&self, chain_id: String, address: String) -> Result<Option<url::Url>, Error> {
+        let find_key = (chain_id, address);
+        let find_result = contract_url::Entity::find_by_id(find_key)
+            .one(&self.db)
+            .await?;
+        find_result
+            .map(|contract| Ok(url::Url::parse(&contract.url)?))
+            .transpose()
+    }
+
     async fn set_sources(
         &self,
         chain_id: String,
@@ -78,13 +88,26 @@ impl PostgresCache {
         Ok(())
     }
 
+    async fn get_sources(
+        &self,
+        chain_id: String,
+        address: String,
+    ) -> Result<BTreeMap<String, String>, Error> {
+        let models = contract_sources::Entity::find()
+            .filter(contract_sources::Column::ChainId.eq(chain_id))
+            .filter(contract_sources::Column::Address.eq(address))
+            .all(&self.db)
+            .await?;
+        Ok(models
+            .into_iter()
+            .map(|m| (m.filename, m.contents))
+            .collect())
+    }
+
     async fn remove_all_sources(&self, chain_id: String, address: String) -> Result<(), Error> {
         contract_sources::Entity::delete_many()
-            .filter(
-                Condition::all()
-                    .add(contract_sources::Column::ChainId.eq(chain_id))
-                    .add(contract_sources::Column::Address.eq(address)),
-            )
+            .filter(contract_sources::Column::ChainId.eq(chain_id))
+            .filter(contract_sources::Column::Address.eq(address))
             .exec(&self.db)
             .await?;
         Ok(())
@@ -121,18 +144,28 @@ impl CacheManager<SmartContractId, SmartContractValue> for PostgresCache {
     }
 
     async fn get(&self, key: &SmartContractId) -> Result<Option<SmartContractValue>, Self::Error> {
-        let find_key = (key.chain_id.clone(), key.address.to_string());
-        let find_result = contract_url::Entity::find_by_id(find_key)
-            .one(&self.db)
+        let url = self
+            .get_url(key.chain_id.clone(), key.address.to_string())
             .await?;
-        find_result
-            .map(|contract| {
-                Ok(SmartContractValue {
-                    blockscout_url: url::Url::parse(&contract.url)?,
-                    sources: BTreeMap::new(),
-                })
-            })
-            .transpose()
+        let sources = self
+            .get_sources(key.chain_id.clone(), key.address.to_string())
+            .await?;
+
+        let Some(url) = url else {
+            if !sources.is_empty() {
+                tracing::warn!(
+                    "detected {} dangling source files for contract {:?}",
+                    sources.len(),
+                    (&key.chain_id, key.address.to_string())
+                );
+            }
+            return Ok(None);
+        };
+
+        Ok(Some(SmartContractValue {
+            blockscout_url: url,
+            sources: sources,
+        }))
     }
 
     async fn remove(
