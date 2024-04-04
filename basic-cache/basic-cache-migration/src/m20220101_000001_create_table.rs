@@ -77,7 +77,6 @@ impl MigrationTrait for Migration {
 
 #[derive(DeriveIden)]
 enum ContractUrl {
-    #[sea_orm(iden = "contract_url")]
     Table,
     ChainId,
     Address,
@@ -86,7 +85,6 @@ enum ContractUrl {
 
 #[derive(DeriveIden)]
 enum ContractSources {
-    #[sea_orm(iden = "contract_sources")]
     Table,
     ChainId,
     Address,
