@@ -6,6 +6,7 @@ pub struct Migration;
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        // probably having string limits is better
         manager
             .create_table(
                 Table::create()
@@ -13,7 +14,7 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(
                         ColumnDef::new(ContractUrl::ChainId)
-                            .string_len(128) // probably better than no limit
+                            .string_len(128)
                             .not_null()
                             .primary_key(),
                     )
@@ -35,7 +36,7 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(
                         ColumnDef::new(ContractSources::ChainId)
-                            .string_len(128) // probably better than no limit
+                            .string_len(128)
                             .not_null()
                             .primary_key(),
                     )
@@ -46,8 +47,14 @@ impl MigrationTrait for Migration {
                             .primary_key(),
                     )
                     .col(
-                        ColumnDef::new(ContractSources::Source)
-                            .string_len(512)
+                        ColumnDef::new(ContractSources::Filename)
+                            .string_len(32768)
+                            .not_null()
+                            .primary_key(), // shouldn't have duplicates
+                    )
+                    .col(
+                        ColumnDef::new(ContractSources::Contents)
+                            .string()
                             .not_null(),
                     )
                     .to_owned(),
@@ -83,5 +90,6 @@ enum ContractSources {
     Table,
     ChainId,
     Address,
-    Source,
+    Filename,
+    Contents,
 }
