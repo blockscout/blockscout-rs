@@ -30,18 +30,12 @@ pub enum Error {
     InvalidData(#[from] url::ParseError),
 }
 
-impl CacheManager<SmartContractId, SmartContractValue> for PostgresCache {
-    type Error = Error;
-
-    async fn set(
-        &self,
-        key: SmartContractId,
-        value: SmartContractValue,
-    ) -> Result<(), Self::Error> {
+impl PostgresCache {
+    async fn set_url(&self, chain_id: String, address: String, url: String) -> Result<(), Error> {
         contract_url::Entity::insert(contract_url::ActiveModel {
-            chain_id: Set(key.chain_id.clone()),
-            address: Set(key.address.to_string()),
-            url: Set(value.blockscout_url.to_string()),
+            chain_id: Set(chain_id),
+            address: Set(address),
+            url: Set(url),
         })
         .on_conflict(
             OnConflict::columns(contract_url::PrimaryKey::iter())
@@ -50,14 +44,23 @@ impl CacheManager<SmartContractId, SmartContractValue> for PostgresCache {
         )
         .exec(&self.db)
         .await?;
+        Ok(())
+    }
+
+    async fn set_sources(
+        &self,
+        chain_id: String,
+        address: String,
+        sources: impl IntoIterator<Item = (String, String)>,
+    ) -> Result<(), Error> {
+        // todo: prune existing files
 
         let sources_models =
-            value
-                .sources
+            sources
                 .into_iter()
                 .map(|(filename, contents)| contract_sources::ActiveModel {
-                    chain_id: Set(key.chain_id.clone()),
-                    address: Set(key.address.to_string()),
+                    chain_id: Set(chain_id.clone()),
+                    address: Set(address.clone()),
                     filename: Set(filename),
                     contents: Set(contents),
                 });
@@ -69,6 +72,26 @@ impl CacheManager<SmartContractId, SmartContractValue> for PostgresCache {
                     .to_owned(),
             )
             .exec(&self.db)
+            .await?;
+        Ok(())
+    }
+}
+
+impl CacheManager<SmartContractId, SmartContractValue> for PostgresCache {
+    type Error = Error;
+
+    async fn set(
+        &self,
+        key: SmartContractId,
+        value: SmartContractValue,
+    ) -> Result<(), Self::Error> {
+        self.set_url(
+            key.chain_id.clone(),
+            key.address.to_string(),
+            value.blockscout_url.to_string(),
+        )
+        .await?;
+        self.set_sources(key.chain_id.clone(), key.address.to_string(), value.sources)
             .await?;
         Ok(())
     }
