@@ -6,44 +6,82 @@ pub struct Migration;
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        // Replace the sample below with your own migration scripts
+        manager
+            .create_table(
+                Table::create()
+                    .table(ContractUrl::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(ContractUrl::ChainId)
+                            .string_len(128) // probably better than no limit
+                            .not_null()
+                            .primary_key(),
+                    )
+                    .col(
+                        ColumnDef::new(ContractUrl::Address)
+                            .string_len(512)
+                            .not_null()
+                            .primary_key(),
+                    )
+                    .col(ColumnDef::new(ContractUrl::Url).string_len(512).not_null())
+                    .to_owned(),
+            )
+            .await?;
 
-        // manager
-        //     .create_table(
-        //         Table::create()
-        //             .table(Post::Table)
-        //             .if_not_exists()
-        //             .col(
-        //                 ColumnDef::new(Post::Id)
-        //                     .integer()
-        //                     .not_null()
-        //                     .auto_increment()
-        //                     .primary_key(),
-        //             )
-        //             .col(ColumnDef::new(Post::Title).string().not_null())
-        //             .col(ColumnDef::new(Post::Text).string().not_null())
-        //             .to_owned(),
-        //     )
-        //     .await?;
+        manager
+            .create_table(
+                Table::create()
+                    .table(ContractSources::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(ContractSources::ChainId)
+                            .string_len(128) // probably better than no limit
+                            .not_null()
+                            .primary_key(),
+                    )
+                    .col(
+                        ColumnDef::new(ContractSources::Address)
+                            .string_len(512)
+                            .not_null()
+                            .primary_key(),
+                    )
+                    .col(
+                        ColumnDef::new(ContractSources::Source)
+                            .string_len(512)
+                            .not_null(),
+                    )
+                    .to_owned(),
+            )
+            .await?;
 
         Ok(())
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        // Replace the sample below with your own migration scripts
-
-        // manager
-        //     .drop_table(Table::drop().table(Post::Table).to_owned())
-        //     .await?;
+        manager
+            .drop_table(Table::drop().table(ContractUrl::Table).to_owned())
+            .await?;
+        manager
+            .drop_table(Table::drop().table(ContractSources::Table).to_owned())
+            .await?;
         Ok(())
     }
 }
 
-/// Learn more at https://docs.rs/sea-query#iden
-#[derive(Iden)]
-enum Post {
+#[derive(DeriveIden)]
+enum ContractUrl {
+    #[sea_orm(iden = "contract_url")]
     Table,
-    Id,
-    Title,
-    Text,
+    ChainId,
+    Address,
+    Url,
+}
+
+#[derive(DeriveIden)]
+enum ContractSources {
+    #[sea_orm(iden = "contract_sources")]
+    Table,
+    ChainId,
+    Address,
+    Source,
 }
