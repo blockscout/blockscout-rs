@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use basic_cache_entity::{contract_sources, contract_url};
 
 use sea_orm::{
-    sea_query::OnConflict, ActiveValue::Set, ConnectionTrait, DatabaseConnection, DbErr,
-    EntityTrait, Iterable, Statement,
+    sea_query::OnConflict, ActiveValue::Set, ColumnTrait, Condition, ConnectionTrait,
+    DatabaseConnection, DbErr, EntityTrait, Iterable, QueryFilter, Statement,
 };
 
 use crate::{
@@ -53,7 +53,9 @@ impl PostgresCache {
         address: String,
         sources: impl IntoIterator<Item = (String, String)>,
     ) -> Result<(), Error> {
-        // todo: prune existing files
+        // since we overwrite existing contracts, we need to prune old sources
+        self.remove_all_sources(chain_id.clone(), address.clone())
+            .await?;
 
         let sources_models =
             sources
@@ -70,6 +72,18 @@ impl PostgresCache {
                 OnConflict::columns(contract_sources::PrimaryKey::iter())
                     .update_column(contract_sources::Column::Contents)
                     .to_owned(),
+            )
+            .exec(&self.db)
+            .await?;
+        Ok(())
+    }
+
+    async fn remove_all_sources(&self, chain_id: String, address: String) -> Result<(), Error> {
+        contract_sources::Entity::delete_many()
+            .filter(
+                Condition::all()
+                    .add(contract_sources::Column::ChainId.eq(chain_id))
+                    .add(contract_sources::Column::Address.eq(address)),
             )
             .exec(&self.db)
             .await?;
