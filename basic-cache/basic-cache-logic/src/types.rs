@@ -30,6 +30,8 @@ pub struct SmartContract {
 pub enum ContractParsingError {
     #[error("contract must be included into request")]
     MissingContract,
+    #[error("file names must be unique, {0} is repeated")]
+    DuplicateFilenames(String),
 }
 
 impl TryFrom<CreateSmartContractRequestInternal> for SmartContract {
@@ -39,6 +41,13 @@ impl TryFrom<CreateSmartContractRequestInternal> for SmartContract {
         let contract = value
             .smart_contract
             .ok_or(ContractParsingError::MissingContract)?;
+        let mut sources = BTreeMap::new();
+        for f in contract.sources.into_iter() {
+            if sources.contains_key(&f.name) {
+                return Err(ContractParsingError::DuplicateFilenames(f.name));
+            }
+            sources.insert(f.name, f.content);
+        }
         Ok(SmartContract {
             id: SmartContractId {
                 chain_id: value.chain_id,
@@ -46,11 +55,7 @@ impl TryFrom<CreateSmartContractRequestInternal> for SmartContract {
             },
             value: SmartContractValue {
                 blockscout_url: contract.url,
-                sources: contract
-                    .sources
-                    .into_iter()
-                    .map(|f| (f.name, f.content))
-                    .collect(),
+                sources,
             },
         })
     }
