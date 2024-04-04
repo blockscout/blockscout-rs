@@ -3,6 +3,7 @@ use crate::{
     services::{CacheService, HealthService},
     settings::Settings,
 };
+use basic_cache_logic::db_cache::PostgresCache;
 use basic_cache_proto::blockscout::basic_cache::v1::cache_server::CacheServer;
 use blockscout_service_launcher::{database, launcher, launcher::LaunchSettings, tracing};
 
@@ -15,14 +16,7 @@ const SERVICE_NAME: &str = "basic_cache";
 #[derive(Clone)]
 struct Router {
     health: Arc<HealthService>,
-    cache: Arc<
-        CacheService<
-            basic_cache_logic::in_memory_cache::HashMapCache<
-                basic_cache_logic::types::SmartContractId,
-                basic_cache_logic::types::SmartContract,
-            >,
-        >,
-    >,
+    cache: Arc<CacheService<basic_cache_logic::db_cache::PostgresCache>>,
 }
 
 impl Router {
@@ -47,14 +41,14 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let health = Arc::new(HealthService::default());
 
-    let _db_connection = database::initialize_postgres::<Migrator>(
+    let db_connection = database::initialize_postgres::<Migrator>(
         &settings.database.connect.url(),
         settings.database.create_database,
         settings.database.run_migrations,
     )
     .await?;
 
-    let cache = Arc::new(CacheService::<_>::default());
+    let cache = Arc::new(CacheService::new(PostgresCache::new(db_connection)));
 
     let router = Router { health, cache };
 

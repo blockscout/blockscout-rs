@@ -12,6 +12,12 @@ pub struct PostgresCache {
     db: DatabaseConnection,
 }
 
+impl PostgresCache {
+    pub fn new(db: DatabaseConnection) -> Self {
+        Self { db }
+    }
+}
+
 impl CacheManager<SmartContractId, SmartContractValue> for PostgresCache {
     async fn insert(
         &self,
