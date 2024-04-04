@@ -147,7 +147,7 @@ mod tests {
         ];
         let request = CreateSmartContractRequestInternal {
             chain_id: chain_id.clone(),
-            address: address.clone(),
+            address,
             smart_contract: Some(
                 basic_cache_proto::blockscout::basic_cache::v1::SmartContractInternal {
                     url: url.clone(),
