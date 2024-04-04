@@ -36,8 +36,10 @@ where
             .map_err(|err| tonic::Status::invalid_argument(format!("invalid request: {}", err)))?;
         let existing_contract = self
             .implementation
-            .insert(contract.id.clone(), contract.value.clone())
-            .await;
+            .replace(contract.id.clone(), contract.value.clone())
+            .await
+            .inspect_err(|err| tracing::error!("failed to store contract: {:?}", err))
+            .map_err(|_| tonic::Status::internal("failed to store contract"))?;
         match existing_contract {
             Some(_) => tracing::info!("overwritten contract at {:?}", contract.id),
             None => tracing::info!("saved contract at {:?}", &contract.id),
@@ -52,13 +54,15 @@ where
         let request = GetSmartContractRequestInternal::try_convert(request.into_inner())
             .map_err(|err| tonic::Status::invalid_argument(format!("invalid request: {}", err)))?;
         let contract_id = basic_cache_logic::types::SmartContractId::from(request);
-        let contract =
-            self.implementation
-                .get(&contract_id)
-                .await
-                .ok_or(tonic::Status::not_found(
-                    "did not find contract with given chain id and address",
-                ))?;
+        let contract = self
+            .implementation
+            .get(&contract_id)
+            .await
+            .inspect_err(|err| tracing::error!("failed to retrieve contract: {:?}", err))
+            .map_err(|_| tonic::Status::internal("failed to retrieve contract"))?
+            .ok_or(tonic::Status::not_found(
+                "did not find contract with given chain id and address",
+            ))?;
         Ok(tonic::Response::new(contract.into()))
     }
 }

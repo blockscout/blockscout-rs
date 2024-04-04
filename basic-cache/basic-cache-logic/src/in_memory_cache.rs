@@ -30,18 +30,25 @@ where
     K: Eq + Hash + Send + Sync,
     V: Clone + Send + Sync,
 {
-    async fn insert(&self, key: K, value: V) -> Option<V> {
-        // test-only code, ok to panic
-        self.inner.try_lock().unwrap().insert(key, value)
+    type Error = ();
+
+    async fn set(&self, key: K, value: V) -> Result<(), Self::Error> {
+        self.replace(key, value).await?;
+        Ok(())
     }
 
-    async fn get(&self, key: &K) -> Option<V> {
+    async fn replace(&self, key: K, value: V) -> Result<Option<V>, Self::Error> {
         // test-only code, ok to panic
-        self.inner.try_lock().unwrap().get(key).cloned()
+        Ok(self.inner.try_lock().unwrap().insert(key, value))
     }
 
-    async fn remove(&self, key: &K) -> Option<V> {
+    async fn get(&self, key: &K) -> Result<Option<V>, Self::Error> {
         // test-only code, ok to panic
-        self.inner.try_lock().unwrap().remove(&key)
+        Ok(self.inner.try_lock().unwrap().get(key).cloned())
+    }
+
+    async fn remove(&self, key: &K) -> Result<Option<V>, Self::Error> {
+        // test-only code, ok to panic
+        Ok(self.inner.try_lock().unwrap().remove(&key))
     }
 }
