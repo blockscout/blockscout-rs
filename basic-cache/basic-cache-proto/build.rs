@@ -1,7 +1,9 @@
 use actix_prost_build::{ActixGenerator, GeneratorList};
 use prost_build::{Config, ServiceGenerator};
-use std::env;
-use std::path::{Path, PathBuf};
+use std::{
+    env,
+    path::{Path, PathBuf},
+};
 
 // custom function to include custom generator
 fn compile(
