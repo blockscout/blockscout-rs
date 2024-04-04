@@ -55,17 +55,14 @@ where
     }
 
     async fn replace(&self, key: K, value: V) -> Result<Option<V>, Self::Error> {
-        // test-only code, ok to panic
         Ok(self.inner.try_lock()?.insert(key, value))
     }
 
     async fn get(&self, key: &K) -> Result<Option<V>, Self::Error> {
-        // test-only code, ok to panic
         Ok(self.inner.try_lock()?.get(key).cloned())
     }
 
     async fn remove(&self, key: &K) -> Result<Option<V>, Self::Error> {
-        // test-only code, ok to panic
-        Ok(self.inner.try_lock()?.remove(&key))
+        Ok(self.inner.try_lock()?.remove(key))
     }
 }

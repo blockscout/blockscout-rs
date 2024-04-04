@@ -178,7 +178,7 @@ impl CacheManager<SmartContractId, SmartContractValue> for PostgresCache {
 
         Ok(Some(SmartContractValue {
             blockscout_url: url,
-            sources: sources,
+            sources,
         }))
     }
 
