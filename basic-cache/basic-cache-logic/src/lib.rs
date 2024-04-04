@@ -1,7 +1,6 @@
 use std::fmt::Debug;
 
 pub mod db_cache;
-// todo: test only
 pub mod in_memory_cache;
 pub mod types;
 
