@@ -50,6 +50,6 @@ migrate-up:
     sea-orm-cli migrate -d {{project-name}}-migration up
 
 migrate-down:
-    sea-orm-cli migrate {{project-name}}-migration down
+    sea-orm-cli migrate -d {{project-name}}-migration down
 {% endif %}
 
