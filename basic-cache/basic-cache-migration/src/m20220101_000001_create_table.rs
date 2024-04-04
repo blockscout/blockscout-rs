@@ -15,16 +15,19 @@ impl MigrationTrait for Migration {
                     .col(
                         ColumnDef::new(ContractUrl::ChainId)
                             .string_len(128)
-                            .not_null()
-                            .primary_key(),
+                            .not_null(),
                     )
                     .col(
                         ColumnDef::new(ContractUrl::Address)
                             .string_len(512)
-                            .not_null()
-                            .primary_key(),
+                            .not_null(),
                     )
                     .col(ColumnDef::new(ContractUrl::Url).string_len(512).not_null())
+                    .primary_key(
+                        Index::create()
+                            .col(ContractSources::ChainId)
+                            .col(ContractSources::Address),
+                    )
                     .to_owned(),
             )
             .await?;
@@ -37,25 +40,28 @@ impl MigrationTrait for Migration {
                     .col(
                         ColumnDef::new(ContractSources::ChainId)
                             .string_len(128)
-                            .not_null()
-                            .primary_key(),
+                            .not_null(),
                     )
                     .col(
                         ColumnDef::new(ContractSources::Address)
                             .string_len(512)
-                            .not_null()
-                            .primary_key(),
+                            .not_null(),
                     )
                     .col(
                         ColumnDef::new(ContractSources::Filename)
                             .string_len(32768)
-                            .not_null()
-                            .primary_key(), // shouldn't have duplicates
+                            .not_null(),
                     )
                     .col(
                         ColumnDef::new(ContractSources::Contents)
                             .string()
                             .not_null(),
+                    )
+                    .primary_key(
+                        Index::create()
+                            .col(ContractSources::ChainId)
+                            .col(ContractSources::Address)
+                            .col(ContractSources::Filename), // shouldn't have duplicates
                     )
                     .to_owned(),
             )
