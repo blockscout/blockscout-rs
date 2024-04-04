@@ -57,6 +57,20 @@ impl PostgresCache {
             .transpose()
     }
 
+    async fn remove_url(&self, chain_id: String, address: String) -> Result<(), Error> {
+        let find_key = (chain_id, address);
+        let find_result = contract_url::Entity::delete_by_id(find_key)
+            .exec(&self.db)
+            .await?;
+        if find_result.rows_affected > 1 {
+            tracing::warn!(
+                "unexpected number of removed urls: {}",
+                find_result.rows_affected
+            );
+        }
+        Ok(())
+    }
+
     async fn set_sources(
         &self,
         chain_id: String,
@@ -64,7 +78,7 @@ impl PostgresCache {
         sources: impl IntoIterator<Item = (String, String)>,
     ) -> Result<(), Error> {
         // since we overwrite existing contracts, we need to prune old sources
-        self.remove_all_sources(chain_id.clone(), address.clone())
+        self.remove_sources(chain_id.clone(), address.clone())
             .await?;
 
         let sources_models =
@@ -104,7 +118,7 @@ impl PostgresCache {
             .collect())
     }
 
-    async fn remove_all_sources(&self, chain_id: String, address: String) -> Result<(), Error> {
+    async fn remove_sources(&self, chain_id: String, address: String) -> Result<(), Error> {
         contract_sources::Entity::delete_many()
             .filter(contract_sources::Column::ChainId.eq(chain_id))
             .filter(contract_sources::Column::Address.eq(address))
@@ -172,6 +186,11 @@ impl CacheManager<SmartContractId, SmartContractValue> for PostgresCache {
         &self,
         key: &SmartContractId,
     ) -> Result<Option<SmartContractValue>, Self::Error> {
-        todo!()
+        let contract = self.get(key).await?;
+        self.remove_url(key.chain_id.clone(), key.address.to_string())
+            .await?;
+        self.remove_sources(key.chain_id.clone(), key.address.to_string())
+            .await?;
+        Ok(contract)
     }
 }
