@@ -55,10 +55,12 @@
     },
 
     "creation_match": true,
+    "creation_match_type": "full",
     "creation_values": {},
     "creation_transformations": [],
 
     "runtime_match": true,
+    "runtime_match_type": "full",
     "runtime_values": {},
     "runtime_transformations": []
 }

@@ -63,9 +63,6 @@ where
 pub type CompilationFailure = Response<compilation_failure::CompilationFailure>;
 mod compilation_failure {
     use super::*;
-    use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
-        self as proto, batch_verify_response, BatchVerifyResponse,
-    };
 
     #[derive(Clone, Debug, Deserialize)]
     #[serde(rename_all = "camelCase")]
@@ -114,13 +111,20 @@ mod contract_verification_success {
     use pretty_assertions::assert_eq;
     use serde::Deserialize;
     use serde_json::Value;
-    use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::BatchVerifyResponse;
     use std::collections::BTreeMap;
 
     #[derive(Clone, Debug, Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub struct ContractVerificationSuccess {
         pub success: ContractVerificationSuccessInternal,
+    }
+
+    #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct MatchDetails {
+        pub match_type: String,
+        pub values: Value,
+        pub transformations: Value,
     }
 
     #[derive(Clone, Debug, Deserialize)]
@@ -138,12 +142,8 @@ mod contract_verification_success {
         pub compilation_artifacts: Value,
         pub creation_code_artifacts: Value,
         pub runtime_code_artifacts: Value,
-        pub creation_match: bool,
-        pub creation_values: Option<Value>,
-        pub creation_transformations: Option<Value>,
-        pub runtime_match: bool,
-        pub runtime_values: Option<Value>,
-        pub runtime_transformations: Option<Value>,
+        pub creation_match_details: Option<MatchDetails>,
+        pub runtime_match_details: Option<MatchDetails>,
     }
 
     impl TestCaseResponse for ContractVerificationSuccess {
@@ -163,12 +163,8 @@ mod contract_verification_success {
                 compilation_artifacts,
                 creation_code_artifacts,
                 runtime_code_artifacts,
-                creation_match,
-                creation_values,
-                creation_transformations,
-                runtime_match,
-                runtime_values,
-                runtime_transformations,
+                creation_match_details,
+                runtime_match_details,
             } = retrieve_success_item(actual_response);
 
             assert_eq!(
@@ -208,28 +204,12 @@ mod contract_verification_success {
                 "invalid runtime_code_artifacts"
             );
             assert_eq!(
-                self.success.creation_match, creation_match,
-                "invalid creation_match"
+                self.success.creation_match_details, creation_match_details,
+                "invalid creation_match_details"
             );
             assert_eq!(
-                self.success.creation_values, creation_values,
-                "invalid creation_values"
-            );
-            assert_eq!(
-                self.success.creation_transformations, creation_transformations,
-                "invalid creation_transformations"
-            );
-            assert_eq!(
-                self.success.runtime_match, runtime_match,
-                "invalid runtime_match"
-            );
-            assert_eq!(
-                self.success.runtime_values, runtime_values,
-                "invalid runtime_values"
-            );
-            assert_eq!(
-                self.success.runtime_transformations, runtime_transformations,
-                "invalid runtime_transformations"
+                self.success.runtime_match_details, runtime_match_details,
+                "invalid runtime_match_details"
             );
         }
     }
@@ -240,7 +220,6 @@ pub type ContractVerificationFailure =
 mod contract_verification_failure {
     use super::*;
     use serde::Deserialize;
-    use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::BatchVerifyResponse;
 
     #[derive(Clone, Debug, Deserialize)]
     #[serde(rename_all = "camelCase")]
@@ -275,12 +254,8 @@ pub struct ParsedSuccessItem {
     pub compilation_artifacts: Value,
     pub creation_code_artifacts: Value,
     pub runtime_code_artifacts: Value,
-    pub creation_match: bool,
-    pub creation_values: Option<Value>,
-    pub creation_transformations: Option<Value>,
-    pub runtime_match: bool,
-    pub runtime_values: Option<Value>,
-    pub runtime_transformations: Option<Value>,
+    pub creation_match_details: Option<contract_verification_success::MatchDetails>,
+    pub runtime_match_details: Option<contract_verification_success::MatchDetails>,
 }
 
 impl From<proto::ContractVerificationSuccess> for ParsedSuccessItem {
@@ -298,12 +273,8 @@ impl From<proto::ContractVerificationSuccess> for ParsedSuccessItem {
             compilation_artifacts,
             creation_code_artifacts,
             runtime_code_artifacts,
-            creation_match,
-            creation_values,
-            creation_transformations,
-            runtime_match,
-            runtime_values,
-            runtime_transformations,
+            creation_match_details,
+            runtime_match_details,
         } = value;
 
         let creation_code =
@@ -311,8 +282,12 @@ impl From<proto::ContractVerificationSuccess> for ParsedSuccessItem {
         let runtime_code =
             DisplayBytes::from_str(&runtime_code).expect("cannot parse runtime_code as bytes");
 
-        let compiler = smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::contract_verification_success::compiler::Compiler::from_i32(compiler).unwrap().as_str_name();
-        let language = smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::contract_verification_success::language::Language::from_i32(language).unwrap().as_str_name();
+        let compiler = proto::contract_verification_success::compiler::Compiler::from_i32(compiler)
+            .unwrap()
+            .as_str_name();
+        let language = proto::contract_verification_success::language::Language::from_i32(language)
+            .unwrap()
+            .as_str_name();
         let compiler_settings = {
             let mut compiler_settings = serde_json::Value::from_str(&compiler_settings)
                 .expect("cannot parse compiler_settings as json");
@@ -330,19 +305,23 @@ impl From<proto::ContractVerificationSuccess> for ParsedSuccessItem {
         let runtime_code_artifacts = serde_json::Value::from_str(&runtime_code_artifacts)
             .expect("cannot parse runtime_code_artifacts as json");
 
-        macro_rules! maybe_string_to_value {
-            ($field:ident) => {
-                $field.map(|v| {
-                    serde_json::Value::from_str(&v)
-                        .expect(&format!("cannot parse {} as json", stringify!($field)))
-                })
+        let parse_match_details =
+            |proto_details: proto::contract_verification_success::MatchDetails| {
+                let match_type = proto::contract_verification_success::MatchType::from_i32(
+                    proto_details.match_type,
+                )
+                .unwrap()
+                .as_str_name();
+                let values = serde_json::Value::from_str(&proto_details.values)
+                    .expect("cannot parse values as json");
+                let transformations = serde_json::Value::from_str(&proto_details.transformations)
+                    .expect("cannot parse transformations as json");
+                contract_verification_success::MatchDetails {
+                    match_type: match_type.to_string(),
+                    values,
+                    transformations,
+                }
             };
-        }
-
-        let creation_values = maybe_string_to_value!(creation_values);
-        let creation_transformations = maybe_string_to_value!(creation_transformations);
-        let runtime_values = maybe_string_to_value!(runtime_values);
-        let runtime_transformations = maybe_string_to_value!(runtime_transformations);
 
         ParsedSuccessItem {
             creation_code,
@@ -357,12 +336,8 @@ impl From<proto::ContractVerificationSuccess> for ParsedSuccessItem {
             compilation_artifacts,
             creation_code_artifacts,
             runtime_code_artifacts,
-            creation_match,
-            creation_values,
-            creation_transformations,
-            runtime_match,
-            runtime_values,
-            runtime_transformations,
+            creation_match_details: creation_match_details.map(parse_match_details),
+            runtime_match_details: runtime_match_details.map(parse_match_details),
         }
     }
 }

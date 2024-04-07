@@ -266,6 +266,15 @@ definitions:
       - YUL
       - VYPER
     default: UNSPECIFIED
+  ContractVerificationSuccessMatchDetails:
+    type: object
+    properties:
+      matchType:
+        $ref: '#/definitions/v2ContractVerificationSuccessMatchType'
+      values:
+        type: string
+      transformations:
+        type: string
   ExtraDataBytecodePart:
     type: object
     properties:
@@ -293,14 +302,6 @@ definitions:
       length:
         type: integer
         format: int64
-  SourceMatchType:
-    type: string
-    enum:
-      - MATCH_TYPE_UNSPECIFIED
-      - PARTIAL
-      - FULL
-    default: MATCH_TYPE_UNSPECIFIED
-    description: ' - MATCH_TYPE_UNSPECIFIED: Default value. This value is unused.'
   SourceSourceType:
     type: string
     enum:
@@ -476,18 +477,17 @@ definitions:
       runtimeCodeArtifacts:
         type: string
         title: / Store info about the runtime code (sourcemaps, linkreferences, immutables) (json)
-      creationMatch:
-        type: boolean
-      creationValues:
-        type: string
-      creationTransformations:
-        type: string
-      runtimeMatch:
-        type: boolean
-      runtimeValues:
-        type: string
-      runtimeTransformations:
-        type: string
+      creationMatchDetails:
+        $ref: '#/definitions/ContractVerificationSuccessMatchDetails'
+      runtimeMatchDetails:
+        $ref: '#/definitions/ContractVerificationSuccessMatchDetails'
+  v2ContractVerificationSuccessMatchType:
+    type: string
+    enum:
+      - UNDEFINED
+      - PARTIAL
+      - FULL
+    default: UNDEFINED
   v2HealthCheckResponse:
     type: object
     properties:
@@ -555,7 +555,7 @@ definitions:
           / Constructor arguments used for deploying verified contract
           / (exists only for creation inputs)
       matchType:
-        $ref: '#/definitions/SourceMatchType'
+        $ref: '#/definitions/v2SourceMatchType'
         title: / Similar to Sourcify (see https://docs.sourcify.dev/docs/full-vs-partial-match/)
       compilationArtifacts:
         type: string
@@ -568,6 +568,14 @@ definitions:
       deployedBytecodeArtifacts:
         type: string
         description: / Info about the runtime code (sourcemaps, linkreferences, immutables) encoded as a json.
+  v2SourceMatchType:
+    type: string
+    enum:
+      - MATCH_TYPE_UNSPECIFIED
+      - PARTIAL
+      - FULL
+    default: MATCH_TYPE_UNSPECIFIED
+    description: ' - MATCH_TYPE_UNSPECIFIED: Default value. This value is unused.'
   v2VerificationMetadata:
     type: object
     properties:

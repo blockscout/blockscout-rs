@@ -51,6 +51,7 @@
     },
 
     "creation_match": true,
+    "creation_match_type": "partial",
     "creation_values": {
         "cborAuxdata": {
             "1": "0xa26469706673582212204ac0ce5f82b26331fa3e9ae959291a55624ffaf90fcd509deafcc21a5f1da21e64736f6c63430008120033"
@@ -66,6 +67,7 @@
     ],
 
     "runtime_match": true,
+    "runtime_match_type": "partial",
     "runtime_values": {
         "cborAuxdata": {
             "1": "0xa26469706673582212204ac0ce5f82b26331fa3e9ae959291a55624ffaf90fcd509deafcc21a5f1da21e64736f6c63430008120033"

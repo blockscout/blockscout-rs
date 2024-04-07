@@ -56,6 +56,19 @@ pub fn from_proto_solidity_multi_part_content_to_inner(
     })
 }
 
+pub fn from_inner_match_type_to_proto(
+    inner: smart_contract_verifier::MatchType,
+) -> proto::contract_verification_success::MatchType {
+    match inner {
+        smart_contract_verifier::MatchType::Partial => {
+            proto::contract_verification_success::MatchType::Partial
+        }
+        smart_contract_verifier::MatchType::Full => {
+            proto::contract_verification_success::MatchType::Full
+        }
+    }
+}
+
 pub fn compilation_error(message: impl Into<String>) -> Response<BatchVerifyResponse> {
     Response::new(BatchVerifyResponse {
         verification_result: Some(
@@ -114,6 +127,7 @@ fn process_verification_result(
                 &success.language.to_uppercase(),
             )
             .ok_or_else(|| Status::internal("invalid language returned internally"))?;
+
             proto::contract_verification_result::VerificationResult::Success(
                 proto::ContractVerificationSuccess {
                     creation_code: super::to_hex(success.creation_code),
@@ -128,24 +142,22 @@ fn process_verification_result(
                     compilation_artifacts: success.compilation_artifacts.to_string(),
                     creation_code_artifacts: success.creation_code_artifacts.to_string(),
                     runtime_code_artifacts: success.runtime_code_artifacts.to_string(),
-                    creation_match: success.creation_match.is_some(),
-                    creation_values: success
-                        .creation_match
-                        .as_ref()
-                        .map(|creation_match| creation_match.values.to_string()),
-                    creation_transformations: success
-                        .creation_match
-                        .as_ref()
-                        .map(|creation_match| creation_match.transformations.to_string()),
-                    runtime_match: success.runtime_match.is_some(),
-                    runtime_values: success
-                        .runtime_match
-                        .as_ref()
-                        .map(|runtime_match| runtime_match.values.to_string()),
-                    runtime_transformations: success
-                        .runtime_match
-                        .as_ref()
-                        .map(|runtime_match| runtime_match.transformations.to_string()),
+                    creation_match_details: success.creation_match.as_ref().map(|creation_match| {
+                        proto::contract_verification_success::MatchDetails {
+                            match_type: from_inner_match_type_to_proto(creation_match.match_type)
+                                .into(),
+                            values: creation_match.values.to_string(),
+                            transformations: creation_match.transformations.to_string(),
+                        }
+                    }),
+                    runtime_match_details: success.runtime_match.as_ref().map(|runtime_match| {
+                        proto::contract_verification_success::MatchDetails {
+                            match_type: from_inner_match_type_to_proto(runtime_match.match_type)
+                                .into(),
+                            values: runtime_match.values.to_string(),
+                            transformations: runtime_match.transformations.to_string(),
+                        }
+                    }),
                 },
             )
         }

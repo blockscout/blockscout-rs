@@ -8,7 +8,7 @@ use crate::{
     },
     compiler,
     verifier::CompilerInput,
-    Compilers, Contract, SolidityCompiler, Version,
+    Compilers, Contract, MatchType, SolidityCompiler, Version,
 };
 use std::collections::BTreeMap;
 use thiserror::Error;
@@ -35,6 +35,7 @@ impl From<compiler::Error> for BatchError {
 
 #[derive(Clone, Debug)]
 pub struct Match {
+    pub match_type: MatchType,
     pub values: serde_json::Value,
     pub transformations: serde_json::Value,
 }
@@ -196,10 +197,12 @@ fn verify_contract(
             )
             .expect("is json serializable"),
             creation_match: does_creation_match.then_some(Match {
+                match_type: match_type(creation_values.clone()),
                 values: creation_values,
                 transformations: creation_transformations,
             }),
             runtime_match: does_runtime_match.then_some(Match {
+                match_type: match_type(runtime_values.clone()),
                 values: runtime_values,
                 transformations: runtime_transformations,
             }),
@@ -245,4 +248,21 @@ fn choose_best_contract(successes: Vec<BatchSuccess>) -> Option<BatchSuccess> {
     }
 
     Some(best_contract)
+}
+
+fn match_type(values: serde_json::Value) -> MatchType {
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Values {
+        #[serde(default)]
+        cbor_auxdata: BTreeMap<String, String>,
+    }
+
+    let values: Values = serde_json::from_value(values).unwrap();
+
+    if values.cbor_auxdata.is_empty() {
+        MatchType::Full
+    } else {
+        MatchType::Partial
+    }
 }

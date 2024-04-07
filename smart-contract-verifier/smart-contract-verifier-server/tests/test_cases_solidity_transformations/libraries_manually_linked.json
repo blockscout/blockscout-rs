@@ -51,6 +51,7 @@
     },
 
     "creation_match": true,
+    "creation_match_type": "full",
     "creation_values": {
         "libraries": {
             "contracts/1_Storage.sol:Journal": "0x7d53f102f4d4aa014db4e10d6deec2009b3cda6b"
@@ -66,6 +67,7 @@
     ],
 
     "runtime_match": true,
+    "runtime_match_type": "full",
     "runtime_values": {
         "libraries": {
             "contracts/1_Storage.sol:Journal": "0x7d53f102f4d4aa014db4e10d6deec2009b3cda6b"

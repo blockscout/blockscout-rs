@@ -1,5 +1,6 @@
 use super::{TestCaseRequest, TestCaseResponse};
 use blockscout_display_bytes::Bytes as DisplayBytes;
+use pretty_assertions::assert_eq;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
@@ -29,10 +30,12 @@ pub struct TestCase {
     pub creation_match: bool,
     pub creation_values: Value,
     pub creation_transformations: Value,
+    pub creation_match_type: String,
 
     pub runtime_match: bool,
     pub runtime_values: Value,
     pub runtime_transformations: Value,
+    pub runtime_match_type: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -153,12 +156,8 @@ impl TestCaseResponse for TestCase {
             compilation_artifacts,
             creation_code_artifacts,
             runtime_code_artifacts,
-            creation_match,
-            creation_values,
-            creation_transformations,
-            runtime_match,
-            runtime_values,
-            runtime_transformations,
+            creation_match_details,
+            runtime_match_details,
         } = super::batch_solidity::retrieve_success_item(actual_response);
 
         let expected_file_name = {
@@ -166,67 +165,83 @@ impl TestCaseResponse for TestCase {
             names[..names.len() - 1].join(":")
         };
 
-        pretty_assertions::assert_eq!(
-            self.compiled_creation_code,
-            creation_code,
+        assert_eq!(
+            self.compiled_creation_code, creation_code,
             "invalid creation_code"
         );
-        pretty_assertions::assert_eq!(
-            self.compiled_runtime_code,
-            runtime_code,
+        assert_eq!(
+            self.compiled_runtime_code, runtime_code,
             "invalid runtime_code"
         );
-        pretty_assertions::assert_eq!(self.compiler.to_uppercase(), compiler, "invalid compiler");
-        pretty_assertions::assert_eq!(self.version, compiler_version, "invalid compiler_version");
-        pretty_assertions::assert_eq!(self.language.to_uppercase(), language, "invalid language");
-        pretty_assertions::assert_eq!(expected_file_name, file_name, "invalid file_name");
-        pretty_assertions::assert_eq!(self.name, contract_name, "invalid contract_name");
-        pretty_assertions::assert_eq!(self.sources, sources, "invalid sources");
-        pretty_assertions::assert_eq!(
-            self.compiler_settings,
-            compiler_settings,
+        assert_eq!(self.compiler.to_uppercase(), compiler, "invalid compiler");
+        assert_eq!(self.version, compiler_version, "invalid compiler_version");
+        assert_eq!(self.language.to_uppercase(), language, "invalid language");
+        assert_eq!(expected_file_name, file_name, "invalid file_name");
+        assert_eq!(self.name, contract_name, "invalid contract_name");
+        assert_eq!(self.sources, sources, "invalid sources");
+        assert_eq!(
+            self.compiler_settings, compiler_settings,
             "invalid compiler_settings"
         );
-        pretty_assertions::assert_eq!(
-            self.compilation_artifacts,
-            compilation_artifacts,
+        assert_eq!(
+            self.compilation_artifacts, compilation_artifacts,
             "invalid compilation_artifacts"
         );
-        pretty_assertions::assert_eq!(
-            self.creation_code_artifacts,
-            creation_code_artifacts,
+        assert_eq!(
+            self.creation_code_artifacts, creation_code_artifacts,
             "invalid creation_code_artifacts"
         );
-        pretty_assertions::assert_eq!(
-            self.runtime_code_artifacts,
-            runtime_code_artifacts,
+        assert_eq!(
+            self.runtime_code_artifacts, runtime_code_artifacts,
             "invalid runtime_code_artifacts"
         );
-        pretty_assertions::assert_eq!(
+
+        assert_eq!(
             self.creation_match,
-            creation_match,
+            creation_match_details.is_some(),
             "invalid creation_match"
         );
-        pretty_assertions::assert_eq!(
-            Some(self.creation_values.clone()),
-            creation_values,
-            "invalid creation_values"
+        if self.creation_match {
+            let creation_match_details = creation_match_details.unwrap();
+            assert_eq!(
+                self.creation_values.clone(),
+                creation_match_details.values,
+                "invalid creation_values"
+            );
+            assert_eq!(
+                self.creation_transformations.clone(),
+                creation_match_details.transformations,
+                "invalid creation_transformations"
+            );
+            assert_eq!(
+                self.creation_match_type.to_uppercase(),
+                creation_match_details.match_type,
+                "invalid creation_match_type"
+            );
+        }
+
+        assert_eq!(
+            self.runtime_match,
+            runtime_match_details.is_some(),
+            "invalid runtime_match"
         );
-        pretty_assertions::assert_eq!(
-            Some(self.creation_transformations.clone()),
-            creation_transformations,
-            "invalid creation_transformations"
-        );
-        pretty_assertions::assert_eq!(self.runtime_match, runtime_match, "invalid runtime_match");
-        pretty_assertions::assert_eq!(
-            Some(self.runtime_values.clone()),
-            runtime_values,
-            "invalid runtime_values"
-        );
-        pretty_assertions::assert_eq!(
-            Some(self.runtime_transformations.clone()),
-            runtime_transformations,
-            "invalid runtime_transformations"
-        );
+        if self.runtime_match {
+            let runtime_match_details = runtime_match_details.unwrap();
+            assert_eq!(
+                self.runtime_values.clone(),
+                runtime_match_details.values,
+                "invalid runtime_values"
+            );
+            assert_eq!(
+                self.runtime_transformations.clone(),
+                runtime_match_details.transformations,
+                "invalid runtime_transformations"
+            );
+            assert_eq!(
+                self.runtime_match_type.to_uppercase(),
+                runtime_match_details.match_type,
+                "invalid runtime_match_type"
+            );
+        }
     }
 }

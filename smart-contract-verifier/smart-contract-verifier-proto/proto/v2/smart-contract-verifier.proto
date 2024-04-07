@@ -359,13 +359,20 @@ message ContractVerificationSuccess {
   /// Store info about the runtime code (sourcemaps, linkreferences, immutables) (json)
   string runtime_code_artifacts = 12;
 
-  bool creation_match = 13;
-  optional string creation_values = 14;
-  optional string creation_transformations = 15;
+  enum MatchType {
+    UNDEFINED = 0;
+    PARTIAL = 1;
+    FULL = 2;
+  }
 
-  bool runtime_match = 16;
-  optional string runtime_values = 17;
-  optional string runtime_transformations = 18;
+  message MatchDetails {
+    MatchType match_type = 1;
+    string values = 2;
+    string transformations = 3;
+  }
+
+  optional MatchDetails creation_match_details = 13;
+  optional MatchDetails runtime_match_details = 14;
 }
 
 message ContractVerificationFailure {}

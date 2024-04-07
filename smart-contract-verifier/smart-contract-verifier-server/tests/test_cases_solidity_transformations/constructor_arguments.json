@@ -49,6 +49,7 @@
     },
 
     "creation_match": true,
+    "creation_match_type": "full",
     "creation_values": {
         "constructorArguments": "0x0000000000000000000000000000000000000000000000000000000000003039"
     },
@@ -61,6 +62,7 @@
     ],
 
     "runtime_match": true,
+    "runtime_match_type": "full",
     "runtime_values": {},
     "runtime_transformations": []
 }

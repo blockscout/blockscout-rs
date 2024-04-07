@@ -60,12 +60,16 @@
                     }
                 }
             },
-            "creationMatch": true,
-            "creationValues": {},
-            "creationTransformations": [],
-            "runtimeMatch": true,
-            "runtimeValues": {},
-            "runtimeTransformations": []
+            "creationMatchDetails": {
+                "matchType": "FULL",
+                "values": {},
+                "transformations": []
+            },
+            "runtimeMatchDetails": {
+                "matchType": "FULL",
+                "values": {},
+                "transformations": []
+            }
         }
     }
 }
