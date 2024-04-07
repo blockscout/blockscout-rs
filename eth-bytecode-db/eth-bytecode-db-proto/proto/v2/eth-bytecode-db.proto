@@ -42,6 +42,11 @@ service SourcifyVerifier {
   rpc VerifyFromEtherscan(VerifyFromEtherscanSourcifyRequest) returns (VerifyResponse) {}
 }
 
+service VerifierAlliance {
+  rpc BatchImportSolidityStandardJson(VerifierAllianceBatchImportSolidityStandardJsonRequest)
+      returns (VerifierAllianceBatchImportResponse) {}
+}
+
 message Source {
   /// The name of the file verified contract was located at
   string file_name = 1;
@@ -315,4 +320,62 @@ message EventDescription {
   string name = 2;
   /// Json encoded array of objects each describing one of the event arguments
   string inputs = 3;
+}
+
+/******************** Verifier alliance related messages ********************/
+
+message VerifierAllianceBatchImportSolidityStandardJsonRequest {
+  /// Contracts to be verified via provided data.
+  repeated VerifierAllianceContract contracts = 1;
+  /// Compiler version used to compile the contract.
+  string compiler_version = 2;
+  /// https://docs.vyperlang.org/en/stable/compiling-a-contract.html#input-json-description
+  string input = 3;
+}
+
+message VerifierAllianceBatchImportResponse {
+  message Success {}
+  message ImportFailure {}
+  message VerificationFailure {}
+
+  message ImportContractResult {
+    oneof result {
+      Success success = 1;
+      ImportFailure import_failure = 2;
+      VerificationFailure verification_failure = 3;
+    }
+  }
+
+  message ImportContractResults {
+    repeated ImportContractResult items = 1;
+  }
+
+  message CompilationFailure {
+    string message = 1;
+  }
+
+  oneof result {
+    ImportContractResults results = 1;
+    CompilationFailure compilation_failure = 2;
+  }
+}
+
+message VerifierAllianceContract {
+  /// Id of the chain which the contract to be verified on
+  string chain_id = 1;
+  /// The address of the contract to be verified
+  string contract_address = 2;
+  /// The hash of the transaction the contract has been created at.
+  /// Must not be `null` if the contract has been deployed as a result of transaction call.
+  optional string transaction_hash = 3;
+  /// The number of the block containing the creation transaction.
+  optional int64 block_number = 4;
+  /// The position number transaction has been added into a block
+  optional int64 transaction_index = 5;
+  /// The address which actually deployed the contract (i.e. called the create/create2 opcode)
+  optional string deployer = 6;
+  /// The bytecode from the calldata (for eoa deployments) or given to create/create2
+  optional string creation_code = 7;
+  // The bytecode actually stored in the blockchain for the given contract
+  string runtime_code = 8;
 }

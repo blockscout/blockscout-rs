@@ -7,12 +7,33 @@ tags:
   - name: SolidityVerifier
   - name: VyperVerifier
   - name: SourcifyVerifier
+  - name: VerifierAlliance
   - name: Health
 consumes:
   - application/json
 produces:
   - application/json
 paths:
+  /api/v2/alliance/solidity/standard-json:batch-import:
+    post:
+      operationId: VerifierAlliance_BatchImportSolidityStandardJson
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v2VerifierAllianceBatchImportResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v2VerifierAllianceBatchImportSolidityStandardJsonRequest'
+      tags:
+        - VerifierAlliance
   /api/v2/alliance/stats:
     get:
       operationId: Database_GetAllianceStats
@@ -344,6 +365,34 @@ definitions:
       - YUL
     default: SOURCE_TYPE_UNSPECIFIED
     description: ' - SOURCE_TYPE_UNSPECIFIED: Default value. This value is unused.'
+  VerifierAllianceBatchImportResponseCompilationFailure:
+    type: object
+    properties:
+      message:
+        type: string
+  VerifierAllianceBatchImportResponseImportContractResult:
+    type: object
+    properties:
+      success:
+        $ref: '#/definitions/VerifierAllianceBatchImportResponseSuccess'
+      importFailure:
+        $ref: '#/definitions/VerifierAllianceBatchImportResponseImportFailure'
+      verificationFailure:
+        $ref: '#/definitions/VerifierAllianceBatchImportResponseVerificationFailure'
+  VerifierAllianceBatchImportResponseImportContractResults:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/VerifierAllianceBatchImportResponseImportContractResult'
+  VerifierAllianceBatchImportResponseImportFailure:
+    type: object
+  VerifierAllianceBatchImportResponseSuccess:
+    type: object
+  VerifierAllianceBatchImportResponseVerificationFailure:
+    type: object
   googlerpcStatus:
     type: object
     properties:
@@ -577,6 +626,59 @@ definitions:
         type: string
         format: int64
         title: / The number of the block containing the creation transaction
+      transactionIndex:
+        type: string
+        format: int64
+        title: / The position number transaction has been added into a block
+      deployer:
+        type: string
+        title: / The address which actually deployed the contract (i.e. called the create/create2 opcode)
+      creationCode:
+        type: string
+        title: / The bytecode from the calldata (for eoa deployments) or given to create/create2
+      runtimeCode:
+        type: string
+        title: The bytecode actually stored in the blockchain for the given contract
+  v2VerifierAllianceBatchImportResponse:
+    type: object
+    properties:
+      results:
+        $ref: '#/definitions/VerifierAllianceBatchImportResponseImportContractResults'
+      compilationFailure:
+        $ref: '#/definitions/VerifierAllianceBatchImportResponseCompilationFailure'
+  v2VerifierAllianceBatchImportSolidityStandardJsonRequest:
+    type: object
+    properties:
+      contracts:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v2VerifierAllianceContract'
+        description: / Contracts to be verified via provided data.
+      compilerVersion:
+        type: string
+        description: / Compiler version used to compile the contract.
+      input:
+        type: string
+        title: / https://docs.vyperlang.org/en/stable/compiling-a-contract.html#input-json-description
+  v2VerifierAllianceContract:
+    type: object
+    properties:
+      chainId:
+        type: string
+        title: / Id of the chain which the contract to be verified on
+      contractAddress:
+        type: string
+        title: / The address of the contract to be verified
+      transactionHash:
+        type: string
+        description: |-
+          / The hash of the transaction the contract has been created at.
+          / Must not be `null` if the contract has been deployed as a result of transaction call.
+      blockNumber:
+        type: string
+        format: int64
+        description: / The number of the block containing the creation transaction.
       transactionIndex:
         type: string
         format: int64

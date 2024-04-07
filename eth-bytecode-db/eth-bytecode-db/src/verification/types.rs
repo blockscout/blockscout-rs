@@ -1,8 +1,10 @@
 use super::smart_contract_verifier;
+use crate::FromHex;
 use anyhow::Context;
 use entity::sea_orm_active_enums;
+use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2 as eth_bytecode_db_v2;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, str::FromStr};
 
 /********** Bytecode Part **********/
 
@@ -346,6 +348,293 @@ pub struct VerificationRequest<T> {
     pub metadata: Option<VerificationMetadata>,
     #[serde(skip_serializing)]
     pub is_authorized: bool,
+}
+
+/********** Verifier Alliance Import Request **********/
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct AllianceContract {
+    pub chain_id: String,
+    pub contract_address: bytes::Bytes,
+    pub transaction_hash: Option<bytes::Bytes>,
+    pub block_number: Option<i64>,
+    pub transaction_index: Option<i64>,
+    pub deployer: Option<bytes::Bytes>,
+    pub creation_code: Option<bytes::Bytes>,
+    pub runtime_code: bytes::Bytes,
+}
+
+impl TryFrom<eth_bytecode_db_v2::VerifierAllianceContract> for AllianceContract {
+    type Error = eth_bytecode_db_proto::tonic::Status;
+
+    fn try_from(value: eth_bytecode_db_v2::VerifierAllianceContract) -> Result<Self, Self::Error> {
+        let str_to_bytes = |value: &str| {
+            FromHex::from_hex(value)
+                .map_err(|v| eth_bytecode_db_proto::tonic::Status::invalid_argument(v.to_string()))
+        };
+
+        Ok(Self {
+            chain_id: value.chain_id,
+            contract_address: str_to_bytes(&value.contract_address)?,
+            transaction_hash: value
+                .transaction_hash
+                .as_deref()
+                .map(str_to_bytes)
+                .transpose()?,
+            block_number: value.block_number,
+            transaction_index: value.transaction_index,
+            deployer: value.deployer.as_deref().map(str_to_bytes).transpose()?,
+            creation_code: value
+                .creation_code
+                .as_deref()
+                .map(str_to_bytes)
+                .transpose()?,
+            runtime_code: str_to_bytes(&value.runtime_code)?,
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct AllianceImportRequest<T> {
+    pub contracts: Vec<AllianceContract>,
+    pub compiler_version: String,
+    #[serde(flatten)]
+    pub content: T,
+}
+
+/********** Verifier Alliance Import Result **********/
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Compiler {
+    Solc,
+    Vyper,
+}
+
+impl TryFrom<smart_contract_verifier::contract_verification_success::compiler::Compiler>
+    for Compiler
+{
+    type Error = crate::verification::Error;
+
+    fn try_from(
+        value: smart_contract_verifier::contract_verification_success::compiler::Compiler,
+    ) -> Result<Self, Self::Error> {
+        match value {
+            smart_contract_verifier::contract_verification_success::compiler::Compiler::Solc => Ok(Compiler::Solc),
+            smart_contract_verifier::contract_verification_success::compiler::Compiler::Vyper => Ok(Compiler::Vyper),
+            smart_contract_verifier::contract_verification_success::compiler::Compiler::Unspecified => {
+                Err(crate::verification::Error::Verifier(anyhow::anyhow!("compiler is unspecified")))
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Language {
+    Solidity,
+    Yul,
+    Vyper,
+}
+
+impl TryFrom<smart_contract_verifier::contract_verification_success::language::Language>
+    for Language
+{
+    type Error = crate::verification::Error;
+
+    fn try_from(
+        value: smart_contract_verifier::contract_verification_success::language::Language,
+    ) -> Result<Self, Self::Error> {
+        match value {
+            smart_contract_verifier::contract_verification_success::language::Language::Solidity => Ok(Language::Solidity),
+            smart_contract_verifier::contract_verification_success::language::Language::Yul => Ok(Language::Yul),
+            smart_contract_verifier::contract_verification_success::language::Language::Vyper => Ok(Language::Vyper),
+            smart_contract_verifier::contract_verification_success::language::Language::Unspecified =>
+                Err(crate::verification::Error::Verifier(anyhow::anyhow!("language is unspecified")))
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MatchDetails {
+    match_type: MatchType,
+    values: serde_json::Value,
+    transformations: serde_json::Value,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AllianceContractImportResult {
+    Success {
+        creation_code: bytes::Bytes,
+        runtime_code: bytes::Bytes,
+        compiler: Compiler,
+        compiler_version: String,
+        language: Language,
+        file_name: String,
+        contract_name: String,
+        sources: BTreeMap<String, String>,
+        compiler_settings: serde_json::Value,
+        compilation_artifacts: serde_json::Value,
+        creation_code_artifacts: serde_json::Value,
+        runtime_code_artifacts: serde_json::Value,
+        creation_match_details: Option<MatchDetails>,
+        runtime_match_details: Option<MatchDetails>,
+    },
+    VerificationFailure {},
+}
+
+impl TryFrom<smart_contract_verifier::ContractVerificationResult> for AllianceContractImportResult {
+    type Error = crate::verification::Error;
+
+    fn try_from(
+        value: smart_contract_verifier::ContractVerificationResult,
+    ) -> Result<Self, Self::Error> {
+        let str_to_bytes = |value: &str| {
+            FromHex::from_hex(value).map_err(|err| Self::Error::Verifier(anyhow::anyhow!("{err}")))
+        };
+
+        let str_to_value = |value: &str| {
+            serde_json::Value::from_str(value)
+                .map_err(|err| Self::Error::Verifier(anyhow::anyhow!("{err}")))
+        };
+
+        let parse_match_details = |details: smart_contract_verifier::contract_verification_success::MatchDetails|
+         -> Result<MatchDetails, Self::Error> {
+            let match_type = match details.match_type() {
+                smart_contract_verifier::contract_verification_success::MatchType::Undefined => MatchType::Unknown,
+                smart_contract_verifier::contract_verification_success::MatchType::Partial => MatchType::Partial,
+                smart_contract_verifier::contract_verification_success::MatchType::Full => MatchType::Full,
+            };
+
+            Ok(MatchDetails {
+                match_type,
+                values: str_to_value(&details.values)?,
+                transformations: str_to_value(&details.transformations)?,
+            })
+        };
+
+        let result = match value {
+            smart_contract_verifier::ContractVerificationResult {
+                verification_result: Some(smart_contract_verifier::contract_verification_result::VerificationResult::Success(value))
+            } => {
+
+                let compiler = value.compiler();
+                let language = value.language();
+                Self::Success {
+                    creation_code: str_to_bytes(&value.creation_code)?,
+                    runtime_code: str_to_bytes(&value.runtime_code)?,
+                    compiler: compiler.try_into()?,
+                    compiler_version: value.compiler_version,
+                    language: language.try_into()?,
+                    file_name: value.file_name,
+                    contract_name: value.contract_name,
+                    sources: value.sources,
+                    compiler_settings: str_to_value(&value.compiler_settings)?,
+                    compilation_artifacts: str_to_value(&value.compilation_artifacts)?,
+                    creation_code_artifacts: str_to_value(&value.creation_code_artifacts)?,
+                    runtime_code_artifacts: str_to_value(&value.runtime_code_artifacts)?,
+                    creation_match_details: value.creation_match_details.map(parse_match_details).transpose()?,
+                    runtime_match_details: value.runtime_match_details.map(parse_match_details).transpose()?,
+                }
+            }
+            smart_contract_verifier::ContractVerificationResult {
+                verification_result: Some(smart_contract_verifier::contract_verification_result::VerificationResult::Failure(_value))
+            } => {
+                Self::VerificationFailure {}
+            }
+            value => return Err(crate::verification::Error::Verifier(
+                anyhow::anyhow!("invalid struct: {value:?}"))
+            )
+        };
+
+        Ok(result)
+    }
+}
+
+impl TryFrom<AllianceContractImportResult>
+    for eth_bytecode_db_v2::verifier_alliance_batch_import_response::ImportContractResult
+{
+    type Error = eth_bytecode_db_proto::tonic::Status;
+
+    fn try_from(value: AllianceContractImportResult) -> Result<Self, Self::Error> {
+        let result = match value {
+            AllianceContractImportResult::VerificationFailure {} => eth_bytecode_db_v2::verifier_alliance_batch_import_response::import_contract_result::Result::VerificationFailure(
+                eth_bytecode_db_v2::verifier_alliance_batch_import_response::VerificationFailure {}
+            ),
+            AllianceContractImportResult::Success {
+                ..
+            } => {
+                eth_bytecode_db_v2::verifier_alliance_batch_import_response::import_contract_result::Result::Success(
+                    eth_bytecode_db_v2::verifier_alliance_batch_import_response::Success {}
+                )
+            }
+        };
+
+        Ok(Self {
+            result: Some(result),
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AllianceBatchImportResult {
+    CompilationFailure(String),
+    Results(Vec<AllianceContractImportResult>),
+}
+
+impl TryFrom<smart_contract_verifier::BatchVerifyResponse> for AllianceBatchImportResult {
+    type Error = crate::verification::Error;
+
+    fn try_from(value: smart_contract_verifier::BatchVerifyResponse) -> Result<Self, Self::Error> {
+        let result = match value {
+            smart_contract_verifier::BatchVerifyResponse {
+                verification_result: Some(smart_contract_verifier::batch_verify_response::VerificationResult::CompilationFailure(
+                smart_contract_verifier::CompilationFailure { message }
+                                          ))
+            } => AllianceBatchImportResult::CompilationFailure(message),
+            smart_contract_verifier::BatchVerifyResponse {
+                verification_result: Some(smart_contract_verifier::batch_verify_response::VerificationResult::ContractVerificationResults(
+                    smart_contract_verifier::batch_verify_response::ContractVerificationResults {
+                        items
+                    }))
+            } => {
+                let results = items.into_iter().map(TryFrom::try_from).collect::<Result<_, _>>()?;
+                AllianceBatchImportResult::Results(results)
+            },
+            value => return Err(crate::verification::Error::Verifier(
+                anyhow::anyhow!("invalid struct: {value:?}"))
+            )
+        };
+
+        Ok(result)
+    }
+}
+
+impl TryFrom<AllianceBatchImportResult>
+    for eth_bytecode_db_v2::VerifierAllianceBatchImportResponse
+{
+    type Error = eth_bytecode_db_proto::tonic::Status;
+
+    fn try_from(value: AllianceBatchImportResult) -> Result<Self, Self::Error> {
+        let result = match value {
+            AllianceBatchImportResult::CompilationFailure(message) => {
+                eth_bytecode_db_v2::verifier_alliance_batch_import_response::Result::CompilationFailure(
+                    eth_bytecode_db_v2::verifier_alliance_batch_import_response::CompilationFailure {
+                        message
+                    }
+                )
+            }
+            AllianceBatchImportResult::Results(results) => {
+                eth_bytecode_db_v2::verifier_alliance_batch_import_response::Result::Results(
+                    eth_bytecode_db_v2::verifier_alliance_batch_import_response::ImportContractResults {
+                        items: results.into_iter().map(TryFrom::try_from).collect::<Result<_, _>>()?,
+                    }
+                )
+            }
+        };
+
+        Ok(eth_bytecode_db_v2::VerifierAllianceBatchImportResponse {
+            result: Some(result),
+        })
+    }
 }
 
 /********** Verification Type **********/

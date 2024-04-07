@@ -68,6 +68,13 @@ http:
       post: /api/v2/verifier/sourcify/sources:verify-from-etherscan
       body: "*"
 
+    #################### Verifier Alliance ####################
+
+    - selector: blockscout.ethBytecodeDb.v2.VerifierAlliance.BatchImportSolidityStandardJson
+      post: /api/v2/alliance/solidity/standard-json:batch-import
+      body: "*"
+
+
     #################### Health ####################
 
     - selector: blockscout.ethBytecodeDb.v2.Health.Check

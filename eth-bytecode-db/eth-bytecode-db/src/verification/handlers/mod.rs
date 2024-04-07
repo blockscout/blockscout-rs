@@ -5,6 +5,7 @@ pub mod solidity_multi_part;
 pub mod solidity_standard_json;
 pub mod sourcify;
 pub mod sourcify_from_etherscan;
+pub mod verifier_alliance;
 pub mod vyper_multi_part;
 pub mod vyper_standard_json;
 
@@ -15,7 +16,6 @@ use super::{
     errors::Error,
     smart_contract_verifier,
     types::{BytecodeType, DatabaseReadySource, Source, VerificationMetadata, VerificationType},
-    verifier_alliance,
 };
 use crate::verification::verifier_alliance::CodeMatch;
 use anyhow::Context;
@@ -375,7 +375,7 @@ async fn retrieve_deployment_from_action(
             creation_code,
             runtime_code,
         } => {
-            let transaction_hash = match verifier_alliance::derive_transaction_hash(
+            let transaction_hash = match super::verifier_alliance::derive_transaction_hash(
                 transaction_hash,
                 creation_code,
                 runtime_code,
@@ -425,7 +425,7 @@ async fn retrieve_deployment_from_action(
             runtime_code,
         } => {
             // At least one of creation and runtime code should exist to add the contract into the database.
-            let transaction_hash = verifier_alliance::derive_transaction_hash(
+            let transaction_hash = super::verifier_alliance::derive_transaction_hash(
                 transaction_hash.clone(),
                 creation_code.clone(),
                 runtime_code.clone(),
@@ -465,7 +465,7 @@ async fn check_code_matches(
             .await
             .context("retrieve deployment contract codes")?;
 
-    let creation_code_match = verifier_alliance::verify_creation_code(
+    let creation_code_match = super::verifier_alliance::verify_creation_code(
         contract_deployment,
         deployed_creation_code.code.clone(),
         database_source.raw_creation_code.clone(),
@@ -473,7 +473,7 @@ async fn check_code_matches(
     )
     .context("verify if creation code match")?;
 
-    let runtime_code_match = verifier_alliance::verify_runtime_code(
+    let runtime_code_match = super::verifier_alliance::verify_runtime_code(
         contract_deployment,
         deployed_runtime_code.code.clone(),
         database_source.raw_runtime_code.clone(),
@@ -506,19 +506,19 @@ async fn check_match_statuses(
             .context("retrieve deployment verified contracts")?;
 
         (
-            verifier_alliance::calculate_max_status(&deployment_verified_contracts, true),
-            verifier_alliance::calculate_max_status(&deployment_verified_contracts, false),
+            super::verifier_alliance::calculate_max_status(&deployment_verified_contracts, true),
+            super::verifier_alliance::calculate_max_status(&deployment_verified_contracts, false),
         )
     };
 
     let (creation_code_status, runtime_code_status) = {
-        let creation_code_status = verifier_alliance::retrieve_code_transformation_status(
+        let creation_code_status = super::verifier_alliance::retrieve_code_transformation_status(
             None,
             true,
             creation_code_match.does_match,
             creation_code_match.values.as_ref(),
         );
-        let runtime_code_status = verifier_alliance::retrieve_code_transformation_status(
+        let runtime_code_status = super::verifier_alliance::retrieve_code_transformation_status(
             None,
             false,
             runtime_code_match.does_match,
