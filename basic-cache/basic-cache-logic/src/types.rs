@@ -42,7 +42,11 @@ impl TryFrom<CreateSmartContractRequestInternal> for SmartContract {
             .smart_contract
             .ok_or(ContractParsingError::MissingContract)?;
         let mut sources = BTreeMap::new();
-        for (name, basic_cache_proto::blockscout::basic_cache::v1::FileContentsInternal{ content }) in contract.sources.into_iter() {
+        for (
+            name,
+            basic_cache_proto::blockscout::basic_cache::v1::FileContentsInternal { content },
+        ) in contract.sources.into_iter()
+        {
             if sources.contains_key(&name) {
                 return Err(ContractParsingError::DuplicateFilenames(name));
             }
@@ -68,13 +72,12 @@ impl From<SmartContractValue> for basic_cache_proto::blockscout::basic_cache::v1
             sources: value
                 .sources
                 .into_iter()
-                .map(
-                    |(name, content)| (
+                .map(|(name, content)| {
+                    (
                         name,
-                        basic_cache_proto::blockscout::basic_cache::v1::FileContents {
-                            content},
-                    
-                ))
+                        basic_cache_proto::blockscout::basic_cache::v1::FileContents { content },
+                    )
+                })
                 .collect(),
         }
     }
