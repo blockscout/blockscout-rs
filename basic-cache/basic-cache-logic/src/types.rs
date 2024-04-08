@@ -101,22 +101,27 @@ mod tests {
     use std::str::FromStr;
 
     use basic_cache_proto::blockscout::basic_cache::v1::{
-        CreateSmartContractRequestInternal, SourceFile,
+        CreateSmartContractRequestInternal, FileContents, FileContentsInternal,
     };
+    use convert_trait::TryConvert;
     use ethers_core::types::H160;
 
     #[test]
     fn from_smart_contract_value() {
         let url = url::Url::parse("https://info.cern.ch/").unwrap();
         let sources = vec![
-            SourceFile {
-                name: "juju.ts".to_owned(),
-                content: "const strongest = 'G'".to_owned(),
-            },
-            SourceFile {
-                name: "lets.go".to_owned(),
-                content: "package lets".to_owned(),
-            },
+            (
+                "juju.ts".to_owned(),
+                FileContents {
+                    content: "const strongest = 'G'".to_owned(),
+                },
+            ),
+            (
+                "lets.go".to_owned(),
+                FileContents {
+                    content: "package lets".to_owned(),
+                },
+            ),
         ];
         let input = super::SmartContract {
             id: super::SmartContractId {
@@ -128,13 +133,13 @@ mod tests {
                 sources: sources
                     .clone()
                     .into_iter()
-                    .map(|f| (f.name, f.content))
+                    .map(|(name, contents)| (name, contents.content))
                     .collect(),
             },
         };
         let expected = basic_cache_proto::blockscout::basic_cache::v1::SmartContract {
             url: url.to_string(),
-            sources,
+            sources: sources.into_iter().collect(),
         };
         assert_eq!(expected, input.value.into())
     }
@@ -145,14 +150,18 @@ mod tests {
         let address = H160::from_str("0x0000000000000000000000000000000000000000").unwrap();
         let url = url::Url::parse("https://info.cern.ch/").unwrap();
         let sources = vec![
-            SourceFile {
-                name: "juju.ts".to_owned(),
-                content: "const strongest = 'G'".to_owned(),
-            },
-            SourceFile {
-                name: "lets.go".to_owned(),
-                content: "package lets".to_owned(),
-            },
+            (
+                "juju.ts".to_owned(),
+                FileContents {
+                    content: "const strongest = 'G'".to_owned(),
+                },
+            ),
+            (
+                "lets.go".to_owned(),
+                FileContents {
+                    content: "package lets".to_owned(),
+                },
+            ),
         ];
         let request = CreateSmartContractRequestInternal {
             chain_id: chain_id.clone(),
@@ -160,7 +169,11 @@ mod tests {
             smart_contract: Some(
                 basic_cache_proto::blockscout::basic_cache::v1::SmartContractInternal {
                     url: url.clone(),
-                    sources: sources.clone(),
+                    sources: sources
+                        .clone()
+                        .into_iter()
+                        .map(|(a, b)| (a, FileContentsInternal::try_convert(b).unwrap()))
+                        .collect(),
                 },
             ),
         };
@@ -168,7 +181,10 @@ mod tests {
             id: super::SmartContractId { chain_id, address },
             value: super::SmartContractValue {
                 blockscout_url: url,
-                sources: sources.into_iter().map(|f| (f.name, f.content)).collect(),
+                sources: sources
+                    .into_iter()
+                    .map(|(name, contents)| (name, contents.content))
+                    .collect(),
             },
         };
         assert_eq!(expected, request.try_into().unwrap())

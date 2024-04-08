@@ -711,6 +711,7 @@ dependencies = [
  "basic-cache-proto",
  "blockscout-display-bytes",
  "blockscout-service-launcher 0.9.0",
+ "convert-trait",
  "ethers-core",
  "hex",
  "pretty_assertions",

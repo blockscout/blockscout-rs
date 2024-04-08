@@ -8,6 +8,7 @@ edition = "2021"
 basic-cache-entity = { path = "../basic-cache-entity" }
 basic-cache-proto = { path = "../basic-cache-proto" }
 anyhow = "1.0"
+convert-trait = { git = "https://github.com/blockscout/actix-prost", tag = "v1.0.0" }
 blockscout-display-bytes = "1.0"
 tracing = "0.1"
 trait-variant = "0.1.2"
