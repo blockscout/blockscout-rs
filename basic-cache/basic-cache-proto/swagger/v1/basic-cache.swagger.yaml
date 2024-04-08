@@ -115,6 +115,11 @@ definitions:
         type: string
       smartContract:
         $ref: '#/definitions/v1SmartContract'
+  v1FileContents:
+    type: object
+    properties:
+      content:
+        type: string
   v1HealthCheckResponse:
     type: object
     properties:
@@ -126,14 +131,6 @@ definitions:
       url:
         type: string
       sources:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1SourceFile'
-  v1SourceFile:
-    type: object
-    properties:
-      name:
-        type: string
-      content:
-        type: string
+        type: object
+        additionalProperties:
+          $ref: '#/definitions/v1FileContents'

@@ -19,15 +19,14 @@ service Cache {
 //   string address = 2;
 // }
 
-message SourceFile {
-  string name = 1;
-  string content = 2;
+message FileContents {
+  string content = 1;
 }
 
 message SmartContract {
   string url = 1
     [ (convert_options.convert) = {type: "url::Url"} ];
-  repeated SourceFile sources = 2;
+  map<string, FileContents> sources = 2;
 }
 
 
