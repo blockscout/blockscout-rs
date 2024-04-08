@@ -467,9 +467,9 @@ mod tests {
 
         #[tokio::test]
         async fn verify_from_etherscan_contract_not_verified() {
-            let chain_id = "5";
+            let chain_id = "11155111";
             let contract_address =
-                parse_contract_address("0x847F2d0c193E90963aAD7B2791aAE8d7310dFF6A");
+                parse_contract_address("0xa4E5DF47af3Cf0746DF6337E3F45286887e86680");
 
             let result = client()
                 .verify_from_etherscan(chain_id, contract_address)
