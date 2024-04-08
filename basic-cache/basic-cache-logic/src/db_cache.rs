@@ -187,10 +187,10 @@ impl CacheManager<SmartContractId, SmartContractValue> for PostgresCache {
         key: &SmartContractId,
     ) -> Result<Option<SmartContractValue>, Self::Error> {
         let contract = self.get(key).await?;
-        self.remove_url(key.chain_id.clone(), key.address.to_string())
-            .await?;
-        self.remove_sources(key.chain_id.clone(), key.address.to_string())
-            .await?;
+        tokio::try_join!(
+            self.remove_url(key.chain_id.clone(), key.address.to_string()),
+            self.remove_sources(key.chain_id.clone(), key.address.to_string())
+        )?;
         Ok(contract)
     }
 }

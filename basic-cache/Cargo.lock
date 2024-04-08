@@ -716,6 +716,7 @@ dependencies = [
  "pretty_assertions",
  "sea-orm",
  "thiserror",
+ "tokio",
  "tracing",
  "trait-variant",
  "url",
