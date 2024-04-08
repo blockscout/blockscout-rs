@@ -98,7 +98,7 @@ async fn invalid_contracts() {
             json!({
                 // relies on fact that the Ethereum Testnet Goerli HASN'T any contract with this address
                 "address": "0x1234567890123456789012345678901234567890",
-                "chain": "5",
+                "chain": "11155111",
                 "files": {
                     "metadata.json": metadata_content,
                     "contracts/1_Storage.sol": source,
@@ -109,7 +109,7 @@ async fn invalid_contracts() {
         (
             json!({
                 "address": "0x1234567890123456789012345678901234567890",
-                "chain": "5",
+                "chain": "11155111",
                 "files": {},
             }),
             "Metadata file not found",
@@ -118,8 +118,8 @@ async fn invalid_contracts() {
             json!({
                 // relies on fact that Ethereum Testnet Goerli has some contract, but it is not verified in
                 // sourcify and `source` contains wrong source code
-                "address": "0xD3F4730068b57d11a5Cd4252D8a9012A188C5D3B",
-                "chain": "5",
+                "address": "0xd9dF63753D90E3DCcc5AA4D13e77992a64393354",
+                "chain": "11155111",
                 "files": {
                     "metadata.json": metadata_content,
                     "contracts/1_Storage.sol": source,
