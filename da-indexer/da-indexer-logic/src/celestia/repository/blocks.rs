@@ -1,7 +1,8 @@
 use da_indexer_entity::celestia_blocks::{ActiveModel, Column, Entity, Model};
 use sea_orm::{
-    sea_query::OnConflict, ConnectionTrait, DatabaseConnection, EntityTrait, FromQueryResult,
-    Statement,
+    sea_query::{Expr, OnConflict},
+    ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, FromQueryResult, QueryFilter,
+    QuerySelect, Statement,
 };
 
 #[derive(FromQueryResult, Debug)]
@@ -14,7 +15,7 @@ pub async fn find_gaps(
     db: &DatabaseConnection,
     up_to_height: u64,
 ) -> Result<Vec<Gap>, anyhow::Error> {
-    let gaps = Gap::find_by_statement(Statement::from_sql_and_values(
+    let mut gaps = Gap::find_by_statement(Statement::from_sql_and_values(
         db.get_database_backend(),
         r#"
             SELECT height + 1 as gap_start, 
@@ -29,7 +30,35 @@ pub async fn find_gaps(
     .all(db)
     .await?;
 
+    // if there is no row with height == up_to_height, we will miss the last gap
+    let gaps_end = gaps.last().map(|gap| gap.gap_end).unwrap_or(0) as u64;
+    let max_height = find_max_in_range(db, gaps_end, up_to_height)
+        .await?
+        .unwrap_or(0) as u64;
+    if max_height < up_to_height {
+        gaps.push(Gap {
+            gap_start: (max_height + 1) as i64,
+            gap_end: up_to_height as i64,
+        })
+    }
+
     Ok(gaps)
+}
+
+pub async fn find_max_in_range(
+    db: &DatabaseConnection,
+    from: u64,
+    to: u64,
+) -> Result<Option<i64>, anyhow::Error> {
+    let max_height = Entity::find()
+        .select_only()
+        .column_as(Expr::col(Column::Height).max(), "height")
+        .filter(Column::Height.gte(from as i64))
+        .filter(Column::Height.lte(to as i64))
+        .into_tuple()
+        .one(db)
+        .await?;
+    Ok(max_height)
 }
 
 pub async fn upsert(
@@ -55,11 +84,6 @@ pub async fn upsert(
         )
         .exec(db)
         .await?;
-    Ok(())
-}
-
-pub async fn remove(db: &DatabaseConnection, height: u64) -> Result<(), anyhow::Error> {
-    Entity::delete_by_id(height as i64).exec(db).await?;
     Ok(())
 }
 

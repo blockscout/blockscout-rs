@@ -42,9 +42,14 @@ impl Indexer {
         )
         .await?;
 
-        let start_from = settings
+        let mut start_from = settings
             .start_height
             .unwrap_or(client.header_local_head().await?.header.height.value());
+
+        // skip genesis block, it can't be fetched by usual means
+        if start_from == 0 {
+            start_from = 1;
+        }
 
         tracing::info!(start_from, "indexer initialized");
 
@@ -52,7 +57,7 @@ impl Indexer {
             client,
             db,
             settings,
-            last_known_height: RwLock::new(start_from),
+            last_known_height: RwLock::new(start_from.saturating_sub(1)),
             failed_blocks: RwLock::new(HashSet::new()),
         })
     }
@@ -129,24 +134,13 @@ impl Indexer {
     }
 
     async fn catch_up(&self) -> Result<impl Stream<Item = Job> + '_> {
+        // TODO: do we need genesis block metadata?
         if !blocks::exists(&self.db, 0).await? {
             blocks::upsert(&self.db, 0, &[], 0, 0).await?;
         }
 
         let last_known_height = *self.last_known_height.read().await;
-
-        // temporaraily insert a block at the last known height
-        // to compute the gaps correctly
-        let exists = blocks::exists(&self.db, last_known_height).await?;
-        if !exists {
-            blocks::upsert(&self.db, last_known_height, &[], 0, 0).await?;
-        }
-
         let gaps = blocks::find_gaps(&self.db, last_known_height).await?;
-
-        if !exists {
-            blocks::remove(&self.db, last_known_height).await?;
-        }
 
         tracing::info!("catch up gaps: {:?}", gaps);
 
@@ -169,7 +163,7 @@ impl Indexer {
             tracing::info!(height, "latest block number");
 
             let mut last_known_height = self.last_known_height.write().await;
-            let from = *last_known_height;
+            let from = *last_known_height + 1;
             *last_known_height = height;
 
             Ok((from..=height).map(|height| Job { height }))

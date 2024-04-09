@@ -5,4 +5,3 @@ mod rpc_client;
 pub mod settings;
 #[cfg(test)]
 pub mod tests;
-pub mod types;
