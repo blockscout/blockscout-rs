@@ -160,7 +160,7 @@ impl Indexer {
             sleep(self.settings.polling_interval).await;
 
             let height = self.client.header_local_head().await?.header.height.value();
-            tracing::info!(height, "latest block number");
+            tracing::info!(height, "latest block");
 
             let mut last_known_height = self.last_known_height.write().await;
             let from = *last_known_height + 1;
