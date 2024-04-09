@@ -63,15 +63,21 @@ pub async fn import_solidity_standard_json(
     client: Client,
     request: AllianceImportRequest<StandardJson>,
 ) -> Result<AllianceBatchImportResult, Error> {
-    let verifier_request = request.into();
+    let deployment_data = request.contracts.clone();
 
+    let verifier_request = request.into();
     let verifier_response = solidity_verifier_client::batch_verify_standard_json(
         &client.verifier_http_client,
         verifier_request,
     )
     .await?;
 
-    let result: AllianceBatchImportResult = verifier_response.try_into()?;
+    let result = super::process_batch_import_response(
+        client.alliance_db_client.as_ref().unwrap(),
+        verifier_response,
+        deployment_data,
+    )
+    .await?;
 
     Ok(result)
 }

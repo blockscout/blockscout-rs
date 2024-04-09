@@ -1,8 +1,6 @@
 use crate::{
-    types,
-    types::verifier_alliance::TestCase,
-    verifier_service::{VerifierServiceRequest, VerifierServiceResponse},
-    TestCaseRequest, TestCaseResponse, TestCaseRoute,
+    types, types::verifier_alliance::TestCase, TestCaseRequest, TestCaseResponse, TestCaseRoute,
+    VerifierAllianceDatabaseChecker, VerifierServiceRequest, VerifierServiceResponse,
 };
 use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2 as eth_bytecode_db_v2;
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2 as smart_contract_verifier_v2;
@@ -220,5 +218,22 @@ mod batch_import_solidity_standard_json {
             .await;
 
         test_case.check(response);
+
+        // Check that correct data inserted into verifier alliance database
+        {
+            let contract_deployment = test_case
+                .check_contract_deployment(alliance_db.client().as_ref())
+                .await;
+            let compiled_contract = test_case
+                .check_compiled_contract(alliance_db.client().as_ref())
+                .await;
+            test_case
+                .check_verified_contract(
+                    alliance_db.client().as_ref(),
+                    &contract_deployment,
+                    &compiled_contract,
+                )
+                .await;
+        }
     }
 }
