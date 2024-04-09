@@ -29,11 +29,20 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     AuthTokens,
+
+    #[sea_orm(has_many = "super::deployments::Entity")]
+    Deployments,
 }
 
 impl Related<super::auth_tokens::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::AuthTokens.def()
+    }
+}
+
+impl Related<super::deployments::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Deployments.def()
     }
 }
 

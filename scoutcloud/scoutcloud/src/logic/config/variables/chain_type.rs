@@ -47,7 +47,8 @@ impl UserVariable for ChainType {
     type SourceType = String;
 
     fn new(v: String, _context: &ConfigValidationContext) -> Result<Self, ConfigError> {
-        Self::from_str(&v).map_err(|_| ConfigError::Validation(format!("unknown chain_type: '{}'", v)))
+        Self::from_str(&v)
+            .map_err(|_| ConfigError::Validation(format!("unknown chain_type: '{}'", v)))
     }
     async fn build_config_vars(
         &self,

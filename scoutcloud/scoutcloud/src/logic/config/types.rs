@@ -37,7 +37,7 @@ pub trait UserVariable: Send + Sync {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Clone)]
 pub struct ConfigValidationContext {
     pub client_name: String,
 }

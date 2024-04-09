@@ -12,10 +12,10 @@ prost = "0.11"
 serde = { version = "1" }
 serde_with = { version = "3.6" }
 tonic = "0.8"
-url = "2"
+url = { version = "2", features = ["serde"] }
 
 [build-dependencies]
-actix-prost-build = { git = "https://github.com/blockscout/actix-prost", branch = "ll-add-clone", features = [
+actix-prost-build = { git = "https://github.com/blockscout/actix-prost", branch = "lok52/derive-option", features = [
     "conversions",
 ] }
 prost-build = "0.11"

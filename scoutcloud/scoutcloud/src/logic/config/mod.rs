@@ -1,12 +1,12 @@
-mod generated;
+mod instance;
 pub mod macros;
 mod types;
-mod validated;
+mod user;
 pub mod variables;
 
-pub use generated::GeneratedInstanceConfig;
+pub use instance::InstanceConfig;
 pub use types::{ConfigValidationContext, ParsedVariable, ParsedVariableKey, UserVariable};
-pub use validated::ValidatedInstanceConfig;
+pub use user::UserConfig;
 
 use thiserror::Error;
 
@@ -15,6 +15,9 @@ pub enum ConfigError {
     #[error("failed to validate config: {0}")]
     Validation(String),
 
+    #[error("missing config")]
+    MissingConfig,
+
     #[error("internal error: {0}")]
-    Internal(anyhow::Error),
+    Internal(#[from] anyhow::Error),
 }

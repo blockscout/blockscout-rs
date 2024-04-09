@@ -11,6 +11,7 @@ impl GithubClient {
         &self,
         path: &str,
         content: &str,
+        commit_message: &str,
     ) -> Result<(), GithubError> {
         let _lock = self.mutex.lock().await;
         let latest_commit = self
@@ -23,7 +24,11 @@ impl GithubClient {
             .await
             .context("create tree")?;
         let commit = self
-            .create_commit(tree.sha, Self::build_commit_message(), latest_commit.sha)
+            .create_commit(
+                tree.sha,
+                Self::build_commit_message(commit_message),
+                latest_commit.sha,
+            )
             .await
             .context("create commit")?;
         self.update_branch(&commit.sha)
@@ -184,8 +189,8 @@ impl GithubClient {
         Ok(())
     }
 
-    fn build_commit_message() -> String {
-        "Automatically created by scoutcloud".to_string()
+    fn build_commit_message(msg: &str) -> String {
+        format!("[scoutcloud] {msg}")
     }
 }
 
@@ -201,7 +206,7 @@ mod tests {
         let client = GithubClient::try_from(&mock_repo).unwrap();
 
         client
-            .create_or_update_file("file_name", "content2")
+            .create_or_update_file("file_name", "content2", "commit message")
             .await
             .expect("create or update file");
         handles.assert("main");

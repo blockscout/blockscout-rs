@@ -19,6 +19,9 @@ service Scoutcloud {
 }
 
 message DeployConfig {
+  option (convert_options.derive) = { name: "serde::Serialize" };
+  option (convert_options.derive) = { name: "serde::Deserialize" };
+
   string rpc_url = 1 [(convert_options.convert) = {type: "url::Url"}];
   string server_size = 2;
   optional string chain_type = 3;
@@ -34,6 +37,9 @@ message DeployConfig {
 }
 
 message DeployConfigPartial {
+  option (convert_options.derive) = { name: "serde::Serialize" };
+  option (convert_options.derive) = { name: "serde::Deserialize" };
+
   optional string rpc_url = 1 [(convert_options.convert) = {type: "Option<url::Url>"}];
   optional string server_size = 2;
   optional string chain_type = 3;
@@ -100,7 +106,7 @@ message UpdateInstanceStatusResponse {
 
 message Instance {
   string instance_id = 1;
-  string deployment_id = 2;
+  optional string deployment_id = 2;
   string name = 3;
   string created_at = 4;
   DeployConfig config = 5;

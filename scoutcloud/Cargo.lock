@@ -111,9 +111,9 @@ dependencies = [
 [[package]]
 name = "actix-prost-build"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/actix-prost?branch=ll-add-clone#c67cc330f938484b989015e06686fc8f7d22cc13"
+source = "git+https://github.com/blockscout/actix-prost?branch=lok52/derive-option#54b62b8d7bac2386a27e264b7dc380ef003387d7"
 dependencies = [
- "convert-trait 0.1.0 (git+https://github.com/blockscout/actix-prost?branch=ll-add-clone)",
+ "convert-trait 0.1.0 (git+https://github.com/blockscout/actix-prost?branch=lok52/derive-option)",
  "prettyplease 0.2.15",
  "proc-macro2",
  "prost-build",
@@ -1508,7 +1508,7 @@ dependencies = [
 [[package]]
 name = "convert-trait"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/actix-prost?branch=ll-add-clone#c67cc330f938484b989015e06686fc8f7d22cc13"
+source = "git+https://github.com/blockscout/actix-prost?branch=lok52/derive-option#54b62b8d7bac2386a27e264b7dc380ef003387d7"
 dependencies = [
  "bytes",
  "ethers-core",
