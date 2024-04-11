@@ -42,9 +42,6 @@ pub trait Chart: Sync {
     fn relevant_or_zero(&self) -> bool {
         false
     }
-    fn drop_last_point(&self) -> bool {
-        self.chart_type() == ChartType::Line
-    }
 
     async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
         create_chart(db, self.name().into(), self.chart_type()).await
