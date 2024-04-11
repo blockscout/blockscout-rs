@@ -1,4 +1,3 @@
-use chrono::NaiveDate;
 use stats::DateValue;
 use stats_proto::blockscout::stats::v1::Point;
 
