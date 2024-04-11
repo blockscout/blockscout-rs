@@ -1,4 +1,7 @@
-use crate::conversion::{self, batch_resolve_from_inner, pagination_from_logic, ConversionError};
+use crate::conversion::{
+    self, batch_resolve_from_inner, batch_resolve_from_logic, pagination_from_logic,
+    ConversionError,
+};
 use async_trait::async_trait;
 use bens_logic::{
     entity,
@@ -29,6 +32,7 @@ impl DomainsExtractor for DomainsExtractorService {
         request: tonic::Request<GetDomainRequest>,
     ) -> Result<tonic::Response<DetailedDomain>, tonic::Status> {
         let request = request.into_inner();
+        let chain_id = request.chain_id;
         let input =
             conversion::get_domain_input_from_inner(request).map_err(map_convertion_error)?;
         let domain = self
@@ -36,7 +40,7 @@ impl DomainsExtractor for DomainsExtractorService {
             .get_domain(input)
             .await
             .map_err(map_subgraph_error)?
-            .map(conversion::detailed_domain_from_logic)
+            .map(|d| conversion::detailed_domain_from_logic(d, chain_id))
             .transpose()
             .map_err(map_convertion_error)?
             .ok_or_else(|| tonic::Status::not_found("domain not found"))?;
@@ -48,6 +52,7 @@ impl DomainsExtractor for DomainsExtractorService {
         request: tonic::Request<ListDomainEventsRequest>,
     ) -> Result<tonic::Response<ListDomainEventsResponse>, tonic::Status> {
         let request = request.into_inner();
+        let chain_id = request.chain_id;
         let input =
             conversion::list_domain_events_from_inner(request).map_err(map_convertion_error)?;
         let items: Vec<DomainEvent> = self
@@ -56,7 +61,7 @@ impl DomainsExtractor for DomainsExtractorService {
             .await
             .map_err(map_subgraph_error)?
             .into_iter()
-            .map(conversion::event_from_logic)
+            .map(|e| conversion::event_from_logic(e, chain_id))
             .collect::<Result<_, _>>()
             .map_err(map_convertion_error)?;
         let response = ListDomainEventsResponse { items };
@@ -68,6 +73,7 @@ impl DomainsExtractor for DomainsExtractorService {
         request: tonic::Request<LookupDomainNameRequest>,
     ) -> Result<tonic::Response<LookupDomainNameResponse>, tonic::Status> {
         let request = request.into_inner();
+        let chain_id = request.chain_id;
         let input =
             conversion::lookup_domain_name_from_inner(request).map_err(map_convertion_error)?;
         let page_size = input.pagination.page_size;
@@ -76,7 +82,7 @@ impl DomainsExtractor for DomainsExtractorService {
             .lookup_domain_name(input)
             .await
             .map_err(map_subgraph_error)?;
-        let domains = from_resolved_domains_result(result.items)?;
+        let domains = from_resolved_domains_result(result.items, chain_id)?;
         let response = LookupDomainNameResponse {
             items: domains,
             next_page_params: pagination_from_logic(result.next_page_token, page_size),
@@ -89,6 +95,7 @@ impl DomainsExtractor for DomainsExtractorService {
         request: tonic::Request<LookupAddressRequest>,
     ) -> Result<tonic::Response<LookupAddressResponse>, tonic::Status> {
         let request = request.into_inner();
+        let chain_id = request.chain_id;
         let input = conversion::lookup_address_from_inner(request).map_err(map_convertion_error)?;
         let page_size = input.pagination.page_size;
         let result = self
@@ -96,7 +103,7 @@ impl DomainsExtractor for DomainsExtractorService {
             .lookup_address(input)
             .await
             .map_err(map_subgraph_error)?;
-        let items = from_resolved_domains_result(result.items)?;
+        let items = from_resolved_domains_result(result.items, chain_id)?;
         let response = LookupAddressResponse {
             items,
             next_page_params: pagination_from_logic(result.next_page_token, page_size),
@@ -109,22 +116,22 @@ impl DomainsExtractor for DomainsExtractorService {
         request: tonic::Request<GetAddressRequest>,
     ) -> Result<tonic::Response<GetAddressResponse>, tonic::Status> {
         let request = request.into_inner();
-        let network_id = request.chain_id;
+        let chain_id = request.chain_id;
         let address =
             conversion::address_from_str_inner(&request.address).map_err(map_convertion_error)?;
 
         let domain = self
             .subgraph_reader
-            .get_address(network_id, address)
+            .get_address(chain_id, address)
             .await
             .map_err(map_subgraph_error)?
-            .map(conversion::detailed_domain_from_logic)
+            .map(|d| conversion::detailed_domain_from_logic(d, chain_id))
             .transpose()
             .map_err(map_convertion_error)?;
 
         let resolved_domains_count = self
             .subgraph_reader
-            .count_domains_by_address(network_id, address, true, false)
+            .count_domains_by_address(chain_id, address, true, false)
             .await
             .map_err(map_subgraph_error)? as i32;
         Ok(tonic::Response::new(GetAddressResponse {
@@ -138,13 +145,14 @@ impl DomainsExtractor for DomainsExtractorService {
         request: tonic::Request<BatchResolveAddressNamesRequest>,
     ) -> Result<tonic::Response<BatchResolveAddressNamesResponse>, tonic::Status> {
         let request = request.into_inner();
+        let chain_id = request.chain_id;
         let input = batch_resolve_from_inner(request).map_err(map_convertion_error)?;
         let names = self
             .subgraph_reader
             .batch_resolve_address_names(input)
             .await
             .map_err(map_subgraph_error)?;
-        let response = BatchResolveAddressNamesResponse { names };
+        let response = batch_resolve_from_logic(names, chain_id).map_err(map_convertion_error)?;
         Ok(tonic::Response::new(response))
     }
 }
@@ -170,10 +178,11 @@ fn map_convertion_error(err: ConversionError) -> tonic::Status {
 
 fn from_resolved_domains_result(
     result: impl IntoIterator<Item = entity::subgraph::domain::Domain>,
+    chain_id: i64,
 ) -> Result<Vec<Domain>, tonic::Status> {
     result
         .into_iter()
-        .map(conversion::domain_from_logic)
+        .map(|d| conversion::domain_from_logic(d, chain_id))
         .collect::<Result<_, _>>()
         .map_err(map_convertion_error)
 }
