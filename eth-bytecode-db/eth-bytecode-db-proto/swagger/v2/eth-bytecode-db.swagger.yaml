@@ -348,14 +348,6 @@ definitions:
       - SERVICE_UNKNOWN
     default: UNKNOWN
     description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
-  SourceMatchType:
-    type: string
-    enum:
-      - MATCH_TYPE_UNSPECIFIED
-      - PARTIAL
-      - FULL
-    default: MATCH_TYPE_UNSPECIFIED
-    description: ' - MATCH_TYPE_UNSPECIFIED: Default value. This value is unused.'
   SourceSourceType:
     type: string
     enum:
@@ -391,6 +383,11 @@ definitions:
     type: object
   VerifierAllianceBatchImportResponseSuccess:
     type: object
+    properties:
+      creationCodeMatchType:
+        $ref: '#/definitions/v2VerifierAllianceBatchImportResponseMatchType'
+      runtimeCodeMatchType:
+        $ref: '#/definitions/v2VerifierAllianceBatchImportResponseMatchType'
   VerifierAllianceBatchImportResponseVerificationFailure:
     type: object
   googlerpcStatus:
@@ -597,7 +594,7 @@ definitions:
           / Constructor arguments used for deploying verified contract
           / (exists only for creation inputs)
       matchType:
-        $ref: '#/definitions/SourceMatchType'
+        $ref: '#/definitions/v2SourceMatchType'
         title: / Similar to Sourcify (see https://docs.sourcify.dev/docs/full-vs-partial-match/)
       compilationArtifacts:
         type: string
@@ -610,6 +607,14 @@ definitions:
       deployedBytecodeArtifacts:
         type: string
         description: / Info about the runtime code (sourcemaps, linkreferences, immutables) encoded as a json.
+  v2SourceMatchType:
+    type: string
+    enum:
+      - MATCH_TYPE_UNSPECIFIED
+      - PARTIAL
+      - FULL
+    default: MATCH_TYPE_UNSPECIFIED
+    description: ' - MATCH_TYPE_UNSPECIFIED: Default value. This value is unused.'
   v2VerificationMetadata:
     type: object
     properties:
@@ -642,10 +647,18 @@ definitions:
   v2VerifierAllianceBatchImportResponse:
     type: object
     properties:
-      results:
+      importResults:
         $ref: '#/definitions/VerifierAllianceBatchImportResponseImportContractResults'
       compilationFailure:
         $ref: '#/definitions/VerifierAllianceBatchImportResponseCompilationFailure'
+  v2VerifierAllianceBatchImportResponseMatchType:
+    type: string
+    enum:
+      - NO_MATCH
+      - NOT_DEFINED
+      - PARTIAL
+      - FULL
+    default: NO_MATCH
   v2VerifierAllianceBatchImportSolidityStandardJsonRequest:
     type: object
     properties:

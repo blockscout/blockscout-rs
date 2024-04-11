@@ -664,11 +664,12 @@ impl TryFrom<AllianceContractImportResult>
 
     fn try_from(value: AllianceContractImportResult) -> Result<Self, Self::Error> {
         let result = match value {
-            AllianceContractImportResult::Success {
-                ..
-            } => {
+            AllianceContractImportResult::Success(success) => {
                 eth_bytecode_db_v2::verifier_alliance_batch_import_response::import_contract_result::Result::Success(
-                    eth_bytecode_db_v2::verifier_alliance_batch_import_response::Success {}
+                    eth_bytecode_db_v2::verifier_alliance_batch_import_response::Success {
+                        creation_code_match_type: match_details_to_proto_match_type(success.creation_match_details.as_ref()).into(),
+                        runtime_code_match_type: match_details_to_proto_match_type(success.runtime_match_details.as_ref()).into(),
+                    }
                 )
             }
             AllianceContractImportResult::VerificationFailure {} => eth_bytecode_db_v2::verifier_alliance_batch_import_response::import_contract_result::Result::VerificationFailure(
@@ -682,6 +683,26 @@ impl TryFrom<AllianceContractImportResult>
         Ok(Self {
             result: Some(result),
         })
+    }
+}
+
+fn match_details_to_proto_match_type(
+    details: Option<&MatchDetails>,
+) -> eth_bytecode_db_v2::verifier_alliance_batch_import_response::MatchType {
+    match details {
+        None => eth_bytecode_db_v2::verifier_alliance_batch_import_response::MatchType::NoMatch,
+        Some(MatchDetails {
+            match_type: MatchType::Unknown,
+            ..
+        }) => eth_bytecode_db_v2::verifier_alliance_batch_import_response::MatchType::NotDefined,
+        Some(MatchDetails {
+            match_type: MatchType::Partial,
+            ..
+        }) => eth_bytecode_db_v2::verifier_alliance_batch_import_response::MatchType::Partial,
+        Some(MatchDetails {
+            match_type: MatchType::Full,
+            ..
+        }) => eth_bytecode_db_v2::verifier_alliance_batch_import_response::MatchType::Full,
     }
 }
 
@@ -727,14 +748,14 @@ impl TryFrom<AllianceBatchImportResult>
     fn try_from(value: AllianceBatchImportResult) -> Result<Self, Self::Error> {
         let result = match value {
             AllianceBatchImportResult::CompilationFailure(message) => {
-                eth_bytecode_db_v2::verifier_alliance_batch_import_response::Result::CompilationFailure(
+                eth_bytecode_db_v2::verifier_alliance_batch_import_response::Response::CompilationFailure(
                     eth_bytecode_db_v2::verifier_alliance_batch_import_response::CompilationFailure {
                         message
                     }
                 )
             }
             AllianceBatchImportResult::Results(results) => {
-                eth_bytecode_db_v2::verifier_alliance_batch_import_response::Result::Results(
+                eth_bytecode_db_v2::verifier_alliance_batch_import_response::Response::ImportResults(
                     eth_bytecode_db_v2::verifier_alliance_batch_import_response::ImportContractResults {
                         items: results.into_iter().map(TryFrom::try_from).collect::<Result<_, _>>()?,
                     }
@@ -743,7 +764,7 @@ impl TryFrom<AllianceBatchImportResult>
         };
 
         Ok(eth_bytecode_db_v2::VerifierAllianceBatchImportResponse {
-            result: Some(result),
+            response: Some(result),
         })
     }
 }

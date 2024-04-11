@@ -334,7 +334,17 @@ message VerifierAllianceBatchImportSolidityStandardJsonRequest {
 }
 
 message VerifierAllianceBatchImportResponse {
-  message Success {}
+  enum MatchType {
+    NO_MATCH = 0;
+    NOT_DEFINED = 1;
+    PARTIAL = 2;
+    FULL = 3;
+  }
+
+  message Success {
+    MatchType creation_code_match_type = 1;
+    MatchType runtime_code_match_type = 2;
+  }
   message ImportFailure {}
   message VerificationFailure {}
 
@@ -354,8 +364,8 @@ message VerifierAllianceBatchImportResponse {
     string message = 1;
   }
 
-  oneof result {
-    ImportContractResults results = 1;
+  oneof response {
+    ImportContractResults import_results = 1;
     CompilationFailure compilation_failure = 2;
   }
 }
