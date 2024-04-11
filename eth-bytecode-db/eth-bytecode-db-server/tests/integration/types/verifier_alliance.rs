@@ -1,8 +1,17 @@
-use crate::VerifierAllianceDatabaseChecker;
+use crate::types::artifacts::{
+    LosslessCodeParts, LosslessCodeValues, LosslessCompilationArtifacts,
+    LosslessCreationCodeArtifacts, LosslessRuntimeCodeArtifacts,
+};
+use crate::{routes, EthBytecodeDbDatabaseChecker, VerifierAllianceDatabaseChecker};
 use blockscout_display_bytes::Bytes as DisplayBytes;
+use entity::{bytecode_parts, bytecodes, files, parts, sea_orm_active_enums, source_files, sources};
+use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2 as eth_bytecode_db_v2;
 use pretty_assertions::assert_eq;
+use routes::{eth_bytecode_db, verifier};
 use sea_orm::{prelude::Decimal, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use serde::Deserialize;
+use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2 as smart_contract_verifier_v2;
+use std::collections::HashSet;
 use std::{collections::BTreeMap, str::FromStr, sync::Arc};
 use verifier_alliance_entity::{
     code, compiled_contracts, contract_deployments, contracts, verified_contracts,
@@ -22,17 +31,20 @@ pub struct TestCase {
     pub fully_qualified_name: String,
     pub sources: BTreeMap<String, String>,
     pub compiler_settings: serde_json::Value,
-    pub compilation_artifacts: serde_json::Value,
-    pub creation_code_artifacts: serde_json::Value,
-    pub runtime_code_artifacts: serde_json::Value,
+    pub compilation_artifacts: LosslessCompilationArtifacts,
+    pub creation_code_artifacts: LosslessCreationCodeArtifacts,
+    pub runtime_code_artifacts: LosslessRuntimeCodeArtifacts,
 
     pub creation_match: bool,
-    pub creation_values: Option<serde_json::Value>,
+    pub creation_values: Option<LosslessCodeValues>,
     pub creation_transformations: Option<serde_json::Value>,
 
     pub runtime_match: bool,
-    pub runtime_values: Option<serde_json::Value>,
+    pub runtime_values: Option<LosslessCodeValues>,
     pub runtime_transformations: Option<serde_json::Value>,
+
+    pub creation_code_parts: Vec<LosslessCodeParts>,
+    pub runtime_code_parts: Vec<LosslessCodeParts>,
 
     #[serde(default = "default_chain_id")]
     pub chain_id: usize,
@@ -51,23 +63,23 @@ pub struct TestCase {
     pub is_genesis: bool,
 }
 
-fn default_chain_id() -> usize {
+pub fn default_chain_id() -> usize {
     5
 }
-fn default_address() -> DisplayBytes {
+pub fn default_address() -> DisplayBytes {
     DisplayBytes::from_str("0xcafecafecafecafecafecafecafecafecafecafe").unwrap()
 }
-fn default_transaction_hash() -> DisplayBytes {
+pub fn default_transaction_hash() -> DisplayBytes {
     DisplayBytes::from_str("0xcafecafecafecafecafecafecafecafecafecafecafecafecafecafecafecafe")
         .unwrap()
 }
-fn default_block_number() -> i64 {
+pub fn default_block_number() -> i64 {
     1
 }
-fn default_transaction_index() -> i64 {
+pub fn default_transaction_index() -> i64 {
     0
 }
-fn default_deployer() -> DisplayBytes {
+pub fn default_deployer() -> DisplayBytes {
     DisplayBytes::from_str("0xfacefacefacefacefacefacefacefacefaceface").unwrap()
 }
 
@@ -111,6 +123,16 @@ impl TestCase {
             .rev()
             .collect::<Vec<_>>()
             .join(":")
+    }
+
+    pub fn abi(&self) -> Option<&serde_json::Value> {
+        self.compilation_artifacts.parsed.abi.as_ref()
+    }
+
+    pub fn constructor_arguments(&self) -> Option<String> {
+        self.creation_values
+            .as_ref()
+            .and_then(|v| v.parsed.constructor_arguments.clone())
     }
 }
 
@@ -256,7 +278,7 @@ impl VerifierAllianceDatabaseChecker for TestCase {
             "Invalid compiler_settings"
         );
         assert_eq!(
-            self.compilation_artifacts, compiled_contract.compilation_artifacts,
+            self.compilation_artifacts.raw, compiled_contract.compilation_artifacts,
             "Invalid compilation_artifacts"
         );
         assert_eq!(
@@ -264,7 +286,7 @@ impl VerifierAllianceDatabaseChecker for TestCase {
             "Invalid creation_code_hash"
         );
         assert_eq!(
-            self.creation_code_artifacts, compiled_contract.creation_code_artifacts,
+            self.creation_code_artifacts.raw, compiled_contract.creation_code_artifacts,
             "Invalid creation_code_artifacts"
         );
         assert_eq!(
@@ -272,7 +294,7 @@ impl VerifierAllianceDatabaseChecker for TestCase {
             "Invalid runtime_code_hash"
         );
         assert_eq!(
-            self.runtime_code_artifacts, compiled_contract.runtime_code_artifacts,
+            self.runtime_code_artifacts.raw, compiled_contract.runtime_code_artifacts,
             "Invalid runtime_code_artifacts"
         );
 
@@ -298,7 +320,8 @@ impl VerifierAllianceDatabaseChecker for TestCase {
             "Invalid creation_match"
         );
         assert_eq!(
-            self.creation_values, verified_contract.creation_values,
+            self.creation_values.as_ref().map(|v| &v.raw),
+            verified_contract.creation_values.as_ref(),
             "Invalid creation_values"
         );
         assert_eq!(
@@ -310,7 +333,8 @@ impl VerifierAllianceDatabaseChecker for TestCase {
             "Invalid runtime_match"
         );
         assert_eq!(
-            self.runtime_values, verified_contract.runtime_values,
+            self.runtime_values.as_ref().map(|v| &v.raw),
+            verified_contract.runtime_values.as_ref(),
             "Invalid runtime_values"
         );
         assert_eq!(
@@ -319,5 +343,421 @@ impl VerifierAllianceDatabaseChecker for TestCase {
         );
 
         verified_contract
+    }
+}
+
+#[async_trait::async_trait]
+impl EthBytecodeDbDatabaseChecker for TestCase {
+    async fn check_source(&self, db: &DatabaseConnection) -> sources::Model {
+        let sources = sources::Entity::find()
+            .all(db)
+            .await
+            .expect("Error while reading source");
+        assert_eq!(
+            1,
+            sources.len(),
+            "Invalid number of sources returned. Expected 1, actual {}",
+            sources.len()
+        );
+        let db_source = &sources[0];
+        assert_eq!(
+            self.language.to_lowercase(),
+            db_source.source_type.to_string().to_lowercase(),
+            "Invalid source type"
+        );
+        assert_eq!(
+            self.version, db_source.compiler_version,
+            "Invalid compiler version"
+        );
+        assert_eq!(
+            self.compiler_settings, db_source.compiler_settings,
+            "Invalid compiler settings"
+        );
+        assert_eq!(self.file_name(), db_source.file_name, "Invalid file name");
+        assert_eq!(
+            self.contract_name(),
+            db_source.contract_name,
+            "Invalid contract name"
+        );
+        assert_eq!(self.abi(), db_source.abi.as_ref(), "Invalid abi");
+        assert_eq!(
+            Some(&self.compilation_artifacts.raw),
+            db_source.compilation_artifacts.as_ref(),
+            "Invalid compilation artifacts"
+        );
+        assert_eq!(
+            Some(&self.creation_code_artifacts.raw),
+            db_source.creation_input_artifacts.as_ref(),
+            "Invalid creation input artifacts"
+        );
+        assert_eq!(
+            Some(&self.runtime_code_artifacts.raw),
+            db_source.deployed_bytecode_artifacts.as_ref(),
+            "Invalid deployed bytecode artifacts"
+        );
+
+        assert_eq!(
+            self.compiled_creation_code, db_source.raw_creation_input,
+            "Invalid raw creation input"
+        );
+        assert_eq!(
+            self.compiled_runtime_code, db_source.raw_deployed_bytecode,
+            "Invalid raw deployed bytecode"
+        );
+
+        db_source.clone()
+    }
+
+    async fn check_files(&self, db: &DatabaseConnection) -> Vec<files::Model> {
+        let files = files::Entity::find()
+            .all(db)
+            .await
+            .expect("Error while reading files");
+        let parsed_files = files
+            .clone()
+            .into_iter()
+            .map(|v| (v.name, v.content))
+            .collect();
+
+        assert_eq!(self.sources, parsed_files, "Invalid source files");
+
+        files
+    }
+
+    async fn check_source_files(
+        &self,
+        db: &DatabaseConnection,
+        source: &sources::Model,
+        files: &[files::Model],
+    ) {
+        let source_files = source_files::Entity::find()
+            .all(db)
+            .await
+            .expect("Error while reading source files");
+        assert!(
+            source_files
+                .iter()
+                .all(|value| value.source_id == source.id),
+            "Invalid source id in retrieved source files"
+        );
+        let expected_file_ids = files.iter().map(|file| file.id).collect::<HashSet<_>>();
+        assert_eq!(
+            expected_file_ids,
+            source_files
+                .iter()
+                .map(|value| value.file_id)
+                .collect::<HashSet<_>>(),
+            "Invalid file ids in retrieved source files"
+        );
+    }
+
+    async fn check_bytecodes(&self, db: &DatabaseConnection, source: &sources::Model) -> Vec<bytecodes::Model> {
+        let bytecodes = bytecodes::Entity::find()
+            .all(db)
+            .await
+            .expect("Error while reading bytecodes");
+        assert!(
+            bytecodes.iter().all(|value| value.source_id == source.id),
+            "Invalid source id in retrieved bytecodes"
+        );
+        let expected_bytecode_types = [
+            sea_orm_active_enums::BytecodeType::CreationInput,
+            sea_orm_active_enums::BytecodeType::DeployedBytecode,
+        ];
+        assert!(
+            expected_bytecode_types.iter().all(|expected| bytecodes
+                .iter()
+                .any(|bytecode| &bytecode.bytecode_type == expected)),
+            "Invalid bytecode types in retrieved bytecodes"
+        );
+
+        bytecodes
+    }
+
+    async fn check_parts(&self, db: &DatabaseConnection) -> Vec<parts::Model> {
+        let parts = parts::Entity::find()
+            .all(db)
+            .await
+            .expect("Error while reading parts");
+
+        let expected_main_parts_data: HashSet<_> = self
+            .creation_code_parts
+            .iter()
+            .chain(&self.runtime_code_parts)
+            .filter_map(|v| (v.parsed.r#type == "main").then_some(v.parsed.data.to_vec()))
+            .collect();
+        assert_eq!(
+            expected_main_parts_data,
+            parts
+                .iter()
+                .filter_map(|part| (part.part_type == sea_orm_active_enums::PartType::Main).then_some(part.data.clone()))
+                .collect::<HashSet<_>>(),
+            "Invalid data returned for main parts"
+        );
+        let expected_meta_parts_data: HashSet<_> = self
+            .creation_code_parts
+            .iter()
+            .chain(&self.runtime_code_parts)
+            .filter_map(|v| (v.parsed.r#type == "meta").then_some(v.parsed.data.to_vec()))
+            .collect();
+        assert_eq!(
+            expected_meta_parts_data,
+            parts
+                .iter()
+                .filter_map(|part| (part.part_type == sea_orm_active_enums::PartType::Metadata).then_some(part.data.clone()))
+                .collect::<HashSet<_>>(),
+            "Invalid data returned for meta parts"
+        );
+
+        parts
+    }
+
+    async fn check_bytecode_parts(&self, db: &DatabaseConnection, bytecodes: &[bytecodes::Model], parts: &[parts::Model]) {
+        let bytecode_parts = bytecode_parts::Entity::find()
+            .all(db)
+            .await
+            .expect("Error while reading bytecode parts");
+
+        let check_code_parts = |
+            bytecode_type: sea_orm_active_enums::BytecodeType,
+            code_parts: &[LosslessCodeParts],
+        | {
+            let bytecode_id = bytecodes
+                .iter().find_map(|bytecode| {
+                (bytecode.bytecode_type == bytecode_type).then_some(bytecode.id)
+            }).unwrap();
+            let processed_parts: Vec<_> = code_parts.iter()
+                .map(|v| parts.iter().find(|part| {
+                    let part_type = if v.parsed.r#type == "main" {
+                        sea_orm_active_enums::PartType::Main
+                    } else {
+                        sea_orm_active_enums::PartType::Metadata
+                    };
+                    part.part_type == part_type && part.data == v.parsed.data
+                }).unwrap()).enumerate().collect();
+            let bytecode_parts: Vec<_> = bytecode_parts.iter().filter(
+                |bytecode_part| bytecode_part.bytecode_id == bytecode_id
+            ).collect();
+            assert_eq!(
+                processed_parts.len(),
+                bytecode_parts.len(),
+                "Parts and bytecode parts length mismatch"
+            );
+            assert!(
+                processed_parts.iter().zip(bytecode_parts).all(|(part, bytecode_part)| {
+                    bytecode_part.order as usize == part.0 &&
+                        bytecode_part.part_id == part.1.id
+                }),
+                "Invalid bytecode parts"
+            );
+        };
+
+        check_code_parts(sea_orm_active_enums::BytecodeType::CreationInput, &self.creation_code_parts);
+        check_code_parts(sea_orm_active_enums::BytecodeType::DeployedBytecode, &self.runtime_code_parts);
+    }
+}
+
+mod responses {
+    use super::*;
+    use crate::types::VerifierResponse;
+
+    impl VerifierResponse<smart_contract_verifier_v2::VerifyResponse> for TestCase {
+        fn returning_const(&self) -> smart_contract_verifier_v2::VerifyResponse {
+            let source_type = match self.language.to_lowercase().as_str() {
+                "solidity" => smart_contract_verifier_v2::source::SourceType::Solidity,
+                "yul" => smart_contract_verifier_v2::source::SourceType::Yul,
+                "vyper" => smart_contract_verifier_v2::source::SourceType::Vyper,
+                _ => panic!("unexpected language"),
+            };
+
+            smart_contract_verifier_v2::VerifyResponse {
+                message: "Ok".to_string(),
+                status: smart_contract_verifier_v2::verify_response::Status::Success.into(),
+                source: Some(smart_contract_verifier_v2::Source {
+                    file_name: self.file_name().clone(),
+                    contract_name: self.contract_name().clone(),
+                    compiler_version: self.version.clone(),
+                    compiler_settings: self.compiler_settings.to_string(),
+                    source_type: source_type.into(),
+                    source_files: self.sources.clone(),
+                    abi: self.abi().map(|v| v.to_string()),
+                    constructor_arguments: self.constructor_arguments(),
+                    match_type: 0,
+                    compilation_artifacts: Some(self.compilation_artifacts.to_string()),
+                    creation_input_artifacts: Some(self.creation_code_artifacts.to_string()),
+                    deployed_bytecode_artifacts: Some(self.runtime_code_artifacts.to_string()),
+                }),
+                extra_data: Some(smart_contract_verifier_v2::verify_response::ExtraData {
+                    local_creation_input_parts: self
+                        .creation_code_parts
+                        .iter()
+                        .map(|v| serde_json::from_value(v.raw.clone()).unwrap())
+                        .collect(),
+                    local_deployed_bytecode_parts: self
+                        .runtime_code_parts
+                        .iter()
+                        .map(|v| serde_json::from_value(v.raw.clone()).unwrap())
+                        .collect(),
+                }),
+                post_action_responses: None,
+            }
+        }
+    }
+
+    impl VerifierResponse<smart_contract_verifier_v2::BatchVerifyResponse> for TestCase {
+        fn returning_const(&self) -> smart_contract_verifier_v2::BatchVerifyResponse {
+            let compiler = match self.compiler.to_lowercase().as_str() {
+                "solc" => smart_contract_verifier_v2::contract_verification_success::compiler::Compiler::Solc,
+                "vyper" => smart_contract_verifier_v2::contract_verification_success::compiler::Compiler::Vyper,
+                _ => panic!("unexpected compiler")
+            };
+            let language = match self.language.to_lowercase().as_str() {
+                "solidity" => smart_contract_verifier_v2::contract_verification_success::language::Language::Solidity,
+                "yul" => smart_contract_verifier_v2::contract_verification_success::language::Language::Yul,
+                "vyper" => smart_contract_verifier_v2::contract_verification_success::language::Language::Vyper,
+                _ => panic!("unexpected language")
+            };
+            smart_contract_verifier_v2::BatchVerifyResponse {
+                verification_result: Some(smart_contract_verifier_v2::batch_verify_response::VerificationResult::ContractVerificationResults(
+                    smart_contract_verifier_v2::batch_verify_response::ContractVerificationResults {
+                        items: vec![
+                            smart_contract_verifier_v2::ContractVerificationResult {
+                                verification_result: Some(smart_contract_verifier_v2::contract_verification_result::VerificationResult::Success(
+                                    smart_contract_verifier_v2::ContractVerificationSuccess {
+                                        creation_code: self.compiled_creation_code.to_string(),
+                                        runtime_code: self.compiled_runtime_code.to_string(),
+                                        compiler: compiler.into(),
+                                        compiler_version: self.version.clone(),
+                                        language: language.into(),
+                                        file_name: self.file_name(),
+                                        contract_name: self.contract_name(),
+                                        sources: self.sources.clone(),
+                                        compiler_settings: self.compiler_settings.to_string(),
+                                        compilation_artifacts: self.compilation_artifacts.to_string(),
+                                        creation_code_artifacts: self.creation_code_artifacts.to_string(),
+                                        runtime_code_artifacts: self.runtime_code_artifacts.to_string(),
+                                        creation_match_details: self.creation_match.then(|| {
+                                            smart_contract_verifier_v2::contract_verification_success::MatchDetails {
+                                                match_type: smart_contract_verifier_v2::contract_verification_success::MatchType::Undefined.into(),
+                                                values: self.creation_values.as_ref().unwrap().to_string(),
+                                                transformations: self.creation_transformations.as_ref().unwrap().to_string(),
+                                            }
+                                        }),
+                                        runtime_match_details: self.runtime_match.then(|| {
+                                            smart_contract_verifier_v2::contract_verification_success::MatchDetails {
+                                                match_type: smart_contract_verifier_v2::contract_verification_success::MatchType::Undefined.into(),
+                                                values: self.runtime_values.as_ref().unwrap().to_string(),
+                                                transformations: self.runtime_transformations.as_ref().unwrap().to_string(),
+                                            }
+                                        }),
+                                    }
+                                )),
+                            }
+                        ],
+                    }
+                )),
+            }
+        }
+    }
+}
+
+mod batch_import_solidity_standard_json {
+    use super::*;
+    use crate::types::{Request, Route, VerifierRequest, VerifierRoute};
+
+    impl Request<eth_bytecode_db::SoliditySourcesVerifyStandardJson> for TestCase {
+        fn to_request(
+            &self,
+        ) -> <eth_bytecode_db::SoliditySourcesVerifyStandardJson as Route>::Request {
+            let transaction_hash = (!self.is_genesis).then_some(self.transaction_hash.to_string());
+            let block_number = (!self.is_genesis).then_some(self.block_number);
+            let transaction_index = (!self.is_genesis).then_some(self.transaction_index);
+            let deployer = (!self.is_genesis).then_some(self.deployer.to_string());
+            let metadata = eth_bytecode_db_v2::VerificationMetadata {
+                chain_id: Some(format!("{}", self.chain_id)),
+                contract_address: Some(self.address.to_string()),
+                transaction_hash,
+                block_number,
+                transaction_index,
+                deployer,
+                creation_code: self
+                    .deployed_creation_code
+                    .as_ref()
+                    .map(ToString::to_string),
+                runtime_code: Some(self.deployed_runtime_code.to_string()),
+            };
+
+            eth_bytecode_db_v2::VerifySolidityStandardJsonRequest {
+                bytecode: self.deployed_runtime_code.to_string(),
+                bytecode_type: eth_bytecode_db_v2::BytecodeType::DeployedBytecode.into(),
+                compiler_version: self.version.clone(),
+                input: self.standard_input().to_string(),
+                metadata: Some(metadata),
+            }
+        }
+    }
+
+    impl VerifierRequest<<verifier::SoliditySourcesVerifyStandardJson as VerifierRoute>::Request>
+        for TestCase
+    {
+        fn with(
+            &self,
+            request: &tonic::Request<
+                <verifier::SoliditySourcesVerifyStandardJson as VerifierRoute>::Request,
+            >,
+        ) -> bool {
+            let request = &request.get_ref();
+
+            let input = self.standard_input().to_string();
+            request.compiler_version == self.version && request.input == input
+        }
+    }
+}
+
+mod solidity_multi_part {
+    use super::*;
+    use crate::{
+        routes::{
+            eth_bytecode_db::AllianceSolidityStandardJsonBatchImport,
+            verifier::SoliditySourcesBatchVerifyStandardJson,
+        },
+        types::{Request, Route, VerifierRequest, VerifierRoute},
+    };
+
+    impl Request<AllianceSolidityStandardJsonBatchImport> for TestCase {
+        fn to_request(&self) -> <AllianceSolidityStandardJsonBatchImport as Route>::Request {
+            let contract = eth_bytecode_db_v2::VerifierAllianceContract {
+                chain_id: format!("{}", self.chain_id),
+                contract_address: self.address.to_string(),
+                transaction_hash: Some(self.transaction_hash.to_string()),
+                block_number: Some(self.block_number),
+                transaction_index: Some(self.transaction_index),
+                deployer: Some(self.deployer.to_string()),
+                creation_code: self.deployed_creation_code.as_ref().map(|v| v.to_string()),
+                runtime_code: self.deployed_runtime_code.to_string(),
+            };
+
+            eth_bytecode_db_v2::VerifierAllianceBatchImportSolidityStandardJsonRequest {
+                contracts: vec![contract],
+                compiler_version: self.version.clone(),
+                input: self.standard_input().to_string(),
+            }
+        }
+    }
+
+    impl VerifierRequest<<SoliditySourcesBatchVerifyStandardJson as VerifierRoute>::Request>
+        for TestCase
+    {
+        fn with(
+            &self,
+            request: &tonic::Request<
+                <SoliditySourcesBatchVerifyStandardJson as VerifierRoute>::Request,
+            >,
+        ) -> bool {
+            let request = &request.get_ref();
+
+            let input = self.standard_input().to_string();
+            request.compiler_version == self.version && request.input == input
+        }
     }
 }

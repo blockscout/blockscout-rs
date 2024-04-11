@@ -1,25 +1,18 @@
+mod alliance_solidity_standard_json_batch_import;
+mod solidity_sources_verify_multi_part;
+mod solidity_sources_verify_standard_json;
+
+mod routes;
+mod test_cases;
 mod types;
-mod verifier_alliance;
 
 /************************************************/
 
+use entity::{bytecodes, files, parts, sources};
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
-use types::{TestCaseRequest, TestCaseResponse, TestCaseRoute};
 use verifier_alliance_entity::{
     compiled_contracts, contract_deployments, contracts, verified_contracts,
 };
-
-pub trait VerifierServiceRequest<EthBytecodeDbRoute> {
-    type VerifierRequest;
-
-    fn with(&self, request: &tonic::Request<Self::VerifierRequest>) -> bool;
-}
-
-pub trait VerifierServiceResponse<EthBytecodeDbRoute> {
-    type VerifierResponse;
-
-    fn returning_const(&self) -> Self::VerifierResponse;
-}
 
 #[async_trait::async_trait]
 pub trait VerifierAllianceDatabaseChecker {
@@ -66,4 +59,24 @@ pub trait VerifierAllianceDatabaseChecker {
             .await
             .expect("Error while retrieving verified contract")
     }
+}
+
+#[async_trait::async_trait]
+pub trait EthBytecodeDbDatabaseChecker {
+    async fn check_source(&self, db: &DatabaseConnection) -> sources::Model;
+
+    async fn check_files(&self, db: &DatabaseConnection) -> Vec<files::Model>;
+
+    async fn check_source_files(
+        &self,
+        db: &DatabaseConnection,
+        source: &sources::Model,
+        files: &[files::Model],
+    );
+
+    async fn check_bytecodes(&self, db: &DatabaseConnection, source: &sources::Model) -> Vec<bytecodes::Model> ;
+
+    async fn check_parts(&self, db: &DatabaseConnection) -> Vec<parts::Model>;
+
+    async fn check_bytecode_parts(&self, db: &DatabaseConnection, bytecodes: &[bytecodes::Model], parts: &[parts::Model]);
 }

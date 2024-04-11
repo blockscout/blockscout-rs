@@ -1,31 +1,48 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use smart_contract_verifier_proto::http_client::mock::SmartContractVerifierServer;
+use std::path::PathBuf;
 
-pub trait TestCaseRoute {
+pub trait Route {
     const ROUTE: &'static str;
-}
-
-pub trait TestCaseRequest<Route: TestCaseRoute> {
     type Request: Serialize;
-
-    fn to_request(&self) -> Self::Request;
-    fn setup(&self) {}
+    type Response: for<'a> Deserialize<'a>;
+    type VerifierRoute: VerifierRoute;
 }
 
-pub trait TestCaseResponse<ProtoResponse>
-where
-    ProtoResponse: for<'de> serde::Deserialize<'de>,
-{
-    fn check(&self, actual_response: ProtoResponse);
+pub trait VerifierRoute {
+    type Request;
+    type Response;
+
+    type MockService: VerifierMock<Self::Request, Self::Response>;
 }
 
-pub fn from_file<Route, TestCase, ProtoResponse>(test_cases_dir: &str, test_case: &str) -> TestCase
+pub trait VerifierRequest<Req> {
+    fn with(&self, request: &tonic::Request<Req>) -> bool;
+}
+
+pub trait VerifierResponse<Res> {
+    fn returning_const(&self) -> Res;
+}
+
+pub trait VerifierMock<Req, Res>: Default {
+    fn expect<TestCase>(&mut self, test_case: TestCase)
+    where
+        TestCase: Send + Clone + 'static + VerifierRequest<Req> + VerifierResponse<Res>;
+
+    fn add_as_service(self, server: SmartContractVerifierServer) -> SmartContractVerifierServer;
+}
+
+pub trait Request<Rou: Route> {
+    fn to_request(&self) -> <Rou as Route>::Request;
+}
+
+pub trait Response<ProtoResponse> {}
+
+pub fn from_path<Rou, TestCase>(test_case_path: &PathBuf) -> TestCase
 where
-    Route: TestCaseRoute,
-    TestCase:
-        TestCaseRequest<Route> + TestCaseResponse<ProtoResponse> + for<'de> serde::Deserialize<'de>,
-    ProtoResponse: for<'de> serde::Deserialize<'de>,
+    Rou: Route,
+    TestCase: for<'de> serde::Deserialize<'de>,
 {
-    let test_case_path = format!("{test_cases_dir}/{test_case}.json");
     let content = std::fs::read_to_string(test_case_path).expect("failed to read file");
 
     serde_json::from_str(&content).expect("invalid test case format")
@@ -33,7 +50,5 @@ where
 
 /***************************************************************/
 
+mod artifacts;
 pub mod verifier_alliance;
-
-// pub mod batch_solidity;
-// pub mod transformations;
