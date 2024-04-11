@@ -6,11 +6,9 @@ use crate::{
     },
     EthBytecodeDbDatabaseChecker, VerifierAllianceDatabaseChecker,
 };
-use blockscout_service_launcher::test_database::TestDbGuard;
-use blockscout_service_launcher::{test_server};
+use blockscout_service_launcher::{test_database::TestDbGuard, test_server};
 use eth_bytecode_db_server::Settings;
-use std::net::SocketAddr;
-use std::{path::PathBuf, str::FromStr};
+use std::{net::SocketAddr, path::PathBuf, str::FromStr};
 use url::Url;
 
 const API_KEY_NAME: &str = "x-api-key";
@@ -89,7 +87,7 @@ async fn send_post_request<Rou: Route>(
     headers: &[(&str, &str)],
 ) -> <Rou as Route>::Response {
     let headers = headers
-        .into_iter()
+        .iter()
         .map(|(key, value)| {
             let key = reqwest::header::HeaderName::from_str(key)
                 .expect("Error converting key string into header name");

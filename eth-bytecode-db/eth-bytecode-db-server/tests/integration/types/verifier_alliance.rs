@@ -1,18 +1,26 @@
-use crate::types::artifacts::{
-    LosslessCodeParts, LosslessCodeValues, LosslessCompilationArtifacts,
-    LosslessCreationCodeArtifacts, LosslessRuntimeCodeArtifacts,
+use crate::{
+    routes,
+    types::artifacts::{
+        LosslessCodeParts, LosslessCodeValues, LosslessCompilationArtifacts,
+        LosslessCompilerSettings, LosslessCreationCodeArtifacts, LosslessRuntimeCodeArtifacts,
+    },
+    EthBytecodeDbDatabaseChecker, VerifierAllianceDatabaseChecker,
 };
-use crate::{routes, EthBytecodeDbDatabaseChecker, VerifierAllianceDatabaseChecker};
 use blockscout_display_bytes::Bytes as DisplayBytes;
-use entity::{bytecode_parts, bytecodes, files, parts, sea_orm_active_enums, source_files, sources};
+use entity::{
+    bytecode_parts, bytecodes, files, parts, sea_orm_active_enums, source_files, sources,
+};
 use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2 as eth_bytecode_db_v2;
 use pretty_assertions::assert_eq;
 use routes::{eth_bytecode_db, verifier};
 use sea_orm::{prelude::Decimal, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use serde::Deserialize;
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2 as smart_contract_verifier_v2;
-use std::collections::HashSet;
-use std::{collections::BTreeMap, str::FromStr, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashSet},
+    str::FromStr,
+    sync::Arc,
+};
 use verifier_alliance_entity::{
     code, compiled_contracts, contract_deployments, contracts, verified_contracts,
 };
@@ -30,7 +38,7 @@ pub struct TestCase {
     pub name: String,
     pub fully_qualified_name: String,
     pub sources: BTreeMap<String, String>,
-    pub compiler_settings: serde_json::Value,
+    pub compiler_settings: LosslessCompilerSettings,
     pub compilation_artifacts: LosslessCompilationArtifacts,
     pub creation_code_artifacts: LosslessCreationCodeArtifacts,
     pub runtime_code_artifacts: LosslessRuntimeCodeArtifacts,
@@ -99,7 +107,7 @@ impl TestCase {
                     )
                 })
                 .collect(),
-            settings: serde_json::from_value(self.compiler_settings.clone())
+            settings: serde_json::from_value(self.compiler_settings.raw.clone())
                 .expect("settings deserialization"),
         };
 
@@ -133,6 +141,62 @@ impl TestCase {
         self.creation_values
             .as_ref()
             .and_then(|v| v.parsed.constructor_arguments.clone())
+    }
+
+    pub fn evm_version(&self) -> Option<String> {
+        self.compiler_settings
+            .parsed
+            .evm_version
+            .map(|v| v.to_string())
+    }
+
+    pub fn optimization_runs(&self) -> Option<i32> {
+        self.compiler_settings
+            .parsed
+            .optimizer
+            .enabled
+            .unwrap_or_default()
+            .then(|| {
+                self.compiler_settings
+                    .parsed
+                    .optimizer
+                    .runs
+                    .map(|v| v as i32)
+            })
+            .flatten()
+    }
+
+    pub fn libraries(&self) -> BTreeMap<String, String> {
+        #[allow(clippy::iter_overeager_cloned)]
+        self.compiler_settings
+            .parsed
+            .libraries
+            .libs
+            .values()
+            .cloned()
+            .flatten()
+            .collect()
+    }
+
+    pub fn verification_metadata(&self) -> eth_bytecode_db_v2::VerificationMetadata {
+        let transaction_hash = (!self.is_genesis).then_some(self.transaction_hash.to_string());
+        let block_number = (!self.is_genesis).then_some(self.block_number);
+        let transaction_index = (!self.is_genesis).then_some(self.transaction_index);
+        let deployer = (!self.is_genesis).then_some(self.deployer.to_string());
+
+        eth_bytecode_db_v2::VerificationMetadata {
+            chain_id: Some(format!("{}", self.chain_id)),
+            contract_address: Some(self.address.to_string()),
+            transaction_hash,
+            block_number,
+            transaction_index,
+            deployer,
+            creation_code: self
+                .deployed_creation_code
+                .as_ref()
+                .map(ToString::to_string),
+            runtime_code: Some(self.deployed_runtime_code.to_string()),
+        }
     }
 }
 
@@ -274,7 +338,7 @@ impl VerifierAllianceDatabaseChecker for TestCase {
             "Invalid sources"
         );
         assert_eq!(
-            self.compiler_settings, compiled_contract.compiler_settings,
+            self.compiler_settings.raw, compiled_contract.compiler_settings,
             "Invalid compiler_settings"
         );
         assert_eq!(
@@ -370,7 +434,7 @@ impl EthBytecodeDbDatabaseChecker for TestCase {
             "Invalid compiler version"
         );
         assert_eq!(
-            self.compiler_settings, db_source.compiler_settings,
+            self.compiler_settings.raw, db_source.compiler_settings,
             "Invalid compiler settings"
         );
         assert_eq!(self.file_name(), db_source.file_name, "Invalid file name");
@@ -451,7 +515,11 @@ impl EthBytecodeDbDatabaseChecker for TestCase {
         );
     }
 
-    async fn check_bytecodes(&self, db: &DatabaseConnection, source: &sources::Model) -> Vec<bytecodes::Model> {
+    async fn check_bytecodes(
+        &self,
+        db: &DatabaseConnection,
+        source: &sources::Model,
+    ) -> Vec<bytecodes::Model> {
         let bytecodes = bytecodes::Entity::find()
             .all(db)
             .await
@@ -490,7 +558,10 @@ impl EthBytecodeDbDatabaseChecker for TestCase {
             expected_main_parts_data,
             parts
                 .iter()
-                .filter_map(|part| (part.part_type == sea_orm_active_enums::PartType::Main).then_some(part.data.clone()))
+                .filter_map(
+                    |part| (part.part_type == sea_orm_active_enums::PartType::Main)
+                        .then_some(part.data.clone())
+                )
                 .collect::<HashSet<_>>(),
             "Invalid data returned for main parts"
         );
@@ -504,7 +575,10 @@ impl EthBytecodeDbDatabaseChecker for TestCase {
             expected_meta_parts_data,
             parts
                 .iter()
-                .filter_map(|part| (part.part_type == sea_orm_active_enums::PartType::Metadata).then_some(part.data.clone()))
+                .filter_map(
+                    |part| (part.part_type == sea_orm_active_enums::PartType::Metadata)
+                        .then_some(part.data.clone())
+                )
                 .collect::<HashSet<_>>(),
             "Invalid data returned for meta parts"
         );
@@ -512,48 +586,70 @@ impl EthBytecodeDbDatabaseChecker for TestCase {
         parts
     }
 
-    async fn check_bytecode_parts(&self, db: &DatabaseConnection, bytecodes: &[bytecodes::Model], parts: &[parts::Model]) {
+    async fn check_bytecode_parts(
+        &self,
+        db: &DatabaseConnection,
+        bytecodes: &[bytecodes::Model],
+        parts: &[parts::Model],
+    ) {
         let bytecode_parts = bytecode_parts::Entity::find()
             .all(db)
             .await
             .expect("Error while reading bytecode parts");
 
-        let check_code_parts = |
-            bytecode_type: sea_orm_active_enums::BytecodeType,
-            code_parts: &[LosslessCodeParts],
-        | {
+        let check_code_parts = |bytecode_type: sea_orm_active_enums::BytecodeType,
+                                code_parts: &[LosslessCodeParts]| {
             let bytecode_id = bytecodes
-                .iter().find_map(|bytecode| {
-                (bytecode.bytecode_type == bytecode_type).then_some(bytecode.id)
-            }).unwrap();
-            let processed_parts: Vec<_> = code_parts.iter()
-                .map(|v| parts.iter().find(|part| {
-                    let part_type = if v.parsed.r#type == "main" {
-                        sea_orm_active_enums::PartType::Main
-                    } else {
-                        sea_orm_active_enums::PartType::Metadata
-                    };
-                    part.part_type == part_type && part.data == v.parsed.data
-                }).unwrap()).enumerate().collect();
-            let bytecode_parts: Vec<_> = bytecode_parts.iter().filter(
-                |bytecode_part| bytecode_part.bytecode_id == bytecode_id
-            ).collect();
+                .iter()
+                .find_map(|bytecode| {
+                    (bytecode.bytecode_type == bytecode_type).then_some(bytecode.id)
+                })
+                .unwrap();
+            let processed_parts: Vec<_> = code_parts
+                .iter()
+                .map(|v| {
+                    parts
+                        .iter()
+                        .find(|part| {
+                            let part_type = if v.parsed.r#type == "main" {
+                                sea_orm_active_enums::PartType::Main
+                            } else {
+                                sea_orm_active_enums::PartType::Metadata
+                            };
+                            part.part_type == part_type && part.data == v.parsed.data
+                        })
+                        .unwrap()
+                })
+                .enumerate()
+                .collect();
+            let bytecode_parts: Vec<_> = bytecode_parts
+                .iter()
+                .filter(|bytecode_part| bytecode_part.bytecode_id == bytecode_id)
+                .collect();
             assert_eq!(
                 processed_parts.len(),
                 bytecode_parts.len(),
                 "Parts and bytecode parts length mismatch"
             );
             assert!(
-                processed_parts.iter().zip(bytecode_parts).all(|(part, bytecode_part)| {
-                    bytecode_part.order as usize == part.0 &&
-                        bytecode_part.part_id == part.1.id
-                }),
+                processed_parts
+                    .iter()
+                    .zip(bytecode_parts)
+                    .all(|(part, bytecode_part)| {
+                        bytecode_part.order as usize == part.0 && bytecode_part.part_id == part.1.id
+                    }),
                 "Invalid bytecode parts"
             );
         };
 
-        check_code_parts(sea_orm_active_enums::BytecodeType::CreationInput, &self.creation_code_parts);
-        check_code_parts(sea_orm_active_enums::BytecodeType::DeployedBytecode, &self.runtime_code_parts);
+        check_code_parts(
+            sea_orm_active_enums::BytecodeType::CreationInput,
+            &self.creation_code_parts,
+        );
+        check_code_parts(
+            sea_orm_active_enums::BytecodeType::DeployedBytecode,
+            &self.runtime_code_parts,
+        );
     }
 }
 
@@ -661,7 +757,47 @@ mod responses {
     }
 }
 
-mod batch_import_solidity_standard_json {
+mod solidity_multi_part {
+    use super::*;
+    use crate::types::{Request, Route, VerifierRequest, VerifierRoute};
+
+    impl Request<eth_bytecode_db::SoliditySourcesVerifyMultiPart> for TestCase {
+        fn to_request(
+            &self,
+        ) -> <eth_bytecode_db::SoliditySourcesVerifyMultiPart as Route>::Request {
+            eth_bytecode_db_v2::VerifySolidityMultiPartRequest {
+                bytecode: self.deployed_runtime_code.to_string(),
+                bytecode_type: eth_bytecode_db_v2::BytecodeType::DeployedBytecode.into(),
+                compiler_version: self.version.clone(),
+                evm_version: self.evm_version(),
+                optimization_runs: self.optimization_runs(),
+                source_files: self.sources.clone(),
+                libraries: self.libraries(),
+                metadata: Some(self.verification_metadata()),
+            }
+        }
+    }
+
+    impl VerifierRequest<<verifier::SoliditySourcesVerifyMultiPart as VerifierRoute>::Request>
+        for TestCase
+    {
+        fn with(
+            &self,
+            request: &tonic::Request<
+                <verifier::SoliditySourcesVerifyMultiPart as VerifierRoute>::Request,
+            >,
+        ) -> bool {
+            let request = &request.get_ref();
+
+            request.compiler_version == self.version
+                && request.evm_version == self.evm_version()
+                && request.optimization_runs == self.optimization_runs()
+                && request.libraries == self.libraries()
+        }
+    }
+}
+
+mod solidity_standard_json {
     use super::*;
     use crate::types::{Request, Route, VerifierRequest, VerifierRoute};
 
@@ -669,30 +805,12 @@ mod batch_import_solidity_standard_json {
         fn to_request(
             &self,
         ) -> <eth_bytecode_db::SoliditySourcesVerifyStandardJson as Route>::Request {
-            let transaction_hash = (!self.is_genesis).then_some(self.transaction_hash.to_string());
-            let block_number = (!self.is_genesis).then_some(self.block_number);
-            let transaction_index = (!self.is_genesis).then_some(self.transaction_index);
-            let deployer = (!self.is_genesis).then_some(self.deployer.to_string());
-            let metadata = eth_bytecode_db_v2::VerificationMetadata {
-                chain_id: Some(format!("{}", self.chain_id)),
-                contract_address: Some(self.address.to_string()),
-                transaction_hash,
-                block_number,
-                transaction_index,
-                deployer,
-                creation_code: self
-                    .deployed_creation_code
-                    .as_ref()
-                    .map(ToString::to_string),
-                runtime_code: Some(self.deployed_runtime_code.to_string()),
-            };
-
             eth_bytecode_db_v2::VerifySolidityStandardJsonRequest {
                 bytecode: self.deployed_runtime_code.to_string(),
                 bytecode_type: eth_bytecode_db_v2::BytecodeType::DeployedBytecode.into(),
                 compiler_version: self.version.clone(),
                 input: self.standard_input().to_string(),
-                metadata: Some(metadata),
+                metadata: Some(self.verification_metadata()),
             }
         }
     }
@@ -714,7 +832,7 @@ mod batch_import_solidity_standard_json {
     }
 }
 
-mod solidity_multi_part {
+mod batch_import_solidity_standard_json {
     use super::*;
     use crate::{
         routes::{

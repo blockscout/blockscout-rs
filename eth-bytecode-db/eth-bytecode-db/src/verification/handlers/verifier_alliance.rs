@@ -73,6 +73,7 @@ pub async fn import_solidity_standard_json(
     .await?;
 
     let result = super::process_batch_import_response(
+        client.db_client.as_ref(),
         client.alliance_db_client.as_ref().unwrap(),
         verifier_response,
         deployment_data,

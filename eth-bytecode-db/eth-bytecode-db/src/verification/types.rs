@@ -330,10 +330,14 @@ impl TryFrom<AllianceContractImportSuccess> for DatabaseReadySource {
                 .context("extractor abi json from compilation artifacts")?
                 .abi;
 
-        let calculate_input_parts = |_code_artifacts| vec![];
-
-        let creation_code_parts = calculate_input_parts(value.creation_code_artifacts.clone());
-        let runtime_code_parts = calculate_input_parts(value.creation_code_artifacts.clone());
+        let creation_code_parts = code_parts(
+            value.creation_code.clone(),
+            value.creation_code_artifacts.clone(),
+        )?;
+        let runtime_code_parts = code_parts(
+            value.runtime_code.clone(),
+            value.runtime_code_artifacts.clone(),
+        )?;
 
         Ok(Self {
             file_name: value.file_name,
@@ -351,6 +355,63 @@ impl TryFrom<AllianceContractImportSuccess> for DatabaseReadySource {
             creation_input_parts: creation_code_parts,
             deployed_bytecode_parts: runtime_code_parts,
         })
+    }
+}
+
+fn code_parts(
+    code: bytes::Bytes,
+    code_artifacts: serde_json::Value,
+) -> Result<Vec<BytecodePart>, anyhow::Error> {
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct CborAuxdata {
+        pub offset: usize,
+        #[serde(deserialize_with = "crate::deserialize_bytes")]
+        pub value: bytes::Bytes,
+    }
+
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct CodeArtifacts {
+        #[serde(default)]
+        pub cbor_auxdata: BTreeMap<String, CborAuxdata>,
+    }
+
+    let code_artifacts: CodeArtifacts =
+        serde_json::from_value(code_artifacts).context("code artifacts deserialization")?;
+
+    let mut parts = vec![];
+
+    let mut i = 0usize;
+    let mut cbor_auxdata = code_artifacts
+        .cbor_auxdata
+        .into_values()
+        .collect::<Vec<_>>();
+    cbor_auxdata.sort_by_key(|v| v.offset);
+    for auxdata in cbor_auxdata {
+        parts.push(BytecodePart::Main {
+            data: code[i..auxdata.offset].to_vec(),
+        });
+        parts.push(BytecodePart::Meta {
+            data: auxdata.value.to_vec(),
+        });
+        i = auxdata.offset + auxdata.value.len();
+    }
+
+    if i < code.len() {
+        parts.push(BytecodePart::Main {
+            data: code[i..].to_vec(),
+        });
+    }
+
+    Ok(parts)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn parse_code_parts() {
+        // let code_parts = serde_json
     }
 }
 

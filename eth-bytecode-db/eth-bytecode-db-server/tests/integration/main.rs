@@ -74,9 +74,18 @@ pub trait EthBytecodeDbDatabaseChecker {
         files: &[files::Model],
     );
 
-    async fn check_bytecodes(&self, db: &DatabaseConnection, source: &sources::Model) -> Vec<bytecodes::Model> ;
+    async fn check_bytecodes(
+        &self,
+        db: &DatabaseConnection,
+        source: &sources::Model,
+    ) -> Vec<bytecodes::Model>;
 
     async fn check_parts(&self, db: &DatabaseConnection) -> Vec<parts::Model>;
 
-    async fn check_bytecode_parts(&self, db: &DatabaseConnection, bytecodes: &[bytecodes::Model], parts: &[parts::Model]);
+    async fn check_bytecode_parts(
+        &self,
+        db: &DatabaseConnection,
+        bytecodes: &[bytecodes::Model],
+        parts: &[parts::Model],
+    );
 }

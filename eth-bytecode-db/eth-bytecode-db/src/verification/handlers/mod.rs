@@ -18,9 +18,12 @@ use super::{
     types::{BytecodeType, DatabaseReadySource, Source, VerificationMetadata, VerificationType},
     AllianceBatchImportResult, AllianceContractImportResult,
 };
-use crate::verification::{
-    types::{AllianceContract, AllianceContractImportSuccess},
-    verifier_alliance::CodeMatch,
+use crate::{
+    verification::{
+        types::{AllianceContract, AllianceContractImportSuccess},
+        verifier_alliance::CodeMatch,
+    },
+    ToHex,
 };
 use anyhow::Context;
 use sea_orm::DatabaseConnection;
@@ -554,7 +557,8 @@ async fn check_match_statuses(
 }
 
 async fn process_batch_import_response(
-    db_client: &DatabaseConnection,
+    eth_bytecode_db_client: &DatabaseConnection,
+    alliance_db_client: &DatabaseConnection,
     response: smart_contract_verifier::BatchVerifyResponse,
     deployment_data: Vec<AllianceContract>,
 ) -> Result<AllianceBatchImportResult, Error> {
@@ -563,15 +567,69 @@ async fn process_batch_import_response(
     if let AllianceBatchImportResult::Results(results) = &mut import_result {
         for (contract_import_result, deployment_data) in results.iter_mut().zip(deployment_data) {
             if let AllianceContractImportResult::Success(success) = contract_import_result {
-                if let Err(err) = process_batch_import_verifier_alliance_action(
-                    db_client,
-                    success,
+                let contract_address = deployment_data.contract_address.to_hex();
+                let chain_id = deployment_data.chain_id.clone();
+
+                let database_source = DatabaseReadySource::try_from(success.clone())
+                    .context(
+                        "Converting alliance contract import success into database ready version",
+                    )
+                    .map_err(Error::Internal)?;
+
+                let process_abi_data_future = process_abi_data(
+                    database_source.abi.clone().map(|v| v.to_string()),
+                    eth_bytecode_db_client,
+                );
+
+                let process_eth_bytecode_db_future = process_batch_import_eth_bytecode_db(
+                    eth_bytecode_db_client,
+                    database_source.clone(),
+                );
+
+                let process_alliance_db_future = process_batch_import_verifier_alliance(
+                    alliance_db_client,
+                    database_source.clone(),
                     deployment_data,
+                    success,
+                );
+
+                // We may process insertion into both databases concurrently, as they are independent from one another.
+                let (
+                    process_abi_data_result,
+                    process_eth_bytecode_db_result,
+                    process_alliance_db_result,
+                ) = futures::future::join3(
+                    process_abi_data_future,
+                    process_eth_bytecode_db_future,
+                    process_alliance_db_future,
                 )
-                .await
-                {
-                    *contract_import_result =
-                        AllianceContractImportResult::ImportFailure(err.to_string())
+                .await;
+
+                let _ = process_abi_data_result.map_err(|err: anyhow::Error| {
+                    tracing::error!(
+                        contract_address,
+                        chain_id,
+                        "Error while inserting abi data into database: {err:#}"
+                    )
+                });
+                let _ = process_eth_bytecode_db_result.map_err(|err: anyhow::Error| {
+                    tracing::error!(
+                        contract_address,
+                        chain_id,
+                        "Error while inserting contract data into database: {err:#}"
+                    )
+                });
+
+                if let Err(err) = process_alliance_db_result {
+                    tracing::error!(
+                        contract_address,
+                        chain_id,
+                        "Error while inserting contract data into verifier alliance database: {err:#}"
+                    );
+
+                    *contract_import_result = AllianceContractImportResult::ImportFailure(
+                        err.context("verifier alliance database").to_string(),
+                    )
                 }
             }
         }
@@ -580,10 +638,11 @@ async fn process_batch_import_response(
     Ok(import_result)
 }
 
-async fn process_batch_import_verifier_alliance_action(
+async fn process_batch_import_verifier_alliance(
     db_client: &DatabaseConnection,
-    contract_import_success: &AllianceContractImportSuccess,
+    database_source: DatabaseReadySource,
     deployment_data: AllianceContract,
+    contract_import_success: &AllianceContractImportSuccess,
 ) -> Result<(), anyhow::Error> {
     let contract_deployment = save_deployment_data(db_client, deployment_data).await?;
 
@@ -591,9 +650,6 @@ async fn process_batch_import_verifier_alliance_action(
         code_match_from_match_details(contract_import_success.creation_match_details.clone());
     let runtime_code_match =
         code_match_from_match_details(contract_import_success.runtime_match_details.clone());
-
-    let database_source = DatabaseReadySource::try_from(contract_import_success.clone())
-        .context("Converting alliance contract import success into database ready version")?;
 
     check_match_statuses(
         db_client,
@@ -612,6 +668,15 @@ async fn process_batch_import_verifier_alliance_action(
     )
     .await
     .context("Insert data into verifier alliance database")
+}
+
+async fn process_batch_import_eth_bytecode_db(
+    db_client: &DatabaseConnection,
+    database_source: DatabaseReadySource,
+) -> Result<i64, anyhow::Error> {
+    db::eth_bytecode_db::insert_data(db_client, database_source)
+        .await
+        .context("Insert data into database")
 }
 
 fn code_match_from_match_details(

@@ -1,6 +1,8 @@
 use serde::Deserialize;
-use std::collections::BTreeMap;
-use std::fmt::{Debug, Formatter};
+use std::{
+    collections::BTreeMap,
+    fmt::{Debug, Formatter},
+};
 
 macro_rules! impl_lossless {
     ($name:ident) => {
@@ -79,6 +81,9 @@ pub struct CodeParts {
     pub data: blockscout_display_bytes::Bytes,
 }
 impl_lossless!(CodeParts);
+
+type CompilerSettings = foundry_compilers::artifacts::Settings;
+impl_lossless!(CompilerSettings);
 
 #[cfg(test)]
 mod tests {
