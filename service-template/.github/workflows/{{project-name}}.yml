@@ -4,6 +4,10 @@ on:
       - 'main'
     tags:
       - '{{project-name}}/v*'
+    paths:
+      - {{project-name}}/**
+      - .github/workflows/{{project-name}}.yml
+      - .github/actions/deps/**
   pull_request:
     paths:
       - {{project-name}}/**
@@ -124,7 +128,7 @@ jobs:
         id: regex
         with:
           text: ${{ github.ref }}
-          regex: '^(refs\/tags\/{{project-name}}\/(v\d+\.\d+\.\d+))|(refs\/heads\/(main))$'
+          regex: '^(refs\/tags\/{% endraw %}{{project-name}}{% raw %}\/(v\d+\.\d+\.\d+))|(refs\/heads\/(main))$'
 
       - name: Extract tag name
         id: tags_extractor
@@ -152,7 +156,7 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           context: "{{project-name}}"
-          file: "{{project-name}}/{{project-name}}-server/Dockerfile"
+          file: "{{project-name}}/Dockerfile"
           {% raw -%}
           push: ${{ steps.tags_extractor.outputs.tags != '' }}
           tags: ${{ steps.tags_extractor.outputs.tags }}

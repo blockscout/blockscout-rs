@@ -17,7 +17,7 @@ pub async fn init_mocked_blockscout_auth_service(
     users: &[MockUser],
 ) -> MockServer {
     let mock_server = MockServer::start().await;
-    let url = "/api/account/v1/authenticate".to_string();
+    let url = "/api/account/v2/authenticate".to_string();
 
     for user in users {
         let mut mock = Mock::given(method("GET"))

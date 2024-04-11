@@ -32,7 +32,7 @@ test-with-db *args:
 stop-test-postgres:
     just docker-name="{{docker-name}}-test" stop-postgres
 run:
-    PROXY_VERIFIER__DATABASE__URL={{DATABASE_URL}} cargo run --bin proxy-verifier-server
+    cargo run --bin proxy-verifier-server
 
 
 

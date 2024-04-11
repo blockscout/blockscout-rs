@@ -1,4 +1,7 @@
-use crate::{repository::user_op::ListUserOpDB, types::common::u256_to_decimal};
+use crate::{
+    indexer::common::decode_execute_call_data, repository::user_op::ListUserOpDB,
+    types::common::u256_to_decimal,
+};
 pub use entity::sea_orm_active_enums::{EntryPointVersion, SponsorType};
 use entity::user_operations::Model;
 use ethers::prelude::{
@@ -202,6 +205,8 @@ impl From<UserOp> for user_ops_indexer_proto::blockscout::user_ops_indexer::v1::
             }
         };
 
+        let (execute_target, execute_call_data) = decode_execute_call_data(&v.call_data);
+
         user_ops_indexer_proto::blockscout::user_ops_indexer::v1::UserOp {
             hash: v.hash.encode_hex(),
             sender: to_checksum(&v.sender, None),
@@ -238,6 +243,9 @@ impl From<UserOp> for user_ops_indexer_proto::blockscout::user_ops_indexer::v1::
 
             consensus: v.consensus,
             timestamp: v.timestamp,
+
+            execute_target: execute_target.map(|a| to_checksum(&a, None)),
+            execute_call_data: execute_call_data.map(|b| b.to_string()),
         }
     }
 }

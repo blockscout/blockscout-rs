@@ -477,12 +477,11 @@ mod tests {
                 .expect_err("error expected");
             assert!(
                 matches!(
-                    result,
-                    Error::Sourcify(SourcifyError::Custom(
-                        VerifyFromEtherscanError::ContractNotVerified(_)
-                    ))
+                    &result,
+                    Error::Sourcify(SourcifyError::NotFound(message))
+                    if message.contains("not verified on Etherscan")
                 ),
-                "expected: 'SourcifyError::ContractNotVerified', got: {result:?}"
+                "expected: 'SourcifyError::NotFound with not verified on etherscan message', got: {result:?}"
             );
         }
 

@@ -216,6 +216,9 @@ message UserOp {
 
   optional bool consensus = 33;
   optional string timestamp = 34;
+
+  optional string execute_target = 36;
+  optional string execute_call_data = 37;
 }
 
 message ListUserOp {

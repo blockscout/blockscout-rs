@@ -631,3 +631,7 @@ definitions:
         type: boolean
       timestamp:
         type: string
+      execute_target:
+        type: string
+      execute_call_data:
+        type: string

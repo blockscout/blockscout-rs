@@ -12,7 +12,7 @@ pub struct Stats {
 #[derive(FromQueryResult)]
 struct ProviderContractsCount {
     created_by: String,
-    count: u64,
+    count: i64,
 }
 
 pub async fn stats(client: Client) -> Result<Option<Stats>, Error> {
@@ -26,7 +26,7 @@ pub async fn stats(client: Client) -> Result<Option<Stats>, Error> {
             .all(alliance_db_client.as_ref())
             .await?
             .into_iter()
-            .map(|value| (value.created_by, value.count))
+            .map(|value| (value.created_by, value.count as u64))
             .collect();
         let total_contracts = contracts_per_provider.iter().map(|v| v.1).sum();
 

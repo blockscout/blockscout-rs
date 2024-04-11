@@ -1,0 +1,7 @@
+{
+  "filename": "dispatch_deploy_yaml.json",
+  "url": "/repos/{owner}/{repo}/actions/workflows/deploy.yaml/dispatches",
+  "method": "POST",
+  "status": 204,
+  "response": ""
+}
