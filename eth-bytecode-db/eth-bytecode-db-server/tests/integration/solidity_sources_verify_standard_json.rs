@@ -7,6 +7,8 @@ mod verifier_alliance {
 
     #[rstest::rstest]
     #[tokio::test]
+    #[timeout(std::time::Duration::from_secs(60))]
+    #[ignore = "Needs database to run"]
     async fn success(#[files("tests/alliance_test_cases/*.json")] test_case_path: PathBuf) {
         test_cases::verifier_alliance::success::<SoliditySourcesVerifyStandardJson>(test_case_path)
             .await;

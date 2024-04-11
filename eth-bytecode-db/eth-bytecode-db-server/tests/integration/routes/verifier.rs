@@ -40,6 +40,15 @@ macro_rules! impl_verifier_route {
 }
 
 impl_verifier_route!(
+    SoliditySourcesBatchVerifyMultiPart,
+    smart_contract_verifier_v2::BatchVerifySolidityMultiPartRequest,
+    smart_contract_verifier_v2::BatchVerifyResponse,
+    MockSolidityVerifierService,
+    expect_batch_verify_multi_part,
+    solidity_service
+);
+
+impl_verifier_route!(
     SoliditySourcesBatchVerifyStandardJson,
     smart_contract_verifier_v2::BatchVerifySolidityStandardJsonRequest,
     smart_contract_verifier_v2::BatchVerifyResponse,

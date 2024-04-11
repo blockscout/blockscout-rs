@@ -15,6 +15,14 @@ macro_rules! impl_route {
 }
 
 impl_route!(
+    AllianceSolidityMultiPartBatchImport,
+    "/api/v2/alliance/solidity/multi-part:batch-import",
+    eth_bytecode_db_v2::VerifierAllianceBatchImportSolidityMultiPartRequest,
+    eth_bytecode_db_v2::VerifierAllianceBatchImportResponse,
+    verifier::SoliditySourcesBatchVerifyMultiPart
+);
+
+impl_route!(
     AllianceSolidityStandardJsonBatchImport,
     "/api/v2/alliance/solidity/standard-json:batch-import",
     eth_bytecode_db_v2::VerifierAllianceBatchImportSolidityStandardJsonRequest,

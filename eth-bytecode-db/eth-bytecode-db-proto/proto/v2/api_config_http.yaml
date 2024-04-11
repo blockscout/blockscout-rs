@@ -70,6 +70,10 @@ http:
 
     #################### Verifier Alliance ####################
 
+    - selector: blockscout.ethBytecodeDb.v2.VerifierAlliance.BatchImportSolidityMultiPart
+      post: /api/v2/alliance/solidity/multi-part:batch-import
+      body: "*"
+
     - selector: blockscout.ethBytecodeDb.v2.VerifierAlliance.BatchImportSolidityStandardJson
       post: /api/v2/alliance/solidity/standard-json:batch-import
       body: "*"

@@ -1,3 +1,4 @@
+mod alliance_solidity_multi_part_batch_import;
 mod alliance_solidity_standard_json_batch_import;
 mod solidity_sources_verify_multi_part;
 mod solidity_sources_verify_standard_json;

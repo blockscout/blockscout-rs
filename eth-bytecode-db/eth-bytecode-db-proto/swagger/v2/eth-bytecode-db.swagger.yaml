@@ -14,6 +14,26 @@ consumes:
 produces:
   - application/json
 paths:
+  /api/v2/alliance/solidity/multi-part:batch-import:
+    post:
+      operationId: VerifierAlliance_BatchImportSolidityMultiPart
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v2VerifierAllianceBatchImportResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v2VerifierAllianceBatchImportSolidityMultiPartRequest'
+      tags:
+        - VerifierAlliance
   /api/v2/alliance/solidity/standard-json:batch-import:
     post:
       operationId: VerifierAlliance_BatchImportSolidityStandardJson
@@ -659,6 +679,37 @@ definitions:
       - PARTIAL
       - FULL
     default: NO_MATCH
+  v2VerifierAllianceBatchImportSolidityMultiPartRequest:
+    type: object
+    properties:
+      contracts:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v2VerifierAllianceContract'
+        description: / Contracts to be verified via provided data.
+      compilerVersion:
+        type: string
+        description: / Compiler version used to compile the contract.
+      evmVersion:
+        type: string
+        title: / Version of the EVM to compile for. If absent results in default EVM version
+      optimizationRuns:
+        type: integer
+        format: int64
+        title: |-
+          / If present, optimizations are enabled with specified number of runs,
+          / otherwise optimizations are disabled
+      sourceFiles:
+        type: object
+        additionalProperties:
+          type: string
+        title: / Map from a source file name to the actual source code
+      libraries:
+        type: object
+        additionalProperties:
+          type: string
+        title: / Map from a library name to its address
   v2VerifierAllianceBatchImportSolidityStandardJsonRequest:
     type: object
     properties:

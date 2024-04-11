@@ -43,6 +43,9 @@ service SourcifyVerifier {
 }
 
 service VerifierAlliance {
+  rpc BatchImportSolidityMultiPart(VerifierAllianceBatchImportSolidityMultiPartRequest)
+      returns (VerifierAllianceBatchImportResponse) {}
+
   rpc BatchImportSolidityStandardJson(VerifierAllianceBatchImportSolidityStandardJsonRequest)
       returns (VerifierAllianceBatchImportResponse) {}
 }
@@ -323,6 +326,22 @@ message EventDescription {
 }
 
 /******************** Verifier alliance related messages ********************/
+
+message VerifierAllianceBatchImportSolidityMultiPartRequest {
+  /// Contracts to be verified via provided data.
+  repeated VerifierAllianceContract contracts = 1;
+  /// Compiler version used to compile the contract.
+  string compiler_version = 2;
+  /// Version of the EVM to compile for. If absent results in default EVM version
+  optional string evm_version = 4;
+  /// If present, optimizations are enabled with specified number of runs,
+  /// otherwise optimizations are disabled
+  optional uint32 optimization_runs = 5;
+  /// Map from a source file name to the actual source code
+  map<string, string> source_files = 6;
+  /// Map from a library name to its address
+  map<string, string> libraries = 7;
+}
 
 message VerifierAllianceBatchImportSolidityStandardJsonRequest {
   /// Contracts to be verified via provided data.

@@ -150,7 +150,7 @@ impl TestCase {
             .map(|v| v.to_string())
     }
 
-    pub fn optimization_runs(&self) -> Option<i32> {
+    pub fn optimization_runs(&self) -> Option<u32> {
         self.compiler_settings
             .parsed
             .optimizer
@@ -161,7 +161,7 @@ impl TestCase {
                     .parsed
                     .optimizer
                     .runs
-                    .map(|v| v as i32)
+                    .map(|v| v as u32)
             })
             .flatten()
     }
@@ -176,6 +176,19 @@ impl TestCase {
             .cloned()
             .flatten()
             .collect()
+    }
+
+    pub fn verifier_alliance_contract(&self) -> eth_bytecode_db_v2::VerifierAllianceContract {
+        eth_bytecode_db_v2::VerifierAllianceContract {
+            chain_id: format!("{}", self.chain_id),
+            contract_address: self.address.to_string(),
+            transaction_hash: Some(self.transaction_hash.to_string()),
+            block_number: Some(self.block_number),
+            transaction_index: Some(self.transaction_index),
+            deployer: Some(self.deployer.to_string()),
+            creation_code: self.deployed_creation_code.as_ref().map(|v| v.to_string()),
+            runtime_code: self.deployed_runtime_code.to_string(),
+        }
     }
 
     pub fn verification_metadata(&self) -> eth_bytecode_db_v2::VerificationMetadata {
@@ -770,7 +783,7 @@ mod solidity_multi_part {
                 bytecode_type: eth_bytecode_db_v2::BytecodeType::DeployedBytecode.into(),
                 compiler_version: self.version.clone(),
                 evm_version: self.evm_version(),
-                optimization_runs: self.optimization_runs(),
+                optimization_runs: self.optimization_runs().map(|v| v as i32),
                 source_files: self.sources.clone(),
                 libraries: self.libraries(),
                 metadata: Some(self.verification_metadata()),
@@ -791,7 +804,7 @@ mod solidity_multi_part {
 
             request.compiler_version == self.version
                 && request.evm_version == self.evm_version()
-                && request.optimization_runs == self.optimization_runs()
+                && request.optimization_runs.map(|v| v as u32) == self.optimization_runs()
                 && request.libraries == self.libraries()
         }
     }
@@ -832,6 +845,46 @@ mod solidity_standard_json {
     }
 }
 
+mod batch_import_solidity_multi_part {
+    use super::*;
+    use crate::{
+        routes::{
+            eth_bytecode_db::AllianceSolidityMultiPartBatchImport,
+            verifier::SoliditySourcesBatchVerifyMultiPart,
+        },
+        types::{Request, Route, VerifierRequest, VerifierRoute},
+    };
+
+    impl Request<AllianceSolidityMultiPartBatchImport> for TestCase {
+        fn to_request(&self) -> <AllianceSolidityMultiPartBatchImport as Route>::Request {
+            eth_bytecode_db_v2::VerifierAllianceBatchImportSolidityMultiPartRequest {
+                contracts: vec![self.verifier_alliance_contract()],
+                compiler_version: self.version.clone(),
+                evm_version: self.evm_version(),
+                optimization_runs: self.optimization_runs(),
+                source_files: self.sources.clone(),
+                libraries: self.libraries(),
+            }
+        }
+    }
+
+    impl VerifierRequest<<SoliditySourcesBatchVerifyMultiPart as VerifierRoute>::Request> for TestCase {
+        fn with(
+            &self,
+            request: &tonic::Request<
+                <SoliditySourcesBatchVerifyMultiPart as VerifierRoute>::Request,
+            >,
+        ) -> bool {
+            let request = &request.get_ref();
+
+            request.compiler_version == self.version
+                && request.evm_version == self.evm_version()
+                && request.optimization_runs == self.optimization_runs()
+                && request.libraries == self.libraries()
+        }
+    }
+}
+
 mod batch_import_solidity_standard_json {
     use super::*;
     use crate::{
@@ -844,19 +897,8 @@ mod batch_import_solidity_standard_json {
 
     impl Request<AllianceSolidityStandardJsonBatchImport> for TestCase {
         fn to_request(&self) -> <AllianceSolidityStandardJsonBatchImport as Route>::Request {
-            let contract = eth_bytecode_db_v2::VerifierAllianceContract {
-                chain_id: format!("{}", self.chain_id),
-                contract_address: self.address.to_string(),
-                transaction_hash: Some(self.transaction_hash.to_string()),
-                block_number: Some(self.block_number),
-                transaction_index: Some(self.transaction_index),
-                deployer: Some(self.deployer.to_string()),
-                creation_code: self.deployed_creation_code.as_ref().map(|v| v.to_string()),
-                runtime_code: self.deployed_runtime_code.to_string(),
-            };
-
             eth_bytecode_db_v2::VerifierAllianceBatchImportSolidityStandardJsonRequest {
-                contracts: vec![contract],
+                contracts: vec![self.verifier_alliance_contract()],
                 compiler_version: self.version.clone(),
                 input: self.standard_input().to_string(),
             }
