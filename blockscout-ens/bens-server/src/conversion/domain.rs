@@ -94,7 +94,7 @@ pub fn batch_resolve_from_logic(
     let names = output
         .into_iter()
         .map(|(address, name)| {
-            let address = checksummed(&address_from_str_inner(&address)?, chain_id);
+            let address = address_from_str_logic(&address, chain_id)?.hash;
             Ok((address, name))
         })
         .collect::<Result<_, _>>()?;
