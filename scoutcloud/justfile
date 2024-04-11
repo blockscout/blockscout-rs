@@ -35,8 +35,8 @@ stop-test-postgres:
 run:
     SCOUTCLOUD__DATABASE__CONNECT__URL={{DATABASE_URL}} cargo run --bin scoutcloud-server
 
-generate-entities:
-    sea-orm-cli generate entity --lib -o scoutcloud-entity/src
+generate-entities *args:
+    sea-orm-cli generate entity --lib -o scoutcloud-entity/src {{args}}
 
 new-migration name:
     sea-orm-cli migrate generate -d scoutcloud-migration {{name}}
@@ -48,6 +48,9 @@ migrate-down:
     sea-orm-cli migrate -d scoutcloud-migration down
 
 insert-test-data:
-    docker exec -i {{docker-name}} psql -U {{db-user}} -d {{db-name}} -c "insert into users(id,email) values (1, 'lymarenko.lev@gmail.com'); insert into auth_tokens(user_id) values (1); select token_value from auth_tokens;"
+    docker exec -i {{docker-name}} psql -U {{db-user}} -d {{db-name}} -c "\
+    insert into users(id,email) values (1, 'lymarenko.lev@gmail.com');\
+    insert into auth_tokens(user_id) values (1); select token_value from auth_tokens;\
+    insert into balance_changes(user_id, amount) values (1, 100);"
 
 

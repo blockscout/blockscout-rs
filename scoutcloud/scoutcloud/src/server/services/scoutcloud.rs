@@ -106,9 +106,24 @@ impl Scoutcloud for ScoutcloudService {
 
     async fn update_instance_status(
         &self,
-        _request: Request<UpdateInstanceStatusRequest>,
+        request: Request<UpdateInstanceStatusRequest>,
     ) -> Result<Response<UpdateInstanceStatusResponse>, Status> {
-        todo!()
+        let (request, user_token): (UpdateInstanceStatusRequestInternal, _) =
+            parse_request_with_headers(self.db.as_ref(), request).await?;
+
+        let result = logic::deploy::update_instance_status(
+            self.db.as_ref(),
+            self.github.as_ref(),
+            &request.instance_id,
+            &request.action,
+            &user_token,
+        )
+        .await
+        .map_err(map_deploy_error)?;
+
+        Ok(Response::new(
+            UpdateInstanceStatusResponse::try_convert(result).map_err(map_convert_error)?,
+        ))
     }
 
     async fn get_instance(
@@ -225,6 +240,7 @@ fn map_deploy_error(err: DeployError) -> Status {
         DeployError::Internal(e) => Status::internal(e.to_string()),
         DeployError::Auth(e) => map_auth_error(e),
         DeployError::DeploymentNotFound => Status::not_found(err.to_string()),
+        DeployError::InvalidStateTransition(_, _) => Status::invalid_argument(err.to_string()),
     }
 }
 
@@ -237,6 +253,7 @@ fn map_auth_error(err: AuthError) -> Status {
         AuthError::NotFound => Status::not_found(err.to_string()),
         AuthError::Unauthorized => Status::permission_denied(err.to_string()),
         AuthError::Db(e) => map_db_err(e),
+        AuthError::InsufficientBalance => Status::permission_denied(err.to_string()),
     }
 }
 

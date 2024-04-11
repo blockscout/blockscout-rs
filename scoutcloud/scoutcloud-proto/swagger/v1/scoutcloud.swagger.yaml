@@ -344,13 +344,13 @@ definitions:
     type: string
     enum:
       - NO_STATUS
-      - CREATED
       - PENDING
       - RUNNING
       - STOPPING
       - STOPPED
       - FAILED
     default: NO_STATUS
+    title: 'option (convert_options.derive) = { name: "serde::Serialize" };'
   v1HealthCheckResponse:
     type: object
     properties:
@@ -399,6 +399,7 @@ definitions:
       - FINISH
       - RESTART
     default: START
+    title: 'option (convert_options.derive) = { name: "serde::Serialize" };'
   v1UpdateInstanceStatusResponse:
     type: object
     properties:

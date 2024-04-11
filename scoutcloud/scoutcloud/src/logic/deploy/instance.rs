@@ -1,30 +1,26 @@
+use super::deployment::{map_deployment_status, Deployment};
 use crate::{
     logic::{
-        config::{InstanceConfig, UserConfig},
-        deploy::{
-            deployment::{map_deployment_status, Deployment},
-            DeployError,
-        },
-        github::GithubClient,
-        users::UserToken,
-        ConfigError,
+        github::{DeployWorkflow, Workflow},
+        ConfigError, DeployError, GithubClient, InstanceConfig, UserConfig, UserToken,
     },
     server::proto,
     uuid_eq,
 };
 use scoutcloud_entity as db;
-use scoutcloud_proto::blockscout::scoutcloud::v1::{
-    DeployConfigInternal, DeployConfigPartialInternal,
+use sea_orm::{
+    prelude::*, ActiveModelTrait, ActiveValue::Set, IntoActiveModel, QueryOrder, QuerySelect,
 };
-use sea_orm::{prelude::*, ActiveModelTrait, ActiveValue::Set, IntoActiveModel, QuerySelect};
 
 const MAX_LIMIT: u64 = 50;
+const MAX_TRY_GITHUB: u8 = 10;
 
 #[derive(Clone)]
 pub struct Instance {
     pub model: db::instances::Model,
 }
 
+// Build functions
 impl Instance {
     pub fn new(model: db::instances::Model) -> Self {
         Instance { model }
@@ -46,7 +42,7 @@ impl Instance {
     where
         C: ConnectionTrait,
     {
-        let instances = db::instances::Entity::find()
+        let instances = Self::default_select()
             .filter(db::instances::Column::CreatorTokenId.eq(creator_token_id))
             .limit(MAX_LIMIT)
             .all(db)
@@ -57,25 +53,10 @@ impl Instance {
         Ok(instances)
     }
 
-    pub async fn deployments<C>(&self, db: &C) -> Result<Vec<Deployment>, DeployError>
-    where
-        C: ConnectionTrait,
-    {
-        let deployments = Deployment::default_loader()
-            .filter(db::deployments::Column::InstanceId.eq(self.model.id))
-            .limit(MAX_LIMIT)
-            .all(db)
-            .await?
-            .into_iter()
-            .map(|model| Deployment { model })
-            .collect();
-        Ok(deployments)
-    }
-
     pub async fn try_create<C>(
         db: &C,
         name: &str,
-        config: &DeployConfigInternal,
+        config: &proto::DeployConfigInternal,
         creator: &UserToken,
     ) -> Result<Self, DeployError>
     where
@@ -114,11 +95,15 @@ impl Instance {
     }
 
     pub fn user_config(&self) -> Result<UserConfig, ConfigError> {
-        UserConfig::parse(self.user_config_raw().clone())
+        UserConfig::from_raw(self.user_config_raw().clone())
     }
 
     pub fn parsed_config(&self) -> InstanceConfig {
         InstanceConfig::from_raw(self.model.parsed_config.clone())
+    }
+
+    pub fn default_select() -> Select<db::instances::Entity> {
+        db::instances::Entity::find().order_by_desc(db::instances::Column::CreatedAt)
     }
 
     pub async fn commit(
@@ -157,7 +142,7 @@ impl Instance {
     pub async fn update_config_partial<C>(
         &mut self,
         db: &C,
-        config: &DeployConfigPartialInternal,
+        config: &proto::DeployConfigPartialInternal,
     ) -> Result<UserConfig, DeployError>
     where
         C: ConnectionTrait,
@@ -165,13 +150,6 @@ impl Instance {
         let config = self.user_config()?.with_merged_partial(config)?;
         Self::update_config(self, db, config.clone()).await?;
         Ok(config)
-    }
-
-    pub async fn with_latest_deployment<C>(self, db: &C) -> Result<InstanceDeployment, DeployError>
-    where
-        C: ConnectionTrait,
-    {
-        InstanceDeployment::from_instance(db, self).await
     }
 
     async fn _update_configs<C>(
@@ -188,6 +166,70 @@ impl Instance {
         active.parsed_config = Set(parsed_config);
         let model = active.update(db).await?;
         Ok(model)
+    }
+
+    pub async fn deployments<C>(&self, db: &C) -> Result<Vec<Deployment>, DeployError>
+    where
+        C: ConnectionTrait,
+    {
+        let deployments = Deployment::default_select()
+            .filter(db::deployments::Column::InstanceId.eq(self.model.id))
+            .limit(MAX_LIMIT)
+            .all(db)
+            .await?
+            .into_iter()
+            .map(|model| Deployment { model })
+            .collect();
+        Ok(deployments)
+    }
+
+    pub async fn find_server_spec<C>(&self, db: &C) -> Result<db::server_specs::Model, DeployError>
+    where
+        C: ConnectionTrait,
+    {
+        let server_size = self.user_config()?.internal.server_size;
+        let server_spec = db::server_specs::Entity::find()
+            .filter(db::server_specs::Column::Slug.eq(&server_size))
+            .one(db)
+            .await?
+            .ok_or(DeployError::Internal(anyhow::anyhow!(
+                "server size `{server_size}` not found in database"
+            )))?;
+        Ok(server_spec)
+    }
+}
+
+// Starting and stopping instance using github api
+impl Instance {
+    pub async fn deploy_via_github(
+        &self,
+        github: &GithubClient,
+    ) -> Result<octocrab::models::workflows::Run, DeployError> {
+        let instance_run = DeployWorkflow::instance(self.model.slug.clone())
+            .run_and_get_latest(github, MAX_TRY_GITHUB)
+            .await?
+            .ok_or(DeployError::Internal(anyhow::anyhow!(
+                "no instance workflow found after running"
+            )))?;
+        tracing::info!(
+            instance_id =? self.model.external_id,
+            run_id =? instance_run.id,
+            run_status =? instance_run.status,
+            "triggered github deploy workflow for app=instance"
+        );
+        let postgres_run = DeployWorkflow::postgres(self.model.slug.clone())
+            .run_and_get_latest(github, MAX_TRY_GITHUB)
+            .await?
+            .ok_or(DeployError::Internal(anyhow::anyhow!(
+                "no postgres workflow found after running"
+            )))?;
+        tracing::info!(
+            instance_id =? self.model.external_id,
+            run_id =? postgres_run.id,
+            run_status =? postgres_run.status,
+            "triggered github deploy workflow for app=postgres"
+        );
+        Ok(instance_run)
     }
 }
 
@@ -222,7 +264,7 @@ impl InstanceDeployment {
     where
         C: ConnectionTrait,
     {
-        let (deployment, instance) = Deployment::default_loader()
+        let (deployment, instance) = Deployment::default_select()
             .find_also_related(db::instances::Entity)
             .one(db)
             .await?
@@ -247,7 +289,7 @@ impl InstanceDeployment {
             .map(|i| i.model)
             .collect();
         let deployments = instances
-            .load_many(Deployment::default_loader().limit(1), db)
+            .load_many(Deployment::default_select().limit(1), db)
             .await?;
 
         instances

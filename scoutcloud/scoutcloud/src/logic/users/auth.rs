@@ -1,8 +1,9 @@
 use crate::{logic::Instance, uuid_eq};
-use scoutcloud_entity::{auth_tokens, users};
+use scoutcloud_entity::{auth_tokens, server_specs, users};
 use sea_orm::{
     prelude::*, sea_query::Expr, ActiveModelTrait, ActiveValue::Set, ColumnTrait, QueryFilter,
 };
+use std::ops::Sub;
 use thiserror::Error;
 use tonic::codegen::http::HeaderMap;
 
@@ -18,6 +19,8 @@ pub enum AuthError {
     NotFound,
     #[error("unauthorized")]
     Unauthorized,
+    #[error("insufficient balance")]
+    InsufficientBalance,
     #[error("internal error: {0}")]
     Internal(#[from] anyhow::Error),
     #[error("db error: {0}")]
@@ -72,6 +75,26 @@ impl UserToken {
         } else {
             Err(AuthError::Unauthorized)
         }
+    }
+
+    pub async fn allowed_to_deploy_for_hours(
+        &self,
+        hours: u64,
+        server_spec: &server_specs::Model,
+    ) -> Result<(), AuthError> {
+        if self.user.is_superuser {
+            return Ok(());
+        }
+        let hours = Decimal::new(hours as i64, 0);
+        if self
+            .user
+            .balance
+            .sub(hours * server_spec.cost_per_hour)
+            .is_sign_negative()
+        {
+            return Err(AuthError::InsufficientBalance);
+        }
+        Ok(())
     }
 
     pub async fn create<C>(db: &C, user_id: i32) -> Result<Self, AuthError>

@@ -59,6 +59,20 @@ impl Workflow for DeployWorkflow {
     }
 }
 
+impl DeployWorkflow {
+    pub fn new(client: String, app: AppVariant) -> Self {
+        Self { client, app }
+    }
+
+    pub fn instance(client: String) -> Self {
+        Self::new(client, AppVariant::Instance)
+    }
+
+    pub fn postgres(client: String) -> Self {
+        Self::new(client, AppVariant::Postgres)
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CleanupWorkflow {
     pub client: String,
@@ -68,6 +82,20 @@ pub struct CleanupWorkflow {
 impl Workflow for CleanupWorkflow {
     fn id() -> &'static str {
         "cleanup.yaml"
+    }
+}
+
+impl CleanupWorkflow {
+    pub fn new(client: String, app: AppVariant) -> Self {
+        Self { client, app }
+    }
+
+    pub fn instance(client: String) -> Self {
+        Self::new(client, AppVariant::Instance)
+    }
+
+    pub fn postgres(client: String) -> Self {
+        Self::new(client, AppVariant::Postgres)
     }
 }
 

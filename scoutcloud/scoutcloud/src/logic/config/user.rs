@@ -25,7 +25,7 @@ impl UserConfig {
         Ok(raw)
     }
 
-    pub fn parse(json: serde_json::Value) -> Result<Self, ConfigError> {
+    pub fn from_raw(json: serde_json::Value) -> Result<Self, ConfigError> {
         let internal: DeployConfigInternal =
             serde_json::from_value(json).context("parsing existing config")?;
         Ok(internal.into())
@@ -39,6 +39,6 @@ impl UserConfig {
         let mut other = serde_json::to_value(partial).context("serializing partial config")?;
         json_utils::filter_null_values(&mut other);
         json_utils::merge(&mut this, &other);
-        Self::parse(this)
+        Self::from_raw(this)
     }
 }

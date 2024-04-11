@@ -9,8 +9,6 @@ use sea_orm::entity::prelude::*;
     enum_name = "deployment_status_type"
 )]
 pub enum DeploymentStatusType {
-    #[sea_orm(string_value = "created")]
-    Created,
     #[sea_orm(string_value = "failed")]
     Failed,
     #[sea_orm(string_value = "pending")]

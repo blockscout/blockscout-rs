@@ -9,6 +9,6 @@ pub use config::{
     ConfigError, ConfigValidationContext, InstanceConfig, ParsedVariable, ParsedVariableKey,
     UserConfig, UserVariable,
 };
-pub use deploy::{DeployError, Instance};
+pub use deploy::{DeployError, Deployment, Instance, InstanceDeployment};
 pub use github::{GithubClient, GithubError};
 pub use users::{AuthError, UserToken};

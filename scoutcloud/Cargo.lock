@@ -5245,6 +5245,7 @@ dependencies = [
  "paste",
  "pretty_assertions",
  "reqwest",
+ "rust_decimal",
  "scoutcloud-entity",
  "scoutcloud-migration",
  "scoutcloud-proto",

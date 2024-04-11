@@ -1,11 +1,13 @@
 use crate::{
     logic::{
-        deploy::instance::InstanceDeployment, users::UserToken, DeployError, GithubClient,
-        Instance, UserConfig,
+        deploy::{handlers::user_actions::user_action, instance::InstanceDeployment},
+        users::UserToken,
+        DeployError, GithubClient, Instance, UserConfig,
     },
     server::proto,
 };
 use sea_orm::{DatabaseConnection, TransactionTrait};
+use serde_json::json;
 
 pub async fn create_instance(
     db: &DatabaseConnection,
@@ -17,6 +19,16 @@ pub async fn create_instance(
     let tx = db.begin().await.map_err(|e| anyhow::anyhow!(e))?;
     let instance = Instance::try_create(&tx, name, config, creator).await?;
     instance.commit(github, "initial instance creation").await?;
+    user_action(
+        &tx,
+        creator,
+        "create_instance",
+        Some(json!({
+            "instance_id": instance.model.id,
+            "instance_slug": instance.model.slug,
+        })),
+    )
+    .await?;
     tx.commit().await.map_err(|e| anyhow::anyhow!(e))?;
 
     Ok(proto::CreateInstanceResponseInternal {
