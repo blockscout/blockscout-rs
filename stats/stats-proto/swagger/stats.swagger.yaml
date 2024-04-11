@@ -190,4 +190,6 @@ definitions:
         type: string
       value:
         type: string
+      isApproximate:
+        type: boolean
     title: All integers are encoded as strings to prevent data loss

@@ -16,7 +16,10 @@ fn compile(
         .protoc_arg("--openapiv2_opt")
         .protoc_arg("grpc_api_configuration=proto/api_config_http.yaml,output_format=yaml,allow_merge=true,merge_file_name=stats")
         .bytes(["."])
-        .type_attribute(".", "#[actix_prost_macros::serde]");
+        .type_attribute(".", "#[actix_prost_macros::serde]")
+        // &bool -> bool
+        .field_attribute(".blockscout.stats.v1.Point.is_approximate", "#[serde(skip_serializing_if = \"std::clone::Clone::clone\")]")
+        .field_attribute(".blockscout.stats.v1.Point.is_approximate", "#[serde(default)]");
 
     config.compile_protos(protos, includes)?;
     Ok(())
