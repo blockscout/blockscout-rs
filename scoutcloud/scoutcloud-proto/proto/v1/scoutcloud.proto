@@ -1,0 +1,189 @@
+syntax = "proto3";
+
+package blockscout.scoutcloud.v1;
+
+import "convert_options.proto";
+
+option go_package = "github.com/blockscout/blockscout-rs/scoutcloud";
+
+service Scoutcloud {
+  rpc CreateInstance(CreateInstanceRequest) returns (CreateInstanceResponse) {}
+  rpc UpdateConfig(UpdateConfigRequest) returns (UpdateConfigResponse) {}
+  rpc UpdateConfigPartial(UpdateConfigPartialRequest) returns (UpdateConfigResponse) {}
+  rpc UpdateInstanceStatus(UpdateInstanceStatusRequest) returns (UpdateInstanceStatusResponse) {}
+  rpc GetInstance(GetInstanceRequest) returns (Instance) {}
+  rpc ListInstances(ListInstancesRequest) returns (ListInstancesResponse) {}
+  rpc GetDeployment(GetDeploymentRequest) returns (Deployment) {}
+  rpc GetCurrentDeployment(GetCurrentDeploymentRequest) returns (Deployment) {}
+  rpc ListDeployments(ListDeploymentsRequest) returns (ListDeploymentsResponse) {}
+}
+
+message DeployConfig {
+  string rpc_url = 1 [(convert_options.convert) = {type: "url::Url"}];
+  string server_size = 2;
+  optional string chain_type = 3;
+  optional string node_type = 12;
+  optional string chain_id = 4;
+  optional string token_symbol = 5;
+  optional string instance_url = 6;
+  optional string logo_url = 7 [(convert_options.convert) = {type: "Option<url::Url>"}];
+  optional string chain_name = 8;
+  optional string icon_url = 9 [(convert_options.convert) = {type: "Option<url::Url>"}];
+  optional string homeplate_background = 10;
+  optional string homeplate_text_color = 11;
+}
+
+message DeployConfigPartial {
+  optional string rpc_url = 1 [(convert_options.convert) = {type: "Option<url::Url>"}];
+  optional string server_size = 2;
+  optional string chain_type = 3;
+  optional string node_type = 12;
+  optional string chain_id = 4;
+  optional string token_symbol = 5;
+  optional string instance_url = 6;
+  optional string logo_url = 7 [(convert_options.convert) = {type: "Option<url::Url>"}];
+  optional string chain_name = 8;
+  optional string icon_url = 9 [(convert_options.convert) = {type: "Option<url::Url>"}];
+  optional string homeplate_background = 10;
+  optional string homeplate_text_color = 11;
+}
+
+message CreateInstanceRequest {
+  option (convert_options.extra_fields) = {
+    name: "auth_token",
+    type: "String"
+  };
+
+  string name = 1;
+  // initial config
+  DeployConfig config = 2;
+}
+
+message CreateInstanceResponse {
+  string instance_id = 1;
+}
+
+message UpdateConfigRequest {
+  option (convert_options.extra_fields) = {
+    name: "auth_token",
+    type: "String"
+  };
+
+  string instance_id = 1;
+  DeployConfig config = 2;
+}
+
+message UpdateConfigResponse {
+  DeployConfig config = 1;
+}
+
+message UpdateConfigPartialRequest {
+  option (convert_options.extra_fields) = {
+    name: "auth_token",
+    type: "String"
+  };
+
+  string instance_id = 1;
+  DeployConfigPartial config = 2;
+}
+
+enum DeploymentStatus {
+  NO_STATUS = 0;
+  CREATED = 1;
+  PENDING = 2;
+  RUNNING = 3;
+  STOPPING = 4;
+  STOPPED = 5;
+  FAILED = 6;
+}
+
+enum UpdateInstanceAction {
+  START = 0;
+  FINISH = 1;
+  RESTART = 2;
+}
+
+message UpdateInstanceStatusRequest {
+  option (convert_options.extra_fields) = {
+    name: "auth_token",
+    type: "String"
+  };
+
+  string instance_id = 1;
+  UpdateInstanceAction action = 2;
+}
+
+message UpdateInstanceStatusResponse {
+  DeploymentStatus status = 1;
+  string deployment_id = 2;
+}
+
+message Instance {
+  string instance_id = 1;
+  string deployment_id = 2;
+  string name = 3;
+  string created_at = 4;
+  DeployConfig config = 5;
+  DeploymentStatus deployment_status = 6;
+}
+
+message Deployment {
+  string deployment_id = 1;
+  string instance_id = 2;
+  DeploymentStatus status = 3;
+  optional string error = 4;
+  string created_at = 5;
+  optional string finished_at = 6;
+  DeployConfig config = 7;
+}
+
+message GetInstanceRequest {
+  option (convert_options.extra_fields) = {
+    name: "auth_token",
+    type: "String"
+  };
+
+  string instance_id = 1;
+}
+
+message ListInstancesRequest {
+  option (convert_options.extra_fields) = {
+    name: "auth_token",
+    type: "String"
+  };
+}
+
+message ListInstancesResponse {
+  repeated Instance items = 1;
+}
+
+message GetDeploymentRequest {
+  option (convert_options.extra_fields) = {
+    name: "auth_token",
+    type: "String"
+  };
+
+  string deployment_id = 1;
+}
+
+message ListDeploymentsRequest {
+  option (convert_options.extra_fields) = {
+    name: "auth_token",
+    type: "String"
+  };
+
+  string instance_id = 1;
+}
+
+message ListDeploymentsResponse {
+  repeated Deployment items = 1;
+}
+
+message GetCurrentDeploymentRequest {
+  option (convert_options.extra_fields) = {
+    name: "auth_token",
+    type: "String"
+  };
+
+  string instance_id = 1;
+}

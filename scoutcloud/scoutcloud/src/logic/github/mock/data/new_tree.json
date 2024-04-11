@@ -1,0 +1,44 @@
+{
+  "filename": "new_tree.json",
+  "url": "/repos/{owner}/{repo}/git/trees",
+  "method": "POST",
+  "status": 201,
+  "response": {
+    "sha": "6af0941d068a21bbb728ad0ff11764bdf6f4acf4",
+    "url": "https://api.github.com/repos/sevenzing/test/git/trees/6af0941d068a21bbb728ad0ff11764bdf6f4acf4",
+    "tree": [
+      {
+        "path": ".github",
+        "mode": "040000",
+        "type": "tree",
+        "sha": "492a98e440002d428470ccd87456695b17d7c9e7",
+        "url": "https://api.github.com/repos/sevenzing/test/git/trees/492a98e440002d428470ccd87456695b17d7c9e7"
+      },
+      {
+        "path": "README.md",
+        "mode": "100644",
+        "type": "blob",
+        "sha": "369c48833ccd4d39b5a0b672c7048d70ff40dcec",
+        "size": 19,
+        "url": "https://api.github.com/repos/sevenzing/test/git/blobs/369c48833ccd4d39b5a0b672c7048d70ff40dcec"
+      },
+      {
+        "path": "file",
+        "mode": "100644",
+        "type": "blob",
+        "sha": "929246f65aab4d636cb229c790f966afc332c124",
+        "size": 19,
+        "url": "https://api.github.com/repos/sevenzing/test/git/blobs/929246f65aab4d636cb229c790f966afc332c124"
+      },
+      {
+        "path": "file_name",
+        "mode": "100644",
+        "type": "blob",
+        "sha": "db00fd65b218578127ea51f3dffac701f12f486a",
+        "size": 8,
+        "url": "https://api.github.com/repos/sevenzing/test/git/blobs/db00fd65b218578127ea51f3dffac701f12f486a"
+      }
+    ],
+    "truncated": false
+  }
+}

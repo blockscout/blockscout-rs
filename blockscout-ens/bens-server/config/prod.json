@@ -51,6 +51,19 @@
             "empty_label_hash": "0x2fd69f9e5bec9de9ebf3468dafc549eca0bc7d17dfbc09869c2cfc3997d5d038"
           }
         }
+      },
+      "1890": {
+        "blockscout": {
+          "url": "https://phoenix.lightlink.io"
+        },
+        "subgraphs": {
+          "lightlink-subgraph": {
+            "use_cache": true,
+            "address_resolve_technique": "reverse_registry",
+            "native_token_contract": "0x5183ba1dee9770760360533cf00b9d8e26495927",
+            "empty_label_hash": "0xd00bb4a08bb99b28b4c1d80951b62b654e4d2688242da2d2c7f98ed6c9caaaad"
+          }
+        }
       }
     }
   }

@@ -1,4 +1,4 @@
-ARG CARGO_CHEF_VERSION=0.1.62-rust-1.75-buster
+ARG CARGO_CHEF_VERSION=0.1.66-rust-1.77-buster
 FROM lukemathwalker/cargo-chef:${CARGO_CHEF_VERSION}
 
 ARG PROTOC_VERSION=25.2

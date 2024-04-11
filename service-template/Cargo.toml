@@ -7,9 +7,12 @@ members = [
     {% if entity -%}
     "{{project-name}}-entity",
     {% endif -%}
-    {% if migration -%}
+    {% if migrations -%}
     "{{project-name}}-migration",
     {% endif -%}
     "{{project-name}}-proto",
     "{{project-name}}-server",
 ]
+
+[workspace.dependencies]
+blockscout-service-launcher = "0.10.0"

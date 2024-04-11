@@ -1,0 +1,40 @@
+{
+  "filename": "new_commit.json",
+  "url": "/repos/{owner}/{repo}/git/commits",
+  "method": "POST",
+  "status": 201,
+  "response": {
+    "sha": "280868af8a068bd8680918394efd184deb1cae55",
+    "node_id": "C_kwDOLfL6LNoAKDI4MDg2OGFmOGEwNjhiZDg2ODA5MTgzOTRlZmQxODRkZWIxY2FlNTU",
+    "url": "https://api.github.com/repos/sevenzing/test/git/commits/280868af8a068bd8680918394efd184deb1cae55",
+    "html_url": "https://github.com/sevenzing/test/commit/280868af8a068bd8680918394efd184deb1cae55",
+    "author": {
+      "name": "sevenzing",
+      "email": "41516657+sevenzing@users.noreply.github.com",
+      "date": "2024-03-19T05:45:05Z"
+    },
+    "committer": {
+      "name": "sevenzing",
+      "email": "41516657+sevenzing@users.noreply.github.com",
+      "date": "2024-03-19T05:45:05Z"
+    },
+    "tree": {
+      "sha": "6af0941d068a21bbb728ad0ff11764bdf6f4acf4",
+      "url": "https://api.github.com/repos/sevenzing/test/git/trees/6af0941d068a21bbb728ad0ff11764bdf6f4acf4"
+    },
+    "message": "commit message",
+    "parents": [
+      {
+        "sha": "90a6c10981375220c3891dc3da4e37ac91f872cd",
+        "url": "https://api.github.com/repos/sevenzing/test/git/commits/90a6c10981375220c3891dc3da4e37ac91f872cd",
+        "html_url": "https://github.com/sevenzing/test/commit/90a6c10981375220c3891dc3da4e37ac91f872cd"
+      }
+    ],
+    "verification": {
+      "verified": false,
+      "reason": "unsigned",
+      "signature": null,
+      "payload": null
+    }
+  }
+}

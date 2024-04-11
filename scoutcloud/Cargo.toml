@@ -1,0 +1,8 @@
+[workspace]
+resolver = "2"
+members = [
+    "scoutcloud",
+    "scoutcloud-entity",
+    "scoutcloud-migration",
+    "scoutcloud-proto",
+]

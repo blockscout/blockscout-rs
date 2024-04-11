@@ -8,6 +8,7 @@ pub mod vyper_verifier_standard_json;
 
 use crate::{
     address_details, address_details::AddressDetails, to_hex::ToHex, Error, VerificationResponse,
+    VerificationSuccess,
 };
 use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2 as eth_bytecode_db_v2;
 use std::future::Future;
@@ -47,9 +48,10 @@ where
         )
         .await;
         match result {
-            Ok(()) => {
+            Ok(match_type) => {
                 let search_result = search_contract(blockscout_client, contract_address).await;
-                results.push(search_result)
+                let result = search_result.map(|url| VerificationSuccess { url, match_type });
+                results.push(result)
             }
             Err(err) if err.is_compilation_failed_error() => {
                 return VerificationResponse::CompilationFailed(err)
@@ -90,7 +92,7 @@ async fn verify_contract<'a, Request, RequestBuilder, Verify, VerifyOutput>(
     contract_details: Result<AddressDetails, Error>,
     request_builder: RequestBuilder,
     verify: Verify,
-) -> Result<(), Error>
+) -> Result<eth_bytecode_db_v2::source::MatchType, Error>
 where
     RequestBuilder: Fn(
         ethers_core::types::Bytes,
@@ -147,12 +149,15 @@ fn process_verify_response(
     chain_id: &str,
     contract_address: ethers_core::types::Address,
     response: Result<eth_bytecode_db_v2::VerifyResponse, eth_bytecode_db_proto::http_client::Error>,
-) -> Result<(), Error> {
+) -> Result<eth_bytecode_db_v2::source::MatchType, Error> {
     match response {
         Ok(response)
             if response.status == eth_bytecode_db_v2::verify_response::Status::Success as i32 =>
         {
-            Ok(())
+            response
+                .source
+                .map(|value| value.match_type())
+                .ok_or_else(|| Error::internal("Eth-bytecode-db returned invalid response"))
         }
         Ok(response)
             if response
