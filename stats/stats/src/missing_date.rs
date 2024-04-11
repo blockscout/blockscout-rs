@@ -38,6 +38,10 @@ pub async fn get_and_fill_chart(
     Ok(data)
 }
 
+/// Fills values for all dates from `min(data.first(), from)` to `max(data.last(), to)` according
+/// to `policy`.
+///
+/// See [`fill_zeros`] and [`fill_previous`] for details on the policies.
 pub fn fill_missing_points(
     data: Vec<DateValue>,
     policy: MissingDatePolicy,
@@ -63,6 +67,7 @@ pub fn fill_missing_points(
     }
 }
 
+/// Inserts zero values in `data` for all missing dates in inclusive range `[from; to]`
 fn fill_zeros(data: Vec<DateValue>, from: NaiveDate, to: NaiveDate) -> Vec<DateValue> {
     let n = (to - from).num_days() as usize;
     let mut new_data: Vec<DateValue> = Vec::with_capacity(n);
@@ -86,6 +91,8 @@ fn fill_zeros(data: Vec<DateValue>, from: NaiveDate, to: NaiveDate) -> Vec<DateV
     new_data
 }
 
+/// Inserts last existing values in `data` for all missing dates in inclusive range `[from; to]`.
+/// For all leading missing dates inserts zero.
 fn fill_previous(data: Vec<DateValue>, from: NaiveDate, to: NaiveDate) -> Vec<DateValue> {
     let n = (to - from).num_days() as usize;
     let mut new_data: Vec<DateValue> = Vec::with_capacity(n);
@@ -180,6 +187,12 @@ mod tests {
                 Some(d("2022-01-02")),
             ),
             (
+                vec![v("2022-01-02", "02")],
+                vec![v("2022-01-01", "0"), v("2022-01-02", "02")],
+                Some(d("2022-01-01")),
+                Some(d("2022-01-02")),
+            ),
+            (
                 vec![
                     v("2022-08-20", "20"),
                     v("2022-08-22", "22"),
@@ -267,6 +280,12 @@ mod tests {
             (
                 vec![v("2022-01-01", "01")],
                 vec![v("2022-01-01", "01"), v("2022-01-02", "01")],
+                Some(d("2022-01-01")),
+                Some(d("2022-01-02")),
+            ),
+            (
+                vec![v("2022-01-02", "02")],
+                vec![v("2022-01-01", "0"), v("2022-01-02", "02")],
                 Some(d("2022-01-01")),
                 Some(d("2022-01-02")),
             ),
