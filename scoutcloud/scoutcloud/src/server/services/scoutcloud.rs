@@ -251,7 +251,7 @@ fn map_auth_error(err: AuthError) -> Status {
         AuthError::Internal(e) => Status::internal(e.to_string()),
 
         AuthError::NotFound => Status::not_found(err.to_string()),
-        AuthError::Unauthorized => Status::permission_denied(err.to_string()),
+        AuthError::Unauthorized(_) => Status::permission_denied(err.to_string()),
         AuthError::Db(e) => map_db_err(e),
         AuthError::InsufficientBalance => Status::permission_denied(err.to_string()),
     }

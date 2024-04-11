@@ -1,13 +1,12 @@
 use crate::{
     logic::{
-        deploy::{handlers::user_actions::user_action, instance::InstanceDeployment},
+        deploy::{handlers::user_actions, instance::InstanceDeployment},
         users::UserToken,
         DeployError, GithubClient, Instance, UserConfig,
     },
     server::proto,
 };
 use sea_orm::{DatabaseConnection, TransactionTrait};
-use serde_json::json;
 
 pub async fn create_instance(
     db: &DatabaseConnection,
@@ -17,18 +16,11 @@ pub async fn create_instance(
     creator: &UserToken,
 ) -> Result<proto::CreateInstanceResponseInternal, DeployError> {
     let tx = db.begin().await.map_err(|e| anyhow::anyhow!(e))?;
+    creator.allowed_to_create_instance(&tx).await?;
     let instance = Instance::try_create(&tx, name, config, creator).await?;
+    let config = instance.user_config_raw().clone();
+    user_actions::log_create_instance(&tx, creator, &instance, &config).await?;
     instance.commit(github, "initial instance creation").await?;
-    user_action(
-        &tx,
-        creator,
-        "create_instance",
-        Some(json!({
-            "instance_id": instance.model.id,
-            "instance_slug": instance.model.slug,
-        })),
-    )
-    .await?;
     tx.commit().await.map_err(|e| anyhow::anyhow!(e))?;
 
     Ok(proto::CreateInstanceResponseInternal {
@@ -47,9 +39,19 @@ pub async fn update_instance_config(
     let mut instance = Instance::find(db, instance_id)
         .await?
         .ok_or(DeployError::InstanceNotFound(instance_id.to_string()))?;
-    user_token.has_access_to_instance(&instance).await?;
+    user_token.has_access_to_instance(&instance)?;
+    let old_config = instance.user_config_raw().clone();
     let updated_config = instance.update_config(&tx, config.clone()).await?;
-    instance.commit(github, "full config update").await?;
+    user_actions::log_update_config(
+        &tx,
+        user_token,
+        &instance,
+        &old_config,
+        &updated_config.raw()?,
+        false,
+    )
+    .await?;
+    instance.commit(github, "config update").await?;
     tx.commit().await.map_err(|e| anyhow::anyhow!(e))?;
 
     Ok(updated_config)
@@ -66,8 +68,18 @@ pub async fn update_instance_config_partial(
     let mut instance = Instance::find(db, instance_id)
         .await?
         .ok_or(DeployError::InstanceNotFound(instance_id.to_string()))?;
-    user_token.has_access_to_instance(&instance).await?;
+    user_token.has_access_to_instance(&instance)?;
+    let old_config = instance.user_config_raw().clone();
     let updated_config = instance.update_config_partial(&tx, config).await?;
+    user_actions::log_update_config(
+        &tx,
+        user_token,
+        &instance,
+        &old_config,
+        &updated_config.raw()?,
+        true,
+    )
+    .await?;
     instance.commit(github, "partial config update").await?;
     tx.commit().await.map_err(|e| anyhow::anyhow!(e))?;
 
@@ -80,9 +92,7 @@ pub async fn get_instance(
     user_token: &UserToken,
 ) -> Result<proto::InstanceInternal, DeployError> {
     let instance_deployment = InstanceDeployment::from_instance_id(db, instance_id).await?;
-    user_token
-        .has_access_to_instance(&instance_deployment.instance)
-        .await?;
+    user_token.has_access_to_instance(&instance_deployment.instance)?;
     proto::InstanceInternal::try_from(instance_deployment)
 }
 
@@ -93,6 +103,9 @@ pub async fn list_instances(
     let instances = InstanceDeployment::find_all(db, user_token).await?;
     instances
         .into_iter()
+        // find_all should return only instances that the user has access to,
+        // but we filter them again just in case
+        .filter(|i| user_token.has_access_to_instance(&i.instance).is_ok())
         .map(proto::InstanceInternal::try_from)
         .collect::<Result<Vec<_>, _>>()
 }
@@ -103,7 +116,7 @@ pub async fn get_deployment(
     user_token: &UserToken,
 ) -> Result<proto::DeploymentInternal, DeployError> {
     let result = InstanceDeployment::from_deployment_id(db, deployment_id).await?;
-    user_token.has_access_to_instance(&result.instance).await?;
+    user_token.has_access_to_instance(&result.instance)?;
     proto::DeploymentInternal::try_from(result)
 }
 
@@ -113,7 +126,7 @@ pub async fn get_current_deployment(
     user_token: &UserToken,
 ) -> Result<proto::DeploymentInternal, DeployError> {
     let result = InstanceDeployment::from_instance_id(db, instance_id).await?;
-    user_token.has_access_to_instance(&result.instance).await?;
+    user_token.has_access_to_instance(&result.instance)?;
     proto::DeploymentInternal::try_from(result)
 }
 
@@ -125,7 +138,7 @@ pub async fn list_deployments(
     let instance = Instance::find(db, instance_id)
         .await?
         .ok_or(DeployError::InstanceNotFound(instance_id.to_string()))?;
-    user_token.has_access_to_instance(&instance).await?;
+    user_token.has_access_to_instance(&instance)?;
     let deployments = InstanceDeployment::find_all_for_instance(db, &instance).await?;
     deployments
         .into_iter()

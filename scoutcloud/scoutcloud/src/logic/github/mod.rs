@@ -6,7 +6,6 @@ mod workflows;
 pub use mock::*;
 pub use workflows::*;
 
-use std::sync::Arc;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -24,7 +23,6 @@ pub struct GithubClient {
     owner: String,
     repo: String,
     default_branch_name: String,
-    mutex: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl GithubClient {
@@ -45,7 +43,6 @@ impl GithubClient {
             owner,
             repo,
             default_branch_name: default_branch_name.unwrap_or("main".to_string()),
-            mutex: Arc::new(tokio::sync::Mutex::new(())),
         })
     }
 

@@ -26,7 +26,7 @@ impl Instance {
         Instance { model }
     }
 
-    pub async fn find<C>(db: &C, id: &str) -> Result<Option<Self>, DeployError>
+    pub async fn find<C>(db: &C, id: &str) -> Result<Option<Self>, DbErr>
     where
         C: ConnectionTrait,
     {
@@ -38,7 +38,7 @@ impl Instance {
         Ok(this)
     }
 
-    pub async fn find_all<C>(db: &C, creator_token_id: i32) -> Result<Vec<Self>, DeployError>
+    pub async fn find_all<C>(db: &C, creator_token_id: i32) -> Result<Vec<Self>, DbErr>
     where
         C: ConnectionTrait,
     {
@@ -51,6 +51,17 @@ impl Instance {
             .map(|model| Instance { model })
             .collect();
         Ok(instances)
+    }
+
+    pub async fn count<C>(db: &C, creator: &UserToken) -> Result<u64, DbErr>
+    where
+        C: ConnectionTrait,
+    {
+        let count = Self::default_select()
+            .filter(db::instances::Column::CreatorTokenId.eq(creator.token.id))
+            .count(db)
+            .await?;
+        Ok(count)
     }
 
     pub async fn try_create<C>(
@@ -206,7 +217,7 @@ impl Instance {
         github: &GithubClient,
     ) -> Result<octocrab::models::workflows::Run, DeployError> {
         let instance_run = DeployWorkflow::instance(self.model.slug.clone())
-            .run_and_get_latest(github, MAX_TRY_GITHUB)
+            .run_and_get_latest_with_mutex(github, MAX_TRY_GITHUB)
             .await?
             .ok_or(DeployError::Internal(anyhow::anyhow!(
                 "no instance workflow found after running"
@@ -218,7 +229,7 @@ impl Instance {
             "triggered github deploy workflow for app=instance"
         );
         let postgres_run = DeployWorkflow::postgres(self.model.slug.clone())
-            .run_and_get_latest(github, MAX_TRY_GITHUB)
+            .run_and_get_latest_with_mutex(github, MAX_TRY_GITHUB)
             .await?
             .ok_or(DeployError::Internal(anyhow::anyhow!(
                 "no postgres workflow found after running"

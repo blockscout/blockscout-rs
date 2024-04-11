@@ -13,7 +13,6 @@ impl GithubClient {
         content: &str,
         commit_message: &str,
     ) -> Result<(), GithubError> {
-        let _lock = self.mutex.lock().await;
         let latest_commit = self
             .get_latest_commit()
             .await
@@ -54,7 +53,6 @@ impl GithubClient {
         _ref: impl Into<String>,
         inputs: P,
     ) -> Result<(), GithubError> {
-        let _lock = self.mutex.lock().await;
         let workflow_dispatch = types::WorkflowDispatchRequest {
             _ref: _ref.into(),
             inputs,

@@ -23,7 +23,7 @@ async fn main() -> Result<(), anyhow::Error> {
         app: AppVariant::Instance,
         client: "sevenzing-test-2".to_string(),
     }
-    .run_and_get_latest(&client, 5)
+    .run_and_get_latest_with_mutex(&client, 5)
     .await?
     .unwrap();
     println!("{}: {} - {}", r.id, r.name, r.status);

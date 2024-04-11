@@ -1,7 +1,12 @@
 use super::{GithubClient, GithubError};
 use chrono::Utc;
+use lazy_static::lazy_static;
 use octocrab::models::workflows::Run;
 use serde::{Deserialize, Serialize};
+
+lazy_static! {
+    static ref GITHUB_WORKFLOW_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::new(());
+}
 
 #[async_trait::async_trait]
 pub trait Workflow: Serialize + Send + Sync {
@@ -21,11 +26,14 @@ pub trait Workflow: Serialize + Send + Sync {
             .await
     }
 
-    async fn run_and_get_latest(
+    async fn run_and_get_latest_with_mutex(
         &self,
         client: &GithubClient,
         max_try: u8,
     ) -> Result<Option<Run>, GithubError> {
+        // since we want to start workflow and get the latest run,
+        // we need to lock the mutex to prevent getting wrong run
+        let _lock = GITHUB_WORKFLOW_MUTEX.lock().await;
         let now = chrono::Utc::now();
         self.run(client).await?;
         for _ in 0..max_try {
@@ -116,7 +124,7 @@ mod tests {
             app: AppVariant::Instance,
         };
         let run = deploy
-            .run_and_get_latest(&client, 5)
+            .run_and_get_latest_with_mutex(&client, 5)
             .await
             .expect("run and get workflow")
             .expect("no workflows returned");

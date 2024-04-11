@@ -8,6 +8,7 @@ use thiserror::Error;
 use tonic::codegen::http::HeaderMap;
 
 const AUTH_TOKEN_NAME: &str = "x-api-key";
+const MAX_INSTANCES_PER_USER: u64 = 20;
 
 #[derive(Error, Debug)]
 pub enum AuthError {
@@ -17,8 +18,8 @@ pub enum AuthError {
     TokenNotFound,
     #[error("requested resource not found")]
     NotFound,
-    #[error("unauthorized")]
-    Unauthorized,
+    #[error("unauthorized: {0}")]
+    Unauthorized(String),
     #[error("insufficient balance")]
     InsufficientBalance,
     #[error("internal error: {0}")]
@@ -69,12 +70,31 @@ impl UserToken {
         Ok(Self { user, token })
     }
 
-    pub async fn has_access_to_instance(&self, instance: &Instance) -> Result<(), AuthError> {
+    pub fn has_access_to_instance(&self, instance: &Instance) -> Result<(), AuthError> {
         if self.user.is_superuser || instance.model.creator_token_id == self.token.id {
             Ok(())
         } else {
-            Err(AuthError::Unauthorized)
+            Err(AuthError::Unauthorized("no to the instance".to_string()))
         }
+    }
+
+    pub async fn allowed_to_create_instance<C>(&self, db: &C) -> Result<(), AuthError>
+    where
+        C: ConnectionTrait,
+    {
+        if self.user.is_superuser {
+            return Ok(());
+        }
+        if self.user.balance.is_sign_negative() {
+            return Err(AuthError::InsufficientBalance);
+        }
+        if Instance::count(db, self).await? >= MAX_INSTANCES_PER_USER {
+            return Err(AuthError::Unauthorized(
+                "max instances per user reached".to_string(),
+            ));
+        }
+
+        Ok(())
     }
 
     pub async fn allowed_to_deploy_for_hours(

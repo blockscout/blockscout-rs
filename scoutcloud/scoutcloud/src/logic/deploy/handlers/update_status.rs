@@ -1,8 +1,10 @@
 use crate::{
     logic::{
-        deploy::{deployment::map_deployment_status, instance::InstanceDeployment},
+        deploy::{
+            deployment::map_deployment_status, handlers::user_actions, instance::InstanceDeployment,
+        },
         users::UserToken,
-        DeployError, Deployment, GithubClient,
+        DeployError, Deployment, GithubClient, Instance,
     },
     server::proto,
 };
@@ -19,11 +21,9 @@ pub async fn update_instance_status(
     user_token: &UserToken,
 ) -> Result<proto::UpdateInstanceStatusResponseInternal, DeployError> {
     let tx = db.begin().await.map_err(|e| anyhow::anyhow!(e))?;
-    let instance = InstanceDeployment::from_instance_id(db, instance_id).await?;
-    user_token
-        .has_access_to_instance(&instance.instance)
-        .await?;
-    let result = handle_instance_action(db, github, instance, action, user_token).await?;
+    let instance = InstanceDeployment::from_instance_id(&tx, instance_id).await?;
+    user_token.has_access_to_instance(&instance.instance)?;
+    let result = handle_instance_action(&tx, github, instance, action, user_token).await?;
     tx.commit().await.map_err(|e| anyhow::anyhow!(e))?;
     Ok(result)
 }
@@ -60,7 +60,7 @@ where
 
     let deployment = match action {
         proto::UpdateInstanceAction::Start => {
-            start_instance(db, github, instance, user_token).await?
+            start_instance(db, github, &instance.instance, user_token).await?
         }
         proto::UpdateInstanceAction::Finish => {
             todo!("finish instance")
@@ -79,18 +79,19 @@ where
 async fn start_instance<C>(
     db: &C,
     github: &GithubClient,
-    instance: InstanceDeployment,
+    instance: &Instance,
     user_token: &UserToken,
 ) -> Result<Deployment, DeployError>
 where
     C: ConnectionTrait,
 {
-    let spec = instance.instance.find_server_spec(db).await?;
+    let spec = instance.find_server_spec(db).await?;
     user_token
         .allowed_to_deploy_for_hours(MIN_HOURS_DEPLOY, &spec)
         .await?;
+    let run = instance.deploy_via_github(github).await?;
     let deployment =
-        Deployment::try_create(db, &instance.instance, Some(DeploymentStatusType::Pending)).await?;
-    let _run = instance.instance.deploy_via_github(github).await?;
+        Deployment::try_create(db, instance, Some(DeploymentStatusType::Pending)).await?;
+    user_actions::log_start_instance(db, user_token, instance, &deployment, &run).await?;
     Ok(deployment)
 }
