@@ -1,4 +1,4 @@
-use super::ConversionError;
+use super::{address_from_str_logic, checksummed, ConversionError};
 use crate::conversion::order_direction_from_inner;
 use bens_logic::{
     entity::subgraph::domain::Domain,
@@ -9,7 +9,7 @@ use bens_logic::{
 };
 use bens_proto::blockscout::bens::v1 as proto;
 use ethers::types::Address;
-use std::str::FromStr;
+use std::{collections::BTreeMap, str::FromStr};
 
 const DEFAULT_PAGE_SIZE: u32 = 50;
 
@@ -87,26 +87,43 @@ pub fn batch_resolve_from_inner(
     })
 }
 
+pub fn batch_resolve_from_logic(
+    output: BTreeMap<String, String>,
+    chain_id: i64,
+) -> Result<proto::BatchResolveAddressNamesResponse, ConversionError> {
+    let names = output
+        .into_iter()
+        .map(|(address, name)| {
+            let address = address_from_str_logic(&address, chain_id)?.hash;
+            Ok((address, name))
+        })
+        .collect::<Result<_, _>>()?;
+    Ok(proto::BatchResolveAddressNamesResponse { names })
+}
+
 pub fn detailed_domain_from_logic(
     output: GetDomainOutput,
+    chain_id: i64,
 ) -> Result<proto::DetailedDomain, ConversionError> {
     let domain = output.domain;
-    let owner = Some(proto::Address { hash: domain.owner });
+    let owner = Some(address_from_str_logic(&domain.owner, chain_id)?);
     let resolved_address = domain
         .resolved_address
-        .map(|resolved_address| proto::Address {
-            hash: resolved_address,
-        });
-    let wrapped_owner = domain.wrapped_owner.map(|wrapped_owner| proto::Address {
-        hash: wrapped_owner,
-    });
+        .map(|resolved_address| address_from_str_logic(&resolved_address, chain_id))
+        .transpose()?;
+
+    let wrapped_owner = domain
+        .wrapped_owner
+        .map(|wrapped_owner| address_from_str_logic(&wrapped_owner, chain_id))
+        .transpose()?;
     let registrant = domain
         .registrant
-        .map(|registrant| proto::Address { hash: registrant });
+        .map(|registrant| address_from_str_logic(&registrant, chain_id))
+        .transpose()?;
     let tokens = output
         .tokens
         .into_iter()
-        .map(domain_token_from_logic)
+        .map(|t| domain_token_from_logic(t, chain_id))
         .collect();
     Ok(proto::DetailedDomain {
         id: domain.id,
@@ -122,14 +139,16 @@ pub fn detailed_domain_from_logic(
     })
 }
 
-pub fn domain_from_logic(d: Domain) -> Result<proto::Domain, ConversionError> {
-    let owner = Some(proto::Address { hash: d.owner });
-    let resolved_address = d.resolved_address.map(|resolved_address| proto::Address {
-        hash: resolved_address,
-    });
-    let wrapped_owner = d.wrapped_owner.map(|wrapped_owner| proto::Address {
-        hash: wrapped_owner,
-    });
+pub fn domain_from_logic(d: Domain, chain_id: i64) -> Result<proto::Domain, ConversionError> {
+    let owner = Some(address_from_str_logic(&d.owner, chain_id)?);
+    let resolved_address = d
+        .resolved_address
+        .map(|resolved_address| address_from_str_logic(&resolved_address, chain_id))
+        .transpose()?;
+    let wrapped_owner = d
+        .wrapped_owner
+        .map(|wrapped_owner| address_from_str_logic(&wrapped_owner, chain_id))
+        .transpose()?;
     Ok(proto::Domain {
         id: d.id,
         name: d.name.unwrap_or_default(),
@@ -174,10 +193,10 @@ fn date_from_logic(d: chrono::DateTime<chrono::Utc>) -> String {
     d.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
 }
 
-fn domain_token_from_logic(t: DomainToken) -> proto::Token {
+fn domain_token_from_logic(t: DomainToken, chain_id: i64) -> proto::Token {
     proto::Token {
         id: t.id,
-        contract_hash: format!("{:#x}", t.contract),
+        contract_hash: checksummed(&t.contract, chain_id),
         r#type: domain_token_type_from_logic(t._type).into(),
     }
 }
