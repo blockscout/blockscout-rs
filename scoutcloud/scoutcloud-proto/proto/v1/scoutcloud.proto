@@ -82,11 +82,12 @@ enum DeploymentStatus {
   //option (convert_options.derive) = { name: "serde::Serialize" };
 
   NO_STATUS = 0;
-  PENDING = 1;
-  RUNNING = 2;
-  STOPPING = 3;
-  STOPPED = 4;
-  FAILED = 5;
+  CREATED = 1;
+  PENDING = 2;
+  RUNNING = 3;
+  STOPPING = 4;
+  STOPPED = 5;
+  FAILED = 6;
 }
 
 enum UpdateInstanceAction {

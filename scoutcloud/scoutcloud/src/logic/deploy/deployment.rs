@@ -5,7 +5,7 @@ use crate::{
 };
 use db::sea_orm_active_enums::DeploymentStatusType;
 use scoutcloud_entity as db;
-use sea_orm::{prelude::*, ActiveValue::Set, ConnectionTrait, IntoActiveModel, QueryOrder};
+use sea_orm::{prelude::*, ActiveValue::Set, ConnectionTrait, IntoActiveModel, NotSet, QueryOrder};
 
 pub struct Deployment {
     pub model: db::deployments::Model,
@@ -30,7 +30,7 @@ impl Deployment {
             user_config: Set(instance.model.user_config.clone()),
             parsed_config: Set(instance.model.parsed_config.clone()),
             server_spec_id: Set(instance.find_server_spec(db).await?.id),
-            status: Set(maybe_status.unwrap_or(DeploymentStatusType::Pending)),
+            status: maybe_status.map(Set).unwrap_or(NotSet),
             ..Default::default()
         }
         .insert(db)
@@ -98,6 +98,7 @@ impl Deployment {
 pub fn map_deployment_status(status: Option<&DeploymentStatusType>) -> proto::DeploymentStatus {
     match status {
         None => proto::DeploymentStatus::NoStatus,
+        Some(DeploymentStatusType::Created) => proto::DeploymentStatus::Created,
         Some(DeploymentStatusType::Pending) => proto::DeploymentStatus::Pending,
         Some(DeploymentStatusType::Running) => proto::DeploymentStatus::Running,
         Some(DeploymentStatusType::Failed) => proto::DeploymentStatus::Failed,

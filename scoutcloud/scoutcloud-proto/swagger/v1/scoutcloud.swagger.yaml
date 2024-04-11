@@ -344,6 +344,7 @@ definitions:
     type: string
     enum:
       - NO_STATUS
+      - CREATED
       - PENDING
       - RUNNING
       - STOPPING

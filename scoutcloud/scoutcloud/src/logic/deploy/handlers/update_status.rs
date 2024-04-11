@@ -91,7 +91,7 @@ where
         .await?;
     let run = instance.deploy_via_github(github).await?;
     let deployment =
-        Deployment::try_create(db, instance, Some(DeploymentStatusType::Pending)).await?;
+        Deployment::try_create(db, instance, Some(DeploymentStatusType::Created)).await?;
     user_actions::log_start_instance(db, user_token, instance, &deployment, &run).await?;
     Ok(deployment)
 }

@@ -1,4 +1,5 @@
 CREATE TYPE "deployment_status_type" AS ENUM (
+  'created',
   'pending',
   'running',
   'stopping',
@@ -58,7 +59,7 @@ CREATE TABLE "deployments" (
   "parsed_config" jsonb NOT NULL DEFAULT '{}',
   "created_at" timestamp NOT NULL DEFAULT (CURRENT_TIMESTAMP),
   "finished_at" timestamp,
-  "status" deployment_status_type NOT NULL DEFAULT 'pending',
+  "status" deployment_status_type NOT NULL DEFAULT 'created',
   "error" varchar,
   "total_cost" numeric NOT NULL DEFAULT 0,
   CONSTRAINT "fk_instance_id" FOREIGN KEY ("instance_id") REFERENCES "instances" ("id"),
