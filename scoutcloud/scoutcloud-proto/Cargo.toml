@@ -15,7 +15,7 @@ tonic = "0.8"
 url = { version = "2", features = ["serde"] }
 
 [build-dependencies]
-actix-prost-build = { git = "https://github.com/blockscout/actix-prost", branch = "lok52/derive-option", features = [
+actix-prost-build = { git = "https://github.com/blockscout/actix-prost", branch = "main", features = [
     "conversions",
 ] }
 prost-build = "0.11"

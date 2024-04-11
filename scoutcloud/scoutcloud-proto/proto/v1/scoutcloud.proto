@@ -79,8 +79,6 @@ message UpdateConfigPartialRequest {
 }
 
 enum DeploymentStatus {
-  //option (convert_options.derive) = { name: "serde::Serialize" };
-
   NO_STATUS = 0;
   CREATED = 1;
   PENDING = 2;
@@ -91,8 +89,6 @@ enum DeploymentStatus {
 }
 
 enum UpdateInstanceAction {
-  //option (convert_options.derive) = { name: "serde::Serialize" };
-
   START = 0;
   FINISH = 1;
   RESTART = 2;

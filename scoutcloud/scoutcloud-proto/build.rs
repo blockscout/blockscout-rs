@@ -25,8 +25,6 @@ fn compile(
         .bytes(["."])
         .btree_map(["."])
         .type_attribute(".", "#[actix_prost_macros::serde(rename_all=\"snake_case\")]")
-        //.type_attribute(".blockscout.scoutcloud.v1.DeploymentStatus", "#[derive(serde::Serialize)]")
-        //.type_attribute(".blockscout.scoutcloud.v1.UpdateInstanceAction", "#[derive(serde::Serialize)]")
         // .field_attribute(
         //     ".blockscout.scoutcloud.v1.<MessageName>.<DefaultFieldName>",
         //     "#[serde(default)]"
