@@ -75,7 +75,7 @@ impl crate::Chart for NewBlocks {
 mod tests {
     use super::*;
     use crate::{
-        charts::db_interaction::updater::get_min_block_blockscout,
+        charts::db_interaction::{read::ExtendedDateValue, updater::get_min_block_blockscout},
         get_chart_data,
         tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
         Chart,
@@ -124,17 +124,20 @@ mod tests {
             .await
             .unwrap();
         let expected = vec![
-            DateValue {
+            ExtendedDateValue {
                 date: NaiveDate::from_str("2022-11-10").unwrap(),
                 value: "3".into(),
+                is_approximate: false,
             },
-            DateValue {
+            ExtendedDateValue {
                 date: NaiveDate::from_str("2022-11-11").unwrap(),
                 value: "4".into(),
+                is_approximate: false,
             },
-            DateValue {
+            ExtendedDateValue {
                 date: NaiveDate::from_str("2022-11-12").unwrap(),
                 value: "1".into(),
+                is_approximate: true,
             },
         ];
         assert_eq!(expected, data);
@@ -145,21 +148,25 @@ mod tests {
             .await
             .unwrap();
         let expected = vec![
-            DateValue {
+            ExtendedDateValue {
                 date: NaiveDate::from_str("2022-11-09").unwrap(),
                 value: "1".into(),
+                is_approximate: false,
             },
-            DateValue {
+            ExtendedDateValue {
                 date: NaiveDate::from_str("2022-11-10").unwrap(),
                 value: "3".into(),
+                is_approximate: false,
             },
-            DateValue {
+            ExtendedDateValue {
                 date: NaiveDate::from_str("2022-11-11").unwrap(),
                 value: "4".into(),
+                is_approximate: false,
             },
-            DateValue {
+            ExtendedDateValue {
                 date: NaiveDate::from_str("2022-11-12").unwrap(),
                 value: "1".into(),
+                is_approximate: true,
             },
         ];
         assert_eq!(expected, data);
@@ -180,21 +187,25 @@ mod tests {
             .await
             .unwrap();
         let expected = vec![
-            DateValue {
+            ExtendedDateValue {
                 date: NaiveDate::from_str("2022-11-09").unwrap(),
                 value: "1".into(),
+                is_approximate: false,
             },
-            DateValue {
+            ExtendedDateValue {
                 date: NaiveDate::from_str("2022-11-10").unwrap(),
                 value: "3".into(),
+                is_approximate: false,
             },
-            DateValue {
+            ExtendedDateValue {
                 date: NaiveDate::from_str("2022-11-11").unwrap(),
                 value: "4".into(),
+                is_approximate: false,
             },
-            DateValue {
+            ExtendedDateValue {
                 date: NaiveDate::from_str("2022-11-12").unwrap(),
                 value: "1".into(),
+                is_approximate: true,
             },
         ];
         assert_eq!(expected, data);
@@ -252,21 +263,25 @@ mod tests {
             .await
             .unwrap();
         let expected = vec![
-            DateValue {
+            ExtendedDateValue {
                 date: NaiveDate::from_str("2022-11-09").unwrap(),
                 value: "2".into(),
+                is_approximate: false,
             },
-            DateValue {
+            ExtendedDateValue {
                 date: NaiveDate::from_str("2022-11-10").unwrap(),
                 value: "4".into(),
+                is_approximate: false,
             },
-            DateValue {
+            ExtendedDateValue {
                 date: NaiveDate::from_str("2022-11-11").unwrap(),
                 value: "5".into(),
+                is_approximate: false,
             },
-            DateValue {
+            ExtendedDateValue {
                 date: NaiveDate::from_str("2022-11-12").unwrap(),
                 value: "1".into(),
+                is_approximate: true,
             },
         ];
         assert_eq!(expected, data);

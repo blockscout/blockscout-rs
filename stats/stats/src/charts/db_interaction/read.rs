@@ -59,6 +59,7 @@ pub async fn get_counters(
     Ok(counters)
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ExtendedDateValue {
     pub date: NaiveDate,
     pub value: String,
@@ -221,17 +222,20 @@ mod tests {
             .unwrap();
         assert_eq!(
             vec![
-                DateValue {
+                ExtendedDateValue {
                     date: NaiveDate::from_str("2022-11-10").unwrap(),
                     value: "100".into(),
+                    is_approximate: false,
                 },
-                DateValue {
+                ExtendedDateValue {
                     date: NaiveDate::from_str("2022-11-11").unwrap(),
                     value: "150".into(),
+                    is_approximate: false,
                 },
-                DateValue {
+                ExtendedDateValue {
                     date: NaiveDate::from_str("2022-11-12").unwrap(),
                     value: "200".into(),
+                    is_approximate: true,
                 },
             ],
             chart
