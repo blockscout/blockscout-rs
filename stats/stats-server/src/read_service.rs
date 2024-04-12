@@ -90,17 +90,9 @@ impl StatsService for ReadService {
             .and_then(|date| NaiveDate::from_str(&date).ok());
         let to = request.to.and_then(|date| NaiveDate::from_str(&date).ok());
         let policy = Some(chart_info.chart.missing_date_policy());
-        let mut data = stats::get_chart_data(&self.db, &request.name, from, to, policy)
+        let data = stats::get_chart_data(&self.db, &request.name, from, to, policy)
             .await
             .map_err(map_read_error)?;
-
-        // remove last data point, because it can be partially updated
-
-        if let Some(last) = data.last() {
-            if last.is_partial() {
-                data.pop();
-            }
-        }
 
         let serialized_chart = serialize_line_points(data);
         Ok(Response::new(LineChart {

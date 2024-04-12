@@ -12,4 +12,4 @@ pub use migration;
 pub use charts::{
     cache, counters, db_interaction::types::DateValue, lines, Chart, MissingDatePolicy, UpdateError,
 };
-pub use read::{get_chart_data, get_counters, ReadError};
+pub use read::{get_chart_data, get_counters, ExtendedDateValue, ReadError};

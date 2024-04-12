@@ -16,7 +16,8 @@ pub use dependent::{last_point, parse_and_cumsum, parse_and_sum, ChartDependentU
 pub use full::ChartFullUpdater;
 pub use partial::ChartPartialUpdater;
 
-use crate::{Chart, DateValue, UpdateError};
+use super::types::DateValue;
+use crate::{Chart, UpdateError};
 
 #[derive(FromQueryResult)]
 struct MinBlock {

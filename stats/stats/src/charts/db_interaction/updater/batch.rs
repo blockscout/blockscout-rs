@@ -7,8 +7,11 @@
 
 use super::{get_last_row, get_min_block_blockscout, get_min_date_blockscout};
 use crate::{
-    charts::{db_interaction::insert::insert_data_many, find_chart},
-    metrics, Chart, DateValue, UpdateError,
+    charts::{
+        db_interaction::{insert::insert_data_many, types::DateValue},
+        find_chart,
+    },
+    metrics, Chart, UpdateError,
 };
 use async_trait::async_trait;
 use chrono::{Duration, NaiveDate, Utc};

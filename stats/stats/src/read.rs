@@ -59,13 +59,48 @@ pub async fn get_counters(
     Ok(counters)
 }
 
+pub struct ExtendedDateValue {
+    pub date: NaiveDate,
+    pub value: String,
+    pub is_approximate: bool,
+}
+
+impl ExtendedDateValue {
+    fn from_date_value(dv: DateValue, is_approximate: bool) -> Self {
+        Self {
+            date: dv.date,
+            value: dv.value,
+            is_approximate,
+        }
+    }
+}
+
+impl From<ExtendedDateValue> for DateValue {
+    fn from(dv: ExtendedDateValue) -> Self {
+        DateValue {
+            date: dv.date,
+            value: dv.value,
+        }
+    }
+}
+
+fn mark_approximate_data(data: Vec<DateValue>) -> Vec<ExtendedDateValue> {
+    let today = chrono::Utc::now().date_naive();
+    data.into_iter()
+        .map(|dv| {
+            let is_approximate = dv.date >= today;
+            ExtendedDateValue::from_date_value(dv, is_approximate)
+        })
+        .collect()
+}
+
 pub async fn get_chart_data(
     db: &DatabaseConnection,
     name: &str,
     from: Option<NaiveDate>,
     to: Option<NaiveDate>,
     policy: Option<MissingDatePolicy>,
-) -> Result<Vec<DateValue>, ReadError> {
+) -> Result<Vec<ExtendedDateValue>, ReadError> {
     let chart = charts::Entity::find()
         .column(charts::Column::Id)
         .filter(charts::Column::Name.eq(name))
@@ -77,6 +112,7 @@ pub async fn get_chart_data(
         Some(policy) => get_and_fill_chart(db, chart.id, from, to, policy).await?,
         None => get_chart(db, chart.id, from, to).await?,
     };
+    let data = mark_approximate_data(data);
     Ok(data)
 }
 
