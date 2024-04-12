@@ -2,8 +2,10 @@ use super::NativeCoinHoldersGrowth;
 use crate::{
     charts::{
         create_chart,
-        insert::{DateValue, DateValueInt},
-        updater::ChartDependentUpdater,
+        db_interaction::{
+            insert::{DateValue, DateValueInt},
+            updater::ChartDependentUpdater,
+        },
         Chart,
     },
     UpdateError,

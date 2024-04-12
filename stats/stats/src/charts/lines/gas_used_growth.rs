@@ -1,7 +1,7 @@
 use crate::{
     charts::{
-        insert::{DateValue, DateValueDecimal},
-        updater::ChartPartialUpdater,
+        db_interaction::insert::{DateValue, DateValueDecimal},
+        db_interaction::updater::ChartPartialUpdater,
     },
     MissingDatePolicy, UpdateError,
 };

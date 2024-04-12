@@ -2,8 +2,10 @@ use super::NewAccounts;
 use crate::{
     charts::{
         cache::Cache,
-        insert::{DateValue, DateValueInt},
-        updater::ChartFullUpdater,
+        db_interaction::{
+            insert::{DateValue, DateValueInt},
+            updater::ChartFullUpdater,
+        },
     },
     MissingDatePolicy, UpdateError,
 };

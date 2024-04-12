@@ -1,5 +1,5 @@
 use crate::{
-    charts::{
+    charts::db_interaction::{
         insert::{DateValue, DateValueDouble},
         updater::ChartFullUpdater,
     },

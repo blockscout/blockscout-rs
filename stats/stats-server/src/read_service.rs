@@ -94,14 +94,14 @@ impl StatsService for ReadService {
             .await
             .map_err(map_read_error)?;
 
-        if chart_info.chart.drop_last_point() {
-            // remove last data point, because it can be partially updated
-            if let Some(last) = data.last() {
-                if last.is_partial() {
-                    data.pop();
-                }
+        // remove last data point, because it can be partially updated
+
+        if let Some(last) = data.last() {
+            if last.is_partial() {
+                data.pop();
             }
         }
+
         let serialized_chart = serialize_line_points(data);
         Ok(Response::new(LineChart {
             chart: serialized_chart,

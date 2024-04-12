@@ -4,8 +4,8 @@
 use super::get_min_block_blockscout;
 use crate::{
     charts::{
+        db_interaction::insert::{insert_data_many, DateValue},
         find_chart,
-        insert::{insert_data_many, DateValue},
     },
     get_chart_data, Chart, UpdateError,
 };

@@ -7,7 +7,7 @@
 
 use super::{get_last_row, get_min_block_blockscout, get_min_date_blockscout};
 use crate::{
-    charts::{find_chart, insert::insert_data_many},
+    charts::{db_interaction::insert::insert_data_many, find_chart},
     metrics, Chart, DateValue, UpdateError,
 };
 use async_trait::async_trait;

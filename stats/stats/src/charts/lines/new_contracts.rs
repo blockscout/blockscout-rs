@@ -1,4 +1,4 @@
-use crate::{charts::updater::ChartBatchUpdater, UpdateError};
+use crate::{charts::db_interaction::updater::ChartBatchUpdater, UpdateError};
 use async_trait::async_trait;
 use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;

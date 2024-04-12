@@ -1,4 +1,6 @@
-use crate::{charts::insert::DateValue, missing_date::get_and_fill_chart, MissingDatePolicy};
+use crate::{
+    charts::db_interaction::insert::DateValue, missing_date::get_and_fill_chart, MissingDatePolicy,
+};
 use chrono::NaiveDate;
 use entity::{chart_data, charts};
 use sea_orm::{

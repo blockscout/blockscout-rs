@@ -1,8 +1,10 @@
 use crate::{
     charts::{
         create_chart,
-        insert::DateValue,
-        updater::{parse_and_sum, ChartDependentUpdater},
+        db_interaction::{
+            insert::DateValue,
+            updater::{parse_and_sum, ChartDependentUpdater},
+        },
     },
     lines::NewNativeCoinTransfers,
     Chart, UpdateError,

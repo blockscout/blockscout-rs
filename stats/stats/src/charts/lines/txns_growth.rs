@@ -3,8 +3,10 @@ use crate::{
     charts::{
         chart::Chart,
         create_chart,
-        insert::DateValue,
-        updater::{parse_and_cumsum, ChartDependentUpdater},
+        db_interaction::{
+            insert::DateValue,
+            updater::{parse_and_cumsum, ChartDependentUpdater},
+        },
     },
     MissingDatePolicy, UpdateError,
 };

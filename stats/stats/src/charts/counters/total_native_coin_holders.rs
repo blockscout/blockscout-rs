@@ -1,8 +1,10 @@
 use crate::{
     charts::{
         create_chart,
-        insert::DateValue,
-        updater::{last_point, ChartDependentUpdater},
+        db_interaction::{
+            insert::DateValue,
+            updater::{last_point, ChartDependentUpdater},
+        },
     },
     lines::NativeCoinHoldersGrowth,
     UpdateError,

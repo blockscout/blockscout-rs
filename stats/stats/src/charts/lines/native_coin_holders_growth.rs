@@ -1,8 +1,11 @@
 use crate::{
     charts::{
-        create_chart, find_chart,
-        insert::{insert_data_many, DateValue},
-        updater::{get_last_row, get_min_block_blockscout},
+        create_chart,
+        db_interaction::{
+            insert::{insert_data_many, DateValue},
+            updater::{get_last_row, get_min_block_blockscout},
+        },
+        find_chart,
     },
     Chart, MissingDatePolicy, UpdateError,
 };
