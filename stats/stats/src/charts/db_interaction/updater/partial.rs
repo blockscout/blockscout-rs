@@ -5,7 +5,7 @@
 use super::{get_last_row, get_min_block_blockscout};
 use crate::{
     charts::{
-        db_interaction::insert::{insert_data_many, DateValue},
+        db_interaction::{insert::insert_data_many, types::DateValue},
         find_chart,
     },
     metrics, Chart, UpdateError,

@@ -2,7 +2,7 @@
 
 use crate::{
     charts::{
-        db_interaction::insert::{insert_data_many, DateValue},
+        db_interaction::{insert::insert_data_many, types::DateValue},
         find_chart,
     },
     metrics, Chart, UpdateError,

@@ -2,7 +2,7 @@ use crate::{
     charts::{
         create_chart,
         db_interaction::{
-            insert::DateValue,
+            types::DateValue,
             updater::{parse_and_sum, ChartDependentUpdater},
         },
     },

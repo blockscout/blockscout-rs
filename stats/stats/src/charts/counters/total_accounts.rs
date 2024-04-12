@@ -2,7 +2,7 @@ use crate::{
     charts::{
         cache::Cache,
         db_interaction::{
-            insert::{DateValue, DateValueInt},
+            types::{DateValue, DateValueInt},
             updater::ChartFullUpdater,
         },
     },

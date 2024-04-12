@@ -4,7 +4,7 @@ use crate::{
         chart::Chart,
         create_chart,
         db_interaction::{
-            insert::DateValue,
+            types::DateValue,
             updater::{parse_and_cumsum, ChartDependentUpdater},
         },
     },

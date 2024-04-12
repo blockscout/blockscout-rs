@@ -2,7 +2,8 @@ use crate::{
     charts::{
         create_chart,
         db_interaction::{
-            insert::{insert_data_many, DateValue},
+            insert::insert_data_many,
+            types::DateValue,
             updater::{get_last_row, get_min_block_blockscout},
         },
         find_chart,
