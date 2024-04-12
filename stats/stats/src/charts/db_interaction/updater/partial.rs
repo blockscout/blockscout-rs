@@ -34,8 +34,7 @@ pub trait ChartPartialUpdater: Chart {
         let min_blockscout_block = get_min_block_blockscout(blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?;
-        // set offset to 1 because actual last row can be partially calculated
-        let offset = Some(1);
+        let offset = Some(self.approximate_trailing_values_count());
         let last_row =
             get_last_row(self, chart_id, min_blockscout_block, db, force_full, offset).await?;
         let values = {

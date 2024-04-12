@@ -20,6 +20,8 @@ where
 {
     fn parent(&self) -> Arc<P>;
 
+    //todo: decide what to do with `approximate_trailing_values_count`
+
     async fn get_values(&self, parent_data: Vec<DateValue>) -> Result<Vec<DateValue>, UpdateError>;
 
     async fn get_parent_data(

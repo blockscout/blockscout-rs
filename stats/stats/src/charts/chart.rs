@@ -42,6 +42,31 @@ pub trait Chart: Sync {
     fn relevant_or_zero(&self) -> bool {
         false
     }
+    /// Number of last values that are considered approximate.
+    /// (ordered by time)
+    ///
+    /// E.g. how many end values should be recalculated on (kinda)
+    /// lazy update (where `get_last_row` is retrieved successfully).
+    /// Also controls marking points as approximate when returning data.
+    ///
+    /// ## Value
+    ///
+    /// Usually set to 1 for line charts. Currently they have resolution of
+    /// 1 day. Also, data for portion of the (last) day has to be recalculated
+    /// on the next day.
+    ///
+    /// I.e. for number of blocks per day, stats for current day (0) are
+    /// not complete because blocks will be produced till the end of the day.
+    ///    |===|=  |
+    /// day -1   0
+    fn approximate_trailing_values_count(&self) -> u64 {
+        if self.chart_type() == ChartType::Counter {
+            // there's only one value in counter
+            0
+        } else {
+            1
+        }
+    }
 
     async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
         create_chart(db, self.name().into(), self.chart_type()).await

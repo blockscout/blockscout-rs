@@ -54,6 +54,10 @@ impl crate::Chart for NativeCoinHoldersGrowth {
     fn missing_date_policy(&self) -> MissingDatePolicy {
         MissingDatePolicy::FillPrevious
     }
+    fn approximate_trailing_values_count(&self) -> u64 {
+        // support table contains information of actual last day
+        0
+    }
 
     async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
         self.create_support_table(db).await?;
@@ -73,9 +77,7 @@ impl crate::Chart for NativeCoinHoldersGrowth {
         let min_blockscout_block = get_min_block_blockscout(blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?;
-        // settings offset to zero to get actual last row,
-        // because support table contains information of actual last day
-        let offset = Some(0);
+        let offset = Some(self.approximate_trailing_values_count());
         let last_row =
             get_last_row(self, chart_id, min_blockscout_block, db, force_full, offset).await?;
         self.update_sequentially_with_support_table(
