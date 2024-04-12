@@ -1,6 +1,5 @@
 mod charts;
 mod missing_date;
-mod read;
 
 pub mod metrics;
 #[cfg(feature = "test-utils")]
@@ -10,6 +9,10 @@ pub use entity;
 pub use migration;
 
 pub use charts::{
-    cache, counters, db_interaction::types::DateValue, lines, Chart, MissingDatePolicy, UpdateError,
+    cache, counters,
+    db_interaction::{
+        read::{get_chart_data, get_counters, ExtendedDateValue, ReadError},
+        types::DateValue,
+    },
+    lines, Chart, MissingDatePolicy, UpdateError,
 };
-pub use read::{get_chart_data, get_counters, ExtendedDateValue, ReadError};
