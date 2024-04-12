@@ -103,3 +103,29 @@ impl DateValue {
         self.date >= today
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ExtendedDateValue {
+    pub date: NaiveDate,
+    pub value: String,
+    pub is_approximate: bool,
+}
+
+impl ExtendedDateValue {
+    pub fn from_date_value(dv: DateValue, is_approximate: bool) -> Self {
+        Self {
+            date: dv.date,
+            value: dv.value,
+            is_approximate,
+        }
+    }
+}
+
+impl From<ExtendedDateValue> for DateValue {
+    fn from(dv: ExtendedDateValue) -> Self {
+        DateValue {
+            date: dv.date,
+            value: dv.value,
+        }
+    }
+}

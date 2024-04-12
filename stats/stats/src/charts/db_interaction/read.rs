@@ -1,6 +1,4 @@
-use crate::{
-    charts::db_interaction::types::DateValue, missing_date::get_and_fill_chart, MissingDatePolicy,
-};
+use crate::{missing_date::get_and_fill_chart, DateValue, ExtendedDateValue, MissingDatePolicy};
 use chrono::NaiveDate;
 use entity::{chart_data, charts};
 use sea_orm::{
@@ -57,32 +55,6 @@ pub async fn get_counters(
         .collect();
 
     Ok(counters)
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ExtendedDateValue {
-    pub date: NaiveDate,
-    pub value: String,
-    pub is_approximate: bool,
-}
-
-impl ExtendedDateValue {
-    fn from_date_value(dv: DateValue, is_approximate: bool) -> Self {
-        Self {
-            date: dv.date,
-            value: dv.value,
-            is_approximate,
-        }
-    }
-}
-
-impl From<ExtendedDateValue> for DateValue {
-    fn from(dv: ExtendedDateValue) -> Self {
-        DateValue {
-            date: dv.date,
-            value: dv.value,
-        }
-    }
 }
 
 fn mark_approximate_data(data: Vec<DateValue>) -> Vec<ExtendedDateValue> {
