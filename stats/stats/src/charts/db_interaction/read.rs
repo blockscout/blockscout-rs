@@ -57,13 +57,13 @@ pub async fn get_counters(
     Ok(counters)
 }
 
-fn mark_approximate_data(data: Vec<DateValue>) -> Vec<ExtendedDateValue> {
-    let today = chrono::Utc::now().date_naive();
+fn mark_approximate_data(data: Vec<DateValue>, mark_trailing_count: u64) -> Vec<ExtendedDateValue> {
+    let mark_from = data
+        .len()
+        .saturating_sub(mark_trailing_count.try_into().unwrap_or(usize::MAX));
     data.into_iter()
-        .map(|dv| {
-            let is_approximate = dv.date >= today;
-            ExtendedDateValue::from_date_value(dv, is_approximate)
-        })
+        .enumerate()
+        .map(|(i, dv)| ExtendedDateValue::from_date_value(dv, i >= mark_from))
         .collect()
 }
 
@@ -73,6 +73,7 @@ pub async fn get_chart_data(
     from: Option<NaiveDate>,
     to: Option<NaiveDate>,
     policy: Option<MissingDatePolicy>,
+    approximate_trailing_values: u64,
 ) -> Result<Vec<ExtendedDateValue>, ReadError> {
     let chart = charts::Entity::find()
         .column(charts::Column::Id)
@@ -85,7 +86,7 @@ pub async fn get_chart_data(
         Some(policy) => get_and_fill_chart(db, chart.id, from, to, policy).await?,
         None => get_chart(db, chart.id, from, to).await?,
     };
-    let data = mark_approximate_data(data);
+    let data = mark_approximate_data(data, approximate_trailing_values);
     Ok(data)
 }
 
@@ -189,7 +190,7 @@ mod tests {
 
         let db = init_db("get_chart_int_mock").await;
         insert_mock_data(&db).await;
-        let chart = get_chart_data(&db, "newBlocksPerDay", None, None, None)
+        let chart = get_chart_data(&db, "newBlocksPerDay", None, None, None, 1)
             .await
             .unwrap();
         assert_eq!(

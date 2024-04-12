@@ -20,7 +20,7 @@ where
 {
     fn parent(&self) -> Arc<P>;
 
-    //todo: decide what to do with `approximate_trailing_values_count`
+    //todo: decide what to do with `approximate_trailing_values`
 
     async fn get_values(&self, parent_data: Vec<DateValue>) -> Result<Vec<DateValue>, UpdateError>;
 
@@ -37,7 +37,16 @@ where
             "updating parent"
         );
         parent.update_with_mutex(db, blockscout, force_full).await?;
-        let data = get_chart_data(db, parent.name(), None, None, None).await?;
+        let data = get_chart_data(
+            db,
+            parent.name(),
+            None,
+            None,
+            None,
+            //todo: decide what to do with `approximate_trailing_values`
+            self.approximate_trailing_values(),
+        )
+        .await?;
         let data = data.into_iter().map(DateValue::from).collect();
         Ok(data)
     }

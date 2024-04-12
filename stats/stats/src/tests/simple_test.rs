@@ -9,12 +9,31 @@ pub async fn simple_test_chart(test_name: &str, chart: impl Chart, expected: Vec
     let (db, blockscout) = init_db_all(test_name).await;
     chart.create(&db).await.unwrap();
     fill_mock_blockscout_data(&blockscout, "2023-03-01").await;
+    let approximate_trailing_values = chart.approximate_trailing_values();
 
     chart.update(&db, &blockscout, true).await.unwrap();
-    get_chart_and_assert_eq(&db, &chart, &expected, None, None, None).await;
+    get_chart_and_assert_eq(
+        &db,
+        &chart,
+        &expected,
+        None,
+        None,
+        None,
+        approximate_trailing_values,
+    )
+    .await;
 
     chart.update(&db, &blockscout, false).await.unwrap();
-    get_chart_and_assert_eq(&db, &chart, &expected, None, None, None).await;
+    get_chart_and_assert_eq(
+        &db,
+        &chart,
+        &expected,
+        None,
+        None,
+        None,
+        approximate_trailing_values,
+    )
+    .await;
 }
 
 pub async fn ranged_test_chart(
@@ -29,12 +48,31 @@ pub async fn ranged_test_chart(
     chart.create(&db).await.unwrap();
     fill_mock_blockscout_data(&blockscout, "2023-03-01").await;
     let policy = chart.missing_date_policy();
+    let approximate_trailing_values = chart.approximate_trailing_values();
 
     chart.update(&db, &blockscout, true).await.unwrap();
-    get_chart_and_assert_eq(&db, &chart, &expected, Some(from), Some(to), Some(policy)).await;
+    get_chart_and_assert_eq(
+        &db,
+        &chart,
+        &expected,
+        Some(from),
+        Some(to),
+        Some(policy),
+        approximate_trailing_values,
+    )
+    .await;
 
     chart.update(&db, &blockscout, false).await.unwrap();
-    get_chart_and_assert_eq(&db, &chart, &expected, Some(from), Some(to), Some(policy)).await;
+    get_chart_and_assert_eq(
+        &db,
+        &chart,
+        &expected,
+        Some(from),
+        Some(to),
+        Some(policy),
+        approximate_trailing_values,
+    )
+    .await;
 }
 
 async fn get_chart_and_assert_eq(
@@ -44,10 +82,18 @@ async fn get_chart_and_assert_eq(
     from: Option<NaiveDate>,
     to: Option<NaiveDate>,
     policy: Option<MissingDatePolicy>,
+    approximate_trailing_values: u64,
 ) {
-    let data = get_chart_data(db, chart.name(), from, to, policy)
-        .await
-        .unwrap();
+    let data = get_chart_data(
+        db,
+        chart.name(),
+        from,
+        to,
+        policy,
+        approximate_trailing_values,
+    )
+    .await
+    .unwrap();
     let data: Vec<_> = data
         .into_iter()
         .map(|p| (p.date.to_string(), p.value))
