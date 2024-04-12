@@ -20,7 +20,11 @@ where
 {
     fn parent(&self) -> Arc<P>;
 
-    //todo: decide what to do with `approximate_trailing_values`
+    // Note that usually this chart's `approximate_trailing_values` logically
+    // matches the one of it's parent
+    fn parent_approximate_trailing_values(&self) -> u64 {
+        self.parent().approximate_trailing_values()
+    }
 
     async fn get_values(&self, parent_data: Vec<DateValue>) -> Result<Vec<DateValue>, UpdateError>;
 
@@ -43,8 +47,7 @@ where
             None,
             None,
             None,
-            //todo: decide what to do with `approximate_trailing_values`
-            self.approximate_trailing_values(),
+            self.parent_approximate_trailing_values(),
         )
         .await?;
         let data = data.into_iter().map(DateValue::from).collect();
