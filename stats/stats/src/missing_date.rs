@@ -33,8 +33,18 @@ pub async fn get_and_fill_chart(
     };
 
     let data_with_extra = data_request.into_model().all(db).await?;
+    let retrieved_count = data_with_extra.len();
+
     let data_filled = fill_missing_points(data_with_extra, policy, from, to);
     let data = filter_within_range(data_filled, from, to);
+    match data.len().checked_sub(retrieved_count) {
+        Some(filled_count) => {
+            if filled_count > 0 {
+                tracing::debug!(policy = ?policy, "{} points were missing for requested range and were filled", filled_count);
+            }
+        }
+        None => todo!(),
+    }
     Ok(data)
 }
 

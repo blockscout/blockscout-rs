@@ -122,7 +122,7 @@ impl NativeCoinHoldersGrowth {
                 len = days.len(),
                 first = ?first,
                 last = ?last,
-                "start fethcing data for days"
+                "start fetching data for days"
             );
             // NOTE: we update support table and chart data in one transaction
             // to support invariant that support table has information about last day in chart data

@@ -58,7 +58,7 @@ impl UpdateService {
             })
             .collect::<Vec<_>>();
         futures::future::join_all(tasks).await;
-        tracing::info!("initial updating is done");
+        tracing::info!("initial update is done");
     }
 
     fn spawn_chart_updater(self: &Arc<Self>, chart: ArcChart, default_schedule: &Schedule) {
