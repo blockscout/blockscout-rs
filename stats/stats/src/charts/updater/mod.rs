@@ -1,3 +1,7 @@
+//! Update logic for charts.
+//!
+//! Depending on the chart nature, various tactics are better fit (in terms of efficiency, performance, etc.).
+
 use blockscout_db::entity::blocks;
 use chrono::{NaiveDate, NaiveDateTime};
 use entity::chart_data;
@@ -8,7 +12,7 @@ mod full;
 mod partial;
 
 pub use batch::ChartBatchUpdater;
-pub use dependent::{last_point, parse_and_growth, parse_and_sum, ChartDependentUpdater};
+pub use dependent::{last_point, parse_and_cumsum, parse_and_sum, ChartDependentUpdater};
 pub use full::ChartFullUpdater;
 pub use partial::ChartPartialUpdater;
 
@@ -70,6 +74,10 @@ struct SyncInfo {
     pub min_blockscout_block: Option<i64>,
 }
 
+/// Get "last" row. Date of the row can be a starting point for an update.
+///
+/// Retrieves `offset`th latest data point from DB, if any.
+/// In case of inconsistencies or set `force_full`, also returns `None`.
 pub async fn get_last_row<C>(
     chart: &C,
     chart_id: i32,

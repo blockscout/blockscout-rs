@@ -1,3 +1,6 @@
+//! Updates chart according to data from another chart.
+//! I.e. current chart depends on another (on "parent")
+
 use super::get_min_block_blockscout;
 use crate::{
     charts::{
@@ -61,7 +64,7 @@ where
     }
 }
 
-pub fn parse_and_growth<T>(
+pub fn parse_and_cumsum<T>(
     mut data: Vec<DateValue>,
     parent_name: &str,
 ) -> Result<Vec<DateValue>, UpdateError>

@@ -4,7 +4,7 @@ use crate::{
         chart::Chart,
         create_chart,
         insert::DateValue,
-        updater::{parse_and_growth, ChartDependentUpdater},
+        updater::{parse_and_cumsum, ChartDependentUpdater},
     },
     MissingDatePolicy, UpdateError,
 };
@@ -31,7 +31,7 @@ impl ChartDependentUpdater<NewContracts> for ContractsGrowth {
     }
 
     async fn get_values(&self, parent_data: Vec<DateValue>) -> Result<Vec<DateValue>, UpdateError> {
-        parse_and_growth::<i64>(parent_data, self.parent.name())
+        parse_and_cumsum::<i64>(parent_data, self.parent.name())
     }
 }
 

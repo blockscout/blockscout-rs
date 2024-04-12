@@ -1,3 +1,5 @@
+//! Re-reads/re-calculates whole chart from the source DB.
+
 use crate::{
     charts::{
         find_chart,

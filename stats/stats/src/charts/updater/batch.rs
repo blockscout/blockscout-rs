@@ -1,3 +1,10 @@
+//! Similar to `ChartPartialUpdater`, but performs multiple updates for each time period
+//! ([`step_duration`]).
+//!
+//! Useful when each period is independent and this division can help with performance.
+//! I.e. if updating a large interval at once (e.g. like `ChartPartialUpdater` does in
+//! `force_full` or initial updates) is too expensive.
+
 use super::{get_last_row, get_min_block_blockscout, get_min_date_blockscout};
 use crate::{
     charts::{find_chart, insert::insert_data_many},
