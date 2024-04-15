@@ -18,7 +18,7 @@ fn compile(
         .bytes(["."])
         .type_attribute(".", "#[actix_prost_macros::serde]")
         // &bool -> bool
-        .field_attribute(".blockscout.stats.v1.Point.is_approximate", "#[serde(skip_serializing_if = \"std::clone::Clone::clone\")]")
+        .field_attribute(".blockscout.stats.v1.Point.is_approximate", "#[serde(skip_serializing_if = \"std::ops::Not::not\")]")
         .field_attribute(".blockscout.stats.v1.Point.is_approximate", "#[serde(default)]");
 
     config.compile_protos(protos, includes)?;
