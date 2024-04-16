@@ -1,7 +1,7 @@
 //! Updates chart according to data from another chart.
 //! I.e. current chart depends on another (on "parent")
 
-use super::get_min_block_blockscout;
+use super::common_operations::read::get_min_block_blockscout;
 use crate::{
     charts::{
         db_interaction::{insert::insert_data_many, types::DateValue},

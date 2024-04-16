@@ -4,7 +4,7 @@ use crate::{
         db_interaction::{
             insert::insert_data_many,
             types::DateValue,
-            updater::{get_last_row, get_min_block_blockscout},
+            updater::common_operations::read::{get_last_row, get_min_block_blockscout},
         },
         find_chart,
     },

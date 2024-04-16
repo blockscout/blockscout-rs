@@ -3,8 +3,7 @@ use chrono::{NaiveDate, NaiveDateTime};
 use entity::chart_data;
 use sea_orm::{prelude::*, sea_query, ConnectionTrait, FromQueryResult, QueryOrder, QuerySelect};
 
-use super::types::DateValue;
-use crate::{Chart, UpdateError};
+use crate::{Chart, DateValue, UpdateError};
 
 #[derive(FromQueryResult)]
 struct MinBlock {
