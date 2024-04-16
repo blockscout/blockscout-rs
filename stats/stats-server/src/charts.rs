@@ -3,7 +3,7 @@ use crate::config::{
     ChartSettings,
 };
 use stats::{
-    cache::Cache, counters, entity::sea_orm_active_enums::ChartType, lines, Chart, ChartUpdater,
+    cache::Cache, counters, entity::sea_orm_active_enums::ChartType, lines, ChartUpdater,
 };
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
