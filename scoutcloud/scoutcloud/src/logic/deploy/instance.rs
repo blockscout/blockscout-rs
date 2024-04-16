@@ -1,4 +1,4 @@
-use super::deployment::{map_deployment_status, Deployment};
+use super::deployment::Deployment;
 use crate::{
     logic::{
         github::{DeployWorkflow, Workflow},
@@ -38,12 +38,12 @@ impl Instance {
         Ok(this)
     }
 
-    pub async fn find_all<C>(db: &C, creator_token_id: i32) -> Result<Vec<Self>, DbErr>
+    pub async fn find_all<C>(db: &C, user_token: &UserToken) -> Result<Vec<Self>, DbErr>
     where
         C: ConnectionTrait,
     {
         let instances = Self::default_select()
-            .filter(db::instances::Column::CreatorTokenId.eq(creator_token_id))
+            .filter(db::instances::Column::CreatorId.eq(user_token.user.id))
             .limit(MAX_LIMIT)
             .all(db)
             .await?
@@ -58,7 +58,7 @@ impl Instance {
         C: ConnectionTrait,
     {
         let count = Self::default_select()
-            .filter(db::instances::Column::CreatorTokenId.eq(creator.token.id))
+            .filter(db::instances::Column::CreatorId.eq(creator.user.id))
             .count(db)
             .await?;
         Ok(count)
@@ -87,7 +87,7 @@ impl Instance {
             InstanceConfig::try_from_user_with_defaults(user_config.clone(), &slug).await?;
 
         let model = db::instances::ActiveModel {
-            creator_token_id: Set(creator.token.id),
+            creator_id: Set(creator.user.id),
             slug: Set(slug),
             user_config: Set(user_config.raw()?),
             parsed_config: Set(parsed_config.raw().to_owned()),
@@ -203,9 +203,9 @@ impl Instance {
             .filter(db::server_specs::Column::Slug.eq(&server_size))
             .one(db)
             .await?
-            .ok_or(DeployError::Internal(anyhow::anyhow!(
+            .ok_or(anyhow::anyhow!(
                 "server size `{server_size}` not found in database"
-            )))?;
+            ))?;
         Ok(server_spec)
     }
 }
@@ -219,9 +219,7 @@ impl Instance {
         let instance_run = DeployWorkflow::instance(self.model.slug.clone())
             .run_and_get_latest_with_mutex(github, MAX_TRY_GITHUB)
             .await?
-            .ok_or(DeployError::Internal(anyhow::anyhow!(
-                "no instance workflow found after running"
-            )))?;
+            .ok_or(anyhow::anyhow!("no instance workflow found after running"))?;
         tracing::info!(
             instance_id =? self.model.external_id,
             run_id =? instance_run.id,
@@ -231,9 +229,7 @@ impl Instance {
         let postgres_run = DeployWorkflow::postgres(self.model.slug.clone())
             .run_and_get_latest_with_mutex(github, MAX_TRY_GITHUB)
             .await?
-            .ok_or(DeployError::Internal(anyhow::anyhow!(
-                "no postgres workflow found after running"
-            )))?;
+            .ok_or(anyhow::anyhow!("no postgres workflow found after running"))?;
         tracing::info!(
             instance_id =? self.model.external_id,
             run_id =? postgres_run.id,
@@ -241,133 +237,6 @@ impl Instance {
             "triggered github deploy workflow for app=postgres"
         );
         Ok(instance_run)
-    }
-}
-
-pub struct InstanceDeployment {
-    pub instance: Instance,
-    pub deployment: Option<Deployment>,
-}
-
-impl InstanceDeployment {
-    pub async fn from_instance<C>(db: &C, instance: Instance) -> Result<Self, DeployError>
-    where
-        C: ConnectionTrait,
-    {
-        let deployment = Deployment::latest_of_instance(db, &instance).await?;
-        Ok(InstanceDeployment {
-            instance,
-            deployment,
-        })
-    }
-
-    pub async fn from_instance_id<C>(db: &C, instance_id: &str) -> Result<Self, DeployError>
-    where
-        C: ConnectionTrait,
-    {
-        let instance = Instance::find(db, instance_id)
-            .await?
-            .ok_or(DeployError::InstanceNotFound(instance_id.to_string()))?;
-        Self::from_instance(db, instance).await
-    }
-
-    pub async fn from_deployment_id<C>(db: &C, _deployment_id: &str) -> Result<Self, DeployError>
-    where
-        C: ConnectionTrait,
-    {
-        let (deployment, instance) = Deployment::default_select()
-            .find_also_related(db::instances::Entity)
-            .one(db)
-            .await?
-            .ok_or(DeployError::DeploymentNotFound)?;
-        let instance = instance.ok_or(DeployError::Internal(anyhow::anyhow!(
-            "deployment without instance"
-        )))?;
-
-        Ok(Self {
-            instance: Instance::new(instance),
-            deployment: Some(Deployment::new(deployment)),
-        })
-    }
-
-    pub async fn find_all<C>(db: &C, owner: &UserToken) -> Result<Vec<Self>, DeployError>
-    where
-        C: ConnectionTrait,
-    {
-        let instances: Vec<db::instances::Model> = Instance::find_all(db, owner.token.id)
-            .await?
-            .into_iter()
-            .map(|i| i.model)
-            .collect();
-        let deployments = instances
-            .load_many(Deployment::default_select().limit(1), db)
-            .await?;
-
-        instances
-            .into_iter()
-            .zip(deployments.into_iter())
-            .map(|(instance, mut deployments)| {
-                Ok(InstanceDeployment {
-                    instance: Instance { model: instance },
-                    deployment: deployments.pop().map(|model| Deployment { model }),
-                })
-            })
-            .collect()
-    }
-
-    pub async fn find_all_for_instance<C>(
-        db: &C,
-        instance: &Instance,
-    ) -> Result<Vec<Self>, DeployError>
-    where
-        C: ConnectionTrait,
-    {
-        let deployments = instance.deployments(db).await?;
-        Ok(deployments
-            .into_iter()
-            .map(|d| InstanceDeployment {
-                instance: instance.clone(),
-                deployment: Some(d),
-            })
-            .collect())
-    }
-}
-
-impl TryFrom<InstanceDeployment> for proto::InstanceInternal {
-    type Error = DeployError;
-
-    fn try_from(value: InstanceDeployment) -> Result<Self, Self::Error> {
-        let instance = value.instance;
-        let deployment = value.deployment;
-        let user_config = instance.user_config()?;
-        let proto_instance = proto::InstanceInternal {
-            instance_id: instance.model.external_id.to_string(),
-            name: instance.model.slug.clone(),
-            created_at: instance.model.created_at.to_string(),
-            config: Some(user_config.internal),
-            deployment_id: deployment.as_ref().map(|d| d.model.external_id.to_string()),
-            deployment_status: map_deployment_status(deployment.as_ref().map(|d| &d.model.status)),
-        };
-        Ok(proto_instance)
-    }
-}
-
-impl TryFrom<InstanceDeployment> for proto::DeploymentInternal {
-    type Error = DeployError;
-
-    fn try_from(value: InstanceDeployment) -> Result<Self, Self::Error> {
-        let instance = value.instance;
-        let deployment = value.deployment.ok_or(DeployError::DeploymentNotFound)?;
-        let config = deployment.user_config()?;
-        Ok(Self {
-            deployment_id: deployment.model.external_id.to_string(),
-            instance_id: instance.model.external_id.to_string(),
-            status: map_deployment_status(Some(&deployment.model.status)),
-            error: deployment.model.error,
-            created_at: deployment.model.created_at.to_string(),
-            finished_at: deployment.model.finished_at.map(|t| t.to_string()),
-            config: Some(config.internal),
-        })
     }
 }
 

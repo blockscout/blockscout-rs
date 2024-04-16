@@ -1,8 +1,7 @@
 use crate::{
     logic::{
-        deploy::{handlers::user_actions, instance::InstanceDeployment},
-        users::UserToken,
-        DeployError, GithubClient, Instance, UserConfig,
+        deploy::handlers::user_actions, users::UserToken, DeployError, GithubClient, Instance,
+        InstanceDeployment, UserConfig,
     },
     server::proto,
 };
@@ -15,13 +14,13 @@ pub async fn create_instance(
     config: &proto::DeployConfigInternal,
     creator: &UserToken,
 ) -> Result<proto::CreateInstanceResponseInternal, DeployError> {
-    let tx = db.begin().await.map_err(|e| anyhow::anyhow!(e))?;
+    let tx = db.begin().await?;
     creator.allowed_to_create_instance(&tx).await?;
     let instance = Instance::try_create(&tx, name, config, creator).await?;
     let config = instance.user_config_raw().clone();
     user_actions::log_create_instance(&tx, creator, &instance, &config).await?;
     instance.commit(github, "initial instance creation").await?;
-    tx.commit().await.map_err(|e| anyhow::anyhow!(e))?;
+    tx.commit().await?;
 
     Ok(proto::CreateInstanceResponseInternal {
         instance_id: instance.model.external_id.to_string(),

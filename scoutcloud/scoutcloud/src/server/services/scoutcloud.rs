@@ -7,7 +7,7 @@ use crate::{
     server::proto::{scoutcloud_server::Scoutcloud, *},
 };
 use convert_trait::TryConvert;
-use sea_orm::{ConnectionTrait, DatabaseConnection, DbErr};
+use sea_orm::{ConnectionTrait, DatabaseConnection};
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
@@ -236,7 +236,7 @@ fn map_deploy_error(err: DeployError) -> Status {
         DeployError::InstanceNotFound(_) => Status::not_found(err.to_string()),
         DeployError::Config(e) => Status::invalid_argument(e.to_string()),
         DeployError::Github(e) => Status::internal(e.to_string()),
-        DeployError::Db(e) => map_db_err(e),
+        DeployError::Db(e) => Status::internal(e.to_string()),
         DeployError::Internal(e) => Status::internal(e.to_string()),
         DeployError::Auth(e) => map_auth_error(e),
         DeployError::DeploymentNotFound => Status::not_found(err.to_string()),
@@ -249,14 +249,9 @@ fn map_auth_error(err: AuthError) -> Status {
         AuthError::NoToken => Status::unauthenticated(err.to_string()),
         AuthError::TokenNotFound => Status::unauthenticated(err.to_string()),
         AuthError::Internal(e) => Status::internal(e.to_string()),
-
         AuthError::NotFound => Status::not_found(err.to_string()),
         AuthError::Unauthorized(_) => Status::permission_denied(err.to_string()),
-        AuthError::Db(e) => map_db_err(e),
+        AuthError::Db(e) => Status::internal(e.to_string()),
         AuthError::InsufficientBalance => Status::permission_denied(err.to_string()),
     }
-}
-
-fn map_db_err(err: DbErr) -> Status {
-    Status::internal(err.to_string())
 }

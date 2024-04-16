@@ -17,7 +17,14 @@ impl MigrationTrait for Migration {
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        crate::from_sql(manager, r#"DELETE FROM server_specs"#).await?;
+        crate::from_sql(
+            manager,
+            r#"
+        DELETE FROM server_specs
+        WHERE slug = ANY('{small,medium,large}')
+        "#,
+        )
+        .await?;
         Ok(())
     }
 }

@@ -71,7 +71,7 @@ impl UserToken {
     }
 
     pub fn has_access_to_instance(&self, instance: &Instance) -> Result<(), AuthError> {
-        if self.user.is_superuser || instance.model.creator_token_id == self.token.id {
+        if self.user.is_superuser || instance.model.creator_id == self.user.id {
             Ok(())
         } else {
             Err(AuthError::Unauthorized("no to the instance".to_string()))

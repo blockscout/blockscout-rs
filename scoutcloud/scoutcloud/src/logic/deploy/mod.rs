@@ -5,10 +5,12 @@ use thiserror::Error;
 mod deployment;
 mod handlers;
 mod instance;
+mod instance_deployment;
 
 pub use deployment::Deployment;
 pub use handlers::*;
-pub use instance::{Instance, InstanceDeployment};
+pub use instance::Instance;
+pub use instance_deployment::InstanceDeployment;
 
 #[derive(Error, Debug)]
 pub enum DeployError {

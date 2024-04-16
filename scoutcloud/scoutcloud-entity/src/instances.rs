@@ -9,7 +9,7 @@ pub struct Model {
     pub id: i32,
     #[sea_orm(unique)]
     pub external_id: Uuid,
-    pub creator_token_id: i32,
+    pub creator_id: i32,
     pub slug: String,
     #[sea_orm(column_type = "JsonBinary")]
     pub user_config: Json,
@@ -22,21 +22,21 @@ pub struct Model {
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
     #[sea_orm(
-        belongs_to = "super::auth_tokens::Entity",
-        from = "Column::CreatorTokenId",
-        to = "super::auth_tokens::Column::Id",
+        belongs_to = "super::users::Entity",
+        from = "Column::CreatorId",
+        to = "super::users::Column::Id",
         on_update = "NoAction",
         on_delete = "NoAction"
     )]
-    AuthTokens,
+    Users,
 
     #[sea_orm(has_many = "super::deployments::Entity")]
     Deployments,
 }
 
-impl Related<super::auth_tokens::Entity> for Entity {
+impl Related<super::users::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::AuthTokens.def()
+        Relation::Users.def()
     }
 }
 

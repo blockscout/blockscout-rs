@@ -1,10 +1,8 @@
 use crate::{
     logic::{
-        deploy::{
-            deployment::map_deployment_status, handlers::user_actions, instance::InstanceDeployment,
-        },
+        deploy::{deployment::map_deployment_status, handlers::user_actions},
         users::UserToken,
-        DeployError, Deployment, GithubClient, Instance,
+        DeployError, Deployment, GithubClient, Instance, InstanceDeployment,
     },
     server::proto,
 };
