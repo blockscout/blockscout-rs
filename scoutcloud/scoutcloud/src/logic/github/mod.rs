@@ -6,13 +6,14 @@ mod workflows;
 pub use mock::*;
 pub use workflows::*;
 
-use std::sync::Arc;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub enum Error {
+pub enum GithubError {
     #[error("github error: {0}")]
     Octocrab(#[from] octocrab::Error),
+    #[error("failed to create file: {0}")]
+    CreatingFile(#[from] anyhow::Error),
     #[error("internal error: {0}")]
     Internal(anyhow::Error),
 }
@@ -22,7 +23,6 @@ pub struct GithubClient {
     owner: String,
     repo: String,
     default_branch_name: String,
-    mutex: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl GithubClient {
@@ -43,8 +43,19 @@ impl GithubClient {
             owner,
             repo,
             default_branch_name: default_branch_name.unwrap_or("main".to_string()),
-            mutex: Arc::new(tokio::sync::Mutex::new(())),
         })
+    }
+
+    pub fn from_settings(
+        settings: &crate::server::GithubSettings,
+    ) -> Result<Self, octocrab::Error> {
+        Self::new(
+            settings.token.clone(),
+            settings.owner.clone(),
+            settings.repo.clone(),
+            None,
+            None,
+        )
     }
 }
 

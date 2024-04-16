@@ -16,5 +16,13 @@ message ExtraFieldOptions {
   string type = 2;
 }
 
-extend google.protobuf.MessageOptions { repeated ExtraFieldOptions extra_fields = 50000; }
-extend google.protobuf.FieldOptions { optional ConvertOptions convert = 50001; }
+message DeriveOptions {
+  string name = 1;
+  string type = 2;
+}
+
+extend google.protobuf.MessageOptions {
+  repeated ExtraFieldOptions extra_fields = 50000;
+  repeated DeriveOptions derive = 50001;
+}
+extend google.protobuf.FieldOptions { optional ConvertOptions convert = 50002; }

@@ -19,7 +19,7 @@ macro_rules! simple_env_var {
                     fn new(
                         v: $var_ty,
                         _context: &$crate::logic::ConfigValidationContext
-                    ) -> Result<Self, $crate::logic::config::Error> {
+                    ) -> Result<Self, $crate::logic::ConfigError> {
                         Ok(Self(v))
                     }
                     $($extra_body)*
@@ -48,7 +48,7 @@ macro_rules! custom_env_var {
 
                 async fn build_config_vars(&self, _context: &$crate::logic::ConfigValidationContext) -> Result<Vec<
                     $crate::logic::ParsedVariable>,
-                    $crate::logic::config::Error
+                    $crate::logic::ConfigError
                 > {
                     let mut config_vars = Vec::new();
                     $(

@@ -1,6 +1,7 @@
-use super::Error;
-use crate::logic::ValidatedInstanceConfig;
-use json_dotpath::DotPaths;
+use super::{variables, UserConfig, UserVariable};
+use crate::logic::{json_utils, ConfigError, ConfigValidationContext, ParsedVariableKey};
+
+use std::collections::BTreeMap;
 
 lazy_static::lazy_static! {
     pub static ref DEFAULT_CONFIG: serde_json::Value = {
@@ -8,87 +9,135 @@ lazy_static::lazy_static! {
     };
 }
 
-// Generated config is a final config that is used to merge different config together,
-// handles default config and can generate yaml config file
 #[derive(Default, Debug, Clone, Eq, PartialEq)]
-pub struct GeneratedInstanceConfig {
+pub struct InstanceConfig {
     pub raw: serde_json::Value,
 }
 
-impl TryFrom<ValidatedInstanceConfig> for GeneratedInstanceConfig {
-    type Error = Error;
+macro_rules! parse_config_vars {
+    ($config:ident, $context:ident, $vars:ident, { $($var:ident),* $(,)? }) => {
+        paste::item! {
+            $({
+                let value: Option<_> = $config.[<$var:snake>].into();
+                let maybe_value = match value {
+                    Some(value) => Some(value),
+                    None => <variables::[<$var:snake>]::[<$var:camel>] as UserVariable>::maybe_default(&$context),
+                };
+                if let Some(value) = maybe_value {
+                    let parsed_vars = variables::[<$var:snake>]::[<$var:camel>]::new(value, &$context)?
+                        .build_config_vars(&$context)
+                        .await?;
+                    $vars.extend(parsed_vars);
+                }
+            })*
+        }
+    }
+}
 
-    fn try_from(validated: ValidatedInstanceConfig) -> Result<Self, Self::Error> {
+macro_rules! parse_config_all_vars {
+    ($config:ident, $context:ident, $validated_config:ident) => {
+        parse_config_vars!($config, $context, $validated_config, {
+            ChainId,
+            ChainName,
+            ChainType,
+            HomeplateBackground,
+            HomeplateTextColor,
+            IconUrl,
+            InstanceUrl,
+            LogoUrl,
+            NodeType,
+            RpcUrl,
+            ServerSize,
+            TokenSymbol,
+        });
+    };
+}
+
+type ParsedVars = BTreeMap<ParsedVariableKey, serde_json::Value>;
+
+impl InstanceConfig {
+    pub async fn try_from_user(
+        user_config: UserConfig,
+        client_name: impl Into<String>,
+    ) -> Result<Self, ConfigError> {
+        let context = ConfigValidationContext {
+            client_name: client_name.into(),
+        };
+
+        let mut parsed_vars = ParsedVars::default();
+        let config = user_config.internal;
+        parse_config_all_vars!(config, context, parsed_vars);
+
         let mut this = Self::default();
-        for (key, value) in validated.vars {
+        for (key, value) in parsed_vars {
             let path = key.get_path();
-            update_json_by_path(&mut this.raw, &path, value).map_err(|e| {
-                Error::Internal(anyhow::anyhow!("failed to update json '{path}' path: {e}"))
+            json_utils::update_json_by_path(&mut this.raw, &path, value).map_err(|e| {
+                ConfigError::Internal(anyhow::anyhow!("failed to update json '{path}' path: {e}"))
             })?;
         }
 
         Ok(this)
     }
-}
 
-impl GeneratedInstanceConfig {
+    pub async fn try_from_user_with_defaults(
+        user_config: UserConfig,
+        client_name: impl Into<String>,
+    ) -> Result<Self, ConfigError> {
+        Self::try_from_user(user_config, client_name)
+            .await
+            .map(|mut this| this.merged_with_defaults().to_owned())
+    }
+
+    pub fn raw(&self) -> &serde_json::Value {
+        &self.raw
+    }
+
+    pub fn from_raw(raw: serde_json::Value) -> Self {
+        Self { raw }
+    }
+
+    pub fn from_yaml(yaml: &str) -> Result<Self, ConfigError> {
+        let raw = serde_yaml::from_str(yaml).map_err(|e| {
+            ConfigError::Internal(anyhow::anyhow!("failed to parse saved config: {e}"))
+        })?;
+        Ok(Self { raw })
+    }
+
     pub fn from_default_file() -> Self {
         let raw = DEFAULT_CONFIG.clone();
         Self { raw }
     }
 
     pub fn merge(&mut self, other: &Self) -> &mut Self {
-        merge(&mut self.raw, &other.raw);
+        json_utils::merge(&mut self.raw, &other.raw);
+        self
+    }
+
+    pub fn merge_reverse(&mut self, mut other: Self) -> &mut Self {
+        other.merge(self);
+        self.raw = other.raw;
         self
     }
 
     pub fn merged_with_defaults(&mut self) -> &mut Self {
         // we override default config with current config
         // therefore we merge `default` with `self`
-        let mut default = Self::from_default_file();
-        default.merge(self);
-        self.raw = default.raw;
-        self
+        self.merge_reverse(Self::from_default_file())
     }
 
-    pub fn to_yaml(&self) -> Result<String, Error> {
+    pub fn to_yaml(&self) -> Result<String, ConfigError> {
         serde_yaml::to_string(&self.raw).map_err(|e| {
-            Error::Internal(anyhow::anyhow!("failed to serialize config to yaml: {e}"))
+            ConfigError::Internal(anyhow::anyhow!("failed to serialize config to yaml: {e}"))
         })
-    }
-}
-
-fn update_json_by_path(
-    json: &mut serde_json::Value,
-    path: &str,
-    new_value: serde_json::Value,
-) -> Result<(), json_dotpath::Error> {
-    json.dot_set(path, new_value)?;
-    Ok(())
-}
-
-fn merge(a: &mut serde_json::Value, b: &serde_json::Value) {
-    match (a, b) {
-        (serde_json::Value::Object(a), serde_json::Value::Object(b)) => {
-            for (k, v) in b {
-                merge(a.entry(k.clone()).or_insert(serde_json::Value::Null), v);
-            }
-        }
-        (a, b) => *a = b.clone(),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::logic::{
-        config::{generated::GeneratedInstanceConfig, validated::ValidatedInstanceConfig},
-        ConfigValidationContext,
-    };
+    use crate::logic::config::{instance::InstanceConfig, user::UserConfig};
     use httpmock::{Method::*, MockServer};
     use pretty_assertions::assert_eq;
-    use scoutcloud_proto::blockscout::scoutcloud::v1::{
-        DeployConfigInternal, DeployConfigPartialInternal,
-    };
+    use scoutcloud_proto::blockscout::scoutcloud::v1::DeployConfigInternal;
     use serde_json::json;
 
     fn mock_rpc() -> MockServer {
@@ -108,8 +157,8 @@ mod tests {
         server
     }
 
-    fn test_deploy_instance_config(server: &MockServer) -> DeployConfigInternal {
-        DeployConfigInternal {
+    fn test_user_config(server: &MockServer) -> UserConfig {
+        let internal = DeployConfigInternal {
             rpc_url: server.url("/").parse().unwrap(),
             server_size: "small".to_string(),
             node_type: Some("geth".to_string()),
@@ -122,31 +171,21 @@ mod tests {
             icon_url: Some("http://example.com/icon".parse().unwrap()),
             homeplate_background: Some("#111111".to_string()),
             homeplate_text_color: Some("#222222".to_string()),
-        }
+        };
+        UserConfig { internal }
     }
 
     #[tokio::test]
     async fn config_parse_works() {
         let server = mock_rpc();
-        let config = test_deploy_instance_config(&server);
-        let context = ConfigValidationContext {
-            client_name: "test-client".to_string(),
-        };
-        let validated = ValidatedInstanceConfig::try_from_config(config, context)
+        let config = test_user_config(&server);
+        let client_name = "test-client";
+
+        let instance_config = InstanceConfig::try_from_user(config, client_name)
             .await
-            .expect("failed to parse config");
-
+            .expect("failed to generate config");
         assert_eq!(
-            validated.vars.len(),
-            16,
-            "invalid parsed config: {:?}",
-            validated
-        );
-
-        let generated =
-            GeneratedInstanceConfig::try_from(validated).expect("failed to generate config");
-        assert_eq!(
-            generated.raw,
+            instance_config.raw,
             json!({
                 "blockscout": {
                     "image": {
@@ -200,45 +239,35 @@ mod tests {
     #[tokio::test]
     async fn config_empty_parse_works() {
         let server = mock_rpc();
-        let config = DeployConfigInternal {
-            rpc_url: server.url("/").parse().unwrap(),
-            server_size: "medium".to_string(),
-            node_type: None,
-            chain_type: None,
-            chain_id: None,
-            token_symbol: None,
-            instance_url: None,
-            logo_url: None,
-            chain_name: None,
-            icon_url: None,
-            homeplate_background: None,
-            homeplate_text_color: None,
+        let config = UserConfig {
+            internal: DeployConfigInternal {
+                rpc_url: server.url("/").parse().unwrap(),
+                server_size: "medium".to_string(),
+                node_type: None,
+                chain_type: None,
+                chain_id: None,
+                token_symbol: None,
+                instance_url: None,
+                logo_url: None,
+                chain_name: None,
+                icon_url: None,
+                homeplate_background: None,
+                homeplate_text_color: None,
+            },
         };
-        let context = ConfigValidationContext {
-            client_name: "test-client".to_string(),
-        };
-        let validated = ValidatedInstanceConfig::try_from_config(config, context)
+        let client_name = "test-client";
+        let instance_config = InstanceConfig::try_from_user(config, client_name)
             .await
-            .expect("failed to parse config");
+            .expect("failed to generate config");
 
         assert_eq!(
-            validated.vars.len(),
-            8,
-            "invalid parsed config: {:?}",
-            validated
-        );
-
-        let generated =
-            GeneratedInstanceConfig::try_from(validated).expect("failed to generate config");
-        assert_eq!(
-            generated.raw,
+            instance_config.raw,
             json!({
                 "blockscout": {
                     "ingress": {
                         "hostname": "test-client.blockscout.com",
                     },
                     "env": {
-                        "CHAIN_TYPE": "ethereum",
                         "ETHEREUM_JSONRPC_HTTP_URL": server.url("/"),
                         "INDEXER_DISABLE_INTERNAL_TRANSACTIONS_FETCHER": "true",
                     },
@@ -271,60 +300,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn config_partial_parse_works() {
-        let config = DeployConfigPartialInternal {
-            rpc_url: None,
-            server_size: None,
-            node_type: None,
-            chain_type: Some("rsk".to_string()),
-            chain_id: None,
-            token_symbol: None,
-            instance_url: None,
-            logo_url: None,
-            chain_name: None,
-            icon_url: None,
-            homeplate_background: None,
-            homeplate_text_color: None,
-        };
-        let context = ConfigValidationContext {
-            client_name: "test-client".to_string(),
-        };
-        let validated = ValidatedInstanceConfig::try_from_config_partial(config, context)
-            .await
-            .expect("failed to parse config");
-
-        let generated =
-            GeneratedInstanceConfig::try_from(validated).expect("failed to generate config");
-
-        assert_eq!(
-            generated.raw,
-            json!({
-                "blockscout": {
-                    "image": {
-                        "repository": "blockscout/blockscout-rsk",
-                    },
-                    "env": {
-                        "CHAIN_TYPE": "rsk"
-                    }
-                }
-            }),
-        )
-    }
-
-    #[tokio::test]
     async fn config_merged_with_default_works() {
         let server = mock_rpc();
-        let config = test_deploy_instance_config(&server);
+        let config = test_user_config(&server);
         let server_url = server.url("/").to_string();
-        let context = ConfigValidationContext {
-            client_name: "test-client".to_string(),
-        };
-        let validated = ValidatedInstanceConfig::try_from_config(config, context)
+        let client_name = "test-client";
+
+        let raw_yaml = InstanceConfig::try_from_user_with_defaults(config, client_name)
             .await
-            .expect("failed to parse config");
-        let raw_yaml = GeneratedInstanceConfig::try_from(validated)
             .expect("failed to generate config")
-            .merged_with_defaults()
             .to_yaml()
             .expect("failed to serialize config to yaml");
         assert_eq!(

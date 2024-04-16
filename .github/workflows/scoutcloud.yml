@@ -4,6 +4,10 @@ on:
       - 'main'
     tags:
       - 'scoutcloud/v*'
+    paths:
+      - scoutcloud/**
+      - .github/workflows/scoutcloud.yml
+      - .github/actions/deps/**
   pull_request:
     paths:
       - scoutcloud/**
