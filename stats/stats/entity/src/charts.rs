@@ -12,7 +12,7 @@ pub struct Model {
     pub name: String,
     pub chart_type: ChartType,
     pub created_at: DateTimeWithTimeZone,
-    pub last_updated_at: Option<DateTime>,
+    pub last_updated_at: Option<DateTimeWithTimeZone>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

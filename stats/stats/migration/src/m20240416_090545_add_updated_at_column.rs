@@ -10,7 +10,7 @@ impl MigrationTrait for Migration {
         // fix timezone of timestamps (everywhere in the code UTC is used)
         let sql = r#"
             ALTER TABLE charts
-                ADD COLUMN last_updated_at timestamp;
+                ADD COLUMN last_updated_at timestamptz;
 
             UPDATE charts SET last_updated_at = (
                 SELECT max(date) FROM chart_data
