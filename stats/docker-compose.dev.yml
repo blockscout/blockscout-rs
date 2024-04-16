@@ -117,5 +117,6 @@ services:
       - STATS__SERVER__HTTP__ENABLED=true
       - STATS__SERVER__HTTP__ADDR=0.0.0.0:8050
       - STATS__SERVER__HTTP__MAX_BODY_SIZE=2097152
+      - RUST_BACKTRACE=1
     ports:
       - 8080:8050
