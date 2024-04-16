@@ -4,7 +4,7 @@ use crate::{
         create_chart,
         db_interaction::{
             types::{DateValue, DateValueInt},
-            updater::ChartDependentUpdater,
+            updater::{ChartDependentUpdater, ChartUpdater},
         },
         Chart,
     },
@@ -72,8 +72,11 @@ impl Chart for NewNativeCoinHolders {
         self.parent.create(db).await?;
         create_chart(db, self.name().into(), self.chart_type()).await
     }
+}
 
-    async fn update(
+#[async_trait]
+impl ChartUpdater for NewNativeCoinHolders {
+    async fn update_values(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,

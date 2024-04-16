@@ -5,7 +5,7 @@ use crate::{
         create_chart,
         db_interaction::{
             types::DateValue,
-            updater::{parse_and_cumsum, ChartDependentUpdater},
+            updater::{parse_and_cumsum, ChartDependentUpdater, ChartUpdater},
         },
     },
     MissingDatePolicy, UpdateError,
@@ -53,8 +53,11 @@ impl crate::Chart for TxnsGrowth {
         self.parent.create(db).await?;
         create_chart(db, self.name().into(), self.chart_type()).await
     }
+}
 
-    async fn update(
+#[async_trait]
+impl ChartUpdater for TxnsGrowth {
+    async fn update_values(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,

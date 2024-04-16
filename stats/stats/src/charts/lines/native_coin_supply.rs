@@ -1,7 +1,7 @@
 use crate::{
     charts::db_interaction::{
         types::{DateValue, DateValueDouble},
-        updater::ChartPartialUpdater,
+        updater::{ChartPartialUpdater, ChartUpdater},
     },
     UpdateError,
 };
@@ -84,8 +84,11 @@ impl crate::Chart for NativeCoinSupply {
     fn chart_type(&self) -> ChartType {
         ChartType::Line
     }
+}
 
-    async fn update(
+#[async_trait]
+impl ChartUpdater for NativeCoinSupply {
+    async fn update_values(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,

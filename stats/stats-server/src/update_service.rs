@@ -1,4 +1,4 @@
-use crate::charts::{ArcChart, Charts};
+use crate::charts::{ArcChartUpdater, Charts};
 use chrono::Utc;
 use cron::Schedule;
 use sea_orm::{DatabaseConnection, DbErr};
@@ -61,7 +61,7 @@ impl UpdateService {
         tracing::info!("initial update is done");
     }
 
-    fn spawn_chart_updater(self: &Arc<Self>, chart: ArcChart, default_schedule: &Schedule) {
+    fn spawn_chart_updater(self: &Arc<Self>, chart: ArcChartUpdater, default_schedule: &Schedule) {
         let chart_info = self
             .charts
             .charts_info
@@ -78,7 +78,7 @@ impl UpdateService {
         tokio::spawn(async move { this.run_cron(chart, schedule).await });
     }
 
-    async fn update(self: Arc<Self>, chart: ArcChart, force_full: bool) {
+    async fn update(self: Arc<Self>, chart: ArcChartUpdater, force_full: bool) {
         tracing::info!(chart = chart.name(), "updating chart");
         let result = {
             let _timer = stats::metrics::CHART_UPDATE_TIME
@@ -98,7 +98,7 @@ impl UpdateService {
         }
     }
 
-    async fn run_cron(self: Arc<Self>, chart: ArcChart, schedule: Schedule) {
+    async fn run_cron(self: Arc<Self>, chart: ArcChartUpdater, schedule: Schedule) {
         loop {
             let sleep_duration = time_till_next_call(&schedule);
             tracing::info!(

@@ -3,7 +3,7 @@ use crate::{
         create_chart,
         db_interaction::{
             types::DateValue,
-            updater::{parse_and_sum, ChartDependentUpdater},
+            updater::{parse_and_sum, ChartDependentUpdater, ChartUpdater},
         },
     },
     lines::NewNativeCoinTransfers,
@@ -51,8 +51,11 @@ impl crate::Chart for TotalNativeCoinTransfers {
         self.parent.create(db).await?;
         create_chart(db, self.name().into(), self.chart_type()).await
     }
+}
 
-    async fn update(
+#[async_trait]
+impl ChartUpdater for TotalNativeCoinTransfers {
+    async fn update_values(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,

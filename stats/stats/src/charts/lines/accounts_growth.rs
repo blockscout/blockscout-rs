@@ -4,7 +4,7 @@ use crate::{
         cache::Cache,
         db_interaction::{
             types::{DateValue, DateValueInt},
-            updater::ChartFullUpdater,
+            updater::{ChartFullUpdater, ChartUpdater},
         },
     },
     MissingDatePolicy, UpdateError,
@@ -64,8 +64,11 @@ impl crate::Chart for AccountsGrowth {
     fn missing_date_policy(&self) -> MissingDatePolicy {
         MissingDatePolicy::FillPrevious
     }
+}
 
-    async fn update(
+#[async_trait]
+impl ChartUpdater for AccountsGrowth {
+    async fn update_values(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,

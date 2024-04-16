@@ -1,7 +1,7 @@
 use crate::{
     charts::db_interaction::{
         types::{DateValue, DateValueDecimal},
-        updater::ChartPartialUpdater,
+        updater::{ChartPartialUpdater, ChartUpdater},
     },
     MissingDatePolicy, UpdateError,
 };
@@ -90,8 +90,11 @@ impl crate::Chart for GasUsedGrowth {
     fn missing_date_policy(&self) -> MissingDatePolicy {
         MissingDatePolicy::FillPrevious
     }
+}
 
-    async fn update(
+#[async_trait]
+impl ChartUpdater for GasUsedGrowth {
+    async fn update_values(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,

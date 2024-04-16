@@ -5,7 +5,10 @@
 use async_trait::async_trait;
 use sea_orm::prelude::*;
 
-use crate::{charts::find_chart, Chart, UpdateError};
+use crate::{
+    charts::{find_chart, mutex::get_global_update_mutex},
+    Chart, UpdateError,
+};
 
 mod batch;
 pub(crate) mod common_operations;
@@ -19,7 +22,7 @@ pub use full::ChartFullUpdater;
 pub use partial::ChartPartialUpdater;
 
 #[async_trait]
-trait ChartUpdater: Chart {
+pub trait ChartUpdater: Chart {
     /// Update only data (values) of the chart (`chart_data` table).
     ///
     /// Implementation is expected to be highly variable.
@@ -51,7 +54,7 @@ trait ChartUpdater: Chart {
     }
 
     /// Update data and metadata of the chart
-    async fn update_chart(
+    async fn update(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
@@ -59,5 +62,28 @@ trait ChartUpdater: Chart {
     ) -> Result<(), UpdateError> {
         self.update_values(db, blockscout, force_full).await?;
         self.update_metadata(db, blockscout).await
+    }
+
+    async fn update_with_mutex(
+        &self,
+        db: &DatabaseConnection,
+        blockscout: &DatabaseConnection,
+        force_full: bool,
+    ) -> Result<(), UpdateError> {
+        let name = self.name();
+        let mutex = get_global_update_mutex(name).await;
+        let _permit = {
+            match mutex.try_lock() {
+                Ok(v) => v,
+                Err(_) => {
+                    tracing::warn!(
+                        chart_name = name,
+                        "found locked update mutex, waiting for unlock"
+                    );
+                    mutex.lock().await
+                }
+            }
+        };
+        self.update(db, blockscout, force_full).await
     }
 }

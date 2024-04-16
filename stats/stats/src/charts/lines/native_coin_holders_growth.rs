@@ -4,7 +4,10 @@ use crate::{
         db_interaction::{
             insert::insert_data_many,
             types::DateValue,
-            updater::common_operations::read::{get_last_row, get_min_block_blockscout},
+            updater::{
+                common_operations::read::{get_last_row, get_min_block_blockscout},
+                ChartUpdater,
+            },
         },
         find_chart,
     },
@@ -63,8 +66,11 @@ impl crate::Chart for NativeCoinHoldersGrowth {
         self.create_support_table(db).await?;
         create_chart(db, self.name().into(), self.chart_type()).await
     }
+}
 
-    async fn update(
+#[async_trait]
+impl ChartUpdater for NativeCoinHoldersGrowth {
+    async fn update_values(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,

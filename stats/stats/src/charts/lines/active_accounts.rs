@@ -1,5 +1,8 @@
 use crate::{
-    charts::db_interaction::{types::DateValue, updater::ChartPartialUpdater},
+    charts::db_interaction::{
+        types::DateValue,
+        updater::{ChartPartialUpdater, ChartUpdater},
+    },
     UpdateError,
 };
 use async_trait::async_trait;
@@ -66,8 +69,11 @@ impl crate::Chart for ActiveAccounts {
     fn chart_type(&self) -> ChartType {
         ChartType::Line
     }
+}
 
-    async fn update(
+#[async_trait]
+impl ChartUpdater for ActiveAccounts {
+    async fn update_values(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,

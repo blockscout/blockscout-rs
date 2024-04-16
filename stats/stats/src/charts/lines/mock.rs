@@ -1,5 +1,8 @@
 use crate::{
-    charts::db_interaction::{types::DateValue, updater::ChartFullUpdater},
+    charts::db_interaction::{
+        types::DateValue,
+        updater::{ChartFullUpdater, ChartUpdater},
+    },
     UpdateError,
 };
 use async_trait::async_trait;
@@ -71,8 +74,13 @@ impl<T: SampleUniform + PartialOrd + Clone + ToString + Send + Sync + 'static> c
     fn chart_type(&self) -> ChartType {
         ChartType::Line
     }
+}
 
-    async fn update(
+#[async_trait]
+impl<T: SampleUniform + PartialOrd + Clone + ToString + Send + Sync + 'static> ChartUpdater
+    for MockLine<T>
+{
+    async fn update_values(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,

@@ -1,10 +1,17 @@
 use super::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data};
-use crate::{get_chart_data, get_counters, Chart, MissingDatePolicy};
+use crate::{
+    charts::db_interaction::updater::ChartUpdater, get_chart_data, get_counters, Chart,
+    MissingDatePolicy,
+};
 use chrono::NaiveDate;
 use sea_orm::DatabaseConnection;
 use std::assert_eq;
 
-pub async fn simple_test_chart(test_name: &str, chart: impl Chart, expected: Vec<(&str, &str)>) {
+pub async fn simple_test_chart(
+    test_name: &str,
+    chart: impl ChartUpdater,
+    expected: Vec<(&str, &str)>,
+) {
     let _ = tracing_subscriber::fmt::try_init();
     let (db, blockscout) = init_db_all(test_name).await;
     chart.create(&db).await.unwrap();
@@ -38,7 +45,7 @@ pub async fn simple_test_chart(test_name: &str, chart: impl Chart, expected: Vec
 
 pub async fn ranged_test_chart(
     test_name: &str,
-    chart: impl Chart,
+    chart: impl ChartUpdater,
     expected: Vec<(&str, &str)>,
     from: NaiveDate,
     to: NaiveDate,
@@ -105,7 +112,7 @@ async fn get_chart_and_assert_eq(
     assert_eq!(expected, &data);
 }
 
-pub async fn simple_test_counter(test_name: &str, counter: impl Chart, expected: &str) {
+pub async fn simple_test_counter(test_name: &str, counter: impl ChartUpdater, expected: &str) {
     let _ = tracing_subscriber::fmt::try_init();
     let (db, blockscout) = init_db_all(test_name).await;
     counter.create(&db).await.unwrap();

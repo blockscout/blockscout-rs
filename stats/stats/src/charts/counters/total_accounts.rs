@@ -3,7 +3,7 @@ use crate::{
         cache::Cache,
         db_interaction::{
             types::{DateValue, DateValueInt},
-            updater::ChartFullUpdater,
+            updater::{ChartFullUpdater, ChartUpdater},
         },
     },
     lines::{AccountsGrowth, NewAccounts},
@@ -54,8 +54,11 @@ impl crate::Chart for TotalAccounts {
     fn chart_type(&self) -> ChartType {
         ChartType::Counter
     }
+}
 
-    async fn update(
+#[async_trait]
+impl ChartUpdater for TotalAccounts {
+    async fn update_values(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,

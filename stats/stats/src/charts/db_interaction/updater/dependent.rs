@@ -1,22 +1,22 @@
 //! Updates chart according to data from another chart.
 //! I.e. current chart depends on another (on "parent")
 
-use super::common_operations::read::get_min_block_blockscout;
+use super::{common_operations::read::get_min_block_blockscout, ChartUpdater};
 use crate::{
     charts::{
         db_interaction::{insert::insert_data_many, types::DateValue},
         find_chart,
     },
-    get_chart_data, Chart, UpdateError,
+    get_chart_data, UpdateError,
 };
 use async_trait::async_trait;
 use sea_orm::prelude::*;
 use std::{fmt::Display, iter::Sum, ops::AddAssign, str::FromStr, sync::Arc};
 
 #[async_trait]
-pub trait ChartDependentUpdater<P>: Chart
+pub trait ChartDependentUpdater<P>: ChartUpdater
 where
-    P: Chart + Send,
+    P: ChartUpdater + Send,
 {
     fn parent(&self) -> Arc<P>;
 

@@ -2,17 +2,19 @@ use crate::config::{
     toml_config::{Config, LineChartSection},
     ChartSettings,
 };
-use stats::{cache::Cache, counters, entity::sea_orm_active_enums::ChartType, lines, Chart};
+use stats::{
+    cache::Cache, counters, entity::sea_orm_active_enums::ChartType, lines, Chart, ChartUpdater,
+};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     hash::Hash,
     sync::Arc,
 };
 
-pub type ArcChart = Arc<dyn Chart + Send + Sync + 'static>;
+pub type ArcChartUpdater = Arc<dyn ChartUpdater + Send + Sync + 'static>;
 
 pub struct ChartInfo {
-    pub chart: ArcChart,
+    pub chart: ArcChartUpdater,
     pub settings: ChartSettings,
 }
 
@@ -131,7 +133,7 @@ impl Charts {
             .collect()
     }
 
-    fn all_charts() -> Vec<ArcChart> {
+    fn all_charts() -> Vec<ArcChartUpdater> {
         let accounts_cache = Cache::default();
         let new_txns = Arc::new(lines::NewTxns::default());
         let new_native_coin_transfers = Arc::new(lines::NewNativeCoinTransfers::default());

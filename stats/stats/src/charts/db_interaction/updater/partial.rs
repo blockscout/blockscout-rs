@@ -2,19 +2,22 @@
 //!
 //! In some cases performes full update (i.e. when some inconsistency was found or `force_full` is set)
 
-use super::common_operations::read::{get_last_row, get_min_block_blockscout};
+use super::{
+    common_operations::read::{get_last_row, get_min_block_blockscout},
+    ChartUpdater,
+};
 use crate::{
     charts::{
         db_interaction::{insert::insert_data_many, types::DateValue},
         find_chart,
     },
-    metrics, Chart, UpdateError,
+    metrics, UpdateError,
 };
 use async_trait::async_trait;
 use sea_orm::prelude::*;
 
 #[async_trait]
-pub trait ChartPartialUpdater: Chart {
+pub trait ChartPartialUpdater: ChartUpdater {
     async fn get_values(
         &self,
         blockscout: &DatabaseConnection,

@@ -1,4 +1,3 @@
-use super::mutex::get_global_update_mutex;
 use crate::ReadError;
 use async_trait::async_trait;
 use entity::{charts, sea_orm_active_enums::ChartType};
@@ -70,36 +69,6 @@ pub trait Chart: Sync {
 
     async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
         create_chart(db, self.name().into(), self.chart_type()).await
-    }
-
-    async fn update(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        force_full: bool,
-    ) -> Result<(), UpdateError>;
-
-    async fn update_with_mutex(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        let name = self.name();
-        let mutex = get_global_update_mutex(name).await;
-        let _permit = {
-            match mutex.try_lock() {
-                Ok(v) => v,
-                Err(_) => {
-                    tracing::warn!(
-                        chart_name = name,
-                        "found locked update mutex, waiting for unlock"
-                    );
-                    mutex.lock().await
-                }
-            }
-        };
-        self.update(db, blockscout, force_full).await
     }
 }
 

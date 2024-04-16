@@ -1,4 +1,7 @@
-use crate::{charts::db_interaction::updater::ChartBatchUpdater, UpdateError};
+use crate::{
+    charts::db_interaction::updater::{ChartBatchUpdater, ChartUpdater},
+    UpdateError,
+};
 use async_trait::async_trait;
 use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
@@ -59,8 +62,11 @@ impl crate::Chart for NewContracts {
     fn chart_type(&self) -> ChartType {
         ChartType::Line
     }
+}
 
-    async fn update(
+#[async_trait]
+impl ChartUpdater for NewContracts {
+    async fn update_values(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,

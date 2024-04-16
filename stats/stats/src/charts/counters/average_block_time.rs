@@ -1,7 +1,7 @@
 use crate::{
     charts::db_interaction::{
         types::{DateValue, DateValueDouble},
-        updater::ChartFullUpdater,
+        updater::{ChartFullUpdater, ChartUpdater},
     },
     UpdateError,
 };
@@ -56,8 +56,11 @@ impl crate::Chart for AverageBlockTime {
     fn chart_type(&self) -> ChartType {
         ChartType::Counter
     }
+}
 
-    async fn update(
+#[async_trait]
+impl ChartUpdater for AverageBlockTime {
+    async fn update_values(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
