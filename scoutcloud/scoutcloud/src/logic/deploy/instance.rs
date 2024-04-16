@@ -42,8 +42,9 @@ impl Instance {
     where
         C: ConnectionTrait,
     {
-        let instances = Self::default_select()
-            .filter(db::instances::Column::CreatorId.eq(user_token.user.id))
+        let instances = user_token
+            .user
+            .find_related(db::instances::Entity)
             .limit(MAX_LIMIT)
             .all(db)
             .await?
@@ -57,8 +58,9 @@ impl Instance {
     where
         C: ConnectionTrait,
     {
-        let count = Self::default_select()
-            .filter(db::instances::Column::CreatorId.eq(creator.user.id))
+        let count = creator
+            .user
+            .find_related(db::instances::Entity)
             .count(db)
             .await?;
         Ok(count)

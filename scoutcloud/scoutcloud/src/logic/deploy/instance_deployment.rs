@@ -53,7 +53,7 @@ impl InstanceDeployment {
         })
     }
 
-    pub async fn find_all<C>(db: &C, owner: &UserToken) -> Result<Vec<Self>, DeployError>
+    pub async fn find_all_instances<C>(db: &C, owner: &UserToken) -> Result<Vec<Self>, DeployError>
     where
         C: ConnectionTrait,
     {
@@ -78,7 +78,7 @@ impl InstanceDeployment {
             .collect()
     }
 
-    pub async fn find_all_for_instance<C>(
+    pub async fn find_deployments_of_instance<C>(
         db: &C,
         instance: &Instance,
     ) -> Result<Vec<Self>, DeployError>

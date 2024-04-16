@@ -99,7 +99,7 @@ pub async fn list_instances(
     db: &DatabaseConnection,
     user_token: &UserToken,
 ) -> Result<Vec<proto::InstanceInternal>, DeployError> {
-    let instances = InstanceDeployment::find_all(db, user_token).await?;
+    let instances = InstanceDeployment::find_all_instances(db, user_token).await?;
     instances
         .into_iter()
         // find_all should return only instances that the user has access to,
@@ -138,7 +138,7 @@ pub async fn list_deployments(
         .await?
         .ok_or(DeployError::InstanceNotFound(instance_id.to_string()))?;
     user_token.has_access_to_instance(&instance)?;
-    let deployments = InstanceDeployment::find_all_for_instance(db, &instance).await?;
+    let deployments = InstanceDeployment::find_deployments_of_instance(db, &instance).await?;
     deployments
         .into_iter()
         .map(proto::DeploymentInternal::try_from)
