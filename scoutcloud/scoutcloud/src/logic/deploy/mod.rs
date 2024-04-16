@@ -30,6 +30,8 @@ pub enum DeployError {
     InvalidStateTransition(String, String),
     #[error("db error: {0}")]
     Db(#[from] DbErr),
+    #[error("github workflow error: {0}")]
+    GithubWorkflow(anyhow::Error),
     #[error("internal error: {0}")]
     Internal(#[from] anyhow::Error),
 }

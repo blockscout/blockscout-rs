@@ -25,11 +25,14 @@ impl Deployment {
     where
         C: ConnectionTrait,
     {
+        let server_spec = instance.find_server_spec(db).await?.ok_or(anyhow::anyhow!(
+            "server size of instance not found in database"
+        ))?;
         let model = db::deployments::ActiveModel {
             instance_id: Set(instance.model.id),
             user_config: Set(instance.model.user_config.clone()),
             parsed_config: Set(instance.model.parsed_config.clone()),
-            server_spec_id: Set(instance.find_server_spec(db).await?.id),
+            server_spec_id: Set(server_spec.id),
             status: maybe_status.map(Set).unwrap_or(NotSet),
             ..Default::default()
         }
@@ -38,19 +41,16 @@ impl Deployment {
         Ok(Deployment { model })
     }
 
-    pub async fn get(db: &DatabaseConnection, id: i64) -> Result<Deployment, DeployError> {
+    pub async fn get(db: &DatabaseConnection, id: i32) -> Result<Self, DbErr> {
         let model = Self::default_select()
             .filter(db::deployments::Column::Id.eq(id))
             .one(db)
             .await?
-            .ok_or(DeployError::DeploymentNotFound)?;
+            .ok_or(DbErr::Custom("no deployment found".into()))?;
         Ok(Deployment { model })
     }
 
-    pub async fn latest_of_instance<C>(
-        db: &C,
-        instance: &Instance,
-    ) -> Result<Option<Self>, DeployError>
+    pub async fn latest_of_instance<C>(db: &C, instance: &Instance) -> Result<Option<Self>, DbErr>
     where
         C: ConnectionTrait,
     {
@@ -62,7 +62,7 @@ impl Deployment {
         Ok(deployment)
     }
 
-    pub async fn find<C>(db: &C, id: impl Into<String>) -> Result<Option<Self>, DeployError>
+    pub async fn find<C>(db: &C, id: impl Into<String>) -> Result<Option<Self>, DbErr>
     where
         C: ConnectionTrait,
     {
@@ -88,6 +88,13 @@ impl Deployment {
         &self.model.user_config
     }
 
+    pub async fn get_instance<C>(&self, db: &C) -> Result<Instance, DbErr>
+    where
+        C: ConnectionTrait,
+    {
+        Instance::get(db, self.model.instance_id).await
+    }
+
     pub async fn update_status<C>(
         &mut self,
         db: &C,
@@ -98,8 +105,22 @@ impl Deployment {
     {
         let mut model = self.model.clone().into_active_model();
         model.status = Set(status);
-        let updated = model.insert(db).await?;
-        self.model = updated;
+        self.model = model.update(db).await?;
+        Ok(self)
+    }
+
+    pub async fn update_error<C>(
+        &mut self,
+        db: &C,
+        error: impl Into<String>,
+    ) -> Result<&mut Self, DbErr>
+    where
+        C: ConnectionTrait,
+    {
+        let mut model = self.model.clone().into_active_model();
+        model.error = Set(Some(error.into()));
+        model.status = Set(DeploymentStatusType::Failed);
+        self.model = model.update(db).await?;
         Ok(self)
     }
 }

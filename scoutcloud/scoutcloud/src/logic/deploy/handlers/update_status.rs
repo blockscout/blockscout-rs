@@ -1,41 +1,42 @@
 use crate::{
     logic::{
         deploy::{deployment::map_deployment_status, handlers::user_actions},
+        jobs::JobsRunner,
         users::UserToken,
         DeployError, Deployment, GithubClient, Instance, InstanceDeployment,
     },
     server::proto,
 };
+
 use scoutcloud_entity::sea_orm_active_enums::DeploymentStatusType;
-use sea_orm::{ConnectionTrait, DatabaseConnection, TransactionTrait};
+use sea_orm::DatabaseConnection;
 
 const MIN_HOURS_DEPLOY: u64 = 12;
 
 pub async fn update_instance_status(
     db: &DatabaseConnection,
     github: &GithubClient,
+    runner: &JobsRunner,
     instance_id: &str,
     action: &proto::UpdateInstanceAction,
     user_token: &UserToken,
 ) -> Result<proto::UpdateInstanceStatusResponseInternal, DeployError> {
-    let tx = db.begin().await.map_err(|e| anyhow::anyhow!(e))?;
-    let instance = InstanceDeployment::from_instance_id(&tx, instance_id).await?;
+    let instance = InstanceDeployment::find_by_instance_uuid(db, instance_id)
+        .await?
+        .ok_or(DeployError::InstanceNotFound(instance_id.to_string()))?;
     user_token.has_access_to_instance(&instance.instance)?;
-    let result = handle_instance_action(&tx, github, instance, action, user_token).await?;
-    tx.commit().await.map_err(|e| anyhow::anyhow!(e))?;
+    let result = handle_instance_action(db, github, runner, instance, action, user_token).await?;
     Ok(result)
 }
 
-async fn handle_instance_action<C>(
-    db: &C,
-    github: &GithubClient,
+async fn handle_instance_action(
+    db: &DatabaseConnection,
+    _github: &GithubClient,
+    runner: &JobsRunner,
     instance: InstanceDeployment,
     action: &proto::UpdateInstanceAction,
     user_token: &UserToken,
-) -> Result<proto::UpdateInstanceStatusResponseInternal, DeployError>
-where
-    C: ConnectionTrait,
-{
+) -> Result<proto::UpdateInstanceStatusResponseInternal, DeployError> {
     let current_status =
         map_deployment_status(instance.deployment.as_ref().map(|d| &d.model.status));
     let allowed_statuses = match &action {
@@ -58,7 +59,7 @@ where
 
     let deployment = match action {
         proto::UpdateInstanceAction::Start => {
-            start_instance(db, github, &instance.instance, user_token).await?
+            start_instance(db, runner, &instance.instance, user_token).await?
         }
         proto::UpdateInstanceAction::Finish => {
             todo!("finish instance")
@@ -74,22 +75,21 @@ where
     })
 }
 
-async fn start_instance<C>(
-    db: &C,
-    github: &GithubClient,
+async fn start_instance(
+    db: &DatabaseConnection,
+    runner: &JobsRunner,
     instance: &Instance,
     user_token: &UserToken,
-) -> Result<Deployment, DeployError>
-where
-    C: ConnectionTrait,
-{
-    let spec = instance.find_server_spec(db).await?;
+) -> Result<Deployment, DeployError> {
+    let spec = instance.find_server_spec(db).await?.ok_or(anyhow::anyhow!(
+        "server size of instance not found in database"
+    ))?;
     user_token
         .allowed_to_deploy_for_hours(MIN_HOURS_DEPLOY, &spec)
         .await?;
-    //let run = instance.deploy_via_github(github).await?;
     let deployment =
         Deployment::try_create(db, instance, Some(DeploymentStatusType::Created)).await?;
     user_actions::log_start_instance(db, user_token, instance, &deployment).await?;
+    runner.insert_starting_task(deployment.model.id).await?;
     Ok(deployment)
 }

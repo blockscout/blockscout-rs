@@ -83,3 +83,61 @@ pub struct WorkflowRunsListRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub page: Option<u32>,
 }
+
+// https://docs.github.com/en/rest/actions/workflow-runs?apiVersion=2022-11-28#list-workflow-runs-for-a-workflow
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RunStatus {
+    Completed,
+    ActionRequired,
+    Cancelled,
+    Failure,
+    Neutral,
+    Skipped,
+    Stale,
+    Success,
+    TimedOut,
+    InProgress,
+    Queued,
+    Requested,
+    Waiting,
+    Pending,
+}
+
+impl RunStatus {
+    pub fn try_from_str(value: impl Into<String>) -> Result<Self, anyhow::Error> {
+        let value = value.into();
+        serde_plain::from_str(&value)
+            .map_err(|_| anyhow::anyhow!("invalid run status from github: {value}"))
+    }
+    pub fn short(&self) -> RunStatusShort {
+        self.clone().into()
+    }
+}
+
+pub enum RunStatusShort {
+    Completed,
+    Pending,
+    Failure,
+}
+
+impl From<RunStatus> for RunStatusShort {
+    fn from(value: RunStatus) -> Self {
+        match value {
+            RunStatus::Neutral | RunStatus::Completed | RunStatus::Success => {
+                RunStatusShort::Completed
+            }
+            RunStatus::Pending
+            | RunStatus::InProgress
+            | RunStatus::Queued
+            | RunStatus::Requested
+            | RunStatus::Waiting
+            | RunStatus::Stale => RunStatusShort::Pending,
+            RunStatus::Skipped
+            | RunStatus::ActionRequired
+            | RunStatus::Failure
+            | RunStatus::Cancelled
+            | RunStatus::TimedOut => RunStatusShort::Failure,
+        }
+    }
+}

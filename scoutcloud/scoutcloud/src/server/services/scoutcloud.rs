@@ -1,24 +1,32 @@
 use crate::{
     logic,
     logic::{
+        jobs::JobsRunner,
         users::{AuthError, UserToken},
         ConfigError, DeployError, GithubClient,
     },
     server::proto::{scoutcloud_server::Scoutcloud, *},
 };
 use convert_trait::TryConvert;
+
 use sea_orm::{ConnectionTrait, DatabaseConnection};
 use std::sync::Arc;
+
 use tonic::{Request, Response, Status};
 
 pub struct ScoutcloudService {
     db: Arc<DatabaseConnection>,
     github: Arc<GithubClient>,
+    jobs: Arc<JobsRunner>,
 }
 
 impl ScoutcloudService {
-    pub fn new(db: Arc<DatabaseConnection>, github: Arc<GithubClient>) -> Self {
-        Self { db, github }
+    pub fn new(
+        db: Arc<DatabaseConnection>,
+        github: Arc<GithubClient>,
+        jobs: Arc<JobsRunner>,
+    ) -> Self {
+        Self { db, github, jobs }
     }
 }
 
@@ -114,6 +122,7 @@ impl Scoutcloud for ScoutcloudService {
         let result = logic::deploy::update_instance_status(
             self.db.as_ref(),
             self.github.as_ref(),
+            self.jobs.as_ref(),
             &request.instance_id,
             &request.action,
             &user_token,
@@ -241,6 +250,7 @@ fn map_deploy_error(err: DeployError) -> Status {
         DeployError::Auth(e) => map_auth_error(e),
         DeployError::DeploymentNotFound => Status::not_found(err.to_string()),
         DeployError::InvalidStateTransition(_, _) => Status::invalid_argument(err.to_string()),
+        DeployError::GithubWorkflow(_) => Status::internal(err.to_string()),
     }
 }
 

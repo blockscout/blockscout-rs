@@ -1,7 +1,7 @@
 use super::{types, GithubClient, GithubError};
 use anyhow::Context;
 use chrono::Utc;
-use octocrab::{models as octo_types, Page};
+use octocrab::{models as octo_types, models::RunId, Page};
 use serde::Serialize;
 use tracing::instrument;
 
@@ -110,7 +110,7 @@ impl GithubClient {
 
     pub async fn get_workflow_run(
         &self,
-        run_id: u64,
+        run_id: impl Into<RunId>,
     ) -> Result<octo_types::workflows::Run, GithubError> {
         let run = self
             .client

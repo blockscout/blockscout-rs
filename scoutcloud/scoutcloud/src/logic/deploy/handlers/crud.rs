@@ -90,7 +90,9 @@ pub async fn get_instance(
     instance_id: &str,
     user_token: &UserToken,
 ) -> Result<proto::InstanceInternal, DeployError> {
-    let instance_deployment = InstanceDeployment::from_instance_id(db, instance_id).await?;
+    let instance_deployment = InstanceDeployment::find_by_instance_uuid(db, instance_id)
+        .await?
+        .ok_or(DeployError::InstanceNotFound(instance_id.to_string()))?;
     user_token.has_access_to_instance(&instance_deployment.instance)?;
     proto::InstanceInternal::try_from(instance_deployment)
 }
@@ -114,7 +116,9 @@ pub async fn get_deployment(
     deployment_id: &str,
     user_token: &UserToken,
 ) -> Result<proto::DeploymentInternal, DeployError> {
-    let result = InstanceDeployment::from_deployment_id(db, deployment_id).await?;
+    let result = InstanceDeployment::find_by_deployment_uuid(db, deployment_id)
+        .await?
+        .ok_or(DeployError::DeploymentNotFound)?;
     user_token.has_access_to_instance(&result.instance)?;
     proto::DeploymentInternal::try_from(result)
 }
@@ -124,7 +128,9 @@ pub async fn get_current_deployment(
     instance_id: &str,
     user_token: &UserToken,
 ) -> Result<proto::DeploymentInternal, DeployError> {
-    let result = InstanceDeployment::from_instance_id(db, instance_id).await?;
+    let result = InstanceDeployment::find_by_instance_uuid(db, instance_id)
+        .await?
+        .ok_or(DeployError::InstanceNotFound(instance_id.to_string()))?;
     user_token.has_access_to_instance(&result.instance)?;
     proto::DeploymentInternal::try_from(result)
 }

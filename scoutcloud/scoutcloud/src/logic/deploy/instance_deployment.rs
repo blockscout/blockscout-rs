@@ -6,7 +6,7 @@ use crate::{
     uuid_eq,
 };
 use scoutcloud_entity as db;
-use sea_orm::{ConnectionTrait, LoaderTrait, QueryFilter, QuerySelect};
+use sea_orm::{ConnectionTrait, DbErr, LoaderTrait, QueryFilter, QuerySelect};
 
 pub struct InstanceDeployment {
     pub instance: Instance,
@@ -14,7 +14,7 @@ pub struct InstanceDeployment {
 }
 
 impl InstanceDeployment {
-    pub async fn from_instance<C>(db: &C, instance: Instance) -> Result<Self, DeployError>
+    pub async fn from_instance<C>(db: &C, instance: Instance) -> Result<Self, DbErr>
     where
         C: ConnectionTrait,
     {
@@ -25,32 +25,45 @@ impl InstanceDeployment {
         })
     }
 
-    pub async fn from_instance_id<C>(db: &C, instance_id: &str) -> Result<Self, DeployError>
+    pub async fn find_by_instance_uuid<C>(
+        db: &C,
+        instance_uuid: &str,
+    ) -> Result<Option<Self>, DbErr>
     where
         C: ConnectionTrait,
     {
-        let instance = Instance::find(db, instance_id)
-            .await?
-            .ok_or(DeployError::InstanceNotFound(instance_id.to_string()))?;
-        Self::from_instance(db, instance).await
+        let instance = match Instance::find(db, instance_uuid).await? {
+            Some(instance) => instance,
+            None => return Ok(None),
+        };
+        Self::from_instance(db, instance).await.map(Some)
     }
 
-    pub async fn from_deployment_id<C>(db: &C, deployment_id: &str) -> Result<Self, DeployError>
+    pub async fn find_by_deployment_uuid<C>(
+        db: &C,
+        deployment_uuid: &str,
+    ) -> Result<Option<Self>, DbErr>
     where
         C: ConnectionTrait,
     {
-        let (deployment, instance) = Deployment::default_select()
-            .filter(uuid_eq!(db::deployments::Column::ExternalId, deployment_id))
+        let (deployment, instance) = match Deployment::default_select()
+            .filter(uuid_eq!(
+                db::deployments::Column::ExternalId,
+                deployment_uuid
+            ))
             .find_also_related(db::instances::Entity)
             .one(db)
             .await?
-            .ok_or(DeployError::DeploymentNotFound)?;
-        let instance = instance.ok_or(anyhow::anyhow!("deployment without instance"))?;
+        {
+            Some((deployment, instance)) => (deployment, instance),
+            None => return Ok(None),
+        };
+        let instance = instance.ok_or(DbErr::Custom("deployment without instance".into()))?;
 
-        Ok(Self {
+        Ok(Some(Self {
             instance: Instance::new(instance),
             deployment: Some(Deployment::new(deployment)),
-        })
+        }))
     }
 
     pub async fn find_all_instances<C>(db: &C, owner: &UserToken) -> Result<Vec<Self>, DeployError>

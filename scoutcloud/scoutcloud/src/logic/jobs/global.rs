@@ -1,7 +1,7 @@
-use std::sync::Arc;
-use sea_orm::DatabaseConnection;
-use tokio::sync::OnceCell;
 use crate::logic::GithubClient;
+use sea_orm::DatabaseConnection;
+use std::sync::Arc;
+use tokio::sync::OnceCell;
 
 static DATABASE: OnceCell<Arc<DatabaseConnection>> = OnceCell::const_new();
 
@@ -16,10 +16,11 @@ pub fn get_db_connection() -> Arc<DatabaseConnection> {
 static GITHUB: OnceCell<Arc<GithubClient>> = OnceCell::const_new();
 
 pub fn init_github_client(github: Arc<GithubClient>) {
-    GITHUB.set(github).expect("github client already initialized");
+    GITHUB
+        .set(github)
+        .expect("github client already initialized");
 }
 
 pub fn get_github_client() -> Arc<GithubClient> {
     GITHUB.get().expect("github client not initialized").clone()
 }
-
