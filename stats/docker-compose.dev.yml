@@ -1,11 +1,6 @@
 version: '3.9'
 
 services:
-  # redis-db:
-  #   extends:
-  #     file: ./services/redis.yml
-  #     service: redis-db
-
   db-init:
     image: postgres:15
     volumes:
@@ -45,7 +40,6 @@ services:
   backend:
     depends_on:
       - db
-      # - redis-db
     image: blockscout/blockscout:6.4.0
     links:
       - db:database
@@ -61,21 +55,11 @@ services:
       PORT: 4000
     ports:
       - 80:4000
-    # entrypoint: "/bin/sh"
-    # command:
-    # [
-    #   "bin/blockscout",
-    #   "eval",
-    #   "'Elixir.Explorer.ReleaseTasks.create_and_migrate()'",
-    #   "&&",
-    #   "bin/blockscout",
-    #   "start"
-    # ]
     command:
       [
         "/bin/sh",
         "-c",
-        "bin/blockscout eval \"Elixir.Explorer.ReleaseTasks.create_and_migrate()\" && echo aboba && bin/blockscout start"
+        "bin/blockscout eval \"Elixir.Explorer.ReleaseTasks.create_and_migrate()\" && bin/blockscout start"
       ]
 
   stats-db-init:
