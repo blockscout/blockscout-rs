@@ -44,6 +44,8 @@ num-bigint = { version = "0.4.4", features = ["serde"] }
 slug = "0.1.5"
 convert-trait = { git = "https://github.com/blockscout/actix-prost", tag="v1.0.0" }
 rust_decimal = "1.35.0"
+fang = { version = "0.10.4" , features = ["asynk", "derive-error" ], default-features = false }
+clokwerk = "0.4.0"
 
 ## Uncomment this if needed
 #ethabi = "18.0"

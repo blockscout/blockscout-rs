@@ -64,6 +64,18 @@ impl Instance {
         Ok(count)
     }
 
+    // pub async fn get<C>(db: &C, id: i64) -> Result<Self, DbErr>
+    // where
+    //     C: ConnectionTrait,
+    // {
+    //     let model = db::instances::Entity::find()
+    //         .filter(db::instances::Column::Id.eq(id))
+    //         .one(db)
+    //         .await?
+    //         .ok_or(DbErr::Custom("no instance found".into()))?;
+    //     Ok(Instance { model })
+    // }
+
     pub async fn try_create<C>(
         db: &C,
         name: &str,

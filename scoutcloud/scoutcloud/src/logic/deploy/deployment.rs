@@ -38,6 +38,15 @@ impl Deployment {
         Ok(Deployment { model })
     }
 
+    pub async fn get(db: &DatabaseConnection, id: i64) -> Result<Deployment, DeployError> {
+        let model = Self::default_select()
+            .filter(db::deployments::Column::Id.eq(id))
+            .one(db)
+            .await?
+            .ok_or(DeployError::DeploymentNotFound)?;
+        Ok(Deployment { model })
+    }
+
     pub async fn latest_of_instance<C>(
         db: &C,
         instance: &Instance,

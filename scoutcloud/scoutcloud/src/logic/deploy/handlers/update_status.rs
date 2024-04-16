@@ -87,9 +87,9 @@ where
     user_token
         .allowed_to_deploy_for_hours(MIN_HOURS_DEPLOY, &spec)
         .await?;
-    let run = instance.deploy_via_github(github).await?;
+    //let run = instance.deploy_via_github(github).await?;
     let deployment =
         Deployment::try_create(db, instance, Some(DeploymentStatusType::Created)).await?;
-    user_actions::log_start_instance(db, user_token, instance, &deployment, &run).await?;
+    user_actions::log_start_instance(db, user_token, instance, &deployment).await?;
     Ok(deployment)
 }

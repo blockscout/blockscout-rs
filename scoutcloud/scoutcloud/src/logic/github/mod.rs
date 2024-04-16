@@ -18,6 +18,7 @@ pub enum GithubError {
     Internal(anyhow::Error),
 }
 
+#[derive(Clone, Debug)]
 pub struct GithubClient {
     client: octocrab::Octocrab,
     owner: String,

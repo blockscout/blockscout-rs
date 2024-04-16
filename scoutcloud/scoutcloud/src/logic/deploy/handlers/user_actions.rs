@@ -95,7 +95,6 @@ pub(crate) async fn log_start_instance(
     user_token: &UserToken,
     instance: &Instance,
     deployment: &Deployment,
-    run: &octocrab::models::workflows::Run,
 ) -> Result<(), sea_orm::DbErr> {
     log_user_action(
         db,
@@ -105,7 +104,6 @@ pub(crate) async fn log_start_instance(
             "instance_slug": instance.model.slug,
             "instance_id": instance.model.external_id,
             "deployment_id": deployment.model.external_id,
-            "run_id": run.id,
         })),
     )
     .await?;

@@ -13,6 +13,7 @@ use blockscout_service_launcher::{database, launcher, launcher::LaunchSettings, 
 use migration::Migrator;
 use scoutcloud_proto::blockscout::scoutcloud::v1::scoutcloud_server::ScoutcloudServer;
 use std::sync::Arc;
+use crate::logic::jobs::FangRunner;
 
 const SERVICE_NAME: &str = "scoutcloud";
 
@@ -45,7 +46,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let db_connection = Arc::new(
         database::initialize_postgres::<Migrator>(
-            &settings.database.connect.url(),
+            &settings.database.connect.clone().url(),
             settings.database.create_database,
             settings.database.run_migrations,
         )
@@ -58,6 +59,10 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         db_connection.clone(),
         github.clone(),
     ));
+
+    FangRunner::start(db_connection, github, &settings.database.connect.url())
+        .await?;
+
 
     let router = Router { health, scoutcloud };
 

@@ -108,6 +108,18 @@ impl GithubClient {
         Ok(pages.take_items().into_iter().next())
     }
 
+    pub async fn get_workflow_run(
+        &self,
+        run_id: u64,
+    ) -> Result<octo_types::workflows::Run, GithubError> {
+        let run = self
+            .client
+            .workflows(self.owner.clone(), self.repo.clone())
+            .get(run_id.into())
+            .await?;
+        Ok(run)
+    }
+
     async fn create_blob(&self, content: &str) -> Result<types::CreateBlobResponse, GithubError> {
         let blob: types::CreateBlobResponse = self
             .client
