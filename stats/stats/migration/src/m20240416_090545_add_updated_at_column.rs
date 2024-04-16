@@ -28,12 +28,18 @@ impl MigrationTrait for Migration {
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        // appropriate timezone (local) should be considered automatically;
+        // local is assumed because there was no mention of timezone in init migration
         let sql = r#"
             ALTER TABLE charts
                 DROP COLUMN last_updated_at;
 
-            ALTER TABLE charts ALTER COLUMN created_at SET DEFAULT (now());
-            ALTER TABLE chart_data ALTER COLUMN created_at SET DEFAULT (now());
+            ALTER TABLE charts
+                ALTER COLUMN created_at TYPE timestamp USING created_at
+                , ALTER COLUMN created_at SET DEFAULT (now());
+            ALTER TABLE chart_data
+                ALTER COLUMN created_at TYPE timestamp USING created_at
+                , ALTER COLUMN created_at SET DEFAULT (now());
         "#;
         crate::from_sql(manager, sql).await
     }

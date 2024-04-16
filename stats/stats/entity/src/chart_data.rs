@@ -10,7 +10,7 @@ pub struct Model {
     pub chart_id: i32,
     pub date: Date,
     pub value: String,
-    pub created_at: DateTime,
+    pub created_at: DateTimeWithTimeZone,
     pub min_blockscout_block: Option<i64>,
 }
 

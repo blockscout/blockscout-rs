@@ -11,7 +11,7 @@ pub struct Model {
     #[sea_orm(unique)]
     pub name: String,
     pub chart_type: ChartType,
-    pub created_at: DateTime,
+    pub created_at: DateTimeWithTimeZone,
     pub last_updated_at: Option<DateTime>,
 }
 
