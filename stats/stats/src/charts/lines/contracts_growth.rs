@@ -60,8 +60,7 @@ impl crate::Chart for ContractsGrowth {
         blockscout: &DatabaseConnection,
         force_full: bool,
     ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, force_full).await?;
-        Ok(())
+        self.update_with_values(db, blockscout, force_full).await
     }
 }
 
