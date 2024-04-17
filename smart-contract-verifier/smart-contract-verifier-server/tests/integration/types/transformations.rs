@@ -39,7 +39,7 @@ pub struct TestCase {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct TestCaseMultiPart(TestCase);
+pub struct TestCaseMultiPart(pub TestCase);
 
 impl TestCaseRequest for TestCaseMultiPart {
     fn route() -> &'static str {
@@ -90,7 +90,7 @@ impl TestCaseRequest for TestCaseMultiPart {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct TestCaseStandardJson(TestCase);
+pub struct TestCaseStandardJson(pub TestCase);
 
 impl TestCaseRequest for TestCaseStandardJson {
     fn route() -> &'static str {

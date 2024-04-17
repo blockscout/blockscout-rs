@@ -175,6 +175,14 @@ impl<'a, C: EvmCompiler> ContractVerifier<'a, C> {
                 .unwrap_or(Error::NoMatchingContracts)
         })?;
 
+        // Currently the only way to check if the source matches exactly is via metadata hash
+        // inside bytecode. If that hash is not present we consider all matches as partial.
+        let match_type = if C::contains_metadata_hash(self.compiler_version, compiler_input) {
+            verification_success.match_type
+        } else {
+            MatchType::Partial
+        };
+
         let (_raw_output, compiler_output, _compiler_output_modified) = outputs;
         // We accept compiler input and compiler version by reference, so that we
         // avoid their cloning if verification fails.
@@ -187,7 +195,7 @@ impl<'a, C: EvmCompiler> ContractVerifier<'a, C> {
             abi: verification_success.abi,
             constructor_args: verification_success.constructor_args,
             local_bytecode_parts: verification_success.local_bytecode_parts,
-            match_type: verification_success.match_type,
+            match_type,
             compilation_artifacts: verification_success.compilation_artifacts,
             creation_input_artifacts: verification_success.creation_input_artifacts,
             deployed_bytecode_artifacts: verification_success.deployed_bytecode_artifacts,

@@ -81,11 +81,14 @@ pub async fn verify_solidity(
             .await?
     };
 
+    let contains_metadata_hash =
+        Compilers::<SolidityCompiler>::contains_metadata_hash(&compiler_version, compiler_input);
     let compilation_result = compilation::parse_solidity_contracts(
         compiler_version,
         compiler_input,
         raw_compiler_output,
         modified_raw_compiler_output,
+        contains_metadata_hash,
     )
     .map_err(|err| {
         tracing::error!("parsing compiled contracts failed: {err:#}");
@@ -197,12 +200,18 @@ fn verify_contract(
             )
             .expect("is json serializable"),
             creation_match: does_creation_match.then_some(Match {
-                match_type: match_type(creation_values.clone()),
+                match_type: match_type(
+                    creation_values.clone(),
+                    compilation_result.contains_metadata_hash,
+                ),
                 values: creation_values,
                 transformations: creation_transformations,
             }),
             runtime_match: does_runtime_match.then_some(Match {
-                match_type: match_type(runtime_values.clone()),
+                match_type: match_type(
+                    runtime_values.clone(),
+                    compilation_result.contains_metadata_hash,
+                ),
                 values: runtime_values,
                 transformations: runtime_transformations,
             }),
@@ -250,7 +259,11 @@ fn choose_best_contract(successes: Vec<BatchSuccess>) -> Option<BatchSuccess> {
     Some(best_contract)
 }
 
-fn match_type(values: serde_json::Value) -> MatchType {
+fn match_type(values: serde_json::Value, contains_metadata_hash: bool) -> MatchType {
+    if !contains_metadata_hash {
+        return MatchType::Partial;
+    }
+
     #[derive(serde::Deserialize)]
     #[serde(rename_all = "camelCase")]
     struct Values {
