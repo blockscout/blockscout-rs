@@ -1,5 +1,5 @@
 use crate::logic::{
-    config::{macros, Error},
+    config::{macros, ConfigError},
     ConfigValidationContext,
 };
 use std::fmt::{Display, Formatter};
@@ -26,7 +26,7 @@ macros::custom_env_var!(
         (ConfigPath, "frontend.ingress.hostname")
     ],
     {
-        fn new(v: String, _context: &ConfigValidationContext) -> Result<Self, Error> {
+        fn new(v: String, _context: &ConfigValidationContext) -> Result<Self, ConfigError> {
             if v.contains('.') {
                 Ok(Self::Host(v))
             } else {

@@ -1,13 +1,18 @@
-use super::{Error, GithubClient};
+use super::{GithubClient, GithubError};
 use chrono::Utc;
+use lazy_static::lazy_static;
 use octocrab::models::workflows::Run;
 use serde::{Deserialize, Serialize};
+
+lazy_static! {
+    static ref GITHUB_WORKFLOW_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::new(());
+}
 
 #[async_trait::async_trait]
 pub trait Workflow: Serialize + Send + Sync {
     fn id() -> &'static str;
 
-    async fn run(&self, client: &GithubClient) -> Result<(), Error> {
+    async fn run(&self, client: &GithubClient) -> Result<(), GithubError> {
         client
             .run_workflow(Self::id(), &client.default_branch_name, self)
             .await
@@ -15,17 +20,20 @@ pub trait Workflow: Serialize + Send + Sync {
     async fn get_latest_run(
         client: &GithubClient,
         created_from: Option<chrono::DateTime<Utc>>,
-    ) -> Result<Option<Run>, Error> {
+    ) -> Result<Option<Run>, GithubError> {
         client
             .get_latest_workflow_run(Self::id(), created_from)
             .await
     }
 
-    async fn run_and_get_latest(
+    async fn run_and_get_latest_with_mutex(
         &self,
         client: &GithubClient,
         max_try: u8,
-    ) -> Result<Option<Run>, Error> {
+    ) -> Result<Option<Run>, GithubError> {
+        // since we want to start workflow and get the latest run,
+        // we need to lock the mutex to prevent getting wrong run
+        let _lock = GITHUB_WORKFLOW_MUTEX.lock().await;
         let now = chrono::Utc::now();
         self.run(client).await?;
         for _ in 0..max_try {
@@ -59,6 +67,20 @@ impl Workflow for DeployWorkflow {
     }
 }
 
+impl DeployWorkflow {
+    pub fn new(client: String, app: AppVariant) -> Self {
+        Self { client, app }
+    }
+
+    pub fn instance(client: String) -> Self {
+        Self::new(client, AppVariant::Instance)
+    }
+
+    pub fn postgres(client: String) -> Self {
+        Self::new(client, AppVariant::Postgres)
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CleanupWorkflow {
     pub client: String,
@@ -68,6 +90,20 @@ pub struct CleanupWorkflow {
 impl Workflow for CleanupWorkflow {
     fn id() -> &'static str {
         "cleanup.yaml"
+    }
+}
+
+impl CleanupWorkflow {
+    pub fn new(client: String, app: AppVariant) -> Self {
+        Self { client, app }
+    }
+
+    pub fn instance(client: String) -> Self {
+        Self::new(client, AppVariant::Instance)
+    }
+
+    pub fn postgres(client: String) -> Self {
+        Self::new(client, AppVariant::Postgres)
     }
 }
 
@@ -88,7 +124,7 @@ mod tests {
             app: AppVariant::Instance,
         };
         let run = deploy
-            .run_and_get_latest(&client, 5)
+            .run_and_get_latest_with_mutex(&client, 5)
             .await
             .expect("run and get workflow")
             .expect("no workflows returned");

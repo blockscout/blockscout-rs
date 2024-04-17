@@ -1,5 +1,5 @@
 use crate::logic::{
-    config::{macros, Error},
+    config::{macros, ConfigError},
     ConfigValidationContext,
 };
 use serde::{Deserialize, Serialize};
@@ -17,7 +17,7 @@ macros::custom_env_var!(
         (ConfigPath, "config.network.currency.name")
     ],
     {
-        fn new(v: String, _config: &ConfigValidationContext) -> Result<Self, Error> {
+        fn new(v: String, _config: &ConfigValidationContext) -> Result<Self, ConfigError> {
             Ok(Self(v))
         }
 

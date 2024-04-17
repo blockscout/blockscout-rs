@@ -67,20 +67,20 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
             "ETH": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
         },
         "owner": {
-            "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
+            "hash": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
         },
         "registrant": {
-            "hash": "0x220866b1a2219f40e72f5c628b65d54268ca3a9d",
+            "hash": "0x220866B1A2219f40e72f5c628B65D54268cA3A9D",
         },
         "wrapped_owner": null,
         "registration_date": "2017-06-18T08:39:14.000Z",
         "resolved_address": {
-            "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
+            "hash": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
         },
         "tokens": [
             {
                 "id": "79233663829379634837589865448569342784712482819484549289560981379859480642508",
-                "contract_hash": "0x57f1887a8bf19b14fc0df6fd9b2acc9af147ea85",
+                "contract_hash": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85",
                 "type": "NATIVE_DOMAIN_TOKEN",
             }
         ],
@@ -96,29 +96,29 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
             "name": "wa🇬🇲i.eth",
             "other_addresses": {},
             "owner": {
-                "hash": "0xd4416b13d2b3a9abae7acd5d6c2bbdbe25686401",
+                "hash": "0xD4416b13d2b3a9aBae7AcD5D6C2BbDBE25686401",
             },
             "registrant": {
-                "hash": "0x9c996076a85b46061d9a70ff81f013853a86b619",
+                "hash": "0x9C996076A85B46061D9a70ff81F013853A86b619",
             },
             "registration_date": "2021-11-12T11:36:46.000Z",
             "resolved_address": {
-                "hash": "0x9c996076a85b46061d9a70ff81f013853a86b619",
+                "hash": "0x9C996076A85B46061D9a70ff81F013853A86b619",
             },
             "tokens": [
                 {
-                    "contract_hash": "0x57f1887a8bf19b14fc0df6fd9b2acc9af147ea85",
+                    "contract_hash": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85",
                     "id": "46567936673033819165815925923418529171479684343878036049875289456825310839168",
                     "type": "NATIVE_DOMAIN_TOKEN",
                 },
                 {
-                    "contract_hash": "0xd4416b13d2b3a9abae7acd5d6c2bbdbe25686401",
+                    "contract_hash": "0xD4416b13d2b3a9aBae7AcD5D6C2BbDBE25686401",
                     "id": "42184447928009120460686389475560276149795188091233200941948299907753855407605",
                     "type": "WRAPPED_DOMAIN_TOKEN",
                 },
             ],
             "wrapped_owner": {
-                "hash": "0x9c996076a85b46061d9a70ff81f013853a86b619",
+                "hash": "0x9C996076A85B46061D9a70ff81F013853A86b619",
             },
         })
     );
@@ -128,7 +128,7 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
         {
             "action": "setResolver",
             "from_address": {
-                "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045"
+                "hash": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
             },
             "timestamp": "2021-02-15T17:19:17.000000Z",
             "transaction_hash": "0xbb13efab7f1f798f63814a4d184e903e050b38c38aa407f9294079ee7b3110c9"
@@ -136,7 +136,7 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
         {
             "action": "multicall",
             "from_address": {
-                "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045"
+                "hash": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
             },
             "timestamp": "2021-02-15T17:19:09.000000Z",
             "transaction_hash": "0x160ef4492c731ac6b59beebe1e234890cd55d4c556f8847624a0b47125fe4f84"
@@ -144,7 +144,7 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
         {
             "action": "migrateAll",
             "from_address": {
-                "hash": "0x0904dac3347ea47d208f3fd67402d039a3b99859"
+                "hash": "0x0904Dac3347eA47d208F3Fd67402D039a3b99859"
             },
             "timestamp": "2020-02-06T18:23:40.000000Z",
             "transaction_hash": "0xc3f86218c67bee8256b74b9b65d746a40bb5318a8b57948b804dbbbc3d0d7864"
@@ -152,7 +152,7 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
         {
             "action": "setAddr",
             "from_address": {
-                "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045"
+                "hash": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
             },
             "timestamp": "2019-10-29T13:47:34.000000Z",
             "transaction_hash": "0x09922ac0caf1efcc8f68ce004f382b46732258870154d8805707a1d4b098dfd0"
@@ -160,7 +160,7 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
         {
             "action": "transferRegistrars",
             "from_address": {
-                "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045"
+                "hash": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
             },
             "timestamp": "2019-07-10T05:58:51.000000Z",
             "transaction_hash": "0xea30bda97a7e9afcca208d5a648e8ec1e98b245a8884bf589dec8f4aa332fb14"
@@ -168,7 +168,7 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
         {
             "action": "finalizeAuction",
             "from_address": {
-                "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045"
+                "hash": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
             },
             "timestamp": "2017-06-18T08:39:14.000000Z",
             "transaction_hash": "0xdd16deb1ea750037c3ed1cae5ca20ff9db0e664a5146e5a030137d277a9247f3"
@@ -199,12 +199,12 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
             "id": "0x68b620f61c87062cf680144f898582a631c90e39dd1badb35c241be0a7284fff",
             "name": "sashaxyz.eth",
             "owner": {
-                "hash": "0x66a6f7744ce4dea450910b81a7168588f992eafb",
+                "hash": "0x66A6f7744ce4DEa450910B81A7168588F992eAfB",
             },
             "wrapped_owner": null,
             "registration_date": "2021-12-24T10:23:57.000Z",
             "resolved_address": {
-                "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
+                "hash": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
             },
         }),
         json!({
@@ -212,14 +212,14 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
             "id": "0x5d438d292de31e08576d5bcd8a93aa41b401b9d9aeaba57da1a32c003e5fd5f5",
             "name": "wa🇬🇲i.eth",
             "owner": {
-                "hash": "0xd4416b13d2b3a9abae7acd5d6c2bbdbe25686401",
+                "hash": "0xD4416b13d2b3a9aBae7AcD5D6C2BbDBE25686401",
             },
             "wrapped_owner": {
-                "hash": "0x9c996076a85b46061d9a70ff81f013853a86b619",
+                "hash": "0x9C996076A85B46061D9a70ff81F013853A86b619",
             },
             "registration_date": "2021-11-12T11:36:46.000Z",
             "resolved_address": {
-                "hash": "0x9c996076a85b46061d9a70ff81f013853a86b619",
+                "hash": "0x9C996076A85B46061D9a70ff81F013853A86b619",
             },
         }),
         json!({
@@ -227,12 +227,12 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
             "id": "0xeb4f647bea6caa36333c816d7b46fdcb05f9466ecacc140ea8c66faf15b3d9f1",
             "name": "test.eth",
             "owner": {
-                "hash": "0xbd6bbe64bf841b81fc5a6e2b760029e316f2783b",
+                "hash": "0xbD6BBE64Bf841b81FC5A6e2b760029e316F2783B",
             },
             "wrapped_owner": null,
             "registration_date": "2019-10-24T07:26:47.000Z",
             "resolved_address": {
-                "hash": "0xeefb13c7d42efcc655e528da6d6f7bbcf9a2251d",
+                "hash": "0xeefB13C7D42eFCc655E528dA6d6F7bBcf9A2251d",
             },
         }),
         json!({
@@ -240,7 +240,7 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
             "id": "0x6db3aa7fbaf005b22a12dd698aa41e3456ea93d2ab312796ee29fca980c99dcd",
             "name": "biglobe.eth",
             "owner": {
-                "hash": "0x916a3bc6f0306426adaaa101fe28fea7a5f69b06",
+                "hash": "0x916a3bC6F0306426adAAA101FE28Fea7A5f69b06",
             },
             "registration_date": "2017-07-08T02:11:54.000Z",
             "resolved_address": null,
@@ -274,10 +274,10 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
             "id": "0x68b620f61c87062cf680144f898582a631c90e39dd1badb35c241be0a7284fff",
             "name": "sashaxyz.eth",
             "resolved_address": {
-                "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045"
+                "hash": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
             },
             "owner": {
-                "hash": "0x66a6f7744ce4dea450910b81a7168588f992eafb"
+                "hash": "0x66A6f7744ce4DEa450910B81A7168588F992eAfB"
             },
             "wrapped_owner": null,
             "registration_date": "2021-12-24T10:23:57.000Z",
@@ -299,10 +299,10 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
             "id": "0xee6c4522aab0003e8d14cd40a6af439055fd2577951148c14b6cea9a53475835",
             "name": "vitalik.eth",
             "resolved_address": {
-                "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045"
+                "hash": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
             },
             "owner": {
-                "hash": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045"
+                "hash": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
             },
             "wrapped_owner": null,
             "registration_date": "2017-06-18T08:39:14.000Z",
@@ -318,7 +318,7 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
         HashMap::from_iter([
             (
                 "address".into(),
-                "0xd8da6bf26964af9d7eed9e03e53415d37aa96045".into(),
+                "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045".into(),
             ),
             ("resolved_to".into(), "true".into()),
             ("owned_by".into(), "true".into()),
@@ -337,9 +337,11 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
         &json!({
             "addresses": [
                 "0xeefb13c7d42efcc655e528da6d6f7bbcf9a2251d",
+                // unchecksummed
                 "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
                 "0x9f7f7ddbfb8e14d1756580ba8037530da0880b99",
-                "0x9c996076a85b46061d9a70ff81f013853a86b619",
+                // checksummed
+                "0x9C996076A85B46061D9a70ff81F013853A86b619",
                 "0xee6c4522aab0003e8d14cd40a6af439055fd2577",
             ],
         }),
@@ -349,15 +351,15 @@ async fn check_basic_scenario_eth(settings: Settings, base: Url) {
         response,
         json!({
             "names": {
-                "0x9c996076a85b46061d9a70ff81f013853a86b619": "wa🇬🇲i.eth",
-                "0xd8da6bf26964af9d7eed9e03e53415d37aa96045": "vitalik.eth",
+                "0x9C996076A85B46061D9a70ff81F013853A86b619": "wa🇬🇲i.eth",
+                "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045": "vitalik.eth",
             }
         })
     );
 
     let response: Value = send_get_request(
         &base,
-        "/api/v1/1/addresses/0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
+        "/api/v1/1/addresses/0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
     )
     .await;
     assert_eq!(
@@ -392,20 +394,20 @@ async fn check_basic_scenario_gno(settings: Settings, base: Url) {
             "name": "levvv.gno",
             "other_addresses": {},
             "owner": {
-                "hash": "0xc0de20a37e2dac848f81a93bd85fe4acdde7c0de",
+                "hash": "0xc0De20A37E2dAC848F81A93BD85FE4ACDdE7C0DE",
             },
             "wrapped_owner": null,
             "registrant":{
-                "hash": "0xc0de20a37e2dac848f81a93bd85fe4acdde7c0de",
+                "hash": "0xc0De20A37E2dAC848F81A93BD85FE4ACDdE7C0DE",
             },
             "registration_date": "2023-11-29T09:09:25.000Z",
             "resolved_address":{
-                "hash": "0xc0de20a37e2dac848f81a93bd85fe4acdde7c0de",
+                "hash": "0xc0De20A37E2dAC848F81A93BD85FE4ACDdE7C0DE",
             },
             "tokens": [
                 {
                     "id": "11990319655936053415661126359086567018700354293176496925267203544835860524390",
-                    "contract_hash": "0xfd3d666db2557983f3f04d61f90e35cc696f6d60",
+                    "contract_hash": "0xfd3d666dB2557983F3F04d61f90E35cc696f6D60",
                     "type": "NATIVE_DOMAIN_TOKEN",
                 }
             ]

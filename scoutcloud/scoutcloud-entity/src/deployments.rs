@@ -34,15 +34,7 @@ pub enum Relation {
         on_update = "NoAction",
         on_delete = "NoAction"
     )]
-    Instances2,
-    #[sea_orm(
-        belongs_to = "super::instances::Entity",
-        from = "Column::InstanceId",
-        to = "super::instances::Column::Id",
-        on_update = "NoAction",
-        on_delete = "NoAction"
-    )]
-    Instances1,
+    Instances,
     #[sea_orm(
         belongs_to = "super::server_specs::Entity",
         from = "Column::ServerSpecId",
@@ -50,20 +42,24 @@ pub enum Relation {
         on_update = "NoAction",
         on_delete = "NoAction"
     )]
-    ServerSpecs2,
-    #[sea_orm(
-        belongs_to = "super::server_specs::Entity",
-        from = "Column::ServerSpecId",
-        to = "super::server_specs::Column::Id",
-        on_update = "NoAction",
-        on_delete = "NoAction"
-    )]
-    ServerSpecs1,
+    ServerSpecs,
 }
 
 impl Related<super::balance_expenses::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::BalanceExpenses.def()
+    }
+}
+
+impl Related<super::instances::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Instances.def()
+    }
+}
+
+impl Related<super::server_specs::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::ServerSpecs.def()
     }
 }
 

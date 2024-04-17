@@ -1,5 +1,5 @@
 use crate::logic::{
-    config::Error, ConfigValidationContext, ParsedVariable, ParsedVariableKey, UserVariable,
+    config::ConfigError, ConfigValidationContext, ParsedVariable, ParsedVariableKey, UserVariable,
 };
 use anyhow::Context;
 use ethers::{prelude::*, providers::Provider, types::BlockNumber};
@@ -11,24 +11,24 @@ pub struct RpcUrl(Url);
 impl UserVariable for RpcUrl {
     type SourceType = Url;
 
-    fn new(v: Url, _config: &ConfigValidationContext) -> Result<Self, Error> {
+    fn new(v: Url, _config: &ConfigValidationContext) -> Result<Self, ConfigError> {
         Ok(Self(v))
     }
 
     async fn build_config_vars(
         &self,
         _config: &ConfigValidationContext,
-    ) -> Result<Vec<ParsedVariable>, Error> {
+    ) -> Result<Vec<ParsedVariable>, ConfigError> {
         let mut parsed = vec![];
 
         // check json rpc
         let provider = Provider::<Http>::try_from(self.0.as_str())
             .context("failed to parse url as http")
-            .map_err(|e| Error::Validation(e.to_string()))?;
+            .map_err(|e| ConfigError::Validation(e.to_string()))?;
 
         check_jsonrpc_health(&provider)
             .await
-            .map_err(|e| Error::Validation(e.to_string()))?;
+            .map_err(|e| ConfigError::Validation(e.to_string()))?;
         parsed.push((
             ParsedVariableKey::BackendEnv("ETHEREUM_JSONRPC_HTTP_URL".to_string()),
             serde_json::Value::String(self.0.to_string()),
@@ -75,7 +75,7 @@ impl UserVariable for RpcUrl {
         // check websocket
         if let Some(ws_url) = get_any_healthy_ws_url(self.0.clone())
             .await
-            .map_err(Error::Internal)?
+            .map_err(ConfigError::Internal)?
         {
             parsed.push((
                 ParsedVariableKey::BackendEnv("ETHEREUM_JSONRPC_WS_URL".to_string()),
@@ -144,7 +144,7 @@ async fn get_any_healthy_ws_url(url: Url) -> Result<Option<Url>, anyhow::Error> 
                 return Ok(Some(url));
             }
             Err(e) => {
-                tracing::warn!("failed to check health of `rpc_url` as websocket: {e}");
+                tracing::warn!(url = ?url, "failed to check health of `rpc_url` as websocket: {e}");
             }
         };
     }

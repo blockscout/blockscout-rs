@@ -96,7 +96,7 @@ dependencies = [
 [[package]]
 name = "actix-prost"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/actix-prost#b04dccf9259d397e2307edc9c4ae390b07b30fda"
+source = "git+https://github.com/blockscout/actix-prost?tag=v1.0.0#32188ff27483da72a6fb8a40ad6ba8d685b07cf1"
 dependencies = [
  "actix-http",
  "actix-web",
@@ -111,9 +111,9 @@ dependencies = [
 [[package]]
 name = "actix-prost-build"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/actix-prost#b04dccf9259d397e2307edc9c4ae390b07b30fda"
+source = "git+https://github.com/blockscout/actix-prost?branch=main#9cc47aa1cb7b63ce1cb814912b71188579647241"
 dependencies = [
- "convert-trait",
+ "convert-trait 0.1.0 (git+https://github.com/blockscout/actix-prost?branch=main)",
  "prettyplease 0.2.15",
  "proc-macro2",
  "prost-build",
@@ -128,7 +128,7 @@ dependencies = [
 [[package]]
 name = "actix-prost-macros"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/actix-prost#b04dccf9259d397e2307edc9c4ae390b07b30fda"
+source = "git+https://github.com/blockscout/actix-prost?tag=v1.0.0#32188ff27483da72a6fb8a40ad6ba8d685b07cf1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1497,7 +1497,18 @@ checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
 [[package]]
 name = "convert-trait"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/actix-prost#b04dccf9259d397e2307edc9c4ae390b07b30fda"
+source = "git+https://github.com/blockscout/actix-prost?tag=v1.0.0#32188ff27483da72a6fb8a40ad6ba8d685b07cf1"
+dependencies = [
+ "bytes",
+ "ethers-core",
+ "hex",
+ "url",
+]
+
+[[package]]
+name = "convert-trait"
+version = "0.1.0"
+source = "git+https://github.com/blockscout/actix-prost?branch=main#9cc47aa1cb7b63ce1cb814912b71188579647241"
 dependencies = [
  "bytes",
  "ethers-core",
@@ -1751,6 +1762,12 @@ dependencies = [
  "rustc_version 0.4.0",
  "syn 1.0.109",
 ]
+
+[[package]]
+name = "deunicode"
+version = "1.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6e854126756c496b8c81dec88f9a706b15b875c5849d4097a3854476b9fdf94"
 
 [[package]]
 name = "diff"
@@ -5216,6 +5233,7 @@ dependencies = [
  "blockscout-service-launcher",
  "chrono",
  "config",
+ "convert-trait 0.1.0 (git+https://github.com/blockscout/actix-prost?tag=v1.0.0)",
  "ethers",
  "foundry-compilers",
  "hex",
@@ -5227,6 +5245,7 @@ dependencies = [
  "paste",
  "pretty_assertions",
  "reqwest",
+ "rust_decimal",
  "scoutcloud-entity",
  "scoutcloud-migration",
  "scoutcloud-proto",
@@ -5235,6 +5254,7 @@ dependencies = [
  "serde_json",
  "serde_plain",
  "serde_yaml",
+ "slug",
  "thiserror",
  "tokio",
  "tonic",
@@ -5266,7 +5286,7 @@ dependencies = [
  "actix-prost-build",
  "actix-prost-macros",
  "actix-web",
- "convert-trait",
+ "convert-trait 0.1.0 (git+https://github.com/blockscout/actix-prost?tag=v1.0.0)",
  "prost 0.11.9",
  "prost-build",
  "serde",
@@ -5806,6 +5826,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f92a496fb766b417c996b9c5e57daf2f7ad3b0bebe1ccfca4856390e3d3bb67"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "slug"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3bd94acec9c8da640005f8e135a39fc0372e74535e6b368b7a04b875f784c8c4"
+dependencies = [
+ "deunicode",
+ "wasm-bindgen",
 ]
 
 [[package]]
