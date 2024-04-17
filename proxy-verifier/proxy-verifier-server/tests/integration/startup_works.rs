@@ -1,5 +1,4 @@
-mod helpers;
-
+use crate::helpers;
 use blockscout_service_launcher::test_server;
 use pretty_assertions::assert_eq;
 

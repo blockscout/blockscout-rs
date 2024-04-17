@@ -1,5 +1,5 @@
 use crate::{
-    config::{ChainSettings, ChainsSettings},
+    config::ChainsSettings,
     proto::{
         proxy_server::Proxy, Chain, GetVerificationConfigRequest, ListChainsRequest,
         ListChainsResponse, VerificationConfig,
@@ -7,31 +7,27 @@ use crate::{
     services::{SOLIDITY_EVM_VERSIONS, VYPER_EVM_VERSIONS},
 };
 use async_trait::async_trait;
-use std::{collections::BTreeMap, sync::Arc};
+use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
 pub struct ProxyService {
     /// Mapping from supported chain ids to chain names
-    chains: BTreeMap<String, ChainSettings>,
+    chains: ChainsSettings,
     eth_bytecode_db_client: Arc<eth_bytecode_db_proto::http_client::Client>,
 }
 
 impl ProxyService {
     pub fn new(
-        chains_settings: &ChainsSettings,
+        chains_settings: ChainsSettings,
         eth_bytecode_db_client: Arc<eth_bytecode_db_proto::http_client::Client>,
     ) -> Self {
-        let chains = chains_settings
-            .inner()
-            .iter()
-            .map(|(chain_id, settings)| {
-                let mut chain_settings = settings.clone();
-                chain_settings.sensitive_api_key = None;
-                (chain_id.clone(), chain_settings)
-            })
-            .collect();
+        chains_settings
+            .clone()
+            .inner_mut()
+            .values_mut()
+            .for_each(|settings| settings.sensitive_api_key = None);
         Self {
-            chains,
+            chains: chains_settings,
             eth_bytecode_db_client,
         }
     }
@@ -78,9 +74,10 @@ impl Proxy for ProxyService {
 async fn list_chains(proxy: &ProxyService) -> Vec<Chain> {
     proxy
         .chains
-        .clone()
-        .into_iter()
+        .insertion_iter()
         .map(|(id, settings)| {
+            let settings = settings.clone();
+
             let icon_url = if let Some(icon_url) = settings.icon_url {
                 icon_url.to_string()
             } else {
@@ -90,7 +87,7 @@ async fn list_chains(proxy: &ProxyService) -> Vec<Chain> {
             };
 
             Chain {
-                id,
+                id: id.clone(),
                 name: settings.name,
                 icon_url,
             }

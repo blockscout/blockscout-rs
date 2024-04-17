@@ -1,9 +1,10 @@
+use indexmap::IndexMap;
 use serde::Deserialize;
-use std::{collections::BTreeMap, path::PathBuf};
+use std::path::PathBuf;
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(transparent)]
-pub struct ChainsSettings(BTreeMap<String, ChainSettings>);
+pub struct ChainsSettings(IndexMap<String, ChainSettings>);
 
 impl ChainsSettings {
     pub fn new(path: Option<PathBuf>) -> Result<Self, anyhow::Error> {
@@ -17,19 +18,27 @@ impl ChainsSettings {
                 .try_parsing(true),
         );
 
-        let settings: Self = builder.build()?.try_deserialize()?;
+        let settings: ChainsSettings = builder.build()?.try_deserialize()?;
 
         settings.validate()?;
 
         Ok(settings)
     }
 
-    pub fn inner(&self) -> &BTreeMap<String, ChainSettings> {
+    pub fn inner(&self) -> &IndexMap<String, ChainSettings> {
         &self.0
     }
 
-    pub fn into_inner(self) -> BTreeMap<String, ChainSettings> {
+    pub fn inner_mut(&mut self) -> &mut IndexMap<String, ChainSettings> {
+        &mut self.0
+    }
+
+    pub fn into_inner(self) -> IndexMap<String, ChainSettings> {
         self.0
+    }
+
+    pub fn insertion_iter(&self) -> indexmap::map::Iter<String, ChainSettings> {
+        self.inner().get_range(..).unwrap().iter()
     }
 
     fn validate(&self) -> anyhow::Result<()> {
