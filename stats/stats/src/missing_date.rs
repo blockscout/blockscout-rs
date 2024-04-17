@@ -350,4 +350,71 @@ mod tests {
             assert_eq!(expected, actual);
         }
     }
+
+    #[test]
+    fn limits_are_respected() {
+        let limit = Duration::days(4);
+        assert_eq!(
+            fill_missing_points(
+                vec![
+                    v("2023-07-10", "10"),
+                    v("2023-07-12", "12"),
+                    v("2023-07-15", "12"),
+                ],
+                MissingDatePolicy::FillZero,
+                Some(d("2023-07-12")),
+                Some(d("2023-07-12")),
+                Some(limit)
+            ),
+            Err(ReadError::IntervalLimitExceeded(limit))
+        );
+        assert_eq!(
+            fill_missing_points(
+                vec![
+                    v("2023-07-10", "10"),
+                    v("2023-07-12", "12"),
+                    v("2023-07-14", "12"),
+                ],
+                MissingDatePolicy::FillZero,
+                Some(d("2023-07-10")),
+                Some(d("2023-07-14")),
+                Some(limit)
+            ),
+            Ok(vec![
+                v("2023-07-10", "10"),
+                v("2023-07-11", "0"),
+                v("2023-07-12", "12"),
+                v("2023-07-13", "0"),
+                v("2023-07-14", "12"),
+            ],)
+        );
+        assert_eq!(
+            fill_missing_points(
+                vec![
+                    v("2023-07-10", "10"),
+                    v("2023-07-12", "12"),
+                    v("2023-07-14", "12"),
+                ],
+                MissingDatePolicy::FillZero,
+                Some(d("2023-07-10")),
+                Some(d("2023-07-15")),
+                Some(limit)
+            ),
+            Err(ReadError::IntervalLimitExceeded(limit))
+        );
+        assert_eq!(
+            fill_missing_points(
+                vec![
+                    v("2023-07-10", "10"),
+                    v("2023-07-12", "12"),
+                    v("2023-07-14", "12"),
+                ],
+                MissingDatePolicy::FillZero,
+                Some(d("2023-07-09")),
+                Some(d("2023-07-14")),
+                Some(limit)
+            ),
+            Err(ReadError::IntervalLimitExceeded(limit))
+        );
+    }
 }
