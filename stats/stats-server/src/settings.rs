@@ -76,7 +76,8 @@ pub struct LimitsSettings {
 impl Default for LimitsSettings {
     fn default() -> Self {
         Self {
-            request_interval_limit_days: u32::MAX,
+            // ~500 years seems reasonable
+            request_interval_limit_days: 182500,
         }
     }
 }
