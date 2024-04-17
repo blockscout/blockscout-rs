@@ -3,13 +3,14 @@ use chrono::{Duration, NaiveDate};
 use entity::chart_data;
 use sea_orm::{prelude::*, sea_query::Expr, QueryOrder, QuerySelect};
 
+/// Returns the chart and count of originally retrieved points
 pub async fn get_and_fill_chart(
     db: &DatabaseConnection,
     chart_id: i32,
     from: Option<NaiveDate>,
     to: Option<NaiveDate>,
     policy: MissingDatePolicy,
-) -> Result<Vec<DateValue>, DbErr> {
+) -> Result<(Vec<DateValue>, usize), DbErr> {
     let mut data_request = chart_data::Entity::find()
         .select_only()
         .column(chart_data::Column::Date)
@@ -43,9 +44,9 @@ pub async fn get_and_fill_chart(
                 tracing::debug!(policy = ?policy, "{} points were missing for requested range and were filled", filled_count);
             }
         }
-        None => todo!(),
+        None => (),
     }
-    Ok(data)
+    Ok((data, retrieved_count))
 }
 
 /// Fills values for all dates from `min(data.first(), from)` to `max(data.last(), to)` according

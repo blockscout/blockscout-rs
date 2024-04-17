@@ -5,7 +5,7 @@ use sea_orm::{
     ColumnTrait, DatabaseConnection, DbBackend, DbErr, EntityTrait, FromQueryResult, QueryFilter,
     QueryOrder, QuerySelect, Statement,
 };
-use std::collections::HashMap;
+use std::{cmp::min, collections::HashMap};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -82,11 +82,31 @@ pub async fn get_chart_data(
         .await?
         .ok_or_else(|| ReadError::NotFound(name.into()))?;
 
-    let data = match policy {
+    let to = match (to, chart.last_updated_at) {
+        // No updates happened - no data should be present in DB
+        // and no points should be returned.
+        (None, None) => None,
+        // Points up to `last_updated_at` should be retrieved (and filled).
+        (None, Some(last_updated_at)) => Some(last_updated_at),
+        // No updates happened - no data should be present in DB
+        // and no points should be returned.
+        (Some(to), None) => Some(to),
+        // Respect `to` if requesting past data,
+        // do not predict future otherwise.
+        (Some(to), Some(last_updated_at)) => Some(min(to, last_updated_at)),
+    };
+    let (data, retrieved_points) = match policy {
         Some(policy) => get_and_fill_chart(db, chart.id, from, to, policy).await?,
         None => get_chart(db, chart.id, from, to).await?,
     };
     let data = mark_approximate_data(data, approximate_trailing_values);
+    if chart.last_updated_at.is_none() && retrieved_points != 0 {
+        tracing::warn!(
+            chart_name = chart.name(),
+            retrieved_db_points = retrieved_points,
+            "`last_updated_at` is not set whereas data is present in DB"
+        );
+    }
     Ok(data)
 }
 
@@ -112,7 +132,8 @@ async fn get_chart(
     } else {
         data_request
     };
-    data_request.into_model().all(db).await
+    let data = data_request.into_model().all(db).await?;
+    (data, data.len())
 }
 
 #[cfg(test)]
