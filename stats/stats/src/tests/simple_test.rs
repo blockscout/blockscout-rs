@@ -96,6 +96,7 @@ async fn get_chart_and_assert_eq(
         chart.name(),
         from,
         to,
+        None,
         policy,
         approximate_until_updated,
     )

@@ -1,5 +1,6 @@
 use crate::ReadError;
 use async_trait::async_trait;
+use chrono::Duration;
 use entity::{charts, sea_orm_active_enums::ChartType};
 use sea_orm::{prelude::*, sea_query, FromQueryResult, QuerySelect, Set};
 use thiserror::Error;
@@ -12,6 +13,8 @@ pub enum UpdateError {
     StatsDB(DbErr),
     #[error("chart {0} not found")]
     NotFound(String),
+    #[error("date interval limit ({limit}) is exceeded; choose smaller time interval.")]
+    IntervalLimitExceeded { limit: Duration },
     #[error("internal error: {0}")]
     Internal(String),
 }
@@ -21,6 +24,7 @@ impl From<ReadError> for UpdateError {
         match read {
             ReadError::DB(db) => UpdateError::StatsDB(db),
             ReadError::NotFound(err) => UpdateError::NotFound(err),
+            ReadError::IntervalLimitExceeded(limit) => UpdateError::IntervalLimitExceeded { limit },
         }
     }
 }

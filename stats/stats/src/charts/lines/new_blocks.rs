@@ -126,7 +126,7 @@ mod tests {
 
         // Note that update is not full, therefore there is no entry with date `2022-11-09`
         updater.update(&db, &blockscout, false).await.unwrap();
-        let data = get_chart_data(&db, updater.name(), None, None, None, 1)
+        let data = get_chart_data(&db, updater.name(), None, None, None, None, 1)
             .await
             .unwrap();
         let expected = vec![
@@ -150,7 +150,7 @@ mod tests {
 
         // note that update is full, therefore there is entry with date `2022-11-09`
         updater.update(&db, &blockscout, true).await.unwrap();
-        let data = get_chart_data(&db, updater.name(), None, None, None, 1)
+        let data = get_chart_data(&db, updater.name(), None, None, None, None, 1)
             .await
             .unwrap();
         let expected = vec![
@@ -189,7 +189,7 @@ mod tests {
         updater.create(&db).await.unwrap();
 
         updater.update(&db, &blockscout, true).await.unwrap();
-        let data = get_chart_data(&db, updater.name(), None, None, None, 0)
+        let data = get_chart_data(&db, updater.name(), None, None, None, None, 0)
             .await
             .unwrap();
         let expected = vec![
@@ -265,7 +265,7 @@ mod tests {
         .unwrap();
 
         updater.update(&db, &blockscout, false).await.unwrap();
-        let data = get_chart_data(&db, updater.name(), None, None, None, 1)
+        let data = get_chart_data(&db, updater.name(), None, None, None, None, 1)
             .await
             .unwrap();
         let expected = vec![

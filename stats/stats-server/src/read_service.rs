@@ -1,6 +1,6 @@
-use crate::{charts::Charts, serializers::serialize_line_points};
+use crate::{charts::Charts, serializers::serialize_line_points, settings::LimitsSettings};
 use async_trait::async_trait;
-use chrono::NaiveDate;
+use chrono::{Duration, NaiveDate};
 use sea_orm::{DatabaseConnection, DbErr};
 use stats::ReadError;
 use stats_proto::blockscout::stats::v1::{
@@ -14,11 +14,30 @@ use tonic::{Request, Response, Status};
 pub struct ReadService {
     db: Arc<DatabaseConnection>,
     charts: Arc<Charts>,
+    limits: ReadLimits,
 }
 
 impl ReadService {
-    pub async fn new(db: Arc<DatabaseConnection>, charts: Arc<Charts>) -> Result<Self, DbErr> {
-        Ok(Self { db, charts })
+    pub async fn new(
+        db: Arc<DatabaseConnection>,
+        charts: Arc<Charts>,
+        limits: ReadLimits,
+    ) -> Result<Self, DbErr> {
+        Ok(Self { db, charts, limits })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReadLimits {
+    /// See [`LimitsSettings::request_interval_limit_days`]
+    pub request_interval_limit: Duration,
+}
+
+impl From<LimitsSettings> for ReadLimits {
+    fn from(value: LimitsSettings) -> Self {
+        Self {
+            request_interval_limit: Duration::days(value.request_interval_limit_days.into()),
+        }
     }
 }
 
@@ -91,9 +110,18 @@ impl StatsService for ReadService {
         let to = request.to.and_then(|date| NaiveDate::from_str(&date).ok());
         let policy = Some(chart_info.chart.missing_date_policy());
         let mark_approx = chart_info.chart.approximate_until_updated();
-        let data = stats::get_chart_data(&self.db, &request.name, from, to, policy, mark_approx)
-            .await
-            .map_err(map_read_error)?;
+        let interval_limit = Some(self.limits.request_interval_limit);
+        let data = stats::get_chart_data(
+            &self.db,
+            &request.name,
+            from,
+            to,
+            interval_limit,
+            policy,
+            mark_approx,
+        )
+        .await
+        .map_err(map_read_error)?;
 
         let serialized_chart = serialize_line_points(data);
         Ok(Response::new(LineChart {

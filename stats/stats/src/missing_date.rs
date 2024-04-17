@@ -1,4 +1,4 @@
-use crate::{DateValue, MissingDatePolicy};
+use crate::{DateValue, MissingDatePolicy, ReadError};
 use chrono::{Duration, NaiveDate};
 
 /// Fills missing points according to policy and filters out points outsied of range.
@@ -9,9 +9,10 @@ pub fn fill_and_filter_chart(
     from: Option<NaiveDate>,
     to: Option<NaiveDate>,
     policy: MissingDatePolicy,
-) -> Vec<DateValue> {
+    interval_limit: Option<Duration>,
+) -> Result<Vec<DateValue>, ReadError> {
     let retrieved_count = data.len();
-    let data_filled = fill_missing_points(data, policy, from, to);
+    let data_filled = fill_missing_points(data, policy, from, to, interval_limit)?;
     if let Some(filled_count) = data_filled.len().checked_sub(retrieved_count) {
         if filled_count > 0 {
             tracing::debug!(policy = ?policy, "{} missing points were filled", filled_count);
@@ -24,7 +25,7 @@ pub fn fill_and_filter_chart(
             tracing::debug!(range = ?(from, to), "{} points outside of range were removed", filtered);
         }
     }
-    data_filtered
+    Ok(data_filtered)
 }
 
 /// Fills values for all dates from `min(data.first(), from)` to `max(data.last(), to)` according
@@ -36,7 +37,8 @@ pub fn fill_missing_points(
     policy: MissingDatePolicy,
     from: Option<NaiveDate>,
     to: Option<NaiveDate>,
-) -> Vec<DateValue> {
+    interval_limit: Option<Duration>,
+) -> Result<Vec<DateValue>, ReadError> {
     let from = vec![from.as_ref(), data.first().map(|v| &v.date)]
         .into_iter()
         .flatten()
@@ -47,13 +49,20 @@ pub fn fill_missing_points(
         .max();
     let (from, to) = match (from, to) {
         (Some(from), Some(to)) if from <= to => (from.to_owned(), to.to_owned()),
-        _ => return data,
+        // data is empty or ill-formed
+        _ => return Ok(data),
     };
 
-    match policy {
+    if let Some(interval_limit) = interval_limit {
+        if to - from > interval_limit {
+            return Err(ReadError::IntervalLimitExceeded(interval_limit));
+        }
+    }
+
+    Ok(match policy {
         MissingDatePolicy::FillZero => filled_zeros_data(&data, from, to),
         MissingDatePolicy::FillPrevious => filled_previous_data(&data, from, to),
-    }
+    })
 }
 
 /// Inserts zero values in `data` for all missing dates in inclusive range `[from; to]`
@@ -238,7 +247,8 @@ mod tests {
                 Some(d("2023-07-13")),
             ),
         ] {
-            let actual = fill_missing_points(data, MissingDatePolicy::FillZero, from, to);
+            let actual =
+                fill_missing_points(data, MissingDatePolicy::FillZero, from, to, None).unwrap();
             assert_eq!(expected, actual)
         }
     }
@@ -335,7 +345,8 @@ mod tests {
                 Some(d("2023-07-13")),
             ),
         ] {
-            let actual = fill_missing_points(data, MissingDatePolicy::FillPrevious, from, to);
+            let actual =
+                fill_missing_points(data, MissingDatePolicy::FillPrevious, from, to, None).unwrap();
             assert_eq!(expected, actual);
         }
     }

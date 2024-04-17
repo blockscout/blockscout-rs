@@ -2,7 +2,7 @@ use crate::{
     missing_date::{fill_and_filter_chart, filter_within_range},
     DateValue, ExtendedDateValue, MissingDatePolicy,
 };
-use chrono::NaiveDate;
+use chrono::{Duration, NaiveDate};
 use entity::{chart_data, charts};
 use sea_orm::{
     sea_query::Expr, ColumnTrait, DatabaseConnection, DbBackend, DbErr, EntityTrait,
@@ -11,12 +11,14 @@ use sea_orm::{
 use std::collections::HashMap;
 use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum ReadError {
     #[error("database error {0}")]
     DB(#[from] DbErr),
     #[error("chart {0} not found")]
     NotFound(String),
+    #[error("date interval limit ({0}) is exceeded; choose smaller time interval.")]
+    IntervalLimitExceeded(Duration),
 }
 
 #[derive(Debug, FromQueryResult)]
@@ -96,6 +98,7 @@ pub async fn get_chart_data(
     name: &str,
     from: Option<NaiveDate>,
     to: Option<NaiveDate>,
+    interval_limit: Option<Duration>,
     policy: Option<MissingDatePolicy>,
     approximate_until_updated: u64,
 ) -> Result<Vec<ExtendedDateValue>, ReadError> {
@@ -119,7 +122,7 @@ pub async fn get_chart_data(
 
     // may include future points that were not yet collected and were just filled accordingly.
     let data_with_maybe_future = match policy {
-        Some(policy) => fill_and_filter_chart(db_data, from, to, policy),
+        Some(policy) => fill_and_filter_chart(db_data, from, to, policy, interval_limit)?,
         None => db_data,
     };
     let data_with_maybe_future_len = data_with_maybe_future.len();
@@ -243,7 +246,7 @@ mod tests {
 
         let db = init_db("get_chart_int_mock").await;
         insert_mock_data(&db).await;
-        let chart = get_chart_data(&db, "newBlocksPerDay", None, None, None, 1)
+        let chart = get_chart_data(&db, "newBlocksPerDay", None, None, None, None, 1)
             .await
             .unwrap();
         assert_eq!(
