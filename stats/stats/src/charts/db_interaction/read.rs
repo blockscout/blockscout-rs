@@ -87,7 +87,8 @@ pub async fn get_chart_data(
 
     let db_data = get_chart(db, chart.id, from, to).await?;
 
-    if chart.last_updated_at.is_none() && db_data.len() != 0 {
+    let last_updated_at = chart.last_updated_at.map(|t| t.date_naive());
+    if last_updated_at.is_none() && db_data.len() != 0 {
         tracing::warn!(
             chart_name = chart.name,
             db_data_len = db_data.len(),
@@ -100,11 +101,13 @@ pub async fn get_chart_data(
         Some(policy) => fill_and_filter_chart(db_data, from, to, policy),
         None => db_data,
     };
-    let data_unmarked = filter_within_range(
-        data_with_maybe_future,
-        None,
-        chart.last_updated_at.map(|t| t.date_naive()),
-    );
+    let data_with_maybe_future_len = data_with_maybe_future.len();
+    let data_unmarked = filter_within_range(data_with_maybe_future, None, last_updated_at);
+    if let Some(filtered) = data_with_maybe_future_len.checked_sub(data_unmarked.len()) {
+        if filtered > 0 {
+            tracing::debug!(last_updated_at = ?last_updated_at, "{} points filled after last update were removed", filtered);
+        }
+    }
     let data = mark_approximate_data(data_unmarked, approximate_trailing_values);
     Ok(data)
 }

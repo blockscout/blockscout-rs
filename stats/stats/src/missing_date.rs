@@ -14,10 +14,17 @@ pub fn fill_and_filter_chart(
     let data_filled = fill_missing_points(data, policy, from, to);
     if let Some(filled_count) = data_filled.len().checked_sub(retrieved_count) {
         if filled_count > 0 {
-            tracing::debug!(policy = ?policy, "{} points were missing for requested range and were filled", filled_count);
+            tracing::debug!(policy = ?policy, "{} missing points were filled", filled_count);
         }
     }
-    filter_within_range(data_filled, from, to)
+    let filled_len = data_filled.len();
+    let data_filtered = filter_within_range(data_filled, from, to);
+    if let Some(filtered) = filled_len.checked_sub(data_filtered.len()) {
+        if filtered > 0 {
+            tracing::debug!(range = ?(from, to), "{} points outside of range were removed", filtered);
+        }
+    }
+    data_filtered
 }
 
 /// Fills values for all dates from `min(data.first(), from)` to `max(data.last(), to)` according
