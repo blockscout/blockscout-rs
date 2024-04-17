@@ -3,8 +3,8 @@ use crate::{
     charts::{
         create_chart,
         db_interaction::{
+            chart_updaters::{ChartDependentUpdater, ChartUpdater},
             types::{DateValue, DateValueInt},
-            updater::{ChartDependentUpdater, ChartUpdater},
         },
         Chart,
     },

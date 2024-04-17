@@ -1,6 +1,6 @@
 use super::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data};
 use crate::{
-    charts::db_interaction::updater::ChartUpdater, get_chart_data, get_counters, Chart,
+    charts::db_interaction::chart_updaters::ChartUpdater, get_chart_data, get_counters, Chart,
     MissingDatePolicy,
 };
 use chrono::NaiveDate;

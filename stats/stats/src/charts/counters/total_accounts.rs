@@ -3,7 +3,7 @@ use crate::{
         cache::Cache,
         db_interaction::{
             types::{DateValue, DateValueInt},
-            updater::{ChartFullUpdater, ChartUpdater},
+            chart_updaters::{ChartFullUpdater, ChartUpdater},
         },
     },
     lines::{AccountsGrowth, NewAccounts},

@@ -48,7 +48,7 @@ pub trait ChartUpdater: Chart {
             .map_err(UpdateError::StatsDB)?
             .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
         let time = chrono::Utc::now();
-        common_operations::update::set_last_updated_at(chart_id, db, time)
+        common_operations::set_last_updated_at(chart_id, db, time)
             .await
             .map_err(UpdateError::StatsDB)
     }

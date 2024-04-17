@@ -5,7 +5,7 @@ use crate::{
         create_chart,
         db_interaction::{
             types::DateValue,
-            updater::{parse_and_cumsum, ChartDependentUpdater, ChartUpdater},
+            chart_updaters::{parse_and_cumsum, ChartDependentUpdater, ChartUpdater},
         },
     },
     MissingDatePolicy, UpdateError,

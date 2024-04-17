@@ -1,7 +1,7 @@
 use crate::{
     charts::db_interaction::{
+        chart_updaters::{ChartPartialUpdater, ChartUpdater},
         types::DateValue,
-        updater::{ChartPartialUpdater, ChartUpdater},
     },
     UpdateError,
 };
@@ -81,7 +81,7 @@ impl ChartUpdater for NewBlocks {
 mod tests {
     use super::*;
     use crate::{
-        charts::db_interaction::updater::common_operations::read::get_min_block_blockscout,
+        charts::db_interaction::chart_updaters::common_operations::get_min_block_blockscout,
         get_chart_data,
         tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
         Chart, ExtendedDateValue,

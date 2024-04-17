@@ -93,6 +93,9 @@ fn mark_approximate(
 ///
 /// `approximate_until_updated` - number of points to mark as approximate
 /// starting from `last_updated_at` and moving backwards in time.
+///
+/// `interval_limit` - max interval (from, to). If `from` or `to` are none,
+/// min or max date in DB are calculated.
 pub async fn get_chart_data(
     db: &DatabaseConnection,
     name: &str,

@@ -3,7 +3,7 @@
 use super::ChartUpdater;
 use crate::{
     charts::{
-        db_interaction::{insert::insert_data_many, types::DateValue},
+        db_interaction::{types::DateValue, write::insert_data_many},
         find_chart,
     },
     metrics, UpdateError,

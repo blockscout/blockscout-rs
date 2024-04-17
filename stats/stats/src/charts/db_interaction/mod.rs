@@ -1,6 +1,6 @@
 //! Abstracted interaction with DB
 
-pub mod insert;
+pub mod chart_updaters;
 pub mod read;
 pub mod types;
-pub mod updater;
+pub mod write;

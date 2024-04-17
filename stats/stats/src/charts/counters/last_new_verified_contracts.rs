@@ -3,7 +3,7 @@ use crate::{
         create_chart,
         db_interaction::{
             types::DateValue,
-            updater::{last_point, ChartDependentUpdater, ChartUpdater},
+            chart_updaters::{last_point, ChartDependentUpdater, ChartUpdater},
         },
     },
     lines::NewVerifiedContracts,

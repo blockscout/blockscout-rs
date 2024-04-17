@@ -2,8 +2,8 @@ use crate::{
     charts::{
         create_chart,
         db_interaction::{
+            chart_updaters::{parse_and_sum, ChartDependentUpdater, ChartUpdater},
             types::DateValue,
-            updater::{parse_and_sum, ChartDependentUpdater, ChartUpdater},
         },
     },
     lines::NewTxns,

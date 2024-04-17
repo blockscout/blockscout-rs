@@ -3,12 +3,12 @@
 //! In some cases performes full update (i.e. when some inconsistency was found or `force_full` is set)
 
 use super::{
-    common_operations::read::{get_last_row, get_min_block_blockscout},
+    common_operations::{get_last_row, get_min_block_blockscout},
     ChartUpdater,
 };
 use crate::{
     charts::{
-        db_interaction::{insert::insert_data_many, types::DateValue},
+        db_interaction::{types::DateValue, write::insert_data_many},
         find_chart,
     },
     metrics, UpdateError,

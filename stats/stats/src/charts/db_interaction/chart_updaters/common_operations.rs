@@ -1,7 +1,13 @@
+//! Collection of common operations to perform while updating.
+//! Can be useful for any chart regardless of their type.
+
 use blockscout_db::entity::blocks;
-use chrono::{NaiveDate, NaiveDateTime};
-use entity::chart_data;
-use sea_orm::{prelude::*, sea_query, ConnectionTrait, FromQueryResult, QueryOrder, QuerySelect};
+use chrono::{NaiveDate, NaiveDateTime, Offset};
+use entity::{chart_data, charts};
+use sea_orm::{
+    prelude::*, sea_query, ConnectionTrait, DatabaseConnection, DbErr, EntityTrait,
+    FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Set, Unchanged,
+};
 
 use crate::{Chart, DateValue, UpdateError};
 
@@ -143,4 +149,25 @@ where
     };
 
     Ok(last_row)
+}
+
+pub async fn set_last_updated_at<Tz>(
+    chart_id: i32,
+    db: &DatabaseConnection,
+    at: chrono::DateTime<Tz>,
+) -> Result<(), DbErr>
+where
+    Tz: chrono::TimeZone,
+{
+    let last_updated_at = at.with_timezone(&chrono::Utc.fix());
+    let model = charts::ActiveModel {
+        id: Unchanged(chart_id),
+        last_updated_at: Set(Some(last_updated_at)),
+        ..Default::default()
+    };
+    charts::Entity::update(model)
+        .filter(charts::Column::Id.eq(chart_id))
+        .exec(db)
+        .await?;
+    Ok(())
 }

@@ -2,8 +2,8 @@ use crate::{
     charts::{
         create_chart,
         db_interaction::{
+            chart_updaters::{last_point, ChartDependentUpdater, ChartUpdater},
             types::DateValue,
-            updater::{last_point, ChartDependentUpdater, ChartUpdater},
         },
     },
     lines::NewContracts,

@@ -1,7 +1,7 @@
 use crate::{
     charts::db_interaction::{
+        chart_updaters::{ChartPartialUpdater, ChartUpdater},
         types::{DateValue, DateValueDouble},
-        updater::{ChartPartialUpdater, ChartUpdater},
     },
     UpdateError,
 };
