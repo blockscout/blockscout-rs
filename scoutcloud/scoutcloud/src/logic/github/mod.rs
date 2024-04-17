@@ -13,9 +13,11 @@ pub enum GithubError {
     #[error("github error: {0}")]
     Octocrab(#[from] octocrab::Error),
     #[error("failed to create file: {0}")]
-    CreatingFile(#[from] anyhow::Error),
+    CreatingFile(anyhow::Error),
+    #[error("github workflow error: {0}")]
+    GithubWorkflow(anyhow::Error),
     #[error("internal error: {0}")]
-    Internal(anyhow::Error),
+    Internal(#[from] anyhow::Error),
 }
 
 #[derive(Clone, Debug)]

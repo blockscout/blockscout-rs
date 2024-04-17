@@ -16,12 +16,18 @@ impl GithubClient {
         let latest_commit = self
             .get_latest_commit()
             .await
-            .context("get latest commit")?;
-        let blob = self.create_blob(content).await.context("create blob")?;
+            .context("get latest commit")
+            .map_err(GithubError::CreatingFile)?;
+        let blob = self
+            .create_blob(content)
+            .await
+            .context("create blob")
+            .map_err(GithubError::CreatingFile)?;
         let tree = self
             .create_tree(&latest_commit.sha, path, &blob.sha)
             .await
-            .context("create tree")?;
+            .context("create tree")
+            .map_err(GithubError::CreatingFile)?;
         let commit = self
             .create_commit(
                 tree.sha,
@@ -29,10 +35,12 @@ impl GithubClient {
                 latest_commit.sha,
             )
             .await
-            .context("create commit")?;
+            .context("create commit")
+            .map_err(GithubError::CreatingFile)?;
         self.update_branch(&commit.sha)
             .await
-            .context("update branch")?;
+            .context("update branch")
+            .map_err(GithubError::CreatingFile)?;
         Ok(())
     }
 

@@ -1,8 +1,13 @@
-use super::{GithubClient, GithubError};
+use super::{
+    types::{RunStatus, RunStatusShort},
+    GithubClient, GithubError,
+};
+
 use chrono::Utc;
 use lazy_static::lazy_static;
-use octocrab::models::workflows::Run;
+use octocrab::models::{workflows::Run, RunId};
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 
 lazy_static! {
     static ref GITHUB_WORKFLOW_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::new(());
@@ -104,6 +109,65 @@ impl CleanupWorkflow {
 
     pub fn postgres(client: String) -> Self {
         Self::new(client, AppVariant::Postgres)
+    }
+}
+
+impl GithubClient {
+    pub async fn wait_for_success_workflow(
+        &self,
+        run_name_debug: &str,
+        run_id: RunId,
+        timeout: Duration,
+        sleep_between: Duration,
+    ) -> Result<RunStatus, GithubError> {
+        let status = self
+            .wait_for_final_status_workflow(run_name_debug, run_id, timeout, sleep_between)
+            .await?;
+        match status.short() {
+            RunStatusShort::Failure => Err(GithubError::GithubWorkflow(anyhow::anyhow!(
+                "failed to start '{run_name_debug}'. status={status:?}"
+            ))),
+            RunStatusShort::Pending => Err(GithubError::GithubWorkflow(anyhow::anyhow!(
+                "timed out waiting for '{run_name_debug}' deploy. status={status:?}"
+            ))),
+            RunStatusShort::Completed => {
+                tracing::info!(status = ?status, "'{run_name_debug}' deploy completed");
+                Ok(status)
+            }
+        }
+    }
+
+    async fn wait_for_final_status_workflow(
+        &self,
+        run_name_debug: &str,
+        run_id: RunId,
+        timeout: Duration,
+        sleep_between: Duration,
+    ) -> Result<RunStatus, GithubError> {
+        tracing::info!(
+            run_id = run_id.to_string(),
+            "waiting for github workflow run '{run_name_debug}'"
+        );
+
+        let run = self.get_workflow_run(run_id).await?;
+        let first_status = RunStatus::try_from_str(&run.status)?;
+        match first_status.short() {
+            RunStatusShort::Completed | RunStatusShort::Failure => return Ok(first_status),
+            RunStatusShort::Pending => {}
+        }
+        tokio::time::timeout(timeout, async move {
+            loop {
+                tokio::time::sleep(sleep_between).await;
+                let run = self.get_workflow_run(run_id).await?;
+                let status = RunStatus::try_from_str(&run.status)?;
+                match status.short() {
+                    RunStatusShort::Completed | RunStatusShort::Failure => return Ok(status),
+                    RunStatusShort::Pending => {}
+                }
+            }
+        })
+        .await
+        .unwrap_or(Ok(first_status))
     }
 }
 

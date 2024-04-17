@@ -1,4 +1,7 @@
-use crate::logic::{DeployError, GithubClient};
+use crate::logic::{
+    jobs::{balance::CheckBalanceTask, StartingTask, StoppingTask},
+    DeployError, GithubClient,
+};
 use anyhow::Context;
 use fang::{
     asynk::async_queue::AsyncQueue, AsyncQueueable, AsyncWorkerPool, FangError, NoTls, SleepParams,
@@ -57,20 +60,19 @@ impl JobsRunner {
 
     pub async fn schedule_tasks(&self) -> Result<(), anyhow::Error> {
         let mut queue = self.queue.lock().await;
-        queue
-            .schedule_task(&super::balance::CheckBalanceTask::default())
-            .await?;
-        // self.queue
-        //     .insert_task(&super::starting::StartingTask::new(1))
-        //     .await?;
+        queue.schedule_task(&CheckBalanceTask::default()).await?;
         Ok(())
     }
 
     pub async fn insert_starting_task(&self, deployment_id: i32) -> Result<(), anyhow::Error> {
         let mut queue = self.queue.lock().await;
-        queue
-            .insert_task(&super::starting::StartingTask::new(deployment_id))
-            .await?;
+        queue.insert_task(&StartingTask::new(deployment_id)).await?;
+        Ok(())
+    }
+
+    pub async fn insert_stopping_task(&self, deployment_id: i32) -> Result<(), anyhow::Error> {
+        let mut queue = self.queue.lock().await;
+        queue.insert_task(&StoppingTask::new(deployment_id)).await?;
         Ok(())
     }
 }

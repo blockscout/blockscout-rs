@@ -12,7 +12,7 @@ use convert_trait::TryConvert;
 use sea_orm::{ConnectionTrait, DatabaseConnection};
 use std::sync::Arc;
 
-use tonic::{Request, Response, Status};
+use tonic::{Code, Request, Response, Status};
 
 pub struct ScoutcloudService {
     db: Arc<DatabaseConnection>,
@@ -240,28 +240,35 @@ fn map_convert_error(e: String) -> Status {
 
 fn map_deploy_error(err: DeployError) -> Status {
     tracing::error!("deploy error: {:?}", err);
+    Status::new(map_deploy_code(&err), err.to_string())
+}
+
+fn map_deploy_code(err: &DeployError) -> Code {
     match err {
-        DeployError::InstanceExists(_) => Status::already_exists(err.to_string()),
-        DeployError::InstanceNotFound(_) => Status::not_found(err.to_string()),
-        DeployError::Config(e) => Status::invalid_argument(e.to_string()),
-        DeployError::Github(e) => Status::internal(e.to_string()),
-        DeployError::Db(e) => Status::internal(e.to_string()),
-        DeployError::Internal(e) => Status::internal(e.to_string()),
-        DeployError::Auth(e) => map_auth_error(e),
-        DeployError::DeploymentNotFound => Status::not_found(err.to_string()),
-        DeployError::InvalidStateTransition(_, _) => Status::invalid_argument(err.to_string()),
-        DeployError::GithubWorkflow(_) => Status::internal(err.to_string()),
+        DeployError::InstanceExists(_) => Code::AlreadyExists,
+        DeployError::InstanceNotFound(_) => Code::NotFound,
+        DeployError::Config(_) => Code::InvalidArgument,
+        DeployError::Github(_) => Code::Internal,
+        DeployError::Db(_) => Code::Internal,
+        DeployError::Internal(_) => Code::Internal,
+        DeployError::Auth(e) => map_auth_code(e),
+        DeployError::DeploymentNotFound => Code::NotFound,
+        DeployError::InvalidStateTransition(_, _) => Code::InvalidArgument,
     }
 }
 
 fn map_auth_error(err: AuthError) -> Status {
+    Status::new(map_auth_code(&err), err.to_string())
+}
+
+fn map_auth_code(err: &AuthError) -> Code {
     match err {
-        AuthError::NoToken => Status::unauthenticated(err.to_string()),
-        AuthError::TokenNotFound => Status::unauthenticated(err.to_string()),
-        AuthError::Internal(e) => Status::internal(e.to_string()),
-        AuthError::NotFound => Status::not_found(err.to_string()),
-        AuthError::Unauthorized(_) => Status::permission_denied(err.to_string()),
-        AuthError::Db(e) => Status::internal(e.to_string()),
-        AuthError::InsufficientBalance => Status::permission_denied(err.to_string()),
+        AuthError::NoToken => Code::Unauthenticated,
+        AuthError::TokenNotFound => Code::Unauthenticated,
+        AuthError::Internal(_) => Code::Internal,
+        AuthError::NotFound => Code::NotFound,
+        AuthError::Unauthorized(_) => Code::PermissionDenied,
+        AuthError::Db(_) => Code::Internal,
+        AuthError::InsufficientBalance => Code::PermissionDenied,
     }
 }

@@ -49,15 +49,27 @@ impl MigrationTrait for Migration {
                     UPDATE users
                     SET balance = balance - NEW.expense_amount
                     WHERE id = NEW.user_id;
+
+                    UPDATE deployments
+                    SET total_cost = total_cost + NEW.expense_amount
+                    WHERE id = NEW.deployment_id;
                 ELSIF TG_OP = 'UPDATE' THEN
                     UPDATE users
                     SET balance = balance - (NEW.expense_amount - OLD.expense_amount)
                     WHERE id = NEW.user_id;
+
+                    UPDATE deployments
+                    SET total_cost = total_cost + (NEW.expense_amount - OLD.expense_amount)
+                    WHERE id = NEW.deployment_id;
                 ELSIF TG_OP = 'DELETE' THEN
                     -- Update user balance when a balance expense is deleted
                     UPDATE users
                     SET balance = balance + OLD.expense_amount
                     WHERE id = OLD.user_id;
+
+                    UPDATE deployments
+                    SET total_cost = total_cost - OLD.expense_amount
+                    WHERE id = OLD.deployment_id;
                 END IF;
             
                 RETURN NULL;

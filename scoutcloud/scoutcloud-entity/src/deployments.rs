@@ -16,6 +16,7 @@ pub struct Model {
     pub user_config: Json,
     #[sea_orm(column_type = "JsonBinary")]
     pub parsed_config: Json,
+    pub instance_url: Option<String>,
     pub created_at: DateTime,
     pub finished_at: Option<DateTime>,
     pub status: DeploymentStatusType,

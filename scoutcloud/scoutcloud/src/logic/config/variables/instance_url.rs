@@ -35,7 +35,8 @@ macros::custom_env_var!(
         }
 
         fn maybe_default(context: &ConfigValidationContext) -> Option<String> {
-            Some(format!("{}.blockscout.com", context.client_name))
+            // default should be <client-name>.k8s-dev.blockscout.com
+            Some(context.client_name.clone())
         }
     }
 );

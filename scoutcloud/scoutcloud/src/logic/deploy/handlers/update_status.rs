@@ -62,11 +62,11 @@ async fn handle_instance_action(
             start_instance(db, runner, &instance.instance, user_token).await?
         }
         proto::UpdateInstanceAction::Finish => {
-            todo!("finish instance")
+            stop_instance(db, runner, &instance.instance, user_token).await?
         }
-        proto::UpdateInstanceAction::Restart => {
-            todo!("restart instance")
-        }
+        proto::UpdateInstanceAction::Restart => Err(anyhow::anyhow!(
+            "restart not implemented yet, use start and stop instead"
+        ))?,
     };
 
     Ok(proto::UpdateInstanceStatusResponseInternal {
@@ -91,5 +91,19 @@ async fn start_instance(
         Deployment::try_create(db, instance, Some(DeploymentStatusType::Created)).await?;
     user_actions::log_start_instance(db, user_token, instance, &deployment).await?;
     runner.insert_starting_task(deployment.model.id).await?;
+    Ok(deployment)
+}
+
+async fn stop_instance(
+    db: &DatabaseConnection,
+    runner: &JobsRunner,
+    instance: &Instance,
+    user_token: &UserToken,
+) -> Result<Deployment, DeployError> {
+    let deployment = Deployment::latest_of_instance(db, instance)
+        .await?
+        .ok_or(DeployError::DeploymentNotFound)?;
+    user_actions::log_stop_instance(db, user_token, instance, &deployment).await?;
+    runner.insert_stopping_task(deployment.model.id).await?;
     Ok(deployment)
 }

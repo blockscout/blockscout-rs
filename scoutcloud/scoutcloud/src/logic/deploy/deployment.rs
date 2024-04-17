@@ -1,8 +1,9 @@
 use crate::{
-    logic::{ConfigError, DeployError, Instance, UserConfig},
+    logic::{ConfigError, DeployError, Instance, InstanceConfig, UserConfig},
     server::proto,
     uuid_eq,
 };
+
 use db::sea_orm_active_enums::DeploymentStatusType;
 use scoutcloud_entity as db;
 use sea_orm::{prelude::*, ActiveValue::Set, ConnectionTrait, IntoActiveModel, NotSet, QueryOrder};
@@ -41,7 +42,10 @@ impl Deployment {
         Ok(Deployment { model })
     }
 
-    pub async fn get(db: &DatabaseConnection, id: i32) -> Result<Self, DbErr> {
+    pub async fn get<C>(db: &C, id: i32) -> Result<Self, DbErr>
+    where
+        C: ConnectionTrait,
+    {
         let model = Self::default_select()
             .filter(db::deployments::Column::Id.eq(id))
             .one(db)
@@ -88,6 +92,10 @@ impl Deployment {
         &self.model.user_config
     }
 
+    pub fn instance_config(&self) -> InstanceConfig {
+        InstanceConfig::from_raw(self.model.parsed_config.clone())
+    }
+
     pub async fn get_instance<C>(&self, db: &C) -> Result<Instance, DbErr>
     where
         C: ConnectionTrait,
@@ -109,7 +117,7 @@ impl Deployment {
         Ok(self)
     }
 
-    pub async fn update_error<C>(
+    pub async fn mark_as_error<C>(
         &mut self,
         db: &C,
         error: impl Into<String>,
@@ -120,6 +128,29 @@ impl Deployment {
         let mut model = self.model.clone().into_active_model();
         model.error = Set(Some(error.into()));
         model.status = Set(DeploymentStatusType::Failed);
+        self.model = model.update(db).await?;
+        Ok(self)
+    }
+
+    pub async fn mark_as_finished<C>(&mut self, db: &C) -> Result<&mut Self, DbErr>
+    where
+        C: ConnectionTrait,
+    {
+        let mut model = self.model.clone().into_active_model();
+        model.status = Set(DeploymentStatusType::Stopped);
+        model.finished_at = Set(Some(chrono::Utc::now().naive_utc()));
+        self.model = model.update(db).await?;
+        Ok(self)
+    }
+
+    pub async fn mark_as_running<C>(&mut self, db: &C) -> Result<&mut Self, DeployError>
+    where
+        C: ConnectionTrait,
+    {
+        let instance_url = self.instance_config().parse_instance_url()?;
+        let mut model = self.model.clone().into_active_model();
+        model.status = Set(DeploymentStatusType::Running);
+        model.instance_url = Set(Some(instance_url.to_string()));
         self.model = model.update(db).await?;
         Ok(self)
     }
