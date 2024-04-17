@@ -1,11 +1,14 @@
-use crate::{missing_date::get_and_fill_chart, DateValue, ExtendedDateValue, MissingDatePolicy};
+use crate::{
+    missing_date::{fill_and_filter_chart, filter_within_range},
+    DateValue, ExtendedDateValue, MissingDatePolicy,
+};
 use chrono::NaiveDate;
 use entity::{chart_data, charts};
 use sea_orm::{
-    ColumnTrait, DatabaseConnection, DbBackend, DbErr, EntityTrait, FromQueryResult, QueryFilter,
-    QueryOrder, QuerySelect, Statement,
+    sea_query::Expr, ColumnTrait, DatabaseConnection, DbBackend, DbErr, EntityTrait,
+    FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Statement,
 };
-use std::{cmp::min, collections::HashMap};
+use std::collections::HashMap;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -82,31 +85,27 @@ pub async fn get_chart_data(
         .await?
         .ok_or_else(|| ReadError::NotFound(name.into()))?;
 
-    let to = match (to, chart.last_updated_at) {
-        // No updates happened - no data should be present in DB
-        // and no points should be returned.
-        (None, None) => None,
-        // Points up to `last_updated_at` should be retrieved (and filled).
-        (None, Some(last_updated_at)) => Some(last_updated_at),
-        // No updates happened - no data should be present in DB
-        // and no points should be returned.
-        (Some(to), None) => Some(to),
-        // Respect `to` if requesting past data,
-        // do not predict future otherwise.
-        (Some(to), Some(last_updated_at)) => Some(min(to, last_updated_at)),
-    };
-    let (data, retrieved_points) = match policy {
-        Some(policy) => get_and_fill_chart(db, chart.id, from, to, policy).await?,
-        None => get_chart(db, chart.id, from, to).await?,
-    };
-    let data = mark_approximate_data(data, approximate_trailing_values);
-    if chart.last_updated_at.is_none() && retrieved_points != 0 {
+    let db_data = get_chart(db, chart.id, from, to).await?;
+
+    if chart.last_updated_at.is_none() && db_data.len() != 0 {
         tracing::warn!(
-            chart_name = chart.name(),
-            retrieved_db_points = retrieved_points,
+            chart_name = chart.name,
+            db_data_len = db_data.len(),
             "`last_updated_at` is not set whereas data is present in DB"
         );
     }
+
+    // may include future points that were not yet collected and were just filled accordingly.
+    let data_with_maybe_future = match policy {
+        Some(policy) => fill_and_filter_chart(db_data, from, to, policy),
+        None => db_data,
+    };
+    let data_unmarked = filter_within_range(
+        data_with_maybe_future,
+        None,
+        chart.last_updated_at.map(|t| t.date_naive()),
+    );
+    let data = mark_approximate_data(data_unmarked, approximate_trailing_values);
     Ok(data)
 }
 
@@ -116,24 +115,29 @@ async fn get_chart(
     from: Option<NaiveDate>,
     to: Option<NaiveDate>,
 ) -> Result<Vec<DateValue>, DbErr> {
-    let data_request = chart_data::Entity::find()
+    let mut data_request = chart_data::Entity::find()
         .column(chart_data::Column::Date)
         .column(chart_data::Column::Value)
         .filter(chart_data::Column::ChartId.eq(chart_id))
         .order_by_asc(chart_data::Column::Date);
 
-    let data_request = if let Some(from) = from {
-        data_request.filter(chart_data::Column::Date.gte(from))
-    } else {
-        data_request
+    if let Some(from) = from {
+        let custom_where = Expr::cust_with_values::<sea_orm::sea_query::Value, _>(
+            "date >= (SELECT COALESCE(MAX(date), '1900-01-01'::date) FROM chart_data WHERE chart_id = $1 AND date <= $2)",
+            [chart_id.into(), from.into()],
+        );
+        QuerySelect::query(&mut data_request).cond_where(custom_where);
+    }
+    if let Some(to) = to {
+        let custom_where = Expr::cust_with_values::<sea_orm::sea_query::Value, _>(
+            "date <= (SELECT COALESCE(MIN(date), '9999-12-31'::date) FROM chart_data WHERE chart_id = $1 AND date >= $2)",
+            [chart_id.into(), to.into()],
+        );
+        QuerySelect::query(&mut data_request).cond_where(custom_where);
     };
-    let data_request = if let Some(to) = to {
-        data_request.filter(chart_data::Column::Date.lte(to))
-    } else {
-        data_request
-    };
+
     let data = data_request.into_model().all(db).await?;
-    (data, data.len())
+    Ok(data)
 }
 
 #[cfg(test)]

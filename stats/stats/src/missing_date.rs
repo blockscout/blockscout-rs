@@ -1,52 +1,23 @@
 use crate::{DateValue, MissingDatePolicy};
 use chrono::{Duration, NaiveDate};
-use entity::chart_data;
-use sea_orm::{prelude::*, sea_query::Expr, QueryOrder, QuerySelect};
 
-/// Returns the chart and count of originally retrieved points
-pub async fn get_and_fill_chart(
-    db: &DatabaseConnection,
-    chart_id: i32,
+/// Fills missing points according to policy and filters out points outsied of range.
+///
+/// Note that values outside of the range can still affect the filled values.
+pub fn fill_and_filter_chart(
+    data: Vec<DateValue>,
     from: Option<NaiveDate>,
     to: Option<NaiveDate>,
     policy: MissingDatePolicy,
-) -> Result<(Vec<DateValue>, usize), DbErr> {
-    let mut data_request = chart_data::Entity::find()
-        .select_only()
-        .column(chart_data::Column::Date)
-        .column(chart_data::Column::Value)
-        .filter(chart_data::Column::ChartId.eq(chart_id))
-        .order_by_asc(chart_data::Column::Date);
-
-    if let Some(from) = from {
-        let custom_where = Expr::cust_with_values::<sea_orm::sea_query::Value, _>(
-            "date >= (SELECT COALESCE(MAX(date), '1900-01-01'::date) FROM chart_data WHERE chart_id = $1 AND date <= $2)",
-            [chart_id.into(), from.into()],
-        );
-        QuerySelect::query(&mut data_request).cond_where(custom_where);
-    }
-    if let Some(to) = to {
-        let custom_where = Expr::cust_with_values::<sea_orm::sea_query::Value, _>(
-            "date <= (SELECT COALESCE(MIN(date), '9999-12-31'::date) FROM chart_data WHERE chart_id = $1 AND date >= $2)",
-            [chart_id.into(), to.into()],
-        );
-        QuerySelect::query(&mut data_request).cond_where(custom_where);
-    };
-
-    let data_with_extra = data_request.into_model().all(db).await?;
-    let retrieved_count = data_with_extra.len();
-
-    let data_filled = fill_missing_points(data_with_extra, policy, from, to);
-    let data = filter_within_range(data_filled, from, to);
-    match data.len().checked_sub(retrieved_count) {
-        Some(filled_count) => {
-            if filled_count > 0 {
-                tracing::debug!(policy = ?policy, "{} points were missing for requested range and were filled", filled_count);
-            }
+) -> Vec<DateValue> {
+    let retrieved_count = data.len();
+    let data_filled = fill_missing_points(data, policy, from, to);
+    if let Some(filled_count) = data_filled.len().checked_sub(retrieved_count) {
+        if filled_count > 0 {
+            tracing::debug!(policy = ?policy, "{} points were missing for requested range and were filled", filled_count);
         }
-        None => (),
     }
-    Ok((data, retrieved_count))
+    filter_within_range(data_filled, from, to)
 }
 
 /// Fills values for all dates from `min(data.first(), from)` to `max(data.last(), to)` according
@@ -130,7 +101,7 @@ fn filled_previous_data(data: &Vec<DateValue>, from: NaiveDate, to: NaiveDate) -
     new_data
 }
 
-fn filter_within_range(
+pub(crate) fn filter_within_range(
     data: Vec<DateValue>,
     maybe_from: Option<NaiveDate>,
     maybe_to: Option<NaiveDate>,
