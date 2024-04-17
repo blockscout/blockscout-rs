@@ -525,13 +525,10 @@ fn creation_input_artifacts<T>(
         pub cbor_auxdata: cbor_auxdata::CborAuxdata,
     }
 
-    let bytecode = raw_contract
-        .evm
-        .as_ref()
-        .and_then(|evm| evm.bytecode.as_ref());
+    let bytecode = &raw_contract.evm.bytecode;
     let artifacts = CreationInputArtifacts {
-        source_map: bytecode.and_then(|bytecode| bytecode.source_map.as_ref()),
-        link_references: bytecode.and_then(|bytecode| bytecode.link_references.as_ref()),
+        source_map: bytecode.source_map.as_ref(),
+        link_references: bytecode.link_references.as_ref(),
         cbor_auxdata: cbor_auxdata::generate_auxdata(&local_bytecode.creation_tx_input_parts),
     };
 
@@ -555,15 +552,11 @@ fn deployed_bytecode_artifacts<T>(
         pub cbor_auxdata: cbor_auxdata::CborAuxdata,
     }
 
-    let deployed_bytecode = raw_contract
-        .evm
-        .as_ref()
-        .and_then(|evm| evm.deployed_bytecode.as_ref());
+    let deployed_bytecode = &raw_contract.evm.deployed_bytecode;
     let artifacts = DeployedBytecodeArtifacts {
-        source_map: deployed_bytecode.and_then(|bytecode| bytecode.source_map.as_ref()),
-        link_references: deployed_bytecode.and_then(|bytecode| bytecode.link_references.as_ref()),
-        immutable_references: deployed_bytecode
-            .and_then(|bytecode| bytecode.immutable_references.as_ref()),
+        source_map: deployed_bytecode.bytecode.source_map.as_ref(),
+        link_references: deployed_bytecode.bytecode.link_references.as_ref(),
+        immutable_references: deployed_bytecode.immutable_references.as_ref(),
         cbor_auxdata: cbor_auxdata::generate_auxdata(&local_bytecode.deployed_bytecode_parts),
     };
 

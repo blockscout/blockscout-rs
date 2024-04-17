@@ -185,14 +185,16 @@ impl<T> LocalBytecode<T> {
         ),
         immutable_references: BTreeMap<String, Vec<Offsets>>,
     ) -> Result<Self, VerificationErrorKind> {
-        let creation_tx_input_parts = Self::split(
+        let creation_tx_input_parts = split(
             creation_tx_input.bytecode(),
             creation_tx_input_modified.bytecode(),
-        )?;
-        let deployed_bytecode_parts = Self::split(
+        )
+        .map_err(|err| VerificationErrorKind::InternalError(format!("{err:#}")))?;
+        let deployed_bytecode_parts = split(
             deployed_bytecode.bytecode(),
             deployed_bytecode_modified.bytecode(),
-        )?;
+        )
+        .map_err(|err| VerificationErrorKind::InternalError(format!("{err:#}")))?;
 
         Ok(Self {
             creation_tx_input,
@@ -224,125 +226,119 @@ impl<T> LocalBytecode<T> {
             SourceKind::DeployedBytecode => &self.deployed_bytecode_parts,
         }
     }
+}
 
-    /// Splits bytecode onto [`BytecodePart`]s using bytecode with modified metadata hashes.
-    ///
-    /// Any error here is [`VerificationErrorKind::InternalError`], as both original
-    /// and modified bytecodes are obtained as a result of local compilation.
-    fn split(
-        raw: &Bytes,
-        raw_modified: &Bytes,
-    ) -> Result<Vec<BytecodePart>, VerificationErrorKind> {
-        if raw.len() != raw_modified.len() {
-            return Err(VerificationErrorKind::InternalError(format!(
-                "bytecode and modified bytecode length mismatch: {}",
-                Mismatch::new(raw.len(), raw_modified.len())
-            )));
-        }
+/// Splits bytecode onto [`BytecodePart`]s using bytecode with modified metadata hashes.
+///
+/// Any error here is [`VerificationErrorKind::InternalError`], as both original
+/// and modified bytecodes are obtained as a result of local compilation.
+pub fn split(raw: &Bytes, raw_modified: &Bytes) -> Result<Vec<BytecodePart>, anyhow::Error> {
+    if raw.len() != raw_modified.len() {
+        anyhow::bail!(
+            "bytecode and modified bytecode length mismatch: {}",
+            Mismatch::new(raw.len(), raw_modified.len())
+        )
+    }
 
-        let parts_total_size = |parts: &Vec<BytecodePart>| -> usize {
-            parts.iter().fold(0, |size, el| size + el.size())
+    let parts_total_size =
+        |parts: &Vec<BytecodePart>| -> usize { parts.iter().fold(0, |size, el| size + el.size()) };
+
+    let mut result = Vec::new();
+
+    let mut i = 0usize;
+    while i < raw.len() {
+        let decoded = parse_bytecode_parts(&raw.slice(i..raw.len()), &raw_modified[i..])?;
+        let decoded_size = parts_total_size(&decoded);
+        result.extend(decoded);
+
+        i += decoded_size;
+    }
+
+    Ok(result)
+}
+
+/// Finds the next [`BytecodePart`]s into a series of bytes.
+///
+/// Parses at most one [`BytecodePart::Main`] and one [`BytecodePart::Metadata`].
+fn parse_bytecode_parts(
+    raw: &Bytes,
+    raw_modified: &[u8],
+) -> Result<Vec<BytecodePart>, anyhow::Error> {
+    let mut parts = Vec::new();
+
+    let len = raw.len();
+
+    // search for the first non-matching byte
+    let mut index = raw
+        .iter()
+        .zip(raw_modified.iter())
+        .position(|(a, b)| a != b);
+
+    // There is some non-matching byte - part of the metadata part byte.
+    if let Some(mut i) = index {
+        let is_metadata_length_valid = |metadata_length: usize, i: usize| {
+            if len < i + metadata_length + 2 {
+                return false;
+            }
+
+            // Decode length of metadata hash representation
+            let mut metadata_length_raw =
+                raw.slice((i + metadata_length)..(i + metadata_length + 2));
+            let encoded_metadata_length = metadata_length_raw.get_u16() as usize;
+            if encoded_metadata_length != metadata_length {
+                return false;
+            }
+
+            true
         };
 
-        let mut result = Vec::new();
+        // `i` is the first different byte. The metadata hash itself started somewhere earlier
+        // (at least for "a1"/"a2" indicating number of elements in cbor mapping).
+        // Next steps are trying to find that beginning.
 
-        let mut i = 0usize;
-        while i < raw.len() {
-            let decoded = Self::parse_bytecode_parts(&raw.slice(i..raw.len()), &raw_modified[i..])?;
-            let decoded_size = parts_total_size(&decoded);
-            result.extend(decoded);
-
-            i += decoded_size;
-        }
-
-        Ok(result)
-    }
-
-    /// Finds the next [`BytecodePart`]s into a series of bytes.
-    ///
-    /// Parses at most one [`BytecodePart::Main`] and one [`BytecodePart::Metadata`].
-    fn parse_bytecode_parts(
-        raw: &Bytes,
-        raw_modified: &[u8],
-    ) -> Result<Vec<BytecodePart>, VerificationErrorKind> {
-        let mut parts = Vec::new();
-
-        let len = raw.len();
-
-        // search for the first non-matching byte
-        let mut index = raw
-            .iter()
-            .zip(raw_modified.iter())
-            .position(|(a, b)| a != b);
-
-        // There is some non-matching byte - part of the metadata part byte.
-        if let Some(mut i) = index {
-            let is_metadata_length_valid = |metadata_length: usize, i: usize| {
-                if len < i + metadata_length + 2 {
-                    return false;
+        let (metadata, metadata_length) = loop {
+            let mut result = MetadataHash::from_cbor(&raw[i..]);
+            while result.is_err() {
+                // It is the beginning of the bytecode segment but no metadata hash has been parsed
+                if i == 0 {
+                    anyhow::bail!("failed to parse bytecode part",)
                 }
-
-                // Decode length of metadata hash representation
-                let mut metadata_length_raw =
-                    raw.slice((i + metadata_length)..(i + metadata_length + 2));
-                let encoded_metadata_length = metadata_length_raw.get_u16() as usize;
-                if encoded_metadata_length != metadata_length {
-                    return false;
-                }
-
-                true
-            };
-
-            // `i` is the first different byte. The metadata hash itself started somewhere earlier
-            // (at least for "a1"/"a2" indicating number of elements in cbor mapping).
-            // Next steps are trying to find that beginning.
-
-            let (metadata, metadata_length) = loop {
-                let mut result = MetadataHash::from_cbor(&raw[i..]);
-                while result.is_err() {
-                    // It is the beginning of the bytecode segment but no metadata hash has been parsed
-                    if i == 0 {
-                        return Err(VerificationErrorKind::InternalError(
-                            "failed to parse bytecode part".into(),
-                        ));
-                    }
-                    i -= 1;
-
-                    result = MetadataHash::from_cbor(&raw[i..]);
-                }
-
-                let (metadata, metadata_length) = result.unwrap();
-
-                if is_metadata_length_valid(metadata_length, i) {
-                    break (metadata, metadata_length);
-                }
-
                 i -= 1;
-            };
 
-            parts.push(BytecodePart::Metadata {
-                raw: raw.slice(i..(i + metadata_length + 2)),
-                metadata,
-            });
+                result = MetadataHash::from_cbor(&raw[i..]);
+            }
 
-            // Update index to point where metadata part begins
-            index = Some(i);
-        }
+            let (metadata, metadata_length) = result.unwrap();
 
-        // If there is something before metadata part (if any)
-        // belongs to main part
-        let i = index.unwrap_or(len);
-        if i > 0 {
-            parts.insert(
-                0,
-                BytecodePart::Main {
-                    raw: raw.slice(0..i),
-                },
-            )
-        }
+            if is_metadata_length_valid(metadata_length, i) {
+                break (metadata, metadata_length);
+            }
 
-        Ok(parts)
+            i -= 1;
+        };
+
+        parts.push(BytecodePart::Metadata {
+            raw: raw.slice(i..(i + metadata_length + 2)),
+            metadata,
+        });
+
+        // Update index to point where metadata part begins
+        index = Some(i);
     }
+
+    // If there is something before metadata part (if any)
+    // belongs to main part
+    let i = index.unwrap_or(len);
+    if i > 0 {
+        parts.insert(
+            0,
+            BytecodePart::Main {
+                raw: raw.slice(0..i),
+            },
+        )
+    }
+
+    Ok(parts)
 }
 
 #[cfg(test)]

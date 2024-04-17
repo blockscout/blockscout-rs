@@ -240,7 +240,8 @@ async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse
         "Invalid optimization"
     );
     assert_eq!(
-        result_compiler_settings.optimizer.runs, input.optimization_runs,
+        result_compiler_settings.optimizer.runs,
+        input.optimization_runs.or(Some(200)),
         "Invalid optimization runs"
     );
     assert_eq!(
