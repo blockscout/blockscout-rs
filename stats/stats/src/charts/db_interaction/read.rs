@@ -60,13 +60,30 @@ pub async fn get_counters(
     Ok(counters)
 }
 
-fn mark_approximate_data(data: Vec<DateValue>, mark_trailing_count: u64) -> Vec<ExtendedDateValue> {
-    let mark_from = data
-        .len()
-        .saturating_sub(mark_trailing_count.try_into().unwrap_or(usize::MAX));
+/// Mark corresponding data points as approximate.
+///
+/// Approximate are:
+/// - points after `last_updated_at` date
+/// - `mark_trailing_count` dates starting from `last_updated_at` and moving back
+///
+/// If `mark_trailing_count=0`` - only future points are marked
+fn mark_approximate(
+    data: Vec<DateValue>,
+    last_updated_at: NaiveDate,
+    mark_trailing_count: u64,
+) -> Vec<ExtendedDateValue> {
+    // saturating sub/add
+    let next_after_updated_at = last_updated_at
+        .checked_add_days(chrono::Days::new(1))
+        .unwrap_or(NaiveDate::MAX);
+    let mark_from_date = next_after_updated_at
+        .checked_sub_days(chrono::Days::new(mark_trailing_count))
+        .unwrap_or(NaiveDate::MIN);
     data.into_iter()
-        .enumerate()
-        .map(|(i, dv)| ExtendedDateValue::from_date_value(dv, i >= mark_from))
+        .map(|dv| {
+            let is_marked = dv.date >= mark_from_date;
+            ExtendedDateValue::from_date_value(dv, is_marked)
+        })
         .collect()
 }
 
@@ -108,7 +125,11 @@ pub async fn get_chart_data(
             tracing::debug!(last_updated_at = ?last_updated_at, "{} points filled after last update were removed", filtered);
         }
     }
-    let data = mark_approximate_data(data_unmarked, approximate_trailing_values);
+    let data = mark_approximate(
+        data_unmarked,
+        last_updated_at.unwrap_or(NaiveDate::MAX),
+        approximate_trailing_values,
+    );
     Ok(data)
 }
 
