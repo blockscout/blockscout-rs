@@ -34,6 +34,6 @@ fn is_approximate_serialization() {
     let serialized_point = serde_json::to_string(&point).unwrap();
     assert_eq!(
         serialized_point.replace(" ", "").replace("\n", ""),
-        PRECISE_POINT_1.replace(" ", "").replace("\n", "")
+        PRECISE_POINT_2.replace(" ", "").replace("\n", "")
     );
 }
