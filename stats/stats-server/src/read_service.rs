@@ -44,6 +44,7 @@ impl From<LimitsSettings> for ReadLimits {
 fn map_read_error(err: ReadError) -> Status {
     match &err {
         ReadError::NotFound(_) => Status::not_found(err.to_string()),
+        ReadError::IntervalLimitExceeded(_) => Status::invalid_argument(err.to_string()),
         _ => {
             tracing::error!(err = ?err, "internal read error");
             Status::internal(err.to_string())
