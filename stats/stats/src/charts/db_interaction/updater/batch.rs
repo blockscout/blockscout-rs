@@ -41,7 +41,7 @@ pub trait ChartBatchUpdater: ChartUpdater {
         let min_blockscout_block = get_min_block_blockscout(blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?;
-        let offset = Some(self.approximate_trailing_values());
+        let offset = Some(self.approximate_until_updated());
         let last_row =
             get_last_row(self, chart_id, min_blockscout_block, db, force_full, offset).await?;
 

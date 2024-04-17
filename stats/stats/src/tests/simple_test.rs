@@ -16,7 +16,7 @@ pub async fn simple_test_chart(
     let (db, blockscout) = init_db_all(test_name).await;
     chart.create(&db).await.unwrap();
     fill_mock_blockscout_data(&blockscout, "2023-03-01").await;
-    let approximate_trailing_values = chart.approximate_trailing_values();
+    let approximate_until_updated = chart.approximate_until_updated();
 
     chart.update(&db, &blockscout, true).await.unwrap();
     get_chart_and_assert_eq(
@@ -26,7 +26,7 @@ pub async fn simple_test_chart(
         None,
         None,
         None,
-        approximate_trailing_values,
+        approximate_until_updated,
     )
     .await;
 
@@ -38,7 +38,7 @@ pub async fn simple_test_chart(
         None,
         None,
         None,
-        approximate_trailing_values,
+        approximate_until_updated,
     )
     .await;
 }
@@ -55,7 +55,7 @@ pub async fn ranged_test_chart(
     chart.create(&db).await.unwrap();
     fill_mock_blockscout_data(&blockscout, "2023-03-01").await;
     let policy = chart.missing_date_policy();
-    let approximate_trailing_values = chart.approximate_trailing_values();
+    let approximate_until_updated = chart.approximate_until_updated();
 
     chart.update(&db, &blockscout, true).await.unwrap();
     get_chart_and_assert_eq(
@@ -65,7 +65,7 @@ pub async fn ranged_test_chart(
         Some(from),
         Some(to),
         Some(policy),
-        approximate_trailing_values,
+        approximate_until_updated,
     )
     .await;
 
@@ -77,7 +77,7 @@ pub async fn ranged_test_chart(
         Some(from),
         Some(to),
         Some(policy),
-        approximate_trailing_values,
+        approximate_until_updated,
     )
     .await;
 }
@@ -89,7 +89,7 @@ async fn get_chart_and_assert_eq(
     from: Option<NaiveDate>,
     to: Option<NaiveDate>,
     policy: Option<MissingDatePolicy>,
-    approximate_trailing_values: u64,
+    approximate_until_updated: u64,
 ) {
     let data = get_chart_data(
         db,
@@ -97,7 +97,7 @@ async fn get_chart_and_assert_eq(
         from,
         to,
         policy,
-        approximate_trailing_values,
+        approximate_until_updated,
     )
     .await
     .unwrap();

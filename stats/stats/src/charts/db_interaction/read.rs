@@ -70,14 +70,14 @@ pub async fn get_counters(
 fn mark_approximate(
     data: Vec<DateValue>,
     last_updated_at: NaiveDate,
-    mark_trailing_count: u64,
+    mark_before_updated: u64,
 ) -> Vec<ExtendedDateValue> {
     // saturating sub/add
     let next_after_updated_at = last_updated_at
         .checked_add_days(chrono::Days::new(1))
         .unwrap_or(NaiveDate::MAX);
     let mark_from_date = next_after_updated_at
-        .checked_sub_days(chrono::Days::new(mark_trailing_count))
+        .checked_sub_days(chrono::Days::new(mark_before_updated))
         .unwrap_or(NaiveDate::MIN);
     data.into_iter()
         .map(|dv| {
@@ -87,13 +87,17 @@ fn mark_approximate(
         .collect()
 }
 
+/// Get data points for the chart `name`.
+///
+/// `approximate_until_updated` - number of points to mark as approximate
+/// starting from `last_updated_at` and moving backwards in time.
 pub async fn get_chart_data(
     db: &DatabaseConnection,
     name: &str,
     from: Option<NaiveDate>,
     to: Option<NaiveDate>,
     policy: Option<MissingDatePolicy>,
-    approximate_trailing_values: u64,
+    approximate_until_updated: u64,
 ) -> Result<Vec<ExtendedDateValue>, ReadError> {
     let chart = charts::Entity::find()
         .column(charts::Column::Id)
@@ -122,13 +126,13 @@ pub async fn get_chart_data(
     let data_unmarked = filter_within_range(data_with_maybe_future, None, last_updated_at);
     if let Some(filtered) = data_with_maybe_future_len.checked_sub(data_unmarked.len()) {
         if filtered > 0 {
-            tracing::debug!(last_updated_at = ?last_updated_at, "{} points filled after last update were removed", filtered);
+            tracing::debug!(last_updated_at = ?last_updated_at, "{} future points were removed", filtered);
         }
     }
     let data = mark_approximate(
         data_unmarked,
         last_updated_at.unwrap_or(NaiveDate::MAX),
-        approximate_trailing_values,
+        approximate_until_updated,
     );
     Ok(data)
 }

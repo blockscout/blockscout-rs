@@ -90,8 +90,8 @@ impl StatsService for ReadService {
             .and_then(|date| NaiveDate::from_str(&date).ok());
         let to = request.to.and_then(|date| NaiveDate::from_str(&date).ok());
         let policy = Some(chart_info.chart.missing_date_policy());
-        let trail_approx = chart_info.chart.approximate_trailing_values();
-        let data = stats::get_chart_data(&self.db, &request.name, from, to, policy, trail_approx)
+        let mark_approx = chart_info.chart.approximate_until_updated();
+        let data = stats::get_chart_data(&self.db, &request.name, from, to, policy, mark_approx)
             .await
             .map_err(map_read_error)?;
 
