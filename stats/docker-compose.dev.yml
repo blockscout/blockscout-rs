@@ -4,7 +4,7 @@ services:
   db-init:
     image: postgres:15
     volumes:
-      - ./db/blockscout-db:/var/lib/postgresql/data
+      - ./data/blockscout-db:/var/lib/postgresql/data
     entrypoint:
       - sh
       - -c
