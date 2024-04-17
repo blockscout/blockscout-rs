@@ -1,7 +1,7 @@
 use crate::{DateValue, MissingDatePolicy, ReadError};
 use chrono::{Duration, NaiveDate};
 
-/// Fills missing points according to policy and filters out points outsied of range.
+/// Fills missing points according to policy and filters out points outside of range.
 ///
 /// Note that values outside of the range can still affect the filled values.
 pub fn fill_and_filter_chart(

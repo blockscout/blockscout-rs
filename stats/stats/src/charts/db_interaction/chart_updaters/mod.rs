@@ -42,7 +42,6 @@ pub trait ChartUpdater: Chart {
         db: &DatabaseConnection,
         _blockscout: &DatabaseConnection,
     ) -> Result<(), UpdateError> {
-        // todo: factor out to `update_chart`
         let chart_id = find_chart(db, self.name())
             .await
             .map_err(UpdateError::StatsDB)?
