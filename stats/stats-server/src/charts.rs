@@ -2,9 +2,7 @@ use crate::config::{
     toml_config::{Config, LineChartSection},
     ChartSettings,
 };
-use stats::{
-    cache::Cache, counters, entity::sea_orm_active_enums::ChartType, lines, ChartUpdater,
-};
+use stats::{cache::Cache, counters, entity::sea_orm_active_enums::ChartType, lines, ChartUpdater};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     hash::Hash,
