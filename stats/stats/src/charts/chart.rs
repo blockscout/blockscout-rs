@@ -62,7 +62,7 @@ pub trait Chart: Sync {
     /// not complete because blocks will be produced till the end of the day.
     ///    |===|=  |
     /// day -1   0
-    fn approximate_until_updated(&self) -> u64 {
+    fn approximate_trailing_points(&self) -> u64 {
         if self.chart_type() == ChartType::Counter {
             // there's only one value in counter
             0

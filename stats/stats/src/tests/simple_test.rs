@@ -18,7 +18,7 @@ pub async fn simple_test_chart(
     let current_date = current_time.date_naive();
     chart.create(&db).await.unwrap();
     fill_mock_blockscout_data(&blockscout, current_date).await;
-    let approximate_until_updated = chart.approximate_until_updated();
+    let approximate_trailing_points = chart.approximate_trailing_points();
 
     chart
         .update(&db, &blockscout, current_time, true)
@@ -31,7 +31,7 @@ pub async fn simple_test_chart(
         None,
         None,
         None,
-        approximate_until_updated,
+        approximate_trailing_points,
     )
     .await;
 
@@ -46,7 +46,7 @@ pub async fn simple_test_chart(
         None,
         None,
         None,
-        approximate_until_updated,
+        approximate_trailing_points,
     )
     .await;
 }
@@ -65,7 +65,7 @@ pub async fn ranged_test_chart(
     chart.create(&db).await.unwrap();
     fill_mock_blockscout_data(&blockscout, current_date).await;
     let policy = chart.missing_date_policy();
-    let approximate_until_updated = chart.approximate_until_updated();
+    let approximate_trailing_points = chart.approximate_trailing_points();
 
     chart
         .update(&db, &blockscout, current_time, true)
@@ -78,7 +78,7 @@ pub async fn ranged_test_chart(
         Some(from),
         Some(to),
         Some(policy),
-        approximate_until_updated,
+        approximate_trailing_points,
     )
     .await;
 
@@ -93,7 +93,7 @@ pub async fn ranged_test_chart(
         Some(from),
         Some(to),
         Some(policy),
-        approximate_until_updated,
+        approximate_trailing_points,
     )
     .await;
 }
@@ -105,7 +105,7 @@ async fn get_chart_and_assert_eq(
     from: Option<NaiveDate>,
     to: Option<NaiveDate>,
     policy: Option<MissingDatePolicy>,
-    approximate_until_updated: u64,
+    approximate_trailing_points: u64,
 ) {
     let data = get_chart_data(
         db,
@@ -114,7 +114,7 @@ async fn get_chart_and_assert_eq(
         to,
         None,
         policy,
-        approximate_until_updated,
+        approximate_trailing_points,
     )
     .await
     .unwrap();

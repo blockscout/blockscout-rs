@@ -91,7 +91,7 @@ fn mark_approximate(
 
 /// Get data points for the chart `name`.
 ///
-/// `approximate_until_updated` - number of points to mark as approximate
+/// `approximate_trailing_points` - number of points to mark as approximate
 /// starting from `last_updated_at` and moving backwards in time.
 ///
 /// `interval_limit` - max interval (from, to). If `from` or `to` are none,
@@ -103,7 +103,7 @@ pub async fn get_chart_data(
     to: Option<NaiveDate>,
     interval_limit: Option<Duration>,
     policy: Option<MissingDatePolicy>,
-    approximate_until_updated: u64,
+    approximate_trailing_points: u64,
 ) -> Result<Vec<ExtendedDateValue>, ReadError> {
     let chart = charts::Entity::find()
         .column(charts::Column::Id)
@@ -138,7 +138,7 @@ pub async fn get_chart_data(
     let data = mark_approximate(
         data_unmarked,
         last_updated_at.unwrap_or(NaiveDate::MAX),
-        approximate_until_updated,
+        approximate_trailing_points,
     );
     Ok(data)
 }
