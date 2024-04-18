@@ -46,9 +46,10 @@ async fn libraries_manually_linked() {
     test_success_multi_part_and_standard_json("libraries_manually_linked").await
 }
 
-// TODO: no auxdata is parsed right now when `metadataHash` is "none"
 #[tokio::test]
 async fn metadata_hash_absent() {
+    // Now auxdata is not retrieved for contracts compiled without metadata hash.
+    // TODO: should be removed, when that is fixed
     let remove_cbor_auxdata_from_artifacts = |artifacts: &mut serde_json::Value| {
         artifacts
             .as_object_mut()
