@@ -66,7 +66,7 @@ pub fn fill_missing_points(
 }
 
 /// Inserts zero values in `data` for all missing dates in inclusive range `[from; to]`
-fn filled_zeros_data(data: &Vec<DateValue>, from: NaiveDate, to: NaiveDate) -> Vec<DateValue> {
+fn filled_zeros_data(data: &[DateValue], from: NaiveDate, to: NaiveDate) -> Vec<DateValue> {
     let n = (to - from).num_days() as usize;
     let mut new_data: Vec<DateValue> = Vec::with_capacity(n);
 
@@ -91,7 +91,7 @@ fn filled_zeros_data(data: &Vec<DateValue>, from: NaiveDate, to: NaiveDate) -> V
 
 /// Inserts last existing values in `data` for all missing dates in inclusive range `[from; to]`.
 /// For all leading missing dates inserts zero.
-fn filled_previous_data(data: &Vec<DateValue>, from: NaiveDate, to: NaiveDate) -> Vec<DateValue> {
+fn filled_previous_data(data: &[DateValue], from: NaiveDate, to: NaiveDate) -> Vec<DateValue> {
     let n = (to - from).num_days() as usize;
     let mut new_data: Vec<DateValue> = Vec::with_capacity(n);
     let mut current_date = from;

@@ -115,7 +115,7 @@ pub async fn get_chart_data(
     let db_data = get_chart(db, chart.id, from, to).await?;
 
     let last_updated_at = chart.last_updated_at.map(|t| t.date_naive());
-    if last_updated_at.is_none() && db_data.len() != 0 {
+    if last_updated_at.is_none() && !db_data.is_empty() {
         tracing::warn!(
             chart_name = chart.name,
             db_data_len = db_data.len(),
