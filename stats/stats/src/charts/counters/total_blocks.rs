@@ -90,7 +90,7 @@ mod tests {
         let _ = tracing_subscriber::fmt::try_init();
         let (db, blockscout) = init_db_all("update_total_blocks_recurrent").await;
         let updater = TotalBlocks::default();
-        let current_time = chrono::DateTime::from_str("2023-03-01T12:00:00").unwrap();
+        let current_time = chrono::DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
         let current_date = current_time.date_naive();
 
         updater.create(&db).await.unwrap();
@@ -121,7 +121,7 @@ mod tests {
         let _ = tracing_subscriber::fmt::try_init();
         let (db, blockscout) = init_db_all("update_total_blocks_fresh").await;
         let updater = TotalBlocks::default();
-        let current_time = chrono::DateTime::from_str("2022-11-12T12:00:00").unwrap();
+        let current_time = chrono::DateTime::from_str("2022-11-12T12:00:00Z").unwrap();
         let current_date = current_time.date_naive();
 
         updater.create(&db).await.unwrap();
@@ -142,7 +142,7 @@ mod tests {
         let _ = tracing_subscriber::fmt::try_init();
         let (db, blockscout) = init_db_all("update_total_blocks_last").await;
         let updater = TotalBlocks::default();
-        let current_time = chrono::DateTime::from_str("2023-03-01T12:00:00").unwrap();
+        let current_time = chrono::DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
         let current_date = current_time.date_naive();
 
         updater.create(&db).await.unwrap();

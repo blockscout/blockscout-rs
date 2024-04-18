@@ -14,7 +14,7 @@ pub async fn simple_test_chart(
 ) {
     let _ = tracing_subscriber::fmt::try_init();
     let (db, blockscout) = init_db_all(test_name).await;
-    let current_time = DateTime::from_str("2023-03-01T12:00:00").unwrap();
+    let current_time = DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
     let current_date = current_time.date_naive();
     chart.create(&db).await.unwrap();
     fill_mock_blockscout_data(&blockscout, current_date).await;
@@ -60,7 +60,7 @@ pub async fn ranged_test_chart(
 ) {
     let _ = tracing_subscriber::fmt::try_init();
     let (db, blockscout) = init_db_all(test_name).await;
-    let current_time = DateTime::from_str("2023-03-01T12:00:00").unwrap();
+    let current_time = DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
     let current_date = current_time.date_naive();
     chart.create(&db).await.unwrap();
     fill_mock_blockscout_data(&blockscout, current_date).await;
@@ -132,7 +132,7 @@ async fn get_chart_and_assert_eq(
 pub async fn simple_test_counter(test_name: &str, counter: impl ChartUpdater, expected: &str) {
     let _ = tracing_subscriber::fmt::try_init();
     let (db, blockscout) = init_db_all(test_name).await;
-    let current_time = DateTime::from_str("2023-03-01T12:00:00").unwrap();
+    let current_time = chrono::DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
     let current_date = current_time.date_naive();
 
     counter.create(&db).await.unwrap();

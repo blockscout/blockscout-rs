@@ -99,7 +99,7 @@ mod tests {
     async fn update_new_blocks_recurrent() {
         let _ = tracing_subscriber::fmt::try_init();
         let (db, blockscout) = init_db_all("update_new_blocks_recurrent").await;
-        let current_time = chrono::DateTime::from_str("2022-11-12T12:00:00").unwrap();
+        let current_time = chrono::DateTime::from_str("2022-11-12T12:00:00Z").unwrap();
         let current_date = current_time.date_naive();
         fill_mock_blockscout_data(&blockscout, current_date).await;
 
@@ -193,7 +193,7 @@ mod tests {
     async fn update_new_blocks_fresh() {
         let _ = tracing_subscriber::fmt::try_init();
         let (db, blockscout) = init_db_all("update_new_blocks_fresh").await;
-        let current_time = chrono::DateTime::from_str("2022-11-12T12:00:00").unwrap();
+        let current_time = chrono::DateTime::from_str("2022-11-12T12:00:00Z").unwrap();
         let current_date = current_time.date_naive();
         fill_mock_blockscout_data(&blockscout, current_date).await;
 
@@ -237,7 +237,7 @@ mod tests {
     async fn update_new_blocks_last() {
         let _ = tracing_subscriber::fmt::try_init();
         let (db, blockscout) = init_db_all("update_new_blocks_last").await;
-        let current_time = chrono::DateTime::from_str("2022-11-12T12:00:00").unwrap();
+        let current_time = chrono::DateTime::from_str("2022-11-12T12:00:00Z").unwrap();
         let current_date = current_time.date_naive();
         fill_mock_blockscout_data(&blockscout, current_date).await;
 
