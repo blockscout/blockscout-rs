@@ -24,7 +24,6 @@ pub struct CompilationResult {
     pub compiler_settings: serde_json::Value,
     pub sources: BTreeMap<String, String>,
     pub parsed_contracts: Vec<ParsedContract>,
-    pub contains_metadata_hash: bool,
 }
 
 fn to_lossless_output(
@@ -45,7 +44,6 @@ mod solidity {
         compiler_input: &foundry_compilers::CompilerInput,
         compiler_output: serde_json::Value,
         modified_compiler_output: serde_json::Value,
-        contains_metadata_hash: bool,
     ) -> Result<CompilationResult, anyhow::Error> {
         let compiler_output = to_lossless_output(compiler_output).context("original output")?;
         let modified_compiler_output =
@@ -107,7 +105,6 @@ mod solidity {
                 })
                 .collect(),
             parsed_contracts,
-            contains_metadata_hash,
         })
     }
 

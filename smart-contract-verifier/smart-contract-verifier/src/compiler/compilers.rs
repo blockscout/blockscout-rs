@@ -38,10 +38,6 @@ pub trait EvmCompiler {
         ver: &Version,
         input: &Self::CompilerInput,
     ) -> Result<(serde_json::Value, CompilerOutput), SolcError>;
-
-    fn contains_metadata_hash(_version: &Version, _input: &Self::CompilerInput) -> bool {
-        false
-    }
 }
 
 pub struct Compilers<C> {
@@ -145,10 +141,6 @@ where
                 )
             }
         };
-    }
-
-    pub fn contains_metadata_hash(compiler_version: &Version, input: &C::CompilerInput) -> bool {
-        C::contains_metadata_hash(compiler_version, input)
     }
 }
 

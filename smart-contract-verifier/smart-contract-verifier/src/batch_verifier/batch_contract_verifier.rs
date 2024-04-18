@@ -1,8 +1,7 @@
-use super::compilation;
 use crate::{
     batch_verifier::{
-        artifacts::CodeArtifacts,
-        compilation::CompilationResult,
+        artifacts::{cbor_auxdata, CodeArtifacts},
+        compilation::{self, CompilationResult},
         errors::{VerificationError, VerificationErrorKind},
         transformations,
     },
@@ -81,14 +80,11 @@ pub async fn verify_solidity(
             .await?
     };
 
-    let contains_metadata_hash =
-        Compilers::<SolidityCompiler>::contains_metadata_hash(&compiler_version, compiler_input);
     let compilation_result = compilation::parse_solidity_contracts(
         compiler_version,
         compiler_input,
         raw_compiler_output,
         modified_raw_compiler_output,
-        contains_metadata_hash,
     )
     .map_err(|err| {
         tracing::error!("parsing compiled contracts failed: {err:#}");
@@ -202,7 +198,7 @@ fn verify_contract(
             creation_match: does_creation_match.then_some(Match {
                 match_type: match_type(
                     creation_values.clone(),
-                    compilation_result.contains_metadata_hash,
+                    &parsed_contract.creation_code_artifacts.cbor_auxdata,
                 ),
                 values: creation_values,
                 transformations: creation_transformations,
@@ -210,7 +206,7 @@ fn verify_contract(
             runtime_match: does_runtime_match.then_some(Match {
                 match_type: match_type(
                     runtime_values.clone(),
-                    compilation_result.contains_metadata_hash,
+                    &parsed_contract.runtime_code_artifacts.cbor_auxdata,
                 ),
                 values: runtime_values,
                 transformations: runtime_transformations,
@@ -259,8 +255,9 @@ fn choose_best_contract(successes: Vec<BatchSuccess>) -> Option<BatchSuccess> {
     Some(best_contract)
 }
 
-fn match_type(values: serde_json::Value, contains_metadata_hash: bool) -> MatchType {
-    if !contains_metadata_hash {
+fn match_type(values: serde_json::Value, cbor_auxdata: &cbor_auxdata::CborAuxdata) -> MatchType {
+    // if no cbor_auxdata is present, no metadata hash exists to check on exact matches
+    if cbor_auxdata.is_empty() {
         return MatchType::Partial;
     }
 
