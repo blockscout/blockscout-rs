@@ -10,6 +10,7 @@ use crate::{
     get_chart_data, UpdateError,
 };
 use async_trait::async_trait;
+use chrono::Utc;
 use sea_orm::prelude::*;
 use std::{fmt::Display, iter::Sum, ops::AddAssign, str::FromStr, sync::Arc};
 
@@ -32,6 +33,7 @@ where
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
+        current_time: chrono::DateTime<Utc>,
         force_full: bool,
     ) -> Result<Vec<DateValue>, UpdateError> {
         let parent = self.parent();
@@ -40,7 +42,9 @@ where
             parent_chart_name = parent.name(),
             "updating parent"
         );
-        parent.update_with_mutex(db, blockscout, force_full).await?;
+        parent
+            .update_with_mutex(db, blockscout, current_time, force_full)
+            .await?;
         let data = get_chart_data(
             db,
             parent.name(),
@@ -59,6 +63,7 @@ where
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
+        current_time: chrono::DateTime<Utc>,
         force_full: bool,
     ) -> Result<(), UpdateError> {
         let chart_id = find_chart(db, self.name())
@@ -68,7 +73,9 @@ where
         let min_blockscout_block = get_min_block_blockscout(blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?;
-        let parent_data = self.get_parent_data(db, blockscout, force_full).await?;
+        let parent_data = self
+            .get_parent_data(db, blockscout, current_time, force_full)
+            .await?;
         let values = self
             .get_values(parent_data)
             .await?

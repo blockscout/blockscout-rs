@@ -1,6 +1,6 @@
 use std::num::ParseIntError;
 
-use chrono::{NaiveDate, Utc};
+use chrono::NaiveDate;
 use entity::chart_data;
 use sea_orm::{prelude::*, FromQueryResult, Set};
 
@@ -89,18 +89,12 @@ impl DateValue {
         }
     }
 
-    pub fn relevant_or_zero(self) -> DateValue {
-        let today = Utc::now().date_naive();
-        if self.date < today {
-            DateValue::zero(today)
+    pub fn relevant_or_zero(self, current_date: NaiveDate) -> DateValue {
+        if self.date < current_date {
+            DateValue::zero(current_date)
         } else {
             self
         }
-    }
-
-    pub fn is_partial(&self) -> bool {
-        let today = Utc::now().date_naive();
-        self.date >= today
     }
 }
 

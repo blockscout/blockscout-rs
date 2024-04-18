@@ -6,6 +6,7 @@ use crate::{
     UpdateError,
 };
 use async_trait::async_trait;
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::prelude::*;
 
@@ -28,7 +29,7 @@ impl ChartFullUpdater for MockCounter {
         _blockscout: &DatabaseConnection,
     ) -> Result<Vec<DateValue>, UpdateError> {
         let item = DateValue {
-            date: chrono::offset::Local::now().date_naive(),
+            date: NaiveDate::parse_from_str("2022-11-12", "%Y-%m-%d").unwrap(),
             value: self.value.clone(),
         };
         Ok(vec![item])
@@ -52,8 +53,10 @@ impl ChartUpdater for MockCounter {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
+        current_time: chrono::DateTime<chrono::Utc>,
         force_full: bool,
     ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, force_full).await
+        self.update_with_values(db, blockscout, current_time, force_full)
+            .await
     }
 }

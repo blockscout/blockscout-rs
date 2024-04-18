@@ -1,7 +1,7 @@
 use crate::{
     charts::db_interaction::{
-        types::DateValue,
         chart_updaters::{ChartFullUpdater, ChartUpdater},
+        types::DateValue,
     },
     UpdateError,
 };
@@ -73,9 +73,11 @@ impl ChartUpdater for CompletedTxns {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
+        current_time: chrono::DateTime<chrono::Utc>,
         force_full: bool,
     ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, force_full).await
+        self.update_with_values(db, blockscout, current_time, force_full)
+            .await
     }
 }
 

@@ -1,6 +1,6 @@
 use crate::{charts::Charts, serializers::serialize_line_points, settings::LimitsSettings};
 use async_trait::async_trait;
-use chrono::{Duration, NaiveDate};
+use chrono::{Duration, NaiveDate, Utc};
 use sea_orm::{DatabaseConnection, DbErr};
 use stats::ReadError;
 use stats_proto::blockscout::stats::v1::{
@@ -76,7 +76,7 @@ impl StatsService for ReadService {
             .filter_map(|(counter, info)| {
                 data.remove(&counter.id).map(|point| {
                     let point: stats::DateValue = if info.chart.relevant_or_zero() {
-                        point.relevant_or_zero()
+                        point.relevant_or_zero(Utc::now().date_naive())
                     } else {
                         point
                     };

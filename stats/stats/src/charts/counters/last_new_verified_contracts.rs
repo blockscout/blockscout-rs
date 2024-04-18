@@ -2,8 +2,8 @@ use crate::{
     charts::{
         create_chart,
         db_interaction::{
-            types::DateValue,
             chart_updaters::{last_point, ChartDependentUpdater, ChartUpdater},
+            types::DateValue,
         },
     },
     lines::NewVerifiedContracts,
@@ -61,9 +61,11 @@ impl ChartUpdater for LastNewVerifiedContracts {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
+        current_time: chrono::DateTime<chrono::Utc>,
         force_full: bool,
     ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, force_full).await
+        self.update_with_values(db, blockscout, current_time, force_full)
+            .await
     }
 }
 

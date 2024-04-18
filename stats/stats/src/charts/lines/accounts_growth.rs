@@ -3,8 +3,8 @@ use crate::{
     charts::{
         cache::Cache,
         db_interaction::{
-            types::{DateValue, DateValueInt},
             chart_updaters::{ChartFullUpdater, ChartUpdater},
+            types::{DateValue, DateValueInt},
         },
     },
     MissingDatePolicy, UpdateError,
@@ -72,9 +72,11 @@ impl ChartUpdater for AccountsGrowth {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
+        current_time: chrono::DateTime<chrono::Utc>,
         force_full: bool,
     ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, force_full).await
+        self.update_with_values(db, blockscout, current_time, force_full)
+            .await
     }
 }
 

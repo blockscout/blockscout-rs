@@ -3,6 +3,7 @@
 //! Depending on the chart nature, various tactics are better fit (in terms of efficiency, performance, etc.).
 
 use async_trait::async_trait;
+use chrono::Utc;
 use sea_orm::prelude::*;
 
 use crate::{
@@ -30,6 +31,7 @@ pub trait ChartUpdater: Chart {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
+        current_time: chrono::DateTime<Utc>,
         force_full: bool,
     ) -> Result<(), UpdateError>;
 
@@ -41,32 +43,39 @@ pub trait ChartUpdater: Chart {
         &self,
         db: &DatabaseConnection,
         _blockscout: &DatabaseConnection,
+        current_time: chrono::DateTime<Utc>,
     ) -> Result<(), UpdateError> {
         let chart_id = find_chart(db, self.name())
             .await
             .map_err(UpdateError::StatsDB)?
             .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
-        let time = chrono::Utc::now();
-        common_operations::set_last_updated_at(chart_id, db, time)
+        common_operations::set_last_updated_at(chart_id, db, current_time)
             .await
             .map_err(UpdateError::StatsDB)
     }
 
-    /// Update data and metadata of the chart
+    /// Update data and metadata of the chart.
+    ///
+    /// `current_time` is settable mainly for testing purposes. So that
+    /// code dependant on time (mostly metadata updates) can be reproducibly tested.
     async fn update(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
+        current_time: chrono::DateTime<Utc>,
         force_full: bool,
     ) -> Result<(), UpdateError> {
-        self.update_values(db, blockscout, force_full).await?;
-        self.update_metadata(db, blockscout).await
+        self.update_values(db, blockscout, current_time, force_full)
+            .await?;
+        self.update_metadata(db, blockscout, current_time).await
     }
 
+    /// Run [`Self::update`] with acquiring global mutex for the chart
     async fn update_with_mutex(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
+        current_time: chrono::DateTime<Utc>,
         force_full: bool,
     ) -> Result<(), UpdateError> {
         let name = self.name();
@@ -83,6 +92,6 @@ pub trait ChartUpdater: Chart {
                 }
             }
         };
-        self.update(db, blockscout, force_full).await
+        self.update(db, blockscout, current_time, force_full).await
     }
 }

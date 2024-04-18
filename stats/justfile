@@ -25,9 +25,8 @@ test *args:
     cargo test {{args}} -- --include-ignored
 
 test-with-db *args:
-    -just                            docker-name="{{docker-name}}-test" stop-postgres 2> /dev/null
     -just db-port="{{test-db-port}}" db-name="" docker-name="{{docker-name}}-test" start-postgres
-    just db-port="{{test-db-port}}" db-name=""                                    test {{args}}
+    -just db-port="{{test-db-port}}" db-name=""                                    test {{args}}
     just                            docker-name="{{docker-name}}-test" stop-postgres
 
 restart-generate-entities: 

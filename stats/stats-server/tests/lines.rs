@@ -2,6 +2,7 @@ use blockscout_service_launcher::{
     launcher::ConfigSettings,
     test_server::{get_test_server_settings, init_server, send_get_request},
 };
+use chrono::NaiveDate;
 use stats::tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data};
 use stats_server::{stats, Settings};
 use std::{path::PathBuf, str::FromStr};
@@ -10,7 +11,7 @@ use std::{path::PathBuf, str::FromStr};
 #[ignore = "needs database"]
 async fn test_lines_ok() {
     let (stats_db, blockscout_db) = init_db_all("test_lines_ok").await;
-    fill_mock_blockscout_data(&blockscout_db, "2023-03-01").await;
+    fill_mock_blockscout_data(&blockscout_db, NaiveDate::from_str("2023-03-01").unwrap()).await;
 
     std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
     let mut settings = Settings::build().expect("Failed to build settings");

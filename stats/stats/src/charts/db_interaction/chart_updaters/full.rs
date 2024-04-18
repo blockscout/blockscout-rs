@@ -9,6 +9,7 @@ use crate::{
     metrics, UpdateError,
 };
 use async_trait::async_trait;
+use chrono::Utc;
 use sea_orm::prelude::*;
 
 #[async_trait]
@@ -22,6 +23,7 @@ pub trait ChartFullUpdater: ChartUpdater {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
+        _current_time: chrono::DateTime<Utc>,
         _force_full: bool,
     ) -> Result<(), UpdateError> {
         let chart_id = find_chart(db, self.name())

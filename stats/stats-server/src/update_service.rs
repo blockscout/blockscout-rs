@@ -85,7 +85,7 @@ impl UpdateService {
                 .with_label_values(&[chart.name()])
                 .start_timer();
             chart
-                .update_with_mutex(&self.db, &self.blockscout, force_full)
+                .update_with_mutex(&self.db, &self.blockscout, chrono::Utc::now(), force_full)
                 .await
         };
         if let Err(err) = result {

@@ -14,6 +14,7 @@ use crate::{
     metrics, UpdateError,
 };
 use async_trait::async_trait;
+use chrono::Utc;
 use sea_orm::prelude::*;
 
 #[async_trait]
@@ -28,6 +29,7 @@ pub trait ChartPartialUpdater: ChartUpdater {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
+        _current_time: chrono::DateTime<Utc>,
         force_full: bool,
     ) -> Result<(), UpdateError> {
         let chart_id = find_chart(db, self.name())

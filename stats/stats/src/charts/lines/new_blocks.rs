@@ -71,9 +71,11 @@ impl ChartUpdater for NewBlocks {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
+        current_time: chrono::DateTime<chrono::Utc>,
         force_full: bool,
     ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, force_full).await
+        self.update_with_values(db, blockscout, current_time, force_full)
+            .await
     }
 }
 
@@ -97,7 +99,9 @@ mod tests {
     async fn update_new_blocks_recurrent() {
         let _ = tracing_subscriber::fmt::try_init();
         let (db, blockscout) = init_db_all("update_new_blocks_recurrent").await;
-        fill_mock_blockscout_data(&blockscout, "2022-11-12").await;
+        let current_time = chrono::DateTime::from_str("2022-11-12T12:00:00").unwrap();
+        let current_date = current_time.date_naive();
+        fill_mock_blockscout_data(&blockscout, current_date).await;
 
         let updater = NewBlocks::default();
         updater.create(&db).await.unwrap();
@@ -125,7 +129,10 @@ mod tests {
         .unwrap();
 
         // Note that update is not full, therefore there is no entry with date `2022-11-09`
-        updater.update(&db, &blockscout, false).await.unwrap();
+        updater
+            .update(&db, &blockscout, current_time, false)
+            .await
+            .unwrap();
         let data = get_chart_data(&db, updater.name(), None, None, None, None, 1)
             .await
             .unwrap();
@@ -149,7 +156,10 @@ mod tests {
         assert_eq!(expected, data);
 
         // note that update is full, therefore there is entry with date `2022-11-09`
-        updater.update(&db, &blockscout, true).await.unwrap();
+        updater
+            .update(&db, &blockscout, current_time, true)
+            .await
+            .unwrap();
         let data = get_chart_data(&db, updater.name(), None, None, None, None, 1)
             .await
             .unwrap();
@@ -183,12 +193,17 @@ mod tests {
     async fn update_new_blocks_fresh() {
         let _ = tracing_subscriber::fmt::try_init();
         let (db, blockscout) = init_db_all("update_new_blocks_fresh").await;
-        fill_mock_blockscout_data(&blockscout, "2022-11-12").await;
+        let current_time = chrono::DateTime::from_str("2022-11-12T12:00:00").unwrap();
+        let current_date = current_time.date_naive();
+        fill_mock_blockscout_data(&blockscout, current_date).await;
 
         let updater = NewBlocks::default();
         updater.create(&db).await.unwrap();
 
-        updater.update(&db, &blockscout, true).await.unwrap();
+        updater
+            .update(&db, &blockscout, current_time, true)
+            .await
+            .unwrap();
         let data = get_chart_data(&db, updater.name(), None, None, None, None, 0)
             .await
             .unwrap();
@@ -222,7 +237,9 @@ mod tests {
     async fn update_new_blocks_last() {
         let _ = tracing_subscriber::fmt::try_init();
         let (db, blockscout) = init_db_all("update_new_blocks_last").await;
-        fill_mock_blockscout_data(&blockscout, "2022-11-12").await;
+        let current_time = chrono::DateTime::from_str("2022-11-12T12:00:00").unwrap();
+        let current_date = current_time.date_naive();
+        fill_mock_blockscout_data(&blockscout, current_date).await;
 
         let updater = NewBlocks::default();
         updater.create(&db).await.unwrap();
@@ -264,7 +281,10 @@ mod tests {
         .await
         .unwrap();
 
-        updater.update(&db, &blockscout, false).await.unwrap();
+        updater
+            .update(&db, &blockscout, current_time, false)
+            .await
+            .unwrap();
         let data = get_chart_data(&db, updater.name(), None, None, None, None, 1)
             .await
             .unwrap();

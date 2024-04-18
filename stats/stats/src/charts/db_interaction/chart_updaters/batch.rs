@@ -17,7 +17,7 @@ use crate::{
     metrics, UpdateError,
 };
 use async_trait::async_trait;
-use chrono::{Duration, NaiveDate, Utc};
+use chrono::{DateTime, Duration, NaiveDate, Utc};
 use sea_orm::{DatabaseConnection, FromQueryResult, Statement, TransactionTrait};
 use std::time::Instant;
 
@@ -32,6 +32,7 @@ pub trait ChartBatchUpdater: ChartUpdater {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
+        current_time: DateTime<Utc>,
         force_full: bool,
     ) -> Result<(), UpdateError> {
         let chart_id = find_chart(db, self.name())
@@ -49,8 +50,15 @@ pub trait ChartBatchUpdater: ChartUpdater {
             .with_label_values(&[self.name()])
             .start_timer();
         tracing::info!(last_row =? last_row, "start batch update");
-        self.batch_update(db, blockscout, last_row, chart_id, min_blockscout_block)
-            .await
+        self.batch_update(
+            db,
+            blockscout,
+            last_row,
+            current_time.date_naive(),
+            chart_id,
+            min_blockscout_block,
+        )
+        .await
     }
 
     async fn batch_update(
@@ -58,6 +66,7 @@ pub trait ChartBatchUpdater: ChartUpdater {
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
         last_row: Option<DateValue>,
+        today: NaiveDate,
         chart_id: i32,
         min_blockscout_block: i64,
     ) -> Result<(), UpdateError> {
@@ -72,9 +81,8 @@ pub trait ChartBatchUpdater: ChartUpdater {
                 .map(|time| time.date())
                 .map_err(UpdateError::BlockscoutDB)?,
         };
-        let last_date = Utc::now().date_naive();
 
-        let steps = generate_date_ranges(first_date, last_date, self.step_duration());
+        let steps = generate_date_ranges(first_date, today, self.step_duration());
         let n = steps.len();
 
         for (i, (from, to)) in steps.into_iter().enumerate() {

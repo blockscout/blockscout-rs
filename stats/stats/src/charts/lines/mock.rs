@@ -12,10 +12,9 @@ use rand::{distributions::uniform::SampleUniform, rngs::StdRng, Rng, SeedableRng
 use sea_orm::prelude::*;
 use std::{ops::Range, str::FromStr};
 
-fn generate_intervals(mut start: NaiveDate) -> Vec<NaiveDate> {
-    let now = chrono::offset::Utc::now().naive_utc().date();
+fn generate_intervals(mut start: NaiveDate, end: NaiveDate) -> Vec<NaiveDate> {
     let mut times = vec![];
-    while start < now {
+    while start < end {
         times.push(start);
         start += Duration::days(1);
     }
@@ -26,17 +25,20 @@ pub fn mocked_lines<T: SampleUniform + PartialOrd + Clone + ToString>(
     range: Range<T>,
 ) -> Vec<DateValue> {
     let mut rng = StdRng::seed_from_u64(222);
-    generate_intervals(NaiveDate::from_str("2022-01-01").unwrap())
-        .into_iter()
-        .map(|date| {
-            let range = range.clone();
-            let value = rng.gen_range(range);
-            DateValue {
-                date,
-                value: value.to_string(),
-            }
-        })
-        .collect()
+    generate_intervals(
+        NaiveDate::from_str("2022-01-01").unwrap(),
+        NaiveDate::from_str("2022-04-01").unwrap(),
+    )
+    .into_iter()
+    .map(|date| {
+        let range = range.clone();
+        let value = rng.gen_range(range);
+        DateValue {
+            date,
+            value: value.to_string(),
+        }
+    })
+    .collect()
 }
 
 #[derive(Debug)]
@@ -84,8 +86,10 @@ impl<T: SampleUniform + PartialOrd + Clone + ToString + Send + Sync + 'static> C
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
+        current_time: chrono::DateTime<chrono::Utc>,
         force_full: bool,
     ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, force_full).await
+        self.update_with_values(db, blockscout, current_time, force_full)
+            .await
     }
 }

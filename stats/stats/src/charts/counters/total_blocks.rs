@@ -1,7 +1,7 @@
 use crate::{
     charts::db_interaction::{
-        types::DateValue,
         chart_updaters::{ChartFullUpdater, ChartUpdater},
+        types::DateValue,
     },
     UpdateError,
 };
@@ -62,9 +62,11 @@ impl ChartUpdater for TotalBlocks {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
+        current_time: chrono::DateTime<chrono::Utc>,
         force_full: bool,
     ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, force_full).await
+        self.update_with_values(db, blockscout, current_time, force_full)
+            .await
     }
 }
 
@@ -88,6 +90,8 @@ mod tests {
         let _ = tracing_subscriber::fmt::try_init();
         let (db, blockscout) = init_db_all("update_total_blocks_recurrent").await;
         let updater = TotalBlocks::default();
+        let current_time = chrono::DateTime::from_str("2023-03-01T12:00:00").unwrap();
+        let current_date = current_time.date_naive();
 
         updater.create(&db).await.unwrap();
 
@@ -101,9 +105,12 @@ mod tests {
         .await
         .unwrap();
 
-        fill_mock_blockscout_data(&blockscout, "2023-03-01").await;
+        fill_mock_blockscout_data(&blockscout, current_date).await;
 
-        updater.update(&db, &blockscout, true).await.unwrap();
+        updater
+            .update(&db, &blockscout, current_time, true)
+            .await
+            .unwrap();
         let data = get_counters(&db).await.unwrap();
         assert_eq!("13", data[updater.name()].value);
     }
@@ -114,12 +121,17 @@ mod tests {
         let _ = tracing_subscriber::fmt::try_init();
         let (db, blockscout) = init_db_all("update_total_blocks_fresh").await;
         let updater = TotalBlocks::default();
+        let current_time = chrono::DateTime::from_str("2022-11-12T12:00:00").unwrap();
+        let current_date = current_time.date_naive();
 
         updater.create(&db).await.unwrap();
 
-        fill_mock_blockscout_data(&blockscout, "2022-11-12").await;
+        fill_mock_blockscout_data(&blockscout, current_date).await;
 
-        updater.update(&db, &blockscout, true).await.unwrap();
+        updater
+            .update(&db, &blockscout, current_time, true)
+            .await
+            .unwrap();
         let data = get_counters(&db).await.unwrap();
         assert_eq!("9", data[updater.name()].value);
     }
@@ -130,6 +142,8 @@ mod tests {
         let _ = tracing_subscriber::fmt::try_init();
         let (db, blockscout) = init_db_all("update_total_blocks_last").await;
         let updater = TotalBlocks::default();
+        let current_time = chrono::DateTime::from_str("2023-03-01T12:00:00").unwrap();
+        let current_date = current_time.date_naive();
 
         updater.create(&db).await.unwrap();
 
@@ -143,9 +157,12 @@ mod tests {
         .await
         .unwrap();
 
-        fill_mock_blockscout_data(&blockscout, "2023-03-01").await;
+        fill_mock_blockscout_data(&blockscout, current_date).await;
 
-        updater.update(&db, &blockscout, true).await.unwrap();
+        updater
+            .update(&db, &blockscout, current_time, true)
+            .await
+            .unwrap();
         let data = get_counters(&db).await.unwrap();
         assert_eq!("13", data[updater.name()].value);
     }

@@ -3,9 +3,9 @@ use crate::{
     charts::db_interaction::chart_updaters::ChartUpdater, get_chart_data, get_counters, Chart,
     MissingDatePolicy,
 };
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate};
 use sea_orm::DatabaseConnection;
-use std::assert_eq;
+use std::{assert_eq, str::FromStr};
 
 pub async fn simple_test_chart(
     test_name: &str,
@@ -14,11 +14,16 @@ pub async fn simple_test_chart(
 ) {
     let _ = tracing_subscriber::fmt::try_init();
     let (db, blockscout) = init_db_all(test_name).await;
+    let current_time = DateTime::from_str("2023-03-01T12:00:00").unwrap();
+    let current_date = current_time.date_naive();
     chart.create(&db).await.unwrap();
-    fill_mock_blockscout_data(&blockscout, "2023-03-01").await;
+    fill_mock_blockscout_data(&blockscout, current_date).await;
     let approximate_until_updated = chart.approximate_until_updated();
 
-    chart.update(&db, &blockscout, true).await.unwrap();
+    chart
+        .update(&db, &blockscout, current_time, true)
+        .await
+        .unwrap();
     get_chart_and_assert_eq(
         &db,
         &chart,
@@ -30,7 +35,10 @@ pub async fn simple_test_chart(
     )
     .await;
 
-    chart.update(&db, &blockscout, false).await.unwrap();
+    chart
+        .update(&db, &blockscout, current_time, false)
+        .await
+        .unwrap();
     get_chart_and_assert_eq(
         &db,
         &chart,
@@ -52,12 +60,17 @@ pub async fn ranged_test_chart(
 ) {
     let _ = tracing_subscriber::fmt::try_init();
     let (db, blockscout) = init_db_all(test_name).await;
+    let current_time = DateTime::from_str("2023-03-01T12:00:00").unwrap();
+    let current_date = current_time.date_naive();
     chart.create(&db).await.unwrap();
-    fill_mock_blockscout_data(&blockscout, "2023-03-01").await;
+    fill_mock_blockscout_data(&blockscout, current_date).await;
     let policy = chart.missing_date_policy();
     let approximate_until_updated = chart.approximate_until_updated();
 
-    chart.update(&db, &blockscout, true).await.unwrap();
+    chart
+        .update(&db, &blockscout, current_time, true)
+        .await
+        .unwrap();
     get_chart_and_assert_eq(
         &db,
         &chart,
@@ -69,7 +82,10 @@ pub async fn ranged_test_chart(
     )
     .await;
 
-    chart.update(&db, &blockscout, false).await.unwrap();
+    chart
+        .update(&db, &blockscout, current_time, false)
+        .await
+        .unwrap();
     get_chart_and_assert_eq(
         &db,
         &chart,
@@ -116,13 +132,22 @@ async fn get_chart_and_assert_eq(
 pub async fn simple_test_counter(test_name: &str, counter: impl ChartUpdater, expected: &str) {
     let _ = tracing_subscriber::fmt::try_init();
     let (db, blockscout) = init_db_all(test_name).await;
-    counter.create(&db).await.unwrap();
-    fill_mock_blockscout_data(&blockscout, "2023-03-01").await;
+    let current_time = DateTime::from_str("2023-03-01T12:00:00").unwrap();
+    let current_date = current_time.date_naive();
 
-    counter.update(&db, &blockscout, true).await.unwrap();
+    counter.create(&db).await.unwrap();
+    fill_mock_blockscout_data(&blockscout, current_date).await;
+
+    counter
+        .update(&db, &blockscout, current_time, true)
+        .await
+        .unwrap();
     get_counter_and_assert_eq(&db, &counter, expected).await;
 
-    counter.update(&db, &blockscout, false).await.unwrap();
+    counter
+        .update(&db, &blockscout, current_time, false)
+        .await
+        .unwrap();
     get_counter_and_assert_eq(&db, &counter, expected).await;
 }
 

@@ -74,6 +74,7 @@ impl ChartUpdater for NativeCoinHoldersGrowth {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
+        _current_time: chrono::DateTime<chrono::Utc>,
         force_full: bool,
     ) -> Result<(), UpdateError> {
         let chart_id = find_chart(db, self.name())
