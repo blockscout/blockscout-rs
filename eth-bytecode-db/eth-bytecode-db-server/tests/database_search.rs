@@ -507,7 +507,7 @@ async fn search_contract_with_metadata_hash_returns_correct_matches() {
 
     let db = init_db(
         TEST_SUITE_NAME,
-        "search_contract_without_metadata_hash_returns_partial_match",
+        "search_contract_with_metadata_hash_returns_correct_matches",
     )
     .await;
 
