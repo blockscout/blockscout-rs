@@ -199,11 +199,7 @@ mod tests {
                 name: Set(TotalBlocks::default().name().to_string()),
                 chart_type: Set(ChartType::Counter),
                 last_updated_at: Set(Some(
-                    DateTime::parse_from_str(
-                        "2022 11 12 08:08:08.274 +0000",
-                        "%Y %m %d %H:%M:%S%.3f %z",
-                    )
-                    .unwrap(),
+                    DateTime::parse_from_rfc3339("2022-11-12T08:08:08+00:00").unwrap(),
                 )),
                 ..Default::default()
             },
@@ -211,11 +207,7 @@ mod tests {
                 name: Set("newBlocksPerDay".into()),
                 chart_type: Set(ChartType::Line),
                 last_updated_at: Set(Some(
-                    DateTime::parse_from_str(
-                        "2022 11 12 08:08:08.274 +0000",
-                        "%Y %m %d %H:%M:%S%.3f %z",
-                    )
-                    .unwrap(),
+                    DateTime::parse_from_rfc3339("2022-11-12T08:08:08+00:00").unwrap(),
                 )),
                 ..Default::default()
             },
