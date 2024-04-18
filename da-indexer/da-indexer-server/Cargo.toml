@@ -21,6 +21,7 @@ tonic = "0.8"
 tracing = "0.1"
 base64 = "0.22.0"
 hex = "0.4.3"
+blockscout-display-bytes = "1.0.0"
 
 
 [dev-dependencies]

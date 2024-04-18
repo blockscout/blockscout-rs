@@ -1,5 +1,5 @@
 use anyhow::{Error, Result};
-use celestia_rpc::prelude::*;
+use celestia_rpc::{prelude::*, Client};
 use celestia_types::{blob::Blob, ExtendedHeader};
 use futures::{
     stream,
@@ -7,14 +7,22 @@ use futures::{
     Stream, StreamExt,
 };
 use sea_orm::DatabaseConnection;
-use std::{collections::HashSet, sync::Arc, time::Duration};
+use std::{
+    collections::HashSet,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 use tokio::{sync::RwLock, time::sleep};
 use tracing::instrument;
+
+use crate::celestia::rpc_client;
 
 use super::{
     parser,
     repository::{blobs, blocks},
-    rpc_client::Client,
     settings::IndexerSettings,
 };
 
@@ -28,13 +36,13 @@ pub struct Indexer {
     db: Arc<DatabaseConnection>,
     settings: IndexerSettings,
 
-    last_known_height: RwLock<u64>,
+    last_known_height: AtomicU64,
     failed_blocks: RwLock<HashSet<u64>>,
 }
 
 impl Indexer {
     pub async fn new(db: Arc<DatabaseConnection>, settings: IndexerSettings) -> Result<Self> {
-        let client = Client::new(
+        let client = rpc_client::new_celestia_client(
             &settings.rpc.url,
             settings.rpc.auth_token.as_deref(),
             settings.rpc.max_request_size,
@@ -57,7 +65,7 @@ impl Indexer {
             client,
             db,
             settings,
-            last_known_height: RwLock::new(start_from.saturating_sub(1)),
+            last_known_height: AtomicU64::new(start_from.saturating_sub(1)),
             failed_blocks: RwLock::new(HashSet::new()),
         })
     }
@@ -139,7 +147,7 @@ impl Indexer {
             blocks::upsert(&self.db, 0, &[], 0, 0).await?;
         }
 
-        let last_known_height = *self.last_known_height.read().await;
+        let last_known_height = self.last_known_height.load(Ordering::SeqCst);
         let gaps = blocks::find_gaps(&self.db, last_known_height).await?;
 
         tracing::info!("catch up gaps: {:?}", gaps);
@@ -162,10 +170,7 @@ impl Indexer {
             let height = self.client.header_local_head().await?.header.height.value();
             tracing::info!(height, "latest block");
 
-            let mut last_known_height = self.last_known_height.write().await;
-            let from = *last_known_height + 1;
-            *last_known_height = height;
-
+            let from = self.last_known_height.swap(height, Ordering::SeqCst) + 1;
             Ok((from..=height).map(|height| Job { height }))
         })
         .filter_map(|fut| async {

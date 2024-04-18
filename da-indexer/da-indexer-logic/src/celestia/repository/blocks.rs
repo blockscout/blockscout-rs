@@ -24,7 +24,7 @@ pub async fn find_gaps(
                 SELECT height, lead(height) OVER (ORDER BY height) as next_nr
                 FROM celestia_blocks WHERE height <= $1
             ) nr
-            WHERE nr.height + 1 <> nr.next_nr;"#,
+            WHERE nr.height + 1 <> nr.next_nr ORDER BY nr.height;"#,
         [(up_to_height as i64).into()],
     ))
     .all(db)

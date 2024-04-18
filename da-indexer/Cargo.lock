@@ -1617,6 +1617,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "base64 0.22.0",
+ "blockscout-display-bytes",
  "blockscout-service-launcher 0.10.0",
  "config 0.14.0",
  "da-indexer-logic",
