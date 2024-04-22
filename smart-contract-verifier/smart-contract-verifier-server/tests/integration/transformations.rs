@@ -46,11 +46,25 @@ async fn libraries_manually_linked() {
     test_success_multi_part_and_standard_json("libraries_manually_linked").await
 }
 
-// TODO: no auxdata is parsed right now when `metadataHash` is "none"
-// #[tokio::test]
-// async fn metadata_hash_absent() {
-//     test_success::<TestCaseStandardJson>("metadata_hash_absent").await;
-// }
+#[tokio::test]
+async fn metadata_hash_absent() {
+    // Now auxdata is not retrieved for contracts compiled without metadata hash.
+    // TODO: should be removed, when that is fixed
+    let remove_cbor_auxdata_from_artifacts = |artifacts: &mut serde_json::Value| {
+        artifacts
+            .as_object_mut()
+            .map(|artifacts| artifacts.remove("cborAuxdata"))
+    };
+
+    let (mut test_case_request, mut test_case_response) =
+        from_file::<TestCaseStandardJson, TestCase>(TEST_CASES_DIR, "metadata_hash_absent");
+    remove_cbor_auxdata_from_artifacts(&mut test_case_request.0.creation_code_artifacts);
+    remove_cbor_auxdata_from_artifacts(&mut test_case_request.0.runtime_code_artifacts);
+    remove_cbor_auxdata_from_artifacts(&mut test_case_response.creation_code_artifacts);
+    remove_cbor_auxdata_from_artifacts(&mut test_case_response.runtime_code_artifacts);
+
+    crate::test_success(&test_case_request, &test_case_response).await;
+}
 
 #[tokio::test]
 async fn partial_match() {

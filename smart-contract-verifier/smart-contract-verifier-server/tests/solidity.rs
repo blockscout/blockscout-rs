@@ -334,12 +334,29 @@ mod success_tests {
         test_success(&test_case, BytecodeType::DeployedBytecode).await;
     }
 
-    // TODO: is not working right now, as auxdata is not retrieved for contracts compiled without metadata hash.
-    // #[tokio::test]
-    // async fn returns_compilation_related_artifacts_with_no_metadata_hash() {
-    //     let test_case = solidity_types::from_file::<StandardJson>("no_metadata_hash");
-    //     test_success(test_case).await;
-    // }
+    #[tokio::test]
+    async fn returns_compilation_related_artifacts_with_no_metadata_hash() {
+        // Now auxdata is not retrieved for contracts compiled without metadata hash.
+        // TODO: should be removed, when that is fixed
+        let remove_cbor_auxdata_from_artifacts = |artifacts: &mut serde_json::Value| {
+            artifacts
+                .as_object_mut()
+                .map(|artifacts| artifacts.remove("cborAuxdata"))
+        };
+
+        let mut test_case = solidity_types::from_file::<StandardJson>("no_metadata_hash");
+        test_case
+            .expected_creation_input_artifacts
+            .as_mut()
+            .map(remove_cbor_auxdata_from_artifacts);
+        test_case
+            .expected_deployed_bytecode_artifacts
+            .as_mut()
+            .map(remove_cbor_auxdata_from_artifacts);
+
+        test_success(&test_case, BytecodeType::CreationInput).await;
+        test_success(&test_case, BytecodeType::DeployedBytecode).await;
+    }
 
     #[tokio::test]
     async fn verifies_runtime_code_with_immutables() {
