@@ -66,20 +66,20 @@ pub async fn get_counters(
 ///
 /// Approximate are:
 /// - points after `last_updated_at` date
-/// - `mark_trailing_count` dates starting from `last_updated_at` and moving back
+/// - `approximate_until_updated` dates starting from `last_updated_at` and moving back
 ///
-/// If `mark_trailing_count=0`` - only future points are marked
+/// If `approximate_until_updated=0` - only future points are marked
 fn mark_approximate(
     data: Vec<DateValue>,
     last_updated_at: NaiveDate,
-    mark_before_updated: u64,
+    approximate_until_updated: u64,
 ) -> Vec<ExtendedDateValue> {
     // saturating sub/add
     let next_after_updated_at = last_updated_at
         .checked_add_days(chrono::Days::new(1))
         .unwrap_or(NaiveDate::MAX);
     let mark_from_date = next_after_updated_at
-        .checked_sub_days(chrono::Days::new(mark_before_updated))
+        .checked_sub_days(chrono::Days::new(approximate_until_updated))
         .unwrap_or(NaiveDate::MIN);
     data.into_iter()
         .map(|dv| {
@@ -91,11 +91,13 @@ fn mark_approximate(
 
 /// Get data points for the chart `name`.
 ///
-/// `approximate_trailing_points` - number of points to mark as approximate
-/// starting from `last_updated_at` and moving backwards in time.
+/// `approximate_trailing_points` - number of trailing points to mark as approximate.
 ///
 /// `interval_limit` - max interval (from, to). If `from` or `to` are none,
 /// min or max date in DB are calculated.
+///
+/// Note: if future dates are specified in interval `(from, to)`, no data points
+/// for future dates are returned.
 pub async fn get_chart_data(
     db: &DatabaseConnection,
     name: &str,
