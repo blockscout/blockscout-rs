@@ -1,6 +1,6 @@
-use crate::{charts::Charts, serializers::serialize_line_points};
+use crate::{charts::Charts, serializers::serialize_line_points, settings::LimitsSettings};
 use async_trait::async_trait;
-use chrono::NaiveDate;
+use chrono::{Duration, NaiveDate, Utc};
 use sea_orm::{DatabaseConnection, DbErr};
 use stats::ReadError;
 use stats_proto::blockscout::stats::v1::{
@@ -14,17 +14,37 @@ use tonic::{Request, Response, Status};
 pub struct ReadService {
     db: Arc<DatabaseConnection>,
     charts: Arc<Charts>,
+    limits: ReadLimits,
 }
 
 impl ReadService {
-    pub async fn new(db: Arc<DatabaseConnection>, charts: Arc<Charts>) -> Result<Self, DbErr> {
-        Ok(Self { db, charts })
+    pub async fn new(
+        db: Arc<DatabaseConnection>,
+        charts: Arc<Charts>,
+        limits: ReadLimits,
+    ) -> Result<Self, DbErr> {
+        Ok(Self { db, charts, limits })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReadLimits {
+    /// See [`LimitsSettings::request_interval_limit_days`]
+    pub request_interval_limit: Duration,
+}
+
+impl From<LimitsSettings> for ReadLimits {
+    fn from(value: LimitsSettings) -> Self {
+        Self {
+            request_interval_limit: Duration::days(value.request_interval_limit_days.into()),
+        }
     }
 }
 
 fn map_read_error(err: ReadError) -> Status {
     match &err {
         ReadError::NotFound(_) => Status::not_found(err.to_string()),
+        ReadError::IntervalLimitExceeded(_) => Status::invalid_argument(err.to_string()),
         _ => {
             tracing::error!(err = ?err, "internal read error");
             Status::internal(err.to_string())
@@ -56,7 +76,7 @@ impl StatsService for ReadService {
             .filter_map(|(counter, info)| {
                 data.remove(&counter.id).map(|point| {
                     let point: stats::DateValue = if info.chart.relevant_or_zero() {
-                        point.relevant_or_zero()
+                        point.relevant_or_zero(Utc::now().date_naive())
                     } else {
                         point
                     };
@@ -90,18 +110,20 @@ impl StatsService for ReadService {
             .and_then(|date| NaiveDate::from_str(&date).ok());
         let to = request.to.and_then(|date| NaiveDate::from_str(&date).ok());
         let policy = Some(chart_info.chart.missing_date_policy());
-        let mut data = stats::get_chart_data(&self.db, &request.name, from, to, policy)
-            .await
-            .map_err(map_read_error)?;
+        let mark_approx = chart_info.chart.approximate_trailing_points();
+        let interval_limit = Some(self.limits.request_interval_limit);
+        let data = stats::get_chart_data(
+            &self.db,
+            &request.name,
+            from,
+            to,
+            interval_limit,
+            policy,
+            mark_approx,
+        )
+        .await
+        .map_err(map_read_error)?;
 
-        if chart_info.chart.drop_last_point() {
-            // remove last data point, because it can be partially updated
-            if let Some(last) = data.last() {
-                if last.is_partial() {
-                    data.pop();
-                }
-            }
-        }
         let serialized_chart = serialize_line_points(data);
         Ok(Response::new(LineChart {
             chart: serialized_chart,

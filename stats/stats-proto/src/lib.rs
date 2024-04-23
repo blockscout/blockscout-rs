@@ -6,3 +6,6 @@ pub mod blockscout {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -1,16 +1,13 @@
-use blockscout_db::entity::blocks;
-use chrono::{NaiveDate, NaiveDateTime};
-use entity::chart_data;
-use sea_orm::{prelude::*, sea_query, ConnectionTrait, FromQueryResult, QueryOrder, QuerySelect};
-mod batch;
-mod dependent;
-mod full;
-mod partial;
+//! Collection of common operations to perform while updating.
+//! Can be useful for any chart regardless of their type.
 
-pub use batch::ChartBatchUpdater;
-pub use dependent::{last_point, parse_and_growth, parse_and_sum, ChartDependentUpdater};
-pub use full::ChartFullUpdater;
-pub use partial::ChartPartialUpdater;
+use blockscout_db::entity::blocks;
+use chrono::{NaiveDate, NaiveDateTime, Offset};
+use entity::{chart_data, charts};
+use sea_orm::{
+    prelude::*, sea_query, ConnectionTrait, DatabaseConnection, DbErr, EntityTrait,
+    FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Set, Unchanged,
+};
 
 use crate::{Chart, DateValue, UpdateError};
 
@@ -70,7 +67,12 @@ struct SyncInfo {
     pub min_blockscout_block: Option<i64>,
 }
 
-pub async fn get_last_row<C>(
+/// Get `offset`th last row. Date of the row can be a starting point for an update.
+/// Usually used to retrieve last 'finalized' row (for which no recomputations needed).
+///
+/// Retrieves `offset`th latest data point from DB, if any.
+/// In case of inconsistencies or set `force_full`, also returns `None`.
+pub async fn get_nth_last_row<C>(
     chart: &C,
     chart_id: i32,
     min_blockscout_block: i64,
@@ -82,7 +84,7 @@ where
     C: Chart + ?Sized,
 {
     let offset = offset.unwrap_or(0);
-    let last_row = if force_full {
+    let row = if force_full {
         tracing::info!(
             min_blockscout_block = min_blockscout_block,
             chart = chart.name(),
@@ -90,7 +92,7 @@ where
         );
         None
     } else {
-        let last_row: Option<SyncInfo> = chart_data::Entity::find()
+        let row: Option<SyncInfo> = chart_data::Entity::find()
             .column(chart_data::Column::Date)
             .column(chart_data::Column::Value)
             .column(chart_data::Column::MinBlockscoutBlock)
@@ -102,7 +104,7 @@ where
             .await
             .map_err(UpdateError::StatsDB)?;
 
-        match last_row {
+        match row {
             Some(row) => {
                 if let Some(block) = row.min_blockscout_block {
                     if block == min_blockscout_block {
@@ -146,5 +148,26 @@ where
         }
     };
 
-    Ok(last_row)
+    Ok(row)
+}
+
+pub async fn set_last_updated_at<Tz>(
+    chart_id: i32,
+    db: &DatabaseConnection,
+    at: chrono::DateTime<Tz>,
+) -> Result<(), DbErr>
+where
+    Tz: chrono::TimeZone,
+{
+    let last_updated_at = at.with_timezone(&chrono::Utc.fix());
+    let model = charts::ActiveModel {
+        id: Unchanged(chart_id),
+        last_updated_at: Set(Some(last_updated_at)),
+        ..Default::default()
+    };
+    charts::Entity::update(model)
+        .filter(charts::Column::Id.eq(chart_id))
+        .exec(db)
+        .await?;
+    Ok(())
 }

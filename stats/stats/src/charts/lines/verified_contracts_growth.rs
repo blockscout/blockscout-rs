@@ -3,8 +3,10 @@ use crate::{
     charts::{
         chart::Chart,
         create_chart,
-        insert::DateValue,
-        updater::{parse_and_growth, ChartDependentUpdater},
+        db_interaction::{
+            chart_updaters::{parse_and_cumsum, ChartDependentUpdater, ChartUpdater},
+            types::DateValue,
+        },
     },
     MissingDatePolicy, UpdateError,
 };
@@ -31,7 +33,7 @@ impl ChartDependentUpdater<NewVerifiedContracts> for VerifiedContractsGrowth {
     }
 
     async fn get_values(&self, parent_data: Vec<DateValue>) -> Result<Vec<DateValue>, UpdateError> {
-        parse_and_growth::<i64>(parent_data, self.parent.name())
+        parse_and_cumsum::<i64>(parent_data, self.parent.name())
     }
 }
 
@@ -46,23 +48,24 @@ impl crate::Chart for VerifiedContractsGrowth {
     fn missing_date_policy(&self) -> MissingDatePolicy {
         MissingDatePolicy::FillPrevious
     }
-    fn drop_last_point(&self) -> bool {
-        false
-    }
 
     async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
         self.parent.create(db).await?;
         create_chart(db, self.name().into(), self.chart_type()).await
     }
+}
 
-    async fn update(
+#[async_trait]
+impl ChartUpdater for VerifiedContractsGrowth {
+    async fn update_values(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
+        current_time: chrono::DateTime<chrono::Utc>,
         force_full: bool,
     ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, force_full).await?;
-        Ok(())
+        self.update_with_values(db, blockscout, current_time, force_full)
+            .await
     }
 }
 

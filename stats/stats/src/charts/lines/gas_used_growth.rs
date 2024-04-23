@@ -1,7 +1,7 @@
 use crate::{
-    charts::{
-        insert::{DateValue, DateValueDecimal},
-        updater::ChartPartialUpdater,
+    charts::db_interaction::{
+        chart_updaters::{ChartPartialUpdater, ChartUpdater},
+        types::{DateValue, DateValueDecimal},
     },
     MissingDatePolicy, UpdateError,
 };
@@ -17,9 +17,9 @@ impl ChartPartialUpdater for GasUsedGrowth {
     async fn get_values(
         &self,
         blockscout: &DatabaseConnection,
-        last_row: Option<DateValue>,
+        last_updated_row: Option<DateValue>,
     ) -> Result<Vec<DateValue>, UpdateError> {
-        let data = match last_row {
+        let data = match last_updated_row {
             Some(row) => {
                 let last_value = Decimal::from_str_exact(&row.value).map_err(|e| {
                     UpdateError::Internal(format!("failed to parse previous value: {e}"))
@@ -90,17 +90,19 @@ impl crate::Chart for GasUsedGrowth {
     fn missing_date_policy(&self) -> MissingDatePolicy {
         MissingDatePolicy::FillPrevious
     }
-    fn drop_last_point(&self) -> bool {
-        false
-    }
+}
 
-    async fn update(
+#[async_trait]
+impl ChartUpdater for GasUsedGrowth {
+    async fn update_values(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
+        current_time: chrono::DateTime<chrono::Utc>,
         force_full: bool,
     ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, force_full).await
+        self.update_with_values(db, blockscout, current_time, force_full)
+            .await
     }
 }
 

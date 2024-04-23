@@ -1,7 +1,7 @@
 use crate::{
-    charts::{
-        insert::{DateValue, DateValueDouble},
-        updater::ChartPartialUpdater,
+    charts::db_interaction::{
+        chart_updaters::{ChartPartialUpdater, ChartUpdater},
+        types::{DateValue, DateValueDouble},
     },
     UpdateError,
 };
@@ -17,9 +17,9 @@ impl ChartPartialUpdater for TxnsSuccessRate {
     async fn get_values(
         &self,
         blockscout: &DatabaseConnection,
-        last_row: Option<DateValue>,
+        last_updated_row: Option<DateValue>,
     ) -> Result<Vec<DateValue>, UpdateError> {
-        let stmnt = match last_row {
+        let stmnt = match last_updated_row {
             Some(row) => Statement::from_sql_and_values(
                 DbBackend::Postgres,
                 r#"
@@ -79,14 +79,19 @@ impl crate::Chart for TxnsSuccessRate {
     fn chart_type(&self) -> ChartType {
         ChartType::Line
     }
+}
 
-    async fn update(
+#[async_trait]
+impl ChartUpdater for TxnsSuccessRate {
+    async fn update_values(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
+        current_time: chrono::DateTime<chrono::Utc>,
         force_full: bool,
     ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, force_full).await
+        self.update_with_values(db, blockscout, current_time, force_full)
+            .await
     }
 }
 

@@ -1,8 +1,8 @@
 use std::num::ParseIntError;
 
-use chrono::{NaiveDate, Utc};
+use chrono::NaiveDate;
 use entity::chart_data;
-use sea_orm::{prelude::*, sea_query, ConnectionTrait, FromQueryResult, Set};
+use sea_orm::{prelude::*, FromQueryResult, Set};
 
 #[derive(FromQueryResult, Debug, Clone)]
 pub struct DateValueInt {
@@ -89,39 +89,37 @@ impl DateValue {
         }
     }
 
-    pub fn relevant_or_zero(self) -> DateValue {
-        let today = Utc::now().date_naive();
-        if self.date < today {
-            DateValue::zero(today)
+    pub fn relevant_or_zero(self, current_date: NaiveDate) -> DateValue {
+        if self.date < current_date {
+            DateValue::zero(current_date)
         } else {
             self
         }
     }
+}
 
-    pub fn is_partial(&self) -> bool {
-        let today = Utc::now().date_naive();
-        self.date >= today
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ExtendedDateValue {
+    pub date: NaiveDate,
+    pub value: String,
+    pub is_approximate: bool,
+}
+
+impl ExtendedDateValue {
+    pub fn from_date_value(dv: DateValue, is_approximate: bool) -> Self {
+        Self {
+            date: dv.date,
+            value: dv.value,
+            is_approximate,
+        }
     }
 }
 
-pub async fn insert_data_many<C, D>(db: &C, data: D) -> Result<(), DbErr>
-where
-    C: ConnectionTrait,
-    D: IntoIterator<Item = chart_data::ActiveModel> + Send + Sync,
-{
-    let mut data = data.into_iter().peekable();
-    if data.peek().is_some() {
-        chart_data::Entity::insert_many(data)
-            .on_conflict(
-                sea_query::OnConflict::columns([
-                    chart_data::Column::ChartId,
-                    chart_data::Column::Date,
-                ])
-                .update_column(chart_data::Column::Value)
-                .to_owned(),
-            )
-            .exec(db)
-            .await?;
+impl From<ExtendedDateValue> for DateValue {
+    fn from(dv: ExtendedDateValue) -> Self {
+        DateValue {
+            date: dv.date,
+            value: dv.value,
+        }
     }
-    Ok(())
 }

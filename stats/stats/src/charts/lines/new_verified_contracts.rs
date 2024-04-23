@@ -1,8 +1,12 @@
 use crate::{
-    charts::{insert::DateValue, updater::ChartPartialUpdater},
+    charts::db_interaction::{
+        chart_updaters::{ChartPartialUpdater, ChartUpdater},
+        types::DateValue,
+    },
     UpdateError,
 };
 use async_trait::async_trait;
+use chrono::Utc;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 
@@ -14,9 +18,9 @@ impl ChartPartialUpdater for NewVerifiedContracts {
     async fn get_values(
         &self,
         blockscout: &DatabaseConnection,
-        last_row: Option<DateValue>,
+        last_updated_row: Option<DateValue>,
     ) -> Result<Vec<DateValue>, UpdateError> {
-        let stmnt = match last_row {
+        let stmnt = match last_updated_row {
             Some(row) => Statement::from_sql_and_values(
                 DbBackend::Postgres,
                 r#"SELECT
@@ -55,14 +59,19 @@ impl crate::Chart for NewVerifiedContracts {
     fn chart_type(&self) -> ChartType {
         ChartType::Line
     }
+}
 
-    async fn update(
+#[async_trait]
+impl ChartUpdater for NewVerifiedContracts {
+    async fn update_values(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
+        current_time: chrono::DateTime<Utc>,
         force_full: bool,
     ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, force_full).await
+        self.update_with_values(db, blockscout, current_time, force_full)
+            .await
     }
 }
 

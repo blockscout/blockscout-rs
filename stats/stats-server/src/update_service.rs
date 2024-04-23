@@ -1,4 +1,4 @@
-use crate::charts::{ArcChart, Charts};
+use crate::charts::{ArcChartUpdater, Charts};
 use chrono::Utc;
 use cron::Schedule;
 use sea_orm::{DatabaseConnection, DbErr};
@@ -58,10 +58,10 @@ impl UpdateService {
             })
             .collect::<Vec<_>>();
         futures::future::join_all(tasks).await;
-        tracing::info!("initial updating is done");
+        tracing::info!("initial update is done");
     }
 
-    fn spawn_chart_updater(self: &Arc<Self>, chart: ArcChart, default_schedule: &Schedule) {
+    fn spawn_chart_updater(self: &Arc<Self>, chart: ArcChartUpdater, default_schedule: &Schedule) {
         let chart_info = self
             .charts
             .charts_info
@@ -78,14 +78,14 @@ impl UpdateService {
         tokio::spawn(async move { this.run_cron(chart, schedule).await });
     }
 
-    async fn update(self: Arc<Self>, chart: ArcChart, force_full: bool) {
+    async fn update(self: Arc<Self>, chart: ArcChartUpdater, force_full: bool) {
         tracing::info!(chart = chart.name(), "updating chart");
         let result = {
             let _timer = stats::metrics::CHART_UPDATE_TIME
                 .with_label_values(&[chart.name()])
                 .start_timer();
             chart
-                .update_with_mutex(&self.db, &self.blockscout, force_full)
+                .update_with_mutex(&self.db, &self.blockscout, chrono::Utc::now(), force_full)
                 .await
         };
         if let Err(err) = result {
@@ -98,7 +98,7 @@ impl UpdateService {
         }
     }
 
-    async fn run_cron(self: Arc<Self>, chart: ArcChart, schedule: Schedule) {
+    async fn run_cron(self: Arc<Self>, chart: ArcChartUpdater, schedule: Schedule) {
         loop {
             let sleep_duration = time_till_next_call(&schedule);
             tracing::info!(

@@ -1,15 +1,19 @@
+//! Re-reads/re-calculates whole chart from the source DB.
+
+use super::ChartUpdater;
 use crate::{
     charts::{
+        db_interaction::{types::DateValue, write::insert_data_many},
         find_chart,
-        insert::{insert_data_many, DateValue},
     },
-    metrics, Chart, UpdateError,
+    metrics, UpdateError,
 };
 use async_trait::async_trait;
+use chrono::Utc;
 use sea_orm::prelude::*;
 
 #[async_trait]
-pub trait ChartFullUpdater: Chart {
+pub trait ChartFullUpdater: ChartUpdater {
     async fn get_values(
         &self,
         blockscout: &DatabaseConnection,
@@ -19,6 +23,7 @@ pub trait ChartFullUpdater: Chart {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
+        _current_time: chrono::DateTime<Utc>,
         _force_full: bool,
     ) -> Result<(), UpdateError> {
         let chart_id = find_chart(db, self.name())
