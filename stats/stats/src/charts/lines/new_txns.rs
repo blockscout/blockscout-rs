@@ -17,9 +17,9 @@ impl ChartPartialUpdater for NewTxns {
     async fn get_values(
         &self,
         blockscout: &DatabaseConnection,
-        last_row: Option<DateValue>,
+        last_updated_row: Option<DateValue>,
     ) -> Result<Vec<DateValue>, UpdateError> {
-        let stmnt = match last_row {
+        let stmnt = match last_updated_row {
             Some(row) => Statement::from_sql_and_values(
                 DbBackend::Postgres,
                 r#"

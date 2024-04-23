@@ -72,7 +72,7 @@ struct SyncInfo {
 ///
 /// Retrieves `offset`th latest data point from DB, if any.
 /// In case of inconsistencies or set `force_full`, also returns `None`.
-pub async fn get_last_row<C>(
+pub async fn get_nth_last_row<C>(
     chart: &C,
     chart_id: i32,
     min_blockscout_block: i64,
@@ -84,7 +84,7 @@ where
     C: Chart + ?Sized,
 {
     let offset = offset.unwrap_or(0);
-    let last_row = if force_full {
+    let row = if force_full {
         tracing::info!(
             min_blockscout_block = min_blockscout_block,
             chart = chart.name(),
@@ -92,7 +92,7 @@ where
         );
         None
     } else {
-        let last_row: Option<SyncInfo> = chart_data::Entity::find()
+        let row: Option<SyncInfo> = chart_data::Entity::find()
             .column(chart_data::Column::Date)
             .column(chart_data::Column::Value)
             .column(chart_data::Column::MinBlockscoutBlock)
@@ -104,7 +104,7 @@ where
             .await
             .map_err(UpdateError::StatsDB)?;
 
-        match last_row {
+        match row {
             Some(row) => {
                 if let Some(block) = row.min_blockscout_block {
                     if block == min_blockscout_block {
@@ -148,7 +148,7 @@ where
         }
     };
 
-    Ok(last_row)
+    Ok(row)
 }
 
 pub async fn set_last_updated_at<Tz>(

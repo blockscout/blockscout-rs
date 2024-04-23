@@ -6,7 +6,7 @@
 //! `force_full` or initial updates) is too expensive.
 
 use super::{
-    common_operations::{get_last_row, get_min_block_blockscout, get_min_date_blockscout},
+    common_operations::{get_min_block_blockscout, get_min_date_blockscout, get_nth_last_row},
     ChartUpdater,
 };
 use crate::{
@@ -43,17 +43,17 @@ pub trait ChartBatchUpdater: ChartUpdater {
             .await
             .map_err(UpdateError::BlockscoutDB)?;
         let offset = Some(self.approximate_trailing_points());
-        let last_row =
-            get_last_row(self, chart_id, min_blockscout_block, db, force_full, offset).await?;
+        let last_updated_row =
+            get_nth_last_row(self, chart_id, min_blockscout_block, db, force_full, offset).await?;
 
         let _timer = metrics::CHART_FETCH_NEW_DATA_TIME
             .with_label_values(&[self.name()])
             .start_timer();
-        tracing::info!(last_row =? last_row, "start batch update");
+        tracing::info!(last_updated_row =? last_updated_row, "start batch update");
         self.batch_update(
             db,
             blockscout,
-            last_row,
+            last_updated_row,
             current_time.date_naive(),
             chart_id,
             min_blockscout_block,
@@ -65,7 +65,7 @@ pub trait ChartBatchUpdater: ChartUpdater {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
-        last_row: Option<DateValue>,
+        update_from_row: Option<DateValue>,
         today: NaiveDate,
         chart_id: i32,
         min_blockscout_block: i64,
@@ -74,8 +74,8 @@ pub trait ChartBatchUpdater: ChartUpdater {
             .begin()
             .await
             .map_err(UpdateError::BlockscoutDB)?;
-        let first_date = match last_row {
-            Some(last_row) => last_row.date,
+        let first_date = match update_from_row {
+            Some(row) => row.date,
             None => get_min_date_blockscout(&txn)
                 .await
                 .map(|time| time.date())
@@ -155,6 +155,11 @@ mod tests {
                     (d("2015-11-17"), d("2015-12-17")),
                     (d("2015-12-17"), d("2016-01-16")),
                 ],
+            ),
+            ((d("2015-07-20"), d("2015-07-20")), vec![]),
+            (
+                (d("2015-07-20"), d("2015-07-21")),
+                vec![(d("2015-07-20"), d("2015-08-19"))],
             ),
         ] {
             let actual = generate_date_ranges(from, to, Duration::days(30));

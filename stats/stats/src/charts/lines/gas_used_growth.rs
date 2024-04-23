@@ -17,9 +17,9 @@ impl ChartPartialUpdater for GasUsedGrowth {
     async fn get_values(
         &self,
         blockscout: &DatabaseConnection,
-        last_row: Option<DateValue>,
+        last_updated_row: Option<DateValue>,
     ) -> Result<Vec<DateValue>, UpdateError> {
-        let data = match last_row {
+        let data = match last_updated_row {
             Some(row) => {
                 let last_value = Decimal::from_str_exact(&row.value).map_err(|e| {
                     UpdateError::Internal(format!("failed to parse previous value: {e}"))

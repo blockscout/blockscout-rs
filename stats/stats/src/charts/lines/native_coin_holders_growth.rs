@@ -3,7 +3,7 @@ use crate::{
         create_chart,
         db_interaction::{
             chart_updaters::{
-                common_operations::{get_last_row, get_min_block_blockscout},
+                common_operations::{get_min_block_blockscout, get_nth_last_row},
                 ChartUpdater,
             },
             types::DateValue,
@@ -86,7 +86,7 @@ impl ChartUpdater for NativeCoinHoldersGrowth {
             .map_err(UpdateError::BlockscoutDB)?;
         let offset = Some(self.approximate_trailing_points());
         let last_row =
-            get_last_row(self, chart_id, min_blockscout_block, db, force_full, offset).await?;
+            get_nth_last_row(self, chart_id, min_blockscout_block, db, force_full, offset).await?;
         self.update_sequentially_with_support_table(
             db,
             blockscout,

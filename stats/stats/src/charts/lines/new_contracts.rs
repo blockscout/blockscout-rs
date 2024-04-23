@@ -15,7 +15,8 @@ impl ChartBatchUpdater for NewContracts {
     fn get_query(&self, from: NaiveDate, to: NaiveDate) -> Statement {
         Statement::from_sql_and_values(
             DbBackend::Postgres,
-            r#"SELECT day AS date, COUNT(*)::text AS value
+            r#"
+            SELECT day AS date, COUNT(*)::text AS value
                 FROM (
                     SELECT 
                         DISTINCT ON (txns_plus_internal_txns.hash)
@@ -30,8 +31,8 @@ impl ChartBatchUpdater for NewContracts {
                             t.created_contract_address_hash NOTNULL AND
                             b.consensus = TRUE AND
                             b.timestamp != to_timestamp(0) AND
-                            b.timestamp::date < $2 AND
-                            b.timestamp::date >= $1
+                            b.timestamp::date < '2024-04-23 04:05:06' AND
+                            b.timestamp::date >= '2024-03-23 04:05:06'
                         UNION
                         SELECT
                             it.created_contract_address_hash AS hash,
@@ -42,8 +43,8 @@ impl ChartBatchUpdater for NewContracts {
                             it.created_contract_address_hash NOTNULL AND
                             b.consensus = TRUE AND
                             b.timestamp != to_timestamp(0) AND
-                            b.timestamp::date < $2 AND
-                            b.timestamp::date >= $1
+                            b.timestamp::date < '2024-04-23 04:05:06' AND
+                            b.timestamp::date >= '2024-03-23 04:05:06'
                     ) txns_plus_internal_txns
                 ) sub
                 GROUP BY sub.day;
