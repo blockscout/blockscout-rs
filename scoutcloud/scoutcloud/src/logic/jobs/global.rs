@@ -5,8 +5,9 @@ use tokio::sync::OnceCell;
 
 static DATABASE: OnceCell<Arc<DatabaseConnection>> = OnceCell::const_new();
 
-pub fn init_db_connection(db: Arc<DatabaseConnection>) {
-    DATABASE.set(db).expect("database already initialized");
+pub fn init_db_connection(db: Arc<DatabaseConnection>) -> Result<(), anyhow::Error> {
+    DATABASE.set(db)?;
+    Ok(())
 }
 
 pub fn get_db_connection() -> Arc<DatabaseConnection> {
@@ -15,10 +16,9 @@ pub fn get_db_connection() -> Arc<DatabaseConnection> {
 
 static GITHUB: OnceCell<Arc<GithubClient>> = OnceCell::const_new();
 
-pub fn init_github_client(github: Arc<GithubClient>) {
-    GITHUB
-        .set(github)
-        .expect("github client already initialized");
+pub fn init_github_client(github: Arc<GithubClient>) -> Result<(), anyhow::Error> {
+    GITHUB.set(github)?;
+    Ok(())
 }
 
 pub fn get_github_client() -> Arc<GithubClient> {

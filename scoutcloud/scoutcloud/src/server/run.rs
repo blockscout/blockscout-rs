@@ -9,7 +9,7 @@ use crate::{
         settings::Settings,
     },
 };
-use blockscout_service_launcher::{database, launcher, launcher::LaunchSettings, tracing};
+use blockscout_service_launcher::{database, launcher, launcher::LaunchSettings};
 use migration::Migrator;
 use scoutcloud_proto::blockscout::scoutcloud::v1::scoutcloud_server::ScoutcloudServer;
 use sea_orm::ConnectOptions;
@@ -40,7 +40,11 @@ impl launcher::HttpRouter for Router {
 }
 
 pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
-    tracing::init_logs(SERVICE_NAME, &settings.tracing, &settings.jaeger)?;
+    blockscout_service_launcher::tracing::init_logs(
+        SERVICE_NAME,
+        &settings.tracing,
+        &settings.jaeger,
+    )?;
 
     let health = Arc::new(HealthService::default());
 
@@ -58,7 +62,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     );
 
     let github = Arc::new(GithubClient::from_settings(&settings.github)?);
-    let runner = JobsRunner::start(
+    let runner = JobsRunner::default_start(
         db_connection.clone(),
         github.clone(),
         &settings.database.connect.url(),

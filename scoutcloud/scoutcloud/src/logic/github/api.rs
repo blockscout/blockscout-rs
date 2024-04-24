@@ -214,14 +214,12 @@ impl GithubClient {
 
 #[cfg(test)]
 mod tests {
-    use super::{super::mock::MockedGithubRepo, *};
+    use crate::tests_utils;
 
     #[tokio::test]
     async fn create_or_update_works() {
-        let mock_repo = MockedGithubRepo::default();
-        let handles = mock_repo.build_mock_handlers();
-
-        let client = GithubClient::try_from(&mock_repo).unwrap();
+        let (client, mock) = tests_utils::init::test_github_client().await;
+        let handles = mock.build_handles();
 
         client
             .create_or_update_file("file_name", "content2", "commit message")

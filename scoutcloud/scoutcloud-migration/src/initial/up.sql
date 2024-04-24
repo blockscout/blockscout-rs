@@ -59,6 +59,7 @@ CREATE TABLE "deployments" (
   "parsed_config" jsonb NOT NULL DEFAULT '{}',
   "instance_url" varchar,
   "created_at" timestamp NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  "started_at" timestamp,
   "finished_at" timestamp,
   "status" deployment_status_type NOT NULL DEFAULT 'created',
   "error" varchar,

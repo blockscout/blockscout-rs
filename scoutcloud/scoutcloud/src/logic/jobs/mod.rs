@@ -4,7 +4,7 @@
 // pub use runner::{Job, JobsRunner};
 
 mod balance;
-mod global;
+pub(crate) mod global;
 mod jobs_runner;
 mod starting;
 mod stopping;

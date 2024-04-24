@@ -84,24 +84,15 @@ pub struct WorkflowRunsListRequest {
     pub page: Option<u32>,
 }
 
-// https://docs.github.com/en/rest/actions/workflow-runs?apiVersion=2022-11-28#list-workflow-runs-for-a-workflow
+// https://github.com/octokit/webhooks.net/blob/aaeeebd41d7ff49a3253146a5e54d0410e6b4ad0/src/Octokit.Webhooks/Models/WorkflowRunStatus.cs#L4
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum RunStatus {
-    Completed,
-    ActionRequired,
-    Cancelled,
-    Failure,
-    Neutral,
-    Skipped,
-    Stale,
-    Success,
-    TimedOut,
-    InProgress,
-    Queued,
     Requested,
+    InProgress,
+    Completed,
+    Queued,
     Waiting,
-    Pending,
 }
 
 impl RunStatus {
@@ -110,34 +101,41 @@ impl RunStatus {
         serde_plain::from_str(&value)
             .map_err(|_| anyhow::anyhow!("invalid run status from github: {value}"))
     }
-    pub fn short(&self) -> RunStatusShort {
-        self.clone().into()
+    pub fn is_completed(&self) -> bool {
+        matches!(self, Self::Completed)
     }
 }
 
-pub enum RunStatusShort {
-    Completed,
-    Pending,
+// https://github.com/octokit/webhooks.net/blob/aaeeebd41d7ff49a3253146a5e54d0410e6b4ad0/src/Octokit.Webhooks/Models/WorkflowRunConclusion.cs
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RunConclusion {
+    Success,
     Failure,
+    Neutral,
+    Cancelled,
+    TimedOut,
+    ActionRequired,
+    Stale,
+    Skipped,
 }
 
-impl From<RunStatus> for RunStatusShort {
-    fn from(value: RunStatus) -> Self {
-        match value {
-            RunStatus::Neutral | RunStatus::Completed | RunStatus::Success => {
-                RunStatusShort::Completed
-            }
-            RunStatus::Pending
-            | RunStatus::InProgress
-            | RunStatus::Queued
-            | RunStatus::Requested
-            | RunStatus::Waiting
-            | RunStatus::Stale => RunStatusShort::Pending,
-            RunStatus::Skipped
-            | RunStatus::ActionRequired
-            | RunStatus::Failure
-            | RunStatus::Cancelled
-            | RunStatus::TimedOut => RunStatusShort::Failure,
+impl RunConclusion {
+    pub fn try_from_str(value: impl Into<String>) -> Result<Self, anyhow::Error> {
+        let value = value.into();
+        serde_plain::from_str(&value)
+            .map_err(|_| anyhow::anyhow!("invalid run conclusion from github: {value}"))
+    }
+
+    pub fn is_ok(&self) -> bool {
+        match self {
+            RunConclusion::Success | RunConclusion::Neutral => true,
+            RunConclusion::Failure
+            | RunConclusion::Cancelled
+            | RunConclusion::TimedOut
+            | RunConclusion::ActionRequired
+            | RunConclusion::Stale
+            | RunConclusion::Skipped => false,
         }
     }
 }

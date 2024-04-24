@@ -10,11 +10,9 @@ headers = {
     'Accept': 'application/vnd.github+json'
 }
 
-APP = "autodeploy"
 CLIENT = "test-client"
 
 def write_response(filename, url, method, response, override_body=None):
-
     url = url.replace('https://api.github.com', '').replace('sevenzing', '{owner}').replace('test', '{repo}')
     try:
         if override_body is not None:
@@ -54,20 +52,29 @@ write_response('workflows.json', url, 'GET', r)
 workflows = r.json()['workflows']
 for workflow in workflows:
     workflow_id = workflow['path'].split('/')[-1]
+    workflow_debug_name = workflow_id.replace('.', '_')
+
+    # dispatch a workflow
+    url = host + f'/actions/workflows/{workflow_id}/dispatches'
+    r = requests.post(url, headers=headers, json={"ref":"main", "inputs":{"client": CLIENT}})
+    filename = f"dispatch_{workflow_debug_name}.json"
+    write_response(filename, url, 'POST', r)
+
     url = host + f'/actions/workflows/{workflow_id}/runs'
     r = requests.get(url, headers=headers)
     data = r.json()
     data["workflow_runs"][0]["created_at"] = "2050-01-01T00:00:00Z"
     data["workflow_runs"][0]["updated_at"] = "2050-01-01T00:00:00Z"
-    data["workflow_runs"][0]["name"] = f"Deploy {APP} to {CLIENT} env"
-    filename = f"runs_{workflow_id.replace('.', '_')}.json"
+    data["workflow_runs"][0]["name"] = f"Deploy to {CLIENT} env"
+    filename = f"runs_{workflow_debug_name}.json"
     write_response(filename, url, 'GET', r, override_body=data)
 
-    # dispatch a workflow
-    url = host + f'/actions/workflows/{workflow_id}/dispatches'
-    r = requests.post(url, headers=headers, json={"ref":"main", "inputs":{"client": CLIENT, "app": APP}})
-    filename = f"dispatch_{workflow_id.replace('.', '_')}.json"
-    write_response(filename, url, 'POST', r)
+    # get run
+    run_id = data["workflow_runs"][0]["id"]
+    url = host + f'/actions/runs/{run_id}'
+    r = requests.get(url, headers=headers)
+    write_response(f"single_run_{workflow_debug_name}.json", url, 'GET', r)
+
 
 # creating blob
 url = host + '/git/blobs'
@@ -77,7 +84,7 @@ blob_sha = r.json()['sha']
 
 # creating tree
 data = {
-    "base_tree":"8b8551ae8b5d47f848575ac68437a8379bdf8be9",
+    "base_tree": main_sha,
     "tree":[{"path":"file","mode":"100644","type":"blob","sha":blob_sha}]
 }
 url = host + '/git/trees'

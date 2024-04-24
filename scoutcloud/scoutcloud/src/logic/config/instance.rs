@@ -287,7 +287,7 @@ mod tests {
             json!({
                 "blockscout": {
                     "ingress": {
-                        "hostname": "test-client.blockscout.com",
+                        "hostname": "test-client.k8s-dev.blockscout.com",
                     },
                     "env": {
                         "ETHEREUM_JSONRPC_HTTP_URL": server.url("/"),
@@ -306,7 +306,7 @@ mod tests {
                 },
                 "frontend": {
                     "ingress": {
-                        "hostname": "test-client.blockscout.com",
+                        "hostname": "test-client.k8s-dev.blockscout.com",
                     },
                 },
                 "config": {

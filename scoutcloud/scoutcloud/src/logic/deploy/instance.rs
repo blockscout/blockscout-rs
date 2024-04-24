@@ -45,6 +45,7 @@ impl Instance {
         let instances = user_token
             .user
             .find_related(db::instances::Entity)
+            .order_by_desc(db::instances::Column::CreatedAt)
             .limit(MAX_LIMIT)
             .all(db)
             .await?
@@ -226,28 +227,11 @@ impl Instance {
 
 // Starting and stopping instance using github api
 impl Instance {
-    pub async fn deploy_postgres(
+    pub async fn deploy_github(
         &self,
         github: &GithubClient,
     ) -> Result<octocrab::models::workflows::Run, DeployError> {
-        let run = DeployWorkflow::postgres(self.model.slug.clone())
-            .run_and_get_latest_with_mutex(github, MAX_TRY_GITHUB)
-            .await?
-            .ok_or(anyhow::anyhow!("no postgres workflow found after running"))?;
-        tracing::info!(
-            instance_id =? self.model.external_id,
-            run_id =? run.id,
-            run_status =? run.status,
-            "triggered github deploy workflow for app=postgres"
-        );
-        Ok(run)
-    }
-
-    pub async fn deploy_microservices(
-        &self,
-        github: &GithubClient,
-    ) -> Result<octocrab::models::workflows::Run, DeployError> {
-        let run = DeployWorkflow::instance(self.model.slug.clone())
+        let run = DeployWorkflow::new(self.model.slug.clone())
             .run_and_get_latest_with_mutex(github, MAX_TRY_GITHUB)
             .await?
             .ok_or(anyhow::anyhow!("no instance workflow found after running"))?;
@@ -255,35 +239,16 @@ impl Instance {
             instance_id =? self.model.external_id,
             run_id =? run.id,
             run_status =? run.status,
-            "triggered github deploy workflow for app=instance"
+            "triggered github deploy workflow"
         );
         Ok(run)
     }
 
-    pub async fn cleanup_postgres(
+    pub async fn cleanup_github(
         &self,
         github: &GithubClient,
     ) -> Result<octocrab::models::workflows::Run, DeployError> {
-        let run = CleanupWorkflow::postgres(self.model.slug.clone())
-            .run_and_get_latest_with_mutex(github, MAX_TRY_GITHUB)
-            .await?
-            .ok_or(anyhow::anyhow!(
-                "no cleanup postgres workflow found after running"
-            ))?;
-        tracing::info!(
-            instance_id =? self.model.external_id,
-            run_id =? run.id,
-            run_status =? run.status,
-            "triggered github cleanup workflow for app=postgres"
-        );
-        Ok(run)
-    }
-
-    pub async fn cleanup_instance(
-        &self,
-        github: &GithubClient,
-    ) -> Result<octocrab::models::workflows::Run, DeployError> {
-        let run = CleanupWorkflow::instance(self.model.slug.clone())
+        let run = CleanupWorkflow::new(self.model.slug.clone())
             .run_and_get_latest_with_mutex(github, MAX_TRY_GITHUB)
             .await?
             .ok_or(anyhow::anyhow!(
@@ -293,7 +258,7 @@ impl Instance {
             instance_id =? self.model.external_id,
             run_id =? run.id,
             run_status =? run.status,
-            "triggered github cleanup workflow for app=instance"
+            "triggered github cleanup workflow"
         );
         Ok(run)
     }

@@ -65,7 +65,7 @@ async fn handle_instance_action(
             stop_instance(db, runner, &instance.instance, user_token).await?
         }
         proto::UpdateInstanceAction::Restart => Err(anyhow::anyhow!(
-            "restart not implemented yet, use start and stop instead"
+            "restart not implemented yet, use start and finish instead"
         ))?,
     };
 

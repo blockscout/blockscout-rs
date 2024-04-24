@@ -150,6 +150,7 @@ impl Deployment {
         let instance_url = self.instance_config().parse_instance_url()?;
         let mut model = self.model.clone().into_active_model();
         model.status = Set(DeploymentStatusType::Running);
+        model.started_at = Set(Some(chrono::Utc::now().naive_utc()));
         model.instance_url = Set(Some(instance_url.to_string()));
         self.model = model.update(db).await?;
         Ok(self)

@@ -10,7 +10,7 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum GithubError {
-    #[error("github error: {0}")]
+    #[error("api error: {0}")]
     Octocrab(#[from] octocrab::Error),
     #[error("failed to create file: {0}")]
     CreatingFile(anyhow::Error),
@@ -56,7 +56,7 @@ impl GithubClient {
             settings.token.clone(),
             settings.owner.clone(),
             settings.repo.clone(),
-            None,
+            settings.branch.clone(),
             None,
         )
     }

@@ -27,7 +27,7 @@ test *args:
 
 test-with-db *args:
     -just db-port="{{test-db-port}}" db-name="" docker-name="{{docker-name}}-test" start-postgres
-    just db-port="{{test-db-port}}" db-name=""                                    test {{args}}
+    just  db-port="{{test-db-port}}" db-name=""                                    test {{args}}
 
 stop-test-postgres:
     just docker-name="{{docker-name}}-test" stop-postgres

@@ -4,7 +4,8 @@ use crate::logic::{
 };
 use anyhow::Context;
 use fang::{
-    asynk::async_queue::AsyncQueue, AsyncQueueable, AsyncWorkerPool, FangError, NoTls, SleepParams,
+    asynk::async_queue::AsyncQueue, AsyncQueueable, AsyncRunnable, AsyncWorkerPool, FangError,
+    NoTls, SleepParams,
 };
 use sea_orm::DatabaseConnection;
 use std::{sync::Arc, time::Duration};
@@ -15,21 +16,33 @@ pub struct JobsRunner {
 }
 
 impl JobsRunner {
-    pub async fn start(
+    pub async fn default_start(
         scoutcloud_db: Arc<DatabaseConnection>,
         github: Arc<GithubClient>,
         fang_db_url: &str,
     ) -> Result<Self, anyhow::Error> {
         // it's important to init global values before starting the runner
         // because runner will use global variables since fang doesn't support context
-        super::global::init_db_connection(scoutcloud_db);
-        super::global::init_github_client(github);
-        let runner = Self::start_pool(fang_db_url).await?;
+        super::global::init_db_connection(scoutcloud_db).expect("database already initialized");
+        super::global::init_github_client(github).expect("github client already initialized");
+
+        let sleep_params = SleepParams {
+            sleep_period: Duration::from_secs(1),
+            max_sleep_period: Duration::from_secs(5),
+            min_sleep_period: Duration::from_secs(1),
+            sleep_step: Duration::from_secs(1),
+        };
+        let runner = Self::start_pool(fang_db_url, sleep_params).await?;
         runner.schedule_tasks().await?;
         Ok(runner)
     }
 
-    pub async fn start_pool(db_url: &str) -> Result<Self, anyhow::Error> {
+    pub async fn start_pool(
+        db_url: &str,
+        sleep_params: SleepParams,
+    ) -> Result<Self, anyhow::Error> {
+        tracing::info!("start jobs runners pool");
+
         let max_pool_size: u32 = 10;
 
         let mut queue = AsyncQueue::builder()
@@ -43,12 +56,7 @@ impl JobsRunner {
 
         let mut pool: AsyncWorkerPool<AsyncQueue<NoTls>> = AsyncWorkerPool::builder()
             .number_of_workers(max_pool_size)
-            .sleep_params(SleepParams {
-                sleep_period: Duration::from_secs(1),
-                max_sleep_period: Duration::from_secs(5),
-                min_sleep_period: Duration::from_secs(1),
-                sleep_step: Duration::from_secs(1),
-            })
+            .sleep_params(sleep_params)
             .queue(queue.clone())
             .build();
         pool.start().await;
@@ -65,14 +73,18 @@ impl JobsRunner {
     }
 
     pub async fn insert_starting_task(&self, deployment_id: i32) -> Result<(), anyhow::Error> {
-        let mut queue = self.queue.lock().await;
-        queue.insert_task(&StartingTask::new(deployment_id)).await?;
-        Ok(())
+        self.insert_task(&StartingTask::from_deployment_id(deployment_id))
+            .await
     }
 
     pub async fn insert_stopping_task(&self, deployment_id: i32) -> Result<(), anyhow::Error> {
+        self.insert_task(&StoppingTask::from_deployment_id(deployment_id))
+            .await
+    }
+
+    pub async fn insert_task(&self, task: &dyn AsyncRunnable) -> Result<(), anyhow::Error> {
         let mut queue = self.queue.lock().await;
-        queue.insert_task(&StoppingTask::new(deployment_id)).await?;
+        queue.insert_task(task).await?;
         Ok(())
     }
 }

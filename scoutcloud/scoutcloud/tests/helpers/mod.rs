@@ -1,8 +1,10 @@
-use blockscout_service_launcher::{test_database::TestDbGuard, test_server};
+use blockscout_service_launcher::{
+    launcher::ConfigSettings, test_database::TestDbGuard, test_server,
+};
 use reqwest::Url;
 use scoutcloud::server::Settings;
 
-pub async fn init_db(db_prefix: &str, test_name: &str) -> TestDbGuard {
+pub async fn init_test_db(db_prefix: &str, test_name: &str) -> TestDbGuard {
     let db_name = format!("{db_prefix}_{test_name}");
     TestDbGuard::new::<migration::Migrator>(db_name.as_str()).await
 }
@@ -12,12 +14,11 @@ where
     F: Fn(Settings) -> Settings,
 {
     let (settings, base) = {
-        let mut settings = Settings::default(db_url);
+        std::env::set_var("SCOUTCLOUD__CONFIG", "./tests/config.test.toml");
+        std::env::set_var("SCOUTCLOUD__DATABASE__CONNECT__URL", db_url);
+        let mut settings = Settings::build().expect("Failed to build settings");
         let (server_settings, base) = test_server::get_test_server_settings();
         settings.server = server_settings;
-        settings.metrics.enabled = false;
-        settings.tracing.enabled = false;
-        settings.jaeger.enabled = false;
 
         (settings_setup(settings), base)
     };

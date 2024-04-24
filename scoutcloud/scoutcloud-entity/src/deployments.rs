@@ -18,6 +18,7 @@ pub struct Model {
     pub parsed_config: Json,
     pub instance_url: Option<String>,
     pub created_at: DateTime,
+    pub started_at: Option<DateTime>,
     pub finished_at: Option<DateTime>,
     pub status: DeploymentStatusType,
     pub error: Option<String>,
