@@ -66,12 +66,12 @@ impl Deployment {
         Ok(deployment)
     }
 
-    pub async fn find<C>(db: &C, id: impl Into<String>) -> Result<Option<Self>, DbErr>
+    pub async fn find_by_uud<C>(db: &C, uuid: impl Into<String>) -> Result<Option<Self>, DbErr>
     where
         C: ConnectionTrait,
     {
         let deployment = Self::default_select()
-            .filter(uuid_eq!(db::deployments::Column::ExternalId, id.into()))
+            .filter(uuid_eq!(db::deployments::Column::ExternalId, uuid.into()))
             .one(db)
             .await?
             .map(|model| Deployment { model });

@@ -55,7 +55,7 @@ pub(crate) async fn log_create_instance(
         UserActionType::CreateInstance,
         Some(json!({
             "instance_slug": instance.model.slug,
-            "instance_id": instance.model.external_id,
+            "instance_uuid": instance.model.external_id,
             "config": config,
         })),
     )
@@ -82,7 +82,7 @@ pub(crate) async fn log_update_config(
         action,
         Some(json!({
             "instance_slug": instance.model.slug,
-            "instance_id": instance.model.external_id,
+            "instance_uuid": instance.model.external_id,
             "old_config": old_config,
             "new_config": new_config,
         })),
@@ -103,8 +103,8 @@ pub(crate) async fn log_start_instance(
         UserActionType::StartInstance,
         Some(json!({
             "instance_slug": instance.model.slug,
-            "instance_id": instance.model.external_id,
-            "deployment_id": deployment.model.external_id,
+            "instance_uuid": instance.model.external_id,
+            "deployment_uuid": deployment.model.external_id,
         })),
     )
     .await?;
@@ -123,8 +123,8 @@ pub(crate) async fn log_stop_instance(
         UserActionType::StopInstance,
         Some(json!({
             "instance_slug": instance.model.slug,
-            "instance_id": instance.model.external_id,
-            "deployment_id": deployment.model.external_id,
+            "instance_uuid": instance.model.external_id,
+            "deployment_uuid": deployment.model.external_id,
         })),
     )
     .await?;

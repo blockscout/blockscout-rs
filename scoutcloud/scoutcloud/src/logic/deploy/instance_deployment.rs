@@ -32,7 +32,7 @@ impl InstanceDeployment {
     where
         C: ConnectionTrait,
     {
-        let instance = match Instance::find(db, instance_uuid).await? {
+        let instance = match Instance::find_by_uuid(db, instance_uuid).await? {
             Some(instance) => instance,
             None => return Ok(None),
         };

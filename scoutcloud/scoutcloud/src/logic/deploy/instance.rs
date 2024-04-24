@@ -26,7 +26,7 @@ impl Instance {
         Instance { model }
     }
 
-    pub async fn find<C>(db: &C, uuid: &str) -> Result<Option<Self>, DbErr>
+    pub async fn find_by_uuid<C>(db: &C, uuid: &str) -> Result<Option<Self>, DbErr>
     where
         C: ConnectionTrait,
     {
@@ -227,7 +227,7 @@ impl Instance {
 
 // Starting and stopping instance using github api
 impl Instance {
-    pub async fn deploy_github(
+    pub async fn deploy_via_github(
         &self,
         github: &GithubClient,
     ) -> Result<octocrab::models::workflows::Run, DeployError> {
@@ -236,7 +236,7 @@ impl Instance {
             .await?
             .ok_or(anyhow::anyhow!("no instance workflow found after running"))?;
         tracing::info!(
-            instance_id =? self.model.external_id,
+            instance_uuid =? self.model.external_id,
             run_id =? run.id,
             run_status =? run.status,
             "triggered github deploy workflow"
@@ -244,7 +244,7 @@ impl Instance {
         Ok(run)
     }
 
-    pub async fn cleanup_github(
+    pub async fn cleanup_via_github(
         &self,
         github: &GithubClient,
     ) -> Result<octocrab::models::workflows::Run, DeployError> {

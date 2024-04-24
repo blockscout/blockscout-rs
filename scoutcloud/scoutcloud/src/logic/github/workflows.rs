@@ -92,7 +92,7 @@ impl GithubClient {
         sleep_between: Duration,
     ) -> Result<RunConclusion, GithubError> {
         let (status, conclusion) = self
-            .wait_for_final_status_workflow(run, timeout, sleep_between)
+            .wait_for_completed_status_with_timeout(run, timeout, sleep_between)
             .await?;
         let run_name_debug = run.name.to_string();
         match status.is_completed() {
@@ -114,7 +114,7 @@ impl GithubClient {
         }
     }
 
-    async fn wait_for_final_status_workflow(
+    async fn wait_for_completed_status_with_timeout(
         &self,
         run: &Run,
         timeout: Duration,
@@ -177,12 +177,6 @@ mod tests {
             .await
             .expect("run and get workflow")
             .expect("no workflows returned");
-
-        // assert!(
-        //     run.name.contains("autodeploy"),
-        //     "run name {} should contain autodeploy",
-        //     run.name
-        // );
 
         // note that this value is configured inside `mock/data/fetch.py`, not in `DeployWorkflow.client`
         assert!(

@@ -1,3 +1,5 @@
+#![allow(clippy::blocks_in_conditions)]
+
 use super::global;
 use crate::logic::{DeployError, Deployment, GithubClient, Instance};
 
@@ -43,7 +45,7 @@ impl StartingTask {
 #[typetag::serde]
 #[fang::async_trait]
 impl AsyncRunnable for StartingTask {
-    #[tracing::instrument(skip(_client), level = "info")]
+    #[tracing::instrument(err(Debug), skip(_client), level = "info")]
     async fn run(&self, _client: &mut dyn AsyncQueueable) -> Result<(), FangError> {
         let db = global::get_db_connection();
         let github = global::get_github_client();
@@ -107,7 +109,7 @@ impl StartingTask {
         deployment
             .update_status(db, DeploymentStatusType::Pending)
             .await?;
-        let run = instance.deploy_github(github).await?;
+        let run = instance.deploy_via_github(github).await?;
         github
             .wait_for_success_workflow(&run, self.workflow_timeout, self.workflow_check_interval)
             .await?;

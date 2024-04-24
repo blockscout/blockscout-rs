@@ -17,13 +17,13 @@ pub async fn update_instance_status(
     db: &DatabaseConnection,
     github: &GithubClient,
     runner: &JobsRunner,
-    instance_id: &str,
+    instance_uuid: &str,
     action: &proto::UpdateInstanceAction,
     user_token: &UserToken,
 ) -> Result<proto::UpdateInstanceStatusResponseInternal, DeployError> {
-    let instance = InstanceDeployment::find_by_instance_uuid(db, instance_id)
+    let instance = InstanceDeployment::find_by_instance_uuid(db, instance_uuid)
         .await?
-        .ok_or(DeployError::InstanceNotFound(instance_id.to_string()))?;
+        .ok_or(DeployError::InstanceNotFound(instance_uuid.to_string()))?;
     user_token.has_access_to_instance(&instance.instance)?;
     let result = handle_instance_action(db, github, runner, instance, action, user_token).await?;
     Ok(result)

@@ -18,7 +18,7 @@ pub struct CheckBalanceTask {}
 #[typetag::serde]
 #[fang::async_trait]
 impl AsyncRunnable for CheckBalanceTask {
-    #[instrument(err(Debug), skip(self, client))]
+    #[instrument(err(Debug), skip(self, client), level = "info")]
     async fn run(&self, client: &mut dyn AsyncQueueable) -> Result<(), FangError> {
         let db = global::get_db_connection();
         // 'check balance' is unique task and there is only one instance of this task running
@@ -41,7 +41,7 @@ impl AsyncRunnable for CheckBalanceTask {
                     deployment_id = unpaid.deployment_id,
                     "user can't pay for deployment. stopping deployment",
                 );
-                // TODO: notify user
+                // TODO: maybe notify user?
                 client
                     .insert_task(&StoppingTask::from_deployment_id(unpaid.deployment_id))
                     .await?;

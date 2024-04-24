@@ -30,14 +30,14 @@ pub async fn create_instance(
 pub async fn update_instance_config(
     db: &DatabaseConnection,
     github: &GithubClient,
-    instance_id: &str,
+    instance_uuid: &str,
     config: &proto::DeployConfigInternal,
     user_token: &UserToken,
 ) -> Result<UserConfig, DeployError> {
     let tx = db.begin().await.map_err(|e| anyhow::anyhow!(e))?;
-    let mut instance = Instance::find(db, instance_id)
+    let mut instance = Instance::find_by_uuid(db, instance_uuid)
         .await?
-        .ok_or(DeployError::InstanceNotFound(instance_id.to_string()))?;
+        .ok_or(DeployError::InstanceNotFound(instance_uuid.to_string()))?;
     user_token.has_access_to_instance(&instance)?;
     let old_config = instance.user_config_raw().clone();
     let updated_config = instance.update_config(&tx, config.clone()).await?;
@@ -59,14 +59,14 @@ pub async fn update_instance_config(
 pub async fn update_instance_config_partial(
     db: &DatabaseConnection,
     github: &GithubClient,
-    instance_id: &str,
+    instance_uuid: &str,
     config: &proto::DeployConfigPartialInternal,
     user_token: &UserToken,
 ) -> Result<UserConfig, DeployError> {
     let tx = db.begin().await.map_err(|e| anyhow::anyhow!(e))?;
-    let mut instance = Instance::find(db, instance_id)
+    let mut instance = Instance::find_by_uuid(db, instance_uuid)
         .await?
-        .ok_or(DeployError::InstanceNotFound(instance_id.to_string()))?;
+        .ok_or(DeployError::InstanceNotFound(instance_uuid.to_string()))?;
     user_token.has_access_to_instance(&instance)?;
     let old_config = instance.user_config_raw().clone();
     let updated_config = instance.update_config_partial(&tx, config).await?;
@@ -87,12 +87,12 @@ pub async fn update_instance_config_partial(
 
 pub async fn get_instance(
     db: &DatabaseConnection,
-    instance_id: &str,
+    instance_uuid: &str,
     user_token: &UserToken,
 ) -> Result<proto::InstanceInternal, DeployError> {
-    let instance_deployment = InstanceDeployment::find_by_instance_uuid(db, instance_id)
+    let instance_deployment = InstanceDeployment::find_by_instance_uuid(db, instance_uuid)
         .await?
-        .ok_or(DeployError::InstanceNotFound(instance_id.to_string()))?;
+        .ok_or(DeployError::InstanceNotFound(instance_uuid.to_string()))?;
     user_token.has_access_to_instance(&instance_deployment.instance)?;
     proto::InstanceInternal::try_from(instance_deployment)
 }
@@ -113,10 +113,10 @@ pub async fn list_instances(
 
 pub async fn get_deployment(
     db: &DatabaseConnection,
-    deployment_id: &str,
+    deployment_uuid: &str,
     user_token: &UserToken,
 ) -> Result<proto::DeploymentInternal, DeployError> {
-    let result = InstanceDeployment::find_by_deployment_uuid(db, deployment_id)
+    let result = InstanceDeployment::find_by_deployment_uuid(db, deployment_uuid)
         .await?
         .ok_or(DeployError::DeploymentNotFound)?;
     user_token.has_access_to_instance(&result.instance)?;
@@ -125,24 +125,24 @@ pub async fn get_deployment(
 
 pub async fn get_current_deployment(
     db: &DatabaseConnection,
-    instance_id: &str,
+    instance_uuid: &str,
     user_token: &UserToken,
 ) -> Result<proto::DeploymentInternal, DeployError> {
-    let result = InstanceDeployment::find_by_instance_uuid(db, instance_id)
+    let result = InstanceDeployment::find_by_instance_uuid(db, instance_uuid)
         .await?
-        .ok_or(DeployError::InstanceNotFound(instance_id.to_string()))?;
+        .ok_or(DeployError::InstanceNotFound(instance_uuid.to_string()))?;
     user_token.has_access_to_instance(&result.instance)?;
     proto::DeploymentInternal::try_from(result)
 }
 
 pub async fn list_deployments(
     db: &DatabaseConnection,
-    instance_id: &str,
+    instance_uuid: &str,
     user_token: &UserToken,
 ) -> Result<Vec<proto::DeploymentInternal>, DeployError> {
-    let instance = Instance::find(db, instance_id)
+    let instance = Instance::find_by_uuid(db, instance_uuid)
         .await?
-        .ok_or(DeployError::InstanceNotFound(instance_id.to_string()))?;
+        .ok_or(DeployError::InstanceNotFound(instance_uuid.to_string()))?;
     user_token.has_access_to_instance(&instance)?;
     let deployments = InstanceDeployment::find_deployments_of_instance(db, &instance).await?;
     deployments

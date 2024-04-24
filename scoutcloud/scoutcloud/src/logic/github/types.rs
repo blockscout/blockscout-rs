@@ -128,14 +128,6 @@ impl RunConclusion {
     }
 
     pub fn is_ok(&self) -> bool {
-        match self {
-            RunConclusion::Success | RunConclusion::Neutral => true,
-            RunConclusion::Failure
-            | RunConclusion::Cancelled
-            | RunConclusion::TimedOut
-            | RunConclusion::ActionRequired
-            | RunConclusion::Stale
-            | RunConclusion::Skipped => false,
-        }
+        matches!(self, RunConclusion::Success | RunConclusion::Neutral)
     }
 }

@@ -1,3 +1,5 @@
+#![allow(clippy::blocks_in_conditions)]
+
 use crate::logic::{jobs::global, DeployError, Deployment, GithubClient, Instance};
 use fang::{typetag, AsyncQueueable, AsyncRunnable, FangError, Scheduled};
 use scoutcloud_entity::sea_orm_active_enums::DeploymentStatusType;
@@ -40,7 +42,7 @@ impl StoppingTask {
 #[typetag::serde]
 #[fang::async_trait]
 impl AsyncRunnable for StoppingTask {
-    #[tracing::instrument(skip(_client), level = "info")]
+    #[tracing::instrument(err(Debug), skip(_client), level = "info")]
     async fn run(&self, _client: &mut dyn AsyncQueueable) -> Result<(), FangError> {
         let db = global::get_db_connection();
         let github = global::get_github_client();
@@ -100,7 +102,7 @@ impl StoppingTask {
         deployment
             .update_status(db, DeploymentStatusType::Stopping)
             .await?;
-        let run = instance.cleanup_github(github).await?;
+        let run = instance.cleanup_via_github(github).await?;
         github
             .wait_for_success_workflow(&run, self.workflow_timeout, self.workflow_check_interval)
             .await?;
