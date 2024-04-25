@@ -6,7 +6,7 @@ use futures::{
     stream::{repeat_with, BoxStream},
     Stream, StreamExt,
 };
-use sea_orm::DatabaseConnection;
+use sea_orm::{DatabaseConnection, TransactionTrait};
 use std::{
     collections::HashSet,
     sync::{
@@ -106,20 +106,25 @@ impl Indexer {
     async fn process_job(&self, job: &Job) -> Result<()> {
         let (header, blobs) = self.get_blobs_by_height(job.height).await?;
 
+        let txn = self.db.begin().await?;
+
         let blobs_count = blobs.len() as u32;
-        if !blobs.is_empty() {
-            blobs::upsert_many(&self.db, job.height, blobs).await?;
-            tracing::debug!(height = job.height, blobs_count, "saved blobs to db");
-        }
 
         blocks::upsert(
-            &self.db,
+            &txn,
             job.height,
             header.hash().as_bytes(),
             blobs_count,
             header.header.time.unix_timestamp(),
         )
         .await?;
+
+        if !blobs.is_empty() {
+            blobs::upsert_many(&txn, job.height, blobs).await?;
+            tracing::debug!(height = job.height, blobs_count, "saved blobs to db");
+        }
+
+        txn.commit().await?;
 
         // this is not accurate, just to indicate progress
         if job.height % 1000 == 0 {
@@ -144,7 +149,7 @@ impl Indexer {
     async fn catch_up(&self) -> Result<impl Stream<Item = Job> + '_> {
         // TODO: do we need genesis block metadata?
         if !blocks::exists(&self.db, 0).await? {
-            blocks::upsert(&self.db, 0, &[], 0, 0).await?;
+            blocks::upsert(self.db.as_ref(), 0, &[], 0, 0).await?;
         }
 
         let last_known_height = self.last_known_height.load(Ordering::SeqCst);

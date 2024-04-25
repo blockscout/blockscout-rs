@@ -43,8 +43,8 @@ pub async fn find_by_height_and_commitment(
     Ok(blob)
 }
 
-pub async fn upsert_many(
-    db: &DatabaseConnection,
+pub async fn upsert_many<C: ConnectionTrait>(
+    db: &C,
     height: u64,
     blobs: Vec<CelestiaBlob>,
 ) -> Result<(), anyhow::Error> {

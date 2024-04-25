@@ -10,7 +10,7 @@ async fn upsert_test() {
         let hash = [height as u8; 32];
         let blobs_count = height as u32;
         let timestamp = height as i64;
-        blocks::upsert(&db.client(), height, &hash, blobs_count, timestamp)
+        blocks::upsert(db.client().as_ref(), height, &hash, blobs_count, timestamp)
             .await
             .unwrap();
         assert!(blocks::exists(&db.client(), height).await.unwrap());

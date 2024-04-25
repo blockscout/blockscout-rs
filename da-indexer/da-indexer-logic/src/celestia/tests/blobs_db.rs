@@ -14,10 +14,10 @@ async fn smoke_test() {
 
     for height in height_range.clone() {
         let blobs = blobs_range.clone().map(celestia_blob).collect::<Vec<_>>();
-        blobs::upsert_many(&db.client(), height, blobs)
+        blocks::upsert(db.client().as_ref(), height, &[], 5, 0)
             .await
             .unwrap();
-        blocks::upsert(&db.client(), height, &[], 5, 0)
+        blobs::upsert_many(db.client().as_ref(), height, blobs)
             .await
             .unwrap();
     }

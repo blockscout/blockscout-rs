@@ -61,8 +61,8 @@ pub async fn find_max_in_range(
     Ok(max_height)
 }
 
-pub async fn upsert(
-    db: &DatabaseConnection,
+pub async fn upsert<C: ConnectionTrait>(
+    db: &C,
     height: u64,
     hash: &[u8],
     blobs_count: u32,
