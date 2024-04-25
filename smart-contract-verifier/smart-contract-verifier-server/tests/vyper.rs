@@ -335,6 +335,15 @@ mod flattened {
         };
         test_success(test_case).await;
     }
+
+    #[tokio::test]
+    async fn blueprint_contract() {
+        let mut test_case = vyper_types::from_file::<Flattened>("blueprint");
+        test_success(test_case.clone()).await;
+
+        test_case.use_deployed_bytecode = true;
+        test_success(test_case).await;
+    }
 }
 
 mod multi_part {
