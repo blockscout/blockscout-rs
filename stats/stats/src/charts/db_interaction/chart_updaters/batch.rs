@@ -1,15 +1,28 @@
-use super::{get_last_row, get_min_block_blockscout, get_min_date_blockscout};
+//! Similar to `ChartPartialUpdater`, but performs multiple updates for each time period
+//! ([`step_duration`]).
+//!
+//! Useful when each period is independent and this division can help with performance.
+//! I.e. if updating a large interval at once (e.g. like `ChartPartialUpdater` does in
+//! `force_full` or initial updates) is too expensive.
+
+use super::{
+    common_operations::{get_min_block_blockscout, get_min_date_blockscout, get_nth_last_row},
+    ChartUpdater,
+};
 use crate::{
-    charts::{find_chart, insert::insert_data_many},
-    metrics, Chart, DateValue, UpdateError,
+    charts::{
+        db_interaction::{types::DateValue, write::insert_data_many},
+        find_chart,
+    },
+    metrics, UpdateError,
 };
 use async_trait::async_trait;
-use chrono::{Duration, NaiveDate, Utc};
+use chrono::{DateTime, Duration, NaiveDate, Utc};
 use sea_orm::{DatabaseConnection, FromQueryResult, Statement, TransactionTrait};
 use std::time::Instant;
 
 #[async_trait]
-pub trait ChartBatchUpdater: Chart {
+pub trait ChartBatchUpdater: ChartUpdater {
     fn get_query(&self, from: NaiveDate, to: NaiveDate) -> Statement;
     fn step_duration(&self) -> chrono::Duration {
         chrono::Duration::days(30)
@@ -19,6 +32,7 @@ pub trait ChartBatchUpdater: Chart {
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
+        current_time: DateTime<Utc>,
         force_full: bool,
     ) -> Result<(), UpdateError> {
         let chart_id = find_chart(db, self.name())
@@ -28,24 +42,31 @@ pub trait ChartBatchUpdater: Chart {
         let min_blockscout_block = get_min_block_blockscout(blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?;
-        // set offset to 1 because actual last row can be partially calculated
-        let offset = Some(1);
-        let last_row =
-            get_last_row(self, chart_id, min_blockscout_block, db, force_full, offset).await?;
+        let offset = Some(self.approximate_trailing_points());
+        let last_updated_row =
+            get_nth_last_row(self, chart_id, min_blockscout_block, db, force_full, offset).await?;
 
         let _timer = metrics::CHART_FETCH_NEW_DATA_TIME
             .with_label_values(&[self.name()])
             .start_timer();
-        tracing::info!(last_row =? last_row, "start batch update");
-        self.batch_update(db, blockscout, last_row, chart_id, min_blockscout_block)
-            .await
+        tracing::info!(last_updated_row =? last_updated_row, "start batch update");
+        self.batch_update(
+            db,
+            blockscout,
+            last_updated_row,
+            current_time.date_naive(),
+            chart_id,
+            min_blockscout_block,
+        )
+        .await
     }
 
     async fn batch_update(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
-        last_row: Option<DateValue>,
+        update_from_row: Option<DateValue>,
+        today: NaiveDate,
         chart_id: i32,
         min_blockscout_block: i64,
     ) -> Result<(), UpdateError> {
@@ -53,16 +74,15 @@ pub trait ChartBatchUpdater: Chart {
             .begin()
             .await
             .map_err(UpdateError::BlockscoutDB)?;
-        let first_date = match last_row {
-            Some(last_row) => last_row.date,
+        let first_date = match update_from_row {
+            Some(row) => row.date,
             None => get_min_date_blockscout(&txn)
                 .await
                 .map(|time| time.date())
                 .map_err(UpdateError::BlockscoutDB)?,
         };
-        let last_date = Utc::now().date_naive();
 
-        let steps = generate_date_ranges(first_date, last_date, self.step_duration());
+        let steps = generate_date_ranges(first_date, today, self.step_duration());
         let n = steps.len();
 
         for (i, (from, to)) in steps.into_iter().enumerate() {
@@ -135,6 +155,11 @@ mod tests {
                     (d("2015-11-17"), d("2015-12-17")),
                     (d("2015-12-17"), d("2016-01-16")),
                 ],
+            ),
+            ((d("2015-07-20"), d("2015-07-20")), vec![]),
+            (
+                (d("2015-07-20"), d("2015-07-21")),
+                vec![(d("2015-07-20"), d("2015-08-19"))],
             ),
         ] {
             let actual = generate_date_ranges(from, to, Duration::days(30));

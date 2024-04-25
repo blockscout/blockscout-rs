@@ -1,21 +1,31 @@
-use super::get_min_block_blockscout;
+//! Updates chart according to data from another chart.
+//! I.e. current chart depends on another (on "parent")
+
+use super::{common_operations::get_min_block_blockscout, ChartUpdater};
 use crate::{
     charts::{
+        db_interaction::{types::DateValue, write::insert_data_many},
         find_chart,
-        insert::{insert_data_many, DateValue},
     },
-    get_chart_data, Chart, UpdateError,
+    get_chart_data, UpdateError,
 };
 use async_trait::async_trait;
+use chrono::Utc;
 use sea_orm::prelude::*;
 use std::{fmt::Display, iter::Sum, ops::AddAssign, str::FromStr, sync::Arc};
 
 #[async_trait]
-pub trait ChartDependentUpdater<P>: Chart
+pub trait ChartDependentUpdater<P>: ChartUpdater
 where
-    P: Chart + Send,
+    P: ChartUpdater + Send,
 {
     fn parent(&self) -> Arc<P>;
+
+    // Note that usually this chart's `approximate_trailing_points` logically
+    // matches the one of it's parent
+    fn parent_approximate_trailing_points(&self) -> u64 {
+        self.parent().approximate_trailing_points()
+    }
 
     async fn get_values(&self, parent_data: Vec<DateValue>) -> Result<Vec<DateValue>, UpdateError>;
 
@@ -23,6 +33,7 @@ where
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
+        current_time: chrono::DateTime<Utc>,
         force_full: bool,
     ) -> Result<Vec<DateValue>, UpdateError> {
         let parent = self.parent();
@@ -31,8 +42,20 @@ where
             parent_chart_name = parent.name(),
             "updating parent"
         );
-        parent.update_with_mutex(db, blockscout, force_full).await?;
-        let data = get_chart_data(db, parent.name(), None, None, None).await?;
+        parent
+            .update_with_mutex(db, blockscout, current_time, force_full)
+            .await?;
+        let data = get_chart_data(
+            db,
+            parent.name(),
+            None,
+            None,
+            None,
+            None,
+            self.parent_approximate_trailing_points(),
+        )
+        .await?;
+        let data = data.into_iter().map(DateValue::from).collect();
         Ok(data)
     }
 
@@ -40,6 +63,7 @@ where
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
+        current_time: chrono::DateTime<Utc>,
         force_full: bool,
     ) -> Result<(), UpdateError> {
         let chart_id = find_chart(db, self.name())
@@ -49,7 +73,9 @@ where
         let min_blockscout_block = get_min_block_blockscout(blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?;
-        let parent_data = self.get_parent_data(db, blockscout, force_full).await?;
+        let parent_data = self
+            .get_parent_data(db, blockscout, current_time, force_full)
+            .await?;
         let values = self
             .get_values(parent_data)
             .await?
@@ -61,7 +87,7 @@ where
     }
 }
 
-pub fn parse_and_growth<T>(
+pub fn parse_and_cumsum<T>(
     mut data: Vec<DateValue>,
     parent_name: &str,
 ) -> Result<Vec<DateValue>, UpdateError>

@@ -78,7 +78,7 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
             .await;
     });
 
-    let read_service = Arc::new(ReadService::new(db, charts).await?);
+    let read_service = Arc::new(ReadService::new(db, charts, settings.limits.into()).await?);
     let health = Arc::new(HealthService::default());
 
     let grpc_router = grpc_router(read_service.clone(), health.clone());

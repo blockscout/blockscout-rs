@@ -11,7 +11,9 @@ use blockscout_display_bytes::Bytes as DisplayBytes;
 use pretty_assertions::assert_eq;
 use serde::Deserialize;
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
-    source::SourceType, verify_response::Status, vyper_verifier_actix::route_vyper_verifier,
+    source::{MatchType, SourceType},
+    verify_response::Status,
+    vyper_verifier_actix::route_vyper_verifier,
     VerifyResponse,
 };
 use smart_contract_verifier_server::{Settings, VyperVerifierService};
@@ -80,6 +82,14 @@ async fn test_success(test_case: impl TestCase) {
     let verification_result = verification_response
         .source
         .expect("Verification source is absent");
+
+    // Vyper always results in partial matches, as currently there is no way to
+    // check if the source code is exact.
+    assert_eq!(
+        verification_result.match_type(),
+        MatchType::Partial,
+        "Invalid match type"
+    );
 
     let abi: Option<Result<ethabi::Contract, _>> = verification_result
         .abi

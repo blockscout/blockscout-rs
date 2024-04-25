@@ -3,6 +3,7 @@ use sea_orm_migration::sea_orm::{ConnectionTrait, Statement, TransactionTrait};
 
 mod m20220101_000001_init;
 mod m20230814_105206_drop_zero_timestamp;
+mod m20240416_090545_add_updated_at_column;
 
 pub struct Migrator;
 
@@ -12,6 +13,7 @@ impl MigratorTrait for Migrator {
         vec![
             Box::new(m20220101_000001_init::Migration),
             Box::new(m20230814_105206_drop_zero_timestamp::Migration),
+            Box::new(m20240416_090545_add_updated_at_column::Migration),
         ]
     }
 }

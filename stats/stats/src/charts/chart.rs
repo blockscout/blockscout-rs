@@ -1,6 +1,6 @@
-use super::mutex::get_global_update_mutex;
 use crate::ReadError;
 use async_trait::async_trait;
+use chrono::Duration;
 use entity::{charts, sea_orm_active_enums::ChartType};
 use sea_orm::{prelude::*, sea_query, FromQueryResult, QuerySelect, Set};
 use thiserror::Error;
@@ -13,6 +13,8 @@ pub enum UpdateError {
     StatsDB(DbErr),
     #[error("chart {0} not found")]
     NotFound(String),
+    #[error("date interval limit ({limit}) is exceeded; choose smaller time interval.")]
+    IntervalLimitExceeded { limit: Duration },
     #[error("internal error: {0}")]
     Internal(String),
 }
@@ -22,6 +24,7 @@ impl From<ReadError> for UpdateError {
         match read {
             ReadError::DB(db) => UpdateError::StatsDB(db),
             ReadError::NotFound(err) => UpdateError::NotFound(err),
+            ReadError::IntervalLimitExceeded(limit) => UpdateError::IntervalLimitExceeded { limit },
         }
     }
 }
@@ -42,42 +45,34 @@ pub trait Chart: Sync {
     fn relevant_or_zero(&self) -> bool {
         false
     }
-    fn drop_last_point(&self) -> bool {
-        self.chart_type() == ChartType::Line
+    /// Number of last values that are considered approximate.
+    /// (ordered by time)
+    ///
+    /// E.g. how many end values should be recalculated on (kinda)
+    /// lazy update (where `get_last_row` is retrieved successfully).
+    /// Also controls marking points as approximate when returning data.
+    ///
+    /// ## Value
+    ///
+    /// Usually set to 1 for line charts. Currently they have resolution of
+    /// 1 day. Also, data for portion of the (last) day has to be recalculated
+    /// on the next day.
+    ///
+    /// I.e. for number of blocks per day, stats for current day (0) are
+    /// not complete because blocks will be produced till the end of the day.
+    ///    |===|=  |
+    /// day -1   0
+    fn approximate_trailing_points(&self) -> u64 {
+        if self.chart_type() == ChartType::Counter {
+            // there's only one value in counter
+            0
+        } else {
+            1
+        }
     }
 
     async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
         create_chart(db, self.name().into(), self.chart_type()).await
-    }
-
-    async fn update(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        force_full: bool,
-    ) -> Result<(), UpdateError>;
-
-    async fn update_with_mutex(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        let name = self.name();
-        let mutex = get_global_update_mutex(name).await;
-        let _permit = {
-            match mutex.try_lock() {
-                Ok(v) => v,
-                Err(_) => {
-                    tracing::warn!(
-                        chart_name = name,
-                        "found locked update mutex, waiting for unlock"
-                    );
-                    mutex.lock().await
-                }
-            }
-        };
-        self.update(db, blockscout, force_full).await
     }
 }
 

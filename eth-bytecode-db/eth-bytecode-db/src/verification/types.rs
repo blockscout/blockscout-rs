@@ -1,8 +1,10 @@
 use super::smart_contract_verifier;
+use crate::FromHex;
 use anyhow::Context;
 use entity::sea_orm_active_enums;
+use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2 as eth_bytecode_db_v2;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, str::FromStr};
 
 /********** Bytecode Part **********/
 
@@ -309,6 +311,102 @@ impl TryFrom<Source> for DatabaseReadySource {
     }
 }
 
+impl TryFrom<AllianceContractImportSuccess> for DatabaseReadySource {
+    type Error = anyhow::Error;
+
+    fn try_from(value: AllianceContractImportSuccess) -> Result<Self, Self::Error> {
+        let source_type = match value.language {
+            Language::Solidity => SourceType::Solidity,
+            Language::Yul => SourceType::Yul,
+            Language::Vyper => SourceType::Vyper,
+        };
+
+        #[derive(Deserialize)]
+        struct CompilationArtifacts {
+            pub abi: Option<serde_json::Value>,
+        }
+        let abi =
+            serde_json::from_value::<CompilationArtifacts>(value.compilation_artifacts.clone())
+                .context("extractor abi json from compilation artifacts")?
+                .abi;
+
+        let creation_code_parts = code_parts(
+            value.creation_code.clone(),
+            value.creation_code_artifacts.clone(),
+        )?;
+        let runtime_code_parts = code_parts(
+            value.runtime_code.clone(),
+            value.runtime_code_artifacts.clone(),
+        )?;
+
+        Ok(Self {
+            file_name: value.file_name,
+            contract_name: value.contract_name,
+            compiler_version: value.compiler_version,
+            compiler_settings: value.compiler_settings,
+            source_type,
+            source_files: value.sources,
+            abi,
+            compilation_artifacts: Some(value.compilation_artifacts),
+            creation_code_artifacts: Some(value.creation_code_artifacts),
+            runtime_code_artifacts: Some(value.runtime_code_artifacts),
+            raw_creation_code: value.creation_code.to_vec(),
+            raw_runtime_code: value.runtime_code.to_vec(),
+            creation_input_parts: creation_code_parts,
+            deployed_bytecode_parts: runtime_code_parts,
+        })
+    }
+}
+
+fn code_parts(
+    code: bytes::Bytes,
+    code_artifacts: serde_json::Value,
+) -> Result<Vec<BytecodePart>, anyhow::Error> {
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct CborAuxdata {
+        pub offset: usize,
+        #[serde(deserialize_with = "crate::deserialize_bytes")]
+        pub value: bytes::Bytes,
+    }
+
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct CodeArtifacts {
+        #[serde(default)]
+        pub cbor_auxdata: BTreeMap<String, CborAuxdata>,
+    }
+
+    let code_artifacts: CodeArtifacts =
+        serde_json::from_value(code_artifacts).context("code artifacts deserialization")?;
+
+    let mut parts = vec![];
+
+    let mut i = 0usize;
+    let mut cbor_auxdata = code_artifacts
+        .cbor_auxdata
+        .into_values()
+        .collect::<Vec<_>>();
+    cbor_auxdata.sort_by_key(|v| v.offset);
+    for auxdata in cbor_auxdata {
+        parts.push(BytecodePart::Main {
+            data: code[i..auxdata.offset].to_vec(),
+        });
+        parts.push(BytecodePart::Meta {
+            data: auxdata.value.to_vec(),
+        });
+        i = auxdata.offset + auxdata.value.len();
+    }
+
+    if i < code.len() {
+        parts.push(BytecodePart::Main {
+            data: code[i..].to_vec(),
+        });
+    }
+
+    Ok(parts)
+}
+
 /********** Verification Request **********/
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -346,6 +444,321 @@ pub struct VerificationRequest<T> {
     pub metadata: Option<VerificationMetadata>,
     #[serde(skip_serializing)]
     pub is_authorized: bool,
+}
+
+/********** Verifier Alliance Import Request **********/
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct AllianceContract {
+    pub chain_id: String,
+    pub contract_address: bytes::Bytes,
+    pub transaction_hash: Option<bytes::Bytes>,
+    pub block_number: Option<i64>,
+    pub transaction_index: Option<i64>,
+    pub deployer: Option<bytes::Bytes>,
+    pub creation_code: Option<bytes::Bytes>,
+    pub runtime_code: bytes::Bytes,
+}
+
+impl TryFrom<eth_bytecode_db_v2::VerifierAllianceContract> for AllianceContract {
+    type Error = eth_bytecode_db_proto::tonic::Status;
+
+    fn try_from(value: eth_bytecode_db_v2::VerifierAllianceContract) -> Result<Self, Self::Error> {
+        let str_to_bytes = |value: &str| {
+            FromHex::from_hex(value)
+                .map_err(|v| eth_bytecode_db_proto::tonic::Status::invalid_argument(v.to_string()))
+        };
+
+        Ok(Self {
+            chain_id: value.chain_id,
+            contract_address: str_to_bytes(&value.contract_address)?,
+            transaction_hash: value
+                .transaction_hash
+                .as_deref()
+                .map(str_to_bytes)
+                .transpose()?,
+            block_number: value.block_number,
+            transaction_index: value.transaction_index,
+            deployer: value.deployer.as_deref().map(str_to_bytes).transpose()?,
+            creation_code: value
+                .creation_code
+                .as_deref()
+                .map(str_to_bytes)
+                .transpose()?,
+            runtime_code: str_to_bytes(&value.runtime_code)?,
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct AllianceImportRequest<T> {
+    pub contracts: Vec<AllianceContract>,
+    pub compiler_version: String,
+    #[serde(flatten)]
+    pub content: T,
+}
+
+/********** Verifier Alliance Import Result **********/
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Compiler {
+    Solc,
+    Vyper,
+}
+
+impl TryFrom<smart_contract_verifier::contract_verification_success::compiler::Compiler>
+    for Compiler
+{
+    type Error = crate::verification::Error;
+
+    fn try_from(
+        value: smart_contract_verifier::contract_verification_success::compiler::Compiler,
+    ) -> Result<Self, Self::Error> {
+        match value {
+            smart_contract_verifier::contract_verification_success::compiler::Compiler::Solc => Ok(Compiler::Solc),
+            smart_contract_verifier::contract_verification_success::compiler::Compiler::Vyper => Ok(Compiler::Vyper),
+            smart_contract_verifier::contract_verification_success::compiler::Compiler::Unspecified => {
+                Err(crate::verification::Error::Verifier(anyhow::anyhow!("compiler is unspecified")))
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Language {
+    Solidity,
+    Yul,
+    Vyper,
+}
+
+impl TryFrom<smart_contract_verifier::contract_verification_success::language::Language>
+    for Language
+{
+    type Error = crate::verification::Error;
+
+    fn try_from(
+        value: smart_contract_verifier::contract_verification_success::language::Language,
+    ) -> Result<Self, Self::Error> {
+        match value {
+            smart_contract_verifier::contract_verification_success::language::Language::Solidity => Ok(Language::Solidity),
+            smart_contract_verifier::contract_verification_success::language::Language::Yul => Ok(Language::Yul),
+            smart_contract_verifier::contract_verification_success::language::Language::Vyper => Ok(Language::Vyper),
+            smart_contract_verifier::contract_verification_success::language::Language::Unspecified =>
+                Err(crate::verification::Error::Verifier(anyhow::anyhow!("language is unspecified")))
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MatchDetails {
+    pub match_type: MatchType,
+    pub values: serde_json::Value,
+    pub transformations: serde_json::Value,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AllianceContractImportSuccess {
+    pub creation_code: bytes::Bytes,
+    pub runtime_code: bytes::Bytes,
+    pub compiler: Compiler,
+    pub compiler_version: String,
+    pub language: Language,
+    pub file_name: String,
+    pub contract_name: String,
+    pub sources: BTreeMap<String, String>,
+    pub compiler_settings: serde_json::Value,
+    pub compilation_artifacts: serde_json::Value,
+    pub creation_code_artifacts: serde_json::Value,
+    pub runtime_code_artifacts: serde_json::Value,
+    pub creation_match_details: Option<MatchDetails>,
+    pub runtime_match_details: Option<MatchDetails>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AllianceContractImportResult {
+    Success(AllianceContractImportSuccess),
+    VerificationFailure {},
+    ImportFailure(String),
+}
+
+impl TryFrom<smart_contract_verifier::ContractVerificationResult> for AllianceContractImportResult {
+    type Error = crate::verification::Error;
+
+    fn try_from(
+        value: smart_contract_verifier::ContractVerificationResult,
+    ) -> Result<Self, Self::Error> {
+        let str_to_bytes = |value: &str| {
+            FromHex::from_hex(value).map_err(|err| Self::Error::Verifier(anyhow::anyhow!("{err}")))
+        };
+
+        let str_to_value = |value: &str| {
+            serde_json::Value::from_str(value)
+                .map_err(|err| Self::Error::Verifier(anyhow::anyhow!("{err}")))
+        };
+
+        let parse_match_details = |details: smart_contract_verifier::contract_verification_success::MatchDetails|
+         -> Result<MatchDetails, Self::Error> {
+            let match_type = match details.match_type() {
+                smart_contract_verifier::contract_verification_success::MatchType::Undefined => MatchType::Unknown,
+                smart_contract_verifier::contract_verification_success::MatchType::Partial => MatchType::Partial,
+                smart_contract_verifier::contract_verification_success::MatchType::Full => MatchType::Full,
+            };
+
+            Ok(MatchDetails {
+                match_type,
+                values: str_to_value(&details.values)?,
+                transformations: str_to_value(&details.transformations)?,
+            })
+        };
+
+        let result = match value {
+            smart_contract_verifier::ContractVerificationResult {
+                verification_result: Some(smart_contract_verifier::contract_verification_result::VerificationResult::Success(value))
+            } => {
+
+                let compiler = value.compiler();
+                let language = value.language();
+                Self::Success(AllianceContractImportSuccess {
+                    creation_code: str_to_bytes(&value.creation_code)?,
+                    runtime_code: str_to_bytes(&value.runtime_code)?,
+                    compiler: compiler.try_into()?,
+                    compiler_version: value.compiler_version,
+                    language: language.try_into()?,
+                    file_name: value.file_name,
+                    contract_name: value.contract_name,
+                    sources: value.sources,
+                    compiler_settings: str_to_value(&value.compiler_settings)?,
+                    compilation_artifacts: str_to_value(&value.compilation_artifacts)?,
+                    creation_code_artifacts: str_to_value(&value.creation_code_artifacts)?,
+                    runtime_code_artifacts: str_to_value(&value.runtime_code_artifacts)?,
+                    creation_match_details: value.creation_match_details.map(parse_match_details).transpose()?,
+                    runtime_match_details: value.runtime_match_details.map(parse_match_details).transpose()?,
+                })
+            }
+            smart_contract_verifier::ContractVerificationResult {
+                verification_result: Some(smart_contract_verifier::contract_verification_result::VerificationResult::Failure(_value))
+            } => {
+                Self::VerificationFailure {}
+            }
+            value => return Err(crate::verification::Error::Verifier(
+                anyhow::anyhow!("invalid struct: {value:?}"))
+            )
+        };
+
+        Ok(result)
+    }
+}
+
+impl TryFrom<AllianceContractImportResult>
+    for eth_bytecode_db_v2::verifier_alliance_batch_import_response::ImportContractResult
+{
+    type Error = eth_bytecode_db_proto::tonic::Status;
+
+    fn try_from(value: AllianceContractImportResult) -> Result<Self, Self::Error> {
+        let result = match value {
+            AllianceContractImportResult::Success(success) => {
+                eth_bytecode_db_v2::verifier_alliance_batch_import_response::import_contract_result::Result::Success(
+                    eth_bytecode_db_v2::verifier_alliance_batch_import_response::Success {
+                        creation_code_match_type: match_details_to_proto_match_type(success.creation_match_details.as_ref()).into(),
+                        runtime_code_match_type: match_details_to_proto_match_type(success.runtime_match_details.as_ref()).into(),
+                    }
+                )
+            }
+            AllianceContractImportResult::VerificationFailure {} => eth_bytecode_db_v2::verifier_alliance_batch_import_response::import_contract_result::Result::VerificationFailure(
+                eth_bytecode_db_v2::verifier_alliance_batch_import_response::VerificationFailure {}
+            ),
+            AllianceContractImportResult::ImportFailure(_message) => eth_bytecode_db_v2::verifier_alliance_batch_import_response::import_contract_result::Result::ImportFailure(
+                eth_bytecode_db_v2::verifier_alliance_batch_import_response::ImportFailure {}
+            )
+        };
+
+        Ok(Self {
+            result: Some(result),
+        })
+    }
+}
+
+fn match_details_to_proto_match_type(
+    details: Option<&MatchDetails>,
+) -> eth_bytecode_db_v2::verifier_alliance_batch_import_response::MatchType {
+    match details {
+        None => eth_bytecode_db_v2::verifier_alliance_batch_import_response::MatchType::NoMatch,
+        Some(MatchDetails {
+            match_type: MatchType::Unknown,
+            ..
+        }) => eth_bytecode_db_v2::verifier_alliance_batch_import_response::MatchType::NotDefined,
+        Some(MatchDetails {
+            match_type: MatchType::Partial,
+            ..
+        }) => eth_bytecode_db_v2::verifier_alliance_batch_import_response::MatchType::Partial,
+        Some(MatchDetails {
+            match_type: MatchType::Full,
+            ..
+        }) => eth_bytecode_db_v2::verifier_alliance_batch_import_response::MatchType::Full,
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AllianceBatchImportResult {
+    CompilationFailure(String),
+    Results(Vec<AllianceContractImportResult>),
+}
+
+impl TryFrom<smart_contract_verifier::BatchVerifyResponse> for AllianceBatchImportResult {
+    type Error = crate::verification::Error;
+
+    fn try_from(value: smart_contract_verifier::BatchVerifyResponse) -> Result<Self, Self::Error> {
+        let result = match value {
+            smart_contract_verifier::BatchVerifyResponse {
+                verification_result: Some(smart_contract_verifier::batch_verify_response::VerificationResult::CompilationFailure(
+                smart_contract_verifier::CompilationFailure { message }
+                                          ))
+            } => AllianceBatchImportResult::CompilationFailure(message),
+            smart_contract_verifier::BatchVerifyResponse {
+                verification_result: Some(smart_contract_verifier::batch_verify_response::VerificationResult::ContractVerificationResults(
+                    smart_contract_verifier::batch_verify_response::ContractVerificationResults {
+                        items
+                    }))
+            } => {
+                let results = items.into_iter().map(TryFrom::try_from).collect::<Result<_, _>>()?;
+                AllianceBatchImportResult::Results(results)
+            },
+            value => return Err(crate::verification::Error::Verifier(
+                anyhow::anyhow!("invalid struct: {value:?}"))
+            )
+        };
+
+        Ok(result)
+    }
+}
+
+impl TryFrom<AllianceBatchImportResult>
+    for eth_bytecode_db_v2::VerifierAllianceBatchImportResponse
+{
+    type Error = eth_bytecode_db_proto::tonic::Status;
+
+    fn try_from(value: AllianceBatchImportResult) -> Result<Self, Self::Error> {
+        let result = match value {
+            AllianceBatchImportResult::CompilationFailure(message) => {
+                eth_bytecode_db_v2::verifier_alliance_batch_import_response::Response::CompilationFailure(
+                    eth_bytecode_db_v2::verifier_alliance_batch_import_response::CompilationFailure {
+                        message
+                    }
+                )
+            }
+            AllianceBatchImportResult::Results(results) => {
+                eth_bytecode_db_v2::verifier_alliance_batch_import_response::Response::ImportResults(
+                    eth_bytecode_db_v2::verifier_alliance_batch_import_response::ImportContractResults {
+                        items: results.into_iter().map(TryFrom::try_from).collect::<Result<_, _>>()?,
+                    }
+                )
+            }
+        };
+
+        Ok(eth_bytecode_db_v2::VerifierAllianceBatchImportResponse {
+            response: Some(result),
+        })
+    }
 }
 
 /********** Verification Type **********/

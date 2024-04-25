@@ -1,8 +1,7 @@
-use super::compilation;
 use crate::{
     batch_verifier::{
-        artifacts::CodeArtifacts,
-        compilation::CompilationResult,
+        artifacts::{cbor_auxdata, CodeArtifacts},
+        compilation::{self, CompilationResult},
         errors::{VerificationError, VerificationErrorKind},
         transformations,
     },
@@ -197,12 +196,18 @@ fn verify_contract(
             )
             .expect("is json serializable"),
             creation_match: does_creation_match.then_some(Match {
-                match_type: match_type(creation_values.clone()),
+                match_type: match_type(
+                    creation_values.clone(),
+                    &parsed_contract.creation_code_artifacts.cbor_auxdata,
+                ),
                 values: creation_values,
                 transformations: creation_transformations,
             }),
             runtime_match: does_runtime_match.then_some(Match {
-                match_type: match_type(runtime_values.clone()),
+                match_type: match_type(
+                    runtime_values.clone(),
+                    &parsed_contract.runtime_code_artifacts.cbor_auxdata,
+                ),
                 values: runtime_values,
                 transformations: runtime_transformations,
             }),
@@ -250,7 +255,12 @@ fn choose_best_contract(successes: Vec<BatchSuccess>) -> Option<BatchSuccess> {
     Some(best_contract)
 }
 
-fn match_type(values: serde_json::Value) -> MatchType {
+fn match_type(values: serde_json::Value, cbor_auxdata: &cbor_auxdata::CborAuxdata) -> MatchType {
+    // if no cbor_auxdata is present, no metadata hash exists to check on exact matches
+    if cbor_auxdata.is_empty() {
+        return MatchType::Partial;
+    }
+
     #[derive(serde::Deserialize)]
     #[serde(rename_all = "camelCase")]
     struct Values {

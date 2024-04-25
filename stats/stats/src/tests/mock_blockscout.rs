@@ -6,7 +6,7 @@ use chrono::{NaiveDate, NaiveDateTime};
 use sea_orm::{prelude::Decimal, ActiveValue::NotSet, DatabaseConnection, EntityTrait, Set};
 use std::str::FromStr;
 
-pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date: &str) {
+pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date: NaiveDate) {
     addresses::Entity::insert_many([
         addresses::ActiveModel {
             hash: Set(vec![]),
@@ -41,9 +41,7 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
         "2023-03-01T10:00:00",
     ]
     .into_iter()
-    .filter(|val| {
-        NaiveDateTime::from_str(val).unwrap().date() <= NaiveDate::from_str(max_date).unwrap()
-    })
+    .filter(|val| NaiveDateTime::from_str(val).unwrap().date() <= max_date)
     .enumerate()
     .map(|(ind, ts)| mock_block(ind as i64, ts, true))
     .collect::<Vec<_>>();
@@ -199,9 +197,7 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
         "2022-11-08T12:00:00",
     ]
     .into_iter()
-    .filter(|val| {
-        NaiveDateTime::from_str(val).unwrap().date() <= NaiveDate::from_str(max_date).unwrap()
-    })
+    .filter(|val| NaiveDateTime::from_str(val).unwrap().date() <= max_date)
     .enumerate()
     .map(|(ind, ts)| mock_block((ind + blocks.len()) as i64, ts, false));
     blocks::Entity::insert_many(useless_blocks)

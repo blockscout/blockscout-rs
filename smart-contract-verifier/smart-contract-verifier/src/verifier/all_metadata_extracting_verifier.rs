@@ -258,6 +258,15 @@ impl<T: Source> Verifier<T> {
         };
 
         if processed_remote_code.starts_with(local_code) {
+            // If no metadata parts exist, we cannot ensure exact matches
+            if !local_bytecode
+                .bytecode_parts()
+                .iter()
+                .any(|part| matches!(part, BytecodePart::Metadata { .. }))
+            {
+                return Ok(MatchType::Partial);
+            }
+
             // If local compilation bytecode is prefix of remote one,
             // metadata parts are the same and we do not need to compare bytecode parts.
             return Ok(MatchType::Full);

@@ -67,7 +67,10 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     };
 
     let health = Arc::new(HealthService::default());
-    let proxy = Arc::new(ProxyService::new(&chains, eth_bytecode_db_client.clone()));
+    let proxy = Arc::new(ProxyService::new(
+        chains.clone(),
+        eth_bytecode_db_client.clone(),
+    ));
 
     let blockscout_clients = {
         let mut clients = BTreeMap::new();

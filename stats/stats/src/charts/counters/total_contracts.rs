@@ -1,8 +1,10 @@
 use crate::{
     charts::{
         create_chart,
-        insert::DateValue,
-        updater::{last_point, ChartDependentUpdater},
+        db_interaction::{
+            chart_updaters::{last_point, ChartDependentUpdater, ChartUpdater},
+            types::DateValue,
+        },
     },
     lines::ContractsGrowth,
     UpdateError,
@@ -49,14 +51,19 @@ impl crate::Chart for TotalContracts {
         self.parent.create(db).await?;
         create_chart(db, self.name().into(), self.chart_type()).await
     }
+}
 
-    async fn update(
+#[async_trait]
+impl ChartUpdater for TotalContracts {
+    async fn update_values(
         &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
+        current_time: chrono::DateTime<chrono::Utc>,
         force_full: bool,
     ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, force_full).await
+        self.update_with_values(db, blockscout, current_time, force_full)
+            .await
     }
 }
 

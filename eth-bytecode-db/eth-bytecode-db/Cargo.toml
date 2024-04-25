@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 entity = { path = "./entity" }
 verifier-alliance-entity = { path = "./verifier-alliance-entity" }
+eth-bytecode-db-proto = { path = "../eth-bytecode-db-proto" }
 
 alloy-json-abi = { git = "https://github.com/alloy-rs/core", rev = "398d7e2", features = ["serde_json"] }
 anyhow = "1.0"
@@ -36,7 +37,6 @@ solidity-metadata = "1.0"
 thiserror = "1.0"
 tokio = "1.22"
 tokio-stream = { version = "0.1" }
-tonic = { version = "0.8", features = ["tls-roots"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"]}
 
@@ -50,6 +50,7 @@ rstest = "0.18.0"
 sea-orm = { version = "*", features = ["mock"] }
 smart-contract-verifier-proto = { workspace = true, features = ["http-client", "mock"] }
 tokio-stream = { version = "0.1", features = ["net"] }
+tonic = { version = "0.8", features = ["tls-roots"] }
 verifier-alliance-entity = { path = "./verifier-alliance-entity" }
 verifier-alliance-migration = { path = "./verifier-alliance-migration" }
 url = "2.4.0"

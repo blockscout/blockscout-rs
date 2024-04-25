@@ -34,6 +34,7 @@ message GetLineChartRequest {
 message Point {
   string date = 1;
   string value = 2;
+  bool is_approximate = 3;
 }
 
 message LineChart { repeated Point chart = 1; }
