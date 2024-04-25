@@ -407,14 +407,6 @@ fn code_parts(
     Ok(parts)
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn parse_code_parts() {
-        // let code_parts = serde_json
-    }
-}
-
 /********** Verification Request **********/
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

@@ -36,11 +36,11 @@ pub fn process_verification_result(
 pub fn process_batch_import_error(error: Error) -> tonic::Status {
     match error {
         Error::Internal(message) => {
-            tracing::info!(details=%message, "Internal error");
+            tracing::error!(details=%message, "Internal error");
             tonic::Status::internal(message.to_string())
         }
         Error::Verifier(message) => {
-            tracing::info!(details=%message, "Internal error");
+            tracing::error!(details=%message, "Internal verifier error");
             tonic::Status::internal(format!("Verifier error: {}", message))
         }
         err => {
