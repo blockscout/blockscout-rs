@@ -9,8 +9,8 @@ use eth_bytecode_db_proto::blockscout::eth_bytecode_db::{
         BatchSearchEventDescriptionsRequest, BatchSearchEventDescriptionsResponse,
         EventDescription, SearchAllSourcesRequest, SearchAllSourcesResponse,
         SearchAllianceSourcesRequest, SearchEventDescriptionsRequest,
-        SearchEventDescriptionsResponse, SearchSourcesResponse, SearchSourcifySourcesRequest,
-        Source,
+        SearchEventDescriptionsResponse, SearchSourcesRequest, SearchSourcesResponse,
+        SearchSourcifySourcesRequest, Source,
     },
 };
 use pretty_assertions::assert_eq;
@@ -383,6 +383,92 @@ async fn search_sources_returns_latest_contract() {
     assert_eq!(
         expected_response, verification_response,
         "Invalid response returned"
+    );
+}
+
+#[rstest]
+#[tokio::test]
+#[timeout(std::time::Duration::from_secs(60))]
+#[ignore = "Needs database to run"]
+async fn search_blueprint_contracts() {
+    const ROUTE: &str = "/api/v2/bytecodes/sources:search";
+
+    let db = init_db(TEST_SUITE_NAME, "search_blueprint_contracts").await;
+
+    let blueprint_creation_code = "0x61009c3d81600a3d39f3fe7100346100235760206100995f395f516001555f5f5561005f61002760003961005f6000f35b5f80fd5f3560e01c60026001821660011b61005b01601e395f51565b63158ef93e81186100535734610057575f5460405260206040f3610053565b633fa4f245811861005357346100575760015460405260206040f35b5f5ffd5b5f80fd0018003784185f810400a16576797065728300030a0013";
+    let blueprint_runtime_code = "0xfe7100346100235760206100995f395f516001555f5f5561005f61002760003961005f6000f35b5f80fd5f3560e01c60026001821660011b61005b01601e395f51565b63158ef93e81186100535734610057575f5460405260206040f3610053565b633fa4f245811861005357346100575760015460405260206040f35b5f5ffd5b5f80fd0018003784185f810400a16576797065728300030a0013";
+
+    let compiled_creation_code = "0x346100235760206100995f395f516001555f5f5561005f61002760003961005f6000f35b5f80fd5f3560e01c60026001821660011b61005b01601e395f51565b63158ef93e81186100535734610057575f5460405260206040f3610053565b633fa4f245811861005357346100575760015460405260206040f35b5f5ffd5b5f80fd0018003784185f810400a16576797065728300030a0013";
+    let compiled_runtime_code = "0x5f3560e01c60026001821660011b61005b01601e395f51565b63158ef93e81186100535734610057575f5460405260206040f3610053565b633fa4f245811861005357346100575760015460405260206040f35b5f5ffd5b5f80fd00180037";
+
+    /********** Setup **********/
+
+    let mut test_data = test_input_data::basic(verification::SourceType::Solidity, MatchType::Full);
+    test_data.set_bytecode(smart_contract_verifier_v2::verify_response::ExtraData {
+        local_creation_input_parts: vec![
+            smart_contract_verifier_v2::verify_response::extra_data::BytecodePart {
+                r#type: "main".to_string(),
+                data: compiled_creation_code.to_string(),
+            },
+        ],
+        local_deployed_bytecode_parts: vec![
+            smart_contract_verifier_v2::verify_response::extra_data::BytecodePart {
+                r#type: "main".to_string(),
+                data: compiled_runtime_code.to_string(),
+            },
+        ],
+    });
+
+    let db_url = db.db_url();
+    let verifier_addr = init_verifier_server::<
+        _,
+        eth_bytecode_db_v2::VerifySolidityMultiPartRequest,
+        _,
+    >(service(), test_data.verifier_response.clone())
+    .await;
+
+    let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
+
+    // Fill the database with existing value
+    {
+        let dummy_request = default_verify_request();
+        let _verification_response: eth_bytecode_db_v2::VerifyResponse =
+            test_server::send_post_request(&eth_bytecode_db_base, VERIFY_ROUTE, &dummy_request)
+                .await;
+    }
+
+    let expected_response = SearchSourcesResponse {
+        sources: vec![test_data.eth_bytecode_db_response.source.unwrap()],
+    };
+
+    /********** Creation code **********/
+
+    let request = SearchSourcesRequest {
+        bytecode: blueprint_creation_code.to_string(),
+        bytecode_type: eth_bytecode_db_v2::BytecodeType::CreationInput.into(),
+    };
+
+    let verification_response: SearchSourcesResponse =
+        test_server::send_post_request(&eth_bytecode_db_base, ROUTE, &request).await;
+
+    assert_eq!(
+        expected_response, verification_response,
+        "Invalid response returned for creation code"
+    );
+
+    /********** Runtime code **********/
+
+    let request = SearchSourcesRequest {
+        bytecode: blueprint_runtime_code.to_string(),
+        bytecode_type: eth_bytecode_db_v2::BytecodeType::DeployedBytecode.into(),
+    };
+
+    let verification_response: SearchSourcesResponse =
+        test_server::send_post_request(&eth_bytecode_db_base, ROUTE, &request).await;
+
+    assert_eq!(
+        expected_response, verification_response,
+        "Invalid response returned for runtime code"
     );
 }
 

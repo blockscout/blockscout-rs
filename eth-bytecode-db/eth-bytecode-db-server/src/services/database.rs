@@ -279,7 +279,7 @@ impl DatabaseService {
         };
 
         let mut matches =
-            search::eth_bytecode_db_find_contract(self.client.db_client.as_ref(), &bytecode_remote)
+            search::eth_bytecode_db_find_contract(self.client.db_client.as_ref(), bytecode_remote)
                 .await
                 .map_err(|err| tonic::Status::internal(err.to_string()))?;
         matches.sort_by_key(|m| m.updated_at);
