@@ -5,16 +5,18 @@ use crate::{
         solidity_verifier_server::SolidityVerifierServer,
         sourcify_verifier_actix::route_sourcify_verifier,
         sourcify_verifier_server::SourcifyVerifierServer,
+        verifier_alliance_server::VerifierAllianceServer,
         vyper_verifier_actix::route_vyper_verifier, vyper_verifier_server::VyperVerifierServer,
     },
     services::{
         DatabaseService, HealthService, SolidityVerifierService, SourcifyVerifierService,
-        VyperVerifierService,
+        VerifierAllianceService, VyperVerifierService,
     },
     settings::Settings,
 };
 use blockscout_service_launcher::{database, launcher, launcher::LaunchSettings, tracing};
 use eth_bytecode_db::verification::Client;
+use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2::verifier_alliance_actix::route_verifier_alliance;
 use migration::Migrator;
 use sea_orm::ConnectOptions;
 use std::{collections::HashSet, sync::Arc};
@@ -27,6 +29,7 @@ struct Router {
     solidity_verifier: Option<Arc<SolidityVerifierService>>,
     vyper_verifier: Option<Arc<VyperVerifierService>>,
     sourcify_verifier: Option<Arc<SourcifyVerifierService>>,
+    verifier_alliance: Option<Arc<VerifierAllianceService>>,
 
     health: Arc<HealthService>,
 }
@@ -50,6 +53,11 @@ impl Router {
                     .clone()
                     .map(SourcifyVerifierServer::from_arc),
             )
+            .add_optional_service(
+                self.verifier_alliance
+                    .clone()
+                    .map(VerifierAllianceServer::from_arc),
+            )
     }
 }
 
@@ -68,6 +76,10 @@ impl launcher::HttpRouter for Router {
         }
         if let Some(sourcify) = &self.sourcify_verifier {
             service_config.configure(|config| route_sourcify_verifier(config, sourcify.clone()));
+        }
+        if let Some(verifier_alliance) = &self.verifier_alliance {
+            service_config
+                .configure(|config| route_verifier_alliance(config, verifier_alliance.clone()));
         }
     }
 }
@@ -121,15 +133,21 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let solidity_verifier = Arc::new(
         SolidityVerifierService::new(client.clone()).with_authorized_keys(authorized_keys.clone()),
     );
-    let vyper_verifier =
-        Arc::new(VyperVerifierService::new(client.clone()).with_authorized_keys(authorized_keys));
+    let vyper_verifier = Arc::new(
+        VyperVerifierService::new(client.clone()).with_authorized_keys(authorized_keys.clone()),
+    );
     let sourcify_verifier = Arc::new(SourcifyVerifierService::new(client.clone()));
+
+    let verifier_alliance = Arc::new(
+        VerifierAllianceService::new(client.clone()).with_authorized_keys(authorized_keys),
+    );
 
     let router = Router {
         database: Some(database),
         solidity_verifier: Some(solidity_verifier),
         vyper_verifier: Some(vyper_verifier),
         sourcify_verifier: Some(sourcify_verifier),
+        verifier_alliance: Some(verifier_alliance),
         health,
     };
 
