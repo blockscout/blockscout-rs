@@ -7043,7 +7043,7 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 [[package]]
 name = "verification-common"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs?rev=bce6df7b#bce6df7b74e130335b0e23d2f67011a1145b4010"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=08577436#08577436acbf25276844f21daf22d104f25b8a29"
 dependencies = [
  "bytes",
 ]
