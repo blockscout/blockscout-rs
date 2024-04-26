@@ -1,5 +1,6 @@
 mod verification_test_helpers;
 
+use crate::verification_test_helpers::test_input_data::TestInputData;
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use blockscout_service_launcher::test_server;
 use eth_bytecode_db::{verification, verification::MatchType};
@@ -279,37 +280,6 @@ async fn search_sources_returns_latest_contract() {
     const ROUTE: &str = "/api/v2/bytecodes/sources:search";
 
     let db = init_db(TEST_SUITE_NAME, "search_sources_returns_latest_contract").await;
-
-    let build_test_data = |metadata_hash: &str| {
-        let extra_data = smart_contract_verifier_v2::verify_response::ExtraData {
-            local_creation_input_parts: vec![
-                smart_contract_verifier_v2::verify_response::extra_data::BytecodePart {
-                    r#type: "main".to_string(),
-                    data: "0x608060405234801561001057600080fd5b506101ac806100206000396000f3fe608060405234801561001057600080fd5b506004361061002b5760003560e01c8063f0eb5e5414610030575b600080fd5b6100566004803603602081101561004657600080fd5b50356001600160a01b0316610072565b604080516001600160a01b039092168252519081900360200190f35b6040516000907fcd6e305ffe05775ee4dccd218c885635a575631eb3fe360b322621bad158facb908290a1600080546001810182558180527f290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e56301805473ffffffffffffffffffffffffffffffffffffffff19166001600160a01b038516179055604080516374f0fffb60e01b8152600481019290925251736b88c55cfbd4eda1320f802b724193cab062ccce916374f0fffb916024808301926020929190829003018186803b15801561014457600080fd5b505af4158015610158573d6000803e3d6000fd5b505050506040513d602081101561016e57600080fd5b50519291505056fe".to_string(),
-                },
-                smart_contract_verifier_v2::verify_response::extra_data::BytecodePart {
-                    r#type: "meta".to_string(),
-                    data: format!("0xa264697066735822{metadata_hash}64736f6c63430006080033"),
-                },
-            ],
-            local_deployed_bytecode_parts: vec![
-                smart_contract_verifier_v2::verify_response::extra_data::BytecodePart {
-                    r#type: "main".to_string(),
-                    data: "0x608060405234801561001057600080fd5b506004361061002b5760003560e01c8063f0eb5e5414610030575b600080fd5b6100566004803603602081101561004657600080fd5b50356001600160a01b0316610072565b604080516001600160a01b039092168252519081900360200190f35b6040516000907fcd6e305ffe05775ee4dccd218c885635a575631eb3fe360b322621bad158facb908290a1600080546001810182558180527f290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e56301805473ffffffffffffffffffffffffffffffffffffffff19166001600160a01b038516179055604080516374f0fffb60e01b8152600481019290925251736b88c55cfbd4eda1320f802b724193cab062ccce916374f0fffb916024808301926020929190829003018186803b15801561014457600080fd5b505af4158015610158573d6000803e3d6000fd5b505050506040513d602081101561016e57600080fd5b50519291505056fe".to_string(),
-                },
-                smart_contract_verifier_v2::verify_response::extra_data::BytecodePart {
-                    r#type: "meta".to_string(),
-                    data: format!("0xa264697066735822{metadata_hash}64736f6c63430006080033"),
-                },
-            ],
-        };
-
-        let mut test_data =
-            test_input_data::basic(verification::SourceType::Solidity, MatchType::Partial);
-        test_data.set_bytecode(extra_data);
-
-        test_data
-    };
 
     let test_data_old =
         build_test_data("cafecafecafecafecafecafecafecafecafecafecafecafecafecafecafecafecafe");
@@ -615,4 +585,218 @@ async fn batch_search_event_descriptions() {
         expected_response, batch_event_descriptions,
         "Invalid response returned"
     );
+}
+
+#[rstest]
+#[tokio::test]
+#[timeout(std::time::Duration::from_secs(60))]
+#[ignore = "Needs database to run"]
+async fn search_contract_with_metadata_hash_returns_correct_matches() {
+    const ROUTE: &str = "/api/v2/bytecodes/sources:search";
+
+    let db = init_db(
+        TEST_SUITE_NAME,
+        "search_contract_with_metadata_hash_returns_correct_matches",
+    )
+    .await;
+
+    let metadata_hash = "12341234123412341234123412341234123412341234123412341234123412341234";
+    let another_matadata_hash =
+        "cafecafecafecafecafecafecafecafecafecafecafecafecafecafecafecafecafe";
+
+    /********** Setup **********/
+
+    let mut test_data = build_test_data(metadata_hash);
+
+    let db_url = db.db_url();
+    let verifier_addr = init_verifier_server::<
+        _,
+        eth_bytecode_db_v2::VerifySolidityMultiPartRequest,
+        _,
+    >(service(), test_data.verifier_response.clone())
+    .await;
+
+    let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
+
+    // Fill the database with existing value
+    {
+        let dummy_request = default_verify_request();
+        let _verification_response: eth_bytecode_db_v2::VerifyResponse =
+            test_server::send_post_request(&eth_bytecode_db_base, VERIFY_ROUTE, &dummy_request)
+                .await;
+    }
+
+    /********** Full matches **********/
+
+    let request = SearchSourcesRequest {
+        bytecode: test_data.creation_input().unwrap(),
+        bytecode_type: eth_bytecode_db_v2::BytecodeType::CreationInput.into(),
+    };
+
+    let verification_response: SearchSourcesResponse =
+        test_server::send_post_request(&eth_bytecode_db_base, ROUTE, &request).await;
+
+    let actual_match_type = verification_response
+        .sources
+        .first()
+        .expect("Inserted source has not been found for full match")
+        .match_type();
+
+    assert_eq!(
+        eth_bytecode_db_v2::source::MatchType::Full,
+        actual_match_type,
+        "Invalid match type returned for full match"
+    );
+
+    /********** Partial matches **********/
+
+    test_data.set_creation_input_metadata_hash(another_matadata_hash);
+    let request = SearchSourcesRequest {
+        bytecode: test_data.creation_input().unwrap(),
+        bytecode_type: eth_bytecode_db_v2::BytecodeType::CreationInput.into(),
+    };
+
+    let verification_response: SearchSourcesResponse =
+        test_server::send_post_request(&eth_bytecode_db_base, ROUTE, &request).await;
+
+    let actual_match_type = verification_response
+        .sources
+        .first()
+        .expect("Inserted source has not been found for partial match")
+        .match_type();
+
+    assert_eq!(
+        eth_bytecode_db_v2::source::MatchType::Partial,
+        actual_match_type,
+        "Invalid match type returned for partial match"
+    );
+}
+
+#[rstest]
+#[tokio::test]
+#[timeout(std::time::Duration::from_secs(60))]
+#[ignore = "Needs database to run"]
+async fn search_contract_without_metadata_hash_returns_partial_match() {
+    const ROUTE: &str = "/api/v2/bytecodes/sources:search";
+
+    let db = init_db(
+        TEST_SUITE_NAME,
+        "search_contract_without_metadata_hash_returns_partial_match",
+    )
+    .await;
+
+    let creation_code = "0x1234";
+    let runtime_code = "0x5678";
+
+    /********** Setup **********/
+
+    let mut test_data =
+        test_input_data::basic(verification::SourceType::Solidity, MatchType::Partial);
+    test_data.set_bytecode(smart_contract_verifier_v2::verify_response::ExtraData {
+        local_creation_input_parts: vec![
+            smart_contract_verifier_v2::verify_response::extra_data::BytecodePart {
+                r#type: "main".to_string(),
+                data: creation_code.to_string(),
+            },
+        ],
+        local_deployed_bytecode_parts: vec![
+            smart_contract_verifier_v2::verify_response::extra_data::BytecodePart {
+                r#type: "main".to_string(),
+                data: runtime_code.to_string(),
+            },
+        ],
+    });
+
+    let db_url = db.db_url();
+    let verifier_addr = init_verifier_server::<
+        _,
+        eth_bytecode_db_v2::VerifySolidityMultiPartRequest,
+        _,
+    >(service(), test_data.verifier_response.clone())
+    .await;
+
+    let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
+
+    // Fill the database with existing value
+    {
+        let dummy_request = default_verify_request();
+        let _verification_response: eth_bytecode_db_v2::VerifyResponse =
+            test_server::send_post_request(&eth_bytecode_db_base, VERIFY_ROUTE, &dummy_request)
+                .await;
+    }
+
+    /********** Creation code search **********/
+
+    let request = SearchSourcesRequest {
+        bytecode: test_data.creation_input().unwrap(),
+        bytecode_type: eth_bytecode_db_v2::BytecodeType::CreationInput.into(),
+    };
+
+    let verification_response: SearchSourcesResponse =
+        test_server::send_post_request(&eth_bytecode_db_base, ROUTE, &request).await;
+
+    let actual_match_type = verification_response
+        .sources
+        .first()
+        .expect("Inserted source has not been found for creation code")
+        .match_type();
+
+    assert_eq!(
+        eth_bytecode_db_v2::source::MatchType::Partial,
+        actual_match_type,
+        "Invalid match type returned for creation code"
+    );
+
+    /********** Runtime code search **********/
+
+    let request = SearchSourcesRequest {
+        bytecode: test_data.deployed_bytecode().unwrap(),
+        bytecode_type: eth_bytecode_db_v2::BytecodeType::DeployedBytecode.into(),
+    };
+
+    let verification_response: SearchSourcesResponse =
+        test_server::send_post_request(&eth_bytecode_db_base, ROUTE, &request).await;
+
+    let actual_match_type = verification_response
+        .sources
+        .first()
+        .expect("Inserted source has not been found for runtime code")
+        .match_type();
+
+    assert_eq!(
+        eth_bytecode_db_v2::source::MatchType::Partial,
+        actual_match_type,
+        "Invalid match type returned for runtime code"
+    );
+}
+
+fn build_test_data(metadata_hash: &str) -> TestInputData {
+    let extra_data = smart_contract_verifier_v2::verify_response::ExtraData {
+            local_creation_input_parts: vec![
+                smart_contract_verifier_v2::verify_response::extra_data::BytecodePart {
+                    r#type: "main".to_string(),
+                    data: "0x608060405234801561001057600080fd5b506101ac806100206000396000f3fe608060405234801561001057600080fd5b506004361061002b5760003560e01c8063f0eb5e5414610030575b600080fd5b6100566004803603602081101561004657600080fd5b50356001600160a01b0316610072565b604080516001600160a01b039092168252519081900360200190f35b6040516000907fcd6e305ffe05775ee4dccd218c885635a575631eb3fe360b322621bad158facb908290a1600080546001810182558180527f290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e56301805473ffffffffffffffffffffffffffffffffffffffff19166001600160a01b038516179055604080516374f0fffb60e01b8152600481019290925251736b88c55cfbd4eda1320f802b724193cab062ccce916374f0fffb916024808301926020929190829003018186803b15801561014457600080fd5b505af4158015610158573d6000803e3d6000fd5b505050506040513d602081101561016e57600080fd5b50519291505056fe".to_string(),
+                },
+                smart_contract_verifier_v2::verify_response::extra_data::BytecodePart {
+                    r#type: "meta".to_string(),
+                    data: format!("0xa264697066735822{metadata_hash}64736f6c63430006080033"),
+                },
+            ],
+            local_deployed_bytecode_parts: vec![
+                smart_contract_verifier_v2::verify_response::extra_data::BytecodePart {
+                    r#type: "main".to_string(),
+                    data: "0x608060405234801561001057600080fd5b506004361061002b5760003560e01c8063f0eb5e5414610030575b600080fd5b6100566004803603602081101561004657600080fd5b50356001600160a01b0316610072565b604080516001600160a01b039092168252519081900360200190f35b6040516000907fcd6e305ffe05775ee4dccd218c885635a575631eb3fe360b322621bad158facb908290a1600080546001810182558180527f290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e56301805473ffffffffffffffffffffffffffffffffffffffff19166001600160a01b038516179055604080516374f0fffb60e01b8152600481019290925251736b88c55cfbd4eda1320f802b724193cab062ccce916374f0fffb916024808301926020929190829003018186803b15801561014457600080fd5b505af4158015610158573d6000803e3d6000fd5b505050506040513d602081101561016e57600080fd5b50519291505056fe".to_string(),
+                },
+                smart_contract_verifier_v2::verify_response::extra_data::BytecodePart {
+                    r#type: "meta".to_string(),
+                    data: format!("0xa264697066735822{metadata_hash}64736f6c63430006080033"),
+                },
+            ],
+        };
+
+    let mut test_data =
+        test_input_data::basic(verification::SourceType::Solidity, MatchType::Partial);
+    test_data.set_bytecode(extra_data);
+
+    test_data
 }

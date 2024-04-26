@@ -99,8 +99,19 @@ pub fn compare(remote_bytecode: &Bytes, local: &LocalBytecode) -> Result<MatchTy
     let local_bytecode = &local.raw_bytecode();
 
     if remote_bytecode.starts_with(local_bytecode) {
-        // If local compilation bytecode is prefix of remote one,
-        // metadata parts are the same and we do not need to compare bytecode parts.
+        // Local compilation bytecode is prefix of remote one,
+        // but there is no metadata parts in resultant bytecodes.
+        // As there is no way to determine of the source was the original one
+        // for such contracts, we consider all matches as partial.
+        if !local
+            .parts
+            .iter()
+            .any(|part| matches!(part, BytecodePart::Metadata { .. }))
+        {
+            return Ok(MatchType::Partial);
+        }
+        // If local compilation bytecode is prefix of remote one and metadata parts exist,
+        // metadata parts are the same, and we do not need to compare bytecode parts.
         return Ok(MatchType::Full);
     }
 

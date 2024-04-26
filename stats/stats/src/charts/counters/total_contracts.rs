@@ -2,7 +2,7 @@ use crate::{
     charts::{
         create_chart,
         db_interaction::{
-            chart_updaters::{last_point, ChartDependentUpdater, ChartUpdater},
+            chart_updaters::{last_point, ChartDependentUpdater, ChartFullUpdater, ChartUpdater},
             types::DateValue,
         },
     },
@@ -10,6 +10,7 @@ use crate::{
     UpdateError,
 };
 use async_trait::async_trait;
+use blockscout_db::entity::addresses;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::prelude::*;
 use std::sync::Arc;
@@ -22,6 +23,25 @@ pub struct TotalContracts {
 impl TotalContracts {
     pub fn new(parent: Arc<ContractsGrowth>) -> Self {
         Self { parent }
+    }
+}
+
+#[async_trait]
+impl ChartFullUpdater for TotalContracts {
+    async fn get_values(
+        &self,
+        blockscout: &DatabaseConnection,
+    ) -> Result<Vec<DateValue>, UpdateError> {
+        let value = addresses::Entity::find()
+            .filter(addresses::Column::ContractCode.is_not_null())
+            .count(blockscout)
+            .await
+            .map_err(UpdateError::BlockscoutDB)?;
+        let date = chrono::Utc::now().date_naive();
+        Ok(vec![DateValue {
+            date,
+            value: value.to_string(),
+        }])
     }
 }
 
@@ -62,8 +82,16 @@ impl ChartUpdater for TotalContracts {
         current_time: chrono::DateTime<chrono::Utc>,
         force_full: bool,
     ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, current_time, force_full)
-            .await
+        // todo: reconsider once #845 is solved
+        // https://github.com/blockscout/blockscout-rs/issues/845
+        <Self as ChartFullUpdater>::update_with_values(
+            self,
+            db,
+            blockscout,
+            current_time,
+            force_full,
+        )
+        .await
     }
 }
 

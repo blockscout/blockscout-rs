@@ -14,7 +14,9 @@ pub struct TestDbGuard {
 impl TestDbGuard {
     pub async fn new<Migrator: MigratorTrait>(db_name: &str) -> Self {
         let base_db_url = std::env::var("DATABASE_URL")
-            .expect("Database url must be set to initialize a test database");
+            .expect("Database url must be set to initialize a test database")
+            .trim_end_matches('/')
+            .to_string();
         let conn_without_db = Database::connect(&base_db_url)
             .await
             .expect("Connection to postgres (without database) failed");
