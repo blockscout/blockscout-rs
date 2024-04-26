@@ -64,6 +64,8 @@ jobs:
       - name: Unit tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture
         if: success() || failure()
+        env:
+          DATABASE_URL: postgres://postgres:admin@localhost:5432/
 
       - name: Doc tests
         run: cargo test --locked --workspace --all-features --doc
