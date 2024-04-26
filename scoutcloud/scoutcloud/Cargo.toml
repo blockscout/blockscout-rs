@@ -28,14 +28,13 @@ scoutcloud-proto = { path = "../scoutcloud-proto" }
 scoutcloud-migration = { path = "../scoutcloud-migration" }
 actix-web = "4.2"
 async-trait = "0.1"
-blockscout-service-launcher = { path = "../../libs/blockscout-service-launcher", features = [ "database-0_12" ] }
+blockscout-service-launcher = { version = "0.10.1", features = [ "database-0_12" ] }
 config = "0.13"
 tonic = "0.8"
 chrono = "0.4.35"
 paste = "1.0"
 url = "2.5.0"
 serde_yaml = "0.9.34"
-#amplify = { version = "4.6.0", features = ["derive"] }
 lazy_static = "1.4.0"
 ethers = { version = "2.0.14", features = ["ws"] }
 json_dotpath = "1.1.0"
@@ -47,26 +46,8 @@ rust_decimal = "1.35.0"
 fang = { version = "0.10.4" , features = ["asynk", "derive-error" ], default-features = false }
 clokwerk = "0.4.0"
 
-## Uncomment this if needed
-#ethabi = "18.0"
-#ethers-core = "2.0.0"
-#futures = "0.3"
-#hex = "0.4"
-#keccak-hash = "0.10.0"
-#lazy_static = "1"
-#mismatch = "1.0"
-#prometheus = "0.13"
-#reqwest = "0.11.18"
-#semver = "1.0"
-#serde = "1.0"
-#serde_json = "1.0"
-#thiserror = "1.0"
-#tokio = "1.22"
-#tonic = { version = "0.8", features = ["tls-roots"] }
-#tracing-subscriber = { version = "0.3", features = ["env-filter"]}
-
 [dev-dependencies]
-blockscout-service-launcher = { path = "../../libs/blockscout-service-launcher", features = [
+blockscout-service-launcher = { version = "0.10.1", features = [
     "test-database", "database-0_12", "test-server"
 ] }
 scoutcloud-migration = {path = "../scoutcloud-migration"}
