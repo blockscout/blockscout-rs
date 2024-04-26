@@ -132,6 +132,15 @@ impl TestInputData {
             .source_files
             .insert(file_name, content);
     }
+
+    pub fn set_is_blueprint(&mut self, is_blueprint: bool) {
+        self.verifier_response.source.as_mut().unwrap().is_blueprint = is_blueprint;
+        self.eth_bytecode_db_response
+            .source
+            .as_mut()
+            .unwrap()
+            .is_blueprint = is_blueprint;
+    }
 }
 
 pub fn basic(source_type: SourceType, match_type: MatchType) -> TestInputData {

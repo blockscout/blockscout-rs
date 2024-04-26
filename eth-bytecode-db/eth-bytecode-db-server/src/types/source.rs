@@ -49,7 +49,7 @@ impl From<search::MatchContract> for SourceWrapper {
             compilation_artifacts: value.compilation_artifacts,
             creation_input_artifacts: value.creation_input_artifacts,
             deployed_bytecode_artifacts: value.deployed_bytecode_artifacts,
-            is_blueprint: false,
+            is_blueprint: value.is_blueprint,
         }
         .into()
     }
@@ -206,6 +206,7 @@ mod tests {
             deployed_bytecode_artifacts: Some("deployed_bytecode_artifacts".into()),
             raw_creation_input: vec![0u8, 1u8, 2u8, 3u8, 4u8],
             raw_deployed_bytecode: vec![5u8, 6u8, 7u8, 8u8],
+            is_blueprint: false,
         };
 
         let expected = proto::Source {

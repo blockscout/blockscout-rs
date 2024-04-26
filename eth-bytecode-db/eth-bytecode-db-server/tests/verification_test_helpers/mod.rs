@@ -130,13 +130,8 @@ pub mod test_cases {
     {
         let db = init_db(test_suite_name, "test_propagates_is_blueprint_in_response").await;
 
-        let test_data = {
-            let test_data = test_input_data::basic(source_type, MatchType::Partial);
-            let mut source = test_data.eth_bytecode_db_response.source.unwrap();
-            let extra_data = test_data.verifier_response.extra_data.unwrap();
-            source.is_blueprint = true;
-            TestInputData::from_source_and_extra_data(source, extra_data)
-        };
+        let mut test_data = test_input_data::basic(source_type, MatchType::Partial);
+        test_data.set_is_blueprint(true);
 
         let db_url = db.db_url();
         let verifier_addr =

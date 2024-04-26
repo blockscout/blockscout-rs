@@ -14,11 +14,13 @@ where
     let bytecode_type = remote.bytecode_type.to_string();
     let label_values = &[bytecode_type.as_str()];
 
+    let mut is_blueprint = false;
     if let BytecodeType::CreationInput = remote.bytecode_type {
         if let Some(parsed_blueprint_code) =
             blueprint_contracts::from_creation_code(remote.data.clone())
         {
-            remote.data = parsed_blueprint_code
+            remote.data = parsed_blueprint_code;
+            is_blueprint = true;
         }
     }
 
@@ -28,6 +30,7 @@ where
         {
             remote.data = parsed_blueprint_code;
             remote.bytecode_type = BytecodeType::CreationInput;
+            is_blueprint = true;
         }
     }
 
@@ -37,6 +40,9 @@ where
             .start_timer();
         find_match_contracts(db, &remote).await?
     };
+    matches
+        .iter_mut()
+        .for_each(|value| value.is_blueprint = is_blueprint);
     metrics::ALL_MATCHES_COUNT
         .with_label_values(label_values)
         .observe(matches.len() as f64);

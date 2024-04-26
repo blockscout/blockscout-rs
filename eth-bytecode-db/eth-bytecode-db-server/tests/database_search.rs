@@ -406,6 +406,7 @@ async fn search_blueprint_contracts() {
     /********** Setup **********/
 
     let mut test_data = test_input_data::basic(verification::SourceType::Solidity, MatchType::Full);
+    test_data.set_is_blueprint(true);
     test_data.set_bytecode(smart_contract_verifier_v2::verify_response::ExtraData {
         local_creation_input_parts: vec![
             smart_contract_verifier_v2::verify_response::extra_data::BytecodePart {
