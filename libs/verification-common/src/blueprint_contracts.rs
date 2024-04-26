@@ -13,7 +13,7 @@ use bytes::Bytes;
 pub fn from_runtime_code(code: Bytes) -> Option<Bytes> {
     let prefix = [0xfe, 0x71, 0x00];
     code.starts_with(&prefix)
-        .then_some(code.slice(prefix.len()..))
+        .then(|| code.slice(prefix.len()..))
 }
 
 pub fn from_creation_code(code: Bytes) -> Option<Bytes> {
@@ -86,5 +86,16 @@ mod tests {
             from_creation_code(code),
             "length encoded as 2 bytes"
         );
+    }
+
+    #[test]
+    fn empty_code_not_fails() {
+        let code = Bytes::new();
+        assert_eq!(
+            None,
+            from_creation_code(code.clone()),
+            "empty creation code"
+        );
+        assert_eq!(None, from_runtime_code(code), "empty runtime code");
     }
 }
