@@ -5,6 +5,7 @@ use crate::{
 use blockscout_service_launcher::test_database::TestDbGuard;
 use fang::SleepParams;
 use std::{sync::Arc, time::Duration};
+use tokio::sync::OnceCell;
 
 pub async fn test_db(db_prefix: &str, test_name: &str) -> TestDbGuard {
     let db_name = format!("{db_prefix}_{test_name}");
@@ -29,12 +30,15 @@ pub async fn test_jobs_runner(db: &TestDbGuard) -> JobsRunner {
         .expect("Failed to start jobs runner")
 }
 
+static GITHUB_MOCK: OnceCell<MockedGithubRepo> = OnceCell::const_new();
+
 pub async fn jobs_runner_test_case(
     test_name: &str,
 ) -> (TestDbGuard, Arc<GithubClient>, JobsRunner) {
     let db = test_db("test", test_name).await;
     let (github, repo) = test_github_client().await;
     repo.build_handles();
+    let _ = GITHUB_MOCK.set(repo);
     let _ = crate::logic::jobs::global::init_github_client(Arc::new(github));
     let github = crate::logic::jobs::global::get_github_client();
     let runner = test_jobs_runner(&db).await;
