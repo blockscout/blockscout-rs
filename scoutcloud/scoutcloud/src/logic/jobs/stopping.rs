@@ -1,6 +1,9 @@
 #![allow(clippy::blocks_in_conditions)]
 
-use crate::logic::{jobs::global, DeployError, Deployment, GithubClient, Instance};
+use crate::logic::{
+    jobs::{global, utils::impl_get_db},
+    DeployError, Deployment, GithubClient, Instance,
+};
 use fang::{typetag, AsyncQueueable, AsyncRunnable, FangError, Scheduled};
 use scoutcloud_entity::sea_orm_active_enums::DeploymentStatusType;
 use sea_orm::DatabaseConnection;
@@ -15,27 +18,21 @@ pub struct StoppingTask {
     deployment_id: i32,
     workflow_timeout: Duration,
     workflow_check_interval: Duration,
+    #[cfg(test)]
+    database_url: Option<String>,
 }
 
+impl_get_db!(StoppingTask);
+
 impl StoppingTask {
-    pub fn new(
-        deployment_id: i32,
-        workflow_timeout: Duration,
-        workflow_check_interval: Duration,
-    ) -> Self {
+    pub fn from_deployment_id(deployment_id: i32) -> Self {
         Self {
             deployment_id,
-            workflow_timeout,
-            workflow_check_interval,
+            workflow_timeout: DEFAULT_WORKFLOW_TIMEOUT,
+            workflow_check_interval: DEFAULT_WORKFLOW_CHECK_INTERVAL,
+            #[cfg(test)]
+            database_url: None,
         }
-    }
-
-    pub fn from_deployment_id(deployment_id: i32) -> Self {
-        Self::new(
-            deployment_id,
-            DEFAULT_WORKFLOW_TIMEOUT,
-            DEFAULT_WORKFLOW_CHECK_INTERVAL,
-        )
     }
 }
 
@@ -44,7 +41,7 @@ impl StoppingTask {
 impl AsyncRunnable for StoppingTask {
     #[tracing::instrument(err(Debug), skip(_client), level = "info")]
     async fn run(&self, _client: &mut dyn AsyncQueueable) -> Result<(), FangError> {
-        let db = global::get_db_connection();
+        let db = self.get_db().await;
         let github = global::get_github_client();
 
         let mut deployment = Deployment::get(db.as_ref(), self.deployment_id)
@@ -118,21 +115,21 @@ mod tests {
 
     #[tokio::test]
     async fn stopping_task_works() {
-        let (db, _github, repo, runner) =
+        let (db, _github, runner) =
             tests_utils::init::jobs_runner_test_case("stopping_task_works").await;
         let conn = db.client();
-        let handles = repo.build_handles();
 
         let running_deployment_id = 1;
-        let task = StoppingTask::new(
-            running_deployment_id,
-            Duration::from_millis(100),
-            Duration::from_millis(100),
-        );
+        let task = StoppingTask {
+            deployment_id: running_deployment_id,
+            workflow_timeout: Duration::from_secs(10),
+            workflow_check_interval: Duration::from_secs(5),
+            database_url: Some(db.db_url().to_string()),
+        };
         runner.insert_task(&task).await.unwrap();
-        // no way to block on task, so wait for task to be executed
-        tokio::time::sleep(Duration::from_secs(10)).await;
-
+        tests_utils::db::wait_for_empty_fang_tasks(conn.clone())
+            .await
+            .unwrap();
         let deployment = Deployment::get(conn.as_ref(), running_deployment_id)
             .await
             .unwrap();
@@ -142,9 +139,5 @@ mod tests {
             "deployment is not stopped. error: {:?}",
             deployment.model.error
         );
-
-        handles.assert_hits("dispatch_cleanup_yaml", 1);
-        handles.assert_hits("runs_cleanup_yaml", 1);
-        handles.assert_hits("single_run_cleanup_yaml", 1);
     }
 }

@@ -1,7 +1,7 @@
 #![allow(clippy::blocks_in_conditions)]
 
-use super::{global, StoppingTask};
-use crate::logic::DeployError;
+use super::StoppingTask;
+use crate::logic::{jobs::utils::impl_get_db, DeployError};
 use fang::{typetag, AsyncQueueable, AsyncRunnable, FangError, Scheduled};
 use scoutcloud_entity as db;
 use sea_orm::{
@@ -11,16 +11,32 @@ use sea_orm::{
 use std::ops::Mul;
 use tracing::instrument;
 
-#[derive(fang::serde::Serialize, fang::serde::Deserialize, Default)]
+#[derive(fang::serde::Serialize, fang::serde::Deserialize)]
 #[serde(crate = "fang::serde")]
-pub struct CheckBalanceTask {}
+pub struct CheckBalanceTask {
+    schedule: Option<String>,
+    #[cfg(test)]
+    database_url: Option<String>,
+}
+
+impl_get_db!(CheckBalanceTask);
+
+impl Default for CheckBalanceTask {
+    fn default() -> Self {
+        Self {
+            schedule: Some("0 * * * * *".to_string()),
+            #[cfg(test)]
+            database_url: None,
+        }
+    }
+}
 
 #[typetag::serde]
 #[fang::async_trait]
 impl AsyncRunnable for CheckBalanceTask {
     #[instrument(err(Debug), skip(self, client), level = "info")]
     async fn run(&self, client: &mut dyn AsyncQueueable) -> Result<(), FangError> {
-        let db = global::get_db_connection();
+        let db = self.get_db().await;
         // 'check balance' is unique task and there is only one instance of this task running
         // however we begin transaction with serializable isolation level just in case
         let tx = db
@@ -56,7 +72,9 @@ impl AsyncRunnable for CheckBalanceTask {
     }
 
     fn cron(&self) -> Option<Scheduled> {
-        Some(Scheduled::CronPattern("0 * * * * *".to_string()))
+        self.schedule
+            .as_ref()
+            .map(|s| Scheduled::CronPattern(s.clone()))
     }
 }
 
@@ -152,11 +170,10 @@ mod tests {
     use crate::{logic::jobs::balance::UnpaidDeployment, tests_utils};
     use pretty_assertions::assert_eq;
     use sea_orm::ActiveValue::Set;
-    use std::time::Duration;
 
     #[tokio::test]
     async fn select_unpaid_deployments_works() {
-        let (db, _github, _repo, _runner) =
+        let (db, _github, _runner) =
             tests_utils::init::jobs_runner_test_case("select_unpaid_deployments_works").await;
         let conn = db.client();
 
@@ -226,7 +243,7 @@ mod tests {
 
     #[tokio::test]
     async fn check_balance_works() {
-        let (db, _github, _repo, runner) =
+        let (db, _github, runner) =
             tests_utils::init::jobs_runner_test_case("check_balance_works").await;
         let conn = db.client();
 
@@ -235,17 +252,21 @@ mod tests {
             .await
             .unwrap();
 
-        let task = CheckBalanceTask::default();
+        let task = CheckBalanceTask {
+            schedule: None,
+            database_url: Some(db.db_url().to_string()),
+        };
         let n = 2;
         assert_eq!(UnpaidDeployment::all(conn.as_ref()).await.unwrap().len(), n);
         runner.insert_task(&task).await.unwrap();
-        // no way to block on task, so wait for task to be executed
-        tokio::time::sleep(Duration::from_secs(10)).await;
-        let expenses_count = scoutcloud_entity::balance_expenses::Entity::find()
+        tests_utils::db::wait_for_empty_fang_tasks(conn.clone())
+            .await
+            .unwrap();
+        let expenses_found = scoutcloud_entity::balance_expenses::Entity::find()
             .count(conn.as_ref())
             .await
             .unwrap();
-        assert_eq!(expenses_count, n as u64);
+        assert_eq!(expenses_found, n as u64);
         assert_eq!(UnpaidDeployment::all(conn.as_ref()).await.unwrap().len(), 0);
     }
 }

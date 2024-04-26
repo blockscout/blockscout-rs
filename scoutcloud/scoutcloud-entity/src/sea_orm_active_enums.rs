@@ -22,3 +22,17 @@ pub enum DeploymentStatusType {
     #[sea_orm(string_value = "stopping")]
     Stopping,
 }
+#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
+#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "fang_task_state")]
+pub enum FangTaskState {
+    #[sea_orm(string_value = "failed")]
+    Failed,
+    #[sea_orm(string_value = "finished")]
+    Finished,
+    #[sea_orm(string_value = "in_progress")]
+    InProgress,
+    #[sea_orm(string_value = "new")]
+    New,
+    #[sea_orm(string_value = "retried")]
+    Retried,
+}

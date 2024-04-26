@@ -57,6 +57,7 @@ impl JobsRunner {
         let mut pool: AsyncWorkerPool<AsyncQueue<NoTls>> = AsyncWorkerPool::builder()
             .number_of_workers(max_pool_size)
             .sleep_params(sleep_params)
+            .retention_mode(fang::RetentionMode::RemoveFinished)
             .queue(queue.clone())
             .build();
         pool.start().await;
@@ -86,6 +87,10 @@ impl JobsRunner {
         let mut queue = self.queue.lock().await;
         queue.insert_task(task).await?;
         Ok(())
+    }
+
+    pub fn queue(&self) -> &Mutex<AsyncQueue<NoTls>> {
+        &self.queue
     }
 }
 

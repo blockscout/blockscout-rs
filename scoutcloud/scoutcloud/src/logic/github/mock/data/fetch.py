@@ -63,9 +63,10 @@ for workflow in workflows:
     url = host + f'/actions/workflows/{workflow_id}/runs'
     r = requests.get(url, headers=headers)
     data = r.json()
-    data["workflow_runs"][0]["created_at"] = "2050-01-01T00:00:00Z"
-    data["workflow_runs"][0]["updated_at"] = "2050-01-01T00:00:00Z"
-    data["workflow_runs"][0]["name"] = f"Deploy to {CLIENT} env"
+    for i in range(len(data["workflow_runs"])):
+        data["workflow_runs"][i]["created_at"] = "2050-01-01T00:00:00Z"
+        data["workflow_runs"][i]["updated_at"] = "2050-01-01T00:00:00Z"
+        data["workflow_runs"][i]["name"] = f"Deploy to {CLIENT} env"
     filename = f"runs_{workflow_debug_name}.json"
     write_response(filename, url, 'GET', r, override_body=data)
 

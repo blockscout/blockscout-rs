@@ -43,9 +43,8 @@ pub trait Workflow: Serialize + Send + Sync {
             if let Some(run) = maybe_run {
                 return Ok(Some(run));
             }
-            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            tokio::time::sleep(Duration::from_millis(500)).await;
         }
-
         Ok(None)
     }
 }
@@ -125,36 +124,19 @@ impl GithubClient {
             "waiting for github workflow run '{}'",
             run.name
         );
-
-        let maybe_timeout = tokio::time::timeout(timeout, async move {
-            loop {
-                tokio::time::sleep(sleep_between).await;
-                let run = self.get_workflow_run(run.id).await?;
-                let status = RunStatus::try_from_str(&run.status)?;
+        let now = std::time::Instant::now();
+        loop {
+            let run = self.get_workflow_run(run.id).await?;
+            let status = RunStatus::try_from_str(&run.status)?;
+            if now.elapsed() >= timeout || status.is_completed() {
                 let conclusion = run
                     .conclusion
                     .as_ref()
                     .map(RunConclusion::try_from_str)
                     .transpose()?;
-                if status.is_completed() {
-                    return Ok((status, conclusion));
-                }
+                return Ok((status, conclusion));
             }
-        })
-        .await;
-
-        match maybe_timeout {
-            Ok(result) => result,
-            Err(_) => {
-                let run = self.get_workflow_run(run.id).await?;
-                let status = RunStatus::try_from_str(&run.status)?;
-                let conclusion = run
-                    .conclusion
-                    .as_ref()
-                    .map(RunConclusion::try_from_str)
-                    .transpose()?;
-                Ok((status, conclusion))
-            }
+            tokio::time::sleep(sleep_between).await;
         }
     }
 }
@@ -185,14 +167,14 @@ mod tests {
             run.name
         );
 
-        handles.assert("dispatch_deploy_yaml");
-        handles.assert("runs_deploy_yaml");
+        handles.assert_hits("dispatch_deploy_yaml", 1);
+        handles.assert_hits("runs_deploy_yaml", 1);
         handles.assert_hits("dispatch_cleanup_yaml", 0);
         handles.assert_hits("runs_cleanup_yaml", 0);
 
         CleanupWorkflow::get_latest_run(&client, None)
             .await
             .expect("get workflow runs");
-        handles.assert("runs_cleanup_yaml");
+        handles.assert_hits("runs_cleanup_yaml", 1);
     }
 }
