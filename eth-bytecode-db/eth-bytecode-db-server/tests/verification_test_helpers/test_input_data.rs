@@ -31,6 +31,7 @@ impl TestInputData {
                 compilation_artifacts: source.compilation_artifacts.clone(),
                 creation_input_artifacts: source.creation_input_artifacts.clone(),
                 deployed_bytecode_artifacts: source.deployed_bytecode_artifacts.clone(),
+                is_blueprint: source.is_blueprint,
             }),
             extra_data: Some(extra_data),
             post_action_responses: None,
@@ -52,6 +53,7 @@ impl TestInputData {
                 compilation_artifacts: source.compilation_artifacts,
                 creation_input_artifacts: source.creation_input_artifacts,
                 deployed_bytecode_artifacts: source.deployed_bytecode_artifacts,
+                is_blueprint: source.is_blueprint,
             }),
         };
 
@@ -161,6 +163,7 @@ pub fn basic(source_type: SourceType, match_type: MatchType) -> TestInputData {
         deployed_bytecode_artifacts: Some(
             "{\"sourceMap\":\"10:11:12:-:0;;;;;;;;;;;;;;;;;;;\"}".to_string(),
         ),
+        is_blueprint: false,
     };
 
     let extra_data = smart_contract_verifier_proto_v2::verify_response::ExtraData {

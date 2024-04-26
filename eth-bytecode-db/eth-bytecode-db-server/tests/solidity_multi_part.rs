@@ -39,6 +39,30 @@ async fn test_returns_valid_source(service: MockSolidityVerifierService) {
 #[tokio::test]
 #[timeout(std::time::Duration::from_secs(60))]
 #[ignore = "Needs database to run"]
+async fn test_propagates_is_blueprint_in_response() {
+    let default_request = VerifySolidityMultiPartRequest {
+        bytecode: "".to_string(),
+        bytecode_type: BytecodeType::CreationInput.into(),
+        compiler_version: "".to_string(),
+        evm_version: None,
+        optimization_runs: None,
+        source_files: Default::default(),
+        libraries: Default::default(),
+        metadata: None,
+    };
+    let source_type = verification::SourceType::Solidity;
+    test_cases::test_propagates_is_blueprint_in_response::<MockSolidityVerifierService, _>(
+        TEST_SUITE_NAME,
+        default_request,
+        source_type,
+    )
+    .await;
+}
+
+#[rstest]
+#[tokio::test]
+#[timeout(std::time::Duration::from_secs(60))]
+#[ignore = "Needs database to run"]
 async fn test_verify_then_search(service: MockSolidityVerifierService) {
     let default_request = VerifySolidityMultiPartRequest {
         bytecode: "".to_string(),

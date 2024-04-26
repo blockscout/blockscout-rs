@@ -158,6 +158,7 @@ impl TestCase {
             compilation_artifacts: Some(self.compilation_artifacts.to_string()),
             creation_input_artifacts: Some(self.creation_code_artifacts.to_string()),
             deployed_bytecode_artifacts: Some(self.runtime_code_artifacts.to_string()),
+            is_blueprint: false,
         }
     }
 

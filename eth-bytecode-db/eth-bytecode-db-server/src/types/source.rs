@@ -26,6 +26,7 @@ impl From<verification::Source> for SourceWrapper {
             compilation_artifacts: value.compilation_artifacts,
             creation_input_artifacts: value.creation_input_artifacts,
             deployed_bytecode_artifacts: value.deployed_bytecode_artifacts,
+            is_blueprint: value.is_blueprint,
         }
         .into()
     }
@@ -48,6 +49,7 @@ impl From<search::MatchContract> for SourceWrapper {
             compilation_artifacts: value.compilation_artifacts,
             creation_input_artifacts: value.creation_input_artifacts,
             deployed_bytecode_artifacts: value.deployed_bytecode_artifacts,
+            is_blueprint: false,
         }
         .into()
     }
@@ -118,6 +120,7 @@ impl TryFrom<sourcify::GetSourceFilesResponse> for SourceWrapper {
             compilation_artifacts: None,
             creation_input_artifacts: None,
             deployed_bytecode_artifacts: None,
+            is_blueprint: false,
         }
         .into())
     }
@@ -162,6 +165,7 @@ mod tests {
                     data: vec![7u8, 8u8],
                 },
             ],
+            is_blueprint: false,
         };
 
         let expected = proto::Source {
@@ -177,6 +181,7 @@ mod tests {
             compilation_artifacts: Some("compilation_artifacts".into()),
             creation_input_artifacts: Some("creation_input_artifacts".into()),
             deployed_bytecode_artifacts: Some("deployed_bytecode_artifacts".into()),
+            is_blueprint: false,
         };
 
         let result = SourceWrapper::from(verification_source).into_inner();
@@ -216,6 +221,7 @@ mod tests {
             compilation_artifacts: Some("compilation_artifacts".into()),
             creation_input_artifacts: Some("creation_input_artifacts".into()),
             deployed_bytecode_artifacts: Some("deployed_bytecode_artifacts".into()),
+            is_blueprint: false,
         };
 
         let result = SourceWrapper::from(search_source).into_inner();
@@ -283,6 +289,7 @@ mod tests {
             compilation_artifacts: None,
             creation_input_artifacts: None,
             deployed_bytecode_artifacts: None,
+            is_blueprint: false
         };
 
         let result = SourceWrapper::try_from(sourcify_response)

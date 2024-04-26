@@ -87,6 +87,7 @@ where
 
 pub mod test_cases {
     use super::*;
+    use crate::verification_test_helpers::test_input_data::TestInputData;
     use amplify::set;
     use eth_bytecode_db::verification::MatchType;
     use pretty_assertions::assert_eq;
@@ -107,6 +108,39 @@ pub mod test_cases {
 
         let db_url = db.db_url();
         let verifier_addr = init_verifier_server(service, test_data.verifier_response).await;
+
+        let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
+
+        let verification_response: eth_bytecode_db_v2::VerifyResponse =
+            test_server::send_post_request(&eth_bytecode_db_base, Service::ROUTE, &request).await;
+
+        assert_eq!(
+            test_data.eth_bytecode_db_response, verification_response,
+            "Invalid verification response"
+        );
+    }
+
+    pub async fn test_propagates_is_blueprint_in_response<Service, Request>(
+        test_suite_name: &str,
+        request: Request,
+        source_type: SourceType,
+    ) where
+        Service: VerifierService<Request, smart_contract_verifier_v2::VerifyResponse> + Default,
+        Request: Serialize,
+    {
+        let db = init_db(test_suite_name, "test_propagates_is_blueprint_in_response").await;
+
+        let test_data = {
+            let test_data = test_input_data::basic(source_type, MatchType::Partial);
+            let mut source = test_data.eth_bytecode_db_response.source.unwrap();
+            let extra_data = test_data.verifier_response.extra_data.unwrap();
+            source.is_blueprint = true;
+            TestInputData::from_source_and_extra_data(source, extra_data)
+        };
+
+        let db_url = db.db_url();
+        let verifier_addr =
+            init_verifier_server(Service::default(), test_data.verifier_response).await;
 
         let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
 
