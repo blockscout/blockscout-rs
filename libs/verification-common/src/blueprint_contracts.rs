@@ -1,14 +1,14 @@
 use bytes::Bytes;
 
-/// ERC5202_PREFIX = b"\xFE\x71\x00"  # default prefix from ERC-5202
-/// def blueprint_bytecode(self) -> bytes:
-///     blueprint_bytecode = ERC5202_PREFIX + self.bytecode
-///
-///     # the length of the deployed code in bytes
-///     len_bytes = len(blueprint_bytecode).to_bytes(2, "big")
-///     deploy_bytecode = b"\x61" + len_bytes + b"\x3d\x81\x60\x0a\x3d\x39\xf3"
-///
-///     return deploy_bytecode + blueprint_bytecode
+// ERC5202_PREFIX = b"\xFE\x71\x00"  # default prefix from ERC-5202
+// def blueprint_bytecode(self) -> bytes:
+//     blueprint_bytecode = ERC5202_PREFIX + self.bytecode
+//
+//     # the length of the deployed code in bytes
+//     len_bytes = len(blueprint_bytecode).to_bytes(2, "big")
+//     deploy_bytecode = b"\x61" + len_bytes + b"\x3d\x81\x60\x0a\x3d\x39\xf3"
+//
+//     return deploy_bytecode + blueprint_bytecode
 
 pub fn from_runtime_code(code: Bytes) -> Option<Bytes> {
     let prefix = [0xfe, 0x71, 0x00];
