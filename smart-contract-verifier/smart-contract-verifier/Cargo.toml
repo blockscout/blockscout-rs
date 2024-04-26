@@ -44,6 +44,7 @@ thiserror = "1.0"
 tokio = { version = "1", features = ["macros"] }
 tracing = "0.1"
 url = { version = "2.4", features = ["serde"] }
+verification-common = { path = "../../libs/verification-common" }
 
 [dev-dependencies]
 const_format = "0.2"
