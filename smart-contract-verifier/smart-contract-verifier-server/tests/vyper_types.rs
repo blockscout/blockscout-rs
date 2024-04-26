@@ -1,6 +1,8 @@
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use serde::{de::DeserializeOwned, Deserialize};
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::BytecodeType;
+use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
+    verify_response::extra_data::BytecodePart, BytecodeType,
+};
 use std::{borrow::Cow, collections::BTreeMap, path::PathBuf, str::FromStr};
 
 const TEST_CASES_DIR: &str = "tests/test_cases_vyper";
@@ -45,6 +47,14 @@ pub trait TestCase {
     fn is_blueprint(&self) -> bool {
         false
     }
+
+    fn expected_local_creation_code(&self) -> Option<Vec<BytecodePart>> {
+        None
+    }
+
+    fn expected_local_runtime_code(&self) -> Option<Vec<BytecodePart>> {
+        None
+    }
 }
 
 pub fn from_file<T: TestCase + DeserializeOwned>(test_case: &str) -> T {
@@ -68,6 +78,8 @@ pub struct Flattened {
     pub expected_deployed_bytecode_artifacts: Option<serde_json::Value>,
     #[serde(default)]
     pub is_blueprint: bool,
+    pub expected_local_creation_code: Option<Vec<BytecodePart>>,
+    pub expected_local_runtime_code: Option<Vec<BytecodePart>>,
 
     // Verification metadata related values
     pub chain_id: Option<String>,
@@ -151,6 +163,14 @@ impl TestCase for Flattened {
 
     fn is_blueprint(&self) -> bool {
         self.is_blueprint
+    }
+
+    fn expected_local_creation_code(&self) -> Option<Vec<BytecodePart>> {
+        self.expected_local_creation_code.clone()
+    }
+
+    fn expected_local_runtime_code(&self) -> Option<Vec<BytecodePart>> {
+        self.expected_local_runtime_code.clone()
     }
 }
 

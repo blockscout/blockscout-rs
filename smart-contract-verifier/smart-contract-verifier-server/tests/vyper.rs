@@ -223,6 +223,22 @@ async fn test_success(test_case: impl TestCase) {
         verification_result.is_blueprint,
         "Invalid is_blueprint value"
     );
+
+    let extra_data = verification_response
+        .extra_data
+        .expect("Missing extra data");
+    if let Some(expected_local_creation_code) = test_case.expected_local_creation_code() {
+        assert_eq!(
+            expected_local_creation_code, extra_data.local_creation_input_parts,
+            "Invalid local creation code"
+        );
+    }
+    if let Some(expected_local_runtime_code) = test_case.expected_local_runtime_code() {
+        assert_eq!(
+            expected_local_runtime_code, extra_data.local_deployed_bytecode_parts,
+            "Invalid local runtime code"
+        );
+    }
 }
 
 async fn test_failure(test_case: impl TestCase, expected_message: &str) {
