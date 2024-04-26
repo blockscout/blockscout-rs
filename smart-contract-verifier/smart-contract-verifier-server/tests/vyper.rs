@@ -217,6 +217,12 @@ async fn test_success(test_case: impl TestCase) {
             "Invalid deployed bytecode artifacts"
         )
     }
+
+    assert_eq!(
+        test_case.is_blueprint(),
+        verification_result.is_blueprint,
+        "Invalid is_blueprint value"
+    );
 }
 
 async fn test_failure(test_case: impl TestCase, expected_message: &str) {

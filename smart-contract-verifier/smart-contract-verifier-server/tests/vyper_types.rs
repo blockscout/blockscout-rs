@@ -41,6 +41,10 @@ pub trait TestCase {
     fn deployed_bytecode_artifacts(&self) -> Option<serde_json::Value> {
         None
     }
+
+    fn is_blueprint(&self) -> bool {
+        false
+    }
 }
 
 pub fn from_file<T: TestCase + DeserializeOwned>(test_case: &str) -> T {
@@ -144,6 +148,10 @@ impl TestCase for Flattened {
     fn deployed_bytecode_artifacts(&self) -> Option<serde_json::Value> {
         self.expected_deployed_bytecode_artifacts.clone()
     }
+
+    fn is_blueprint(&self) -> bool {
+        self.is_blueprint
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -217,6 +225,10 @@ impl TestCase for MultiPart {
             (path.clone(), content)
         });
         sources.chain(interfaces).collect()
+    }
+
+    fn is_blueprint(&self) -> bool {
+        self.is_blueprint
     }
 }
 
@@ -359,5 +371,9 @@ impl TestCase for StandardJson {
                 panic!("bytecode metadata is not a bool")
             }
         })
+    }
+
+    fn is_blueprint(&self) -> bool {
+        self.is_blueprint
     }
 }
