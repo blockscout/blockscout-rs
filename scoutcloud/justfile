@@ -23,7 +23,7 @@ stop-postgres:
     docker kill {{docker-name}}
 
 test *args:
-    RUST_BACKTRACE=1 cargo test {{args}} -- --include-ignored
+    cargo test {{args}} -- --include-ignored
 
 test-with-db *args:
     -just db-port="{{test-db-port}}" db-name="" docker-name="{{docker-name}}-test" start-postgres
