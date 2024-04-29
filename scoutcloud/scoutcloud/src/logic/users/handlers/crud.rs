@@ -46,3 +46,57 @@ where
 
     Ok(actions)
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::{logic::UserToken, tests_utils};
+    use pretty_assertions::assert_eq;
+    use rust_decimal::Decimal;
+    use sea_orm::{ActiveModelTrait, ActiveValue::Set};
+
+    #[tokio::test]
+    async fn balance_change_works() {
+        let db = tests_utils::init::test_db("test", "balance_change_works").await;
+        let conn = db.client();
+        tests_utils::mock::insert_default_data(conn.as_ref())
+            .await
+            .expect("insert_default_data failed");
+        let user_token = UserToken::get(conn.as_ref(), 1)
+            .await
+            .expect("get user token failed");
+
+        let profile = get_profile(conn.as_ref(), &user_token)
+            .await
+            .expect("get profile failed");
+        // there is initial balance in default mock data
+        assert_eq!(profile.balance, "100");
+
+        scoutcloud_entity::balance_expenses::ActiveModel {
+            user_id: Set(user_token.user.id),
+            expense_amount: Set(Decimal::new(25, 0)),
+            deployment_id: Set(1),
+            hours: Set(1),
+            ..Default::default()
+        }
+        .insert(conn.as_ref())
+        .await
+        .expect("insert balance expense failed");
+        scoutcloud_entity::balance_changes::ActiveModel {
+            user_id: Set(user_token.user.id),
+            amount: Set(Decimal::new(-10, 0)),
+            ..Default::default()
+        }
+        .insert(conn.as_ref())
+        .await
+        .expect("insert balance change failed");
+
+        let user_token = UserToken::get(conn.as_ref(), 1)
+            .await
+            .expect("get user token failed");
+        let profile = get_profile(conn.as_ref(), &user_token)
+            .await
+            .expect("get profile failed");
+        assert_eq!(profile.balance, "65");
+    }
+}
