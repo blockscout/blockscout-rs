@@ -1,7 +1,7 @@
 #![allow(clippy::blocks_in_conditions)]
 
-use super::StoppingTask;
-use crate::logic::{jobs::utils::impl_get_db, DeployError};
+use super::{global, StoppingTask};
+use crate::logic::DeployError;
 use fang::{typetag, AsyncQueueable, AsyncRunnable, FangError, Scheduled};
 use scoutcloud_entity as db;
 use sea_orm::{
@@ -19,8 +19,6 @@ pub struct CheckBalanceTask {
     database_url: Option<String>,
 }
 
-impl_get_db!(CheckBalanceTask);
-
 impl Default for CheckBalanceTask {
     fn default() -> Self {
         Self {
@@ -36,7 +34,7 @@ impl Default for CheckBalanceTask {
 impl AsyncRunnable for CheckBalanceTask {
     #[instrument(err(Debug), skip(self, client), level = "info")]
     async fn run(&self, client: &mut dyn AsyncQueueable) -> Result<(), FangError> {
-        let db = self.get_db().await;
+        let db = global::DATABASE.get().await;
         // 'check balance' is unique task and there is only one instance of this task running
         // however we begin transaction with serializable isolation level just in case
         let tx = db
@@ -172,8 +170,9 @@ mod tests {
     use sea_orm::ActiveValue::Set;
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn select_unpaid_deployments_works() {
-        let (db, _github, _runner) =
+        let (db, _github, _repo, _runner) =
             tests_utils::init::jobs_runner_test_case("select_unpaid_deployments_works").await;
         let conn = db.client();
 
@@ -242,8 +241,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn check_balance_works() {
-        let (db, _github, runner) =
+        let (db, _github, _repo, runner) =
             tests_utils::init::jobs_runner_test_case("check_balance_works").await;
         let conn = db.client();
 

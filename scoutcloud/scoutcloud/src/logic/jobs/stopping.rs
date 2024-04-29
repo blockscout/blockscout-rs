@@ -1,9 +1,6 @@
 #![allow(clippy::blocks_in_conditions)]
 
-use crate::logic::{
-    jobs::{global, utils::impl_get_db},
-    DeployError, Deployment, GithubClient, Instance,
-};
+use crate::logic::{jobs::global, DeployError, Deployment, GithubClient, Instance};
 use fang::{typetag, AsyncQueueable, AsyncRunnable, FangError, Scheduled};
 use scoutcloud_entity::sea_orm_active_enums::DeploymentStatusType;
 use sea_orm::DatabaseConnection;
@@ -22,8 +19,6 @@ pub struct StoppingTask {
     database_url: Option<String>,
 }
 
-impl_get_db!(StoppingTask);
-
 impl StoppingTask {
     pub fn from_deployment_id(deployment_id: i32) -> Self {
         Self {
@@ -41,8 +36,8 @@ impl StoppingTask {
 impl AsyncRunnable for StoppingTask {
     #[tracing::instrument(err(Debug), skip(_client), level = "info")]
     async fn run(&self, _client: &mut dyn AsyncQueueable) -> Result<(), FangError> {
-        let db = self.get_db().await;
-        let github = global::get_github_client();
+        let db = global::DATABASE.get().await;
+        let github = global::GITHUB.get().await;
 
         let mut deployment = Deployment::get(db.as_ref(), self.deployment_id)
             .await
@@ -114,10 +109,12 @@ mod tests {
     use crate::tests_utils;
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn stopping_task_works() {
-        let (db, _github, runner) =
+        let (db, _github, repo, runner) =
             tests_utils::init::jobs_runner_test_case("stopping_task_works").await;
         let conn = db.client();
+        let handles = repo.build_handles();
 
         let running_deployment_id = 1;
         let task = StoppingTask {
@@ -139,5 +136,9 @@ mod tests {
             "deployment is not stopped. error: {:?}",
             deployment.model.error
         );
+
+        handles.assert_hits("dispatch_cleanup_yaml", 1);
+        handles.assert_hits("runs_cleanup_yaml", 1);
+        handles.assert_hits("single_run_cleanup_yaml", 1);
     }
 }

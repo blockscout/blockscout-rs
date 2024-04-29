@@ -1,7 +1,7 @@
 #![allow(clippy::blocks_in_conditions)]
 
 use super::global;
-use crate::logic::{jobs::utils::impl_get_db, DeployError, Deployment, GithubClient, Instance};
+use crate::logic::{DeployError, Deployment, GithubClient, Instance};
 use fang::{typetag, AsyncQueueable, AsyncRunnable, FangError, Scheduled};
 use scoutcloud_entity::sea_orm_active_enums::DeploymentStatusType;
 use sea_orm::DatabaseConnection;
@@ -23,8 +23,6 @@ pub struct StartingTask {
     database_url: Option<String>,
 }
 
-impl_get_db!(StartingTask);
-
 impl StartingTask {
     pub fn from_deployment_id(deployment_id: i32) -> Self {
         Self {
@@ -42,8 +40,8 @@ impl StartingTask {
 impl AsyncRunnable for StartingTask {
     #[tracing::instrument(err(Debug), skip(_client), level = "info")]
     async fn run(&self, _client: &mut dyn AsyncQueueable) -> Result<(), FangError> {
-        let db = self.get_db().await;
-        let github = global::get_github_client();
+        let db = global::DATABASE.get().await;
+        let github = global::GITHUB.get().await;
 
         let mut deployment = Deployment::get(db.as_ref(), self.deployment_id)
             .await
@@ -120,10 +118,12 @@ mod tests {
     use crate::tests_utils;
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn starting_task_works() {
-        let (db, _github, runner) =
+        let (db, _github, repo, runner) =
             tests_utils::init::jobs_runner_test_case("starting_task_works").await;
         let conn = db.client();
+        let handles = repo.build_handles();
 
         let not_started_deployment_id = 4;
         let task = StartingTask {
@@ -145,5 +145,8 @@ mod tests {
             "deployment is not running. error: {:?}",
             deployment.model.error
         );
+        handles.assert_hits("dispatch_deploy_yaml", 1);
+        handles.assert_hits("runs_deploy_yaml", 1);
+        handles.assert_hits("single_run_deploy_yaml", 1);
     }
 }

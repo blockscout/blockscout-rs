@@ -1,26 +1,33 @@
 use crate::logic::GithubClient;
 use sea_orm::DatabaseConnection;
-use std::sync::Arc;
-use tokio::sync::OnceCell;
+use std::{fmt::Debug, sync::Arc};
+use tokio::sync::{OnceCell, RwLock, RwLockReadGuard};
 
-static DATABASE: OnceCell<Arc<DatabaseConnection>> = OnceCell::const_new();
-
-pub fn init_db_connection(db: Arc<DatabaseConnection>) -> Result<(), anyhow::Error> {
-    DATABASE.set(db)?;
-    Ok(())
+pub struct Global<T> {
+    cell: OnceCell<RwLock<Arc<T>>>,
 }
 
-pub fn get_db_connection() -> Arc<DatabaseConnection> {
-    DATABASE.get().expect("database not initialized").clone()
+impl<T: Debug + Send + Sync + 'static> Global<T> {
+    pub const fn new() -> Self {
+        Self {
+            cell: OnceCell::const_new(),
+        }
+    }
+
+    pub async fn init(&self, value: Arc<T>) -> Result<(), anyhow::Error> {
+        if let Some(lock) = self.cell.get() {
+            *lock.write().await = value;
+        } else {
+            self.cell.set(RwLock::new(value))?;
+        }
+        Ok(())
+    }
+
+    pub async fn get(&self) -> RwLockReadGuard<Arc<T>> {
+        self.cell.get().expect("value not initialized").read().await
+    }
 }
 
-static GITHUB: OnceCell<Arc<GithubClient>> = OnceCell::const_new();
+pub static DATABASE: Global<DatabaseConnection> = Global::new();
 
-pub fn init_github_client(github: Arc<GithubClient>) -> Result<(), anyhow::Error> {
-    GITHUB.set(github)?;
-    Ok(())
-}
-
-pub fn get_github_client() -> Arc<GithubClient> {
-    GITHUB.get().expect("github client not initialized").clone()
-}
+pub static GITHUB: Global<GithubClient> = Global::new();

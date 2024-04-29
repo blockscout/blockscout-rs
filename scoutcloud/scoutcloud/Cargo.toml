@@ -45,10 +45,12 @@ convert-trait = { git = "https://github.com/blockscout/actix-prost", tag="v1.0.0
 rust_decimal = "1.35.0"
 fang = { version = "0.10.4" , features = ["asynk", "derive-error" ], default-features = false }
 
+
 [dev-dependencies]
 blockscout-service-launcher = { version = "0.10.1", features = [
     "test-database", "database-0_12", "test-server"
 ] }
+serial_test = "3.1.1"
 scoutcloud-migration = {path = "../scoutcloud-migration"}
 pretty_assertions = "1.3"
 reqwest = { version = "0.11", features = ["json"]}

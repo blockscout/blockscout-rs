@@ -23,8 +23,14 @@ impl JobsRunner {
     ) -> Result<Self, anyhow::Error> {
         // it's important to init global values before starting the runner
         // because runner will use global variables since fang doesn't support context
-        super::global::init_db_connection(scoutcloud_db).expect("database already initialized");
-        super::global::init_github_client(github).expect("github client already initialized");
+        super::global::DATABASE
+            .init(scoutcloud_db)
+            .await
+            .expect("database already initialized");
+        super::global::GITHUB
+            .init(github)
+            .await
+            .expect("github client already initialized");
 
         let sleep_params = SleepParams {
             sleep_period: Duration::from_secs(1),
