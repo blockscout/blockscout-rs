@@ -1,7 +1,7 @@
 use crate::{
     logic::{
-        deploy::handlers::user_actions, users::UserToken, DeployError, GithubClient, Instance,
-        InstanceDeployment, UserConfig,
+        users::{user_actions, UserToken},
+        DeployError, GithubClient, Instance, InstanceDeployment, UserConfig,
     },
     server::proto,
 };

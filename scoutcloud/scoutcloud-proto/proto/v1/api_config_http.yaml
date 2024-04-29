@@ -33,6 +33,12 @@ http:
 
     - selector: blockscout.scoutcloud.v1.Scoutcloud.ListDeployments
       get: /api/v1/instances/{instance_id}/deployments
+
+    #################### Users ####################
+
+    - selector: blockscout.scoutcloud.v1.Scoutcloud.GetProfile
+      get: /api/v1/users/profile
+
     
     #################### Health ####################
 

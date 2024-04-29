@@ -20,6 +20,7 @@ pub(crate) async fn log_user_action<C>(
     db: &C,
     user_token: &UserToken,
     action: impl Display,
+    instance_id: Option<i32>,
     maybe_data: Option<serde_json::Value>,
 ) -> Result<(), sea_orm::DbErr>
 where
@@ -35,6 +36,7 @@ where
     scoutcloud_entity::user_actions::ActiveModel {
         token_id: Set(user_token.token.id),
         action: Set(action.to_string()),
+        instance_id: Set(instance_id),
         data: maybe_data.map(Set).unwrap_or(NotSet),
         ..Default::default()
     }
@@ -53,6 +55,7 @@ pub(crate) async fn log_create_instance(
         db,
         user_token,
         UserActionType::CreateInstance,
+        Some(instance.model.id),
         Some(json!({
             "instance_slug": instance.model.slug,
             "instance_uuid": instance.model.external_id,
@@ -80,6 +83,7 @@ pub(crate) async fn log_update_config(
         db,
         user_token,
         action,
+        Some(instance.model.id),
         Some(json!({
             "instance_slug": instance.model.slug,
             "instance_uuid": instance.model.external_id,
@@ -101,6 +105,7 @@ pub(crate) async fn log_start_instance(
         db,
         user_token,
         UserActionType::StartInstance,
+        Some(instance.model.id),
         Some(json!({
             "instance_slug": instance.model.slug,
             "instance_uuid": instance.model.external_id,
@@ -121,6 +126,7 @@ pub(crate) async fn log_stop_instance(
         db,
         user_token,
         UserActionType::StopInstance,
+        Some(instance.model.id),
         Some(json!({
             "instance_slug": instance.model.slug,
             "instance_uuid": instance.model.external_id,

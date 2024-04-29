@@ -144,6 +144,7 @@ impl TryFrom<InstanceDeployment> for proto::DeploymentInternal {
             finished_at: deployment.model.finished_at.map(|t| t.to_string()),
             config: Some(config.internal),
             blockscout_url: deployment.model.instance_url,
+            total_cost: deployment.model.total_cost.to_string(),
         })
     }
 }

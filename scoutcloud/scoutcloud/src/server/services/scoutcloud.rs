@@ -215,6 +215,19 @@ impl Scoutcloud for ScoutcloudService {
             .map(|items| ListDeploymentsResponse { items })
             .map(Response::new)
     }
+
+    async fn get_profile(
+        &self,
+        request: Request<GetProfileRequest>,
+    ) -> Result<Response<UserProfile>, Status> {
+        let (_, user_token): (GetProfileRequestInternal, _) =
+            parse_request_with_headers(self.db.as_ref(), request).await?;
+        let internal = logic::users::get_profile(self.db.as_ref(), &user_token)
+            .await
+            .map_err(map_auth_error)?;
+        let result = UserProfile::try_convert(internal).map_err(map_convert_error)?;
+        Ok(Response::new(result))
+    }
 }
 
 async fn parse_request_with_headers<C, B, I>(
