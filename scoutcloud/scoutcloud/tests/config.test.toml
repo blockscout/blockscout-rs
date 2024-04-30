@@ -1,0 +1,16 @@
+[metrics]
+enabled = false
+
+[jaeger]
+enabled = false
+
+[tracing]
+enabled = false
+
+[database]
+run_migrations = true
+
+[github]
+token = "test-token"
+owner = "test-owner"
+repo = "test-repo"

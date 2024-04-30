@@ -12,6 +12,7 @@ pub enum UserActionType {
     UpdateInstanceConfig,
     UpdateInstanceConfigPartial,
     StartInstance,
+    StopInstance,
 }
 derive_display_from_serialize!(UserActionType);
 
@@ -54,7 +55,7 @@ pub(crate) async fn log_create_instance(
         UserActionType::CreateInstance,
         Some(json!({
             "instance_slug": instance.model.slug,
-            "instance_id": instance.model.external_id,
+            "instance_uuid": instance.model.external_id,
             "config": config,
         })),
     )
@@ -81,7 +82,7 @@ pub(crate) async fn log_update_config(
         action,
         Some(json!({
             "instance_slug": instance.model.slug,
-            "instance_id": instance.model.external_id,
+            "instance_uuid": instance.model.external_id,
             "old_config": old_config,
             "new_config": new_config,
         })),
@@ -95,7 +96,6 @@ pub(crate) async fn log_start_instance(
     user_token: &UserToken,
     instance: &Instance,
     deployment: &Deployment,
-    run: &octocrab::models::workflows::Run,
 ) -> Result<(), sea_orm::DbErr> {
     log_user_action(
         db,
@@ -103,9 +103,28 @@ pub(crate) async fn log_start_instance(
         UserActionType::StartInstance,
         Some(json!({
             "instance_slug": instance.model.slug,
-            "instance_id": instance.model.external_id,
-            "deployment_id": deployment.model.external_id,
-            "run_id": run.id,
+            "instance_uuid": instance.model.external_id,
+            "deployment_uuid": deployment.model.external_id,
+        })),
+    )
+    .await?;
+    Ok(())
+}
+
+pub(crate) async fn log_stop_instance(
+    db: &impl ConnectionTrait,
+    user_token: &UserToken,
+    instance: &Instance,
+    deployment: &Deployment,
+) -> Result<(), sea_orm::DbErr> {
+    log_user_action(
+        db,
+        user_token,
+        UserActionType::StopInstance,
+        Some(json!({
+            "instance_slug": instance.model.slug,
+            "instance_uuid": instance.model.external_id,
+            "deployment_uuid": deployment.model.external_id,
         })),
     )
     .await?;

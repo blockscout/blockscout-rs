@@ -1,7 +1,7 @@
 use super::{types, GithubClient, GithubError};
 use anyhow::Context;
 use chrono::Utc;
-use octocrab::{models as octo_types, Page};
+use octocrab::{models as octo_types, models::RunId, Page};
 use serde::Serialize;
 use tracing::instrument;
 
@@ -16,12 +16,18 @@ impl GithubClient {
         let latest_commit = self
             .get_latest_commit()
             .await
-            .context("get latest commit")?;
-        let blob = self.create_blob(content).await.context("create blob")?;
+            .context("get latest commit")
+            .map_err(GithubError::CreatingFile)?;
+        let blob = self
+            .create_blob(content)
+            .await
+            .context("create blob")
+            .map_err(GithubError::CreatingFile)?;
         let tree = self
             .create_tree(&latest_commit.sha, path, &blob.sha)
             .await
-            .context("create tree")?;
+            .context("create tree")
+            .map_err(GithubError::CreatingFile)?;
         let commit = self
             .create_commit(
                 tree.sha,
@@ -29,10 +35,12 @@ impl GithubClient {
                 latest_commit.sha,
             )
             .await
-            .context("create commit")?;
+            .context("create commit")
+            .map_err(GithubError::CreatingFile)?;
         self.update_branch(&commit.sha)
             .await
-            .context("update branch")?;
+            .context("update branch")
+            .map_err(GithubError::CreatingFile)?;
         Ok(())
     }
 
@@ -106,6 +114,18 @@ impl GithubClient {
             self.client.get(url, Some(&params)).await?;
 
         Ok(pages.take_items().into_iter().next())
+    }
+
+    pub async fn get_workflow_run(
+        &self,
+        run_id: impl Into<RunId>,
+    ) -> Result<octo_types::workflows::Run, GithubError> {
+        let run = self
+            .client
+            .workflows(self.owner.clone(), self.repo.clone())
+            .get(run_id.into())
+            .await?;
+        Ok(run)
     }
 
     async fn create_blob(&self, content: &str) -> Result<types::CreateBlobResponse, GithubError> {
@@ -194,14 +214,12 @@ impl GithubClient {
 
 #[cfg(test)]
 mod tests {
-    use super::{super::mock::MockedGithubRepo, *};
+    use crate::tests_utils;
 
     #[tokio::test]
     async fn create_or_update_works() {
-        let mock_repo = MockedGithubRepo::default();
-        let handles = mock_repo.build_mock_handlers();
-
-        let client = GithubClient::try_from(&mock_repo).unwrap();
+        let (client, mock) = tests_utils::init::test_github_client().await;
+        let handles = mock.build_handles();
 
         client
             .create_or_update_file("file_name", "content2", "commit message")

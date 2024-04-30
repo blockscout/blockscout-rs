@@ -10,7 +10,7 @@ pub struct Model {
     pub user_id: i32,
     pub changed_by_user_id: Option<i32>,
     pub amount: Decimal,
-    pub created_at: DateTime,
+    pub created_at: DateTimeWithTimeZone,
     pub note: Option<String>,
 }
 

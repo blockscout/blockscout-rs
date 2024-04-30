@@ -1,5 +1,5 @@
 use crate::{
-    logic::GithubClient,
+    logic::{jobs::JobsRunner, GithubClient},
     server::{
         proto::{
             health_actix::route_health, health_server::HealthServer,
@@ -9,9 +9,10 @@ use crate::{
         settings::Settings,
     },
 };
-use blockscout_service_launcher::{database, launcher, launcher::LaunchSettings, tracing};
+use blockscout_service_launcher::{database, launcher, launcher::LaunchSettings};
 use migration::Migrator;
 use scoutcloud_proto::blockscout::scoutcloud::v1::scoutcloud_server::ScoutcloudServer;
+use sea_orm::ConnectOptions;
 use std::sync::Arc;
 
 const SERVICE_NAME: &str = "scoutcloud";
@@ -39,13 +40,21 @@ impl launcher::HttpRouter for Router {
 }
 
 pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
-    tracing::init_logs(SERVICE_NAME, &settings.tracing, &settings.jaeger)?;
+    blockscout_service_launcher::tracing::init_logs(
+        SERVICE_NAME,
+        &settings.tracing,
+        &settings.jaeger,
+    )?;
 
     let health = Arc::new(HealthService::default());
 
+    let connect_options = ConnectOptions::new(settings.database.connect.clone().url())
+        .sqlx_logging_level(::tracing::log::LevelFilter::Debug)
+        .to_owned();
+
     let db_connection = Arc::new(
         database::initialize_postgres::<Migrator>(
-            &settings.database.connect.url(),
+            connect_options,
             settings.database.create_database,
             settings.database.run_migrations,
         )
@@ -53,11 +62,15 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     );
 
     let github = Arc::new(GithubClient::from_settings(&settings.github)?);
-
-    let scoutcloud = Arc::new(ScoutcloudService::new(
+    let runner = JobsRunner::default_start(
         db_connection.clone(),
         github.clone(),
-    ));
+        &settings.database.connect.url(),
+    )
+    .await?;
+    let runner = Arc::new(runner);
+
+    let scoutcloud = Arc::new(ScoutcloudService::new(db_connection, github, runner));
 
     let router = Router { health, scoutcloud };
 

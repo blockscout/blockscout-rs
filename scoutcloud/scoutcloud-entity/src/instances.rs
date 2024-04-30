@@ -15,8 +15,8 @@ pub struct Model {
     pub user_config: Json,
     #[sea_orm(column_type = "JsonBinary")]
     pub parsed_config: Json,
-    pub created_at: DateTime,
-    pub updated_at: DateTime,
+    pub created_at: DateTimeWithTimeZone,
+    pub updated_at: DateTimeWithTimeZone,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

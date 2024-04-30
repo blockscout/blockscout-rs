@@ -9,8 +9,9 @@ pub struct Model {
     pub id: i32,
     pub user_id: i32,
     pub deployment_id: i32,
+    pub hours: i32,
     pub expense_amount: Decimal,
-    pub created_at: DateTime,
+    pub created_at: DateTimeWithTimeZone,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

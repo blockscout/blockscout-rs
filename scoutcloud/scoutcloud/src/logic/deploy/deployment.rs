@@ -1,8 +1,9 @@
 use crate::{
-    logic::{ConfigError, DeployError, Instance, UserConfig},
+    logic::{ConfigError, DeployError, Instance, InstanceConfig, UserConfig},
     server::proto,
     uuid_eq,
 };
+
 use db::sea_orm_active_enums::DeploymentStatusType;
 use scoutcloud_entity as db;
 use sea_orm::{prelude::*, ActiveValue::Set, ConnectionTrait, IntoActiveModel, NotSet, QueryOrder};
@@ -25,11 +26,14 @@ impl Deployment {
     where
         C: ConnectionTrait,
     {
+        let server_spec = instance.find_server_spec(db).await?.ok_or(anyhow::anyhow!(
+            "server spec of the instance was not found in database"
+        ))?;
         let model = db::deployments::ActiveModel {
             instance_id: Set(instance.model.id),
             user_config: Set(instance.model.user_config.clone()),
             parsed_config: Set(instance.model.parsed_config.clone()),
-            server_spec_id: Set(instance.find_server_spec(db).await?.id),
+            server_spec_id: Set(server_spec.id),
             status: maybe_status.map(Set).unwrap_or(NotSet),
             ..Default::default()
         }
@@ -38,10 +42,19 @@ impl Deployment {
         Ok(Deployment { model })
     }
 
-    pub async fn latest_of_instance<C>(
-        db: &C,
-        instance: &Instance,
-    ) -> Result<Option<Self>, DeployError>
+    pub async fn get<C>(db: &C, id: i32) -> Result<Self, DbErr>
+    where
+        C: ConnectionTrait,
+    {
+        let model = Self::default_select()
+            .filter(db::deployments::Column::Id.eq(id))
+            .one(db)
+            .await?
+            .ok_or(DbErr::Custom("no deployment found".into()))?;
+        Ok(Deployment { model })
+    }
+
+    pub async fn latest_of_instance<C>(db: &C, instance: &Instance) -> Result<Option<Self>, DbErr>
     where
         C: ConnectionTrait,
     {
@@ -53,12 +66,12 @@ impl Deployment {
         Ok(deployment)
     }
 
-    pub async fn find<C>(db: &C, id: impl Into<String>) -> Result<Option<Self>, DeployError>
+    pub async fn find_by_uuid<C>(db: &C, uuid: impl Into<String>) -> Result<Option<Self>, DbErr>
     where
         C: ConnectionTrait,
     {
         let deployment = Self::default_select()
-            .filter(uuid_eq!(db::deployments::Column::ExternalId, id.into()))
+            .filter(uuid_eq!(db::deployments::Column::ExternalId, uuid.into()))
             .one(db)
             .await?
             .map(|model| Deployment { model });
@@ -79,6 +92,17 @@ impl Deployment {
         &self.model.user_config
     }
 
+    pub fn instance_config(&self) -> InstanceConfig {
+        InstanceConfig::from_raw(self.model.parsed_config.clone())
+    }
+
+    pub async fn get_instance<C>(&self, db: &C) -> Result<Instance, DbErr>
+    where
+        C: ConnectionTrait,
+    {
+        Instance::get(db, self.model.instance_id).await
+    }
+
     pub async fn update_status<C>(
         &mut self,
         db: &C,
@@ -89,8 +113,46 @@ impl Deployment {
     {
         let mut model = self.model.clone().into_active_model();
         model.status = Set(status);
-        let updated = model.insert(db).await?;
-        self.model = updated;
+        self.model = model.update(db).await?;
+        Ok(self)
+    }
+
+    pub async fn mark_as_error<C>(
+        &mut self,
+        db: &C,
+        error: impl Into<String>,
+    ) -> Result<&mut Self, DbErr>
+    where
+        C: ConnectionTrait,
+    {
+        let mut model = self.model.clone().into_active_model();
+        model.error = Set(Some(error.into()));
+        model.status = Set(DeploymentStatusType::Failed);
+        self.model = model.update(db).await?;
+        Ok(self)
+    }
+
+    pub async fn mark_as_finished<C>(&mut self, db: &C) -> Result<&mut Self, DbErr>
+    where
+        C: ConnectionTrait,
+    {
+        let mut model = self.model.clone().into_active_model();
+        model.status = Set(DeploymentStatusType::Stopped);
+        model.finished_at = Set(Some(chrono::Utc::now().fixed_offset()));
+        self.model = model.update(db).await?;
+        Ok(self)
+    }
+
+    pub async fn mark_as_running<C>(&mut self, db: &C) -> Result<&mut Self, DeployError>
+    where
+        C: ConnectionTrait,
+    {
+        let instance_url = self.instance_config().parse_instance_url()?;
+        let mut model = self.model.clone().into_active_model();
+        model.status = Set(DeploymentStatusType::Running);
+        model.started_at = Set(Some(chrono::Utc::now().fixed_offset()));
+        model.instance_url = Set(Some(instance_url.to_string()));
+        self.model = model.update(db).await?;
         Ok(self)
     }
 }

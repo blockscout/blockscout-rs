@@ -83,3 +83,51 @@ pub struct WorkflowRunsListRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub page: Option<u32>,
 }
+
+// https://github.com/octokit/webhooks.net/blob/aaeeebd41d7ff49a3253146a5e54d0410e6b4ad0/src/Octokit.Webhooks/Models/WorkflowRunStatus.cs#L4
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RunStatus {
+    Requested,
+    InProgress,
+    Completed,
+    Queued,
+    Waiting,
+}
+
+impl RunStatus {
+    pub fn try_from_str(value: impl Into<String>) -> Result<Self, anyhow::Error> {
+        let value = value.into();
+        serde_plain::from_str(&value)
+            .map_err(|_| anyhow::anyhow!("invalid run status from github: {value}"))
+    }
+    pub fn is_completed(&self) -> bool {
+        matches!(self, Self::Completed)
+    }
+}
+
+// https://github.com/octokit/webhooks.net/blob/aaeeebd41d7ff49a3253146a5e54d0410e6b4ad0/src/Octokit.Webhooks/Models/WorkflowRunConclusion.cs
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RunConclusion {
+    Success,
+    Failure,
+    Neutral,
+    Cancelled,
+    TimedOut,
+    ActionRequired,
+    Stale,
+    Skipped,
+}
+
+impl RunConclusion {
+    pub fn try_from_str(value: impl Into<String>) -> Result<Self, anyhow::Error> {
+        let value = value.into();
+        serde_plain::from_str(&value)
+            .map_err(|_| anyhow::anyhow!("invalid run conclusion from github: {value}"))
+    }
+
+    pub fn is_ok(&self) -> bool {
+        matches!(self, RunConclusion::Success | RunConclusion::Neutral)
+    }
+}

@@ -121,6 +121,7 @@ message Deployment {
   string created_at = 5;
   optional string finished_at = 6;
   DeployConfig config = 7;
+  optional string blockscout_url = 8;
 }
 
 message GetInstanceRequest {

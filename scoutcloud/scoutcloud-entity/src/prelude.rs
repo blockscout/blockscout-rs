@@ -3,6 +3,7 @@
 pub use super::{
     auth_tokens::Entity as AuthTokens, balance_changes::Entity as BalanceChanges,
     balance_expenses::Entity as BalanceExpenses, deployments::Entity as Deployments,
-    instances::Entity as Instances, server_specs::Entity as ServerSpecs,
-    user_actions::Entity as UserActions, users::Entity as Users,
+    fang_tasks::Entity as FangTasks, instances::Entity as Instances,
+    server_specs::Entity as ServerSpecs, user_actions::Entity as UserActions,
+    users::Entity as Users,
 };

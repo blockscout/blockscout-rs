@@ -6,6 +6,7 @@ pub mod auth_tokens;
 pub mod balance_changes;
 pub mod balance_expenses;
 pub mod deployments;
+pub mod fang_tasks;
 pub mod instances;
 pub mod sea_orm_active_enums;
 pub mod server_specs;

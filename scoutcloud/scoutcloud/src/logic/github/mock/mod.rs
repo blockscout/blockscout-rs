@@ -56,7 +56,7 @@ struct MockCase {
 }
 
 impl MockedGithubRepo {
-    pub fn build_mock_handlers(&self) -> GithubMockedHandles {
+    pub fn build_handles(&self) -> GithubMockedHandles {
         let mut handles = HashMap::new();
         for case_raw in [
             include_str!("data/commits.json"),
@@ -70,6 +70,8 @@ impl MockedGithubRepo {
             include_str!("data/dispatch_deploy_yaml.json"),
             include_str!("data/runs_cleanup_yaml.json"),
             include_str!("data/runs_deploy_yaml.json"),
+            include_str!("data/single_run_cleanup_yaml.json"),
+            include_str!("data/single_run_deploy_yaml.json"),
         ] {
             let case: MockCase = serde_json::from_str(case_raw).expect("invalid json");
             let url = case

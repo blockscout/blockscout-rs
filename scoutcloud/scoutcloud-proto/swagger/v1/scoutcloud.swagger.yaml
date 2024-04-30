@@ -340,6 +340,8 @@ definitions:
         type: string
       config:
         $ref: '#/definitions/v1DeployConfig'
+      blockscout_url:
+        type: string
   v1DeploymentStatus:
     type: string
     enum:

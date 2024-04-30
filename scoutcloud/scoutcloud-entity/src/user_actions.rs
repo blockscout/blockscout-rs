@@ -8,7 +8,7 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
     pub token_id: i32,
-    pub created_at: DateTime,
+    pub created_at: DateTimeWithTimeZone,
     pub action: String,
     #[sea_orm(column_type = "JsonBinary")]
     pub data: Json,

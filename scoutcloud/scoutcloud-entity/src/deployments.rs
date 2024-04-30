@@ -16,8 +16,10 @@ pub struct Model {
     pub user_config: Json,
     #[sea_orm(column_type = "JsonBinary")]
     pub parsed_config: Json,
-    pub created_at: DateTime,
-    pub finished_at: Option<DateTime>,
+    pub instance_url: Option<String>,
+    pub created_at: DateTimeWithTimeZone,
+    pub started_at: Option<DateTimeWithTimeZone>,
+    pub finished_at: Option<DateTimeWithTimeZone>,
     pub status: DeploymentStatusType,
     pub error: Option<String>,
     pub total_cost: Decimal,
