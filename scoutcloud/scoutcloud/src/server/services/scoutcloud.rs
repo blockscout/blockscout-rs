@@ -266,6 +266,7 @@ fn map_deploy_code(err: &DeployError) -> Code {
         DeployError::Auth(e) => map_auth_code(e),
         DeployError::DeploymentNotFound => Code::NotFound,
         DeployError::InvalidStateTransition(_, _) => Code::InvalidArgument,
+        DeployError::InvalidValue(_) => Code::InvalidArgument,
     }
 }
 

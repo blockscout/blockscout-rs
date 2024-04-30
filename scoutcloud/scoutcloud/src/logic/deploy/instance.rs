@@ -89,6 +89,9 @@ impl Instance {
         C: ConnectionTrait,
     {
         let slug = slug::slugify(name);
+        if slug.len() > 255 {
+            return Err(DeployError::InvalidValue("name is too long".to_string()));
+        }
         if let Some(instance) = db::instances::Entity::find()
             .filter(db::instances::Column::Slug.eq(&slug))
             .one(db)
@@ -103,6 +106,7 @@ impl Instance {
 
         let model = db::instances::ActiveModel {
             creator_id: Set(creator.user.id),
+            name: Set(name.to_string()),
             slug: Set(slug),
             user_config: Set(user_config.raw()?),
             parsed_config: Set(parsed_config.raw().to_owned()),

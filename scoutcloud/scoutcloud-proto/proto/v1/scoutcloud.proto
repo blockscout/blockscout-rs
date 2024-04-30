@@ -110,9 +110,10 @@ message Instance {
   string instance_id = 1;
   optional string deployment_id = 2;
   string name = 3;
-  string created_at = 4;
-  DeployConfig config = 5;
-  DeploymentStatus deployment_status = 6;
+  string slug = 4;
+  string created_at = 5;
+  DeployConfig config = 6;
+  DeploymentStatus deployment_status = 7;
 }
 
 message Deployment {
@@ -121,10 +122,11 @@ message Deployment {
   DeploymentStatus status = 3;
   optional string error = 4;
   string created_at = 5;
-  optional string finished_at = 6;
-  DeployConfig config = 7;
-  optional string blockscout_url = 8;
-  string total_cost = 9;
+  optional string started_at = 6;
+  optional string finished_at = 7;
+  DeployConfig config = 8;
+  optional string blockscout_url = 9;
+  string total_cost = 10;
 }
 
 message GetInstanceRequest {
