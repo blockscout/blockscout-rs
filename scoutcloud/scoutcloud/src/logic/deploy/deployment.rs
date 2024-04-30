@@ -27,7 +27,7 @@ impl Deployment {
         C: ConnectionTrait,
     {
         let server_spec = instance.find_server_spec(db).await?.ok_or(anyhow::anyhow!(
-            "server size of instance not found in database"
+            "server spec of the instance was not found in database"
         ))?;
         let model = db::deployments::ActiveModel {
             instance_id: Set(instance.model.id),
@@ -66,7 +66,7 @@ impl Deployment {
         Ok(deployment)
     }
 
-    pub async fn find_by_uud<C>(db: &C, uuid: impl Into<String>) -> Result<Option<Self>, DbErr>
+    pub async fn find_by_uuid<C>(db: &C, uuid: impl Into<String>) -> Result<Option<Self>, DbErr>
     where
         C: ConnectionTrait,
     {
@@ -138,7 +138,7 @@ impl Deployment {
     {
         let mut model = self.model.clone().into_active_model();
         model.status = Set(DeploymentStatusType::Stopped);
-        model.finished_at = Set(Some(chrono::Utc::now().naive_utc()));
+        model.finished_at = Set(Some(chrono::Utc::now().fixed_offset()));
         self.model = model.update(db).await?;
         Ok(self)
     }
@@ -150,7 +150,7 @@ impl Deployment {
         let instance_url = self.instance_config().parse_instance_url()?;
         let mut model = self.model.clone().into_active_model();
         model.status = Set(DeploymentStatusType::Running);
-        model.started_at = Set(Some(chrono::Utc::now().naive_utc()));
+        model.started_at = Set(Some(chrono::Utc::now().fixed_offset()));
         model.instance_url = Set(Some(instance_url.to_string()));
         self.model = model.update(db).await?;
         Ok(self)

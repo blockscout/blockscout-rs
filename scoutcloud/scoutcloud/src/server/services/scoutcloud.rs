@@ -121,7 +121,6 @@ impl Scoutcloud for ScoutcloudService {
 
         let result = logic::deploy::update_instance_status(
             self.db.as_ref(),
-            self.github.as_ref(),
             self.jobs.as_ref(),
             &request.instance_id,
             &request.action,

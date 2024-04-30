@@ -38,6 +38,9 @@ pub trait Workflow: Serialize + Send + Sync {
         let _lock = GITHUB_WORKFLOW_MUTEX.lock().await;
         let now = chrono::Utc::now();
         self.run(client).await?;
+
+        // we don't have way to get run id from run_workflow, since github doesn't return anything,
+        // so we need to wait for the run to appear in the list
         for _ in 0..max_try {
             let maybe_run = Self::get_latest_run(client, Some(now)).await?;
             if let Some(run) = maybe_run {
@@ -94,8 +97,9 @@ impl GithubClient {
             .wait_for_completed_status_with_timeout(run, timeout, sleep_between)
             .await?;
         let run_name_debug = run.name.to_string();
-        match status.is_completed() {
-            true => match conclusion {
+
+        if status.is_completed() {
+            match conclusion {
                 Some(conclusion) if conclusion.is_ok() => {
                     tracing::info!(conclusion = ?conclusion, "'{run_name_debug}' deploy completed");
                     Ok(conclusion)
@@ -106,10 +110,11 @@ impl GithubClient {
                 None => Err(GithubError::Internal(anyhow::anyhow!(
                     "no final result for workflow"
                 ))),
-            },
-            false => Err(GithubError::GithubWorkflow(anyhow::anyhow!(
+            }
+        } else {
+            Err(GithubError::GithubWorkflow(anyhow::anyhow!(
                 "timed out waiting for '{run_name_debug}' deploy. status={status:?}"
-            ))),
+            )))
         }
     }
 

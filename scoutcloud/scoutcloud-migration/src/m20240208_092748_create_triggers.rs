@@ -41,7 +41,7 @@ impl MigrationTrait for Migration {
             "#,
             r#"
             -- Trigger function to update user balance after insert, update, or delete on balance_expenses
-            CREATE OR REPLACE FUNCTION update_user_balance_expenses()
+            CREATE OR REPLACE FUNCTION update_for_balance_expenses()
             RETURNS TRIGGER AS $$
             BEGIN
                 IF TG_OP = 'INSERT' THEN
@@ -81,7 +81,7 @@ impl MigrationTrait for Migration {
             AFTER INSERT OR UPDATE OR DELETE
             ON balance_expenses
             FOR EACH ROW
-            EXECUTE FUNCTION update_user_balance_expenses();"#,
+            EXECUTE FUNCTION update_for_balance_expenses();"#,
         ].as_ref()).await?;
 
         Ok(())
@@ -94,7 +94,7 @@ impl MigrationTrait for Migration {
             DROP TRIGGER IF EXISTS balance_changes_trigger ON balance_changes;
             DROP TRIGGER IF EXISTS balance_expenses_trigger ON balance_expenses;
 
-            DROP FUNCTION IF EXISTS update_user_balance_expenses() CASCADE;
+            DROP FUNCTION IF EXISTS update_for_balance_expenses() CASCADE;
             DROP FUNCTION IF EXISTS update_user_balance() CASCADE;"#,
         )
         .await?;

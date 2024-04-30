@@ -9,7 +9,7 @@ pub struct Model {
     pub id: i32,
     pub email: String,
     pub project_title: Option<String>,
-    pub created_at: DateTime,
+    pub created_at: DateTimeWithTimeZone,
     pub is_superuser: bool,
     pub balance: Decimal,
 }

@@ -3,7 +3,7 @@ use crate::{
         deploy::{deployment::map_deployment_status, handlers::user_actions},
         jobs::JobsRunner,
         users::UserToken,
-        DeployError, Deployment, GithubClient, Instance, InstanceDeployment,
+        DeployError, Deployment, Instance, InstanceDeployment,
     },
     server::proto,
 };
@@ -15,7 +15,6 @@ const MIN_HOURS_DEPLOY: u64 = 12;
 
 pub async fn update_instance_status(
     db: &DatabaseConnection,
-    github: &GithubClient,
     runner: &JobsRunner,
     instance_uuid: &str,
     action: &proto::UpdateInstanceAction,
@@ -25,13 +24,12 @@ pub async fn update_instance_status(
         .await?
         .ok_or(DeployError::InstanceNotFound(instance_uuid.to_string()))?;
     user_token.has_access_to_instance(&instance.instance)?;
-    let result = handle_instance_action(db, github, runner, instance, action, user_token).await?;
+    let result = handle_instance_action(db, runner, instance, action, user_token).await?;
     Ok(result)
 }
 
 async fn handle_instance_action(
     db: &DatabaseConnection,
-    _github: &GithubClient,
     runner: &JobsRunner,
     instance: InstanceDeployment,
     action: &proto::UpdateInstanceAction,
@@ -82,7 +80,7 @@ async fn start_instance(
     user_token: &UserToken,
 ) -> Result<Deployment, DeployError> {
     let spec = instance.find_server_spec(db).await?.ok_or(anyhow::anyhow!(
-        "server size of instance not found in database"
+        "server spec of the instance was not found in database"
     ))?;
     user_token
         .allowed_to_deploy_for_hours(MIN_HOURS_DEPLOY, &spec)

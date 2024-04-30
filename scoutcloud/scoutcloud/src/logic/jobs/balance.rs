@@ -50,7 +50,7 @@ impl AsyncRunnable for CheckBalanceTask {
             if unpaid.creator_can_pay(&tx).await.map_err(DeployError::Db)? {
                 unpaid.mark_as_paid(&tx).await.map_err(DeployError::Db)?;
             } else {
-                tracing::warn!(
+                tracing::info!(
                     user_id = unpaid.creator_id,
                     deployment_id = unpaid.deployment_id,
                     "user can't pay for deployment. stopping deployment",
