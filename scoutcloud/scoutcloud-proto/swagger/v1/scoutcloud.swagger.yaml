@@ -190,6 +190,20 @@ paths:
             $ref: '#/definitions/ScoutcloudUpdateInstanceStatusBody'
       tags:
         - Scoutcloud
+  /api/v1/users/profile:
+    get:
+      operationId: Scoutcloud_GetProfile
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1UserProfile'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - Scoutcloud
   /health:
     get:
       summary: |-
@@ -336,11 +350,15 @@ definitions:
         type: string
       created_at:
         type: string
+      started_at:
+        type: string
       finished_at:
         type: string
       config:
         $ref: '#/definitions/v1DeployConfig'
       blockscout_url:
+        type: string
+      total_cost:
         type: string
   v1DeploymentStatus:
     type: string
@@ -366,6 +384,8 @@ definitions:
       deployment_id:
         type: string
       name:
+        type: string
+      slug:
         type: string
       created_at:
         type: string
@@ -408,3 +428,28 @@ definitions:
         $ref: '#/definitions/v1DeploymentStatus'
       deployment_id:
         type: string
+  v1UserAction:
+    type: object
+    properties:
+      action:
+        type: string
+      instance_id:
+        type: string
+      timestamp:
+        type: string
+  v1UserProfile:
+    type: object
+    properties:
+      email:
+        type: string
+      project_title:
+        type: string
+      created_at:
+        type: string
+      balance:
+        type: string
+      recent_actions:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1UserAction'

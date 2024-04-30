@@ -10,6 +10,7 @@ pub struct Model {
     pub token_id: i32,
     pub created_at: DateTimeWithTimeZone,
     pub action: String,
+    pub instance_id: Option<i32>,
     #[sea_orm(column_type = "JsonBinary")]
     pub data: Json,
 }
@@ -24,11 +25,25 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     AuthTokens,
+    #[sea_orm(
+        belongs_to = "super::instances::Entity",
+        from = "Column::InstanceId",
+        to = "super::instances::Column::Id",
+        on_update = "NoAction",
+        on_delete = "NoAction"
+    )]
+    Instances,
 }
 
 impl Related<super::auth_tokens::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::AuthTokens.def()
+    }
+}
+
+impl Related<super::instances::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Instances.def()
     }
 }
 

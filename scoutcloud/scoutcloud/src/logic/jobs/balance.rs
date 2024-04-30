@@ -55,6 +55,8 @@ impl AsyncRunnable for CheckBalanceTask {
                     deployment_id = unpaid.deployment_id,
                     "user can't pay for deployment. stopping deployment",
                 );
+                // create expense in any case, user balance will be negative
+                unpaid.mark_as_paid(&tx).await.map_err(DeployError::Db)?;
                 // TODO: maybe notify user?
                 client
                     .insert_task(&StoppingTask::from_deployment_id(unpaid.deployment_id))

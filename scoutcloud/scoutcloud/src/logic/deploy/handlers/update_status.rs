@@ -1,8 +1,8 @@
 use crate::{
     logic::{
-        deploy::{deployment::map_deployment_status, handlers::user_actions},
+        deploy::deployment::map_deployment_status,
         jobs::JobsRunner,
-        users::UserToken,
+        users::{user_actions, UserToken},
         DeployError, Deployment, Instance, InstanceDeployment,
     },
     server::proto,

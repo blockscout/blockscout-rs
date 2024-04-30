@@ -118,7 +118,8 @@ impl TryFrom<InstanceDeployment> for proto::InstanceInternal {
         let user_config = instance.user_config()?;
         let proto_instance = proto::InstanceInternal {
             instance_id: instance.model.external_id.to_string(),
-            name: instance.model.slug.clone(),
+            name: instance.model.name.clone(),
+            slug: instance.model.slug.clone(),
             created_at: instance.model.created_at.to_string(),
             config: Some(user_config.internal),
             deployment_id: deployment.as_ref().map(|d| d.model.external_id.to_string()),
@@ -141,9 +142,11 @@ impl TryFrom<InstanceDeployment> for proto::DeploymentInternal {
             status: map_deployment_status(Some(&deployment.model.status)),
             error: deployment.model.error,
             created_at: deployment.model.created_at.to_string(),
+            started_at: deployment.model.started_at.map(|t| t.to_string()),
             finished_at: deployment.model.finished_at.map(|t| t.to_string()),
             config: Some(config.internal),
             blockscout_url: deployment.model.instance_url,
+            total_cost: deployment.model.total_cost.to_string(),
         })
     }
 }

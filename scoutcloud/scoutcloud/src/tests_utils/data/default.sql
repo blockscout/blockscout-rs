@@ -15,11 +15,11 @@ VALUES
     (2);
 
 -- Inserting mock data for instances
-INSERT INTO "instances" ("id", "creator_id", "slug", "user_config", "parsed_config")
+INSERT INTO "instances" ("id", "creator_id", "name", "slug", "user_config", "parsed_config")
 VALUES
-    (1, 1, 'instance1', '{"rpc_url": "https://sepolia.drpc.org/","node_type": "geth", "chain_type": "ethereum", "server_size": "medium"}', '{}'),
-    (2, 2, 'instance2', '{"rpc_url": "https://sepolia.drpc.org/","node_type": "geth", "chain_type": "ethereum", "server_size": "medium"}', '{}'),
-    (3, 2, 'instance3', '{"rpc_url": "https://sepolia.drpc.org/","node_type": "geth", "chain_type": "ethereum", "server_size": "medium"}', '{}');
+    (1, 1, 'Instance 1', 'instance-1', '{"rpc_url": "https://sepolia.drpc.org/","node_type": "geth", "chain_type": "ethereum", "server_size": "medium"}', '{}'),
+    (2, 2, 'Instance 2', 'instance-2', '{"rpc_url": "https://sepolia.drpc.org/","node_type": "geth", "chain_type": "ethereum", "server_size": "medium"}', '{}'),
+    (3, 2, 'Instance 3', 'instance-3', '{"rpc_url": "https://sepolia.drpc.org/","node_type": "geth", "chain_type": "ethereum", "server_size": "medium"}', '{}');
 
 
 -- Inserting mock data for deployments
