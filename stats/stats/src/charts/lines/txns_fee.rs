@@ -1,3 +1,4 @@
+//! Total transaction fees for an interval
 use crate::{
     charts::db_interaction::{
         chart_updaters::{ChartPartialUpdater, ChartUpdater},

@@ -1,3 +1,4 @@
+//! Average fee per transaction
 use crate::{
     charts::db_interaction::{
         chart_updaters::{ChartPartialUpdater, ChartUpdater},
