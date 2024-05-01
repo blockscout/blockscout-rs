@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package blockscout.daIndexer.v1;
+
+option go_package = "github.com/blockscout/blockscout-rs/da-indexer";
+
+
+service DaService {
+  rpc GetCelestiaBlob(GetCelestiaBlobRequest) returns (Blob) {}
+}
+
+message Blob {
+  uint64 height = 1;
+  string namespace = 2;
+  string commitment = 3;
+  uint64 timestamp = 4;
+  uint64 size = 5;
+  optional string data = 6;
+}
+
+message GetCelestiaBlobRequest {
+  uint64 height = 1;
+  string commitment = 2;
+  optional bool skip_data = 3;
+}

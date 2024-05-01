@@ -1,0 +1,33 @@
+[server.http]
+enabled = true
+addr = "0.0.0.0:8050"
+max_body_size = 2097152
+
+[server.grpc]
+enabled = false
+addr = "0.0.0.0:8051"
+
+[celestia_indexer]
+concurrency = 30
+
+[celestia_indexer.rpc]
+url = "http://localhost:26658"
+auth_token = ""
+
+[database]
+connect.url = "postgres://postgres:admin@127.0.0.1:9432/blockscout" # (required) no default value available
+create_database = true
+run_migrations = true
+
+[metrics]
+enabled = true
+addr = "0.0.0.0:6060"
+route = "/metrics"
+
+[jaeger]
+enabled = false
+agent_endpoint = "localhost:6831"
+
+[tracing]
+enabled = true
+format = "default"
