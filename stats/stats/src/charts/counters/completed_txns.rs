@@ -21,7 +21,7 @@ impl ChartFullUpdater for CompletedTxns {
         // here we split query into 3 parts due to perfomance.
         //
         // joining transactions and blocks with filtering on (t.status = 1 and b.consensus = true) is super long.
-        // so we count amount of success transactions without joinging,
+        // so we count amount of success transactions without joining,
         // and then subtract amount of dropped transactions.
         // since amount of dropped txns (b.consensus = false) is very small,
         // the second query will execute very quickly.
