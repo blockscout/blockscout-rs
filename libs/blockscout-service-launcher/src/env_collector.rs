@@ -237,9 +237,6 @@ where
             .as_str(),
     )?;
 
-    // check that every variable in example present in markdown.
-    // ignore description but check value and required
-    // return list of variables that are not present in markdown
     let missing = example
         .vars
         .iter()
