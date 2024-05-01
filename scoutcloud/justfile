@@ -53,4 +53,5 @@ insert-test-data:
     insert into auth_tokens(user_id) values (1); select token_value from auth_tokens;\
     insert into balance_changes(user_id, amount) values (1, 100);"
 
-
+check-envs:
+    cargo run --bin check-envs
