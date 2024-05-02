@@ -77,6 +77,6 @@ backend [configuration](https://github.com/blockscout/docs/blob/master/for-devel
 and
 frontend [configuration](https://github.com/blockscout/frontend/blob/main/docs/ENVS.md#user-operations-feature-erc-4337)
 
-Running using docker
+Running using [docker compose](https://github.com/blockscout/blockscout/tree/master/docker-compose)
 or [Blockscout Stack Helm charts](https://docs.blockscout.com/for-developers/deployment/kubernetes-deployment) is
 recommended.
