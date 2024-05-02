@@ -102,13 +102,13 @@ impl<'a, C: EvmCompiler> ContractVerifier<'a, C> {
             >,
         > = match creation_tx_input {
             None => {
-                if let Some(parsed_blueprint_code) =
+                if let Some(blueprint_contract) =
                     blueprint_contracts::from_runtime_code(deployed_bytecode.clone())
                 {
                     is_blueprint = true;
                     Box::new(all_metadata_extracting_verifier::Verifier::<
                         CreationTxInputWithoutConstructorArgs,
-                    >::new(parsed_blueprint_code)?)
+                    >::new(blueprint_contract.initcode)?)
                 } else {
                     Box::new(all_metadata_extracting_verifier::Verifier::<
                         DeployedBytecode,
@@ -116,13 +116,13 @@ impl<'a, C: EvmCompiler> ContractVerifier<'a, C> {
                 }
             }
             Some(creation_tx_input) => {
-                if let Some(parsed_blueprint_code) =
+                if let Some(blueprint_contract) =
                     blueprint_contracts::from_creation_code(creation_tx_input.clone())
                 {
                     is_blueprint = true;
                     Box::new(all_metadata_extracting_verifier::Verifier::<
                         CreationTxInputWithoutConstructorArgs,
-                    >::new(parsed_blueprint_code)?)
+                    >::new(blueprint_contract.initcode)?)
                 } else {
                     Box::new(
                         all_metadata_extracting_verifier::Verifier::<CreationTxInput>::new(
