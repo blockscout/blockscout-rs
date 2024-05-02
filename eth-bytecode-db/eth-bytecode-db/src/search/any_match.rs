@@ -16,19 +16,19 @@ where
 
     let mut is_blueprint = false;
     if let BytecodeType::CreationInput = remote.bytecode_type {
-        if let Some(parsed_blueprint_code) =
+        if let Some(blueprint_contract) =
             blueprint_contracts::from_creation_code(remote.data.clone())
         {
-            remote.data = parsed_blueprint_code;
+            remote.data = blueprint_contract.initcode;
             is_blueprint = true;
         }
     }
 
     if let BytecodeType::DeployedBytecode = remote.bytecode_type {
-        if let Some(parsed_blueprint_code) =
+        if let Some(blueprint_contract) =
             blueprint_contracts::from_runtime_code(remote.data.clone())
         {
-            remote.data = parsed_blueprint_code;
+            remote.data = blueprint_contract.initcode;
             remote.bytecode_type = BytecodeType::CreationInput;
             is_blueprint = true;
         }
