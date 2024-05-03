@@ -11,46 +11,49 @@ use super::{
 };
 use crate::{
     charts::{
+        data_source::{UpdateContext, UpdateParameters},
         db_interaction::{types::DateValue, write::insert_data_many},
         find_chart,
     },
     metrics, UpdateError,
 };
-use async_trait::async_trait;
-use chrono::{DateTime, Duration, NaiveDate, Utc};
+use chrono::{Duration, NaiveDate};
 use sea_orm::{DatabaseConnection, FromQueryResult, Statement, TransactionTrait};
 use std::time::Instant;
 
-#[async_trait]
 pub trait ChartBatchUpdater: ChartUpdater {
-    fn get_query(&self, from: NaiveDate, to: NaiveDate) -> Statement;
-    fn step_duration(&self) -> chrono::Duration {
+    fn get_query(from: NaiveDate, to: NaiveDate) -> Statement;
+    fn step_duration() -> chrono::Duration {
         chrono::Duration::days(30)
     }
 
     async fn update_with_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: DateTime<Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        let chart_id = find_chart(db, self.name())
+        cx: &mut UpdateContext<UpdateParameters<'_>>,
+    ) -> Result<Vec<DateValue>, UpdateError> {
+        let cx = &cx.user_context;
+        let UpdateParameters {
+            db,
+            blockscout,
+            current_time,
+            force_full,
+        } = *cx;
+        let chart_id = find_chart(db, Self::name())
             .await
             .map_err(UpdateError::StatsDB)?
-            .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
+            .ok_or_else(|| UpdateError::NotFound(Self::name().into()))?;
         let min_blockscout_block = get_min_block_blockscout(blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?;
-        let offset = Some(self.approximate_trailing_points());
+        let offset = Some(Self::approximate_trailing_points());
         let last_updated_row =
-            get_nth_last_row(self, chart_id, min_blockscout_block, db, force_full, offset).await?;
+            get_nth_last_row::<Self>(chart_id, min_blockscout_block, db, force_full, offset)
+                .await?;
 
         let _timer = metrics::CHART_FETCH_NEW_DATA_TIME
-            .with_label_values(&[self.name()])
+            .with_label_values(&[Self::name()])
             .start_timer();
         tracing::info!(last_updated_row =? last_updated_row, "start batch update");
-        self.batch_update(
+        Self::batch_update(
             db,
             blockscout,
             last_updated_row,
@@ -58,11 +61,12 @@ pub trait ChartBatchUpdater: ChartUpdater {
             chart_id,
             min_blockscout_block,
         )
-        .await
+        .await?;
+        // todo: fix
+        Ok(vec![])
     }
 
     async fn batch_update(
-        &self,
         db: &DatabaseConnection,
         blockscout: &DatabaseConnection,
         update_from_row: Option<DateValue>,
@@ -82,12 +86,12 @@ pub trait ChartBatchUpdater: ChartUpdater {
                 .map_err(UpdateError::BlockscoutDB)?,
         };
 
-        let steps = generate_date_ranges(first_date, today, self.step_duration());
+        let steps = generate_date_ranges(first_date, today, Self::step_duration());
         let n = steps.len();
 
         for (i, (from, to)) in steps.into_iter().enumerate() {
             tracing::info!(from =? from, to =? to , "run {}/{} step of batch update", i + 1, n);
-            let query = self.get_query(from, to);
+            let query = Self::get_query(from, to);
             let now = Instant::now();
             let values = DateValue::find_by_statement(query)
                 .all(&txn)

@@ -2,13 +2,13 @@
 //!
 //! Depending on the chart nature, various tactics are better fit (in terms of efficiency, performance, etc.).
 
-use async_trait::async_trait;
-use chrono::Utc;
-use sea_orm::prelude::*;
-
 use crate::{
-    charts::{find_chart, mutex::get_global_update_mutex},
-    Chart, UpdateError,
+    charts::{
+        data_source::{ChartMetadata, UpdateContext, UpdateParameters},
+        find_chart,
+        mutex::get_global_update_mutex,
+    },
+    Chart, DateValue, UpdateError,
 };
 
 mod batch;
@@ -22,36 +22,35 @@ pub use dependent::{last_point, parse_and_cumsum, parse_and_sum, ChartDependentU
 pub use full::ChartFullUpdater;
 pub use partial::ChartPartialUpdater;
 
-#[async_trait]
 pub trait ChartUpdater: Chart {
     /// Update only data (values) of the chart (`chart_data` table).
     ///
     /// Implementation is expected to be highly variable.
     async fn update_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError>;
+        cx: &mut UpdateContext<UpdateParameters<'_>>,
+    ) -> Result<Vec<DateValue>, UpdateError>;
 
     /// Update only metadata of the chart (`charts` table).
     ///
     /// Generally better to call after changing chart data to keep
     /// the info relevant (i.e. if it depends on values).
     async fn update_metadata(
-        &self,
-        db: &DatabaseConnection,
-        _blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<Utc>,
-    ) -> Result<(), UpdateError> {
-        let chart_id = find_chart(db, self.name())
+        cx: &mut UpdateContext<UpdateParameters<'_>>,
+    ) -> Result<ChartMetadata, UpdateError> {
+        let cx = &cx.user_context;
+        let UpdateParameters {
+            db, current_time, ..
+        } = cx;
+        let chart_id = find_chart(db, Self::name())
             .await
             .map_err(UpdateError::StatsDB)?
-            .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
-        common_operations::set_last_updated_at(chart_id, db, current_time)
+            .ok_or_else(|| UpdateError::NotFound(Self::name().into()))?;
+        common_operations::set_last_updated_at(chart_id, db, current_time.clone())
             .await
-            .map_err(UpdateError::StatsDB)
+            .map_err(UpdateError::StatsDB)?;
+        Ok(ChartMetadata {
+            last_update: current_time.clone(),
+        })
     }
 
     /// Update data and metadata of the chart.
@@ -59,26 +58,19 @@ pub trait ChartUpdater: Chart {
     /// `current_time` is settable mainly for testing purposes. So that
     /// code dependant on time (mostly metadata updates) can be reproducibly tested.
     async fn update(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_values(db, blockscout, current_time, force_full)
-            .await?;
-        self.update_metadata(db, blockscout, current_time).await
+        cx: &mut UpdateContext<UpdateParameters<'_>>,
+    ) -> Result<(Vec<DateValue>, ChartMetadata), UpdateError> {
+        Ok((
+            Self::update_values(cx).await?,
+            Self::update_metadata(cx).await?,
+        ))
     }
 
     /// Run [`Self::update`] with acquiring global mutex for the chart
     async fn update_with_mutex(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        let name = self.name();
+        cx: &mut UpdateContext<UpdateParameters<'_>>,
+    ) -> Result<(Vec<DateValue>, ChartMetadata), UpdateError> {
+        let name = Self::name();
         let mutex = get_global_update_mutex(name).await;
         let _permit = {
             match mutex.try_lock() {
@@ -92,6 +84,6 @@ pub trait ChartUpdater: Chart {
                 }
             }
         };
-        self.update(db, blockscout, current_time, force_full).await
+        Self::update(cx).await
     }
 }

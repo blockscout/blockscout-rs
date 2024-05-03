@@ -1,32 +1,34 @@
 use super::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data};
 use crate::{
-    charts::db_interaction::chart_updaters::ChartUpdater, get_chart_data, get_counters, Chart,
-    MissingDatePolicy,
+    charts::{
+        data_source::{UpdateContext, UpdateParameters},
+        db_interaction::chart_updaters::ChartUpdater,
+    },
+    get_chart_data, get_counters, Chart, MissingDatePolicy,
 };
 use chrono::{DateTime, NaiveDate};
 use sea_orm::DatabaseConnection;
 use std::{assert_eq, str::FromStr};
 
-pub async fn simple_test_chart(
-    test_name: &str,
-    chart: impl ChartUpdater,
-    expected: Vec<(&str, &str)>,
-) {
+pub async fn simple_test_chart<C: ChartUpdater>(test_name: &str, expected: Vec<(&str, &str)>) {
     let _ = tracing_subscriber::fmt::try_init();
     let (db, blockscout) = init_db_all(test_name).await;
     let current_time = DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
     let current_date = current_time.date_naive();
-    chart.create(&db).await.unwrap();
+    C::create(&db).await.unwrap();
     fill_mock_blockscout_data(&blockscout, current_date).await;
-    let approximate_trailing_points = chart.approximate_trailing_points();
+    let approximate_trailing_points = C::approximate_trailing_points();
 
-    chart
-        .update(&db, &blockscout, current_time, true)
-        .await
-        .unwrap();
-    get_chart_and_assert_eq(
+    let mut parameters = UpdateParameters {
+        db: &db,
+        blockscout: &blockscout,
+        current_time,
+        force_full: true,
+    };
+    let mut cx = UpdateContext::from_inner(parameters.clone());
+    C::update(&mut cx).await.unwrap();
+    get_chart_and_assert_eq::<C>(
         &db,
-        &chart,
         &expected,
         None,
         None,
@@ -35,13 +37,11 @@ pub async fn simple_test_chart(
     )
     .await;
 
-    chart
-        .update(&db, &blockscout, current_time, false)
-        .await
-        .unwrap();
-    get_chart_and_assert_eq(
+    parameters.force_full = false;
+    let mut cx = UpdateContext::from_inner(parameters);
+    C::update(&mut cx).await.unwrap();
+    get_chart_and_assert_eq::<C>(
         &db,
-        &chart,
         &expected,
         None,
         None,
@@ -51,9 +51,8 @@ pub async fn simple_test_chart(
     .await;
 }
 
-pub async fn ranged_test_chart(
+pub async fn ranged_test_chart<C: ChartUpdater>(
     test_name: &str,
-    chart: impl ChartUpdater,
     expected: Vec<(&str, &str)>,
     from: NaiveDate,
     to: NaiveDate,
@@ -62,18 +61,21 @@ pub async fn ranged_test_chart(
     let (db, blockscout) = init_db_all(test_name).await;
     let current_time = DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
     let current_date = current_time.date_naive();
-    chart.create(&db).await.unwrap();
+    C::create(&db).await.unwrap();
     fill_mock_blockscout_data(&blockscout, current_date).await;
-    let policy = chart.missing_date_policy();
-    let approximate_trailing_points = chart.approximate_trailing_points();
+    let policy = C::missing_date_policy();
+    let approximate_trailing_points = C::approximate_trailing_points();
 
-    chart
-        .update(&db, &blockscout, current_time, true)
-        .await
-        .unwrap();
-    get_chart_and_assert_eq(
+    let mut parameters = UpdateParameters {
+        db: &db,
+        blockscout: &blockscout,
+        current_time,
+        force_full: true,
+    };
+    let mut cx = UpdateContext::from_inner(parameters.clone());
+    C::update(&mut cx).await.unwrap();
+    get_chart_and_assert_eq::<C>(
         &db,
-        &chart,
         &expected,
         Some(from),
         Some(to),
@@ -82,13 +84,11 @@ pub async fn ranged_test_chart(
     )
     .await;
 
-    chart
-        .update(&db, &blockscout, current_time, false)
-        .await
-        .unwrap();
-    get_chart_and_assert_eq(
+    parameters.force_full = false;
+    let mut cx = UpdateContext::from_inner(parameters);
+    C::update(&mut cx).await.unwrap();
+    get_chart_and_assert_eq::<C>(
         &db,
-        &chart,
         &expected,
         Some(from),
         Some(to),
@@ -98,9 +98,8 @@ pub async fn ranged_test_chart(
     .await;
 }
 
-async fn get_chart_and_assert_eq(
+async fn get_chart_and_assert_eq<C: Chart>(
     db: &DatabaseConnection,
-    chart: &impl Chart,
     expected: &Vec<(&str, &str)>,
     from: Option<NaiveDate>,
     to: Option<NaiveDate>,
@@ -109,7 +108,7 @@ async fn get_chart_and_assert_eq(
 ) {
     let data = get_chart_data(
         db,
-        chart.name(),
+        C::name(),
         from,
         to,
         None,
@@ -129,31 +128,34 @@ async fn get_chart_and_assert_eq(
     assert_eq!(expected, &data);
 }
 
-pub async fn simple_test_counter(test_name: &str, counter: impl ChartUpdater, expected: &str) {
+pub async fn simple_test_counter<C: ChartUpdater>(test_name: &str, expected: &str) {
     let _ = tracing_subscriber::fmt::try_init();
     let (db, blockscout) = init_db_all(test_name).await;
     let current_time = chrono::DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
     let current_date = current_time.date_naive();
 
-    counter.create(&db).await.unwrap();
+    C::create(&db).await.unwrap();
     fill_mock_blockscout_data(&blockscout, current_date).await;
 
-    counter
-        .update(&db, &blockscout, current_time, true)
-        .await
-        .unwrap();
-    get_counter_and_assert_eq(&db, &counter, expected).await;
+    let mut parameters = UpdateParameters {
+        db: &db,
+        blockscout: &blockscout,
+        current_time,
+        force_full: true,
+    };
+    let mut cx = UpdateContext::from_inner(parameters.clone());
+    C::update(&mut cx).await.unwrap();
+    get_counter_and_assert_eq::<C>(&db, expected).await;
 
-    counter
-        .update(&db, &blockscout, current_time, false)
-        .await
-        .unwrap();
-    get_counter_and_assert_eq(&db, &counter, expected).await;
+    parameters.force_full = false;
+    let mut cx = UpdateContext::from_inner(parameters.clone());
+    C::update(&mut cx).await.unwrap();
+    get_counter_and_assert_eq::<C>(&db, expected).await;
 }
 
-async fn get_counter_and_assert_eq(db: &DatabaseConnection, counter: &impl Chart, expected: &str) {
+async fn get_counter_and_assert_eq<C: Chart>(db: &DatabaseConnection, expected: &str) {
     let data = get_counters(db).await.unwrap();
-    let data = &data[counter.name()];
+    let data = &data[C::name()];
     let value = &data.value;
     assert_eq!(expected, value);
 }

@@ -1,5 +1,4 @@
 use crate::ReadError;
-use async_trait::async_trait;
 use chrono::Duration;
 use entity::{charts, sea_orm_active_enums::ChartType};
 use sea_orm::{prelude::*, sea_query, FromQueryResult, QuerySelect, Set};
@@ -35,14 +34,13 @@ pub enum MissingDatePolicy {
     FillPrevious,
 }
 
-#[async_trait]
 pub trait Chart: Sync {
-    fn name(&self) -> &str;
-    fn chart_type(&self) -> ChartType;
-    fn missing_date_policy(&self) -> MissingDatePolicy {
+    fn name() -> &'static str;
+    fn chart_type() -> ChartType;
+    fn missing_date_policy() -> MissingDatePolicy {
         MissingDatePolicy::FillZero
     }
-    fn relevant_or_zero(&self) -> bool {
+    fn relevant_or_zero() -> bool {
         false
     }
     /// Number of last values that are considered approximate.
@@ -62,8 +60,8 @@ pub trait Chart: Sync {
     /// not complete because blocks will be produced till the end of the day.
     ///    |===|=  |
     /// day -1   0
-    fn approximate_trailing_points(&self) -> u64 {
-        if self.chart_type() == ChartType::Counter {
+    fn approximate_trailing_points() -> u64 {
+        if Self::chart_type() == ChartType::Counter {
             // there's only one value in counter
             0
         } else {
@@ -71,8 +69,10 @@ pub trait Chart: Sync {
         }
     }
 
-    async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
-        create_chart(db, self.name().into(), self.chart_type()).await
+    // will be used only in our code
+    #[allow(async_fn_in_trait)]
+    async fn create(db: &DatabaseConnection) -> Result<(), DbErr> {
+        create_chart(db, Self::name().into(), Self::chart_type()).await
     }
 }
 

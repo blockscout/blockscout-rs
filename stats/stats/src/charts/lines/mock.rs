@@ -53,14 +53,10 @@ impl<T: SampleUniform + PartialOrd + Clone + ToString> MockLine<T> {
     }
 }
 
-#[async_trait]
 impl<T: SampleUniform + PartialOrd + Clone + ToString + Send + Sync + 'static> ChartFullUpdater
     for MockLine<T>
 {
-    async fn get_values(
-        &self,
-        _blockscout: &DatabaseConnection,
-    ) -> Result<Vec<DateValue>, UpdateError> {
+    async fn get_values(_blockscout: &DatabaseConnection) -> Result<Vec<DateValue>, UpdateError> {
         Ok(mocked_lines(self.range.clone()))
     }
 }
@@ -69,7 +65,7 @@ impl<T: SampleUniform + PartialOrd + Clone + ToString + Send + Sync + 'static> C
 impl<T: SampleUniform + PartialOrd + Clone + ToString + Send + Sync + 'static> crate::Chart
     for MockLine<T>
 {
-    fn name(&self) -> &str {
+    fn name() -> &'static str {
         &self.name
     }
 

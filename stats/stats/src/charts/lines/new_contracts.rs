@@ -1,18 +1,19 @@
 use crate::{
-    charts::db_interaction::chart_updaters::{ChartBatchUpdater, ChartUpdater},
-    UpdateError,
+    charts::{
+        data_source::{UpdateContext, UpdateParameters},
+        db_interaction::chart_updaters::{ChartBatchUpdater, ChartUpdater},
+    },
+    DateValue, UpdateError,
 };
-use async_trait::async_trait;
 use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, Statement};
+use sea_orm::{DbBackend, Statement};
 
 #[derive(Default, Debug)]
 pub struct NewContracts {}
 
-#[async_trait]
 impl ChartBatchUpdater for NewContracts {
-    fn get_query(&self, from: NaiveDate, to: NaiveDate) -> Statement {
+    fn get_query(from: NaiveDate, to: NaiveDate) -> Statement {
         Statement::from_sql_and_values(
             DbBackend::Postgres,
             r#"SELECT day AS date, COUNT(*)::text AS value
@@ -53,28 +54,21 @@ impl ChartBatchUpdater for NewContracts {
     }
 }
 
-#[async_trait]
 impl crate::Chart for NewContracts {
-    fn name(&self) -> &str {
+    fn name() -> &'static str {
         "newContracts"
     }
 
-    fn chart_type(&self) -> ChartType {
+    fn chart_type() -> ChartType {
         ChartType::Line
     }
 }
 
-#[async_trait]
 impl ChartUpdater for NewContracts {
     async fn update_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<chrono::Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, current_time, force_full)
-            .await
+        cx: &mut UpdateContext<UpdateParameters<'_>>,
+    ) -> Result<Vec<DateValue>, UpdateError> {
+        Self::update_with_values(cx).await
     }
 }
 
@@ -86,10 +80,8 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_new_contracts() {
-        let chart = NewContracts::default();
-        simple_test_chart(
+        simple_test_chart::<NewContracts>(
             "update_new_contracts",
-            chart,
             vec![
                 ("2022-11-09", "3"),
                 ("2022-11-10", "6"),

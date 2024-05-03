@@ -73,7 +73,7 @@ struct SyncInfo {
 /// Retrieves `offset`th latest data point from DB, if any.
 /// In case of inconsistencies or set `force_full`, also returns `None`.
 pub async fn get_nth_last_row<C>(
-    chart: &C,
+    // chart: &C,
     chart_id: i32,
     min_blockscout_block: i64,
     db: &DatabaseConnection,
@@ -87,7 +87,7 @@ where
     let row = if force_full {
         tracing::info!(
             min_blockscout_block = min_blockscout_block,
-            chart = chart.name(),
+            chart = C::name(),
             "running full update due to force override"
         );
         None
@@ -111,7 +111,7 @@ where
                         tracing::info!(
                             min_blockscout_block = min_blockscout_block,
                             min_chart_block = block,
-                            chart = chart.name(),
+                            chart = C::name(),
                             row = ?row,
                             "running partial update"
                         );
@@ -123,7 +123,7 @@ where
                         tracing::info!(
                             min_blockscout_block = min_blockscout_block,
                             min_chart_block = block,
-                            chart = chart.name(),
+                            chart = C::name(),
                             "running full update due to min blocks mismatch"
                         );
                         None
@@ -131,7 +131,7 @@ where
                 } else {
                     tracing::info!(
                         min_blockscout_block = min_blockscout_block,
-                        chart = chart.name(),
+                        chart = C::name(),
                         "running full update due to lack of saved min block"
                     );
                     None
@@ -140,7 +140,7 @@ where
             None => {
                 tracing::info!(
                     min_blockscout_block = min_blockscout_block,
-                    chart = chart.name(),
+                    chart = C::name(),
                     "running full update due to lack of history data"
                 );
                 None

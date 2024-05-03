@@ -4,55 +4,43 @@
 use super::{common_operations::get_min_block_blockscout, ChartUpdater};
 use crate::{
     charts::{
+        data_source::{UpdateContext, UpdateParameters},
         db_interaction::{types::DateValue, write::insert_data_many},
         find_chart,
     },
     get_chart_data, UpdateError,
 };
-use async_trait::async_trait;
-use chrono::Utc;
-use sea_orm::prelude::*;
-use std::{fmt::Display, iter::Sum, ops::AddAssign, str::FromStr, sync::Arc};
+use std::{fmt::Display, iter::Sum, ops::AddAssign, str::FromStr};
 
-#[async_trait]
 pub trait ChartDependentUpdater<P>: ChartUpdater
 where
     P: ChartUpdater + Send,
 {
-    fn parent(&self) -> Arc<P>;
-
     // Note that usually this chart's `approximate_trailing_points` logically
     // matches the one of it's parent
-    fn parent_approximate_trailing_points(&self) -> u64 {
-        self.parent().approximate_trailing_points()
+    fn parent_approximate_trailing_points() -> u64 {
+        P::approximate_trailing_points()
     }
 
-    async fn get_values(&self, parent_data: Vec<DateValue>) -> Result<Vec<DateValue>, UpdateError>;
+    async fn get_values(parent_data: Vec<DateValue>) -> Result<Vec<DateValue>, UpdateError>;
 
     async fn get_parent_data(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<Utc>,
-        force_full: bool,
+        cx: &mut UpdateContext<UpdateParameters<'_>>,
     ) -> Result<Vec<DateValue>, UpdateError> {
-        let parent = self.parent();
         tracing::info!(
-            chart_name = self.name(),
-            parent_chart_name = parent.name(),
+            chart_name = Self::name(),
+            parent_chart_name = P::name(),
             "updating parent"
         );
-        parent
-            .update_with_mutex(db, blockscout, current_time, force_full)
-            .await?;
+        P::update_with_mutex(cx).await?;
         let data = get_chart_data(
-            db,
-            parent.name(),
+            cx.user_context.db,
+            P::name(),
             None,
             None,
             None,
             None,
-            self.parent_approximate_trailing_points(),
+            Self::parent_approximate_trailing_points(),
         )
         .await?;
         let data = data.into_iter().map(DateValue::from).collect();
@@ -60,30 +48,25 @@ where
     }
 
     async fn update_with_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        let chart_id = find_chart(db, self.name())
+        cx: &mut UpdateContext<UpdateParameters<'_>>,
+    ) -> Result<Vec<DateValue>, UpdateError> {
+        let chart_id = find_chart(cx.user_context.db, Self::name())
             .await
             .map_err(UpdateError::StatsDB)?
-            .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
-        let min_blockscout_block = get_min_block_blockscout(blockscout)
+            .ok_or_else(|| UpdateError::NotFound(Self::name().into()))?;
+        let min_blockscout_block = get_min_block_blockscout(cx.user_context.blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?;
-        let parent_data = self
-            .get_parent_data(db, blockscout, current_time, force_full)
-            .await?;
-        let values = self
-            .get_values(parent_data)
-            .await?
+        let parent_data = Self::get_parent_data(cx).await?;
+        let data = Self::get_values(parent_data).await?;
+        let values = data
+            .clone()
             .into_iter()
             .map(|v| v.active_model(chart_id, Some(min_blockscout_block)));
-        insert_data_many(db, values)
+        insert_data_many(cx.user_context.db, values)
             .await
-            .map_err(UpdateError::StatsDB)
+            .map_err(UpdateError::StatsDB)?;
+        Ok(data)
     }
 }
 

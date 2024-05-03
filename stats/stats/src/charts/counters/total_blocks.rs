@@ -1,7 +1,10 @@
 use crate::{
-    charts::db_interaction::{
-        chart_updaters::{ChartFullUpdater, ChartUpdater},
-        types::DateValue,
+    charts::{
+        data_source::{UpdateContext, UpdateParameters},
+        db_interaction::{
+            chart_updaters::{ChartFullUpdater, ChartUpdater},
+            types::DateValue,
+        },
     },
     UpdateError,
 };
@@ -20,12 +23,8 @@ struct TotalBlocksData {
 #[derive(Default, Debug)]
 pub struct TotalBlocks {}
 
-#[async_trait]
 impl ChartFullUpdater for TotalBlocks {
-    async fn get_values(
-        &self,
-        blockscout: &DatabaseConnection,
-    ) -> Result<Vec<DateValue>, UpdateError> {
+    async fn get_values(blockscout: &DatabaseConnection) -> Result<Vec<DateValue>, UpdateError> {
         let data = blocks::Entity::find()
             .select_only()
             .column_as(Expr::col(blocks::Column::Number).count(), "number")
@@ -47,26 +46,20 @@ impl ChartFullUpdater for TotalBlocks {
 
 #[async_trait]
 impl crate::Chart for TotalBlocks {
-    fn name(&self) -> &str {
+    fn name() -> &'static str {
         "totalBlocks"
     }
 
-    fn chart_type(&self) -> ChartType {
+    fn chart_type() -> ChartType {
         ChartType::Counter
     }
 }
 
-#[async_trait]
 impl ChartUpdater for TotalBlocks {
     async fn update_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<chrono::Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, current_time, force_full)
-            .await
+        cx: &mut UpdateContext<UpdateParameters<'_>>,
+    ) -> Result<Vec<DateValue>, UpdateError> {
+        Self::update_with_values(cx).await
     }
 }
 
@@ -93,7 +86,7 @@ mod tests {
         let current_time = chrono::DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
         let current_date = current_time.date_naive();
 
-        updater.create(&db).await.unwrap();
+        TotalBlocks::create(&db).await.unwrap();
 
         chart_data::Entity::insert(chart_data::ActiveModel {
             chart_id: Set(1),
@@ -107,12 +100,16 @@ mod tests {
 
         fill_mock_blockscout_data(&blockscout, current_date).await;
 
-        updater
-            .update(&db, &blockscout, current_time, true)
-            .await
-            .unwrap();
+        let mut parameters = UpdateParameters {
+            db: &db,
+            blockscout: &blockscout,
+            current_time,
+            force_full: true,
+        };
+        let mut cx = UpdateContext::from_inner(parameters.clone());
+        TotalBlocks::update(&mut cx).await.unwrap();
         let data = get_counters(&db).await.unwrap();
-        assert_eq!("13", data[updater.name()].value);
+        assert_eq!("13", data[TotalBlocks::name()].value);
     }
 
     #[tokio::test]
@@ -120,20 +117,23 @@ mod tests {
     async fn update_total_blocks_fresh() {
         let _ = tracing_subscriber::fmt::try_init();
         let (db, blockscout) = init_db_all("update_total_blocks_fresh").await;
-        let updater = TotalBlocks::default();
         let current_time = chrono::DateTime::from_str("2022-11-12T12:00:00Z").unwrap();
         let current_date = current_time.date_naive();
 
-        updater.create(&db).await.unwrap();
+        TotalBlocks::create(&db).await.unwrap();
 
         fill_mock_blockscout_data(&blockscout, current_date).await;
 
-        updater
-            .update(&db, &blockscout, current_time, true)
-            .await
-            .unwrap();
+        let parameters = UpdateParameters {
+            db: &db,
+            blockscout: &blockscout,
+            current_time,
+            force_full: true,
+        };
+        let mut cx = UpdateContext::from_inner(parameters.clone());
+        TotalBlocks::update(&mut cx).await.unwrap();
         let data = get_counters(&db).await.unwrap();
-        assert_eq!("9", data[updater.name()].value);
+        assert_eq!("9", data[TotalBlocks::name()].value);
     }
 
     #[tokio::test]
@@ -141,11 +141,10 @@ mod tests {
     async fn update_total_blocks_last() {
         let _ = tracing_subscriber::fmt::try_init();
         let (db, blockscout) = init_db_all("update_total_blocks_last").await;
-        let updater = TotalBlocks::default();
         let current_time = chrono::DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
         let current_date = current_time.date_naive();
 
-        updater.create(&db).await.unwrap();
+        TotalBlocks::create(&db).await.unwrap();
 
         chart_data::Entity::insert(chart_data::ActiveModel {
             chart_id: Set(1),
@@ -159,11 +158,15 @@ mod tests {
 
         fill_mock_blockscout_data(&blockscout, current_date).await;
 
-        updater
-            .update(&db, &blockscout, current_time, true)
-            .await
-            .unwrap();
+        let parameters = UpdateParameters {
+            db: &db,
+            blockscout: &blockscout,
+            current_time,
+            force_full: true,
+        };
+        let mut cx = UpdateContext::from_inner(parameters.clone());
+        TotalBlocks::update(&mut cx).await.unwrap();
         let data = get_counters(&db).await.unwrap();
-        assert_eq!("13", data[updater.name()].value);
+        assert_eq!("13", data[TotalBlocks::name()].value);
     }
 }
