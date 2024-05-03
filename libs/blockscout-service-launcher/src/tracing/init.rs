@@ -5,6 +5,7 @@ use opentelemetry::{
     trace::TraceError,
 };
 use std::marker::Send;
+use tracing::Level;
 use tracing_subscriber::{
     filter::LevelFilter, fmt::format::FmtSpan, layer::SubscriberExt, prelude::*, Layer,
 };
@@ -13,6 +14,7 @@ pub fn init_logs(
     service_name: &str,
     tracing_settings: &TracingSettings,
     jaeger_settings: &JaegerSettings,
+    ignore_info_targets: &'static [&str],
 ) -> Result<(), anyhow::Error> {
     // If tracing is disabled, there is nothing to initialize
     if !tracing_settings.enabled {
@@ -28,6 +30,12 @@ pub fn init_logs(
         }
     }
 
+    let ignore_filter = tracing_subscriber::filter::filter_fn(move |metadata| {
+        ignore_info_targets
+            .iter()
+            .all(|&target| metadata.level().ge(&Level::INFO) && metadata.target() != target)
+    });
+
     let stdout_layer: Box<dyn Layer<_> + Sync + Send + 'static> = match tracing_settings.format {
         TracingFormat::Default => tracing_subscriber::fmt::layer()
             .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
@@ -36,6 +44,7 @@ pub fn init_logs(
                     .with_default_directive(LevelFilter::INFO.into())
                     .from_env_lossy(),
             )
+            .with_filter(ignore_filter.clone())
             .boxed(),
         TracingFormat::Json => tracing_subscriber::fmt::layer()
             .json()
@@ -43,6 +52,7 @@ pub fn init_logs(
             .flatten_event(true)
             .with_current_span(true)
             .with_span_list(false)
+            .with_filter(ignore_filter.clone())
             .with_filter(
                 tracing_subscriber::EnvFilter::builder()
                     .with_default_directive(LevelFilter::INFO.into())
