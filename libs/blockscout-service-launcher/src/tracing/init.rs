@@ -5,15 +5,16 @@ use opentelemetry::{
     trace::TraceError,
 };
 use std::marker::Send;
-use tracing::Level;
+use tracing::Metadata;
 use tracing_subscriber::{
     filter::LevelFilter, fmt::format::FmtSpan, layer::SubscriberExt, prelude::*, Layer,
 };
 
-pub fn init_logs(
+pub fn init_logs<F: Fn(&Metadata) -> bool + Send + Sync + 'static>(
     service_name: &str,
     tracing_settings: &TracingSettings,
     jaeger_settings: &JaegerSettings,
+    filter: Option<tracing_subscriber::filter::FilterFn<F>>,
 ) -> Result<(), anyhow::Error> {
     // If tracing is disabled, there is nothing to initialize
     if !tracing_settings.enabled {
@@ -37,6 +38,7 @@ pub fn init_logs(
                     .with_default_directive(LevelFilter::INFO.into())
                     .from_env_lossy(),
             )
+            .with_filter(filter)
             .boxed(),
         TracingFormat::Json => tracing_subscriber::fmt::layer()
             .json()
@@ -49,24 +51,10 @@ pub fn init_logs(
                     .with_default_directive(LevelFilter::INFO.into())
                     .from_env_lossy(),
             )
+            .with_filter(filter)
             .boxed(),
     };
-
-    let ignore_info_targets = tracing_settings
-        .ignore_info_targets
-        .clone()
-        .split(',')
-        .map(str::to_string)
-        .collect::<Vec<String>>();
-    layers.push(
-        stdout_layer
-            .with_filter(tracing_subscriber::filter::filter_fn(move |metadata| {
-                ignore_info_targets
-                    .iter()
-                    .all(|target| metadata.level().ge(&Level::INFO) && metadata.target() != target)
-            }))
-            .boxed(),
-    );
+    layers.push(stdout_layer);
 
     if jaeger_settings.enabled {
         let tracer = init_jaeger_tracer(service_name, &jaeger_settings.agent_endpoint)?;

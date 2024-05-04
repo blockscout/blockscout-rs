@@ -14,10 +14,6 @@ pub struct TracingSettings {
     /// stdout, nor jaeger (enabled by default).
     pub enabled: bool,
     pub format: TracingFormat,
-    #[serde(default)]
-    // comma-separated list of tracing targets that
-    // should be ignored if the span level is INFO
-    pub ignore_info_targets: String,
 }
 
 impl Default for TracingSettings {
@@ -25,7 +21,6 @@ impl Default for TracingSettings {
         Self {
             enabled: true,
             format: TracingFormat::Default,
-            ignore_info_targets: Default::default(),
         }
     }
 }
