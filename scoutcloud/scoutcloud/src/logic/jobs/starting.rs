@@ -39,7 +39,7 @@ impl StartingTask {
 #[fang::async_trait]
 impl AsyncRunnable for StartingTask {
     #[tracing::instrument(err(Debug), skip(_client), level = "info")]
-    async fn run(&self, _client: &mut dyn AsyncQueueable) -> Result<(), FangError> {
+    async fn run(&self, _client: &dyn AsyncQueueable) -> Result<(), FangError> {
         let db = global::DATABASE.get().await;
         let github = global::GITHUB.get().await;
 
