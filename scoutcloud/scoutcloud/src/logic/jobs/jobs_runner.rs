@@ -5,14 +5,14 @@ use crate::logic::{
 use anyhow::Context;
 use fang::{
     asynk::async_queue::AsyncQueue, AsyncQueueable, AsyncRunnable, AsyncWorkerPool, FangError,
-    NoTls, SleepParams,
+    SleepParams,
 };
 use sea_orm::DatabaseConnection;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 
 pub struct JobsRunner {
-    queue: Mutex<AsyncQueue<NoTls>>,
+    queue: Mutex<AsyncQueue>,
 }
 
 impl JobsRunner {
@@ -56,11 +56,11 @@ impl JobsRunner {
             .max_pool_size(max_pool_size)
             .build();
         queue
-            .connect(NoTls)
+            .connect()
             .await
             .context("connecting to fang database")?;
 
-        let mut pool: AsyncWorkerPool<AsyncQueue<NoTls>> = AsyncWorkerPool::builder()
+        let mut pool: AsyncWorkerPool<AsyncQueue> = AsyncWorkerPool::builder()
             .number_of_workers(max_pool_size)
             .sleep_params(sleep_params)
             .retention_mode(fang::RetentionMode::RemoveFinished)
@@ -74,7 +74,7 @@ impl JobsRunner {
     }
 
     pub async fn schedule_tasks(&self) -> Result<(), anyhow::Error> {
-        let mut queue = self.queue.lock().await;
+        let queue = self.queue.lock().await;
         queue.schedule_task(&CheckBalanceTask::default()).await?;
         Ok(())
     }
@@ -90,12 +90,12 @@ impl JobsRunner {
     }
 
     pub async fn insert_task(&self, task: &dyn AsyncRunnable) -> Result<(), anyhow::Error> {
-        let mut queue = self.queue.lock().await;
+        let queue = self.queue.lock().await;
         queue.insert_task(task).await?;
         Ok(())
     }
 
-    pub fn queue(&self) -> &Mutex<AsyncQueue<NoTls>> {
+    pub fn queue(&self) -> &Mutex<AsyncQueue> {
         &self.queue
     }
 }
