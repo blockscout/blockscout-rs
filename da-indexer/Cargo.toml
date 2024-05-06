@@ -1,0 +1,11 @@
+[workspace]
+resolver = "2"
+members = [
+    "da-indexer-logic",
+    "da-indexer-entity",
+    "da-indexer-proto",
+    "da-indexer-server",
+]
+
+[workspace.dependencies]
+blockscout-service-launcher = "0.10.0"

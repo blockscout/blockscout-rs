@@ -33,7 +33,7 @@ impl Default for CheckBalanceTask {
 #[fang::async_trait]
 impl AsyncRunnable for CheckBalanceTask {
     #[instrument(err(Debug), skip(self, client), level = "info")]
-    async fn run(&self, client: &mut dyn AsyncQueueable) -> Result<(), FangError> {
+    async fn run(&self, client: &dyn AsyncQueueable) -> Result<(), FangError> {
         let db = global::DATABASE.get().await;
         // 'check balance' is unique task and there is only one instance of this task running
         // however we begin transaction with serializable isolation level just in case

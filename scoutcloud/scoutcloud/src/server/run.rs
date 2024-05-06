@@ -14,6 +14,7 @@ use migration::Migrator;
 use scoutcloud_proto::blockscout::scoutcloud::v1::scoutcloud_server::ScoutcloudServer;
 use sea_orm::ConnectOptions;
 use std::sync::Arc;
+use tracing::Level;
 
 const SERVICE_NAME: &str = "scoutcloud";
 
@@ -44,6 +45,11 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         SERVICE_NAME,
         &settings.tracing,
         &settings.jaeger,
+        Some(tracing_subscriber::filter::filter_fn(move |metadata| {
+            ["sqlx::query"]
+                .iter()
+                .all(|&target| metadata.level().ge(&Level::INFO) && metadata.target() != target)
+        })),
     )?;
 
     let health = Arc::new(HealthService::default());

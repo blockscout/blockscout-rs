@@ -1,0 +1,14 @@
+type: google.api.Service
+config_version: 3
+
+http:
+  rules:
+
+    - selector: blockscout.daIndexer.v1.DaService.GetCelestiaBlob
+      get: /api/v1/celestia/blob
+    
+    #################### Health ####################
+
+    - selector: blockscout.daIndexer.v1.Health.Check
+      get: /health
+

@@ -16,7 +16,7 @@ COPY --from=cache $CARGO_HOME $CARGO_HOME
 RUN cargo build --release
 
 FROM ubuntu:20.04 as run
-RUN apt-get update && apt-get install -y libpq-dev libssl1.1 libssl-dev ca-certificates
+RUN apt-get update && apt-get install -y libssl1.1 libssl-dev ca-certificates
 
 WORKDIR /app
 ENV APP_USER=app
@@ -25,9 +25,9 @@ ENV APP_USER=app
 RUN groupadd $APP_USER \
     && useradd -g $APP_USER $APP_USER
 
-COPY --from=build /app/target/release/scoutcloud-server /app/scoutcloud-server
+COPY --from=build /app/target/release/da-indexer-server /app/da-indexer-server
 # Change directory access for app user
 RUN chown -R $APP_USER:$APP_USER /app
 USER app
 
-CMD ["./scoutcloud-server"]
+CMD ["./da-indexer-server"]
