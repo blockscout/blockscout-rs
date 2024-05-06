@@ -40,5 +40,6 @@ Here we describe only service specific variables. Variables common for all servi
 
 ## Links
 - Demo - https://http.sc-verifier.services.blockscout.com
+- [Swagger](https://blockscout.github.io/swaggers/services/smart-contract-verifier/index.html)
 - [Packages](https://github.com/blockscout/blockscout-rs/pkgs/container/smart-contract-verifier)
 - [Releases](https://github.com/blockscout/blockscout-rs/releases?q=smart-contract-verifier&expanded=true)
