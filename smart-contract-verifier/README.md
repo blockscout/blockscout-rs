@@ -20,21 +20,21 @@ Here we describe only service specific variables. Variables common for all servi
 
 [anchor]: <> (anchors.envs.start)
 
-| Variable                                                       | Is required | Example value                                                                | Comment                                                                 |
-|----------------------------------------------------------------| --- |------------------------------------------------------------------------------|-------------------------------------------------------------------------|
-| `SMART_CONTRACT_VERIFIER__SOLIDITY__ENABLED`                   | | `true`                                                                       | Enable Solidity verification endpoints                                  |
-| `SMART_CONTRACT_VERIFIER__SOLIDITY__FETCHER__LIST__LIST_URL`   | | `https://solc-bin.ethereum.org/linux-amd64/list.json`                        | Url that contains a list available Solidity compilers                   |
-| `SMART_CONTRACT_VERIFIER__SOLIDITY__REFRESH_VERSIONS_SCHEDULE` | | `0 0 * * * * *`                                                              | Cron-format schedule to update the list of available Solidity compilers |
-| `SMART_CONTRACT_VERIFIER__SOLIDITY__COMPILERS_DIR`             | | `/tmp/solidity-compilers`                                                    | Directory where Solidity compilers will be downloaded                   |
-| `SMART_CONTRACT_VERIFIER__VYPER__ENABLED`                      | | `true`                                                                       | Enable Vyper verification endpoints                                     |
-| `SMART_CONTRACT_VERIFIER__VYPER__FETCHER__LIST__LIST_URL`      | | `https://raw.githubusercontent.com/blockscout/solc-bin/main/vyper.list.json` | Url that contains a list of available Vyper compilers                   |
-| `SMART_CONTRACT_VERIFIER__VYPER__REFRESH_VERSIONS_SCHEDULE`    | | `0 0 * * * * *`                                                              | Cron-format schedule to update the list of available Vyper compilers    |
-| `SMART_CONTRACT_VERIFIER__VYPER__COMPILERS_DIR`                | | `/tmp/vyper-compilers`                                                       | Directory where Vyper compilers will be downloaded                      |
-| `SMART_CONTRACT_VERIFIER__SOURCIFY__ENABLED`                   | | `true`                                                                       | Enable Soucify verification endpoint                                    |
-| `SMART_CONTRACT_VERIFIER__SOURCIFY__API_URL`                   | | `https://sourcify.dev/server/`                                               | Sourcify API url                                                        |
-| `SMART_CONTRACT_VERIFIER__SOURCIFY__VERIFICATION_ATTEMPTS`     | | `3`                                                                          | Number of attempts the server makes to Sourcify API. Must be at least 1 |
-| `SMART_CONTRACT_VERIFIER__SOURCIFY__REQUEST_TIMEOUT`           | | `15`                                                                         | Timeout in seconds for a single request to Sourcify API                 |
-| `SMART_CONTRACT_VERIFIER__COMPILERS__MAX_THREADS`              | | `8`                                                                          | Maximum number of concurrent compilations                               |
+| Variable                                                       | Required | Description                                                             | Default value                                                                |
+|----------------------------------------------------------------|----------|-------------------------------------------------------------------------|------------------------------------------------------------------------------|
+| `SMART_CONTRACT_VERIFIER__SOLIDITY__ENABLED`                   |          | Enable Solidity verification endpoints                                  | `true`                                                                       |
+| `SMART_CONTRACT_VERIFIER__SOLIDITY__FETCHER__LIST__LIST_URL`   |          | Url that contains a list available Solidity compilers                   | `https://solc-bin.ethereum.org/linux-amd64/list.json`                        |
+| `SMART_CONTRACT_VERIFIER__SOLIDITY__REFRESH_VERSIONS_SCHEDULE` |          | Cron-format schedule to update the list of available Solidity compilers | `0 0 * * * * *`                                                              |
+| `SMART_CONTRACT_VERIFIER__SOLIDITY__COMPILERS_DIR`             |          | Directory where Solidity compilers will be downloaded                   | `/tmp/solidity-compilers`                                                    |
+| `SMART_CONTRACT_VERIFIER__VYPER__ENABLED`                      |          | Enable Vyper verification endpoints                                     | `true`                                                                       |
+| `SMART_CONTRACT_VERIFIER__VYPER__FETCHER__LIST__LIST_URL`      |          | Url that contains a list of available Vyper compilers                   | `https://raw.githubusercontent.com/blockscout/solc-bin/main/vyper.list.json` |
+| `SMART_CONTRACT_VERIFIER__VYPER__REFRESH_VERSIONS_SCHEDULE`    |          | Cron-format schedule to update the list of available Vyper compilers    | `0 0 * * * * *`                                                              |
+| `SMART_CONTRACT_VERIFIER__VYPER__COMPILERS_DIR`                |          | Directory where Vyper compilers will be downloaded                      | `/tmp/vyper-compilers`                                                       |
+| `SMART_CONTRACT_VERIFIER__SOURCIFY__ENABLED`                   |          | Enable Soucify verification endpoint                                    | `true`                                                                       |
+| `SMART_CONTRACT_VERIFIER__SOURCIFY__API_URL`                   |          | Sourcify API url                                                        | `https://sourcify.dev/server/`                                               |
+| `SMART_CONTRACT_VERIFIER__SOURCIFY__VERIFICATION_ATTEMPTS`     |          | Number of attempts the server makes to Sourcify API. Must be at least 1 | `3`                                                                          |
+| `SMART_CONTRACT_VERIFIER__SOURCIFY__REQUEST_TIMEOUT`           |          | Timeout in seconds for a single request to Sourcify API                 | `15`                                                                         |
+| `SMART_CONTRACT_VERIFIER__COMPILERS__MAX_THREADS`              |          | Maximum number of concurrent compilations                               | `8`                                                                          |
 
 [anchor]: <> (anchors.envs.end)
 
