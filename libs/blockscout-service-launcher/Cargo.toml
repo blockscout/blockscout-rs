@@ -45,7 +45,7 @@ sea-orm-migration-0_11 = { package = "sea-orm-migration", version = "0.11", opti
 
 sea-orm-0_12 = { package = "sea-orm", version = "0.12.2", optional = true }
 sea-orm-migration-0_12 = { package = "sea-orm-migration", version = "0.12.2", optional = true }
-regex = { version = "1.10.4", optional = true }
+regex = { version = "1.10.2", optional = true }
 json_dotpath = { version = "1.1.0", optional = true }
 
 [dev-dependencies]

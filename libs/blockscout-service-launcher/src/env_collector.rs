@@ -7,6 +7,7 @@ use serde_json::Value;
 use std::{
     collections::BTreeMap,
     marker::PhantomData,
+    ops::Not,
     path::{Path, PathBuf},
 };
 
@@ -104,14 +105,16 @@ where
 #[derive(Debug, Clone, Ord, PartialOrd, Eq)]
 pub struct EnvVariable {
     pub key: String,
-    pub required: bool,
-    pub value: String,
     pub description: String,
+    pub required: bool,
+    pub default_value: Option<String>,
 }
 
 impl PartialEq<Self> for EnvVariable {
     fn eq(&self, other: &Self) -> bool {
-        self.key == other.key && self.required == other.required && self.value == other.value
+        self.key == other.key
+            && self.required == other.required
+            && self.default_value == other.default_value
     }
 }
 
@@ -149,13 +152,13 @@ impl Envs {
             .into_iter()
             .filter(|(key, _)| !skip_vars.iter().any(|s| key.starts_with(s)))
             .map(|(key, value)| {
+                let required =
+                    var_is_required(&settings, &from_key_to_json_path(&key, service_prefix));
+                let default_value = required.not().then_some(value);
                 let var = EnvVariable {
                     key: key.clone(),
-                    required: var_is_required(
-                        &settings,
-                        &from_key_to_json_path(&key, service_prefix),
-                    ),
-                    value,
+                    required,
+                    default_value,
                     description: Default::default(),
                 };
 
@@ -178,18 +181,21 @@ impl Envs {
             - 1;
         let table_content = &markdown_content[line_start..=line_end];
 
-        let re = regex::Regex::new(
-            r"\|\s*`([^|]+)`\s*\|\s*([^|]*)\s*\|\s*`([^|]+)`\s*\|\s*([^|]*)\s*\|",
-        )
-        .context("regex creation")?;
+        let re =
+            regex::Regex::new(&regex_md_table_row_with_n_columns(4)).context("regex creation")?;
         let result = re
             .captures_iter(table_content)
             .map(|c| c.extract())
-            .map(|(_, [key, required, value, description])| {
+            .map(|(_, [key, required, description, default_value])| {
                 let required = required.trim().eq("true");
+                let default_value = if default_value.trim().is_empty() {
+                    None
+                } else {
+                    Some(default_value.to_string())
+                };
                 let var = EnvVariable {
                     key: key.to_string(),
-                    value: value.to_string(),
+                    default_value,
                     required,
                     description: description.trim().to_string(),
                 };
@@ -309,24 +315,37 @@ fn from_key_to_json_path(key: &str, service_prefix: &str) -> String {
 
 fn serialize_env_vars_to_md_table(vars: Envs) -> String {
     let mut result = r#"
-| Variable | Is required | Example value | Comment |
+| Variable | Required | Description | Default value |
 | --- | --- | --- | --- |
 "#
     .to_string();
 
     for (key, env) in vars.sorted_with_required() {
         let required = if env.required { " true " } else { " " };
-        let comment = if env.description.is_empty() {
+        let description = if env.description.is_empty() {
             " ".to_string()
         } else {
             format!(" {} ", env.description)
         };
+        let default_value = env
+            .default_value
+            .as_ref()
+            .map(|v| format!(" `{v}` "))
+            .unwrap_or(" ".to_string());
         result.push_str(&format!(
-            "| `{}` |{}| `{}` |{}|\n",
-            key, required, env.value, comment
+            "| `{}` |{}|{}|{}|\n",
+            key, required, description, default_value,
         ));
     }
     result
+}
+
+fn regex_md_table_row_with_n_columns(n: usize) -> String {
+    if n == 0 {
+        r"\|".to_string()
+    } else {
+        r"\|\s*`([^|`]+)`\s*\|".to_string() + &r"\s*`?([^|`]+)`?\s*\|".repeat(n - 1)
+    }
 }
 
 fn flatten_json(json: &Value, initial_prefix: &str) -> BTreeMap<String, String> {
@@ -381,14 +400,14 @@ mod tests {
         const SERVICE_NAME: &'static str = "TEST_SERVICE";
     }
 
-    fn var(key: &str, val: &str, required: bool) -> (String, EnvVariable) {
+    fn var(key: &str, val: Option<&str>, required: bool) -> (String, EnvVariable) {
         (
             key.into(),
             EnvVariable {
-                key: key.into(),
-                value: val.into(),
+                key: key.to_string(),
+                default_value: val.map(str::to_string),
                 required,
-                description: "".into(),
+                description: "".to_string(),
             },
         )
     }
@@ -403,11 +422,19 @@ url = "test-url"
 
     fn default_envs() -> Envs {
         Envs::from(BTreeMap::from_iter(vec![
-            var("TEST_SERVICE__TEST", "value", true),
-            var("TEST_SERVICE__DATABASE__CREATE_DATABASE", "false", false),
-            var("TEST_SERVICE__DATABASE__RUN_MIGRATIONS", "false", false),
-            var("TEST_SERVICE__TEST2", "123", false),
-            var("TEST_SERVICE__DATABASE__CONNECT__URL", "test-url", true),
+            var("TEST_SERVICE__TEST", None, true),
+            var(
+                "TEST_SERVICE__DATABASE__CREATE_DATABASE",
+                Some("false"),
+                false,
+            ),
+            var(
+                "TEST_SERVICE__DATABASE__RUN_MIGRATIONS",
+                Some("false"),
+                false,
+            ),
+            var("TEST_SERVICE__TEST2", Some("123"), false),
+            var("TEST_SERVICE__DATABASE__CONNECT__URL", None, true),
         ]))
     }
 
@@ -415,13 +442,13 @@ url = "test-url"
         r#"
 [anchor]: <> (anchors.envs.start)
 
-| Variable                                  | Is required | Example value | Comment |
-|-------------------------------------------|-------------|---------------|---------|
-| `TEST_SERVICE__TEST`                      | true        | `value`       |         |
-| `TEST_SERVICE__DATABASE__CREATE_DATABASE` | false       | `false`       |         |
-| `TEST_SERVICE__DATABASE__RUN_MIGRATIONS`  | false       | `false`       |         |
-| `TEST_SERVICE__TEST2`                     | false       | `123`         |         |
-| `TEST_SERVICE__DATABASE__CONNECT__URL`    | true        | `test-url`    |         |
+| Variable                                  | Required    | Description | Default Value |
+|-------------------------------------------|-------------|-------------|---------------|
+| `TEST_SERVICE__TEST`                      | true        |             |               |
+| `TEST_SERVICE__DATABASE__CREATE_DATABASE` | false       |             | `false`       |
+| `TEST_SERVICE__DATABASE__RUN_MIGRATIONS`  | false       |             | `false`       |
+| `TEST_SERVICE__TEST2`                     | false       |             | `123`         |
+| `TEST_SERVICE__DATABASE__CONNECT__URL`    | true        |             |               |
 [anchor]: <> (anchors.envs.end)
 "#
     }
@@ -450,8 +477,8 @@ url = "test-url"
             markdown,
             r#"
 [anchor]: <> (anchors.envs.start)
-|`SOME_EXTRA_VARS`| | `example_value` | comment should be saved |
-|`SOME_EXTRA_VARS2`| true | `example_value2` |        |
+|`SOME_EXTRA_VARS`| | comment should be saved |`example_value` |
+|`SOME_EXTRA_VARS2`| true |        |`example_value2` |
 
 [anchor]: <> (anchors.envs.end)
 "#
@@ -488,15 +515,15 @@ url = "test-url"
             r#"
 [anchor]: <> (anchors.envs.start)
 
-| Variable | Is required | Example value | Comment |
+| Variable | Required | Description | Default value |
 | --- | --- | --- | --- |
-| `SOME_EXTRA_VARS2` | true | `example_value2` | |
-| `TEST_SERVICE__DATABASE__CONNECT__URL` | true | `test-url` | |
-| `TEST_SERVICE__TEST` | true | `value` | |
-| `SOME_EXTRA_VARS` | | `example_value` | comment should be saved |
-| `TEST_SERVICE__DATABASE__CREATE_DATABASE` | | `false` | |
-| `TEST_SERVICE__DATABASE__RUN_MIGRATIONS` | | `false` | |
-| `TEST_SERVICE__TEST2` | | `123` | |
+| `SOME_EXTRA_VARS2` | true | | `example_value2` |
+| `TEST_SERVICE__DATABASE__CONNECT__URL` | true | | |
+| `TEST_SERVICE__TEST` | true | | |
+| `SOME_EXTRA_VARS` | | comment should be saved | `example_value` |
+| `TEST_SERVICE__DATABASE__CREATE_DATABASE` | | | `false` |
+| `TEST_SERVICE__DATABASE__RUN_MIGRATIONS` | | | `false` |
+| `TEST_SERVICE__TEST2` | | | `123` |
 
 [anchor]: <> (anchors.envs.end)
 "#
