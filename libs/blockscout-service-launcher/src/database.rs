@@ -1,5 +1,5 @@
 use anyhow::Context;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
 cfg_if::cfg_if! {
@@ -104,7 +104,7 @@ fn with_connect_options(url: impl Into<String>, source_options: &ConnectOptions)
     options
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct DatabaseSettings {
     pub connect: DatabaseConnectSettings,
@@ -114,7 +114,7 @@ pub struct DatabaseSettings {
     pub run_migrations: bool,
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields, rename_all = "lowercase")]
 pub enum DatabaseConnectSettings {
     Url(String),
@@ -130,7 +130,7 @@ impl DatabaseConnectSettings {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct DatabaseKvConnection {
     pub host: String,
