@@ -64,6 +64,10 @@ Most of the projects consist of 3 main parts:
 1. `{service-name}-proto` - defines the gRPC proto file with all API related data.
    Defines mapping HTTP/JSON requests and their parameters to those gRPC methods.
 2. `{service-name}-logic` - the crate with the implementation of the main business logic.
+    
+    _Note: previously the logic crate was named as `{service-name}`; 
+    some services still use that convention_
+
 3. `{service-name}-server` - initialize the server using the defined API.
     Using the methods from “{service-name}-logic” to handle incoming requests.
 

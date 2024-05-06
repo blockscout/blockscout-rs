@@ -7,9 +7,9 @@ Each service contains a Dockerfile in the service root directory.
 
 ### Preparation
 
-1. Install rustup from rustup.rs.
+1. Install rustup from [[rustup.rs](https://rustup.rs/)].
 
-1. Make sure that openssl is installed:
+2. Make sure that openssl is installed:
 
     - macOS:
 
@@ -27,11 +27,11 @@ Each service contains a Dockerfile in the service root directory.
 
       `$ sudo dnf install pkg-config openssl-devel`
 
-1. Make sure protobuf is installed and the version (`$ protoc --version`) is at least `v3.15.0`.
+3. Make sure protobuf is installed and the version (`$ protoc --version`) is at least `v3.15.0`.
 
    If protobuf version is too old, you may see the following error: `Explicit 'optional' labels are disallowed in the Proto3 syntax.`
 
-1. Install [`protoc-gen-openapiv2`](https://github.com/grpc-ecosystem/grpc-gateway#installation).
+4. Install [`protoc-gen-openapiv2`](https://github.com/grpc-ecosystem/grpc-gateway#installation).
    You may find useful the following [Action](https://github.com/blockscout/blockscout-rs/blob/main/.github/actions/deps/action.yml#L21)
    we use in our Github pipeline.
 
@@ -60,3 +60,8 @@ cargo install --git https://github.com/blockscout/blockscout-rs {service-name}-s
 ```
 
 In that case, you can run the binary using just `{service-name}-server`.
+
+## Justfile
+
+Most of the services contain `justfile`s inside root directories (https://github.com/casey/just). 
+Sometimes using that during development may make your a little easier. 

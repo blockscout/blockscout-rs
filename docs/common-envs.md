@@ -1,5 +1,8 @@
 # Common Environment Variables
 
+By convention each env has a `{SERVICE_NAME}` (e.g, `{SMART_CONTRACT_VERIFIER}`) as a prefix,
+and uses `__` as a separator between internal identifiers. 
+
 | Variable                                                       | Required | Description                                                                      | Default value                            |
 |----------------------------------------------------------------|----------|----------------------------------------------------------------------------------|------------------------------------------|
 | `{SERVICE_NAME}__SERVER__HTTP__ENABLED`                        |          | Enable HTTP API server                                                           | `true`                                   |
