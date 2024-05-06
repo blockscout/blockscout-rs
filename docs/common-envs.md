@@ -14,12 +14,12 @@ and uses `__` as a separator between internal identifiers.
 | `{SERVICE_NAME}__SERVER__HTTP__CORS__ALLOWED_CREDENTIALS`      |          | Allow users to make authenticated requests                                       | `true`                                   |
 | `{SERVICE_NAME}__SERVER__HTTP__CORS__MAX_AGE`                  |          | Sets a maximum time (in seconds) for which this CORS request may be cached       | `3600`                                   |
 | `{SERVICE_NAME}__SERVER__HTTP__CORS__BLOCK_ON_ORIGIN_MISMATCH` |          | Configures whether requests should be pre-emptively blocked on mismatched origin | `false`                                  |
-| `SMART_CONTRACT_VERIFIER__SERVER__GRPC__ENABLED`               |          | Enable GRPC API server                                                           | `false`                                  |
-| `SMART_CONTRACT_VERIFIER__SERVER__GRPC__ADDR`                  |          | GRPC API listening interface                                                     | `0.0.0.0:8051`                           |
-| `SMART_CONTRACT_VERIFIER__METRICS__ENABLED`                    |          | Enable metrics collection endpoint                                               | `false`                                  |
-| `SMART_CONTRACT_VERIFIER__METRICS__ADDR`                       |          | Metrics collection listening interface                                           | `0.0.0.0:6060`                           |
-| `SMART_CONTRACT_VERIFIER__METRICS__ROUTE`                      |          | Metrics collection API route                                                     | `/metrics`                               |
-| `SMART_CONTRACT_VERIFIER__TRACING__ENABLED`                    |          | Enable tracing log module                                                        | `true`                                   |
-| `SMART_CONTRACT_VERIFIER__TRACING__FORMAT`                     |          | Tracing format. `default` / `json`                                               | `default`                                |
-| `SMART_CONTRACT_VERIFIER__JAEGER__ENABLED`                     |          | Enable Jaeger tracing                                                            | `false`                                  |
-| `SMART_CONTRACT_VERIFIER__JAEGER__AGENT_ENDPOINT`              |          | Jaeger tracing listening interface                                               | `localhost:6831`                         |
+| `{SERVICE_NAME}__SERVER__GRPC__ENABLED`                        |          | Enable GRPC API server                                                           | `false`                                  |
+| `{SERVICE_NAME}__SERVER__GRPC__ADDR`                           |          | GRPC API listening interface                                                     | `0.0.0.0:8051`                           |
+| `{SERVICE_NAME}__METRICS__ENABLED`                             |          | Enable metrics collection endpoint                                               | `false`                                  |
+| `{SERVICE_NAME}__METRICS__ADDR`                                |          | Metrics collection listening interface                                           | `0.0.0.0:6060`                           |
+| `{SERVICE_NAME}__METRICS__ROUTE`                               |          | Metrics collection API route                                                     | `/metrics`                               |
+| `{SERVICE_NAME}__TRACING__ENABLED`                             |          | Enable tracing log module                                                        | `true`                                   |
+| `{SERVICE_NAME}__TRACING__FORMAT`                              |          | Tracing format. `default` / `json`                                               | `default`                                |
+| `{SERVICE_NAME}__JAEGER__ENABLED`                              |          | Enable Jaeger tracing                                                            | `false`                                  |
+| `{SERVICE_NAME}__JAEGER__AGENT_ENDPOINT`                       |          | Jaeger tracing listening interface                                               | `localhost:6831`                         |
