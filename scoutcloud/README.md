@@ -21,7 +21,7 @@ It tracks amount of time each instance is running and charges user for it.
 | `SCOUTCLOUD__METRICS__ENABLED`          |          | Whether metrics collection is enabled.              | `false`        |
 | `SCOUTCLOUD__METRICS__ROUTE`            |          | Route for metrics collection API.                   | `/metrics`     |
 | `SCOUTCLOUD__TRACING__ENABLED`          |          | Whether tracing is enabled.                         | `true`         |
-| `SCOUTCLOUD__TRACING__FORMAT`           |          | Format for tracing. default/json                    | `default`      |
+| `SCOUTCLOUD__TRACING__FORMAT`           |          | Format for tracing. `default`/`json`                    | `default`      |
 
 [anchor]: <> (anchors.envs.end)
 
