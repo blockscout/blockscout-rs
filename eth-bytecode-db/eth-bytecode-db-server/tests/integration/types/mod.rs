@@ -36,7 +36,7 @@ pub trait Request<Rou: Route> {
     fn to_request(&self) -> <Rou as Route>::Request;
 }
 
-pub trait Response<ProtoResponse> {}
+pub trait _Response<ProtoResponse> {}
 
 pub fn from_path<Rou, TestCase>(test_case_path: &PathBuf) -> TestCase
 where
