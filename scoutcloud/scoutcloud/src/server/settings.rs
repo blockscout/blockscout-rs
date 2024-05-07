@@ -31,6 +31,10 @@ pub struct GithubSettings {
     pub token: String,
     pub owner: String,
     pub repo: String,
-    #[serde(default)]
-    pub branch: Option<String>,
+    #[serde(default = "default_branch")]
+    pub branch: String,
+}
+
+fn default_branch() -> String {
+    "main".to_string()
 }

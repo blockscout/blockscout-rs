@@ -8,20 +8,20 @@ It tracks amount of time each instance is running and charges user for it.
 
 [anchor]: <> (anchors.envs.start)
 
-| Variable                                | Is required | Example value                                          | Comment |
-|-----------------------------------------|-------------|--------------------------------------------------------|---------|
-| `SCOUTCLOUD__DATABASE__CONNECT__URL`    | true        | `postgres://postgres:postgres@localhost:5432/postgres` |         |
-| `SCOUTCLOUD__GITHUB__OWNER`             | true        | `blockscout`                                           |         |
-| `SCOUTCLOUD__GITHUB__REPO`              | true        | `autodeploy`                                           |         |
-| `SCOUTCLOUD__GITHUB__TOKEN`             | true        | `your_github_token`                                    |         |
-| `SCOUTCLOUD__DATABASE__CREATE_DATABASE` |             | `false`                                                |         |
-| `SCOUTCLOUD__DATABASE__RUN_MIGRATIONS`  |             | `false`                                                |         |
-| `SCOUTCLOUD__GITHUB__BRANCH`            |             | `master`                                               |         |
-| `SCOUTCLOUD__METRICS__ADDR`             |             | `0.0.0.0:6060`                                         |         |
-| `SCOUTCLOUD__METRICS__ENABLED`          |             | `false`                                                |         |
-| `SCOUTCLOUD__METRICS__ROUTE`            |             | `/metrics`                                             |         |
-| `SCOUTCLOUD__TRACING__ENABLED`          |             | `true`                                                 |         |
-| `SCOUTCLOUD__TRACING__FORMAT`           |             | `default`                                              |         |
+| Variable                                | Required | Description                                         | Default value  |
+|-----------------------------------------|----------|-----------------------------------------------------|----------------|
+| `SCOUTCLOUD__DATABASE__CONNECT__URL`    | true     | URL for connecting to the database.                 |                |
+| `SCOUTCLOUD__GITHUB__OWNER`             | true     | GitHub owner or organization name.                  |                |
+| `SCOUTCLOUD__GITHUB__REPO`              | true     | GitHub repository name.                             |                |
+| `SCOUTCLOUD__GITHUB__TOKEN`             | true     | GitHub personal access token for authentication.    |                |
+| `SCOUTCLOUD__GITHUB__BRANCH`            |          | GitHub branch name                                  | `main`         |
+| `SCOUTCLOUD__DATABASE__CREATE_DATABASE` |          | Whether to create the database if it doesn't exist. | `false`        |
+| `SCOUTCLOUD__DATABASE__RUN_MIGRATIONS`  |          | Whether to run database migrations.                 | `false`        |
+| `SCOUTCLOUD__METRICS__ADDR`             |          | Address for metrics collection.                     | `0.0.0.0:6060` |
+| `SCOUTCLOUD__METRICS__ENABLED`          |          | Whether metrics collection is enabled.              | `false`        |
+| `SCOUTCLOUD__METRICS__ROUTE`            |          | Route for metrics collection API.                   | `/metrics`     |
+| `SCOUTCLOUD__TRACING__ENABLED`          |          | Whether tracing is enabled.                         | `true`         |
+| `SCOUTCLOUD__TRACING__FORMAT`           |          | Format for tracing. `default`/`json`                | `default`      |
 
 [anchor]: <> (anchors.envs.end)
 

@@ -33,7 +33,7 @@ impl GithubClient {
         token: String,
         owner: String,
         repo: String,
-        default_branch_name: Option<String>,
+        default_branch_name: String,
         uri: Option<&str>,
     ) -> Result<Self, octocrab::Error> {
         let mut builder = octocrab::Octocrab::builder();
@@ -45,7 +45,7 @@ impl GithubClient {
             client,
             owner,
             repo,
-            default_branch_name: default_branch_name.unwrap_or("main".to_string()),
+            default_branch_name,
         })
     }
 
@@ -71,7 +71,7 @@ impl TryFrom<&MockedGithubRepo> for GithubClient {
             mock.token.clone(),
             mock.owner.clone(),
             mock.repo.clone(),
-            Some(mock.default_main_branch.clone()),
+            mock.default_main_branch.clone(),
             Some(mock.server.base_url().as_str()),
         )
     }

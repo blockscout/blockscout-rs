@@ -8,7 +8,7 @@ async fn main() -> Result<(), anyhow::Error> {
         settings.github.token,
         settings.github.owner,
         settings.github.repo,
-        Some("main".to_string()),
+        "main".to_string(),
         None,
     )?;
 
