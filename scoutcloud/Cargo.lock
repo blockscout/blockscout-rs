@@ -1128,7 +1128,8 @@ dependencies = [
 [[package]]
 name = "blockscout-service-launcher"
 version = "0.11.0"
-source = "git+https://github.com/blockscout/blockscout-rs?branch=ll/libs-env-collector#fab54a42dc147b73d645d8f91647178d318dfd51"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c212508e1a16b2374c3620218702ff0670e66245d9698bc752f154692c87b543"
 dependencies = [
  "actix-cors",
  "actix-web",

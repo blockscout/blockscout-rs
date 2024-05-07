@@ -6,3 +6,6 @@ members = [
     "scoutcloud-migration",
     "scoutcloud-proto",
 ]
+
+[workspace.dependencies]
+blockscout-service-launcher = "0.11.0"
