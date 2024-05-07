@@ -16,7 +16,7 @@ Set the following ENVs on blockscout instance:
 - `MICROSERVICE_SC_VERIFIER_TYPE=sc_verifier`
 
 ## Envs
-Here we describe only service specific variables. Variables common for all services can be found [here](../docs/common-envs.md).
+Here, we describe variables specific to this service. Variables common to all services can be found [here](../docs/common-envs.md).
 
 [anchor]: <> (anchors.envs.start)
 
