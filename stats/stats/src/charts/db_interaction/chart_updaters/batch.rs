@@ -23,9 +23,6 @@ use std::time::Instant;
 
 pub trait ChartBatchUpdater: ChartUpdater {
     fn get_query(from: NaiveDate, to: NaiveDate) -> Statement;
-    fn step_duration() -> chrono::Duration {
-        chrono::Duration::days(30)
-    }
 
     async fn update_with_values(
         cx: &mut UpdateContext<UpdateParameters<'_>>,

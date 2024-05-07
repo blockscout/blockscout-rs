@@ -69,8 +69,11 @@ pub trait Chart: Sync {
         }
     }
 
-    // will be used only in our code
-    #[allow(async_fn_in_trait)]
+    fn step_duration() -> chrono::Duration {
+        chrono::Duration::days(30)
+    }
+
+    // todo: move to UpdateableChart
     async fn create(db: &DatabaseConnection) -> Result<(), DbErr> {
         create_chart(db, Self::name().into(), Self::chart_type()).await
     }

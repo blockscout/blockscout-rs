@@ -114,7 +114,7 @@ pub async fn get_chart_data(
         .await?
         .ok_or_else(|| ReadError::NotFound(name.into()))?;
 
-    let db_data = get_chart(db, chart.id, from, to).await?;
+    let db_data = get_raw_chart_data(db, chart.id, from, to).await?;
 
     let last_updated_at = chart.last_updated_at.map(|t| t.date_naive());
     if last_updated_at.is_none() && !db_data.is_empty() {
@@ -145,7 +145,7 @@ pub async fn get_chart_data(
     Ok(data)
 }
 
-async fn get_chart(
+async fn get_raw_chart_data(
     db: &DatabaseConnection,
     chart_id: i32,
     from: Option<NaiveDate>,
