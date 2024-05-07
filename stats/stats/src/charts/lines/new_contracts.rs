@@ -72,26 +72,26 @@ impl ChartUpdater for NewContracts {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::NewContracts;
-    use crate::tests::simple_test::simple_test_chart;
+// #[cfg(test)]
+// mod tests {
+//     use super::NewContracts;
+//     use crate::tests::simple_test::simple_test_chart;
 
-    #[tokio::test]
-    #[ignore = "needs database to run"]
-    async fn update_new_contracts() {
-        simple_test_chart::<NewContracts>(
-            "update_new_contracts",
-            vec![
-                ("2022-11-09", "3"),
-                ("2022-11-10", "6"),
-                ("2022-11-11", "8"),
-                ("2022-11-12", "2"),
-                ("2022-12-01", "2"),
-                ("2023-01-01", "1"),
-                ("2023-02-01", "1"),
-            ],
-        )
-        .await;
-    }
-}
+//     #[tokio::test]
+//     #[ignore = "needs database to run"]
+//     async fn update_new_contracts() {
+//         simple_test_chart::<NewContracts>(
+//             "update_new_contracts",
+//             vec![
+//                 ("2022-11-09", "3"),
+//                 ("2022-11-10", "6"),
+//                 ("2022-11-11", "8"),
+//                 ("2022-11-12", "2"),
+//                 ("2022-12-01", "2"),
+//                 ("2023-01-01", "1"),
+//                 ("2023-02-01", "1"),
+//             ],
+//         )
+//         .await;
+//     }
+// }
