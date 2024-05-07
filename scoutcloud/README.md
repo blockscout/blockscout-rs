@@ -14,14 +14,14 @@ It tracks amount of time each instance is running and charges user for it.
 | `SCOUTCLOUD__GITHUB__OWNER`             | true     | GitHub owner or organization name.                  |                |
 | `SCOUTCLOUD__GITHUB__REPO`              | true     | GitHub repository name.                             |                |
 | `SCOUTCLOUD__GITHUB__TOKEN`             | true     | GitHub personal access token for authentication.    |                |
-| `SCOUTCLOUD__GITHUB__BRANCH`            |          | GitHub branch name                                  | `main`         |
 | `SCOUTCLOUD__DATABASE__CREATE_DATABASE` |          | Whether to create the database if it doesn't exist. | `false`        |
 | `SCOUTCLOUD__DATABASE__RUN_MIGRATIONS`  |          | Whether to run database migrations.                 | `false`        |
+| `SCOUTCLOUD__GITHUB__BRANCH`            |          | GitHub branch name                                  | `main`         |
 | `SCOUTCLOUD__METRICS__ADDR`             |          | Address for metrics collection.                     | `0.0.0.0:6060` |
 | `SCOUTCLOUD__METRICS__ENABLED`          |          | Whether metrics collection is enabled.              | `false`        |
 | `SCOUTCLOUD__METRICS__ROUTE`            |          | Route for metrics collection API.                   | `/metrics`     |
 | `SCOUTCLOUD__TRACING__ENABLED`          |          | Whether tracing is enabled.                         | `true`         |
-| `SCOUTCLOUD__TRACING__FORMAT`           |          | Format for tracing. `default`/`json`                | `default`      |
+| `SCOUTCLOUD__TRACING__FORMAT`           |          | Format for tracing. default/json                    | `default`      |
 
 [anchor]: <> (anchors.envs.end)
 
