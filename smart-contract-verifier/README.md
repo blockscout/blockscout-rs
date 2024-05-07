@@ -1,10 +1,8 @@
 # <h1 align="center"> Smart-contract Verifier </h1>
 
-**Smart-contract verifier** - service for verification of EVM based contracts. 
-Its basic idea is to accept bytecode to be verified and potential source files as input and return whether those files and bytecode correspond to each other.
+**Smart-contract verifier** is a service for verifying EVM-based contracts. The primary function of this service is to receive bytecode and potential source files as inputs and determine whether the files and the bytecode correspond to each other.
 
-Is a backbone service for everything related to smart-contract verification in blockscout.
-Is required if you want to have smart-contract verification functionality on your instance.
+This service serves as the core component for all activities related to smart-contract verification in BlockScout. It is essential for enabling smart-contract verification functionality on your instance.
 
 ## Requirements
 No additional dependencies
