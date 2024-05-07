@@ -181,8 +181,7 @@ impl Envs {
             - 1;
         let table_content = &markdown_content[line_start..=line_end];
 
-        let re =
-            regex::Regex::new(&regex_md_table_row_with_n_columns(4)).context("regex creation")?;
+        let re = regex::Regex::new(regex_md_table_row()).context("regex creation")?;
         let result = re
             .captures_iter(table_content)
             .map(|c| c.extract())
@@ -340,12 +339,14 @@ fn serialize_env_vars_to_md_table(vars: Envs) -> String {
     result
 }
 
-fn regex_md_table_row_with_n_columns(n: usize) -> String {
-    if n == 0 {
-        r"\|".to_string()
-    } else {
-        r"\|\s*`([^|`]+)`\s*\|".to_string() + &r"\s*`?([^|`]+)`?\s*\|".repeat(n - 1)
-    }
+fn regex_md_table_row() -> &'static str {
+    concat!(
+        r"\|\s*`([^|`]*)`\s*",
+        r"\|\s*([^|]*)\s*",
+        r"\|\s*([^|]*)\s*",
+        r"\|\s*`?([^|`]*)`?\s*",
+        r#"\|"#
+    )
 }
 
 fn flatten_json(json: &Value, initial_prefix: &str) -> BTreeMap<String, String> {
@@ -477,7 +478,7 @@ url = "test-url"
             markdown,
             r#"
 [anchor]: <> (anchors.envs.start)
-|`SOME_EXTRA_VARS`| | comment should be saved |`example_value` |
+|`SOME_EXTRA_VARS`| | comment should be saved. `kek` |`example_value` |
 |`SOME_EXTRA_VARS2`| true |        |`example_value2` |
 
 [anchor]: <> (anchors.envs.end)
@@ -520,7 +521,7 @@ url = "test-url"
 | `SOME_EXTRA_VARS2` | true | | `example_value2` |
 | `TEST_SERVICE__DATABASE__CONNECT__URL` | true | | |
 | `TEST_SERVICE__TEST` | true | | |
-| `SOME_EXTRA_VARS` | | comment should be saved | `example_value` |
+| `SOME_EXTRA_VARS` | | comment should be saved. `kek` | `example_value` |
 | `TEST_SERVICE__DATABASE__CREATE_DATABASE` | | | `false` |
 | `TEST_SERVICE__DATABASE__RUN_MIGRATIONS` | | | `false` |
 | `TEST_SERVICE__TEST2` | | | `123` |
