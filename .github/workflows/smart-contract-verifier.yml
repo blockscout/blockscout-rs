@@ -80,7 +80,7 @@ jobs:
         with:
           source_file: 'smart-contract-verifier/smart-contract-verifier-proto/swagger/v2/smart-contract-verifier.swagger.yaml'
           destination_repo: 'blockscout/swaggers'
-          destination_folder: 'services/smart-contract-verifier/swagger.yaml'
+          destination_folder: 'services/smart-contract-verifier'
           user_email: 'rimrakhimov@gmail.com  '
           user_name: 'rimrakhimov'
           destination_branch: 'master'
