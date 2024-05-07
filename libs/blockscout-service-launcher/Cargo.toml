@@ -1,6 +1,6 @@
 [package]
 name = "blockscout-service-launcher"
-version = "0.10.2"
+version = "0.11.1"
 description = "Allows to launch blazingly fast blockscout rust services"
 license = "MIT"
 repository = "https://github.com/blockscout/blockscout-rs"
@@ -45,6 +45,12 @@ sea-orm-migration-0_11 = { package = "sea-orm-migration", version = "0.11", opti
 
 sea-orm-0_12 = { package = "sea-orm", version = "0.12.2", optional = true }
 sea-orm-migration-0_12 = { package = "sea-orm-migration", version = "0.12.2", optional = true }
+regex = { version = "1.10.2", optional = true }
+json_dotpath = { version = "1.1.0", optional = true }
+
+[dev-dependencies]
+pretty_assertions = "1.4.0"
+tempfile = "3.10.1"
 
 
 [features]
@@ -110,4 +116,13 @@ test-server = [
 test-database = [
     "database",
     "dep:keccak-hash",
+]
+
+env-collector = [
+    "dep:anyhow",
+    "dep:config",
+    "dep:serde",
+    "dep:serde_json",
+    "dep:regex",
+    "dep:json_dotpath",
 ]

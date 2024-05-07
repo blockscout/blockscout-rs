@@ -12,3 +12,6 @@ pub mod test_server;
 
 #[cfg(feature = "test-database")]
 pub mod test_database;
+
+#[cfg(feature = "env-collector")]
+pub mod env_collector;
