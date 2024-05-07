@@ -1,11 +1,13 @@
 use std::{collections::HashSet, marker::PhantomData, ops::RangeInclusive, time::Instant};
 
 use chrono::{DateTime, Duration, NaiveDate, Utc};
+use futures::{future::BoxFuture, FutureExt};
 use sea_orm::{prelude::*, DatabaseConnection, DbErr, FromQueryResult, TransactionTrait};
 
 use crate::{Chart, ChartUpdater, DateValue, UpdateError};
 
 use super::{
+    create_chart,
     db_interaction::chart_updaters::{
         common_operations::{get_min_block_blockscout, get_min_date_blockscout, get_nth_last_row},
         ChartBatchUpdater, ChartPartialUpdater,
@@ -27,6 +29,31 @@ pub trait DataSource {
     type PrimaryDependency: DataSource;
     type SecondaryDependencies: DataSource;
     type Output;
+
+    /// Initialize the data source and its dependencies in local database.
+    ///
+    /// If the source was initialized before, keep old values.
+    fn init_all_locally<'a>(
+        db: &'a DatabaseConnection,
+        init_time: &'a chrono::DateTime<Utc>,
+    ) -> BoxFuture<'a, Result<(), DbErr>> {
+        async move {
+            Self::PrimaryDependency::init_all_locally(db, init_time).await?;
+            Self::SecondaryDependencies::init_all_locally(db, init_time).await?;
+            Self::init_itself(db, init_time).await
+        }
+        .boxed()
+        // had to juggle with boxed futures
+        // because of recursive async calls (:
+        // :)
+    }
+
+    /// Initialize only this source. This fn is intended to be implemented
+    /// for regular types
+    fn init_itself(
+        db: &DatabaseConnection,
+        init_time: &chrono::DateTime<Utc>,
+    ) -> impl std::future::Future<Output = Result<(), DbErr>> + Send;
 
     /// Update source data (values + metadata), if necessary.
     async fn update_from_remote(
@@ -52,6 +79,14 @@ pub trait UpdateableChart: Chart {
         find_chart(db, Self::name())
             .await
             .map_err(UpdateError::StatsDB)
+    }
+
+    /// Create chart in db. Does not overwrite existing data.
+    fn create(
+        db: &DatabaseConnection,
+        init_time: &chrono::DateTime<Utc>,
+    ) -> impl std::future::Future<Output = Result<(), DbErr>> + Send {
+        async move { create_chart(db, Self::name().into(), Self::chart_type(), init_time).await }
     }
 
     async fn batch_update(
@@ -161,6 +196,13 @@ impl<C: UpdateableChart> DataSource for C {
     ) -> Result<ChartData, UpdateError> {
         C::query_data(cx, range).await
     }
+
+    async fn init_itself(
+        db: &DatabaseConnection,
+        init_time: &chrono::DateTime<Utc>,
+    ) -> Result<(), DbErr> {
+        Self::create(db, init_time).await
+    }
 }
 
 pub fn generate_date_ranges(
@@ -185,6 +227,21 @@ impl DataSource for () {
     type SecondaryDependencies = ();
     type Output = ();
 
+    fn init_all_locally<'a>(
+        _db: &'a DatabaseConnection,
+        _init_time: &'a chrono::DateTime<Utc>,
+    ) -> BoxFuture<'a, Result<(), DbErr>> {
+        // stop recursion
+        async { Ok(()) }.boxed()
+    }
+
+    async fn init_itself(
+        _db: &DatabaseConnection,
+        _init_time: &chrono::DateTime<Utc>,
+    ) -> Result<(), DbErr> {
+        Ok(())
+    }
+
     async fn update_from_remote(
         _cx: &mut UpdateContext<UpdateParameters<'_>>,
     ) -> Result<(), UpdateError> {
@@ -207,6 +264,15 @@ where
     type PrimaryDependency = T1;
     type SecondaryDependencies = T2;
     type Output = (T1::Output, T2::Output);
+
+    async fn init_itself(
+        _db: &DatabaseConnection,
+        _init_time: &chrono::DateTime<Utc>,
+    ) -> Result<(), DbErr> {
+        // dependencies are called in `init_all_locally`
+        // the tuple itself does not need any init
+        Ok(())
+    }
 
     /// Update source data (values + metadata), if necessary.
     async fn update_from_remote(
@@ -278,6 +344,13 @@ macro_rules! impl_data_source_for_remote_pull_type {
             type PrimaryDependency = ();
             type SecondaryDependencies = ();
             type Output = Vec<crate::DateValue>;
+
+            async fn init_itself(
+                _db: &sea_orm::DatabaseConnection,
+                _init_time: &chrono::DateTime<Utc>,
+            ) -> Result<(), sea_orm::DbErr> {
+                Ok(())
+            }
 
             /// Does not do anything because source is not controlled by this service.
             async fn update_from_remote(
@@ -421,6 +494,7 @@ pub struct UpdateParameters<'a> {
 }
 
 pub struct UpdateContext<UCX> {
+    // todo: consider memoization
     // update_results: HashMap<String, (Vec<DateValue>, ChartMetadata)>,
     pub user_context: UCX,
 }
@@ -441,6 +515,8 @@ pub trait UpdateGroup<P> {
     async fn create_charts(
         db: &DatabaseConnection,
         enabled_names: &HashSet<String>,
+
+        current_time: &chrono::DateTime<Utc>,
     ) -> Result<(), DbErr>;
     async fn update_charts(params: P, enabled_names: &HashSet<String>) -> Result<(), UpdateError>;
 }
@@ -458,12 +534,9 @@ mod examples {
         UpdateableChart,
     };
     use crate::{
-        charts::{
-            create_chart,
-            db_interaction::{
-                chart_updaters::{common_operations, parse_and_cumsum},
-                write::insert_data_many,
-            },
+        charts::db_interaction::{
+            chart_updaters::{common_operations, parse_and_cumsum},
+            write::insert_data_many,
         },
         get_chart_data,
         lines::NewContracts,
@@ -562,11 +635,6 @@ mod examples {
         fn missing_date_policy() -> MissingDatePolicy {
             MissingDatePolicy::FillPrevious
         }
-
-        async fn create(db: &DatabaseConnection) -> Result<(), DbErr> {
-            NewContracts::create(db).await?;
-            create_chart(db, Self::name().into(), Self::chart_type()).await
-        }
     }
 
     impl UpdateableChart for ContractsGrowthChart {
@@ -636,12 +704,13 @@ mod examples {
         async fn create_charts(
             db: &DatabaseConnection,
             enabled_names: &HashSet<String>,
+            current_time: &chrono::DateTime<Utc>,
         ) -> Result<(), DbErr> {
             if enabled_names.contains(NewContractsChart::name()) {
-                NewContractsChart::create(db).await?;
+                NewContractsChart::init_all_locally(db, current_time).await?;
             }
             if enabled_names.contains(ContractsGrowthChart::name()) {
-                ContractsGrowthChart::create(db).await?;
+                ContractsGrowthChart::init_all_locally(db, current_time).await?;
             }
             Ok(())
         }
@@ -671,7 +740,7 @@ mod examples {
         let enabled = HashSet::from(
             [NewContractsChart::name(), ContractsGrowthChart::name()].map(|l| l.to_owned()),
         );
-        ExampleUpdateGroup::create_charts(&db, &enabled)
+        ExampleUpdateGroup::create_charts(&db, &enabled, &current_time)
             .await
             .unwrap();
 

@@ -15,7 +15,7 @@ pub async fn simple_test_chart<C: ChartUpdater>(test_name: &str, expected: Vec<(
     let (db, blockscout) = init_db_all(test_name).await;
     let current_time = DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
     let current_date = current_time.date_naive();
-    C::create(&db).await.unwrap();
+    // C::create(&db).await.unwrap();
     fill_mock_blockscout_data(&blockscout, current_date).await;
     let approximate_trailing_points = C::approximate_trailing_points();
 
@@ -61,7 +61,7 @@ pub async fn ranged_test_chart<C: ChartUpdater>(
     let (db, blockscout) = init_db_all(test_name).await;
     let current_time = DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
     let current_date = current_time.date_naive();
-    C::create(&db).await.unwrap();
+    // C::create(&db).await.unwrap();
     fill_mock_blockscout_data(&blockscout, current_date).await;
     let policy = C::missing_date_policy();
     let approximate_trailing_points = C::approximate_trailing_points();
@@ -134,7 +134,7 @@ pub async fn simple_test_counter<C: ChartUpdater>(test_name: &str, expected: &st
     let current_time = chrono::DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
     let current_date = current_time.date_naive();
 
-    C::create(&db).await.unwrap();
+    // C::create(&db).await.unwrap();
     fill_mock_blockscout_data(&blockscout, current_date).await;
 
     let mut parameters = UpdateParameters {

@@ -42,11 +42,6 @@ impl crate::Chart for ContractsGrowth {
     fn missing_date_policy() -> MissingDatePolicy {
         MissingDatePolicy::FillPrevious
     }
-
-    async fn create(db: &DatabaseConnection) -> Result<(), DbErr> {
-        NewContracts::create(db).await?;
-        create_chart(db, Self::name().into(), Self::chart_type()).await
-    }
 }
 
 impl ChartUpdater for ContractsGrowth {

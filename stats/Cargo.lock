@@ -3443,6 +3443,7 @@ dependencies = [
  "blockscout-service-launcher 0.9.0",
  "chrono",
  "entity",
+ "futures",
  "itertools 0.12.1",
  "lazy_static",
  "migration",
