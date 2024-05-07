@@ -1,7 +1,7 @@
 use std::{collections::HashSet, marker::PhantomData, ops::RangeInclusive};
 
 use chrono::{DateTime, NaiveDate, Utc};
-use sea_orm::{DatabaseConnection, FromQueryResult};
+use sea_orm::{DatabaseConnection, DbErr, FromQueryResult};
 
 use crate::{ChartUpdater, DateValue, UpdateError};
 
@@ -45,12 +45,19 @@ pub trait DataSource {
             ),
         )
         .await?;
-        Self::update_with(cx.user_context.db, primary_data, secondary_data).await?;
+        Self::update_with(
+            cx.user_context.db,
+            cx.user_context.current_time,
+            primary_data,
+            secondary_data,
+        )
+        .await?;
         Ok(())
     }
 
     async fn update_with(
         db: &DatabaseConnection,
+        update_time: chrono::DateTime<Utc>,
         primary_data: <Self::PrimaryDependency as DataSource>::Output,
         secondary_data: <Self::SecondaryDependencies as DataSource>::Output,
     ) -> Result<(), UpdateError>;
@@ -79,6 +86,7 @@ impl DataSource for () {
 
     async fn update_with(
         _db: &DatabaseConnection,
+        _update_time: chrono::DateTime<Utc>,
         _primary_data: (),
         _secondary_data: <Self::SecondaryDependencies as DataSource>::Output,
     ) -> Result<(), UpdateError> {
@@ -113,6 +121,7 @@ where
 
     async fn update_with(
         _db: &DatabaseConnection,
+        _update_time: chrono::DateTime<Utc>,
         _primary_data: <Self::PrimaryDependency as DataSource>::Output,
         _secondary_data: <Self::SecondaryDependencies as DataSource>::Output,
     ) -> Result<(), UpdateError> {
@@ -190,6 +199,7 @@ impl<T: RemotePull> DataSource for T {
 
     async fn update_with(
         _db: &DatabaseConnection,
+        _update_time: chrono::DateTime<Utc>,
         _primary_data: (),
         _secondary_data: (),
     ) -> Result<(), UpdateError> {
@@ -336,7 +346,12 @@ impl<'a, UCX> UpdateContext<UCX> {
 // todo: move comments somewhere
 /// Directed Acyclic Connected Graph
 pub trait UpdateGroup<P> {
-    async fn update_charts(params: P, enabled_names: HashSet<String>) -> Result<(), UpdateError>;
+    // todo: impl with macros(?)
+    async fn create_charts(
+        db: &DatabaseConnection,
+        enabled_names: &HashSet<String>,
+    ) -> Result<(), DbErr>;
+    async fn update_charts(params: P, enabled_names: &HashSet<String>) -> Result<(), UpdateError>;
 }
 
 #[cfg(test)]
@@ -353,7 +368,10 @@ mod examples {
     use crate::{
         charts::{
             create_chart,
-            db_interaction::{chart_updaters::parse_and_cumsum, write::insert_data_many},
+            db_interaction::{
+                chart_updaters::{common_operations, parse_and_cumsum},
+                write::insert_data_many,
+            },
             find_chart,
         },
         get_chart_data,
@@ -381,6 +399,7 @@ mod examples {
 
         async fn update_with(
             db: &sea_orm::prelude::DatabaseConnection,
+            update_time: chrono::DateTime<Utc>,
             primary_data: <Self::PrimaryDependency as DataSource>::Output,
             _secondary_data: <Self::SecondaryDependencies as DataSource>::Output,
         ) -> Result<(), UpdateError> {
@@ -395,6 +414,9 @@ mod examples {
                 .into_iter()
                 .map(|value| value.active_model(chart_id, None));
             insert_data_many(db, values)
+                .await
+                .map_err(UpdateError::StatsDB)?;
+            common_operations::set_last_updated_at(chart_id, db, update_time)
                 .await
                 .map_err(UpdateError::StatsDB)?;
             Ok(())
@@ -469,6 +491,7 @@ mod examples {
 
         async fn update_with(
             db: &sea_orm::prelude::DatabaseConnection,
+            update_time: chrono::DateTime<Utc>,
             primary_data: <Self::PrimaryDependency as DataSource>::Output,
             _secondary_data: <Self::SecondaryDependencies as DataSource>::Output,
         ) -> Result<(), UpdateError> {
@@ -480,6 +503,9 @@ mod examples {
                 .into_iter()
                 .map(|value| value.active_model(chart_id, None));
             insert_data_many(db, values)
+                .await
+                .map_err(UpdateError::StatsDB)?;
+            common_operations::set_last_updated_at(chart_id, db, update_time)
                 .await
                 .map_err(UpdateError::StatsDB)?;
             Ok(())
@@ -523,9 +549,22 @@ mod examples {
     pub struct ExampleUpdateGroup;
 
     impl<'a> UpdateGroup<UpdateParameters<'a>> for ExampleUpdateGroup {
+        async fn create_charts(
+            db: &DatabaseConnection,
+            enabled_names: &HashSet<String>,
+        ) -> Result<(), DbErr> {
+            if enabled_names.contains(NewContractsChart::name()) {
+                NewContractsChart::create(db).await?;
+            }
+            if enabled_names.contains(ContractsGrowthChart::name()) {
+                ContractsGrowthChart::create(db).await?;
+            }
+            Ok(())
+        }
+
         async fn update_charts(
             params: UpdateParameters<'a>,
-            enabled_names: HashSet<String>,
+            enabled_names: &HashSet<String>,
         ) -> Result<(), UpdateError> {
             let mut cx = UpdateContext::from_inner(params.into());
             if enabled_names.contains(NewContractsChart::name()) {
@@ -542,6 +581,12 @@ mod examples {
     async fn _update_examples() {
         let (db, blockscout) = init_db_all("update_examples").await;
         let current_time = DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
+        let enabled = HashSet::from(
+            [NewContractsChart::name(), ContractsGrowthChart::name()].map(|l| l.to_owned()),
+        );
+        ExampleUpdateGroup::create_charts(&db, &enabled)
+            .await
+            .unwrap();
 
         let parameters = UpdateParameters {
             db: &db,
@@ -549,13 +594,8 @@ mod examples {
             current_time,
             force_full: true,
         };
-        ExampleUpdateGroup::update_charts(
-            parameters,
-            HashSet::from(
-                [NewContractsChart::name(), ContractsGrowthChart::name()].map(|l| l.to_owned()),
-            ),
-        )
-        .await
-        .unwrap();
+        ExampleUpdateGroup::update_charts(parameters, &enabled)
+            .await
+            .unwrap();
     }
 }
