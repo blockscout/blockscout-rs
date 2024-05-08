@@ -1,0 +1,9 @@
+[database.connect]
+url = "postgres://postgres:postgres@localhost:5432/postgres"
+
+[github]
+token = "your_github_token"
+owner = "blockscout"
+repo = "autodeploy"
+
+

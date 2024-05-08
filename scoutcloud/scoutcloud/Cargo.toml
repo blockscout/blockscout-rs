@@ -28,7 +28,7 @@ scoutcloud-proto = { path = "../scoutcloud-proto" }
 scoutcloud-migration = { path = "../scoutcloud-migration" }
 actix-web = "4.2"
 async-trait = "0.1"
-blockscout-service-launcher = { version = "0.10.2", features = [ "database-0_12" ] }
+blockscout-service-launcher = { workspace = true, features = [ "database-0_12", "env-collector"] }
 config = "0.13"
 tonic = "0.8"
 chrono = "0.4.35"
@@ -50,11 +50,11 @@ fang = { version = "0.11.0-rc1", features = [
 
 
 [dev-dependencies]
-blockscout-service-launcher = { version = "0.10.2", features = [
+blockscout-service-launcher = { workspace = true, features = [
     "test-database", "database-0_12", "test-server"
 ] }
+pretty_assertions = "1.3"
 serial_test = "3.1.1"
 scoutcloud-migration = {path = "../scoutcloud-migration"}
-pretty_assertions = "1.3"
 reqwest = { version = "0.11", features = ["json"]}
 
