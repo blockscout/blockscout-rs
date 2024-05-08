@@ -72,7 +72,7 @@ pub async fn upsert_many<C: ConnectionTrait>(
 
 fn compute_id(height: u64, commitment: &[u8]) -> Vec<u8> {
     // commitment is not unique, but the combination of the height and commitment is
-    Sha3_256::digest([&height.to_be_bytes()[..], &commitment].concat())
+    Sha3_256::digest([&height.to_be_bytes()[..], commitment].concat())
         .as_slice()
         .to_vec()
 }
