@@ -18,6 +18,10 @@ fn compile(
         .bytes(["."])
         .btree_map(["."])
         .type_attribute(".", "#[actix_prost_macros::serde]")
+        .field_attribute(
+            ".blockscout.daIndexer.v1.HealthCheckRequest.service",
+            "#[serde(default)]"
+        )
         // .field_attribute(
         //     ".blockscout.daIndexer.v1.<MessageName>.<DefaultFieldName>",
         //     "#[serde(default)]"
