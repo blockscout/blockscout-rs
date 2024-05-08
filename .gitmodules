@@ -1,0 +1,3 @@
+[submodule "scoutcloud/scoutcloud-proto/grpc-gateway"]
+	path = scoutcloud/scoutcloud-proto/grpc-gateway
+	url = https://github.com/grpc-ecosystem/grpc-gateway.git
