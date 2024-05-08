@@ -123,7 +123,7 @@ fn flatten_geth_trace(root: CallFrame) -> Vec<CommonCallTrace> {
         }
         if let Some(calls) = &frame.calls {
             if calls.len() > idx {
-                path.push((&frame, idx + 1));
+                path.push((frame, idx + 1));
                 path.push((&calls[idx], 0));
             }
         }
