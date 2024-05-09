@@ -2,7 +2,6 @@ use super::NewContracts;
 use crate::{
     charts::{
         chart::Chart,
-        create_chart,
         data_source::{UpdateContext, UpdateParameters},
         db_interaction::{
             chart_updaters::{parse_and_cumsum, ChartDependentUpdater, ChartUpdater},
@@ -12,7 +11,7 @@ use crate::{
     MissingDatePolicy, UpdateError,
 };
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::prelude::*;
+
 use std::marker::PhantomData;
 
 #[derive(Debug, Default)]

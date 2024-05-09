@@ -26,9 +26,9 @@ pub trait ChartUpdater: Chart {
     /// Update only data (values) of the chart (`chart_data` table).
     ///
     /// Implementation is expected to be highly variable.
-    async fn update_values(
+    fn update_values(
         cx: &mut UpdateContext<UpdateParameters<'_>>,
-    ) -> Result<Vec<DateValue>, UpdateError>;
+    ) -> impl std::future::Future<Output = Result<Vec<DateValue>, UpdateError>> + Send;
 
     /// Update only metadata of the chart (`charts` table).
     ///

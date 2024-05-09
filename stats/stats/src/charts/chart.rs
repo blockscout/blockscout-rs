@@ -1,5 +1,5 @@
 use crate::ReadError;
-use chrono::{DateTime, Duration, Offset, TimeZone, Utc};
+use chrono::{DateTime, Duration, Offset, TimeZone};
 use entity::{charts, sea_orm_active_enums::ChartType};
 use sea_orm::{prelude::*, sea_query, FromQueryResult, QuerySelect, Set};
 use thiserror::Error;
