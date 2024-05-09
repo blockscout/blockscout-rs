@@ -44,6 +44,7 @@ thiserror = "1.0"
 tokio = { version = "1", features = ["macros"] }
 tracing = "0.1"
 url = { version = "2.4", features = ["serde"] }
+verification-common = { git = "https://github.com/blockscout/blockscout-rs", rev = "58d025e9" }
 
 [dev-dependencies]
 const_format = "0.2"

@@ -627,6 +627,9 @@ definitions:
       deployedBytecodeArtifacts:
         type: string
         description: / Info about the runtime code (sourcemaps, linkreferences, immutables) encoded as a json.
+      isBlueprint:
+        type: boolean
+        title: / If true, the verified contract was a ERC-5202 compatible blueprint contract
   v2SourceMatchType:
     type: string
     enum:

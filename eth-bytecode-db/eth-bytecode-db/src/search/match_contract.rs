@@ -28,6 +28,7 @@ pub struct MatchContract {
     pub deployed_bytecode_artifacts: Option<String>,
     pub raw_creation_input: Vec<u8>,
     pub raw_deployed_bytecode: Vec<u8>,
+    pub is_blueprint: bool,
 }
 
 impl MatchContract {
@@ -100,6 +101,7 @@ impl MatchContract {
                 .map(|value| value.to_string()),
             raw_creation_input: source.raw_creation_input,
             raw_deployed_bytecode: source.raw_deployed_bytecode,
+            is_blueprint: false,
         };
 
         Ok(match_contract)

@@ -174,6 +174,7 @@ pub struct Source {
     pub raw_deployed_bytecode: Vec<u8>,
     pub creation_input_parts: Vec<BytecodePart>,
     pub deployed_bytecode_parts: Vec<BytecodePart>,
+    pub is_blueprint: bool,
 }
 
 impl
@@ -237,6 +238,7 @@ impl
             raw_deployed_bytecode,
             creation_input_parts,
             deployed_bytecode_parts,
+            is_blueprint: source.is_blueprint,
         })
     }
 }

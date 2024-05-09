@@ -217,6 +217,28 @@ async fn test_success(test_case: impl TestCase) {
             "Invalid deployed bytecode artifacts"
         )
     }
+
+    assert_eq!(
+        test_case.is_blueprint(),
+        verification_result.is_blueprint,
+        "Invalid is_blueprint value"
+    );
+
+    let extra_data = verification_response
+        .extra_data
+        .expect("Missing extra data");
+    if let Some(expected_local_creation_code) = test_case.expected_local_creation_code() {
+        assert_eq!(
+            expected_local_creation_code, extra_data.local_creation_input_parts,
+            "Invalid local creation code"
+        );
+    }
+    if let Some(expected_local_runtime_code) = test_case.expected_local_runtime_code() {
+        assert_eq!(
+            expected_local_runtime_code, extra_data.local_deployed_bytecode_parts,
+            "Invalid local runtime code"
+        );
+    }
 }
 
 async fn test_failure(test_case: impl TestCase, expected_message: &str) {
@@ -333,6 +355,15 @@ mod flattened {
                 Some("0x0123456789012345678901234567890123456789".to_string());
             test_case
         };
+        test_success(test_case).await;
+    }
+
+    #[tokio::test]
+    async fn blueprint_contract() {
+        let mut test_case = vyper_types::from_file::<Flattened>("blueprint");
+        test_success(test_case.clone()).await;
+
+        test_case.use_deployed_bytecode = true;
         test_success(test_case).await;
     }
 }

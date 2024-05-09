@@ -29,7 +29,7 @@ pub enum SourceKind {
 }
 
 /// An indicator used in [`Bytecode`] showing that underlying bytecode
-/// was obtained from on chain creation transaction input
+/// was obtained from on chain deployed bytecode.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct DeployedBytecode;
 
@@ -66,7 +66,7 @@ impl Source for DeployedBytecode {
 }
 
 /// An indicator used in [`Bytecode`] showing that underlying bytecode
-/// was obtained from on chain deployed bytecode.
+/// was obtained from on chain creation transaction input
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct CreationTxInput;
 
@@ -91,6 +91,46 @@ impl Source for CreationTxInput {
 
     fn has_constructor_args() -> bool {
         true
+    }
+
+    fn has_immutable_references() -> bool {
+        false
+    }
+
+    fn source_kind() -> SourceKind {
+        SourceKind::CreationTxInput
+    }
+}
+
+/// An indicator used in [`Bytecode`] showing that underlying bytecode
+/// was obtained from on chain creation transaction input but should not check constructor arguments.
+///
+/// Used for the verification of blueprint contracts, as constructor arguments
+/// are inserted only during the actual create_from_blueprint calls.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CreationTxInputWithoutConstructorArgs;
+
+impl Source for CreationTxInputWithoutConstructorArgs {
+    fn try_bytes_from_contract(contract: &Contract) -> Result<Bytes, BytecodeInitError> {
+        let bytes = contract
+            .get_bytecode_bytes()
+            .ok_or_else(|| {
+                let bytecode = contract
+                    .get_bytecode_object()
+                    .unwrap_or_default()
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_string();
+                BytecodeInitError::InvalidCreationTxInput(bytecode)
+            })?
+            .0
+            .clone();
+
+        Ok(bytes)
+    }
+
+    fn has_constructor_args() -> bool {
+        false
     }
 
     fn has_immutable_references() -> bool {

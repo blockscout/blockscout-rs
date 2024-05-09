@@ -10,4 +10,5 @@ members = [
     "reqwest-rate-limiter",
     "solidity-metadata",
     "sourcify",
+    "verification-common",
 ]
