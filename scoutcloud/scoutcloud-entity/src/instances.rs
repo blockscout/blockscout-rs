@@ -10,13 +10,14 @@ pub struct Model {
     #[sea_orm(unique)]
     pub external_id: Uuid,
     pub creator_id: i32,
+    pub name: String,
     pub slug: String,
     #[sea_orm(column_type = "JsonBinary")]
     pub user_config: Json,
     #[sea_orm(column_type = "JsonBinary")]
     pub parsed_config: Json,
-    pub created_at: DateTime,
-    pub updated_at: DateTime,
+    pub created_at: DateTimeWithTimeZone,
+    pub updated_at: DateTimeWithTimeZone,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

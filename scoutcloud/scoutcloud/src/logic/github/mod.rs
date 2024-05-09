@@ -10,14 +10,17 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum GithubError {
-    #[error("github error: {0}")]
+    #[error("api error: {0}")]
     Octocrab(#[from] octocrab::Error),
     #[error("failed to create file: {0}")]
-    CreatingFile(#[from] anyhow::Error),
+    CreatingFile(anyhow::Error),
+    #[error("github workflow error: {0}")]
+    GithubWorkflow(anyhow::Error),
     #[error("internal error: {0}")]
-    Internal(anyhow::Error),
+    Internal(#[from] anyhow::Error),
 }
 
+#[derive(Clone, Debug)]
 pub struct GithubClient {
     client: octocrab::Octocrab,
     owner: String,
@@ -53,7 +56,7 @@ impl GithubClient {
             settings.token.clone(),
             settings.owner.clone(),
             settings.repo.clone(),
-            None,
+            settings.branch.clone(),
             None,
         )
     }

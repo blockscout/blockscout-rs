@@ -70,6 +70,21 @@ impl UserToken {
         Ok(Self { user, token })
     }
 
+    pub async fn get<C>(db: &C, token_id: i32) -> Result<Self, AuthError>
+    where
+        C: ConnectionTrait,
+    {
+        let (token, maybe_user) = auth_tokens::Entity::find()
+            .find_also_related(users::Entity)
+            .filter(auth_tokens::Column::Id.eq(token_id))
+            .one(db)
+            .await?
+            .ok_or_else(|| AuthError::TokenNotFound)?;
+        let user = maybe_user.ok_or_else(|| anyhow::anyhow!("token doesn't have user_id"))?;
+
+        Ok(Self { user, token })
+    }
+
     pub fn has_access_to_instance(&self, instance: &Instance) -> Result<(), AuthError> {
         if self.user.is_superuser || instance.model.creator_id == self.user.id {
             Ok(())

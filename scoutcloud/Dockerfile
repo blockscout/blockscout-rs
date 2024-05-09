@@ -16,7 +16,7 @@ COPY --from=cache $CARGO_HOME $CARGO_HOME
 RUN cargo build --release
 
 FROM ubuntu:20.04 as run
-RUN apt-get update && apt-get install -y libssl1.1 libssl-dev ca-certificates
+RUN apt-get update && apt-get install -y libpq-dev libssl1.1 libssl-dev ca-certificates
 
 WORKDIR /app
 ENV APP_USER=app

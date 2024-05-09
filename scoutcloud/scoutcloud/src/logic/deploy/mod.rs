@@ -28,6 +28,8 @@ pub enum DeployError {
     DeploymentNotFound,
     #[error("invalid action `{0}` for instance in state `{1}`")]
     InvalidStateTransition(String, String),
+    #[error("invalid value: {0}")]
+    InvalidValue(String),
     #[error("db error: {0}")]
     Db(#[from] DbErr),
     #[error("internal error: {0}")]

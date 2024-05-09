@@ -1,8 +1,5 @@
 use blockscout_service_launcher::launcher::ConfigSettings;
-use scoutcloud::{
-    logic::github::{AppVariant, Workflow},
-    server::Settings,
-};
+use scoutcloud::{logic::github::Workflow, server::Settings};
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -20,7 +17,6 @@ async fn main() -> Result<(), anyhow::Error> {
         .unwrap();
     println!("{}: {} - {}", r.id, r.name, r.status);
     let r = scoutcloud::logic::github::DeployWorkflow {
-        app: AppVariant::Instance,
         client: "sevenzing-test-2".to_string(),
     }
     .run_and_get_latest_with_mutex(&client, 5)

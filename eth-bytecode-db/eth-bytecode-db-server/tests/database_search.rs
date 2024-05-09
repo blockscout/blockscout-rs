@@ -771,6 +771,53 @@ async fn search_contract_without_metadata_hash_returns_partial_match() {
     );
 }
 
+#[rstest]
+#[tokio::test]
+#[timeout(std::time::Duration::from_secs(60))]
+#[ignore = "Needs database to run"]
+async fn search_alliance_contract_without_metadata_hash_returns_partial_match(
+    #[files("tests/alliance_test_cases/metadata_hash_absent.json")] test_case_path: PathBuf,
+) {
+    let remove_cbor_auxdata_from_artifacts = |artifacts: &mut serde_json::Value| {
+        artifacts
+            .as_object_mut()
+            .and_then(|artifacts| artifacts.remove("cborAuxdata"))
+    };
+
+    const TEST_NAME: &str = "search_alliance_contract_without_metadata_hash_returns_partial_match";
+    const ROUTE: &str = "/api/v2/bytecodes/sources:search-alliance";
+
+    let mut test_case = verifier_alliance_types::TestCase::from_file(test_case_path);
+    remove_cbor_auxdata_from_artifacts(&mut test_case.creation_code_artifacts);
+    remove_cbor_auxdata_from_artifacts(&mut test_case.runtime_code_artifacts);
+    let setup_data = verifier_alliance_setup::Setup::new(TEST_NAME)
+        .authorized()
+        .setup_test_case(TEST_SUITE_NAME, test_case)
+        .await;
+
+    let request = SearchAllianceSourcesRequest {
+        chain: setup_data.test_case.chain_id.to_string(),
+        address: setup_data.test_case.address.to_string(),
+    };
+
+    let verification_response: SearchSourcesResponse =
+        test_server::send_post_request(&setup_data.eth_bytecode_db_base, ROUTE, &request).await;
+
+    let expected_response = SearchSourcesResponse {
+        sources: vec![setup_data
+            .test_case
+            .to_test_input_data()
+            .eth_bytecode_db_response
+            .source
+            .unwrap()],
+    };
+
+    assert_eq!(
+        expected_response, verification_response,
+        "Invalid response returned"
+    );
+}
+
 fn build_test_data(metadata_hash: &str) -> TestInputData {
     let extra_data = smart_contract_verifier_v2::verify_response::ExtraData {
             local_creation_input_parts: vec![

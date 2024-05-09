@@ -1,5 +1,5 @@
 use blockscout_service_launcher::{
-    database::{DatabaseConnectSettings, DatabaseSettings},
+    database::DatabaseSettings,
     launcher::{ConfigSettings, MetricsSettings, ServerSettings},
     tracing::{JaegerSettings, TracingSettings},
 };
@@ -30,25 +30,6 @@ pub struct GithubSettings {
     pub token: String,
     pub owner: String,
     pub repo: String,
-}
-
-impl Settings {
-    pub fn default(database_url: String) -> Self {
-        Self {
-            server: Default::default(),
-            metrics: Default::default(),
-            tracing: Default::default(),
-            jaeger: Default::default(),
-            database: DatabaseSettings {
-                connect: DatabaseConnectSettings::Url(database_url),
-                create_database: false,
-                run_migrations: false,
-            },
-            github: GithubSettings {
-                token: "".to_string(),
-                owner: "".to_string(),
-                repo: "".to_string(),
-            },
-        }
-    }
+    #[serde(default)]
+    pub branch: Option<String>,
 }

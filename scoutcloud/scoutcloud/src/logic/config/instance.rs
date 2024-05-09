@@ -2,6 +2,7 @@ use super::{variables, UserConfig, UserVariable};
 use crate::logic::{json_utils, ConfigError, ConfigValidationContext, ParsedVariableKey};
 
 use std::collections::BTreeMap;
+use url::Url;
 
 lazy_static::lazy_static! {
     pub static ref DEFAULT_CONFIG: serde_json::Value = {
@@ -129,6 +130,27 @@ impl InstanceConfig {
         serde_yaml::to_string(&self.raw).map_err(|e| {
             ConfigError::Internal(anyhow::anyhow!("failed to serialize config to yaml: {e}"))
         })
+    }
+}
+
+impl InstanceConfig {
+    pub fn parse_instance_url(&self) -> Result<Url, ConfigError> {
+        let instance_url = self.raw["frontend"]["ingress"]["hostname"]
+            .as_str()
+            .ok_or_else(|| {
+                ConfigError::Internal(anyhow::anyhow!("failed to get instance url from config"))
+            })?;
+        let instance_url = if instance_url.starts_with("http") {
+            instance_url.to_string()
+        } else {
+            format!("https://{}", instance_url)
+        };
+        let url = Url::parse(&instance_url).map_err(|e| {
+            ConfigError::Internal(anyhow::anyhow!(
+                "failed to parse instance url '{instance_url}': {e}"
+            ))
+        })?;
+        Ok(url)
     }
 }
 
@@ -265,7 +287,7 @@ mod tests {
             json!({
                 "blockscout": {
                     "ingress": {
-                        "hostname": "test-client.blockscout.com",
+                        "hostname": "test-client.k8s-dev.blockscout.com",
                     },
                     "env": {
                         "ETHEREUM_JSONRPC_HTTP_URL": server.url("/"),
@@ -284,7 +306,7 @@ mod tests {
                 },
                 "frontend": {
                     "ingress": {
-                        "hostname": "test-client.blockscout.com",
+                        "hostname": "test-client.k8s-dev.blockscout.com",
                     },
                 },
                 "config": {

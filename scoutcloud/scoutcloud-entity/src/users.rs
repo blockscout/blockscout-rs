@@ -9,7 +9,7 @@ pub struct Model {
     pub id: i32,
     pub email: String,
     pub project_title: Option<String>,
-    pub created_at: DateTime,
+    pub created_at: DateTimeWithTimeZone,
     pub is_superuser: bool,
     pub balance: Decimal,
 }
@@ -20,6 +20,8 @@ pub enum Relation {
     AuthTokens,
     #[sea_orm(has_many = "super::balance_expenses::Entity")]
     BalanceExpenses,
+    #[sea_orm(has_many = "super::instances::Entity")]
+    Instances,
 }
 
 impl Related<super::auth_tokens::Entity> for Entity {
@@ -31,6 +33,12 @@ impl Related<super::auth_tokens::Entity> for Entity {
 impl Related<super::balance_expenses::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::BalanceExpenses.def()
+    }
+}
+
+impl Related<super::instances::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Instances.def()
     }
 }
 

@@ -6,7 +6,7 @@ use crate::{
     uuid_eq,
 };
 use scoutcloud_entity as db;
-use sea_orm::{ConnectionTrait, LoaderTrait, QueryFilter, QuerySelect};
+use sea_orm::{ConnectionTrait, DbErr, LoaderTrait, QueryFilter, QuerySelect};
 
 pub struct InstanceDeployment {
     pub instance: Instance,
@@ -14,7 +14,7 @@ pub struct InstanceDeployment {
 }
 
 impl InstanceDeployment {
-    pub async fn from_instance<C>(db: &C, instance: Instance) -> Result<Self, DeployError>
+    pub async fn from_instance<C>(db: &C, instance: Instance) -> Result<Self, DbErr>
     where
         C: ConnectionTrait,
     {
@@ -25,35 +25,48 @@ impl InstanceDeployment {
         })
     }
 
-    pub async fn from_instance_id<C>(db: &C, instance_id: &str) -> Result<Self, DeployError>
+    pub async fn find_by_instance_uuid<C>(
+        db: &C,
+        instance_uuid: &str,
+    ) -> Result<Option<Self>, DbErr>
     where
         C: ConnectionTrait,
     {
-        let instance = Instance::find(db, instance_id)
-            .await?
-            .ok_or(DeployError::InstanceNotFound(instance_id.to_string()))?;
-        Self::from_instance(db, instance).await
+        let instance = match Instance::find_by_uuid(db, instance_uuid).await? {
+            Some(instance) => instance,
+            None => return Ok(None),
+        };
+        Self::from_instance(db, instance).await.map(Some)
     }
 
-    pub async fn from_deployment_id<C>(db: &C, deployment_id: &str) -> Result<Self, DeployError>
+    pub async fn find_by_deployment_uuid<C>(
+        db: &C,
+        deployment_uuid: &str,
+    ) -> Result<Option<Self>, DbErr>
     where
         C: ConnectionTrait,
     {
-        let (deployment, instance) = Deployment::default_select()
-            .filter(uuid_eq!(db::deployments::Column::ExternalId, deployment_id))
+        let (deployment, instance) = match Deployment::default_select()
+            .filter(uuid_eq!(
+                db::deployments::Column::ExternalId,
+                deployment_uuid
+            ))
             .find_also_related(db::instances::Entity)
             .one(db)
             .await?
-            .ok_or(DeployError::DeploymentNotFound)?;
-        let instance = instance.ok_or(anyhow::anyhow!("deployment without instance"))?;
+        {
+            Some((deployment, instance)) => (deployment, instance),
+            None => return Ok(None),
+        };
+        let instance = instance.ok_or(DbErr::Custom("deployment without instance".into()))?;
 
-        Ok(Self {
+        Ok(Some(Self {
             instance: Instance::new(instance),
             deployment: Some(Deployment::new(deployment)),
-        })
+        }))
     }
 
-    pub async fn find_all<C>(db: &C, owner: &UserToken) -> Result<Vec<Self>, DeployError>
+    pub async fn find_all_instances<C>(db: &C, owner: &UserToken) -> Result<Vec<Self>, DeployError>
     where
         C: ConnectionTrait,
     {
@@ -78,7 +91,7 @@ impl InstanceDeployment {
             .collect()
     }
 
-    pub async fn find_all_for_instance<C>(
+    pub async fn find_deployments_of_instance<C>(
         db: &C,
         instance: &Instance,
     ) -> Result<Vec<Self>, DeployError>
@@ -105,7 +118,8 @@ impl TryFrom<InstanceDeployment> for proto::InstanceInternal {
         let user_config = instance.user_config()?;
         let proto_instance = proto::InstanceInternal {
             instance_id: instance.model.external_id.to_string(),
-            name: instance.model.slug.clone(),
+            name: instance.model.name.clone(),
+            slug: instance.model.slug.clone(),
             created_at: instance.model.created_at.to_string(),
             config: Some(user_config.internal),
             deployment_id: deployment.as_ref().map(|d| d.model.external_id.to_string()),
@@ -128,8 +142,11 @@ impl TryFrom<InstanceDeployment> for proto::DeploymentInternal {
             status: map_deployment_status(Some(&deployment.model.status)),
             error: deployment.model.error,
             created_at: deployment.model.created_at.to_string(),
+            started_at: deployment.model.started_at.map(|t| t.to_string()),
             finished_at: deployment.model.finished_at.map(|t| t.to_string()),
             config: Some(config.internal),
+            blockscout_url: deployment.model.instance_url,
+            total_cost: deployment.model.total_cost.to_string(),
         })
     }
 }

@@ -85,6 +85,8 @@ fn match_contract_from_model(
         .naive_utc()
         .max(verified_contract.updated_at.naive_utc());
 
+    let match_type = extract_match_type(&compiled_contract, &verified_contract)?;
+
     let source_files = serde_json::from_value(compiled_contract.sources)
         .context("compiled contract sources are not valid BTreeMap<String, String>")?;
 
@@ -98,7 +100,7 @@ fn match_contract_from_model(
         source_files,
         abi: extract_abi(&compiled_contract.compilation_artifacts)?,
         constructor_arguments: extract_constructor_arguments(&verified_contract)?,
-        match_type: extract_match_type(&verified_contract)?,
+        match_type,
         compilation_artifacts: Some(compiled_contract.compilation_artifacts.to_string()),
         creation_input_artifacts: Some(compiled_contract.creation_code_artifacts.to_string()),
         deployed_bytecode_artifacts: Some(compiled_contract.runtime_code_artifacts.to_string()),
@@ -172,11 +174,16 @@ fn extract_constructor_arguments(
 }
 
 fn extract_match_type(
+    compiled_contract: &compiled_contracts::Model,
     verified_contract: &verified_contracts::Model,
 ) -> Result<MatchType, anyhow::Error> {
     // If creation code matches, we are considering it with greater priority,
     // assuming that creation code full match automatically implies runtime code full match
     if verified_contract.creation_match {
+        let code_artifacts = compiled_contract
+            .creation_code_artifacts
+            .as_object()
+            .ok_or_else(|| anyhow::anyhow!("'creation_code_artifacts' is not an object"))?;
         let values = verified_contract
             .creation_values
             .as_ref()
@@ -185,13 +192,19 @@ fn extract_match_type(
             })?
             .as_object()
             .ok_or_else(|| anyhow::anyhow!("'creation_values' is not an object"))?;
-        return Ok(match values.get("cborAuxdata") {
-            Some(_) => MatchType::Partial,
-            None => MatchType::Full,
-        });
+        return Ok(
+            match (code_artifacts.get("cborAuxdata"), values.get("cborAuxdata")) {
+                (Some(_), None) => MatchType::Full,
+                _ => MatchType::Partial,
+            },
+        );
     }
 
     if verified_contract.runtime_match {
+        let code_artifacts = compiled_contract
+            .runtime_code_artifacts
+            .as_object()
+            .ok_or_else(|| anyhow::anyhow!("'runtime_code_artifacts' is not an object"))?;
         let values = verified_contract
             .runtime_values
             .as_ref()
@@ -200,10 +213,12 @@ fn extract_match_type(
             })?
             .as_object()
             .ok_or_else(|| anyhow::anyhow!("'runtime_values' is not an object"))?;
-        return Ok(match values.get("cborAuxdata") {
-            Some(_) => MatchType::Partial,
-            None => MatchType::Full,
-        });
+        return Ok(
+            match (code_artifacts.get("cborAuxdata"), values.get("cborAuxdata")) {
+                (Some(_), None) => MatchType::Full,
+                _ => MatchType::Partial,
+            },
+        );
     }
 
     Err(anyhow::anyhow!(

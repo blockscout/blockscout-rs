@@ -2,6 +2,7 @@ mod config;
 mod db_utils;
 pub mod deploy;
 pub mod github;
+pub mod jobs;
 mod json_utils;
 pub mod users;
 

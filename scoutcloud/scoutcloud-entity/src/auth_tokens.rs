@@ -10,7 +10,7 @@ pub struct Model {
     pub token_value: Uuid,
     pub user_id: i32,
     pub deleted: bool,
-    pub created_at: DateTime,
+    pub created_at: DateTimeWithTimeZone,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

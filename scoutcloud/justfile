@@ -11,11 +11,44 @@ export DATABASE_URL := "postgres://" + db-user + ":" + db-password + "@" + db-ho
 docker-name := env_var_or_default('DOCKER_NAME', "scoutcloud-postgres")
 test-db-port := env_var_or_default('TEST_DB_PORT', "9433")
 
-
 start-postgres:
-    # we run it in --rm mode, so all data will be deleted after stopping
-    docker run -p {{db-port}}:5432 --name {{docker-name}} -e POSTGRES_PASSWORD={{db-password}} -e POSTGRES_USER={{db-user}} --rm -d postgres -N 500
+    docker run \
+      -p {{db-port}}:5432 \
+      --name {{docker-name}} \
+      -e POSTGRES_PASSWORD={{db-password}} \
+      -e POSTGRES_USER={{db-user}} \
+      -e POSTGRES_DB={{db-name}} \
+      --rm \
+      -d \
+      postgres
     sleep 3
+    just _create-db
+
+start-tls-postgres:
+    mkdir -p tls
+    openssl req -new -text -passout pass:abcd -subj /CN=localhost -out tls/server.req -keyout tls/privkey.pem
+    openssl rsa -in tls/privkey.pem -passin pass:abcd -out tls/server.key
+    openssl req -x509 -in tls/server.req -text -key tls/server.key -out tls/server.crt
+    chmod 600 tls/server.key
+    -test $(uname -s) = Linux && chown 70 tls/server.key
+
+    docker run \
+      -p {{db-port}}:5432 \
+      --name {{docker-name}} \
+      -e POSTGRES_PASSWORD={{db-password}} \
+      -e POSTGRES_USER={{db-user}} \
+      -v $(pwd)/tls:/etc/postgresql/certs \
+      --rm \
+      -d \
+      postgres \
+      -N 500 \
+      -c ssl=on \
+      -c ssl_cert_file=/etc/postgresql/certs/server.crt \
+      -c ssl_key_file=/etc/postgresql/certs/server.key
+    sleep 3
+    just _create-db
+
+_create-db:
     # wait for postgres to start, but only if db_name is not empty
     $SHELL -c '[[ -z "{{db-name}}" ]] || docker exec -it {{docker-name}} psql -U postgres -c "create database {{db-name}};"'
 
@@ -27,7 +60,7 @@ test *args:
 
 test-with-db *args:
     -just db-port="{{test-db-port}}" db-name="" docker-name="{{docker-name}}-test" start-postgres
-    just db-port="{{test-db-port}}" db-name=""                                    test {{args}}
+    just  db-port="{{test-db-port}}" db-name=""                                    test {{args}}
 
 stop-test-postgres:
     just docker-name="{{docker-name}}-test" stop-postgres

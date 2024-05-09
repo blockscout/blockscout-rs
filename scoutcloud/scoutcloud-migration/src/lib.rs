@@ -4,6 +4,7 @@ use sea_orm_migration::sea_orm::{Statement, TransactionTrait};
 mod m20220101_000001_create_table;
 mod m20240208_092748_create_triggers;
 mod m20240409_105319_fill_server_specs;
+mod m20240415_094154_add_fang;
 
 pub struct Migrator;
 
@@ -14,6 +15,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20220101_000001_create_table::Migration),
             Box::new(m20240208_092748_create_triggers::Migration),
             Box::new(m20240409_105319_fill_server_specs::Migration),
+            Box::new(m20240415_094154_add_fang::Migration),
         ]
     }
 }

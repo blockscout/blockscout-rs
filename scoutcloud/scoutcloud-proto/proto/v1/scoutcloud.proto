@@ -16,6 +16,8 @@ service Scoutcloud {
   rpc GetDeployment(GetDeploymentRequest) returns (Deployment) {}
   rpc GetCurrentDeployment(GetCurrentDeploymentRequest) returns (Deployment) {}
   rpc ListDeployments(ListDeploymentsRequest) returns (ListDeploymentsResponse) {}
+
+  rpc GetProfile(GetProfileRequest) returns (UserProfile) {}
 }
 
 message DeployConfig {
@@ -108,9 +110,10 @@ message Instance {
   string instance_id = 1;
   optional string deployment_id = 2;
   string name = 3;
-  string created_at = 4;
-  DeployConfig config = 5;
-  DeploymentStatus deployment_status = 6;
+  string slug = 4;
+  string created_at = 5;
+  DeployConfig config = 6;
+  DeploymentStatus deployment_status = 7;
 }
 
 message Deployment {
@@ -119,8 +122,11 @@ message Deployment {
   DeploymentStatus status = 3;
   optional string error = 4;
   string created_at = 5;
-  optional string finished_at = 6;
-  DeployConfig config = 7;
+  optional string started_at = 6;
+  optional string finished_at = 7;
+  DeployConfig config = 8;
+  optional string blockscout_url = 9;
+  string total_cost = 10;
 }
 
 message GetInstanceRequest {
@@ -148,4 +154,24 @@ message ListDeploymentsResponse {
 
 message GetCurrentDeploymentRequest {
   string instance_id = 1;
+}
+
+
+// Users
+
+message GetProfileRequest {}
+
+
+message UserAction {
+  string action = 1;
+  optional string instance_id = 2;
+  string timestamp = 3;
+}
+
+message UserProfile {
+  string email = 1;
+  optional string project_title = 2;
+  string created_at = 3;
+  string balance = 4;
+  repeated UserAction recent_actions = 5;
 }

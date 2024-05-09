@@ -8,6 +8,7 @@ pub use action_helpers::*;
 
 use verifier_alliance_entity::contract_deployments;
 
+#[derive(Clone, Debug)]
 pub struct CodeMatch {
     pub does_match: bool,
     pub values: Option<serde_json::Value>,
