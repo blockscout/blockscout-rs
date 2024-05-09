@@ -405,8 +405,7 @@ frontend:
     NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID: ref+vault://deployment-values/blockscout/common?token_env=VAULT_TOKEN&address=https://vault.k8s.blockscout.com#/NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID
     SENTRY_CSP_REPORT_URI: ref+vault://deployment-values/blockscout/common?token_env=VAULT_TOKEN&address=https://vault.k8s.blockscout.com#/SENTRY_CSP_REPORT_URI
   image:
-    pullPolicy: Always
-    tag: latest
+    tag: v1.29.2
   ingress:
     enabled: true
     hostname: hostname-test.k8s-dev.blockscout.com

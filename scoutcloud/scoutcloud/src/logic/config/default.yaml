@@ -32,8 +32,7 @@ blockscout:
 frontend:
   enabled: true
   image:
-    tag: latest
-    pullPolicy: Always
+    tag: v1.29.2
   replicas:
     app: 2
   ingress:
