@@ -12,4 +12,4 @@ members = [
 
 [workspace.dependencies]
 blockscout-service-launcher = "0.10.0"
-smart-contract-verifier-proto = { git = "https://github.com/blockscout/blockscout-rs", rev = "bce6df7b" }
+smart-contract-verifier-proto = { git = "https://github.com/blockscout/blockscout-rs", rev = "b855922a" }
