@@ -65,7 +65,7 @@ pub trait DataSource {
 
     /// Update source data (values + metadata), if necessary.
     async fn update_from_remote(
-        cx: &mut UpdateContext<UpdateParameters<'_>>,
+        cx: &UpdateContext<UpdateParameters<'_>>,
     ) -> Result<(), UpdateError>;
 
     /// Retrieve chart data for dates in `range`.
@@ -73,7 +73,7 @@ pub trait DataSource {
     /// **Does not perform an update!** If you need relevant data, you likely need
     /// to call [`DataSource::update_from_remote`] beforehand.
     async fn query_data(
-        cx: &mut UpdateContext<UpdateParameters<'_>>,
+        cx: &UpdateContext<UpdateParameters<'_>>,
         range: RangeInclusive<NaiveDate>,
     ) -> Result<Self::Output, UpdateError>;
 }
@@ -100,7 +100,7 @@ pub trait UpdateableChart: Chart {
     // todo: maybe leave only `batch_update` from fn cascade and provide helper functions to perform the batching?
 
     async fn batch_update(
-        cx: &mut UpdateContext<UpdateParameters<'_>>,
+        cx: &UpdateContext<UpdateParameters<'_>>,
         update_from_row: Option<DateValue>,
         min_blockscout_block: i64,
     ) -> Result<(), UpdateError> {
@@ -139,7 +139,7 @@ pub trait UpdateableChart: Chart {
 
     /// Returns how many records were found
     async fn update_next_values_batch(
-        cx: &mut UpdateContext<UpdateParameters<'_>>,
+        cx: &UpdateContext<UpdateParameters<'_>>,
         chart_id: i32,
         min_blockscout_block: i64,
         range: RangeInclusive<NaiveDate>,
@@ -182,7 +182,7 @@ pub trait UpdateableChart: Chart {
     }
 
     async fn query_data(
-        cx: &mut UpdateContext<UpdateParameters<'_>>,
+        cx: &UpdateContext<UpdateParameters<'_>>,
         range: std::ops::RangeInclusive<sea_orm::prelude::Date>,
     ) -> Result<ChartData, UpdateError> {
         let values = get_chart_data(
@@ -221,7 +221,7 @@ impl<C: UpdateableChart> DataSource for C {
     type Output = ChartData;
 
     async fn update_from_remote(
-        cx: &mut UpdateContext<UpdateParameters<'_>>,
+        cx: &UpdateContext<UpdateParameters<'_>>,
     ) -> Result<(), UpdateError> {
         Self::PrimaryDependency::update_from_remote(cx).await?;
         Self::SecondaryDependencies::update_from_remote(cx).await?;
@@ -247,7 +247,7 @@ impl<C: UpdateableChart> DataSource for C {
     }
 
     async fn query_data(
-        cx: &mut UpdateContext<UpdateParameters<'_>>,
+        cx: &UpdateContext<UpdateParameters<'_>>,
         range: RangeInclusive<NaiveDate>,
     ) -> Result<ChartData, UpdateError> {
         C::query_data(cx, range).await
@@ -300,13 +300,13 @@ impl DataSource for () {
     }
 
     async fn update_from_remote(
-        _cx: &mut UpdateContext<UpdateParameters<'_>>,
+        _cx: &UpdateContext<UpdateParameters<'_>>,
     ) -> Result<(), UpdateError> {
         // stop recursion
         Ok(())
     }
     async fn query_data(
-        _cx: &mut UpdateContext<UpdateParameters<'_>>,
+        _cx: &UpdateContext<UpdateParameters<'_>>,
         _range: RangeInclusive<NaiveDate>,
     ) -> Result<Self::Output, UpdateError> {
         Ok(())
@@ -333,7 +333,7 @@ where
 
     /// Update source data (values + metadata), if necessary.
     async fn update_from_remote(
-        cx: &mut UpdateContext<UpdateParameters<'_>>,
+        cx: &UpdateContext<UpdateParameters<'_>>,
     ) -> Result<(), UpdateError> {
         Self::PrimaryDependency::update_from_remote(cx).await?;
         Self::SecondaryDependencies::update_from_remote(cx).await?;
@@ -341,7 +341,7 @@ where
     }
 
     async fn query_data(
-        cx: &mut UpdateContext<UpdateParameters<'_>>,
+        cx: &UpdateContext<UpdateParameters<'_>>,
         range: RangeInclusive<NaiveDate>,
     ) -> Result<Self::Output, UpdateError> {
         Ok((
@@ -357,7 +357,7 @@ pub trait RemotelyPulledChart: Chart {
 
     /// Returns how many records were found
     async fn update_next_values_batch(
-        cx: &mut UpdateContext<UpdateParameters<'_>>,
+        cx: &UpdateContext<UpdateParameters<'_>>,
         chart_id: i32,
         min_blockscout_block: i64,
         range: RangeInclusive<NaiveDate>,
@@ -380,7 +380,7 @@ pub trait RemotelyPulledChart: Chart {
     }
 
     // async fn query_local_data(
-    //     cx: &mut UpdateContext<UpdateParameters<'_>>,
+    //     cx: &UpdateContext<UpdateParameters<'_>>,
     //     range: std::ops::RangeInclusive<sea_orm::prelude::Date>,
     // ) -> Result<ChartData, UpdateError> {
     // }
@@ -392,7 +392,7 @@ impl<R: RemotelyPulledChart> UpdateableChart for R {
 
     /// Returns how many records were found
     async fn update_next_values_batch(
-        cx: &mut UpdateContext<UpdateParameters<'_>>,
+        cx: &UpdateContext<UpdateParameters<'_>>,
         chart_id: i32,
         min_blockscout_block: i64,
         range: RangeInclusive<NaiveDate>,
@@ -452,17 +452,63 @@ impl<'a, UCX> UpdateContext<UCX> {
     }
 }
 
-// todo: move comments somewhere
+// todo: move comments somewhere (to module likely)
 /// Directed Acyclic Connected Graph
 pub trait UpdateGroup<P> {
-    // todo: impl with macros(?)
     async fn create_charts(
         db: &DatabaseConnection,
         enabled_names: &HashSet<String>,
-
         current_time: &chrono::DateTime<Utc>,
     ) -> Result<(), DbErr>;
     async fn update_charts(params: P, enabled_names: &HashSet<String>) -> Result<(), UpdateError>;
+}
+
+macro_rules! construct_update_group {
+    ($group_name:ident = [
+        $($member:path),*
+        $(,)?
+    ]) => {
+        pub struct $group_name;
+
+        impl<'a>
+            $crate::charts::data_source::UpdateGroup<
+                $crate::charts::data_source::UpdateParameters<'a>,
+            > for $group_name
+        {
+            async fn create_charts(
+                #[allow(unused)]
+                db: &sea_orm::DatabaseConnection,
+                #[allow(unused)]
+                enabled_names: &std::collections::HashSet<String>,
+                #[allow(unused)]
+                current_time: &chrono::DateTime<chrono::Utc>,
+            ) -> Result<(), sea_orm::DbErr> {
+                $(
+                    if enabled_names.contains(<$member>::name()) {
+                        <$member>::init_all_locally(db, current_time).await?;
+                    }
+                )*
+                Ok(())
+            }
+
+            async fn update_charts(
+                params: $crate::charts::data_source::UpdateParameters<'a>,
+                #[allow(unused)]
+                enabled_names: &std::collections::HashSet<String>,
+            ) -> Result<(), $crate::UpdateError> {
+                #[allow(unused)]
+                let cx = $crate::charts::data_source::UpdateContext::<$crate::charts::data_source::UpdateParameters<'a>>::from_inner(
+                    params.into()
+                );
+                $(
+                    if enabled_names.contains(<$member>::name()) {
+                        <$member>::update_from_remote(&cx).await?;
+                    }
+                )*
+                Ok(())
+            }
+        }
+    };
 }
 
 // mod update_strategies {
@@ -542,37 +588,7 @@ mod examples {
         }
     }
 
-    pub struct ExampleUpdateGroup;
-
-    impl<'a> UpdateGroup<UpdateParameters<'a>> for ExampleUpdateGroup {
-        async fn create_charts(
-            db: &DatabaseConnection,
-            enabled_names: &HashSet<String>,
-            current_time: &chrono::DateTime<Utc>,
-        ) -> Result<(), DbErr> {
-            if enabled_names.contains(NewContractsChart::name()) {
-                NewContractsChart::init_all_locally(db, current_time).await?;
-            }
-            if enabled_names.contains(ContractsGrowthChart::name()) {
-                ContractsGrowthChart::init_all_locally(db, current_time).await?;
-            }
-            Ok(())
-        }
-
-        async fn update_charts(
-            params: UpdateParameters<'a>,
-            enabled_names: &HashSet<String>,
-        ) -> Result<(), UpdateError> {
-            let mut cx = UpdateContext::from_inner(params.into());
-            if enabled_names.contains(NewContractsChart::name()) {
-                NewContractsChart::update_from_remote(&mut cx).await?;
-            }
-            if enabled_names.contains(ContractsGrowthChart::name()) {
-                ContractsGrowthChart::update_from_remote(&mut cx).await?;
-            }
-            Ok(())
-        }
-    }
+    construct_update_group!(ExampleUpdateGroup = [NewContractsChart, ContractsGrowthChart]);
 
     #[tokio::test]
     async fn _update_examples() {
