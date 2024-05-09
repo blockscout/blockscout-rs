@@ -366,7 +366,7 @@ mod tests {
     TXS_STATS_DAYS_TO_COMPILE_AT_INIT: 10
   image:
     repository: blockscout/blockscout-stability
-    tag: 6.3.0
+    tag: 6.5.0
   ingress:
     enabled: true
     hostname: hostname-test.k8s-dev.blockscout.com
