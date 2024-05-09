@@ -8,7 +8,11 @@ use std::str::FromStr;
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ChainType {
+    Default,
+    Arbitrum,
     Ethereum,
+    Filecoin,
+    Optimism,
     PolygonEdge,
     PolygonZkevm,
     Rsk,
@@ -16,8 +20,7 @@ pub enum ChainType {
     Stability,
     Suave,
     Zetachain,
-    Filecoin,
-    Default,
+    Zksync,
 }
 
 derive_display_from_serialize!(ChainType);
@@ -26,19 +29,22 @@ derive_fromstr_from_deserialize!(ChainType);
 impl ChainType {
     pub fn maybe_custom_image(&self) -> Option<String> {
         let image = match self {
-            Self::PolygonEdge => Some("blockscout/blockscout-polygon-edge"),
-            Self::PolygonZkevm => Some("blockscout/blockscout-zkevm"),
-            Self::Rsk => Some("blockscout/blockscout-rsk"),
-            Self::Shibarium => Some("blockscout/blockscout-shibarium"),
-            Self::Stability => Some("blockscout/blockscout-stability"),
-            Self::Suave => Some("blockscout/blockscout-suave"),
-            Self::Zetachain => None,
-            Self::Filecoin => None,
-            Self::Default => None,
-            Self::Ethereum => None,
+            Self::Default => "blockscout/blockscout",
+            Self::PolygonEdge => "blockscout/blockscout-polygon-edge",
+            Self::PolygonZkevm => "blockscout/blockscout-zkevm",
+            Self::Rsk => "blockscout/blockscout-rsk",
+            Self::Shibarium => "blockscout/blockscout-shibarium",
+            Self::Stability => "blockscout/blockscout-stability",
+            Self::Suave => "blockscout/blockscout-suave",
+            Self::Zetachain => "blockscout/blockscout-zetachain",
+            Self::Filecoin => "blockscout/blockscout-filecoin",
+            Self::Ethereum => "blockscout/blockscout-ethereum",
+            Self::Arbitrum => "blockscout/blockscout-arbitrum",
+            Self::Optimism => "blockscout/blockscout-optimism",
+            Self::Zksync => "blockscout/blockscout-zksync",
         };
 
-        image.map(str::to_string)
+        Some(image.to_string())
     }
 }
 

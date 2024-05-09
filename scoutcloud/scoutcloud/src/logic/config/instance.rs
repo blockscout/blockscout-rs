@@ -366,7 +366,7 @@ mod tests {
     TXS_STATS_DAYS_TO_COMPILE_AT_INIT: 10
   image:
     repository: blockscout/blockscout-stability
-    tag: 6.3.0
+    tag: 6.5.0
   ingress:
     enabled: true
     hostname: hostname-test.k8s-dev.blockscout.com
@@ -405,8 +405,7 @@ frontend:
     NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID: ref+vault://deployment-values/blockscout/common?token_env=VAULT_TOKEN&address=https://vault.k8s.blockscout.com#/NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID
     SENTRY_CSP_REPORT_URI: ref+vault://deployment-values/blockscout/common?token_env=VAULT_TOKEN&address=https://vault.k8s.blockscout.com#/SENTRY_CSP_REPORT_URI
   image:
-    pullPolicy: Always
-    tag: latest
+    tag: v1.29.2
   ingress:
     enabled: true
     hostname: hostname-test.k8s-dev.blockscout.com
