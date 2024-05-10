@@ -22,6 +22,7 @@ use sea_orm::{DatabaseConnection, FromQueryResult, Statement, TransactionTrait};
 use std::time::Instant;
 
 pub trait ChartBatchUpdater: ChartUpdater {
+    // todo: leave only query
     fn get_query(from: NaiveDate, to: NaiveDate) -> Statement;
 
     async fn update_with_values(
@@ -83,7 +84,7 @@ pub trait ChartBatchUpdater: ChartUpdater {
                 .map_err(UpdateError::BlockscoutDB)?,
         };
 
-        let steps = generate_date_ranges(first_date, today, Self::step_duration());
+        let steps = generate_date_ranges(first_date, today, Duration::days(30));
         let n = steps.len();
 
         for (i, (from, to)) in steps.into_iter().enumerate() {

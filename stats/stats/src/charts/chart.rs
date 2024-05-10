@@ -68,10 +68,6 @@ pub trait Chart: Sync {
             1
         }
     }
-
-    fn step_duration() -> chrono::Duration {
-        chrono::Duration::days(30)
-    }
 }
 
 #[derive(Debug, FromQueryResult)]
