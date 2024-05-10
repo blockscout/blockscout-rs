@@ -34,6 +34,7 @@ pub enum MissingDatePolicy {
     FillPrevious,
 }
 
+#[portrait::make()]
 pub trait Chart: Sync {
     fn name() -> &'static str;
     fn chart_type() -> ChartType;

@@ -1,29 +1,10 @@
-use std::{collections::HashSet, ops::RangeInclusive, time::Instant};
+use std::{collections::HashSet, ops::RangeInclusive};
 
 use chrono::{DateTime, Duration, NaiveDate, Utc};
-use entity::charts;
 use futures::{future::BoxFuture, FutureExt};
-use sea_orm::{
-    prelude::*, DatabaseConnection, DbErr, FromQueryResult, QuerySelect, TransactionTrait,
-};
+use sea_orm::{DatabaseConnection, DbErr};
 
-use crate::{get_chart_data, Chart, DateValue, ReadError, UpdateError};
-
-use self::chart_update_strategies::BatchUpdateableChart;
-
-use super::{
-    create_chart,
-    db_interaction::{
-        chart_updaters::{
-            common_operations::{
-                self, get_min_block_blockscout, get_min_date_blockscout, get_nth_last_row,
-            },
-            ChartBatchUpdater,
-        },
-        write::insert_data_many,
-    },
-    find_chart,
-};
+use crate::{DateValue, UpdateError};
 
 /// Thing that can provide data from local storage.
 ///
@@ -80,22 +61,163 @@ pub trait DataSource {
     ) -> Result<Self::Output, UpdateError>;
 }
 
-mod chart_update_strategies {
-    use std::{ops::RangeInclusive, time::Instant};
+mod data_source_kinds {
+    use std::{marker::PhantomData, ops::RangeInclusive, time::Instant};
 
     use chrono::{NaiveDate, Utc};
-    use sea_orm::{DatabaseConnection, TransactionTrait};
+    use entity::sea_orm_active_enums::ChartType;
+    use sea_orm::{
+        prelude::*, DatabaseConnection, DbErr, FromQueryResult, QuerySelect, TransactionTrait,
+    };
 
     use crate::{
-        charts::db_interaction::chart_updaters::common_operations::get_min_date_blockscout,
-        DateValue, UpdateError,
+        charts::{
+            chart::chart_portrait,
+            create_chart,
+            db_interaction::chart_updaters::{
+                common_operations::{
+                    self, get_min_block_blockscout, get_min_date_blockscout, get_nth_last_row,
+                },
+                ChartBatchUpdater,
+            },
+            find_chart,
+        },
+        get_chart_data, Chart, DateValue, MissingDatePolicy, ReadError, UpdateError,
     };
 
     use super::{
-        generate_date_ranges, DataSource, UpdateContext, UpdateParameters, UpdateableChart,
+        generate_date_ranges, ChartData, ChartMetadata, DataSource, UpdateContext, UpdateParameters,
     };
 
-    pub trait BatchUpdateableChart: UpdateableChart {
+    // todo: instruction on how to implement
+    pub trait UpdateableChart: Chart {
+        type PrimaryDependency: DataSource;
+        type SecondaryDependencies: DataSource;
+
+        /// Create chart in db. Does not overwrite existing data.
+        fn create(
+            db: &DatabaseConnection,
+            init_time: &chrono::DateTime<Utc>,
+        ) -> impl std::future::Future<Output = Result<(), DbErr>> + Send {
+            async move { create_chart(db, Self::name().into(), Self::chart_type(), init_time).await }
+        }
+
+        async fn update(cx: &UpdateContext<UpdateParameters<'_>>) -> Result<(), UpdateError> {
+            let chart_id = Self::query_chart_id(cx.user_context.db)
+                .await?
+                .ok_or_else(|| UpdateError::NotFound(Self::name().into()))?;
+            let min_blockscout_block = get_min_block_blockscout(cx.user_context.blockscout)
+                .await
+                .map_err(UpdateError::BlockscoutDB)?;
+            let offset = Some(Self::approximate_trailing_points());
+            let last_updated_row = get_nth_last_row::<Self>(
+                chart_id,
+                min_blockscout_block,
+                cx.user_context.db,
+                cx.user_context.force_full,
+                offset,
+            )
+            .await?;
+            Self::update_values(cx, chart_id, last_updated_row, min_blockscout_block).await?;
+            Self::update_metadata(cx.user_context.db, chart_id, cx.user_context.current_time).await
+        }
+
+        async fn update_values(
+            cx: &UpdateContext<UpdateParameters<'_>>,
+            chart_id: i32,
+            update_from_row: Option<DateValue>,
+            min_blockscout_block: i64,
+        ) -> Result<(), UpdateError>;
+
+        async fn update_metadata(
+            db: &DatabaseConnection,
+            chart_id: i32,
+            update_time: chrono::DateTime<Utc>,
+        ) -> Result<(), UpdateError> {
+            common_operations::set_last_updated_at(chart_id, db, update_time)
+                .await
+                .map_err(UpdateError::StatsDB)
+        }
+
+        // todo: maybe more to `Chart`??
+        async fn query_chart_id(db: &DatabaseConnection) -> Result<Option<i32>, UpdateError> {
+            find_chart(db, Self::name())
+                .await
+                .map_err(UpdateError::StatsDB)
+        }
+
+        async fn query_data(
+            cx: &UpdateContext<UpdateParameters<'_>>,
+            range: std::ops::RangeInclusive<sea_orm::prelude::Date>,
+        ) -> Result<ChartData, UpdateError> {
+            let values = get_chart_data(
+                cx.user_context.db,
+                Self::name(),
+                Some(*range.start()),
+                Some(*range.end()),
+                None,
+                None,
+                Self::approximate_trailing_points(),
+            )
+            .await?
+            .into_iter()
+            .map(DateValue::from)
+            .collect();
+            let chart = entity::charts::Entity::find()
+                .column(entity::charts::Column::Id)
+                .filter(entity::charts::Column::Name.eq(Self::name()))
+                .one(cx.user_context.db)
+                .await
+                .map_err(ReadError::from)?
+                .ok_or_else(|| ReadError::NotFound(Self::name().into()))?;
+            let metadata = ChartMetadata {
+                last_update: chart
+                    .last_updated_at
+                    .ok_or_else(|| ReadError::NotFound(Self::name().into()))?
+                    .with_timezone(&Utc),
+            };
+            Ok(ChartData { metadata, values })
+        }
+    }
+
+    pub struct UpdateableChartWrapper<T: UpdateableChart>(PhantomData<T>);
+
+    #[portrait::fill(portrait::delegate(T))]
+    impl<T: UpdateableChart + Chart> Chart for UpdateableChartWrapper<T> {}
+
+    impl<C: UpdateableChart> DataSource for UpdateableChartWrapper<C> {
+        type PrimaryDependency = C::PrimaryDependency;
+        type SecondaryDependencies = C::SecondaryDependencies;
+        type Output = ChartData;
+
+        async fn update_from_remote(
+            cx: &UpdateContext<UpdateParameters<'_>>,
+        ) -> Result<(), UpdateError> {
+            Self::PrimaryDependency::update_from_remote(cx).await?;
+            Self::SecondaryDependencies::update_from_remote(cx).await?;
+            C::update(cx).await?;
+            Ok(())
+        }
+
+        async fn query_data(
+            cx: &UpdateContext<UpdateParameters<'_>>,
+            range: RangeInclusive<NaiveDate>,
+        ) -> Result<ChartData, UpdateError> {
+            C::query_data(cx, range).await
+        }
+
+        async fn init_itself(
+            db: &DatabaseConnection,
+            init_time: &chrono::DateTime<Utc>,
+        ) -> Result<(), DbErr> {
+            C::create(db, init_time).await
+        }
+    }
+    pub trait BatchUpdateableChart: Chart {
+        type PrimaryDependency: DataSource;
+        type SecondaryDependencies: DataSource;
+
+        // todo: TimeDelta
         fn step_duration() -> chrono::Duration {
             chrono::Duration::days(30)
         }
@@ -113,14 +235,20 @@ mod chart_update_strategies {
         ) -> Result<usize, UpdateError>;
     }
 
+    pub struct BatchUpdateableChartWrapper<T: BatchUpdateableChart>(PhantomData<T>);
+
+    #[portrait::fill(portrait::delegate(T))]
+    impl<T: BatchUpdateableChart + Chart> Chart for BatchUpdateableChartWrapper<T> {}
+
     /// Perform update utilizing batching
     pub async fn batch_update_values<U>(
         cx: &UpdateContext<UpdateParameters<'_>>,
+        chart_id: i32,
         update_from_row: Option<DateValue>,
         min_blockscout_block: i64,
     ) -> Result<(), UpdateError>
     where
-        U: UpdateableChart + BatchUpdateableChart,
+        U: BatchUpdateableChart,
     {
         let today = cx.user_context.current_time.date_naive();
         let txn = cx
@@ -136,9 +264,6 @@ mod chart_update_strategies {
                 .map(|time| time.date())
                 .map_err(UpdateError::BlockscoutDB)?,
         };
-        let chart_id = U::query_chart_id(cx.user_context.db)
-            .await?
-            .ok_or_else(|| UpdateError::NotFound(U::name().into()))?;
 
         let steps = generate_date_ranges(first_date, today, U::step_duration());
         let n = steps.len();
@@ -162,7 +287,7 @@ mod chart_update_strategies {
         range: RangeInclusive<NaiveDate>,
     ) -> Result<usize, UpdateError>
     where
-        U: UpdateableChart + BatchUpdateableChart,
+        U: BatchUpdateableChart,
     {
         let primary_data = U::PrimaryDependency::query_data(cx, range.clone()).await?;
         let secondary_data = U::SecondaryDependencies::query_data(cx, range).await?;
@@ -177,124 +302,67 @@ mod chart_update_strategies {
         .await?;
         Ok(found)
     }
-}
 
-// todo: instruction on how to implement
-pub trait UpdateableChart: Chart {
-    type PrimaryDependency: DataSource;
-    type SecondaryDependencies: DataSource;
+    impl<T: BatchUpdateableChart> UpdateableChart for BatchUpdateableChartWrapper<T> {
+        type PrimaryDependency = T::PrimaryDependency;
+        type SecondaryDependencies = T::SecondaryDependencies;
 
-    /// Create chart in db. Does not overwrite existing data.
-    fn create(
-        db: &DatabaseConnection,
-        init_time: &chrono::DateTime<Utc>,
-    ) -> impl std::future::Future<Output = Result<(), DbErr>> + Send {
-        async move { create_chart(db, Self::name().into(), Self::chart_type(), init_time).await }
+        async fn update_values(
+            cx: &UpdateContext<UpdateParameters<'_>>,
+            chart_id: i32,
+            update_from_row: Option<DateValue>,
+            min_blockscout_block: i64,
+        ) -> Result<(), UpdateError> {
+            batch_update_values::<T>(cx, chart_id, update_from_row, min_blockscout_block).await
+        }
     }
 
-    async fn update(cx: &UpdateContext<UpdateParameters<'_>>) -> Result<(), UpdateError> {
-        let chart_id = Self::query_chart_id(cx.user_context.db)
-            .await?
-            .ok_or_else(|| UpdateError::NotFound(Self::name().into()))?;
-        let min_blockscout_block = get_min_block_blockscout(cx.user_context.blockscout)
-            .await
-            .map_err(UpdateError::BlockscoutDB)?;
-        let offset = Some(Self::approximate_trailing_points());
-        let last_updated_row = get_nth_last_row::<Self>(
-            chart_id,
-            min_blockscout_block,
-            cx.user_context.db,
-            cx.user_context.force_full,
-            offset,
-        )
-        .await?;
-        Self::update_values(cx, chart_id, last_updated_row, min_blockscout_block).await?;
-        Self::update_metadata(cx.user_context.db, chart_id, cx.user_context.current_time).await
+    pub trait RemoteSource {
+        async fn query_data(
+            cx: &UpdateContext<UpdateParameters<'_>>,
+            range: RangeInclusive<NaiveDate>,
+        ) -> Result<Vec<DateValue>, UpdateError>;
     }
 
-    async fn update_values(
-        cx: &UpdateContext<UpdateParameters<'_>>,
-        chart_id: i32,
-        update_from_row: Option<DateValue>,
-        min_blockscout_block: i64,
-    ) -> Result<(), UpdateError>;
+    pub struct RemoteSourceWrapper<T: RemoteSource>(PhantomData<T>);
 
-    async fn update_metadata(
-        db: &DatabaseConnection,
-        chart_id: i32,
-        update_time: chrono::DateTime<Utc>,
-    ) -> Result<(), UpdateError> {
-        common_operations::set_last_updated_at(chart_id, db, update_time)
-            .await
-            .map_err(UpdateError::StatsDB)
+    impl<T: RemoteSource> DataSource for RemoteSourceWrapper<T> {
+        type PrimaryDependency = ();
+        type SecondaryDependencies = ();
+        type Output = Vec<DateValue>;
+
+        fn init_itself(
+            _db: &::sea_orm::DatabaseConnection,
+            _init_time: &::chrono::DateTime<chrono::Utc>,
+        ) -> impl ::std::future::Future<Output = Result<(), ::sea_orm::DbErr>> + Send {
+            async move { Ok(()) }
+        }
+
+        async fn update_from_remote(
+            _cx: &UpdateContext<UpdateParameters<'_>>,
+        ) -> Result<(), UpdateError> {
+            Ok(())
+        }
+
+        async fn query_data(
+            cx: &UpdateContext<UpdateParameters<'_>>,
+            range: RangeInclusive<NaiveDate>,
+        ) -> Result<Self::Output, UpdateError> {
+            T::query_data(cx, range).await
+        }
     }
 
-    async fn query_chart_id(db: &DatabaseConnection) -> Result<Option<i32>, UpdateError> {
-        find_chart(db, Self::name())
-            .await
-            .map_err(UpdateError::StatsDB)
-    }
-
-    async fn query_data(
-        cx: &UpdateContext<UpdateParameters<'_>>,
-        range: std::ops::RangeInclusive<sea_orm::prelude::Date>,
-    ) -> Result<ChartData, UpdateError> {
-        let values = get_chart_data(
-            cx.user_context.db,
-            Self::name(),
-            Some(*range.start()),
-            Some(*range.end()),
-            None,
-            None,
-            Self::approximate_trailing_points(),
-        )
-        .await?
-        .into_iter()
-        .map(DateValue::from)
-        .collect();
-        let chart = charts::Entity::find()
-            .column(charts::Column::Id)
-            .filter(charts::Column::Name.eq(Self::name()))
-            .one(cx.user_context.db)
-            .await
-            .map_err(ReadError::from)?
-            .ok_or_else(|| ReadError::NotFound(Self::name().into()))?;
-        let metadata = ChartMetadata {
-            last_update: chart
-                .last_updated_at
-                .ok_or_else(|| ReadError::NotFound(Self::name().into()))?
-                .with_timezone(&Utc),
-        };
-        Ok(ChartData { metadata, values })
-    }
-}
-
-impl<C: UpdateableChart> DataSource for C {
-    type PrimaryDependency = C::PrimaryDependency;
-    type SecondaryDependencies = C::SecondaryDependencies;
-    type Output = ChartData;
-
-    async fn update_from_remote(
-        cx: &UpdateContext<UpdateParameters<'_>>,
-    ) -> Result<(), UpdateError> {
-        Self::PrimaryDependency::update_from_remote(cx).await?;
-        Self::SecondaryDependencies::update_from_remote(cx).await?;
-        C::update(cx).await?;
-        Ok(())
-    }
-
-    async fn query_data(
-        cx: &UpdateContext<UpdateParameters<'_>>,
-        range: RangeInclusive<NaiveDate>,
-    ) -> Result<ChartData, UpdateError> {
-        C::query_data(cx, range).await
-    }
-
-    async fn init_itself(
-        db: &DatabaseConnection,
-        init_time: &chrono::DateTime<Utc>,
-    ) -> Result<(), DbErr> {
-        Self::create(db, init_time).await
+    impl<T: ChartBatchUpdater> RemoteSource for T {
+        async fn query_data(
+            cx: &UpdateContext<UpdateParameters<'_>>,
+            range: RangeInclusive<NaiveDate>,
+        ) -> Result<Vec<DateValue>, UpdateError> {
+            let query = T::get_query(*range.start(), *range.end());
+            DateValue::find_by_statement(query)
+                .all(cx.user_context.blockscout)
+                .await
+                .map_err(UpdateError::BlockscoutDB)
+        }
     }
 }
 
@@ -307,7 +375,10 @@ pub fn generate_date_ranges(
     let mut current_date = start;
 
     while current_date < end {
-        let next_date = current_date + step;
+        // saturating add, since `step` is expected to be positive
+        let next_date = current_date
+            .checked_add_signed(step)
+            .unwrap_or(NaiveDate::MAX);
         date_range.push(RangeInclusive::new(current_date, next_date));
         current_date = next_date;
     }
@@ -387,63 +458,6 @@ where
         ))
     }
 }
-
-pub trait RemoteSource {
-    async fn query_data(
-        cx: &UpdateContext<UpdateParameters<'_>>,
-        range: RangeInclusive<NaiveDate>,
-    ) -> Result<Vec<DateValue>, UpdateError>;
-}
-
-macro_rules! impl_data_source_for_remote {
-    ($remote:ty) => {
-        impl $crate::charts::data_source::DataSource for $remote {
-            type PrimaryDependency = ();
-            type SecondaryDependencies = ();
-            type Output = Vec<$crate::DateValue>;
-
-            fn init_itself(
-                _db: &::sea_orm::DatabaseConnection,
-                _init_time: &::chrono::DateTime<chrono::Utc>,
-            ) -> impl ::std::future::Future<Output = Result<(), ::sea_orm::DbErr>> + Send {
-                async move { Ok(()) }
-            }
-
-            async fn update_from_remote(
-                _cx: &$crate::charts::data_source::UpdateContext<
-                    $crate::charts::data_source::UpdateParameters<'_>,
-                >,
-            ) -> Result<(), $crate::UpdateError> {
-                Ok(())
-            }
-
-            async fn query_data(
-                cx: &$crate::charts::data_source::UpdateContext<
-                    $crate::charts::data_source::UpdateParameters<'_>,
-                >,
-                range: ::std::ops::RangeInclusive<NaiveDate>,
-            ) -> Result<Self::Output, $crate::UpdateError> {
-                <Self as $crate::charts::data_source::RemoteSource>::query_data(cx, range).await
-            }
-        }
-    };
-}
-
-pub(crate) use impl_data_source_for_remote;
-
-impl<T: ChartBatchUpdater> RemoteSource for T {
-    async fn query_data(
-        cx: &UpdateContext<UpdateParameters<'_>>,
-        range: RangeInclusive<NaiveDate>,
-    ) -> Result<Vec<DateValue>, UpdateError> {
-        let query = T::get_query(*range.start(), *range.end());
-        DateValue::find_by_statement(query)
-            .all(cx.user_context.blockscout)
-            .await
-            .map_err(UpdateError::BlockscoutDB)
-    }
-}
-
 #[derive(Clone)]
 pub struct ChartMetadata {
     pub last_update: DateTime<Utc>,
@@ -549,8 +563,11 @@ mod examples {
     use sea_orm::prelude::*;
 
     use super::{
-        chart_update_strategies::{batch_update_values, BatchUpdateableChart},
-        DataSource, UpdateGroup, UpdateParameters, UpdateableChart,
+        data_source_kinds::{
+            BatchUpdateableChart, BatchUpdateableChartWrapper, RemoteSourceWrapper,
+            UpdateableChartWrapper,
+        },
+        DataSource, UpdateGroup, UpdateParameters,
     };
     use crate::{
         charts::db_interaction::{chart_updaters::parse_and_cumsum, write::insert_data_many},
@@ -571,7 +588,14 @@ mod examples {
         }
     }
 
+    type NewContractsSource = RemoteSourceWrapper<NewContracts>;
+    type NewContractsChartSource =
+        UpdateableChartWrapper<BatchUpdateableChartWrapper<NewContractsChart>>;
+
     impl BatchUpdateableChart for NewContractsChart {
+        type PrimaryDependency = NewContractsSource;
+        type SecondaryDependencies = ();
+
         async fn batch_update_values_step_with(
             db: &DatabaseConnection,
             chart_id: i32,
@@ -591,20 +615,6 @@ mod examples {
         }
     }
 
-    impl UpdateableChart for NewContractsChart {
-        type PrimaryDependency = NewContracts;
-        type SecondaryDependencies = ();
-
-        async fn update_values(
-            cx: &super::UpdateContext<UpdateParameters<'_>>,
-            _chart_id: i32,
-            update_from_row: Option<crate::DateValue>,
-            min_blockscout_block: i64,
-        ) -> Result<(), UpdateError> {
-            batch_update_values::<Self>(cx, update_from_row, min_blockscout_block).await
-        }
-    }
-
     struct ContractsGrowthChart;
 
     impl Chart for ContractsGrowthChart {
@@ -620,6 +630,9 @@ mod examples {
     }
 
     impl BatchUpdateableChart for ContractsGrowthChart {
+        type PrimaryDependency = NewContractsChartSource;
+        type SecondaryDependencies = ();
+
         fn step_duration() -> chrono::Duration {
             // we need to count cumulative from the beginning
             chrono::Duration::max_value()
@@ -645,21 +658,12 @@ mod examples {
         }
     }
 
-    impl UpdateableChart for ContractsGrowthChart {
-        type PrimaryDependency = NewContractsChart;
-        type SecondaryDependencies = ();
+    type ContractsGrowthChartSource =
+        UpdateableChartWrapper<BatchUpdateableChartWrapper<ContractsGrowthChart>>;
 
-        async fn update_values(
-            cx: &super::UpdateContext<UpdateParameters<'_>>,
-            _chart_id: i32,
-            update_from_row: Option<crate::DateValue>,
-            min_blockscout_block: i64,
-        ) -> Result<(), UpdateError> {
-            batch_update_values::<Self>(cx, update_from_row, min_blockscout_block).await
-        }
-    }
-
-    construct_update_group!(ExampleUpdateGroup = [NewContractsChart, ContractsGrowthChart]);
+    construct_update_group!(
+        ExampleUpdateGroup = [NewContractsChartSource, ContractsGrowthChartSource]
+    );
 
     #[tokio::test]
     async fn _update_examples() {

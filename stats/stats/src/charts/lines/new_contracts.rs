@@ -1,6 +1,6 @@
 use crate::{
     charts::{
-        data_source::{impl_data_source_for_remote, UpdateContext, UpdateParameters},
+        data_source::{UpdateContext, UpdateParameters},
         db_interaction::chart_updaters::{ChartBatchUpdater, ChartUpdater},
     },
     DateValue, UpdateError,
@@ -11,8 +11,6 @@ use sea_orm::{DbBackend, Statement};
 
 #[derive(Default, Debug)]
 pub struct NewContracts {}
-
-impl_data_source_for_remote!(NewContracts);
 
 impl ChartBatchUpdater for NewContracts {
     fn get_query(from: NaiveDate, to: NaiveDate) -> Statement {
