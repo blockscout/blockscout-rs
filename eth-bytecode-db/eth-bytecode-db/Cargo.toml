@@ -39,7 +39,8 @@ tokio = "1.22"
 tokio-stream = { version = "0.1" }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"]}
-verification-common = { git = "https://github.com/blockscout/blockscout-rs", rev = "b855922a" }
+#verification-common = { git = "https://github.com/blockscout/blockscout-rs", rev = "b855922a" }
+verification-common = { path = "../../libs/verification-common" }
 
 [dev-dependencies]
 actix-web = "4.2"

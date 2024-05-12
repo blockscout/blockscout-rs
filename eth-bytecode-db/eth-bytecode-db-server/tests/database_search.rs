@@ -392,6 +392,7 @@ async fn search_blueprint_contracts() {
             },
         ],
     });
+    test_data.set_abi("[{\"inputs\":[{\"name\":\"_value\",\"type\":\"uint256\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"inputs\":[],\"name\":\"initialized\",\"outputs\":[{\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"value\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"}]".to_string());
 
     let db_url = db.db_url();
     let verifier_addr = init_verifier_server::<
