@@ -4,6 +4,7 @@ use sqlx::{Executor, PgPool};
 mod addr_reverse_names;
 mod address_names;
 
+use crate::subgraphs_reader::sql::DbErr;
 pub use addr_reverse_names::AddrReverseNamesView;
 pub use address_names::AddressNamesView;
 
@@ -14,7 +15,7 @@ pub trait CachedView {
     fn unique_field() -> &'static str;
     fn table_sql(schema: &str) -> String;
 
-    async fn create_view(pool: &PgPool, schema: &str) -> Result<(), anyhow::Error> {
+    async fn create_view(pool: &PgPool, schema: &str) -> Result<(), DbErr> {
         let view_table_name = Self::view_table_name();
         let refresh_function_name = Self::refresh_function_name();
         let unique_field = Self::unique_field();
@@ -58,7 +59,7 @@ pub trait CachedView {
         Ok(())
     }
 
-    async fn refresh_view(pool: &PgPool, schema: &str) -> Result<(), anyhow::Error> {
+    async fn refresh_view(pool: &PgPool, schema: &str) -> Result<(), DbErr> {
         let refresh_function_name = Self::refresh_function_name();
         sqlx::query(&format!("SELECT {schema}.{refresh_function_name};"))
             .execute(pool)

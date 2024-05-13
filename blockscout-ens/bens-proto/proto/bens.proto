@@ -17,6 +17,8 @@ service DomainsExtractor {
   rpc GetAddress(GetAddressRequest) returns (GetAddressResponse) {}
   // Perform batch resolving of list of address for blockscout backend requests
   rpc BatchResolveAddressNames(BatchResolveAddressNamesRequest) returns (BatchResolveAddressNamesResponse) {}
+  // Get list of supported protocols
+  rpc GetProtocols(GetProtocolsRequest) returns (GetProtocolsResponse) {}
 }
 
 message Domain {
@@ -34,6 +36,8 @@ message Domain {
   string registration_date = 5;
   // Optional. RFC 3339 datetime  of expiry date. None means never expires
   optional string expiry_date = 6;
+  // Protocol that domain belongs to
+  ProtocolInfo protocol = 8;
 }
 
 message DetailedDomain {
@@ -58,7 +62,19 @@ message DetailedDomain {
   // Map chain -> resolved_address that contains other blockchain addresses.
   // This map will contain `current_chain_id` -> `resovled_address` if `resovled_address` is not None
   map<string, string> other_addresses = 9;
+  // Information about protocol that domain belongs to
+  ProtocolInfo protocol = 12;
 }
+
+message ProtocolInfo {
+  string id = 1;
+  string title = 2;
+  string description = 3;
+  optional string icon_url = 4;
+  repeated string tld_list = 5;
+}
+
+
 
 message DomainEvent {
   // Transaction hash where action occured
@@ -107,6 +123,8 @@ message GetDomainRequest {
   int64 chain_id = 2;
   // Filtering field to remove expired domains
   bool only_active = 3;
+  // Protocol id of domain, default is first priority protocol on that chain
+  optional string protocol_id = 4;
 }
 
 message ListDomainEventsRequest {
@@ -118,6 +136,8 @@ message ListDomainEventsRequest {
   string sort = 4;
   // Order direction. Default is DESC
   Order order = 5;
+  // Protocol id of domain, default is first priority protocol on that chain
+  optional string protocol_id = 6;
 }
 
 message ListDomainEventsResponse {
@@ -139,6 +159,8 @@ message LookupDomainNameRequest {
   optional uint32 page_size = 6;
   // Optional. Value of `.pagination.page_token` from previous response
   optional string page_token = 7;
+  // comma separated list of protocol ids to filter by
+  optional string protocols = 8;
 }
 
 message LookupDomainNameResponse {
@@ -167,6 +189,8 @@ message LookupAddressRequest {
   optional uint32 page_size = 9;
   // Optional. Value of `.pagination.page_token` from previous response
   optional string page_token = 10;
+  // comma separated list of protocol ids to filter by
+  optional string protocols = 11;
 }
 
 message LookupAddressResponse {
@@ -179,6 +203,7 @@ message LookupAddressResponse {
 message GetAddressRequest {
   string address = 1;
   int64 chain_id = 2;
+  optional string protocol_id = 3;
 }
 
 message GetAddressResponse {
@@ -195,4 +220,13 @@ message BatchResolveAddressNamesRequest {
 
 message BatchResolveAddressNamesResponse {
   map<string, string> names = 1;
+}
+
+message GetProtocolsRequest {
+    // The chain (network) where to get protocols
+    int64 chain_id = 1;
+}
+
+message GetProtocolsResponse {
+    repeated ProtocolInfo items = 1;
 }

@@ -1,11 +1,12 @@
-use super::{address_from_str_logic, checksummed, ConversionError};
+use super::{
+    address_from_str_logic, checksummed, maybe_protocol_filter_from_inner, protocol_from_logic,
+    ConversionError,
+};
 use crate::conversion::order_direction_from_inner;
-use bens_logic::{
-    entity::subgraph::domain::Domain,
-    subgraphs_reader::{
-        BatchResolveAddressNamesInput, DomainPaginationInput, DomainSortField, DomainToken,
-        DomainTokenType, GetDomainInput, GetDomainOutput, LookupAddressInput, LookupDomainInput,
-    },
+use bens_logic::subgraphs_reader::{
+    BatchResolveAddressNamesInput, DomainPaginationInput, DomainSortField, DomainToken,
+    DomainTokenType, GetAddressInput, GetDomainInput, GetDomainOutput, LookupAddressInput,
+    LookupDomainInput, LookupOutput,
 };
 use bens_proto::blockscout::bens::v1 as proto;
 use ethers::types::Address;
@@ -21,6 +22,7 @@ pub fn get_domain_input_from_inner(
         network_id: inner.chain_id,
         name,
         only_active: inner.only_active,
+        protocol_id: inner.protocol_id,
     })
 }
 
@@ -30,6 +32,8 @@ pub fn lookup_domain_name_from_inner(
     let sort = domain_sort_from_inner(&inner.sort)?;
     let order = order_direction_from_inner(inner.order());
     let name = inner.name.map(name_from_inner).transpose()?;
+    let maybe_filter_protocols = maybe_protocol_filter_from_inner(inner.protocols);
+
     Ok(LookupDomainInput {
         network_id: inner.chain_id,
         name,
@@ -40,6 +44,7 @@ pub fn lookup_domain_name_from_inner(
             page_size: page_size_from_inner(inner.page_size),
             page_token: inner.page_token,
         },
+        maybe_filter_protocols,
     })
 }
 
@@ -49,6 +54,7 @@ pub fn lookup_address_from_inner(
     let sort = domain_sort_from_inner(&inner.sort)?;
     let order = order_direction_from_inner(inner.order());
     let address = address_from_str_inner(&inner.address)?;
+    let maybe_filter_protocols = maybe_protocol_filter_from_inner(inner.protocols);
     Ok(LookupAddressInput {
         network_id: inner.chain_id,
         address,
@@ -61,6 +67,18 @@ pub fn lookup_address_from_inner(
             page_size: page_size_from_inner(inner.page_size),
             page_token: inner.page_token,
         },
+        maybe_filter_protocols,
+    })
+}
+
+pub fn get_address_from_inner(
+    inner: proto::GetAddressRequest,
+) -> Result<GetAddressInput, ConversionError> {
+    let address = address_from_str_inner(&inner.address)?;
+    Ok(GetAddressInput {
+        network_id: inner.chain_id,
+        address,
+        protocol_id: inner.protocol_id,
     })
 }
 
@@ -106,6 +124,7 @@ pub fn detailed_domain_from_logic(
     chain_id: i64,
 ) -> Result<proto::DetailedDomain, ConversionError> {
     let domain = output.domain;
+    let protocol = output.protocol;
     let owner = Some(address_from_str_logic(&domain.owner, chain_id)?);
     let resolved_address = domain
         .resolved_address
@@ -125,6 +144,18 @@ pub fn detailed_domain_from_logic(
         .into_iter()
         .map(|t| domain_token_from_logic(t, chain_id))
         .collect();
+    let protocol = Some(proto::ProtocolInfo {
+        id: protocol.info.slug,
+        description: protocol.info.meta.description,
+        tld_list: protocol
+            .info
+            .tld_list
+            .into_iter()
+            .map(|tld| tld.0)
+            .collect(),
+        title: protocol.info.meta.title,
+        icon_url: protocol.info.meta.icon_url,
+    });
     Ok(proto::DetailedDomain {
         id: domain.id,
         name: domain.name.unwrap_or_default(),
@@ -136,27 +167,34 @@ pub fn detailed_domain_from_logic(
         registration_date: date_from_logic(domain.registration_date),
         other_addresses: domain.other_addresses.0.into_iter().collect(),
         tokens,
+        protocol,
     })
 }
 
-pub fn domain_from_logic(d: Domain, chain_id: i64) -> Result<proto::Domain, ConversionError> {
-    let owner = Some(address_from_str_logic(&d.owner, chain_id)?);
-    let resolved_address = d
+pub fn domain_from_logic(
+    output: LookupOutput,
+    chain_id: i64,
+) -> Result<proto::Domain, ConversionError> {
+    let domain = output.domain;
+    let owner = Some(address_from_str_logic(&domain.owner, chain_id)?);
+    let resolved_address = domain
         .resolved_address
         .map(|resolved_address| address_from_str_logic(&resolved_address, chain_id))
         .transpose()?;
-    let wrapped_owner = d
+    let wrapped_owner = domain
         .wrapped_owner
         .map(|wrapped_owner| address_from_str_logic(&wrapped_owner, chain_id))
         .transpose()?;
+    let protocol = Some(protocol_from_logic(&output.protocol));
     Ok(proto::Domain {
-        id: d.id,
-        name: d.name.unwrap_or_default(),
+        id: domain.id,
+        name: domain.name.unwrap_or_default(),
         owner,
         wrapped_owner,
         resolved_address,
-        expiry_date: d.expiry_date.map(date_from_logic),
-        registration_date: date_from_logic(d.registration_date),
+        expiry_date: domain.expiry_date.map(date_from_logic),
+        registration_date: date_from_logic(domain.registration_date),
+        protocol,
     })
 }
 

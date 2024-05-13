@@ -33,3 +33,6 @@ test-with-db *args:
 
 add-test-migration name:
     sqlx migrate add {{name}} --source bens-logic/tests/migrations/
+
+benchmark:
+    cargo run --example resolve_benchmark

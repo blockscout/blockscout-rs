@@ -1,7 +1,7 @@
-use crate::hash_name::domain_id;
+use super::{domain_id, Protocol, ProtocolError};
 use ethers::types::{Address, Bytes};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DomainName {
     pub id: String,
     pub label_name: String,
@@ -9,10 +9,10 @@ pub struct DomainName {
 }
 
 impl DomainName {
-    pub fn new(name: &str, empty_label_hash: Option<Bytes>) -> Result<Self, anyhow::Error> {
+    pub fn new(name: &str, empty_label_hash: Option<Bytes>) -> Result<Self, ProtocolError> {
         let name = name.trim_matches('.');
         if name.is_empty() {
-            anyhow::bail!("empty name provided");
+            return Err(ProtocolError::InvalidName("empty".to_string()));
         }
         let (label_name, _) = name.split_once('.').unwrap_or((name, ""));
         let id = domain_id(name, empty_label_hash);
@@ -36,11 +36,48 @@ impl DomainName {
         }
     }
 
-    // Returns true if the domain name is a child of a TLD
-    // e.g. `vitalik.eth`, `test.vitalik.eth`, `test.test.vitalik.eth` are children of `eth`
-    // `eth` and `vitalik` are not children of any TLD
-    pub fn is_child_of_tld(&self) -> bool {
-        self.name.chars().filter(|c| *c == '.').count() > 0
+    // Returns true if level of domain is greater than 1
+    // e.g. `vitalik.eth`, `test.vitalik.eth`, `test.test.vitalik.eth` are 2nd, 3rd and 4th level domains
+    // `eth` and `vitalik` are TLD
+    pub fn level_gt_tld(&self) -> bool {
+        self.level() > 1
+    }
+
+    pub fn level(&self) -> usize {
+        self.name.chars().filter(|c| *c == '.').count() + 1
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct DomainNameOnProtocol<'a> {
+    pub inner: DomainName,
+    pub protocol: &'a Protocol,
+}
+
+impl<'a> DomainNameOnProtocol<'a> {
+    pub fn new(name: &str, protocol: &'a Protocol) -> Result<Self, ProtocolError> {
+        let name = DomainName::new(name, protocol.info.empty_label_hash.clone())?;
+
+        Ok(Self {
+            inner: name,
+            protocol,
+        })
+    }
+}
+
+pub struct ProtocolWithMaybeName<'a> {
+    pub inner: &'a Protocol,
+    pub maybe_name: Option<DomainName>,
+}
+
+impl<'a> ProtocolWithMaybeName<'a> {
+    pub fn new(name: Option<&str>, protocol: &'a Protocol) -> Self {
+        Self {
+            maybe_name: name.and_then(|name| {
+                DomainName::new(name, protocol.info.empty_label_hash.clone()).ok()
+            }),
+            inner: protocol,
+        }
     }
 }
 

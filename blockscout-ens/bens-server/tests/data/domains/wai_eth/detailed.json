@@ -1,0 +1,40 @@
+{
+  "expiry_date": "2038-01-19T03:14:07.000Z",
+  "id": "0x5d438d292de31e08576d5bcd8a93aa41b401b9d9aeaba57da1a32c003e5fd5f5",
+  "name": "wa🇬🇲i.eth",
+  "other_addresses": {},
+  "owner": {
+    "hash": "0xD4416b13d2b3a9aBae7AcD5D6C2BbDBE25686401"
+  },
+  "registrant": {
+    "hash": "0x9C996076A85B46061D9a70ff81F013853A86b619"
+  },
+  "registration_date": "2021-11-12T11:36:46.000Z",
+  "resolved_address": {
+    "hash": "0x9C996076A85B46061D9a70ff81F013853A86b619"
+  },
+  "tokens": [
+    {
+      "contract_hash": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85",
+      "id": "46567936673033819165815925923418529171479684343878036049875289456825310839168",
+      "type": "NATIVE_DOMAIN_TOKEN"
+    },
+    {
+      "contract_hash": "0xD4416b13d2b3a9aBae7AcD5D6C2BbDBE25686401",
+      "id": "42184447928009120460686389475560276149795188091233200941948299907753855407605",
+      "type": "WRAPPED_DOMAIN_TOKEN"
+    }
+  ],
+  "wrapped_owner": {
+    "hash": "0x9C996076A85B46061D9a70ff81F013853A86b619"
+  },
+  "protocol": {
+    "id": "ens",
+    "title": "ENS",
+    "description": "Ethereum Name Service",
+    "tld_list": [
+      "eth"
+    ],
+    "icon_url": null
+  }
+}

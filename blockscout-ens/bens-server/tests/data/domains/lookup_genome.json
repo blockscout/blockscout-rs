@@ -1,0 +1,46 @@
+[
+  {
+    "expiry_date": "2025-03-18T06:17:27.000Z",
+    "id": "0x6635ff2e6ba5d52ca5fa237e7e9f766bd73089f99ac49f49ba88ca61b8fbb168",
+    "name": "zeshitcoinwebdev.gno",
+    "owner": {
+      "hash": "0xb1b38CEDf091714916Bc01BC4B96674b1bacdC10"
+    },
+    "registration_date": "2023-12-19T00:28:15.000Z",
+    "resolved_address": {
+      "hash": "0xb1b38CEDf091714916Bc01BC4B96674b1bacdC10"
+    },
+    "wrapped_owner": null,
+    "protocol": {
+      "id": "genome",
+      "title": "Genome",
+      "description": "Genome Name Service",
+      "tld_list": [
+        "gno"
+      ],
+      "icon_url": null
+    }
+  },
+  {
+    "expiry_date": "2025-03-18T01:27:42.000Z",
+    "id": "0x98ae83dd985941d29a5c5947cd4f69d5f192b8416d216dbbe79cb18827401b4d",
+    "name": "cele0x.gno",
+    "owner": {
+      "hash": "0xc9Be4fEA6C3f0D9E39d65678D7c631C0C41e95A6"
+    },
+    "registration_date": "2023-12-18T19:38:30.000Z",
+    "resolved_address": {
+      "hash": "0xc9Be4fEA6C3f0D9E39d65678D7c631C0C41e95A6"
+    },
+    "wrapped_owner": null,
+    "protocol": {
+      "id": "genome",
+      "title": "Genome",
+      "description": "Genome Name Service",
+      "tld_list": [
+        "gno"
+      ],
+      "icon_url": null
+    }
+  }
+]

@@ -1,0 +1,7 @@
+{
+  "id": "genome",
+  "title": "Genome",
+  "description": "Genome Name Service",
+  "tld_list": ["gno"],
+  "icon_url": null
+}

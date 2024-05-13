@@ -1,0 +1,34 @@
+{
+  "expiry_date": "2038-01-19T03:14:07.000Z",
+  "id": "0xee6c4522aab0003e8d14cd40a6af439055fd2577951148c14b6cea9a53475835",
+  "name": "vitalik.eth",
+  "other_addresses": {
+    "RSK": "0xf0d485009714cE586358E3761754929904D76B9D",
+    "ETH": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
+  },
+  "owner": {
+    "hash": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
+  },
+  "registrant": {
+    "hash": "0x220866B1A2219f40e72f5c628B65D54268cA3A9D"
+  },
+  "wrapped_owner": null,
+  "registration_date": "2017-06-18T08:39:14.000Z",
+  "resolved_address": {
+    "hash": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
+  },
+  "tokens": [
+    {
+      "id": "79233663829379634837589865448569342784712482819484549289560981379859480642508",
+      "contract_hash": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85",
+      "type": "NATIVE_DOMAIN_TOKEN"
+    }
+  ],
+  "protocol": {
+    "id": "ens",
+    "title": "ENS",
+    "description": "Ethereum Name Service",
+    "tld_list": ["eth"],
+    "icon_url": null
+  }
+}

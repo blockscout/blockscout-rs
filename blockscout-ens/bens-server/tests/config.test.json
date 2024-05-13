@@ -3,38 +3,63 @@
     "enabled": false
   },
   "jaeger": {
-      "enabled": false
+    "enabled": false
   },
   "tracing": {
-      "enabled": false
+    "enabled": false
   },
   "subgraphs_reader": {
-    "cache_enabled": true,
-    "refresh_cache_schedule": "0 0 * * * *",
     "networks": {
       "1": {
         "blockscout": {
           "url": "http://localhost"
         },
-        "subgraphs": {
-          "ens-subgraph": {
-            "use_cache": true,
-            "address_resolve_technique": "reverse_registry",
-            "native_token_contract": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85"
-          }
-        }
+        "use_protocols": [
+          "ens"
+        ]
       },
       "10200": {
         "blockscout": {
           "url": "http://localhost"
         },
-        "subgraphs": {
-          "genome-subgraph": {
-            "use_cache": false,
-            "address_resolve_technique": "reverse_registry",
-            "empty_label_hash": "0x1a13b687a5ff1d8ab1a9e189e1507a6abe834a9296cc8cff937905e3dee0c4f6",
-            "native_token_contract": "0xfd3d666dB2557983F3F04d61f90E35cc696f6D60"
-          }
+        "use_protocols": [
+          "genome"
+        ]
+      },
+      "1337": {
+        "blockscout": {
+          "url": "http://localhost"
+        },
+        "use_protocols": [
+          "ens",
+          "genome"
+        ]
+      }
+    },
+    "protocols": {
+      "ens": {
+        "tld_list": ["eth"],
+        "ordinal": 0,
+        "subgraph_name": "ens-subgraph",
+        "use_cache": true,
+        "address_resolve_technique": "reverse_registry",
+        "native_token_contract": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85",
+        "meta": {
+          "title": "ENS",
+          "description": "Ethereum Name Service"
+        }
+      },
+      "genome": {
+        "tld_list": ["gno"],
+        "ordinal": 1,
+        "subgraph_name": "genome-subgraph",
+        "use_cache": false,
+        "address_resolve_technique": "reverse_registry",
+        "empty_label_hash": "0x1a13b687a5ff1d8ab1a9e189e1507a6abe834a9296cc8cff937905e3dee0c4f6",
+        "native_token_contract": "0xfd3d666dB2557983F3F04d61f90E35cc696f6D60",
+        "meta": {
+          "title": "Genome",
+          "description": "Genome Name Service"
         }
       }
     }

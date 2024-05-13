@@ -1,0 +1,7 @@
+{
+  "id": "ens",
+  "title": "ENS",
+  "description": "Ethereum Name Service",
+  "tld_list": ["eth"],
+  "icon_url": null
+}

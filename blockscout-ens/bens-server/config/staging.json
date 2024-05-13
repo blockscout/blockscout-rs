@@ -1,68 +1,104 @@
 {
   "subgraphs_reader": {
-    "cache_enabled": true,
     "refresh_cache_schedule": "0 0 * * * *",
     "networks": {
       "11155111": {
         "blockscout": {
           "url": "https://eth-sepolia.blockscout.com"
         },
-        "subgraphs": {
-          "ens-subgraph": {
-            "use_cache": true,
-            "address_resolve_technique": "reverse_registry",
-            "native_token_contract": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85"
-          }
-        }
+        "use_protocols": [
+          "ens", "genome"
+        ]
       },
       "10200": {
         "blockscout": {
           "url": "https://gnosis-chiado.blockscout.com"
         },
-        "subgraphs": {
-          "genome-subgraph": {
-            "use_cache": true,
-            "address_resolve_technique": "reverse_registry",
-            "empty_label_hash": "0x1a13b687a5ff1d8ab1a9e189e1507a6abe834a9296cc8cff937905e3dee0c4f6",
-            "native_token_contract": "0xfd3d666dB2557983F3F04d61f90E35cc696f6D60"
-          }
-        }
+        "use_protocols": [
+          "genome"
+        ]
       },
       "31": {
         "blockscout": {
           "url": "https://rootstock-testnet.blockscout.com"
         },
-        "subgraphs": {
-          "rns-subgraph": {
-            "use_cache": true,
-            "address_resolve_technique": "all_domains",
-            "native_token_contract": "0xca0a477e19bac7e0e172ccfd2e3c28a7200bdb71"
-          }
-        }
+        "use_protocols": [
+          "rns"
+        ]
       },
       "84531": {
         "blockscout": {
           "url": "https://base-goerli.blockscout.com"
         },
-        "subgraphs": {
-          "base-name-service-subgraph": {
-            "use_cache": true,
-            "address_resolve_technique": "reverse_registry",
-            "native_token_contract": "0x707Db367E3E1e0d503924160E32D3981AD86C80e"
-          }
-        }
+        "use_protocols": [
+          "base-name-service"
+        ]
       },
       "919": {
         "blockscout": {
           "url": "https://sepolia.explorer.mode.network"
         },
-        "subgraphs": {
-          "mode-subgraph": {
-            "use_cache": true,
-            "address_resolve_technique": "reverse_registry",
-            "native_token_contract": "0xCa3a57e014937C29526De98e4A8A334a7D04792b",
-            "empty_label_hash": "0xea1eb1136f380e6643b69866632ce3b493100790c9c84416f2769d996a1c38b1"
-          }
+        "use_protocols": [
+          "mode"
+        ]
+      }
+    },
+    "protocols": {
+      "ens": {
+        "tld_list": ["eth"],
+        "subgraph_name": "ens-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "native_token_contract": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85",
+        "meta": {
+          "title": "ENS",
+          "description": "Ethereum Name Service",
+          "icon_url": ""
+        }
+      },
+      "genome": {
+        "tld_list": ["gno"],
+        "subgraph_name": "genome-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "empty_label_hash": "0x1a13b687a5ff1d8ab1a9e189e1507a6abe834a9296cc8cff937905e3dee0c4f6",
+        "native_token_contract": "0xfd3d666dB2557983F3F04d61f90E35cc696f6D60",
+        "meta": {
+          "title": "Genome",
+          "description": "Genome Name Service",
+          "icon_url": ""
+        }
+      },
+      "rns": {
+        "tld_list": ["rsk"],
+        "subgraph_name": "rns-subgraph",
+        "address_resolve_technique": "all_domains",
+        "native_token_contract": "0xca0a477e19bac7e0e172ccfd2e3c28a7200bdb71",
+        "meta": {
+          "title": "RNS",
+          "description": "Rootstock Name Service",
+          "icon_url": ""
+        }
+      },
+      "base-name-service": {
+        "tld_list": ["base"],
+        "subgraph_name": "base-name-service-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "native_token_contract": "0x707Db367E3E1e0d503924160E32D3981AD86C80e",
+        "meta": {
+          "title": "BNS",
+          "description": "Base Name Service",
+          "icon_url": ""
+        }
+      },
+      "mode": {
+        "tld_list": ["mode"],
+        "subgraph_name": "mode-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "native_token_contract": "0xCa3a57e014937C29526De98e4A8A334a7D04792b",
+        "empty_label_hash": "0xea1eb1136f380e6643b69866632ce3b493100790c9c84416f2769d996a1c38b1",
+        "meta": {
+          "title": "MNS",
+          "description": "Mode Name Service",
+          "icon_url": ""
         }
       }
     }
