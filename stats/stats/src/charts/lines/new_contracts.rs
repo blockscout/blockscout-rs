@@ -8,9 +8,9 @@ use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{DbBackend, Statement};
 
 #[derive(Default, Debug)]
-pub struct NewContracts {}
+pub struct NewContractsRemote {}
 
-impl ChartBatchUpdater for NewContracts {
+impl ChartBatchUpdater for NewContractsRemote {
     fn get_query(from: NaiveDate, to: NaiveDate) -> Statement {
         Statement::from_sql_and_values(
             DbBackend::Postgres,
@@ -52,7 +52,7 @@ impl ChartBatchUpdater for NewContracts {
     }
 }
 
-impl crate::Chart for NewContracts {
+impl crate::Chart for NewContractsRemote {
     fn name() -> &'static str {
         "newContracts"
     }
@@ -62,7 +62,7 @@ impl crate::Chart for NewContracts {
     }
 }
 
-impl ChartUpdater for NewContracts {
+impl ChartUpdater for NewContractsRemote {
     async fn update_values(
         cx: &mut UpdateContext<UpdateParameters<'_>>,
     ) -> Result<Vec<DateValue>, UpdateError> {

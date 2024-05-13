@@ -111,10 +111,10 @@ pub trait UpdateableChart: Chart {
     }
 }
 
-pub struct UpdateableChartWrapper<T: UpdateableChart>(PhantomData<T>);
+pub struct UpdateableChartWrapper<C: UpdateableChart>(PhantomData<C>);
 
-#[portrait::fill(portrait::delegate(T))]
-impl<T: UpdateableChart + Chart> Chart for UpdateableChartWrapper<T> {}
+#[portrait::fill(portrait::delegate(C))]
+impl<C: UpdateableChart + Chart> Chart for UpdateableChartWrapper<C> {}
 
 impl<C: UpdateableChart> DataSource for UpdateableChartWrapper<C> {
     type PrimaryDependency = C::PrimaryDependency;

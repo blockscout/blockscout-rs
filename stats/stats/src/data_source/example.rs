@@ -7,17 +7,16 @@ use sea_orm::prelude::*;
 use crate::{
     charts::db_interaction::{chart_updaters::parse_and_cumsum, write::insert_data_many},
     construct_update_group,
-    lines::NewContracts,
+    lines::NewContractsRemote,
     tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
     Chart, MissingDatePolicy, UpdateError,
 };
 
 use super::{
     group::UpdateGroup,
-    kinds::{
-        batch_chart::{BatchUpdateableChart, BatchUpdateableChartWrapper},
-        chart::UpdateableChartWrapper,
-        remote::RemoteSourceWrapper,
+    kinds::chart::{
+        BatchUpdateableChart, BatchUpdateableChartWrapper, RemoteChart, RemoteChartWrapper,
+        UpdateableChartWrapper,
     },
     source_trait::DataSource,
     types::UpdateParameters,
@@ -35,31 +34,11 @@ impl crate::Chart for NewContractsChart {
     }
 }
 
-type NewContractsSource = RemoteSourceWrapper<NewContracts>;
 type NewContractsChartSource =
-    UpdateableChartWrapper<BatchUpdateableChartWrapper<NewContractsChart>>;
+    UpdateableChartWrapper<BatchUpdateableChartWrapper<RemoteChartWrapper<NewContractsChart>>>;
 
-impl BatchUpdateableChart for NewContractsChart {
-    type PrimaryDependency = NewContractsSource;
-    type SecondaryDependencies = ();
-
-    async fn batch_update_values_step_with(
-        db: &DatabaseConnection,
-        chart_id: i32,
-        _update_time: chrono::DateTime<Utc>,
-        min_blockscout_block: i64,
-        primary_data: <Self::PrimaryDependency as DataSource>::Output,
-        _secondary_data: <Self::SecondaryDependencies as DataSource>::Output,
-    ) -> Result<usize, UpdateError> {
-        let found = primary_data.len();
-        let values = primary_data
-            .into_iter()
-            .map(|value| value.active_model(chart_id, Some(min_blockscout_block)));
-        insert_data_many(db, values)
-            .await
-            .map_err(UpdateError::StatsDB)?;
-        Ok(found)
-    }
+impl RemoteChart for NewContractsChart {
+    type Dependency = NewContractsRemote;
 }
 
 struct ContractsGrowthChart;

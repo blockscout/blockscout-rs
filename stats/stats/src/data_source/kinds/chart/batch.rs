@@ -4,6 +4,7 @@ use chrono::{Duration, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{DatabaseConnection, TransactionTrait};
 
+use super::UpdateableChart;
 use crate::{
     charts::{
         chart::chart_portrait,
@@ -16,7 +17,6 @@ use crate::{
     Chart, DateValue, MissingDatePolicy, UpdateError,
 };
 
-use super::chart::UpdateableChart;
 pub trait BatchUpdateableChart: Chart {
     type PrimaryDependency: DataSource;
     type SecondaryDependencies: DataSource;
@@ -45,7 +45,7 @@ pub struct BatchUpdateableChartWrapper<T: BatchUpdateableChart>(PhantomData<T>);
 impl<T: BatchUpdateableChart + Chart> Chart for BatchUpdateableChartWrapper<T> {}
 
 /// Perform update utilizing batching
-pub async fn batch_update_values<U>(
+async fn batch_update_values<U>(
     cx: &UpdateContext<UpdateParameters<'_>>,
     chart_id: i32,
     update_from_row: Option<DateValue>,
@@ -94,7 +94,8 @@ where
     U: BatchUpdateableChart,
 {
     let primary_data = U::PrimaryDependency::query_data(cx, range.clone()).await?;
-    let secondary_data = U::SecondaryDependencies::query_data(cx, range).await?;
+    let secondary_data: <<U as BatchUpdateableChart>::SecondaryDependencies as DataSource>::Output =
+        U::SecondaryDependencies::query_data(cx, range).await?;
     let found = U::batch_update_values_step_with(
         cx.user_context.db,
         chart_id,
@@ -121,7 +122,7 @@ impl<T: BatchUpdateableChart> UpdateableChart for BatchUpdateableChartWrapper<T>
     }
 }
 
-pub fn generate_date_ranges(
+fn generate_date_ranges(
     start: NaiveDate,
     end: NaiveDate,
     step: Duration,
@@ -134,9 +135,59 @@ pub fn generate_date_ranges(
         let next_date = current_date
             .checked_add_signed(step)
             .unwrap_or(NaiveDate::MAX);
+        // todo: .min(end) ?
         date_range.push(RangeInclusive::new(current_date, next_date));
         current_date = next_date;
     }
 
     date_range
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::NaiveDate;
+    use pretty_assertions::assert_eq;
+    use std::str::FromStr;
+
+    fn d(s: &str) -> NaiveDate {
+        NaiveDate::from_str(s).expect("cannot parse date")
+    }
+
+    #[test]
+    fn test_generate_date_ranges() {
+        for ((from, to), expected) in [
+            (
+                (d("2022-01-01"), d("2022-03-14")),
+                vec![
+                    (d("2022-01-01"), d("2022-01-31")),
+                    (d("2022-01-31"), d("2022-03-02")),
+                    (d("2022-03-02"), d("2022-04-01")),
+                ],
+            ),
+            (
+                (d("2015-07-20"), d("2015-12-31")),
+                vec![
+                    (d("2015-07-20"), d("2015-08-19")),
+                    (d("2015-08-19"), d("2015-09-18")),
+                    (d("2015-09-18"), d("2015-10-18")),
+                    (d("2015-10-18"), d("2015-11-17")),
+                    (d("2015-11-17"), d("2015-12-17")),
+                    (d("2015-12-17"), d("2016-01-16")),
+                ],
+            ),
+            ((d("2015-07-20"), d("2015-07-20")), vec![]),
+            (
+                (d("2015-07-20"), d("2015-07-21")),
+                vec![(d("2015-07-20"), d("2015-08-19"))],
+            ),
+        ] {
+            let expected: Vec<_> = expected
+                .into_iter()
+                .map(|r| RangeInclusive::new(r.0, r.1))
+                .collect();
+            let actual = generate_date_ranges(from, to, Duration::days(30));
+            assert_eq!(expected, actual);
+        }
+    }
 }

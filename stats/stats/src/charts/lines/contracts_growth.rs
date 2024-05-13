@@ -1,4 +1,4 @@
-use super::NewContracts;
+use super::NewContractsRemote;
 use crate::{
     charts::{
         chart::Chart,
@@ -16,18 +16,18 @@ use std::marker::PhantomData;
 
 #[derive(Debug, Default)]
 pub struct ContractsGrowth {
-    parent: PhantomData<NewContracts>,
+    parent: PhantomData<NewContractsRemote>,
 }
 
 impl ContractsGrowth {
-    pub fn new(parent: PhantomData<NewContracts>) -> Self {
+    pub fn new(parent: PhantomData<NewContractsRemote>) -> Self {
         Self { parent }
     }
 }
 
-impl ChartDependentUpdater<NewContracts> for ContractsGrowth {
+impl ChartDependentUpdater<NewContractsRemote> for ContractsGrowth {
     async fn get_values(parent_data: Vec<DateValue>) -> Result<Vec<DateValue>, UpdateError> {
-        parse_and_cumsum::<i64>(parent_data, NewContracts::name())
+        parse_and_cumsum::<i64>(parent_data, NewContractsRemote::name())
     }
 }
 

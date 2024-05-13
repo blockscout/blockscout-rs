@@ -50,6 +50,7 @@ pub trait ChartBatchUpdater: ChartUpdater {
         let _timer = metrics::CHART_FETCH_NEW_DATA_TIME
             .with_label_values(&[Self::name()])
             .start_timer();
+
         tracing::info!(last_updated_row =? last_updated_row, "start batch update");
         Self::batch_update(
             db,
