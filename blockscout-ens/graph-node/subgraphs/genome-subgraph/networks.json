@@ -1,19 +1,19 @@
 {
-  "gnosis": {
+  "gnosis-mainnet": {
     "Registry": {
-      "address": "0xFFC305697bb27483268106be6F22B0555c192804",
-      "startBlock": 30929686
+      "address": "0x5dC881dDA4e4a8d312be3544AD13118D1a04Cb17",
+      "startBlock": 31502166
     },
     "Resolver": {
-      "startBlock": 31040099
+      "startBlock": 31502299
     },
     "RegistrarController": {
-      "address": "0x4211B1Dcf3adbEbAB6013A907465d2B90e90eb6d",
-      "startBlock": 30929686
+      "address": "0xd7b837a0e388b4c25200983bdaa3ef3a83ca86b7",
+      "startBlock": 31502238
     },
     "Base": {
-      "address": "TODO: not deployed yet",
-      "startBlock": -1
+      "address": "0x942fcaf68a0c264d5447b03a2011b395a899f2d3",
+      "startBlock": 31513654
     }
   },
   "gnosis-chiado": {
