@@ -4,10 +4,10 @@
 use super::{common_operations::get_min_block_blockscout, ChartUpdater};
 use crate::{
     charts::{
-        data_source::{UpdateContext, UpdateParameters},
         db_interaction::{types::DateValue, write::insert_data_many},
         find_chart,
     },
+    data_source::types::{UpdateContext, UpdateParameters},
     get_chart_data, UpdateError,
 };
 use std::{fmt::Display, iter::Sum, ops::AddAssign, str::FromStr};

@@ -3,11 +3,8 @@
 //! Depending on the chart nature, various tactics are better fit (in terms of efficiency, performance, etc.).
 
 use crate::{
-    charts::{
-        data_source::{ChartMetadata, UpdateContext, UpdateParameters},
-        find_chart,
-        mutex::get_global_update_mutex,
-    },
+    charts::{chart::ChartMetadata, find_chart, mutex::get_global_update_mutex},
+    data_source::types::{UpdateContext, UpdateParameters},
     Chart, DateValue, UpdateError,
 };
 

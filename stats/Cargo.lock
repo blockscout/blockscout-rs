@@ -870,7 +870,7 @@ version = "3.2.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea0c8bce528c4be4da13ea6fead8965e95b6073585a2f05204bd8f4119f82a65"
 dependencies = [
- "heck 0.4.0",
+ "heck 0.4.1",
  "proc-macro-error",
  "proc-macro2",
  "quote",
@@ -1522,9 +1522,9 @@ dependencies = [
 
 [[package]]
 name = "heck"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2540771e65fc8cb83cd6e8a237f70c319bd5c29f78ed1084ba5d50eeac86f7f9"
+checksum = "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8"
 dependencies = [
  "unicode-segmentation",
 ]
@@ -2481,6 +2481,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "portrait"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef45976c13e2ca4bbf64fb52680c41ab0100484bb22038f1bb282f2d7ca4b841"
+dependencies = [
+ "portrait-codegen",
+]
+
+[[package]]
+name = "portrait-codegen"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbe79b0b5142c1f347958fae033fee42a50c35ed502a1dc8e13901f88cbdc001"
+dependencies = [
+ "heck 0.4.1",
+ "itertools 0.11.0",
+ "portrait-framework",
+ "proc-macro2",
+ "quote",
+ "rand",
+ "syn 2.0.37",
+]
+
+[[package]]
+name = "portrait-framework"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f7c7d0ce33f82397dcd87769f5df2636e0c40397c073b7ae71c8a5bb93f966ef"
+dependencies = [
+ "heck 0.4.1",
+ "proc-macro2",
+ "quote",
+ "rand",
+ "syn 2.0.37",
+]
+
+[[package]]
 name = "ppv-lite86"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2592,7 +2629,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d8b442418ea0822409d9e7d047cbf1e7e9e1760b172bf9982cf29d517c93511"
 dependencies = [
  "bytes",
- "heck 0.4.0",
+ "heck 0.4.1",
  "itertools 0.10.5",
  "lazy_static",
  "log",
@@ -3404,7 +3441,7 @@ checksum = "b850fa514dc11f2ee85be9d055c512aa866746adfacd1cb42d867d68e6a5b0d9"
 dependencies = [
  "dotenvy",
  "either",
- "heck 0.4.0",
+ "heck 0.4.1",
  "once_cell",
  "proc-macro2",
  "quote",
@@ -3447,6 +3484,7 @@ dependencies = [
  "itertools 0.12.1",
  "lazy_static",
  "migration",
+ "portrait",
  "pretty_assertions",
  "prometheus",
  "rand",

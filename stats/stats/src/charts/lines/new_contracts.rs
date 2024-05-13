@@ -1,8 +1,6 @@
 use crate::{
-    charts::{
-        data_source::{UpdateContext, UpdateParameters},
-        db_interaction::chart_updaters::{ChartBatchUpdater, ChartUpdater},
-    },
+    charts::db_interaction::chart_updaters::{ChartBatchUpdater, ChartUpdater},
+    data_source::types::{UpdateContext, UpdateParameters},
     DateValue, UpdateError,
 };
 use chrono::NaiveDate;

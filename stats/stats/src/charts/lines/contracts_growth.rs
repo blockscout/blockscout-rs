@@ -2,12 +2,12 @@ use super::NewContracts;
 use crate::{
     charts::{
         chart::Chart,
-        data_source::{UpdateContext, UpdateParameters},
         db_interaction::{
             chart_updaters::{parse_and_cumsum, ChartDependentUpdater, ChartUpdater},
             types::DateValue,
         },
     },
+    data_source::types::{UpdateContext, UpdateParameters},
     MissingDatePolicy, UpdateError,
 };
 use entity::sea_orm_active_enums::ChartType;

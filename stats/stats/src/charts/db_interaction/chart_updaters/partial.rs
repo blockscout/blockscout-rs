@@ -8,10 +8,10 @@ use super::{
 };
 use crate::{
     charts::{
-        data_source::{UpdateContext, UpdateParameters},
         db_interaction::{types::DateValue, write::insert_data_many},
         find_chart,
     },
+    data_source::types::{UpdateContext, UpdateParameters},
     metrics, UpdateError,
 };
 use sea_orm::prelude::*;

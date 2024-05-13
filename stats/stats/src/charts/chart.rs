@@ -1,5 +1,5 @@
-use crate::ReadError;
-use chrono::{DateTime, Duration, Offset, TimeZone};
+use crate::{DateValue, ReadError};
+use chrono::{DateTime, Duration, Offset, TimeZone, Utc};
 use entity::{charts, sea_orm_active_enums::ChartType};
 use sea_orm::{prelude::*, sea_query, FromQueryResult, QuerySelect, Set};
 use thiserror::Error;
@@ -26,6 +26,16 @@ impl From<ReadError> for UpdateError {
             ReadError::IntervalLimitExceeded(limit) => UpdateError::IntervalLimitExceeded { limit },
         }
     }
+}
+
+#[derive(Clone)]
+pub struct ChartMetadata {
+    pub last_update: DateTime<Utc>,
+}
+
+pub struct ChartData {
+    pub metadata: ChartMetadata,
+    pub values: Vec<DateValue>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

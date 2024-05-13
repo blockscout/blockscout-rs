@@ -1,7 +1,6 @@
 pub mod cache;
-mod chart;
+pub(crate) mod chart;
 pub mod counters;
-pub mod data_source;
 pub mod db_interaction;
 pub mod lines;
 mod mutex;
