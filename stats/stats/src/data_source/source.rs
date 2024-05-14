@@ -26,7 +26,12 @@ pub trait DataSource {
 
     /// Initialize the data source and its dependencies in local database.
     ///
-    /// If the source was initialized before, keep old values.
+    /// The intention is to leave default implementation and implement only
+    /// [`DataSource::init_itself`].
+    ///
+    /// If the source was initialized before, keep old values. In other words,
+    /// the method should be idempotent, as it is expected to be called on
+    /// previously initialized sources.
     fn init_all_locally<'a>(
         db: &'a DatabaseConnection,
         init_time: &'a chrono::DateTime<Utc>,
@@ -43,13 +48,19 @@ pub trait DataSource {
     }
 
     /// Initialize only this source. This fn is intended to be implemented
-    /// for regular types
+    /// by types, as recursive logic of [`DataSource::init_all_locally`] is
+    /// not expected to change.
+    ///
+    /// Should be idempotent.
     fn init_itself(
         db: &DatabaseConnection,
         init_time: &chrono::DateTime<Utc>,
     ) -> impl std::future::Future<Output = Result<(), DbErr>> + Send;
 
-    /// Update source data (values + metadata), if necessary.
+    /// Update source data (values + metadata).
+    ///
+    /// Should be idempontent with regards to `current_time` (in `cx`).
+    /// It is a normal behaviour to call this method within single update.
     async fn update_from_remote(
         cx: &UpdateContext<UpdateParameters<'_>>,
     ) -> Result<(), UpdateError>;
@@ -120,7 +131,6 @@ where
         Ok(())
     }
 
-    /// Update source data (values + metadata), if necessary.
     async fn update_from_remote(
         cx: &UpdateContext<UpdateParameters<'_>>,
     ) -> Result<(), UpdateError> {

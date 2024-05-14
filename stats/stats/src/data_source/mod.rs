@@ -1,8 +1,8 @@
-mod group;
-mod kinds;
-mod source;
+pub mod group;
+pub mod kinds;
+pub mod source;
 mod source_metrics;
-pub(crate) mod types;
+pub mod types;
 
 #[cfg(test)]
 mod example;

@@ -20,6 +20,7 @@ pub trait RemoteSource {
     ) -> Result<Vec<DateValue>, UpdateError>;
 }
 
+/// Wrapper struct used for avoiding implementation conflicts
 pub struct RemoteSourceWrapper<T: RemoteSource>(PhantomData<T>);
 
 impl<T: RemoteSource> DataSource for RemoteSourceWrapper<T> {

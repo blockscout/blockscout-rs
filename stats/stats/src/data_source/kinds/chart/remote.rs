@@ -14,6 +14,7 @@ pub trait RemoteChart: Chart {
     type Dependency: RemoteSource;
 }
 
+/// Wrapper struct used for avoiding implementation conflicts
 pub struct RemoteChartWrapper<T: RemoteChart>(PhantomData<T>);
 
 #[portrait::fill(portrait::delegate(T))]

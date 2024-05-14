@@ -39,6 +39,7 @@ pub trait BatchUpdateableChart: Chart {
     ) -> Result<usize, UpdateError>;
 }
 
+/// Wrapper struct used for avoiding implementation conflicts
 pub struct BatchUpdateableChartWrapper<T: BatchUpdateableChart>(PhantomData<T>);
 
 #[portrait::fill(portrait::delegate(T))]

@@ -12,7 +12,6 @@ use crate::{
             chart_updaters::common_operations::{self, get_min_block_blockscout, get_nth_last_row},
             read::get_chart_metadata,
         },
-        find_chart,
     },
     data_source::{
         source::DataSource,
@@ -35,6 +34,11 @@ pub trait UpdateableChart: Chart {
         async move { create_chart(db, Self::name().into(), Self::chart_type(), init_time).await }
     }
 
+    /// Update chart data (values + metadata).
+    ///
+    /// Should be idempontent with regards to `current_time` (in `cx`).
+    /// It is a normal behaviour to call this method within single update
+    /// (= with same `current_time`).
     async fn update(
         cx: &UpdateContext<UpdateParameters<'_>>,
         remote_fetch_timer: &mut AggregateTimer,
@@ -71,6 +75,7 @@ pub trait UpdateableChart: Chart {
         Ok(())
     }
 
+    /// Update only chart values.
     async fn update_values(
         cx: &UpdateContext<UpdateParameters<'_>>,
         chart_id: i32,
@@ -79,6 +84,7 @@ pub trait UpdateableChart: Chart {
         remote_fetch_timer: &mut AggregateTimer,
     ) -> Result<(), UpdateError>;
 
+    /// Update only chart metadata.
     async fn update_metadata(
         db: &DatabaseConnection,
         chart_id: i32,
@@ -89,6 +95,7 @@ pub trait UpdateableChart: Chart {
             .map_err(UpdateError::StatsDB)
     }
 
+    /// Retrieve chart data from (local) storage.
     async fn query_data(
         cx: &UpdateContext<UpdateParameters<'_>>,
         range: std::ops::RangeInclusive<sea_orm::prelude::Date>,
@@ -111,6 +118,7 @@ pub trait UpdateableChart: Chart {
     }
 }
 
+/// Wrapper struct used for avoiding implementation conflicts
 pub struct UpdateableChartWrapper<C: UpdateableChart>(PhantomData<C>);
 
 #[portrait::fill(portrait::delegate(C))]
