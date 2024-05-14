@@ -1,5 +1,6 @@
 use std::ops::RangeInclusive;
 
+use blockscout_metrics_tools::AggregateTimer;
 use chrono::{NaiveDate, Utc};
 use futures::{future::BoxFuture, FutureExt};
 use sea_orm::{DatabaseConnection, DbErr};
@@ -17,7 +18,7 @@ use super::types::{UpdateContext, UpdateParameters};
 ///     - depend only on external data (i.e. independent from local data)
 ///     - depend on data from other charts
 ///
-/// Also it can be a remote data source. In this case, `update`
+/// Also it can be a remote data source.
 pub trait DataSource {
     type PrimaryDependency: DataSource;
     type SecondaryDependencies: DataSource;
@@ -60,6 +61,7 @@ pub trait DataSource {
     async fn query_data(
         cx: &UpdateContext<UpdateParameters<'_>>,
         range: RangeInclusive<NaiveDate>,
+        remote_fetch_timer: &mut AggregateTimer,
     ) -> Result<Self::Output, UpdateError>;
 }
 
@@ -81,6 +83,7 @@ impl DataSource for () {
         _db: &DatabaseConnection,
         _init_time: &chrono::DateTime<Utc>,
     ) -> Result<(), DbErr> {
+        // todo: unimplemented where applicable?
         Ok(())
     }
 
@@ -93,6 +96,7 @@ impl DataSource for () {
     async fn query_data(
         _cx: &UpdateContext<UpdateParameters<'_>>,
         _range: RangeInclusive<NaiveDate>,
+        _remote_fetch_timer: &mut AggregateTimer,
     ) -> Result<Self::Output, UpdateError> {
         Ok(())
     }
@@ -128,10 +132,11 @@ where
     async fn query_data(
         cx: &UpdateContext<UpdateParameters<'_>>,
         range: RangeInclusive<NaiveDate>,
+        remote_fetch_timer: &mut AggregateTimer,
     ) -> Result<Self::Output, UpdateError> {
         Ok((
-            T1::query_data(cx, range.clone()).await?,
-            T2::query_data(cx, range).await?,
+            T1::query_data(cx, range.clone(), remote_fetch_timer).await?,
+            T2::query_data(cx, range, remote_fetch_timer).await?,
         ))
     }
 }

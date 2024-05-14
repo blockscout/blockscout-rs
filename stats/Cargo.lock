@@ -631,6 +631,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "blockscout-metrics-tools"
+version = "0.1.0"
+
+[[package]]
 name = "blockscout-service-launcher"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3477,6 +3481,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "blockscout-db",
+ "blockscout-metrics-tools",
  "blockscout-service-launcher 0.9.0",
  "chrono",
  "entity",

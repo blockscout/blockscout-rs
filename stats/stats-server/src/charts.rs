@@ -141,7 +141,7 @@ impl Charts {
         let verified_contracts_growth = Arc::new(lines::VerifiedContractsGrowth::new(
             new_verified_contracts.clone(),
         ));
-        let new_contracts = Arc::new(lines::NewContracts::default());
+        let new_contracts = Arc::new(lines::NewContractsRemote::default());
         let contracts_growth = Arc::new(lines::ContractsGrowth::new(new_contracts.clone()));
 
         vec![

@@ -1,7 +1,7 @@
-use std::{marker::PhantomData, ops::RangeInclusive};
+use std::{marker::PhantomData, ops::RangeInclusive, time::Duration};
 
+use blockscout_metrics_tools::AggregateTimer;
 use chrono::{NaiveDate, Utc};
-use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DatabaseConnection, DbErr, QuerySelect};
 
 use crate::{
@@ -14,10 +14,11 @@ use crate::{
         find_chart,
     },
     data_source::{
-        source_trait::DataSource,
+        source::DataSource,
+        source_metrics::DataSourceMetrics,
         types::{UpdateContext, UpdateParameters},
     },
-    get_chart_data, Chart, DateValue, MissingDatePolicy, ReadError, UpdateError,
+    get_chart_data, metrics, Chart, DateValue, ReadError, UpdateError,
 };
 
 // todo: instruction on how to implement
@@ -33,7 +34,10 @@ pub trait UpdateableChart: Chart {
         async move { create_chart(db, Self::name().into(), Self::chart_type(), init_time).await }
     }
 
-    async fn update(cx: &UpdateContext<UpdateParameters<'_>>) -> Result<(), UpdateError> {
+    async fn update(
+        cx: &UpdateContext<UpdateParameters<'_>>,
+        remote_fetch_timer: &mut AggregateTimer,
+    ) -> Result<(), UpdateError> {
         let chart_id = Self::query_chart_id(cx.user_context.db)
             .await?
             .ok_or_else(|| UpdateError::NotFound(Self::name().into()))?;
@@ -49,8 +53,16 @@ pub trait UpdateableChart: Chart {
             offset,
         )
         .await?;
-        Self::update_values(cx, chart_id, last_updated_row, min_blockscout_block).await?;
-        Self::update_metadata(cx.user_context.db, chart_id, cx.user_context.current_time).await
+        Self::update_values(
+            cx,
+            chart_id,
+            last_updated_row,
+            min_blockscout_block,
+            remote_fetch_timer,
+        )
+        .await?;
+        Self::update_metadata(cx.user_context.db, chart_id, cx.user_context.current_time).await?;
+        Ok(())
     }
 
     async fn update_values(
@@ -58,6 +70,7 @@ pub trait UpdateableChart: Chart {
         chart_id: i32,
         update_from_row: Option<DateValue>,
         min_blockscout_block: i64,
+        remote_fetch_timer: &mut AggregateTimer,
     ) -> Result<(), UpdateError>;
 
     async fn update_metadata(
@@ -116,6 +129,16 @@ pub struct UpdateableChartWrapper<C: UpdateableChart>(PhantomData<C>);
 #[portrait::fill(portrait::delegate(C))]
 impl<C: UpdateableChart + Chart> Chart for UpdateableChartWrapper<C> {}
 
+impl<C: UpdateableChart> DataSourceMetrics for UpdateableChartWrapper<C> {
+    fn observe_query_time(time: std::time::Duration) {
+        if time > Duration::ZERO {
+            metrics::CHART_FETCH_NEW_DATA_TIME
+                .with_label_values(&[Self::name()])
+                .observe(time.as_secs_f64());
+        }
+    }
+}
+
 impl<C: UpdateableChart> DataSource for UpdateableChartWrapper<C> {
     type PrimaryDependency = C::PrimaryDependency;
     type SecondaryDependencies = C::SecondaryDependencies;
@@ -126,13 +149,19 @@ impl<C: UpdateableChart> DataSource for UpdateableChartWrapper<C> {
     ) -> Result<(), UpdateError> {
         Self::PrimaryDependency::update_from_remote(cx).await?;
         Self::SecondaryDependencies::update_from_remote(cx).await?;
-        C::update(cx).await?;
+        let mut remote_fetch_timer = AggregateTimer::new();
+
+        C::update(cx, &mut remote_fetch_timer).await?;
+
+        Self::observe_query_time(remote_fetch_timer.total_time());
         Ok(())
     }
 
     async fn query_data(
         cx: &UpdateContext<UpdateParameters<'_>>,
         range: RangeInclusive<NaiveDate>,
+        // local data is queried, do not track in remote timer
+        _remote_fetch_timer: &mut AggregateTimer,
     ) -> Result<ChartData, UpdateError> {
         C::query_data(cx, range).await
     }

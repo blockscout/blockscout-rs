@@ -1,7 +1,7 @@
 use std::{marker::PhantomData, ops::RangeInclusive, time::Instant};
 
+use blockscout_metrics_tools::AggregateTimer;
 use chrono::{Duration, NaiveDate, Utc};
-use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{DatabaseConnection, TransactionTrait};
 
 use super::UpdateableChart;
@@ -11,10 +11,10 @@ use crate::{
         db_interaction::chart_updaters::common_operations::get_min_date_blockscout,
     },
     data_source::{
-        source_trait::DataSource,
+        source::DataSource,
         types::{UpdateContext, UpdateParameters},
     },
-    Chart, DateValue, MissingDatePolicy, UpdateError,
+    Chart, DateValue, UpdateError,
 };
 
 pub trait BatchUpdateableChart: Chart {
@@ -50,6 +50,7 @@ async fn batch_update_values<U>(
     chart_id: i32,
     update_from_row: Option<DateValue>,
     min_blockscout_block: i64,
+    remote_fetch_timer: &mut AggregateTimer,
 ) -> Result<(), UpdateError>
 where
     U: BatchUpdateableChart,
@@ -75,8 +76,14 @@ where
     for (i, range) in steps.into_iter().enumerate() {
         tracing::info!(from =? range.start(), to =? range.end() , "run {}/{} step of batch update", i + 1, n);
         let now = Instant::now();
-        let found =
-            batch_update_values_step::<U>(cx, chart_id, min_blockscout_block, range).await?;
+        let found = batch_update_values_step::<U>(
+            cx,
+            chart_id,
+            min_blockscout_block,
+            range,
+            remote_fetch_timer,
+        )
+        .await?;
         let elapsed: std::time::Duration = now.elapsed();
         tracing::info!(found =? found, elapsed =? elapsed, "{}/{} step of batch done", i + 1, n);
     }
@@ -89,13 +96,15 @@ async fn batch_update_values_step<U>(
     chart_id: i32,
     min_blockscout_block: i64,
     range: RangeInclusive<NaiveDate>,
+    remote_fetch_timer: &mut AggregateTimer,
 ) -> Result<usize, UpdateError>
 where
     U: BatchUpdateableChart,
 {
-    let primary_data = U::PrimaryDependency::query_data(cx, range.clone()).await?;
+    let primary_data =
+        U::PrimaryDependency::query_data(cx, range.clone(), remote_fetch_timer).await?;
     let secondary_data: <<U as BatchUpdateableChart>::SecondaryDependencies as DataSource>::Output =
-        U::SecondaryDependencies::query_data(cx, range).await?;
+        U::SecondaryDependencies::query_data(cx, range, remote_fetch_timer).await?;
     let found = U::batch_update_values_step_with(
         cx.user_context.db,
         chart_id,
@@ -117,8 +126,16 @@ impl<T: BatchUpdateableChart> UpdateableChart for BatchUpdateableChartWrapper<T>
         chart_id: i32,
         update_from_row: Option<DateValue>,
         min_blockscout_block: i64,
+        remote_fetch_timer: &mut AggregateTimer,
     ) -> Result<(), UpdateError> {
-        batch_update_values::<T>(cx, chart_id, update_from_row, min_blockscout_block).await
+        batch_update_values::<T>(
+            cx,
+            chart_id,
+            update_from_row,
+            min_blockscout_block,
+            remote_fetch_timer,
+        )
+        .await
     }
 }
 

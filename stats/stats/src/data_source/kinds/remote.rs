@@ -1,12 +1,13 @@
 use std::{marker::PhantomData, ops::RangeInclusive};
 
+use blockscout_metrics_tools::AggregateTimer;
 use chrono::NaiveDate;
 use sea_orm::FromQueryResult;
 
 use crate::{
-    charts::db_interaction::chart_updaters::ChartBatchUpdater,
+    charts::db_interaction::chart_updaters::RemoteBatchQuery,
     data_source::{
-        source_trait::DataSource,
+        source::DataSource,
         types::{UpdateContext, UpdateParameters},
     },
     DateValue, UpdateError,
@@ -42,12 +43,14 @@ impl<T: RemoteSource> DataSource for RemoteSourceWrapper<T> {
     async fn query_data(
         cx: &UpdateContext<UpdateParameters<'_>>,
         range: RangeInclusive<NaiveDate>,
+        remote_fetch_timer: &mut AggregateTimer,
     ) -> Result<Vec<DateValue>, UpdateError> {
+        let _interval = remote_fetch_timer.start_interval();
         T::query_data(cx, range).await
     }
 }
 
-impl<T: ChartBatchUpdater> RemoteSource for T {
+impl<T: RemoteBatchQuery> RemoteSource for T {
     async fn query_data(
         cx: &UpdateContext<UpdateParameters<'_>>,
         range: RangeInclusive<NaiveDate>,

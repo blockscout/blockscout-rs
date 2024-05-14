@@ -18,7 +18,7 @@ use super::{
         BatchUpdateableChart, BatchUpdateableChartWrapper, RemoteChart, RemoteChartWrapper,
         UpdateableChartWrapper,
     },
-    source_trait::DataSource,
+    source::DataSource,
     types::UpdateParameters,
 };
 

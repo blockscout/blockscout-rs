@@ -1,6 +1,7 @@
 mod group;
 mod kinds;
-mod source_trait;
+mod source;
+mod source_metrics;
 pub(crate) mod types;
 
 #[cfg(test)]

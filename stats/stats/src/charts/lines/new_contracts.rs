@@ -1,5 +1,5 @@
 use crate::{
-    charts::db_interaction::chart_updaters::{ChartBatchUpdater, ChartUpdater},
+    charts::db_interaction::chart_updaters::{ChartUpdater, RemoteBatchQuery},
     data_source::types::{UpdateContext, UpdateParameters},
     DateValue, UpdateError,
 };
@@ -10,7 +10,7 @@ use sea_orm::{DbBackend, Statement};
 #[derive(Default, Debug)]
 pub struct NewContractsRemote {}
 
-impl ChartBatchUpdater for NewContractsRemote {
+impl RemoteBatchQuery for NewContractsRemote {
     fn get_query(from: NaiveDate, to: NaiveDate) -> Statement {
         Statement::from_sql_and_values(
             DbBackend::Postgres,
@@ -59,14 +59,6 @@ impl crate::Chart for NewContractsRemote {
 
     fn chart_type() -> ChartType {
         ChartType::Line
-    }
-}
-
-impl ChartUpdater for NewContractsRemote {
-    async fn update_values(
-        cx: &mut UpdateContext<UpdateParameters<'_>>,
-    ) -> Result<Vec<DateValue>, UpdateError> {
-        Self::update_with_values(cx).await
     }
 }
 

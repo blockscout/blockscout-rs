@@ -25,12 +25,6 @@ impl ContractsGrowth {
     }
 }
 
-impl ChartDependentUpdater<NewContractsRemote> for ContractsGrowth {
-    async fn get_values(parent_data: Vec<DateValue>) -> Result<Vec<DateValue>, UpdateError> {
-        parse_and_cumsum::<i64>(parent_data, NewContractsRemote::name())
-    }
-}
-
 impl crate::Chart for ContractsGrowth {
     fn name() -> &'static str {
         "contractsGrowth"
@@ -40,14 +34,6 @@ impl crate::Chart for ContractsGrowth {
     }
     fn missing_date_policy() -> MissingDatePolicy {
         MissingDatePolicy::FillPrevious
-    }
-}
-
-impl ChartUpdater for ContractsGrowth {
-    async fn update_values(
-        cx: &mut UpdateContext<UpdateParameters<'_>>,
-    ) -> Result<Vec<DateValue>, UpdateError> {
-        Self::update_with_values(cx).await
     }
 }
 
