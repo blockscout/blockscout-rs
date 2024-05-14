@@ -2,14 +2,15 @@ use std::{marker::PhantomData, ops::RangeInclusive, time::Duration};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{NaiveDate, Utc};
-use sea_orm::{prelude::*, DatabaseConnection, DbErr, QuerySelect};
+use sea_orm::{DatabaseConnection, DbErr};
 
 use crate::{
     charts::{
-        chart::{chart_portrait, ChartData, ChartMetadata},
+        chart::{chart_portrait, ChartData},
         create_chart,
-        db_interaction::chart_updaters::common_operations::{
-            self, get_min_block_blockscout, get_nth_last_row,
+        db_interaction::{
+            chart_updaters::common_operations::{self, get_min_block_blockscout, get_nth_last_row},
+            read::get_chart_metadata,
         },
         find_chart,
     },
@@ -18,7 +19,7 @@ use crate::{
         source_metrics::DataSourceMetrics,
         types::{UpdateContext, UpdateParameters},
     },
-    get_chart_data, metrics, Chart, DateValue, ReadError, UpdateError,
+    get_chart_data, metrics, Chart, DateValue, UpdateError,
 };
 
 // todo: instruction on how to implement
@@ -38,9 +39,14 @@ pub trait UpdateableChart: Chart {
         cx: &UpdateContext<UpdateParameters<'_>>,
         remote_fetch_timer: &mut AggregateTimer,
     ) -> Result<(), UpdateError> {
-        let chart_id = Self::query_chart_id(cx.user_context.db)
-            .await?
-            .ok_or_else(|| UpdateError::NotFound(Self::name().into()))?;
+        let metadata = get_chart_metadata(cx.user_context.db, Self::name()).await?;
+        if let Some(last_updated_at) = metadata.last_updated_at {
+            if cx.user_context.current_time == last_updated_at {
+                // no need to perform update
+                return Ok(());
+            }
+        }
+        let chart_id = metadata.id;
         let min_blockscout_block = get_min_block_blockscout(cx.user_context.blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?;
@@ -83,13 +89,6 @@ pub trait UpdateableChart: Chart {
             .map_err(UpdateError::StatsDB)
     }
 
-    // todo: maybe more to `Chart`??
-    async fn query_chart_id(db: &DatabaseConnection) -> Result<Option<i32>, UpdateError> {
-        find_chart(db, Self::name())
-            .await
-            .map_err(UpdateError::StatsDB)
-    }
-
     async fn query_data(
         cx: &UpdateContext<UpdateParameters<'_>>,
         range: std::ops::RangeInclusive<sea_orm::prelude::Date>,
@@ -107,19 +106,7 @@ pub trait UpdateableChart: Chart {
         .into_iter()
         .map(DateValue::from)
         .collect();
-        let chart = entity::charts::Entity::find()
-            .column(entity::charts::Column::Id)
-            .filter(entity::charts::Column::Name.eq(Self::name()))
-            .one(cx.user_context.db)
-            .await
-            .map_err(ReadError::from)?
-            .ok_or_else(|| ReadError::NotFound(Self::name().into()))?;
-        let metadata = ChartMetadata {
-            last_update: chart
-                .last_updated_at
-                .ok_or_else(|| ReadError::NotFound(Self::name().into()))?
-                .with_timezone(&Utc),
-        };
+        let metadata = get_chart_metadata(cx.user_context.db, Self::name()).await?;
         Ok(ChartData { metadata, values })
     }
 }

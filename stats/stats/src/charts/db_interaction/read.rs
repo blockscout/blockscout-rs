@@ -1,8 +1,9 @@
 use crate::{
+    charts::chart::ChartMetadata,
     missing_date::{fill_and_filter_chart, filter_within_range},
     DateValue, ExtendedDateValue, MissingDatePolicy,
 };
-use chrono::{Duration, NaiveDate};
+use chrono::{Duration, NaiveDate, Utc};
 use entity::{chart_data, charts};
 use sea_orm::{
     sea_query::Expr, ColumnTrait, DatabaseConnection, DbBackend, DbErr, EntityTrait,
@@ -87,6 +88,23 @@ fn mark_approximate(
             ExtendedDateValue::from_date_value(dv, is_marked)
         })
         .collect()
+}
+
+pub async fn get_chart_metadata(
+    db: &DatabaseConnection,
+    name: &str,
+) -> Result<ChartMetadata, ReadError> {
+    let chart = charts::Entity::find()
+        .column(charts::Column::Id)
+        .filter(charts::Column::Name.eq(name))
+        .one(db)
+        .await?
+        .ok_or_else(|| ReadError::NotFound(name.into()))?;
+    Ok(ChartMetadata {
+        last_updated_at: chart.last_updated_at.map(|t| t.with_timezone(&Utc)),
+        id: chart.id,
+        created_at: chart.created_at.with_timezone(&Utc),
+    })
 }
 
 /// Get data points for the chart `name`.

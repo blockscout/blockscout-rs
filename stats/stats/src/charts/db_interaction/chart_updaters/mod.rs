@@ -33,7 +33,7 @@ pub trait ChartUpdater: Chart {
     /// the info relevant (i.e. if it depends on values).
     async fn update_metadata(
         cx: &mut UpdateContext<UpdateParameters<'_>>,
-    ) -> Result<ChartMetadata, UpdateError> {
+    ) -> Result<(), UpdateError> {
         let cx = &cx.user_context;
         let UpdateParameters {
             db, current_time, ..
@@ -45,28 +45,23 @@ pub trait ChartUpdater: Chart {
         common_operations::set_last_updated_at(chart_id, db, current_time.clone())
             .await
             .map_err(UpdateError::StatsDB)?;
-        Ok(ChartMetadata {
-            last_update: current_time.clone(),
-        })
+        Ok(())
     }
 
     /// Update data and metadata of the chart.
     ///
     /// `current_time` is settable mainly for testing purposes. So that
     /// code dependant on time (mostly metadata updates) can be reproducibly tested.
-    async fn update(
-        cx: &mut UpdateContext<UpdateParameters<'_>>,
-    ) -> Result<(Vec<DateValue>, ChartMetadata), UpdateError> {
-        Ok((
-            Self::update_values(cx).await?,
-            Self::update_metadata(cx).await?,
-        ))
+    async fn update(cx: &mut UpdateContext<UpdateParameters<'_>>) -> Result<(), UpdateError> {
+        Self::update_values(cx).await?;
+        Self::update_metadata(cx).await?;
+        Ok(())
     }
 
     /// Run [`Self::update`] with acquiring global mutex for the chart
     async fn update_with_mutex(
         cx: &mut UpdateContext<UpdateParameters<'_>>,
-    ) -> Result<(Vec<DateValue>, ChartMetadata), UpdateError> {
+    ) -> Result<(), UpdateError> {
         let name = Self::name();
         let mutex = get_global_update_mutex(name).await;
         let _permit = {
@@ -81,6 +76,7 @@ pub trait ChartUpdater: Chart {
                 }
             }
         };
-        Self::update(cx).await
+        Self::update(cx).await?;
+        Ok(())
     }
 }
