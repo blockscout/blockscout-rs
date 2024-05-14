@@ -1,35 +1,46 @@
-use super::{matches::find_match_contracts, BytecodeRemote, MatchContract};
+use super::{
+    matches::find_match_contracts,
+    types::{BytecodeRemote, BytecodeType},
+    MatchContract,
+};
 use crate::{metrics, verification::MatchType};
-use entity::sea_orm_active_enums::BytecodeType;
+use entity::sea_orm_active_enums;
 use sea_orm::{ConnectionTrait, TransactionTrait};
 use verification_common::blueprint_contracts;
 
 pub async fn find_contract<C>(
     db: &C,
-    mut remote: BytecodeRemote,
+    code_type: sea_orm_active_enums::BytecodeType,
+    code: bytes::Bytes,
 ) -> Result<Vec<MatchContract>, anyhow::Error>
 where
     C: ConnectionTrait + TransactionTrait,
 {
+    let mut remote = BytecodeRemote {
+        bytecode_type: code_type.into(),
+        data: code,
+    };
+
     let bytecode_type = remote.bytecode_type.to_string();
     let label_values = &[bytecode_type.as_str()];
 
     let mut is_blueprint = false;
-    if let BytecodeType::CreationInput = remote.bytecode_type {
+    if let BytecodeType::CreationCode = remote.bytecode_type {
         if let Some(blueprint_contract) =
             blueprint_contracts::from_creation_code(remote.data.clone())
         {
             remote.data = blueprint_contract.initcode;
+            remote.bytecode_type = BytecodeType::CreationCodeWithoutConstructor;
             is_blueprint = true;
         }
     }
 
-    if let BytecodeType::DeployedBytecode = remote.bytecode_type {
+    if let BytecodeType::RuntimeCode = remote.bytecode_type {
         if let Some(blueprint_contract) =
             blueprint_contracts::from_runtime_code(remote.data.clone())
         {
             remote.data = blueprint_contract.initcode;
-            remote.bytecode_type = BytecodeType::CreationInput;
+            remote.bytecode_type = BytecodeType::CreationCodeWithoutConstructor;
             is_blueprint = true;
         }
     }
