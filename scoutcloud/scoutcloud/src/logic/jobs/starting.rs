@@ -108,7 +108,7 @@ impl StartingTask {
             .wait_for_success_workflow(&run, self.workflow_timeout, self.workflow_check_interval)
             .await?;
 
-        deployment.mark_as_running(db, instance).await?;
+        deployment.mark_as_running(db).await?;
         Ok(())
     }
 }

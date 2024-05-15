@@ -159,11 +159,7 @@ impl Deployment {
         Ok(self)
     }
 
-    pub async fn mark_as_running<C>(
-        &mut self,
-        db: &C,
-        _instance: &Instance,
-    ) -> Result<&mut Self, DeployError>
+    pub async fn mark_as_running<C>(&mut self, db: &C) -> Result<&mut Self, DeployError>
     where
         C: ConnectionTrait,
     {
