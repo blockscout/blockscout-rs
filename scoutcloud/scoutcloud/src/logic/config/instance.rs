@@ -256,7 +256,7 @@ mod tests {
                             "symbol": "EEE",
                         }
                     },
-                    "testnet": "true"
+                    "testnet": true
                 }
             }),
         )
@@ -321,7 +321,7 @@ mod tests {
                             "symbol": "ETH",
                         }
                     },
-                    "testnet": "false"
+                    "testnet": false
                 }
             }),
         )
@@ -390,7 +390,7 @@ config:
     id: '77'
     name: chain-test
     shortname: chain-test
-  testnet: 'true'
+  testnet: true
 frontend:
   enabled: true
   env:
