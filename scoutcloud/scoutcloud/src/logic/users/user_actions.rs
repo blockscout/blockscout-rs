@@ -13,6 +13,7 @@ pub enum UserActionType {
     UpdateInstanceConfigPartial,
     StartInstance,
     StopInstance,
+    RestartInstance,
 }
 derive_display_from_serialize!(UserActionType);
 
@@ -101,19 +102,14 @@ pub(crate) async fn log_start_instance(
     instance: &Instance,
     deployment: &Deployment,
 ) -> Result<(), sea_orm::DbErr> {
-    log_user_action(
+    log_instance_action(
         db,
         user_token,
+        instance,
+        deployment,
         UserActionType::StartInstance,
-        Some(instance.model.id),
-        Some(json!({
-            "instance_slug": instance.model.slug,
-            "instance_uuid": instance.model.external_id,
-            "deployment_uuid": deployment.model.external_id,
-        })),
     )
-    .await?;
-    Ok(())
+    .await
 }
 
 pub(crate) async fn log_stop_instance(
@@ -122,10 +118,43 @@ pub(crate) async fn log_stop_instance(
     instance: &Instance,
     deployment: &Deployment,
 ) -> Result<(), sea_orm::DbErr> {
+    log_instance_action(
+        db,
+        user_token,
+        instance,
+        deployment,
+        UserActionType::StopInstance,
+    )
+    .await
+}
+
+pub(crate) async fn log_restart_instance(
+    db: &impl ConnectionTrait,
+    user_token: &UserToken,
+    instance: &Instance,
+    deployment: &Deployment,
+) -> Result<(), sea_orm::DbErr> {
+    log_instance_action(
+        db,
+        user_token,
+        instance,
+        deployment,
+        UserActionType::RestartInstance,
+    )
+    .await
+}
+
+async fn log_instance_action(
+    db: &impl ConnectionTrait,
+    user_token: &UserToken,
+    instance: &Instance,
+    deployment: &Deployment,
+    user_action_type: UserActionType,
+) -> Result<(), sea_orm::DbErr> {
     log_user_action(
         db,
         user_token,
-        UserActionType::StopInstance,
+        user_action_type,
         Some(instance.model.id),
         Some(json!({
             "instance_slug": instance.model.slug,

@@ -42,6 +42,22 @@ impl Deployment {
         Ok(Deployment { model })
     }
 
+    pub async fn update_from_instance<C: ConnectionTrait>(
+        &mut self,
+        db: &C,
+        instance: &Instance,
+    ) -> Result<&mut Self, DeployError> {
+        let server_spec = instance.find_server_spec(db).await?.ok_or(anyhow::anyhow!(
+            "server spec of the instance was not found in database"
+        ))?;
+        let mut model = self.model.clone().into_active_model();
+        model.user_config = Set(instance.model.user_config.clone());
+        model.parsed_config = Set(instance.model.parsed_config.clone());
+        model.server_spec_id = Set(server_spec.id);
+        self.model = model.update(db).await?;
+        Ok(self)
+    }
+
     pub async fn get<C>(db: &C, id: i32) -> Result<Self, DbErr>
     where
         C: ConnectionTrait,
@@ -132,7 +148,7 @@ impl Deployment {
         Ok(self)
     }
 
-    pub async fn mark_as_finished<C>(&mut self, db: &C) -> Result<&mut Self, DbErr>
+    pub async fn mark_as_stopped<C>(&mut self, db: &C) -> Result<&mut Self, DbErr>
     where
         C: ConnectionTrait,
     {
@@ -143,7 +159,11 @@ impl Deployment {
         Ok(self)
     }
 
-    pub async fn mark_as_running<C>(&mut self, db: &C) -> Result<&mut Self, DeployError>
+    pub async fn mark_as_running<C>(
+        &mut self,
+        db: &C,
+        _instance: &Instance,
+    ) -> Result<&mut Self, DeployError>
     where
         C: ConnectionTrait,
     {

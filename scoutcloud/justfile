@@ -17,7 +17,6 @@ start-postgres:
       --name {{docker-name}} \
       -e POSTGRES_PASSWORD={{db-password}} \
       -e POSTGRES_USER={{db-user}} \
-      -e POSTGRES_DB={{db-name}} \
       --rm \
       -d \
       postgres

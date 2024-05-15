@@ -98,7 +98,7 @@ impl StoppingTask {
         github
             .wait_for_success_workflow(&run, self.workflow_timeout, self.workflow_check_interval)
             .await?;
-        deployment.mark_as_finished(db).await?;
+        deployment.mark_as_stopped(db).await?;
         Ok(())
     }
 }

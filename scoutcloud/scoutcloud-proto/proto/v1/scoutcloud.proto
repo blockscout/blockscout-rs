@@ -92,7 +92,7 @@ enum DeploymentStatus {
 
 enum UpdateInstanceAction {
   START = 0;
-  FINISH = 1;
+  STOP = 1;
   RESTART = 2;
 }
 
