@@ -52,10 +52,15 @@ macro_rules! custom_env_var {
                 > {
                     let mut config_vars = Vec::new();
                     $(
+                    {
+                        let value = serde_json::to_value(&self)
+                            .map_err(|e| anyhow::anyhow!("converting internal value to json object: {e}"))?;
                         config_vars.push((
                             $crate::logic::ParsedVariableKey::$key_type($key.to_string()),
-                            serde_json::Value::String(self.to_string())
+                            value,
                         ));
+                    }
+
                     )*
                     Ok(config_vars)
                 }
