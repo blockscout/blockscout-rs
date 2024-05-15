@@ -47,7 +47,6 @@ impl Scoutcloud for ScoutcloudService {
         &self,
         request: Request<CreateInstanceRequest>,
     ) -> Result<Response<CreateInstanceResponse>, Status> {
-        tracing::error!("test");
         let (request, user_token): (CreateInstanceRequestInternal, _) =
             parse_request_with_headers(self.db.as_ref(), request).await?;
         let config = get_config!(&request)?;
