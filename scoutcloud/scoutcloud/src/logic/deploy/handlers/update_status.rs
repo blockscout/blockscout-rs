@@ -43,7 +43,7 @@ async fn handle_instance_action(
             proto::DeploymentStatus::Stopped,
             proto::DeploymentStatus::Failed,
         ],
-        proto::UpdateInstanceAction::Finish | proto::UpdateInstanceAction::Restart => {
+        proto::UpdateInstanceAction::Stop | proto::UpdateInstanceAction::Restart => {
             vec![proto::DeploymentStatus::Running]
         }
     };
@@ -59,12 +59,12 @@ async fn handle_instance_action(
         proto::UpdateInstanceAction::Start => {
             start_instance(db, runner, &instance.instance, user_token).await?
         }
-        proto::UpdateInstanceAction::Finish => {
+        proto::UpdateInstanceAction::Stop => {
             stop_instance(db, runner, &instance.instance, user_token).await?
         }
-        proto::UpdateInstanceAction::Restart => Err(anyhow::anyhow!(
-            "restart not implemented yet, use start and finish instead"
-        ))?,
+        proto::UpdateInstanceAction::Restart => {
+            restart_instance(db, runner, &instance.instance, user_token).await?
+        }
     };
 
     Ok(proto::UpdateInstanceStatusResponseInternal {
@@ -103,5 +103,22 @@ async fn stop_instance(
         .ok_or(DeployError::DeploymentNotFound)?;
     user_actions::log_stop_instance(db, user_token, instance, &deployment).await?;
     runner.insert_stopping_task(deployment.model.id).await?;
+    Ok(deployment)
+}
+
+async fn restart_instance(
+    db: &DatabaseConnection,
+    runner: &JobsRunner,
+    instance: &Instance,
+    user_token: &UserToken,
+) -> Result<Deployment, DeployError> {
+    let mut deployment = Deployment::latest_of_instance(db, instance)
+        .await?
+        .ok_or(DeployError::DeploymentNotFound)?;
+    // make sure that config of deployment is updated according to current instance
+    deployment.update_from_instance(db, instance).await?;
+    user_actions::log_restart_instance(db, user_token, instance, &deployment).await?;
+    // restart is just start running deployment
+    runner.insert_starting_task(deployment.model.id).await?;
     Ok(deployment)
 }

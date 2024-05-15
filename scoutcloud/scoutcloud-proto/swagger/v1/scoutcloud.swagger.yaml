@@ -418,7 +418,7 @@ definitions:
     type: string
     enum:
       - START
-      - FINISH
+      - STOP
       - RESTART
     default: START
   v1UpdateInstanceStatusResponse:

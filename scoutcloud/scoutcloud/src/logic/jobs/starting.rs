@@ -53,7 +53,9 @@ impl AsyncRunnable for StartingTask {
 
         // todo: save run_id to database and if deployment in pending state, watch for it
         let result = match &deployment.model.status {
-            DeploymentStatusType::Created | DeploymentStatusType::Stopped => {
+            DeploymentStatusType::Created
+            | DeploymentStatusType::Stopped
+            | DeploymentStatusType::Running => {
                 self.github_deploy_and_wait(
                     db.as_ref(),
                     github.as_ref(),
@@ -62,8 +64,7 @@ impl AsyncRunnable for StartingTask {
                 )
                 .await
             }
-            DeploymentStatusType::Running
-            | DeploymentStatusType::Pending
+            DeploymentStatusType::Pending
             | DeploymentStatusType::Stopping
             | DeploymentStatusType::Failed => {
                 tracing::warn!(
