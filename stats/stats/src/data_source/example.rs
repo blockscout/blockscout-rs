@@ -1,13 +1,15 @@
 use std::{collections::HashSet, str::FromStr};
 
-use chrono::Utc;
+use chrono::{NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::prelude::*;
+use sea_orm::{prelude::*, DbBackend, Statement};
 
 use crate::{
-    charts::db_interaction::{chart_updaters::parse_and_cumsum, write::insert_data_many},
+    charts::db_interaction::{
+        chart_updaters::{parse_and_cumsum, RemoteBatchQuery},
+        write::insert_data_many,
+    },
     construct_update_group,
-    lines::NewContractsRemote,
     tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
     Chart, MissingDatePolicy, UpdateError,
 };
@@ -36,6 +38,22 @@ impl crate::Chart for NewContractsChart {
 
 type NewContractsChartSource =
     UpdateableChartWrapper<BatchUpdateableChartWrapper<RemoteChartWrapper<NewContractsChart>>>;
+
+pub struct NewContractsRemote;
+
+impl RemoteBatchQuery for NewContractsRemote {
+    fn get_query(from: NaiveDate, to: NaiveDate) -> Statement {
+        Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            r#"SELECT * FROM new_contracts
+                WHERE
+                    b.timestamp::date < $2 AND
+                    b.timestamp::date >= $1;
+            "#,
+            vec![from.into(), to.into()],
+        )
+    }
+}
 
 impl RemoteChart for NewContractsChart {
     type Dependency = NewContractsRemote;
@@ -98,7 +116,8 @@ async fn _update_examples() {
     let enabled = HashSet::from(
         [NewContractsChart::name(), ContractsGrowthChart::name()].map(|l| l.to_owned()),
     );
-    ExampleUpdateGroup::create_charts(&db, &enabled, &current_time)
+    ExampleUpdateGroup
+        .create_charts(&db, &enabled, &current_time)
         .await
         .unwrap();
 
@@ -108,7 +127,8 @@ async fn _update_examples() {
         current_time,
         force_full: true,
     };
-    ExampleUpdateGroup::update_charts(parameters, &enabled)
+    ExampleUpdateGroup
+        .update_charts(parameters, &enabled)
         .await
         .unwrap();
 }

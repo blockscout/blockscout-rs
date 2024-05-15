@@ -1,21 +1,33 @@
 use std::collections::HashSet;
 
+use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{DatabaseConnection, DbErr};
 
 use crate::UpdateError;
 
+use super::types::UpdateParameters;
+
 // todo: reconsider name of module (also should help reading??)
 
 // todo: move comments somewhere (to module likely)
+// todo: use `trait-variant` once updated, probably
+// `async_trait` allows making trait objects
 /// Directed Acyclic Connected Graph
-pub trait UpdateGroup<P> {
+#[async_trait]
+pub trait UpdateGroup {
+    // &self is only to make fns dispatchable (and trait to be object-safe)
     async fn create_charts(
+        &self,
         db: &DatabaseConnection,
         enabled_names: &HashSet<String>,
         current_time: &chrono::DateTime<Utc>,
     ) -> Result<(), DbErr>;
-    async fn update_charts(params: P, enabled_names: &HashSet<String>) -> Result<(), UpdateError>;
+    async fn update_charts<'a>(
+        &self,
+        params: UpdateParameters<'a>,
+        enabled_names: &HashSet<String>,
+    ) -> Result<(), UpdateError>;
 }
 
 // todo: move example to module?
@@ -101,12 +113,11 @@ macro_rules! construct_update_group {
     ]) => {
         pub struct $group_name;
 
-        impl<'a>
-            $crate::data_source::group::UpdateGroup<
-                $crate::data_source::types::UpdateParameters<'a>,
-            > for $group_name
+        #[::async_trait::async_trait]
+        impl $crate::data_source::group::UpdateGroup for $group_name
         {
             async fn create_charts(
+                &self,
                 #[allow(unused)]
                 db: &sea_orm::DatabaseConnection,
                 #[allow(unused)]
@@ -122,7 +133,8 @@ macro_rules! construct_update_group {
                 Ok(())
             }
 
-            async fn update_charts(
+            async fn update_charts<'a>(
+                &self,
                 params: $crate::data_source::types::UpdateParameters<'a>,
                 #[allow(unused)]
                 enabled_names: &std::collections::HashSet<String>,

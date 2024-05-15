@@ -37,7 +37,7 @@ pub use contracts_growth::ContractsGrowth;
 // pub use native_coin_supply::NativeCoinSupply;
 // pub use new_accounts::NewAccounts;
 // pub use new_blocks::NewBlocks;
-pub use new_contracts::NewContractsRemote;
+pub use new_contracts::NewContracts;
 // pub use new_native_coin_holders::NewNativeCoinHolders;
 // pub use new_native_coin_transfers::NewNativeCoinTransfers;
 // pub use new_txns::NewTxns;

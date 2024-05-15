@@ -1,31 +1,22 @@
-use super::NewContractsRemote;
+use super::NewContracts;
 use crate::{
     charts::{
         chart::Chart,
-        db_interaction::{
-            chart_updaters::{parse_and_cumsum, ChartDependentUpdater, ChartUpdater},
-            types::DateValue,
-        },
+        db_interaction::{chart_updaters::parse_and_cumsum, write::insert_data_many},
     },
-    data_source::types::{UpdateContext, UpdateParameters},
+    data_source::{
+        kinds::chart::{BatchUpdateableChart, BatchUpdateableChartWrapper, UpdateableChartWrapper},
+        source::DataSource,
+    },
     MissingDatePolicy, UpdateError,
 };
+use chrono::Utc;
 use entity::sea_orm_active_enums::ChartType;
+use sea_orm::DatabaseConnection;
 
-use std::marker::PhantomData;
+pub struct ContractsGrowthInner;
 
-#[derive(Debug, Default)]
-pub struct ContractsGrowth {
-    parent: PhantomData<NewContractsRemote>,
-}
-
-impl ContractsGrowth {
-    pub fn new(parent: PhantomData<NewContractsRemote>) -> Self {
-        Self { parent }
-    }
-}
-
-impl crate::Chart for ContractsGrowth {
+impl crate::Chart for ContractsGrowthInner {
     fn name() -> &'static str {
         "contractsGrowth"
     }
@@ -36,6 +27,37 @@ impl crate::Chart for ContractsGrowth {
         MissingDatePolicy::FillPrevious
     }
 }
+
+impl BatchUpdateableChart for ContractsGrowthInner {
+    type PrimaryDependency = NewContracts;
+    type SecondaryDependencies = ();
+
+    fn step_duration() -> chrono::Duration {
+        // we need to count cumulative from the beginning
+        chrono::Duration::max_value()
+    }
+
+    async fn batch_update_values_step_with(
+        db: &DatabaseConnection,
+        chart_id: i32,
+        _update_time: chrono::DateTime<Utc>,
+        min_blockscout_block: i64,
+        primary_data: <Self::PrimaryDependency as DataSource>::Output,
+        _secondary_data: <Self::SecondaryDependencies as DataSource>::Output,
+    ) -> Result<usize, UpdateError> {
+        let found = primary_data.values.len();
+        let values = parse_and_cumsum::<i64>(primary_data.values, Self::PrimaryDependency::name())?
+            .into_iter()
+            .map(|value| value.active_model(chart_id, Some(min_blockscout_block)));
+        insert_data_many(db, values)
+            .await
+            .map_err(UpdateError::StatsDB)?;
+        Ok(found)
+    }
+}
+
+pub type ContractsGrowth =
+    UpdateableChartWrapper<BatchUpdateableChartWrapper<ContractsGrowthInner>>;
 
 // #[cfg(test)]
 // mod tests {

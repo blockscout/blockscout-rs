@@ -8,6 +8,7 @@ lazy_static! {
         &["chart_id"],
     )
     .unwrap();
+    // todo: track update time (probably within UpdateableChart)
     pub static ref CHART_UPDATE_TIME: HistogramVec = register_histogram_vec!(
         "stats_chart_update_time_seconds",
         "single chart update time",

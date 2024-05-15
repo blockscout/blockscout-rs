@@ -1,14 +1,14 @@
 use crate::{
-    charts::db_interaction::chart_updaters::{ChartUpdater, RemoteBatchQuery},
-    data_source::types::{UpdateContext, UpdateParameters},
-    DateValue, UpdateError,
+    charts::db_interaction::chart_updaters::RemoteBatchQuery,
+    data_source::kinds::chart::{
+        BatchUpdateableChartWrapper, RemoteChart, RemoteChartWrapper, UpdateableChartWrapper,
+    },
 };
 use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{DbBackend, Statement};
 
-#[derive(Default, Debug)]
-pub struct NewContractsRemote {}
+pub struct NewContractsRemote;
 
 impl RemoteBatchQuery for NewContractsRemote {
     fn get_query(from: NaiveDate, to: NaiveDate) -> Statement {
@@ -52,7 +52,9 @@ impl RemoteBatchQuery for NewContractsRemote {
     }
 }
 
-impl crate::Chart for NewContractsRemote {
+pub struct NewContractsInner;
+
+impl crate::Chart for NewContractsInner {
     fn name() -> &'static str {
         "newContracts"
     }
@@ -61,6 +63,13 @@ impl crate::Chart for NewContractsRemote {
         ChartType::Line
     }
 }
+
+impl RemoteChart for NewContractsInner {
+    type Dependency = NewContractsRemote;
+}
+
+pub type NewContracts =
+    UpdateableChartWrapper<BatchUpdateableChartWrapper<RemoteChartWrapper<NewContractsInner>>>;
 
 // #[cfg(test)]
 // mod tests {
