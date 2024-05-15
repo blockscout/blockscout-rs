@@ -50,6 +50,7 @@ macro_rules! parse_config_all_vars {
             RpcUrl,
             ServerSize,
             TokenSymbol,
+            IsTestnet,
         });
     };
 }
@@ -193,6 +194,7 @@ mod tests {
             icon_url: Some("http://example.com/icon".parse().unwrap()),
             homeplate_background: Some("#111111".to_string()),
             homeplate_text_color: Some("#222222".to_string()),
+            is_testnet: Some(true),
         };
         UserConfig { internal }
     }
@@ -217,7 +219,6 @@ mod tests {
                         "hostname": "hostname-test.k8s-dev.blockscout.com",
                     },
                     "env": {
-                        "CHAIN_ID": "77",
                         "CHAIN_TYPE": "stability",
                         "ETHEREUM_JSONRPC_VARIANT": "geth",
                         "ETHEREUM_JSONRPC_HTTP_URL": server.url("/"),
@@ -243,16 +244,19 @@ mod tests {
                         "NEXT_PUBLIC_HOMEPAGE_PLATE_TEXT_COLOR": "#222222",
                         "NEXT_PUBLIC_NETWORK_ICON": "http://example.com/icon",
                         "NEXT_PUBLIC_NETWORK_LOGO": "http://example.com/logo",
-                        "NEXT_PUBLIC_NETWORK_NAME": "chain-test",
                     }
                 },
                 "config": {
                     "network": {
+                        "id": "77",
+                        "name": "chain-test",
+                        "shortname": "chain-test",
                         "currency": {
                             "name": "EEE",
                             "symbol": "EEE",
                         }
-                    }
+                    },
+                    "testnet": "true"
                 }
             }),
         )
@@ -275,6 +279,7 @@ mod tests {
                 icon_url: None,
                 homeplate_background: None,
                 homeplate_text_color: None,
+                is_testnet: None,
             },
         };
         let client_name = "test-client";
@@ -315,7 +320,8 @@ mod tests {
                             "name": "ETH",
                             "symbol": "ETH",
                         }
-                    }
+                    },
+                    "testnet": "false"
                 }
             }),
         )
@@ -340,7 +346,6 @@ mod tests {
   enabled: true
   env:
     ACCOUNT_POOL_SIZE: 10
-    CHAIN_ID: '77'
     CHAIN_TYPE: stability
     COIN_BALANCE_HISTORY_DAYS: 90
     DISABLE_EXCHANGE_RATES: 'true'
@@ -382,6 +387,10 @@ config:
     currency:
       name: EEE
       symbol: EEE
+    id: '77'
+    name: chain-test
+    shortname: chain-test
+  testnet: 'true'
 frontend:
   enabled: true
   env:
@@ -394,7 +403,6 @@ frontend:
     NEXT_PUBLIC_HOMEPAGE_PLATE_TEXT_COLOR: '#222222'
     NEXT_PUBLIC_NETWORK_ICON: http://example.com/icon
     NEXT_PUBLIC_NETWORK_LOGO: http://example.com/logo
-    NEXT_PUBLIC_NETWORK_NAME: chain-test
     NEXT_PUBLIC_NETWORK_VERIFICATION_TYPE: validation
     NEXT_PUBLIC_VISUALIZE_API_HOST: https://visualizer.services.blockscout.com
   envFromSecret:
