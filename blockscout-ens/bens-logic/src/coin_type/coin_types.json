@@ -710,5 +710,12 @@
     "encoding": {
       "checkSummedHex": null
     }
+  },
+  {
+    "name": "PLS",
+    "coinType": "1028",
+    "encoding": {
+      "checkSummedHex": null
+    }
   }
 ]

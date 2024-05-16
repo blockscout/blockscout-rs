@@ -10,6 +10,7 @@
 | bns-subgraph | Base | .base |      |
 | mode-subgraph | Mode | .mode | SpaceID contracts |
 | lightlink-subgraph | Lightlink | .ll | SpaceID contracts |
+| pns-subgraph | PulseChain | .pls |      |
 
 ## Add your own subgraph
 
