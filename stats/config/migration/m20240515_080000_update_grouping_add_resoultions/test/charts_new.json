@@ -2,79 +2,89 @@
     "template_values": {
         "native_coin_symbol": "ETH"
     },
-    "counters": {
-        "average_block_time": {
+    "counters": [
+        {
+            "id": "average_block_time",
             "title": "Average block time",
             "description": "Average time taken in seconds for a block to be included in the blockchain",
             "units": "s"
         },
-        "total_txns": {
+        {
+            "id": "total_txns",
             "enabled": false,
             "title": "Total txns",
             "description": "All transactions including pending, dropped, replaced, failed transactions"
         }
-    },
-    "lines_layout": {
-        "transactions": {
+    ],
+    "line_categories": [
+        {
+            "id": "transactions",
             "title": "Transactions",
-            "order": 1,
-            "charts": {
-                "average_txn_fee": {
+            "charts": [
+                {
+                    "id": "average_txn_fee",
                     "enabled": false,
                     "title": "Average transaction fee",
                     "description": "The average amount in {{native_coin_symbol}} spent per transaction",
                     "units": "{{native_coin_symbol}}"
                 },
-                "txns_fee": {
+                {
+                    "id": "txns_fee",
                     "title": "Transactions fees",
                     "description": "Amount of tokens paid as fees",
                     "units": "{{native_coin_symbol}}"
                 },
-                "new_txns": {
+                {
+                    "id": "new_txns",
                     "title": "New transactions",
                     "description": "New transactions number"
                 },
-                "txns_growth": {
+                {
+                    "id": "txns_growth",
                     "title": "Transactions growth",
                     "description": "Cumulative transactions number"
                 }
-            }
+            ]
         },
-        "blocks": {
+        {
+            "id": "blocks",
             "title": "Blocks",
-            "order": 2,
-            "charts": {
-                "new_blocks": {
+            "charts": [
+                {
+                    "id": "new_blocks",
                     "title": "New blocks",
                     "description": "New blocks number"
                 },
-                "average_block_rewards": {
+                {
+                    "id": "average_block_rewards",
                     "title": "Average block rewards",
                     "description": "Average amount of distributed reward in tokens per day",
                     "units": "{{native_coin_symbol}}"
                 }
-            }
+            ]
         },
-        "tokens": {
+        {
+            "id": "tokens",
             "title": "Tokens",
-            "order": 3,
-            "charts": {
-                "new_native_coin_transfers": {
+            "charts": [
+                {
+                    "id": "new_native_coin_transfers",
                     "title": "New {{native_coin_symbol}} transfers",
                     "description": "New token transfers number for the period"
                 }
-            }
+            ]
         },
-        "gas": {
+        {
+            "id": "gas",
             "title": "Gas",
-            "order": 4,
-            "charts": {
-                "average_gas_price": {
+            "charts": [
+                {
+                    "id": "average_gas_price",
                     "title": "Average gas price",
                     "description": "Average gas price for the period (Gwei)",
                     "units": "Gwei"
                 }
-            }
+            ]
         }
-    }
+    ]
 }

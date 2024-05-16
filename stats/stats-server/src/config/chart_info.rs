@@ -2,14 +2,12 @@ use cron::Schedule;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
 
-#[serde_as]
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct ChartSettings {
+/// includes disabled charts
+pub struct AllChartSettings {
     #[serde(default = "enabled_default")]
     pub enabled: bool,
-    #[serde_as(as = "Option<DisplayFromStr>")]
-    pub update_schedule: Option<Schedule>,
     pub units: Option<String>,
 }
 
@@ -17,20 +15,40 @@ fn enabled_default() -> bool {
     true
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct CounterInfo {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CounterInfo<ChartSettings> {
+    pub id: String,
     pub title: String,
     pub description: String,
     #[serde(flatten)]
     pub settings: ChartSettings,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct LineChartInfo {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LineChartInfo<ChartSettings> {
+    pub id: String,
     pub title: String,
     pub description: String,
     #[serde(flatten)]
     pub settings: ChartSettings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LineChartCategory<ChartSettings> {
+    pub id: String,
+    pub title: String,
+    pub charts: Vec<LineChartInfo<ChartSettings>>,
+}
+
+#[serde_as]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct UpdateGroup {
+    pub title: String,
+    #[serde_as(as = "Option<DisplayFromStr>")]
+    pub update_schedule: Option<Schedule>,
+    pub charts: Vec<String>,
 }
