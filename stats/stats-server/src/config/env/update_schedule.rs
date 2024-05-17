@@ -8,8 +8,8 @@ use std::collections::BTreeMap;
 #[serde(deny_unknown_fields)]
 pub struct UpdateGroup {
     pub title: String,
-    #[serde_as(as = "DisplayFromStr")]
-    pub update_schedule: Schedule,
+    #[serde_as(as = "Option<DisplayFromStr>")]
+    pub update_schedule: Option<Schedule>,
     pub charts: BTreeMap<String, ()>,
 }
 

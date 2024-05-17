@@ -8,6 +8,8 @@ use serde_with::{serde_as, DisplayFromStr};
 pub struct AllChartSettings {
     #[serde(default = "enabled_default")]
     pub enabled: bool,
+    pub title: String,
+    pub description: String,
     pub units: Option<String>,
 }
 
@@ -19,8 +21,6 @@ fn enabled_default() -> bool {
 #[serde(deny_unknown_fields)]
 pub struct CounterInfo<ChartSettings> {
     pub id: String,
-    pub title: String,
-    pub description: String,
     #[serde(flatten)]
     pub settings: ChartSettings,
 }
@@ -29,8 +29,6 @@ pub struct CounterInfo<ChartSettings> {
 #[serde(deny_unknown_fields)]
 pub struct LineChartInfo<ChartSettings> {
     pub id: String,
-    pub title: String,
-    pub description: String,
     #[serde(flatten)]
     pub settings: ChartSettings,
 }

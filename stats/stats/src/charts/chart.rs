@@ -51,6 +51,7 @@ pub enum MissingDatePolicy {
     entity::sea_orm_active_enums::ChartType,
 ))]
 pub trait Chart: Sync {
+    /// Must be unique
     fn name() -> &'static str;
     fn chart_type() -> ChartType;
     fn missing_date_policy() -> MissingDatePolicy {
@@ -82,6 +83,30 @@ pub trait Chart: Sync {
             0
         } else {
             1
+        }
+    }
+}
+
+/// Dynamic version of trait `Chart`.
+///
+/// Helpful when need a unified type for different charts
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChartDynamic {
+    pub name: String,
+    pub chart_type: ChartType,
+    pub missing_date_policy: MissingDatePolicy,
+    pub relevant_or_zero: bool,
+    pub approximate_trailing_points: u64,
+}
+
+impl ChartDynamic {
+    pub fn construct_from_chart<T: Chart>() -> Self {
+        Self {
+            name: T::name().to_owned(),
+            chart_type: T::chart_type(),
+            missing_date_policy: T::missing_date_policy(),
+            relevant_or_zero: T::relevant_or_zero(),
+            approximate_trailing_points: T::approximate_trailing_points(),
         }
     }
 }

@@ -41,7 +41,7 @@ impl UpdateService {
         let semaphore = Arc::new(tokio::sync::Semaphore::new(concurrent_tasks));
         let tasks = self
             .charts
-            .charts_info
+            .update_groups
             .values()
             .map(|chart_info| {
                 let this = self.clone();
@@ -64,7 +64,7 @@ impl UpdateService {
     fn spawn_chart_updater(self: &Arc<Self>, chart: ArcChartUpdater, default_schedule: &Schedule) {
         let chart_info = self
             .charts
-            .charts_info
+            .update_groups
             .get(chart.name())
             .expect("enabled chart must contain settings");
         let this = self.clone();

@@ -1,23 +1,26 @@
-use crate::config::{
-    chart_info::{AllChartSettings, CounterInfo, LineChartCategory, LineChartInfo},
-    json,
+use crate::{
+    charts::EnabledChartSettings,
+    config::{
+        chart_info::{AllChartSettings, CounterInfo, LineChartCategory, LineChartInfo},
+        json,
+    },
 };
 use serde::Deserialize;
 use stats_proto::blockscout::stats::v1 as proto;
 
-impl From<LineChartInfo<AllChartSettings>> for proto::LineChartInfo {
-    fn from(value: LineChartInfo<AllChartSettings>) -> Self {
+impl From<LineChartInfo<EnabledChartSettings>> for proto::LineChartInfo {
+    fn from(value: LineChartInfo<EnabledChartSettings>) -> Self {
         Self {
             id: value.id,
-            title: value.title,
-            description: value.description,
+            title: value.settings.title,
+            description: value.settings.description,
             units: value.settings.units,
         }
     }
 }
 
-impl From<LineChartCategory<AllChartSettings>> for proto::LineChartSection {
-    fn from(value: LineChartCategory<AllChartSettings>) -> Self {
+impl From<LineChartCategory<EnabledChartSettings>> for proto::LineChartSection {
+    fn from(value: LineChartCategory<EnabledChartSettings>) -> Self {
         Self {
             id: value.id,
             title: value.title,
@@ -27,16 +30,33 @@ impl From<LineChartCategory<AllChartSettings>> for proto::LineChartSection {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct LinesInfo<ChartSettings>(pub Vec<LineChartCategory<ChartSettings>>);
+
+impl From<LinesInfo<EnabledChartSettings>> for proto::LineCharts {
+    fn from(value: LinesInfo<EnabledChartSettings>) -> Self {
+        Self {
+            sections: value.0.into_iter().map(|x| x.into()).collect(),
+        }
+    }
+}
+
+impl<S> From<Vec<LineChartCategory<S>>> for LinesInfo<S> {
+    fn from(value: Vec<LineChartCategory<S>>) -> Self {
+        Self(value)
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct Config<ChartSettings> {
     pub counters: Vec<CounterInfo<ChartSettings>>,
-    pub lines: Vec<LineChartCategory<ChartSettings>>,
+    pub lines: LinesInfo<ChartSettings>,
 }
 
 impl From<json::charts::Config> for Config<AllChartSettings> {
     fn from(value: json::charts::Config) -> Self {
         Self {
             counters: value.counters,
-            lines: value.line_categories,
+            lines: LinesInfo(value.line_categories),
         }
     }
 }

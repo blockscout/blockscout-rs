@@ -104,7 +104,10 @@ impl BatchUpdateableChart for ContractsGrowthChart {
 type ContractsGrowthChartSource =
     UpdateableChartWrapper<BatchUpdateableChartWrapper<ContractsGrowthChart>>;
 
-construct_update_group!(ExampleUpdateGroup = [NewContractsChartSource, ContractsGrowthChartSource]);
+construct_update_group!(ExampleUpdateGroup {
+    name: "exampleGroup",
+    charts: [NewContractsChartSource, ContractsGrowthChartSource],
+});
 
 #[tokio::test]
 async fn _update_examples() {

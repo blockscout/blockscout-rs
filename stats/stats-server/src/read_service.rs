@@ -2,7 +2,7 @@ use crate::{charts::Charts, serializers::serialize_line_points, settings::Limits
 use async_trait::async_trait;
 use chrono::{Duration, NaiveDate, Utc};
 use sea_orm::{DatabaseConnection, DbErr};
-use stats::ReadError;
+use stats::{entity::sea_orm_active_enums::ChartType, ReadError};
 use stats_proto::blockscout::stats::v1::{
     stats_service_server::StatsService, Counter, Counters, GetCountersRequest, GetLineChartRequest,
     GetLineChartsRequest, LineChart, LineCharts,
@@ -64,28 +64,22 @@ impl StatsService for ReadService {
 
         let counters = self
             .charts
-            .config
-            .counters
+            .charts_info
             .iter()
-            .filter_map(|counter| {
-                self.charts
-                    .charts_info
-                    .get(&counter.id)
-                    .map(|info| (counter, info))
-            })
-            .filter_map(|(counter, info)| {
-                data.remove(&counter.id).map(|point| {
-                    let point: stats::DateValue = if info.chart.relevant_or_zero() {
+            .filter(|(_, chart)| chart.static_info.chart_type == ChartType::Counter)
+            .filter_map(|(name, counter)| {
+                data.remove(name).map(|point| {
+                    let point: stats::DateValue = if counter.static_info.relevant_or_zero {
                         point.relevant_or_zero(Utc::now().date_naive())
                     } else {
                         point
                     };
                     Counter {
-                        id: counter.id.clone(),
+                        id: counter.static_info.name.clone(),
                         value: point.value,
-                        title: counter.title.clone(),
-                        description: counter.description.clone(),
-                        units: info.settings.units.clone(),
+                        title: counter.settings.title.clone(),
+                        description: counter.settings.description.clone(),
+                        units: counter.settings.units.clone(),
                     }
                 })
             })
@@ -103,14 +97,15 @@ impl StatsService for ReadService {
             .charts
             .charts_info
             .get(&request.name)
+            .filter(|e| e.static_info.chart_type == ChartType::Line)
             .ok_or_else(|| Status::not_found(format!("chart {} not found", request.name)))?;
 
         let from = request
             .from
             .and_then(|date| NaiveDate::from_str(&date).ok());
         let to = request.to.and_then(|date| NaiveDate::from_str(&date).ok());
-        let policy = Some(chart_info.chart.missing_date_policy());
-        let mark_approx = chart_info.chart.approximate_trailing_points();
+        let policy = Some(chart_info.static_info.missing_date_policy);
+        let mark_approx = chart_info.static_info.approximate_trailing_points;
         let interval_limit = Some(self.limits.request_interval_limit);
         let data = stats::get_chart_data(
             &self.db,
@@ -134,6 +129,6 @@ impl StatsService for ReadService {
         &self,
         _request: Request<GetLineChartsRequest>,
     ) -> Result<Response<LineCharts>, Status> {
-        Ok(Response::new(self.charts.config.lines.clone().into()))
+        Ok(Response::new(self.charts.lines_layout.clone().into()))
     }
 }

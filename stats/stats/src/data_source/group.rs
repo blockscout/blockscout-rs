@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{DatabaseConnection, DbErr};
 
-use crate::UpdateError;
+use crate::{ChartDynamic, UpdateError};
 
 use super::types::UpdateParameters;
 
@@ -17,6 +17,8 @@ use super::types::UpdateParameters;
 #[async_trait]
 pub trait UpdateGroup {
     // &self is only to make fns dispatchable (and trait to be object-safe)
+    fn name(&self) -> String;
+    fn list_charts(&self) -> std::vec::Vec<ChartDynamic>;
     async fn create_charts(
         &self,
         db: &DatabaseConnection,
@@ -31,16 +33,50 @@ pub trait UpdateGroup {
 }
 
 // todo: move example to module?
-/// Construct update group that implemants [`UpdateGroup`]. All members of the group are updated
-/// simultaneously, meaning that each group usually consisits of interconnected members and
-/// all interconnected members are included in group. However this is not enforced and can
-/// be intentionally violated.
+// todo: add check for unique names
+// steps:
+// - make macro for making all groups altogether.
+// - in the macro make smth like `validate()` that will check uniqueness of names with the help of
+// `TypeId` (https://doc.rust-lang.org/beta/core/any/struct.TypeId.html#method.of)
+// and (probably) phf https://docs.rs/phf/latest/phf/index.html
+// - mark "TODO" when `const` version of `TypeId::of` gets stabilized (to check it in compile-time w/ const-assert)
+// - do the same for update group names
+
+/// Construct update group that implemants [`UpdateGroup`]. The main purpose of the
+/// group is to update its members together.
 ///
 /// All membere must implement [`crate::Chart`] and [`crate::data_source::source::DataSource`].
 ///
 /// The behaviour is the following:
 /// 1. when `create` or `update` is triggered, each member's correspinding method is triggered
 /// 2. the method recursively updates/creates its dependencies
+///
+/// In addition, to update synchronization, the resulting group provides object-safe interface
+/// for interacting with its members (charts). In particular, the charts themselves
+/// intentionally do not have `self` parameter, which is present in the resulting group.
+///
+/// ## Usage
+///
+/// Since `update` and `create` are performed recursively it makes sense to include
+/// all ancestors of members (i.e. dependencies, dependencies of them, etc.) into the group.
+/// Otherwise the following may occur:
+///
+/// Let's say we have chart `A` that depends on `B`. We make an update group with only `A`.
+/// See possible configurations for chart availability (e.g. for data requests):
+/// - Both `A` and `B` are enabled:\
+/// Update/create of `A` is called which triggers `B`. Everything is fine.
+/// - `A` is on, `B` is off:\
+/// Update/create of `A` is called which triggers `B`, as intended. Everything is fine.
+/// - `A` is off, `B` is on:\
+/// Group only contains `A`, which means nothing is triggered. Quite counter-intuitive.
+/// - `A` is off, `B` is off:\
+/// Nothing happens, as expected.
+///
+/// Therefore, to make working with updates easier, it is highly recommended to include all
+/// dependencies into the group. Later this check might be included into the macro.
+///
+/// Similarly, it makes sense to include all dependants (unless they have some other heavy dependencies),
+/// since it should be very lightweight to update them together.
 ///
 /// ## Reasoning for macro
 ///
@@ -107,15 +143,28 @@ pub trait UpdateGroup {
 ///
 #[macro_export]
 macro_rules! construct_update_group {
-    ($group_name:ident = [
-        $($member:path),*
-        $(,)?
-    ]) => {
+    ($group_name:ident {
+        name: $name:literal,
+        charts: [
+            $($member:path),*
+            $(,)?
+        ] $(,)?
+    }) => {
         pub struct $group_name;
 
         #[::async_trait::async_trait]
         impl $crate::data_source::group::UpdateGroup for $group_name
         {
+            fn name(&self) -> ::std::string::String {
+                $name.into()
+            }
+            fn list_charts(&self) -> ::std::vec::Vec<$crate::ChartDynamic> {
+                std::vec![
+                    $(
+                        $crate::ChartDynamic::construct_from_chart::<$member>(),
+                    )*
+                ]
+            }
             async fn create_charts(
                 &self,
                 #[allow(unused)]

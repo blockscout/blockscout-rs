@@ -23,6 +23,7 @@ pub struct Settings {
     pub concurrent_start_updates: usize,
     pub limits: LimitsSettings,
     pub charts_config: PathBuf,
+    pub update_schedule_config: PathBuf,
 
     pub server: ServerSettings,
     pub metrics: MetricsSettings,
@@ -51,6 +52,7 @@ impl Default for Settings {
             concurrent_start_updates: 3,
             limits: Default::default(),
             charts_config: PathBuf::from_str("config/charts.json").unwrap(),
+            update_schedule_config: PathBuf::from_str("config/update_schedule.json").unwrap(),
             blockscout_db_url: Default::default(),
             create_database: Default::default(),
             run_migrations: Default::default(),

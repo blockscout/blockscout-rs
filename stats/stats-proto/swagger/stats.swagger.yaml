@@ -26,6 +26,7 @@ paths:
         - StatsService
   /api/v1/lines:
     get:
+      summary: 'todo: rename'
       operationId: StatsService_GetLineCharts
       responses:
         "200":

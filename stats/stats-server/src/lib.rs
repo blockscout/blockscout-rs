@@ -1,5 +1,6 @@
 mod charts;
 mod config;
+mod groups;
 mod health;
 mod read_service;
 mod serializers;
