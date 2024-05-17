@@ -51,18 +51,19 @@ Here, we describe variables specific to this service. Variables common to all se
 
 [anchor]: <> (anchors.envs.start)
 
-| Variable                                               | Required | Description                                                                                | Default value                  |
-|--------------------------------------------------------|----------|--------------------------------------------------------------------------------------------|--------------------------------|
-| `ETH_BYTECODE_DB__DATABASE__URL`                       | true     | Postgres connect URL to internal database with read/write access                           | (empty)                        |
-| `ETH_BYTECODE_DB__DATABASE__CREATE_DATABASE`           |          | Create internal database if doesn't exist                                                  | `false`                        |
-| `ETH_BYTECODE_DB__DATABASE__RUN_MIGRATIONS`            |          | Run internal database migrations                                                           | `false`                        |
-| `ETH_BYTECODE_DB__VERIFIER__HTTP_URL`                  | true     | HTTP URL to underlying smart-contract-verifier service                                     | (empty)                        |
-| `ETH_BYTECODE_DB__VERIFIER__MAX_RETRIES`               |          | Number of attempts the server makes to smart-contract-verifier service. Must be at least 1 | `3`                            |
-| `ETH_BYTECODE_DB__VERIFIER__PROBE_URL`                 |          | If true, will check that `VERIFIER_HTTP_URL` can be connected to on startup                | `false`                        |
-| `ETH_BYTECODE_DB__SOURCIFY__BASE_URL`                  |          | Sourcify API url                                                                           | `https://sourcify.dev/server/` |
-| `ETH_BYTECODE_DB__SOURCIFY__MAX_RETRIES`               |          | Number of attempts the server makes to Sourcify API. Must be at least 1                    | `3`                            |
-| `ETH_BYTECODE_DB__VERIFIER_ALLIANCE_DATABASE__ENABLED` |          | If true, enables connection to verifier alliance database                                  | `false`                        |
-| `ETH_BYTECODE_DB__VERIFIER_ALLIANCE_DATABASE__URL`     |          | Postgres connect URL to verifier alliance database with read/write access                  | (empty)                        |
+| Variable                                               | Required | Description                                                                                                                                                           | Default value                  |
+|--------------------------------------------------------|----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------|
+| `ETH_BYTECODE_DB__DATABASE__URL`                       | true     | Postgres connect URL to internal database with read/write access                                                                                                      | (empty)                        |
+| `ETH_BYTECODE_DB__DATABASE__CREATE_DATABASE`           |          | Create internal database if doesn't exist                                                                                                                             | `false`                        |
+| `ETH_BYTECODE_DB__DATABASE__RUN_MIGRATIONS`            |          | Run internal database migrations                                                                                                                                      | `false`                        |
+| `ETH_BYTECODE_DB__VERIFIER__HTTP_URL`                  | true     | HTTP URL to underlying smart-contract-verifier service                                                                                                                | (empty)                        |
+| `ETH_BYTECODE_DB__VERIFIER__MAX_RETRIES`               |          | Number of attempts the server makes to smart-contract-verifier service. Must be at least 1                                                                            | `3`                            |
+| `ETH_BYTECODE_DB__VERIFIER__PROBE_URL`                 |          | If true, will check that `VERIFIER_HTTP_URL` can be connected to on startup                                                                                           | `false`                        |
+| `ETH_BYTECODE_DB__SOURCIFY__BASE_URL`                  |          | Sourcify API url                                                                                                                                                      | `https://sourcify.dev/server/` |
+| `ETH_BYTECODE_DB__SOURCIFY__MAX_RETRIES`               |          | Number of attempts the server makes to Sourcify API. Must be at least 1                                                                                               | `3`                            |
+| `ETH_BYTECODE_DB__VERIFIER_ALLIANCE_DATABASE__ENABLED` |          | If true, enables connection to verifier alliance database                                                                                                             | `false`                        |
+| `ETH_BYTECODE_DB__VERIFIER_ALLIANCE_DATABASE__URL`     |          | Postgres connect URL to verifier alliance database with read/write access                                                                                             | (empty)                        |
+| `ETH_BYTECODE_DB__AUTHORIZED_KEYS__{name}__KEY`        |          | A set of api keys requests from which are considered authorized. If authorized, contract deployment details are allowed to be written into verifier-alliance database | (empty)                        |
 
 [anchor]: <> (anchors.envs.end)
 
