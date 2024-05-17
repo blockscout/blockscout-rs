@@ -7,6 +7,11 @@ The service consists of 2 parts, a stats calculation library and a transport lay
 + [stats](./stats) - implements actual chart calculation logic as a library and exposes an interface to be used by the transport layer;
 + A transport layer that implements some APIs over the service ([stats-server](./stats-server/)).
 
+## Requirements
+
+- Postgresql database for this service
+- Access to Blockscout database
+
 ## Build
 
 ### Using docker
@@ -48,6 +53,8 @@ To remove unnecessary or unrelated charts, simply open the `charts.toml` file an
 
 ## For development
 
+### Manual run
+
 + Install [docker](https://docs.docker.com/engine/install/), [rust](https://www.rust-lang.org/tools/install), [just](https://github.com/casey/just)
 
 + Start dev postgres:
@@ -66,3 +73,11 @@ export STATS__DB_URl="postgres://postgres:admin@localhost:5432/stats"
 export STATS__BLOCKSCOUT_DB_URL="postgres://postgres:admin@localhost:5432/blockscout" 
 cargo run --bin stats-server
 ```
+
+### Docker compose
+
+Alternatively, you can use `docker-compose.dev.yml` for simplicity.
+
++ Set `ETHEREUM_JSONRPC_HTTP_URL` and `ETHEREUM_JSONRPC_TRACE_URL` to ethereum node you have access to (in `backend` (Blockscout) service)
++ Update `ETHEREUM_JSONRPC_VARIANT` if necessary
++ Run `docker compose -f docker-compose.dev.yml up -d`
