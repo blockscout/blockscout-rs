@@ -22,7 +22,7 @@ The service consists of 2 parts, a stats calculation library and a transport lay
 
 ### Using docker-compose
 
-+ You can use docker-compose.yaml written in [blockscout main repo](https://github.com/blockscout/blockscout/blob/master/docker-compose/services/stats.yml) to run latest version of stats with database
++ You can use compose file from [blockscout main repo](https://github.com/blockscout/blockscout/blob/master/docker-compose/services/stats.yml) to run latest version of stats with database
 
 ### Building from source
 
