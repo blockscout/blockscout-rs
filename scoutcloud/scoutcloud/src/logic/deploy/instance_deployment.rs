@@ -6,7 +6,7 @@ use crate::{
     uuid_eq,
 };
 use scoutcloud_entity as db;
-use sea_orm::{ConnectionTrait, DbErr, LoaderTrait, QueryFilter, QuerySelect};
+use sea_orm::{prelude::*, ConnectionTrait, DbErr, LoaderTrait, QueryFilter, QuerySelect};
 
 pub struct InstanceDeployment {
     pub instance: Instance,
