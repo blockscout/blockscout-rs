@@ -1,0 +1,35 @@
+specVersion: 1.0.0
+indexerHints:
+  prune: auto
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: ZNSRegistry
+    network: matic
+    source:
+      address: "0xBD32A89A76aFAFDDD8Fd514a292326377B6e4Cc9"
+      abi: ZNSRegistry
+      startBlock: 56770167
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Account
+        - Domain
+        - Transfer
+        - Resolver
+      abis:
+        - name: ZNSRegistry
+          file: ./abis/ZNSRegistry.json
+      eventHandlers:
+        - event: MintedDomain(string,indexed uint256,indexed address,indexed uint256)
+          handler: handleMintedDomain
+        - event: PrimaryDomainSet(indexed uint256,indexed address)
+          handler: handlePrimaryDomainSet
+        - event: RenewedDomain(indexed uint256,indexed uint256)
+          handler: handleRenewedDomain
+        - event: Transfer(indexed address,indexed address,indexed uint256)
+          handler: handleTransfer
+      file: ./src/zns-registry.ts
