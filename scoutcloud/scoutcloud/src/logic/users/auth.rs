@@ -8,7 +8,6 @@ use thiserror::Error;
 use tonic::codegen::http::HeaderMap;
 
 const AUTH_TOKEN_NAME: &str = "x-api-key";
-const MAX_INSTANCES_PER_USER: u64 = 20;
 
 #[derive(Error, Debug)]
 pub enum AuthError {
@@ -103,10 +102,12 @@ impl UserToken {
         if self.user.balance.is_sign_negative() {
             return Err(AuthError::InsufficientBalance);
         }
-        if Instance::count(db, self).await? >= MAX_INSTANCES_PER_USER {
-            return Err(AuthError::Unauthorized(
-                "max instances per user reached".to_string(),
-            ));
+        let created_instances = Instance::count(db, self).await? as i32;
+        if created_instances >= self.user.max_instances {
+            return Err(AuthError::Unauthorized(format!(
+                "max instances per user reached: {}",
+                self.user.max_instances
+            )));
         }
 
         Ok(())
