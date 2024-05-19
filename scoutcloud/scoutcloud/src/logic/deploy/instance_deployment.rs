@@ -107,12 +107,17 @@ impl InstanceDeployment {
             })
             .collect())
     }
+
+    pub fn deployment_status(&self) -> proto::DeploymentStatus {
+        map_deployment_status(self.deployment.as_ref().map(|d| &d.model.status))
+    }
 }
 
 impl TryFrom<InstanceDeployment> for proto::InstanceInternal {
     type Error = DeployError;
 
     fn try_from(value: InstanceDeployment) -> Result<Self, Self::Error> {
+        let status = value.deployment_status();
         let instance = value.instance;
         let deployment = value.deployment;
         let user_config = instance.user_config()?;
@@ -123,7 +128,7 @@ impl TryFrom<InstanceDeployment> for proto::InstanceInternal {
             created_at: instance.model.created_at.to_string(),
             config: Some(user_config.internal),
             deployment_id: deployment.as_ref().map(|d| d.model.external_id.to_string()),
-            deployment_status: map_deployment_status(deployment.as_ref().map(|d| &d.model.status)),
+            deployment_status: status,
         };
         Ok(proto_instance)
     }
