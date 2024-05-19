@@ -1,6 +1,6 @@
-# <h1 align="center">Ethereum Bytecode Database</h1>
+# <h1 align="center">Proxy Verifier</h1>
 
-The Ethereum Bytecode Database powers the Vera verification application 
+The Proxy Verifier powers the Vera verification application 
 ([https://vera.blockscout.com/](https://vera.blockscout.com/)).
 
 Vera is a standalone application designed for easy, universal, 
