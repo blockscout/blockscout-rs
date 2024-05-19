@@ -3,7 +3,7 @@
 The Ethereum Bytecode Database is a cross-chain smart contract database 
 designed for automatic contract verification. It serves as a proxy between users 
 and the [smart-contract-verifier](../smart-contract-verifier) service. 
-This verifier stores verified contract data in the database 
+This servcice stores verified contract data in the database 
 and enables searches for contracts with similar bytecodes.
 
 You will recognize the service in action when you see the notification: 
