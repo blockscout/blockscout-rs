@@ -21,3 +21,5 @@ Template for blockscout Rust service
 🔧   Initializing a fresh Git repository
 ✨   Done! New project created /Users/levlymarenko/poa/blockscout-rs/test-project
 ```
+
+3. Go into created service directory and rename `_Cargo.toml` to `Cargo.toml`
