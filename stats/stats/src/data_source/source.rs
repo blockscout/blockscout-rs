@@ -1,4 +1,4 @@
-use std::ops::RangeInclusive;
+use std::{collections::HashSet, ops::RangeInclusive};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{NaiveDate, Utc};
@@ -24,6 +24,12 @@ pub trait DataSource {
     type SecondaryDependencies: DataSource;
     type Output;
 
+    /// Unique identifier of this data source that is used for synchronizing updates.
+    ///
+    /// Must be set to `Some` if the source stores some local data (i.e. `update_from_remote`
+    /// does something)
+    const MUTEX_ID: Option<&'static str>;
+
     /// Initialize the data source and its dependencies in local database.
     ///
     /// The intention is to leave default implementation and implement only
@@ -37,6 +43,13 @@ pub trait DataSource {
         init_time: &'a chrono::DateTime<Utc>,
     ) -> BoxFuture<'a, Result<(), DbErr>> {
         async move {
+            // It is possible to do it concurrently, but it requires mutexes on
+            // each chart.
+            // We don't want any race conditions that could happen when some source D
+            // is referenced through two different charts.
+            //     C → D
+            //   ↗   ↗
+            // A → B
             Self::PrimaryDependency::init_all_locally(db, init_time).await?;
             Self::SecondaryDependencies::init_all_locally(db, init_time).await?;
             Self::init_itself(db, init_time).await
@@ -56,6 +69,21 @@ pub trait DataSource {
         db: &DatabaseConnection,
         init_time: &chrono::DateTime<Utc>,
     ) -> impl std::future::Future<Output = Result<(), DbErr>> + Send;
+
+    fn all_dependencies_mutex_ids() -> HashSet<&'static str> {
+        let mut ids = Self::PrimaryDependency::all_dependencies_mutex_ids();
+        ids.extend(Self::SecondaryDependencies::all_dependencies_mutex_ids().into_iter());
+        if let Some(self_id) = Self::MUTEX_ID {
+            let is_duplicate = ids.insert(self_id);
+            // Type system shouldn't allow same type to be present in the dependencies,
+            // so it is a duplicate name
+            assert!(
+                !is_duplicate,
+                "Data sources `MUTEX_ID`s must be unique. ID '{self_id}' is duplicate",
+            );
+        }
+        ids
+    }
 
     /// Update source data (values + metadata).
     ///
@@ -81,6 +109,7 @@ impl DataSource for () {
     type PrimaryDependency = ();
     type SecondaryDependencies = ();
     type Output = ();
+    const MUTEX_ID: Option<&'static str> = None;
 
     fn init_all_locally<'a>(
         _db: &'a DatabaseConnection,
@@ -96,6 +125,10 @@ impl DataSource for () {
     ) -> Result<(), DbErr> {
         // todo: unimplemented where applicable?
         Ok(())
+    }
+
+    fn all_dependencies_mutex_ids() -> HashSet<&'static str> {
+        HashSet::new()
     }
 
     async fn update_from_remote(
@@ -121,6 +154,9 @@ where
     type PrimaryDependency = T1;
     type SecondaryDependencies = T2;
     type Output = (T1::Output, T2::Output);
+
+    // only dependencies' ids matter
+    const MUTEX_ID: Option<&'static str> = None;
 
     async fn init_itself(
         _db: &DatabaseConnection,
@@ -149,4 +185,8 @@ where
             T2::query_data(cx, range, remote_fetch_timer).await?,
         ))
     }
+}
+
+pub trait NamedDataSource: DataSource {
+    fn name() -> &'static str;
 }

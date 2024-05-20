@@ -106,7 +106,7 @@ async fn get_chart_and_assert_eq<C: Chart>(
 ) {
     let data = get_chart_data(
         db,
-        C::name(),
+        C::NAME,
         from,
         to,
         None,
@@ -153,7 +153,7 @@ pub async fn simple_test_counter<C: ChartUpdater>(test_name: &str, expected: &st
 
 async fn get_counter_and_assert_eq<C: Chart>(db: &DatabaseConnection, expected: &str) {
     let data = get_counters(db).await.unwrap();
-    let data = &data[C::name()];
+    let data = &data[C::NAME];
     let value = &data.value;
     assert_eq!(expected, value);
 }

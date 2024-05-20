@@ -27,9 +27,7 @@ use super::{
 struct NewContractsChart;
 
 impl crate::Chart for NewContractsChart {
-    fn name() -> &'static str {
-        "newContracts"
-    }
+    const NAME: &'static str = "newContracts";
 
     fn chart_type() -> ChartType {
         ChartType::Line
@@ -62,9 +60,8 @@ impl RemoteChart for NewContractsChart {
 struct ContractsGrowthChart;
 
 impl Chart for ContractsGrowthChart {
-    fn name() -> &'static str {
-        "contractsGrowth"
-    }
+    const NAME: &'static str = "contractsGrowth";
+
     fn chart_type() -> ChartType {
         ChartType::Line
     }
@@ -91,7 +88,7 @@ impl BatchUpdateableChart for ContractsGrowthChart {
         _secondary_data: <Self::SecondaryDependencies as DataSource>::Output,
     ) -> Result<usize, UpdateError> {
         let found = primary_data.values.len();
-        let values = parse_and_cumsum::<i64>(primary_data.values, Self::PrimaryDependency::name())?
+        let values = parse_and_cumsum::<i64>(primary_data.values, Self::PrimaryDependency::NAME)?
             .into_iter()
             .map(|value| value.active_model(chart_id, Some(min_blockscout_block)));
         insert_data_many(db, values)
@@ -116,9 +113,8 @@ async fn _update_examples() {
     let current_time = chrono::DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
     let current_date = current_time.date_naive();
     fill_mock_blockscout_data(&blockscout, current_date).await;
-    let enabled = HashSet::from(
-        [NewContractsChart::name(), ContractsGrowthChart::name()].map(|l| l.to_owned()),
-    );
+    let enabled =
+        HashSet::from([NewContractsChart::NAME, ContractsGrowthChart::NAME].map(|l| l.to_owned()));
     ExampleUpdateGroup
         .create_charts(&db, &enabled, &current_time)
         .await

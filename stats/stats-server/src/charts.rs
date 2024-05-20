@@ -59,7 +59,7 @@ pub struct UpdateGroupEntry {
 pub struct Charts {
     pub lines_layout: LinesInfo<EnabledChartSettings>,
     pub update_schedule_config: config::update_schedule::Config,
-    pub update_groups: BTreeMap<String, ArcUpdateGroup>,
+    pub update_groups: (),
     pub charts_info: BTreeMap<String, EnabledChartEntry>,
     pub enabled_set: HashSet<String>,
 }
@@ -142,7 +142,7 @@ impl Charts {
         Ok(Self {
             lines_layout: enabled_charts_config.lines,
             update_schedule_config: update_schedule,
-            update_groups,
+            update_groups: (),
             charts_info,
             enabled_set: enabled_charts,
         })

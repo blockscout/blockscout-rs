@@ -52,7 +52,7 @@ pub enum MissingDatePolicy {
 ))]
 pub trait Chart: Sync {
     /// Must be unique
-    fn name() -> &'static str;
+    const NAME: &'static str;
     fn chart_type() -> ChartType;
     fn missing_date_policy() -> MissingDatePolicy {
         MissingDatePolicy::FillZero
@@ -102,7 +102,7 @@ pub struct ChartDynamic {
 impl ChartDynamic {
     pub fn construct_from_chart<T: Chart>() -> Self {
         Self {
-            name: T::name().to_owned(),
+            name: T::NAME.to_owned(),
             chart_type: T::chart_type(),
             missing_date_policy: T::missing_date_policy(),
             relevant_or_zero: T::relevant_or_zero(),

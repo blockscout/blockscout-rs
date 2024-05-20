@@ -87,7 +87,7 @@ where
     let row = if force_full {
         tracing::info!(
             min_blockscout_block = min_blockscout_block,
-            chart = C::name(),
+            chart = C::NAME,
             "running full update due to force override"
         );
         None
@@ -111,7 +111,7 @@ where
                         tracing::info!(
                             min_blockscout_block = min_blockscout_block,
                             min_chart_block = block,
-                            chart = C::name(),
+                            chart = C::NAME,
                             row = ?row,
                             "running partial update"
                         );
@@ -123,7 +123,7 @@ where
                         tracing::info!(
                             min_blockscout_block = min_blockscout_block,
                             min_chart_block = block,
-                            chart = C::name(),
+                            chart = C::NAME,
                             "running full update due to min blocks mismatch"
                         );
                         None
@@ -131,7 +131,7 @@ where
                 } else {
                     tracing::info!(
                         min_blockscout_block = min_blockscout_block,
-                        chart = C::name(),
+                        chart = C::NAME,
                         "running full update due to lack of saved min block"
                     );
                     None
@@ -140,7 +140,7 @@ where
             None => {
                 tracing::info!(
                     min_blockscout_block = min_blockscout_block,
-                    chart = C::name(),
+                    chart = C::NAME,
                     "running full update due to lack of history data"
                 );
                 None

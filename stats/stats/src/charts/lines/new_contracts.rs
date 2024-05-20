@@ -55,9 +55,7 @@ impl RemoteBatchQuery for NewContractsRemote {
 pub struct NewContractsInner;
 
 impl crate::Chart for NewContractsInner {
-    fn name() -> &'static str {
-        "newContracts"
-    }
+    const NAME: &'static str = "newContracts";
 
     fn chart_type() -> ChartType {
         ChartType::Line

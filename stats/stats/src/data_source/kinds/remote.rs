@@ -20,13 +20,21 @@ pub trait RemoteSource {
     ) -> Result<Vec<DateValue>, UpdateError>;
 }
 
-/// Wrapper struct used for avoiding implementation conflicts
+/// Wrapper struct used for avoiding implementation conflicts.
+///
+/// Note that since each `query_data` performs (likely a heavy)
+/// query, it is undesireable to have this source present in
+/// different places. In this case,
+/// [`crate::data_source::kinds::chart::RemoteChart`]
+/// can be helpful to reuse the query results.
 pub struct RemoteSourceWrapper<T: RemoteSource>(PhantomData<T>);
 
 impl<T: RemoteSource> DataSource for RemoteSourceWrapper<T> {
     type PrimaryDependency = ();
     type SecondaryDependencies = ();
     type Output = Vec<DateValue>;
+    // No local state => no race conditions expected
+    const MUTEX_ID: Option<&'static str> = None;
 
     fn init_itself(
         _db: &::sea_orm::DatabaseConnection,

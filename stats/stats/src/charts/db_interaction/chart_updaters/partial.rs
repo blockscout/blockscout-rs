@@ -32,10 +32,10 @@ pub trait ChartPartialUpdater: ChartUpdater {
             force_full,
             ..
         } = *cx;
-        let chart_id = find_chart(db, Self::name())
+        let chart_id = find_chart(db, Self::NAME)
             .await
             .map_err(UpdateError::StatsDB)?
-            .ok_or_else(|| UpdateError::NotFound(Self::name().into()))?;
+            .ok_or_else(|| UpdateError::NotFound(Self::NAME.into()))?;
         let min_blockscout_block = get_min_block_blockscout(blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?;
@@ -45,7 +45,7 @@ pub trait ChartPartialUpdater: ChartUpdater {
                 .await?;
         let values = {
             let _timer = metrics::CHART_FETCH_NEW_DATA_TIME
-                .with_label_values(&[Self::name()])
+                .with_label_values(&[Self::NAME])
                 .start_timer();
             Self::get_values(blockscout, last_updated_row)
                 .await?

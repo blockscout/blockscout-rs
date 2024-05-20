@@ -31,7 +31,7 @@ pub trait UpdateableChart: Chart {
         db: &DatabaseConnection,
         init_time: &chrono::DateTime<Utc>,
     ) -> impl std::future::Future<Output = Result<(), DbErr>> + Send {
-        async move { create_chart(db, Self::name().into(), Self::chart_type(), init_time).await }
+        async move { create_chart(db, Self::NAME.into(), Self::chart_type(), init_time).await }
     }
 
     /// Update chart data (values + metadata).
@@ -43,7 +43,7 @@ pub trait UpdateableChart: Chart {
         cx: &UpdateContext<UpdateParameters<'_>>,
         remote_fetch_timer: &mut AggregateTimer,
     ) -> Result<(), UpdateError> {
-        let metadata = get_chart_metadata(cx.user_context.db, Self::name()).await?;
+        let metadata = get_chart_metadata(cx.user_context.db, Self::NAME).await?;
         if let Some(last_updated_at) = metadata.last_updated_at {
             if cx.user_context.current_time == last_updated_at {
                 // no need to perform update
@@ -102,7 +102,7 @@ pub trait UpdateableChart: Chart {
     ) -> Result<ChartData, UpdateError> {
         let values = get_chart_data(
             cx.user_context.db,
-            Self::name(),
+            Self::NAME,
             Some(*range.start()),
             Some(*range.end()),
             None,
@@ -113,7 +113,7 @@ pub trait UpdateableChart: Chart {
         .into_iter()
         .map(DateValue::from)
         .collect();
-        let metadata = get_chart_metadata(cx.user_context.db, Self::name()).await?;
+        let metadata = get_chart_metadata(cx.user_context.db, Self::NAME).await?;
         Ok(ChartData { metadata, values })
     }
 }
@@ -128,7 +128,7 @@ impl<C: UpdateableChart> DataSourceMetrics for UpdateableChartWrapper<C> {
     fn observe_query_time(time: std::time::Duration) {
         if time > Duration::ZERO {
             metrics::CHART_FETCH_NEW_DATA_TIME
-                .with_label_values(&[Self::name()])
+                .with_label_values(&[Self::NAME])
                 .observe(time.as_secs_f64());
         }
     }
@@ -138,6 +138,8 @@ impl<C: UpdateableChart> DataSource for UpdateableChartWrapper<C> {
     type PrimaryDependency = C::PrimaryDependency;
     type SecondaryDependencies = C::SecondaryDependencies;
     type Output = ChartData;
+
+    const MUTEX_ID: Option<&'static str> = Some(<C as Chart>::NAME);
 
     async fn update_from_remote(
         cx: &UpdateContext<UpdateParameters<'_>>,

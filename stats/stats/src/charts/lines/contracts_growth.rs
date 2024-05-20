@@ -17,9 +17,7 @@ use sea_orm::DatabaseConnection;
 pub struct ContractsGrowthInner;
 
 impl crate::Chart for ContractsGrowthInner {
-    fn name() -> &'static str {
-        "contractsGrowth"
-    }
+    const NAME: &'static str = "contractsGrowth";
     fn chart_type() -> ChartType {
         ChartType::Line
     }
@@ -46,7 +44,7 @@ impl BatchUpdateableChart for ContractsGrowthInner {
         _secondary_data: <Self::SecondaryDependencies as DataSource>::Output,
     ) -> Result<usize, UpdateError> {
         let found = primary_data.values.len();
-        let values = parse_and_cumsum::<i64>(primary_data.values, Self::PrimaryDependency::name())?
+        let values = parse_and_cumsum::<i64>(primary_data.values, Self::PrimaryDependency::NAME)?
             .into_iter()
             .map(|value| value.active_model(chart_id, Some(min_blockscout_block)));
         insert_data_many(db, values)

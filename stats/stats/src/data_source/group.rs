@@ -175,7 +175,7 @@ macro_rules! construct_update_group {
                 current_time: &chrono::DateTime<chrono::Utc>,
             ) -> Result<(), sea_orm::DbErr> {
                 $(
-                    if enabled_names.contains(<$member as $crate::Chart>::name()) {
+                    if enabled_names.contains(<$member as $crate::Chart>::NAME) {
                         <$member as $crate::data_source::source::DataSource>::init_all_locally(db, current_time).await?;
                     }
                 )*
@@ -193,7 +193,7 @@ macro_rules! construct_update_group {
                     params.into()
                 );
                 $(
-                    if enabled_names.contains(<$member as $crate::Chart>::name()) {
+                    if enabled_names.contains(<$member as $crate::Chart>::NAME) {
                         <$member as $crate::data_source::source::DataSource>::update_from_remote(&cx).await?;
                     }
                 )*

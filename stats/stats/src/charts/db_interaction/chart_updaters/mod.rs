@@ -38,10 +38,10 @@ pub trait ChartUpdater: Chart {
         let UpdateParameters {
             db, current_time, ..
         } = cx;
-        let chart_id = find_chart(db, Self::name())
+        let chart_id = find_chart(db, Self::NAME)
             .await
             .map_err(UpdateError::StatsDB)?
-            .ok_or_else(|| UpdateError::NotFound(Self::name().into()))?;
+            .ok_or_else(|| UpdateError::NotFound(Self::NAME.into()))?;
         common_operations::set_last_updated_at(chart_id, db, current_time.clone())
             .await
             .map_err(UpdateError::StatsDB)?;
@@ -62,7 +62,7 @@ pub trait ChartUpdater: Chart {
     async fn update_with_mutex(
         cx: &mut UpdateContext<UpdateParameters<'_>>,
     ) -> Result<(), UpdateError> {
-        let name = Self::name();
+        let name = Self::NAME;
         let mutex = get_global_update_mutex(name).await;
         let _permit = {
             match mutex.try_lock() {

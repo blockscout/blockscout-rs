@@ -6,6 +6,7 @@ mod read_service;
 mod serializers;
 mod server;
 mod settings;
+mod sync;
 mod update_service;
 
 pub use charts::Charts;

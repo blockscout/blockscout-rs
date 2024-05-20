@@ -216,7 +216,7 @@ mod tests {
     async fn insert_mock_data(db: &DatabaseConnection) {
         charts::Entity::insert_many([
             charts::ActiveModel {
-                name: Set(TotalBlocks::name().to_string()),
+                name: Set(TotalBlocks::NAME.to_string()),
                 chart_type: Set(ChartType::Counter),
                 last_updated_at: Set(Some(
                     DateTime::parse_from_rfc3339("2022-11-12T08:08:08+00:00").unwrap(),
