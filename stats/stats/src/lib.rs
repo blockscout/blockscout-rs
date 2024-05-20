@@ -3,7 +3,7 @@ pub mod data_source;
 mod missing_date;
 
 pub mod metrics;
-#[cfg(feature = "test-utils")]
+#[cfg(any(feature = "test-utils", test))]
 pub mod tests;
 
 pub use entity;
