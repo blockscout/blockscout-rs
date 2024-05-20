@@ -22,7 +22,7 @@ pub trait ChartFullUpdater: ChartUpdater {
         let chart_id = find_chart(db, Self::NAME)
             .await
             .map_err(UpdateError::StatsDB)?
-            .ok_or_else(|| UpdateError::NotFound(Self::NAME.into()))?;
+            .ok_or_else(|| UpdateError::ChartNotFound(Self::NAME.into()))?;
         let (values, data) = {
             let _timer = metrics::CHART_FETCH_NEW_DATA_TIME
                 .with_label_values(&[Self::NAME])

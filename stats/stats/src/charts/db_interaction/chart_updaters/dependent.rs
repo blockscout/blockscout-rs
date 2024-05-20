@@ -53,7 +53,7 @@ where
         let chart_id = find_chart(cx.user_context.db, Self::NAME)
             .await
             .map_err(UpdateError::StatsDB)?
-            .ok_or_else(|| UpdateError::NotFound(Self::NAME.into()))?;
+            .ok_or_else(|| UpdateError::ChartNotFound(Self::NAME.into()))?;
         let min_blockscout_block = get_min_block_blockscout(cx.user_context.blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?;

@@ -17,7 +17,7 @@ pub enum ReadError {
     #[error("database error {0}")]
     DB(#[from] DbErr),
     #[error("chart {0} not found")]
-    NotFound(String),
+    ChartNotFound(String),
     #[error("date interval limit ({0}) is exceeded; choose smaller time interval.")]
     IntervalLimitExceeded(Duration),
 }
@@ -99,7 +99,7 @@ pub async fn get_chart_metadata(
         .filter(charts::Column::Name.eq(name))
         .one(db)
         .await?
-        .ok_or_else(|| ReadError::NotFound(name.into()))?;
+        .ok_or_else(|| ReadError::ChartNotFound(name.into()))?;
     Ok(ChartMetadata {
         last_updated_at: chart.last_updated_at.map(|t| t.with_timezone(&Utc)),
         id: chart.id,
@@ -130,7 +130,7 @@ pub async fn get_chart_data(
         .filter(charts::Column::Name.eq(name))
         .one(db)
         .await?
-        .ok_or_else(|| ReadError::NotFound(name.into()))?;
+        .ok_or_else(|| ReadError::ChartNotFound(name.into()))?;
 
     let db_data = get_raw_chart_data(db, chart.id, from, to).await?;
 

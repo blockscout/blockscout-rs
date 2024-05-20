@@ -3,6 +3,7 @@ use std::{collections::HashSet, str::FromStr};
 use chrono::{NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, Statement};
+use tokio::sync::Mutex;
 
 use crate::{
     charts::db_interaction::{
@@ -43,10 +44,38 @@ impl RemoteBatchQuery for NewContractsRemote {
     fn get_query(from: NaiveDate, to: NaiveDate) -> Statement {
         Statement::from_sql_and_values(
             DbBackend::Postgres,
-            r#"SELECT * FROM new_contracts
-                WHERE
-                    b.timestamp::date < $2 AND
-                    b.timestamp::date >= $1;
+            r#"SELECT day AS date, COUNT(*)::text AS value
+            FROM (
+                SELECT 
+                    DISTINCT ON (txns_plus_internal_txns.hash)
+                    txns_plus_internal_txns.day
+                FROM (
+                    SELECT
+                        t.created_contract_address_hash AS hash,
+                        b.timestamp::date AS day
+                    FROM transactions t
+                        JOIN blocks b ON b.hash = t.block_hash
+                    WHERE
+                        t.created_contract_address_hash NOTNULL AND
+                        b.consensus = TRUE AND
+                        b.timestamp != to_timestamp(0) AND
+                        b.timestamp::date < $2 AND
+                        b.timestamp::date >= $1
+                    UNION
+                    SELECT
+                        it.created_contract_address_hash AS hash,
+                        b.timestamp::date AS day
+                    FROM internal_transactions it
+                        JOIN blocks b ON b.hash = it.block_hash
+                    WHERE
+                        it.created_contract_address_hash NOTNULL AND
+                        b.consensus = TRUE AND
+                        b.timestamp != to_timestamp(0) AND
+                        b.timestamp::date < $2 AND
+                        b.timestamp::date >= $1
+                ) txns_plus_internal_txns
+            ) sub
+            GROUP BY sub.day;
             "#,
             vec![from.into(), to.into()],
         )
@@ -116,7 +145,14 @@ async fn _update_examples() {
     fill_mock_blockscout_data(&blockscout, current_date).await;
     let enabled =
         HashSet::from([NewContractsChart::NAME, ContractsGrowthChart::NAME].map(|l| l.to_owned()));
-    ExampleUpdateGroup
+    let mutexes = ExampleUpdateGroup
+        .list_dependency_mutex_ids()
+        .into_iter()
+        .map(|id| (id.to_owned(), Mutex::new(())))
+        .collect();
+    let group = ExampleUpdateGroupSync::new(mutexes, ExampleUpdateGroup).unwrap();
+    group
+        .inner
         .create_charts(&db, &enabled, &current_time)
         .await
         .unwrap();
@@ -127,8 +163,8 @@ async fn _update_examples() {
         current_time,
         force_full: true,
     };
-    ExampleUpdateGroup
-        .update_charts(parameters, &enabled)
+    group
+        .update_charts_with_mutexes(parameters, &enabled)
         .await
         .unwrap();
 }

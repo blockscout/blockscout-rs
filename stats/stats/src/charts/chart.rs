@@ -11,7 +11,7 @@ pub enum UpdateError {
     #[error("stats database error: {0}")]
     StatsDB(DbErr),
     #[error("chart {0} not found")]
-    NotFound(String),
+    ChartNotFound(String),
     #[error("date interval limit ({limit}) is exceeded; choose smaller time interval.")]
     IntervalLimitExceeded { limit: Duration },
     #[error("internal error: {0}")]
@@ -22,7 +22,7 @@ impl From<ReadError> for UpdateError {
     fn from(read: ReadError) -> Self {
         match read {
             ReadError::DB(db) => UpdateError::StatsDB(db),
-            ReadError::NotFound(err) => UpdateError::NotFound(err),
+            ReadError::ChartNotFound(err) => UpdateError::ChartNotFound(err),
             ReadError::IntervalLimitExceeded(limit) => UpdateError::IntervalLimitExceeded { limit },
         }
     }

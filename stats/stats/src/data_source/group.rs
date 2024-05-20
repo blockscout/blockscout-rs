@@ -1,14 +1,26 @@
-use std::collections::HashSet;
+use std::{
+    collections::{BTreeMap, HashSet},
+    vec::Vec,
+};
 
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{DatabaseConnection, DbErr};
+use thiserror::Error;
+use tokio::sync::{Mutex, MutexGuard};
+use tracing::warn;
 
 use crate::{ChartDynamic, UpdateError};
 
 use super::types::UpdateParameters;
 
 // todo: reconsider name of module (also should help reading??)
+
+#[derive(Error, Debug)]
+#[error("Could not initialize update group: mutexes for {missing_mutexes:?} were not provided")]
+pub struct InitializationError {
+    pub missing_mutexes: Vec<String>,
+}
 
 // todo: move comments somewhere (to module likely)
 // todo: use `trait-variant` once updated, probably
@@ -18,7 +30,16 @@ use super::types::UpdateParameters;
 pub trait UpdateGroup {
     // &self is only to make fns dispatchable (and trait to be object-safe)
     fn name(&self) -> String;
-    fn list_charts(&self) -> std::vec::Vec<ChartDynamic>;
+    /// List names of charts directly listed in the group.
+    fn list_charts(&self) -> Vec<ChartDynamic>;
+    /// List mutex ids of group members + their dependencies.
+    /// Dependencies participate in updates, thus access to them needs to be
+    /// synchronized.
+    fn list_dependency_mutex_ids(&self) -> HashSet<&'static str>;
+    /// List mutex ids of particular group member dependencies (including the member itself).
+    ///
+    /// `None` if `chart_name` is not a member.
+    fn dependency_mutex_ids_of(&self, chart_name: &str) -> Option<HashSet<&'static str>>;
     async fn create_charts(
         &self,
         db: &DatabaseConnection,
@@ -30,6 +51,11 @@ pub trait UpdateGroup {
         params: UpdateParameters<'a>,
         enabled_names: &HashSet<String>,
     ) -> Result<(), UpdateError>;
+}
+
+pub mod macro_reexport {
+    pub use chrono;
+    pub use paste;
 }
 
 // todo: move example to module?
@@ -149,12 +175,17 @@ macro_rules! construct_update_group {
     }) => {
         pub struct $group_name;
 
+        $crate::data_source::group::macro_reexport::paste::paste! {
+            pub type [< $group_name Sync >] = $crate::data_source::group::SyncUpdateGroup<$group_name>;
+        }
+
         #[::async_trait::async_trait]
         impl $crate::data_source::group::UpdateGroup for $group_name
         {
             fn name(&self) -> ::std::string::String {
                 $name.into()
             }
+
             fn list_charts(&self) -> ::std::vec::Vec<$crate::ChartDynamic> {
                 std::vec![
                     $(
@@ -162,14 +193,32 @@ macro_rules! construct_update_group {
                     )*
                 ]
             }
+
+            fn list_dependency_mutex_ids(&self) -> ::std::collections::HashSet<&'static str> {
+                let mut ids = ::std::collections::HashSet::new();
+                $(
+                    ids.extend(<$member as $crate::data_source::source::DataSource>::all_dependencies_mutex_ids().into_iter());
+                )*
+                ids
+            }
+
+            fn dependency_mutex_ids_of(&self, chart_name: &str) -> Option<::std::collections::HashSet<&'static str>> {
+                $(
+                    if chart_name == <$member as $crate::Chart>::NAME {
+                        return Some(<$member as $crate::data_source::source::DataSource>::all_dependencies_mutex_ids());
+                    }
+                )*
+                return None;
+            }
+
             async fn create_charts(
                 &self,
                 #[allow(unused)]
                 db: &sea_orm::DatabaseConnection,
                 #[allow(unused)]
-                enabled_names: &std::collections::HashSet<String>,
+                enabled_names: &::std::collections::HashSet<String>,
                 #[allow(unused)]
-                current_time: &chrono::DateTime<chrono::Utc>,
+                current_time: &$crate::data_source::group::macro_reexport::chrono::DateTime<chrono::Utc>,
             ) -> Result<(), sea_orm::DbErr> {
                 $(
                     if enabled_names.contains(<$member as $crate::Chart>::NAME) {
@@ -183,7 +232,7 @@ macro_rules! construct_update_group {
                 &self,
                 params: $crate::data_source::types::UpdateParameters<'a>,
                 #[allow(unused)]
-                enabled_names: &std::collections::HashSet<String>,
+                enabled_names: &::std::collections::HashSet<String>,
             ) -> Result<(), $crate::UpdateError> {
                 #[allow(unused)]
                 let cx = $crate::data_source::types::UpdateContext::<$crate::data_source::types::UpdateParameters<'a>>::from_inner(
@@ -197,5 +246,110 @@ macro_rules! construct_update_group {
                 Ok(())
             }
         }
+
     };
+}
+
+/// Synchronized update group.
+///
+/// ## Deadlock-free
+/// Deadlock-free, as long as only these groups are used
+/// and mapping name-mutex is consistent between the groups.
+///
+/// This is achieved using deadlock ordering.
+/// For more info see [link, section "lock ordering"](https://www.cs.cornell.edu/courses/cs4410/2017su/lectures/lec09-deadlock.html)
+///
+/// The order is a lexicographical order of chart (data source) mutex IDs
+pub struct SyncUpdateGroup<T: UpdateGroup> {
+    /// Mutexes. Acquired in lexicographical order (=order within `BTreeMap`)
+    chart_mutexes: BTreeMap<String, Mutex<()>>,
+    pub inner: T,
+}
+
+impl<T: UpdateGroup> SyncUpdateGroup<T> {
+    pub fn new(
+        chart_mutexes: BTreeMap<String, Mutex<()>>,
+        inner: T,
+    ) -> Result<Self, InitializationError>
+    where
+        Self: Sized,
+    {
+        let mutex_ids_expected: HashSet<String> = inner
+            .list_dependency_mutex_ids()
+            .into_iter()
+            .map(|s| s.to_owned())
+            .collect();
+        let mutex_ids_received: HashSet<String> = chart_mutexes.keys().cloned().collect();
+        if !mutex_ids_expected.is_subset(&mutex_ids_received) {
+            return Err(InitializationError {
+                missing_mutexes: mutex_ids_expected
+                    .difference(&mutex_ids_received)
+                    .into_iter()
+                    .cloned()
+                    .collect(),
+            });
+        }
+        return Ok(Self {
+            chart_mutexes,
+            inner,
+        });
+    }
+
+    /// Ignores missing elements
+    fn joint_dependencies_of(&self, chart_names: &HashSet<String>) -> HashSet<String> {
+        let mut result = HashSet::new();
+        for name in chart_names {
+            let Some(dependencies_ids) = self.inner.dependency_mutex_ids_of(name) else {
+                warn!(
+                    group_name=self.inner.name(),
+                    "`dependency_mutex_ids_of` of member chart '{name}' returned `None`. Expected `Some(..)`"
+                );
+                continue;
+            };
+            result.extend(dependencies_ids.into_iter().map(|s| s.to_owned()))
+        }
+        result
+    }
+
+    async fn lock_in_order(&self, mut to_lock: HashSet<String>) -> Vec<MutexGuard<()>> {
+        let mut guards = vec![];
+        // .iter() is ordered by key, so order is followed
+        for (name, mutex) in self.chart_mutexes.iter() {
+            if to_lock.remove(name) {
+                guards.push(mutex.lock().await);
+            }
+        }
+        guards
+    }
+
+    /// Ignores unknown names
+    pub async fn update_charts_with_mutexes<'a>(
+        &self,
+        params: UpdateParameters<'a>,
+        enabled_names: &HashSet<String>,
+    ) -> Result<(), UpdateError> {
+        let members: HashSet<String> = self
+            .inner
+            .list_charts()
+            .into_iter()
+            .map(|c| c.name)
+            .collect();
+        // in-place intersection
+        let enabled_members: HashSet<String> = members
+            .into_iter()
+            .filter(|m| enabled_names.contains(m))
+            .collect();
+        let enabled_members_with_deps = self.joint_dependencies_of(&enabled_members);
+        let _joint_guard = self.lock_in_order(enabled_members_with_deps).await;
+        // order is very important to prevent deadlocks
+        self.inner.update_charts(params, &enabled_members).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn new_checks_mutexes() {
+        // todo: test
+    }
 }

@@ -41,7 +41,7 @@ pub trait ChartUpdater: Chart {
         let chart_id = find_chart(db, Self::NAME)
             .await
             .map_err(UpdateError::StatsDB)?
-            .ok_or_else(|| UpdateError::NotFound(Self::NAME.into()))?;
+            .ok_or_else(|| UpdateError::ChartNotFound(Self::NAME.into()))?;
         common_operations::set_last_updated_at(chart_id, db, current_time.clone())
             .await
             .map_err(UpdateError::StatsDB)?;

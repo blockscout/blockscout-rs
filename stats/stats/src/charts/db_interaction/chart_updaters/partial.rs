@@ -35,7 +35,7 @@ pub trait ChartPartialUpdater: ChartUpdater {
         let chart_id = find_chart(db, Self::NAME)
             .await
             .map_err(UpdateError::StatsDB)?
-            .ok_or_else(|| UpdateError::NotFound(Self::NAME.into()))?;
+            .ok_or_else(|| UpdateError::ChartNotFound(Self::NAME.into()))?;
         let min_blockscout_block = get_min_block_blockscout(blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?;
