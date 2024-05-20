@@ -24,7 +24,7 @@ use super::{
     types::UpdateParameters,
 };
 
-struct NewContractsChart;
+pub struct NewContractsChart;
 
 impl crate::Chart for NewContractsChart {
     const NAME: &'static str = "newContracts";
@@ -34,7 +34,7 @@ impl crate::Chart for NewContractsChart {
     }
 }
 
-type NewContractsChartSource =
+pub type NewContractsChartSource =
     UpdateableChartWrapper<BatchUpdateableChartWrapper<RemoteChartWrapper<NewContractsChart>>>;
 
 pub struct NewContractsRemote;
@@ -57,7 +57,7 @@ impl RemoteChart for NewContractsChart {
     type Dependency = NewContractsRemote;
 }
 
-struct ContractsGrowthChart;
+pub struct ContractsGrowthChart;
 
 impl Chart for ContractsGrowthChart {
     const NAME: &'static str = "contractsGrowth";
@@ -98,7 +98,7 @@ impl BatchUpdateableChart for ContractsGrowthChart {
     }
 }
 
-type ContractsGrowthChartSource =
+pub type ContractsGrowthChartSource =
     UpdateableChartWrapper<BatchUpdateableChartWrapper<ContractsGrowthChart>>;
 
 construct_update_group!(ExampleUpdateGroup {

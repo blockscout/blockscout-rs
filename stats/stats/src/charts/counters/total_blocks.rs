@@ -44,9 +44,7 @@ impl ChartFullUpdater for TotalBlocks {
 
 #[async_trait]
 impl crate::Chart for TotalBlocks {
-    fn name() -> &'static str {
-        "totalBlocks"
-    }
+    const NAME: &'static str = "totalBlocks";
 
     fn chart_type() -> ChartType {
         ChartType::Counter

@@ -74,11 +74,11 @@ pub trait DataSource {
         let mut ids = Self::PrimaryDependency::all_dependencies_mutex_ids();
         ids.extend(Self::SecondaryDependencies::all_dependencies_mutex_ids().into_iter());
         if let Some(self_id) = Self::MUTEX_ID {
-            let is_duplicate = ids.insert(self_id);
+            let is_not_duplicate = ids.insert(self_id);
             // Type system shouldn't allow same type to be present in the dependencies,
             // so it is a duplicate name
             assert!(
-                !is_duplicate,
+                is_not_duplicate,
                 "Data sources `MUTEX_ID`s must be unique. ID '{self_id}' is duplicate",
             );
         }
@@ -187,6 +187,22 @@ where
     }
 }
 
-pub trait NamedDataSource: DataSource {
-    fn name() -> &'static str;
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use crate::data_source::example::{ContractsGrowthChartSource, NewContractsChartSource};
+
+    use super::DataSource;
+
+    #[test]
+    fn dependencies_list_correctly() {
+        assert_eq!(
+            ContractsGrowthChartSource::all_dependencies_mutex_ids(),
+            HashSet::from([
+                ContractsGrowthChartSource::MUTEX_ID.unwrap(),
+                NewContractsChartSource::MUTEX_ID.unwrap(),
+            ])
+        )
+    }
 }
