@@ -196,13 +196,17 @@ mod tests {
     use super::DataSource;
 
     #[test]
-    fn dependencies_list_correctly() {
+    fn dependencies_listed_correctly() {
         assert_eq!(
             ContractsGrowthChartSource::all_dependencies_mutex_ids(),
             HashSet::from([
                 ContractsGrowthChartSource::MUTEX_ID.unwrap(),
                 NewContractsChartSource::MUTEX_ID.unwrap(),
             ])
+        );
+        assert_eq!(
+            NewContractsChartSource::all_dependencies_mutex_ids(),
+            HashSet::from([NewContractsChartSource::MUTEX_ID.unwrap(),])
         )
     }
 }
