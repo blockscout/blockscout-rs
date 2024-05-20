@@ -12,6 +12,7 @@ service Scoutcloud {
   rpc UpdateConfigPartial(UpdateConfigPartialRequest) returns (UpdateConfigResponse) {}
   rpc UpdateInstanceStatus(UpdateInstanceStatusRequest) returns (UpdateInstanceStatusResponse) {}
   rpc GetInstance(GetInstanceRequest) returns (Instance) {}
+  rpc DeleteInstance(DeleteInstanceRequest) returns (DeleteInstanceResponse) {}
   rpc ListInstances(ListInstancesRequest) returns (ListInstancesResponse) {}
   rpc GetDeployment(GetDeploymentRequest) returns (Deployment) {}
   rpc GetCurrentDeployment(GetCurrentDeploymentRequest) returns (Deployment) {}
@@ -66,6 +67,14 @@ message CreateInstanceRequest {
 
 message CreateInstanceResponse {
   string instance_id = 1;
+}
+
+message DeleteInstanceRequest {
+  string instance_id = 1;
+}
+
+message DeleteInstanceResponse {
+
 }
 
 message UpdateConfigRequest {

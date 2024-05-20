@@ -13,6 +13,9 @@ http:
     - selector: blockscout.scoutcloud.v1.Scoutcloud.ListInstances
       get: /api/v1/instances
 
+    - selector: blockscout.scoutcloud.v1.Scoutcloud.DeleteInstance
+      delete: /api/v1/instances/{instance_id}
+
     - selector: blockscout.scoutcloud.v1.Scoutcloud.UpdateConfig
       put: /api/v1/instances/{instance_id}/config
       body: "*"

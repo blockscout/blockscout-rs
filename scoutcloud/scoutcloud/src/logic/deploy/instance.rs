@@ -10,6 +10,7 @@ use crate::{
 use scoutcloud_entity as db;
 use sea_orm::{
     prelude::*, ActiveModelTrait, ActiveValue::Set, IntoActiveModel, QueryOrder, QuerySelect,
+    QueryTrait,
 };
 
 const MAX_LIMIT: u64 = 50;
@@ -30,7 +31,7 @@ impl Instance {
     where
         C: ConnectionTrait,
     {
-        let this = db::instances::Entity::find()
+        let this = Self::default_select()
             .filter(uuid_eq!(db::instances::Column::ExternalId, uuid))
             .one(db)
             .await?
@@ -45,6 +46,7 @@ impl Instance {
         let instances = user_token
             .user
             .find_related(db::instances::Entity)
+            .apply_if(Some(()), Self::default_apply)
             .order_by_desc(db::instances::Column::CreatedAt)
             .limit(MAX_LIMIT)
             .all(db)
@@ -62,6 +64,7 @@ impl Instance {
         let count = creator
             .user
             .find_related(db::instances::Entity)
+            .apply_if(Some(()), Self::default_apply)
             .count(db)
             .await?;
         Ok(count)
@@ -71,7 +74,7 @@ impl Instance {
     where
         C: ConnectionTrait,
     {
-        let model = db::instances::Entity::find()
+        let model = Self::default_select()
             .filter(db::instances::Column::Id.eq(id))
             .one(db)
             .await?
@@ -92,7 +95,7 @@ impl Instance {
         if slug.len() > 255 {
             return Err(DeployError::InvalidValue("name is too long".to_string()));
         }
-        if let Some(instance) = db::instances::Entity::find()
+        if let Some(instance) = Self::default_select()
             .filter(db::instances::Column::Slug.eq(&slug))
             .one(db)
             .await?
@@ -133,7 +136,16 @@ impl Instance {
     }
 
     pub fn default_select() -> Select<db::instances::Entity> {
-        db::instances::Entity::find().order_by_desc(db::instances::Column::CreatedAt)
+        db::instances::Entity::find().apply_if(Some(()), Self::default_apply)
+    }
+
+    pub fn default_apply<T>(
+        query: Select<db::instances::Entity>,
+        _: T,
+    ) -> Select<db::instances::Entity> {
+        query
+            .order_by_desc(db::instances::Column::CreatedAt)
+            .filter(db::instances::Column::Deleted.eq(false))
     }
 
     pub async fn commit(
@@ -146,6 +158,22 @@ impl Instance {
         github
             .create_or_update_file(&file_name, &content, action_name)
             .await?;
+        Ok(())
+    }
+
+    pub async fn delete_file(&self, github: &GithubClient) -> Result<(), DeployError> {
+        let file_name = get_filename(&self.model.slug);
+        github.delete_file(&file_name).await?;
+        Ok(())
+    }
+
+    pub async fn mark_as_deleted<C>(&mut self, db: &C) -> Result<(), DeployError>
+    where
+        C: ConnectionTrait,
+    {
+        let mut active = self.model.clone().into_active_model();
+        active.deleted = Set(true);
+        self.model = active.update(db).await?;
         Ok(())
     }
 
