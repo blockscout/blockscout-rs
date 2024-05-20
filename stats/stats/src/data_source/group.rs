@@ -117,9 +117,7 @@ pub trait UpdateGroup {
 /// struct DummyChart;
 ///
 /// impl Chart for DummyChart {
-///     fn name() -> &'static str {
-///         "dummyChart"
-///     }
+///     const NAME: &'static str = "dummyChart";
 ///     fn chart_type() -> ChartType {
 ///         ChartType::Line
 ///     }
@@ -134,11 +132,10 @@ pub trait UpdateGroup {
 /// type DummyChartSource =
 ///     UpdateableChartWrapper<BatchUpdateableChartWrapper<RemoteChartWrapper<DummyChart>>>;
 ///
-/// construct_update_group!(
-///     ExampleUpdateGroup = [
-///         DummyChartSource
-///     ]
-/// );
+/// construct_update_group!(ExampleUpdateGroup {
+///     name: "exampleGroup",
+///     charts: [DummyChartSource],
+/// });
 /// ```
 ///
 #[macro_export]
