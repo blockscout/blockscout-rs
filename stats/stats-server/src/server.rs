@@ -69,6 +69,7 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
     let now = chrono::Utc::now();
     for update_group in charts.update_groups.values() {
         update_group
+            .inner
             .create_charts(&db, &charts.enabled_set, &now)
             .await?;
     }

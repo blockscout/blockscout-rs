@@ -10,13 +10,16 @@ use cron::Schedule;
 use itertools::Itertools;
 use serde::Deserialize;
 use stats::{
-    data_source::group::UpdateGroup, entity::sea_orm_active_enums::ChartType, ChartDynamic,
+    data_source::group::{ArcUpdateGroup, SyncUpdateGroup},
+    entity::sea_orm_active_enums::ChartType,
+    ChartDynamic,
 };
 use std::{
     collections::{btree_map::Entry, BTreeMap, HashSet},
     hash::Hash,
     sync::Arc,
 };
+use tokio::sync::Mutex;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct EnabledChartSettings {
@@ -46,21 +49,21 @@ pub struct EnabledChartEntry {
     pub static_info: ChartDynamic,
 }
 
-pub type ArcUpdateGroup = Arc<dyn for<'a> UpdateGroup + Send + Sync + 'static>;
-
 #[derive(Clone)]
 pub struct UpdateGroupEntry {
     /// Custom schedule for this update group
     pub update_schedule: Option<Schedule>,
     /// Handle for operating the group
-    pub group: ArcUpdateGroup,
+    pub group: SyncUpdateGroup,
 }
 
+// todo: rename
 pub struct Charts {
     pub lines_layout: LinesInfo<EnabledChartSettings>,
     pub update_schedule_config: config::update_schedule::Config,
-    pub update_groups: (),
+    pub update_groups: BTreeMap<String, SyncUpdateGroup>,
     pub charts_info: BTreeMap<String, EnabledChartEntry>,
+    /// Exactly the same as `charts_info.keys`; made for convenient update
     pub enabled_set: HashSet<String>,
 }
 
@@ -82,10 +85,10 @@ impl Charts {
         charts: config::charts::Config<AllChartSettings>,
         update_schedule: config::update_schedule::Config,
     ) -> Result<Self, anyhow::Error> {
-        Self::validated(charts, update_schedule)
+        Self::validated_and_initialized(charts, update_schedule)
     }
 
-    fn validated(
+    fn validated_and_initialized(
         charts: config::charts::Config<AllChartSettings>,
         update_schedule: config::update_schedule::Config,
     ) -> Result<Self, anyhow::Error> {
@@ -108,8 +111,8 @@ impl Charts {
         let mut counters_unknown = enabled_counters.clone();
         let mut lines_unknown = enabled_lines.clone();
         let settings = Self::new_settings(&enabled_charts_config);
-        let update_groups = Self::all_update_groups();
-        let charts_info = Self::all_charts()
+        let update_groups = Self::init_sync_update_groups()?;
+        let charts_info: BTreeMap<String, EnabledChartEntry> = Self::all_charts()
             .into_iter()
             .filter(|(name, chart)| match chart.chart_type {
                 ChartType::Counter => counters_unknown.remove(name),
@@ -133,16 +136,12 @@ impl Charts {
             ));
         }
 
-        let enabled_charts = {
-            let mut s = enabled_counters;
-            s.extend(enabled_lines);
-            s
-        };
+        let enabled_charts = charts_info.keys().cloned().collect();
 
         Ok(Self {
             lines_layout: enabled_charts_config.lines,
             update_schedule_config: update_schedule,
-            update_groups: (),
+            update_groups,
             charts_info,
             enabled_set: enabled_charts,
         })
@@ -208,6 +207,32 @@ impl Charts {
         let contracts = Arc::new(groups::Contracts);
         let groups: Vec<ArcUpdateGroup> = vec![contracts];
         groups.into_iter().map(|g| (g.name(), g)).collect()
+    }
+
+    fn create_all_dependencies_mutexes(
+        groups: impl Iterator<Item = ArcUpdateGroup>,
+    ) -> BTreeMap<String, Arc<Mutex<()>>> {
+        let mut mutexes = BTreeMap::new();
+        for g in groups {
+            let dependencies = g.list_dependency_mutex_ids();
+            for d in dependencies {
+                if !mutexes.contains_key(d) {
+                    mutexes.insert(d.to_owned(), Arc::new(Mutex::new(())));
+                }
+            }
+        }
+        mutexes
+    }
+
+    fn init_sync_update_groups() -> Result<BTreeMap<String, SyncUpdateGroup>, anyhow::Error> {
+        let update_groups = Self::all_update_groups();
+        let dep_mutexes = Self::create_all_dependencies_mutexes(update_groups.values().cloned());
+        let mut sync_groups = BTreeMap::new();
+        for (name, group) in update_groups {
+            let sync_group = SyncUpdateGroup::new(&dep_mutexes, group)?;
+            sync_groups.insert(name, sync_group);
+        }
+        Ok(sync_groups)
     }
 
     fn all_charts() -> BTreeMap<String, ChartDynamic> {

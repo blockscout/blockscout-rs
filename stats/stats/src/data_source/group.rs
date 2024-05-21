@@ -1,10 +1,14 @@
 use std::{
     collections::{BTreeMap, HashSet},
+    marker::{Send, Sync},
+    ops::Deref,
+    sync::Arc,
     vec::Vec,
 };
 
 use async_trait::async_trait;
 use chrono::Utc;
+use itertools::Itertools;
 use sea_orm::{DatabaseConnection, DbErr};
 use thiserror::Error;
 use tokio::sync::{Mutex, MutexGuard};
@@ -40,12 +44,14 @@ pub trait UpdateGroup {
     ///
     /// `None` if `chart_name` is not a member.
     fn dependency_mutex_ids_of(&self, chart_name: &str) -> Option<HashSet<&'static str>>;
+    // todo: comments
     async fn create_charts(
         &self,
         db: &DatabaseConnection,
         enabled_names: &HashSet<String>,
         current_time: &chrono::DateTime<Utc>,
     ) -> Result<(), DbErr>;
+    // todo: comments
     async fn update_charts<'a>(
         &self,
         params: UpdateParameters<'a>,
@@ -175,10 +181,6 @@ macro_rules! construct_update_group {
     }) => {
         pub struct $group_name;
 
-        $crate::data_source::group::macro_reexport::paste::paste! {
-            pub type [< $group_name Sync >] = $crate::data_source::group::SyncUpdateGroup<$group_name>;
-        }
-
         #[::async_trait::async_trait]
         impl $crate::data_source::group::UpdateGroup for $group_name
         {
@@ -250,6 +252,8 @@ macro_rules! construct_update_group {
     };
 }
 
+pub type ArcUpdateGroup = Arc<dyn for<'a> UpdateGroup + Send + Sync + 'static>;
+
 /// Synchronized update group.
 ///
 /// ## Deadlock-free
@@ -260,41 +264,50 @@ macro_rules! construct_update_group {
 /// For more info see [link, section "lock ordering"](https://www.cs.cornell.edu/courses/cs4410/2017su/lectures/lec09-deadlock.html)
 ///
 /// The order is a lexicographical order of chart (data source) mutex IDs
-pub struct SyncUpdateGroup<T: UpdateGroup> {
+#[derive(Clone)]
+pub struct SyncUpdateGroup {
     /// Mutexes. Acquired in lexicographical order (=order within `BTreeMap`)
-    chart_mutexes: BTreeMap<String, Mutex<()>>,
-    pub inner: T,
+    dependencies_mutexes: BTreeMap<String, Arc<Mutex<()>>>,
+    // todo: unpub to prevent accidental non-mutex update
+    pub inner: ArcUpdateGroup,
 }
 
-impl<T: UpdateGroup> SyncUpdateGroup<T> {
+impl SyncUpdateGroup {
+    /// `chart_mutexes` must contain mutexes for all members of the group + their dependencies
     pub fn new(
-        chart_mutexes: BTreeMap<String, Mutex<()>>,
-        inner: T,
+        all_chart_mutexes: &BTreeMap<String, Arc<Mutex<()>>>,
+        inner: ArcUpdateGroup,
     ) -> Result<Self, InitializationError>
     where
         Self: Sized,
     {
-        let mutex_ids_expected: HashSet<String> = inner
-            .list_dependency_mutex_ids()
+        let dependencies: HashSet<&str> = inner.list_dependency_mutex_ids();
+        let received_charts: HashSet<&str> =
+            all_chart_mutexes.keys().map(|n| (*n).deref()).collect();
+        let missing_mutexes = dependencies
+            .difference(&received_charts)
             .into_iter()
-            .map(|s| s.to_owned())
-            .collect();
-        let mutex_ids_received: HashSet<String> = chart_mutexes.keys().cloned().collect();
-        if !mutex_ids_expected.is_subset(&mutex_ids_received) {
-            return Err(InitializationError {
-                missing_mutexes: mutex_ids_expected
-                    .difference(&mutex_ids_received)
-                    .into_iter()
-                    .cloned()
-                    .collect(),
-            });
+            .map(|s| (*s).to_owned())
+            .collect_vec();
+
+        let mut dependencies_mutexes = BTreeMap::new();
+
+        for dependency_name in dependencies {
+            let mutex = all_chart_mutexes
+                .get(dependency_name)
+                .ok_or(InitializationError {
+                    missing_mutexes: missing_mutexes.clone(),
+                })?;
+            dependencies_mutexes.insert(dependency_name.to_owned(), mutex.clone());
         }
         return Ok(Self {
-            chart_mutexes,
-            inner,
+            dependencies_mutexes,
+            inner: inner,
         });
     }
+}
 
+impl SyncUpdateGroup {
     /// Ignores missing elements
     fn joint_dependencies_of(&self, chart_names: &HashSet<String>) -> HashSet<String> {
         let mut result = HashSet::new();
@@ -314,7 +327,7 @@ impl<T: UpdateGroup> SyncUpdateGroup<T> {
     async fn lock_in_order(&self, mut to_lock: HashSet<String>) -> Vec<MutexGuard<()>> {
         let mut guards = vec![];
         // .iter() is ordered by key, so order is followed
-        for (name, mutex) in self.chart_mutexes.iter() {
+        for (name, mutex) in self.dependencies_mutexes.iter() {
             if to_lock.remove(name) {
                 guards.push(mutex.lock().await);
             }
@@ -322,12 +335,13 @@ impl<T: UpdateGroup> SyncUpdateGroup<T> {
         guards
     }
 
-    /// Ignores unknown names
-    pub async fn update_charts_with_mutexes<'a>(
+    /// Lock only enabled charts and their dependencies
+    ///
+    /// Returns (joint mutex guard) and (enabled group members list)
+    async fn lock_enabled_dependencies(
         &self,
-        params: UpdateParameters<'a>,
         enabled_names: &HashSet<String>,
-    ) -> Result<(), UpdateError> {
+    ) -> (Vec<MutexGuard<()>>, HashSet<String>) {
         let members: HashSet<String> = self
             .inner
             .list_charts()
@@ -340,8 +354,34 @@ impl<T: UpdateGroup> SyncUpdateGroup<T> {
             .filter(|m| enabled_names.contains(m))
             .collect();
         let enabled_members_with_deps = self.joint_dependencies_of(&enabled_members);
-        let _joint_guard = self.lock_in_order(enabled_members_with_deps).await;
         // order is very important to prevent deadlocks
+        let joint_guard = self.lock_in_order(enabled_members_with_deps).await;
+        (joint_guard, enabled_members)
+    }
+
+    /// Ignores unknown names
+    pub async fn create_charts_with_mutexes<'a>(
+        &self,
+        db: &DatabaseConnection,
+        enabled_names: &HashSet<String>,
+        // todo: update `current_time`???
+        current_time: &chrono::DateTime<Utc>,
+    ) -> Result<(), UpdateError> {
+        let (_joint_guard, enabled_members) = self.lock_enabled_dependencies(enabled_names).await;
+        self.inner
+            .create_charts(db, &enabled_members, current_time)
+            .await
+            .map_err(UpdateError::StatsDB)
+    }
+
+    /// Ignores unknown names
+    pub async fn update_charts_with_mutexes<'a>(
+        &self,
+        // todo: update `current_time`???
+        params: UpdateParameters<'a>,
+        enabled_names: &HashSet<String>,
+    ) -> Result<(), UpdateError> {
+        let (_joint_guard, enabled_members) = self.lock_enabled_dependencies(enabled_names).await;
         self.inner.update_charts(params, &enabled_members).await
     }
 }

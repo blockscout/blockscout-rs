@@ -147,10 +147,19 @@ impl<C: UpdateableChart> DataSource for UpdateableChartWrapper<C> {
         Self::PrimaryDependency::update_from_remote(cx).await?;
         Self::SecondaryDependencies::update_from_remote(cx).await?;
         let mut remote_fetch_timer = AggregateTimer::new();
+        let _update_timer = metrics::CHART_UPDATE_TIME
+            .with_label_values(&[Self::NAME])
+            .start_timer();
 
-        C::update(cx, &mut remote_fetch_timer).await?;
+        C::update(cx, &mut remote_fetch_timer)
+            .await
+            .inspect_err(|err| {
+                metrics::UPDATE_ERRORS.with_label_values(&[C::NAME]).inc();
+                tracing::error!(chart = C::NAME, "error during updating chart: {}", err);
+            })?;
 
         Self::observe_query_time(remote_fetch_timer.total_time());
+        tracing::info!(chart = C::NAME, "successfully updated chart");
         Ok(())
     }
 

@@ -1,4 +1,4 @@
-use std::{collections::HashSet, str::FromStr};
+use std::{collections::HashSet, str::FromStr, sync::Arc};
 
 use chrono::{NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
@@ -16,7 +16,7 @@ use crate::{
 };
 
 use super::{
-    group::UpdateGroup,
+    group::{SyncUpdateGroup, UpdateGroup},
     kinds::chart::{
         BatchUpdateableChart, BatchUpdateableChartWrapper, RemoteChart, RemoteChartWrapper,
         UpdateableChartWrapper,
@@ -148,9 +148,9 @@ async fn _update_examples() {
     let mutexes = ExampleUpdateGroup
         .list_dependency_mutex_ids()
         .into_iter()
-        .map(|id| (id.to_owned(), Mutex::new(())))
+        .map(|id| (id.to_owned(), Arc::new(Mutex::new(()))))
         .collect();
-    let group = ExampleUpdateGroupSync::new(mutexes, ExampleUpdateGroup).unwrap();
+    let group = SyncUpdateGroup::new(&mutexes, Arc::new(ExampleUpdateGroup)).unwrap();
     group
         .inner
         .create_charts(&db, &enabled, &current_time)

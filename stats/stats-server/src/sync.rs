@@ -4,8 +4,11 @@
 //!
 //! Charts can be repeated across update groups
 
+//todo: remove
+
 use std::collections::{BTreeMap, HashSet};
 
+use stats::UpdateError;
 use tokio::sync::Mutex;
 
 use crate::charts::ArcUpdateGroup;
@@ -21,4 +24,10 @@ struct GroupEntry {
 struct SyncGroups {
     groups: BTreeMap<String, ArcUpdateGroup>,
     chart_mutexes: BTreeMap<String, Mutex<()>>,
+}
+
+impl SyncGroups {
+    pub fn update_group(&self, name: &str) -> Result<(), UpdateError> {
+        let group_handle = self.groups.get(name).ok_or();
+    }
 }
