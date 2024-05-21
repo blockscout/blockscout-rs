@@ -22,7 +22,7 @@ use super::types::{UpdateContext, UpdateParameters};
 pub trait DataSource {
     type PrimaryDependency: DataSource;
     type SecondaryDependencies: DataSource;
-    type Output;
+    type Output: Send;
 
     /// Unique identifier of this data source that is used for synchronizing updates.
     ///
@@ -89,19 +89,19 @@ pub trait DataSource {
     ///
     /// Should be idempontent with regards to `current_time` (in `cx`).
     /// It is a normal behaviour to call this method within single update.
-    async fn update_from_remote(
+    fn update_from_remote(
         cx: &UpdateContext<UpdateParameters<'_>>,
-    ) -> Result<(), UpdateError>;
+    ) -> impl std::future::Future<Output = Result<(), UpdateError>> + std::marker::Send;
 
     /// Retrieve chart data for dates in `range`.
     ///
     /// **Does not perform an update!** If you need relevant data, you likely need
     /// to call [`DataSource::update_from_remote`] beforehand.
-    async fn query_data(
+    fn query_data(
         cx: &UpdateContext<UpdateParameters<'_>>,
         range: RangeInclusive<NaiveDate>,
         remote_fetch_timer: &mut AggregateTimer,
-    ) -> Result<Self::Output, UpdateError>;
+    ) -> impl std::future::Future<Output = Result<Self::Output, UpdateError>> + std::marker::Send;
 }
 
 // Base case for recursive type

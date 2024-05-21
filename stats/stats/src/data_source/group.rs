@@ -329,7 +329,18 @@ impl SyncUpdateGroup {
         // .iter() is ordered by key, so order is followed
         for (name, mutex) in self.dependencies_mutexes.iter() {
             if to_lock.remove(name) {
-                guards.push(mutex.lock().await);
+                let guard = match mutex.try_lock() {
+                    Ok(v) => v,
+                    Err(_) => {
+                        tracing::warn!(
+                            update_group = self.inner.name(),
+                            chart_name = name,
+                            "found locked update mutex, waiting for unlock"
+                        );
+                        mutex.lock().await
+                    }
+                };
+                guards.push(guard);
             }
         }
         guards

@@ -39,82 +39,89 @@ pub trait UpdateableChart: Chart {
     /// Should be idempontent with regards to `current_time` (in `cx`).
     /// It is a normal behaviour to call this method within single update
     /// (= with same `current_time`).
-    async fn update(
+    fn update(
         cx: &UpdateContext<UpdateParameters<'_>>,
         remote_fetch_timer: &mut AggregateTimer,
-    ) -> Result<(), UpdateError> {
-        let metadata = get_chart_metadata(cx.user_context.db, Self::NAME).await?;
-        if let Some(last_updated_at) = metadata.last_updated_at {
-            if cx.user_context.current_time == last_updated_at {
-                // no need to perform update
-                return Ok(());
+    ) -> impl std::future::Future<Output = Result<(), UpdateError>> + Send {
+        async {
+            let metadata = get_chart_metadata(cx.user_context.db, Self::NAME).await?;
+            if let Some(last_updated_at) = metadata.last_updated_at {
+                if cx.user_context.current_time == last_updated_at {
+                    // no need to perform update
+                    return Ok(());
+                }
             }
+            let chart_id = metadata.id;
+            let min_blockscout_block = get_min_block_blockscout(cx.user_context.blockscout)
+                .await
+                .map_err(UpdateError::BlockscoutDB)?;
+            let offset = Some(Self::approximate_trailing_points());
+            let last_updated_row = get_nth_last_row::<Self>(
+                chart_id,
+                min_blockscout_block,
+                cx.user_context.db,
+                cx.user_context.force_full,
+                offset,
+            )
+            .await?;
+            Self::update_values(
+                cx,
+                chart_id,
+                last_updated_row,
+                min_blockscout_block,
+                remote_fetch_timer,
+            )
+            .await?;
+            Self::update_metadata(cx.user_context.db, chart_id, cx.user_context.current_time)
+                .await?;
+            Ok(())
         }
-        let chart_id = metadata.id;
-        let min_blockscout_block = get_min_block_blockscout(cx.user_context.blockscout)
-            .await
-            .map_err(UpdateError::BlockscoutDB)?;
-        let offset = Some(Self::approximate_trailing_points());
-        let last_updated_row = get_nth_last_row::<Self>(
-            chart_id,
-            min_blockscout_block,
-            cx.user_context.db,
-            cx.user_context.force_full,
-            offset,
-        )
-        .await?;
-        Self::update_values(
-            cx,
-            chart_id,
-            last_updated_row,
-            min_blockscout_block,
-            remote_fetch_timer,
-        )
-        .await?;
-        Self::update_metadata(cx.user_context.db, chart_id, cx.user_context.current_time).await?;
-        Ok(())
     }
 
     /// Update only chart values.
-    async fn update_values(
+    fn update_values(
         cx: &UpdateContext<UpdateParameters<'_>>,
         chart_id: i32,
         update_from_row: Option<DateValue>,
         min_blockscout_block: i64,
         remote_fetch_timer: &mut AggregateTimer,
-    ) -> Result<(), UpdateError>;
+    ) -> impl std::future::Future<Output = Result<(), UpdateError>> + Send;
 
     /// Update only chart metadata.
-    async fn update_metadata(
+    fn update_metadata(
         db: &DatabaseConnection,
         chart_id: i32,
         update_time: chrono::DateTime<Utc>,
-    ) -> Result<(), UpdateError> {
-        common_operations::set_last_updated_at(chart_id, db, update_time)
-            .await
-            .map_err(UpdateError::StatsDB)
+    ) -> impl std::future::Future<Output = Result<(), UpdateError>> + Send {
+        async move {
+            common_operations::set_last_updated_at(chart_id, db, update_time)
+                .await
+                .map_err(UpdateError::StatsDB)
+        }
     }
 
     /// Retrieve chart data from (local) storage.
-    async fn query_data(
+    fn query_data(
         cx: &UpdateContext<UpdateParameters<'_>>,
         range: std::ops::RangeInclusive<sea_orm::prelude::Date>,
-    ) -> Result<ChartData, UpdateError> {
-        let values = get_chart_data(
-            cx.user_context.db,
-            Self::NAME,
-            Some(*range.start()),
-            Some(*range.end()),
-            None,
-            None,
-            Self::approximate_trailing_points(),
-        )
-        .await?
-        .into_iter()
-        .map(DateValue::from)
-        .collect();
-        let metadata = get_chart_metadata(cx.user_context.db, Self::NAME).await?;
-        Ok(ChartData { metadata, values })
+    ) -> impl std::future::Future<Output = Result<ChartData, UpdateError>> + Send {
+        async move {
+            let values = get_chart_data(
+                cx.user_context.db,
+                Self::NAME,
+                Some(*range.start()),
+                Some(*range.end()),
+                None,
+                None,
+                Self::approximate_trailing_points(),
+            )
+            .await?
+            .into_iter()
+            .map(DateValue::from)
+            .collect();
+            let metadata = get_chart_metadata(cx.user_context.db, Self::NAME).await?;
+            Ok(ChartData { metadata, values })
+        }
     }
 }
 

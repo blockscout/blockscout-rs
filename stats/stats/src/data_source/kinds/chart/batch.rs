@@ -29,14 +29,14 @@ pub trait BatchUpdateableChart: Chart {
     /// Update chart with data from its dependencies.
     ///
     /// Returns how many records were found
-    async fn batch_update_values_step_with(
+    fn batch_update_values_step_with(
         db: &DatabaseConnection,
         chart_id: i32,
         update_time: chrono::DateTime<Utc>,
         min_blockscout_block: i64,
         primary_data: <Self::PrimaryDependency as DataSource>::Output,
         secondary_data: <Self::SecondaryDependencies as DataSource>::Output,
-    ) -> Result<usize, UpdateError>;
+    ) -> impl std::future::Future<Output = Result<usize, UpdateError>> + std::marker::Send;
 }
 
 /// Wrapper struct used for avoiding implementation conflicts
@@ -118,25 +118,31 @@ where
     Ok(found)
 }
 
-impl<T: BatchUpdateableChart> UpdateableChart for BatchUpdateableChartWrapper<T> {
+impl<T: BatchUpdateableChart> UpdateableChart for BatchUpdateableChartWrapper<T>
+where
+    <T::PrimaryDependency as DataSource>::Output: Send,
+    <T::SecondaryDependencies as DataSource>::Output: Send,
+{
     type PrimaryDependency = T::PrimaryDependency;
     type SecondaryDependencies = T::SecondaryDependencies;
 
-    async fn update_values(
+    fn update_values(
         cx: &UpdateContext<UpdateParameters<'_>>,
         chart_id: i32,
         update_from_row: Option<DateValue>,
         min_blockscout_block: i64,
         remote_fetch_timer: &mut AggregateTimer,
-    ) -> Result<(), UpdateError> {
-        batch_update_values::<T>(
-            cx,
-            chart_id,
-            update_from_row,
-            min_blockscout_block,
-            remote_fetch_timer,
-        )
-        .await
+    ) -> impl std::future::Future<Output = Result<(), UpdateError>> + Send {
+        async move {
+            batch_update_values::<T>(
+                cx,
+                chart_id,
+                update_from_row,
+                min_blockscout_block,
+                remote_fetch_timer,
+            )
+            .await
+        }
     }
 }
 

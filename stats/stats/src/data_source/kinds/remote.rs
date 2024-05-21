@@ -14,10 +14,10 @@ use crate::{
 };
 
 pub trait RemoteSource {
-    async fn query_data(
+    fn query_data(
         cx: &UpdateContext<UpdateParameters<'_>>,
         range: RangeInclusive<NaiveDate>,
-    ) -> Result<Vec<DateValue>, UpdateError>;
+    ) -> impl std::future::Future<Output = Result<Vec<DateValue>, UpdateError>> + std::marker::Send;
 }
 
 /// Wrapper struct used for avoiding implementation conflicts.
