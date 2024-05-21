@@ -49,22 +49,24 @@ pub struct EnabledChartEntry {
     pub static_info: ChartDynamic,
 }
 
+/// Everything needed to operate update group
 #[derive(Clone)]
 pub struct UpdateGroupEntry {
     /// Custom schedule for this update group
     pub update_schedule: Option<Schedule>,
     /// Handle for operating the group
     pub group: SyncUpdateGroup,
+    /// Members that are enabled both
+    /// - in the charts config
+    /// - in update group config (=not disabled there)
+    pub enabled_members: HashSet<String>,
 }
 
 // todo: rename
 pub struct Charts {
     pub lines_layout: LinesInfo<EnabledChartSettings>,
-    pub update_schedule_config: config::update_schedule::Config,
-    pub update_groups: BTreeMap<String, SyncUpdateGroup>,
+    pub update_groups: BTreeMap<String, UpdateGroupEntry>,
     pub charts_info: BTreeMap<String, EnabledChartEntry>,
-    /// Exactly the same as `charts_info.keys`; made for convenient update
-    pub enabled_set: HashSet<String>,
 }
 
 fn new_set_check_duplicates<T: Hash + Eq, I: IntoIterator<Item = T>>(
@@ -111,7 +113,6 @@ impl Charts {
         let mut counters_unknown = enabled_counters.clone();
         let mut lines_unknown = enabled_lines.clone();
         let settings = Self::new_settings(&enabled_charts_config);
-        let update_groups = Self::init_sync_update_groups()?;
         let charts_info: BTreeMap<String, EnabledChartEntry> = Self::all_charts()
             .into_iter()
             .filter(|(name, chart)| match chart.chart_type {
@@ -136,14 +137,12 @@ impl Charts {
             ));
         }
 
-        let enabled_charts = charts_info.keys().cloned().collect();
+        let update_groups = Self::init_update_groups(update_schedule)?;
 
         Ok(Self {
             lines_layout: enabled_charts_config.lines,
-            update_schedule_config: update_schedule,
             update_groups,
             charts_info,
-            enabled_set: enabled_charts,
         })
     }
 
@@ -224,15 +223,65 @@ impl Charts {
         mutexes
     }
 
-    fn init_sync_update_groups() -> Result<BTreeMap<String, SyncUpdateGroup>, anyhow::Error> {
+    /// Returns more user-friendly errors
+    fn verify_schedule_config(
+        update_groups: &BTreeMap<String, ArcUpdateGroup>,
+        schedule_config: &config::update_schedule::Config,
+    ) -> Result<(), anyhow::Error> {
+        let all_names: HashSet<_> = update_groups.keys().collect();
+        let config_names: HashSet<_> = schedule_config.update_groups.keys().collect();
+        let missing_group_settings = all_names.difference(&config_names).collect_vec();
+        let unknown_group_settings = config_names.difference(&all_names).collect_vec();
+        let mut error_messages = Vec::new();
+        if !missing_group_settings.is_empty() {
+            error_messages.push(format!("Missing groups: {:?}", missing_group_settings));
+        }
+        if !unknown_group_settings.is_empty() {
+            error_messages.push(format!("Unknown groups: {:?}", unknown_group_settings))
+        }
+        if !error_messages.is_empty() {
+            return Err(anyhow::anyhow!(
+                "Failed to parse update schedule config: {}",
+                error_messages.join(", ")
+            ));
+        }
+        Ok(())
+    }
+
+    fn init_update_groups(
+        schedule_config: config::update_schedule::Config,
+    ) -> Result<BTreeMap<String, UpdateGroupEntry>, anyhow::Error> {
         let update_groups = Self::all_update_groups();
         let dep_mutexes = Self::create_all_dependencies_mutexes(update_groups.values().cloned());
-        let mut sync_groups = BTreeMap::new();
+        let mut result = BTreeMap::new();
+
+        // checks that all groups are present in config.
+        Self::verify_schedule_config(&update_groups, &schedule_config)?;
+
         for (name, group) in update_groups {
+            let group_config = schedule_config
+                .update_groups
+                .get(&name)
+                .expect("config verification did not catch missing group config");
+            let disabled_members: HashSet<String> =
+                group_config.ignore_charts.iter().cloned().collect();
+            let enabled_members = group
+                .list_charts()
+                .into_iter()
+                .map(|m| m.name)
+                .filter(|member| !disabled_members.contains(member))
+                .collect();
             let sync_group = SyncUpdateGroup::new(&dep_mutexes, group)?;
-            sync_groups.insert(name, sync_group);
+            result.insert(
+                name,
+                UpdateGroupEntry {
+                    update_schedule: group_config.update_schedule.clone(),
+                    group: sync_group,
+                    enabled_members,
+                },
+            );
         }
-        Ok(sync_groups)
+        Ok(result)
     }
 
     fn all_charts() -> BTreeMap<String, ChartDynamic> {

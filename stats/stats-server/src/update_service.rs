@@ -1,8 +1,8 @@
-use crate::charts::Charts;
+use crate::charts::{Charts, UpdateGroupEntry};
 use chrono::Utc;
 use cron::Schedule;
 use sea_orm::{DatabaseConnection, DbErr};
-use stats::data_source::{group::SyncUpdateGroup, types::UpdateParameters};
+use stats::data_source::types::UpdateParameters;
 use std::sync::Arc;
 
 pub struct UpdateService {
@@ -46,15 +46,15 @@ impl UpdateService {
             .values()
             .map(|group| {
                 let this = self.clone();
-                let update_group = group.clone();
+                let group_entry = group.clone();
                 let default_schedule = default_schedule.clone();
                 let sema = semaphore.clone();
                 async move {
                     let _permit = sema.acquire().await.expect("failed to acquire permit");
                     if let Some(force_full) = force_update_on_start {
-                        this.clone().update(update_group.clone(), force_full).await
+                        this.clone().update(group_entry.clone(), force_full).await
                     };
-                    this.spawn_group_updater(update_group, &default_schedule);
+                    this.spawn_group_updater(group_entry, &default_schedule);
                 }
             })
             .collect::<Vec<_>>();
@@ -64,18 +64,12 @@ impl UpdateService {
 
     fn spawn_group_updater(
         self: &Arc<Self>,
-        update_group: SyncUpdateGroup,
+        group_entry: UpdateGroupEntry,
         default_schedule: &Schedule,
     ) {
-        let group_info = self
-            .charts
-            .update_schedule_config
-            .update_groups
-            .get(&update_group.inner.name())
-            .expect("enabled chart must contain settings");
         let this = self.clone();
-        let chart = update_group.clone();
-        let schedule = group_info
+        let chart = group_entry.clone();
+        let schedule = group_entry
             .update_schedule
             .as_ref()
             .unwrap_or(default_schedule)
@@ -83,9 +77,9 @@ impl UpdateService {
         tokio::spawn(async move { this.run_cron(chart, schedule).await });
     }
 
-    async fn update(self: Arc<Self>, update_group: SyncUpdateGroup, force_full: bool) {
+    async fn update(self: Arc<Self>, group_entry: UpdateGroupEntry, force_full: bool) {
         tracing::info!(
-            update_group = update_group.inner.name(),
+            update_group = group_entry.group.inner.name(),
             "updating group of charts"
         );
         let result = {
@@ -95,34 +89,35 @@ impl UpdateService {
                 current_time: chrono::Utc::now(),
                 force_full,
             };
-            update_group
-                .update_charts_with_mutexes(update_parameters, &self.charts.enabled_set)
+            group_entry
+                .group
+                .update_charts_with_mutexes(update_parameters, &group_entry.enabled_members)
                 .await
         };
         if let Err(err) = result {
             tracing::error!(
-                update_group = update_group.inner.name(),
+                update_group = group_entry.group.inner.name(),
                 "error during updating group: {}",
                 err
             );
         } else {
             tracing::info!(
-                update_group = update_group.inner.name(),
+                update_group = group_entry.group.inner.name(),
                 "successfully updated group"
             );
         }
     }
 
-    async fn run_cron(self: Arc<Self>, update_group: SyncUpdateGroup, schedule: Schedule) {
+    async fn run_cron(self: Arc<Self>, group_entry: UpdateGroupEntry, schedule: Schedule) {
         loop {
             let sleep_duration = time_till_next_call(&schedule);
             tracing::info!(
-                update_group = update_group.inner.name(),
+                update_group = group_entry.group.inner.name(),
                 "scheduled next run of group update in {:?}",
                 sleep_duration
             );
             tokio::time::sleep(sleep_duration).await;
-            self.clone().update(update_group.clone(), false).await;
+            self.clone().update(group_entry.clone(), false).await;
         }
     }
 }

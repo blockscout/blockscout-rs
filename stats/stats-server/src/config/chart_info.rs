@@ -45,8 +45,10 @@ pub struct LineChartCategory<ChartSettings> {
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct UpdateGroup {
-    pub title: String,
     #[serde_as(as = "Option<DisplayFromStr>")]
     pub update_schedule: Option<Schedule>,
-    pub charts: Vec<String>,
+    /// Dynamically disable some group members.
+    /// These charts won't get directly updated by the group
+    /// (they can still get updated if they are depended upon)
+    pub ignore_charts: Vec<String>,
 }

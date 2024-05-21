@@ -67,10 +67,10 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
 
     // TODO: may be run this with migrations or have special config
     let now = chrono::Utc::now();
-    for update_group in charts.update_groups.values() {
-        update_group
-            .inner
-            .create_charts(&db, &charts.enabled_set, &now)
+    for group_entry in charts.update_groups.values() {
+        group_entry
+            .group
+            .create_charts_with_mutexes(&db, &group_entry.enabled_members, &now)
             .await?;
     }
 
