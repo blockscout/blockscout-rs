@@ -15,6 +15,7 @@ mod verifier;
 mod batch_verifier;
 #[cfg(test)]
 mod tests;
+mod zksync_solidity;
 
 pub(crate) use blockscout_display_bytes::Bytes as DisplayBytes;
 
@@ -27,12 +28,14 @@ pub use middleware::Middleware;
 pub use crate::sourcify::Error as SourcifyError;
 pub use batch_verifier::{BatchError, BatchMatch, BatchSuccess, BatchVerificationResult};
 pub use common_types::{Contract, MatchType};
-pub use compiler::{Compilers, Fetcher, ListFetcher, S3Fetcher, Version};
+pub use compiler::{Compilers, Fetcher, FileValidator, ListFetcher, S3Fetcher, Version};
 pub use verifier::{BytecodePart, Error as VerificationError};
 
 pub use crate::sourcify::{SourcifyApiClient, Success as SourcifySuccess};
+pub use compiler::ZksyncCompilers;
 pub use lookup_methods::{find_methods, LookupMethodsRequest, LookupMethodsResponse};
 pub use solidity::{
     Client as SolidityClient, SolcValidator, SolidityCompiler, Success as SoliditySuccess,
 };
 pub use vyper::{Client as VyperClient, Success as VyperSuccess, VyperCompiler};
+pub use zksync_solidity::ZksyncSolidityCompiler;

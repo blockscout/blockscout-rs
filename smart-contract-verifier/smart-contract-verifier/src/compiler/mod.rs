@@ -7,9 +7,11 @@ mod versions_fetcher;
 
 mod compilers;
 mod download_cache;
+mod zksync_compilers;
 
 pub use compilers::{Compilers, Error, EvmCompiler};
 pub use fetcher::{Fetcher, FileValidator};
 pub use list_fetcher::ListFetcher;
 pub use s3_fetcher::S3Fetcher;
 pub use version::Version;
+pub use zksync_compilers::ZksyncCompilers;

@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package blockscout.smartContractVerifier.v2.zksync.vyper;
+
+//import "v2/zksync.proto";
+
+option go_package = "github.com/blockscout/blockscout-rs/smart-contract-verifier/zksync/vyper";
+
+service Verifier {
+  rpc VerifyStandardJson(VerifyStandardJsonRequest) returns (VerifyResponse) {}
+}
+
+message VerifyStandardJsonRequest {
+  string bytecode = 1;
+  string constructor_arguments = 2;
+  string zk_compiler = 3;
+  string solc_compiler = 4;
+  string input = 5;
+}
+
+message VerifyResponse {
+
+}

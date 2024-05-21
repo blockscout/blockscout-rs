@@ -52,6 +52,21 @@ http:
       post: /api/v2/verifier/sourcify/sources:verify-from-etherscan
       body: "*"
 
+    #################### ZkSync Solidity Verifier ####################
+
+    - selector: blockscout.smartContractVerifier.v2.zksync.solidity.Verifier.VerifyStandardJson
+      post: /api/v2/zksync-verifier/solidity/sources:verify-standard-json
+      body: "*"
+
+    - selector: blockscout.smartContractVerifier.v2.zksync.solidity.Verifier.ListCompilers
+      get: /api/v2/zksync-verifier/solidity/versions
+
+#    #################### ZkSync Vyper Verifier ####################
+#
+#    - selector: blockscout.smartContractVerifier.v2.zksync.vyper.Verifier.VerifyStandardJson
+#      post: /api/v2/zksync-verifier/vyper/sources:verify-standard-json
+#      body: "*"
+
     #################### Health ####################
 
     - selector: blockscout.smartContractVerifier.v2.Health.Check
