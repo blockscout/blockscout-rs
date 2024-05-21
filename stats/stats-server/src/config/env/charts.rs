@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct ChartSettingsOverwrite {
     pub enabled: Option<bool>,
     pub title: Option<String>,
@@ -47,22 +47,7 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
-    use pretty_assertions::assert_eq;
-
-    /// env prefix "STATS_CHARTS" is assumed
-    fn assert_envs_parsed_to(env_values: HashMap<String, String>, expected: Config) {
-        let env_source = config::Environment::with_prefix("STATS_CHARTS")
-            .separator("__")
-            .try_parsing(true)
-            .source(Some(env_values));
-        let config: Config = config::Config::builder()
-            .add_source(env_source)
-            .build()
-            .unwrap()
-            .try_deserialize()
-            .unwrap();
-        assert_eq!(config, expected)
-    }
+    use crate::config::env::assert_envs_parsed_to;
 
     // purpose of env is to overwrite some attributes in existing configurations
     // therefore it should be possible to do it a granular manner
