@@ -5,7 +5,7 @@
         },
         "transactions": {
             "update_schedule": "0 0 7 * * * *",
-            "exclude_charts": [
+            "ignore_charts": [
                 "total_txns"
             ]
         },

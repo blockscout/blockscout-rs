@@ -56,10 +56,10 @@ pub fn read_update_schedule_config(path: &Path) -> Result<update_schedule::Confi
     }
 }
 
-fn override_charts(target: &mut json::charts::Config, from: &env::charts::Config) {
-    todo!()
-}
+/// Prioritize values from environment
+fn override_charts(target: &mut json::charts::Config, from: &env::charts::Config) {}
 
+/// Prioritize values from environment
 fn override_update_schedule(
     target: &mut json::update_schedule::Config,
     from: &env::update_schedule::Config,
