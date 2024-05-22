@@ -21,6 +21,7 @@ pub(crate) use blockscout_display_bytes::Bytes as DisplayBytes;
 
 pub use consts::{
     DEFAULT_SOLIDITY_COMPILER_LIST, DEFAULT_SOURCIFY_HOST, DEFAULT_VYPER_COMPILER_LIST,
+    DEFAULT_ZKSOLC_COMPILER_LIST,
 };
 
 pub use middleware::Middleware;

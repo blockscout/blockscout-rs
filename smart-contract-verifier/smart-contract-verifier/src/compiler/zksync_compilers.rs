@@ -4,13 +4,17 @@ use std::{path::PathBuf, sync::Arc};
 pub struct ZksyncCompilers {
     evm_cache: DownloadCache,
     evm_fetcher: Arc<dyn Fetcher>,
+    zk_cache: DownloadCache,
+    zk_fetcher: Arc<dyn Fetcher>,
 }
 
 impl ZksyncCompilers {
-    pub fn new(evm_fetcher: Arc<dyn Fetcher>) -> Self {
+    pub fn new(evm_fetcher: Arc<dyn Fetcher>, zk_fetcher: Arc<dyn Fetcher>) -> Self {
         Self {
             evm_cache: DownloadCache::default(),
             evm_fetcher,
+            zk_cache: DownloadCache::default(),
+            zk_fetcher,
         }
     }
 
@@ -20,6 +24,17 @@ impl ZksyncCompilers {
 
     pub fn all_evm_versions_sorted_str(&self) -> Vec<String> {
         let mut versions = self.all_evm_versions();
+        // sort in descending order
+        versions.sort_by(|x, y| x.cmp(y).reverse());
+        versions.into_iter().map(|v| v.to_string()).collect()
+    }
+
+    pub fn all_zk_versions(&self) -> Vec<Version> {
+        self.zk_fetcher.all_versions()
+    }
+
+    pub fn all_zk_versions_sorted_str(&self) -> Vec<String> {
+        let mut versions = self.all_zk_versions();
         // sort in descending order
         versions.sort_by(|x, y| x.cmp(y).reverse());
         versions.into_iter().map(|v| v.to_string()).collect()
@@ -40,7 +55,8 @@ mod tests {
             .await
             .expect("Fetch releases");
 
-        ZksyncCompilers::new(Arc::new(evm_fetcher))
+        let fetcher = Arc::new(evm_fetcher);
+        ZksyncCompilers::new(fetcher.clone(), fetcher.clone())
     }
 
     #[tokio::test]

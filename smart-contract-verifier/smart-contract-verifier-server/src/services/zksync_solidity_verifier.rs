@@ -29,9 +29,17 @@ impl Service {
             Some(solc_validator),
         )
         .await
-        .context("zk-solidity fetcher initialization")?;
+        .context("zksync solc fetcher initialization")?;
 
-        let compilers = ZksyncCompilers::new(evm_fetcher);
+        let zk_fetcher = common::initialize_fetcher(
+            settings.zk_fetcher,
+            settings.zk_compilers_dir.clone(),
+            settings.zk_refresh_versions_schedule,
+            None,
+        )
+            .await.context("zksync zksolc fetcher initialization")?;
+
+        let compilers = ZksyncCompilers::new(evm_fetcher.clone(), zk_fetcher.clone());
 
         Ok(Self { compilers })
     }
@@ -51,8 +59,8 @@ impl Verifier for Service {
         request: Request<ListCompilersRequest>,
     ) -> Result<Response<ListCompilersResponse>, Status> {
         Ok(Response::new(ListCompilersResponse {
-            zk_compilers: vec![],
-            solc_compilers: self.compilers.all_evm_versions_sorted_str(),
+            zk_compilers: self.compilers.all_evm_versions_sorted_str(),
+            solc_compilers: self.compilers.all_zk_versions_sorted_str(),
         }))
     }
 }

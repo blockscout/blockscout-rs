@@ -8,6 +8,7 @@ mod versions_fetcher;
 mod compilers;
 mod download_cache;
 mod zksync_compilers;
+mod zk_list_fetcher;
 
 pub use compilers::{Compilers, Error, EvmCompiler};
 pub use fetcher::{Fetcher, FileValidator};

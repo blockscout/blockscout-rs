@@ -16,7 +16,15 @@ async fn list_compilers() {
         response
             .solc_compilers
             .contains(&"v0.8.25+commit.b61c2a91".to_string()),
-        "solc_compiler v0.8.25 missed; response={:#?}",
+        "solc_compiler v0.8.25 is missed; response={:#?}",
         response.solc_compilers,
     );
+
+    assert!(
+        response
+            .zk_compilers
+            .contains(&"v1.4.1".to_string()),
+        "zk_compiler v1.4.1 is missed; response={:#?}",
+        response.zk_compilers,
+    )
 }
