@@ -157,10 +157,9 @@ pub fn override_update_schedule(
             }
             Entry::Occupied(mut o) => {
                 let target_group = o.get_mut();
-                target_group.update_schedule = target_group
+                target_group.update_schedule = added_settings
                     .update_schedule
-                    .take()
-                    .or(added_settings.update_schedule);
+                    .or(target_group.update_schedule.take());
 
                 for (chart_name, new_ignore_status) in added_settings.ignore_charts {
                     if new_ignore_status == true {
@@ -187,7 +186,7 @@ mod tests {
 
     use super::override_charts;
 
-    const EXAMPLE_CONFIG: &'static str = r#"{
+    const EXAMPLE_CHART_CONFIG: &'static str = r#"{
         "counters": [
             {
                 "id": "total_blocks",
@@ -230,7 +229,8 @@ mod tests {
 
     #[test]
     fn charts_override_correctly() {
-        let mut json_config: json::charts::Config = serde_json::from_str(&EXAMPLE_CONFIG).unwrap();
+        let mut json_config: json::charts::Config =
+            serde_json::from_str(&EXAMPLE_CHART_CONFIG).unwrap();
 
         let env_override: env::charts::Config = config_from_env(HashMap::from_iter(
             [
@@ -256,7 +256,7 @@ mod tests {
                     "title": "Total Blocks",
                     "description": "Number of all blocks in the network",
                     "units": "blocks",
-                    "enabled": true
+                    "enabled": false
                 },
                 {
                     "id": "total_txns",

@@ -33,7 +33,7 @@ impl ChartSettingsOverwrite {
                 description,
             }
         );
-        target.units = target.units.take().or(self.units);
+        target.units = self.units.or(target.units.take());
     }
 }
 
