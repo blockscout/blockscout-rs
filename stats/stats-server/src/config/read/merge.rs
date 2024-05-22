@@ -1,4 +1,5 @@
 use anyhow::Context;
+use itertools::Itertools;
 
 use crate::config::{
     chart_info::{CounterInfo, LineChartCategory, LineChartInfo},
@@ -79,6 +80,9 @@ where
         update_t(target_val, val_with_order)
             .context(format!("updating values for key: {}", key))?;
     }
+    let mut target_with_order = target_with_order.into_values().collect_vec();
+    target_with_order.sort_by_key(|t| t.0);
+    *target = target_with_order.into_iter().map(|t| t.1).collect();
     Ok(())
 }
 
@@ -169,4 +173,125 @@ pub fn override_update_schedule(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use crate::config::{
+        env::{self, test_utils::config_from_env},
+        json,
+    };
+    use pretty_assertions::assert_eq;
+
+    use super::override_charts;
+
+    const EXAMPLE_CONFIG: &'static str = r#"{
+        "counters": [
+            {
+                "id": "total_blocks",
+                "title": "Total Blocks",
+                "description": "Number of all blocks in the network",
+                "units": "blocks"
+            },
+            {
+                "id": "total_txns",
+                "enabled": false,
+                "title": "Total txns",
+                "description": "All transactions including pending, dropped, replaced, failed transactions"
+            }
+        ],
+        "line_categories": [
+            {
+                "id": "accounts",
+                "title": "Accounts",
+                "charts": [
+                    {
+                        "id": "average_txn_fee",
+                        "enabled": false,
+                        "title": "Average transaction fee",
+                        "description": "The average amount in {{native_coin_symbol}} spent per transaction",
+                        "units": "{{native_coin_symbol}}"
+                    },
+                    {
+                        "id": "txns_fee",
+                        "title": "Transactions fees",
+                        "description": "Amount of tokens paid as fees",
+                        "units": "{{native_coin_symbol}}"
+                    }
+                ]
+            }
+        ],
+        "template_values": {
+            "native_coin_symbol": "USDT"
+        }
+    }"#;
+
+    #[test]
+    fn charts_override_correctly() {
+        let mut json_config: json::charts::Config = serde_json::from_str(&EXAMPLE_CONFIG).unwrap();
+
+        let env_override: env::charts::Config = config_from_env(HashMap::from_iter(
+            [
+                ("STATS_CHARTS__TEMPLATE_VALUES__NATIVE_COIN_SYMBOL", "USDC"),
+                ("STATS_CHARTS__COUNTERS__TOTAL_BLOCKS__ENABLED", "false"),
+                ("STATS_CHARTS__COUNTERS__TOTAL_TXNS__ENABLED", "true"),
+                (
+                    "STATS_CHARTS__LINE_CATEGORIES__ACCOUNTS__CHARTS__TXNS_FEE__UNITS",
+                    "k USDC",
+                ),
+            ]
+            .map(|(a, b)| (a.to_owned(), b.to_owned())),
+        ))
+        .unwrap();
+
+        override_charts(&mut json_config, env_override).unwrap();
+        let overridden_config = serde_json::to_value(json_config).unwrap();
+
+        let expected_config: json::charts::Config = serde_json::from_str(r#"{
+            "counters": [
+                {
+                    "id": "total_blocks",
+                    "title": "Total Blocks",
+                    "description": "Number of all blocks in the network",
+                    "units": "blocks",
+                    "enabled": true
+                },
+                {
+                    "id": "total_txns",
+                    "enabled": true,
+                    "title": "Total txns",
+                    "description": "All transactions including pending, dropped, replaced, failed transactions"
+                }
+            ],
+            "line_categories": [
+                {
+                    "id": "accounts",
+                    "title": "Accounts",
+                    "charts": [
+                        {
+                            "id": "average_txn_fee",
+                            "enabled": false,
+                            "title": "Average transaction fee",
+                            "description": "The average amount in {{native_coin_symbol}} spent per transaction",
+                            "units": "{{native_coin_symbol}}"
+                        },
+                        {
+                            "id": "txns_fee",
+                            "title": "Transactions fees",
+                            "description": "Amount of tokens paid as fees",
+                            "units": "k USDC"
+                        }
+                    ]
+                }
+            ],
+            "template_values": {
+                "native_coin_symbol": "USDC"
+            }
+        }"#).unwrap();
+        let expected_config = serde_json::to_value(expected_config).unwrap();
+
+        assert_eq!(overridden_config, expected_config)
+    }
 }

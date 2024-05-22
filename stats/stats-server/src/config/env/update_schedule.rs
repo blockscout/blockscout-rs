@@ -40,11 +40,11 @@ mod tests {
     use std::str::FromStr;
 
     use super::*;
-    use crate::config::env::assert_envs_parsed_to;
+    use crate::config::env::test_utils::check_envs_parsed_to;
 
     #[test]
     fn single_attribute_overwrite_works() {
-        assert_envs_parsed_to(
+        check_envs_parsed_to(
             [(
                 "STATS_CHARTS__UPDATE_GROUPS__AVERAGE_BLOCK_TIME__UPDATE_SCHEDULE".to_owned(),
                 "0 0 15 * * * *".to_owned(),
@@ -59,9 +59,10 @@ mod tests {
                     },
                 )]),
             },
-        );
+        )
+        .unwrap();
 
-        assert_envs_parsed_to(
+        check_envs_parsed_to(
             [(
                 "STATS_CHARTS__UPDATE_GROUPS__AVERAGE_BLOCK_TIME__IGNORE_CHARTS__SOME_POOR_CHART"
                     .to_owned(),
@@ -77,6 +78,7 @@ mod tests {
                     },
                 )]),
             },
-        );
+        )
+        .unwrap();
     }
 }

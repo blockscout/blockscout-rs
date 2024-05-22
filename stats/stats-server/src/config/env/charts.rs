@@ -109,8 +109,9 @@ pub struct Config {
 mod tests {
     use std::collections::HashMap;
 
+    use crate::config::env::test_utils::check_envs_parsed_to;
+
     use super::*;
-    use crate::config::env::assert_envs_parsed_to;
 
     // purpose of env is to overwrite some attributes in existing configurations
     // therefore it should be possible to do it a granular manner
@@ -119,7 +120,7 @@ mod tests {
     fn single_attribute_overwrite_works_for_template() {
         // purpose of env is to overwrite some attributes in existing configurations
         // therefore it should be possible to do it a granular manner
-        assert_envs_parsed_to(
+        check_envs_parsed_to(
             [(
                 "STATS_CHARTS__TEMPLATE_VALUES__NATIVE_COIN_SYMBOL".to_owned(),
                 "USDT".to_owned(),
@@ -133,12 +134,13 @@ mod tests {
                     serde_json::Value::String("USDT".to_owned()),
                 )]),
             },
-        );
+        )
+        .unwrap();
     }
 
     #[test]
     fn single_attribute_overwrite_works_for_line() {
-        assert_envs_parsed_to(
+        check_envs_parsed_to(
             [(
                 "STATS_CHARTS__LINE_CATEGORIES__TRANSACTIONS__CHARTS__AVERAGE_TXN_FEE__DESCRIPTION"
                     .to_owned(),
@@ -170,9 +172,10 @@ mod tests {
                 )]),
                 template_values: BTreeMap::new(),
             },
-        );
+        )
+        .unwrap();
 
-        assert_envs_parsed_to(
+        check_envs_parsed_to(
             [(
                 "STATS_CHARTS__LINE_CATEGORIES__TRANSACTIONS__CHARTS__AVERAGE_TXN_FEE__ORDER"
                     .to_owned(),
@@ -202,9 +205,10 @@ mod tests {
                 )]),
                 template_values: BTreeMap::new(),
             },
-        );
+        )
+        .unwrap();
 
-        assert_envs_parsed_to(
+        check_envs_parsed_to(
             [(
                 "STATS_CHARTS__LINE_CATEGORIES__TRANSACTIONS__TITLE".to_owned(),
                 "Trans chart".to_owned(),
@@ -222,12 +226,13 @@ mod tests {
                 )]),
                 template_values: BTreeMap::new(),
             },
-        );
+        )
+        .unwrap();
     }
 
     #[test]
     fn single_attribute_overwrite_works_for_counters() {
-        assert_envs_parsed_to(
+        check_envs_parsed_to(
             [(
                 "STATS_CHARTS__COUNTERS__AVERAGE_BLOCK_TIME__ORDER".to_owned(),
                 "1".to_owned(),
@@ -249,9 +254,10 @@ mod tests {
                 line_categories: BTreeMap::new(),
                 template_values: BTreeMap::new(),
             },
-        );
+        )
+        .unwrap();
 
-        assert_envs_parsed_to(
+        check_envs_parsed_to(
             [(
                 "STATS_CHARTS__COUNTERS__AVERAGE_BLOCK_TIME__ENABLED".to_owned(),
                 "true".to_owned(),
@@ -273,7 +279,8 @@ mod tests {
                 line_categories: BTreeMap::new(),
                 template_values: BTreeMap::new(),
             },
-        );
+        )
+        .unwrap();
     }
 
     #[test]
@@ -336,7 +343,7 @@ mod tests {
             )]),
         };
 
-        assert_envs_parsed_to(
+        check_envs_parsed_to(
             envs,
             Config {
                 counters: BTreeMap::from_iter([(
@@ -352,6 +359,7 @@ mod tests {
                     serde_json::Value::String("USDC".to_owned()),
                 )]),
             },
-        );
+        )
+        .unwrap();
     }
 }
