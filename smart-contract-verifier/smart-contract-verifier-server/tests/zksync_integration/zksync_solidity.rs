@@ -21,9 +21,7 @@ async fn list_compilers() {
     );
 
     assert!(
-        response
-            .zk_compilers
-            .contains(&"v1.4.1".to_string()),
+        response.zk_compilers.contains(&"v1.4.1".to_string()),
         "zk_compiler v1.4.1 is missed; response={:#?}",
         response.zk_compilers,
     )

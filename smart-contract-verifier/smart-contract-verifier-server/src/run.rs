@@ -143,9 +143,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         &launch_settings.service_name,
         &settings.tracing,
         &settings.jaeger,
-        Some(tracing_subscriber::filter::filter_fn(move |_| {
-            true
-        })),
+        Some(tracing_subscriber::filter::filter_fn(move |_| true)),
     )?;
 
     launcher::launch(&launch_settings, http_router, grpc_router).await

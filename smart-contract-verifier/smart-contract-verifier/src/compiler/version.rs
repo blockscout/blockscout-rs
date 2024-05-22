@@ -140,6 +140,12 @@ impl Version {
     }
 }
 
+impl super::generic_fetcher::Version for Version {
+    fn to_semver(&self) -> &semver::Version {
+        self.version()
+    }
+}
+
 impl FromStr for Version {
     type Err = ParseError;
 

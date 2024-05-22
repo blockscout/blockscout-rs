@@ -8,7 +8,7 @@ use serde::Deserialize;
 use serde_with::{serde_as, DisplayFromStr};
 use smart_contract_verifier::{
     DEFAULT_SOLIDITY_COMPILER_LIST, DEFAULT_SOURCIFY_HOST, DEFAULT_VYPER_COMPILER_LIST,
-    DEFAULT_ZKSOLC_COMPILER_LIST
+    DEFAULT_ZKSOLC_COMPILER_LIST,
 };
 use std::{
     num::{NonZeroU32, NonZeroUsize},

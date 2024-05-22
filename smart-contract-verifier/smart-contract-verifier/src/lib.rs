@@ -40,3 +40,8 @@ pub use solidity::{
 };
 pub use vyper::{Client as VyperClient, Success as VyperSuccess, VyperCompiler};
 pub use zksync_solidity::ZksyncSolidityCompiler;
+
+pub use compiler::{
+    generic_download_cache, generic_fetcher, generic_list_fetcher, generic_s3_fetcher,
+    zksync_compilers,
+};

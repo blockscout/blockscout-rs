@@ -1,5 +1,5 @@
-use crate::compiler::{FileValidator, Version};
-use anyhow::Context;
+use crate::compiler::{FileValidator, Version, generic_fetcher};
+use anyhow::{Context, Error};
 use async_trait::async_trait;
 use ethers_solc::Solc;
 use std::path::Path;
@@ -19,6 +19,26 @@ impl FileValidator for SolcValidator {
             Err(anyhow::anyhow!(
                 "versions don't match: expected={}, got={}",
                 ver.version(),
+                solc_ver
+            ))
+        } else {
+            Ok(())
+        }
+    }
+}
+
+#[async_trait]
+impl<Ver: generic_fetcher::Version> generic_fetcher::FileValidator<Ver> for SolcValidator {
+    async fn validate(&self, ver: &Ver, path: &Path) -> Result<(), Error> {
+        let solc = Solc::new(path);
+        let solc_ver = solc.version().context("could not get compiler version")?;
+        // ignore build and pre metadata
+        let solc_ver = semver::Version::new(solc_ver.major, solc_ver.minor, solc_ver.patch);
+
+        if &solc_ver != ver.to_semver() {
+            Err(anyhow::anyhow!(
+                "versions don't match: expected={}, got={}",
+                ver.to_semver(),
                 solc_ver
             ))
         } else {

@@ -22,7 +22,7 @@ impl Service {
         compilers_threads_semaphore: Arc<Semaphore>,
     ) -> anyhow::Result<Self> {
         let solc_validator = Arc::new(SolcValidator::default());
-        let evm_fetcher = common::initialize_fetcher(
+        let evm_fetcher = common::initialize_generic_fetcher(
             settings.evm_fetcher,
             settings.evm_compilers_dir.clone(),
             settings.evm_refresh_versions_schedule,
@@ -31,13 +31,14 @@ impl Service {
         .await
         .context("zksync solc fetcher initialization")?;
 
-        let zk_fetcher = common::initialize_fetcher(
+        let zk_fetcher = common::initialize_generic_fetcher(
             settings.zk_fetcher,
             settings.zk_compilers_dir.clone(),
             settings.zk_refresh_versions_schedule,
             None,
         )
-            .await.context("zksync zksolc fetcher initialization")?;
+        .await
+        .context("zksync zksolc fetcher initialization")?;
 
         let compilers = ZksyncCompilers::new(evm_fetcher.clone(), zk_fetcher.clone());
 
