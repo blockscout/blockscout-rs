@@ -79,7 +79,7 @@ impl UpdateService {
 
     async fn update(self: Arc<Self>, group_entry: UpdateGroupEntry, force_full: bool) {
         tracing::info!(
-            update_group = group_entry.group.inner.name(),
+            update_group = group_entry.group.name(),
             "updating group of charts"
         );
         let result = {
@@ -96,13 +96,13 @@ impl UpdateService {
         };
         if let Err(err) = result {
             tracing::error!(
-                update_group = group_entry.group.inner.name(),
+                update_group = group_entry.group.name(),
                 "error during updating group: {}",
                 err
             );
         } else {
             tracing::info!(
-                update_group = group_entry.group.inner.name(),
+                update_group = group_entry.group.name(),
                 "successfully updated group"
             );
         }
@@ -112,7 +112,7 @@ impl UpdateService {
         loop {
             let sleep_duration = time_till_next_call(&schedule);
             tracing::info!(
-                update_group = group_entry.group.inner.name(),
+                update_group = group_entry.group.name(),
                 "scheduled next run of group update in {:?}",
                 sleep_duration
             );

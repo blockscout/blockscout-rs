@@ -152,8 +152,7 @@ async fn _update_examples() {
         .collect();
     let group = SyncUpdateGroup::new(&mutexes, Arc::new(ExampleUpdateGroup)).unwrap();
     group
-        .inner
-        .create_charts(&db, &enabled, &current_time)
+        .create_charts_with_mutexes(&db, &enabled, &current_time)
         .await
         .unwrap();
 

@@ -112,8 +112,8 @@ impl Charts {
 
         let mut counters_unknown = enabled_counters.clone();
         let mut lines_unknown = enabled_lines.clone();
-        let settings = Self::new_settings(&enabled_charts_config);
-        let charts_info: BTreeMap<String, EnabledChartEntry> = Self::all_charts()
+        let settings = Self::extract_united_chart_settings(&enabled_charts_config);
+        let charts_info: BTreeMap<String, EnabledChartEntry> = Self::all_member_charts()
             .into_iter()
             .filter(|(name, chart)| match chart.chart_type {
                 ChartType::Counter => counters_unknown.remove(name),
@@ -185,8 +185,9 @@ impl Charts {
         config::charts::Config { counters, lines }
     }
 
-    // assumes that config is valid
-    fn new_settings(
+    /// Get settings for both counters and line charts in single data structure.
+    /// Assumes that config is valid.
+    fn extract_united_chart_settings(
         config: &config::charts::Config<EnabledChartSettings>,
     ) -> BTreeMap<String, EnabledChartSettings> {
         config
@@ -248,6 +249,7 @@ impl Charts {
         Ok(())
     }
 
+    /// All initialization of update groups happens here
     fn init_update_groups(
         schedule_config: config::update_schedule::Config,
     ) -> Result<BTreeMap<String, UpdateGroupEntry>, anyhow::Error> {
@@ -284,7 +286,8 @@ impl Charts {
         Ok(result)
     }
 
-    fn all_charts() -> BTreeMap<String, ChartDynamic> {
+    /// List all charts that are members of at least 1 group.
+    fn all_member_charts() -> BTreeMap<String, ChartDynamic> {
         let charts_with_duplicates = Self::all_update_groups()
             .into_iter()
             .flat_map(|(_, g)| g.list_charts())

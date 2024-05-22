@@ -33,8 +33,9 @@ pub struct InitializationError {
 #[async_trait]
 pub trait UpdateGroup {
     // &self is only to make fns dispatchable (and trait to be object-safe)
+    /// Group name
     fn name(&self) -> String;
-    /// List names of charts directly listed in the group.
+    /// List names of charts - members of the group.
     fn list_charts(&self) -> Vec<ChartDynamic>;
     /// List mutex ids of group members + their dependencies.
     /// Dependencies participate in updates, thus access to them needs to be
@@ -268,8 +269,7 @@ pub type ArcUpdateGroup = Arc<dyn for<'a> UpdateGroup + Send + Sync + 'static>;
 pub struct SyncUpdateGroup {
     /// Mutexes. Acquired in lexicographical order (=order within `BTreeMap`)
     dependencies_mutexes: BTreeMap<String, Arc<Mutex<()>>>,
-    // todo: unpub to prevent accidental non-mutex update
-    pub inner: ArcUpdateGroup,
+    inner: ArcUpdateGroup,
 }
 
 impl SyncUpdateGroup {
@@ -305,6 +305,26 @@ impl SyncUpdateGroup {
             inner: inner,
         });
     }
+
+    /// See [`UpdateGroup::name`]
+    pub fn name(&self) -> String {
+        self.inner.name()
+    }
+
+    /// See [`UpdateGroup::list_charts``]
+    pub fn list_charts(&self) -> Vec<ChartDynamic> {
+        self.inner.list_charts()
+    }
+
+    /// See [`UpdateGroup::list_dependency_mutex_ids`]
+    pub fn list_dependency_mutex_ids(&self) -> HashSet<&'static str> {
+        self.inner.list_dependency_mutex_ids()
+    }
+
+    /// See [`UpdateGroup::dependency_mutex_ids_of`]
+    pub fn dependency_mutex_ids_of(&self, chart_name: &str) -> Option<HashSet<&'static str>> {
+        self.inner.dependency_mutex_ids_of(chart_name)
+    }
 }
 
 impl SyncUpdateGroup {
@@ -314,7 +334,7 @@ impl SyncUpdateGroup {
         for name in chart_names {
             let Some(dependencies_ids) = self.inner.dependency_mutex_ids_of(name) else {
                 warn!(
-                    group_name=self.inner.name(),
+                    group_name=self.name(),
                     "`dependency_mutex_ids_of` of member chart '{name}' returned `None`. Expected `Some(..)`"
                 );
                 continue;
@@ -333,7 +353,7 @@ impl SyncUpdateGroup {
                     Ok(v) => v,
                     Err(_) => {
                         tracing::warn!(
-                            update_group = self.inner.name(),
+                            update_group = self.name(),
                             chart_name = name,
                             "found locked update mutex, waiting for unlock"
                         );
@@ -353,12 +373,7 @@ impl SyncUpdateGroup {
         &self,
         enabled_names: &HashSet<String>,
     ) -> (Vec<MutexGuard<()>>, HashSet<String>) {
-        let members: HashSet<String> = self
-            .inner
-            .list_charts()
-            .into_iter()
-            .map(|c| c.name)
-            .collect();
+        let members: HashSet<String> = self.list_charts().into_iter().map(|c| c.name).collect();
         // in-place intersection
         let enabled_members: HashSet<String> = members
             .into_iter()
