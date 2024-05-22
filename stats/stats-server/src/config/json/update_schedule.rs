@@ -10,7 +10,7 @@ pub struct Config {
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
+    use std::{collections::HashSet, str::FromStr};
 
     use super::*;
     use cron::Schedule;
@@ -24,7 +24,8 @@ mod tests {
             "transactions": {
                 "update_schedule": "0 0 7 * * * *",
                 "ignore_charts": [
-                    "total_txns"
+                    "total_txns",
+                    "average_txn_fee"
                 ]
             },
             "new_transactions_only": {
@@ -46,21 +47,24 @@ mod tests {
                         "average_block_time".to_owned(),
                         UpdateGroup {
                             update_schedule: Some(Schedule::from_str("0 0 15 * * * *").unwrap()),
-                            ignore_charts: vec![]
+                            ignore_charts: HashSet::new()
                         }
                     ),
                     (
                         "transactions".to_owned(),
                         UpdateGroup {
                             update_schedule: Some(Schedule::from_str("0 0 7 * * * *").unwrap()),
-                            ignore_charts: vec!["total_txns".to_owned()]
+                            ignore_charts: HashSet::from_iter([
+                                "total_txns".to_owned(),
+                                "average_txn_fee".to_owned()
+                            ])
                         }
                     ),
                     (
                         "new_transactions_only".to_owned(),
                         UpdateGroup {
                             update_schedule: Some(Schedule::from_str("0 10 */3 * * * *").unwrap()),
-                            ignore_charts: vec![]
+                            ignore_charts: HashSet::new()
                         }
                     ),
                 ])

@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use cron::Schedule;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
@@ -50,5 +52,5 @@ pub struct UpdateGroup {
     /// Dynamically disable some group members.
     /// These charts won't get directly updated by the group
     /// (they can still get updated if they are depended upon)
-    pub ignore_charts: Vec<String>,
+    pub ignore_charts: HashSet<String>,
 }

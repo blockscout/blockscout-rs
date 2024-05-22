@@ -15,6 +15,20 @@ pub struct UpdateGroup {
     pub ignore_charts: BTreeMap<String, bool>,
 }
 
+impl From<UpdateGroup> for crate::config::chart_info::UpdateGroup {
+    fn from(value: UpdateGroup) -> Self {
+        Self {
+            update_schedule: value.update_schedule,
+            ignore_charts: value
+                .ignore_charts
+                .into_iter()
+                .filter(|(_, ignore)| *ignore)
+                .map(|(name, _)| name)
+                .collect(),
+        }
+    }
+}
+
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {

@@ -1,9 +1,12 @@
 //!
 
+use merge::{override_charts, override_update_schedule};
+
 use super::{chart_info::AllChartSettings, env, json};
 use std::path::Path;
 
 pub mod charts;
+mod merge;
 pub mod update_schedule;
 
 // todo: deduplicate
@@ -22,7 +25,7 @@ pub fn read_charts_config(path: &Path) -> Result<charts::Config<AllChartSettings
             )
             .build()?
             .try_deserialize()?;
-        override_charts(&mut json_config, &env_config);
+        override_charts(&mut json_config, env_config)?;
         let json_config = json_config.render_with_template_values()?;
         Ok(json_config.into())
     } else {
@@ -47,22 +50,11 @@ pub fn read_update_schedule_config(path: &Path) -> Result<update_schedule::Confi
             )
             .build()?
             .try_deserialize()?;
-        override_update_schedule(&mut json_config, &env_config);
+        override_update_schedule(&mut json_config, env_config)?;
         Ok(json_config.into())
     } else {
         Err(anyhow::anyhow!(
             "invalid chart config extension: {extension:?}"
         ))
     }
-}
-
-/// Prioritize values from environment
-fn override_charts(target: &mut json::charts::Config, from: &env::charts::Config) {}
-
-/// Prioritize values from environment
-fn override_update_schedule(
-    target: &mut json::update_schedule::Config,
-    from: &env::update_schedule::Config,
-) {
-    todo!()
 }

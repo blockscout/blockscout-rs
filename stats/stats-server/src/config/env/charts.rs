@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+use crate::config::chart_info::AllChartSettings;
+
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
 pub struct ChartSettingsOverwrite {
@@ -10,10 +12,71 @@ pub struct ChartSettingsOverwrite {
     pub units: Option<String>,
 }
 
+macro_rules! overwrite_struct_fields {
+    ($target_struct:ident <- $source_struct:ident {
+        $($field_name:ident),+ $(,)?
+    }) => {
+        $(
+            if let Some($field_name) = $source_struct.$field_name {
+                $target_struct.$field_name = $field_name;
+            }
+        )+
+    };
+}
+
+impl ChartSettingsOverwrite {
+    pub fn apply_to(self, target: &mut AllChartSettings) {
+        overwrite_struct_fields!(
+            target <- self {
+                enabled,
+                title,
+                description,
+            }
+        );
+        target.units = target.units.take().or(self.units);
+    }
+}
+
+impl TryFrom<ChartSettingsOverwrite> for AllChartSettings {
+    type Error = anyhow::Error;
+
+    fn try_from(value: ChartSettingsOverwrite) -> Result<Self, Self::Error> {
+        match value {
+            ChartSettingsOverwrite {
+                enabled: Some(enabled),
+                title: Some(title),
+                description: Some(description),
+                units,
+            } => Ok(AllChartSettings {
+                enabled,
+                title,
+                description,
+                units,
+            }),
+            _ => {
+                let mut missing_fields = vec![];
+                if value.enabled.is_none() {
+                    missing_fields.push("enabled");
+                }
+                if value.title.is_none() {
+                    missing_fields.push("title");
+                }
+                if value.description.is_none() {
+                    missing_fields.push("description");
+                }
+                Err(anyhow::anyhow!(
+                    "Cannot overwrite missing item properties. Missing required fields: {:?}",
+                    missing_fields
+                ))
+            }
+        }
+    }
+}
+
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
 pub struct CounterInfoOrdered {
-    pub order: Option<i64>,
+    pub order: Option<usize>,
     #[serde(flatten)]
     pub settings: ChartSettingsOverwrite,
 }
@@ -21,7 +84,7 @@ pub struct CounterInfoOrdered {
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
 pub struct LineChartInfoOrdered {
-    pub order: Option<i64>,
+    pub order: Option<usize>,
     #[serde(flatten)]
     pub settings: ChartSettingsOverwrite,
 }
@@ -29,7 +92,7 @@ pub struct LineChartInfoOrdered {
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
 pub struct LineChartCategoryOrdered {
-    pub order: Option<i64>,
+    pub order: Option<usize>,
     pub title: Option<String>,
     pub charts: BTreeMap<String, LineChartInfoOrdered>,
 }
