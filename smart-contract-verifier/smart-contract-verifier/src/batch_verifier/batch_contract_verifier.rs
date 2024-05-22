@@ -15,7 +15,7 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum BatchError {
     #[error("Compiler version not found: {0}")]
-    VersionNotFound(Version),
+    VersionNotFound(String),
     #[error("Compilation error: {0:?}")]
     Compilation(Vec<String>),
     #[error("{0}")]

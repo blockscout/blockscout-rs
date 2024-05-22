@@ -122,7 +122,7 @@ impl ListFetcher {
             versions
                 .get(ver)
                 .cloned()
-                .ok_or_else(|| FetchError::NotFound(ver.clone()))?
+                .ok_or_else(|| FetchError::NotFound(ver.clone().to_string()))?
         };
 
         let response = reqwest::get(file_info.url)

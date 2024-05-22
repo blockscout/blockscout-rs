@@ -16,7 +16,7 @@ use tracing::instrument;
 #[derive(Error, Debug)]
 pub enum FetchError {
     #[error("version {0} not found")]
-    NotFound(Version),
+    NotFound(String),
     #[error("couldn't fetch the file: {0}")]
     Fetch(anyhow::Error),
     #[error("hashsum of fetched file mismatch: {0}")]

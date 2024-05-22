@@ -110,7 +110,7 @@ impl S3Fetcher {
         {
             let versions = self.versions.read();
             if !versions.contains(ver) {
-                return Err(FetchError::NotFound(ver.clone()));
+                return Err(FetchError::NotFound(ver.clone().to_string()));
             }
         }
 

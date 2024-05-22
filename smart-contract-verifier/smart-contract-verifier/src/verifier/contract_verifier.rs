@@ -23,7 +23,7 @@ pub enum Error {
     #[error("{0}")]
     Initialization(anyhow::Error),
     #[error("Compiler version not found: {0}")]
-    VersionNotFound(compiler::Version),
+    VersionNotFound(String),
     #[error("Compilation error: {0:?}")]
     Compilation(Vec<String>),
     #[error("{0}")]

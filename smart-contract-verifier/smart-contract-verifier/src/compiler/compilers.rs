@@ -17,7 +17,7 @@ use tracing::instrument;
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Compiler version not found: {0}")]
-    VersionNotFound(Version),
+    VersionNotFound(String),
     #[error("Error while fetching compiler: {0:#}")]
     Fetch(#[from] FetchError),
     #[error("Internal error while compiling: {0}")]
