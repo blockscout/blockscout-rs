@@ -184,7 +184,7 @@ mod tests {
     };
     use pretty_assertions::assert_eq;
 
-    use super::override_charts;
+    use super::*;
 
     const EXAMPLE_CHART_CONFIG: &'static str = r#"{
         "counters": [
@@ -228,7 +228,7 @@ mod tests {
     }"#;
 
     #[test]
-    fn charts_override_correctly() {
+    fn charts_overridden_correctly() {
         let mut json_config: json::charts::Config =
             serde_json::from_str(&EXAMPLE_CHART_CONFIG).unwrap();
 
@@ -290,6 +290,76 @@ mod tests {
                 "native_coin_symbol": "USDC"
             }
         }"#).unwrap();
+        let expected_config = serde_json::to_value(expected_config).unwrap();
+
+        assert_eq!(overridden_config, expected_config)
+    }
+
+    const EXAMPLE_SCHEDULE_CONFIG: &'static str = r#"{
+        "update_groups": {
+            "average_block_time": {
+                "update_schedule": "0 0 15 * * * *"
+            },
+            "transactions": {
+                "update_schedule": "0 0 7 * * * *",
+                "ignore_charts": [
+                    "total_txns",
+                    "average_txn_fee"
+                ]
+            },
+            "new_transactions_only": {
+                "update_schedule": "0 10 */3 * * * *",
+                "ignore_charts": [ ]
+            }
+        }
+    }"#;
+
+    #[test]
+    fn schedule_overridden_correctly() {
+        let mut json_config: json::update_schedule::Config =
+            serde_json::from_str(&EXAMPLE_SCHEDULE_CONFIG).unwrap();
+
+        let env_override: env::update_schedule::Config = config_from_env(HashMap::from_iter(
+            [
+                ("STATS_CHARTS__UPDATE_GROUPS__AVERAGE_BLOCK_TIME__IGNORE_CHARTS__AVERAGE_BLOCK_TIME", "true"),
+                ("STATS_CHARTS__UPDATE_GROUPS__TRANSACTIONS__IGNORE_CHARTS__AVERAGE_TXN_FEE", "false"),
+                ("STATS_CHARTS__UPDATE_GROUPS__TRANSACTIONS__UPDATE_SCHEDULE", "0 0 3 * * * *"),
+                ("STATS_CHARTS__UPDATE_GROUPS__NEW_CONTRACTS__UPDATE_SCHEDULE", "0 0 1 * * * *"),
+            ]
+            .map(|(a, b)| (a.to_owned(), b.to_owned())),
+        ))
+        .unwrap();
+
+        override_update_schedule(&mut json_config, env_override).unwrap();
+        let overridden_config = serde_json::to_value(json_config).unwrap();
+
+        let expected_config: json::update_schedule::Config = serde_json::from_str(
+            r#"{
+            "update_groups": {
+                "average_block_time": {
+                    "update_schedule": "0 0 15 * * * *",
+                    "ignore_charts": [
+                        "average_block_time"
+                    ]
+                },
+                "transactions": {
+                    "update_schedule": "0 0 3 * * * *",
+                    "ignore_charts": [
+                        "total_txns"
+                    ]
+                },
+                "new_transactions_only": {
+                    "update_schedule": "0 10 */3 * * * *",
+                    "ignore_charts": [ ]
+                },
+                "new_contracts": {
+                    "update_schedule": "0 0 1 * * * *",
+                    "ignore_charts": [ ]
+                }
+            }
+        }"#,
+        )
+        .unwrap();
         let expected_config = serde_json::to_value(expected_config).unwrap();
 
         assert_eq!(overridden_config, expected_config)
