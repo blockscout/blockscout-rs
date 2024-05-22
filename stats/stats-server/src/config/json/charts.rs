@@ -25,38 +25,55 @@ mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
 
+    const EXAMPLE_CONFIG: &'static str = r#"{
+        "counters": [
+            {
+                "id": "total_blocks",
+                "title": "Total Blocks",
+                "description": "Number of all blocks in the network",
+                "units": "blocks"
+            },
+            {
+                "id": "total_txns",
+                "enabled": false,
+                "title": "Total txns",
+                "description": "All transactions including pending, dropped, replaced, failed transactions"
+            }
+        ],
+        "line_categories": [
+            {
+                "id": "accounts",
+                "title": "Accounts",
+                "charts": [
+                    {
+                        "id": "average_txn_fee",
+                        "enabled": false,
+                        "title": "Average transaction fee",
+                        "description": "The average amount in {{native_coin_symbol}} spent per transaction",
+                        "units": "{{native_coin_symbol}}"
+                    },
+                    {
+                        "id": "txns_fee",
+                        "title": "Transactions fees",
+                        "description": "Amount of tokens paid as fees",
+                        "units": "{{native_coin_symbol}}"
+                    }
+                ]
+            }
+        ],
+        "template_values": {
+            "native_coin_symbol": "USDT"
+        }
+    }"#;
+
+    #[test]
+    fn config_parses() {
+        let _: Config = serde_json::from_str(&EXAMPLE_CONFIG).expect("should be valid config");
+    }
+
     #[test]
     fn render_works() {
-        let config: Config = serde_json::from_str(r#"{
-            "counters": {
-                "total_blocks": {
-                    "title": "Total Blocks",
-                    "update_schedule": "0 0 */3 * * * *"
-                }
-            },
-            "lines": {
-                "accounts": {
-                    "title": "Accounts",
-                    "charts": {
-                        "average_txn_fee": {
-                            "title": "Average transaction fee",
-                            "description": "The average amount in {{native_coin_symbol}} spent per transaction",
-                            "units": "{{native_coin_symbol}}",
-                            "update_schedule": "0 0 6 * * * *"
-                        },
-                        "txns_fee": {
-                            "title": "Transactions fees",
-                            "description": "Amount of tokens paid as fees",
-                            "units": "{{native_coin_symbol}}",
-                            "update_schedule": "0 0 7 * * * *"
-                        }
-                    }
-                }
-            },
-            "template_values": {
-                "native_coin_symbol": "USDT"
-            }
-        }"#).expect("should be valid config");
+        let config: Config = serde_json::from_str(&EXAMPLE_CONFIG).expect("should be valid config");
 
         let config = serde_json::to_value(
             config
@@ -65,39 +82,9 @@ mod tests {
         )
         .expect("failed to serialize");
 
-        let expected_config: Config = serde_json::from_str(
-            r#"{
-            "counters": {
-                "total_blocks": {
-                    "title": "Total Blocks",
-                    "update_schedule": "0 0 */3 * * * *"
-                }
-            },
-            "lines": {
-                "accounts": {
-                    "title": "Accounts",
-                    "charts": {
-                        "average_txn_fee": {
-                            "title": "Average transaction fee",
-                            "description": "The average amount in USDT spent per transaction",
-                            "units": "USDT",
-                            "update_schedule": "0 0 6 * * * *"
-                        },
-                        "txns_fee": {
-                            "title": "Transactions fees",
-                            "description": "Amount of tokens paid as fees",
-                            "units": "USDT",
-                            "update_schedule": "0 0 7 * * * *"
-                        }
-                    }
-                }
-            },
-            "template_values": {
-                "native_coin_symbol": "USDT"
-            }
-        }"#,
-        )
-        .expect("should be valid config");
+        let expected_config_str = &EXAMPLE_CONFIG.replace("{{native_coin_symbol}}", "USDT");
+        let expected_config: Config =
+            serde_json::from_str(&expected_config_str).expect("should be valid config");
         let expected_config = serde_json::to_value(expected_config).unwrap();
 
         assert_eq!(config, expected_config);
