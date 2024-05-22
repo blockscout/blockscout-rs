@@ -42,7 +42,7 @@ pub struct LineChartCategory<ChartSettings> {
 }
 
 #[serde_as]
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
 pub struct UpdateGroup {
     #[serde_as(as = "Option<DisplayFromStr>")]
