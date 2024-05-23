@@ -5,21 +5,28 @@ use sea_orm::DatabaseConnection;
 pub struct UpdateParameters<'a> {
     pub db: &'a DatabaseConnection,
     pub blockscout: &'a DatabaseConnection,
-    pub current_time: chrono::DateTime<Utc>,
+    /// If `None`, it will be measured at the start of update
+    /// (i.e. after taking mutexes)
+    pub update_time_override: Option<chrono::DateTime<Utc>>,
     pub force_full: bool,
 }
 
-pub struct UpdateContext<UCX> {
-    // todo: consider memoization
-    // update_results: HashMap<String, (Vec<DateValue>, ChartMetadata)>,
-    pub user_context: UCX,
+#[derive(Clone)]
+pub struct UpdateContext<'a> {
+    pub db: &'a DatabaseConnection,
+    pub blockscout: &'a DatabaseConnection,
+    /// Update time
+    pub time: chrono::DateTime<Utc>,
+    pub force_full: bool,
 }
 
-impl<'a, UCX> UpdateContext<UCX> {
-    pub fn from_inner(inner: UCX) -> Self {
+impl<'a> From<UpdateParameters<'a>> for UpdateContext<'a> {
+    fn from(value: UpdateParameters<'a>) -> Self {
         Self {
-            // update_results: HashMap::new(),
-            user_context: inner,
+            db: value.db,
+            blockscout: value.blockscout,
+            time: value.update_time_override.unwrap_or_else(|| Utc::now()),
+            force_full: value.force_full,
         }
     }
 }

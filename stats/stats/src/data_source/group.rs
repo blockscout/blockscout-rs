@@ -49,8 +49,8 @@ pub trait UpdateGroup {
     async fn create_charts(
         &self,
         db: &DatabaseConnection,
+        creation_time_override: Option<chrono::DateTime<Utc>>,
         enabled_names: &HashSet<String>,
-        current_time: &chrono::DateTime<Utc>,
     ) -> Result<(), DbErr>;
     // todo: comments
     async fn update_charts<'a>(
@@ -140,7 +140,7 @@ pub mod macro_reexport {
 ///
 /// impl RemoteSource for DummyRemoteSource {
 ///     async fn query_data(
-///         cx: &UpdateContext<UpdateParameters<'_>>,
+///         cx: &UpdateContext<'_>,
 ///         range: RangeInclusive<NaiveDate>,
 ///     ) -> Result<Vec<DateValue>, UpdateError> {
 ///         Ok(vec![])
@@ -219,13 +219,18 @@ macro_rules! construct_update_group {
                 #[allow(unused)]
                 db: &sea_orm::DatabaseConnection,
                 #[allow(unused)]
-                enabled_names: &::std::collections::HashSet<String>,
+                creation_time_override: ::std::option::Option<
+                    $crate::data_source::group::macro_reexport::chrono::DateTime<
+                        $crate::data_source::group::macro_reexport::chrono::Utc
+                    >
+                >,
                 #[allow(unused)]
-                current_time: &$crate::data_source::group::macro_reexport::chrono::DateTime<chrono::Utc>,
+                enabled_names: &::std::collections::HashSet<String>,
             ) -> Result<(), sea_orm::DbErr> {
+                let current_time = creation_time_override.unwrap_or_else(|| $crate::data_source::group::macro_reexport::chrono::Utc::now());
                 $(
                     if enabled_names.contains(<$member as $crate::Chart>::NAME) {
-                        <$member as $crate::data_source::source::DataSource>::init_all_locally(db, current_time).await?;
+                        <$member as $crate::data_source::source::DataSource>::init_all_locally(db, &current_time).await?;
                     }
                 )*
                 Ok(())
@@ -238,9 +243,7 @@ macro_rules! construct_update_group {
                 enabled_names: &::std::collections::HashSet<String>,
             ) -> Result<(), $crate::UpdateError> {
                 #[allow(unused)]
-                let cx = $crate::data_source::types::UpdateContext::<$crate::data_source::types::UpdateParameters<'a>>::from_inner(
-                    params.into()
-                );
+                let cx: $crate::data_source::types::UpdateContext = params.into();
                 $(
                     if enabled_names.contains(<$member as $crate::Chart>::NAME) {
                         <$member as $crate::data_source::source::DataSource>::update_from_remote(&cx).await?;
@@ -389,13 +392,12 @@ impl SyncUpdateGroup {
     pub async fn create_charts_with_mutexes<'a>(
         &self,
         db: &DatabaseConnection,
+        creation_time_override: Option<chrono::DateTime<Utc>>,
         enabled_names: &HashSet<String>,
-        // todo: update `current_time`???
-        current_time: &chrono::DateTime<Utc>,
     ) -> Result<(), UpdateError> {
         let (_joint_guard, enabled_members) = self.lock_enabled_dependencies(enabled_names).await;
         self.inner
-            .create_charts(db, &enabled_members, current_time)
+            .create_charts(db, creation_time_override, &enabled_members)
             .await
             .map_err(UpdateError::StatsDB)
     }
@@ -403,7 +405,6 @@ impl SyncUpdateGroup {
     /// Ignores unknown names
     pub async fn update_charts_with_mutexes<'a>(
         &self,
-        // todo: update `current_time`???
         params: UpdateParameters<'a>,
         enabled_names: &HashSet<String>,
     ) -> Result<(), UpdateError> {

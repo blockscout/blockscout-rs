@@ -52,9 +52,7 @@ impl crate::Chart for TotalBlocks {
 }
 
 impl ChartUpdater for TotalBlocks {
-    async fn update_values(
-        cx: &mut UpdateContext<UpdateParameters<'_>>,
-    ) -> Result<Vec<DateValue>, UpdateError> {
+    async fn update_values(cx: &mut UpdateContext<'_>) -> Result<Vec<DateValue>, UpdateError> {
         Self::update_with_values(cx).await
     }
 }
@@ -103,7 +101,7 @@ impl ChartUpdater for TotalBlocks {
 //             current_time,
 //             force_full: true,
 //         };
-//         let mut cx = UpdateContext::from_inner(parameters.clone());
+//         let mut cx = UpdateContext::from(parameters.clone());
 //         TotalBlocks::update(&mut cx).await.unwrap();
 //         let data = get_counters(&db).await.unwrap();
 //         assert_eq!("13", data[TotalBlocks::name()].value);
@@ -127,7 +125,7 @@ impl ChartUpdater for TotalBlocks {
 //             current_time,
 //             force_full: true,
 //         };
-//         let mut cx = UpdateContext::from_inner(parameters.clone());
+//         let mut cx = UpdateContext::from(parameters.clone());
 //         TotalBlocks::update(&mut cx).await.unwrap();
 //         let data = get_counters(&db).await.unwrap();
 //         assert_eq!("9", data[TotalBlocks::name()].value);
@@ -161,7 +159,7 @@ impl ChartUpdater for TotalBlocks {
 //             current_time,
 //             force_full: true,
 //         };
-//         let mut cx = UpdateContext::from_inner(parameters.clone());
+//         let mut cx = UpdateContext::from(parameters.clone());
 //         TotalBlocks::update(&mut cx).await.unwrap();
 //         let data = get_counters(&db).await.unwrap();
 //         assert_eq!("13", data[TotalBlocks::name()].value);

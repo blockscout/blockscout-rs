@@ -1,30 +1,35 @@
 use super::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data};
 use crate::{
-    charts::db_interaction::chart_updaters::ChartUpdater,
-    data_source::types::{UpdateContext, UpdateParameters},
+    data_source::{
+        kinds::chart::UpdateableChart,
+        types::{UpdateContext, UpdateParameters},
+    },
     get_chart_data, get_counters, Chart, MissingDatePolicy,
 };
+use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, NaiveDate};
 use sea_orm::DatabaseConnection;
 use std::{assert_eq, str::FromStr};
 
-pub async fn simple_test_chart<C: ChartUpdater>(test_name: &str, expected: Vec<(&str, &str)>) {
+pub async fn simple_test_chart<C: UpdateableChart>(test_name: &str, expected: Vec<(&str, &str)>) {
     let _ = tracing_subscriber::fmt::try_init();
     let (db, blockscout) = init_db_all(test_name).await;
     let current_time = DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
     let current_date = current_time.date_naive();
-    // C::create(&db).await.unwrap();
+    C::create(&db, &current_time).await.unwrap();
     fill_mock_blockscout_data(&blockscout, current_date).await;
     let approximate_trailing_points = C::approximate_trailing_points();
 
     let mut parameters = UpdateParameters {
         db: &db,
         blockscout: &blockscout,
-        current_time,
+        update_time_override: Some(current_time),
         force_full: true,
     };
-    let mut cx = UpdateContext::from_inner(parameters.clone());
-    C::update(&mut cx).await.unwrap();
+    let mut cx = UpdateContext::from(parameters.clone());
+    C::update(&mut cx, &mut AggregateTimer::new())
+        .await
+        .unwrap();
     get_chart_and_assert_eq::<C>(
         &db,
         &expected,
@@ -36,8 +41,10 @@ pub async fn simple_test_chart<C: ChartUpdater>(test_name: &str, expected: Vec<(
     .await;
 
     parameters.force_full = false;
-    let mut cx = UpdateContext::from_inner(parameters);
-    C::update(&mut cx).await.unwrap();
+    let mut cx = UpdateContext::from(parameters);
+    C::update(&mut cx, &mut AggregateTimer::new())
+        .await
+        .unwrap();
     get_chart_and_assert_eq::<C>(
         &db,
         &expected,
@@ -49,7 +56,7 @@ pub async fn simple_test_chart<C: ChartUpdater>(test_name: &str, expected: Vec<(
     .await;
 }
 
-pub async fn ranged_test_chart<C: ChartUpdater>(
+pub async fn ranged_test_chart<C: UpdateableChart>(
     test_name: &str,
     expected: Vec<(&str, &str)>,
     from: NaiveDate,
@@ -59,7 +66,7 @@ pub async fn ranged_test_chart<C: ChartUpdater>(
     let (db, blockscout) = init_db_all(test_name).await;
     let current_time = DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
     let current_date = current_time.date_naive();
-    // C::create(&db).await.unwrap();
+    C::create(&db, &current_time).await.unwrap();
     fill_mock_blockscout_data(&blockscout, current_date).await;
     let policy = C::missing_date_policy();
     let approximate_trailing_points = C::approximate_trailing_points();
@@ -67,11 +74,13 @@ pub async fn ranged_test_chart<C: ChartUpdater>(
     let mut parameters = UpdateParameters {
         db: &db,
         blockscout: &blockscout,
-        current_time,
+        update_time_override: Some(current_time),
         force_full: true,
     };
-    let mut cx = UpdateContext::from_inner(parameters.clone());
-    C::update(&mut cx).await.unwrap();
+    let mut cx = UpdateContext::from(parameters.clone());
+    C::update(&mut cx, &mut AggregateTimer::new())
+        .await
+        .unwrap();
     get_chart_and_assert_eq::<C>(
         &db,
         &expected,
@@ -83,8 +92,10 @@ pub async fn ranged_test_chart<C: ChartUpdater>(
     .await;
 
     parameters.force_full = false;
-    let mut cx = UpdateContext::from_inner(parameters);
-    C::update(&mut cx).await.unwrap();
+    let mut cx = UpdateContext::from(parameters);
+    C::update(&mut cx, &mut AggregateTimer::new())
+        .await
+        .unwrap();
     get_chart_and_assert_eq::<C>(
         &db,
         &expected,
@@ -96,7 +107,7 @@ pub async fn ranged_test_chart<C: ChartUpdater>(
     .await;
 }
 
-async fn get_chart_and_assert_eq<C: Chart>(
+async fn get_chart_and_assert_eq<C: UpdateableChart>(
     db: &DatabaseConnection,
     expected: &Vec<(&str, &str)>,
     from: Option<NaiveDate>,
@@ -126,28 +137,32 @@ async fn get_chart_and_assert_eq<C: Chart>(
     assert_eq!(expected, &data);
 }
 
-pub async fn simple_test_counter<C: ChartUpdater>(test_name: &str, expected: &str) {
+pub async fn simple_test_counter<C: UpdateableChart>(test_name: &str, expected: &str) {
     let _ = tracing_subscriber::fmt::try_init();
     let (db, blockscout) = init_db_all(test_name).await;
     let current_time = chrono::DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
     let current_date = current_time.date_naive();
 
-    // C::create(&db).await.unwrap();
+    C::create(&db, &current_time).await.unwrap();
     fill_mock_blockscout_data(&blockscout, current_date).await;
 
     let mut parameters = UpdateParameters {
         db: &db,
         blockscout: &blockscout,
-        current_time,
+        update_time_override: Some(current_time),
         force_full: true,
     };
-    let mut cx = UpdateContext::from_inner(parameters.clone());
-    C::update(&mut cx).await.unwrap();
+    let mut cx = UpdateContext::from(parameters.clone());
+    C::update(&mut cx, &mut AggregateTimer::new())
+        .await
+        .unwrap();
     get_counter_and_assert_eq::<C>(&db, expected).await;
 
     parameters.force_full = false;
-    let mut cx = UpdateContext::from_inner(parameters.clone());
-    C::update(&mut cx).await.unwrap();
+    let mut cx = UpdateContext::from(parameters.clone());
+    C::update(&mut cx, &mut AggregateTimer::new())
+        .await
+        .unwrap();
     get_counter_and_assert_eq::<C>(&db, expected).await;
 }
 

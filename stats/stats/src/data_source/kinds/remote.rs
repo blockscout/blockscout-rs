@@ -6,16 +6,13 @@ use sea_orm::FromQueryResult;
 
 use crate::{
     charts::db_interaction::chart_updaters::RemoteBatchQuery,
-    data_source::{
-        source::DataSource,
-        types::{UpdateContext, UpdateParameters},
-    },
+    data_source::{source::DataSource, types::UpdateContext},
     DateValue, UpdateError,
 };
 
 pub trait RemoteSource {
     fn query_data(
-        cx: &UpdateContext<UpdateParameters<'_>>,
+        cx: &UpdateContext<'_>,
         range: RangeInclusive<NaiveDate>,
     ) -> impl std::future::Future<Output = Result<Vec<DateValue>, UpdateError>> + std::marker::Send;
 }
@@ -43,14 +40,12 @@ impl<T: RemoteSource> DataSource for RemoteSourceWrapper<T> {
         async move { Ok(()) }
     }
 
-    async fn update_from_remote(
-        _cx: &UpdateContext<UpdateParameters<'_>>,
-    ) -> Result<(), UpdateError> {
+    async fn update_from_remote(_cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
         Ok(())
     }
 
     async fn query_data(
-        cx: &UpdateContext<UpdateParameters<'_>>,
+        cx: &UpdateContext<'_>,
         range: RangeInclusive<NaiveDate>,
         remote_fetch_timer: &mut AggregateTimer,
     ) -> Result<Vec<DateValue>, UpdateError> {
@@ -61,12 +56,12 @@ impl<T: RemoteSource> DataSource for RemoteSourceWrapper<T> {
 
 impl<T: RemoteBatchQuery> RemoteSource for T {
     async fn query_data(
-        cx: &UpdateContext<UpdateParameters<'_>>,
+        cx: &UpdateContext<'_>,
         range: RangeInclusive<NaiveDate>,
     ) -> Result<Vec<DateValue>, UpdateError> {
         let query = T::get_query(*range.start(), *range.end());
         DateValue::find_by_statement(query)
-            .all(cx.user_context.blockscout)
+            .all(cx.blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)
     }

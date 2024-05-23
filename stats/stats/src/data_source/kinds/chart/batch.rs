@@ -10,10 +10,7 @@ use crate::{
         chart::chart_portrait,
         db_interaction::chart_updaters::common_operations::get_min_date_blockscout,
     },
-    data_source::{
-        source::DataSource,
-        types::{UpdateContext, UpdateParameters},
-    },
+    data_source::{source::DataSource, types::UpdateContext},
     Chart, DateValue, UpdateError,
 };
 
@@ -47,7 +44,7 @@ impl<T: BatchUpdateableChart + Chart> Chart for BatchUpdateableChartWrapper<T> {
 
 /// Perform update utilizing batching
 async fn batch_update_values<U>(
-    cx: &UpdateContext<UpdateParameters<'_>>,
+    cx: &UpdateContext<'_>,
     chart_id: i32,
     update_from_row: Option<DateValue>,
     min_blockscout_block: i64,
@@ -56,9 +53,8 @@ async fn batch_update_values<U>(
 where
     U: BatchUpdateableChart,
 {
-    let today = cx.user_context.current_time.date_naive();
+    let today = cx.time.date_naive();
     let txn = cx
-        .user_context
         .blockscout
         .begin()
         .await
@@ -93,7 +89,7 @@ where
 
 /// Returns how many records were found
 async fn batch_update_values_step<U>(
-    cx: &UpdateContext<UpdateParameters<'_>>,
+    cx: &UpdateContext<'_>,
     chart_id: i32,
     min_blockscout_block: i64,
     range: RangeInclusive<NaiveDate>,
@@ -107,9 +103,9 @@ where
     let secondary_data: <<U as BatchUpdateableChart>::SecondaryDependencies as DataSource>::Output =
         U::SecondaryDependencies::query_data(cx, range, remote_fetch_timer).await?;
     let found = U::batch_update_values_step_with(
-        cx.user_context.db,
+        cx.db,
         chart_id,
-        cx.user_context.current_time,
+        cx.time,
         min_blockscout_block,
         primary_data,
         secondary_data,
@@ -127,7 +123,7 @@ where
     type SecondaryDependencies = T::SecondaryDependencies;
 
     fn update_values(
-        cx: &UpdateContext<UpdateParameters<'_>>,
+        cx: &UpdateContext<'_>,
         chart_id: i32,
         update_from_row: Option<DateValue>,
         min_blockscout_block: i64,

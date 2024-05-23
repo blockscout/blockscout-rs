@@ -5,7 +5,7 @@
 // mod mock;
 // mod total_accounts;
 // mod total_addresses;
-mod total_blocks;
+// mod total_blocks;
 // mod total_contracts;
 // mod total_native_coin_holders;
 // mod total_native_coin_transfers;
@@ -20,7 +20,7 @@ mod total_blocks;
 // pub use mock::MockCounter;
 // pub use total_accounts::TotalAccounts;
 // pub use total_addresses::TotalAddresses;
-pub use total_blocks::TotalBlocks;
+// pub use total_blocks::TotalBlocks;
 // pub use total_contracts::TotalContracts;
 // pub use total_native_coin_holders::TotalNativeCoinHolders;
 // pub use total_native_coin_transfers::TotalNativeCoinTransfers;

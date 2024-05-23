@@ -66,11 +66,10 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
     let charts = Arc::new(Charts::new(charts_config, update_schedule)?);
 
     // TODO: may be run this with migrations or have special config
-    let now = chrono::Utc::now();
     for group_entry in charts.update_groups.values() {
         group_entry
             .group
-            .create_charts_with_mutexes(&db, &group_entry.enabled_members, &now)
+            .create_charts_with_mutexes(&db, None, &group_entry.enabled_members)
             .await?;
     }
 

@@ -7,7 +7,7 @@ use sea_orm::{DatabaseConnection, DbErr};
 
 use crate::UpdateError;
 
-use super::types::{UpdateContext, UpdateParameters};
+use super::types::UpdateContext;
 
 /// Thing that can provide data from local storage.
 ///
@@ -90,7 +90,7 @@ pub trait DataSource {
     /// Should be idempontent with regards to `current_time` (in `cx`).
     /// It is a normal behaviour to call this method within single update.
     fn update_from_remote(
-        cx: &UpdateContext<UpdateParameters<'_>>,
+        cx: &UpdateContext<'_>,
     ) -> impl std::future::Future<Output = Result<(), UpdateError>> + std::marker::Send;
 
     /// Retrieve chart data for dates in `range`.
@@ -98,7 +98,7 @@ pub trait DataSource {
     /// **Does not perform an update!** If you need relevant data, you likely need
     /// to call [`DataSource::update_from_remote`] beforehand.
     fn query_data(
-        cx: &UpdateContext<UpdateParameters<'_>>,
+        cx: &UpdateContext<'_>,
         range: RangeInclusive<NaiveDate>,
         remote_fetch_timer: &mut AggregateTimer,
     ) -> impl std::future::Future<Output = Result<Self::Output, UpdateError>> + std::marker::Send;
@@ -131,14 +131,12 @@ impl DataSource for () {
         HashSet::new()
     }
 
-    async fn update_from_remote(
-        _cx: &UpdateContext<UpdateParameters<'_>>,
-    ) -> Result<(), UpdateError> {
+    async fn update_from_remote(_cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
         // stop recursion
         Ok(())
     }
     async fn query_data(
-        _cx: &UpdateContext<UpdateParameters<'_>>,
+        _cx: &UpdateContext<'_>,
         _range: RangeInclusive<NaiveDate>,
         _remote_fetch_timer: &mut AggregateTimer,
     ) -> Result<Self::Output, UpdateError> {
@@ -167,16 +165,20 @@ where
         Ok(())
     }
 
-    async fn update_from_remote(
-        cx: &UpdateContext<UpdateParameters<'_>>,
-    ) -> Result<(), UpdateError> {
+    async fn update_from_remote(cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
+        // todo: log deps updated
+        // tracing::info!(
+        //     chart_name = Self::NAME,
+        //     parent_chart_name = P::NAME,
+        //     "updating parent"
+        // );
         Self::PrimaryDependency::update_from_remote(cx).await?;
         Self::SecondaryDependencies::update_from_remote(cx).await?;
         Ok(())
     }
 
     async fn query_data(
-        cx: &UpdateContext<UpdateParameters<'_>>,
+        cx: &UpdateContext<'_>,
         range: RangeInclusive<NaiveDate>,
         remote_fetch_timer: &mut AggregateTimer,
     ) -> Result<Self::Output, UpdateError> {

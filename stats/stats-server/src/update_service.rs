@@ -86,7 +86,7 @@ impl UpdateService {
             let update_parameters = UpdateParameters {
                 db: &self.db,
                 blockscout: &self.blockscout,
-                current_time: chrono::Utc::now(),
+                update_time_override: None,
                 force_full,
             };
             group_entry

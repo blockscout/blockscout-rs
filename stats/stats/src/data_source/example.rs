@@ -140,7 +140,7 @@ construct_update_group!(ExampleUpdateGroup {
 async fn _update_examples() {
     let _ = tracing_subscriber::fmt::try_init();
     let (db, blockscout) = init_db_all("update_examples").await;
-    let current_time = chrono::DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
+    let current_time = chrono::DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap();
     let current_date = current_time.date_naive();
     fill_mock_blockscout_data(&blockscout, current_date).await;
     let enabled =
@@ -152,14 +152,14 @@ async fn _update_examples() {
         .collect();
     let group = SyncUpdateGroup::new(&mutexes, Arc::new(ExampleUpdateGroup)).unwrap();
     group
-        .create_charts_with_mutexes(&db, &enabled, &current_time)
+        .create_charts_with_mutexes(&db, None, &enabled)
         .await
         .unwrap();
 
     let parameters = UpdateParameters {
         db: &db,
         blockscout: &blockscout,
-        current_time,
+        update_time_override: None,
         force_full: true,
     };
     group

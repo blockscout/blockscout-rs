@@ -13,11 +13,7 @@ use crate::{
             read::get_chart_metadata,
         },
     },
-    data_source::{
-        source::DataSource,
-        source_metrics::DataSourceMetrics,
-        types::{UpdateContext, UpdateParameters},
-    },
+    data_source::{source::DataSource, source_metrics::DataSourceMetrics, types::UpdateContext},
     get_chart_data, metrics, Chart, DateValue, UpdateError,
 };
 
@@ -40,27 +36,27 @@ pub trait UpdateableChart: Chart {
     /// It is a normal behaviour to call this method within single update
     /// (= with same `current_time`).
     fn update(
-        cx: &UpdateContext<UpdateParameters<'_>>,
+        cx: &UpdateContext<'_>,
         remote_fetch_timer: &mut AggregateTimer,
     ) -> impl std::future::Future<Output = Result<(), UpdateError>> + Send {
         async {
-            let metadata = get_chart_metadata(cx.user_context.db, Self::NAME).await?;
+            let metadata = get_chart_metadata(cx.db, Self::NAME).await?;
             if let Some(last_updated_at) = metadata.last_updated_at {
-                if cx.user_context.current_time == last_updated_at {
+                if cx.time == last_updated_at {
                     // no need to perform update
                     return Ok(());
                 }
             }
             let chart_id = metadata.id;
-            let min_blockscout_block = get_min_block_blockscout(cx.user_context.blockscout)
+            let min_blockscout_block = get_min_block_blockscout(cx.blockscout)
                 .await
                 .map_err(UpdateError::BlockscoutDB)?;
             let offset = Some(Self::approximate_trailing_points());
             let last_updated_row = get_nth_last_row::<Self>(
                 chart_id,
                 min_blockscout_block,
-                cx.user_context.db,
-                cx.user_context.force_full,
+                cx.db,
+                cx.force_full,
                 offset,
             )
             .await?;
@@ -72,15 +68,14 @@ pub trait UpdateableChart: Chart {
                 remote_fetch_timer,
             )
             .await?;
-            Self::update_metadata(cx.user_context.db, chart_id, cx.user_context.current_time)
-                .await?;
+            Self::update_metadata(cx.db, chart_id, cx.time).await?;
             Ok(())
         }
     }
 
     /// Update only chart values.
     fn update_values(
-        cx: &UpdateContext<UpdateParameters<'_>>,
+        cx: &UpdateContext<'_>,
         chart_id: i32,
         update_from_row: Option<DateValue>,
         min_blockscout_block: i64,
@@ -102,12 +97,12 @@ pub trait UpdateableChart: Chart {
 
     /// Retrieve chart data from (local) storage.
     fn query_data(
-        cx: &UpdateContext<UpdateParameters<'_>>,
+        cx: &UpdateContext<'_>,
         range: std::ops::RangeInclusive<sea_orm::prelude::Date>,
     ) -> impl std::future::Future<Output = Result<ChartData, UpdateError>> + Send {
         async move {
-            let values = get_chart_data(
-                cx.user_context.db,
+            let values: Vec<DateValue> = get_chart_data(
+                cx.db,
                 Self::NAME,
                 Some(*range.start()),
                 Some(*range.end()),
@@ -119,7 +114,7 @@ pub trait UpdateableChart: Chart {
             .into_iter()
             .map(DateValue::from)
             .collect();
-            let metadata = get_chart_metadata(cx.user_context.db, Self::NAME).await?;
+            let metadata = get_chart_metadata(cx.db, Self::NAME).await?;
             Ok(ChartData { metadata, values })
         }
     }
@@ -148,9 +143,7 @@ impl<C: UpdateableChart> DataSource for UpdateableChartWrapper<C> {
 
     const MUTEX_ID: Option<&'static str> = Some(<C as Chart>::NAME);
 
-    async fn update_from_remote(
-        cx: &UpdateContext<UpdateParameters<'_>>,
-    ) -> Result<(), UpdateError> {
+    async fn update_from_remote(cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
         Self::PrimaryDependency::update_from_remote(cx).await?;
         Self::SecondaryDependencies::update_from_remote(cx).await?;
         // data retrieval time
@@ -172,7 +165,7 @@ impl<C: UpdateableChart> DataSource for UpdateableChartWrapper<C> {
     }
 
     async fn query_data(
-        cx: &UpdateContext<UpdateParameters<'_>>,
+        cx: &UpdateContext<'_>,
         range: RangeInclusive<NaiveDate>,
         // local data is queried, do not track in remote timer
         _remote_fetch_timer: &mut AggregateTimer,
