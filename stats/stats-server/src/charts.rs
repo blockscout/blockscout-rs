@@ -86,14 +86,14 @@ impl Charts {
     pub fn new(
         charts: config::charts::Config<AllChartSettings>,
         update_schedule: config::update_schedule::Config,
-    ) -> Result<Self, anyhow::Error> {
+    ) -> anyhow::Result<Self> {
         Self::validated_and_initialized(charts, update_schedule)
     }
 
     fn validated_and_initialized(
         charts: config::charts::Config<AllChartSettings>,
         update_schedule: config::update_schedule::Config,
-    ) -> Result<Self, anyhow::Error> {
+    ) -> anyhow::Result<Self> {
         let enabled_charts_config = Self::remove_disabled_charts(charts);
         let enabled_counters = enabled_charts_config
             .counters
@@ -203,17 +203,15 @@ impl Charts {
             .collect()
     }
 
-    fn all_update_groups() -> BTreeMap<String, ArcUpdateGroup> {
-        let contracts = Arc::new(groups::Contracts);
-        let groups: Vec<ArcUpdateGroup> = vec![contracts];
-        groups.into_iter().map(|g| (g.name(), g)).collect()
+    fn all_update_groups() -> Vec<ArcUpdateGroup> {
+        vec![Arc::new(groups::Contracts)]
     }
 
     fn create_all_dependencies_mutexes(
-        groups: impl Iterator<Item = ArcUpdateGroup>,
+        groups: impl IntoIterator<Item = ArcUpdateGroup>,
     ) -> BTreeMap<String, Arc<Mutex<()>>> {
         let mut mutexes = BTreeMap::new();
-        for g in groups {
+        for g in groups.into_iter() {
             let dependencies = g.list_dependency_mutex_ids();
             for d in dependencies {
                 if !mutexes.contains_key(d) {
@@ -228,7 +226,7 @@ impl Charts {
     fn verify_schedule_config(
         update_groups: &BTreeMap<String, ArcUpdateGroup>,
         schedule_config: &config::update_schedule::Config,
-    ) -> Result<(), anyhow::Error> {
+    ) -> anyhow::Result<()> {
         let all_names: HashSet<_> = update_groups.keys().collect();
         let config_names: HashSet<_> = schedule_config.update_groups.keys().collect();
         let missing_group_settings = all_names.difference(&config_names).collect_vec();
@@ -274,12 +272,29 @@ impl Charts {
         }
     }
 
+    /// Make map & check for duplicate names
+    fn construct_group_map(
+        groups: Vec<ArcUpdateGroup>,
+    ) -> anyhow::Result<BTreeMap<String, ArcUpdateGroup>> {
+        let mut map = BTreeMap::new();
+        for g in groups.into_iter() {
+            if let Some(duplicate_named) = map.insert(g.name(), g) {
+                return Err(anyhow::anyhow!(
+                    "Non-unique group name: {:?}",
+                    duplicate_named.name()
+                ));
+            }
+        }
+        Ok(map)
+    }
+
     /// All initialization of update groups happens here
     fn init_update_groups(
         schedule_config: config::update_schedule::Config,
-    ) -> Result<BTreeMap<String, UpdateGroupEntry>, anyhow::Error> {
+    ) -> anyhow::Result<BTreeMap<String, UpdateGroupEntry>> {
         let update_groups = Self::all_update_groups();
-        let dep_mutexes = Self::create_all_dependencies_mutexes(update_groups.values().cloned());
+        let dep_mutexes = Self::create_all_dependencies_mutexes(update_groups.clone());
+        let update_groups = Self::construct_group_map(update_groups)?;
         let mut result = BTreeMap::new();
 
         // checks that all groups are present in config.
@@ -316,7 +331,7 @@ impl Charts {
     fn all_member_charts() -> BTreeMap<String, ChartDynamic> {
         let charts_with_duplicates = Self::all_update_groups()
             .into_iter()
-            .flat_map(|(_, g)| g.list_charts())
+            .flat_map(|g| g.list_charts())
             .collect_vec();
         let mut charts = BTreeMap::new();
         for chart in charts_with_duplicates {
