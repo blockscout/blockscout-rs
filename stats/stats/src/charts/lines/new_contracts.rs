@@ -1,8 +1,6 @@
-use crate::{
-    charts::db_interaction::chart_updaters::RemoteBatchQuery,
-    data_source::kinds::chart::{
-        BatchUpdateableChartWrapper, RemoteChart, RemoteChartWrapper, UpdateableChartWrapper,
-    },
+use crate::data_source::kinds::{
+    chart::{BatchUpdateableChartWrapper, RemoteChart, RemoteChartWrapper, UpdateableChartWrapper},
+    remote::RemoteSource,
 };
 use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
@@ -10,7 +8,7 @@ use sea_orm::{DbBackend, Statement};
 
 pub struct NewContractsRemote;
 
-impl RemoteBatchQuery for NewContractsRemote {
+impl RemoteSource for NewContractsRemote {
     fn get_query(from: NaiveDate, to: NaiveDate) -> Statement {
         Statement::from_sql_and_values(
             DbBackend::Postgres,

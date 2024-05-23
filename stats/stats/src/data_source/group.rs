@@ -139,6 +139,10 @@ pub mod macro_reexport {
 /// struct DummyRemoteSource;
 ///
 /// impl RemoteSource for DummyRemoteSource {
+///     fn get_query(from: NaiveDate, to: NaiveDate) -> sea_orm::Statement {
+///         // not called
+///         unimplemented!()
+///     }
 ///     async fn query_data(
 ///         cx: &UpdateContext<'_>,
 ///         range: RangeInclusive<NaiveDate>,

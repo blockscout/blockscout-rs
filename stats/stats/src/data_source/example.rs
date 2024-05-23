@@ -6,10 +6,7 @@ use sea_orm::{prelude::*, DbBackend, Statement};
 use tokio::sync::Mutex;
 
 use crate::{
-    charts::db_interaction::{
-        chart_updaters::{parse_and_cumsum, RemoteBatchQuery},
-        write::insert_data_many,
-    },
+    charts::db_interaction::{chart_updaters::parse_and_cumsum, write::insert_data_many},
     construct_update_group,
     tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
     Chart, MissingDatePolicy, UpdateError,
@@ -17,9 +14,12 @@ use crate::{
 
 use super::{
     group::{SyncUpdateGroup, UpdateGroup},
-    kinds::chart::{
-        BatchUpdateableChart, BatchUpdateableChartWrapper, RemoteChart, RemoteChartWrapper,
-        UpdateableChartWrapper,
+    kinds::{
+        chart::{
+            BatchUpdateableChart, BatchUpdateableChartWrapper, RemoteChart, RemoteChartWrapper,
+            UpdateableChartWrapper,
+        },
+        remote::RemoteSource,
     },
     source::DataSource,
     types::UpdateParameters,
@@ -40,7 +40,7 @@ pub type NewContractsChartSource =
 
 pub struct NewContractsRemote;
 
-impl RemoteBatchQuery for NewContractsRemote {
+impl RemoteSource for NewContractsRemote {
     fn get_query(from: NaiveDate, to: NaiveDate) -> Statement {
         Statement::from_sql_and_values(
             DbBackend::Postgres,
