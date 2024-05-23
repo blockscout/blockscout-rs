@@ -144,18 +144,7 @@ pub fn detailed_domain_from_logic(
         .into_iter()
         .map(|t| domain_token_from_logic(t, chain_id))
         .collect();
-    let protocol = Some(proto::ProtocolInfo {
-        id: protocol.info.slug,
-        description: protocol.info.meta.description,
-        tld_list: protocol
-            .info
-            .tld_list
-            .into_iter()
-            .map(|tld| tld.0)
-            .collect(),
-        title: protocol.info.meta.title,
-        icon_url: protocol.info.meta.icon_url,
-    });
+    let protocol = Some(protocol_from_logic(&protocol));
     Ok(proto::DetailedDomain {
         id: domain.id,
         name: domain.name.unwrap_or_default(),

@@ -42,4 +42,4 @@ features = [
 bens-logic = { path = "../bens-logic", features = ["test-utils"] }
 blockscout-service-launcher = { workspace = true, features = [ "database-0_12", "test-server" ] }
 pretty_assertions = "1.4.0"
-
+tera = "1"

@@ -1,7 +1,1 @@
-{
-  "id": "ens",
-  "title": "ENS",
-  "description": "Ethereum Name Service",
-  "tld_list": ["eth"],
-  "icon_url": null
-}
+{{ ens_protocol | json_encode() | safe }}

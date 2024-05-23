@@ -68,10 +68,12 @@ message DetailedDomain {
 
 message ProtocolInfo {
   string id = 1;
-  string title = 2;
-  string description = 3;
-  optional string icon_url = 4;
+  string short_name = 2;
+  string title = 3;
+  string description = 4;
   repeated string tld_list = 5;
+  optional string icon_url = 6;
+  optional string docs_url = 7;
 }
 
 

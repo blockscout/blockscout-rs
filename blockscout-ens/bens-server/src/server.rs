@@ -6,7 +6,7 @@ use crate::{
 use anyhow::Context;
 use bens_logic::{
     blockscout::BlockscoutClient,
-    protocols::{Network, ProtocolInfo, ProtocolMeta},
+    protocols::{Network, ProtocolInfo},
     subgraphs_reader::SubgraphReader,
 };
 use bens_proto::blockscout::bens::v1::{
@@ -103,11 +103,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
                     address_resolve_technique: p.address_resolve_technique,
                     empty_label_hash: p.empty_label_hash,
                     native_token_contract: p.native_token_contract,
-                    meta: ProtocolMeta {
-                        title: p.meta.title,
-                        description: p.meta.description,
-                        icon_url: p.meta.icon_url,
-                    },
+                    meta: p.meta.0,
                 },
             )
         })

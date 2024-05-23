@@ -32,9 +32,7 @@ pub struct ProtocolInfo {
     pub slug: String,
     pub tld_list: NonEmpty<Tld>,
     pub subgraph_name: String,
-    #[serde(default)]
     pub address_resolve_technique: AddressResolveTechnique,
-    #[serde(default)]
     pub empty_label_hash: Option<Bytes>,
     pub native_token_contract: Option<Address>,
     pub meta: ProtocolMeta,
@@ -42,10 +40,13 @@ pub struct ProtocolInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct ProtocolMeta {
+    pub short_name: String,
     pub title: String,
     pub description: String,
     #[serde(default)]
     pub icon_url: Option<String>,
+    #[serde(default)]
+    pub docs_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq, Default)]

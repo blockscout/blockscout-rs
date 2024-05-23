@@ -1,4 +1,4 @@
-use bens_logic::protocols::{AddressResolveTechnique, Tld};
+use bens_logic::protocols::{AddressResolveTechnique, ProtocolMeta, Tld};
 use blockscout_service_launcher::{
     database::{DatabaseConnectSettings, DatabaseSettings},
     launcher::{ConfigSettings, MetricsSettings, ServerSettings},
@@ -68,12 +68,7 @@ pub struct ProtocolSettings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
-pub struct ProtocolSettingsMeta {
-    pub title: String,
-    pub description: String,
-    #[serde(default)]
-    pub icon_url: Option<String>,
-}
+pub struct ProtocolSettingsMeta(pub ProtocolMeta);
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct NetworkSettings {

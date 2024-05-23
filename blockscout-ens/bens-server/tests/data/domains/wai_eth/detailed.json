@@ -28,13 +28,5 @@
   "wrapped_owner": {
     "hash": "0x9C996076A85B46061D9a70ff81F013853A86b619"
   },
-  "protocol": {
-    "id": "ens",
-    "title": "ENS",
-    "description": "Ethereum Name Service",
-    "tld_list": [
-      "eth"
-    ],
-    "icon_url": null
-  }
+  "protocol": {{ ens_protocol | json_encode() | safe }}
 }

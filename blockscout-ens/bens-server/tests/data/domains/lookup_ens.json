@@ -11,15 +11,7 @@
     "resolved_address": {
       "hash": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
     },
-    "protocol": {
-      "id": "ens",
-      "title": "ENS",
-      "description": "Ethereum Name Service",
-      "tld_list": [
-        "eth"
-      ],
-      "icon_url": null
-    }
+    "protocol": {{ ens_protocol | json_encode() | safe }}
   },
   {
     "expiry_date": "2038-01-19T03:14:07.000Z",
@@ -35,15 +27,7 @@
     "resolved_address": {
       "hash": "0x9C996076A85B46061D9a70ff81F013853A86b619"
     },
-    "protocol": {
-      "id": "ens",
-      "title": "ENS",
-      "description": "Ethereum Name Service",
-      "tld_list": [
-        "eth"
-      ],
-      "icon_url": null
-    }
+    "protocol": {{ ens_protocol | json_encode() | safe }}
   },
   {
     "expiry_date": "2038-01-19T03:14:07.000Z",
@@ -57,15 +41,7 @@
     "resolved_address": {
       "hash": "0xeefB13C7D42eFCc655E528dA6d6F7bBcf9A2251d"
     },
-    "protocol": {
-      "id": "ens",
-      "title": "ENS",
-      "description": "Ethereum Name Service",
-      "tld_list": [
-        "eth"
-      ],
-      "icon_url": null
-    }
+    "protocol": {{ ens_protocol | json_encode() | safe }}
   },
   {
     "expiry_date": null,
@@ -77,14 +53,6 @@
     "registration_date": "2017-07-08T02:11:54.000Z",
     "resolved_address": null,
     "wrapped_owner": null,
-    "protocol": {
-      "id": "ens",
-      "title": "ENS",
-      "description": "Ethereum Name Service",
-      "tld_list": [
-        "eth"
-      ],
-      "icon_url": null
-    }
+    "protocol": {{ ens_protocol | json_encode() | safe }}
   }
 ]

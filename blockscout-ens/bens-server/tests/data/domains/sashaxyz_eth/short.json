@@ -10,13 +10,5 @@
   "wrapped_owner": null,
   "registration_date": "2021-12-24T10:23:57.000Z",
   "expiry_date": "2038-01-19T03:14:07.000Z",
-  "protocol": {
-    "id": "ens",
-    "title": "ENS",
-    "description": "Ethereum Name Service",
-    "tld_list": [
-      "eth"
-    ],
-    "icon_url": null
-  }
+  "protocol": {{ ens_protocol | json_encode() | safe }}
 }

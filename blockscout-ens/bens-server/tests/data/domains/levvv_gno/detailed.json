@@ -21,13 +21,5 @@
       "type": "NATIVE_DOMAIN_TOKEN"
     }
   ],
-  "protocol": {
-    "id": "genome",
-    "title": "Genome",
-    "description": "Genome Name Service",
-    "tld_list": [
-      "gno"
-    ],
-    "icon_url": null
-  }
+  "protocol": {{ genome_protocol | json_encode() | safe }}
 }

@@ -539,16 +539,20 @@ definitions:
     properties:
       id:
         type: string
+      short_name:
+        type: string
       title:
         type: string
       description:
-        type: string
-      icon_url:
         type: string
       tld_list:
         type: array
         items:
           type: string
+      icon_url:
+        type: string
+      docs_url:
+        type: string
   v1Token:
     type: object
     properties:

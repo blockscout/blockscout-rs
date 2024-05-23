@@ -24,11 +24,5 @@
       "type": "NATIVE_DOMAIN_TOKEN"
     }
   ],
-  "protocol": {
-    "id": "ens",
-    "title": "ENS",
-    "description": "Ethereum Name Service",
-    "tld_list": ["eth"],
-    "icon_url": null
-  }
+  "protocol": {{ ens_protocol | json_encode() | safe }}
 }

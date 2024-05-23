@@ -19,9 +19,9 @@
         "address_resolve_technique": "reverse_registry",
         "native_token_contract": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85",
         "meta": {
-          "title": "ENS",
-          "description": "Ethereum Name Service",
-          "icon_url": ""
+          "short_name": "ENS",
+          "title": "Ethereum Name Service",
+          "description": "The Ethereum Name Service (ENS) is a distributed, open, and extensible naming system based on the Ethereum blockchain."
         }
       }
     }

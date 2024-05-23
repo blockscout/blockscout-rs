@@ -11,15 +11,7 @@
       "hash": "0xb1b38CEDf091714916Bc01BC4B96674b1bacdC10"
     },
     "wrapped_owner": null,
-    "protocol": {
-      "id": "genome",
-      "title": "Genome",
-      "description": "Genome Name Service",
-      "tld_list": [
-        "gno"
-      ],
-      "icon_url": null
-    }
+    "protocol": {{ genome_protocol | json_encode() | safe }}
   },
   {
     "expiry_date": "2025-03-18T01:27:42.000Z",
@@ -33,14 +25,6 @@
       "hash": "0xc9Be4fEA6C3f0D9E39d65678D7c631C0C41e95A6"
     },
     "wrapped_owner": null,
-    "protocol": {
-      "id": "genome",
-      "title": "Genome",
-      "description": "Genome Name Service",
-      "tld_list": [
-        "gno"
-      ],
-      "icon_url": null
-    }
+    "protocol": {{ genome_protocol | json_encode() | safe }}
   }
 ]

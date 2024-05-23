@@ -14,9 +14,18 @@ use url::Url;
 
 macro_rules! data_file_as_json {
     ($name:expr) => {{
+        let context = serde_json::from_str(include_str!("data/context.json"))
+            .expect("failed to parse context");
+        data_file_as_json!($name, context)
+    }};
+    ($name:expr, $context:expr) => {{
         let content = include_str!(concat!("data/", $name));
+        let context = tera::Context::from_value($context).expect("failed to create context");
+        let rendered = tera::Tera::default()
+            .render_str(content, &context)
+            .expect("failed to render template");
         let value: serde_json::Value =
-            serde_json::from_str(content).expect("failed to parse content");
+            serde_json::from_str(&rendered).expect("failed to parse content");
         value
     }};
 }
