@@ -26,19 +26,6 @@
           "genome"
         ]
       },
-      "100": {
-        "blockscout": {
-          "url": "https://gnosis.blockscout.com/"
-        },
-        "subgraphs": {
-          "genome-subgraph": {
-            "use_cache": true,
-            "address_resolve_technique": "reverse_registry",
-            "native_token_contract": "0x942fcaf68a0c264d5447b03a2011b395a899f2d3",
-            "empty_label_hash": "0xc4a8c56f9b0096f720f38bd557d30306dbd78f7751d277e05f062d1b85912a63"
-          }
-        }
-      },
       "8453": {
         "blockscout": {
           "url": "https://base.blockscout.com"
