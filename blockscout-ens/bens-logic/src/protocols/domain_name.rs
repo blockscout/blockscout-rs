@@ -65,22 +65,6 @@ impl<'a> DomainNameOnProtocol<'a> {
     }
 }
 
-pub struct ProtocolWithMaybeName<'a> {
-    pub inner: &'a Protocol,
-    pub maybe_name: Option<DomainName>,
-}
-
-impl<'a> ProtocolWithMaybeName<'a> {
-    pub fn new(name: Option<&str>, protocol: &'a Protocol) -> Self {
-        Self {
-            maybe_name: name.and_then(|name| {
-                DomainName::new(name, protocol.info.empty_label_hash.clone()).ok()
-            }),
-            inner: protocol,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

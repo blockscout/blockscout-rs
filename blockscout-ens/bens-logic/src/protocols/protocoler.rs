@@ -11,8 +11,8 @@ use std::{collections::HashMap, sync::Arc};
 
 #[derive(Debug, Clone)]
 pub struct Protocoler {
-    pub networks: HashMap<i64, Network>,
-    pub protocols: HashMap<String, Protocol>,
+    networks: HashMap<i64, Network>,
+    protocols: HashMap<String, Protocol>,
 }
 
 #[derive(Debug, Clone)]

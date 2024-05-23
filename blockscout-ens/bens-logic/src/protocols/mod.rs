@@ -2,7 +2,7 @@ mod domain_name;
 pub mod hash_name;
 mod protocoler;
 
-pub use domain_name::{DomainName, DomainNameOnProtocol, ProtocolWithMaybeName};
+pub use domain_name::{DomainName, DomainNameOnProtocol};
 pub use hash_name::domain_id;
 pub use protocoler::{
     AddressResolveTechnique, Network, Protocol, ProtocolInfo, ProtocolMeta, Protocoler, Tld,

@@ -25,23 +25,3 @@ pub async fn get_deployments(pool: &PgPool) -> Result<Vec<Deployment>, sqlx::Err
     .fetch_all(pool)
     .await
 }
-
-// pub fn group_by_net_version(
-//     deployments: impl IntoIterator<Item = Deployment>,
-// ) -> HashMap<i64, Vec<Deployment>> {
-//     let mut group_by_network: HashMap<i64, Vec<Deployment>> = HashMap::new();
-//     for item in deployments {
-//         group_by_network
-//             .entry(item.net_version)
-//             .or_default()
-//             .push(item);
-//     }
-//     group_by_network
-// }
-//
-// pub async fn subgraph_deployments(
-//     pool: &PgPool,
-// ) -> Result<HashMap<i64, Vec<Deployment>>, sqlx::Error> {
-//     get_deployments(pool).await.map(group_by_net_version)
-// }
-//
