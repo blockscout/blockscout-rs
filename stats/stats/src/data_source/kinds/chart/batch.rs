@@ -6,10 +6,7 @@ use sea_orm::{DatabaseConnection, TransactionTrait};
 
 use super::UpdateableChart;
 use crate::{
-    charts::{
-        chart::chart_portrait,
-        db_interaction::chart_updaters::common_operations::get_min_date_blockscout,
-    },
+    charts::{chart::chart_portrait, db_interaction::read::get_min_date_blockscout},
     data_source::{source::DataSource, types::UpdateContext},
     Chart, DateValue, UpdateError,
 };

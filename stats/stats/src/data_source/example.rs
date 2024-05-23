@@ -6,8 +6,9 @@ use sea_orm::{prelude::*, DbBackend, Statement};
 use tokio::sync::Mutex;
 
 use crate::{
-    charts::db_interaction::{chart_updaters::parse_and_cumsum, write::insert_data_many},
+    charts::db_interaction::write::insert_data_many,
     construct_update_group,
+    data_processing::parse_and_cumsum,
     tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
     Chart, MissingDatePolicy, UpdateError,
 };

@@ -1,12 +1,14 @@
 use crate::{
     charts::chart::ChartMetadata,
     missing_date::{fill_and_filter_chart, filter_within_range},
-    DateValue, ExtendedDateValue, MissingDatePolicy,
+    Chart, DateValue, ExtendedDateValue, MissingDatePolicy, UpdateError,
 };
-use chrono::{Duration, NaiveDate, Utc};
+use blockscout_db::entity::blocks;
+use chrono::{Duration, NaiveDate, NaiveDateTime, Utc};
 use entity::{chart_data, charts};
 use sea_orm::{
-    sea_query::Expr, ColumnTrait, DatabaseConnection, DbBackend, DbErr, EntityTrait,
+    sea_query::{self, Expr},
+    ColumnTrait, ConnectionTrait, DatabaseConnection, DbBackend, DbErr, EntityTrait,
     FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Statement,
 };
 use std::collections::HashMap;
@@ -20,6 +22,21 @@ pub enum ReadError {
     ChartNotFound(String),
     #[error("date interval limit ({0}) is exceeded; choose smaller time interval.")]
     IntervalLimitExceeded(Duration),
+}
+
+#[derive(Debug, FromQueryResult)]
+struct ChartID {
+    id: i32,
+}
+
+pub async fn find_chart(db: &DatabaseConnection, name: &str) -> Result<Option<i32>, DbErr> {
+    charts::Entity::find()
+        .column(charts::Column::Id)
+        .filter(charts::Column::Name.eq(name))
+        .into_model::<ChartID>()
+        .one(db)
+        .await
+        .map(|id| id.map(|id| id.id))
 }
 
 #[derive(Debug, FromQueryResult)]
@@ -192,6 +209,146 @@ async fn get_raw_chart_data(
 
     let data = data_request.into_model().all(db).await?;
     Ok(data)
+}
+
+#[derive(FromQueryResult)]
+struct MinBlock {
+    min_block: i64,
+}
+
+pub async fn get_min_block_blockscout(blockscout: &DatabaseConnection) -> Result<i64, DbErr> {
+    let min_block = blocks::Entity::find()
+        .select_only()
+        .column_as(
+            sea_query::Expr::col(blocks::Column::Number).min(),
+            "min_block",
+        )
+        .filter(blocks::Column::Consensus.eq(true))
+        .into_model::<MinBlock>()
+        .one(blockscout)
+        .await?;
+
+    min_block
+        .map(|r| r.min_block)
+        .ok_or_else(|| DbErr::RecordNotFound("no blocks found in blockscout database".into()))
+}
+
+#[derive(FromQueryResult)]
+struct MinDate {
+    timestamp: NaiveDateTime,
+}
+
+pub async fn get_min_date_blockscout<C>(blockscout: &C) -> Result<NaiveDateTime, DbErr>
+where
+    C: ConnectionTrait,
+{
+    let min_date = blocks::Entity::find()
+        .select_only()
+        .column(blocks::Column::Timestamp)
+        .filter(blocks::Column::Consensus.eq(true))
+        // First block on ethereum mainnet has 0 timestamp,
+        // however first block on Goerli for example has valid timestamp.
+        // Therefore we filter on zero timestamp
+        .filter(blocks::Column::Timestamp.ne(NaiveDateTime::default()))
+        .order_by_asc(blocks::Column::Number)
+        .into_model::<MinDate>()
+        .one(blockscout)
+        .await?;
+
+    min_date
+        .map(|r| r.timestamp)
+        .ok_or_else(|| DbErr::RecordNotFound("no blocks found in blockscout database".into()))
+}
+
+#[derive(Debug, FromQueryResult)]
+struct SyncInfo {
+    pub date: NaiveDate,
+    pub value: String,
+    pub min_blockscout_block: Option<i64>,
+}
+
+/// Get `offset`th last row. Date of the row can be a starting point for an update.
+/// Usually used to retrieve last 'finalized' row (for which no recomputations needed).
+///
+/// Retrieves `offset`th latest data point from DB, if any.
+/// In case of inconsistencies or set `force_full`, also returns `None`.
+pub async fn get_nth_last_row<C>(
+    // chart: &C,
+    chart_id: i32,
+    min_blockscout_block: i64,
+    db: &DatabaseConnection,
+    force_full: bool,
+    offset: Option<u64>,
+) -> Result<Option<DateValue>, UpdateError>
+where
+    C: Chart + ?Sized,
+{
+    let offset = offset.unwrap_or(0);
+    let row = if force_full {
+        tracing::info!(
+            min_blockscout_block = min_blockscout_block,
+            chart = C::NAME,
+            "running full update due to force override"
+        );
+        None
+    } else {
+        let row: Option<SyncInfo> = chart_data::Entity::find()
+            .column(chart_data::Column::Date)
+            .column(chart_data::Column::Value)
+            .column(chart_data::Column::MinBlockscoutBlock)
+            .filter(chart_data::Column::ChartId.eq(chart_id))
+            .order_by_desc(chart_data::Column::Date)
+            .offset(offset)
+            .into_model()
+            .one(db)
+            .await
+            .map_err(UpdateError::StatsDB)?;
+
+        match row {
+            Some(row) => {
+                if let Some(block) = row.min_blockscout_block {
+                    if block == min_blockscout_block {
+                        tracing::info!(
+                            min_blockscout_block = min_blockscout_block,
+                            min_chart_block = block,
+                            chart = C::NAME,
+                            row = ?row,
+                            "running partial update"
+                        );
+                        Some(DateValue {
+                            date: row.date,
+                            value: row.value,
+                        })
+                    } else {
+                        tracing::info!(
+                            min_blockscout_block = min_blockscout_block,
+                            min_chart_block = block,
+                            chart = C::NAME,
+                            "running full update due to min blocks mismatch"
+                        );
+                        None
+                    }
+                } else {
+                    tracing::info!(
+                        min_blockscout_block = min_blockscout_block,
+                        chart = C::NAME,
+                        "running full update due to lack of saved min block"
+                    );
+                    None
+                }
+            }
+            None => {
+                tracing::info!(
+                    min_blockscout_block = min_blockscout_block,
+                    chart = C::NAME,
+                    "running full update due to lack of history data"
+                );
+                None
+            }
+        }
+    };
+
+    Ok(row)
 }
 
 // #[cfg(test)]

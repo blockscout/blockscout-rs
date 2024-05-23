@@ -1,7 +1,7 @@
 use crate::{DateValue, ReadError};
-use chrono::{DateTime, Duration, Offset, TimeZone, Utc};
-use entity::{charts, sea_orm_active_enums::ChartType};
-use sea_orm::{prelude::*, sea_query, FromQueryResult, QuerySelect, Set};
+use chrono::{DateTime, Duration, Utc};
+use entity::sea_orm_active_enums::ChartType;
+use sea_orm::prelude::*;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -109,45 +109,4 @@ impl ChartDynamic {
             approximate_trailing_points: T::approximate_trailing_points(),
         }
     }
-}
-
-#[derive(Debug, FromQueryResult)]
-struct ChartID {
-    id: i32,
-}
-
-pub async fn find_chart(db: &DatabaseConnection, name: &str) -> Result<Option<i32>, DbErr> {
-    charts::Entity::find()
-        .column(charts::Column::Id)
-        .filter(charts::Column::Name.eq(name))
-        .into_model::<ChartID>()
-        .one(db)
-        .await
-        .map(|id| id.map(|id| id.id))
-}
-
-pub async fn create_chart<Tz: TimeZone>(
-    db: &DatabaseConnection,
-    name: String,
-    chart_type: ChartType,
-    creation_time: &DateTime<Tz>,
-) -> Result<(), DbErr> {
-    let id = find_chart(db, &name).await?;
-    if id.is_some() {
-        return Ok(());
-    }
-    charts::Entity::insert(charts::ActiveModel {
-        name: Set(name),
-        chart_type: Set(chart_type),
-        created_at: Set(creation_time.with_timezone(&creation_time.offset().fix())),
-        ..Default::default()
-    })
-    .on_conflict(
-        sea_query::OnConflict::column(charts::Column::Name)
-            .do_nothing()
-            .to_owned(),
-    )
-    .exec(db)
-    .await?;
-    Ok(())
 }

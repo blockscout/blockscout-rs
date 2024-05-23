@@ -1,9 +1,7 @@
 use super::NewContracts;
 use crate::{
-    charts::{
-        chart::Chart,
-        db_interaction::{chart_updaters::parse_and_cumsum, write::insert_data_many},
-    },
+    charts::{chart::Chart, db_interaction::write::insert_data_many},
+    data_processing::parse_and_cumsum,
     data_source::{
         kinds::chart::{BatchUpdateableChart, BatchUpdateableChartWrapper, UpdateableChartWrapper},
         source::DataSource,

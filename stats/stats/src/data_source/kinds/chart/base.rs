@@ -7,10 +7,9 @@ use sea_orm::{DatabaseConnection, DbErr};
 use crate::{
     charts::{
         chart::{chart_portrait, ChartData},
-        create_chart,
         db_interaction::{
-            chart_updaters::common_operations::{self, get_min_block_blockscout, get_nth_last_row},
-            read::get_chart_metadata,
+            read::{get_chart_metadata, get_min_block_blockscout, get_nth_last_row},
+            write::{create_chart, set_last_updated_at},
         },
     },
     data_source::{source::DataSource, source_metrics::DataSourceMetrics, types::UpdateContext},
@@ -89,7 +88,7 @@ pub trait UpdateableChart: Chart {
         update_time: chrono::DateTime<Utc>,
     ) -> impl std::future::Future<Output = Result<(), UpdateError>> + Send {
         async move {
-            common_operations::set_last_updated_at(chart_id, db, update_time)
+            set_last_updated_at(chart_id, db, update_time)
                 .await
                 .map_err(UpdateError::StatsDB)
         }

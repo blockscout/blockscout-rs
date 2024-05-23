@@ -1,6 +1,3 @@
-//! Updates chart according to data from another chart.
-//! I.e. current chart depends on another (on "parent")
-
 use crate::{charts::db_interaction::types::DateValue, UpdateError};
 use std::{fmt::Display, iter::Sum, ops::AddAssign, str::FromStr};
 
