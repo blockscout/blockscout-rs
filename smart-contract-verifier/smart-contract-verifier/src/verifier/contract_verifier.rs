@@ -1,7 +1,7 @@
 use super::{
     all_metadata_extracting_verifier, base,
     base::LocalBytecodeParts,
-    bytecode::{CreationTxInput, DeployedBytecode},
+    bytecode::{CreationTxInput, CreationTxInputWithoutConstructorArgs, DeployedBytecode},
     errors::{BytecodeInitError, VerificationError, VerificationErrorKind},
     lossless_compiler_output, CompilerInput,
 };
@@ -16,6 +16,7 @@ use mismatch::Mismatch;
 use serde::Serialize;
 use thiserror::Error;
 use tracing::instrument;
+use verification_common::blueprint_contracts;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -63,6 +64,7 @@ pub struct Success {
     pub compilation_artifacts: serde_json::Value,
     pub creation_input_artifacts: serde_json::Value,
     pub deployed_bytecode_artifacts: serde_json::Value,
+    pub is_blueprint: bool,
 }
 
 pub struct ContractVerifier<'a, C> {
@@ -78,6 +80,7 @@ pub struct ContractVerifier<'a, C> {
         >,
     >,
     chain_id: Option<String>,
+    is_blueprint: bool,
 }
 
 impl<'a, C: EvmCompiler> ContractVerifier<'a, C> {
@@ -88,6 +91,7 @@ impl<'a, C: EvmCompiler> ContractVerifier<'a, C> {
         deployed_bytecode: Bytes,
         chain_id: Option<String>,
     ) -> Result<Self, Error> {
+        let mut is_blueprint = false;
         let verifier: Box<
             dyn base::Verifier<
                 Input = (
@@ -97,18 +101,43 @@ impl<'a, C: EvmCompiler> ContractVerifier<'a, C> {
                 ),
             >,
         > = match creation_tx_input {
-            None => Box::new(all_metadata_extracting_verifier::Verifier::<
-                DeployedBytecode,
-            >::new(deployed_bytecode)?),
-            Some(creation_tx_input) => Box::new(all_metadata_extracting_verifier::Verifier::<
-                CreationTxInput,
-            >::new(creation_tx_input)?),
+            None => {
+                if let Some(blueprint_contract) =
+                    blueprint_contracts::from_runtime_code(deployed_bytecode.clone())
+                {
+                    is_blueprint = true;
+                    Box::new(all_metadata_extracting_verifier::Verifier::<
+                        CreationTxInputWithoutConstructorArgs,
+                    >::new(blueprint_contract.initcode)?)
+                } else {
+                    Box::new(all_metadata_extracting_verifier::Verifier::<
+                        DeployedBytecode,
+                    >::new(deployed_bytecode)?)
+                }
+            }
+            Some(creation_tx_input) => {
+                if let Some(blueprint_contract) =
+                    blueprint_contracts::from_creation_code(creation_tx_input.clone())
+                {
+                    is_blueprint = true;
+                    Box::new(all_metadata_extracting_verifier::Verifier::<
+                        CreationTxInputWithoutConstructorArgs,
+                    >::new(blueprint_contract.initcode)?)
+                } else {
+                    Box::new(
+                        all_metadata_extracting_verifier::Verifier::<CreationTxInput>::new(
+                            creation_tx_input,
+                        )?,
+                    )
+                }
+            }
         };
         Ok(Self {
             compilers,
             compiler_version,
             verifier,
             chain_id,
+            is_blueprint,
         })
     }
 
@@ -191,6 +220,7 @@ impl<'a, C: EvmCompiler> ContractVerifier<'a, C> {
             compilation_artifacts: verification_success.compilation_artifacts,
             creation_input_artifacts: verification_success.creation_input_artifacts,
             deployed_bytecode_artifacts: verification_success.deployed_bytecode_artifacts,
+            is_blueprint: self.is_blueprint,
         })
     }
 }

@@ -109,6 +109,7 @@ fn match_contract_from_model(
         // so for complexity reasons, we just ignore them for now
         raw_creation_input: vec![],
         raw_deployed_bytecode: vec![],
+        is_blueprint: false,
     };
 
     Ok(match_contract)

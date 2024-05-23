@@ -12,4 +12,3 @@ pub use any_match::find_contract as eth_bytecode_db_find_contract;
 pub use entity::sea_orm_active_enums::BytecodeType;
 pub use events::{find_event_descriptions, EventDescription};
 pub use match_contract::MatchContract;
-pub use types::BytecodeRemote;

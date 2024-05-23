@@ -88,6 +88,15 @@ service Scoutcloud {
       tags: "Instances"
     };
   }
+  // Delete instance
+    rpc DeleteInstance(DeleteInstanceRequest) returns (DeleteInstanceResponse) {
+        option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+            security: {
+                security_requirement: {key: "ApiKeyAuth"}
+            }
+            tags: "Instances"
+        };
+    }
   // Get list of all owned instances
   rpc ListInstances(ListInstancesRequest) returns (ListInstancesResponse) {
     option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
@@ -156,6 +165,7 @@ message DeployConfig {
   optional string icon_url = 9 [(convert_options.convert) = {type: "Option<url::Url>"}];
   optional string homeplate_background = 10;
   optional string homeplate_text_color = 11;
+  optional bool is_testnet = 13;
 }
 
 message DeployConfigPartial {
@@ -174,6 +184,7 @@ message DeployConfigPartial {
   optional string icon_url = 9 [(convert_options.convert) = {type: "Option<url::Url>"}];
   optional string homeplate_background = 10;
   optional string homeplate_text_color = 11;
+  optional bool is_testnet = 13;
 }
 
 message CreateInstanceRequest {
@@ -184,6 +195,14 @@ message CreateInstanceRequest {
 
 message CreateInstanceResponse {
   string instance_id = 1;
+}
+
+message DeleteInstanceRequest {
+  string instance_id = 1;
+}
+
+message DeleteInstanceResponse {
+
 }
 
 message UpdateConfigRequest {
@@ -212,7 +231,7 @@ enum DeploymentStatus {
 
 enum UpdateInstanceAction {
   START = 0;
-  FINISH = 1;
+  STOP = 1;
   RESTART = 2;
 }
 

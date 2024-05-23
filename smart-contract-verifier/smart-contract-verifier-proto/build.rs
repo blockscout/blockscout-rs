@@ -19,6 +19,10 @@ fn compile(
         .btree_map(["."])
         .type_attribute(".", "#[actix_prost_macros::serde]")
         .field_attribute(
+            ".blockscout.smartContractVerifier.v2.HealthCheckRequest.service",
+            "#[serde(default)]"
+        )
+        .field_attribute(
             ".blockscout.smartContractVerifier.v2.VerifyVyperMultiPartRequest.interfaces",
             "#[serde(default)]"
         )

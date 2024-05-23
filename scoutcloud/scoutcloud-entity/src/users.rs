@@ -12,6 +12,7 @@ pub struct Model {
     pub created_at: DateTimeWithTimeZone,
     pub is_superuser: bool,
     pub balance: Decimal,
+    pub max_instances: i32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

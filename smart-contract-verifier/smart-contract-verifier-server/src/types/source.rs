@@ -4,7 +4,7 @@ use smart_contract_verifier::{vyper, MatchType, SoliditySuccess, SourcifySuccess
 use std::sync::Arc;
 
 macro_rules! from_success {
-    ( $value:expr, $source_type:expr, $extract_source_files:expr ) => {{
+    ( $value:expr, $source_type:expr, $extract_source_files:expr, $is_blueprint:expr ) => {{
         let compiler_input = $value.compiler_input;
         let compiler_settings = serde_json::to_string(&compiler_input.settings)
             .expect("Is result of local compilation and, thus, should be always valid");
@@ -36,7 +36,11 @@ macro_rules! from_success {
             deployed_bytecode_artifacts: Some(
                 serde_json::to_string(&$value.deployed_bytecode_artifacts).unwrap(),
             ),
+            is_blueprint: $is_blueprint,
         }
+    }};
+    ( $value:expr, $source_type:expr, $extract_source_files:expr ) => {{
+        from_success!($value, $source_type, $extract_source_files, false)
     }};
 }
 
@@ -78,7 +82,12 @@ pub fn from_vyper_success(value: VyperSuccess) -> Source {
             });
         sources.chain(interfaces).collect()
     };
-    from_success!(value, source::SourceType::Vyper, extract_source_files)
+    from_success!(
+        value,
+        source::SourceType::Vyper,
+        extract_source_files,
+        value.is_blueprint
+    )
 }
 
 pub fn from_sourcify_success(value: SourcifySuccess) -> Source {
@@ -102,6 +111,7 @@ pub fn from_sourcify_success(value: SourcifySuccess) -> Source {
         compilation_artifacts: None,
         creation_input_artifacts: None,
         deployed_bytecode_artifacts: None,
+        is_blueprint: false,
     }
 }
 
@@ -171,6 +181,7 @@ mod tests {
             deployed_bytecode_artifacts: Some(
                 "{\"sourceMap\":\"1704:475;;;;:::-;-1:-1;;;;;;:::-;;\"}".into(),
             ),
+            is_blueprint: false,
         };
 
         assert_eq!(expected, result);
@@ -205,6 +216,7 @@ mod tests {
             compilation_artifacts: serde_json::json!({"abi": []}),
             creation_input_artifacts: serde_json::json!({"sourceMap": "-1:-1:0:-;;;;;:::-;;:::-;:::-;;;;;;;;;:::-;"}),
             deployed_bytecode_artifacts: serde_json::json!({"sourceMap": "1704:475;;;;:::-;-1:-1;;;;;;:::-;;"}),
+            is_blueprint: false,
         };
 
         let result = from_vyper_success(verification_success);
@@ -229,6 +241,7 @@ mod tests {
             deployed_bytecode_artifacts: Some(
                 "{\"sourceMap\":\"1704:475;;;;:::-;-1:-1;;;;;;:::-;;\"}".into(),
             ),
+            is_blueprint: false,
         };
 
         assert_eq!(expected, result);
@@ -265,6 +278,7 @@ mod tests {
             compilation_artifacts: None,
             creation_input_artifacts: None,
             deployed_bytecode_artifacts: None,
+            is_blueprint: false,
         };
 
         assert_eq!(expected, result);

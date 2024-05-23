@@ -44,6 +44,12 @@ impl GithubClient {
         Ok(())
     }
 
+    pub async fn delete_file(&self, path: &str) -> Result<(), GithubError> {
+        let file_sha = self.get_file(path).await?.sha;
+        self.delete_file_by_sha(path, &file_sha).await?;
+        Ok(())
+    }
+
     pub async fn get_latest_commit(
         &self,
     ) -> Result<octocrab::models::repos::RepoCommit, GithubError> {
@@ -53,6 +59,24 @@ impl GithubClient {
             .get(self.default_branch_name.clone())
             .await?;
         Ok(latest_commit)
+    }
+
+    pub async fn get_file(&self, path: &str) -> Result<types::OnlySha, GithubError> {
+        let url = format!(
+            "/repos/{owner}/{repo}/contents/{path}",
+            owner = self.owner,
+            repo = self.repo,
+        );
+        let response = self
+            .client
+            .get(
+                url,
+                Some(&types::OnlyRef {
+                    _ref: self.default_branch_name.clone(),
+                }),
+            )
+            .await?;
+        Ok(response)
     }
 
     pub async fn run_workflow<P: Serialize>(
@@ -204,6 +228,21 @@ impl GithubClient {
                 }),
             )
             .await?;
+        Ok(())
+    }
+
+    async fn delete_file_by_sha(&self, path: &str, sha: &str) -> Result<(), GithubError> {
+        let url = format!(
+            "/repos/{owner}/{repo}/contents/{path}",
+            owner = self.owner,
+            repo = self.repo,
+            path = path
+        );
+        let request = types::DeleteFileRequest {
+            message: Self::build_commit_message("delete file"),
+            sha: sha.to_string(),
+        };
+        let _: serde_json::Value = self.client.delete(url, Some(&request)).await?;
         Ok(())
     }
 

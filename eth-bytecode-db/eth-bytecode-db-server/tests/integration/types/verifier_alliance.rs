@@ -695,6 +695,7 @@ mod responses {
                     compilation_artifacts: Some(self.compilation_artifacts.to_string()),
                     creation_input_artifacts: Some(self.creation_code_artifacts.to_string()),
                     deployed_bytecode_artifacts: Some(self.runtime_code_artifacts.to_string()),
+                    is_blueprint: false,
                 }),
                 extra_data: Some(smart_contract_verifier_v2::verify_response::ExtraData {
                     local_creation_input_parts: self

@@ -17,6 +17,10 @@ fn compile(
         .protoc_arg("grpc_api_configuration=proto/api_config_http.yaml,output_format=yaml,allow_merge=true,merge_file_name=user-ops-indexer,json_names_for_fields=false")
         .bytes(["."])
         .type_attribute(".", "#[actix_prost_macros::serde(rename_all=\"snake_case\")]")
+        .field_attribute(
+            ".blockscout.userOpsIndexer.v1.HealthCheckRequest.service",
+            "#[serde(default)]"
+        )
         .field_attribute(".blockscout.userOpsIndexer.v1.UserOp.raw", "#[serde(rename=\"raw\")]");
 
     config.compile_protos(protos, includes)?;
