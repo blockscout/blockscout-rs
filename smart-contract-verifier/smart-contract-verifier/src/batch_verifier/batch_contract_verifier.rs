@@ -7,7 +7,7 @@ use crate::{
     },
     compiler,
     verifier::CompilerInput,
-    Compilers, Contract, MatchType, SolidityCompiler, Version,
+    Compilers, Contract, DetailedVersion, MatchType, SolidityCompiler,
 };
 use std::collections::BTreeMap;
 use thiserror::Error;
@@ -65,7 +65,7 @@ pub struct BatchSuccess {
 
 pub async fn verify_solidity(
     compilers: &Compilers<SolidityCompiler>,
-    compiler_version: Version,
+    compiler_version: DetailedVersion,
     contracts: Vec<Contract>,
     compiler_input: &foundry_compilers::CompilerInput,
 ) -> Result<Vec<VerificationResult>, BatchError> {

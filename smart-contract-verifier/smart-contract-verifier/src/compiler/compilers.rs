@@ -1,7 +1,7 @@
 use super::{
     download_cache::DownloadCache,
     fetcher::{FetchError, Fetcher},
-    version::Version,
+    version_detailed::DetailedVersion,
 };
 use crate::metrics::{self, GuardedGauge};
 use ethers_solc::{artifacts::Severity, error::SolcError, CompilerOutput};
@@ -35,14 +35,14 @@ pub trait EvmCompiler {
     async fn compile(
         &self,
         path: &Path,
-        ver: &Version,
+        ver: &DetailedVersion,
         input: &Self::CompilerInput,
     ) -> Result<(serde_json::Value, CompilerOutput), SolcError>;
 }
 
 pub struct Compilers<C> {
-    cache: DownloadCache,
-    fetcher: Arc<dyn Fetcher>,
+    cache: DownloadCache<DetailedVersion>,
+    fetcher: Arc<dyn Fetcher<Version = DetailedVersion>>,
     evm_compiler: C,
     threads_semaphore: Arc<Semaphore>,
 }
@@ -52,12 +52,12 @@ where
     C: EvmCompiler,
 {
     pub fn new(
-        fetcher: Arc<dyn Fetcher>,
+        fetcher: Arc<dyn Fetcher<Version = DetailedVersion>>,
         evm_compiler: C,
         threads_semaphore: Arc<Semaphore>,
     ) -> Self {
         Self {
-            cache: DownloadCache::new(),
+            cache: Default::default(),
             fetcher,
             evm_compiler,
             threads_semaphore,
@@ -66,7 +66,7 @@ where
     #[instrument(name = "download_and_compile", skip(self, input), level = "debug")]
     pub async fn compile(
         &self,
-        compiler_version: &Version,
+        compiler_version: &DetailedVersion,
         input: &C::CompilerInput,
         chain_id: Option<&str>,
     ) -> Result<(serde_json::Value, CompilerOutput), Error> {
@@ -119,7 +119,7 @@ where
         Ok((raw, output))
     }
 
-    pub fn all_versions(&self) -> Vec<Version> {
+    pub fn all_versions(&self) -> Vec<DetailedVersion> {
         self.fetcher.all_versions()
     }
 
@@ -146,7 +146,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{super::list_fetcher::ListFetcher, *};
+    use super::{super::ListFetcher, *};
     use crate::{consts::DEFAULT_SOLIDITY_COMPILER_LIST, solidity::SolidityCompiler};
     use foundry_compilers::{
         artifacts::{Source, Sources},
@@ -217,7 +217,8 @@ mod tests {
 
         let compilers = global_compilers().await;
         let input: CompilerInput = Input::with_source_code(source_code.into()).into();
-        let version = Version::from_str("v0.8.10+commit.fc410830").expect("Compiler version");
+        let version =
+            DetailedVersion::from_str("v0.8.10+commit.fc410830").expect("Compiler version");
 
         let (_raw, result) = compilers
             .compile(&version, &input, None)
@@ -235,7 +236,8 @@ mod tests {
 
         let compilers = global_compilers().await;
         let input: CompilerInput = Input::with_source_code(source_code.into()).into();
-        let version = Version::from_str("v0.5.9+commit.c68bc34e").expect("Compiler version");
+        let version =
+            DetailedVersion::from_str("v0.5.9+commit.c68bc34e").expect("Compiler version");
 
         let (_raw, result) = compilers
             .compile(&version, &input, None)
@@ -253,7 +255,8 @@ mod tests {
 
         let compilers = global_compilers().await;
         let input: CompilerInput = Input::with_source_code(source_code.into()).into();
-        let version = Version::from_str("v0.8.10+commit.fc410830").expect("Compiler version");
+        let version =
+            DetailedVersion::from_str("v0.8.10+commit.fc410830").expect("Compiler version");
 
         let result = compilers
             .compile(&version, &input, None)

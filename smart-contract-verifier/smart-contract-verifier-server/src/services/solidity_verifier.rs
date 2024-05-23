@@ -7,7 +7,7 @@ use crate::{
         VerifySolidityMultiPartRequest, VerifySolidityStandardJsonRequest,
     },
     services::common,
-    settings::{Extensions, FetcherSettings, S3FetcherSettings, SoliditySettings},
+    settings::{Extensions, SoliditySettings},
     types,
     types::{
         LookupMethodsRequestWrapper, LookupMethodsResponseWrapper, StandardJsonParseError,
@@ -16,15 +16,14 @@ use crate::{
     },
 };
 use anyhow::Context;
-use s3::{creds::Credentials, Bucket, Region};
 use smart_contract_verifier::{
-    find_methods, solidity, Compilers, Fetcher, ListFetcher, S3Fetcher, SolcValidator,
-    SolidityClient, SolidityCompiler, VerificationError,
+    find_methods, solidity, Compilers, SolcValidator, SolidityClient, SolidityCompiler,
+    VerificationError,
 };
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
     BytecodeType, LookupMethodsRequest, LookupMethodsResponse,
 };
-use std::{str::FromStr, sync::Arc};
+use std::sync::Arc;
 use tokio::sync::Semaphore;
 use tonic::{Request, Response, Status};
 

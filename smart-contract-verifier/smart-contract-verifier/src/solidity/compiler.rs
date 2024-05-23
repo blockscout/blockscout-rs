@@ -1,5 +1,5 @@
 use super::solc_cli;
-use crate::compiler::{EvmCompiler, Version};
+use crate::compiler::{DetailedVersion, EvmCompiler};
 use ethers_solc::{error::SolcError, CompilerOutput, Solc};
 use std::path::Path;
 
@@ -19,7 +19,7 @@ impl EvmCompiler for SolidityCompiler {
     async fn compile(
         &self,
         path: &Path,
-        ver: &Version,
+        ver: &DetailedVersion,
         input: &Self::CompilerInput,
     ) -> Result<(serde_json::Value, CompilerOutput), SolcError> {
         if ver.version() < &semver::Version::new(0, 4, 11) {

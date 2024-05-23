@@ -29,7 +29,10 @@ pub use middleware::Middleware;
 pub use crate::sourcify::Error as SourcifyError;
 pub use batch_verifier::{BatchError, BatchMatch, BatchSuccess, BatchVerificationResult};
 pub use common_types::{Contract, MatchType};
-pub use compiler::{Compilers, Fetcher, FileValidator, ListFetcher, S3Fetcher, Version};
+pub use compiler::{
+    CompactVersion, Compilers, DetailedVersion, Fetcher, FileValidator, ListFetcher, S3Fetcher,
+    Version,
+};
 pub use verifier::{BytecodePart, Error as VerificationError};
 
 pub use crate::sourcify::{SourcifyApiClient, Success as SourcifySuccess};
@@ -40,8 +43,3 @@ pub use solidity::{
 };
 pub use vyper::{Client as VyperClient, Success as VyperSuccess, VyperCompiler};
 pub use zksync_solidity::ZksyncSolidityCompiler;
-
-pub use compiler::{
-    generic_download_cache, generic_fetcher, generic_list_fetcher, generic_s3_fetcher,
-    zksync_compilers,
-};

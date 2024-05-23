@@ -1,6 +1,6 @@
 use super::{artifacts::CompilerInput, client::Client, types::Success};
 use crate::{
-    compiler::Version,
+    compiler::DetailedVersion,
     verifier::{ContractVerifier, Error},
 };
 use bytes::Bytes;
@@ -10,7 +10,7 @@ use std::sync::Arc;
 pub struct VerificationRequest {
     pub deployed_bytecode: Bytes,
     pub creation_bytecode: Option<Bytes>,
-    pub compiler_version: Version,
+    pub compiler_version: DetailedVersion,
 
     pub content: StandardJsonContent,
 

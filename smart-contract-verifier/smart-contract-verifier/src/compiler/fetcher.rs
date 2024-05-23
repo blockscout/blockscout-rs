@@ -1,14 +1,16 @@
-use super::version::Version;
 use async_trait::async_trait;
 use bytes::Bytes;
 use mismatch::Mismatch;
 use primitive_types::H256;
 use sha2::{Digest, Sha256};
 use std::{
+    fmt::{Debug, Display},
     fs::{File, OpenOptions},
+    hash::Hash,
     io::ErrorKind,
     os::unix::prelude::OpenOptionsExt,
     path::{Path, PathBuf},
+    str::FromStr,
 };
 use thiserror::Error;
 use tracing::instrument;
@@ -32,14 +34,27 @@ pub enum FetchError {
 }
 
 #[async_trait]
-pub trait FileValidator: Send + Sync {
-    async fn validate(&self, ver: &Version, path: &Path) -> Result<(), anyhow::Error>;
+pub trait FileValidator<Ver>: Send + Sync {
+    async fn validate(&self, ver: &Ver, path: &Path) -> Result<(), anyhow::Error>;
 }
 
 #[async_trait]
 pub trait Fetcher: Send + Sync {
-    async fn fetch(&self, ver: &Version) -> Result<PathBuf, FetchError>;
-    fn all_versions(&self) -> Vec<Version>;
+    type Version;
+    async fn fetch(&self, ver: &Self::Version) -> Result<PathBuf, FetchError>;
+    fn all_versions(&self) -> Vec<Self::Version>;
+}
+
+pub trait Version:
+    Clone + Debug + Display + FromStr + PartialEq + Eq + Hash + Send + Sync + 'static
+{
+    fn to_semver(&self) -> &semver::Version;
+}
+
+impl Version for semver::Version {
+    fn to_semver(&self) -> &semver::Version {
+        self
+    }
 }
 
 #[cfg(target_family = "unix")]
@@ -63,12 +78,12 @@ pub fn validate_checksum(bytes: &Bytes, expected: H256) -> Result<(), Mismatch<H
     }
 }
 
-pub async fn write_executable(
+pub async fn write_executable<Ver: Version>(
     data: Bytes,
     sha: H256,
     path: &Path,
-    ver: &Version,
-    validator: Option<&dyn FileValidator>,
+    ver: &Ver,
+    validator: Option<&dyn FileValidator<Ver>>,
 ) -> Result<PathBuf, FetchError> {
     let folder = path.join(ver.to_string());
     let file = folder.join("solc");
@@ -119,7 +134,7 @@ pub async fn write_executable(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{super::version_detailed as evm_version, *};
     use std::str::FromStr;
 
     #[tokio::test]
@@ -130,7 +145,7 @@ mod tests {
         let bytes = Bytes::from_static(data.as_bytes());
         let sha = Sha256::digest(data.as_bytes());
 
-        let version = Version::from_str("v0.4.10+commit.f0d539ae").unwrap();
+        let version = evm_version::DetailedVersion::from_str("v0.4.10+commit.f0d539ae").unwrap();
         let file = write_executable(
             bytes,
             H256::from_slice(&sha),
@@ -152,7 +167,7 @@ mod tests {
         let data = "this is a compiler binary";
         let bytes = Bytes::from_static(data.as_bytes());
         let sha = H256::default();
-        let version = Version::from_str("v0.4.10+commit.f0d539ae").unwrap();
+        let version = evm_version::DetailedVersion::from_str("v0.4.10+commit.f0d539ae").unwrap();
 
         let err = write_executable(bytes, sha, tmp_dir.path(), &version, None)
             .await

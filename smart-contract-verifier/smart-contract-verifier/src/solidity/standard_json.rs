@@ -1,7 +1,7 @@
 use super::{client::Client, types::Success};
 use crate::{
     batch_verifier::BatchError,
-    compiler::Version,
+    compiler::DetailedVersion,
     verifier::{ContractVerifier, Error},
     BatchVerificationResult, Contract,
 };
@@ -12,7 +12,7 @@ use std::sync::Arc;
 pub struct VerificationRequest {
     pub deployed_bytecode: Bytes,
     pub creation_bytecode: Option<Bytes>,
-    pub compiler_version: Version,
+    pub compiler_version: DetailedVersion,
 
     pub content: StandardJsonContent,
 
@@ -60,7 +60,7 @@ pub async fn verify(client: Arc<Client>, request: VerificationRequest) -> Result
 
 pub struct BatchVerificationRequest {
     pub contracts: Vec<Contract>,
-    pub compiler_version: Version,
+    pub compiler_version: DetailedVersion,
     pub content: StandardJsonContent,
 }
 

@@ -1,6 +1,6 @@
 use super::{
-    generic_fetcher::{FetchError, Fetcher, FileValidator, Version},
-    versions_fetcher::{VersionsFetcher, VersionsRefresher},
+    fetcher::{FetchError, Fetcher, FileValidator, Version},
+    fetcher_versions::{VersionsFetcher, VersionsRefresher},
 };
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -71,7 +71,7 @@ where
         for json_compiler_info in list_json.builds {
             let version = json_compiler_info.long_version.clone();
             let file_info = json_compiler_info
-                .to_compact(&self.list_url)
+                .into_compact(&self.list_url)
                 .map_err(ListError::Path)?;
             versions.insert(version, file_info);
         }
@@ -156,14 +156,8 @@ where
 
     async fn fetch(&self, ver: &Self::Version) -> Result<PathBuf, FetchError> {
         let (data, hash) = self.fetch_file(ver).await?;
-        super::generic_fetcher::write_executable(
-            data,
-            hash,
-            &self.folder,
-            ver,
-            self.validator.as_deref(),
-        )
-        .await
+        super::fetcher::write_executable(data, hash, &self.folder, ver, self.validator.as_deref())
+            .await
     }
 
     fn all_versions(&self) -> Vec<Self::Version> {
@@ -209,7 +203,7 @@ mod json {
     where
         <Ver as FromStr>::Err: Display,
     {
-        pub fn to_compact(self, download_url: &Url) -> Result<super::FileInfo, url::ParseError> {
+        pub fn into_compact(self, download_url: &Url) -> Result<super::FileInfo, url::ParseError> {
             let url = match self.path {
                 DownloadPath::Url(url) => url,
                 // download_url ends with `.../list.json` but join() will replace this with `filename`
@@ -232,10 +226,10 @@ mod json {
 
 #[cfg(test)]
 mod tests {
-    use super::{super::version as evm_version, *};
+    use super::*;
     use crate::{
-        consts::DEFAULT_SOLIDITY_COMPILER_LIST, tests::parse::test_deserialize_ok,
-        DEFAULT_ZKSOLC_COMPILER_LIST,
+        consts::DEFAULT_SOLIDITY_COMPILER_LIST, tests::parse::test_deserialize_ok, CompactVersion,
+        DetailedVersion,
     };
     use ethers_solc::Solc;
     use pretty_assertions::assert_eq;
@@ -283,7 +277,7 @@ mod tests {
 
     #[test]
     fn parse_list_json() {
-        let ver = |s| evm_version::Version::from_str(s).unwrap();
+        let ver = |s| DetailedVersion::from_str(s).unwrap();
         test_deserialize_ok(vec![
             (DEFAULT_LIST_JSON,
              json::List {
@@ -323,8 +317,8 @@ mod tests {
         ]);
     }
 
-    fn assert_has_version(versions: &VersionsMap<evm_version::Version>, ver: &str, expect: &str) {
-        let ver = evm_version::Version::from_str(ver).unwrap();
+    fn assert_has_version(versions: &VersionsMap<DetailedVersion>, ver: &str, expect: &str) {
+        let ver = DetailedVersion::from_str(ver).unwrap();
         let info = versions.get(&ver).unwrap();
         let url = info.url.to_string();
         assert_eq!(url, expect, "urls don't match");
@@ -332,7 +326,7 @@ mod tests {
 
     #[test]
     fn parse_versions() {
-        let list_json_file: json::List<evm_version::Version> =
+        let list_json_file: json::List<DetailedVersion> =
             serde_json::from_str(DEFAULT_LIST_JSON).unwrap();
         let download_url = Url::from_str(DEFAULT_DOWNLOAD_PREFIX).expect("valid url");
         let fetcher = ListVersionFetcher::new(download_url);
@@ -360,7 +354,7 @@ mod tests {
     #[tokio::test]
     async fn list_download_versions() {
         let list_url = Url::try_from(DEFAULT_SOLIDITY_COMPILER_LIST).expect("valid url");
-        let fetcher: ListFetcher<evm_version::Version> = ListFetcher::new(
+        let fetcher: ListFetcher<DetailedVersion> = ListFetcher::new(
             list_url,
             temp_dir().join("blockscout/smart_contract_verifier/compiler_fetcher/test/"),
             None,
@@ -370,8 +364,8 @@ mod tests {
         .expect("list.json file should be valid");
 
         for compiler_version in [
-            evm_version::Version::from_str("0.7.0+commit.9e61f92b").unwrap(),
-            evm_version::Version::from_str("0.8.9+commit.e5eed63a").unwrap(),
+            DetailedVersion::from_str("0.7.0+commit.9e61f92b").unwrap(),
+            DetailedVersion::from_str("0.8.9+commit.e5eed63a").unwrap(),
         ] {
             let file = fetcher.fetch(&compiler_version).await.unwrap();
             let solc = Solc::new(file);
@@ -397,7 +391,7 @@ mod tests {
             .respond_with(ResponseTemplate::new(200).set_body_bytes("{\"builds\": []}"))
             .mount(&mock_server)
             .await;
-        let fetcher: ListFetcher<evm_version::Version> = ListFetcher::new(
+        let fetcher: ListFetcher<DetailedVersion> = ListFetcher::new(
             Url::parse(&mock_server.uri()).unwrap(),
             temp_dir(),
             Some(Schedule::from_str("* * * * * * *").unwrap()),
@@ -418,7 +412,7 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
         let versions = fetcher.all_versions();
         assert!(
-            versions.contains(&evm_version::Version::from_str("0.4.13+commit.0fb4cb1a").unwrap()),
+            versions.contains(&DetailedVersion::from_str("0.4.13+commit.0fb4cb1a").unwrap()),
             "versions list doesn't have 0.4.13: {versions:?}",
         );
     }
@@ -447,7 +441,7 @@ mod tests {
             .respond_with(ResponseTemplate::new(200).set_body_bytes(VYPER_LIST_JSON))
             .mount(&mock_server)
             .await;
-        let fetcher: ListFetcher<evm_version::Version> = ListFetcher::new(
+        let fetcher: ListFetcher<DetailedVersion> = ListFetcher::new(
             Url::parse(&mock_server.uri()).unwrap(),
             temp_dir(),
             None,
@@ -458,7 +452,7 @@ mod tests {
 
         let versions = fetcher.all_versions();
         assert!(
-            versions.contains(&evm_version::Version::from_str("0.3.2+commit.3b6a4117").unwrap()),
+            versions.contains(&DetailedVersion::from_str("0.3.2+commit.3b6a4117").unwrap()),
             "versions list doesn't have 0.3.2: {versions:?}",
         );
 
@@ -495,7 +489,7 @@ mod tests {
             .respond_with(ResponseTemplate::new(200).set_body_bytes(ZKSOLC_LIST_JSON))
             .mount(&mock_server)
             .await;
-        let fetcher: ListFetcher<semver::Version> = ListFetcher::new(
+        let fetcher: ListFetcher<CompactVersion> = ListFetcher::new(
             Url::parse(&mock_server.uri()).unwrap(),
             temp_dir(),
             None,
@@ -506,8 +500,8 @@ mod tests {
 
         let versions = fetcher.all_versions();
         assert!(
-            versions.contains(&semver::Version::from_str("1.4.1").unwrap()),
-            "versions list doesn't have 1.4.1: {versions:?}",
+            versions.contains(&CompactVersion::from_str("v1.4.1").unwrap()),
+            "versions list doesn't have v1.4.1: {versions:?}",
         );
 
         for compiler_version in versions {

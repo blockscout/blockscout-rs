@@ -1,4 +1,4 @@
-use crate::compiler::{FileValidator, Version, generic_fetcher};
+use crate::compiler::{FileValidator, Version};
 use anyhow::{Context, Error};
 use async_trait::async_trait;
 use ethers_solc::Solc;
@@ -8,27 +8,7 @@ use std::path::Path;
 pub struct SolcValidator {}
 
 #[async_trait]
-impl FileValidator for SolcValidator {
-    async fn validate(&self, ver: &Version, path: &Path) -> Result<(), anyhow::Error> {
-        let solc = Solc::new(path);
-        let solc_ver = solc.version().context("could not get compiler version")?;
-        // ignore build and pre metadata
-        let solc_ver = semver::Version::new(solc_ver.major, solc_ver.minor, solc_ver.patch);
-
-        if &solc_ver != ver.version() {
-            Err(anyhow::anyhow!(
-                "versions don't match: expected={}, got={}",
-                ver.version(),
-                solc_ver
-            ))
-        } else {
-            Ok(())
-        }
-    }
-}
-
-#[async_trait]
-impl<Ver: generic_fetcher::Version> generic_fetcher::FileValidator<Ver> for SolcValidator {
+impl<Ver: Version> FileValidator<Ver> for SolcValidator {
     async fn validate(&self, ver: &Ver, path: &Path) -> Result<(), Error> {
         let solc = Solc::new(path);
         let solc_ver = solc.version().context("could not get compiler version")?;
@@ -51,7 +31,7 @@ impl<Ver: generic_fetcher::Version> generic_fetcher::FileValidator<Ver> for Solc
 mod tests {
     use super::*;
     use crate::{
-        compiler::{Fetcher, ListFetcher},
+        compiler::{DetailedVersion, Fetcher, ListFetcher},
         consts::DEFAULT_SOLIDITY_COMPILER_LIST,
     };
     use std::{
@@ -59,8 +39,8 @@ mod tests {
     };
     use tokio::sync::OnceCell;
 
-    fn default_version() -> Version {
-        Version::from_str("v0.8.9+commit.e5eed63a").unwrap()
+    fn default_version() -> DetailedVersion {
+        DetailedVersion::from_str("v0.8.9+commit.e5eed63a").unwrap()
     }
 
     async fn fetch_compiler() -> PathBuf {
@@ -92,7 +72,7 @@ mod tests {
     async fn wrong_version() {
         let compiler = fetch_compiler().await;
         let validator = SolcValidator::default();
-        let other_ver = Version::from_str("v0.8.10+commit.e5eed63a").unwrap();
+        let other_ver = DetailedVersion::from_str("v0.8.10+commit.e5eed63a").unwrap();
         validator
             .validate(&other_ver, compiler.as_path())
             .await

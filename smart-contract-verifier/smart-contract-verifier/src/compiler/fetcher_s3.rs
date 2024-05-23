@@ -1,14 +1,13 @@
 use super::{
-    generic_fetcher::{FetchError, Fetcher, FileValidator, Version},
-    versions_fetcher::{VersionsFetcher, VersionsRefresher},
+    fetcher::{FetchError, Fetcher, FileValidator, Version},
+    fetcher_versions::{VersionsFetcher, VersionsRefresher},
 };
 use async_trait::async_trait;
 use bytes::Bytes;
 use cron::Schedule;
 use primitive_types::H256;
 use s3::{request_trait::ResponseData, Bucket};
-use std::marker::PhantomData;
-use std::{collections::HashSet, path::PathBuf, str::FromStr, sync::Arc};
+use std::{collections::HashSet, marker::PhantomData, path::PathBuf, str::FromStr, sync::Arc};
 use thiserror::Error;
 use tokio::task::JoinHandle;
 use tracing::{debug, instrument};
@@ -147,14 +146,8 @@ impl<Ver: Version> Fetcher for S3Fetcher<Ver> {
 
     async fn fetch(&self, ver: &Self::Version) -> Result<PathBuf, FetchError> {
         let (data, hash) = self.fetch_file(ver).await?;
-        super::generic_fetcher::write_executable(
-            data,
-            hash,
-            &self.folder,
-            ver,
-            self.validator.as_deref(),
-        )
-        .await
+        super::fetcher::write_executable(data, hash, &self.folder, ver, self.validator.as_deref())
+            .await
     }
 
     fn all_versions(&self) -> Vec<Self::Version> {
@@ -165,8 +158,7 @@ impl<Ver: Version> Fetcher for S3Fetcher<Ver> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::version as evm_version;
-    use super::*;
+    use super::{super::version_detailed as evm_version, *};
     use pretty_assertions::assert_eq;
     use s3::{creds::Credentials, Region};
     use serde::Serialize;
@@ -271,8 +263,8 @@ mod tests {
         .await;
 
         let versions = vec![
-            evm_version::Version::from_str("v0.4.10+commit.f0d539ae").unwrap(),
-            evm_version::Version::from_str("v0.4.11+commit.68ef5810").unwrap(),
+            evm_version::DetailedVersion::from_str("v0.4.10+commit.f0d539ae").unwrap(),
+            evm_version::DetailedVersion::from_str("v0.4.11+commit.68ef5810").unwrap(),
         ];
 
         // create type directly to avoid extra work in constructor
@@ -309,7 +301,7 @@ mod tests {
             "v0.5.1+commit.c8a2cb62",
         ]
         .into_iter()
-        .map(evm_version::Version::from_str)
+        .map(evm_version::DetailedVersion::from_str)
         .map(|x| x.unwrap())
         .collect();
 
@@ -335,7 +327,7 @@ mod tests {
             "v0.5.1+commit.c8a2cb62",
         ]
         .into_iter()
-        .map(evm_version::Version::from_str)
+        .map(evm_version::DetailedVersion::from_str)
         .map(|x| x.unwrap())
         .collect();
 

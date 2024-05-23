@@ -1,22 +1,17 @@
-mod version;
-
-mod fetcher;
-mod list_fetcher;
-mod s3_fetcher;
-mod versions_fetcher;
-
 mod compilers;
-pub mod download_cache;
-
-pub mod generic_download_cache;
-pub mod generic_fetcher;
-pub mod generic_list_fetcher;
-pub mod generic_s3_fetcher;
-pub mod zksync_compilers;
+mod compilers_zksync;
+mod download_cache;
+mod fetcher;
+mod fetcher_list;
+mod fetcher_s3;
+mod fetcher_versions;
+mod version_compact;
+mod version_detailed;
 
 pub use compilers::{Compilers, Error, EvmCompiler};
-pub use fetcher::{Fetcher, FileValidator};
-pub use list_fetcher::ListFetcher;
-pub use s3_fetcher::S3Fetcher;
-pub use version::Version;
-pub use zksync_compilers::ZksyncCompilers;
+pub use compilers_zksync::ZksyncCompilers;
+pub use fetcher::{Fetcher, FileValidator, Version};
+pub use fetcher_list::ListFetcher;
+pub use fetcher_s3::S3Fetcher;
+pub use version_compact::CompactVersion;
+pub use version_detailed::DetailedVersion;

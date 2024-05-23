@@ -1,23 +1,22 @@
-use super::{generic_fetcher};
-use crate::{compiler::download_cache::DownloadCache, Fetcher, Version};
-use std::{sync::Arc};
+use crate::{compiler::download_cache::DownloadCache, CompactVersion, DetailedVersion, Fetcher};
+use std::sync::Arc;
 
 pub struct ZksyncCompilers {
-    evm_cache: DownloadCache,
-    evm_fetcher: Arc<dyn generic_fetcher::Fetcher<Version = Version>>,
-    zk_cache: DownloadCache,
-    zk_fetcher: Arc<dyn generic_fetcher::Fetcher<Version = semver::Version>>,
+    _evm_cache: DownloadCache<DetailedVersion>,
+    evm_fetcher: Arc<dyn Fetcher<Version = DetailedVersion>>,
+    _zk_cache: DownloadCache<CompactVersion>,
+    zk_fetcher: Arc<dyn Fetcher<Version = CompactVersion>>,
 }
 
 impl ZksyncCompilers {
     pub fn new(
-        evm_fetcher: Arc<dyn generic_fetcher::Fetcher<Version=Version>>,
-        zk_fetcher: Arc<dyn generic_fetcher::Fetcher<Version = semver::Version>>,
+        evm_fetcher: Arc<dyn Fetcher<Version = DetailedVersion>>,
+        zk_fetcher: Arc<dyn Fetcher<Version = CompactVersion>>,
     ) -> Self {
         Self {
-            evm_cache: DownloadCache::default(),
+            _evm_cache: DownloadCache::default(),
             evm_fetcher,
-            zk_cache: DownloadCache::default(),
+            _zk_cache: DownloadCache::default(),
             zk_fetcher,
         }
     }
@@ -40,16 +39,15 @@ impl ZksyncCompilers {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{compiler::generic_list_fetcher::ListFetcher, DEFAULT_SOLIDITY_COMPILER_LIST, DEFAULT_ZKSOLC_COMPILER_LIST};
-    use std::{env::temp_dir};
+    use crate::{
+        compiler::fetcher_list::ListFetcher, DEFAULT_SOLIDITY_COMPILER_LIST,
+        DEFAULT_ZKSOLC_COMPILER_LIST,
+    };
+    use std::env::temp_dir;
 
     async fn initialize() -> ZksyncCompilers {
-        let evm_url: url::Url = DEFAULT_SOLIDITY_COMPILER_LIST
-            .try_into()
-            .unwrap();
-        let zk_url = DEFAULT_ZKSOLC_COMPILER_LIST
-            .try_into()
-            .unwrap();
+        let evm_url: url::Url = DEFAULT_SOLIDITY_COMPILER_LIST.try_into().unwrap();
+        let zk_url = DEFAULT_ZKSOLC_COMPILER_LIST.try_into().unwrap();
 
         let evm_fetcher = ListFetcher::new(evm_url, temp_dir(), None, None)
             .await
@@ -67,7 +65,15 @@ mod tests {
         let evm_versions = compilers.all_evm_versions_sorted_str();
         let zk_versions = compilers.all_zk_versions_sorted_str();
 
-        assert!(evm_versions.contains(&"v0.8.25+commit.b61c2a91".to_string()), "{:#?}", evm_versions);
-        assert!(zk_versions.contains(&"1.4.1".to_string()), "{:#?}", zk_versions);
+        assert!(
+            evm_versions.contains(&"v0.8.25+commit.b61c2a91".to_string()),
+            "{:#?}",
+            evm_versions
+        );
+        assert!(
+            zk_versions.contains(&"1.4.1".to_string()),
+            "{:#?}",
+            zk_versions
+        );
     }
 }

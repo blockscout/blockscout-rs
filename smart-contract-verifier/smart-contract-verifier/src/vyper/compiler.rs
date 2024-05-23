@@ -1,5 +1,5 @@
 use super::artifacts::CompilerInput;
-use crate::compiler::{EvmCompiler, Version};
+use crate::compiler::{DetailedVersion, EvmCompiler};
 use ethers_solc::{error::SolcError, CompilerOutput, Solc};
 use std::path::Path;
 
@@ -19,7 +19,7 @@ impl EvmCompiler for VyperCompiler {
     async fn compile(
         &self,
         path: &Path,
-        _ver: &Version,
+        _ver: &DetailedVersion,
         input: &Self::CompilerInput,
     ) -> Result<(serde_json::Value, CompilerOutput), SolcError> {
         let raw = Solc::from(path).async_compile_output(input).await?;
@@ -159,7 +159,7 @@ def getUserName() -> String[100]:
         let compilers = global_compilers().await;
         let input: CompilerInput = input_with_source(source_code.into());
         let version =
-            compiler::Version::from_str("0.3.6+commit.4a2124d0").expect("Compiler version");
+            compiler::DetailedVersion::from_str("0.3.6+commit.4a2124d0").expect("Compiler version");
 
         let (_raw, result) = compilers
             .compile(&version, &input, None)
@@ -177,8 +177,8 @@ def getUserName() -> String[100]:
     #[tokio::test]
     async fn compile_failed() {
         let compilers = global_compilers().await;
-        let version =
-            compiler::Version::from_str("v0.2.11+commit.5db35ef").expect("Compiler version");
+        let version = compiler::DetailedVersion::from_str("v0.2.11+commit.5db35ef")
+            .expect("Compiler version");
 
         for sources in [
             BTreeMap::from_iter([("source.vy".into(), "some wrong vyper code".into())]),

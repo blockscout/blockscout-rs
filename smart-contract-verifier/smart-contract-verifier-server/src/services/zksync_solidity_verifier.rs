@@ -4,10 +4,10 @@ use crate::{
         VerifyStandardJsonRequest,
     },
     services::common,
-    settings::{FetcherSettings, ZksyncSoliditySettings},
+    settings::ZksyncSoliditySettings,
 };
 use anyhow::Context;
-use smart_contract_verifier::{Fetcher, ListFetcher, S3Fetcher, SolcValidator, ZksyncCompilers};
+use smart_contract_verifier::{SolcValidator, ZksyncCompilers};
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 use tonic::{Request, Response, Status};
@@ -19,10 +19,10 @@ pub struct Service {
 impl Service {
     pub async fn new(
         settings: ZksyncSoliditySettings,
-        compilers_threads_semaphore: Arc<Semaphore>,
+        _compilers_threads_semaphore: Arc<Semaphore>,
     ) -> anyhow::Result<Self> {
         let solc_validator = Arc::new(SolcValidator::default());
-        let evm_fetcher = common::initialize_generic_fetcher(
+        let evm_fetcher = common::initialize_fetcher(
             settings.evm_fetcher,
             settings.evm_compilers_dir.clone(),
             settings.evm_refresh_versions_schedule,
@@ -31,7 +31,7 @@ impl Service {
         .await
         .context("zksync solc fetcher initialization")?;
 
-        let zk_fetcher = common::initialize_generic_fetcher(
+        let zk_fetcher = common::initialize_fetcher(
             settings.zk_fetcher,
             settings.zk_compilers_dir.clone(),
             settings.zk_refresh_versions_schedule,
@@ -50,18 +50,18 @@ impl Service {
 impl Verifier for Service {
     async fn verify_standard_json(
         &self,
-        request: Request<VerifyStandardJsonRequest>,
+        _request: Request<VerifyStandardJsonRequest>,
     ) -> Result<Response<VerifyResponse>, Status> {
         todo!()
     }
 
     async fn list_compilers(
         &self,
-        request: Request<ListCompilersRequest>,
+        _request: Request<ListCompilersRequest>,
     ) -> Result<Response<ListCompilersResponse>, Status> {
         Ok(Response::new(ListCompilersResponse {
-            zk_compilers: self.compilers.all_evm_versions_sorted_str(),
-            solc_compilers: self.compilers.all_zk_versions_sorted_str(),
+            solc_compilers: self.compilers.all_evm_versions_sorted_str(),
+            zk_compilers: self.compilers.all_zk_versions_sorted_str(),
         }))
     }
 }
