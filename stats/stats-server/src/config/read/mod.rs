@@ -1,4 +1,6 @@
-//!
+//! Actually reading configs.
+//! Currently the configs are read from json files. Values can be overridden with env variables
+//! for convenience.
 
 use merge::{override_charts, override_update_schedule};
 

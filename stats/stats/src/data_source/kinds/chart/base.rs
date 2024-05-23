@@ -153,6 +153,7 @@ impl<C: UpdateableChart> DataSource for UpdateableChartWrapper<C> {
     ) -> Result<(), UpdateError> {
         Self::PrimaryDependency::update_from_remote(cx).await?;
         Self::SecondaryDependencies::update_from_remote(cx).await?;
+        // data retrieval time
         let mut remote_fetch_timer = AggregateTimer::new();
         let _update_timer = metrics::CHART_UPDATE_TIME
             .with_label_values(&[Self::NAME])
