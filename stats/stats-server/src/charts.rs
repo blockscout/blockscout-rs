@@ -249,6 +249,31 @@ impl Charts {
         Ok(())
     }
 
+    /// Check if some dependencies are not present in their respective groups
+    /// and make corresponding warn
+    fn warn_non_member_charts(groups: &BTreeMap<String, ArcUpdateGroup>) {
+        for (name, group) in groups {
+            let sync_dependencies: HashSet<String> = group
+                .list_dependency_mutex_ids()
+                .into_iter()
+                .map(|s| s.to_owned())
+                .collect();
+            // we rely on the fact that:
+            // chart names == their mutex ids
+            let members: HashSet<String> =
+                group.list_charts().into_iter().map(|c| c.name).collect();
+            let missing_members = sync_dependencies.difference(&members).collect_vec();
+            if !missing_members.is_empty() {
+                tracing::warn!(
+                    update_group = name,
+                    "Group has dependencies that are not members. In most scenarios it makes sense to include all dependencies, \
+                    because all deps are updated with the group in any case. Turning off their 'parents' may lead to these members \
+                    getting stalled: {:?}", missing_members
+                )
+            }
+        }
+    }
+
     /// All initialization of update groups happens here
     fn init_update_groups(
         schedule_config: config::update_schedule::Config,
@@ -259,6 +284,7 @@ impl Charts {
 
         // checks that all groups are present in config.
         Self::verify_schedule_config(&update_groups, &schedule_config)?;
+        Self::warn_non_member_charts(&update_groups);
 
         for (name, group) in update_groups {
             let group_config = schedule_config

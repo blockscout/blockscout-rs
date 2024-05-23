@@ -334,7 +334,7 @@ impl SyncUpdateGroup {
         for name in chart_names {
             let Some(dependencies_ids) = self.inner.dependency_mutex_ids_of(name) else {
                 warn!(
-                    group_name=self.name(),
+                    update_group=self.name(),
                     "`dependency_mutex_ids_of` of member chart '{name}' returned `None`. Expected `Some(..)`"
                 );
                 continue;
