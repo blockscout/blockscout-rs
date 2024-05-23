@@ -166,6 +166,23 @@ impl Scoutcloud for ScoutcloudService {
             .map(Response::new)
     }
 
+    async fn delete_instance(
+        &self,
+        request: Request<DeleteInstanceRequest>,
+    ) -> Result<Response<DeleteInstanceResponse>, Status> {
+        let (request, user_token): (DeleteInstanceRequestInternal, _) =
+            parse_request_with_headers(self.db.as_ref(), request).await?;
+        logic::deploy::delete_instance(
+            self.db.as_ref(),
+            self.github.as_ref(),
+            &request.instance_id,
+            &user_token,
+        )
+        .await
+        .map_err(map_deploy_error)?;
+        Ok(Response::new(DeleteInstanceResponse {}))
+    }
+
     async fn get_deployment(
         &self,
         request: Request<GetDeploymentRequest>,

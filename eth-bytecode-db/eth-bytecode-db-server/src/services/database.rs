@@ -12,7 +12,7 @@ use amplify::Wrapper;
 use async_trait::async_trait;
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use eth_bytecode_db::{
-    search::{self, BytecodeRemote},
+    search::{self},
     verification,
     verification::sourcify_from_etherscan,
 };
@@ -271,15 +271,13 @@ impl DatabaseService {
         bytecode_type: BytecodeType,
         bytecode: &str,
     ) -> Result<Vec<Source>, tonic::Status> {
-        let bytecode_remote = BytecodeRemote {
-            bytecode_type: BytecodeTypeWrapper::from_inner(bytecode_type).try_into()?,
-            data: DisplayBytes::from_str(bytecode)
-                .map_err(|err| tonic::Status::invalid_argument(format!("Invalid bytecode: {err}")))?
-                .0,
-        };
+        let code_type = BytecodeTypeWrapper::from_inner(bytecode_type).try_into()?;
+        let code = DisplayBytes::from_str(bytecode)
+            .map_err(|err| tonic::Status::invalid_argument(format!("Invalid bytecode: {err}")))?
+            .0;
 
         let mut matches =
-            search::eth_bytecode_db_find_contract(self.client.db_client.as_ref(), &bytecode_remote)
+            search::eth_bytecode_db_find_contract(self.client.db_client.as_ref(), code_type, code)
                 .await
                 .map_err(|err| tonic::Status::internal(err.to_string()))?;
         matches.sort_by_key(|m| m.updated_at);

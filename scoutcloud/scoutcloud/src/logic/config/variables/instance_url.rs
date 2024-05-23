@@ -2,12 +2,14 @@ use crate::logic::{
     config::{macros, ConfigError},
     ConfigValidationContext,
 };
+use serde_plain::derive_serialize_from_display;
 use std::fmt::{Display, Formatter};
 
 pub enum InstanceUrl {
     Host(String),
     Prefix(String),
 }
+derive_serialize_from_display!(InstanceUrl);
 
 impl Display for InstanceUrl {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {

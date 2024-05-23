@@ -12,6 +12,7 @@ service Scoutcloud {
   rpc UpdateConfigPartial(UpdateConfigPartialRequest) returns (UpdateConfigResponse) {}
   rpc UpdateInstanceStatus(UpdateInstanceStatusRequest) returns (UpdateInstanceStatusResponse) {}
   rpc GetInstance(GetInstanceRequest) returns (Instance) {}
+  rpc DeleteInstance(DeleteInstanceRequest) returns (DeleteInstanceResponse) {}
   rpc ListInstances(ListInstancesRequest) returns (ListInstancesResponse) {}
   rpc GetDeployment(GetDeploymentRequest) returns (Deployment) {}
   rpc GetCurrentDeployment(GetCurrentDeploymentRequest) returns (Deployment) {}
@@ -36,6 +37,7 @@ message DeployConfig {
   optional string icon_url = 9 [(convert_options.convert) = {type: "Option<url::Url>"}];
   optional string homeplate_background = 10;
   optional string homeplate_text_color = 11;
+  optional bool is_testnet = 13;
 }
 
 message DeployConfigPartial {
@@ -54,6 +56,7 @@ message DeployConfigPartial {
   optional string icon_url = 9 [(convert_options.convert) = {type: "Option<url::Url>"}];
   optional string homeplate_background = 10;
   optional string homeplate_text_color = 11;
+  optional bool is_testnet = 13;
 }
 
 message CreateInstanceRequest {
@@ -64,6 +67,14 @@ message CreateInstanceRequest {
 
 message CreateInstanceResponse {
   string instance_id = 1;
+}
+
+message DeleteInstanceRequest {
+  string instance_id = 1;
+}
+
+message DeleteInstanceResponse {
+
 }
 
 message UpdateConfigRequest {
@@ -92,7 +103,7 @@ enum DeploymentStatus {
 
 enum UpdateInstanceAction {
   START = 0;
-  FINISH = 1;
+  STOP = 1;
   RESTART = 2;
 }
 

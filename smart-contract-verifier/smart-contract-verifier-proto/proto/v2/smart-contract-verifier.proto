@@ -83,6 +83,9 @@ message Source {
 
   /// Info about the runtime code (sourcemaps, linkreferences, immutables) encoded as a json.
   optional string deployed_bytecode_artifacts = 12;
+
+  /// If true, the verified contract was a ERC-5202 compatible blueprint contract
+  bool is_blueprint = 13;
 }
 
 enum BytecodeType {

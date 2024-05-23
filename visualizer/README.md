@@ -1,6 +1,26 @@
 # Visualizer
-A Rust service for generating Unified Modeling Language (UML) class diagrams and storage diagrams for Solidity contracts based on Node.js package
+A service for generating Unified Modeling Language (UML) class diagrams and storage diagrams for Solidity contracts based on Node.js package
 [sol2uml](https://github.com/naddison36/sol2uml).
+
+## Requirements
+- NodeJs environment with linked `sol2uml` binary (see [installation guide](https://github.com/naddison36/sol2uml?tab=readme-ov-file#install)) 
+
+## How to enable
+Set the following ENVs on blockscout instance:
+- `MICROSERVICE_VISUALIZE_SOL2UML_ENABLED=true`
+- `MICROSERVICE_VISUALIZE_SOL2UML_URL={service_url}`
+
+## Envs
+Here, we describe variables specific to this service. Variables common to all services can be found [here](../docs/common-envs.md).
+
+[anchor]: <> (anchors.envs.start)
+
+| Variable                                          | Required | Description                                                          | Default value                                      |
+|---------------------------------------------------|----------|----------------------------------------------------------------------|----------------------------------------------------|
+
+_* There are no service specific variables for the service_
+
+[anchor]: <> (anchors.envs.end)
 
 ## Result Examples
 
@@ -72,3 +92,9 @@ For testing on **Windows** you need to rewrite some code due to the way the serv
 ```let output = Command::new("cmd").arg("/C").arg("sol2uml").args(args).output().await?;```
 
 `/C` should be replaced with the drive where sol2uml is installed.
+
+## Links
+- Demo - https://visualizer.services.blockscout.com
+- [Swagger](https://blockscout.github.io/swaggers/services/visualizer/index.html)
+- [Packages](https://github.com/blockscout/blockscout-rs/pkgs/container/visualizer)
+- [Releases](https://github.com/blockscout/blockscout-rs/releases?q=visualizer&expanded=true)

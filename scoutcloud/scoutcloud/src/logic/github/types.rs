@@ -63,6 +63,12 @@ pub struct CreateCommitRequest {
     pub tree: String,
 }
 
+#[derive(Serialize, Debug)]
+pub struct DeleteFileRequest {
+    pub message: String,
+    pub sha: String,
+}
+
 pub type CreateCommitResponse = OnlySha;
 
 pub type UpdateBranchRequest = OnlySha;
@@ -72,6 +78,12 @@ pub struct WorkflowDispatchRequest<P: Serialize + ?Sized> {
     #[serde(rename = "ref")]
     pub _ref: String,
     pub inputs: P,
+}
+
+#[derive(Serialize, Debug)]
+pub struct OnlyRef {
+    #[serde(rename = "ref")]
+    pub _ref: String,
 }
 
 #[derive(Serialize, Debug)]

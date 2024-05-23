@@ -21,6 +21,7 @@ pub struct Success {
     pub compilation_artifacts: serde_json::Value,
     pub creation_input_artifacts: serde_json::Value,
     pub deployed_bytecode_artifacts: serde_json::Value,
+    pub is_blueprint: bool,
 }
 
 impl From<(CompilerInput, verifier::Success)> for Success {
@@ -38,6 +39,7 @@ impl From<(CompilerInput, verifier::Success)> for Success {
             compilation_artifacts: success.compilation_artifacts,
             creation_input_artifacts: success.creation_input_artifacts,
             deployed_bytecode_artifacts: success.deployed_bytecode_artifacts,
+            is_blueprint: success.is_blueprint,
         }
     }
 }

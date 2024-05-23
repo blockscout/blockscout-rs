@@ -111,6 +111,42 @@ pub async fn list_instances(
         .collect::<Result<Vec<_>, _>>()
 }
 
+pub async fn delete_instance(
+    db: &DatabaseConnection,
+    github: &GithubClient,
+    instance_uuid: &str,
+    user_token: &UserToken,
+) -> Result<(), DeployError> {
+    let tx = db.begin().await?;
+    let mut instance_deployment = InstanceDeployment::find_by_instance_uuid(&tx, instance_uuid)
+        .await?
+        .ok_or(DeployError::InstanceNotFound(instance_uuid.to_string()))?;
+    user_token.has_access_to_instance(&instance_deployment.instance)?;
+    let status = instance_deployment.deployment_status();
+    match status {
+        proto::DeploymentStatus::NoStatus
+        | proto::DeploymentStatus::Created
+        | proto::DeploymentStatus::Stopped
+        | proto::DeploymentStatus::Failed => {
+            // Ok
+        }
+        _ => {
+            return Err(DeployError::InvalidStateTransition(
+                "delete".to_string(),
+                serde_plain::to_string(&status).expect("enum should be serializable"),
+            ));
+        }
+    }
+
+    user_actions::log_delete_instance(&tx, user_token, &instance_deployment.instance).await?;
+    instance_deployment.instance.mark_as_deleted(&tx).await?;
+    // deleting a file cannot be reverted, so we do it last
+    instance_deployment.instance.delete_file(github).await?;
+    tx.commit().await?;
+
+    Ok(())
+}
+
 pub async fn get_deployment(
     db: &DatabaseConnection,
     deployment_uuid: &str,

@@ -81,6 +81,24 @@ paths:
           type: string
       tags:
         - Scoutcloud
+    delete:
+      operationId: Scoutcloud_DeleteInstance
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1DeleteInstanceResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: instance_id
+          in: path
+          required: true
+          type: string
+      tags:
+        - Scoutcloud
   /api/v1/instances/{instance_id}/config:
     put:
       operationId: Scoutcloud_UpdateConfig
@@ -283,6 +301,8 @@ definitions:
     properties:
       instance_id:
         type: string
+  v1DeleteInstanceResponse:
+    type: object
   v1DeployConfig:
     type: object
     properties:
@@ -310,6 +330,8 @@ definitions:
         type: string
       homeplate_text_color:
         type: string
+      is_testnet:
+        type: boolean
   v1DeployConfigPartial:
     type: object
     properties:
@@ -337,6 +359,8 @@ definitions:
         type: string
       homeplate_text_color:
         type: string
+      is_testnet:
+        type: boolean
   v1Deployment:
     type: object
     properties:
@@ -418,7 +442,7 @@ definitions:
     type: string
     enum:
       - START
-      - FINISH
+      - STOP
       - RESTART
     default: START
   v1UpdateInstanceStatusResponse:
