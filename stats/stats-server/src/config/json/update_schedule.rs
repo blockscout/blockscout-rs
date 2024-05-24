@@ -1,4 +1,4 @@
-use crate::config::chart_info::UpdateGroup;
+use crate::config::types::UpdateGroup;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 

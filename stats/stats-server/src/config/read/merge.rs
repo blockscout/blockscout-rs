@@ -4,12 +4,12 @@ use anyhow::Context;
 use itertools::Itertools;
 
 use crate::config::{
-    chart_info::{CounterInfo, LineChartCategory, LineChartInfo},
     env::{
         self,
         charts::{CounterInfoOrdered, LineChartCategoryOrdered, LineChartInfoOrdered},
     },
     json,
+    types::{CounterInfo, LineChartCategory, LineChartInfo},
 };
 use std::collections::{btree_map::Entry, BTreeMap};
 
@@ -92,8 +92,8 @@ mod override_field {
     use super::*;
 
     use crate::config::{
-        chart_info::{AllChartSettings, CounterInfo, LineChartCategory, LineChartInfo},
         env::charts::{CounterInfoOrdered, LineChartCategoryOrdered, LineChartInfoOrdered},
+        types::{AllChartSettings, CounterInfo, LineChartCategory, LineChartInfo},
     };
 
     pub fn counter(

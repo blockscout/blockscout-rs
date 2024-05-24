@@ -1,8 +1,7 @@
-use crate::{
-    charts::EnabledChartSettings,
-    config::{
-        chart_info::{AllChartSettings, CounterInfo, LineChartCategory, LineChartInfo},
-        json,
+use crate::config::{
+    json,
+    types::{
+        AllChartSettings, CounterInfo, EnabledChartSettings, LineChartCategory, LineChartInfo,
     },
 };
 use serde::Deserialize;

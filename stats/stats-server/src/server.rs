@@ -1,8 +1,8 @@
 use crate::{
-    charts::Charts,
     config::{read_charts_config, read_update_schedule_config},
     health::HealthService,
     read_service::ReadService,
+    runtime_setup::RuntimeSetup,
     settings::Settings,
     update_service::UpdateService,
 };
@@ -63,7 +63,7 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
     opt.sqlx_logging_level(tracing::log::LevelFilter::Debug);
     let blockscout = Arc::new(Database::connect(opt).await?);
 
-    let charts = Arc::new(Charts::new(charts_config, update_schedule)?);
+    let charts = Arc::new(RuntimeSetup::new(charts_config, update_schedule)?);
 
     // TODO: may be run this with migrations or have special config
     for group_entry in charts.update_groups.values() {

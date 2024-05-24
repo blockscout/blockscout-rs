@@ -1,4 +1,4 @@
-use crate::charts::{Charts, UpdateGroupEntry};
+use crate::runtime_setup::{RuntimeSetup, UpdateGroupEntry};
 use chrono::Utc;
 use cron::Schedule;
 use sea_orm::{DatabaseConnection, DbErr};
@@ -8,7 +8,7 @@ use std::sync::Arc;
 pub struct UpdateService {
     db: Arc<DatabaseConnection>,
     blockscout: Arc<DatabaseConnection>,
-    charts: Arc<Charts>,
+    charts: Arc<RuntimeSetup>,
 }
 
 fn time_till_next_call(schedule: &Schedule) -> std::time::Duration {
@@ -25,7 +25,7 @@ impl UpdateService {
     pub async fn new(
         db: Arc<DatabaseConnection>,
         blockscout: Arc<DatabaseConnection>,
-        charts: Arc<Charts>,
+        charts: Arc<RuntimeSetup>,
     ) -> Result<Self, DbErr> {
         Ok(Self {
             db,

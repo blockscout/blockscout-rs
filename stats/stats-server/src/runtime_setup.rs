@@ -1,17 +1,18 @@
 use crate::{
     config::{
         self,
-        chart_info::{AllChartSettings, CounterInfo, LineChartCategory, LineChartInfo},
         charts::LinesInfo,
+        types::{
+            AllChartSettings, CounterInfo, EnabledChartSettings, LineChartCategory, LineChartInfo,
+        },
     },
-    groups,
+    update_groups,
 };
 use cron::Schedule;
 use itertools::Itertools;
-use serde::Deserialize;
 use stats::{
-    data_source::group::{ArcUpdateGroup, SyncUpdateGroup},
     entity::sea_orm_active_enums::ChartType,
+    update_group::{ArcUpdateGroup, SyncUpdateGroup},
     ChartDynamic,
 };
 use std::{
@@ -20,27 +21,6 @@ use std::{
     sync::Arc,
 };
 use tokio::sync::Mutex;
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct EnabledChartSettings {
-    pub title: String,
-    pub description: String,
-    pub units: Option<String>,
-}
-
-impl EnabledChartSettings {
-    pub fn from_all(value: AllChartSettings) -> Option<Self> {
-        if value.enabled {
-            Some(EnabledChartSettings {
-                units: value.units,
-                title: value.title,
-                description: value.description,
-            })
-        } else {
-            None
-        }
-    }
-}
 
 #[derive(Clone)]
 pub struct EnabledChartEntry {
@@ -63,7 +43,7 @@ pub struct UpdateGroupEntry {
 }
 
 // todo: rename
-pub struct Charts {
+pub struct RuntimeSetup {
     pub lines_layout: LinesInfo<EnabledChartSettings>,
     pub update_groups: BTreeMap<String, UpdateGroupEntry>,
     pub charts_info: BTreeMap<String, EnabledChartEntry>,
@@ -82,7 +62,7 @@ fn new_set_check_duplicates<T: Hash + Eq, I: IntoIterator<Item = T>>(
     Ok(result)
 }
 
-impl Charts {
+impl RuntimeSetup {
     pub fn new(
         charts: config::charts::Config<AllChartSettings>,
         update_schedule: config::update_schedule::Config,
@@ -204,7 +184,7 @@ impl Charts {
     }
 
     fn all_update_groups() -> Vec<ArcUpdateGroup> {
-        vec![Arc::new(groups::Contracts)]
+        vec![Arc::new(update_groups::Contracts)]
     }
 
     fn create_all_dependencies_mutexes(

@@ -7,5 +7,5 @@ pub trait DataSourceMetrics {
     fn observe_query_time(time: Duration);
 }
 
-// not implementing for () and tuple because it does not make sense
-// and `DataSourceMetrics` does not use relations from `DataSource`
+// implementing for () and tuple does not make sense
+// + `DataSourceMetrics` does not use relations from `DataSource`

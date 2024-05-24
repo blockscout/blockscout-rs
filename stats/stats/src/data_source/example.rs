@@ -5,16 +5,7 @@ use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, Statement};
 use tokio::sync::Mutex;
 
-use crate::{
-    charts::db_interaction::write::insert_data_many,
-    construct_update_group,
-    data_processing::parse_and_cumsum,
-    tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
-    Chart, MissingDatePolicy, UpdateError,
-};
-
 use super::{
-    group::{SyncUpdateGroup, UpdateGroup},
     kinds::{
         chart::{
             BatchUpdateableChart, BatchUpdateableChartWrapper, RemoteChart, RemoteChartWrapper,
@@ -24,6 +15,14 @@ use super::{
     },
     source::DataSource,
     types::UpdateParameters,
+};
+use crate::{
+    charts::db_interaction::write::insert_data_many,
+    construct_update_group,
+    data_processing::parse_and_cumsum,
+    tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
+    update_group::{SyncUpdateGroup, UpdateGroup},
+    Chart, MissingDatePolicy, UpdateError,
 };
 
 pub struct NewContractsChart;

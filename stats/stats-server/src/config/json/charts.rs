@@ -1,4 +1,4 @@
-use crate::config::chart_info::{AllChartSettings, CounterInfo, LineChartCategory};
+use crate::config::types::{AllChartSettings, CounterInfo, LineChartCategory};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 

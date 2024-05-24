@@ -14,9 +14,7 @@ use thiserror::Error;
 use tokio::sync::{Mutex, MutexGuard};
 use tracing::warn;
 
-use crate::{ChartDynamic, UpdateError};
-
-use super::types::UpdateParameters;
+use crate::{data_source::UpdateParameters, ChartDynamic, UpdateError};
 
 // todo: reconsider name of module (also should help reading??)
 
@@ -28,7 +26,7 @@ pub struct InitializationError {
 
 // todo: move comments somewhere (to module likely)
 // todo: use `trait-variant` once updated, probably
-// `async_trait` allows making trait objects
+// only `async_trait` currently allows making trait objects
 /// Directed Acyclic Connected Graph
 #[async_trait]
 pub trait UpdateGroup {
@@ -60,25 +58,16 @@ pub trait UpdateGroup {
     ) -> Result<(), UpdateError>;
 }
 
+// reexport some dependencies for macro to reference
 pub mod macro_reexport {
     pub use chrono;
     pub use paste;
 }
 
-// todo: move example to module?
-// todo: add check for unique names
-// steps:
-// - make macro for making all groups altogether.
-// - in the macro make smth like `validate()` that will check uniqueness of names with the help of
-// `TypeId` (https://doc.rust-lang.org/beta/core/any/struct.TypeId.html#method.of)
-// and (probably) phf https://docs.rs/phf/latest/phf/index.html
-// - mark "TODO" when `const` version of `TypeId::of` gets stabilized (to check it in compile-time w/ const-assert)
-// - do the same for update group names
-
 /// Construct update group that implemants [`UpdateGroup`]. The main purpose of the
 /// group is to update its members together.
 ///
-/// All membere must implement [`crate::Chart`] and [`crate::data_source::source::DataSource`].
+/// All membere must implement [`crate::Chart`] and [`crate::data_source::DataSource`].
 ///
 /// The behaviour is the following:
 /// 1. when `create` or `update` is triggered, each member's correspinding method is triggered
@@ -187,7 +176,7 @@ macro_rules! construct_update_group {
         pub struct $group_name;
 
         #[::async_trait::async_trait]
-        impl $crate::data_source::group::UpdateGroup for $group_name
+        impl $crate::update_group::UpdateGroup for $group_name
         {
             fn name(&self) -> ::std::string::String {
                 $name.into()
@@ -204,7 +193,7 @@ macro_rules! construct_update_group {
             fn list_dependency_mutex_ids(&self) -> ::std::collections::HashSet<&'static str> {
                 let mut ids = ::std::collections::HashSet::new();
                 $(
-                    ids.extend(<$member as $crate::data_source::source::DataSource>::all_dependencies_mutex_ids().into_iter());
+                    ids.extend(<$member as $crate::data_source::DataSource>::all_dependencies_mutex_ids().into_iter());
                 )*
                 ids
             }
@@ -212,7 +201,7 @@ macro_rules! construct_update_group {
             fn dependency_mutex_ids_of(&self, chart_name: &str) -> Option<::std::collections::HashSet<&'static str>> {
                 $(
                     if chart_name == <$member as $crate::Chart>::NAME {
-                        return Some(<$member as $crate::data_source::source::DataSource>::all_dependencies_mutex_ids());
+                        return Some(<$member as $crate::data_source::DataSource>::all_dependencies_mutex_ids());
                     }
                 )*
                 return None;
@@ -224,17 +213,17 @@ macro_rules! construct_update_group {
                 db: &sea_orm::DatabaseConnection,
                 #[allow(unused)]
                 creation_time_override: ::std::option::Option<
-                    $crate::data_source::group::macro_reexport::chrono::DateTime<
-                        $crate::data_source::group::macro_reexport::chrono::Utc
+                    $crate::update_group::macro_reexport::chrono::DateTime<
+                        $crate::update_group::macro_reexport::chrono::Utc
                     >
                 >,
                 #[allow(unused)]
                 enabled_names: &::std::collections::HashSet<String>,
             ) -> Result<(), sea_orm::DbErr> {
-                let current_time = creation_time_override.unwrap_or_else(|| $crate::data_source::group::macro_reexport::chrono::Utc::now());
+                let current_time = creation_time_override.unwrap_or_else(|| $crate::update_group::macro_reexport::chrono::Utc::now());
                 $(
                     if enabled_names.contains(<$member as $crate::Chart>::NAME) {
-                        <$member as $crate::data_source::source::DataSource>::init_all_locally(db, &current_time).await?;
+                        <$member as $crate::data_source::DataSource>::init_all_locally(db, &current_time).await?;
                     }
                 )*
                 Ok(())
@@ -242,15 +231,15 @@ macro_rules! construct_update_group {
 
             async fn update_charts<'a>(
                 &self,
-                params: $crate::data_source::types::UpdateParameters<'a>,
+                params: $crate::data_source::UpdateParameters<'a>,
                 #[allow(unused)]
                 enabled_names: &::std::collections::HashSet<String>,
             ) -> Result<(), $crate::UpdateError> {
                 #[allow(unused)]
-                let cx: $crate::data_source::types::UpdateContext = params.into();
+                let cx: $crate::data_source::UpdateContext = params.into();
                 $(
                     if enabled_names.contains(<$member as $crate::Chart>::NAME) {
-                        <$member as $crate::data_source::source::DataSource>::update_from_remote(&cx).await?;
+                        <$member as $crate::data_source::DataSource>::update_from_remote(&cx).await?;
                     }
                 )*
                 Ok(())

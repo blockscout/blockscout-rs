@@ -1,3 +1,5 @@
+//! Common types for the configs
+
 use std::collections::HashSet;
 
 use cron::Schedule;
@@ -17,6 +19,27 @@ pub struct AllChartSettings {
 
 fn enabled_default() -> bool {
     true
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct EnabledChartSettings {
+    pub title: String,
+    pub description: String,
+    pub units: Option<String>,
+}
+
+impl EnabledChartSettings {
+    pub fn from_all(value: AllChartSettings) -> Option<Self> {
+        if value.enabled {
+            Some(EnabledChartSettings {
+                units: value.units,
+                title: value.title,
+                description: value.description,
+            })
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

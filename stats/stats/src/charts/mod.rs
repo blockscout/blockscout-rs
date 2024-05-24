@@ -1,4 +1,3 @@
-pub mod cache;
 pub(crate) mod chart;
 pub mod counters;
 pub mod db_interaction;

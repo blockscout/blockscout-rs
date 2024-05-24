@@ -1,4 +1,6 @@
-use crate::{charts::Charts, serializers::serialize_line_points, settings::LimitsSettings};
+use crate::{
+    runtime_setup::RuntimeSetup, serializers::serialize_line_points, settings::LimitsSettings,
+};
 use async_trait::async_trait;
 use chrono::{Duration, NaiveDate, Utc};
 use sea_orm::{DatabaseConnection, DbErr};
@@ -13,14 +15,14 @@ use tonic::{Request, Response, Status};
 #[derive(Clone)]
 pub struct ReadService {
     db: Arc<DatabaseConnection>,
-    charts: Arc<Charts>,
+    charts: Arc<RuntimeSetup>,
     limits: ReadLimits,
 }
 
 impl ReadService {
     pub async fn new(
         db: Arc<DatabaseConnection>,
-        charts: Arc<Charts>,
+        charts: Arc<RuntimeSetup>,
         limits: ReadLimits,
     ) -> Result<Self, DbErr> {
         Ok(Self { db, charts, limits })

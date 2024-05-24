@@ -1,11 +1,12 @@
 //! Actually reading configs.
+//!
 //! Currently the configs are read from json files. Values can be overridden with env variables
 //! for convenience.
 
 use merge::{override_charts, override_update_schedule};
 use serde::{de::DeserializeOwned, Serialize};
 
-use super::{chart_info::AllChartSettings, env, json};
+use super::{env, json, types::AllChartSettings};
 use std::path::Path;
 
 pub mod charts;

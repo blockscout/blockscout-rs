@@ -1,7 +1,11 @@
-//! Basically the same as normal config but without lists.
-//! Lists are currently not supported by `config` crate with environmental vars.
+//! Basically the same as normal (JSON) config but without lists.
+//! Lists are currently not supported by `config` crate with environmental vars
+//! (and it is quite not clear how to implement them).
 //!
 //! Instead, we have the same items but with `order` field that defines relative position between them.
+//!
+//! ENV config is considered as a mechanism to granuralry (and non-persistently) tweak some values
+//! before launch.
 
 pub mod charts;
 pub mod update_schedule;
