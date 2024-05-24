@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, ops::RangeInclusive, time::Duration};
+use std::{future::Future, marker::PhantomData, ops::RangeInclusive, time::Duration};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{NaiveDate, Utc};
@@ -25,19 +25,19 @@ pub trait UpdateableChart: Chart {
     fn create(
         db: &DatabaseConnection,
         init_time: &chrono::DateTime<Utc>,
-    ) -> impl std::future::Future<Output = Result<(), DbErr>> + Send {
+    ) -> impl Future<Output = Result<(), DbErr>> + Send {
         async move { create_chart(db, Self::NAME.into(), Self::chart_type(), init_time).await }
     }
 
-    /// Update chart data (values + metadata).
+    /// Update this chart data (values + metadata).
     ///
     /// Should be idempontent with regards to `current_time` (in `cx`).
     /// It is a normal behaviour to call this method within single update
     /// (= with same `current_time`).
-    fn update(
+    fn update_itself(
         cx: &UpdateContext<'_>,
         remote_fetch_timer: &mut AggregateTimer,
-    ) -> impl std::future::Future<Output = Result<(), UpdateError>> + Send {
+    ) -> impl Future<Output = Result<(), UpdateError>> + Send {
         async {
             let metadata = get_chart_metadata(cx.db, Self::NAME).await?;
             if let Some(last_updated_at) = metadata.last_updated_at {
@@ -79,14 +79,14 @@ pub trait UpdateableChart: Chart {
         update_from_row: Option<DateValue>,
         min_blockscout_block: i64,
         remote_fetch_timer: &mut AggregateTimer,
-    ) -> impl std::future::Future<Output = Result<(), UpdateError>> + Send;
+    ) -> impl Future<Output = Result<(), UpdateError>> + Send;
 
     /// Update only chart metadata.
     fn update_metadata(
         db: &DatabaseConnection,
         chart_id: i32,
         update_time: chrono::DateTime<Utc>,
-    ) -> impl std::future::Future<Output = Result<(), UpdateError>> + Send {
+    ) -> impl Future<Output = Result<(), UpdateError>> + Send {
         async move {
             set_last_updated_at(chart_id, db, update_time)
                 .await
@@ -97,8 +97,8 @@ pub trait UpdateableChart: Chart {
     /// Retrieve chart data from (local) storage.
     fn query_data(
         cx: &UpdateContext<'_>,
-        range: std::ops::RangeInclusive<sea_orm::prelude::Date>,
-    ) -> impl std::future::Future<Output = Result<ChartData, UpdateError>> + Send {
+        range: RangeInclusive<sea_orm::prelude::Date>,
+    ) -> impl Future<Output = Result<ChartData, UpdateError>> + Send {
         async move {
             let values: Vec<DateValue> = get_chart_data(
                 cx.db,
@@ -151,7 +151,7 @@ impl<C: UpdateableChart> DataSource for UpdateableChartWrapper<C> {
             .with_label_values(&[Self::NAME])
             .start_timer();
 
-        C::update(cx, &mut remote_fetch_timer)
+        C::update_itself(cx, &mut remote_fetch_timer)
             .await
             .inspect_err(|err| {
                 metrics::UPDATE_ERRORS.with_label_values(&[C::NAME]).inc();
