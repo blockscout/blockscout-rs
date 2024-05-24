@@ -1,18 +1,9 @@
-use actix_web::{
-    dev::ServiceResponse,
-    test::{self, read_body, read_body_json, TestRequest},
-    App,
-};
 use assert_str::assert_str_eq;
 use bytes::Bytes;
 use serde::Deserialize;
 use serde_json::json;
 use serde_with::serde_as;
-use visualizer_proto::blockscout::visualizer::v1::solidity_visualizer_actix::route_solidity_visualizer;
-use visualizer_server::{Settings, SolidityVisualizerService};
-
-use std::{collections::BTreeMap, fs, path::PathBuf, str::from_utf8, sync::Arc};
-use blockscout_service_launcher::test_server;
+use std::{collections::BTreeMap, fs, path::PathBuf, str::from_utf8};
 use walkdir::WalkDir;
 
 const CONTRACTS_DIR: &str = "tests/contracts";
@@ -55,8 +46,12 @@ async fn test_setup(request: serde_json::Value, route: &str) -> reqwest::Respons
     let mut url = super::init_server().await;
     url.set_path(route);
 
-    reqwest::Client::new().post(url).json(&request)
-        .send().await.expect("failed to send request")
+    reqwest::Client::new()
+        .post(url)
+        .json(&request)
+        .send()
+        .await
+        .expect("failed to send request")
 }
 
 async fn visualize_contract_success(request: serde_json::Value, expected_svg: String) {
@@ -66,7 +61,10 @@ async fn visualize_contract_success(request: serde_json::Value, expected_svg: St
         "response: {:?}",
         response.text().await
     );
-    let result: Response = response.json().await.expect("could not deserialize response");
+    let result: Response = response
+        .json()
+        .await
+        .expect("could not deserialize response");
 
     let result_svg = from_utf8(&result.svg).expect("failed to convert result svg to string");
 
@@ -93,7 +91,10 @@ async fn visualize_storage_success(request: serde_json::Value, expected_svg: Str
         "response: {:?}",
         response.text().await
     );
-    let result: Response = response.json().await.expect("could not deserialize response");
+    let result: Response = response
+        .json()
+        .await
+        .expect("could not deserialize response");
     let result_svg = from_utf8(&result.svg).expect("failed to convert result svg to string");
 
     assert_str_eq!(result_svg, expected_svg);
@@ -359,7 +360,10 @@ mod failure_tests {
             response.status()
         );
 
-        let message = response.text().await.expect("could not deserialize response text");
+        let message = response
+            .text()
+            .await
+            .expect("could not deserialize response text");
         assert!(
             message.contains("Failed to find contract with name"),
             "Invalid response message: {message}",
@@ -378,7 +382,10 @@ mod failure_tests {
             "Invalid status code (failed expected): {}",
             response.status()
         );
-        let err = response.text().await.expect("could not deserialize response text");
+        let err = response
+            .text()
+            .await
+            .expect("could not deserialize response text");
         assert!(
             err.contains("Failed to parse solidity code",),
             "Invalid response, wrong error type: {err}",
@@ -405,7 +412,10 @@ mod failure_tests {
             "Invalid status code (failed expected): {}",
             response.status()
         );
-        let err = response.text().await.expect("could not deserialize response text");
+        let err = response
+            .text()
+            .await
+            .expect("could not deserialize response text");
         assert!(
             err.contains("Failed to find inherited contract",),
             "Invalid response, wrong error type: {err}",
