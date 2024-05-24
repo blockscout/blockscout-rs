@@ -43,14 +43,10 @@ impl<T: RemoteSource> DataSource for RemoteSourceWrapper<T> {
     // No local state => no race conditions expected
     const MUTEX_ID: Option<&'static str> = None;
 
-    fn init_itself(
+    async fn init_itself(
         _db: &::sea_orm::DatabaseConnection,
         _init_time: &::chrono::DateTime<chrono::Utc>,
-    ) -> impl ::std::future::Future<Output = Result<(), ::sea_orm::DbErr>> + Send {
-        async move { Ok(()) }
-    }
-
-    async fn update_from_remote(_cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
+    ) -> Result<(), ::sea_orm::DbErr> {
         Ok(())
     }
 
@@ -61,5 +57,9 @@ impl<T: RemoteSource> DataSource for RemoteSourceWrapper<T> {
     ) -> Result<Vec<DateValue>, UpdateError> {
         let _interval = remote_fetch_timer.start_interval();
         T::query_data(cx, range).await
+    }
+
+    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
+        Ok(())
     }
 }

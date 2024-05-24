@@ -38,7 +38,7 @@ pub trait DataSource {
     /// If the source was initialized before, keep old values. In other words,
     /// the method should be idempotent, as it is expected to be called on
     /// previously initialized sources.
-    fn init_all_locally<'a>(
+    fn init_recursively<'a>(
         db: &'a DatabaseConnection,
         init_time: &'a chrono::DateTime<Utc>,
     ) -> BoxFuture<'a, Result<(), DbErr>> {
@@ -50,8 +50,14 @@ pub trait DataSource {
             //     C → D
             //   ↗   ↗
             // A → B
-            Self::PrimaryDependency::init_all_locally(db, init_time).await?;
-            Self::SecondaryDependencies::init_all_locally(db, init_time).await?;
+            // todo: log deps init??
+            // tracing::info!(
+            //     chart_name = Self::NAME,
+            //     parent_chart_name = P::NAME,
+            //     "init parent"
+            // );
+            Self::PrimaryDependency::init_recursively(db, init_time).await?;
+            Self::SecondaryDependencies::init_recursively(db, init_time).await?;
             Self::init_itself(db, init_time).await
         }
         .boxed()
@@ -61,7 +67,7 @@ pub trait DataSource {
     }
 
     /// Initialize only this source. This fn is intended to be implemented
-    /// by types, as recursive logic of [`DataSource::init_all_locally`] is
+    /// by types, as recursive logic of [`DataSource::init_recursively`] is
     /// not expected to change.
     ///
     /// Should be idempotent.
@@ -88,8 +94,25 @@ pub trait DataSource {
     /// Update source data (values + metadata).
     ///
     /// Should be idempontent with regards to `current_time` (in `cx`).
-    /// It is a normal behaviour to call this method within single update.
-    fn update_from_remote(
+    /// It is a normal behaviour to call this method multiple times
+    /// within single update.
+    fn update_recursively(
+        cx: &UpdateContext<'_>,
+    ) -> impl std::future::Future<Output = Result<(), UpdateError>> + std::marker::Send {
+        async move {
+            // todo: log deps updated
+            // tracing::info!(
+            //     chart_name = Self::NAME,
+            //     parent_chart_name = P::NAME,
+            //     "updating parent"
+            // );
+            Self::PrimaryDependency::update_recursively(cx).await?;
+            Self::SecondaryDependencies::update_recursively(cx).await?;
+            Self::update_itself(cx).await
+        }
+    }
+
+    fn update_itself(
         cx: &UpdateContext<'_>,
     ) -> impl std::future::Future<Output = Result<(), UpdateError>> + std::marker::Send;
 
@@ -111,7 +134,7 @@ impl DataSource for () {
     type Output = ();
     const MUTEX_ID: Option<&'static str> = None;
 
-    fn init_all_locally<'a>(
+    fn init_recursively<'a>(
         _db: &'a DatabaseConnection,
         _init_time: &'a chrono::DateTime<Utc>,
     ) -> BoxFuture<'a, Result<(), DbErr>> {
@@ -123,18 +146,22 @@ impl DataSource for () {
         _db: &DatabaseConnection,
         _init_time: &chrono::DateTime<Utc>,
     ) -> Result<(), DbErr> {
-        // todo: unimplemented where applicable?
-        Ok(())
+        unreachable!("not called by `init_recursively` and must not be called by anything else")
     }
 
     fn all_dependencies_mutex_ids() -> HashSet<&'static str> {
         HashSet::new()
     }
 
-    async fn update_from_remote(_cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
+    async fn update_recursively(_cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
         // stop recursion
         Ok(())
     }
+
+    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
+        unreachable!("not called by `update_recursively` and must not be called by anything else")
+    }
+
     async fn query_data(
         _cx: &UpdateContext<'_>,
         _range: RangeInclusive<NaiveDate>,
@@ -160,20 +187,12 @@ where
         _db: &DatabaseConnection,
         _init_time: &chrono::DateTime<Utc>,
     ) -> Result<(), DbErr> {
-        // dependencies are called in `init_all_locally`
+        // dependencies are called in `init_recursively`
         // the tuple itself does not need any init
         Ok(())
     }
 
-    async fn update_from_remote(cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
-        // todo: log deps updated
-        // tracing::info!(
-        //     chart_name = Self::NAME,
-        //     parent_chart_name = P::NAME,
-        //     "updating parent"
-        // );
-        Self::PrimaryDependency::update_from_remote(cx).await?;
-        Self::SecondaryDependencies::update_from_remote(cx).await?;
+    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
         Ok(())
     }
 

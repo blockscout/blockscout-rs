@@ -18,7 +18,7 @@ pub async fn simple_test_chart<C: DataSource + Chart>(
     let (db, blockscout) = init_db_all(test_name).await;
     let current_time = DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
     let current_date = current_time.date_naive();
-    C::init_all_locally(&db, &current_time).await.unwrap();
+    C::init_recursively(&db, &current_time).await.unwrap();
     fill_mock_blockscout_data(&blockscout, current_date).await;
     let approximate_trailing_points = C::approximate_trailing_points();
 
@@ -29,7 +29,7 @@ pub async fn simple_test_chart<C: DataSource + Chart>(
         force_full: true,
     };
     let cx = UpdateContext::from(parameters.clone());
-    C::update_from_remote(&cx).await.unwrap();
+    C::update_recursively(&cx).await.unwrap();
     get_chart_and_assert_eq::<C>(
         &db,
         &expected,
@@ -42,7 +42,7 @@ pub async fn simple_test_chart<C: DataSource + Chart>(
 
     parameters.force_full = false;
     let cx = UpdateContext::from(parameters);
-    C::update_from_remote(&cx).await.unwrap();
+    C::update_recursively(&cx).await.unwrap();
     get_chart_and_assert_eq::<C>(
         &db,
         &expected,
@@ -64,7 +64,7 @@ pub async fn ranged_test_chart<C: DataSource + Chart>(
     let (db, blockscout) = init_db_all(test_name).await;
     let current_time = DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
     let current_date = current_time.date_naive();
-    C::init_all_locally(&db, &current_time).await.unwrap();
+    C::init_recursively(&db, &current_time).await.unwrap();
     fill_mock_blockscout_data(&blockscout, current_date).await;
     let policy = C::missing_date_policy();
     let approximate_trailing_points = C::approximate_trailing_points();
@@ -76,7 +76,7 @@ pub async fn ranged_test_chart<C: DataSource + Chart>(
         force_full: true,
     };
     let cx = UpdateContext::from(parameters.clone());
-    C::update_from_remote(&cx).await.unwrap();
+    C::update_recursively(&cx).await.unwrap();
     get_chart_and_assert_eq::<C>(
         &db,
         &expected,
@@ -89,7 +89,7 @@ pub async fn ranged_test_chart<C: DataSource + Chart>(
 
     parameters.force_full = false;
     let cx = UpdateContext::from(parameters);
-    C::update_from_remote(&cx).await.unwrap();
+    C::update_recursively(&cx).await.unwrap();
     get_chart_and_assert_eq::<C>(
         &db,
         &expected,
@@ -137,7 +137,7 @@ pub async fn simple_test_counter<C: DataSource + Chart>(test_name: &str, expecte
     let current_time = chrono::DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
     let current_date = current_time.date_naive();
 
-    C::init_all_locally(&db, &current_time).await.unwrap();
+    C::init_recursively(&db, &current_time).await.unwrap();
     fill_mock_blockscout_data(&blockscout, current_date).await;
 
     let mut parameters = UpdateParameters {
@@ -147,12 +147,12 @@ pub async fn simple_test_counter<C: DataSource + Chart>(test_name: &str, expecte
         force_full: true,
     };
     let cx = UpdateContext::from(parameters.clone());
-    C::update_from_remote(&cx).await.unwrap();
+    C::update_recursively(&cx).await.unwrap();
     get_counter_and_assert_eq::<C>(&db, expected).await;
 
     parameters.force_full = false;
     let cx = UpdateContext::from(parameters.clone());
-    C::update_from_remote(&cx).await.unwrap();
+    C::update_recursively(&cx).await.unwrap();
     get_counter_and_assert_eq::<C>(&db, expected).await;
 }
 

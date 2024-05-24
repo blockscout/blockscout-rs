@@ -223,7 +223,7 @@ macro_rules! construct_update_group {
                 let current_time = creation_time_override.unwrap_or_else(|| $crate::update_group::macro_reexport::chrono::Utc::now());
                 $(
                     if enabled_names.contains(<$member as $crate::Chart>::NAME) {
-                        <$member as $crate::data_source::DataSource>::init_all_locally(db, &current_time).await?;
+                        <$member as $crate::data_source::DataSource>::init_recursively(db, &current_time).await?;
                     }
                 )*
                 Ok(())
@@ -239,7 +239,7 @@ macro_rules! construct_update_group {
                 let cx: $crate::data_source::UpdateContext = params.into();
                 $(
                     if enabled_names.contains(<$member as $crate::Chart>::NAME) {
-                        <$member as $crate::data_source::DataSource>::update_from_remote(&cx).await?;
+                        <$member as $crate::data_source::DataSource>::update_recursively(&cx).await?;
                     }
                 )*
                 Ok(())

@@ -142,9 +142,14 @@ impl<C: UpdateableChart> DataSource for UpdateableChartWrapper<C> {
 
     const MUTEX_ID: Option<&'static str> = Some(<C as Chart>::NAME);
 
-    async fn update_from_remote(cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
-        Self::PrimaryDependency::update_from_remote(cx).await?;
-        Self::SecondaryDependencies::update_from_remote(cx).await?;
+    async fn init_itself(
+        db: &DatabaseConnection,
+        init_time: &chrono::DateTime<Utc>,
+    ) -> Result<(), DbErr> {
+        C::create(db, init_time).await
+    }
+
+    async fn update_itself(cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
         // data retrieval time
         let mut remote_fetch_timer = AggregateTimer::new();
         let _update_timer = metrics::CHART_UPDATE_TIME
@@ -170,12 +175,5 @@ impl<C: UpdateableChart> DataSource for UpdateableChartWrapper<C> {
         _remote_fetch_timer: &mut AggregateTimer,
     ) -> Result<ChartData, UpdateError> {
         C::query_data(cx, range).await
-    }
-
-    async fn init_itself(
-        db: &DatabaseConnection,
-        init_time: &chrono::DateTime<Utc>,
-    ) -> Result<(), DbErr> {
-        C::create(db, init_time).await
     }
 }
