@@ -5,3 +5,6 @@ members = [
     "visualizer-server",
     "visualizer-proto"
 ]
+
+[workspace.dependencies]
+blockscout-service-launcher = "=0.10.1"
