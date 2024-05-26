@@ -13,6 +13,6 @@ serde_with = { version = "3", features = ["hex", "base64"] }
 tonic = "0.8"
 
 [build-dependencies]
-actix-prost-build = { git = "https://github.com/blockscout/actix-prost", rev = "9cc47aa" }
+actix-prost-build = { git = "https://github.com/blockscout/actix-prost" }
 tonic-build = "0.8"
 prost-build = "0.11"

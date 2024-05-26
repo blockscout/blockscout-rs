@@ -1,9 +1,8 @@
 swagger: "2.0"
 info:
-  title: health/v1/health.proto
+  title: visualizer.proto
   version: version not set
 tags:
-  - name: Health
   - name: SolidityVisualizer
 consumes:
   - application/json
@@ -50,45 +49,7 @@ paths:
             $ref: '#/definitions/v1VisualizeStorageRequest'
       tags:
         - SolidityVisualizer
-  /health:
-    get:
-      summary: |-
-        Check gets the health of the specified service. If the requested service
-        is unknown, the call will fail with status NOT_FOUND. If the caller does
-        not specify a service name, the server should respond with its overall
-        health status.
-      description: |-
-        Clients should set a deadline when calling Check, and can declare the
-        server unhealthy if they do not receive a timely response.
-
-        Check implementations should be idempotent and side effect free.
-      operationId: Health_Check
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1HealthCheckResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/rpcStatus'
-      parameters:
-        - name: service
-          in: query
-          required: false
-          type: string
-      tags:
-        - Health
 definitions:
-  HealthCheckResponseServingStatus:
-    type: string
-    enum:
-      - UNKNOWN
-      - SERVING
-      - NOT_SERVING
-      - SERVICE_UNKNOWN
-    default: UNKNOWN
-    description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
   protobufAny:
     type: object
     properties:
@@ -108,11 +69,6 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/protobufAny'
-  v1HealthCheckResponse:
-    type: object
-    properties:
-      status:
-        $ref: '#/definitions/HealthCheckResponseServingStatus'
   v1VisualizeContractsRequest:
     type: object
     properties:
