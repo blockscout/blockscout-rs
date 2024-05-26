@@ -6,6 +6,7 @@ members = [
     "blockscout-db",
     "blockscout-service-launcher",
     "display-bytes",
+    "blockscout-health",
     "mismatch",
     "reqwest-rate-limiter",
     "solidity-metadata",
