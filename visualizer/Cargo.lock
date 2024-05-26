@@ -480,6 +480,7 @@ dependencies = [
 [[package]]
 name = "blockscout-health"
 version = "0.1.0"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=12d2f7e0#12d2f7e093c1a215492cd676ad1e439ab7d995a6"
 dependencies = [
  "actix-prost",
  "actix-prost-build",
