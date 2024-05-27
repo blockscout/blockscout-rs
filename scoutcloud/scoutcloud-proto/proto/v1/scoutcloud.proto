@@ -38,6 +38,10 @@ message DeployConfig {
   optional string homeplate_background = 10;
   optional string homeplate_text_color = 11;
   optional bool is_testnet = 13;
+  optional bool stats_enabled = 14;
+  optional string rpc_ws_url = 15 [(convert_options.convert) = {type: "Option<url::Url>"}];
+  optional string public_rpc_url = 16 [(convert_options.convert) = {type: "Option<url::Url>"}];
+  optional string wallet_connect_project_id = 17;
 }
 
 message DeployConfigPartial {
@@ -57,6 +61,10 @@ message DeployConfigPartial {
   optional string homeplate_background = 10;
   optional string homeplate_text_color = 11;
   optional bool is_testnet = 13;
+  optional bool stats_enabled = 14;
+  optional string rpc_ws_url = 15 [(convert_options.convert) = {type: "Option<url::Url>"}];
+  optional string public_rpc_url = 16 [(convert_options.convert) = {type: "Option<url::Url>"}];
+  optional string wallet_connect_project_id = 17;
 }
 
 message CreateInstanceRequest {

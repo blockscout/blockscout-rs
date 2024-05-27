@@ -332,6 +332,14 @@ definitions:
         type: string
       is_testnet:
         type: boolean
+      stats_enabled:
+        type: boolean
+      rpc_ws_url:
+        type: string
+      public_rpc_url:
+        type: string
+      wallet_connect_project_id:
+        type: string
   v1DeployConfigPartial:
     type: object
     properties:
@@ -361,6 +369,14 @@ definitions:
         type: string
       is_testnet:
         type: boolean
+      stats_enabled:
+        type: boolean
+      rpc_ws_url:
+        type: string
+      public_rpc_url:
+        type: string
+      wallet_connect_project_id:
+        type: string
   v1Deployment:
     type: object
     properties:

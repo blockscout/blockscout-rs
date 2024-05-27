@@ -42,3 +42,13 @@ macros::custom_env_var!(
         }
     }
 );
+
+pub fn hostname_to_url(hostname: &str) -> Result<url::Url, ConfigError> {
+    let instance_url = if hostname.starts_with("http") {
+        hostname.to_string()
+    } else {
+        format!("https://{}", hostname)
+    };
+
+    url::Url::parse(&instance_url).map_err(|e| ConfigError::Validation(e.to_string()))
+}

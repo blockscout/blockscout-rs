@@ -18,6 +18,9 @@ pub enum ConfigError {
     #[error("missing config")]
     MissingConfig,
 
+    #[error("missing variable: {0}")]
+    MissingVariable(String),
+
     #[error("internal error: {0}")]
     Internal(#[from] anyhow::Error),
 }
