@@ -18,7 +18,7 @@ fn compile(
         .bytes(["."])
         .type_attribute(".", "#[actix_prost_macros::serde]")
         .field_attribute(
-            ".blockscout.visualizer.v1.HealthCheckRequest.service", 
+            ".grpc.health.v1.HealthCheckRequest.service",
             "#[serde(default)]"
         );
     config.compile_protos(protos, includes)?;
@@ -36,8 +36,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Box::new(ActixGenerator::new("proto/api_config_http.yaml").unwrap()),
     ]));
     compile(
-        &["proto/visualizer.proto", "proto/health.proto"],
-        &["proto"],
+        &[
+            "../../proto/health/v1/health.proto",
+            "proto/visualizer.proto",
+        ],
+        &["../../proto", "proto"],
         gens,
     )?;
     Ok(())
