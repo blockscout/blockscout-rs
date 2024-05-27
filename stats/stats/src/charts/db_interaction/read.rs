@@ -272,8 +272,7 @@ struct SyncInfo {
 ///
 /// Retrieves `offset`th latest data point from DB, if any.
 /// In case of inconsistencies or set `force_full`, also returns `None`.
-pub async fn get_nth_last_row<C>(
-    // chart: &C,
+pub async fn get_update_start<C>(
     chart_id: i32,
     min_blockscout_block: i64,
     db: &DatabaseConnection,

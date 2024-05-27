@@ -1,5 +1,11 @@
 use crate::data_source::kinds::{
-    chart::{BatchUpdateableChartWrapper, RemoteChart, RemoteChartWrapper, UpdateableChartWrapper},
+    chart::{
+        batch::{
+            remote::{RemoteChart, RemoteChartWrapper},
+            BatchUpdateableChartWrapper,
+        },
+        UpdateableChartWrapper,
+    },
     remote::RemoteSource,
 };
 use chrono::NaiveDate;

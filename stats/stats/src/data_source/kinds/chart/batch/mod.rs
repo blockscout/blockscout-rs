@@ -16,6 +16,8 @@ use crate::{
     Chart, DateValue, UpdateError,
 };
 
+pub mod remote;
+
 /// See [module-level documentation](self) for details.
 pub trait BatchUpdateableChart: Chart {
     type PrimaryDependency: DataSource;

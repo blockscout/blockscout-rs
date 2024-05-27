@@ -20,7 +20,7 @@ use crate::{
     charts::{
         chart::{chart_portrait, ChartData},
         db_interaction::{
-            read::{get_chart_metadata, get_min_block_blockscout, get_nth_last_row},
+            read::{get_chart_metadata, get_min_block_blockscout, get_update_start},
             write::{create_chart, set_last_updated_at},
         },
     },
@@ -63,7 +63,7 @@ pub trait UpdateableChart: Chart {
                 .await
                 .map_err(UpdateError::BlockscoutDB)?;
             let offset = Some(Self::approximate_trailing_points());
-            let last_updated_row = get_nth_last_row::<Self>(
+            let last_updated_row = get_update_start::<Self>(
                 chart_id,
                 min_blockscout_block,
                 cx.db,

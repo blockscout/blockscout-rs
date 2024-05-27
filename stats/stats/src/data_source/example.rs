@@ -8,7 +8,10 @@ use tokio::sync::Mutex;
 use super::{
     kinds::{
         chart::{
-            BatchUpdateableChart, BatchUpdateableChartWrapper, RemoteChart, RemoteChartWrapper,
+            batch::{
+                remote::{RemoteChart, RemoteChartWrapper},
+                BatchUpdateableChart, BatchUpdateableChartWrapper,
+            },
             UpdateableChartWrapper,
         },
         remote::RemoteSource,

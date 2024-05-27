@@ -3,7 +3,10 @@ use crate::{
     charts::{chart::Chart, db_interaction::write::insert_data_many},
     data_processing::parse_and_cumsum,
     data_source::{
-        kinds::chart::{BatchUpdateableChart, BatchUpdateableChartWrapper, UpdateableChartWrapper},
+        kinds::chart::{
+            batch::{BatchUpdateableChart, BatchUpdateableChartWrapper},
+            UpdateableChartWrapper,
+        },
         source::DataSource,
     },
     MissingDatePolicy, UpdateError,

@@ -6,9 +6,6 @@
 //! The 'base' case for charts is [`UpdateableChart`].
 
 mod base;
-mod batch;
-mod remote;
+pub mod batch;
 
 pub use base::{UpdateableChart, UpdateableChartWrapper};
-pub use batch::{BatchUpdateableChart, BatchUpdateableChartWrapper};
-pub use remote::{RemoteChart, RemoteChartWrapper};
