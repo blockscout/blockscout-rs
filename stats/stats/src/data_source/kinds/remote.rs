@@ -3,7 +3,7 @@
 //! The main application - SQL queries from remote database.
 //!
 //! Usually used inside
-//! [`RemoteChart`](`crate::data_source::kinds::chart::RemoteChart`)
+//! [`RemoteChart`](`crate::data_source::kinds::updateable_chart::batch::remote::RemoteChart`)
 //! data source.
 //!
 //! Note that since each `query_data` performs (likely a heavy)
@@ -11,7 +11,7 @@
 //! different places. For each such appearance, the same data
 //! will be requested again.
 //! In this case,
-//! [`RemoteChart`](`crate::data_source::kinds::chart::RemoteChart`)
+//! [`RemoteChart`](`crate::data_source::kinds::updateable_chart::batch::remote::RemoteChart`)
 //! can be helpful to reuse the query results (by storing it locally).
 use std::{marker::PhantomData, ops::RangeInclusive};
 

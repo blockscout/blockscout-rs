@@ -32,7 +32,7 @@ pub fn fill_and_filter_chart(
 /// Fills values for all dates from `min(data.first(), from)` to `max(data.last(), to)` according
 /// to `policy`.
 ///
-/// See [`fill_zeros`] and [`fill_previous`] for details on the policies.
+/// See [`filled_zeros_data`] and [`filled_previous_data`] for details on the policies.
 pub fn fill_missing_points(
     data: Vec<DateValue>,
     policy: MissingDatePolicy,

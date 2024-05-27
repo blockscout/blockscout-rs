@@ -23,7 +23,7 @@
 //! Apart from the base trait, there are multiple special cases that simplify implementation.
 //! For example:
 //! - [`RemoteSource`](`kinds::remote::RemoteSource`) - data pulled from external (DB)
-//! - [`UpdateableChart`](`kinds::chart::UpdateableChart`) - any chart (stored in local (stats) DB)
+//! - [`UpdateableChart`](`kinds::updateable_chart::UpdateableChart`) - any chart (stored in local (stats) DB)
 //!
 //! See [`kinds`] and respective docs for more info
 //!
@@ -33,7 +33,7 @@
 //!
 //! Wrappers (placed together with 'special' traits) are used to get type that implements `DataSource`.
 //! For example, to get `DataSource` from type `T` implementing `RemoteSource`, one can use
-//! `UpdateableChartWrapper<BatchUpdateableChartWrapper<RemoteChartWrapper<T>>>`.
+//! `RemoteDataSourceWrapper<T>`.
 //!
 //! Generally, the idea is to have `TraitNameWrapper` for each helper/special case trait `TraitName`.
 //!

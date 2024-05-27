@@ -3,10 +3,7 @@ use crate::{
     charts::{chart::Chart, db_interaction::write::insert_data_many},
     data_processing::parse_and_cumsum,
     data_source::{
-        kinds::chart::{
-            batch::{BatchUpdateableChart, BatchUpdateableChartWrapper},
-            UpdateableChartWrapper,
-        },
+        kinds::updateable_chart::batch::{BatchDataSourceWrapper, BatchUpdateableChart},
         source::DataSource,
     },
     MissingDatePolicy, UpdateError,
@@ -55,8 +52,7 @@ impl BatchUpdateableChart for ContractsGrowthInner {
     }
 }
 
-pub type ContractsGrowth =
-    UpdateableChartWrapper<BatchUpdateableChartWrapper<ContractsGrowthInner>>;
+pub type ContractsGrowth = BatchDataSourceWrapper<ContractsGrowthInner>;
 
 #[cfg(test)]
 mod tests {

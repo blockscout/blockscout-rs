@@ -134,12 +134,12 @@ pub trait UpdateableChart: Chart {
 /// Wrapper struct used for avoiding implementation conflicts
 ///
 /// See [module-level documentation](self) for details.
-pub struct UpdateableChartWrapper<C: UpdateableChart>(PhantomData<C>);
+pub struct UpdateableChartDataSourceWrapper<C: UpdateableChart>(PhantomData<C>);
 
 #[portrait::fill(portrait::delegate(C))]
-impl<C: UpdateableChart + Chart> Chart for UpdateableChartWrapper<C> {}
+impl<C: UpdateableChart + Chart> Chart for UpdateableChartDataSourceWrapper<C> {}
 
-impl<C: UpdateableChart> DataSourceMetrics for UpdateableChartWrapper<C> {
+impl<C: UpdateableChart> DataSourceMetrics for UpdateableChartDataSourceWrapper<C> {
     fn observe_query_time(time: std::time::Duration) {
         if time > Duration::ZERO {
             metrics::CHART_FETCH_NEW_DATA_TIME
@@ -149,7 +149,7 @@ impl<C: UpdateableChart> DataSourceMetrics for UpdateableChartWrapper<C> {
     }
 }
 
-impl<C: UpdateableChart> DataSource for UpdateableChartWrapper<C> {
+impl<C: UpdateableChart> DataSource for UpdateableChartDataSourceWrapper<C> {
     type PrimaryDependency = C::PrimaryDependency;
     type SecondaryDependencies = C::SecondaryDependencies;
     type Output = ChartData;

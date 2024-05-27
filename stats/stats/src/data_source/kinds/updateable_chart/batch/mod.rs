@@ -9,7 +9,7 @@ use blockscout_metrics_tools::AggregateTimer;
 use chrono::{Duration, NaiveDate, Utc};
 use sea_orm::{DatabaseConnection, TransactionTrait};
 
-use super::UpdateableChart;
+use super::{UpdateableChart, UpdateableChartDataSourceWrapper};
 use crate::{
     charts::{chart::chart_portrait, db_interaction::read::get_min_date_blockscout},
     data_source::{source::DataSource, types::UpdateContext},
@@ -41,13 +41,15 @@ pub trait BatchUpdateableChart: Chart {
     ) -> impl std::future::Future<Output = Result<usize, UpdateError>> + std::marker::Send;
 }
 
+pub type BatchDataSourceWrapper<T> = UpdateableChartDataSourceWrapper<BatchWrapper<T>>;
+
 /// Wrapper struct used for avoiding implementation conflicts
 ///
 /// See [module-level documentation](self) for details.
-pub struct BatchUpdateableChartWrapper<T: BatchUpdateableChart>(PhantomData<T>);
+pub struct BatchWrapper<T: BatchUpdateableChart>(PhantomData<T>);
 
 #[portrait::fill(portrait::delegate(T))]
-impl<T: BatchUpdateableChart + Chart> Chart for BatchUpdateableChartWrapper<T> {}
+impl<T: BatchUpdateableChart + Chart> Chart for BatchWrapper<T> {}
 
 /// Perform update utilizing batching
 async fn batch_update_values<U>(
@@ -121,7 +123,7 @@ where
     Ok(found)
 }
 
-impl<T: BatchUpdateableChart> UpdateableChart for BatchUpdateableChartWrapper<T>
+impl<T: BatchUpdateableChart> UpdateableChart for BatchWrapper<T>
 where
     <T::PrimaryDependency as DataSource>::Output: Send,
     <T::SecondaryDependencies as DataSource>::Output: Send,

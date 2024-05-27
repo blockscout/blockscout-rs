@@ -8,4 +8,4 @@
 mod base;
 pub mod batch;
 
-pub use base::{UpdateableChart, UpdateableChartWrapper};
+pub use base::{UpdateableChart, UpdateableChartDataSourceWrapper};

@@ -7,14 +7,11 @@ use tokio::sync::Mutex;
 
 use super::{
     kinds::{
-        chart::{
-            batch::{
-                remote::{RemoteChart, RemoteChartWrapper},
-                BatchUpdateableChart, BatchUpdateableChartWrapper,
-            },
-            UpdateableChartWrapper,
-        },
         remote::RemoteSource,
+        updateable_chart::batch::{
+            remote::{RemoteChart, RemoteDataSourceWrapper},
+            BatchDataSourceWrapper, BatchUpdateableChart,
+        },
     },
     source::DataSource,
     types::UpdateParameters,
@@ -90,8 +87,7 @@ impl RemoteChart for NewContractsChart {
 
 // Wrap the earth out of it to obtain `DataSource`-implementing type.
 // `Chart` implementation is propageted through the wrappers.
-pub type NewContracts =
-    UpdateableChartWrapper<BatchUpdateableChartWrapper<RemoteChartWrapper<NewContractsChart>>>;
+pub type NewContracts = RemoteDataSourceWrapper<NewContractsChart>;
 
 pub struct ContractsGrowthChart;
 
@@ -136,8 +132,7 @@ impl BatchUpdateableChart for ContractsGrowthChart {
     }
 }
 
-pub type ContractsGrowth =
-    UpdateableChartWrapper<BatchUpdateableChartWrapper<ContractsGrowthChart>>;
+pub type ContractsGrowth = BatchDataSourceWrapper<ContractsGrowthChart>;
 
 // Put the data sources into the group
 construct_update_group!(ExampleUpdateGroup {

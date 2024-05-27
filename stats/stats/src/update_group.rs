@@ -7,20 +7,25 @@
 //!
 //! ## Usage
 //!
-//! (you can also check [`crate::data_source`])
+//! (you can also check [`crate::data_source`] or example.rs)
 //!
 //! 1. Create multiple connected charts
-//! (usually [`UpdateableChartWrapper`s](crate::data_source::kinds::chart::UpdateableChartWrapper)).
+//! (e.g.
+//! [`UpdateableChartDataSourceWrapper`](crate::data_source::kinds::updateable_chart::UpdateableChartDataSourceWrapper)
+//! or
+//! [`RemoteDataSourceWrapper`](crate::data_source::kinds::updateable_chart::batch::remote::RemoteDataSourceWrapper)
+//! ).
 //! For convenience, they may be type aliased:
 //! ```ignore
-//! pub type SomeChart1 = UpdateableChartWrapper<BatchUpdateableChartWrapper<RemoteSource<SomeChart1Source>>>;
+//! pub type SomeChart1 = RemoteDataSourceWrapper<SomeChart1Source>;
 //! // let's say it depends on `SomeChart1`
-//! pub type SomeChart2 = UpdateableChartWrapper<BatchUpdateableChartWrapper<SomeChart2Inner>>;
+//! pub type SomeChart2 = BatchDataSourceWrapper<SomeChart2Inner>;
 //! ```
+//! 2. Construct simple (non-sync) update groups via [`construct_update_group!`]
+//! 3. Create mutexes (1-1 for each chart)
+//! 4. Create synchronous versions of groups with [`SyncUpdateGroup::new`]
 //!
-//! 2. Construct simple (non-sync) update groups
-//! ```ignore
-//! ```
+
 use std::{
     collections::{BTreeMap, HashSet},
     marker::{Send, Sync},
@@ -151,10 +156,7 @@ pub mod macro_reexport {
 /// # use stats::{Chart, construct_update_group, DateValue, UpdateError};
 /// # use stats::data_source::{
 /// #     kinds::{
-/// #         chart::{
-/// #             BatchUpdateableChartWrapper, RemoteChart, RemoteChartWrapper,
-/// #             UpdateableChartWrapper,
-/// #         },
+/// #         updateable_chart::batch::remote::{RemoteChart, RemoteDataSourceWrapper},
 /// #         remote::RemoteSource
 /// #     },
 /// #     types::{UpdateContext, UpdateParameters},
@@ -194,7 +196,7 @@ pub mod macro_reexport {
 /// // use wrappers to utilize existing implementation of `DataSource`
 /// // `Chart` impl is delegated to `DummyChart`.
 /// type DummyChartSource =
-///     UpdateableChartWrapper<BatchUpdateableChartWrapper<RemoteChartWrapper<DummyChart>>>;
+///     RemoteDataSourceWrapper<DummyChart>;
 ///
 /// construct_update_group!(ExampleUpdateGroup {
 ///     name: "exampleGroup",

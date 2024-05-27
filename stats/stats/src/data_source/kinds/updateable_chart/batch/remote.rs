@@ -11,12 +11,14 @@ use crate::{
     Chart, DateValue, UpdateError,
 };
 
-use super::BatchUpdateableChart;
+use super::{BatchDataSourceWrapper, BatchUpdateableChart};
 
 /// See [module-level documentation](self) for details.
 pub trait RemoteChart: Chart {
     type Dependency: RemoteSource;
 }
+
+pub type RemoteDataSourceWrapper<T> = BatchDataSourceWrapper<RemoteChartWrapper<T>>;
 
 /// Wrapper struct used for avoiding implementation conflicts
 ///

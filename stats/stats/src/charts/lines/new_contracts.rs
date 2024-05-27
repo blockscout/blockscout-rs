@@ -1,12 +1,6 @@
 use crate::data_source::kinds::{
-    chart::{
-        batch::{
-            remote::{RemoteChart, RemoteChartWrapper},
-            BatchUpdateableChartWrapper,
-        },
-        UpdateableChartWrapper,
-    },
     remote::RemoteSource,
+    updateable_chart::batch::remote::{RemoteChart, RemoteDataSourceWrapper},
 };
 use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
@@ -70,8 +64,7 @@ impl RemoteChart for NewContractsInner {
     type Dependency = NewContractsRemote;
 }
 
-pub type NewContracts =
-    UpdateableChartWrapper<BatchUpdateableChartWrapper<RemoteChartWrapper<NewContractsInner>>>;
+pub type NewContracts = RemoteDataSourceWrapper<NewContractsInner>;
 
 #[cfg(test)]
 mod tests {

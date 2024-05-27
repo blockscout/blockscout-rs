@@ -25,5 +25,5 @@
 //! ...some other stuff I forgor...
 //!
 
-pub mod chart;
 pub mod remote;
+pub mod updateable_chart;
