@@ -1,5 +1,14 @@
 [
-  { "inputs": [], "stateMutability": "nonpayable", "type": "constructor" },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "_oracle", "type": "address" },
+      { "internalType": "address", "name": "_giftCard", "type": "address" },
+      { "internalType": "string", "name": "_symbol", "type": "string" },
+      { "internalType": "string", "name": "_tld", "type": "string" }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
   { "inputs": [], "name": "AlreadyRegistered", "type": "error" },
   { "inputs": [], "name": "AmountMoreThanShare", "type": "error" },
   { "inputs": [], "name": "DomainExpired", "type": "error" },
@@ -165,6 +174,12 @@
         "internalType": "address",
         "name": "owner",
         "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "domainName",
+        "type": "string"
       }
     ],
     "name": "PrimaryDomainSet",
@@ -184,6 +199,12 @@
         "internalType": "uint256",
         "name": "expiry",
         "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "domainName",
+        "type": "string"
       }
     ],
     "name": "RenewedDomain",
@@ -294,6 +315,37 @@
     "inputs": [
       {
         "indexed": false,
+        "internalType": "string",
+        "name": "domainName",
+        "type": "string"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "tokenId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "from",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "to",
+        "type": "address"
+      }
+    ],
+    "name": "TransferredDomain",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
         "internalType": "address",
         "name": "account",
         "type": "address"
@@ -313,13 +365,6 @@
     "inputs": [],
     "name": "MAINTAINER_ROLE",
     "outputs": [{ "internalType": "bytes32", "name": "", "type": "bytes32" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "TLD",
-    "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
     "stateMutability": "view",
     "type": "function"
   },
@@ -357,6 +402,13 @@
     ],
     "name": "balanceOf",
     "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "baseUri",
+    "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
     "stateMutability": "view",
     "type": "function"
   },
@@ -446,6 +498,15 @@
   },
   {
     "inputs": [],
+    "name": "getTotalRegisteredDomains",
+    "outputs": [
+      { "internalType": "uint256[]", "name": "", "type": "uint256[]" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "giftCard",
     "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
     "stateMutability": "view",
@@ -472,12 +533,26 @@
     "type": "function"
   },
   {
+    "inputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "name": "idToDomain",
+    "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [
       { "internalType": "address", "name": "owner", "type": "address" },
       { "internalType": "address", "name": "operator", "type": "address" }
     ],
     "name": "isApprovedForAll",
     "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "name": "mintToExpire",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
   },
@@ -696,6 +771,15 @@
   },
   {
     "inputs": [
+      { "internalType": "string", "name": "_baseUri", "type": "string" }
+    ],
+    "name": "setBaseUri",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
       {
         "internalType": "uint256[5]",
         "name": "_domainPricing",
@@ -785,6 +869,13 @@
     "type": "function"
   },
   {
+    "inputs": [{ "internalType": "string", "name": "_tld", "type": "string" }],
+    "name": "setTld",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
     "inputs": [
       { "internalType": "bytes4", "name": "interfaceId", "type": "bytes4" }
     ],
@@ -796,6 +887,13 @@
   {
     "inputs": [],
     "name": "symbol",
+    "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "tld",
     "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
     "stateMutability": "view",
     "type": "function"
@@ -817,12 +915,46 @@
     "type": "function"
   },
   {
+    "inputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "name": "totalRegisteredDomains",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "_newOwner", "type": "address" }
+    ],
+    "name": "transferAdminAndMaintainerRole",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "_newAdmin", "type": "address" }
+    ],
+    "name": "transferAdminRole",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
     "inputs": [
       { "internalType": "address", "name": "from", "type": "address" },
       { "internalType": "address", "name": "to", "type": "address" },
       { "internalType": "uint256", "name": "tokenId", "type": "uint256" }
     ],
     "name": "transferFrom",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "_newMaintainer", "type": "address" }
+    ],
+    "name": "transferMaintainerRole",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

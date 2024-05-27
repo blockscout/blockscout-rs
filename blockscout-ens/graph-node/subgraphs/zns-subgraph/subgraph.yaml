@@ -8,9 +8,9 @@ dataSources:
     name: ZNSRegistry
     network: matic
     source:
-      address: "0xBD32A89A76aFAFDDD8Fd514a292326377B6e4Cc9"
+      address: "0xE14428f3D95F054585403ec4dC454D3F5749dE8f"
       abi: ZNSRegistry
-      startBlock: 56770167
+      startBlock: 57451873
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -26,10 +26,8 @@ dataSources:
       eventHandlers:
         - event: MintedDomain(string,indexed uint256,indexed address,indexed uint256)
           handler: handleMintedDomain
-        - event: PrimaryDomainSet(indexed uint256,indexed address)
-          handler: handlePrimaryDomainSet
-        - event: RenewedDomain(indexed uint256,indexed uint256)
+        - event: RenewedDomain(indexed uint256,indexed uint256,string)
           handler: handleRenewedDomain
-        - event: Transfer(indexed address,indexed address,indexed uint256)
+        - event: TransferredDomain(string,indexed uint256,indexed address,indexed address)
           handler: handleTransfer
       file: ./src/zns-registry.ts

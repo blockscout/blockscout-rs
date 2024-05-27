@@ -1,8 +1,7 @@
 import {
   MintedDomain as MintedDomainEvent,
-  PrimaryDomainSet as PrimaryDomainSetEvent,
   RenewedDomain as RenewedDomainEvent,
-  Transfer as TransferEvent,
+  TransferredDomain as TransferEvent,
 } from "../generated/ZNSRegistry/ZNSRegistry";
 import {
   Domain,
@@ -12,13 +11,18 @@ import {
   ExpiryExtended,
 } from "../generated/schema";
 import { crypto, Bytes } from "@graphprotocol/graph-ts";
+import { hashByName } from "./utils";
 
 export function handleMintedDomain(event: MintedDomainEvent): void {
-  let domain = new Domain(event.params.tokenId.toString());
+  // let domain = new Domain(hashByName(event.params.domainName).toHex());
+  let domain = Domain.load(hashByName(event.params.domainName).toHex());
+  if (!domain) {
+    domain = new Domain(hashByName(event.params.domainName).toHex());
+  }
   domain.name = event.params.domainName;
   domain.createdAt = event.block.timestamp;
   domain.expiryDate = event.params.expiry;
-  domain.labelName = event.params.domainName;
+  domain.labelName = event.params.domainName.split(".")[0];
   domain.labelhash = Bytes.fromByteArray(
     crypto.keccak256(Bytes.fromUTF8(domain.labelName!))
   );
@@ -41,23 +45,8 @@ export function handleMintedDomain(event: MintedDomainEvent): void {
   mintedEvent.save();
 }
 
-export function handlePrimaryDomainSet(event: PrimaryDomainSetEvent): void {
-  let domain = Domain.load(event.params.tokenId.toString());
-  if (!domain) {
-    return;
-  }
-  let ownerId = event.params.owner.toHex();
-  let owner = Account.load(ownerId);
-  if (!owner) {
-    owner = new Account(ownerId);
-  }
-  domain.owner = owner.id;
-  domain.save();
-  owner.save();
-}
-
 export function handleRenewedDomain(event: RenewedDomainEvent): void {
-  let domain = Domain.load(event.params.tokenId.toString());
+  let domain = Domain.load(hashByName(event.params.domainName).toHex());
   if (!domain) {
     return;
   }
@@ -81,9 +70,15 @@ export function handleRenewedDomain(event: RenewedDomainEvent): void {
 }
 
 export function handleTransfer(event: TransferEvent): void {
-  let domain = Domain.load(event.params.tokenId.toHex());
+  let domain = Domain.load(hashByName(event.params.domainName).toHex());
   if (!domain) {
-    return;
+    domain = new Domain(hashByName(event.params.domainName).toHex());
+    domain.name = event.params.domainName;
+    domain.createdAt = event.block.timestamp;
+    domain.labelName = event.params.domainName;
+    domain.labelhash = Bytes.fromByteArray(
+      crypto.keccak256(Bytes.fromUTF8(domain.labelName!))
+    );
   }
   let transfer = new Transfer(event.transaction.hash.toHex());
   transfer.domain = domain.id;
@@ -96,6 +91,7 @@ export function handleTransfer(event: TransferEvent): void {
     toOwner = new Account(toOwnerId);
   }
   domain.owner = toOwner.id;
+  domain.resolvedAddress = toOwner.id;
   transfer.save();
   domain.save();
   toOwner.save();
