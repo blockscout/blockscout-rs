@@ -9,28 +9,42 @@ use crate::UpdateError;
 
 use super::types::UpdateContext;
 
-/// Thing that can provide data from local storage.
+/// Thing that can provide data.
 ///
-/// See [`update`](`LocalDataSource::update`) and [`get_local`](`LocalDataSource::get_local`)
-/// for functionality details.
+/// Methods expected to be called:
+/// - [`DataSource::init_recursively`]
+/// - [`DataSource::update_recursively`]
+/// - [`DataSource::all_dependencies_mutex_ids`]
+/// - [`DataSource::query_data`]
 ///
-/// Usually it's a chart that can:
-///     - depend only on external data (i.e. independent from local data)
-///     - depend on data from other charts
+/// Methods expected to be implemented:
+/// - [`DataSource::init_itself`]
+/// - [`DataSource::update_itself`]
+/// - [`DataSource::query_data`]
 ///
-/// Also it can be a remote data source.
+/// See [`super::kinds`] for less general cases.
 pub trait DataSource {
+    /// Dependency that is considered "main" for this data source.
+    ///
+    /// In practice, primary/secondary are not distinguished. The
+    /// naming is just for convenience/readability/indication.
     type PrimaryDependency: DataSource;
+    /// Dependency that is considered less important than [`DataSource::PrimaryDependency`]
+    /// for this data source.
+    ///
+    /// In practice, primary/secondary are not distinguished. The
+    /// naming is just for convenience/readability/indication.
     type SecondaryDependencies: DataSource;
+    /// Data that this source can provide
     type Output: Send;
 
     /// Unique identifier of this data source that is used for synchronizing updates.
     ///
-    /// Must be set to `Some` if the source stores some local data (i.e. `update_from_remote`
+    /// Must be set to `Some` if the source stores some (local) data (i.e. `update_itself`
     /// does something)
     const MUTEX_ID: Option<&'static str>;
 
-    /// Initialize the data source and its dependencies in local database.
+    /// Initialize the data source and its dependencies.
     ///
     /// The intention is to leave default implementation and implement only
     /// [`DataSource::init_itself`].
@@ -66,11 +80,17 @@ pub trait DataSource {
         // :)
     }
 
-    /// Initialize only this source. This fn is intended to be implemented
+    /// **DO NOT CALL DIRECTLY** unless you don't want dependencies to be initialized.
+    /// During normal operation this method is likely invalid.
+    ///
+    /// This fn is intended to be implemented
     /// by types, as recursive logic of [`DataSource::init_recursively`] is
     /// not expected to change.
     ///
     /// Should be idempotent.
+    ///
+    /// ## Description
+    /// Initialize only this source.
     fn init_itself(
         db: &DatabaseConnection,
         init_time: &chrono::DateTime<Utc>,
@@ -91,7 +111,7 @@ pub trait DataSource {
         ids
     }
 
-    /// Update source data (values + metadata).
+    /// Update dependencies' and this source's data (values + metadata).
     ///
     /// Should be idempontent with regards to `current_time` (in `cx`).
     /// It is a normal behaviour to call this method multiple times
@@ -112,6 +132,18 @@ pub trait DataSource {
         }
     }
 
+    /// **DO NOT CALL DIRECTLY** unless you don't want dependencies to be updated.
+    /// During normal operation this method is likely invalid, as to update
+    /// this source, dependencies have to be in a relevant state.
+    ///
+    /// This fn is intended to be implemented
+    /// by types, as recursive logic of [`DataSource::update_recursively`] is
+    /// not expected to change.
+    ///
+    /// Should be idempotent.
+    ///
+    /// ## Description
+    /// Update only thise data source's data (values + metadat)
     fn update_itself(
         cx: &UpdateContext<'_>,
     ) -> impl std::future::Future<Output = Result<(), UpdateError>> + std::marker::Send;
@@ -119,7 +151,7 @@ pub trait DataSource {
     /// Retrieve chart data for dates in `range`.
     ///
     /// **Does not perform an update!** If you need relevant data, you likely need
-    /// to call [`DataSource::update_from_remote`] beforehand.
+    /// to call [`DataSource::update_recursively`] beforehand.
     fn query_data(
         cx: &UpdateContext<'_>,
         range: RangeInclusive<NaiveDate>,
@@ -212,22 +244,22 @@ where
 mod tests {
     use std::collections::HashSet;
 
-    use crate::data_source::example::{ContractsGrowthChartSource, NewContractsChartSource};
+    use crate::data_source::example::{ContractsGrowth, NewContracts};
 
     use super::DataSource;
 
     #[test]
     fn dependencies_listed_correctly() {
         assert_eq!(
-            ContractsGrowthChartSource::all_dependencies_mutex_ids(),
+            ContractsGrowth::all_dependencies_mutex_ids(),
             HashSet::from([
-                ContractsGrowthChartSource::MUTEX_ID.unwrap(),
-                NewContractsChartSource::MUTEX_ID.unwrap(),
+                ContractsGrowth::MUTEX_ID.unwrap(),
+                NewContracts::MUTEX_ID.unwrap(),
             ])
         );
         assert_eq!(
-            NewContractsChartSource::all_dependencies_mutex_ids(),
-            HashSet::from([NewContractsChartSource::MUTEX_ID.unwrap(),])
+            NewContracts::all_dependencies_mutex_ids(),
+            HashSet::from([NewContracts::MUTEX_ID.unwrap(),])
         )
     }
 }

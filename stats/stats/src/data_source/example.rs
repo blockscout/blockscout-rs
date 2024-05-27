@@ -25,19 +25,6 @@ use crate::{
     Chart, MissingDatePolicy, UpdateError,
 };
 
-pub struct NewContractsChart;
-
-impl crate::Chart for NewContractsChart {
-    const NAME: &'static str = "newContracts";
-
-    fn chart_type() -> ChartType {
-        ChartType::Line
-    }
-}
-
-pub type NewContractsChartSource =
-    UpdateableChartWrapper<BatchUpdateableChartWrapper<RemoteChartWrapper<NewContractsChart>>>;
-
 pub struct NewContractsRemote;
 
 impl RemoteSource for NewContractsRemote {
@@ -82,9 +69,26 @@ impl RemoteSource for NewContractsRemote {
     }
 }
 
+pub struct NewContractsChart;
+
+impl crate::Chart for NewContractsChart {
+    const NAME: &'static str = "newContracts";
+
+    fn chart_type() -> ChartType {
+        ChartType::Line
+    }
+}
+
+// Directly uses results of SQL query (from `NewContractsRemote`),
+// thus `RemoteChart`.
 impl RemoteChart for NewContractsChart {
     type Dependency = NewContractsRemote;
 }
+
+// Wrap the earth out of it to obtain `DataSource`-implementing type.
+// `Chart` implementation is propageted through the wrappers.
+pub type NewContracts =
+    UpdateableChartWrapper<BatchUpdateableChartWrapper<RemoteChartWrapper<NewContractsChart>>>;
 
 pub struct ContractsGrowthChart;
 
@@ -99,8 +103,10 @@ impl Chart for ContractsGrowthChart {
     }
 }
 
+// We want to do some custom logic based on data from `NewContracts`.
+// However, batch logic fits this dependency. Therefore, `BatchUpdateableChart`.
 impl BatchUpdateableChart for ContractsGrowthChart {
-    type PrimaryDependency = NewContractsChartSource;
+    type PrimaryDependency = NewContracts;
     type SecondaryDependencies = ();
 
     fn step_duration() -> chrono::Duration {
@@ -127,12 +133,13 @@ impl BatchUpdateableChart for ContractsGrowthChart {
     }
 }
 
-pub type ContractsGrowthChartSource =
+pub type ContractsGrowth =
     UpdateableChartWrapper<BatchUpdateableChartWrapper<ContractsGrowthChart>>;
 
+// Put the data sources into the group
 construct_update_group!(ExampleUpdateGroup {
     name: "exampleGroup",
-    charts: [NewContractsChartSource, ContractsGrowthChartSource],
+    charts: [NewContracts, ContractsGrowth],
 });
 
 #[tokio::test]
@@ -145,6 +152,11 @@ async fn _update_examples() {
     fill_mock_blockscout_data(&blockscout, current_date).await;
     let enabled =
         HashSet::from([NewContractsChart::NAME, ContractsGrowthChart::NAME].map(|l| l.to_owned()));
+
+    // In this case plain `ExampleUpdateGroup` would suffice, but the example
+    // shows what to do in case of >1 groups (to keep it concise there's no 2nd group)
+
+    // Since we want sync group, we need mutexes for each chart
     let mutexes = ExampleUpdateGroup
         .list_dependency_mutex_ids()
         .into_iter()

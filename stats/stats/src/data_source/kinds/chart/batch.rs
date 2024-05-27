@@ -1,3 +1,8 @@
+//! Charts that can operate with batches in 1-to-1 manner.
+//!
+//! It means that update for some period P can be done
+//! with dependencies' data for the same exact period P.
+
 use std::{marker::PhantomData, ops::RangeInclusive, time::Instant};
 
 use blockscout_metrics_tools::AggregateTimer;
@@ -11,6 +16,7 @@ use crate::{
     Chart, DateValue, UpdateError,
 };
 
+/// See [module-level documentation](self) for details.
 pub trait BatchUpdateableChart: Chart {
     type PrimaryDependency: DataSource;
     type SecondaryDependencies: DataSource;
@@ -34,6 +40,8 @@ pub trait BatchUpdateableChart: Chart {
 }
 
 /// Wrapper struct used for avoiding implementation conflicts
+///
+/// See [module-level documentation](self) for details.
 pub struct BatchUpdateableChartWrapper<T: BatchUpdateableChart>(PhantomData<T>);
 
 #[portrait::fill(portrait::delegate(T))]

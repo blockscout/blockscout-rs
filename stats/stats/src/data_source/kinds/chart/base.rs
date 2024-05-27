@@ -1,3 +1,15 @@
+//! Tha most general (so far) trait for charts.
+//!
+//! It assumes that the chart stores its data via
+//! [`UpdateableChart::update_itself`], which can be retrieved
+//! with [`UpdateableChart::query_data`].
+//!
+//! Note that for this chart, `CHART_FETCH_NEW_DATA_TIME` metric
+//! is tracked (with a help of `DataSourceMetrics` trait).
+//!
+//! If you want to define some chart without `UpdateableChart` trait,
+//! you might want to handle this metric somehow.
+
 use std::{future::Future, marker::PhantomData, ops::RangeInclusive, time::Duration};
 
 use blockscout_metrics_tools::AggregateTimer;
@@ -16,7 +28,7 @@ use crate::{
     get_chart_data, metrics, Chart, DateValue, UpdateError,
 };
 
-// todo: instruction on how to implement
+/// See [module-level documentation](self) for details.
 pub trait UpdateableChart: Chart {
     type PrimaryDependency: DataSource;
     type SecondaryDependencies: DataSource;
@@ -120,6 +132,8 @@ pub trait UpdateableChart: Chart {
 }
 
 /// Wrapper struct used for avoiding implementation conflicts
+///
+/// See [module-level documentation](self) for details.
 pub struct UpdateableChartWrapper<C: UpdateableChart>(PhantomData<C>);
 
 #[portrait::fill(portrait::delegate(C))]

@@ -8,6 +8,7 @@ pub struct UpdateParameters<'a> {
     /// If `None`, it will be measured at the start of update
     /// (i.e. after taking mutexes)
     pub update_time_override: Option<chrono::DateTime<Utc>>,
+    /// Force full re-update
     pub force_full: bool,
 }
 

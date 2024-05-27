@@ -1,3 +1,18 @@
+//! Remote data source.
+//!
+//! The main application - SQL queries from remote database.
+//!
+//! Usually used inside
+//! [`RemoteChart`](`crate::data_source::kinds::chart::RemoteChart`)
+//! data source.
+//!
+//! Note that since each `query_data` performs (likely a heavy)
+//! query, it is undesireable to have this source present in
+//! different places. For each such appearance, the same data
+//! will be requested again.
+//! In this case,
+//! [`RemoteChart`](`crate::data_source::kinds::chart::RemoteChart`)
+//! can be helpful to reuse the query results (by storing it locally).
 use std::{marker::PhantomData, ops::RangeInclusive};
 
 use blockscout_metrics_tools::AggregateTimer;
@@ -9,6 +24,7 @@ use crate::{
     DateValue, UpdateError,
 };
 
+/// See [module-level documentation](self) for details.
 pub trait RemoteSource {
     fn get_query(from: NaiveDate, to: NaiveDate) -> Statement;
 
@@ -29,11 +45,7 @@ pub trait RemoteSource {
 
 /// Wrapper struct used for avoiding implementation conflicts.
 ///
-/// Note that since each `query_data` performs (likely a heavy)
-/// query, it is undesireable to have this source present in
-/// different places. In this case,
-/// [`crate::data_source::kinds::chart::RemoteChart`]
-/// can be helpful to reuse the query results.
+/// See [module-level documentation](self) for details.
 pub struct RemoteSourceWrapper<T: RemoteSource>(PhantomData<T>);
 
 impl<T: RemoteSource> DataSource for RemoteSourceWrapper<T> {

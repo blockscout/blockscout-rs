@@ -320,6 +320,12 @@ impl RuntimeSetup {
                     v.insert(chart);
                 }
                 Entry::Occupied(o) => {
+                    // note that it's still possible to have equal `ChartDynamic`s
+                    // but different (static) types underneath.
+                    //
+                    // i.e. this check does not guarantee that same mutex will not be
+                    // used for 2 different charts (although it shouldn't lead to logical
+                    // errors)
                     assert_eq!(o.get(), &chart, "duplicate chart name '{}'", o.get().name);
                 }
             }

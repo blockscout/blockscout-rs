@@ -1,3 +1,26 @@
+//! Chart update groups.
+//!
+//! ## Justification
+//!
+//! Reasons to have update groups are listed in [data source module docs](crate::data_source)
+//! and [`construct_update_group` macro docs](construct_update_group).
+//!
+//! ## Usage
+//!
+//! (you can also check [`crate::data_source`])
+//!
+//! 1. Create multiple connected charts
+//! (usually [`UpdateableChartWrapper`s](crate::data_source::kinds::chart::UpdateableChartWrapper)).
+//! For convenience, they may be type aliased:
+//! ```ignore
+//! pub type SomeChart1 = UpdateableChartWrapper<BatchUpdateableChartWrapper<RemoteSource<SomeChart1Source>>>;
+//! // let's say it depends on `SomeChart1`
+//! pub type SomeChart2 = UpdateableChartWrapper<BatchUpdateableChartWrapper<SomeChart2Inner>>;
+//! ```
+//!
+//! 2. Construct simple (non-sync) update groups
+//! ```ignore
+//! ```
 use std::{
     collections::{BTreeMap, HashSet},
     marker::{Send, Sync},
@@ -16,18 +39,19 @@ use tracing::warn;
 
 use crate::{data_source::UpdateParameters, ChartDynamic, UpdateError};
 
-// todo: reconsider name of module (also should help reading??)
-
 #[derive(Error, Debug)]
 #[error("Could not initialize update group: mutexes for {missing_mutexes:?} were not provided")]
 pub struct InitializationError {
     pub missing_mutexes: Vec<String>,
 }
 
-// todo: move comments somewhere (to module likely)
 // todo: use `trait-variant` once updated, probably
 // only `async_trait` currently allows making trait objects
-/// Directed Acyclic Connected Graph
+/// Directed Acyclic Connected Graph of charts.
+///
+/// Generally (when there are >1 update group), [`SyncUpdateGroup`]
+/// should be used instead. It provides synchronization mechanism
+/// that prevents data races between the groups.
 #[async_trait]
 pub trait UpdateGroup {
     // &self is only to make fns dispatchable (and trait to be object-safe)
@@ -43,14 +67,20 @@ pub trait UpdateGroup {
     ///
     /// `None` if `chart_name` is not a member.
     fn dependency_mutex_ids_of(&self, chart_name: &str) -> Option<HashSet<&'static str>>;
-    // todo: comments
+    /// Create/init enabled charts with their dependencies (in DB) recursively.
+    /// Idempotent, does nothing if the charts were previously initialized.
+    ///
+    /// `creation_time_override` for overriding creation time (only works for not initialized
+    /// charts). Helpful for testing.
     async fn create_charts(
         &self,
         db: &DatabaseConnection,
         creation_time_override: Option<chrono::DateTime<Utc>>,
         enabled_names: &HashSet<String>,
     ) -> Result<(), DbErr>;
-    // todo: comments
+    /// Update enabled charts and their dependencies in one go.
+    ///
+    /// Recursively updates dependencies first.
     async fn update_charts<'a>(
         &self,
         params: UpdateParameters<'a>,
@@ -84,14 +114,22 @@ pub mod macro_reexport {
 /// Otherwise the following may occur:
 ///
 /// Let's say we have chart `A` that depends on `B`. We make an update group with only `A`.
+///
+/// > A ⇨ B
+///
 /// See possible configurations for chart availability (e.g. for data requests):
 /// - Both `A` and `B` are enabled:\
-/// Update/create of `A` is called which triggers `B`. Everything is fine.
+/// > **A** ➡ **B**\
+/// Group triggres `A`, which triggers `B`. Everything is fine.
 /// - `A` is on, `B` is off:\
-/// Update/create of `A` is called which triggers `B`, as intended. Everything is fine.
+/// > **A** ➡ **B**\
+/// Group triggres `A`, which triggers `B`. Everything is fine.
 /// - `A` is off, `B` is on:\
-/// Group only contains `A`, which means nothing is triggered. Quite counter-intuitive.
+/// > A ⇨ B\
+/// Group only contains `A`, which means nothing is triggered. Quite counter-intuitive
+/// (`B` is not triggered even though it's enabled).
 /// - `A` is off, `B` is off:\
+/// > A ⇨ B\
 /// Nothing happens, as expected.
 ///
 /// Therefore, to make working with updates easier, it is highly recommended to include all
@@ -254,8 +292,10 @@ pub type ArcUpdateGroup = Arc<dyn for<'a> UpdateGroup + Send + Sync + 'static>;
 /// Synchronized update group.
 ///
 /// ## Deadlock-free
-/// Deadlock-free, as long as only these groups are used
-/// and mapping name-mutex is consistent between the groups.
+/// Deadlock-free, as long as only `SyncUpdateGroup`s are used
+/// and mapping name-mutex is consistent between the groups
+/// (i.e. single mutex is shared for the chart with the
+/// same name (= same chart, since names must be unique)).
 ///
 /// This is achieved using deadlock ordering.
 /// For more info see [link, section "lock ordering"](https://www.cs.cornell.edu/courses/cs4410/2017su/lectures/lec09-deadlock.html)
@@ -269,7 +309,9 @@ pub struct SyncUpdateGroup {
 }
 
 impl SyncUpdateGroup {
-    /// `chart_mutexes` must contain mutexes for all members of the group + their dependencies
+    /// `chart_mutexes` must contain mutexes for all members of the group + their dependencies.
+    ///
+    /// These mutexes must be shared across all groups.
     pub fn new(
         all_chart_mutexes: &BTreeMap<String, Arc<Mutex<()>>>,
         inner: ArcUpdateGroup,

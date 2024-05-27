@@ -1,3 +1,4 @@
+//! Tools for operating with missing data
 use crate::{DateValue, MissingDatePolicy, ReadError};
 use chrono::{Duration, NaiveDate};
 
