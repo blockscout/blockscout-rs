@@ -222,6 +222,25 @@ paths:
             $ref: '#/definitions/rpcStatus'
       tags:
         - Scoutcloud
+    post:
+      operationId: Scoutcloud_RegisterProfile
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1RegisterProfileResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1RegisterProfileRequest'
+      tags:
+        - Scoutcloud
   /health:
     get:
       summary: |-
@@ -288,6 +307,15 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/protobufAny'
+  v1AuthToken:
+    type: object
+    properties:
+      name:
+        type: string
+      token_value:
+        type: string
+      created_at:
+        type: string
   v1CreateInstanceRequest:
     type: object
     properties:
@@ -411,6 +439,14 @@ definitions:
       - STOPPED
       - FAILED
     default: NO_STATUS
+  v1GetAuthTokensResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1AuthToken'
   v1HealthCheckResponse:
     type: object
     properties:
@@ -449,6 +485,22 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1Instance'
+  v1RegisterProfileRequest:
+    type: object
+    properties:
+      email:
+        type: string
+      project_title:
+        type: string
+      promo:
+        type: string
+  v1RegisterProfileResponse:
+    type: object
+    properties:
+      profile:
+        $ref: '#/definitions/v1UserProfile'
+      initial_token:
+        $ref: '#/definitions/v1AuthToken'
   v1UpdateConfigResponse:
     type: object
     properties:

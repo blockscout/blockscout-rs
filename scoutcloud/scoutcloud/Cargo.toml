@@ -46,6 +46,7 @@ convert-trait = { git = "https://github.com/blockscout/actix-prost", tag="v1.0.0
 rust_decimal = "1.35.0"
 fang = { version = "0.11.0-rc1", features = [
     "asynk-postgres", "asynk-sqlx", "derive-error", "blocking-postgres"] , default-features = false}
+uuid = { version = "1.8.0", features = ["v4"] }
 
 
 

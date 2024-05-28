@@ -42,7 +42,17 @@ http:
     - selector: blockscout.scoutcloud.v1.Scoutcloud.GetProfile
       get: /api/v1/users/profile
 
-    
+    - selector: blockscout.scoutcloud.v1.Scoutcloud.RegisterProfile
+      post: /api/v1/users/profile
+      body: "*"
+
+    - selector: blockscout.scoutcloud.v1.Scoutcloud.IssueAuthKey
+      post: /api/v1/users/authkeys
+      body: "*"
+
+    - selector: blockscout.scoutcloud.v1.Scoutcloud.GetAuthKeys
+      get: /api/v1/users/authkeys
+
     #################### Health ####################
 
     - selector: blockscout.scoutcloud.v1.Health.Check

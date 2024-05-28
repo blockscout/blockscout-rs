@@ -14,10 +14,14 @@ service Scoutcloud {
   rpc GetInstance(GetInstanceRequest) returns (Instance) {}
   rpc DeleteInstance(DeleteInstanceRequest) returns (DeleteInstanceResponse) {}
   rpc ListInstances(ListInstancesRequest) returns (ListInstancesResponse) {}
+
   rpc GetDeployment(GetDeploymentRequest) returns (Deployment) {}
   rpc GetCurrentDeployment(GetCurrentDeploymentRequest) returns (Deployment) {}
   rpc ListDeployments(ListDeploymentsRequest) returns (ListDeploymentsResponse) {}
 
+  rpc RegisterProfile(RegisterProfileRequest) returns (RegisterProfileResponse) {}
+  rpc IssueAuthToken(IssueAuthTokenRequest) returns (AuthToken) {}
+  rpc GetAuthTokens(GetProfileRequest) returns (GetAuthTokensResponse) {}
   rpc GetProfile(GetProfileRequest) returns (UserProfile) {}
 }
 
@@ -193,4 +197,29 @@ message UserProfile {
   string created_at = 3;
   string balance = 4;
   repeated UserAction recent_actions = 5;
+}
+
+message AuthToken {
+  string name = 1;
+  string token_value = 2;
+  string created_at = 3;
+}
+
+message GetAuthTokensResponse {
+  repeated AuthToken items = 1;
+}
+
+message RegisterProfileRequest {
+  string email = 1;
+  string project_title = 2;
+  optional string promo = 3;
+}
+
+message RegisterProfileResponse {
+    UserProfile profile = 1;
+    AuthToken initial_token = 2;
+}
+
+message IssueAuthTokenRequest {
+    string name = 1;
 }

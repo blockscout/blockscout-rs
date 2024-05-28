@@ -7,6 +7,8 @@ mod m20240409_105319_fill_server_specs;
 mod m20240415_094154_add_fang;
 mod m20240519_102932_add_max_instances;
 mod m20240519_112756_update_instances;
+mod m20240527_200323_add_promo;
+mod m20240528_111554_update_token;
 
 pub struct Migrator;
 
@@ -20,6 +22,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20240415_094154_add_fang::Migration),
             Box::new(m20240519_102932_add_max_instances::Migration),
             Box::new(m20240519_112756_update_instances::Migration),
+            Box::new(m20240527_200323_add_promo::Migration),
+            Box::new(m20240528_111554_update_token::Migration),
         ]
     }
 }

@@ -245,6 +245,50 @@ impl Scoutcloud for ScoutcloudService {
         let result = UserProfile::try_convert(internal).map_err(map_convert_error)?;
         Ok(Response::new(result))
     }
+
+    async fn register_profile(
+        &self,
+        request: Request<RegisterProfileRequest>,
+    ) -> Result<Response<RegisterProfileResponse>, Status> {
+        let request = RegisterProfileRequestInternal::try_convert(request.into_inner())
+            .map_err(map_convert_error)?;
+        let internal = logic::users::register_profile(self.db.as_ref(), &request)
+            .await
+            .map_err(map_auth_error)?;
+        let result = TryConvert::try_convert(internal).map_err(map_convert_error)?;
+        Ok(Response::new(result))
+    }
+
+    async fn issue_auth_token(
+        &self,
+        request: Request<IssueAuthTokenRequest>,
+    ) -> Result<Response<AuthToken>, Status> {
+        let (request, user_token): (IssueAuthTokenRequestInternal, _) =
+            parse_request_with_headers(self.db.as_ref(), request).await?;
+        let internal =
+            logic::users::issue_auth_token(self.db.as_ref(), user_token.user.id, &request.name)
+                .await
+                .map_err(map_auth_error)?;
+        let result = AuthToken::try_convert(internal).map_err(map_convert_error)?;
+        Ok(Response::new(result))
+    }
+
+    async fn get_auth_tokens(
+        &self,
+        request: Request<GetProfileRequest>,
+    ) -> Result<Response<GetAuthTokensResponse>, Status> {
+        let (_, user_token): (GetProfileRequestInternal, _) =
+            parse_request_with_headers(self.db.as_ref(), request).await?;
+        let items = logic::users::get_auth_tokens(self.db.as_ref(), &user_token)
+            .await
+            .map_err(map_auth_error)?;
+        items
+            .into_iter()
+            .map(|internal| TryConvert::try_convert(internal).map_err(map_convert_error))
+            .collect::<Result<Vec<_>, _>>()
+            .map(|items| GetAuthTokensResponse { items })
+            .map(Response::new)
+    }
 }
 
 async fn parse_request_with_headers<C, B, I>(
@@ -300,5 +344,6 @@ fn map_auth_code(err: &AuthError) -> Code {
         AuthError::Unauthorized(_) => Code::PermissionDenied,
         AuthError::Db(_) => Code::Internal,
         AuthError::InsufficientBalance => Code::PermissionDenied,
+        AuthError::Promo(_) => Code::InvalidArgument,
     }
 }
