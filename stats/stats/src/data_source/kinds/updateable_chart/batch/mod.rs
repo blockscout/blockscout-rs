@@ -6,13 +6,14 @@
 use std::{marker::PhantomData, ops::RangeInclusive, time::Instant};
 
 use blockscout_metrics_tools::AggregateTimer;
-use chrono::{Days, Duration, NaiveDate, NaiveTime, Utc};
+use chrono::{Days, Duration, NaiveDate, Utc};
 use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, TransactionTrait};
 
 use super::{UpdateableChart, UpdateableChartDataSourceWrapper};
 use crate::{
     charts::{chart::chart_portrait, db_interaction::read::get_min_date_blockscout},
     data_source::{source::DataSource, types::UpdateContext},
+    utils::day_start,
     Chart, DateValue, UpdateError,
 };
 
@@ -78,9 +79,7 @@ where
             .map(|time| time.date())
             .map_err(UpdateError::BlockscoutDB)?,
     };
-    let first_date_time = first_date
-        .and_time(NaiveTime::from_hms_opt(0, 0, 0).expect("correct time"))
-        .and_utc();
+    let first_date_time = day_start(first_date);
 
     let steps = generate_date_ranges(first_date_time, now, U::step_duration());
     let n = steps.len();

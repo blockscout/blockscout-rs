@@ -1,15 +1,16 @@
 use crate::{charts::db_interaction::types::DateValue, UpdateError};
 use std::{fmt::Display, iter::Sum, ops::AddAssign, str::FromStr};
 
+/// `prev_sum` - sum before this data segment
 pub fn parse_and_cumsum<T>(
     mut data: Vec<DateValue>,
     parent_name: &str,
+    mut prev_sum: T,
 ) -> Result<Vec<DateValue>, UpdateError>
 where
     T: AddAssign + FromStr + Default + Display,
     T::Err: Display,
 {
-    let mut prev_sum = T::default();
     for item in data.iter_mut() {
         let value = item.value.parse::<T>().map_err(|e| {
             UpdateError::Internal(format!(

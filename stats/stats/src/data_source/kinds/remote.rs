@@ -25,6 +25,8 @@ use crate::{
 
 /// See [module-level documentation](self) for details.
 pub trait RemoteSource {
+    /// It is valid to have query results to be unsorted
+    /// although it's not encouraged
     fn get_query(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement;
 
     fn query_data(
@@ -34,10 +36,13 @@ pub trait RemoteSource {
     {
         async move {
             let query = Self::get_query(range);
-            DateValue::find_by_statement(query)
+            let mut data = DateValue::find_by_statement(query)
                 .all(cx.blockscout)
                 .await
-                .map_err(UpdateError::BlockscoutDB)
+                .map_err(UpdateError::BlockscoutDB)?;
+            // linear time for sorted sequences
+            data.sort_unstable_by_key(|v| v.date);
+            Ok(data)
         }
     }
 }

@@ -135,9 +135,10 @@ impl BatchChart for ContractsGrowthChart {
         _secondary_data: <Self::SecondaryDependencies as DataSource>::Output,
     ) -> Result<usize, UpdateError> {
         let found = primary_data.values.len();
-        let values = parse_and_cumsum::<i64>(primary_data.values, Self::PrimaryDependency::NAME)?
-            .into_iter()
-            .map(|value| value.active_model(chart_id, Some(min_blockscout_block)));
+        let values =
+            parse_and_cumsum::<i64>(primary_data.values, Self::PrimaryDependency::NAME, 0)?
+                .into_iter()
+                .map(|value| value.active_model(chart_id, Some(min_blockscout_block)));
         insert_data_many(db, values)
             .await
             .map_err(UpdateError::StatsDB)?;
