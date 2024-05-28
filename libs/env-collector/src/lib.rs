@@ -1,4 +1,3 @@
-use crate::launcher::ConfigSettings;
 use anyhow::Context;
 use config::{Config, File, FileFormat};
 use json_dotpath::DotPaths;
@@ -14,7 +13,7 @@ use std::{
 const ANCHOR_START: &str = "anchors.envs.start";
 const ANCHOR_END: &str = "anchors.envs.end";
 
-pub fn run_env_collector_cli<S: ConfigSettings + Serialize + DeserializeOwned>(
+pub fn run_env_collector_cli<S: Serialize + DeserializeOwned>(
     service_name: &str,
     markdown_path: &str,
     config_path: &str,
@@ -66,7 +65,7 @@ pub struct EnvCollector<S> {
 
 impl<S> EnvCollector<S>
 where
-    S: ConfigSettings + Serialize + DeserializeOwned,
+    S: Serialize + DeserializeOwned,
 {
     pub fn new(
         service_name: String,
@@ -136,7 +135,7 @@ impl Envs {
         skip_vars: Vec<String>,
     ) -> Result<Self, anyhow::Error>
     where
-        S: ConfigSettings + Serialize + DeserializeOwned,
+        S: Serialize + DeserializeOwned,
     {
         let settings: S = Config::builder()
             .add_source(File::from_str(
@@ -227,7 +226,7 @@ fn find_missing_variables_in_markdown<S>(
     skip_vars: Vec<String>,
 ) -> Result<Vec<EnvVariable>, anyhow::Error>
 where
-    S: ConfigSettings + Serialize + DeserializeOwned,
+    S: Serialize + DeserializeOwned,
 {
     let example = Envs::from_example_toml::<S>(
         service_name,
@@ -262,7 +261,7 @@ fn update_markdown_file<S>(
     skip_vars: Vec<String>,
 ) -> Result<(), anyhow::Error>
 where
-    S: ConfigSettings + Serialize + DeserializeOwned,
+    S: Serialize + DeserializeOwned,
 {
     let from_config = Envs::from_example_toml::<S>(
         service_name,
@@ -297,7 +296,7 @@ where
 
 fn var_is_required<S>(settings: &S, path: &str) -> bool
 where
-    S: ConfigSettings + Serialize + DeserializeOwned,
+    S: Serialize + DeserializeOwned,
 {
     let mut json = serde_json::to_value(settings).unwrap();
     json.dot_remove(path).unwrap();
@@ -384,7 +383,7 @@ fn _flat_json(json: &Value, prefix: &str, env_vars: &mut BTreeMap<String, String
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::DatabaseSettings;
+    use blockscout_service_launcher::database::DatabaseSettings;
     use pretty_assertions::assert_eq;
     use serde::Deserialize;
     use std::io::Write;
@@ -395,10 +394,6 @@ mod tests {
         #[serde(default)]
         pub test2: i32,
         pub database: DatabaseSettings,
-    }
-
-    impl ConfigSettings for TestSettings {
-        const SERVICE_NAME: &'static str = "TEST_SERVICE";
     }
 
     fn var(key: &str, val: Option<&str>, required: bool) -> (String, EnvVariable) {
