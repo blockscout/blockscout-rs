@@ -10,7 +10,7 @@ use super::{
         remote::RemoteSource,
         updateable_chart::batch::{
             remote::{RemoteChart, RemoteDataSourceWrapper},
-            BatchDataSourceWrapper, BatchUpdateableChart,
+            BatchChart, BatchDataSourceWrapper,
         },
     },
     source::DataSource,
@@ -103,8 +103,8 @@ impl Chart for ContractsGrowthChart {
 }
 
 // We want to do some custom logic based on data from `NewContracts`.
-// However, batch logic fits this dependency. Therefore, `BatchUpdateableChart`.
-impl BatchUpdateableChart for ContractsGrowthChart {
+// However, batch logic fits this dependency. Therefore, `BatchChart`.
+impl BatchChart for ContractsGrowthChart {
     type PrimaryDependency = NewContracts;
     type SecondaryDependencies = ();
 

@@ -3,7 +3,7 @@ use crate::{
     charts::{chart::Chart, db_interaction::write::insert_data_many},
     data_processing::parse_and_cumsum,
     data_source::{
-        kinds::updateable_chart::batch::{BatchDataSourceWrapper, BatchUpdateableChart},
+        kinds::updateable_chart::batch::{BatchChart, BatchDataSourceWrapper},
         source::DataSource,
     },
     MissingDatePolicy, UpdateError,
@@ -24,7 +24,7 @@ impl crate::Chart for ContractsGrowthInner {
     }
 }
 
-impl BatchUpdateableChart for ContractsGrowthInner {
+impl BatchChart for ContractsGrowthInner {
     type PrimaryDependency = NewContracts;
     type SecondaryDependencies = ();
 

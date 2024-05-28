@@ -19,9 +19,10 @@
 //! 2. Define `TraitName`
 //! 3. Create newtype `TraitNameWrapper<T: TraitName>` that's going to wrap types that implement `TraitName`.
 //! 4. Write `impl ParentTrait for TraitNameWrapper`
-//! 5. (for charts) (option) create delegated `Chart` implementation `impl<..> Chart for TraitNameWrapper<C> {}`
+//! 5. Create type alias `TraitDataSourceWrapper` to simplify getting `DataSource` from the types.
+//! 6. (for charts) (option) create delegated `Chart` implementation `impl<..> Chart for TraitNameWrapper<C> {}`
 //! (see existing impls for example)
-//! 6. Check if you need to somehow collect respective metrics
+//! 7. Check if you need to somehow collect respective metrics
 //! ...some other stuff I forgor...
 //!
 

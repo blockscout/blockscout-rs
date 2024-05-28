@@ -11,7 +11,7 @@ use crate::{
     Chart, DateValue, UpdateError,
 };
 
-use super::{BatchDataSourceWrapper, BatchUpdateableChart};
+use super::{BatchDataSourceWrapper, BatchChart};
 
 /// See [module-level documentation](self) for details.
 pub trait RemoteChart: Chart {
@@ -28,7 +28,7 @@ pub struct RemoteChartWrapper<T: RemoteChart>(PhantomData<T>);
 #[portrait::fill(portrait::delegate(T))]
 impl<T: RemoteChart + Chart> Chart for RemoteChartWrapper<T> {}
 
-impl<T: RemoteChart> BatchUpdateableChart for RemoteChartWrapper<T> {
+impl<T: RemoteChart> BatchChart for RemoteChartWrapper<T> {
     type PrimaryDependency = RemoteSourceWrapper<T::Dependency>;
     type SecondaryDependencies = ();
 

@@ -1,12 +1,12 @@
 //! Charts that can operate with batches in 1-to-1 manner.
 //!
 //! It means that update for some period P can be done
-//! with dependencies' data for the same exact period P.
+//! only with dependencies' data for the same exact period P.
 
 use std::{marker::PhantomData, ops::RangeInclusive, time::Instant};
 
 use blockscout_metrics_tools::AggregateTimer;
-use chrono::{Duration, NaiveDate, Utc};
+use chrono::{Days, Duration, NaiveDate, Utc};
 use sea_orm::{DatabaseConnection, TransactionTrait};
 
 use super::{UpdateableChart, UpdateableChartDataSourceWrapper};
@@ -19,7 +19,7 @@ use crate::{
 pub mod remote;
 
 /// See [module-level documentation](self) for details.
-pub trait BatchUpdateableChart: Chart {
+pub trait BatchChart: Chart {
     type PrimaryDependency: DataSource;
     type SecondaryDependencies: DataSource;
 
@@ -46,21 +46,21 @@ pub type BatchDataSourceWrapper<T> = UpdateableChartDataSourceWrapper<BatchWrapp
 /// Wrapper struct used for avoiding implementation conflicts
 ///
 /// See [module-level documentation](self) for details.
-pub struct BatchWrapper<T: BatchUpdateableChart>(PhantomData<T>);
+pub struct BatchWrapper<T: BatchChart>(PhantomData<T>);
 
 #[portrait::fill(portrait::delegate(T))]
-impl<T: BatchUpdateableChart + Chart> Chart for BatchWrapper<T> {}
+impl<T: BatchChart + Chart> Chart for BatchWrapper<T> {}
 
 /// Perform update utilizing batching
 async fn batch_update_values<U>(
     cx: &UpdateContext<'_>,
     chart_id: i32,
-    update_from_row: Option<DateValue>,
+    last_accurate_point: Option<DateValue>,
     min_blockscout_block: i64,
     remote_fetch_timer: &mut AggregateTimer,
 ) -> Result<(), UpdateError>
 where
-    U: BatchUpdateableChart,
+    U: BatchChart,
 {
     let today = cx.time.date_naive();
     let txn = cx
@@ -68,8 +68,11 @@ where
         .begin()
         .await
         .map_err(UpdateError::BlockscoutDB)?;
-    let first_date = match update_from_row {
-        Some(row) => row.date,
+    let update_from_date = last_accurate_point
+        .map(|p| p.date.checked_add_days(Days::new(1)))
+        .flatten();
+    let first_date = match update_from_date {
+        Some(d) => d,
         None => get_min_date_blockscout(&txn)
             .await
             .map(|time| time.date())
@@ -105,11 +108,11 @@ async fn batch_update_values_step<U>(
     remote_fetch_timer: &mut AggregateTimer,
 ) -> Result<usize, UpdateError>
 where
-    U: BatchUpdateableChart,
+    U: BatchChart,
 {
     let primary_data =
         U::PrimaryDependency::query_data(cx, range.clone(), remote_fetch_timer).await?;
-    let secondary_data: <<U as BatchUpdateableChart>::SecondaryDependencies as DataSource>::Output =
+    let secondary_data: <<U as BatchChart>::SecondaryDependencies as DataSource>::Output =
         U::SecondaryDependencies::query_data(cx, range, remote_fetch_timer).await?;
     let found = U::batch_update_values_step_with(
         cx.db,
@@ -123,7 +126,7 @@ where
     Ok(found)
 }
 
-impl<T: BatchUpdateableChart> UpdateableChart for BatchWrapper<T>
+impl<T: BatchChart> UpdateableChart for BatchWrapper<T>
 where
     <T::PrimaryDependency as DataSource>::Output: Send,
     <T::SecondaryDependencies as DataSource>::Output: Send,
@@ -134,7 +137,7 @@ where
     fn update_values(
         cx: &UpdateContext<'_>,
         chart_id: i32,
-        update_from_row: Option<DateValue>,
+        last_accurate_point: Option<DateValue>,
         min_blockscout_block: i64,
         remote_fetch_timer: &mut AggregateTimer,
     ) -> impl std::future::Future<Output = Result<(), UpdateError>> + Send {
@@ -142,7 +145,7 @@ where
             batch_update_values::<T>(
                 cx,
                 chart_id,
-                update_from_row,
+                last_accurate_point,
                 min_blockscout_block,
                 remote_fetch_timer,
             )

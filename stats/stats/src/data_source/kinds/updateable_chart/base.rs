@@ -20,7 +20,7 @@ use crate::{
     charts::{
         chart::{chart_portrait, ChartData},
         db_interaction::{
-            read::{get_chart_metadata, get_min_block_blockscout, get_update_start},
+            read::{get_chart_metadata, get_min_block_blockscout, last_accurate_point},
             write::{create_chart, set_last_updated_at},
         },
     },
@@ -63,7 +63,7 @@ pub trait UpdateableChart: Chart {
                 .await
                 .map_err(UpdateError::BlockscoutDB)?;
             let offset = Some(Self::approximate_trailing_points());
-            let last_updated_row = get_update_start::<Self>(
+            let last_accurate_point = last_accurate_point::<Self>(
                 chart_id,
                 min_blockscout_block,
                 cx.db,
@@ -74,7 +74,7 @@ pub trait UpdateableChart: Chart {
             Self::update_values(
                 cx,
                 chart_id,
-                last_updated_row,
+                last_accurate_point,
                 min_blockscout_block,
                 remote_fetch_timer,
             )
@@ -88,7 +88,7 @@ pub trait UpdateableChart: Chart {
     fn update_values(
         cx: &UpdateContext<'_>,
         chart_id: i32,
-        update_from_row: Option<DateValue>,
+        last_accurate_point: Option<DateValue>,
         min_blockscout_block: i64,
         remote_fetch_timer: &mut AggregateTimer,
     ) -> impl Future<Output = Result<(), UpdateError>> + Send;
