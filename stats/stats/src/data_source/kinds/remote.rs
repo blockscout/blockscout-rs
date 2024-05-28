@@ -16,8 +16,7 @@
 use std::{marker::PhantomData, ops::RangeInclusive};
 
 use blockscout_metrics_tools::AggregateTimer;
-use chrono::NaiveDate;
-use sea_orm::{FromQueryResult, Statement};
+use sea_orm::{prelude::DateTimeUtc, FromQueryResult, Statement};
 
 use crate::{
     data_source::{source::DataSource, types::UpdateContext},
@@ -26,15 +25,15 @@ use crate::{
 
 /// See [module-level documentation](self) for details.
 pub trait RemoteSource {
-    fn get_query(from: NaiveDate, to: NaiveDate) -> Statement;
+    fn get_query(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement;
 
     fn query_data(
         cx: &UpdateContext<'_>,
-        range: RangeInclusive<NaiveDate>,
+        range: Option<RangeInclusive<DateTimeUtc>>,
     ) -> impl std::future::Future<Output = Result<Vec<DateValue>, UpdateError>> + std::marker::Send
     {
         async move {
-            let query = Self::get_query(*range.start(), *range.end());
+            let query = Self::get_query(range);
             DateValue::find_by_statement(query)
                 .all(cx.blockscout)
                 .await
@@ -64,7 +63,7 @@ impl<T: RemoteSource> DataSource for RemoteSourceWrapper<T> {
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        range: RangeInclusive<NaiveDate>,
+        range: Option<RangeInclusive<DateTimeUtc>>,
         remote_fetch_timer: &mut AggregateTimer,
     ) -> Result<Vec<DateValue>, UpdateError> {
         let _interval = remote_fetch_timer.start_interval();

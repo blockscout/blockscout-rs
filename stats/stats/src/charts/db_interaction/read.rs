@@ -267,12 +267,11 @@ struct SyncInfo {
     pub min_blockscout_block: Option<i64>,
 }
 
-/// Get `offset`th last row. Date of the row can be a starting point for an update.
-/// Usually used to retrieve last 'finalized' row (for which no recomputations needed).
+/// Get last 'finalized' row (for which no recomputations needed).
 ///
 /// Retrieves `offset`th latest data point from DB, if any.
 /// In case of inconsistencies or set `force_full`, also returns `None`.
-pub async fn get_update_start<C>(
+pub async fn last_accurate_point<C>(
     chart_id: i32,
     min_blockscout_block: i64,
     db: &DatabaseConnection,

@@ -13,8 +13,8 @@
 use std::{future::Future, marker::PhantomData, ops::RangeInclusive, time::Duration};
 
 use blockscout_metrics_tools::AggregateTimer;
-use chrono::{NaiveDate, Utc};
-use sea_orm::{DatabaseConnection, DbErr};
+use chrono::Utc;
+use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
 
 use crate::{
     charts::{
@@ -85,6 +85,9 @@ pub trait UpdateableChart: Chart {
     }
 
     /// Update only chart values.
+    ///
+    /// `remote_fetch_timer` - timer to track data fetch from (remote) dependencies.
+    /// `min_blockscout_block` - indicator of blockscout reindexation
     fn update_values(
         cx: &UpdateContext<'_>,
         chart_id: i32,
@@ -109,14 +112,18 @@ pub trait UpdateableChart: Chart {
     /// Retrieve chart data from (local) storage.
     fn query_data(
         cx: &UpdateContext<'_>,
-        range: RangeInclusive<sea_orm::prelude::Date>,
+        range: Option<RangeInclusive<DateTimeUtc>>,
     ) -> impl Future<Output = Result<ChartData, UpdateError>> + Send {
         async move {
+            let (start, end) = range.map(|r| (*r.start(), *r.end())).unzip();
+            // Currently we store data with date precision
+            let start = start.map(|s| s.date_naive());
+            let end = end.map(|s| s.date_naive());
             let values: Vec<DateValue> = get_chart_data(
                 cx.db,
                 Self::NAME,
-                Some(*range.start()),
-                Some(*range.end()),
+                start,
+                end,
                 None,
                 None,
                 Self::approximate_trailing_points(),
@@ -184,7 +191,7 @@ impl<C: UpdateableChart> DataSource for UpdateableChartDataSourceWrapper<C> {
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        range: RangeInclusive<NaiveDate>,
+        range: Option<RangeInclusive<DateTimeUtc>>,
         // local data is queried, do not track in remote timer
         _remote_fetch_timer: &mut AggregateTimer,
     ) -> Result<ChartData, UpdateError> {

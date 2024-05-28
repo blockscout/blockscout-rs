@@ -64,7 +64,7 @@ pub trait Chart: Sync {
     /// (ordered by time)
     ///
     /// E.g. how many end values should be recalculated on (kinda)
-    /// lazy update (where `get_last_row` is retrieved successfully).
+    /// lazy update (where `get_update_start` is retrieved successfully).
     /// Also controls marking points as approximate when returning data.
     ///
     /// ## Value
@@ -75,8 +75,10 @@ pub trait Chart: Sync {
     ///
     /// I.e. for number of blocks per day, stats for current day (0) are
     /// not complete because blocks will be produced till the end of the day.
+    /// ```text
     ///    |===|=  |
     /// day -1   0
+    /// ```
     fn approximate_trailing_points() -> u64 {
         if Self::chart_type() == ChartType::Counter {
             // there's only one value in counter

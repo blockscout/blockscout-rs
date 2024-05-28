@@ -6,8 +6,8 @@
 use std::{marker::PhantomData, ops::RangeInclusive, time::Instant};
 
 use blockscout_metrics_tools::AggregateTimer;
-use chrono::{Days, Duration, NaiveDate, Utc};
-use sea_orm::{DatabaseConnection, TransactionTrait};
+use chrono::{Days, Duration, NaiveDate, NaiveTime, Utc};
+use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, TransactionTrait};
 
 use super::{UpdateableChart, UpdateableChartDataSourceWrapper};
 use crate::{
@@ -62,7 +62,7 @@ async fn batch_update_values<U>(
 where
     U: BatchChart,
 {
-    let today = cx.time.date_naive();
+    let now = cx.time;
     let txn = cx
         .blockscout
         .begin()
@@ -78,8 +78,11 @@ where
             .map(|time| time.date())
             .map_err(UpdateError::BlockscoutDB)?,
     };
+    let first_date_time = first_date
+        .and_time(NaiveTime::from_hms_opt(0, 0, 0).expect("correct time"))
+        .and_utc();
 
-    let steps = generate_date_ranges(first_date, today, U::step_duration());
+    let steps = generate_date_ranges(first_date_time, now, U::step_duration());
     let n = steps.len();
 
     for (i, range) in steps.into_iter().enumerate() {
@@ -89,7 +92,7 @@ where
             cx,
             chart_id,
             min_blockscout_block,
-            range,
+            Some(range),
             remote_fetch_timer,
         )
         .await?;
@@ -104,7 +107,7 @@ async fn batch_update_values_step<U>(
     cx: &UpdateContext<'_>,
     chart_id: i32,
     min_blockscout_block: i64,
-    range: RangeInclusive<NaiveDate>,
+    range: Option<RangeInclusive<DateTimeUtc>>,
     remote_fetch_timer: &mut AggregateTimer,
 ) -> Result<usize, UpdateError>
 where
@@ -155,10 +158,10 @@ where
 }
 
 fn generate_date_ranges(
-    start: NaiveDate,
-    end: NaiveDate,
+    start: DateTimeUtc,
+    end: DateTimeUtc,
     step: Duration,
-) -> Vec<RangeInclusive<NaiveDate>> {
+) -> Vec<RangeInclusive<DateTimeUtc>> {
     let mut date_range = Vec::new();
     let mut current_date = start;
 

@@ -174,7 +174,7 @@ pub mod macro_reexport {
 ///     }
 ///     async fn query_data(
 ///         cx: &UpdateContext<'_>,
-///         range: RangeInclusive<NaiveDate>,
+///         range: RangeInclusive<DateTimeUtc>,
 ///     ) -> Result<Vec<DateValue>, UpdateError> {
 ///         Ok(vec![])
 ///     }

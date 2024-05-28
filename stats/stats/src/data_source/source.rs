@@ -1,9 +1,9 @@
 use std::{collections::HashSet, ops::RangeInclusive};
 
 use blockscout_metrics_tools::AggregateTimer;
-use chrono::{NaiveDate, Utc};
+use chrono::Utc;
 use futures::{future::BoxFuture, FutureExt};
-use sea_orm::{DatabaseConnection, DbErr};
+use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
 
 use crate::UpdateError;
 
@@ -148,13 +148,14 @@ pub trait DataSource {
         cx: &UpdateContext<'_>,
     ) -> impl std::future::Future<Output = Result<(), UpdateError>> + std::marker::Send;
 
-    /// Retrieve chart data for dates in `range`.
+    /// Retrieve chart data.
+    /// If `range` is `Some`, should return data within the range. Otherwise - all data.
     ///
     /// **Does not perform an update!** If you need relevant data, you likely need
     /// to call [`DataSource::update_recursively`] beforehand.
     fn query_data(
         cx: &UpdateContext<'_>,
-        range: RangeInclusive<NaiveDate>,
+        range: Option<RangeInclusive<DateTimeUtc>>,
         remote_fetch_timer: &mut AggregateTimer,
     ) -> impl std::future::Future<Output = Result<Self::Output, UpdateError>> + std::marker::Send;
 }
@@ -196,7 +197,7 @@ impl DataSource for () {
 
     async fn query_data(
         _cx: &UpdateContext<'_>,
-        _range: RangeInclusive<NaiveDate>,
+        _range: Option<RangeInclusive<DateTimeUtc>>,
         _remote_fetch_timer: &mut AggregateTimer,
     ) -> Result<Self::Output, UpdateError> {
         Ok(())
@@ -230,7 +231,7 @@ where
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        range: RangeInclusive<NaiveDate>,
+        range: Option<RangeInclusive<DateTimeUtc>>,
         remote_fetch_timer: &mut AggregateTimer,
     ) -> Result<Self::Output, UpdateError> {
         Ok((
