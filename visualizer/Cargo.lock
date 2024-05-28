@@ -478,9 +478,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "blockscout-health"
+name = "blockscout-service-health"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs?rev=12d2f7e0#12d2f7e093c1a215492cd676ad1e439ab7d995a6"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=1d7c72d6#1d7c72d6c1041d9352e33abc3864b69251408b6a"
 dependencies = [
  "actix-prost",
  "actix-prost-build",
@@ -3139,7 +3139,7 @@ dependencies = [
  "anyhow",
  "assert-str",
  "async-trait",
- "blockscout-health",
+ "blockscout-service-health",
  "blockscout-service-launcher",
  "bytes",
  "config",
