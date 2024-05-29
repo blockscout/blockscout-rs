@@ -11,6 +11,7 @@ tags:
   - name: Deployments
   - name: Users
   - name: Scoutcloud
+  - name: Health
 host: scoutcloud.services.blockscout.com
 consumes:
   - application/json
@@ -262,7 +263,38 @@ paths:
         - Users
       security:
         - ApiKeyAuth: []
+  /health:
+    get:
+      summary: |-
+        If the requested service is unknown, the call will fail with status
+        NOT_FOUND.
+      operationId: Health_Check
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1HealthCheckResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: service
+          in: query
+          required: false
+          type: string
+      tags:
+        - Health
 definitions:
+  HealthCheckResponseServingStatus:
+    type: string
+    enum:
+      - UNKNOWN
+      - SERVING
+      - NOT_SERVING
+      - SERVICE_UNKNOWN
+    default: UNKNOWN
+    description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
   ScoutcloudUpdateConfigBody:
     type: object
     properties:
@@ -404,6 +436,11 @@ definitions:
       - STOPPED
       - FAILED
     default: NO_STATUS
+  v1HealthCheckResponse:
+    type: object
+    properties:
+      status:
+        $ref: '#/definitions/HealthCheckResponseServingStatus'
   v1Instance:
     type: object
     properties:

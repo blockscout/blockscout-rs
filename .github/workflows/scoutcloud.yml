@@ -44,8 +44,6 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
-        with:
-          submodules: 'true'
 
       - name: Install deps
         uses: ./.github/actions/deps
@@ -90,8 +88,6 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
-        with:
-          submodules: 'true'
 
       - name: Install deps
         uses: ./.github/actions/deps
@@ -129,8 +125,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          submodules: 'true'
 
       - uses: actions-ecosystem/action-regex-match@v2
         id: regex
@@ -164,6 +158,8 @@ jobs:
         with:
           context: "scoutcloud"
           file: "scoutcloud/Dockerfile"
+          build-contexts: |
+            proto=proto
           push: ${{ steps.tags_extractor.outputs.tags != '' }}
           tags: ${{ steps.tags_extractor.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
