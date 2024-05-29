@@ -21,15 +21,9 @@ option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
     url: "https://github.com/blockscout/blockscout-rs";
     description: "More about blockscout microservices";
   }
-  tags: {
-    name: "Instances"
-  }
-  tags: {
-    name: "Deployments"
-  }
-  tags: {
-    name: "Users"
-  }
+  tags: {name: "Instances"}
+  tags: {name: "Deployments"}
+  tags: {name: "Users"}
   security_definitions: {
     security: {
       key: "ApiKeyAuth";
@@ -89,14 +83,14 @@ service Scoutcloud {
     };
   }
   // Delete instance
-    rpc DeleteInstance(DeleteInstanceRequest) returns (DeleteInstanceResponse) {
-        option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
-            security: {
-                security_requirement: {key: "ApiKeyAuth"}
-            }
-            tags: "Instances"
-        };
-    }
+  rpc DeleteInstance(DeleteInstanceRequest) returns (DeleteInstanceResponse) {
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      security: {
+        security_requirement: {key: "ApiKeyAuth"}
+      }
+      tags: "Instances"
+    };
+  }
   // Get list of all owned instances
   rpc ListInstances(ListInstancesRequest) returns (ListInstancesResponse) {
     option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
@@ -201,9 +195,7 @@ message DeleteInstanceRequest {
   string instance_id = 1;
 }
 
-message DeleteInstanceResponse {
-
-}
+message DeleteInstanceResponse {}
 
 message UpdateConfigRequest {
   string instance_id = 1;
