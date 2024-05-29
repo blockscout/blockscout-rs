@@ -26,5 +26,6 @@
 //! ...some other stuff I forgor...
 //!
 
+pub mod adapter;
 pub mod remote;
 pub mod updateable_chart;

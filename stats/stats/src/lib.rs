@@ -18,5 +18,5 @@ pub use charts::{
         read::{get_chart_data, get_counters, ReadError},
         types::{DateValue, ExtendedDateValue},
     },
-    lines, Chart, ChartDynamic, MissingDatePolicy, UpdateError,
+    lines, Chart, ChartDynamic, MissingDatePolicy, Named, UpdateError,
 };

@@ -19,12 +19,17 @@ use blockscout_metrics_tools::AggregateTimer;
 use sea_orm::{prelude::DateTimeUtc, FromQueryResult, Statement};
 
 use crate::{
+    charts::db_interaction::types::Dated,
     data_source::{source::DataSource, types::UpdateContext},
     DateValue, UpdateError,
 };
 
 /// See [module-level documentation](self) for details.
 pub trait RemoteSource {
+    /// Type of point to get from the query. Usually `DateValue`,
+    /// but can also be `DateValueDecimal`, for example.
+    type Point: FromQueryResult + Dated;
+
     /// It is valid to have query results to be unsorted
     /// although it's not encouraged
     fn get_query(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement;
@@ -32,16 +37,16 @@ pub trait RemoteSource {
     fn query_data(
         cx: &UpdateContext<'_>,
         range: Option<RangeInclusive<DateTimeUtc>>,
-    ) -> impl std::future::Future<Output = Result<Vec<DateValue>, UpdateError>> + std::marker::Send
+    ) -> impl std::future::Future<Output = Result<Vec<Self::Point>, UpdateError>> + std::marker::Send
     {
         async move {
             let query = Self::get_query(range);
-            let mut data = DateValue::find_by_statement(query)
+            let mut data = Self::Point::find_by_statement(query)
                 .all(cx.blockscout)
                 .await
                 .map_err(UpdateError::BlockscoutDB)?;
             // linear time for sorted sequences
-            data.sort_unstable_by_key(|v| v.date);
+            data.sort_unstable_by_key(|v| v.get_date());
             Ok(data)
         }
     }

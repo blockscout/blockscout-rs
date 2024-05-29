@@ -25,7 +25,7 @@ use crate::{
         },
     },
     data_source::{source::DataSource, source_metrics::DataSourceMetrics, types::UpdateContext},
-    get_chart_data, metrics, Chart, DateValue, UpdateError,
+    get_chart_data, metrics, Chart, DateValue, Named, UpdateError,
 };
 
 /// See [module-level documentation](self) for details.
@@ -143,6 +143,10 @@ pub trait UpdateableChart: Chart {
 /// See [module-level documentation](self) for details.
 pub struct UpdateableChartDataSourceWrapper<C: UpdateableChart>(PhantomData<C>);
 
+impl<T: UpdateableChart + Named> Named for UpdateableChartDataSourceWrapper<T> {
+    const NAME: &'static str = T::NAME;
+}
+
 #[portrait::fill(portrait::delegate(C))]
 impl<C: UpdateableChart + Chart> Chart for UpdateableChartDataSourceWrapper<C> {}
 
@@ -161,7 +165,7 @@ impl<C: UpdateableChart> DataSource for UpdateableChartDataSourceWrapper<C> {
     type SecondaryDependencies = C::SecondaryDependencies;
     type Output = ChartData;
 
-    const MUTEX_ID: Option<&'static str> = Some(<C as Chart>::NAME);
+    const MUTEX_ID: Option<&'static str> = Some(<C as Named>::NAME);
 
     async fn init_itself(
         db: &DatabaseConnection,

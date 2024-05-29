@@ -14,7 +14,7 @@ use crate::{
     charts::{chart::chart_portrait, db_interaction::read::get_min_date_blockscout},
     data_source::{source::DataSource, types::UpdateContext},
     utils::day_start,
-    Chart, DateValue, UpdateError,
+    Chart, DateValue, Named, UpdateError,
 };
 
 pub mod remote;
@@ -48,6 +48,10 @@ pub type BatchDataSourceWrapper<T> = UpdateableChartDataSourceWrapper<BatchWrapp
 ///
 /// See [module-level documentation](self) for details.
 pub struct BatchWrapper<T: BatchChart>(PhantomData<T>);
+
+impl<T: BatchChart + Named> Named for BatchWrapper<T> {
+    const NAME: &'static str = T::NAME;
+}
 
 #[portrait::fill(portrait::delegate(T))]
 impl<T: BatchChart + Chart> Chart for BatchWrapper<T> {}

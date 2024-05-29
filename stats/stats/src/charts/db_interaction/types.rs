@@ -4,10 +4,20 @@ use chrono::NaiveDate;
 use entity::chart_data;
 use sea_orm::{prelude::*, FromQueryResult, Set};
 
+pub trait Dated {
+    fn get_date<'a>(&'a self) -> &'a NaiveDate;
+}
+
 #[derive(FromQueryResult, Debug, Clone)]
 pub struct DateValueInt {
     pub date: NaiveDate,
     pub value: i64,
+}
+
+impl Dated for DateValueInt {
+    fn get_date(&self) -> &NaiveDate {
+        &self.date
+    }
 }
 
 impl From<DateValueInt> for DateValue {
@@ -36,6 +46,12 @@ pub struct DateValueDouble {
     pub value: f64,
 }
 
+impl Dated for DateValueDouble {
+    fn get_date(&self) -> &NaiveDate {
+        &self.date
+    }
+}
+
 impl From<DateValueDouble> for DateValue {
     fn from(value: DateValueDouble) -> Self {
         Self {
@@ -51,6 +67,12 @@ pub struct DateValueDecimal {
     pub value: Decimal,
 }
 
+impl Dated for DateValueDecimal {
+    fn get_date(&self) -> &NaiveDate {
+        &self.date
+    }
+}
+
 impl From<DateValueDecimal> for DateValue {
     fn from(value: DateValueDecimal) -> Self {
         Self {
@@ -64,6 +86,12 @@ impl From<DateValueDecimal> for DateValue {
 pub struct DateValue {
     pub date: NaiveDate,
     pub value: String,
+}
+
+impl Dated for DateValue {
+    fn get_date(&self) -> &NaiveDate {
+        &self.date
+    }
 }
 
 impl DateValue {

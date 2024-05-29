@@ -240,7 +240,7 @@ macro_rules! construct_update_group {
 
             fn dependency_mutex_ids_of(&self, chart_name: &str) -> Option<::std::collections::HashSet<&'static str>> {
                 $(
-                    if chart_name == <$member as $crate::Chart>::NAME {
+                    if chart_name == <$member as $crate::Named>::NAME {
                         return Some(<$member as $crate::data_source::DataSource>::all_dependencies_mutex_ids());
                     }
                 )*
@@ -262,7 +262,7 @@ macro_rules! construct_update_group {
             ) -> Result<(), sea_orm::DbErr> {
                 let current_time = creation_time_override.unwrap_or_else(|| $crate::update_group::macro_reexport::chrono::Utc::now());
                 $(
-                    if enabled_names.contains(<$member as $crate::Chart>::NAME) {
+                    if enabled_names.contains(<$member as $crate::Named>::NAME) {
                         <$member as $crate::data_source::DataSource>::init_recursively(db, &current_time).await?;
                     }
                 )*
@@ -278,7 +278,7 @@ macro_rules! construct_update_group {
                 #[allow(unused)]
                 let cx: $crate::data_source::UpdateContext = params.into();
                 $(
-                    if enabled_names.contains(<$member as $crate::Chart>::NAME) {
+                    if enabled_names.contains(<$member as $crate::Named>::NAME) {
                         <$member as $crate::data_source::DataSource>::update_recursively(&cx).await?;
                     }
                 )*

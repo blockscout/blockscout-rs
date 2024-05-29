@@ -46,13 +46,16 @@ pub enum MissingDatePolicy {
     FillPrevious,
 }
 
+pub trait Named {
+    /// Must be unique
+    const NAME: &'static str;
+}
+
 #[portrait::make(import(
     crate::charts::chart::MissingDatePolicy,
     entity::sea_orm_active_enums::ChartType,
 ))]
-pub trait Chart: Sync {
-    /// Must be unique
-    const NAME: &'static str;
+pub trait Chart: Sync + Named {
     fn chart_type() -> ChartType;
     fn missing_date_policy() -> MissingDatePolicy {
         MissingDatePolicy::FillZero

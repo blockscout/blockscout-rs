@@ -8,10 +8,10 @@ use std::marker::PhantomData;
 use crate::{
     charts::{chart::chart_portrait, db_interaction::write::insert_data_many},
     data_source::kinds::remote::{RemoteSource, RemoteSourceWrapper},
-    Chart, DateValue, UpdateError,
+    Chart, DateValue, Named, UpdateError,
 };
 
-use super::{BatchDataSourceWrapper, BatchChart};
+use super::{BatchChart, BatchDataSourceWrapper};
 
 /// See [module-level documentation](self) for details.
 pub trait RemoteChart: Chart {
@@ -24,6 +24,10 @@ pub type RemoteDataSourceWrapper<T> = BatchDataSourceWrapper<RemoteChartWrapper<
 ///
 /// See [module-level documentation](self) for details.
 pub struct RemoteChartWrapper<T: RemoteChart>(PhantomData<T>);
+
+impl<T: RemoteChart + Named> Named for RemoteChartWrapper<T> {
+    const NAME: &'static str = T::NAME;
+}
 
 #[portrait::fill(portrait::delegate(T))]
 impl<T: RemoteChart + Chart> Chart for RemoteChartWrapper<T> {}

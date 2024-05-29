@@ -19,14 +19,14 @@ use crate::{
     data_processing::parse_and_cumsum,
     data_source::{DataSource, UpdateContext},
     utils::day_start,
-    Chart, DateValue, UpdateError,
+    Chart, DateValue, Named, UpdateError,
 };
 
 use super::{UpdateableChart, UpdateableChartDataSourceWrapper};
 
 /// See [module-level documentation](self) for details.
 pub trait CumulativeChart: Chart {
-    type NewItemsChart: DataSource<Output = ChartData> + Chart;
+    type NewItemsChart: DataSource<Output = ChartData> + Named;
 }
 
 /// Wrapper struct used for avoiding implementation conflicts
@@ -36,6 +36,10 @@ pub type CumulativeDataSourceWrapper<T> =
     UpdateableChartDataSourceWrapper<CumulativeChartWrapper<T>>;
 
 pub struct CumulativeChartWrapper<T: CumulativeChart>(PhantomData<T>);
+
+impl<T: CumulativeChart + Named> Named for CumulativeChartWrapper<T> {
+    const NAME: &'static str = T::NAME;
+}
 
 #[portrait::fill(portrait::delegate(T))]
 impl<T: CumulativeChart + Chart> Chart for CumulativeChartWrapper<T> {}
@@ -61,7 +65,7 @@ impl<T: CumulativeChart> UpdateableChart for CumulativeChartWrapper<T> {
                 p.value.parse::<i64>().map_err(|e| {
                     UpdateError::Internal(format!(
                         "failed to parse value in chart '{}': {e}",
-                        <Self as Chart>::NAME
+                        <Self as Named>::NAME
                     ))
                 })
             })

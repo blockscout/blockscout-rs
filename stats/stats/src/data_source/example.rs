@@ -22,7 +22,7 @@ use crate::{
     data_processing::parse_and_cumsum,
     tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
     update_group::{SyncUpdateGroup, UpdateGroup},
-    Chart, MissingDatePolicy, UpdateError,
+    Chart, MissingDatePolicy, Named, UpdateError,
 };
 
 pub struct NewContractsRemote;
@@ -84,9 +84,11 @@ impl RemoteSource for NewContractsRemote {
 
 pub struct NewContractsChart;
 
-impl crate::Chart for NewContractsChart {
+impl Named for NewContractsChart {
     const NAME: &'static str = "newContracts";
+}
 
+impl Chart for NewContractsChart {
     fn chart_type() -> ChartType {
         ChartType::Line
     }
@@ -104,9 +106,11 @@ pub type NewContracts = RemoteDataSourceWrapper<NewContractsChart>;
 
 pub struct ContractsGrowthChart;
 
-impl Chart for ContractsGrowthChart {
+impl Named for ContractsGrowthChart {
     const NAME: &'static str = "contractsGrowth";
+}
 
+impl Chart for AccountsGrowthInner {
     fn chart_type() -> ChartType {
         ChartType::Line
     }

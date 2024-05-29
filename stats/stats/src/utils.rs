@@ -10,21 +10,176 @@ pub fn day_start(date: NaiveDate) -> DateTimeUtc {
         .and_utc()
 }
 
-/// `blocks` table should be aliased as `b`.
+/// Used inside [`sql_with_range_filter_opt`]
 ///
-/// No other values are expected to be in the query.
-pub fn block_timestamp_sql_filter(
+/// `filter_arg_number_start = len(arg)+1 // (length of other args + 1)`
+/// `filter_by` - column/property(?) name in SQL
+///
+/// ### Results
+/// Vec should be appended to the args.
+/// String should be inserted in places for filter.
+pub(crate) fn produce_filter_and_values(
     range: Option<RangeInclusive<DateTimeUtc>>,
+    filter_by: &str,
+    filter_arg_number_start: u64,
 ) -> (String, Vec<Value>) {
     if let Some(range) = range {
+        let arg_n_1 = filter_arg_number_start;
+        let arg_n_2 = arg_n_1 + 1;
         (
-            r#"AND
-                b.timestamp < $2 AND
-                b.timestamp >= $1"#
-                .to_owned(),
+            format!(
+                " AND
+                {filter_by} <= ${arg_n_2} AND
+                {filter_by} >= ${arg_n_1}"
+            ),
             vec![range.start().into(), range.end().into()],
         )
     } else {
         ("".to_owned(), vec![])
+    }
+}
+
+/// `statement_with_filter_placeholder` must have `filter` named parameter
+/// `filter_by` is a column/property(?) in SQL
+macro_rules! sql_with_range_filter_opt {
+    (
+        $db_backend: expr,
+        $statement_with_filter_placeholder: literal,
+        [$($value: expr),* $(,)?],
+        $filter_by:expr,
+        $range:expr $(,)?
+    ) => {
+        {
+            let mut values = ::std::vec![ $($value),* ];
+            let filter_arg_number_start = values.len()+1;
+            let (filter_str, filter_values) = $crate::utils::produce_filter_and_values(
+                $range, $filter_by, filter_arg_number_start
+            );
+            values.extend(filter_values.into_iter());
+            let sql = ::std::format!(
+                $statement_with_filter_placeholder,
+                filter=filter_str,
+            );
+            ::sea_orm::Statement::from_sql_and_values($db_backend, &sql, values)
+        }
+    };
+}
+
+pub(crate) use sql_with_range_filter_opt;
+
+#[cfg(test)]
+mod test {
+    use pretty_assertions::assert_eq;
+    use sea_orm::{DbBackend, Statement};
+
+    use super::*;
+
+    #[test]
+    fn filter_and_values_works() {
+        assert_eq!(produce_filter_and_values(None, "aboba", 123), ("", vec![]));
+
+        let time_1 = DateTimeUtc::from_timestamp(1234567, 0).unwrap();
+        let time_2 = DateTimeUtc::from_timestamp(7654321, 0).unwrap();
+        assert_eq!(
+            produce_filter_and_values(Some(time_1..=time_2), "aboba", 123),
+            (
+                " AND
+                aboba <= $124 AND
+                aboba >= $123",
+                vec![time_1.into(), time_2.into()]
+            )
+        );
+    }
+
+    const ETH: i64 = 1_000_000_000_000_000_000;
+
+    fn naive_sql_selector(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+        match range {
+            Some(range) => Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                r#"
+                SELECT
+                    DATE(blocks.timestamp) as date,
+                    (AVG(block_rewards.reward) / $1)::FLOAT as value
+                FROM block_rewards
+                JOIN blocks ON block_rewards.block_hash = blocks.hash
+                WHERE 
+                    blocks.timestamp != to_timestamp(0) AND 
+                    blocks.consensus = true AND
+                    block.timestamp <= $3 AND
+                    block.timestamp >= $2
+                GROUP BY date
+                "#,
+                vec![ETH.into(), range.start().into(), range.end().into()],
+            ),
+            None => Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                r#"
+                SELECT
+                    DATE(blocks.timestamp) as date,
+                    (AVG(block_rewards.reward) / $1)::FLOAT as value
+                FROM block_rewards
+                JOIN blocks ON block_rewards.block_hash = blocks.hash
+                WHERE 
+                    blocks.timestamp != to_timestamp(0) AND 
+                    blocks.consensus = true
+                GROUP BY date
+                "#,
+                vec![ETH.into()],
+            ),
+        }
+    }
+
+    #[test]
+    fn sql_with_range_filter_empty_works() {
+        let range = None;
+        assert_eq!(
+            naive_sql_selector(range),
+            sql_with_range_filter_opt!(
+                DbBackend::Postgres,
+                r#"
+                    SELECT
+                        DATE(blocks.timestamp) as date,
+                        (AVG(block_rewards.reward) / $1)::FLOAT as value
+                    FROM block_rewards
+                    JOIN blocks ON block_rewards.block_hash = blocks.hash
+                    WHERE 
+                        blocks.timestamp != to_timestamp(0) AND 
+                        blocks.consensus = true {filter}
+                    GROUP BY date
+                    "#,
+                [ETH.into()],
+                "blocks.timestamp",
+                range,
+            )
+        );
+    }
+
+    #[test]
+    fn sql_with_range_filter_some_works() {
+        let range = Some(
+            DateTimeUtc::from_timestamp(1234567, 0).unwrap()
+                ..=DateTimeUtc::from_timestamp(7654321, 0).unwrap(),
+        );
+        assert_eq!(
+            naive_sql_selector(range),
+            sql_with_range_filter_opt!(
+                DbBackend::Postgres,
+                r#"
+                    SELECT
+                        DATE(blocks.timestamp) as date,
+                        (AVG(block_rewards.reward) / $1)::FLOAT as value
+                    FROM block_rewards
+                    JOIN blocks ON block_rewards.block_hash = blocks.hash
+                    WHERE 
+                        blocks.timestamp != to_timestamp(0) AND 
+                        blocks.consensus = true {filter}
+                    GROUP BY date
+                    "#,
+                [ETH.into()],
+                "blocks.timestamp",
+                range,
+            )
+        );
     }
 }
