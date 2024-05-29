@@ -1,4 +1,4 @@
-specVersion: 1.0.0
+specVersion: 0.0.5
 indexerHints:
   prune: auto
 schema:
@@ -6,10 +6,10 @@ schema:
 dataSources:
   - kind: ethereum
     name: ZNSRegistry
-    network: matic
+    network: polygon-mainnet
     source:
-      address: "0xE14428f3D95F054585403ec4dC454D3F5749dE8f"
       abi: ZNSRegistry
+      address: "0xE14428f3D95F054585403ec4dC454D3F5749dE8f"
       startBlock: 57451873
     mapping:
       kind: ethereum/events
