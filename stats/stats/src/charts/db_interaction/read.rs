@@ -162,7 +162,14 @@ pub async fn get_chart_data(
 
     // may include future points that were not yet collected and were just filled accordingly.
     let data_with_maybe_future = match policy {
-        Some(policy) => fill_and_filter_chart(db_data, from, to, policy, interval_limit)?,
+        Some(policy) => {
+            // If `to` is `None`, we would like to return all known points.
+            // However, if some points are omitted, they should be filled according
+            // to policy.
+            // This fill makes sense up to the latest update.
+            let to = to.or(last_updated_at);
+            fill_and_filter_chart(db_data, from, to, policy, interval_limit)?
+        }
         None => db_data,
     };
     let data_with_maybe_future_len = data_with_maybe_future.len();
