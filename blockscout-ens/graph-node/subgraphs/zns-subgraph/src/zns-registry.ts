@@ -28,6 +28,8 @@ export function handleMintedDomain(event: MintedDomainEvent): void {
   );
   domain.resolvedAddress = event.params.owner.toHex();
   domain.registrant = event.params.owner.toHex();
+  domain.subdomainCount = 0;
+
   let ownerId = event.params.owner.toHex();
   let owner = Account.load(ownerId);
   if (!owner) {
@@ -79,6 +81,7 @@ export function handleTransfer(event: TransferEvent): void {
     domain.labelhash = Bytes.fromByteArray(
       crypto.keccak256(Bytes.fromUTF8(domain.labelName!))
     );
+    domain.subdomainCount = 0;
   }
   let transfer = new Transfer(event.transaction.hash.toHex());
   transfer.domain = domain.id;
