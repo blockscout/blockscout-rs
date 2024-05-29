@@ -94,13 +94,14 @@ impl SubgraphReader {
 
         let networks = networks.into_iter()
             .filter_map(|(chain_id, network)| {
-                let (found_protocols, unknown_protocols): (Vec<_>, _) = network.use_protocols.iter().partition(|&protocol_name| protocols.contains_key(protocol_name));
-
+                let (found_protocols, unknown_protocols): (Vec<_>, _) = network
+                    .use_protocols
+                    .into_iter()
+                    .partition(|protocol_name| protocols.contains_key(protocol_name));
                 if !unknown_protocols.is_empty() {
                     tracing::warn!("found unknown protocols for network with id={chain_id}: {unknown_protocols:?}")
                 }
-
-                if let Some(use_protocols) = NonEmpty::collect(found_protocols.into_iter().map(String::to_string)) {
+                if let Some(use_protocols) = NonEmpty::collect(found_protocols) {
                     Some(
                         (chain_id, Network {
                             blockscout_client: network.blockscout_client,

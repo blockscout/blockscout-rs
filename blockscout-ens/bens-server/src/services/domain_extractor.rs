@@ -157,6 +157,7 @@ impl DomainsExtractor for DomainsExtractorService {
         let response = GetProtocolsResponse {
             items: protocols
                 .into_iter()
+                .cloned()
                 .map(conversion::protocol_from_logic)
                 .collect(),
         };

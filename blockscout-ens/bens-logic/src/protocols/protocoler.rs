@@ -84,22 +84,15 @@ impl Protocoler {
         networks: HashMap<i64, Network>,
         protocols: HashMap<String, Protocol>,
     ) -> Result<Self, anyhow::Error> {
-        networks
-            .values()
-            .map(|network| {
-                network
-                    .use_protocols
-                    .iter()
-                    .map(|name| {
-                        if protocols.contains_key(name) {
-                            Ok(())
-                        } else {
-                            Err(anyhow!("unknown protocol {name}"))
-                        }
-                    })
-                    .collect::<Result<Vec<_>, _>>()
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        for network in networks.values() {
+            if let Some(name) = network
+                .use_protocols
+                .iter()
+                .find(|&name| !protocols.contains_key(name))
+            {
+                return Err(anyhow!("unknown protocol {name}"));
+            }
+        }
 
         Ok(Self {
             networks,

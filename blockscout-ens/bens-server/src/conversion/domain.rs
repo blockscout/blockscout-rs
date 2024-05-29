@@ -144,7 +144,7 @@ pub fn detailed_domain_from_logic(
         .into_iter()
         .map(|t| domain_token_from_logic(t, chain_id))
         .collect();
-    let protocol = Some(protocol_from_logic(&protocol));
+    let protocol = Some(protocol_from_logic(protocol));
     Ok(proto::DetailedDomain {
         id: domain.id,
         name: domain.name.unwrap_or_default(),
@@ -174,7 +174,7 @@ pub fn domain_from_logic(
         .wrapped_owner
         .map(|wrapped_owner| address_from_str_logic(&wrapped_owner, chain_id))
         .transpose()?;
-    let protocol = Some(protocol_from_logic(&output.protocol));
+    let protocol = Some(protocol_from_logic(output.protocol));
     Ok(proto::Domain {
         id: domain.id,
         name: domain.name.unwrap_or_default(),
