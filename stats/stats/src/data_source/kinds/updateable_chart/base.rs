@@ -18,7 +18,7 @@ use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
 
 use crate::{
     charts::{
-        chart::{chart_portrait, ChartData},
+        chart::chart_portrait,
         db_interaction::{
             read::{get_chart_metadata, get_min_block_blockscout, last_accurate_point},
             write::{create_chart, set_last_updated_at},
@@ -113,7 +113,7 @@ pub trait UpdateableChart: Chart {
     fn query_data(
         cx: &UpdateContext<'_>,
         range: Option<RangeInclusive<DateTimeUtc>>,
-    ) -> impl Future<Output = Result<ChartData, UpdateError>> + Send {
+    ) -> impl Future<Output = Result<Vec<DateValue>, UpdateError>> + Send {
         async move {
             let (start, end) = range.map(|r| (*r.start(), *r.end())).unzip();
             // Currently we store data with date precision
@@ -132,8 +132,7 @@ pub trait UpdateableChart: Chart {
             .into_iter()
             .map(DateValue::from)
             .collect();
-            let metadata = get_chart_metadata(cx.db, Self::NAME).await?;
-            Ok(ChartData { metadata, values })
+            Ok(values)
         }
     }
 }
@@ -163,7 +162,7 @@ impl<C: UpdateableChart> DataSourceMetrics for UpdateableChartDataSourceWrapper<
 impl<C: UpdateableChart> DataSource for UpdateableChartDataSourceWrapper<C> {
     type PrimaryDependency = C::PrimaryDependency;
     type SecondaryDependencies = C::SecondaryDependencies;
-    type Output = ChartData;
+    type Output = Vec<DateValue>;
 
     const MUTEX_ID: Option<&'static str> = Some(<C as Named>::NAME);
 
@@ -198,7 +197,7 @@ impl<C: UpdateableChart> DataSource for UpdateableChartDataSourceWrapper<C> {
         range: Option<RangeInclusive<DateTimeUtc>>,
         // local data is queried, do not track in remote timer
         _remote_fetch_timer: &mut AggregateTimer,
-    ) -> Result<ChartData, UpdateError> {
+    ) -> Result<Vec<DateValue>, UpdateError> {
         C::query_data(cx, range).await
     }
 }

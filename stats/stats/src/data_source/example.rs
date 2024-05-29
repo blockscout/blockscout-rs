@@ -22,7 +22,7 @@ use crate::{
     data_processing::parse_and_cumsum,
     tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
     update_group::{SyncUpdateGroup, UpdateGroup},
-    Chart, MissingDatePolicy, Named, UpdateError,
+    Chart, DateValue, MissingDatePolicy, Named, UpdateError,
 };
 
 pub struct NewContractsRemote;
@@ -35,7 +35,7 @@ impl NewContractsRemote {
                     b.timestamp < $2 AND
                     b.timestamp >= $1"#
                     .to_owned(),
-                vec![range.start().into(), range.end().into()],
+                vec![(*range.start()).into(), (*range.end()).into()],
             )
         } else {
             ("".to_owned(), vec![])
@@ -44,6 +44,8 @@ impl NewContractsRemote {
 }
 
 impl RemoteSource for NewContractsRemote {
+    type Point = DateValue;
+
     fn get_query(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
         let (filter_statement, values) = Self::date_sql_filter(range);
         let sql = format!(
@@ -110,7 +112,7 @@ impl Named for ContractsGrowthChart {
     const NAME: &'static str = "contractsGrowth";
 }
 
-impl Chart for AccountsGrowthInner {
+impl Chart for ContractsGrowthChart {
     fn chart_type() -> ChartType {
         ChartType::Line
     }
@@ -138,11 +140,10 @@ impl BatchChart for ContractsGrowthChart {
         primary_data: <Self::PrimaryDependency as DataSource>::Output,
         _secondary_data: <Self::SecondaryDependencies as DataSource>::Output,
     ) -> Result<usize, UpdateError> {
-        let found = primary_data.values.len();
-        let values =
-            parse_and_cumsum::<i64>(primary_data.values, Self::PrimaryDependency::NAME, 0)?
-                .into_iter()
-                .map(|value| value.active_model(chart_id, Some(min_blockscout_block)));
+        let found = primary_data.len();
+        let values = parse_and_cumsum::<i64>(primary_data, Self::PrimaryDependency::NAME, 0)?
+            .into_iter()
+            .map(|value| value.active_model(chart_id, Some(min_blockscout_block)));
         insert_data_many(db, values)
             .await
             .map_err(UpdateError::StatsDB)?;

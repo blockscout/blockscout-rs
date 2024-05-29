@@ -6,7 +6,7 @@
 use std::{marker::PhantomData, ops::RangeInclusive, time::Instant};
 
 use blockscout_metrics_tools::AggregateTimer;
-use chrono::{Days, Duration, NaiveDate, Utc};
+use chrono::{DateTime, Days, Duration, Utc};
 use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, TransactionTrait};
 
 use super::{UpdateableChart, UpdateableChartDataSourceWrapper};
@@ -172,7 +172,7 @@ fn generate_date_ranges(
         // saturating add, since `step` is expected to be positive
         let next_date = current_date
             .checked_add_signed(step)
-            .unwrap_or(NaiveDate::MAX);
+            .unwrap_or(DateTime::<Utc>::MAX_UTC);
         // todo: .min(end) ?
         date_range.push(RangeInclusive::new(current_date, next_date));
         current_date = next_date;
@@ -222,8 +222,10 @@ mod tests {
         ] {
             let expected: Vec<_> = expected
                 .into_iter()
-                .map(|r| RangeInclusive::new(r.0, r.1))
+                .map(|r| RangeInclusive::new(day_start(r.0), day_start(r.1)))
                 .collect();
+            let from = day_start(from);
+            let to = day_start(to);
             let actual = generate_date_ranges(from, to, Duration::days(30));
             assert_eq!(expected, actual);
         }

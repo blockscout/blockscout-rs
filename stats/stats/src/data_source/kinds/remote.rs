@@ -28,7 +28,7 @@ use crate::{
 pub trait RemoteSource {
     /// Type of point to get from the query. Usually `DateValue`,
     /// but can also be `DateValueDecimal`, for example.
-    type Point: FromQueryResult + Dated;
+    type Point: FromQueryResult + Dated + Into<DateValue> + Send + Sync;
 
     /// It is valid to have query results to be unsorted
     /// although it's not encouraged
@@ -46,7 +46,8 @@ pub trait RemoteSource {
                 .await
                 .map_err(UpdateError::BlockscoutDB)?;
             // linear time for sorted sequences
-            data.sort_unstable_by_key(|v| v.get_date());
+            data.sort_unstable_by(|a, b| a.get_date().cmp(b.get_date()));
+            // can't use sort_*_by_key: https://github.com/rust-lang/rust/issues/34162
             Ok(data)
         }
     }
@@ -60,7 +61,7 @@ pub struct RemoteSourceWrapper<T: RemoteSource>(PhantomData<T>);
 impl<T: RemoteSource> DataSource for RemoteSourceWrapper<T> {
     type PrimaryDependency = ();
     type SecondaryDependencies = ();
-    type Output = Vec<DateValue>;
+    type Output = Vec<T::Point>;
     // No local state => no race conditions expected
     const MUTEX_ID: Option<&'static str> = None;
 
@@ -75,7 +76,7 @@ impl<T: RemoteSource> DataSource for RemoteSourceWrapper<T> {
         cx: &UpdateContext<'_>,
         range: Option<RangeInclusive<DateTimeUtc>>,
         remote_fetch_timer: &mut AggregateTimer,
-    ) -> Result<Vec<DateValue>, UpdateError> {
+    ) -> Result<<Self as DataSource>::Output, UpdateError> {
         let _interval = remote_fetch_timer.start_interval();
         T::query_data(cx, range).await
     }

@@ -41,13 +41,14 @@ impl<T: RemoteChart> BatchChart for RemoteChartWrapper<T> {
         chart_id: i32,
         _update_time: chrono::DateTime<chrono::prelude::Utc>,
         min_blockscout_block: i64,
-        primary_data: Vec<DateValue>,
+        primary_data: Vec<<T::Dependency as RemoteSource>::Point>,
         _secondary_data: (),
     ) -> Result<usize, crate::UpdateError> {
         let found = primary_data.len();
-        let values = primary_data
-            .into_iter()
-            .map(|value| value.active_model(chart_id, Some(min_blockscout_block)));
+        let values = primary_data.into_iter().map(|value| {
+            <<T::Dependency as RemoteSource>::Point as Into<DateValue>>::into(value)
+                .active_model(chart_id, Some(min_blockscout_block))
+        });
         insert_data_many(db, values)
             .await
             .map_err(UpdateError::StatsDB)?;

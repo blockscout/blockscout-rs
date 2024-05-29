@@ -13,7 +13,7 @@ use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
 
 use crate::{
     data_source::{DataSource, UpdateContext},
-    UpdateError,
+    Named, UpdateError,
 };
 
 pub trait SourceAdapter {
@@ -23,6 +23,10 @@ pub trait SourceAdapter {
 }
 
 pub struct SourceAdapterWrapper<T: SourceAdapter>(PhantomData<T>);
+
+impl<T: SourceAdapter + Named> Named for SourceAdapterWrapper<T> {
+    const NAME: &'static str = T::NAME;
+}
 
 impl<T: SourceAdapter> DataSource for SourceAdapterWrapper<T> {
     type PrimaryDependency = T::InnerSource;

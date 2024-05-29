@@ -21,7 +21,7 @@ pub fn day_start(date: NaiveDate) -> DateTimeUtc {
 pub(crate) fn produce_filter_and_values(
     range: Option<RangeInclusive<DateTimeUtc>>,
     filter_by: &str,
-    filter_arg_number_start: u64,
+    filter_arg_number_start: usize,
 ) -> (String, Vec<Value>) {
     if let Some(range) = range {
         let arg_n_1 = filter_arg_number_start;
@@ -32,7 +32,7 @@ pub(crate) fn produce_filter_and_values(
                 {filter_by} <= ${arg_n_2} AND
                 {filter_by} >= ${arg_n_1}"
             ),
-            vec![range.start().into(), range.end().into()],
+            vec![(*range.start()).into(), (*range.end()).into()],
         )
     } else {
         ("".to_owned(), vec![])
@@ -76,7 +76,10 @@ mod test {
 
     #[test]
     fn filter_and_values_works() {
-        assert_eq!(produce_filter_and_values(None, "aboba", 123), ("", vec![]));
+        assert_eq!(
+            produce_filter_and_values(None, "aboba", 123),
+            ("".to_string(), vec![])
+        );
 
         let time_1 = DateTimeUtc::from_timestamp(1234567, 0).unwrap();
         let time_2 = DateTimeUtc::from_timestamp(7654321, 0).unwrap();
@@ -85,7 +88,8 @@ mod test {
             (
                 " AND
                 aboba <= $124 AND
-                aboba >= $123",
+                aboba >= $123"
+                    .to_string(),
                 vec![time_1.into(), time_2.into()]
             )
         );
@@ -110,7 +114,7 @@ mod test {
                     block.timestamp >= $2
                 GROUP BY date
                 "#,
-                vec![ETH.into(), range.start().into(), range.end().into()],
+                vec![ETH.into(), (*range.start()).into(), (*range.end()).into()],
             ),
             None => Statement::from_sql_and_values(
                 DbBackend::Postgres,
@@ -134,7 +138,7 @@ mod test {
     fn sql_with_range_filter_empty_works() {
         let range = None;
         assert_eq!(
-            naive_sql_selector(range),
+            naive_sql_selector(range.clone()),
             sql_with_range_filter_opt!(
                 DbBackend::Postgres,
                 r#"
@@ -162,7 +166,7 @@ mod test {
                 ..=DateTimeUtc::from_timestamp(7654321, 0).unwrap(),
         );
         assert_eq!(
-            naive_sql_selector(range),
+            naive_sql_selector(range.clone()),
             sql_with_range_filter_opt!(
                 DbBackend::Postgres,
                 r#"

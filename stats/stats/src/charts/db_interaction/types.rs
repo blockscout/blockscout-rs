@@ -5,7 +5,7 @@ use entity::chart_data;
 use sea_orm::{prelude::*, FromQueryResult, Set};
 
 pub trait Dated {
-    fn get_date<'a>(&'a self) -> &'a NaiveDate;
+    fn get_date(&self) -> &NaiveDate;
 }
 
 #[derive(FromQueryResult, Debug, Clone)]

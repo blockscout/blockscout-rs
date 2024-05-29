@@ -12,10 +12,7 @@ use blockscout_metrics_tools::AggregateTimer;
 use chrono::Days;
 
 use crate::{
-    charts::{
-        chart::{chart_portrait, ChartData},
-        db_interaction::write::insert_data_many,
-    },
+    charts::{chart::chart_portrait, db_interaction::write::insert_data_many},
     data_processing::parse_and_cumsum,
     data_source::{DataSource, UpdateContext},
     utils::day_start,
@@ -26,7 +23,7 @@ use super::{UpdateableChart, UpdateableChartDataSourceWrapper};
 
 /// See [module-level documentation](self) for details.
 pub trait CumulativeChart: Chart {
-    type NewItemsChart: DataSource<Output = ChartData> + Named;
+    type NewItemsChart: DataSource<Output = Vec<DateValue>> + Named;
 }
 
 /// Wrapper struct used for avoiding implementation conflicts
@@ -58,8 +55,10 @@ impl<T: CumulativeChart> UpdateableChart for CumulativeChartWrapper<T> {
         let range = last_accurate_point
             .clone()
             .map(|p| day_start(p.date + Days::new(1))..=cx.time);
-        let new_accounts =
-            Self::PrimaryDependency::query_data(cx, range, remote_fetch_timer).await?;
+        let new_items_values: Vec<DateValue> =
+            Self::PrimaryDependency::query_data(cx, range, remote_fetch_timer)
+                .await?
+                .into();
         let partial_sum = last_accurate_point
             .map(|p| {
                 p.value.parse::<i64>().map_err(|e| {
@@ -71,13 +70,9 @@ impl<T: CumulativeChart> UpdateableChart for CumulativeChartWrapper<T> {
             })
             .transpose()?;
         let partial_sum = partial_sum.unwrap_or(0);
-        let data = parse_and_cumsum(
-            new_accounts.values,
-            Self::PrimaryDependency::NAME,
-            partial_sum,
-        )?
-        .into_iter()
-        .map(|value| value.active_model(chart_id, Some(min_blockscout_block)));
+        let data = parse_and_cumsum(new_items_values, Self::PrimaryDependency::NAME, partial_sum)?
+            .into_iter()
+            .map(|value| value.active_model(chart_id, Some(min_blockscout_block)));
         insert_data_many(cx.db, data)
             .await
             .map_err(UpdateError::StatsDB)?;
