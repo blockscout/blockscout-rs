@@ -75,7 +75,7 @@ export function handleTransfer(event: TransferEvent): void {
     domain = new Domain(hashByName(event.params.domainName).toHex());
     domain.name = event.params.domainName;
     domain.createdAt = event.block.timestamp;
-    domain.labelName = event.params.domainName;
+    domain.labelName = event.params.domainName.split(".")[0];
     domain.labelhash = Bytes.fromByteArray(
       crypto.keccak256(Bytes.fromUTF8(domain.labelName!))
     );
