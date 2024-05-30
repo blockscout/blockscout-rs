@@ -7,9 +7,9 @@ use tokio::sync::Mutex;
 
 use super::{
     kinds::{
-        remote::RemoteSource,
+        remote::{RemoteSource, RemoteSourceWrapper},
         updateable_chart::batch::{
-            remote::{RemoteChart, RemoteDataSourceWrapper},
+            clone::{CloneChart, CloneDataSourceWrapper},
             BatchChart, BatchDataSourceWrapper,
         },
     },
@@ -98,13 +98,13 @@ impl Chart for NewContractsChart {
 
 // Directly uses results of SQL query (from `NewContractsRemote`),
 // thus `RemoteChart`.
-impl RemoteChart for NewContractsChart {
-    type Dependency = NewContractsRemote;
+impl CloneChart for NewContractsChart {
+    type Dependency = RemoteSourceWrapper<NewContractsRemote>;
 }
 
 // Wrap the earth out of it to obtain `DataSource`-implementing type.
 // `Chart` implementation is propageted through the wrappers.
-pub type NewContracts = RemoteDataSourceWrapper<NewContractsChart>;
+pub type NewContracts = CloneDataSourceWrapper<NewContractsChart>;
 
 pub struct ContractsGrowthChart;
 

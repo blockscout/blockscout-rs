@@ -21,7 +21,7 @@ use sea_orm::{prelude::DateTimeUtc, FromQueryResult, Statement};
 use crate::{
     charts::{chart::Point, db_interaction::types::DateValue},
     data_source::{source::DataSource, types::UpdateContext},
-    UpdateError,
+    Named, UpdateError,
 };
 
 /// See [module-level documentation](self) for details.
@@ -58,6 +58,10 @@ pub trait RemoteSource {
 ///
 /// See [module-level documentation](self) for details.
 pub struct RemoteSourceWrapper<T: RemoteSource>(PhantomData<T>);
+
+impl<T: RemoteSource + Named> Named for RemoteSourceWrapper<T> {
+    const NAME: &'static str = T::NAME;
+}
 
 impl<T: RemoteSource> DataSource for RemoteSourceWrapper<T> {
     type PrimaryDependency = ();

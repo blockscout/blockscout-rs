@@ -27,7 +27,7 @@ use super::{UpdateableChart, UpdateableChartDataSourceWrapper};
 /// See [module-level documentation](self) for details.
 pub trait CumulativeChart: Chart {
     type NewItemsPoint: Point + Default;
-    type NewItemsChart: DataSource<Output = Vec<Self::NewItemsPoint>> + Named;
+    type NewItemsChart: DataSource<Output = Vec<Self::NewItemsPoint>>;
 }
 
 /// Wrapper struct used for avoiding implementation conflicts

@@ -35,6 +35,7 @@ pub trait DataSource {
     /// In practice, primary/secondary are not distinguished. The
     /// naming is just for convenience/readability/indication.
     type SecondaryDependencies: DataSource;
+    // todo: make some kind of functor to allow `Option` + `Vec`, for example.
     /// Data that this source can provide
     type Output: Send;
 

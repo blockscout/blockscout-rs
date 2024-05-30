@@ -20,7 +20,7 @@ use crate::{
     Chart, DateValueString, Named, UpdateError,
 };
 
-pub mod remote;
+pub mod clone;
 
 /// See [module-level documentation](self) for details.
 pub trait BatchChart: Chart {
@@ -28,7 +28,8 @@ pub trait BatchChart: Chart {
     type SecondaryDependencies: DataSource;
     /// Type of the point stored in the chart.
     /// `DateValueString` can be used to avoid parsing the values,
-    /// but `DateValueDecimal` or other types can be useful sometimes.
+    /// but `DateValueDecimal` or other types can be useful sometimes
+    /// (e.g. for cumulative chart).
     type Point: Point;
 
     // todo: TimeDelta
