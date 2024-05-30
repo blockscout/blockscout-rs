@@ -26,6 +26,17 @@
           "genome"
         ]
       },
+      "137": {
+        "blockscout": {
+          "url": "https://polygon.blockscout.com"
+        },
+        "subgraphs": {
+          "zns-subgraph": {
+            "use_cache": true,
+            "address_resolve_technique": "all_domains"
+          }
+        }
+      },
       "8453": {
         "blockscout": {
           "url": "https://base.blockscout.com"
