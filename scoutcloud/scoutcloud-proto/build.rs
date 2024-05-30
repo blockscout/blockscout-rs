@@ -46,7 +46,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     ]));
     compile(
         &["proto/v1/scoutcloud.proto", "proto/v1/health.proto"],
-        &["proto"],
+        &["proto", "../../proto"],
         gens,
     )?;
     Ok(())

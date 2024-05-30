@@ -1,0 +1,33 @@
+specVersion: 0.0.5
+indexerHints:
+  prune: auto
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: ZNSRegistry
+    network: polygon-mainnet
+    source:
+      abi: ZNSRegistry
+      address: "0xE14428f3D95F054585403ec4dC454D3F5749dE8f"
+      startBlock: 57451873
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Account
+        - Domain
+        - Transfer
+        - Resolver
+      abis:
+        - name: ZNSRegistry
+          file: ./abis/ZNSRegistry.json
+      eventHandlers:
+        - event: MintedDomain(string,indexed uint256,indexed address,indexed uint256)
+          handler: handleMintedDomain
+        - event: RenewedDomain(indexed uint256,indexed uint256,string)
+          handler: handleRenewedDomain
+        - event: TransferredDomain(string,indexed uint256,indexed address,indexed address)
+          handler: handleTransfer
+      file: ./src/zns-registry.ts

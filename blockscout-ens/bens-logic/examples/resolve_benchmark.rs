@@ -1,8 +1,11 @@
 #![allow(dead_code)]
 
-use bens_logic::subgraphs_reader::{
-    blockscout::BlockscoutClient, BatchResolveAddressNamesInput, NetworkInfo, SubgraphReader,
+use bens_logic::{
+    blockscout::BlockscoutClient,
+    protocols::{Network, ProtocolInfo, Tld},
+    subgraphs_reader::{BatchResolveAddressNamesInput, SubgraphReader},
 };
+use nonempty::nonempty;
 use sqlx::postgres::PgPoolOptions;
 use std::{collections::HashMap, sync::Arc, time::Instant};
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -29,11 +32,43 @@ async fn main() -> Result<(), anyhow::Error> {
     let eth_client = BlockscoutClient::new("https://eth.blockscout.com".parse().unwrap(), 5, 30);
     let rootstock_client =
         BlockscoutClient::new("https://rootstock.blockscout.com".parse().unwrap(), 5, 30);
-    let networks = HashMap::from_iter([
-        (1, NetworkInfo::from_client(eth_client)),
-        (30, NetworkInfo::from_client(rootstock_client)),
+    let networks: HashMap<i64, Network> = HashMap::from_iter([
+        (
+            1,
+            Network {
+                blockscout_client: Arc::new(eth_client),
+                use_protocols: nonempty!["ens".to_string()],
+            },
+        ),
+        (
+            30,
+            Network {
+                blockscout_client: Arc::new(rootstock_client),
+                use_protocols: nonempty!["rns".to_string()],
+            },
+        ),
     ]);
-    let reader = SubgraphReader::initialize(pool.clone(), networks).await?;
+    let protocol_infos: HashMap<String, ProtocolInfo> = HashMap::from_iter([
+        (
+            "ens".to_string(),
+            ProtocolInfo {
+                slug: "ens".to_string(),
+                subgraph_name: "ens-subgraph".to_string(),
+                tld_list: nonempty![Tld::new("eth")],
+                ..Default::default()
+            },
+        ),
+        (
+            "rns".to_string(),
+            ProtocolInfo {
+                slug: "rns".to_string(),
+                subgraph_name: "rns-subgraph".to_string(),
+                tld_list: nonempty![Tld::new("rsk")],
+                ..Default::default()
+            },
+        ),
+    ]);
+    let reader = SubgraphReader::initialize(pool.clone(), networks, protocol_infos).await?;
 
     let addresses = vec![
         "0x0292f204513eeafe8c032ffc4cb4c7e10eca908c",
@@ -143,7 +178,7 @@ async fn main() -> Result<(), anyhow::Error> {
         })
         .await
         .expect("failed to quick resolve");
-    // job size is 94. elapsed 0.65092486s. resolved as 14 domains
+    // job size is 94. elapsed 0.19956857s. resolved as 10 domains
     println!(
         "job size is {}. elapsed {:?}s. resolved as {} domains",
         size,

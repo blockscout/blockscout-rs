@@ -146,6 +146,8 @@ jobs:
         with:
           context: "visualizer"
           file: "visualizer/Dockerfile"
+          build-contexts: |
+            proto=proto
           push: ${{ steps.tags_extractor.outputs.tags != '' }}
           tags: ${{ steps.tags_extractor.outputs.tags }}
           # platforms: |

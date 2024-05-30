@@ -158,6 +158,8 @@ jobs:
         with:
           context: "scoutcloud"
           file: "scoutcloud/Dockerfile"
+          build-contexts: |
+            proto=proto
           push: ${{ steps.tags_extractor.outputs.tags != '' }}
           tags: ${{ steps.tags_extractor.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
