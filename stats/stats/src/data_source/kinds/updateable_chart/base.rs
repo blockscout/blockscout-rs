@@ -141,19 +141,17 @@ pub trait UpdateableChart: Chart {
     }
 }
 
-/// Wrapper struct used for avoiding implementation conflicts
-///
-/// See [module-level documentation](self) for details.
-pub struct UpdateableChartDataSourceWrapper<C: UpdateableChart>(PhantomData<C>);
+/// Wrapper to convert type implementing [`UpdateableChart`] to another implementing [`DataSource`]
+pub struct UpdateableChartWrapper<C: UpdateableChart>(PhantomData<C>);
 
-impl<T: UpdateableChart + Named> Named for UpdateableChartDataSourceWrapper<T> {
+impl<T: UpdateableChart + Named> Named for UpdateableChartWrapper<T> {
     const NAME: &'static str = T::NAME;
 }
 
 #[portrait::fill(portrait::delegate(C))]
-impl<C: UpdateableChart + Chart> Chart for UpdateableChartDataSourceWrapper<C> {}
+impl<C: UpdateableChart + Chart> Chart for UpdateableChartWrapper<C> {}
 
-impl<C: UpdateableChart> DataSourceMetrics for UpdateableChartDataSourceWrapper<C> {
+impl<C: UpdateableChart> DataSourceMetrics for UpdateableChartWrapper<C> {
     fn observe_query_time(time: std::time::Duration) {
         if time > Duration::ZERO {
             metrics::CHART_FETCH_NEW_DATA_TIME
@@ -163,7 +161,7 @@ impl<C: UpdateableChart> DataSourceMetrics for UpdateableChartDataSourceWrapper<
     }
 }
 
-impl<C: UpdateableChart> DataSource for UpdateableChartDataSourceWrapper<C> {
+impl<C: UpdateableChart> DataSource for UpdateableChartWrapper<C> {
     type PrimaryDependency = C::PrimaryDependency;
     type SecondaryDependencies = C::SecondaryDependencies;
     type Output = Vec<DateValueString>;

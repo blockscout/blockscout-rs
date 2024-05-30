@@ -31,9 +31,16 @@
 //!
 //! Usually, it should be much easier to implement special kind of data source (see above).
 //!
+//! The approximate workflow is the following:
+//! 1. Create newtype `SomeType` that will represent your data source-ish (name it accordingly).
+//! 2. Implement `TraitName` for `SomeType`.
+//! 3. Use `TraitNameWrapper<SomeType>` to use it as `DataSource`.
+//!
+//! ### On wrappers
+//!
 //! Wrappers (placed together with 'special' traits) are used to get type that implements `DataSource`.
 //! For example, to get `DataSource` from type `T` implementing `RemoteSource`, one can use
-//! `RemoteDataSourceWrapper<T>`.
+//! `RemoteSourceWrapper<T>`.
 //!
 //! Generally, the idea is to have `TraitNameWrapper` for each helper/special case trait `TraitName`.
 //!

@@ -9,4 +9,4 @@ mod base;
 pub mod batch;
 pub mod cumulative;
 
-pub use base::{UpdateableChart, UpdateableChartDataSourceWrapper};
+pub use base::{UpdateableChart, UpdateableChartWrapper};

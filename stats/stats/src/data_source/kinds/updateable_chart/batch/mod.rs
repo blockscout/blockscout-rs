@@ -9,7 +9,7 @@ use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Days, Duration, Utc};
 use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, TransactionTrait};
 
-use super::{UpdateableChart, UpdateableChartDataSourceWrapper};
+use super::{UpdateableChart, UpdateableChartWrapper};
 use crate::{
     charts::{
         chart::{chart_portrait, Point},
@@ -50,19 +50,18 @@ pub trait BatchChart: Chart {
     ) -> impl std::future::Future<Output = Result<usize, UpdateError>> + std::marker::Send;
 }
 
-pub type BatchDataSourceWrapper<T> = UpdateableChartDataSourceWrapper<BatchWrapper<T>>;
+/// Wrapper to convert type implementing [`BatchChart`] to another that implements [`DataSource`]
+pub type BatchChartWrapper<T> = UpdateableChartWrapper<BatchChartLocalWrapper<T>>;
 
-/// Wrapper struct used for avoiding implementation conflicts
-///
-/// See [module-level documentation](self) for details.
-pub struct BatchWrapper<T: BatchChart>(PhantomData<T>);
+/// Wrapper to get type implementing "parent" trait. Use [`BatchChartWrapper`] to get [`DataSource`]
+pub struct BatchChartLocalWrapper<T: BatchChart>(PhantomData<T>);
 
-impl<T: BatchChart + Named> Named for BatchWrapper<T> {
+impl<T: BatchChart + Named> Named for BatchChartLocalWrapper<T> {
     const NAME: &'static str = T::NAME;
 }
 
 #[portrait::fill(portrait::delegate(T))]
-impl<T: BatchChart + Chart> Chart for BatchWrapper<T> {}
+impl<T: BatchChart + Chart> Chart for BatchChartLocalWrapper<T> {}
 
 /// Perform update utilizing batching
 async fn batch_update_values<U>(
@@ -140,7 +139,7 @@ where
     Ok(found)
 }
 
-impl<T: BatchChart> UpdateableChart for BatchWrapper<T>
+impl<T: BatchChart> UpdateableChart for BatchChartLocalWrapper<T>
 where
     <T::PrimaryDependency as DataSource>::Output: Send,
     <T::SecondaryDependencies as DataSource>::Output: Send,

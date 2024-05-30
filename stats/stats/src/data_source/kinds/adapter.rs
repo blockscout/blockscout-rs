@@ -25,11 +25,8 @@ pub trait SourceAdapter {
     ) -> Result<Self::Output, UpdateError>;
 }
 
+/// Wrapper to convert type implementing [`SourceAdapter`] to another implementing [`DataSource`]
 pub struct SourceAdapterWrapper<T: SourceAdapter>(PhantomData<T>);
-
-impl<T: SourceAdapter + Named> Named for SourceAdapterWrapper<T> {
-    const NAME: &'static str = T::NAME;
-}
 
 impl<T: SourceAdapter> DataSource for SourceAdapterWrapper<T> {
     type PrimaryDependency = T::InnerSource;
@@ -69,12 +66,13 @@ pub trait ParseAdapter {
     type ParseInto: DateValue + Send;
 }
 
-pub struct ParseAdapterWrapper<T: ParseAdapter>(PhantomData<T>);
+/// Wrapper to convert type implementing [`ParseAdapter`] to another that implements [`DataSource`]
+pub type ParseAdapterWrapper<T> = SourceAdapterWrapper<ParseAdapterLocalWrapper<T>>;
 
-pub type ParseAdapterDataSourceWrapper<T: ParseAdapter> =
-    SourceAdapterWrapper<ParseAdapterWrapper<T>>;
+/// Wrapper to get type implementing "parent" trait. Use [`ParseAdapterWrapper`] to get [`DataSource`]
+pub struct ParseAdapterLocalWrapper<T: ParseAdapter>(PhantomData<T>);
 
-impl<T: ParseAdapter> SourceAdapter for ParseAdapterWrapper<T>
+impl<T: ParseAdapter> SourceAdapter for ParseAdapterLocalWrapper<T>
 where
     <T::ParseInto as DateValue>::Value: FromStr,
     <<T::ParseInto as DateValue>::Value as FromStr>::Err: Display,
@@ -99,5 +97,27 @@ where
             })
             .collect::<Result<Vec<T::ParseInto>, UpdateError>>()?;
         Ok(parsed_data)
+    }
+}
+
+pub trait ToStringAdapter {
+    type InnerSource: DataSource<Output = Vec<Self::ConvertFrom>>;
+    type ConvertFrom: Into<DateValueString>;
+}
+
+/// Wrapper to convert type implementing [`ToStringAdapter`] to another that implements [`DataSource`]
+pub type ToStringAdapterWrapper<T> = SourceAdapterWrapper<ToStringAdapterLocalWrapper<T>>;
+
+/// Wrapper to get type implementing "parent" trait. Use [`ToStringAdapterWrapper`] to get [`DataSource`]
+pub struct ToStringAdapterLocalWrapper<T>(PhantomData<T>);
+
+impl<T: ToStringAdapter> SourceAdapter for ToStringAdapterLocalWrapper<T> {
+    type InnerSource = T::InnerSource;
+    type Output = Vec<DateValueString>;
+
+    fn function(
+        inner_data: <Self::InnerSource as DataSource>::Output,
+    ) -> Result<Self::Output, UpdateError> {
+        Ok(inner_data.into_iter().map(|p| p.into()).collect())
     }
 }

@@ -9,8 +9,8 @@ use super::{
     kinds::{
         remote::{RemoteSource, RemoteSourceWrapper},
         updateable_chart::batch::{
-            clone::{CloneChart, CloneDataSourceWrapper},
-            BatchChart, BatchDataSourceWrapper,
+            clone::{CloneChart, CloneChartWrapper},
+            BatchChart, BatchChartWrapper,
         },
     },
     source::DataSource,
@@ -104,7 +104,7 @@ impl CloneChart for NewContractsChart {
 
 // Wrap the earth out of it to obtain `DataSource`-implementing type.
 // `Chart` implementation is propageted through the wrappers.
-pub type NewContracts = CloneDataSourceWrapper<NewContractsChart>;
+pub type NewContracts = CloneChartWrapper<NewContractsChart>;
 
 pub struct ContractsGrowthChart;
 
@@ -152,7 +152,7 @@ impl BatchChart for ContractsGrowthChart {
     }
 }
 
-pub type ContractsGrowth = BatchDataSourceWrapper<ContractsGrowthChart>;
+pub type ContractsGrowth = BatchChartWrapper<ContractsGrowthChart>;
 
 // Put the data sources into the group
 construct_update_group!(ExampleUpdateGroup {

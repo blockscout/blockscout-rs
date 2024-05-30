@@ -44,7 +44,8 @@ pub struct ChartData<Point> {
 
 /// Type of the point stored in the chart.
 /// [`DateValueString`] can be used to avoid parsing the values,
-/// but [`DateValueDecimal`] or other types can be useful sometimes
+/// but [`crate::charts::db_interaction::types::DateValueDecimal`]
+/// or other types can be useful sometimes
 /// (e.g. for cumulative chart).
 pub trait Point: FromQueryResult + DateValue + Into<DateValueString> + Send + Sync {}
 

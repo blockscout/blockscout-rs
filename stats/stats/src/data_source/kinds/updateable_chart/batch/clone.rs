@@ -11,28 +11,29 @@ use crate::{
     Chart, DateValueString, Named, UpdateError,
 };
 
-use super::{BatchChart, BatchDataSourceWrapper};
+use super::{BatchChart, BatchChartWrapper};
 
 /// See [module-level documentation](self) for details.
 pub trait CloneChart: Chart {
     type Dependency: DataSource<Output = Vec<DateValueString>>;
 }
 
-pub type CloneDataSourceWrapper<T> = BatchDataSourceWrapper<CloneChartWrapper<T>>;
+/// Wrapper to convert type implementing [`CloneChart`] to another that implements [`DataSource`]
+pub type CloneChartWrapper<T> = BatchChartWrapper<CloneChartLocalWrapper<T>>;
 
 /// Wrapper struct used for avoiding implementation conflicts
 ///
 /// See [module-level documentation](self) for details.
-pub struct CloneChartWrapper<T: CloneChart>(PhantomData<T>);
+pub struct CloneChartLocalWrapper<T: CloneChart>(PhantomData<T>);
 
-impl<T: CloneChart + Named> Named for CloneChartWrapper<T> {
+impl<T: CloneChart + Named> Named for CloneChartLocalWrapper<T> {
     const NAME: &'static str = T::NAME;
 }
 
 #[portrait::fill(portrait::delegate(T))]
-impl<T: CloneChart + Chart> Chart for CloneChartWrapper<T> {}
+impl<T: CloneChart + Chart> Chart for CloneChartLocalWrapper<T> {}
 
-impl<T: CloneChart> BatchChart for CloneChartWrapper<T> {
+impl<T: CloneChart> BatchChart for CloneChartLocalWrapper<T> {
     type PrimaryDependency = T::Dependency;
     type SecondaryDependencies = ();
     type Point = DateValueString;

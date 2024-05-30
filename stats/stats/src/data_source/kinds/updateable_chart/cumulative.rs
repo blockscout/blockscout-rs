@@ -22,7 +22,7 @@ use crate::{
     Chart, DateValueString, Named, UpdateError,
 };
 
-use super::{UpdateableChart, UpdateableChartDataSourceWrapper};
+use super::{UpdateableChart, UpdateableChartWrapper};
 
 /// See [module-level documentation](self) for details.
 pub trait CumulativeChart: Chart {
@@ -30,22 +30,19 @@ pub trait CumulativeChart: Chart {
     type NewItemsChart: DataSource<Output = Vec<Self::NewItemsPoint>>;
 }
 
-/// Wrapper struct used for avoiding implementation conflicts
-///
-/// See [module-level documentation](self) for details.
-pub type CumulativeDataSourceWrapper<T> =
-    UpdateableChartDataSourceWrapper<CumulativeChartWrapper<T>>;
+/// Wrapper to convert type implementing [`CumulativeChart`] to another that implements [`DataSource`]
+pub type CumulativeChartWrapper<T> = UpdateableChartWrapper<CumulativeChartLocalWrapper<T>>;
 
-pub struct CumulativeChartWrapper<T: CumulativeChart>(PhantomData<T>);
+pub struct CumulativeChartLocalWrapper<T: CumulativeChart>(PhantomData<T>);
 
-impl<T: CumulativeChart + Named> Named for CumulativeChartWrapper<T> {
+impl<T: CumulativeChart + Named> Named for CumulativeChartLocalWrapper<T> {
     const NAME: &'static str = T::NAME;
 }
 
 #[portrait::fill(portrait::delegate(T))]
-impl<T: CumulativeChart + Chart> Chart for CumulativeChartWrapper<T> {}
+impl<T: CumulativeChart + Chart> Chart for CumulativeChartLocalWrapper<T> {}
 
-impl<T> UpdateableChart for CumulativeChartWrapper<T>
+impl<T> UpdateableChart for CumulativeChartLocalWrapper<T>
 where
     T: CumulativeChart,
     T::NewItemsPoint: Into<DateValueString>,
