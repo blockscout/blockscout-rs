@@ -1,7 +1,7 @@
 use crate::{
     charts::chart::ChartMetadata,
     missing_date::{fill_and_filter_chart, filter_within_range},
-    Chart, DateValue, ExtendedDateValue, MissingDatePolicy, UpdateError,
+    Chart, DateValueString, ExtendedDateValue, MissingDatePolicy, UpdateError,
 };
 use blockscout_db::entity::blocks;
 use chrono::{Duration, NaiveDate, NaiveDateTime, Utc};
@@ -48,7 +48,7 @@ struct CounterData {
 
 pub async fn get_counters(
     db: &DatabaseConnection,
-) -> Result<HashMap<String, DateValue>, ReadError> {
+) -> Result<HashMap<String, DateValueString>, ReadError> {
     let data = CounterData::find_by_statement(Statement::from_string(
         DbBackend::Postgres,
         r#"
@@ -69,7 +69,7 @@ pub async fn get_counters(
         .map(|data| {
             (
                 data.name,
-                DateValue {
+                DateValueString {
                     date: data.date,
                     value: data.value,
                 },
@@ -88,7 +88,7 @@ pub async fn get_counters(
 ///
 /// If `approximate_until_updated=0` - only future points are marked
 fn mark_approximate(
-    data: Vec<DateValue>,
+    data: Vec<DateValueString>,
     last_updated_at: NaiveDate,
     approximate_until_updated: u64,
 ) -> Vec<ExtendedDateValue> {
@@ -192,7 +192,7 @@ async fn get_raw_chart_data(
     chart_id: i32,
     from: Option<NaiveDate>,
     to: Option<NaiveDate>,
-) -> Result<Vec<DateValue>, DbErr> {
+) -> Result<Vec<DateValueString>, DbErr> {
     let mut data_request = chart_data::Entity::find()
         .column(chart_data::Column::Date)
         .column(chart_data::Column::Value)
@@ -284,7 +284,7 @@ pub async fn last_accurate_point<C>(
     db: &DatabaseConnection,
     force_full: bool,
     offset: Option<u64>,
-) -> Result<Option<DateValue>, UpdateError>
+) -> Result<Option<DateValueString>, UpdateError>
 where
     C: Chart + ?Sized,
 {
@@ -320,7 +320,7 @@ where
                             row = ?row,
                             "running partial update"
                         );
-                        Some(DateValue {
+                        Some(DateValueString {
                             date: row.date,
                             value: row.value,
                         })
@@ -411,7 +411,7 @@ where
 //     }
 
 //     fn value(date: &str, value: &str) -> DateValue {
-//         DateValue {
+//         DateValueString {
 //             date: NaiveDate::from_str(date).unwrap(),
 //             value: value.to_string(),
 //         }

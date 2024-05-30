@@ -1,12 +1,15 @@
-use crate::{charts::db_interaction::types::DateValue, UpdateError};
-use std::{fmt::Display, iter::Sum, ops::AddAssign, str::FromStr};
+use crate::{
+    charts::db_interaction::types::{DateValue, DateValueString},
+    UpdateError,
+};
+use std::{fmt::Display, iter::Sum, mem, ops::AddAssign, str::FromStr};
 
 /// `prev_sum` - sum before this data segment
 pub fn parse_and_cumsum<T>(
-    mut data: Vec<DateValue>,
+    mut data: Vec<DateValueString>,
     parent_name: &str,
     mut prev_sum: T,
-) -> Result<Vec<DateValue>, UpdateError>
+) -> Result<Vec<DateValueString>, UpdateError>
 where
     T: AddAssign + FromStr + Default + Display,
     T::Err: Display,
@@ -23,11 +26,24 @@ where
     Ok(data)
 }
 
+pub fn cumsum<DV>(mut data: Vec<DV>, mut prev_sum: DV::Value) -> Result<Vec<DV>, UpdateError>
+where
+    DV: DateValue + Default,
+    DV::Value: AddAssign + Clone,
+{
+    for item in data.iter_mut() {
+        let (date, value) = mem::take(item).into_parts();
+        prev_sum.add_assign(value);
+        *item = DV::from_parts(date, prev_sum.clone());
+    }
+    Ok(data)
+}
+
 pub fn parse_and_sum<T>(
-    data: Vec<DateValue>,
+    data: Vec<DateValueString>,
     chart_name: &str,
     parent_name: &str,
-) -> Result<Option<DateValue>, UpdateError>
+) -> Result<Option<DateValueString>, UpdateError>
 where
     T: Sum + FromStr + Default + Display,
     T::Err: Display,
@@ -54,13 +70,13 @@ where
         })?
         .into_iter()
         .sum();
-    let point = DateValue {
+    let point = DateValueString {
         date: max_date,
         value: total.to_string(),
     };
     Ok(Some(point))
 }
 
-pub fn last_point(data: Vec<DateValue>) -> Option<DateValue> {
+pub fn last_point(data: Vec<DateValueString>) -> Option<DateValueString> {
     data.into_iter().max()
 }

@@ -1,17 +1,17 @@
 //! Tools for operating with missing data
-use crate::{DateValue, MissingDatePolicy, ReadError};
+use crate::{DateValueString, MissingDatePolicy, ReadError};
 use chrono::{Duration, NaiveDate};
 
 /// Fills missing points according to policy and filters out points outside of range.
 ///
 /// Note that values outside of the range can still affect the filled values.
 pub fn fill_and_filter_chart(
-    data: Vec<DateValue>,
+    data: Vec<DateValueString>,
     from: Option<NaiveDate>,
     to: Option<NaiveDate>,
     policy: MissingDatePolicy,
     interval_limit: Option<Duration>,
-) -> Result<Vec<DateValue>, ReadError> {
+) -> Result<Vec<DateValueString>, ReadError> {
     let retrieved_count = data.len();
     let data_filled = fill_missing_points(data, policy, from, to, interval_limit)?;
     if let Some(filled_count) = data_filled.len().checked_sub(retrieved_count) {
@@ -34,12 +34,12 @@ pub fn fill_and_filter_chart(
 ///
 /// See [`filled_zeros_data`] and [`filled_previous_data`] for details on the policies.
 pub fn fill_missing_points(
-    data: Vec<DateValue>,
+    data: Vec<DateValueString>,
     policy: MissingDatePolicy,
     from: Option<NaiveDate>,
     to: Option<NaiveDate>,
     interval_limit: Option<Duration>,
-) -> Result<Vec<DateValue>, ReadError> {
+) -> Result<Vec<DateValueString>, ReadError> {
     let from = vec![from.as_ref(), data.first().map(|v| &v.date)]
         .into_iter()
         .flatten()
@@ -67,9 +67,9 @@ pub fn fill_missing_points(
 }
 
 /// Inserts zero values in `data` for all missing dates in inclusive range `[from; to]`
-fn filled_zeros_data(data: &[DateValue], from: NaiveDate, to: NaiveDate) -> Vec<DateValue> {
+fn filled_zeros_data(data: &[DateValueString], from: NaiveDate, to: NaiveDate) -> Vec<DateValueString> {
     let n = (to - from).num_days() as usize;
-    let mut new_data: Vec<DateValue> = Vec::with_capacity(n);
+    let mut new_data: Vec<DateValueString> = Vec::with_capacity(n);
 
     let mut current_date = from;
     let mut i = 0;
@@ -81,7 +81,7 @@ fn filled_zeros_data(data: &[DateValue], from: NaiveDate, to: NaiveDate) -> Vec<
                 i += 1;
                 value.clone()
             }
-            None => DateValue::zero(current_date),
+            None => DateValueString::zero(current_date),
         };
         new_data.push(value);
         current_date += Duration::days(1);
@@ -92,9 +92,9 @@ fn filled_zeros_data(data: &[DateValue], from: NaiveDate, to: NaiveDate) -> Vec<
 
 /// Inserts last existing values in `data` for all missing dates in inclusive range `[from; to]`.
 /// For all leading missing dates inserts zero.
-fn filled_previous_data(data: &[DateValue], from: NaiveDate, to: NaiveDate) -> Vec<DateValue> {
+fn filled_previous_data(data: &[DateValueString], from: NaiveDate, to: NaiveDate) -> Vec<DateValueString> {
     let n = (to - from).num_days() as usize;
-    let mut new_data: Vec<DateValue> = Vec::with_capacity(n);
+    let mut new_data: Vec<DateValueString> = Vec::with_capacity(n);
     let mut current_date = from;
     let mut i = 0;
     while current_date <= to {
@@ -106,11 +106,11 @@ fn filled_previous_data(data: &[DateValue], from: NaiveDate, to: NaiveDate) -> V
             }
             None => new_data
                 .last()
-                .map(|value| DateValue {
+                .map(|value| DateValueString {
                     date: current_date,
                     value: value.value.clone(),
                 })
-                .unwrap_or_else(|| DateValue::zero(current_date)),
+                .unwrap_or_else(|| DateValueString::zero(current_date)),
         };
         new_data.push(value);
         current_date += Duration::days(1);
@@ -119,11 +119,11 @@ fn filled_previous_data(data: &[DateValue], from: NaiveDate, to: NaiveDate) -> V
 }
 
 pub(crate) fn filter_within_range(
-    data: Vec<DateValue>,
+    data: Vec<DateValueString>,
     maybe_from: Option<NaiveDate>,
     maybe_to: Option<NaiveDate>,
-) -> Vec<DateValue> {
-    let is_within_range = |v: &DateValue| -> bool {
+) -> Vec<DateValueString> {
+    let is_within_range = |v: &DateValueString| -> bool {
         if let Some(from) = maybe_from {
             if v.date < from {
                 return false;
@@ -149,8 +149,8 @@ mod tests {
     fn d(date: &str) -> NaiveDate {
         date.parse().unwrap()
     }
-    fn v(date: &str, value: &str) -> DateValue {
-        DateValue {
+    fn v(date: &str, value: &str) -> DateValueString {
+        DateValueString {
             date: d(date),
             value: value.to_string(),
         }

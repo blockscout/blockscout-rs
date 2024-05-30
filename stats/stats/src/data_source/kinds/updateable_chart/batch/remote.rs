@@ -8,7 +8,7 @@ use std::marker::PhantomData;
 use crate::{
     charts::{chart::chart_portrait, db_interaction::write::insert_data_many},
     data_source::kinds::remote::{RemoteSource, RemoteSourceWrapper},
-    Chart, DateValue, Named, UpdateError,
+    Chart, DateValueString, Named, UpdateError,
 };
 
 use super::{BatchChart, BatchDataSourceWrapper};
@@ -35,6 +35,7 @@ impl<T: RemoteChart + Chart> Chart for RemoteChartWrapper<T> {}
 impl<T: RemoteChart> BatchChart for RemoteChartWrapper<T> {
     type PrimaryDependency = RemoteSourceWrapper<T::Dependency>;
     type SecondaryDependencies = ();
+    type Point = <T::Dependency as RemoteSource>::Point;
 
     async fn batch_update_values_step_with(
         db: &sea_orm::prelude::DatabaseConnection,
@@ -46,7 +47,7 @@ impl<T: RemoteChart> BatchChart for RemoteChartWrapper<T> {
     ) -> Result<usize, crate::UpdateError> {
         let found = primary_data.len();
         let values = primary_data.into_iter().map(|value| {
-            <<T::Dependency as RemoteSource>::Point as Into<DateValue>>::into(value)
+            <<T::Dependency as RemoteSource>::Point as Into<DateValueString>>::into(value)
                 .active_model(chart_id, Some(min_blockscout_block))
         });
         insert_data_many(db, values)

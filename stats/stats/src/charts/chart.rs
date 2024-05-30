@@ -1,8 +1,10 @@
-use crate::{DateValue, ReadError};
+use crate::{DateValueString, ReadError};
 use chrono::{DateTime, Duration, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::prelude::*;
+use sea_orm::{prelude::*, FromQueryResult};
 use thiserror::Error;
+
+use super::db_interaction::types::DateValue;
 
 #[derive(Error, Debug)]
 pub enum UpdateError {
@@ -35,10 +37,18 @@ pub struct ChartMetadata {
     pub last_updated_at: Option<DateTime<Utc>>,
 }
 
-pub struct ChartData {
+pub struct ChartData<Point> {
     pub metadata: ChartMetadata,
-    pub values: Vec<DateValue>,
+    pub values: Vec<Point>,
 }
+
+/// Type of the point stored in the chart.
+/// [`DateValueString`] can be used to avoid parsing the values,
+/// but [`DateValueDecimal`] or other types can be useful sometimes
+/// (e.g. for cumulative chart).
+pub trait Point: FromQueryResult + DateValue + Into<DateValueString> + Send + Sync {}
+
+impl<T: FromQueryResult + DateValue + Into<DateValueString> + Send + Sync> Point for T {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MissingDatePolicy {

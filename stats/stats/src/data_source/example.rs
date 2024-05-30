@@ -22,7 +22,7 @@ use crate::{
     data_processing::parse_and_cumsum,
     tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
     update_group::{SyncUpdateGroup, UpdateGroup},
-    Chart, DateValue, MissingDatePolicy, Named, UpdateError,
+    Chart, DateValueString, MissingDatePolicy, Named, UpdateError,
 };
 
 pub struct NewContractsRemote;
@@ -44,7 +44,7 @@ impl NewContractsRemote {
 }
 
 impl RemoteSource for NewContractsRemote {
-    type Point = DateValue;
+    type Point = DateValueString;
 
     fn get_query(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
         let (filter_statement, values) = Self::date_sql_filter(range);
@@ -126,6 +126,7 @@ impl Chart for ContractsGrowthChart {
 impl BatchChart for ContractsGrowthChart {
     type PrimaryDependency = NewContracts;
     type SecondaryDependencies = ();
+    type Point = DateValueString;
 
     fn step_duration() -> chrono::Duration {
         // we need to count cumulative from the beginning

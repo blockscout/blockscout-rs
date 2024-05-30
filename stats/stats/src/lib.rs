@@ -16,7 +16,7 @@ pub use charts::{
     counters,
     db_interaction::{
         read::{get_chart_data, get_counters, ReadError},
-        types::{DateValue, ExtendedDateValue},
+        types::{DateValueString, ExtendedDateValue},
     },
     lines, Chart, ChartDynamic, MissingDatePolicy, Named, UpdateError,
 };

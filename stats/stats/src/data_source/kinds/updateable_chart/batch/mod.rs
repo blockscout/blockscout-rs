@@ -11,10 +11,13 @@ use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, TransactionTrait};
 
 use super::{UpdateableChart, UpdateableChartDataSourceWrapper};
 use crate::{
-    charts::{chart::chart_portrait, db_interaction::read::get_min_date_blockscout},
+    charts::{
+        chart::{chart_portrait, Point},
+        db_interaction::read::get_min_date_blockscout,
+    },
     data_source::{source::DataSource, types::UpdateContext},
     utils::day_start,
-    Chart, DateValue, Named, UpdateError,
+    Chart, DateValueString, Named, UpdateError,
 };
 
 pub mod remote;
@@ -23,6 +26,10 @@ pub mod remote;
 pub trait BatchChart: Chart {
     type PrimaryDependency: DataSource;
     type SecondaryDependencies: DataSource;
+    /// Type of the point stored in the chart.
+    /// `DateValueString` can be used to avoid parsing the values,
+    /// but `DateValueDecimal` or other types can be useful sometimes.
+    type Point: Point;
 
     // todo: TimeDelta
     fn step_duration() -> chrono::Duration {
@@ -60,7 +67,7 @@ impl<T: BatchChart + Chart> Chart for BatchWrapper<T> {}
 async fn batch_update_values<U>(
     cx: &UpdateContext<'_>,
     chart_id: i32,
-    last_accurate_point: Option<DateValue>,
+    last_accurate_point: Option<DateValueString>,
     min_blockscout_block: i64,
     remote_fetch_timer: &mut AggregateTimer,
 ) -> Result<(), UpdateError>
@@ -139,11 +146,12 @@ where
 {
     type PrimaryDependency = T::PrimaryDependency;
     type SecondaryDependencies = T::SecondaryDependencies;
+    type Point = T::Point;
 
     fn update_values(
         cx: &UpdateContext<'_>,
         chart_id: i32,
-        last_accurate_point: Option<DateValue>,
+        last_accurate_point: Option<DateValueString>,
         min_blockscout_block: i64,
         remote_fetch_timer: &mut AggregateTimer,
     ) -> impl std::future::Future<Output = Result<(), UpdateError>> + Send {

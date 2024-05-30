@@ -5,15 +5,16 @@
 //! Kinda like `map` for a data source. I.e. applies
 //! a function to the output.
 
-use std::{marker::PhantomData, ops::RangeInclusive};
+use std::{fmt::Display, marker::PhantomData, ops::RangeInclusive, str::FromStr};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::Utc;
 use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
 
 use crate::{
+    charts::db_interaction::types::DateValue,
     data_source::{DataSource, UpdateContext},
-    Named, UpdateError,
+    DateValueString, Named, UpdateError,
 };
 
 pub trait SourceAdapter {

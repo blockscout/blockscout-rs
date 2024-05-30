@@ -6,24 +6,28 @@
 //! So, if the values of `NewItemsChart` are [1, 2, 3, 4], then
 //! cumulative chart will produce [1, 3, 6, 10].
 
-use std::marker::PhantomData;
+use std::{fmt::Display, marker::PhantomData, ops::AddAssign, str::FromStr};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::Days;
 
 use crate::{
-    charts::{chart::chart_portrait, db_interaction::write::insert_data_many},
-    data_processing::parse_and_cumsum,
+    charts::{
+        chart::{chart_portrait, Point},
+        db_interaction::{types::DateValue, write::insert_data_many},
+    },
+    data_processing::cumsum,
     data_source::{DataSource, UpdateContext},
     utils::day_start,
-    Chart, DateValue, Named, UpdateError,
+    Chart, DateValueString, Named, UpdateError,
 };
 
 use super::{UpdateableChart, UpdateableChartDataSourceWrapper};
 
 /// See [module-level documentation](self) for details.
 pub trait CumulativeChart: Chart {
-    type NewItemsChart: DataSource<Output = Vec<DateValue>> + Named;
+    type NewItemsPoint: Point + Default;
+    type NewItemsChart: DataSource<Output = Vec<Self::NewItemsPoint>> + Named;
 }
 
 /// Wrapper struct used for avoiding implementation conflicts
@@ -41,38 +45,49 @@ impl<T: CumulativeChart + Named> Named for CumulativeChartWrapper<T> {
 #[portrait::fill(portrait::delegate(T))]
 impl<T: CumulativeChart + Chart> Chart for CumulativeChartWrapper<T> {}
 
-impl<T: CumulativeChart> UpdateableChart for CumulativeChartWrapper<T> {
+impl<T> UpdateableChart for CumulativeChartWrapper<T>
+where
+    T: CumulativeChart,
+    T::NewItemsPoint: Into<DateValueString>,
+    <T::NewItemsPoint as DateValue>::Value:
+        Send + Sync + AddAssign + FromStr + Default + Display + Clone,
+    <<T::NewItemsPoint as DateValue>::Value as FromStr>::Err: Display,
+{
     type PrimaryDependency = T::NewItemsChart;
     type SecondaryDependencies = ();
+    type Point = T::NewItemsPoint;
 
     async fn update_values(
         cx: &UpdateContext<'_>,
         chart_id: i32,
-        last_accurate_point: Option<DateValue>,
+        last_accurate_point: Option<DateValueString>,
         min_blockscout_block: i64,
         remote_fetch_timer: &mut AggregateTimer,
     ) -> Result<(), UpdateError> {
         let range = last_accurate_point
             .clone()
             .map(|p| day_start(p.date + Days::new(1))..=cx.time);
-        let new_items_values: Vec<DateValue> =
-            Self::PrimaryDependency::query_data(cx, range, remote_fetch_timer)
-                .await?
-                .into();
+        let new_items_data: Vec<T::NewItemsPoint> =
+            <T::NewItemsChart as DataSource>::query_data(cx, range, remote_fetch_timer).await?;
         let partial_sum = last_accurate_point
             .map(|p| {
-                p.value.parse::<i64>().map_err(|e| {
-                    UpdateError::Internal(format!(
-                        "failed to parse value in chart '{}': {e}",
-                        <Self as Named>::NAME
-                    ))
-                })
+                p.value
+                    .parse::<<T::NewItemsPoint as DateValue>::Value>()
+                    .map_err(|e| {
+                        UpdateError::Internal(format!(
+                            "failed to parse value in chart '{}': {e}",
+                            <Self as Named>::NAME
+                        ))
+                    })
             })
             .transpose()?;
-        let partial_sum = partial_sum.unwrap_or(0);
-        let data = parse_and_cumsum(new_items_values, Self::PrimaryDependency::NAME, partial_sum)?
+        let partial_sum = partial_sum.unwrap_or_default();
+        let data = cumsum::<T::NewItemsPoint>(new_items_data, partial_sum)?
             .into_iter()
-            .map(|value| value.active_model(chart_id, Some(min_blockscout_block)));
+            .map(|value| {
+                <T::NewItemsPoint as Into<DateValueString>>::into(value)
+                    .active_model(chart_id, Some(min_blockscout_block))
+            });
         insert_data_many(cx.db, data)
             .await
             .map_err(UpdateError::StatsDB)?;

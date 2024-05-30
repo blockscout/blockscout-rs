@@ -4,35 +4,60 @@ use chrono::NaiveDate;
 use entity::chart_data;
 use sea_orm::{prelude::*, FromQueryResult, Set};
 
-pub trait Dated {
-    fn get_date(&self) -> &NaiveDate;
+pub trait DateValue {
+    type Value;
+    fn get_parts(&self) -> (&NaiveDate, &Self::Value);
+    fn into_parts(self) -> (NaiveDate, Self::Value);
+    fn from_parts(date: NaiveDate, value: Self::Value) -> Self;
 }
 
-#[derive(FromQueryResult, Debug, Clone)]
-pub struct DateValueInt {
-    pub date: NaiveDate,
-    pub value: i64,
-}
-
-impl Dated for DateValueInt {
-    fn get_date(&self) -> &NaiveDate {
-        &self.date
-    }
-}
-
-impl From<DateValueInt> for DateValue {
-    fn from(value: DateValueInt) -> Self {
-        Self {
-            date: value.date,
-            value: value.value.to_string(),
+macro_rules! impl_date_value_decomposition {
+    ($name: ident, $val_type:ty) => {
+        impl DateValue for $name {
+            type Value = $val_type;
+            fn get_parts(&self) -> (&NaiveDate, &Self::Value) {
+                (&self.date, &self.value)
+            }
+            fn into_parts(self) -> (NaiveDate, Self::Value) {
+                (self.date, self.value)
+            }
+            fn from_parts(date: NaiveDate, value: Self::Value) -> Self {
+                Self { date, value }
+            }
         }
-    }
+    };
 }
 
-impl TryFrom<DateValue> for DateValueInt {
+/// Implement non-base date-value type
+macro_rules! create_date_value_with {
+    ($name:ident, $val_type:ty) => {
+        #[derive(FromQueryResult, Debug, Clone, Default)]
+        pub struct $name {
+            pub date: NaiveDate,
+            pub value: $val_type,
+        }
+
+        impl_date_value_decomposition!($name, $val_type);
+
+        impl From<$name> for DateValueString {
+            fn from(value: $name) -> Self {
+                Self {
+                    date: value.date,
+                    value: value.value.to_string(),
+                }
+            }
+        }
+    };
+}
+
+create_date_value_with!(DateValueInt, i64);
+create_date_value_with!(DateValueDouble, f64);
+create_date_value_with!(DateValueDecimal, Decimal);
+
+impl TryFrom<DateValueString> for DateValueInt {
     type Error = ParseIntError;
 
-    fn try_from(value: DateValue) -> Result<Self, Self::Error> {
+    fn try_from(value: DateValueString) -> Result<Self, Self::Error> {
         Ok(Self {
             date: value.date,
             value: value.value.parse()?,
@@ -40,61 +65,15 @@ impl TryFrom<DateValue> for DateValueInt {
     }
 }
 
-#[derive(FromQueryResult, Debug, Clone)]
-pub struct DateValueDouble {
-    pub date: NaiveDate,
-    pub value: f64,
-}
-
-impl Dated for DateValueDouble {
-    fn get_date(&self) -> &NaiveDate {
-        &self.date
-    }
-}
-
-impl From<DateValueDouble> for DateValue {
-    fn from(value: DateValueDouble) -> Self {
-        Self {
-            date: value.date,
-            value: value.value.to_string(),
-        }
-    }
-}
-
-#[derive(FromQueryResult, Debug, Clone)]
-pub struct DateValueDecimal {
-    pub date: NaiveDate,
-    pub value: Decimal,
-}
-
-impl Dated for DateValueDecimal {
-    fn get_date(&self) -> &NaiveDate {
-        &self.date
-    }
-}
-
-impl From<DateValueDecimal> for DateValue {
-    fn from(value: DateValueDecimal) -> Self {
-        Self {
-            date: value.date,
-            value: value.value.to_string(),
-        }
-    }
-}
-
 #[derive(FromQueryResult, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct DateValue {
+pub struct DateValueString {
     pub date: NaiveDate,
     pub value: String,
 }
 
-impl Dated for DateValue {
-    fn get_date(&self) -> &NaiveDate {
-        &self.date
-    }
-}
+impl_date_value_decomposition!(DateValueString, String);
 
-impl DateValue {
+impl DateValueString {
     pub fn active_model(
         &self,
         chart_id: i32,
@@ -117,9 +96,9 @@ impl DateValue {
         }
     }
 
-    pub fn relevant_or_zero(self, current_date: NaiveDate) -> DateValue {
+    pub fn relevant_or_zero(self, current_date: NaiveDate) -> DateValueString {
         if self.date < current_date {
-            DateValue::zero(current_date)
+            DateValueString::zero(current_date)
         } else {
             self
         }
@@ -134,7 +113,7 @@ pub struct ExtendedDateValue {
 }
 
 impl ExtendedDateValue {
-    pub fn from_date_value(dv: DateValue, is_approximate: bool) -> Self {
+    pub fn from_date_value(dv: DateValueString, is_approximate: bool) -> Self {
         Self {
             date: dv.date,
             value: dv.value,
@@ -143,9 +122,9 @@ impl ExtendedDateValue {
     }
 }
 
-impl From<ExtendedDateValue> for DateValue {
+impl From<ExtendedDateValue> for DateValueString {
     fn from(dv: ExtendedDateValue) -> Self {
-        DateValue {
+        DateValueString {
             date: dv.date,
             value: dv.value,
         }

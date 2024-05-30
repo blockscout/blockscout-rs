@@ -71,7 +71,7 @@ impl StatsService for ReadService {
             .filter(|(_, chart)| chart.static_info.chart_type == ChartType::Counter)
             .filter_map(|(name, counter)| {
                 data.remove(name).map(|point| {
-                    let point: stats::DateValue = if counter.static_info.relevant_or_zero {
+                    let point: stats::DateValueString = if counter.static_info.relevant_or_zero {
                         point.relevant_or_zero(Utc::now().date_naive())
                     } else {
                         point

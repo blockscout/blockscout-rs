@@ -18,20 +18,24 @@ use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
 
 use crate::{
     charts::{
-        chart::chart_portrait,
+        chart::{chart_portrait, Point},
         db_interaction::{
             read::{get_chart_metadata, get_min_block_blockscout, last_accurate_point},
             write::{create_chart, set_last_updated_at},
         },
     },
     data_source::{source::DataSource, source_metrics::DataSourceMetrics, types::UpdateContext},
-    get_chart_data, metrics, Chart, DateValue, Named, UpdateError,
+    get_chart_data, metrics, Chart, DateValueString, Named, UpdateError,
 };
 
 /// See [module-level documentation](self) for details.
 pub trait UpdateableChart: Chart {
     type PrimaryDependency: DataSource;
     type SecondaryDependencies: DataSource;
+    /// Type of the point stored in the chart.
+    /// `DateValueString` can be used to avoid parsing the values,
+    /// but `DateValueDecimal` or other types can be useful sometimes.
+    type Point: Point;
 
     /// Create chart in db. Does not overwrite existing data.
     fn create(
@@ -91,7 +95,7 @@ pub trait UpdateableChart: Chart {
     fn update_values(
         cx: &UpdateContext<'_>,
         chart_id: i32,
-        last_accurate_point: Option<DateValue>,
+        last_accurate_point: Option<DateValueString>,
         min_blockscout_block: i64,
         remote_fetch_timer: &mut AggregateTimer,
     ) -> impl Future<Output = Result<(), UpdateError>> + Send;
@@ -113,13 +117,13 @@ pub trait UpdateableChart: Chart {
     fn query_data(
         cx: &UpdateContext<'_>,
         range: Option<RangeInclusive<DateTimeUtc>>,
-    ) -> impl Future<Output = Result<Vec<DateValue>, UpdateError>> + Send {
+    ) -> impl Future<Output = Result<Vec<DateValueString>, UpdateError>> + Send {
         async move {
             let (start, end) = range.map(|r| (*r.start(), *r.end())).unzip();
             // Currently we store data with date precision
             let start = start.map(|s| s.date_naive());
             let end = end.map(|s| s.date_naive());
-            let values: Vec<DateValue> = get_chart_data(
+            let values: Vec<DateValueString> = get_chart_data(
                 cx.db,
                 Self::NAME,
                 start,
@@ -130,7 +134,7 @@ pub trait UpdateableChart: Chart {
             )
             .await?
             .into_iter()
-            .map(DateValue::from)
+            .map(DateValueString::from)
             .collect();
             Ok(values)
         }
@@ -162,7 +166,7 @@ impl<C: UpdateableChart> DataSourceMetrics for UpdateableChartDataSourceWrapper<
 impl<C: UpdateableChart> DataSource for UpdateableChartDataSourceWrapper<C> {
     type PrimaryDependency = C::PrimaryDependency;
     type SecondaryDependencies = C::SecondaryDependencies;
-    type Output = Vec<DateValue>;
+    type Output = Vec<DateValueString>;
 
     const MUTEX_ID: Option<&'static str> = Some(<C as Named>::NAME);
 
@@ -197,7 +201,7 @@ impl<C: UpdateableChart> DataSource for UpdateableChartDataSourceWrapper<C> {
         range: Option<RangeInclusive<DateTimeUtc>>,
         // local data is queried, do not track in remote timer
         _remote_fetch_timer: &mut AggregateTimer,
-    ) -> Result<Vec<DateValue>, UpdateError> {
+    ) -> Result<Vec<DateValueString>, UpdateError> {
         C::query_data(cx, range).await
     }
 }
