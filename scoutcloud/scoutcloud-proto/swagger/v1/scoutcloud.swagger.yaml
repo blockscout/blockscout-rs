@@ -1,10 +1,18 @@
 swagger: "2.0"
 info:
-  title: v1/scoutcloud.proto
-  version: version not set
+  title: Scoutcloud service
+  version: 0.1.1
+  contact:
+    name: Blockscout
+    url: https://blockscout.com
+    email: support@blockscout.com
 tags:
+  - name: Instances
+  - name: Deployments
+  - name: Users
   - name: Scoutcloud
   - name: Health
+host: scoutcloud.services.blockscout.com
 consumes:
   - application/json
 produces:
@@ -12,6 +20,7 @@ produces:
 paths:
   /api/v1/deployments/{deployment_id}:
     get:
+      summary: Get detailed information about specific deployment
       operationId: Scoutcloud_GetDeployment
       responses:
         "200":
@@ -28,9 +37,12 @@ paths:
           required: true
           type: string
       tags:
-        - Scoutcloud
+        - Deployments
+      security:
+        - ApiKeyAuth: []
   /api/v1/instances:
     get:
+      summary: Get list of all owned instances
       operationId: Scoutcloud_ListInstances
       responses:
         "200":
@@ -42,8 +54,11 @@ paths:
           schema:
             $ref: '#/definitions/rpcStatus'
       tags:
-        - Scoutcloud
+        - Instances
+      security:
+        - ApiKeyAuth: []
     post:
+      summary: Creating blockscout instance with config
       operationId: Scoutcloud_CreateInstance
       responses:
         "200":
@@ -61,9 +76,12 @@ paths:
           schema:
             $ref: '#/definitions/v1CreateInstanceRequest'
       tags:
-        - Scoutcloud
+        - Instances
+      security:
+        - ApiKeyAuth: []
   /api/v1/instances/{instance_id}:
     get:
+      summary: Get detailed information of the instance
       operationId: Scoutcloud_GetInstance
       responses:
         "200":
@@ -80,8 +98,11 @@ paths:
           required: true
           type: string
       tags:
-        - Scoutcloud
+        - Instances
+      security:
+        - ApiKeyAuth: []
     delete:
+      summary: Delete instance
       operationId: Scoutcloud_DeleteInstance
       responses:
         "200":
@@ -98,9 +119,12 @@ paths:
           required: true
           type: string
       tags:
-        - Scoutcloud
+        - Instances
+      security:
+        - ApiKeyAuth: []
   /api/v1/instances/{instance_id}/config:
     put:
+      summary: Update configuration of blockscout instance
       operationId: Scoutcloud_UpdateConfig
       responses:
         "200":
@@ -122,8 +146,11 @@ paths:
           schema:
             $ref: '#/definitions/ScoutcloudUpdateConfigBody'
       tags:
-        - Scoutcloud
+        - Instances
+      security:
+        - ApiKeyAuth: []
     patch:
+      summary: Update configuration of blockscout instance (partially)
       operationId: Scoutcloud_UpdateConfigPartial
       responses:
         "200":
@@ -145,9 +172,12 @@ paths:
           schema:
             $ref: '#/definitions/ScoutcloudUpdateConfigPartialBody'
       tags:
-        - Scoutcloud
+        - Instances
+      security:
+        - ApiKeyAuth: []
   /api/v1/instances/{instance_id}/deployments:
     get:
+      summary: Get list of deployments of the instance
       operationId: Scoutcloud_ListDeployments
       responses:
         "200":
@@ -164,9 +194,12 @@ paths:
           required: true
           type: string
       tags:
-        - Scoutcloud
+        - Deployments
+      security:
+        - ApiKeyAuth: []
   /api/v1/instances/{instance_id}/deployments/current:
     get:
+      summary: Get detailed information about current deployment of the instance
       operationId: Scoutcloud_GetCurrentDeployment
       responses:
         "200":
@@ -183,9 +216,12 @@ paths:
           required: true
           type: string
       tags:
-        - Scoutcloud
+        - Deployments
+      security:
+        - ApiKeyAuth: []
   /api/v1/instances/{instance_id}/status:update:
     post:
+      summary: Start or finish the instance
       operationId: Scoutcloud_UpdateInstanceStatus
       responses:
         "200":
@@ -207,9 +243,12 @@ paths:
           schema:
             $ref: '#/definitions/ScoutcloudUpdateInstanceStatusBody'
       tags:
-        - Scoutcloud
+        - Instances
+      security:
+        - ApiKeyAuth: []
   /api/v1/users/profile:
     get:
+      summary: Get information about current account
       operationId: Scoutcloud_GetProfile
       responses:
         "200":
@@ -221,7 +260,9 @@ paths:
           schema:
             $ref: '#/definitions/rpcStatus'
       tags:
-        - Scoutcloud
+        - Users
+      security:
+        - ApiKeyAuth: []
   /health:
     get:
       summary: |-
@@ -477,3 +518,11 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1UserAction'
+securityDefinitions:
+  ApiKeyAuth:
+    type: apiKey
+    name: x-api-key
+    in: header
+externalDocs:
+  description: More about blockscout microservices
+  url: https://github.com/blockscout/blockscout-rs

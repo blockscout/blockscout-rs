@@ -2,28 +2,150 @@ syntax = "proto3";
 
 package blockscout.scoutcloud.v1;
 
-import "convert_options.proto";
+import "convert/convert_options.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
 
 option go_package = "github.com/blockscout/blockscout-rs/scoutcloud";
+option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
+  info: {
+    title: "Scoutcloud service";
+    version: "0.1.1";
+    contact: {
+      name: "Blockscout";
+      url: "https://blockscout.com";
+      email: "support@blockscout.com";
+    };
+  };
+  host: "scoutcloud.services.blockscout.com"
+  external_docs: {
+    url: "https://github.com/blockscout/blockscout-rs";
+    description: "More about blockscout microservices";
+  }
+  tags: {name: "Instances"}
+  tags: {name: "Deployments"}
+  tags: {name: "Users"}
+  security_definitions: {
+    security: {
+      key: "ApiKeyAuth";
+      value: {
+        type: TYPE_API_KEY;
+        in: IN_HEADER;
+        name: "x-api-key";
+      }
+    }
+  }
+};
 
 service Scoutcloud {
-  rpc CreateInstance(CreateInstanceRequest) returns (CreateInstanceResponse) {}
-  rpc UpdateConfig(UpdateConfigRequest) returns (UpdateConfigResponse) {}
-  rpc UpdateConfigPartial(UpdateConfigPartialRequest) returns (UpdateConfigResponse) {}
-  rpc UpdateInstanceStatus(UpdateInstanceStatusRequest) returns (UpdateInstanceStatusResponse) {}
-  rpc GetInstance(GetInstanceRequest) returns (Instance) {}
-  rpc DeleteInstance(DeleteInstanceRequest) returns (DeleteInstanceResponse) {}
-  rpc ListInstances(ListInstancesRequest) returns (ListInstancesResponse) {}
-  rpc GetDeployment(GetDeploymentRequest) returns (Deployment) {}
-  rpc GetCurrentDeployment(GetCurrentDeploymentRequest) returns (Deployment) {}
-  rpc ListDeployments(ListDeploymentsRequest) returns (ListDeploymentsResponse) {}
+  // Creating blockscout instance with config
+  rpc CreateInstance(CreateInstanceRequest) returns (CreateInstanceResponse) {
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      security: {
+        security_requirement: {key: "ApiKeyAuth"}
+      }
+      tags: "Instances"
+    };
+  }
+  // Update configuration of blockscout instance
+  rpc UpdateConfig(UpdateConfigRequest) returns (UpdateConfigResponse) {
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      security: {
+        security_requirement: {key: "ApiKeyAuth"}
+      }
+      tags: "Instances"
+    };
+  }
+  // Update configuration of blockscout instance (partially)
+  rpc UpdateConfigPartial(UpdateConfigPartialRequest) returns (UpdateConfigResponse) {
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      security: {
+        security_requirement: {key: "ApiKeyAuth"}
+      }
+      tags: "Instances"
+    };
+  }
+  // Start or finish the instance
+  rpc UpdateInstanceStatus(UpdateInstanceStatusRequest) returns (UpdateInstanceStatusResponse) {
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      security: {
+        security_requirement: {key: "ApiKeyAuth"}
+      }
+      tags: "Instances"
+    };
+  }
+  // Get detailed information of the instance
+  rpc GetInstance(GetInstanceRequest) returns (Instance) {
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      security: {
+        security_requirement: {key: "ApiKeyAuth"}
+      }
+      tags: "Instances"
+    };
+  }
+  // Delete instance
+  rpc DeleteInstance(DeleteInstanceRequest) returns (DeleteInstanceResponse) {
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      security: {
+        security_requirement: {key: "ApiKeyAuth"}
+      }
+      tags: "Instances"
+    };
+  }
+  // Get list of all owned instances
+  rpc ListInstances(ListInstancesRequest) returns (ListInstancesResponse) {
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      security: {
+        security_requirement: {key: "ApiKeyAuth"}
+      }
+      tags: "Instances"
+    };
+  }
+  // Get detailed information about specific deployment
+  rpc GetDeployment(GetDeploymentRequest) returns (Deployment) {
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      security: {
+        security_requirement: {key: "ApiKeyAuth"}
+      }
+      tags: "Deployments"
+    };
+  }
+  // Get detailed information about current deployment of the instance
+  rpc GetCurrentDeployment(GetCurrentDeploymentRequest) returns (Deployment) {
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      security: {
+        security_requirement: {key: "ApiKeyAuth"}
+      }
+      tags: "Deployments"
+    };
+  }
+  // Get list of deployments of the instance
+  rpc ListDeployments(ListDeploymentsRequest) returns (ListDeploymentsResponse) {
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      security: {
+        security_requirement: {key: "ApiKeyAuth"}
+      }
+      tags: "Deployments"
+    };
+  }
+  // Get information about current account
+  rpc GetProfile(GetProfileRequest) returns (UserProfile) {
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      security: {
+        security_requirement: {key: "ApiKeyAuth"}
+      }
+      tags: "Users"
+    };
+  }
+}
 
-  rpc GetProfile(GetProfileRequest) returns (UserProfile) {}
+message Error {
+  int32 code = 1;
+  string message = 2;
 }
 
 message DeployConfig {
-  option (convert_options.derive) = { name: "serde::Serialize" };
-  option (convert_options.derive) = { name: "serde::Deserialize" };
+  option (convert_options.derive) = {name: "serde::Serialize"};
+  option (convert_options.derive) = {name: "serde::Deserialize"};
 
   string rpc_url = 1 [(convert_options.convert) = {type: "url::Url"}];
   string server_size = 2;
@@ -41,8 +163,8 @@ message DeployConfig {
 }
 
 message DeployConfigPartial {
-  option (convert_options.derive) = { name: "serde::Serialize" };
-  option (convert_options.derive) = { name: "serde::Deserialize" };
+  option (convert_options.derive) = {name: "serde::Serialize"};
+  option (convert_options.derive) = {name: "serde::Deserialize"};
 
   optional string rpc_url = 1 [(convert_options.convert) = {type: "Option<url::Url>"}];
   optional string server_size = 2;
@@ -73,9 +195,7 @@ message DeleteInstanceRequest {
   string instance_id = 1;
 }
 
-message DeleteInstanceResponse {
-
-}
+message DeleteInstanceResponse {}
 
 message UpdateConfigRequest {
   string instance_id = 1;
@@ -144,8 +264,7 @@ message GetInstanceRequest {
   string instance_id = 1;
 }
 
-message ListInstancesRequest {
-}
+message ListInstancesRequest {}
 
 message ListInstancesResponse {
   repeated Instance items = 1;
@@ -167,11 +286,9 @@ message GetCurrentDeploymentRequest {
   string instance_id = 1;
 }
 
-
 // Users
 
 message GetProfileRequest {}
-
 
 message UserAction {
   string action = 1;
