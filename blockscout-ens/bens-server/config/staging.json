@@ -7,7 +7,7 @@
           "url": "https://eth-sepolia.blockscout.com"
         },
         "use_protocols": [
-          "ens", "genome"
+          "ens"
         ]
       },
       "10200": {
@@ -52,7 +52,9 @@
         "meta": {
           "short_name": "ENS",
           "title": "Ethereum Name Service",
-          "description": "The Ethereum Name Service (ENS) is a distributed, open, and extensible naming system based on the Ethereum blockchain."
+          "description": "The Ethereum Name Service (ENS) is a distributed, open, and extensible naming system based on the Ethereum blockchain.",
+          "icon_url": "https://i.imgur.com/GOfUwCb.jpeg",
+          "docs_url": "https://docs.ens.domains/"
         }
       },
       "genome": {
@@ -64,7 +66,9 @@
         "meta": {
           "short_name": "Genome",
           "title": "Genome Domains",
-          "description": "GNO Domains Connecting gnosis chain"
+          "description": "GNO Domains Connecting gnosis chain",
+          "icon_url": "https://i.imgur.com/xlDoPfF.png",
+          "docs_url": "https://genomedomains.com/"
         }
       },
       "rns": {
@@ -75,7 +79,9 @@
         "meta": {
           "short_name": "RNS",
           "title": "Rootstock Name Service",
-          "description": "Rootstock Name Service (RNS) is a decentralized naming service, which allows users to have a readable domain name for their addresses."
+          "description": "Rootstock Name Service (RNS) is a decentralized naming service, which allows users to have a readable domain name for their addresses.",
+          "icon_url": "https://i.imgur.com/o0MATMs.png",
+          "docs_url": "https://dev.rootstock.io/rif/rns/"
         }
       },
       "base-name-service": {
@@ -86,7 +92,9 @@
         "meta": {
           "short_name": "BNS",
           "title": "Base Name Service",
-          "description": "Base Name Service (BNS) is a decentralized naming service, which allows users to have a readable domain name for their addresses."
+          "description": "Base Name Service (BNS) is a decentralized naming service, which allows users to have a readable domain name for their addresses.",
+          "icon_url": "https://i.imgur.com/2ZZT3zl.png",
+          "docs_url": "https://basename.gitbook.io/bns-docs"
         }
       },
       "mode": {
@@ -98,7 +106,9 @@
         "meta": {
           "short_name": "MNS",
           "title": "Mode Name Service",
-          "description": "Mode Name Service (MNS) is a decentralized naming service, which allows users to have a readable domain name for their addresses."
+          "description": "Mode Name Service (MNS) is a decentralized naming service, which allows users to have a readable domain name for their addresses.",
+          "icon_url": "https://i.imgur.com/6QXp70g.png",
+          "docs_url": "https://docs.modedomains.xyz/"
         }
       }
     }
