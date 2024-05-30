@@ -33,6 +33,10 @@ paths:
           in: path
           required: true
           type: string
+        - name: protocol_id
+          in: query
+          required: false
+          type: string
       tags:
         - DomainsExtractor
   /api/v1/{chain_id}/addresses:batch-resolve-names:
@@ -128,6 +132,11 @@ paths:
           in: query
           required: false
           type: string
+        - name: protocols
+          description: comma separated list of protocol ids to filter by
+          in: query
+          required: false
+          type: string
       tags:
         - DomainsExtractor
   /api/v1/{chain_id}/domains/{name}:
@@ -160,6 +169,11 @@ paths:
           in: query
           required: false
           type: boolean
+        - name: protocol_id
+          description: Protocol id of domain, default is first priority protocol on that chain
+          in: query
+          required: false
+          type: string
       tags:
         - DomainsExtractor
   /api/v1/{chain_id}/domains/{name}/events:
@@ -202,6 +216,11 @@ paths:
             - ASC
             - DESC
           default: ORDER_UNSPECIFIED
+        - name: protocol_id
+          description: Protocol id of domain, default is first priority protocol on that chain
+          in: query
+          required: false
+          type: string
       tags:
         - DomainsExtractor
   /api/v1/{chain_id}/domains:lookup:
@@ -260,6 +279,33 @@ paths:
           in: query
           required: false
           type: string
+        - name: protocols
+          description: comma separated list of protocol ids to filter by
+          in: query
+          required: false
+          type: string
+      tags:
+        - DomainsExtractor
+  /api/v1/{chain_id}/protocols:
+    get:
+      summary: Get list of supported protocols
+      operationId: DomainsExtractor_GetProtocols
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetProtocolsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: chain_id
+          description: The chain (network) where to get protocols
+          in: path
+          required: true
+          type: string
+          format: int64
       tags:
         - DomainsExtractor
   /health:
@@ -373,6 +419,9 @@ definitions:
         title: |-
           Map chain -> resolved_address that contains other blockchain addresses.
           This map will contain `current_chain_id` -> `resovled_address` if `resovled_address` is not None
+      protocol:
+        $ref: '#/definitions/v1ProtocolInfo'
+        title: Information about protocol that domain belongs to
   v1Domain:
     type: object
     properties:
@@ -397,6 +446,9 @@ definitions:
       expiry_date:
         type: string
         title: Optional. RFC 3339 datetime  of expiry date. None means never expires
+      protocol:
+        $ref: '#/definitions/v1ProtocolInfo'
+        title: Protocol that domain belongs to
   v1DomainEvent:
     type: object
     properties:
@@ -420,6 +472,14 @@ definitions:
       resolved_domains_count:
         type: integer
         format: int32
+  v1GetProtocolsResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1ProtocolInfo'
   v1HealthCheckResponse:
     type: object
     properties:
@@ -474,6 +534,25 @@ definitions:
       page_size:
         type: integer
         format: int64
+  v1ProtocolInfo:
+    type: object
+    properties:
+      id:
+        type: string
+      short_name:
+        type: string
+      title:
+        type: string
+      description:
+        type: string
+      tld_list:
+        type: array
+        items:
+          type: string
+      icon_url:
+        type: string
+      docs_url:
+        type: string
   v1Token:
     type: object
     properties:

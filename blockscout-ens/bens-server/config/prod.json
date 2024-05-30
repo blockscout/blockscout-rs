@@ -1,92 +1,170 @@
 {
   "subgraphs_reader": {
-    "cache_enabled": true,
     "refresh_cache_schedule": "0 0 * * * *",
     "networks": {
       "1": {
         "blockscout": {
           "url": "https://eth.blockscout.com"
         },
-        "subgraphs": {
-          "ens-subgraph": {
-            "use_cache": true,
-            "address_resolve_technique": "reverse_registry",
-            "native_token_contract": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85"
-          }
-        }
+        "use_protocols": [
+          "ens"
+        ]
       },
       "30": {
         "blockscout": {
           "url": "https://rootstock.blockscout.com"
         },
-        "subgraphs": {
-          "rns-subgraph": {
-            "use_cache": true,
-            "address_resolve_technique": "all_domains",
-            "native_token_contract": "0x45d3E4fB311982a06ba52359d44cB4f5980e0ef1"
-          }
-        }
+        "use_protocols": [
+          "rns"
+        ]
       },
       "100": {
         "blockscout": {
           "url": "https://gnosis.blockscout.com/"
         },
-        "subgraphs": {
-          "genome-subgraph": {
-            "use_cache": true,
-            "address_resolve_technique": "reverse_registry",
-            "native_token_contract": "0x942fcaf68a0c264d5447b03a2011b395a899f2d3",
-            "empty_label_hash": "0xc4a8c56f9b0096f720f38bd557d30306dbd78f7751d277e05f062d1b85912a63"
-          }
-        }
+        "use_protocols": [
+          "genome"
+        ]
       },
       "137": {
         "blockscout": {
           "url": "https://polygon.blockscout.com"
         },
-        "subgraphs": {
-          "zns-subgraph": {
-            "use_cache": true,
-            "address_resolve_technique": "all_domains"
-          }
-        }
+        "use_protocols": [
+          "zns"
+        ]
       },
       "8453": {
         "blockscout": {
           "url": "https://base.blockscout.com"
         },
-        "subgraphs": {
-          "base-name-service-subgraph": {
-            "use_cache": true,
-            "address_resolve_technique": "reverse_registry",
-            "native_token_contract": "0xaCe5602d169Edeb874bfE584a651801B8ac67093"
-          }
-        }
+        "use_protocols": [
+          "base-name-service"
+        ]
       },
       "34443": {
         "blockscout": {
           "url": "https://explorer.mode.network"
         },
-        "subgraphs": {
-          "mode-subgraph": {
-            "use_cache": true,
-            "address_resolve_technique": "reverse_registry",
-            "native_token_contract": "0x2ad86eeec513ac16804bb05310214c3fd496835b",
-            "empty_label_hash": "0x2fd69f9e5bec9de9ebf3468dafc549eca0bc7d17dfbc09869c2cfc3997d5d038"
-          }
-        }
+        "use_protocols": [
+          "mode"
+        ]
       },
       "1890": {
         "blockscout": {
           "url": "https://phoenix.lightlink.io"
         },
-        "subgraphs": {
-          "lightlink-subgraph": {
-            "use_cache": true,
-            "address_resolve_technique": "reverse_registry",
-            "native_token_contract": "0x5183ba1dee9770760360533cf00b9d8e26495927",
-            "empty_label_hash": "0xd00bb4a08bb99b28b4c1d80951b62b654e4d2688242da2d2c7f98ed6c9caaaad"
-          }
+        "use_protocols": [
+          "lightlink"
+        ]
+      }
+    },
+    "protocols": {
+      "ens": {
+        "tld_list": [
+          "eth"
+        ],
+        "subgraph_name": "ens-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "native_token_contract": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85",
+        "meta": {
+          "short_name": "ENS",
+          "title": "Ethereum Name Service",
+          "description": "The Ethereum Name Service (ENS) is a distributed, open, and extensible naming system based on the Ethereum blockchain.",
+          "icon_url": "https://i.imgur.com/GOfUwCb.jpeg",
+          "docs_url": "https://docs.ens.domains/"
+        }
+      },
+      "genome": {
+        "tld_list": [
+          "gno"
+        ],
+        "subgraph_name": "genome-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "empty_label_hash": "0xc4a8c56f9b0096f720f38bd557d30306dbd78f7751d277e05f062d1b85912a63",
+        "native_token_contract": "0x942fcaf68a0c264d5447b03a2011b395a899f2d3",
+        "meta": {
+          "short_name": "Genome",
+          "title": "Genome Domains",
+          "description": "GNO Domains Connecting gnosis chain",
+          "icon_url": "https://i.imgur.com/xlDoPfF.png",
+          "docs_url": "https://genomedomains.com/"
+        }
+      },
+      "rns": {
+        "tld_list": [
+          "rsk"
+        ],
+        "subgraph_name": "rns-subgraph",
+        "address_resolve_technique": "all_domains",
+        "native_token_contract": "0x45d3E4fB311982a06ba52359d44cB4f5980e0ef1",
+        "meta": {
+          "short_name": "RNS",
+          "title": "Rootstock Name Service",
+          "description": "Rootstock Name Service (RNS) is a decentralized naming service, which allows users to have a readable domain name for their addresses.",
+          "icon_url": "https://i.imgur.com/o0MATMs.png",
+          "docs_url": "https://dev.rootstock.io/rif/rns/"
+        }
+      },
+      "base-name-service": {
+        "tld_list": [
+          "base"
+        ],
+        "subgraph_name": "base-name-service-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "native_token_contract": "0xaCe5602d169Edeb874bfE584a651801B8ac67093",
+        "meta": {
+          "short_name": "BNS",
+          "title": "Base Name Service",
+          "description": "Base Name Service (BNS) is a decentralized naming service, which allows users to have a readable domain name for their addresses.",
+          "icon_url": "https://i.imgur.com/2ZZT3zl.png",
+          "docs_url": "https://basename.gitbook.io/bns-docs"
+        }
+      },
+      "mode": {
+        "tld_list": [
+          "mode"
+        ],
+        "subgraph_name": "mode-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "native_token_contract": "0x2ad86eeec513ac16804bb05310214c3fd496835b",
+        "empty_label_hash": "0x2fd69f9e5bec9de9ebf3468dafc549eca0bc7d17dfbc09869c2cfc3997d5d038",
+        "meta": {
+          "short_name": "MNS",
+          "title": "Mode Name Service",
+          "description": "Mode Name Service (MNS) is a decentralized naming service, which allows users to have a readable domain name for their addresses.",
+          "icon_url": "https://i.imgur.com/6QXp70g.png",
+          "docs_url": "https://docs.modedomains.xyz/"
+        }
+      },
+      "lightlink": {
+        "tld_list": [
+          "ll"
+        ],
+        "subgraph_name": "lightlink-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "native_token_contract": "0x5183ba1dee9770760360533cf00b9d8e26495927",
+        "empty_label_hash": "0xd00bb4a08bb99b28b4c1d80951b62b654e4d2688242da2d2c7f98ed6c9caaaad",
+        "meta": {
+          "short_name": "LNS",
+          "title": "LightLink Name Service",
+          "description": "LightLink Name Service (LNS) is a decentralized naming service, which allows users to have a readable domain name for their addresses.",
+          "icon_url": "https://i.imgur.com/GvsaOIH.png",
+          "docs_url": "https://space.id/tld/9"
+        }
+      },
+      "zns": {
+        "tld_list": [
+          "poly"
+        ],
+        "subgraph_name": "zns-subgraph",
+        "address_resolve_technique": "all_domains",
+        "meta": {
+          "short_name": "ZNS",
+          "title": "ZNS Connect Domains",
+          "description": "ZNS Connect is a decentralized naming system designed to simplify Web3 by offering user-friendly and memorable domain names",
+          "icon_url": "https://i.imgur.com/c7QnsBF.png",
+          "docs_url": "https://docs.znsconnect.io/"
         }
       }
     }

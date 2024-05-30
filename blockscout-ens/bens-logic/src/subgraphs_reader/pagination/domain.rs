@@ -1,14 +1,19 @@
 use super::{paginate_list, Order, PaginatedList, PaginationInput, Paginator};
-use crate::{entity::subgraph::domain::Domain, subgraphs_reader::DomainSortField};
+use crate::subgraphs_reader::{DomainSortField, LookupOutput};
 use anyhow::Context;
 use sea_query::{Expr, SelectStatement, SimpleExpr};
 
 pub type DomainPaginationInput = PaginationInput<DomainSortField>;
 
-impl Paginator<Domain> for DomainPaginationInput {
-    fn paginate_result(&self, items: Vec<Domain>) -> Result<PaginatedList<Domain>, anyhow::Error> {
+impl Paginator<LookupOutput> for DomainPaginationInput {
+    fn paginate_result(
+        &self,
+        items: Vec<LookupOutput>,
+    ) -> Result<PaginatedList<LookupOutput>, anyhow::Error> {
         let list = match self.sort {
-            DomainSortField::RegistrationDate => paginate_list!(items, self.page_size, created_at),
+            DomainSortField::RegistrationDate => {
+                paginate_list!(items, self.page_size, domain.created_at)
+            }
         };
 
         Ok(list)

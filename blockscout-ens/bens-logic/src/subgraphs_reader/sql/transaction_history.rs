@@ -1,10 +1,12 @@
 use crate::{
     entity::subgraph::domain_event::DomainEventTransaction,
-    subgraphs_reader::{pagination::Order, EventSort, GetDomainHistoryInput, SubgraphReadError},
+    protocols::{DomainName, Protocol},
+    subgraphs_reader::{pagination::Order, sql::DbErr, EventSort, GetDomainHistoryInput},
 };
+use anyhow::Context;
 use lazy_static::lazy_static;
 use sqlx::postgres::PgPool;
-use tera::{Context, Tera};
+use tera::Tera;
 use tracing::instrument;
 
 #[instrument(
@@ -15,16 +17,16 @@ use tracing::instrument;
 )]
 pub async fn find_transaction_events(
     pool: &PgPool,
-    schema: &str,
-    id: &str,
+    protocol: &Protocol,
+    name: &DomainName,
     input: &GetDomainHistoryInput,
-) -> Result<Vec<DomainEventTransaction>, SubgraphReadError> {
+) -> Result<Vec<DomainEventTransaction>, DbErr> {
     let sort = input.sort;
     let order = input.order;
-    let sql = sql_events_of_domain(schema, sort, order)
-        .map_err(|e| SubgraphReadError::Internal(e.to_string()))?;
+    let sql = sql_events_of_domain(&protocol.subgraph_schema, sort, order)
+        .context("building sql from template")?;
     let transactions: Vec<DomainEventTransaction> =
-        sqlx::query_as(&sql).bind(id).fetch_all(pool).await?;
+        sqlx::query_as(&sql).bind(&name.id).fetch_all(pool).await?;
     Ok(transactions)
 }
 
@@ -38,8 +40,8 @@ lazy_static! {
         tera.autoescape_on(vec![".sql"]);
         tera
     };
-    pub static ref DEFAULT_HISTORY_CONTEXT: Context = {
-        Context::from_value(serde_json::json!({
+    pub static ref DEFAULT_HISTORY_CONTEXT: tera::Context = {
+        tera::Context::from_value(serde_json::json!({
             "domain_event_tables": [
                 "transfer",
                 "new_owner",

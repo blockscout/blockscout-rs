@@ -1,4 +1,4 @@
-use super::{DomainToken, DomainTokenType, SubgraphSettings};
+use super::{DomainToken, DomainTokenType};
 use crate::entity::subgraph::domain::DetailedDomain;
 use anyhow::Context;
 use bigdecimal::{num_bigint::BigInt, Num};
@@ -7,20 +7,19 @@ use std::str::FromStr;
 
 #[tracing::instrument(
     level = "info",
-    skip(domain, subgraph_settings),
+    skip(domain),
     fields(
         domain_name = domain.name,
-        native_token_contract =? subgraph_settings.native_token_contract,
     ),
     err,
 )]
 pub fn extract_tokens_from_domain(
     domain: &DetailedDomain,
-    subgraph_settings: &SubgraphSettings,
+    native_token_contract: Option<Address>,
 ) -> Result<Vec<DomainToken>, anyhow::Error> {
     let mut tokens = vec![];
 
-    if let Some(contract) = subgraph_settings.native_token_contract {
+    if let Some(contract) = native_token_contract {
         let is_second_level_domain = domain
             .name
             .as_ref()
@@ -170,11 +169,8 @@ mod tests {
                 ],
             ),
         ] {
-            let settings = SubgraphSettings {
-                native_token_contract,
-                ..Default::default()
-            };
-            let tokens = extract_tokens_from_domain(&domain, &settings)
+
+            let tokens = extract_tokens_from_domain(&domain, native_token_contract)
                 .expect("failed to extract tokens from domain");
 
             assert_eq!(tokens, expected_tokens);

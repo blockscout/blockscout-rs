@@ -1,6 +1,6 @@
 use bens_logic::{
     entity::subgraph::domain_event::DomainEvent,
-    hash_name::hex,
+    hex,
     subgraphs_reader::{EventSort, GetDomainHistoryInput},
 };
 use bens_proto::blockscout::bens::v1 as proto;
@@ -17,6 +17,7 @@ pub fn list_domain_events_from_inner(
         name: inner.name,
         sort,
         order,
+        protocol_id: inner.protocol_id,
     })
 }
 

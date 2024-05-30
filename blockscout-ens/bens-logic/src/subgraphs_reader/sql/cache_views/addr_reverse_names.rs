@@ -1,13 +1,14 @@
+use nonempty::NonEmpty;
+use sea_query::{Alias, Expr, PostgresQueryBuilder};
+use sqlx::PgPool;
+use tracing::instrument;
+
 use super::CachedView;
 use crate::{
     entity::subgraph::domain::AddrReverseDomainWithActualName,
-    subgraphs_reader::{
-        sql::{bind_string_list, DOMAIN_BLOCK_RANGE_WHERE_CLAUSE},
-        SubgraphReadError,
-    },
+    protocols::Protocol,
+    subgraphs_reader::sql::{utils, DbErr, DOMAIN_BLOCK_RANGE_WHERE_CLAUSE},
 };
-use sqlx::PgPool;
-use tracing::instrument;
 
 pub struct AddrReverseNamesView;
 
@@ -47,6 +48,10 @@ impl CachedView for AddrReverseNamesView {
         AND addr_reversed_domain.{DOMAIN_BLOCK_RANGE_WHERE_CLAUSE}
         AND domain.{DOMAIN_BLOCK_RANGE_WHERE_CLAUSE}
         AND nc.{DOMAIN_BLOCK_RANGE_WHERE_CLAUSE}
+        AND (
+            domain.expiry_date is null
+            OR to_timestamp(domain.expiry_date) > now()
+        )
         "#
         )
     }
@@ -55,27 +60,37 @@ impl CachedView for AddrReverseNamesView {
 impl AddrReverseNamesView {
     #[instrument(
         name = "AddrReverseNamesView::batch_search_addresses",
-        skip(pool, address_hashes),
-        fields(job_size = address_hashes.len()),
+        skip_all,
+        fields(
+            job_size = address_hashes.len(),
+            protocols_size = protocols.len(),
+            fist_protocol_schema = protocols.head.subgraph_schema,
+        ),
         err(level = "error"),
         level = "info",
     )]
     pub async fn batch_search_addresses(
         pool: &PgPool,
-        schema: &str,
+        protocols: &NonEmpty<&Protocol>,
         address_hashes: &[impl AsRef<str>],
-    ) -> Result<Vec<AddrReverseDomainWithActualName>, SubgraphReadError> {
+    ) -> Result<Vec<AddrReverseDomainWithActualName>, DbErr> {
         let view_table_name = Self::view_table_name();
-        let domains: Vec<AddrReverseDomainWithActualName> = sqlx::query_as(&format!(
-            r#"
-            SELECT *
-            FROM {schema}.{view_table_name}
-            WHERE reversed_domain_id = ANY($1)
-            "#
-        ))
-        .bind(bind_string_list(address_hashes))
-        .fetch_all(pool)
-        .await?;
+        let queries = NonEmpty::collect(protocols.into_iter().map(|p| {
+            sea_query::Query::select()
+                .expr(Expr::cust("domain_id"))
+                .expr(Expr::cust("reversed_domain_id"))
+                .expr(Expr::cust("resolved_address"))
+                .expr(Expr::cust("name"))
+                .from((Alias::new(&p.subgraph_schema), Alias::new(view_table_name)))
+                .and_where(Expr::cust("reversed_domain_id = ANY($1)"))
+                .to_owned()
+        }))
+        .expect("protocols is nonempty");
+        let sql = utils::union_domain_queries(queries, None, None)?.to_string(PostgresQueryBuilder);
+        let domains = sqlx::query_as(&sql)
+            .bind(utils::bind_string_list(address_hashes))
+            .fetch_all(pool)
+            .await?;
         Ok(domains)
     }
 }

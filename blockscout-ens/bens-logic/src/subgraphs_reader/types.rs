@@ -1,6 +1,10 @@
 use super::pagination::{DomainPaginationInput, Order};
-use crate::entity::subgraph::domain::DetailedDomain;
+use crate::{
+    entity::subgraph::domain::{DetailedDomain, Domain},
+    protocols::Protocol,
+};
 use ethers::types::Address;
+use nonempty::NonEmpty;
 use sea_query::{Alias, IntoIden};
 use serde::Deserialize;
 use std::fmt::Display;
@@ -10,6 +14,7 @@ pub struct GetDomainInput {
     pub network_id: i64,
     pub name: String,
     pub only_active: bool,
+    pub protocol_id: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -18,6 +23,7 @@ pub struct GetDomainHistoryInput {
     pub name: String,
     pub sort: EventSort,
     pub order: Order,
+    pub protocol_id: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -26,6 +32,7 @@ pub struct LookupDomainInput {
     pub name: Option<String>,
     pub only_active: bool,
     pub pagination: DomainPaginationInput,
+    pub maybe_filter_protocols: Option<NonEmpty<String>>,
 }
 
 #[derive(Debug, Clone)]
@@ -36,6 +43,14 @@ pub struct LookupAddressInput {
     pub owned_by: bool,
     pub only_active: bool,
     pub pagination: DomainPaginationInput,
+    pub maybe_filter_protocols: Option<NonEmpty<String>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct GetAddressInput {
+    pub network_id: i64,
+    pub address: Address,
+    pub protocol_id: Option<String>,
 }
 
 impl Default for DomainPaginationInput {
@@ -88,6 +103,7 @@ impl Display for EventSort {
 pub struct GetDomainOutput {
     pub domain: DetailedDomain,
     pub tokens: Vec<DomainToken>,
+    pub protocol: Protocol,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -101,4 +117,10 @@ pub struct DomainToken {
 pub enum DomainTokenType {
     Native,
     Wrapped,
+}
+
+#[derive(Debug, Clone)]
+pub struct LookupOutput {
+    pub domain: Domain,
+    pub protocol: Protocol,
 }
