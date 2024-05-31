@@ -31,7 +31,7 @@ macro_rules! impl_date_value_decomposition {
 /// Implement non-base date-value type
 macro_rules! create_date_value_with {
     ($name:ident, $val_type:ty) => {
-        #[derive(FromQueryResult, Debug, Clone, Default)]
+        #[derive(FromQueryResult, Debug, Clone, Default, PartialEq)]
         pub struct $name {
             pub date: NaiveDate,
             pub value: $val_type,

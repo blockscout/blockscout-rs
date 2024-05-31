@@ -11,15 +11,15 @@
 //!
 //! 1. Create multiple connected charts
 //! (e.g.
-//! [`UpdateableChartDataSourceWrapper`](crate::data_source::kinds::updateable_chart::UpdateableChartDataSourceWrapper)
+//! [`UpdateableChartWrapper`](crate::data_source::kinds::updateable_chart::UpdateableChartWrapper)
 //! or
-//! [`RemoteDataSourceWrapper`](crate::data_source::kinds::updateable_chart::batch::remote::RemoteDataSourceWrapper)
+//! [`CloneChartWrapper`](crate::data_source::kinds::updateable_chart::batch::clone::CloneChartWrapper)
 //! ).
 //! For convenience, they may be type aliased:
 //! ```ignore
-//! pub type SomeChart1 = RemoteDataSourceWrapper<SomeChart1Source>;
+//! pub type SomeChart1 = CloneChartWrapper<SomeChart1Source>;
 //! // let's say it depends on `SomeChart1`
-//! pub type SomeChart2 = BatchDataSourceWrapper<SomeChart2Inner>;
+//! pub type SomeChart2 = BatchWrapper<SomeChart2Inner>;
 //! ```
 //! 2. Construct simple (non-sync) update groups via [`construct_update_group!`]
 //! 3. Create mutexes (1-1 for each chart)
@@ -156,7 +156,7 @@ pub mod macro_reexport {
 /// # use stats::{Chart, construct_update_group, DateValue, UpdateError};
 /// # use stats::data_source::{
 /// #     kinds::{
-/// #         updateable_chart::batch::remote::{RemoteChart, RemoteDataSourceWrapper},
+/// #         updateable_chart::batch::clone::{CloneChart, CloneChartWrapper},
 /// #         remote::RemoteSource
 /// #     },
 /// #     types::{UpdateContext, UpdateParameters},
@@ -189,14 +189,14 @@ pub mod macro_reexport {
 ///     }
 /// }
 ///
-/// impl RemoteChart for DummyChart {
+/// impl CloneChart for DummyChart {
 ///     type Dependency = DummyRemoteSource;
 /// }
 ///
 /// // use wrappers to utilize existing implementation of `DataSource`
 /// // `Chart` impl is delegated to `DummyChart`.
 /// type DummyChartSource =
-///     RemoteDataSourceWrapper<DummyChart>;
+///     CloneChartWrapper<DummyChart>;
 ///
 /// construct_update_group!(ExampleUpdateGroup {
 ///     name: "exampleGroup",

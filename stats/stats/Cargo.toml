@@ -35,6 +35,8 @@ blockscout-service-launcher = { version = "0.9.0", features = [ "database-0_10",
 pretty_assertions = "1.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 blockscout-service-launcher = { version = "0.9.0", features = [ "database-0_10", "test-database" ] }
+rust_decimal = "1.27"
+rust_decimal_macros = "1.27"
 
 [features]
 default = []

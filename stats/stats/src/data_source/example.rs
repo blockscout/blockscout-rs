@@ -97,7 +97,7 @@ impl Chart for NewContractsChart {
 }
 
 // Directly uses results of SQL query (from `NewContractsRemote`),
-// thus `RemoteChart`.
+// thus `CloneChart`.
 impl CloneChart for NewContractsChart {
     type Dependency = RemoteSourceWrapper<NewContractsRemote>;
 }

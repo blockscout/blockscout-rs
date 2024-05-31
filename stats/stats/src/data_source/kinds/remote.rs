@@ -3,7 +3,7 @@
 //! The main application - SQL queries from remote database.
 //!
 //! Usually used inside
-//! [`RemoteChart`](`crate::data_source::kinds::updateable_chart::batch::remote::RemoteChart`)
+//! [`CloneChart`](`crate::data_source::kinds::updateable_chart::batch::clone::CloneChart`)
 //! data source.
 //!
 //! Note that since each `query_data` performs (likely a heavy)
@@ -11,8 +11,9 @@
 //! different places. For each such appearance, the same data
 //! will be requested again.
 //! In this case,
-//! [`RemoteChart`](`crate::data_source::kinds::updateable_chart::batch::remote::RemoteChart`)
+//! [`CloneChart`](`crate::data_source::kinds::updateable_chart::batch::clone::CloneChart`)
 //! can be helpful to reuse the query results (by storing it locally).
+
 use std::{marker::PhantomData, ops::RangeInclusive};
 
 use blockscout_metrics_tools::AggregateTimer;
@@ -54,9 +55,7 @@ pub trait RemoteSource {
     }
 }
 
-/// Wrapper struct used for avoiding implementation conflicts.
-///
-/// See [module-level documentation](self) for details.
+/// Wrapper to convert type implementing [`RemoteSource`] to another that implements [`DataSource`]
 pub struct RemoteSourceWrapper<T: RemoteSource>(PhantomData<T>);
 
 impl<T: RemoteSource + Named> Named for RemoteSourceWrapper<T> {

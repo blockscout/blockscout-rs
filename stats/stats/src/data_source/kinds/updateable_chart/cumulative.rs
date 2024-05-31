@@ -5,6 +5,8 @@
 //!
 //! So, if the values of `NewItemsChart` are [1, 2, 3, 4], then
 //! cumulative chart will produce [1, 3, 6, 10].
+//!
+//! The opposite of this chart is [delta chart](super::delta).
 
 use std::{fmt::Display, marker::PhantomData, ops::AddAssign, str::FromStr};
 
@@ -26,13 +28,14 @@ use super::{UpdateableChart, UpdateableChartWrapper};
 
 /// See [module-level documentation](self) for details.
 pub trait CumulativeChart: Chart {
-    type NewItemsPoint: Point + Default;
-    type NewItemsChart: DataSource<Output = Vec<Self::NewItemsPoint>>;
+    type DeltaChartPoint: Point + Default;
+    type DeltaChart: DataSource<Output = Vec<Self::DeltaChartPoint>>;
 }
 
 /// Wrapper to convert type implementing [`CumulativeChart`] to another that implements [`DataSource`]
 pub type CumulativeChartWrapper<T> = UpdateableChartWrapper<CumulativeChartLocalWrapper<T>>;
 
+/// Wrapper to get type implementing "parent" trait. Use [`CumulativeChartWrapper`] to get [`DataSource`]
 pub struct CumulativeChartLocalWrapper<T: CumulativeChart>(PhantomData<T>);
 
 impl<T: CumulativeChart + Named> Named for CumulativeChartLocalWrapper<T> {
@@ -45,14 +48,14 @@ impl<T: CumulativeChart + Chart> Chart for CumulativeChartLocalWrapper<T> {}
 impl<T> UpdateableChart for CumulativeChartLocalWrapper<T>
 where
     T: CumulativeChart,
-    T::NewItemsPoint: Into<DateValueString>,
-    <T::NewItemsPoint as DateValue>::Value:
+    T::DeltaChartPoint: Into<DateValueString>,
+    <T::DeltaChartPoint as DateValue>::Value:
         Send + Sync + AddAssign + FromStr + Default + Display + Clone,
-    <<T::NewItemsPoint as DateValue>::Value as FromStr>::Err: Display,
+    <<T::DeltaChartPoint as DateValue>::Value as FromStr>::Err: Display,
 {
-    type PrimaryDependency = T::NewItemsChart;
+    type PrimaryDependency = T::DeltaChart;
     type SecondaryDependencies = ();
-    type Point = T::NewItemsPoint;
+    type Point = T::DeltaChartPoint;
 
     async fn update_values(
         cx: &UpdateContext<'_>,
@@ -64,12 +67,12 @@ where
         let range = last_accurate_point
             .clone()
             .map(|p| day_start(p.date + Days::new(1))..=cx.time);
-        let new_items_data: Vec<T::NewItemsPoint> =
-            <T::NewItemsChart as DataSource>::query_data(cx, range, remote_fetch_timer).await?;
+        let delta_data: Vec<T::DeltaChartPoint> =
+            <T::DeltaChart as DataSource>::query_data(cx, range, remote_fetch_timer).await?;
         let partial_sum = last_accurate_point
             .map(|p| {
                 p.value
-                    .parse::<<T::NewItemsPoint as DateValue>::Value>()
+                    .parse::<<T::DeltaChartPoint as DateValue>::Value>()
                     .map_err(|e| {
                         UpdateError::Internal(format!(
                             "failed to parse value in chart '{}': {e}",
@@ -79,10 +82,10 @@ where
             })
             .transpose()?;
         let partial_sum = partial_sum.unwrap_or_default();
-        let data = cumsum::<T::NewItemsPoint>(new_items_data, partial_sum)?
+        let data = cumsum::<T::DeltaChartPoint>(delta_data, partial_sum)?
             .into_iter()
             .map(|value| {
-                <T::NewItemsPoint as Into<DateValueString>>::into(value)
+                <T::DeltaChartPoint as Into<DateValueString>>::into(value)
                     .active_model(chart_id, Some(min_blockscout_block))
             });
         insert_data_many(cx.db, data)

@@ -69,10 +69,16 @@ pub(crate) use sql_with_range_filter_opt;
 
 #[cfg(test)]
 mod test {
+    use itertools::Itertools;
     use pretty_assertions::assert_eq;
     use sea_orm::{DbBackend, Statement};
 
     use super::*;
+
+    /// In order to ignore spaces during comparison
+    fn compact_sql(s: Statement) -> String {
+        s.to_string().split_whitespace().join(" ")
+    }
 
     #[test]
     fn filter_and_values_works() {
@@ -110,8 +116,8 @@ mod test {
                 WHERE 
                     blocks.timestamp != to_timestamp(0) AND 
                     blocks.consensus = true AND
-                    block.timestamp <= $3 AND
-                    block.timestamp >= $2
+                    blocks.timestamp <= $3 AND
+                    blocks.timestamp >= $2
                 GROUP BY date
                 "#,
                 vec![ETH.into(), (*range.start()).into(), (*range.end()).into()],
@@ -138,8 +144,8 @@ mod test {
     fn sql_with_range_filter_empty_works() {
         let range = None;
         assert_eq!(
-            naive_sql_selector(range.clone()),
-            sql_with_range_filter_opt!(
+            compact_sql(naive_sql_selector(range.clone())),
+            compact_sql(sql_with_range_filter_opt!(
                 DbBackend::Postgres,
                 r#"
                     SELECT
@@ -151,11 +157,11 @@ mod test {
                         blocks.timestamp != to_timestamp(0) AND 
                         blocks.consensus = true {filter}
                     GROUP BY date
-                    "#,
+                "#,
                 [ETH.into()],
                 "blocks.timestamp",
                 range,
-            )
+            ))
         );
     }
 
@@ -166,8 +172,8 @@ mod test {
                 ..=DateTimeUtc::from_timestamp(7654321, 0).unwrap(),
         );
         assert_eq!(
-            naive_sql_selector(range.clone()),
-            sql_with_range_filter_opt!(
+            compact_sql(naive_sql_selector(range.clone())),
+            compact_sql(sql_with_range_filter_opt!(
                 DbBackend::Postgres,
                 r#"
                     SELECT
@@ -179,11 +185,11 @@ mod test {
                         blocks.timestamp != to_timestamp(0) AND 
                         blocks.consensus = true {filter}
                     GROUP BY date
-                    "#,
+                "#,
                 [ETH.into()],
                 "blocks.timestamp",
                 range,
-            )
+            ))
         );
     }
 }

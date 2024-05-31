@@ -8,5 +8,6 @@
 mod base;
 pub mod batch;
 pub mod cumulative;
+pub mod delta;
 
 pub use base::{UpdateableChart, UpdateableChartWrapper};

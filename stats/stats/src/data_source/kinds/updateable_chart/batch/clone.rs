@@ -21,9 +21,7 @@ pub trait CloneChart: Chart {
 /// Wrapper to convert type implementing [`CloneChart`] to another that implements [`DataSource`]
 pub type CloneChartWrapper<T> = BatchChartWrapper<CloneChartLocalWrapper<T>>;
 
-/// Wrapper struct used for avoiding implementation conflicts
-///
-/// See [module-level documentation](self) for details.
+/// Wrapper to get type implementing "parent" trait. Use [`CloneChartWrapper`] to get [`DataSource`]
 pub struct CloneChartLocalWrapper<T: CloneChart>(PhantomData<T>);
 
 impl<T: CloneChart + Named> Named for CloneChartLocalWrapper<T> {
