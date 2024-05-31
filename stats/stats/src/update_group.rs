@@ -153,44 +153,49 @@ pub mod macro_reexport {
 /// ## Example
 ///
 /// ```rust
-/// # use stats::{Chart, construct_update_group, DateValue, UpdateError};
+/// # use stats::{Chart, Named, construct_update_group, DateValueString, UpdateError};
 /// # use stats::data_source::{
 /// #     kinds::{
 /// #         updateable_chart::batch::clone::{CloneChart, CloneChartWrapper},
-/// #         remote::RemoteSource
+/// #         remote::{RemoteSource, RemoteSourceWrapper},
 /// #     },
 /// #     types::{UpdateContext, UpdateParameters},
 /// # };
 /// # use chrono::NaiveDate;
 /// # use entity::sea_orm_active_enums::ChartType;
 /// # use std::ops::RangeInclusive;
+/// # use sea_orm::prelude::DateTimeUtc;
 ///
 /// struct DummyRemoteSource;
 ///
 /// impl RemoteSource for DummyRemoteSource {
-///     fn get_query(from: NaiveDate, to: NaiveDate) -> sea_orm::Statement {
+///     type Point = DateValueString;
+///
+///     fn get_query(range: Option<RangeInclusive<DateTimeUtc>>) -> sea_orm::Statement {
 ///         // not called
 ///         unimplemented!()
 ///     }
 ///     async fn query_data(
 ///         cx: &UpdateContext<'_>,
 ///         range: Option<RangeInclusive<DateTimeUtc>>,
-///     ) -> Result<Vec<DateValueString>, UpdateError> {
+///     ) -> Result<Vec<Self::Point>, UpdateError> {
 ///         Ok(vec![])
 ///     }
 /// }
 ///
 /// struct DummyChart;
 ///
-/// impl Chart for DummyChart {
+/// impl Named for DummyChart {
 ///     const NAME: &'static str = "dummyChart";
+/// }
+/// impl Chart for DummyChart {
 ///     fn chart_type() -> ChartType {
 ///         ChartType::Line
 ///     }
 /// }
 ///
 /// impl CloneChart for DummyChart {
-///     type Dependency = DummyRemoteSource;
+///     type Dependency = RemoteSourceWrapper<DummyRemoteSource>;
 /// }
 ///
 /// // use wrappers to utilize existing implementation of `DataSource`
