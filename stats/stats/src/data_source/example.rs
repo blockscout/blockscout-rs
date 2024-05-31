@@ -162,7 +162,7 @@ construct_update_group!(ExampleUpdateGroup {
 
 #[tokio::test]
 #[ignore = "needs database to run"]
-async fn _update_examples() {
+async fn update_examples() {
     let _ = tracing_subscriber::fmt::try_init();
     let (db, blockscout) = init_db_all("update_examples").await;
     let current_time = chrono::DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap();

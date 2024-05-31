@@ -10,11 +10,18 @@ use chrono::{DateTime, NaiveDate};
 use sea_orm::DatabaseConnection;
 use std::{assert_eq, str::FromStr};
 
+fn map_str_tuple_to_owned(l: Vec<(&str, &str)>) -> Vec<(String, String)> {
+    l.into_iter()
+        .map(|t| (t.0.to_string(), t.1.to_string()))
+        .collect()
+}
+
 pub async fn simple_test_chart<C: DataSource + Chart>(
     test_name: &str,
     expected: Vec<(&str, &str)>,
 ) {
     let _ = tracing_subscriber::fmt::try_init();
+    let expected = map_str_tuple_to_owned(expected);
     let (db, blockscout) = init_db_all(test_name).await;
     let current_time = DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
     let current_date = current_time.date_naive();
@@ -30,28 +37,18 @@ pub async fn simple_test_chart<C: DataSource + Chart>(
     };
     let cx = UpdateContext::from(parameters.clone());
     C::update_recursively(&cx).await.unwrap();
-    get_chart_and_assert_eq::<C>(
-        &db,
-        &expected,
-        None,
-        None,
-        None,
-        approximate_trailing_points,
-    )
-    .await;
+    assert_eq!(
+        &get_chart::<C>(&db, None, None, None, approximate_trailing_points,).await,
+        &expected
+    );
 
     parameters.force_full = false;
     let cx = UpdateContext::from(parameters);
     C::update_recursively(&cx).await.unwrap();
-    get_chart_and_assert_eq::<C>(
-        &db,
-        &expected,
-        None,
-        None,
-        None,
-        approximate_trailing_points,
-    )
-    .await;
+    assert_eq!(
+        &get_chart::<C>(&db, None, None, None, approximate_trailing_points,).await,
+        &expected
+    );
 }
 
 pub async fn ranged_test_chart<C: DataSource + Chart>(
@@ -61,6 +58,7 @@ pub async fn ranged_test_chart<C: DataSource + Chart>(
     to: NaiveDate,
 ) {
     let _ = tracing_subscriber::fmt::try_init();
+    let expected = map_str_tuple_to_owned(expected);
     let (db, blockscout) = init_db_all(test_name).await;
     let current_time = DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
     let current_date = current_time.date_naive();
@@ -77,38 +75,41 @@ pub async fn ranged_test_chart<C: DataSource + Chart>(
     };
     let cx = UpdateContext::from(parameters.clone());
     C::update_recursively(&cx).await.unwrap();
-    get_chart_and_assert_eq::<C>(
-        &db,
-        &expected,
-        Some(from),
-        Some(to),
-        Some(policy),
-        approximate_trailing_points,
-    )
-    .await;
+    assert_eq!(
+        &get_chart::<C>(
+            &db,
+            Some(from),
+            Some(to),
+            Some(policy),
+            approximate_trailing_points,
+        )
+        .await,
+        &expected
+    );
 
     parameters.force_full = false;
     let cx = UpdateContext::from(parameters);
     C::update_recursively(&cx).await.unwrap();
-    get_chart_and_assert_eq::<C>(
-        &db,
-        &expected,
-        Some(from),
-        Some(to),
-        Some(policy),
-        approximate_trailing_points,
-    )
-    .await;
+    assert_eq!(
+        &get_chart::<C>(
+            &db,
+            Some(from),
+            Some(to),
+            Some(policy),
+            approximate_trailing_points,
+        )
+        .await,
+        &expected
+    );
 }
 
-async fn get_chart_and_assert_eq<C: DataSource + Chart>(
+async fn get_chart<C: DataSource + Chart>(
     db: &DatabaseConnection,
-    expected: &Vec<(&str, &str)>,
     from: Option<NaiveDate>,
     to: Option<NaiveDate>,
     policy: Option<MissingDatePolicy>,
     approximate_trailing_points: u64,
-) {
+) -> Vec<(String, String)> {
     let data = get_chart_data(
         db,
         C::NAME,
@@ -120,15 +121,9 @@ async fn get_chart_and_assert_eq<C: DataSource + Chart>(
     )
     .await
     .unwrap();
-    let data: Vec<_> = data
-        .into_iter()
+    data.into_iter()
         .map(|p| (p.date.to_string(), p.value))
-        .collect();
-    let data: Vec<(&str, &str)> = data
-        .iter()
-        .map(|(date, value)| (date.as_str(), value.as_str()))
-        .collect();
-    assert_eq!(expected, &data);
+        .collect()
 }
 
 pub async fn simple_test_counter<C: DataSource + Chart>(test_name: &str, expected: &str) {
