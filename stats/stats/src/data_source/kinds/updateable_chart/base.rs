@@ -57,7 +57,7 @@ pub trait UpdateableChart: Chart {
         async {
             let metadata = get_chart_metadata(cx.db, Self::NAME).await?;
             if let Some(last_updated_at) = metadata.last_updated_at {
-                if cx.time == last_updated_at && !cx.force_full {
+                if cx.time == last_updated_at {
                     // no need to perform update
                     return Ok(());
                 }
