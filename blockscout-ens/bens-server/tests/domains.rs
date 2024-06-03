@@ -120,6 +120,44 @@ async fn eth_protocol_scenario(base: Url) {
     .await;
     assert_eq!(actual, expected);
 
+    // empty domain lookup
+    for invalid_name in [
+        "nothing",
+        "nothing.eth",
+        "nothing.eth.",
+        ".nothing.eth",
+        ".nothing.eth.",
+        ".",
+        "..",
+        ".........",
+        " ",
+        " _ ",
+        " 123 ",
+        " 123.eth ",
+        " 1 . 2. 3. 4",
+    ] {
+        let request: Value = send_get_request(
+            &base,
+            &format!("/api/v1/1/domains:lookup?name={invalid_name}"),
+        )
+        .await;
+        assert_eq!(
+            request,
+            json!({
+                "items": [],
+                "next_page_params": null,
+            }),
+            "invalid response with name: {}",
+            invalid_name
+        );
+
+        let status = reqwest::get(&format!("{base}/api/v1/1/domains/{invalid_name}"))
+            .await
+            .unwrap()
+            .status();
+        assert_eq!(status, 404, "invalid status with name: {}", invalid_name);
+    }
+
     // address lookup
     let expected_addresses: Vec<Value> =
         vec![json!(data_file_as_json!("domains/vitalik_eth/short.json"))]
