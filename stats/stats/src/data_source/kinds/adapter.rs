@@ -62,6 +62,7 @@ impl<T: SourceAdapter> DataSource for SourceAdapterWrapper<T> {
 }
 
 pub trait ParseAdapter {
+    // todo: try iterator
     type InnerSource: DataSource<Output = Vec<DateValueString>> + Named;
     type ParseInto: DateValue + Send;
 }

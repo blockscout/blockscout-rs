@@ -150,19 +150,11 @@ pub(crate) fn filter_within_range(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use chrono::NaiveDate;
-    use pretty_assertions::assert_eq;
+    use crate::tests::point_construction::{d, v};
 
-    fn d(date: &str) -> NaiveDate {
-        date.parse().unwrap()
-    }
-    fn v(date: &str, value: &str) -> DateValueString {
-        DateValueString {
-            date: d(date),
-            value: value.to_string(),
-        }
-    }
+    use super::*;
+
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn fill_zeros_works() {

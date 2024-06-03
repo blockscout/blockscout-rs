@@ -128,7 +128,7 @@ impl BatchChart for ContractsGrowthChart {
     type SecondaryDependencies = ();
     type Point = DateValueString;
 
-    fn step_duration() -> chrono::Duration {
+    fn batch_len() -> chrono::Duration {
         // we need to count cumulative from the beginning
         chrono::Duration::max_value()
     }

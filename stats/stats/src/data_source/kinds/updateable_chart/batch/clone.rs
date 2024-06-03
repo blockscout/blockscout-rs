@@ -16,6 +16,10 @@ use super::{BatchChart, BatchChartWrapper};
 /// See [module-level documentation](self) for details.
 pub trait CloneChart: Chart {
     type Dependency: DataSource<Output = Vec<DateValueString>>;
+
+    fn batch_size() -> chrono::Duration {
+        chrono::Duration::days(30)
+    }
 }
 
 /// Wrapper to convert type implementing [`CloneChart`] to another that implements [`DataSource`]
@@ -52,5 +56,9 @@ impl<T: CloneChart> BatchChart for CloneChartLocalWrapper<T> {
             .await
             .map_err(UpdateError::StatsDB)?;
         Ok(found)
+    }
+
+    fn batch_len() -> chrono::Duration {
+        T::batch_size()
     }
 }

@@ -104,30 +104,11 @@ pub fn last_point(data: Vec<DateValueString>) -> Option<DateValueString> {
 
 #[cfg(test)]
 mod tests {
-    use chrono::NaiveDate;
     use pretty_assertions::assert_eq;
     use rust_decimal_macros::dec;
-    use sea_orm::prelude::Decimal;
 
     use super::*;
-    use crate::charts::db_interaction::types::{DateValueDecimal, DateValueInt};
-
-    fn d(date: &str) -> NaiveDate {
-        date.parse().unwrap()
-    }
-    fn v_int(date: &str, value: i64) -> DateValueInt {
-        DateValueInt {
-            date: d(date),
-            value: value,
-        }
-    }
-
-    fn v_decimal(date: &str, value: Decimal) -> DateValueDecimal {
-        DateValueDecimal {
-            date: d(date),
-            value: value,
-        }
-    }
+    use crate::tests::point_construction::{v_decimal, v_int};
 
     #[test]
     fn test_deltas_works_int() {

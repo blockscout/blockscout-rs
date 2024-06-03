@@ -32,8 +32,8 @@ pub trait BatchChart: Chart {
     /// (e.g. for cumulative chart).
     type Point: Point;
 
-    // todo: TimeDelta
-    fn step_duration() -> chrono::Duration {
+    /// Batching interval
+    fn batch_len() -> chrono::Duration {
         chrono::Duration::days(30)
     }
 
@@ -92,7 +92,7 @@ where
     };
     let first_date_time = day_start(first_date);
 
-    let steps = generate_date_ranges(first_date_time, now, U::step_duration());
+    let steps = generate_date_ranges(first_date_time, now, U::batch_len());
     let n = steps.len();
 
     for (i, range) in steps.into_iter().enumerate() {
@@ -180,8 +180,8 @@ fn generate_date_ranges(
         // saturating add, since `step` is expected to be positive
         let next_date = current_date
             .checked_add_signed(step)
-            .unwrap_or(DateTime::<Utc>::MAX_UTC);
-        // todo: .min(end) ?
+            .unwrap_or(DateTime::<Utc>::MAX_UTC)
+            .min(end); // finish the ranges right at the end
         date_range.push(RangeInclusive::new(current_date, next_date));
         current_date = next_date;
     }
@@ -191,14 +191,10 @@ fn generate_date_ranges(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use chrono::NaiveDate;
-    use pretty_assertions::assert_eq;
-    use std::str::FromStr;
+    use crate::tests::point_construction::d;
 
-    fn d(s: &str) -> NaiveDate {
-        NaiveDate::from_str(s).expect("cannot parse date")
-    }
+    use super::*;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn test_generate_date_ranges() {

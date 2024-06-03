@@ -6,7 +6,7 @@ use crate::{
     },
     get_chart_data, get_counters, Chart, MissingDatePolicy,
 };
-use chrono::{DateTime, NaiveDate};
+use chrono::{DateTime, NaiveDate, NaiveDateTime};
 use sea_orm::DatabaseConnection;
 use std::{assert_eq, str::FromStr};
 
@@ -56,11 +56,14 @@ pub async fn ranged_test_chart<C: DataSource + Chart>(
     expected: Vec<(&str, &str)>,
     from: NaiveDate,
     to: NaiveDate,
+    update_time: Option<NaiveDateTime>,
 ) {
     let _ = tracing_subscriber::fmt::try_init();
     let expected = map_str_tuple_to_owned(expected);
     let (db, blockscout) = init_db_all(test_name).await;
-    let current_time = DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
+    let current_time = update_time
+        .map(|t| t.and_utc())
+        .unwrap_or(DateTime::from_str("2023-03-01T12:00:00Z").unwrap());
     let current_date = current_time.date_naive();
     C::init_recursively(&db, &current_time).await.unwrap();
     fill_mock_blockscout_data(&blockscout, current_date).await;
