@@ -66,7 +66,10 @@ impl Tld {
     }
 
     pub fn from_domain_name(name: &str) -> Option<Tld> {
-        name.rsplit_once('.').map(|(_, tld)| Self::new(tld))
+        name.rsplit('.')
+            .next()
+            .filter(|c| !c.is_empty())
+            .map(Self::new)
     }
 }
 

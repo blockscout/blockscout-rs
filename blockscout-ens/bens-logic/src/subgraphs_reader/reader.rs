@@ -240,12 +240,14 @@ impl SubgraphReader {
         input: LookupDomainInput,
     ) -> Result<PaginatedList<LookupOutput>, SubgraphReadError> {
         let find_domains_input = if let Some(name) = input.name {
-            let (_, names) = self.protocoler.names_options_in_network(
+            match self.protocoler.names_options_in_network(
                 &name,
                 input.network_id,
                 input.maybe_filter_protocols,
-            )?;
-            sql::FindDomainsInput::Names(names)
+            ) {
+                Ok((_, name_options)) => sql::FindDomainsInput::Names(name_options),
+                Err(_) => return Ok(PaginatedList::empty()),
+            }
         } else {
             let (_, protocols) = self
                 .protocoler

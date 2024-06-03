@@ -203,13 +203,7 @@ pub fn address_from_str_inner(addr: &str) -> Result<Address, ConversionError> {
 }
 
 fn name_from_inner(name: String) -> Result<String, ConversionError> {
-    let name = name.trim_matches('.');
-    if name.is_empty() {
-        return Err(ConversionError::UserRequest(
-            "empty name provided".to_string(),
-        ));
-    };
-    Ok(name.to_string())
+    Ok(name)
 }
 
 fn page_size_from_inner(page_size: Option<u32>) -> u32 {
