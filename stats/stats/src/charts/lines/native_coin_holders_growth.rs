@@ -1,21 +1,20 @@
 use crate::{
-    charts::{
-        create_chart,
-        db_interaction::{
-            chart_updaters::{
-                common_operations::{get_min_block_blockscout, get_nth_last_row},
-                ChartUpdater,
-            },
-            types::DateValue,
-            write::insert_data_many,
-        },
-        find_chart,
+    charts::db_interaction::{
+        types::DateValueInt,
+        write::{create_chart, insert_data_many},
     },
-    Chart, MissingDatePolicy, UpdateError,
+    data_source::{
+        kinds::{
+            adapter::{ParseAdapter, ParseAdapterWrapper},
+            updateable_chart::{UpdateableChart, UpdateableChartWrapper},
+        },
+        UpdateContext,
+    },
+    Chart, DateValueString, MissingDatePolicy, Named, UpdateError,
 };
-use async_trait::async_trait;
 use blockscout_db::entity::address_coin_balances_daily;
-use chrono::NaiveDate;
+use blockscout_metrics_tools::AggregateTimer;
+use chrono::{NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
 use itertools::Itertools;
 use migration::OnConflict;
@@ -24,9 +23,6 @@ use sea_orm::{
     TransactionTrait,
 };
 use std::collections::{BTreeMap, HashSet};
-
-#[derive(Default, Debug)]
-pub struct NativeCoinHoldersGrowth {}
 
 mod db_address_balances {
     use sea_orm::prelude::*;
@@ -46,85 +42,96 @@ mod db_address_balances {
     impl ActiveModelBehavior for ActiveModel {}
 }
 
-#[async_trait]
-impl crate::Chart for NativeCoinHoldersGrowth {
-    fn name(&self) -> &str {
-        "nativeCoinHoldersGrowth"
-    }
-    fn chart_type(&self) -> ChartType {
+pub struct NativeCoinHoldersGrowthInner;
+
+impl Named for NativeCoinHoldersGrowthInner {
+    const NAME: &'static str = "nativeCoinHoldersGrowth";
+}
+
+impl Chart for NativeCoinHoldersGrowthInner {
+    fn chart_type() -> ChartType {
         ChartType::Line
     }
-    fn missing_date_policy(&self) -> MissingDatePolicy {
+    fn missing_date_policy() -> MissingDatePolicy {
         MissingDatePolicy::FillPrevious
     }
-    fn approximate_trailing_points(&self) -> u64 {
+    fn approximate_trailing_points() -> u64 {
         // support table contains information of actual last day
         0
     }
-
-    async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
-        self.create_support_table(db).await?;
-        create_chart(db, self.name().into(), self.chart_type()).await
-    }
 }
 
-#[async_trait]
-impl ChartUpdater for NativeCoinHoldersGrowth {
-    async fn update_values(
-        &self,
+// Custom logic, thus more general trait
+impl UpdateableChart for NativeCoinHoldersGrowthInner {
+    type PrimaryDependency = ();
+    type SecondaryDependencies = ();
+    type Point = DateValueString;
+
+    async fn create(
         db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        _current_time: chrono::DateTime<chrono::Utc>,
-        force_full: bool,
+        init_time: &chrono::DateTime<Utc>,
+    ) -> Result<(), DbErr> {
+        Self::create_support_table(db).await?;
+        create_chart(db, Self::NAME.into(), Self::chart_type(), init_time).await
+    }
+
+    async fn update_values(
+        cx: &UpdateContext<'_>,
+        chart_id: i32,
+        last_accurate_point: Option<DateValueString>,
+        min_blockscout_block: i64,
+        remote_fetch_timer: &mut AggregateTimer,
     ) -> Result<(), UpdateError> {
-        let chart_id = find_chart(db, self.name())
-            .await
-            .map_err(UpdateError::StatsDB)?
-            .ok_or_else(|| UpdateError::NotFound(self.name().into()))?;
-        let min_blockscout_block = get_min_block_blockscout(blockscout)
-            .await
-            .map_err(UpdateError::BlockscoutDB)?;
-        let offset = Some(self.approximate_trailing_points());
-        let last_row =
-            get_nth_last_row(self, chart_id, min_blockscout_block, db, force_full, offset).await?;
-        self.update_sequentially_with_support_table(
-            db,
-            blockscout,
-            last_row,
+        Self::update_sequentially_with_support_table(
+            cx,
             chart_id,
+            last_accurate_point,
             min_blockscout_block,
+            remote_fetch_timer,
         )
         .await?;
         Ok(())
     }
 }
 
+pub type NativeCoinHoldersGrowth = UpdateableChartWrapper<NativeCoinHoldersGrowthInner>;
+
+pub struct NativeCoinHoldersGrowthIntInner;
+
+impl ParseAdapter for NativeCoinHoldersGrowthIntInner {
+    type InnerSource = NativeCoinHoldersGrowth;
+    type ParseInto = DateValueInt;
+}
+
+pub type NativeCoinHoldersGrowthInt = ParseAdapterWrapper<NativeCoinHoldersGrowthIntInner>;
+
 // TODO: move common logic to new updater trait
-impl NativeCoinHoldersGrowth {
+impl NativeCoinHoldersGrowthInner {
     pub async fn update_sequentially_with_support_table(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        last_row: Option<DateValue>,
+        cx: &UpdateContext<'_>,
         chart_id: i32,
+        last_accurate_point: Option<DateValueString>,
         min_blockscout_block: i64,
+        remote_fetch_timer: &mut AggregateTimer,
     ) -> Result<(), UpdateError> {
-        tracing::info!("start sequential update for chart {}", self.name());
-        let all_days = match last_row {
-            Some(last_row) => get_unique_ordered_days(blockscout, Some(last_row.date))
-                .await
-                .map_err(UpdateError::BlockscoutDB)?,
+        tracing::info!("start sequential update for chart {}", Self::NAME);
+        let all_days = match last_accurate_point {
+            Some(last_row) => {
+                get_unique_ordered_days(cx.blockscout, Some(last_row.date), remote_fetch_timer)
+                    .await
+                    .map_err(UpdateError::BlockscoutDB)?
+            }
             None => {
-                self.clear_support_table(db)
+                Self::clear_support_table(cx.db)
                     .await
                     .map_err(UpdateError::BlockscoutDB)?;
-                get_unique_ordered_days(blockscout, None)
+                get_unique_ordered_days(cx.blockscout, None, remote_fetch_timer)
                     .await
                     .map_err(UpdateError::BlockscoutDB)?
             }
         };
 
-        for days in all_days.chunks(self.step_duration_days()) {
+        for days in all_days.chunks(Self::step_duration_days()) {
             let first = days.first();
             let last = days.last();
             tracing::info!(
@@ -135,9 +142,13 @@ impl NativeCoinHoldersGrowth {
             );
             // NOTE: we update support table and chart data in one transaction
             // to support invariant that support table has information about last day in chart data
-            let db_tx = db.begin().await.map_err(UpdateError::StatsDB)?;
-            let data: Vec<entity::chart_data::ActiveModel> = self
-                .calculate_days_using_support_table(&db_tx, blockscout, days.iter().copied())
+            let db_tx = cx.db.begin().await.map_err(UpdateError::StatsDB)?;
+            let data: Vec<entity::chart_data::ActiveModel> =
+                Self::calculate_days_using_support_table(
+                    &db_tx,
+                    cx.blockscout,
+                    days.iter().copied(),
+                )
                 .await
                 .map_err(|e| UpdateError::Internal(e.to_string()))?
                 .into_iter()
@@ -152,18 +163,16 @@ impl NativeCoinHoldersGrowth {
     }
 
     async fn calculate_days_using_support_table<C1, C2>(
-        &self,
         db: &C1,
         blockscout: &C2,
         days: impl IntoIterator<Item = NaiveDate>,
-    ) -> Result<Vec<DateValue>, UpdateError>
+    ) -> Result<Vec<DateValueString>, UpdateError>
     where
         C1: ConnectionTrait,
         C2: ConnectionTrait,
     {
         let mut result = vec![];
-        let new_holders_by_date = self
-            .get_holder_changes_by_date(blockscout, days)
+        let new_holders_by_date = Self::get_holder_changes_by_date(blockscout, days)
             .await
             .map_err(|e| UpdateError::Internal(format!("cannot get new holders: {e}")))?;
 
@@ -184,14 +193,13 @@ impl NativeCoinHoldersGrowth {
                     balance: Set(holder.balance),
                 });
 
-            self.update_current_holders(db, holders)
+            Self::update_current_holders(db, holders)
                 .await
                 .map_err(|e| UpdateError::Internal(format!("cannot update holders: {e}")))?;
-            let new_count = self
-                .count_current_holders(db)
+            let new_count = Self::count_current_holders(db)
                 .await
                 .map_err(|e| UpdateError::Internal(format!("cannot count holders: {e}")))?;
-            result.push(DateValue {
+            result.push(DateValueString {
                 date,
                 value: new_count.to_string(),
             });
@@ -200,7 +208,6 @@ impl NativeCoinHoldersGrowth {
     }
 
     async fn get_holder_changes_by_date<C>(
-        &self,
         blockscout: &C,
         days: impl IntoIterator<Item = NaiveDate>,
     ) -> Result<BTreeMap<NaiveDate, Vec<db_address_balances::Model>>, DbErr>
@@ -212,7 +219,7 @@ impl NativeCoinHoldersGrowth {
             // use BTreeMap to prevent address duplicates due to several queries
             let mut all_rows: BTreeMap<Vec<u8>, address_coin_balances_daily::Model> =
                 BTreeMap::new();
-            let limit = self.max_rows_fetch_per_iteration();
+            let limit = Self::max_rows_fetch_per_iteration();
             let mut offset = 0;
             loop {
                 let rows = address_coin_balances_daily::Entity::find()
@@ -251,7 +258,7 @@ impl NativeCoinHoldersGrowth {
         Ok(holders_grouped)
     }
 
-    async fn create_support_table(&self, db: &DatabaseConnection) -> Result<(), sea_orm::DbErr> {
+    async fn create_support_table(db: &DatabaseConnection) -> Result<(), sea_orm::DbErr> {
         let statement = Statement::from_string(
             sea_orm::DatabaseBackend::Postgres,
             format!(
@@ -261,35 +268,34 @@ impl NativeCoinHoldersGrowth {
                     balance NUMERIC(100,0) NOT NULL
                 )
                 "#,
-                self.support_table_name()
+                Self::support_table_name()
             ),
         );
         db.execute(statement).await?;
         Ok(())
     }
 
-    async fn clear_support_table(&self, db: &DatabaseConnection) -> Result<(), sea_orm::DbErr> {
+    async fn clear_support_table(db: &DatabaseConnection) -> Result<(), sea_orm::DbErr> {
         let statement = Statement::from_string(
             sea_orm::DatabaseBackend::Postgres,
-            format!("DELETE FROM {}", self.support_table_name()),
+            format!("DELETE FROM {}", Self::support_table_name()),
         );
         db.execute(statement).await?;
         Ok(())
     }
 
-    async fn count_current_holders<C>(&self, db: &C) -> Result<u64, DbErr>
+    async fn count_current_holders<C>(db: &C) -> Result<u64, DbErr>
     where
         C: ConnectionTrait,
     {
         let count = db_address_balances::Entity::find()
-            .filter(db_address_balances::Column::Balance.gte(self.min_balance_for_holders()))
+            .filter(db_address_balances::Column::Balance.gte(Self::min_balance_for_holders()))
             .count(db)
             .await?;
         Ok(count)
     }
 
     async fn update_current_holders<C>(
-        &self,
         db: &C,
         holders: impl IntoIterator<Item = db_address_balances::ActiveModel>,
     ) -> Result<(), DbErr>
@@ -297,7 +303,7 @@ impl NativeCoinHoldersGrowth {
         C: ConnectionTrait,
     {
         let mut data = holders.into_iter().peekable();
-        let take = self.max_rows_insert_per_iteration();
+        let take = Self::max_rows_insert_per_iteration();
         while data.peek().is_some() {
             let chunk: Vec<_> = data.by_ref().take(take).collect();
             db_address_balances::Entity::insert_many(chunk)
@@ -313,24 +319,24 @@ impl NativeCoinHoldersGrowth {
     }
 }
 
-impl NativeCoinHoldersGrowth {
-    fn support_table_name(&self) -> String {
+impl NativeCoinHoldersGrowthInner {
+    fn support_table_name() -> String {
         db_address_balances::Entity.table_name().to_string()
     }
 
-    fn min_balance_for_holders(&self) -> i64 {
+    fn min_balance_for_holders() -> i64 {
         10_i64.pow(15)
     }
 
-    fn step_duration_days(&self) -> usize {
+    fn step_duration_days() -> usize {
         1
     }
 
-    fn max_rows_fetch_per_iteration(&self) -> u64 {
+    fn max_rows_fetch_per_iteration() -> u64 {
         60_000
     }
 
-    fn max_rows_insert_per_iteration(&self) -> usize {
+    fn max_rows_insert_per_iteration() -> usize {
         20_000
     }
 }
@@ -338,6 +344,7 @@ impl NativeCoinHoldersGrowth {
 async fn get_unique_ordered_days<C>(
     blockscout: &C,
     maybe_from: Option<NaiveDate>,
+    remote_fetch_timer: &mut AggregateTimer,
 ) -> Result<Vec<NaiveDate>, sea_orm::DbErr>
 where
     C: ConnectionTrait,
@@ -359,6 +366,7 @@ where
         }
         None => query,
     };
+    let _timer = remote_fetch_timer.start_interval();
     let days = query
         .into_model::<SelectResult>()
         .all(blockscout)
@@ -378,11 +386,8 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_native_coin_holders_growth() {
-        let chart = NativeCoinHoldersGrowth::default();
-
-        simple_test_chart(
+        simple_test_chart::<NativeCoinHoldersGrowth>(
             "update_native_coin_holders_growth",
-            chart,
             vec![
                 ("2022-11-08", "0"),
                 ("2022-11-09", "8"),

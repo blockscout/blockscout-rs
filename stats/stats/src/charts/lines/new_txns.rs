@@ -1,28 +1,25 @@
 use crate::{
-    charts::db_interaction::{
-        chart_updaters::{ChartPartialUpdater, ChartUpdater},
-        types::DateValue,
+    charts::db_interaction::types::DateValueInt,
+    data_source::kinds::{
+        adapter::{ParseAdapter, ParseAdapterWrapper},
+        remote::{RemoteSource, RemoteSourceWrapper},
+        updateable_chart::batch::clone::{CloneChart, CloneChartWrapper},
     },
-    UpdateError,
+    utils::sql_with_range_filter_opt,
+    Chart, DateValueString, Named,
 };
-use async_trait::async_trait;
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
+use sea_orm::{prelude::*, DbBackend, Statement};
 
-#[derive(Default, Debug)]
-pub struct NewTxns {}
+pub struct NewTxnsRemote;
 
-#[async_trait]
-impl ChartPartialUpdater for NewTxns {
-    async fn get_values(
-        &self,
-        blockscout: &DatabaseConnection,
-        last_updated_row: Option<DateValue>,
-    ) -> Result<Vec<DateValue>, UpdateError> {
-        let stmnt = match last_updated_row {
-            Some(row) => Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
+impl RemoteSource for NewTxnsRemote {
+    type Point = DateValueString;
+
+    fn get_query(range: Option<std::ops::RangeInclusive<DateTimeUtc>>) -> Statement {
+        sql_with_range_filter_opt!(
+            DbBackend::Postgres,
+            r#"
                 SELECT 
                     date(b.timestamp) as date, 
                     COUNT(*)::TEXT as value
@@ -30,61 +27,42 @@ impl ChartPartialUpdater for NewTxns {
                 JOIN blocks       b ON t.block_hash = b.hash
                 WHERE 
                     b.timestamp != to_timestamp(0) AND
-                    date(b.timestamp) > $1 AND 
-                    b.consensus = true
+                    b.consensus = true {filter}
                 GROUP BY date;
-                "#,
-                vec![row.date.into()],
-            ),
-            None => Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
-                SELECT 
-                    date(b.timestamp) as date, 
-                    COUNT(*)::TEXT as value
-                FROM transactions t
-                JOIN blocks       b ON t.block_hash = b.hash
-                WHERE
-                    b.timestamp != to_timestamp(0) AND 
-                    b.consensus = true
-                GROUP BY date;
-                "#,
-                vec![],
-            ),
-        };
-
-        let data = DateValue::find_by_statement(stmnt)
-            .all(blockscout)
-            .await
-            .map_err(UpdateError::BlockscoutDB)?;
-        Ok(data)
+            "#,
+            [],
+            "b.timestamp",
+            range
+        )
     }
 }
 
-#[async_trait]
-impl crate::Chart for NewTxns {
-    fn name(&self) -> &str {
-        "newTxns"
-    }
+pub struct NewTxnsInner;
 
-    fn chart_type(&self) -> ChartType {
+impl Named for NewTxnsInner {
+    const NAME: &'static str = "newTxns";
+}
+
+impl Chart for NewTxnsInner {
+    fn chart_type() -> ChartType {
         ChartType::Line
     }
 }
 
-#[async_trait]
-impl ChartUpdater for NewTxns {
-    async fn update_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<chrono::Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, current_time, force_full)
-            .await
-    }
+impl CloneChart for NewTxnsInner {
+    type Dependency = RemoteSourceWrapper<NewTxnsRemote>;
 }
+
+pub type NewTxns = CloneChartWrapper<NewTxnsInner>;
+
+pub struct NewTxnsIntInner;
+
+impl ParseAdapter for NewTxnsIntInner {
+    type InnerSource = NewTxns;
+    type ParseInto = DateValueInt;
+}
+
+pub type NewTxnsInt = ParseAdapterWrapper<NewTxnsIntInner>;
 
 #[cfg(test)]
 mod tests {
@@ -94,10 +72,8 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_new_txns() {
-        let chart = NewTxns::default();
-        simple_test_chart(
+        simple_test_chart::<NewTxns>(
             "update_new_txns",
-            chart,
             vec![
                 ("2022-11-09", "5"),
                 ("2022-11-10", "12"),
@@ -115,10 +91,8 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn ranged_update_new_txns() {
-        let chart = NewTxns::default();
-        ranged_test_chart(
+        ranged_test_chart::<NewTxns>(
             "ranged_update_new_txns",
-            chart,
             vec![
                 ("2022-11-08", "0"),
                 ("2022-11-09", "5"),
@@ -147,6 +121,7 @@ mod tests {
             ],
             "2022-11-08".parse().unwrap(),
             "2022-12-01".parse().unwrap(),
+            None,
         )
         .await;
     }

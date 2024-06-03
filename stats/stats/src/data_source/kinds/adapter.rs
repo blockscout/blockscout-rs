@@ -103,6 +103,9 @@ where
 
 pub trait ToStringAdapter {
     type InnerSource: DataSource<Output = Vec<Self::ConvertFrom>>;
+    // only need because couldn't figure out how to "extract" generic
+    // T from `Vec` and place bounds on it
+    /// Type of elements in the output of [`InnerSource`](ToStringAdapter::InnerSource)
     type ConvertFrom: Into<DateValueString>;
 }
 

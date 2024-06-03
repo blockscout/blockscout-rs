@@ -1,36 +1,39 @@
+use std::ops::RangeInclusive;
+
 use crate::{
-    charts::{
-        cache::Cache,
-        db_interaction::{
-            chart_updaters::{ChartFullUpdater, ChartUpdater},
-            types::{DateValue, DateValueInt},
+    charts::db_interaction::types::DateValueInt,
+    data_source::{
+        kinds::{
+            adapter::{ParseAdapter, ParseAdapterWrapper, ToStringAdapter, ToStringAdapterWrapper},
+            remote::{RemoteSource, RemoteSourceWrapper},
+            updateable_chart::batch::clone::{CloneChart, CloneChartWrapper},
         },
+        UpdateContext,
     },
-    UpdateError,
+    Chart, Named, UpdateError,
 };
-use async_trait::async_trait;
+use chrono::{Days, Duration, NaiveDate};
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
-use tokio::sync::Mutex;
 
-pub struct NewAccounts {
-    cache: Mutex<Cache<Vec<DateValueInt>>>,
-}
+/// Note:  The intended strategy is to update whole range at once, even
+/// though the implementation allows batching. The batching was done
+/// to simplify interface of the data source.
+///
+/// Thus, use max batch size in the dependant data sources.
+pub struct NewAccountsRemote;
 
-impl NewAccounts {
-    pub fn new(cache: Cache<Vec<DateValueInt>>) -> Self {
-        Self {
-            cache: Mutex::new(cache),
-        }
-    }
+impl RemoteSource for NewAccountsRemote {
+    type Point = DateValueInt;
 
-    pub async fn read_values(
-        blockscout: &DatabaseConnection,
-    ) -> Result<Vec<DateValueInt>, UpdateError> {
-        let stmnt = Statement::from_sql_and_values(
-            DbBackend::Postgres,
-            r#"
-                SELECT 
+    fn get_query(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+        // we want to consider the time at range end; thus optional
+        // filter
+        if let Some(range) = range {
+            Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                r#"
+                SELECT
                     first_tx.date as date,
                     count(*) as value
                 FROM (
@@ -38,77 +41,131 @@ impl NewAccounts {
                         b.timestamp::date as date
                     FROM transactions  t
                     JOIN blocks        b ON t.block_hash = b.hash
-                    WHERE 
-                        b.timestamp != to_timestamp(0) AND 
+                    WHERE
+                        b.timestamp != to_timestamp(0) AND
+                        b.consensus = true AND
+                        b.timestamp <= $1
+                    ORDER BY t.from_address_hash, b.timestamp
+                ) first_tx
+                GROUP BY first_tx.date;
+            "#,
+                vec![(*range.end()).into()],
+            )
+        } else {
+            Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                r#"
+                SELECT
+                    first_tx.date as date,
+                    count(*) as value
+                FROM (
+                    SELECT DISTINCT ON (t.from_address_hash)
+                        b.timestamp::date as date
+                    FROM transactions  t
+                    JOIN blocks        b ON t.block_hash = b.hash
+                    WHERE
+                        b.timestamp != to_timestamp(0) AND
                         b.consensus = true
                     ORDER BY t.from_address_hash, b.timestamp
                 ) first_tx
                 GROUP BY first_tx.date;
-                "#,
-            vec![],
-        );
+            "#,
+                vec![],
+            )
+        }
+    }
 
-        let mut data = DateValueInt::find_by_statement(stmnt)
-            .all(blockscout)
+    async fn query_data(
+        cx: &UpdateContext<'_>,
+        range: Option<RangeInclusive<DateTimeUtc>>,
+    ) -> Result<Vec<Self::Point>, UpdateError> {
+        let query = Self::get_query(range.clone());
+        let mut data = Self::Point::find_by_statement(query)
+            .all(cx.blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?;
-        data.sort_by_key(|v| v.date);
+        // make sure that it's sorted
+        data.sort_by_key(|d| d.date);
+        if let Some(range) = range {
+            trim_out_of_range_sorted(&mut data, range);
+        }
         Ok(data)
     }
 }
 
-#[async_trait]
-impl ChartFullUpdater for NewAccounts {
-    async fn get_values(
-        &self,
-        blockscout: &DatabaseConnection,
-    ) -> Result<Vec<DateValue>, UpdateError> {
-        let mut cache = self.cache.lock().await;
-        Ok(cache
-            .get_or_update(async move { Self::read_values(blockscout).await })
-            .await?
-            .into_iter()
-            .map(DateValue::from)
-            .collect())
-    }
+/// the vector must be sorted
+fn trim_out_of_range_sorted(data: &mut Vec<DateValueInt>, range: RangeInclusive<DateTimeUtc>) {
+    // start of relevant section
+    let keep_from_idx = data
+        .binary_search_by_key(&range.start().date_naive(), |p| p.date)
+        .unwrap_or_else(|i| i);
+    // irrelevant tail start
+    let trim_from_idx = data
+        .binary_search_by_key(
+            &(range
+                .end()
+                .date_naive()
+                .checked_add_days(Days::new(1))
+                .unwrap_or(NaiveDate::MAX)),
+            |p| p.date,
+        )
+        .unwrap_or_else(|i| i);
+    data.truncate(trim_from_idx);
+    data.drain(..keep_from_idx);
 }
 
-#[async_trait]
-impl crate::Chart for NewAccounts {
-    fn name(&self) -> &str {
-        "newAccounts"
-    }
-    fn chart_type(&self) -> ChartType {
+pub struct NewAccountsRemoteString;
+
+impl ToStringAdapter for NewAccountsRemoteString {
+    type InnerSource = RemoteSourceWrapper<NewAccountsRemote>;
+    type ConvertFrom = <NewAccountsRemote as RemoteSource>::Point;
+}
+
+pub struct NewAccountsInner;
+
+impl Named for NewAccountsInner {
+    const NAME: &'static str = "newAccounts";
+}
+
+impl Chart for NewAccountsInner {
+    fn chart_type() -> ChartType {
         ChartType::Line
     }
 }
 
-#[async_trait]
-impl ChartUpdater for NewAccounts {
-    async fn update_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<chrono::Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, current_time, force_full)
-            .await
+impl CloneChart for NewAccountsInner {
+    type Dependency = ToStringAdapterWrapper<NewAccountsRemoteString>;
+
+    fn batch_size() -> Duration {
+        // see `NewAccountsRemote` docs
+        Duration::max_value()
     }
 }
+
+pub type NewAccounts = CloneChartWrapper<NewAccountsInner>;
+
+pub struct NewAccountsIntInner;
+
+impl ParseAdapter for NewAccountsIntInner {
+    type InnerSource = NewAccounts;
+    type ParseInto = DateValueInt;
+}
+
+pub type NewAccountsInt = ParseAdapterWrapper<NewAccountsIntInner>;
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::simple_test::simple_test_chart;
+    use crate::tests::{
+        point_construction::{dt, v_int},
+        simple_test::{ranged_test_chart, simple_test_chart},
+    };
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_new_accounts() {
-        let chart = NewAccounts::new(Cache::default());
-        simple_test_chart(
+        simple_test_chart::<NewAccounts>(
             "update_new_accounts",
-            chart,
             vec![
                 ("2022-11-09", "1"),
                 ("2022-11-10", "3"),
@@ -117,5 +174,99 @@ mod tests {
             ],
         )
         .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn ranged_update_new_accounts() {
+        ranged_test_chart::<NewAccounts>(
+            "ranged_update_gas_used_growth",
+            vec![
+                ("2022-11-09", "1"),
+                ("2022-11-10", "3"),
+                // only half of the tx's should be detected; others were created
+                // later than update time
+                ("2022-11-11", "2"),
+            ],
+            "2022-11-09".parse().unwrap(),
+            "2022-11-11".parse().unwrap(),
+            Some("2022-11-11T14:00:00".parse().unwrap()),
+        )
+        .await;
+    }
+
+    #[test]
+    fn trim_range_empty_vector() {
+        let mut data: Vec<DateValueInt> = vec![];
+        let range = dt("2100-01-02T12:00:00").and_utc()..=dt("2100-01-04T12:00:00").and_utc();
+        trim_out_of_range_sorted(&mut data, range);
+        assert_eq!(data, vec![]);
+
+        let max_range = DateTime::MIN.and_utc()..=DateTime::MAX.and_utc();
+        trim_out_of_range_sorted(&mut data, max_range);
+    }
+
+    #[test]
+    fn trim_range_no_elements_in_range() {
+        let mut data = vec![
+            v_int("2100-01-01", 1),
+            v_int("2100-01-02", 2),
+            v_int("2100-01-03", 3),
+        ];
+        let range = dt("2099-12-30T00:00:00").and_utc()..=dt("2099-12-31T23:59:59").and_utc();
+        trim_out_of_range_sorted(&mut data, range);
+        assert_eq!(data, vec![]);
+
+        let mut data = vec![
+            v_int("2100-01-01", 1),
+            v_int("2100-01-02", 2),
+            v_int("2100-01-03", 3),
+        ];
+        let range = dt("2100-01-04T12:00:00").and_utc()..=dt("2100-01-05T12:00:00").and_utc();
+        trim_out_of_range_sorted(&mut data, range);
+        assert_eq!(data, vec![]);
+    }
+
+    #[test]
+    fn trim_range_all_elements_in_range() {
+        let mut data = vec![
+            v_int("2100-01-01", 1),
+            v_int("2100-01-02", 2),
+            v_int("2100-01-03", 3),
+        ];
+        let range = dt("2100-01-01T00:00:00").and_utc()..=dt("2100-01-03T23:59:59").and_utc();
+        trim_out_of_range_sorted(&mut data, range);
+        assert_eq!(
+            data,
+            vec![
+                v_int("2100-01-01", 1),
+                v_int("2100-01-02", 2),
+                v_int("2100-01-03", 3),
+            ]
+        );
+    }
+
+    #[test]
+    fn trim_range_partial_elements_in_range() {
+        let mut data = vec![
+            v_int("2100-01-01", 1),
+            v_int("2100-01-02", 2),
+            v_int("2100-01-03", 3),
+        ];
+        let range = dt("2100-01-02T00:00:00").and_utc()..=dt("2100-01-10T23:59:59").and_utc();
+        trim_out_of_range_sorted(&mut data, range);
+        assert_eq!(data, vec![v_int("2100-01-02", 2), v_int("2100-01-03", 3)]);
+    }
+
+    #[test]
+    fn trim_range_single_element_in_range() {
+        let mut data = vec![
+            v_int("2100-01-01", 1),
+            v_int("2100-01-02", 2),
+            v_int("2100-01-03", 3),
+        ];
+        let range = dt("2100-01-02T00:00:00").and_utc()..=dt("2100-01-02T23:59:59").and_utc();
+        trim_out_of_range_sorted(&mut data, range);
+        assert_eq!(data, vec![v_int("2100-01-02", 2)]);
     }
 }

@@ -1,31 +1,26 @@
 //! Average fee per transaction
 use crate::{
-    charts::db_interaction::{
-        chart_updaters::{ChartPartialUpdater, ChartUpdater},
-        types::{DateValue, DateValueDouble},
+    data_source::kinds::{
+        remote::{RemoteSource, RemoteSourceWrapper},
+        updateable_chart::batch::clone::{CloneChart, CloneChartWrapper},
     },
-    UpdateError,
+    utils::sql_with_range_filter_opt,
+    Chart, DateValueString, Named,
 };
-use async_trait::async_trait;
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
-
-#[derive(Default, Debug)]
-pub struct AverageTxnFee {}
+use sea_orm::{prelude::*, DbBackend, Statement};
 
 const ETHER: i64 = i64::pow(10, 18);
 
-#[async_trait]
-impl ChartPartialUpdater for AverageTxnFee {
-    async fn get_values(
-        &self,
-        blockscout: &DatabaseConnection,
-        last_updated_row: Option<DateValue>,
-    ) -> Result<Vec<DateValue>, UpdateError> {
-        let stmnt = match last_updated_row {
-            Some(row) => Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
+pub struct AverageTxnFeeRemote;
+
+impl RemoteSource for AverageTxnFeeRemote {
+    type Point = DateValueString;
+
+    fn get_query(range: Option<std::ops::RangeInclusive<DateTimeUtc>>) -> Statement {
+        sql_with_range_filter_opt!(
+            DbBackend::Postgres,
+            r#"
                 SELECT 
                     DATE(b.timestamp) as date, 
                     (AVG(t.gas_used * t.gas_price) / $1)::FLOAT as value
@@ -33,64 +28,33 @@ impl ChartPartialUpdater for AverageTxnFee {
                 JOIN blocks       b ON t.block_hash = b.hash
                 WHERE
                     b.timestamp != to_timestamp(0) AND
-                    DATE(b.timestamp) > $2 AND
-                    b.consensus = true
+                    b.consensus = true {filter}
                 GROUP BY DATE(b.timestamp)
-                "#,
-                vec![ETHER.into(), row.date.into()],
-            ),
-            None => Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
-                SELECT 
-                    DATE(b.timestamp) as date, 
-                    (AVG(t.gas_used * t.gas_price) / $1)::FLOAT as value
-                FROM transactions t
-                JOIN blocks       b ON t.block_hash = b.hash
-                WHERE 
-                    b.timestamp != to_timestamp(0) AND
-                    b.consensus = true
-                GROUP BY DATE(b.timestamp)
-                "#,
-                vec![ETHER.into()],
-            ),
-        };
-
-        let data = DateValueDouble::find_by_statement(stmnt)
-            .all(blockscout)
-            .await
-            .map_err(UpdateError::BlockscoutDB)?
-            .into_iter()
-            .map(DateValue::from)
-            .collect::<Vec<_>>();
-        Ok(data)
+            "#,
+            [ETHER.into()],
+            "b.timestamp",
+            range
+        )
     }
 }
 
-#[async_trait]
-impl crate::Chart for AverageTxnFee {
-    fn name(&self) -> &str {
-        "averageTxnFee"
-    }
+pub struct AverageTxnFeeInner;
 
-    fn chart_type(&self) -> ChartType {
+impl Named for AverageTxnFeeInner {
+    const NAME: &'static str = "averageTxnFee";
+}
+
+impl Chart for AverageTxnFeeInner {
+    fn chart_type() -> ChartType {
         ChartType::Line
     }
 }
 
-#[async_trait]
-impl ChartUpdater for AverageTxnFee {
-    async fn update_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<chrono::Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, current_time, force_full)
-            .await
-    }
+impl CloneChart for AverageTxnFeeInner {
+    type Dependency = RemoteSourceWrapper<AverageTxnFeeRemote>;
 }
+
+pub type AverageTxnFee = CloneChartWrapper<AverageTxnFeeInner>;
 
 #[cfg(test)]
 mod tests {
@@ -100,10 +64,8 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_average_txn_fee() {
-        let chart = AverageTxnFee::default();
-        simple_test_chart(
+        simple_test_chart::<AverageTxnFee>(
             "update_average_txn_fee",
-            chart,
             vec![
                 ("2022-11-09", "0.0000094370370276"),
                 ("2022-11-10", "0.00004128703699575"),

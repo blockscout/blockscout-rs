@@ -1,110 +1,89 @@
 use crate::{
-    charts::db_interaction::{
-        chart_updaters::{ChartPartialUpdater, ChartUpdater},
-        types::{DateValue, DateValueDecimal},
+    charts::db_interaction::types::DateValueDecimal,
+    data_source::kinds::{
+        adapter::{SourceAdapter, SourceAdapterWrapper},
+        remote::{RemoteSource, RemoteSourceWrapper},
+        updateable_chart::cumulative::{CumulativeChart, CumulativeChartWrapper},
     },
-    MissingDatePolicy, UpdateError,
+    utils::sql_with_range_filter_opt,
+    Chart, MissingDatePolicy, Named, UpdateError,
 };
-use async_trait::async_trait;
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
+use sea_orm::{prelude::*, DbBackend, Statement};
 
-#[derive(Default, Debug)]
-pub struct GasUsedGrowth {}
+pub struct GasUsedPartialRemote;
 
-#[async_trait]
-impl ChartPartialUpdater for GasUsedGrowth {
-    async fn get_values(
-        &self,
-        blockscout: &DatabaseConnection,
-        last_updated_row: Option<DateValue>,
-    ) -> Result<Vec<DateValue>, UpdateError> {
-        let data = match last_updated_row {
-            Some(row) => {
-                let last_value = Decimal::from_str_exact(&row.value).map_err(|e| {
-                    UpdateError::Internal(format!("failed to parse previous value: {e}"))
-                })?;
-                let stmnt = Statement::from_sql_and_values(
-                    DbBackend::Postgres,
-                    r#"
+impl RemoteSource for GasUsedPartialRemote {
+    type Point = DateValueDecimal;
+
+    fn get_query(range: Option<std::ops::RangeInclusive<DateTimeUtc>>) -> Statement {
+        sql_with_range_filter_opt!(
+            DbBackend::Postgres,
+            r#"
                     SELECT 
                         DATE(blocks.timestamp) as date, 
                         (sum(sum(blocks.gas_used)) OVER (ORDER BY date(blocks.timestamp))) AS value
                     FROM blocks
                     WHERE 
                         blocks.timestamp != to_timestamp(0) AND 
-                        DATE(blocks.timestamp) > $1 AND 
-                        blocks.consensus = true
+                        blocks.consensus = true {filter}
                     GROUP BY date(blocks.timestamp)
                     ORDER BY date;
-                    "#,
-                    vec![row.date.into()],
-                );
-                DateValueDecimal::find_by_statement(stmnt)
-                    .all(blockscout)
-                    .await
-                    .map_err(UpdateError::BlockscoutDB)?
-                    .into_iter()
-                    .map(|mut point| {
-                        point.value += last_value;
-                        point
-                    })
-                    .map(|point| point.into())
-                    .collect()
-            }
-            None => {
-                let stmnt = Statement::from_sql_and_values(
-                    DbBackend::Postgres,
-                    r#"
-                    SELECT 
-                        DATE(blocks.timestamp) as date, 
-                        (sum(sum(blocks.gas_used)) OVER (ORDER BY date(blocks.timestamp)))::TEXT AS value
-                    FROM blocks
-                    WHERE 
-                        blocks.timestamp != to_timestamp(0) AND 
-                        blocks.consensus = true
-                    GROUP BY date(blocks.timestamp)
-                    ORDER BY date;
-                    "#,
-                    vec![],
-                );
-                DateValue::find_by_statement(stmnt)
-                    .all(blockscout)
-                    .await
-                    .map_err(UpdateError::BlockscoutDB)?
-            }
-        };
-
-        Ok(data)
+            "#,
+            [],
+            "blocks.timestamp",
+            range
+        )
     }
 }
 
-#[async_trait]
-impl crate::Chart for GasUsedGrowth {
-    fn name(&self) -> &str {
-        "gasUsedGrowth"
+pub type GasUsedPartial = RemoteSourceWrapper<GasUsedPartialRemote>;
+
+pub struct NewGasUsedRemote;
+
+// for `Cumulative` error reporting
+impl Named for NewGasUsedRemote {
+    const NAME: &'static str = "newGasUsedAdapter";
+}
+
+impl SourceAdapter for NewGasUsedRemote {
+    type InnerSource = GasUsedPartial;
+    type Output = Vec<DateValueDecimal>;
+
+    fn function(inner_data: Vec<DateValueDecimal>) -> Result<Vec<DateValueDecimal>, UpdateError> {
+        Ok(inner_data
+            .into_iter()
+            .scan(Decimal::ZERO, |state, mut next| {
+                let next_diff = next.value.saturating_sub(*state);
+                *state = next.value;
+                next.value = next_diff;
+                Some(next)
+            })
+            .collect())
     }
-    fn chart_type(&self) -> ChartType {
+}
+
+pub struct GasUsedGrowthInner;
+
+impl Named for GasUsedGrowthInner {
+    const NAME: &'static str = "gasUsedGrowth";
+}
+
+impl Chart for GasUsedGrowthInner {
+    fn chart_type() -> ChartType {
         ChartType::Line
     }
-    fn missing_date_policy(&self) -> MissingDatePolicy {
+    fn missing_date_policy() -> MissingDatePolicy {
         MissingDatePolicy::FillPrevious
     }
 }
 
-#[async_trait]
-impl ChartUpdater for GasUsedGrowth {
-    async fn update_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<chrono::Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, current_time, force_full)
-            .await
-    }
+impl CumulativeChart for GasUsedGrowthInner {
+    type DeltaChart = SourceAdapterWrapper<NewGasUsedRemote>;
+    type DeltaChartPoint = DateValueDecimal;
 }
+
+pub type GasUsedGrowth = CumulativeChartWrapper<GasUsedGrowthInner>;
 
 #[cfg(test)]
 mod tests {
@@ -114,10 +93,8 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_gas_used_growth() {
-        let chart = GasUsedGrowth::default();
-        simple_test_chart(
+        simple_test_chart::<GasUsedGrowth>(
             "update_gas_used_growth",
-            chart,
             vec![
                 ("2022-11-09", "10000"),
                 ("2022-11-10", "91780"),
@@ -135,11 +112,9 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn ranged_update_gas_used_growth() {
-        let chart = GasUsedGrowth::default();
         let value_2022_11_12 = "250680";
-        ranged_test_chart(
+        ranged_test_chart::<GasUsedGrowth>(
             "ranged_update_gas_used_growth",
-            chart,
             vec![
                 ("2022-11-20", value_2022_11_12),
                 ("2022-11-21", value_2022_11_12),
@@ -156,6 +131,7 @@ mod tests {
             ],
             "2022-11-20".parse().unwrap(),
             "2022-12-01".parse().unwrap(),
+            None,
         )
         .await;
     }

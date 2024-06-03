@@ -1,94 +1,67 @@
+use std::ops::RangeInclusive;
+
 use crate::{
-    charts::db_interaction::{
-        chart_updaters::{ChartPartialUpdater, ChartUpdater},
-        types::DateValue,
+    data_source::kinds::{
+        remote::{RemoteSource, RemoteSourceWrapper},
+        updateable_chart::batch::clone::{CloneChart, CloneChartWrapper},
     },
-    UpdateError,
+    utils::sql_with_range_filter_opt,
+    Chart, DateValueString, Named,
 };
-use async_trait::async_trait;
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
+use sea_orm::{prelude::*, DbBackend, Statement};
 
-#[derive(Default, Debug)]
-pub struct NewBlocks {}
+pub struct NewBlocksRemote;
 
-#[async_trait]
-impl ChartPartialUpdater for NewBlocks {
-    async fn get_values(
-        &self,
-        blockscout: &DatabaseConnection,
-        last_updated_row: Option<DateValue>,
-    ) -> Result<Vec<DateValue>, UpdateError> {
-        let stmnt = match last_updated_row {
-            Some(row) => Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
+impl RemoteSource for NewBlocksRemote {
+    type Point = DateValueString;
+    fn get_query(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+        sql_with_range_filter_opt!(
+            DbBackend::Postgres,
+            r#"
                     SELECT date(blocks.timestamp) as date, COUNT(*)::TEXT as value
                         FROM public.blocks
                         WHERE 
                             blocks.timestamp != to_timestamp(0) AND
-                            date(blocks.timestamp) > $1 AND
-                            consensus = true
+                            consensus = true {filter}
                         GROUP BY date;
-                    "#,
-                vec![row.date.into()],
-            ),
-            None => Statement::from_string(
-                DbBackend::Postgres,
-                r#"
-                    SELECT date(blocks.timestamp) as date, COUNT(*)::TEXT as value
-                        FROM public.blocks
-                        WHERE 
-                            blocks.timestamp != to_timestamp(0) AND 
-                            consensus = true
-                        GROUP BY date;
-                    "#
-                .into(),
-            ),
-        };
-        let data = DateValue::find_by_statement(stmnt)
-            .all(blockscout)
-            .await
-            .map_err(UpdateError::BlockscoutDB)?;
-        Ok(data)
+            "#,
+            [],
+            "blocks.timestamp",
+            range
+        )
     }
 }
 
-#[async_trait]
-impl crate::Chart for NewBlocks {
-    fn name(&self) -> &str {
-        "newBlocks"
-    }
+pub struct NewBlocksInner;
 
-    fn chart_type(&self) -> ChartType {
+impl Named for NewBlocksInner {
+    const NAME: &'static str = "newBlocks";
+}
+
+impl Chart for NewBlocksInner {
+    fn chart_type() -> ChartType {
         ChartType::Line
     }
 }
 
-#[async_trait]
-impl ChartUpdater for NewBlocks {
-    async fn update_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<chrono::Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, current_time, force_full)
-            .await
-    }
+impl CloneChart for NewBlocksInner {
+    type Dependency = RemoteSourceWrapper<NewBlocksRemote>;
 }
+
+pub type NewBlocks = CloneChartWrapper<NewBlocksInner>;
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
-        charts::db_interaction::chart_updaters::common_operations::get_min_block_blockscout,
+        charts::db_interaction::read::get_min_block_blockscout,
+        data_source::{DataSource, UpdateContext},
         get_chart_data,
         tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
-        Chart, ExtendedDateValue,
+        ExtendedDateValue,
     };
-    use chrono::NaiveDate;
+    use chrono::{NaiveDate, Utc};
     use entity::chart_data;
     use pretty_assertions::assert_eq;
     use sea_orm::Set;
@@ -99,12 +72,13 @@ mod tests {
     async fn update_new_blocks_recurrent() {
         let _ = tracing_subscriber::fmt::try_init();
         let (db, blockscout) = init_db_all("update_new_blocks_recurrent").await;
-        let current_time = chrono::DateTime::from_str("2022-11-12T12:00:00Z").unwrap();
+        let current_time = chrono::DateTime::<Utc>::from_str("2022-11-12T12:00:00Z").unwrap();
         let current_date = current_time.date_naive();
         fill_mock_blockscout_data(&blockscout, current_date).await;
 
-        let updater = NewBlocks::default();
-        updater.create(&db).await.unwrap();
+        NewBlocks::init_recursively(&db, &current_time)
+            .await
+            .unwrap();
 
         let min_blockscout_block = get_min_block_blockscout(&blockscout).await.unwrap();
         // set wrong value and check, that it was rewritten
@@ -129,11 +103,14 @@ mod tests {
         .unwrap();
 
         // Note that update is not full, therefore there is no entry with date `2022-11-09`
-        updater
-            .update(&db, &blockscout, current_time, false)
-            .await
-            .unwrap();
-        let data = get_chart_data(&db, updater.name(), None, None, None, None, 1)
+        let mut cx = UpdateContext {
+            db: &db,
+            blockscout: &blockscout,
+            time: current_time,
+            force_full: false,
+        };
+        NewBlocks::update_recursively(&cx).await.unwrap();
+        let data = get_chart_data(&db, NewBlocks::NAME, None, None, None, None, 1)
             .await
             .unwrap();
         let expected = vec![
@@ -156,11 +133,9 @@ mod tests {
         assert_eq!(expected, data);
 
         // note that update is full, therefore there is entry with date `2022-11-09`
-        updater
-            .update(&db, &blockscout, current_time, true)
-            .await
-            .unwrap();
-        let data = get_chart_data(&db, updater.name(), None, None, None, None, 1)
+        cx.force_full = true;
+        NewBlocks::update_recursively(&cx).await.unwrap();
+        let data = get_chart_data(&db, NewBlocks::NAME, None, None, None, None, 1)
             .await
             .unwrap();
         let expected = vec![
@@ -197,14 +172,18 @@ mod tests {
         let current_date = current_time.date_naive();
         fill_mock_blockscout_data(&blockscout, current_date).await;
 
-        let updater = NewBlocks::default();
-        updater.create(&db).await.unwrap();
-
-        updater
-            .update(&db, &blockscout, current_time, true)
+        NewBlocks::init_recursively(&db, &current_time)
             .await
             .unwrap();
-        let data = get_chart_data(&db, updater.name(), None, None, None, None, 0)
+
+        let cx = UpdateContext {
+            db: &db,
+            blockscout: &blockscout,
+            time: current_time,
+            force_full: true,
+        };
+        NewBlocks::update_recursively(&cx).await.unwrap();
+        let data = get_chart_data(&db, NewBlocks::NAME, None, None, None, None, 0)
             .await
             .unwrap();
         let expected = vec![
@@ -241,8 +220,9 @@ mod tests {
         let current_date = current_time.date_naive();
         fill_mock_blockscout_data(&blockscout, current_date).await;
 
-        let updater = NewBlocks::default();
-        updater.create(&db).await.unwrap();
+        NewBlocks::init_recursively(&db, &current_time)
+            .await
+            .unwrap();
 
         let min_blockscout_block = get_min_block_blockscout(&blockscout).await.unwrap();
         // set wrong values and check, that they wasn't rewritten
@@ -281,11 +261,14 @@ mod tests {
         .await
         .unwrap();
 
-        updater
-            .update(&db, &blockscout, current_time, false)
-            .await
-            .unwrap();
-        let data = get_chart_data(&db, updater.name(), None, None, None, None, 1)
+        let cx = UpdateContext {
+            db: &db,
+            blockscout: &blockscout,
+            time: current_time,
+            force_full: false,
+        };
+        NewBlocks::update_recursively(&cx).await.unwrap();
+        let data = get_chart_data(&db, NewBlocks::NAME, None, None, None, None, 1)
             .await
             .unwrap();
         let expected = vec![

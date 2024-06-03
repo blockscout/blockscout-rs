@@ -1,21 +1,18 @@
-use super::NewContracts;
+use super::new_contracts::NewContractsInt;
 use crate::{
-    charts::{chart::Chart, db_interaction::write::insert_data_many},
-    data_processing::parse_and_cumsum,
-    data_source::{
-        kinds::updateable_chart::batch::{BatchChart, BatchDataSourceWrapper},
-        source::DataSource,
-    },
-    MissingDatePolicy, UpdateError,
+    charts::db_interaction::types::DateValueInt,
+    data_source::kinds::updateable_chart::cumulative::{CumulativeChart, CumulativeChartWrapper},
+    Chart, MissingDatePolicy, Named,
 };
-use chrono::Utc;
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::DatabaseConnection;
 
 pub struct ContractsGrowthInner;
 
-impl crate::Chart for ContractsGrowthInner {
+impl Named for ContractsGrowthInner {
     const NAME: &'static str = "contractsGrowth";
+}
+
+impl Chart for ContractsGrowthInner {
     fn chart_type() -> ChartType {
         ChartType::Line
     }
@@ -24,35 +21,12 @@ impl crate::Chart for ContractsGrowthInner {
     }
 }
 
-impl BatchChart for ContractsGrowthInner {
-    type PrimaryDependency = NewContracts;
-    type SecondaryDependencies = ();
-
-    fn step_duration() -> chrono::Duration {
-        // we need to count cumulative from the beginning
-        chrono::Duration::max_value()
-    }
-
-    async fn batch_update_values_step_with(
-        db: &DatabaseConnection,
-        chart_id: i32,
-        _update_time: chrono::DateTime<Utc>,
-        min_blockscout_block: i64,
-        primary_data: <Self::PrimaryDependency as DataSource>::Output,
-        _secondary_data: <Self::SecondaryDependencies as DataSource>::Output,
-    ) -> Result<usize, UpdateError> {
-        let found = primary_data.values.len();
-        let values = parse_and_cumsum::<i64>(primary_data.values, Self::PrimaryDependency::NAME)?
-            .into_iter()
-            .map(|value| value.active_model(chart_id, Some(min_blockscout_block)));
-        insert_data_many(db, values)
-            .await
-            .map_err(UpdateError::StatsDB)?;
-        Ok(found)
-    }
+impl CumulativeChart for ContractsGrowthInner {
+    type DeltaChart = NewContractsInt;
+    type DeltaChartPoint = DateValueInt;
 }
 
-pub type ContractsGrowth = BatchDataSourceWrapper<ContractsGrowthInner>;
+pub type ContractsGrowth = CumulativeChartWrapper<ContractsGrowthInner>;
 
 #[cfg(test)]
 mod tests {

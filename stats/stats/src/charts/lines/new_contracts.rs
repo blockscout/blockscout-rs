@@ -1,16 +1,25 @@
-use crate::data_source::kinds::{
-    remote::RemoteSource,
-    updateable_chart::batch::remote::{RemoteChart, RemoteDataSourceWrapper},
+use std::ops::RangeInclusive;
+
+use crate::{
+    charts::db_interaction::types::DateValueInt,
+    data_source::kinds::{
+        adapter::{ParseAdapter, ParseAdapterWrapper},
+        remote::{RemoteSource, RemoteSourceWrapper},
+        updateable_chart::batch::clone::{CloneChart, CloneChartWrapper},
+    },
+    utils::sql_with_range_filter_opt,
+    Chart, DateValueString, Named,
 };
-use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{DbBackend, Statement};
+use sea_orm::{prelude::DateTimeUtc, DbBackend, Statement};
 
 pub struct NewContractsRemote;
 
 impl RemoteSource for NewContractsRemote {
-    fn get_query(from: NaiveDate, to: NaiveDate) -> Statement {
-        Statement::from_sql_and_values(
+    type Point = DateValueString;
+
+    fn get_query(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+        sql_with_range_filter_opt!(
             DbBackend::Postgres,
             r#"SELECT day AS date, COUNT(*)::text AS value
                 FROM (
@@ -26,9 +35,7 @@ impl RemoteSource for NewContractsRemote {
                         WHERE
                             t.created_contract_address_hash NOTNULL AND
                             b.consensus = TRUE AND
-                            b.timestamp != to_timestamp(0) AND
-                            b.timestamp::date < $2 AND
-                            b.timestamp::date >= $1
+                            b.timestamp != to_timestamp(0) {filter}
                         UNION
                         SELECT
                             it.created_contract_address_hash AS hash,
@@ -38,33 +45,44 @@ impl RemoteSource for NewContractsRemote {
                         WHERE
                             it.created_contract_address_hash NOTNULL AND
                             b.consensus = TRUE AND
-                            b.timestamp != to_timestamp(0) AND
-                            b.timestamp::date < $2 AND
-                            b.timestamp::date >= $1
+                            b.timestamp != to_timestamp(0) {filter}
                     ) txns_plus_internal_txns
                 ) sub
                 GROUP BY sub.day;
-                "#,
-            vec![from.into(), to.into()],
+            "#,
+            [],
+            "b.timestamp",
+            range,
         )
     }
 }
 
-pub struct NewContractsInner;
+pub struct NewAccountsInner;
 
-impl crate::Chart for NewContractsInner {
+impl Named for NewAccountsInner {
     const NAME: &'static str = "newContracts";
+}
 
+impl Chart for NewAccountsInner {
     fn chart_type() -> ChartType {
         ChartType::Line
     }
 }
 
-impl RemoteChart for NewContractsInner {
-    type Dependency = NewContractsRemote;
+impl CloneChart for NewAccountsInner {
+    type Dependency = RemoteSourceWrapper<NewContractsRemote>;
 }
 
-pub type NewContracts = RemoteDataSourceWrapper<NewContractsInner>;
+pub type NewContracts = CloneChartWrapper<NewAccountsInner>;
+
+pub struct NewContractsIntInner;
+
+impl ParseAdapter for NewContractsIntInner {
+    type InnerSource = NewContracts;
+    type ParseInto = DateValueInt;
+}
+
+pub type NewContractsInt = ParseAdapterWrapper<NewContractsIntInner>;
 
 #[cfg(test)]
 mod tests {

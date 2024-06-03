@@ -1,46 +1,24 @@
+use std::ops::RangeInclusive;
+
 use crate::{
-    charts::db_interaction::{
-        chart_updaters::{ChartPartialUpdater, ChartUpdater},
-        types::DateValue,
+    data_source::kinds::{
+        remote::{RemoteSource, RemoteSourceWrapper},
+        updateable_chart::batch::clone::{CloneChart, CloneChartWrapper},
     },
-    UpdateError,
+    utils::sql_with_range_filter_opt,
+    Chart, DateValueString, Named,
 };
-use async_trait::async_trait;
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
+use sea_orm::{prelude::*, DbBackend, Statement};
 
-#[derive(Default, Debug)]
-pub struct NewNativeCoinTransfers {}
+pub struct NewNativeCoinTransfersRemote;
 
-#[async_trait]
-impl ChartPartialUpdater for NewNativeCoinTransfers {
-    async fn get_values(
-        &self,
-        blockscout: &DatabaseConnection,
-        last_updated_row: Option<DateValue>,
-    ) -> Result<Vec<DateValue>, UpdateError> {
-        let stmnt = match last_updated_row {
-            Some(row) => Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
-                SELECT 
-                    DATE(b.timestamp) as date,
-                    COUNT(*)::TEXT as value
-                FROM transactions t
-                JOIN blocks       b ON t.block_hash = b.hash
-                WHERE
-                    b.timestamp != to_timestamp(0) AND
-                    DATE(b.timestamp) > $1 AND
-                    b.consensus = true AND
-                    LENGTH(t.input) = 0 AND
-                    t.value >= 0
-                GROUP BY date
-                "#,
-                vec![row.date.into()],
-            ),
-            None => Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
+impl RemoteSource for NewNativeCoinTransfersRemote {
+    type Point = DateValueString;
+    fn get_query(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+        sql_with_range_filter_opt!(
+            DbBackend::Postgres,
+            r#"
                 SELECT 
                     DATE(b.timestamp) as date,
                     COUNT(*)::TEXT as value
@@ -50,45 +28,33 @@ impl ChartPartialUpdater for NewNativeCoinTransfers {
                     b.timestamp != to_timestamp(0) AND
                     b.consensus = true AND
                     LENGTH(t.input) = 0 AND
-                    t.value >= 0
+                    t.value >= 0 {filter}
                 GROUP BY date
-                "#,
-                vec![],
-            ),
-        };
-
-        let data = DateValue::find_by_statement(stmnt)
-            .all(blockscout)
-            .await
-            .map_err(UpdateError::BlockscoutDB)?;
-        Ok(data)
+            "#,
+            [],
+            "b.timestamp",
+            range
+        )
     }
 }
 
-#[async_trait]
-impl crate::Chart for NewNativeCoinTransfers {
-    fn name(&self) -> &str {
-        "newNativeCoinTransfers"
-    }
+pub struct NewNativeCoinTransfersInner;
 
-    fn chart_type(&self) -> ChartType {
+impl Named for NewNativeCoinTransfersInner {
+    const NAME: &'static str = "newNativeCoinTransfers";
+}
+
+impl Chart for NewNativeCoinTransfersInner {
+    fn chart_type() -> ChartType {
         ChartType::Line
     }
 }
 
-#[async_trait]
-impl ChartUpdater for NewNativeCoinTransfers {
-    async fn update_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<chrono::Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, current_time, force_full)
-            .await
-    }
+impl CloneChart for NewNativeCoinTransfersInner {
+    type Dependency = RemoteSourceWrapper<NewNativeCoinTransfersRemote>;
 }
+
+pub type NewNativeCoinTransfers = CloneChartWrapper<NewNativeCoinTransfersInner>;
 
 #[cfg(test)]
 mod tests {
@@ -98,10 +64,8 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_native_coins_transfers() {
-        let chart = NewNativeCoinTransfers::default();
-        simple_test_chart(
+        simple_test_chart::<NewNativeCoinTransfers>(
             "update_native_coins_transfers",
-            chart,
             vec![
                 ("2022-11-09", "2"),
                 ("2022-11-10", "4"),

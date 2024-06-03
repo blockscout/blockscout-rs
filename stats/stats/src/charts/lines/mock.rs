@@ -69,7 +69,7 @@ impl<T: SampleUniform + PartialOrd + Clone + ToString + Send + Sync + 'static> c
         &self.name
     }
 
-    fn chart_type(&self) -> ChartType {
+    fn chart_type() -> ChartType {
         ChartType::Line
     }
 }

@@ -28,6 +28,9 @@ use super::{UpdateableChart, UpdateableChartWrapper};
 
 /// See [module-level documentation](self) for details.
 pub trait CumulativeChart: Chart {
+    // only need because couldn't figure out how to "extract" generic
+    // T from `Vec` and place bounds on it
+    /// Type of elements in the output of [`DeltaChart`](CumulativeChart::DeltaChart)
     type DeltaChartPoint: Point + Default;
     type DeltaChart: DataSource<Output = Vec<Self::DeltaChartPoint>>;
 }
