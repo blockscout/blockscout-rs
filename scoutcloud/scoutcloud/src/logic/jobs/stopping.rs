@@ -49,7 +49,7 @@ impl AsyncRunnable for StoppingTask {
 
         // todo: save run_id to database and if deployment in stopping state, watch for it
         let result = match deployment.model.status {
-            DeploymentStatusType::Running => {
+            DeploymentStatusType::Running | DeploymentStatusType::Unhealthy => {
                 self.github_stop_and_wait(db.as_ref(), github.as_ref(), &instance, &mut deployment)
                     .await
             }

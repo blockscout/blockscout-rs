@@ -48,7 +48,7 @@ impl AsyncRunnable for CheckBalanceTask {
         tracing::info!(unpaid = ?unpaid_list, "found {} unpaid deployments. start processing", unpaid_list.len());
         for unpaid in unpaid_list {
             if unpaid.creator_can_pay(&tx).await.map_err(DeployError::Db)? {
-                unpaid.mark_as_paid(&tx).await.map_err(DeployError::Db)?;
+                unpaid.create_expense(&tx).await.map_err(DeployError::Db)?;
             } else {
                 tracing::info!(
                     user_id = unpaid.creator_id,
@@ -56,7 +56,7 @@ impl AsyncRunnable for CheckBalanceTask {
                     "user can't pay for deployment. stopping deployment",
                 );
                 // create expense in any case, user balance will be negative
-                unpaid.mark_as_paid(&tx).await.map_err(DeployError::Db)?;
+                unpaid.create_expense(&tx).await.map_err(DeployError::Db)?;
                 // TODO: maybe notify user?
                 client
                     .insert_task(&StoppingTask::from_deployment_id(unpaid.deployment_id))
@@ -146,7 +146,7 @@ impl UnpaidDeployment {
         Ok(user.balance >= self.expense_amount())
     }
 
-    pub async fn mark_as_paid<C>(&self, db: &C) -> Result<(), DbErr>
+    pub async fn create_expense<C>(&self, db: &C) -> Result<(), DbErr>
     where
         C: ConnectionTrait,
     {

@@ -1,5 +1,6 @@
 use crate::logic::{
-    ConfigError, ConfigValidationContext, ParsedVariable, ParsedVariableKey, UserVariable,
+    blockscout::blockscout_indexing_status, ConfigError, ConfigValidationContext, ParsedVariable,
+    ParsedVariableKey, UserVariable,
 };
 use url::Url;
 
@@ -77,13 +78,8 @@ fn extract_base_blockscout_url(context: &ConfigValidationContext) -> Result<Url,
 }
 
 async fn is_blockscout_indexing_finished(base_url: &Url) -> Result<bool, anyhow::Error> {
-    let status = blockscout_client::main_page::indexing_status::get(
-        &blockscout_client::Client::new(blockscout_client::Config::new(
-            "blockscout".to_string(),
-            base_url.clone(),
-        )),
-    )
-    .await
-    .map_err(|e| anyhow::anyhow!("failed to check blockscout ({base_url}) index status: {e}"))?;
-    Ok(status.finished_indexing)
+    blockscout_indexing_status(base_url)
+        .await
+        .map(|status| status.finished_indexing)
+        .map_err(|e| anyhow::anyhow!("failed to get blockscout indexing status: {:?}", e))
 }

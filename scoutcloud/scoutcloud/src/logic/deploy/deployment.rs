@@ -93,6 +93,19 @@ impl Deployment {
             .map(|model| Deployment { model });
         Ok(deployment)
     }
+
+    pub async fn find_running<C: ConnectionTrait>(db: &C) -> Result<Vec<Self>, DbErr> {
+        let deployments = Self::default_select()
+            .filter(
+                scoutcloud_entity::deployments::Column::Status.eq(DeploymentStatusType::Running),
+            )
+            .all(db)
+            .await?
+            .into_iter()
+            .map(Self::new)
+            .collect();
+        Ok(deployments)
+    }
 }
 
 impl Deployment {
@@ -182,5 +195,6 @@ pub fn map_deployment_status(status: Option<&DeploymentStatusType>) -> proto::De
         Some(DeploymentStatusType::Failed) => proto::DeploymentStatus::Failed,
         Some(DeploymentStatusType::Stopping) => proto::DeploymentStatus::Stopping,
         Some(DeploymentStatusType::Stopped) => proto::DeploymentStatus::Stopped,
+        Some(DeploymentStatusType::Unhealthy) => proto::DeploymentStatus::Unhealthy,
     }
 }

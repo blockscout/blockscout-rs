@@ -66,7 +66,8 @@ impl AsyncRunnable for StartingTask {
             }
             DeploymentStatusType::Pending
             | DeploymentStatusType::Stopping
-            | DeploymentStatusType::Failed => {
+            | DeploymentStatusType::Failed
+            | DeploymentStatusType::Unhealthy => {
                 tracing::warn!(
                     "cannot start deployment '{}': state '{:?}' is invalid",
                     self.deployment_id,

@@ -1,3 +1,4 @@
+mod blockscout;
 mod config;
 mod db_utils;
 pub mod deploy;

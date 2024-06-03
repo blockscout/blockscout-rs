@@ -480,6 +480,7 @@ definitions:
       - STOPPING
       - STOPPED
       - FAILED
+      - UNHEALTHY
     default: NO_STATUS
   v1GetAuthTokensResponse:
     type: object

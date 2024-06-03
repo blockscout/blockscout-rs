@@ -248,6 +248,7 @@ enum DeploymentStatus {
   STOPPING = 4;
   STOPPED = 5;
   FAILED = 6;
+  UNHEALTHY = 7;
 }
 
 enum UpdateInstanceAction {

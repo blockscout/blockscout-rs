@@ -108,6 +108,23 @@ impl InstanceDeployment {
             .collect())
     }
 
+    // pub async fn find_running_deployments<C: ConnectionTrait>(db: &C) -> Result<Vec<Self>, DeployError> {
+    //
+    //
+    //     let instances = deployments.load_one(Instance::default_select(), db)
+    //         .await?
+    //         .into_iter()
+    //         .map(|maybe_instance| maybe_instance.ok_or_else(|| anyhow::anyhow!("instance not found for deployment")))
+    //         .collect::<Result<Vec<_>, _>>()?;
+    //
+    //     Ok(instances.into_iter().zip(deployments.into_iter()).map(|(instance, deployment)| {
+    //         InstanceDeployment {
+    //             instance: Instance::new(instance),
+    //             deployment: Deployment::new(deployment),
+    //         }
+    //     }).collect())
+    // }
+
     pub fn deployment_status(&self) -> proto::DeploymentStatus {
         map_deployment_status(self.deployment.as_ref().map(|d| &d.model.status))
     }
