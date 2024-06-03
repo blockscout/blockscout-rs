@@ -1,10 +1,12 @@
 use crate::{
+    charts::db_interaction::types::DateValueDouble,
     data_source::kinds::{
+        adapter::{ToStringAdapter, ToStringAdapterWrapper},
         remote::{RemoteSource, RemoteSourceWrapper},
         updateable_chart::batch::clone::{CloneChart, CloneChartWrapper},
     },
     utils::sql_with_range_filter_opt,
-    Chart, DateValueString, Named,
+    Chart, Named,
 };
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, Statement};
@@ -14,7 +16,7 @@ const ETH: i64 = 1_000_000_000_000_000_000;
 pub struct AverageBlockRewardsRemote;
 
 impl RemoteSource for AverageBlockRewardsRemote {
-    type Point = DateValueString;
+    type Point = DateValueDouble;
 
     fn get_query(range: Option<std::ops::RangeInclusive<DateTimeUtc>>) -> Statement {
         sql_with_range_filter_opt!(
@@ -37,6 +39,13 @@ impl RemoteSource for AverageBlockRewardsRemote {
     }
 }
 
+pub struct AverageBlockRewardsRemoteString;
+
+impl ToStringAdapter for AverageBlockRewardsRemoteString {
+    type InnerSource = RemoteSourceWrapper<AverageBlockRewardsRemote>;
+    type ConvertFrom = <AverageBlockRewardsRemote as RemoteSource>::Point;
+}
+
 pub struct AverageBlockRewardsInner;
 
 impl Named for AverageBlockRewardsInner {
@@ -50,7 +59,7 @@ impl Chart for AverageBlockRewardsInner {
 }
 
 impl CloneChart for AverageBlockRewardsInner {
-    type Dependency = RemoteSourceWrapper<AverageBlockRewardsRemote>;
+    type Dependency = ToStringAdapterWrapper<AverageBlockRewardsRemoteString>;
 }
 
 pub type AverageBlockRewards = CloneChartWrapper<AverageBlockRewardsInner>;

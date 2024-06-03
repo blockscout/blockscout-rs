@@ -1,10 +1,12 @@
 use crate::{
+    charts::db_interaction::types::DateValueDouble,
     data_source::kinds::{
+        adapter::{ToStringAdapter, ToStringAdapterWrapper},
         remote::{RemoteSource, RemoteSourceWrapper},
         updateable_chart::batch::clone::{CloneChart, CloneChartWrapper},
     },
     utils::sql_with_range_filter_opt,
-    Chart, DateValueString, Named,
+    Chart, Named,
 };
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, Statement};
@@ -14,7 +16,7 @@ const GWEI: i64 = 1_000_000_000;
 pub struct AverageGasPriceRemote;
 
 impl RemoteSource for AverageGasPriceRemote {
-    type Point = DateValueString;
+    type Point = DateValueDouble;
 
     fn get_query(range: Option<std::ops::RangeInclusive<DateTimeUtc>>) -> Statement {
         sql_with_range_filter_opt!(
@@ -45,6 +47,13 @@ impl RemoteSource for AverageGasPriceRemote {
     }
 }
 
+pub struct AverageGasPriceRemoteString;
+
+impl ToStringAdapter for AverageGasPriceRemoteString {
+    type InnerSource = RemoteSourceWrapper<AverageGasPriceRemote>;
+    type ConvertFrom = <AverageGasPriceRemote as RemoteSource>::Point;
+}
+
 pub struct AverageGasPriceInner;
 
 impl Named for AverageGasPriceInner {
@@ -58,7 +67,7 @@ impl Chart for AverageGasPriceInner {
 }
 
 impl CloneChart for AverageGasPriceInner {
-    type Dependency = RemoteSourceWrapper<AverageGasPriceRemote>;
+    type Dependency = ToStringAdapterWrapper<AverageGasPriceRemoteString>;
 }
 
 pub type AverageGasPrice = CloneChartWrapper<AverageGasPriceInner>;

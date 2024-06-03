@@ -1,11 +1,13 @@
 //! Average fee per transaction
 use crate::{
+    charts::db_interaction::types::DateValueDouble,
     data_source::kinds::{
+        adapter::{ToStringAdapter, ToStringAdapterWrapper},
         remote::{RemoteSource, RemoteSourceWrapper},
         updateable_chart::batch::clone::{CloneChart, CloneChartWrapper},
     },
     utils::sql_with_range_filter_opt,
-    Chart, DateValueString, Named,
+    Chart, Named,
 };
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, Statement};
@@ -15,7 +17,7 @@ const ETHER: i64 = i64::pow(10, 18);
 pub struct AverageTxnFeeRemote;
 
 impl RemoteSource for AverageTxnFeeRemote {
-    type Point = DateValueString;
+    type Point = DateValueDouble;
 
     fn get_query(range: Option<std::ops::RangeInclusive<DateTimeUtc>>) -> Statement {
         sql_with_range_filter_opt!(
@@ -38,6 +40,13 @@ impl RemoteSource for AverageTxnFeeRemote {
     }
 }
 
+pub struct AverageTxnFeeRemoteString;
+
+impl ToStringAdapter for AverageTxnFeeRemoteString {
+    type InnerSource = RemoteSourceWrapper<AverageTxnFeeRemote>;
+    type ConvertFrom = <AverageTxnFeeRemote as RemoteSource>::Point;
+}
+
 pub struct AverageTxnFeeInner;
 
 impl Named for AverageTxnFeeInner {
@@ -51,7 +60,7 @@ impl Chart for AverageTxnFeeInner {
 }
 
 impl CloneChart for AverageTxnFeeInner {
-    type Dependency = RemoteSourceWrapper<AverageTxnFeeRemote>;
+    type Dependency = ToStringAdapterWrapper<AverageTxnFeeRemoteString>;
 }
 
 pub type AverageTxnFee = CloneChartWrapper<AverageTxnFeeInner>;
