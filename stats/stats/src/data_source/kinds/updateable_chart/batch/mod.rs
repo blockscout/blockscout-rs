@@ -92,7 +92,7 @@ where
     };
     let first_date_time = day_start(first_date);
 
-    let steps = generate_date_ranges(first_date_time, now, U::batch_len());
+    let steps = generate_date_time_ranges(first_date_time, now, U::batch_len());
     let n = steps.len();
 
     for (i, range) in steps.into_iter().enumerate() {
@@ -168,22 +168,24 @@ where
     }
 }
 
-fn generate_date_ranges(
+/// Split the range [`start`, `end`] into multiple
+/// with maximum length `step`
+fn generate_date_time_ranges(
     start: DateTimeUtc,
     end: DateTimeUtc,
-    step: Duration,
+    max_step: Duration,
 ) -> Vec<RangeInclusive<DateTimeUtc>> {
     let mut date_range = Vec::new();
-    let mut current_date = start;
+    let mut current_date_time = start;
 
-    while current_date < end {
+    while current_date_time < end {
         // saturating add, since `step` is expected to be positive
-        let next_date = current_date
-            .checked_add_signed(step)
+        let next_date = current_date_time
+            .checked_add_signed(max_step)
             .unwrap_or(DateTime::<Utc>::MAX_UTC)
             .min(end); // finish the ranges right at the end
-        date_range.push(RangeInclusive::new(current_date, next_date));
-        current_date = next_date;
+        date_range.push(RangeInclusive::new(current_date_time, next_date));
+        current_date_time = next_date;
     }
 
     date_range
@@ -191,46 +193,60 @@ fn generate_date_ranges(
 
 #[cfg(test)]
 mod tests {
-    use crate::tests::point_construction::d;
+    use crate::tests::point_construction::{d, dt};
 
     use super::*;
+    use chrono::{NaiveDate, NaiveTime};
     use pretty_assertions::assert_eq;
+
+    // there are leap seconds and such, thus for testing only
+    fn day_end_ish(date: NaiveDate) -> DateTimeUtc {
+        date.and_time(NaiveTime::from_hms_opt(23, 59, 59).expect("correct time"))
+            .and_utc()
+    }
 
     #[test]
     fn test_generate_date_ranges() {
         for ((from, to), expected) in [
             (
-                (d("2022-01-01"), d("2022-03-14")),
+                (day_start(d("2022-01-01")), day_end_ish(d("2022-03-14"))),
                 vec![
-                    (d("2022-01-01"), d("2022-01-31")),
-                    (d("2022-01-31"), d("2022-03-02")),
-                    (d("2022-03-02"), d("2022-04-01")),
+                    (day_start(d("2022-01-01")), day_start(d("2022-01-31"))),
+                    (day_start(d("2022-01-31")), day_start(d("2022-03-02"))),
+                    (day_start(d("2022-03-02")), day_end_ish(d("2022-03-14"))),
                 ],
             ),
             (
-                (d("2015-07-20"), d("2015-12-31")),
+                (day_start(d("2015-07-20")), day_end_ish(d("2015-12-31"))),
                 vec![
-                    (d("2015-07-20"), d("2015-08-19")),
-                    (d("2015-08-19"), d("2015-09-18")),
-                    (d("2015-09-18"), d("2015-10-18")),
-                    (d("2015-10-18"), d("2015-11-17")),
-                    (d("2015-11-17"), d("2015-12-17")),
-                    (d("2015-12-17"), d("2016-01-16")),
+                    (day_start(d("2015-07-20")), day_start(d("2015-08-19"))),
+                    (day_start(d("2015-08-19")), day_start(d("2015-09-18"))),
+                    (day_start(d("2015-09-18")), day_start(d("2015-10-18"))),
+                    (day_start(d("2015-10-18")), day_start(d("2015-11-17"))),
+                    (day_start(d("2015-11-17")), day_start(d("2015-12-17"))),
+                    (day_start(d("2015-12-17")), day_end_ish(d("2015-12-31"))),
                 ],
             ),
-            ((d("2015-07-20"), d("2015-07-20")), vec![]),
             (
-                (d("2015-07-20"), d("2015-07-21")),
-                vec![(d("2015-07-20"), d("2015-08-19"))],
+                (day_start(d("2015-07-20")), day_start(d("2015-07-20"))),
+                vec![],
+            ),
+            (
+                (
+                    dt("2015-07-20T12:12:12").and_utc(),
+                    dt("2015-07-20T20:20:20").and_utc(),
+                ),
+                vec![(
+                    dt("2015-07-20T12:12:12").and_utc(),
+                    dt("2015-07-20T20:20:20").and_utc(),
+                )],
             ),
         ] {
             let expected: Vec<_> = expected
                 .into_iter()
-                .map(|r| RangeInclusive::new(day_start(r.0), day_start(r.1)))
+                .map(|r| RangeInclusive::new(r.0, r.1))
                 .collect();
-            let from = day_start(from);
-            let to = day_start(to);
-            let actual = generate_date_ranges(from, to, Duration::days(30));
+            let actual = generate_date_time_ranges(from, to, Duration::days(30));
             assert_eq!(expected, actual);
         }
     }
