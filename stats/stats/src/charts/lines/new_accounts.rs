@@ -180,7 +180,7 @@ mod tests {
     #[ignore = "needs database to run"]
     async fn ranged_update_new_accounts() {
         ranged_test_chart::<NewAccounts>(
-            "ranged_update_gas_used_growth",
+            "ranged_update_new_accounts",
             vec![
                 ("2022-11-09", "1"),
                 ("2022-11-10", "3"),
