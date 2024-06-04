@@ -15,6 +15,7 @@ use stats_proto::blockscout::stats::v1::{
     stats_service_server::{StatsService, StatsServiceServer},
 };
 use std::sync::Arc;
+use tracing_subscriber::filter::FilterFn;
 
 const SERVICE_NAME: &str = "stats";
 
@@ -46,6 +47,7 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
         SERVICE_NAME,
         &settings.tracing,
         &settings.jaeger,
+        Some(FilterFn::new(|_| true)),
     )?;
     let charts_config = read_charts_config(&settings.charts_config)?;
     let update_schedule = read_update_schedule_config(&settings.update_schedule_config)?;

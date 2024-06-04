@@ -58,8 +58,7 @@ pub async fn get_counters(
                 ON data.chart_id = charts.id
             WHERE charts.chart_type = 'COUNTER'
             ORDER BY charts.id, data.id DESC;
-        "#
-        .into(),
+        "#,
     ))
     .all(db)
     .await?;
@@ -200,14 +199,14 @@ async fn get_raw_chart_data(
         .order_by_asc(chart_data::Column::Date);
 
     if let Some(from) = from {
-        let custom_where = Expr::cust_with_values::<sea_orm::sea_query::Value, _>(
+        let custom_where = Expr::cust_with_values::<_, sea_orm::sea_query::Value, _>(
             "date >= (SELECT COALESCE(MAX(date), '1900-01-01'::date) FROM chart_data WHERE chart_id = $1 AND date <= $2)",
             [chart_id.into(), from.into()],
         );
         QuerySelect::query(&mut data_request).cond_where(custom_where);
     }
     if let Some(to) = to {
-        let custom_where = Expr::cust_with_values::<sea_orm::sea_query::Value, _>(
+        let custom_where = Expr::cust_with_values::<_, sea_orm::sea_query::Value, _>(
             "date <= (SELECT COALESCE(MIN(date), '9999-12-31'::date) FROM chart_data WHERE chart_id = $1 AND date >= $2)",
             [chart_id.into(), to.into()],
         );

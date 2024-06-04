@@ -5,9 +5,9 @@ edition = "2021"
 
 [dependencies]
 entity = { path = "./entity" }
-blockscout-db = { git = "https://github.com/blockscout/blockscout-rs", rev = "e440933" }
+blockscout-db = { git = "https://github.com/blockscout/blockscout-rs", rev = "fb4c5b4" }
 blockscout-metrics-tools = { path = "../../libs/metrics-tools" }
-sea-orm = { version = "0.10", features = [
+sea-orm = { version = "0.12", features = [
     "sqlx-postgres",
     "runtime-tokio-rustls",
 ] }
@@ -29,12 +29,12 @@ itertools = "0.12.1"
 
 # Dependencies for test-utils only
 tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
-blockscout-service-launcher = { version = "0.9.0", features = [ "database-0_10", "test-database" ], optional = true }
+blockscout-service-launcher = { version = "0.10.0", features = [ "database-0_12", "test-database" ], optional = true }
 
 [dev-dependencies]
 pretty_assertions = "1.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-blockscout-service-launcher = { version = "0.9.0", features = [ "database-0_10", "test-database" ] }
+blockscout-service-launcher = { version = "0.10.0", features = [ "database-0_12", "test-database" ] }
 rust_decimal = "1.27"
 rust_decimal_macros = "1.27"
 
