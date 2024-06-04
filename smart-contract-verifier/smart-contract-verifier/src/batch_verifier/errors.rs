@@ -1,5 +1,36 @@
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
+use crate::{compiler};
+
+#[derive(Error, Debug)]
+pub enum BatchError {
+    #[error("Compiler version not found: {0}")]
+    VersionNotFound(String),
+    #[error("Compilation error: {0:?}")]
+    Compilation(Vec<String>),
+    #[error("{0:#}")]
+    Internal(anyhow::Error),
+}
+
+impl From<compiler::Error> for BatchError {
+    fn from(error: compiler::Error) -> Self {
+        match error {
+            compiler::Error::VersionNotFound(version) => BatchError::VersionNotFound(version),
+            compiler::Error::Compilation(details) => BatchError::Compilation(details),
+            err => BatchError::Internal(anyhow::anyhow!(err)),
+        }
+    }
+}
+
+impl From<compiler::ZkError> for BatchError {
+    fn from(error: compiler::ZkError) -> Self {
+        match error {
+            compiler::ZkError::CompilerNotFound(version) => BatchError::VersionNotFound(version),
+            compiler::ZkError::Compilation(details) => BatchError::Compilation(details),
+            err => BatchError::Internal(anyhow::anyhow!(err)),
+        }
+    }
+}
 
 /// Enumerates errors that may occur during a single contract verification.
 #[derive(Error, Debug)]

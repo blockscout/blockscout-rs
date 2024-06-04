@@ -23,16 +23,7 @@ pub struct CompilerInput {
     pub settings: Settings,
 }
 
-impl verifier::CompilerInput for CompilerInput {
-    fn modify(mut self) -> Self {
-        self.sources.iter_mut().for_each(|(_file, source)| {
-            let mut modified_content = source.content.as_ref().clone();
-            modified_content.push(' ');
-            source.content = std::sync::Arc::new(modified_content);
-        });
-        self
-    }
-}
+verifier::impl_compiler_input!(CompilerInput);
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

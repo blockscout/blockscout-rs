@@ -47,8 +47,7 @@ url = { version = "2.4", features = ["serde"] }
 #verification-common = { git = "https://github.com/blockscout/blockscout-rs", rev = "b855922a" }
 verification-common = { path = "../../libs/verification-common" }
 
-#era-compiler-solidity = { git = "https://github.com/matter-labs/era-compiler-solidity", tag = "1.4.1" }
-foundry-zksync-compiler = { git = "https://github.com/matter-labs/foundry-zksync", rev = "13497a5" }
+era-compiler-common = { git = "https://github.com/matter-labs/era-compiler-common", rev = "9969de1" }
 
 [dev-dependencies]
 const_format = "0.2"

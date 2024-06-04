@@ -12,7 +12,7 @@ sig-provider-extension = { path = "../sig-provider-extension", optional = true }
 
 actix-web = "4"
 actix-web-prom = "0.6"
-amplify = { version = "3.13.0", features = ["derive"] }
+amplify = { version = "4.6.0", features = ["derive"] }
 anyhow = "1.0"
 async-trait = "0.1"
 blockscout-display-bytes = { version = "1.0" }

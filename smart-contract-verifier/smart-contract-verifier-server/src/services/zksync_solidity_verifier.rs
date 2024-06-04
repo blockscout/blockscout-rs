@@ -1,25 +1,22 @@
-use crate::{
-    proto::zksync::solidity::{
-        verifier_server::Verifier, ListCompilersRequest, ListCompilersResponse, VerifyResponse,
-        VerifyStandardJsonRequest,
-    },
-    services::common,
-    settings::ZksyncSoliditySettings,
-};
+use crate::types::zksolc_standard_json::VerifyStandardJsonRequestWrapper;
+use crate::{proto::zksync::solidity::{
+    verifier_server::Verifier, ListCompilersRequest, ListCompilersResponse, VerifyResponse,
+    VerifyStandardJsonRequest,
+}, services::common, settings::ZksyncSoliditySettings, types, types::StandardJsonParseError};
 use anyhow::Context;
-use smart_contract_verifier::{SolcValidator, ZksyncCompilers};
+use smart_contract_verifier::{zksolc, SolcValidator, ZkSolcCompiler, ZkSyncCompilers};
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 use tonic::{Request, Response, Status};
 
 pub struct Service {
-    compilers: ZksyncCompilers,
+    compilers: ZkSyncCompilers<ZkSolcCompiler>,
 }
 
 impl Service {
     pub async fn new(
         settings: ZksyncSoliditySettings,
-        _compilers_threads_semaphore: Arc<Semaphore>,
+        compilers_threads_semaphore: Arc<Semaphore>,
     ) -> anyhow::Result<Self> {
         let solc_validator = Arc::new(SolcValidator::default());
         let evm_fetcher = common::initialize_fetcher(
@@ -40,7 +37,11 @@ impl Service {
         .await
         .context("zksync zksolc fetcher initialization")?;
 
-        let compilers = ZksyncCompilers::new(evm_fetcher.clone(), zk_fetcher.clone());
+        let compilers = ZkSyncCompilers::new(
+            evm_fetcher.clone(),
+            zk_fetcher.clone(),
+            compilers_threads_semaphore,
+        );
 
         Ok(Self { compilers })
     }
@@ -50,9 +51,33 @@ impl Service {
 impl Verifier for Service {
     async fn verify_standard_json(
         &self,
-        _request: Request<VerifyStandardJsonRequest>,
+        request: Request<VerifyStandardJsonRequest>,
     ) -> Result<Response<VerifyResponse>, Status> {
-        todo!()
+        let request: VerifyStandardJsonRequestWrapper = request.into_inner().into();
+
+        let verification_request = {
+            let request: Result<_, StandardJsonParseError> = request.try_into();
+            if let Err(err) = request {
+                return match err {
+                    StandardJsonParseError::InvalidContent(_) => {
+                        Ok(types::zksync_verification::compilation_error(format!(
+                            "Invalid standard json: {err}"
+                        )))
+                    }
+                    StandardJsonParseError::BadRequest(_) => {
+                        tracing::info!(err=%err, "Bad request");
+                        Err(Status::invalid_argument(err.to_string()))
+                    }
+                }
+            }
+            request.unwrap()
+        };
+        let result = zksolc::standard_json::verify(&self.compilers, verification_request).await;
+
+        match result {
+            Ok(result) => types::zksync_verification::process_verification_result(result),
+            Err(err) => types::zksync_verification::process_batch_error(err),
+        }
     }
 
     async fn list_compilers(

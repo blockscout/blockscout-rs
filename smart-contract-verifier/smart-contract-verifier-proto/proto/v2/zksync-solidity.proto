@@ -13,15 +13,31 @@ service Verifier {
 }
 
 message VerifyStandardJsonRequest {
-  string bytecode = 1;
-  string constructor_arguments = 2;
+  string code = 1;
+  optional string constructor_arguments = 2;
   string zk_compiler = 3;
   string solc_compiler = 4;
   string input = 5;
 }
 
-message VerifyResponse {
+message CompilationFailure {
+  string message = 1;
+}
 
+message VerificationFailure {
+  string message = 1;
+}
+
+message VerificationSuccess {
+
+}
+
+message VerifyResponse {
+  oneof verify_response {
+    CompilationFailure compilation_failure = 1;
+    VerificationFailure verification_failure = 2;
+    VerificationSuccess verification_success = 3;
+  }
 }
 
 message ListCompilersRequest {}

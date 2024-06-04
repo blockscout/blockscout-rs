@@ -392,6 +392,11 @@ definitions:
       '@type':
         type: string
     additionalProperties: {}
+  smartContractVerifierv2CompilationFailure:
+    type: object
+    properties:
+      message:
+        type: string
   smartContractVerifierv2VerifyResponse:
     type: object
     properties:
@@ -416,11 +421,18 @@ definitions:
         type: array
         items:
           type: string
+  solidityVerificationFailure:
+    type: object
+    properties:
+      message:
+        type: string
+  solidityVerificationSuccess:
+    type: object
   v2BatchVerifyResponse:
     type: object
     properties:
       compilationFailure:
-        $ref: '#/definitions/v2CompilationFailure'
+        $ref: '#/definitions/smartContractVerifierv2CompilationFailure'
       contractVerificationResults:
         $ref: '#/definitions/BatchVerifyResponseContractVerificationResults'
   v2BatchVerifySolidityMultiPartRequest:
@@ -476,11 +488,6 @@ definitions:
       - CREATION_INPUT
       - DEPLOYED_BYTECODE
     default: BYTECODE_TYPE_UNSPECIFIED
-  v2CompilationFailure:
-    type: object
-    properties:
-      message:
-        type: string
   v2Contract:
     type: object
     properties:
@@ -802,12 +809,24 @@ definitions:
       metadata:
         $ref: '#/definitions/v2VerificationMetadata'
         title: / An optional field to be filled by explorers
+  zksyncsolidityCompilationFailure:
+    type: object
+    properties:
+      message:
+        type: string
   zksyncsolidityVerifyResponse:
     type: object
+    properties:
+      compilationFailure:
+        $ref: '#/definitions/zksyncsolidityCompilationFailure'
+      verificationFailure:
+        $ref: '#/definitions/solidityVerificationFailure'
+      verificationSuccess:
+        $ref: '#/definitions/solidityVerificationSuccess'
   zksyncsolidityVerifyStandardJsonRequest:
     type: object
     properties:
-      bytecode:
+      code:
         type: string
       constructorArguments:
         type: string

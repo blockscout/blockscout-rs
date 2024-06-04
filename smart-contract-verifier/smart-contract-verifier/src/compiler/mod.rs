@@ -9,7 +9,7 @@ mod version_compact;
 mod version_detailed;
 
 pub use compilers::{Compilers, Error, EvmCompiler};
-pub use compilers_zksync::ZksyncCompilers;
+pub use compilers_zksync::{ZkSyncCompiler, ZkSyncCompilers, ZkError};
 pub use fetcher::{Fetcher, FileValidator, Version};
 pub use fetcher_list::ListFetcher;
 pub use fetcher_s3::S3Fetcher;
