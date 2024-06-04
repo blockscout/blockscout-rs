@@ -129,7 +129,7 @@ pub trait UpdateableChart: Chart {
                 start,
                 end,
                 None,
-                None,
+                Some(Self::missing_date_policy()),
                 Self::approximate_trailing_points(),
             )
             .await?

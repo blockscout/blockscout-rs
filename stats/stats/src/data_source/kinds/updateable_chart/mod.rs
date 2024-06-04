@@ -10,5 +10,6 @@ pub mod batch;
 pub mod clone;
 pub mod cumulative;
 pub mod delta;
+pub mod last_point;
 
 pub use base::{UpdateableChart, UpdateableChartWrapper};
