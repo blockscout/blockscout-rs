@@ -2,7 +2,6 @@
 //! that contain types that are not expected to be used
 //! from outside. They were made to make interface cleaner
 
-// mod mock;
 mod accounts_growth;
 mod active_accounts;
 mod average_block_rewards;
@@ -12,6 +11,7 @@ mod average_gas_price;
 mod average_txn_fee;
 mod contracts_growth;
 mod gas_used_growth;
+// mod mock;
 mod native_coin_holders_growth;
 mod native_coin_supply;
 mod new_accounts;

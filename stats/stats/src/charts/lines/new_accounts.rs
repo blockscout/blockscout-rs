@@ -6,7 +6,7 @@ use crate::{
         kinds::{
             adapter::{ParseAdapter, ParseAdapterWrapper, ToStringAdapter, ToStringAdapterWrapper},
             remote::{RemoteSource, RemoteSourceWrapper},
-            updateable_chart::batch::clone::{CloneChart, CloneChartWrapper},
+            updateable_chart::clone::{CloneChart, CloneChartWrapper},
         },
         UpdateContext,
     },

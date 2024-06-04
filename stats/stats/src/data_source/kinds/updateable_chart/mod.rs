@@ -7,6 +7,7 @@
 
 mod base;
 pub mod batch;
+pub mod clone;
 pub mod cumulative;
 pub mod delta;
 

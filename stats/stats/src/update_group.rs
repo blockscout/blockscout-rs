@@ -13,7 +13,7 @@
 //! (e.g.
 //! [`UpdateableChartWrapper`](crate::data_source::kinds::updateable_chart::UpdateableChartWrapper)
 //! or
-//! [`CloneChartWrapper`](crate::data_source::kinds::updateable_chart::batch::clone::CloneChartWrapper)
+//! [`CloneChartWrapper`](crate::data_source::kinds::updateable_chart::clone::CloneChartWrapper)
 //! ).
 //! For convenience, they may be type aliased:
 //! ```ignore
@@ -156,7 +156,7 @@ pub mod macro_reexport {
 /// # use stats::{Chart, Named, construct_update_group, DateValueString, UpdateError};
 /// # use stats::data_source::{
 /// #     kinds::{
-/// #         updateable_chart::batch::clone::{CloneChart, CloneChartWrapper},
+/// #         updateable_chart::clone::{CloneChart, CloneChartWrapper},
 /// #         remote::{RemoteSource, RemoteSourceWrapper},
 /// #     },
 /// #     types::{UpdateContext, UpdateParameters},

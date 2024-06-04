@@ -5,7 +5,7 @@ use crate::{
     data_source::kinds::{
         adapter::{ToStringAdapter, ToStringAdapterWrapper},
         remote::{RemoteSource, RemoteSourceWrapper},
-        updateable_chart::batch::clone::{CloneChart, CloneChartWrapper},
+        updateable_chart::clone::{CloneChart, CloneChartWrapper},
     },
     Chart, Named,
 };

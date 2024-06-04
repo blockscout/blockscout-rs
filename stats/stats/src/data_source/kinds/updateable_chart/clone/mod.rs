@@ -3,6 +3,8 @@
 //!
 //! Useful, for example, for combination with adapter source.
 
+pub mod point;
+
 use std::marker::PhantomData;
 
 use crate::{
@@ -11,7 +13,7 @@ use crate::{
     Chart, DateValueString, Named, UpdateError,
 };
 
-use super::{BatchChart, BatchChartWrapper};
+use super::batch::{BatchChart, BatchChartWrapper};
 
 /// See [module-level documentation](self) for details.
 pub trait CloneChart: Chart {

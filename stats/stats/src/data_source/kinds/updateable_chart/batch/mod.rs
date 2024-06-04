@@ -20,8 +20,6 @@ use crate::{
     Chart, DateValueString, Named, UpdateError,
 };
 
-pub mod clone;
-
 /// See [module-level documentation](self) for details.
 pub trait BatchChart: Chart {
     type PrimaryDependency: DataSource;
@@ -148,23 +146,21 @@ where
     type SecondaryDependencies = T::SecondaryDependencies;
     type Point = T::Point;
 
-    fn update_values(
+    async fn update_values(
         cx: &UpdateContext<'_>,
         chart_id: i32,
         last_accurate_point: Option<DateValueString>,
         min_blockscout_block: i64,
         remote_fetch_timer: &mut AggregateTimer,
-    ) -> impl std::future::Future<Output = Result<(), UpdateError>> + Send {
-        async move {
-            batch_update_values::<T>(
-                cx,
-                chart_id,
-                last_accurate_point,
-                min_blockscout_block,
-                remote_fetch_timer,
-            )
-            .await
-        }
+    ) -> Result<(), UpdateError> {
+        batch_update_values::<T>(
+            cx,
+            chart_id,
+            last_accurate_point,
+            min_blockscout_block,
+            remote_fetch_timer,
+        )
+        .await
     }
 }
 

@@ -5,6 +5,8 @@
 //! Kinda like `map` for a data source. I.e. applies
 //! a function to the output.
 
+pub mod point;
+
 use std::{fmt::Display, marker::PhantomData, ops::RangeInclusive, str::FromStr};
 
 use blockscout_metrics_tools::AggregateTimer;

@@ -3,7 +3,7 @@ use std::ops::RangeInclusive;
 use crate::{
     data_source::kinds::{
         remote::{RemoteSource, RemoteSourceWrapper},
-        updateable_chart::batch::clone::{CloneChart, CloneChartWrapper},
+        updateable_chart::clone::{CloneChart, CloneChartWrapper},
     },
     utils::sql_with_range_filter_opt,
     Chart, DateValueString, Named,

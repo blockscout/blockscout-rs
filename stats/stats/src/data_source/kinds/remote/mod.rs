@@ -3,7 +3,7 @@
 //! The main application - SQL queries from remote database.
 //!
 //! Usually used inside
-//! [`CloneChart`](`crate::data_source::kinds::updateable_chart::batch::clone::CloneChart`)
+//! [`CloneChart`](`crate::data_source::kinds::updateable_chart::clone::CloneChart`)
 //! data source.
 //!
 //! Note that since each `query_data` performs (likely a heavy)
@@ -11,8 +11,10 @@
 //! different places. For each such appearance, the same data
 //! will be requested again.
 //! In this case,
-//! [`CloneChart`](`crate::data_source::kinds::updateable_chart::batch::clone::CloneChart`)
+//! [`CloneChart`](`crate::data_source::kinds::updateable_chart::clone::CloneChart`)
 //! can be helpful to reuse the query results (by storing it locally).
+
+pub mod point;
 
 use std::{marker::PhantomData, ops::RangeInclusive};
 

@@ -8,9 +8,9 @@ use tokio::sync::Mutex;
 use super::{
     kinds::{
         remote::{RemoteSource, RemoteSourceWrapper},
-        updateable_chart::batch::{
+        updateable_chart::{
+            batch::{BatchChart, BatchChartWrapper},
             clone::{CloneChart, CloneChartWrapper},
-            BatchChart, BatchChartWrapper,
         },
     },
     source::DataSource,
