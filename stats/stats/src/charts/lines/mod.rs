@@ -1,5 +1,8 @@
-// mod mock;
+//! In chart definitions there are modules named `_inner`
+//! that contain types that are not expected to be used
+//! from outside. They were made to make interface cleaner
 
+// mod mock;
 mod accounts_growth;
 mod active_accounts;
 mod average_block_rewards;

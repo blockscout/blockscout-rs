@@ -36,7 +36,6 @@ mod tests {
         simple_test_chart::<NewNativeCoinHolders>(
             "update_new_native_coin_holders",
             vec![
-                ("2022-11-08", "0"),
                 ("2022-11-09", "8"),
                 ("2022-11-10", "0"),
                 ("2022-11-11", "-1"),

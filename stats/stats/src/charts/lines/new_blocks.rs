@@ -134,6 +134,8 @@ mod tests {
 
         // note that update is full, therefore there is entry with date `2022-11-09`
         cx.force_full = true;
+        // need to update time so that the update is not ignored as the same one
+        cx.time = chrono::DateTime::<Utc>::from_str("2022-11-12T13:00:00Z").unwrap();
         NewBlocks::update_recursively(&cx).await.unwrap();
         let data = get_chart_data(&db, NewBlocks::NAME, None, None, None, None, 1)
             .await
