@@ -23,9 +23,6 @@ pub struct Contract {
     /// The Ethereum Contract ABI.
     /// See https://docs.soliditylang.org/en/develop/abi-spec.html
     pub abi: Option<serde_json::Value>,
-    /// The Ethereum Contract Metadata.
-    /// See <https://docs.soliditylang.org/en/develop/metadata.html>
-    pub metadata: Option<String>,
     pub userdoc: Option<serde_json::Value>,
     pub devdoc: Option<serde_json::Value>,
     pub storage_layout: Option<serde_json::Value>,

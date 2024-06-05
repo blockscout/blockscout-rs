@@ -465,4 +465,11 @@ mod standard_json {
         };
         test_success(test_case).await;
     }
+
+    #[tokio::test]
+    async fn interfaces_in_sources_from_0_4_0() {
+        let test_case =
+            vyper_types::from_file::<StandardJson>("standard_json_interfaces_in_sources");
+        test_success(test_case.clone()).await;
+    }
 }
