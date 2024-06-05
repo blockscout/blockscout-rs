@@ -225,7 +225,7 @@ mod tests {
                 "some_address".into(),
             )])),
         };
-        let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":"pragma"}},"settings":{"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"":["*"],"*":["*"]}},"evmVersion":"london","libraries":{"source.sol":{"some_library":"some_address"}}}}"#;
+        let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":"pragma"}},"settings":{"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"london","libraries":{"source.sol":{"some_library":"some_address"}}}}"#;
         test_to_input(multi_part, vec![expected]);
         let multi_part = MultiFileContent {
             sources: sources(&[("source.sol", "")]),
@@ -233,7 +233,7 @@ mod tests {
             optimization_runs: None,
             contract_libraries: None,
         };
-        let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":""}},"settings":{"optimizer":{"enabled":false,"runs":200},"outputSelection":{"*":{"":["*"],"*":["*"]}},"evmVersion":"spuriousDragon","libraries":{}}}"#;
+        let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":""}},"settings":{"optimizer":{"enabled":false,"runs":200},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"spuriousDragon","libraries":{}}}"#;
         test_to_input(multi_part, vec![expected]);
     }
 
@@ -250,7 +250,7 @@ mod tests {
             contract_libraries: None,
         };
         let expected_solidity = r#"{"language":"Solidity","sources":{"source.sol":{"content":"pragma"}},"settings":{"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"":["*"],"*":["*"]}},"evmVersion":"london","libraries":{}}}"#;
-        let expected_yul = r#"{"language":"Yul","sources":{".yul":{"content":"object \"A\" {}"},"source2.yul":{"content":"object \"A\" {}"}},"settings":{"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"":["*"],"*":["*"]}},"evmVersion":"london","libraries":{}}}"#;
+        let expected_yul = r#"{"language":"Yul","sources":{".yul":{"content":"object \"A\" {}"},"source2.yul":{"content":"object \"A\" {}"}},"settings":{"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"london","libraries":{}}}"#;
         test_to_input(multi_part, vec![expected_solidity, expected_yul]);
     }
 }
