@@ -22,4 +22,3 @@ Template for blockscout Rust service
 ✨   Done! New project created /Users/levlymarenko/poa/blockscout-rs/test-project
 ```
 
-3. Go into created service directories and recursively rename all `_Cargo.toml` to `Cargo.toml`
