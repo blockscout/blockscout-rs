@@ -1,5 +1,6 @@
 mod client;
 mod config;
+pub mod v1;
 mod v2;
 
 pub use client::Client;
