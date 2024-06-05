@@ -6,9 +6,10 @@ use crate::{
     },
     get_chart_data, get_counters, Chart, MissingDatePolicy,
 };
-use chrono::{DateTime, NaiveDate, NaiveDateTime};
+use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
+use pretty_assertions::assert_eq;
 use sea_orm::DatabaseConnection;
-use std::{assert_eq, str::FromStr};
+use std::str::FromStr;
 
 fn map_str_tuple_to_owned(l: Vec<(&str, &str)>) -> Vec<(String, String)> {
     l.into_iter()
@@ -16,6 +17,7 @@ fn map_str_tuple_to_owned(l: Vec<(&str, &str)>) -> Vec<(String, String)> {
         .collect()
 }
 
+/// `test_name` must be unique to avoid db clashes
 pub async fn simple_test_chart<C: DataSource + Chart>(
     test_name: &str,
     expected: Vec<(&str, &str)>,
@@ -67,6 +69,7 @@ pub async fn simple_test_chart<C: DataSource + Chart>(
     );
 }
 
+/// `test_name` must be unique to avoid db clashes
 pub async fn ranged_test_chart<C: DataSource + Chart>(
     test_name: &str,
     expected: Vec<(&str, &str)>,
@@ -77,12 +80,11 @@ pub async fn ranged_test_chart<C: DataSource + Chart>(
     let _ = tracing_subscriber::fmt::try_init();
     let expected = map_str_tuple_to_owned(expected);
     let (db, blockscout) = init_db_all(test_name).await;
-    let current_time = update_time
-        .map(|t| t.and_utc())
-        .unwrap_or(DateTime::from_str("2023-03-01T12:00:00Z").unwrap());
-    let current_date = current_time.date_naive();
+    let max_time = DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap();
+    let current_time = update_time.map(|t| t.and_utc()).unwrap_or(max_time);
+    let max_date = max_time.date_naive();
     C::init_recursively(&db, &current_time).await.unwrap();
-    fill_mock_blockscout_data(&blockscout, current_date).await;
+    fill_mock_blockscout_data(&blockscout, max_date).await;
     let policy = C::missing_date_policy();
     let approximate_trailing_points = C::approximate_trailing_points();
 
@@ -100,7 +102,7 @@ pub async fn ranged_test_chart<C: DataSource + Chart>(
             Some(from),
             Some(to),
             policy,
-            true,
+            false,
             approximate_trailing_points,
         )
         .await,
@@ -116,7 +118,7 @@ pub async fn ranged_test_chart<C: DataSource + Chart>(
             Some(from),
             Some(to),
             policy,
-            true,
+            false,
             approximate_trailing_points,
         )
         .await,
@@ -149,14 +151,20 @@ async fn get_chart<C: DataSource + Chart>(
         .collect()
 }
 
-pub async fn simple_test_counter<C: DataSource + Chart>(test_name: &str, expected: &str) {
+/// `test_name` must be unique to avoid db clashes
+pub async fn simple_test_counter<C: DataSource + Chart>(
+    test_name: &str,
+    expected: &str,
+    update_time: Option<NaiveDateTime>,
+) {
     let _ = tracing_subscriber::fmt::try_init();
     let (db, blockscout) = init_db_all(test_name).await;
-    let current_time = chrono::DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
-    let current_date = current_time.date_naive();
+    let max_time = DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap();
+    let current_time = update_time.map(|t| t.and_utc()).unwrap_or(max_time);
+    let max_date = max_time.date_naive();
 
     C::init_recursively(&db, &current_time).await.unwrap();
-    fill_mock_blockscout_data(&blockscout, current_date).await;
+    fill_mock_blockscout_data(&blockscout, max_date).await;
 
     let mut parameters = UpdateParameters {
         db: &db,
@@ -166,17 +174,15 @@ pub async fn simple_test_counter<C: DataSource + Chart>(test_name: &str, expecte
     };
     let cx = UpdateContext::from(parameters.clone());
     C::update_recursively(&cx).await.unwrap();
-    get_counter_and_assert_eq::<C>(&db, expected).await;
-
+    assert_eq!(expected, get_counter::<C>(&db).await);
     parameters.force_full = false;
     let cx = UpdateContext::from(parameters.clone());
     C::update_recursively(&cx).await.unwrap();
-    get_counter_and_assert_eq::<C>(&db, expected).await;
+    assert_eq!(expected, get_counter::<C>(&db).await);
 }
 
-async fn get_counter_and_assert_eq<C: Chart>(db: &DatabaseConnection, expected: &str) {
+async fn get_counter<C: Chart>(db: &DatabaseConnection) -> String {
     let data = get_counters(db).await.unwrap();
     let data = &data[C::NAME];
-    let value = &data.value;
-    assert_eq!(expected, value);
+    data.value.clone()
 }

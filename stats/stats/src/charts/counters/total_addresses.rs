@@ -56,6 +56,6 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_total_addresses() {
-        simple_test_counter::<TotalAddresses>("update_total_addresses", "33").await;
+        simple_test_counter::<TotalAddresses>("update_total_addresses", "33", None).await;
     }
 }

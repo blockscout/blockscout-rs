@@ -31,7 +31,11 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_total_native_coin_holders() {
-        simple_test_counter::<TotalNativeCoinHolders>("update_total_native_coin_holders", "7")
-            .await;
+        simple_test_counter::<TotalNativeCoinHolders>(
+            "update_total_native_coin_holders",
+            "7",
+            None,
+        )
+        .await;
     }
 }

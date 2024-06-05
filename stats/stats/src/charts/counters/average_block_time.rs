@@ -70,7 +70,11 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_average_block_time() {
-        simple_test_counter::<AverageBlockTime>("update_average_block_time", "802200.0833333334")
-            .await;
+        simple_test_counter::<AverageBlockTime>(
+            "update_average_block_time",
+            "802200.0833333334",
+            None,
+        )
+        .await;
     }
 }

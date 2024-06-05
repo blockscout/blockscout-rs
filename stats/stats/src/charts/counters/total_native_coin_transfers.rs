@@ -61,7 +61,11 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_total_native_coin_transfers() {
-        simple_test_counter::<TotalNativeCoinTransfers>("update_total_native_coin_transfers", "17")
-            .await;
+        simple_test_counter::<TotalNativeCoinTransfers>(
+            "update_total_native_coin_transfers",
+            "17",
+            None,
+        )
+        .await;
     }
 }

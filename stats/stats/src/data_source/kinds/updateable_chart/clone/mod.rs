@@ -51,6 +51,13 @@ impl<T: CloneChart> BatchChart for CloneChartLocalWrapper<T> {
         _secondary_data: (),
     ) -> Result<usize, crate::UpdateError> {
         let found = primary_data.len();
+        // note: right away cloning another chart will not result in exact copy,
+        // because if the other chart is `FillPrevious`, then omitted starting point
+        // within the range is set to the last known before the range
+        // i.e. some duplicate points might get added.
+        //
+        // however, it should not be a problem, since semantics remain the same +
+        // cloning already stored chart is counter-productive/not effective.
         let values = primary_data
             .into_iter()
             .map(|value| value.active_model(chart_id, Some(min_blockscout_block)));

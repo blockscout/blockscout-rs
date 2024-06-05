@@ -87,7 +87,10 @@ pub type NewContractsInt = ParseAdapterWrapper<NewContractsIntInner>;
 #[cfg(test)]
 mod tests {
     use super::NewContracts;
-    use crate::tests::simple_test::simple_test_chart;
+    use crate::tests::{
+        point_construction::{d, dt},
+        simple_test::{ranged_test_chart, simple_test_chart},
+    };
 
     #[tokio::test]
     #[ignore = "needs database to run"]
@@ -103,6 +106,23 @@ mod tests {
                 ("2023-01-01", "1"),
                 ("2023-02-01", "1"),
             ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn ranged_update_new_contracts() {
+        ranged_test_chart::<NewContracts>(
+            "ranged_update_new_contracts",
+            vec![
+                ("2022-11-11", "8"),
+                ("2022-11-12", "2"),
+                ("2022-12-01", "2"),
+            ],
+            d("2022-11-11"),
+            d("2022-12-01"),
+            Some(dt("2022-12-01T12:00:00")),
         )
         .await;
     }
