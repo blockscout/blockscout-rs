@@ -1,12 +1,13 @@
 use crate::{
-    charts::db_interaction::{
-        chart_updaters::{ChartFullUpdater, ChartUpdater},
-        types::DateValue,
+    data_source::{
+        kinds::{
+            remote::point::{RemotePointSource, RemotePointSourceWrapper},
+            updateable_chart::clone::point::{ClonePointChart, ClonePointChartWrapper},
+        },
+        types::UpdateContext,
     },
-    data_source::types::{UpdateContext, UpdateParameters},
-    UpdateError,
+    Chart, DateValueString, Named, UpdateError,
 };
-use async_trait::async_trait;
 use blockscout_db::entity::blocks;
 use chrono::NaiveDateTime;
 use entity::sea_orm_active_enums::ChartType;
@@ -18,150 +19,161 @@ struct TotalBlocksData {
     timestamp: NaiveDateTime,
 }
 
-#[derive(Default, Debug)]
-pub struct TotalBlocks {}
+pub struct TotalBlocksRemote;
 
-impl ChartFullUpdater for TotalBlocks {
-    async fn get_values(blockscout: &DatabaseConnection) -> Result<Vec<DateValue>, UpdateError> {
+impl RemotePointSource for TotalBlocksRemote {
+    type Point = DateValueString;
+    fn get_query() -> sea_orm::Statement {
+        unreachable!("must not be called")
+    }
+
+    async fn query_data(cx: &UpdateContext<'_>) -> Result<Self::Point, UpdateError> {
         let data = blocks::Entity::find()
             .select_only()
             .column_as(Expr::col(blocks::Column::Number).count(), "number")
             .column_as(Expr::col(blocks::Column::Timestamp).max(), "timestamp")
             .filter(blocks::Column::Consensus.eq(true))
             .into_model::<TotalBlocksData>()
-            .one(blockscout)
+            .one(cx.blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?
             .ok_or_else(|| UpdateError::Internal("query returned nothing".into()))?;
 
-        let data = DateValue {
+        let data = DateValueString {
             date: data.timestamp.date(),
             value: data.number.to_string(),
         };
-        Ok(vec![data])
+        Ok(data)
     }
 }
 
-#[async_trait]
-impl crate::Chart for TotalBlocks {
-    const NAME: &'static str = "totalBlocks";
+pub struct TotalBlocksInner;
 
+impl Named for TotalBlocksInner {
+    const NAME: &'static str = "totalBlocks";
+}
+
+impl Chart for TotalBlocksInner {
     fn chart_type() -> ChartType {
         ChartType::Counter
     }
 }
 
-impl ChartUpdater for TotalBlocks {
-    async fn update_values(cx: &mut UpdateContext<'_>) -> Result<Vec<DateValue>, UpdateError> {
-        Self::update_with_values(cx).await
-    }
+impl ClonePointChart for TotalBlocksInner {
+    type Dependency = RemotePointSourceWrapper<TotalBlocksRemote>;
 }
 
-// todo: fix
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use crate::{
-//         get_counters,
-//         tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
-//         Chart,
-//     };
-//     use chrono::NaiveDate;
-//     use entity::chart_data;
-//     use pretty_assertions::assert_eq;
-//     use sea_orm::Set;
-//     use std::str::FromStr;
+pub type TotalBlocks = ClonePointChartWrapper<TotalBlocksInner>;
 
-//     #[tokio::test]
-//     #[ignore = "needs database to run"]
-//     async fn update_total_blocks_recurrent() {
-//         let _ = tracing_subscriber::fmt::try_init();
-//         let (db, blockscout) = init_db_all("update_total_blocks_recurrent").await;
-//         let updater = TotalBlocks::default();
-//         let current_time = chrono::DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
-//         let current_date = current_time.date_naive();
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        data_source::{DataSource, UpdateParameters},
+        get_counters,
+        tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
+    };
+    use chrono::NaiveDate;
+    use entity::chart_data;
+    use pretty_assertions::assert_eq;
+    use sea_orm::Set;
+    use std::str::FromStr;
 
-//         TotalBlocks::create(&db).await.unwrap();
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_total_blocks_recurrent() {
+        let _ = tracing_subscriber::fmt::try_init();
+        let (db, blockscout) = init_db_all("update_total_blocks_recurrent").await;
+        let current_time = chrono::DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
+        let current_date = current_time.date_naive();
 
-//         chart_data::Entity::insert(chart_data::ActiveModel {
-//             chart_id: Set(1),
-//             date: Set(NaiveDate::from_str("2022-11-10").unwrap()),
-//             value: Set(1.to_string()),
-//             ..Default::default()
-//         })
-//         .exec(&db as &DatabaseConnection)
-//         .await
-//         .unwrap();
+        TotalBlocks::init_recursively(&db, &current_time)
+            .await
+            .unwrap();
 
-//         fill_mock_blockscout_data(&blockscout, current_date).await;
+        chart_data::Entity::insert(chart_data::ActiveModel {
+            chart_id: Set(1),
+            date: Set(NaiveDate::from_str("2022-11-10").unwrap()),
+            value: Set(1.to_string()),
+            ..Default::default()
+        })
+        .exec(&db as &DatabaseConnection)
+        .await
+        .unwrap();
 
-//         let mut parameters = UpdateParameters {
-//             db: &db,
-//             blockscout: &blockscout,
-//             current_time,
-//             force_full: true,
-//         };
-//         let mut cx = UpdateContext::from(parameters.clone());
-//         TotalBlocks::update(&mut cx).await.unwrap();
-//         let data = get_counters(&db).await.unwrap();
-//         assert_eq!("13", data[TotalBlocks::name()].value);
-//     }
+        fill_mock_blockscout_data(&blockscout, current_date).await;
 
-//     #[tokio::test]
-//     #[ignore = "needs database to run"]
-//     async fn update_total_blocks_fresh() {
-//         let _ = tracing_subscriber::fmt::try_init();
-//         let (db, blockscout) = init_db_all("update_total_blocks_fresh").await;
-//         let current_time = chrono::DateTime::from_str("2022-11-12T12:00:00Z").unwrap();
-//         let current_date = current_time.date_naive();
+        let parameters = UpdateParameters {
+            db: &db,
+            blockscout: &blockscout,
+            update_time_override: Some(current_time),
+            force_full: true,
+        };
+        let mut cx = UpdateContext::from(parameters.clone());
+        TotalBlocks::update_recursively(&mut cx).await.unwrap();
+        let data = get_counters(&db).await.unwrap();
+        assert_eq!("13", data[TotalBlocks::NAME].value);
+    }
 
-//         TotalBlocks::create(&db).await.unwrap();
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_total_blocks_fresh() {
+        let _ = tracing_subscriber::fmt::try_init();
+        let (db, blockscout) = init_db_all("update_total_blocks_fresh").await;
+        let current_time = chrono::DateTime::from_str("2022-11-12T12:00:00Z").unwrap();
+        let current_date = current_time.date_naive();
 
-//         fill_mock_blockscout_data(&blockscout, current_date).await;
+        TotalBlocks::init_recursively(&db, &current_time)
+            .await
+            .unwrap();
 
-//         let parameters = UpdateParameters {
-//             db: &db,
-//             blockscout: &blockscout,
-//             current_time,
-//             force_full: true,
-//         };
-//         let mut cx = UpdateContext::from(parameters.clone());
-//         TotalBlocks::update(&mut cx).await.unwrap();
-//         let data = get_counters(&db).await.unwrap();
-//         assert_eq!("9", data[TotalBlocks::name()].value);
-//     }
+        fill_mock_blockscout_data(&blockscout, current_date).await;
 
-//     #[tokio::test]
-//     #[ignore = "needs database to run"]
-//     async fn update_total_blocks_last() {
-//         let _ = tracing_subscriber::fmt::try_init();
-//         let (db, blockscout) = init_db_all("update_total_blocks_last").await;
-//         let current_time = chrono::DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
-//         let current_date = current_time.date_naive();
+        let parameters = UpdateParameters {
+            db: &db,
+            blockscout: &blockscout,
+            update_time_override: Some(current_time),
+            force_full: true,
+        };
+        let mut cx = UpdateContext::from(parameters.clone());
+        TotalBlocks::update_recursively(&mut cx).await.unwrap();
+        let data = get_counters(&db).await.unwrap();
+        assert_eq!("9", data[TotalBlocks::NAME].value);
+    }
 
-//         TotalBlocks::create(&db).await.unwrap();
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_total_blocks_last() {
+        let _ = tracing_subscriber::fmt::try_init();
+        let (db, blockscout) = init_db_all("update_total_blocks_last").await;
+        let current_time = chrono::DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
+        let current_date = current_time.date_naive();
 
-//         chart_data::Entity::insert(chart_data::ActiveModel {
-//             chart_id: Set(1),
-//             date: Set(NaiveDate::from_str("2022-11-11").unwrap()),
-//             value: Set(1.to_string()),
-//             ..Default::default()
-//         })
-//         .exec(&db as &DatabaseConnection)
-//         .await
-//         .unwrap();
+        TotalBlocks::init_recursively(&db, &current_time)
+            .await
+            .unwrap();
 
-//         fill_mock_blockscout_data(&blockscout, current_date).await;
+        chart_data::Entity::insert(chart_data::ActiveModel {
+            chart_id: Set(1),
+            date: Set(NaiveDate::from_str("2022-11-11").unwrap()),
+            value: Set(1.to_string()),
+            ..Default::default()
+        })
+        .exec(&db as &DatabaseConnection)
+        .await
+        .unwrap();
 
-//         let parameters = UpdateParameters {
-//             db: &db,
-//             blockscout: &blockscout,
-//             current_time,
-//             force_full: true,
-//         };
-//         let mut cx = UpdateContext::from(parameters.clone());
-//         TotalBlocks::update(&mut cx).await.unwrap();
-//         let data = get_counters(&db).await.unwrap();
-//         assert_eq!("13", data[TotalBlocks::name()].value);
-//     }
-// }
+        fill_mock_blockscout_data(&blockscout, current_date).await;
+
+        let parameters = UpdateParameters {
+            db: &db,
+            blockscout: &blockscout,
+            update_time_override: Some(current_time),
+            force_full: true,
+        };
+        let mut cx = UpdateContext::from(parameters.clone());
+        TotalBlocks::update_recursively(&mut cx).await.unwrap();
+        let data = get_counters(&db).await.unwrap();
+        assert_eq!("13", data[TotalBlocks::NAME].value);
+    }
+}

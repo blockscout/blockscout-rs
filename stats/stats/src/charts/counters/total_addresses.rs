@@ -1,26 +1,22 @@
 use crate::{
-    charts::db_interaction::{
-        chart_updaters::{ChartFullUpdater, ChartUpdater},
-        types::DateValue,
+    data_source::kinds::{
+        remote::point::{RemotePointSource, RemotePointSourceWrapper},
+        updateable_chart::clone::point::{ClonePointChart, ClonePointChartWrapper},
     },
-    UpdateError,
+    Chart, DateValueString, Named,
 };
-use async_trait::async_trait;
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
+use sea_orm::{DbBackend, Statement};
 
-#[derive(Default, Debug)]
-pub struct TotalAddresses {}
+pub struct TotalAddressesRemote;
 
-#[async_trait]
-impl ChartFullUpdater for TotalAddresses {
-    async fn get_values(
-        &self,
-        blockscout: &DatabaseConnection,
-    ) -> Result<Vec<DateValue>, UpdateError> {
-        let data = DateValue::find_by_statement(Statement::from_string(
+impl RemotePointSource for TotalAddressesRemote {
+    type Point = DateValueString;
+    fn get_query() -> Statement {
+        Statement::from_string(
             DbBackend::Postgres,
-            r#"SELECT date, value FROM ( 
+            r#"
+            SELECT date, value FROM ( 
                 SELECT (
                     SELECT COUNT(*)::TEXT as value FROM addresses
                 ), (
@@ -28,42 +24,29 @@ impl ChartFullUpdater for TotalAddresses {
                     FROM blocks b
                     WHERE b.consensus = true
                 )
-            ) as sub"#
-                .into(),
-        ))
-        .one(blockscout)
-        .await
-        .map_err(UpdateError::BlockscoutDB)?
-        .ok_or_else(|| UpdateError::Internal("query returned nothing".into()))?;
-
-        Ok(vec![data])
+            ) as sub
+            "#,
+        )
     }
 }
 
-#[async_trait]
-impl crate::Chart for TotalAddresses {
-    fn name(&self) -> &str {
-        "totalAddresses"
-    }
+pub struct TotalAddressesInner;
 
-    fn chart_type(&self) -> ChartType {
+impl Named for TotalAddressesInner {
+    const NAME: &'static str = "totalAddresses";
+}
+
+impl Chart for TotalAddressesInner {
+    fn chart_type() -> ChartType {
         ChartType::Counter
     }
 }
 
-#[async_trait]
-impl ChartUpdater for TotalAddresses {
-    async fn update_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<chrono::Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, current_time, force_full)
-            .await
-    }
+impl ClonePointChart for TotalAddressesInner {
+    type Dependency = RemotePointSourceWrapper<TotalAddressesRemote>;
 }
+
+pub type TotalAddresses = ClonePointChartWrapper<TotalAddressesInner>;
 
 #[cfg(test)]
 mod tests {
@@ -73,7 +56,6 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_total_addresses() {
-        let counter = TotalAddresses::default();
-        simple_test_counter("update_total_addresses", counter, "33").await;
+        simple_test_counter::<TotalAddresses>("update_total_addresses", "33").await;
     }
 }

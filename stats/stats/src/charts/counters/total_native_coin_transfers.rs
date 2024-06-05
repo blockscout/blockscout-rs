@@ -1,71 +1,57 @@
 use crate::{
-    charts::{
-        create_chart,
-        db_interaction::{
-            chart_updaters::{parse_and_sum, ChartDependentUpdater, ChartUpdater},
-            types::DateValue,
-        },
+    charts::db_interaction::write::insert_data_many,
+    data_processing::parse_and_sum,
+    data_source::{
+        kinds::updateable_chart::{UpdateableChart, UpdateableChartWrapper},
+        DataSource, UpdateContext,
     },
     lines::NewNativeCoinTransfers,
-    Chart, UpdateError,
+    Chart, DateValueString, Named, UpdateError,
 };
-use async_trait::async_trait;
+use blockscout_metrics_tools::AggregateTimer;
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::prelude::*;
-use std::sync::Arc;
 
-#[derive(Default)]
-pub struct TotalNativeCoinTransfers {
-    parent: Arc<NewNativeCoinTransfers>,
+pub struct TotalNativeCoinTransfersInner;
+
+impl Named for TotalNativeCoinTransfersInner {
+    const NAME: &'static str = "totalNativeCoinTransfers";
 }
 
-impl TotalNativeCoinTransfers {
-    pub fn new(parent: Arc<NewNativeCoinTransfers>) -> Self {
-        Self { parent }
-    }
-}
-
-#[async_trait]
-impl ChartDependentUpdater<NewNativeCoinTransfers> for TotalNativeCoinTransfers {
-    fn parent(&self) -> Arc<NewNativeCoinTransfers> {
-        self.parent.clone()
-    }
-
-    async fn get_values(&self, parent_data: Vec<DateValue>) -> Result<Vec<DateValue>, UpdateError> {
-        let sum = parse_and_sum::<i64>(parent_data, self.name(), self.parent.name())?;
-        Ok(sum.into_iter().collect())
-    }
-}
-
-#[async_trait]
-impl crate::Chart for TotalNativeCoinTransfers {
-    fn name(&self) -> &str {
-        "totalNativeCoinTransfers"
-    }
-
-    fn chart_type(&self) -> ChartType {
+impl Chart for TotalNativeCoinTransfersInner {
+    fn chart_type() -> ChartType {
         ChartType::Counter
     }
-
-    async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
-        self.parent.create(db).await?;
-        create_chart(db, self.name().into(), self.chart_type()).await
-    }
 }
 
-#[async_trait]
-impl ChartUpdater for TotalNativeCoinTransfers {
+impl UpdateableChart for TotalNativeCoinTransfersInner {
+    type PrimaryDependency = NewNativeCoinTransfers;
+    type SecondaryDependencies = ();
+
     async fn update_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<chrono::Utc>,
-        force_full: bool,
+        cx: &UpdateContext<'_>,
+        chart_id: i32,
+        _last_accurate_point: Option<DateValueString>,
+        min_blockscout_block: i64,
+        remote_fetch_timer: &mut AggregateTimer,
     ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, current_time, force_full)
+        let full_data = Self::PrimaryDependency::query_data(cx, None, remote_fetch_timer).await?;
+        let sum = parse_and_sum::<i64>(full_data, Self::NAME, Self::PrimaryDependency::NAME)?;
+        let Some(sum) = sum else {
+            tracing::warn!(
+                chart = Self::NAME,
+                "dependency did not return any points; skipping the update"
+            );
+            return Ok(());
+        };
+        let sum = sum.active_model(chart_id, Some(min_blockscout_block));
+        insert_data_many(cx.db, vec![sum])
             .await
+            .map_err(UpdateError::StatsDB)?;
+        Ok(())
     }
 }
+
+pub type TotalNativeCoinTransfers = UpdateableChartWrapper<TotalNativeCoinTransfersInner>;
 
 #[cfg(test)]
 mod tests {
@@ -75,7 +61,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_total_native_coin_transfers() {
-        let counter = TotalNativeCoinTransfers::default();
-        simple_test_counter("update_total_native_coin_transfers", counter, "17").await;
+        simple_test_counter::<TotalNativeCoinTransfers>("update_total_native_coin_transfers", "17")
+            .await;
     }
 }

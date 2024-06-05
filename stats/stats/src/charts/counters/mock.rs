@@ -36,27 +36,14 @@ impl ChartFullUpdater for MockCounter {
     }
 }
 
-#[async_trait]
 impl crate::Chart for MockCounter {
     fn name(&self) -> &str {
         &self.name
     }
 
-    fn chart_type(&self) -> ChartType {
+    fn chart_type() -> ChartType {
         ChartType::Counter
     }
 }
 
-#[async_trait]
-impl ChartUpdater for MockCounter {
-    async fn update_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<chrono::Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, current_time, force_full)
-            .await
-    }
-}
+
