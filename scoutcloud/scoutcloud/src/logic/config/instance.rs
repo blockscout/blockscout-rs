@@ -151,7 +151,10 @@ impl InstanceConfig {
 
 #[cfg(test)]
 mod tests {
-    use crate::logic::config::{instance::InstanceConfig, user::UserConfig};
+    use crate::{
+        logic::config::{instance::InstanceConfig, user::UserConfig},
+        tests_utils::mock::mock_blockscout,
+    };
     use httpmock::{Method::*, MockServer};
     use pretty_assertions::assert_eq;
     use scoutcloud_proto::blockscout::scoutcloud::v1::DeployConfigInternal;
@@ -168,21 +171,6 @@ mod tests {
                 "jsonrpc": "2.0",
                 "id": 1,
                 "result": "0x1"
-            }));
-        });
-
-        server
-    }
-
-    fn mock_blockscout() -> MockServer {
-        let server = MockServer::start();
-        let _mock = server.mock(|when, then| {
-            when.method(GET).path("/api/v2/main-page/indexing-status");
-            then.status(200).json_body(json!({
-              "finished_indexing": true,
-              "finished_indexing_blocks": true,
-              "indexed_blocks_ratio": "1.0",
-              "indexed_internal_transactions_ratio": "1.0"
             }));
         });
 
@@ -356,7 +344,7 @@ mod tests {
     #[tokio::test]
     async fn stats_enabled_works() {
         let rpc = mock_rpc();
-        let blockscout = mock_blockscout();
+        let blockscout = mock_blockscout(true, true);
         let mut config = test_user_config(&rpc);
         config.internal.stats_enabled = Some(true);
         config.internal.instance_url = Some(blockscout.base_url());

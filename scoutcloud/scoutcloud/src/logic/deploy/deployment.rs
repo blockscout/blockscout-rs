@@ -6,7 +6,9 @@ use crate::{
 
 use db::sea_orm_active_enums::DeploymentStatusType;
 use scoutcloud_entity as db;
-use sea_orm::{prelude::*, ActiveValue::Set, ConnectionTrait, IntoActiveModel, NotSet, QueryOrder};
+use sea_orm::{
+    prelude::*, ActiveValue::Set, Condition, ConnectionTrait, IntoActiveModel, NotSet, QueryOrder,
+};
 
 pub struct Deployment {
     pub model: db::deployments::Model,
@@ -94,10 +96,18 @@ impl Deployment {
         Ok(deployment)
     }
 
-    pub async fn find_running<C: ConnectionTrait>(db: &C) -> Result<Vec<Self>, DbErr> {
+    pub async fn find_active<C: ConnectionTrait>(db: &C) -> Result<Vec<Self>, DbErr> {
         let deployments = Self::default_select()
             .filter(
-                scoutcloud_entity::deployments::Column::Status.eq(DeploymentStatusType::Running),
+                Condition::any()
+                    .add(
+                        scoutcloud_entity::deployments::Column::Status
+                            .eq(DeploymentStatusType::Running),
+                    )
+                    .add(
+                        scoutcloud_entity::deployments::Column::Status
+                            .eq(DeploymentStatusType::Unhealthy),
+                    ),
             )
             .all(db)
             .await?
@@ -157,6 +167,21 @@ impl Deployment {
         let mut model = self.model.clone().into_active_model();
         model.error = Set(Some(error.into()));
         model.status = Set(DeploymentStatusType::Failed);
+        self.model = model.update(db).await?;
+        Ok(self)
+    }
+
+    pub async fn mark_as_unhealthy<C>(
+        &mut self,
+        db: &C,
+        maybe_error: Option<impl Into<String>>,
+    ) -> Result<&mut Self, DbErr>
+    where
+        C: ConnectionTrait,
+    {
+        let mut model = self.model.clone().into_active_model();
+        model.status = Set(DeploymentStatusType::Unhealthy);
+        model.error = Set(maybe_error.map(Into::into));
         self.model = model.update(db).await?;
         Ok(self)
     }

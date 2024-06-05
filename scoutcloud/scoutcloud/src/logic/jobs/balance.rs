@@ -121,6 +121,7 @@ impl UnpaidDeployment {
             WHERE
                 deployments.started_at IS NOT NULL
                 AND deployments.status != 'failed'
+                AND deployments.status != 'unhealthy'
             GROUP BY
                 deployments.id
              ) unpaid_deployments

@@ -9,10 +9,10 @@ INSERT INTO "balance_changes" ("user_id", "amount", "note") VALUES
     (2, 20, NULL);
 
 -- Inserting mock data for auth_keys
-INSERT INTO "auth_tokens" ("user_id")
+INSERT INTO "auth_tokens" ("user_id", "name")
 VALUES
-    (1),
-    (2);
+    (1, 'test-auth-token-1'),
+    (2, 'test-auth-token-2');
 
 -- Inserting mock data for instances
 INSERT INTO "instances" ("id", "creator_id", "name", "slug", "user_config", "parsed_config")
