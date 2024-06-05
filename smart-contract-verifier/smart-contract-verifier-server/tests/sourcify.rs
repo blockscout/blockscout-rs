@@ -93,7 +93,7 @@ async fn invalid_contracts() {
 
     let metadata_content = include_str!("contracts/storage/metadata.json");
     let source = include_str!("contracts/storage/source.sol");
-    for (request_body, error_message) in [
+    for (request_body, _error_message) in [
         (
             json!({
                 // relies on fact that the Ethereum Testnet Goerli HASN'T any contract with this address
