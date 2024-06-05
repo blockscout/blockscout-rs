@@ -12,6 +12,7 @@ use std::{fmt::Display, marker::PhantomData, ops::AddAssign, str::FromStr};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::Days;
+use rust_decimal::prelude::Zero;
 
 use crate::{
     charts::{
@@ -53,7 +54,7 @@ where
     T: CumulativeChart,
     T::DeltaChartPoint: Into<DateValueString>,
     <T::DeltaChartPoint as DateValue>::Value:
-        Send + Sync + AddAssign + FromStr + Default + Display + Clone,
+        Send + Sync + AddAssign + FromStr + Display + Clone + Zero,
     <<T::DeltaChartPoint as DateValue>::Value as FromStr>::Err: Display,
 {
     type PrimaryDependency = T::DeltaChart;
@@ -83,7 +84,7 @@ where
                     })
             })
             .transpose()?;
-        let partial_sum = partial_sum.unwrap_or_default();
+        let partial_sum = partial_sum.unwrap_or(<T::DeltaChartPoint as DateValue>::Value::zero());
         let data = cumsum::<T::DeltaChartPoint>(delta_data, partial_sum)?
             .into_iter()
             .map(|value| {

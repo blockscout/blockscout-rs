@@ -26,6 +26,7 @@ lazy_static = "1.4"
 prometheus = "0.13"
 anyhow = "1"
 itertools = "0.12.1"
+rust_decimal = "1.27"
 
 # Dependencies for test-utils only
 tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }

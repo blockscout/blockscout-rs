@@ -10,18 +10,18 @@ use tracing::warn;
 use crate::{
     charts::{
         chart::{chart_portrait, Chart},
-        db_interaction::write::insert_data_many,
+        db_interaction::{types::DateValue, write::insert_data_many},
     },
     data_source::{source::DataSource, types::UpdateContext},
     utils::day_start,
-    DateValueString, Named, UpdateError,
+    DateValueString, MissingDatePolicy, Named, UpdateError,
 };
 
 use super::{UpdateableChart, UpdateableChartWrapper};
 
 /// See [module-level documentation](self) for details.
 pub trait LastPointChart {
-    type InnerSource: DataSource<Output = Vec<DateValueString>>;
+    type InnerSource: DataSource<Output = Vec<DateValueString>> + Chart;
 }
 
 /// Wrapper to convert type implementing [`LastPointChart`] to another that implements [`DataSource`]
@@ -54,7 +54,17 @@ impl<T: LastPointChart + Chart> UpdateableChart for LastPointChartLocalWrapper<T
             remote_fetch_timer,
         )
         .await?;
-        let Some(last_point) = data.last() else {
+        let last_point = data.last().cloned().or_else(|| {
+            if T::InnerSource::missing_date_policy() == MissingDatePolicy::FillZero {
+                Some(DateValueString::from_parts(
+                    cx.time.date_naive(),
+                    "0".to_string(),
+                ))
+            } else {
+                None
+            }
+        });
+        let Some(last_point) = last_point else {
             warn!(
                 chart = Self::NAME,
                 "dependency did not return any points; skipping the update"

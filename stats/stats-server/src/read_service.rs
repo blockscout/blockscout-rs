@@ -106,7 +106,7 @@ impl StatsService for ReadService {
             .from
             .and_then(|date| NaiveDate::from_str(&date).ok());
         let to = request.to.and_then(|date| NaiveDate::from_str(&date).ok());
-        let policy = Some(chart_info.static_info.missing_date_policy);
+        let policy = chart_info.static_info.missing_date_policy;
         let mark_approx = chart_info.static_info.approximate_trailing_points;
         let interval_limit = Some(self.limits.request_interval_limit);
         let data = stats::get_chart_data(
@@ -116,6 +116,7 @@ impl StatsService for ReadService {
             to,
             interval_limit,
             policy,
+            true,
             mark_approx,
         )
         .await

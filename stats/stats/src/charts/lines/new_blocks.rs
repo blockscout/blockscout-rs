@@ -110,9 +110,18 @@ mod tests {
             force_full: false,
         };
         NewBlocks::update_recursively(&cx).await.unwrap();
-        let data = get_chart_data(&db, NewBlocks::NAME, None, None, None, None, 1)
-            .await
-            .unwrap();
+        let data = get_chart_data(
+            &db,
+            NewBlocks::NAME,
+            None,
+            None,
+            None,
+            crate::MissingDatePolicy::FillZero,
+            false,
+            1,
+        )
+        .await
+        .unwrap();
         let expected = vec![
             ExtendedDateValue {
                 date: NaiveDate::from_str("2022-11-10").unwrap(),
@@ -137,9 +146,18 @@ mod tests {
         // need to update time so that the update is not ignored as the same one
         cx.time = chrono::DateTime::<Utc>::from_str("2022-11-12T13:00:00Z").unwrap();
         NewBlocks::update_recursively(&cx).await.unwrap();
-        let data = get_chart_data(&db, NewBlocks::NAME, None, None, None, None, 1)
-            .await
-            .unwrap();
+        let data = get_chart_data(
+            &db,
+            NewBlocks::NAME,
+            None,
+            None,
+            None,
+            crate::MissingDatePolicy::FillZero,
+            false,
+            1,
+        )
+        .await
+        .unwrap();
         let expected = vec![
             ExtendedDateValue {
                 date: NaiveDate::from_str("2022-11-09").unwrap(),
@@ -185,9 +203,18 @@ mod tests {
             force_full: true,
         };
         NewBlocks::update_recursively(&cx).await.unwrap();
-        let data = get_chart_data(&db, NewBlocks::NAME, None, None, None, None, 0)
-            .await
-            .unwrap();
+        let data = get_chart_data(
+            &db,
+            NewBlocks::NAME,
+            None,
+            None,
+            None,
+            crate::MissingDatePolicy::FillZero,
+            false,
+            0,
+        )
+        .await
+        .unwrap();
         let expected = vec![
             ExtendedDateValue {
                 date: NaiveDate::from_str("2022-11-09").unwrap(),
@@ -270,9 +297,18 @@ mod tests {
             force_full: false,
         };
         NewBlocks::update_recursively(&cx).await.unwrap();
-        let data = get_chart_data(&db, NewBlocks::NAME, None, None, None, None, 1)
-            .await
-            .unwrap();
+        let data = get_chart_data(
+            &db,
+            NewBlocks::NAME,
+            None,
+            None,
+            None,
+            crate::MissingDatePolicy::FillZero,
+            false,
+            1,
+        )
+        .await
+        .unwrap();
         let expected = vec![
             ExtendedDateValue {
                 date: NaiveDate::from_str("2022-11-09").unwrap(),

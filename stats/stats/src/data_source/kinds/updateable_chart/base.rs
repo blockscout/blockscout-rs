@@ -110,6 +110,8 @@ pub trait UpdateableChart: Chart {
     }
 
     /// Retrieve chart data from (local) storage.
+    ///
+    /// Note that the data might have missing points for efficiency reasons.
     fn query_data(
         cx: &UpdateContext<'_>,
         range: Option<RangeInclusive<DateTimeUtc>>,
@@ -125,7 +127,8 @@ pub trait UpdateableChart: Chart {
                 start,
                 end,
                 None,
-                Some(Self::missing_date_policy()),
+                Self::missing_date_policy(),
+                false,
                 Self::approximate_trailing_points(),
             )
             .await?

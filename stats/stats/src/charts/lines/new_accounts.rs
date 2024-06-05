@@ -10,9 +10,10 @@ use crate::{
         },
         UpdateContext,
     },
+    missing_date::trim_out_of_range_sorted,
     Chart, Named, UpdateError,
 };
-use chrono::{Days, Duration, NaiveDate};
+use chrono::Duration;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 
@@ -87,31 +88,11 @@ impl RemoteSource for NewAccountsRemote {
         // make sure that it's sorted
         data.sort_by_key(|d| d.date);
         if let Some(range) = range {
+            let range = range.start().date_naive()..=range.end().date_naive();
             trim_out_of_range_sorted(&mut data, range);
         }
         Ok(data)
     }
-}
-
-/// the vector must be sorted
-fn trim_out_of_range_sorted(data: &mut Vec<DateValueInt>, range: RangeInclusive<DateTimeUtc>) {
-    // start of relevant section
-    let keep_from_idx = data
-        .binary_search_by_key(&range.start().date_naive(), |p| p.date)
-        .unwrap_or_else(|i| i);
-    // irrelevant tail start
-    let trim_from_idx = data
-        .binary_search_by_key(
-            &(range
-                .end()
-                .date_naive()
-                .checked_add_days(Days::new(1))
-                .unwrap_or(NaiveDate::MAX)),
-            |p| p.date,
-        )
-        .unwrap_or_else(|i| i);
-    data.truncate(trim_from_idx);
-    data.drain(..keep_from_idx);
 }
 
 pub struct NewAccountsRemoteString;
@@ -156,10 +137,7 @@ pub type NewAccountsInt = ParseAdapterWrapper<NewAccountsIntInner>;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::{
-        point_construction::{dt, v_int},
-        simple_test::{ranged_test_chart, simple_test_chart},
-    };
+    use crate::tests::simple_test::{ranged_test_chart, simple_test_chart};
 
     #[tokio::test]
     #[ignore = "needs database to run"]
@@ -193,80 +171,5 @@ mod tests {
             Some("2022-11-11T14:00:00".parse().unwrap()),
         )
         .await;
-    }
-
-    #[test]
-    fn trim_range_empty_vector() {
-        let mut data: Vec<DateValueInt> = vec![];
-        let range = dt("2100-01-02T12:00:00").and_utc()..=dt("2100-01-04T12:00:00").and_utc();
-        trim_out_of_range_sorted(&mut data, range);
-        assert_eq!(data, vec![]);
-
-        let max_range = DateTime::MIN.and_utc()..=DateTime::MAX.and_utc();
-        trim_out_of_range_sorted(&mut data, max_range);
-    }
-
-    #[test]
-    fn trim_range_no_elements_in_range() {
-        let mut data = vec![
-            v_int("2100-01-01", 1),
-            v_int("2100-01-02", 2),
-            v_int("2100-01-03", 3),
-        ];
-        let range = dt("2099-12-30T00:00:00").and_utc()..=dt("2099-12-31T23:59:59").and_utc();
-        trim_out_of_range_sorted(&mut data, range);
-        assert_eq!(data, vec![]);
-
-        let mut data = vec![
-            v_int("2100-01-01", 1),
-            v_int("2100-01-02", 2),
-            v_int("2100-01-03", 3),
-        ];
-        let range = dt("2100-01-04T12:00:00").and_utc()..=dt("2100-01-05T12:00:00").and_utc();
-        trim_out_of_range_sorted(&mut data, range);
-        assert_eq!(data, vec![]);
-    }
-
-    #[test]
-    fn trim_range_all_elements_in_range() {
-        let mut data = vec![
-            v_int("2100-01-01", 1),
-            v_int("2100-01-02", 2),
-            v_int("2100-01-03", 3),
-        ];
-        let range = dt("2100-01-01T00:00:00").and_utc()..=dt("2100-01-03T23:59:59").and_utc();
-        trim_out_of_range_sorted(&mut data, range);
-        assert_eq!(
-            data,
-            vec![
-                v_int("2100-01-01", 1),
-                v_int("2100-01-02", 2),
-                v_int("2100-01-03", 3),
-            ]
-        );
-    }
-
-    #[test]
-    fn trim_range_partial_elements_in_range() {
-        let mut data = vec![
-            v_int("2100-01-01", 1),
-            v_int("2100-01-02", 2),
-            v_int("2100-01-03", 3),
-        ];
-        let range = dt("2100-01-02T00:00:00").and_utc()..=dt("2100-01-10T23:59:59").and_utc();
-        trim_out_of_range_sorted(&mut data, range);
-        assert_eq!(data, vec![v_int("2100-01-02", 2), v_int("2100-01-03", 3)]);
-    }
-
-    #[test]
-    fn trim_range_single_element_in_range() {
-        let mut data = vec![
-            v_int("2100-01-01", 1),
-            v_int("2100-01-02", 2),
-            v_int("2100-01-03", 3),
-        ];
-        let range = dt("2100-01-02T00:00:00").and_utc()..=dt("2100-01-02T23:59:59").and_utc();
-        trim_out_of_range_sorted(&mut data, range);
-        assert_eq!(data, vec![v_int("2100-01-02", 2)]);
     }
 }

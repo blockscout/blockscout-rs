@@ -34,6 +34,10 @@ where
     Ok(data)
 }
 
+/// Allows missing dates in `data`.
+/// Assumes `data` is sorted.
+///
+/// Semantically inverse to [`deltas`].
 pub fn cumsum<DV>(mut data: Vec<DV>, mut prev_sum: DV::Value) -> Result<Vec<DV>, UpdateError>
 where
     DV: DateValue + Default,
@@ -47,6 +51,10 @@ where
     Ok(data)
 }
 
+/// Allows missing dates in `data`.
+/// Assumes `data` is sorted.
+///
+/// Semantically inverse to [`cumsum`].
 pub fn deltas<DV>(mut data: Vec<DV>, mut prev_value: DV::Value) -> Result<Vec<DV>, UpdateError>
 where
     DV: DateValue + Default,

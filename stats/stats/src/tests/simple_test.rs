@@ -38,7 +38,15 @@ pub async fn simple_test_chart<C: DataSource + Chart>(
     let cx = UpdateContext::from(parameters.clone());
     C::update_recursively(&cx).await.unwrap();
     assert_eq!(
-        &get_chart::<C>(&db, None, None, None, approximate_trailing_points,).await,
+        &get_chart::<C>(
+            &db,
+            None,
+            None,
+            C::missing_date_policy(),
+            false,
+            approximate_trailing_points,
+        )
+        .await,
         &expected
     );
 
@@ -46,7 +54,15 @@ pub async fn simple_test_chart<C: DataSource + Chart>(
     let cx = UpdateContext::from(parameters);
     C::update_recursively(&cx).await.unwrap();
     assert_eq!(
-        &get_chart::<C>(&db, None, None, None, approximate_trailing_points,).await,
+        &get_chart::<C>(
+            &db,
+            None,
+            None,
+            C::missing_date_policy(),
+            false,
+            approximate_trailing_points,
+        )
+        .await,
         &expected
     );
 }
@@ -83,7 +99,8 @@ pub async fn ranged_test_chart<C: DataSource + Chart>(
             &db,
             Some(from),
             Some(to),
-            Some(policy),
+            policy,
+            true,
             approximate_trailing_points,
         )
         .await,
@@ -98,7 +115,8 @@ pub async fn ranged_test_chart<C: DataSource + Chart>(
             &db,
             Some(from),
             Some(to),
-            Some(policy),
+            policy,
+            true,
             approximate_trailing_points,
         )
         .await,
@@ -110,7 +128,8 @@ async fn get_chart<C: DataSource + Chart>(
     db: &DatabaseConnection,
     from: Option<NaiveDate>,
     to: Option<NaiveDate>,
-    policy: Option<MissingDatePolicy>,
+    policy: MissingDatePolicy,
+    fill_missing_dates: bool,
     approximate_trailing_points: u64,
 ) -> Vec<(String, String)> {
     let data = get_chart_data(
@@ -120,6 +139,7 @@ async fn get_chart<C: DataSource + Chart>(
         to,
         None,
         policy,
+        fill_missing_dates,
         approximate_trailing_points,
     )
     .await

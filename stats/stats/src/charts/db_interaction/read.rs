@@ -1,6 +1,6 @@
 use crate::{
     charts::chart::ChartMetadata,
-    missing_date::{fill_and_filter_chart, filter_within_range},
+    missing_date::{fill_and_filter_chart, fit_into_range},
     Chart, DateValueString, ExtendedDateValue, MissingDatePolicy, UpdateError,
 };
 use blockscout_db::entity::blocks;
@@ -138,7 +138,8 @@ pub async fn get_chart_data(
     from: Option<NaiveDate>,
     to: Option<NaiveDate>,
     interval_limit: Option<Duration>,
-    policy: Option<MissingDatePolicy>,
+    policy: MissingDatePolicy,
+    fill_missing_dates: bool,
     approximate_trailing_points: u64,
 ) -> Result<Vec<ExtendedDateValue>, ReadError> {
     let chart = charts::Entity::find()
@@ -147,6 +148,8 @@ pub async fn get_chart_data(
         .one(db)
         .await?
         .ok_or_else(|| ReadError::ChartNotFound(name.into()))?;
+
+    // may contain points outside the range, need to figure it out
     let db_data = get_raw_chart_data(db, chart.id, from, to).await?;
 
     let last_updated_at = chart.last_updated_at.map(|t| t.date_naive());
@@ -158,25 +161,23 @@ pub async fn get_chart_data(
         );
     }
 
-    // may include future points that were not yet collected and were just filled accordingly.
-    let data_with_maybe_future = match policy {
-        Some(policy) => {
-            // If `to` is `None`, we would like to return all known points.
-            // However, if some points are omitted, they should be filled according
-            // to policy.
-            // This fill makes sense up to the latest update.
-            let to = to.or(last_updated_at);
-            fill_and_filter_chart(db_data, from, to, policy, interval_limit)?
-        }
-        None => db_data,
+    // If `to` is `None`, we would like to return all known points.
+    // However, if some points are omitted, they should be filled according
+    // to policy.
+    // This fill makes sense up to the latest update.
+    let to = match (to, last_updated_at) {
+        (Some(to), Some(last_updated_at)) => Some(to.min(last_updated_at)),
+        (None, Some(d)) | (Some(d), None) => Some(d),
+        (None, None) => None,
     };
-    let data_with_maybe_future_len = data_with_maybe_future.len();
-    let data_unmarked = filter_within_range(data_with_maybe_future, None, last_updated_at);
-    if let Some(filtered) = data_with_maybe_future_len.checked_sub(data_unmarked.len()) {
-        if filtered > 0 {
-            tracing::debug!(last_updated_at = ?last_updated_at, "{} future points were removed", filtered);
-        }
-    }
+
+    let data_in_range = fit_into_range(db_data, from, to, policy);
+
+    let data_unmarked = if fill_missing_dates {
+        fill_and_filter_chart(data_in_range, from, to, policy, interval_limit)?
+    } else {
+        data_in_range
+    };
     let data = mark_approximate(
         data_unmarked,
         last_updated_at.unwrap_or(NaiveDate::MAX),
@@ -185,6 +186,10 @@ pub async fn get_chart_data(
     Ok(data)
 }
 
+/// Get data points at least within the provided range.
+///
+/// I.e. if today there was no data, but `from` is today, yesterday's
+/// point will be also retrieved.
 async fn get_raw_chart_data(
     db: &DatabaseConnection,
     chart_id: i32,
@@ -450,9 +455,18 @@ mod tests {
 
         let db = init_db("get_chart_int_mock").await;
         insert_mock_data(&db).await;
-        let chart = get_chart_data(&db, "newBlocksPerDay", None, None, None, None, 1)
-            .await
-            .unwrap();
+        let chart = get_chart_data(
+            &db,
+            "newBlocksPerDay",
+            None,
+            None,
+            None,
+            MissingDatePolicy::FillZero,
+            false,
+            1,
+        )
+        .await
+        .unwrap();
         assert_eq!(
             vec![
                 ExtendedDateValue {
@@ -488,7 +502,8 @@ mod tests {
             Some(d("2022-11-14")),
             Some(d("2022-11-15")),
             None,
-            Some(MissingDatePolicy::FillPrevious),
+            MissingDatePolicy::FillPrevious,
+            true,
             1,
         )
         .await
