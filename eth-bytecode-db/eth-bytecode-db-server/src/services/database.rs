@@ -155,8 +155,8 @@ impl Database for DatabaseService {
             search_sourcify_sources_task
         );
 
-        let trace_error = |source: &str, err: tonic::Status| {
-            tracing::error!(
+        let trace_error = |source: &str, err: &tonic::Status| {
+            tracing::warn!(
                 contract_address = contract_address,
                 chain_id = chain_id,
                 status =? err,
@@ -165,16 +165,16 @@ impl Database for DatabaseService {
         };
 
         let eth_bytecode_db_sources = eth_bytecode_db_sources
-            .map_err(|err| trace_error("eth_bytecode_db", err))
+            .inspect_err(|err| trace_error("eth_bytecode_db", err))
             .unwrap_or_default();
         let alliance_sources = alliance_sources
             .transpose()
-            .map_err(|err| trace_error("alliance", err))
+            .inspect_err(|err| trace_error("alliance", err))
             .unwrap_or_default()
             .unwrap_or_default();
         let mut sourcify_source = sourcify_source
             .transpose()
-            .map_err(|err| trace_error("sourcify", err))
+            .inspect_err(|err| trace_error("sourcify", err))
             .unwrap_or_default()
             .flatten();
 
