@@ -10,6 +10,14 @@
           "ens"
         ]
       },
+      "10": {
+        "blockscout": {
+          "url": "https://optimism.blockscout.com/"
+        },
+        "use_protocols": [
+          "ens"
+        ]
+      },
       "30": {
         "blockscout": {
           "url": "https://rootstock.blockscout.com"
@@ -34,6 +42,22 @@
           "zns"
         ]
       },
+      "690": {
+        "blockscout": {
+          "url": "https://explorer.redstone.xyz/"
+        },
+        "use_protocols": [
+          "ens"
+        ]
+      },
+      "17069": {
+        "blockscout": {
+          "url": "https://explorer.garnetchain.com/"
+        },
+        "use_protocols": [
+          "ens"
+        ]
+      },
       "8453": {
         "blockscout": {
           "url": "https://base.blockscout.com"
@@ -56,6 +80,14 @@
         },
         "use_protocols": [
           "lightlink"
+        ]
+      },
+      "11155420": {
+        "blockscout": {
+          "url": "https://optimism-sepolia.blockscout.com/"
+        },
+        "use_protocols": [
+          "ens"
         ]
       }
     },
