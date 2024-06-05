@@ -154,9 +154,29 @@ impl Database for DatabaseService {
             search_alliance_sources_task,
             search_sourcify_sources_task
         );
-        let eth_bytecode_db_sources = eth_bytecode_db_sources?;
-        let alliance_sources = alliance_sources.transpose()?.unwrap_or_default();
-        let mut sourcify_source = sourcify_source.transpose()?.flatten();
+
+        let trace_error = |source: &str, err: tonic::Status| {
+            tracing::error!(
+                contract_address = contract_address,
+                chain_id = chain_id,
+                status =? err,
+                "Looking for sources in {source} database failed"
+            );
+        };
+
+        let eth_bytecode_db_sources = eth_bytecode_db_sources
+            .map_err(|err| trace_error("eth_bytecode_db", err))
+            .unwrap_or_default();
+        let alliance_sources = alliance_sources
+            .transpose()
+            .map_err(|err| trace_error("alliance", err))
+            .unwrap_or_default()
+            .unwrap_or_default();
+        let mut sourcify_source = sourcify_source
+            .transpose()
+            .map_err(|err| trace_error("sourcify", err))
+            .unwrap_or_default()
+            .flatten();
 
         // Importing contracts from etherscan may be quite expensive operation.
         // For that reason, we try to use that approach only if no other sources have been found.
