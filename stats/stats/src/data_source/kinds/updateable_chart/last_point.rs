@@ -40,7 +40,6 @@ impl<T: LastPointSource + Chart> Chart for LastPointSourceLocalWrapper<T> {}
 impl<T: LastPointSource + Chart> UpdateableChart for LastPointSourceLocalWrapper<T> {
     type PrimaryDependency = T::InnerSource;
     type SecondaryDependencies = ();
-    type Point = DateValueString;
 
     async fn update_values(
         cx: &UpdateContext<'_>,

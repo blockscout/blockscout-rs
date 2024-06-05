@@ -18,7 +18,7 @@ use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
 
 use crate::{
     charts::{
-        chart::{chart_portrait, Point},
+        chart::chart_portrait,
         db_interaction::{
             read::{get_chart_metadata, get_min_block_blockscout, last_accurate_point},
             write::{create_chart, set_last_updated_at},
@@ -32,10 +32,6 @@ use crate::{
 pub trait UpdateableChart: Chart {
     type PrimaryDependency: DataSource;
     type SecondaryDependencies: DataSource;
-    /// Type of the point stored in the chart.
-    /// `DateValueString` can be used to avoid parsing the values,
-    /// but `DateValueDecimal` or other types can be useful sometimes.
-    type Point: Point;
 
     /// Create chart in db. Does not overwrite existing data.
     fn create(

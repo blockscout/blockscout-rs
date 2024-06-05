@@ -144,7 +144,6 @@ where
 {
     type PrimaryDependency = T::PrimaryDependency;
     type SecondaryDependencies = T::SecondaryDependencies;
-    type Point = T::Point;
 
     async fn update_values(
         cx: &UpdateContext<'_>,

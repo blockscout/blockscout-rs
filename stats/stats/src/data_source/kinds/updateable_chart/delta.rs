@@ -49,7 +49,6 @@ where
 {
     type PrimaryDependency = T::CumulativeChart;
     type SecondaryDependencies = ();
-    type Point = T::CumulativeChartPoint;
 
     async fn update_values(
         cx: &UpdateContext<'_>,

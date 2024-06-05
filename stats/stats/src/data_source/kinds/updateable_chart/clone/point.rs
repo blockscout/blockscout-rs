@@ -37,7 +37,6 @@ impl<T: ClonePointChart + Chart> Chart for ClonePointChartLocalWrapper<T> {}
 impl<T: ClonePointChart> UpdateableChart for ClonePointChartLocalWrapper<T> {
     type PrimaryDependency = T::Dependency;
     type SecondaryDependencies = ();
-    type Point = DateValueString;
 
     async fn update_values(
         cx: &crate::data_source::UpdateContext<'_>,

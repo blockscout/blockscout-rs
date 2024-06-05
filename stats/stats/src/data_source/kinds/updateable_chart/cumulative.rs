@@ -58,7 +58,6 @@ where
 {
     type PrimaryDependency = T::DeltaChart;
     type SecondaryDependencies = ();
-    type Point = T::DeltaChartPoint;
 
     async fn update_values(
         cx: &UpdateContext<'_>,
