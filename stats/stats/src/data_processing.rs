@@ -1,3 +1,5 @@
+use chrono::NaiveDate;
+
 use crate::{
     charts::db_interaction::types::{DateValue, DateValueString},
     UpdateError,
@@ -96,6 +98,21 @@ where
         value: total.to_string(),
     };
     Ok(Some(point))
+}
+
+pub fn sum<DV>(data: &Vec<DV>, mut partial_sum: DV::Value) -> Result<DV, UpdateError>
+where
+    DV: DateValue + Default,
+    DV::Value: AddAssign + Clone,
+{
+    let mut max_date = NaiveDate::MIN;
+    for item in data.iter() {
+        let (date, value) = item.get_parts();
+        partial_sum.add_assign(value.clone());
+        max_date = max_date.max(*date);
+    }
+    let sum_point = DV::from_parts(max_date, partial_sum);
+    Ok(sum_point)
 }
 
 pub fn last_point(data: Vec<DateValueString>) -> Option<DateValueString> {

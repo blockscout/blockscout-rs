@@ -65,7 +65,6 @@ impl Chart for NativeCoinHoldersGrowthInner {
 impl UpdateableChart for NativeCoinHoldersGrowthInner {
     type PrimaryDependency = ();
     type SecondaryDependencies = ();
-    type Point = DateValueString;
 
     async fn create(
         db: &DatabaseConnection,

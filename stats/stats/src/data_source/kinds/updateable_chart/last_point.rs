@@ -20,24 +20,24 @@ use crate::{
 use super::{UpdateableChart, UpdateableChartWrapper};
 
 /// See [module-level documentation](self) for details.
-pub trait LastPointSource {
+pub trait LastPointChart {
     type InnerSource: DataSource<Output = Vec<DateValueString>>;
 }
 
-/// Wrapper to convert type implementing [`LastPointSource`] to another that implements [`DataSource`]
-pub type LastPointSourceWrapper<T> = UpdateableChartWrapper<LastPointSourceLocalWrapper<T>>;
+/// Wrapper to convert type implementing [`LastPointChart`] to another that implements [`DataSource`]
+pub type LastPointChartWrapper<T> = UpdateableChartWrapper<LastPointChartLocalWrapper<T>>;
 
 /// Wrapper to get type implementing "parent" trait. Use [`DeltaChartWrapper`] to get [`DataSource`]
-pub struct LastPointSourceLocalWrapper<T: LastPointSource>(PhantomData<T>);
+pub struct LastPointChartLocalWrapper<T: LastPointChart>(PhantomData<T>);
 
-impl<T: LastPointSource + Named> Named for LastPointSourceLocalWrapper<T> {
+impl<T: LastPointChart + Named> Named for LastPointChartLocalWrapper<T> {
     const NAME: &'static str = T::NAME;
 }
 
 #[portrait::fill(portrait::delegate(T))]
-impl<T: LastPointSource + Chart> Chart for LastPointSourceLocalWrapper<T> {}
+impl<T: LastPointChart + Chart> Chart for LastPointChartLocalWrapper<T> {}
 
-impl<T: LastPointSource + Chart> UpdateableChart for LastPointSourceLocalWrapper<T> {
+impl<T: LastPointChart + Chart> UpdateableChart for LastPointChartLocalWrapper<T> {
     type PrimaryDependency = T::InnerSource;
     type SecondaryDependencies = ();
 
