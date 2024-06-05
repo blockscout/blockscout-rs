@@ -85,6 +85,7 @@ where
             })
             .transpose()?;
         let partial_sum = partial_sum.unwrap_or(<T::DeltaChartPoint as DateValue>::Value::zero());
+        // it's ok to have missing points
         let data = cumsum::<T::DeltaChartPoint>(delta_data, partial_sum)?
             .into_iter()
             .map(|value| {

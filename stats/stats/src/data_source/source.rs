@@ -152,6 +152,8 @@ pub trait DataSource {
     /// Retrieve chart data.
     /// If `range` is `Some`, should return data within the range. Otherwise - all data.
     ///
+    /// Note that the data might have missing points for efficiency reasons.
+    ///
     /// **Does not perform an update!** If you need relevant data, you likely need
     /// to call [`DataSource::update_recursively`] beforehand.
     fn query_data(
