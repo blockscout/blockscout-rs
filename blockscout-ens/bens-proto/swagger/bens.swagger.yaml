@@ -545,6 +545,8 @@ definitions:
         type: string
       description:
         type: string
+      deployment_blockscout_base_url:
+        type: string
       tld_list:
         type: array
         items:

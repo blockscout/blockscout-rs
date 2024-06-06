@@ -71,6 +71,7 @@ message ProtocolInfo {
   string short_name = 2;
   string title = 3;
   string description = 4;
+  string deployment_blockscout_base_url = 8;
   repeated string tld_list = 5;
   optional string icon_url = 6;
   optional string docs_url = 7;

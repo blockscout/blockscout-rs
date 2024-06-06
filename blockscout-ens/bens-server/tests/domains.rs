@@ -1,6 +1,7 @@
 mod utils;
 
 use crate::utils::{build_query, check_list_result, data_file_as_json, start_server};
+use bens_server::Settings;
 use blockscout_service_launcher::test_server::{send_get_request, send_post_request};
 use pretty_assertions::assert_eq;
 use serde_json::{json, Value};
@@ -10,20 +11,21 @@ use url::Url;
 
 #[sqlx::test(migrations = "../bens-logic/tests/migrations")]
 async fn subgraphs_reading_works(pool: PgPool) {
-    let base = start_server(&pool).await;
-    get_protocols_scenario(base.clone()).await;
-    eth_protocol_scenario(base.clone()).await;
-    genome_protocol_scenario(base.clone()).await;
-    different_protocols_scenario(base.clone()).await;
+    let (base, settings) = start_server(&pool).await;
+    get_protocols_scenario(base.clone(), &settings).await;
+    eth_protocol_scenario(base.clone(), &settings).await;
+    genome_protocol_scenario(base.clone(), &settings).await;
+    different_protocols_scenario(base.clone(), &settings).await;
 }
 
-async fn get_protocols_scenario(base: Url) {
-    let request: Value = send_get_request(&base, "/api/v1/1/protocols").await;
+async fn get_protocols_scenario(base: Url, settings: &Settings) {
+    let response: Value = send_get_request(&base, "/api/v1/1/protocols").await;
+    let context = utils::settings_context(settings);
     assert_eq!(
-        request,
+        response,
         json!({
             "items": [
-                data_file_as_json!("protocols/ens.json"),
+                data_file_as_json!("protocols/ens.json", &context),
             ]
         })
     );
@@ -33,7 +35,7 @@ async fn get_protocols_scenario(base: Url) {
         request,
         json!({
             "items": [
-                data_file_as_json!("protocols/genome.json")
+                data_file_as_json!("protocols/genome.json", &context)
             ]
         })
     );
@@ -42,24 +44,29 @@ async fn get_protocols_scenario(base: Url) {
         request,
         json!({
             "items": [
-                data_file_as_json!("protocols/ens.json"),
-                data_file_as_json!("protocols/genome.json"),
+                data_file_as_json!("protocols/ens.json", &context),
+                data_file_as_json!("protocols/genome.json", &context),
             ]
         })
     );
 }
 
-async fn eth_protocol_scenario(base: Url) {
+async fn eth_protocol_scenario(base: Url, settings: &Settings) {
+    let context = utils::settings_context(settings);
+
     // get detailed domain
     let request: Value = send_get_request(&base, "/api/v1/1/domains/vitalik.eth").await;
-    let vitalik_detailed_json = data_file_as_json!("domains/vitalik_eth/detailed.json");
+    let vitalik_detailed_json = data_file_as_json!("domains/vitalik_eth/detailed.json", &context);
     assert_eq!(request, vitalik_detailed_json.clone());
     // get detailed domain with emojied name and with wrapped token
     let request: Value = send_get_request(&base, "/api/v1/1/domains/wa🇬🇲i.eth").await;
-    assert_eq!(request, data_file_as_json!("domains/wai_eth/detailed.json"));
+    assert_eq!(
+        request,
+        data_file_as_json!("domains/wai_eth/detailed.json", &context)
+    );
 
     // get events
-    let expected_events = data_file_as_json!("domains/vitalik_eth/events.json");
+    let expected_events = data_file_as_json!("domains/vitalik_eth/events.json", &context);
     let expected_events = expected_events.as_array().unwrap().clone();
     let (actual, expected) = check_list_result(
         &base,
@@ -81,7 +88,7 @@ async fn eth_protocol_scenario(base: Url) {
     assert_eq!(actual, expected);
 
     // all domains lookup + check pagination
-    let expected_domains = data_file_as_json!("domains/lookup_ens.json")
+    let expected_domains = data_file_as_json!("domains/lookup_ens.json", &context)
         .as_array()
         .unwrap()
         .clone();
@@ -109,7 +116,10 @@ async fn eth_protocol_scenario(base: Url) {
     assert_eq!(actual, expected);
 
     // domain lookup
-    let expected_domains = vec![data_file_as_json!("domains/sashaxyz_eth/short.json")];
+    let expected_domains = vec![data_file_as_json!(
+        "domains/sashaxyz_eth/short.json",
+        &context
+    )];
     let (actual, expected) = check_list_result(
         &base,
         "/api/v1/1/domains:lookup",
@@ -159,11 +169,13 @@ async fn eth_protocol_scenario(base: Url) {
     }
 
     // address lookup
-    let expected_addresses: Vec<Value> =
-        vec![json!(data_file_as_json!("domains/vitalik_eth/short.json"))]
-            .into_iter()
-            .chain(expected_domains)
-            .collect();
+    let expected_addresses: Vec<Value> = vec![json!(data_file_as_json!(
+        "domains/vitalik_eth/short.json",
+        &context
+    ))]
+    .into_iter()
+    .chain(expected_domains)
+    .collect();
     let (actual, expected) = check_list_result(
         &base,
         "/api/v1/1/addresses:lookup",
@@ -225,16 +237,17 @@ async fn eth_protocol_scenario(base: Url) {
     );
 }
 
-async fn genome_protocol_scenario(base: Url) {
+async fn genome_protocol_scenario(base: Url, settings: &Settings) {
+    let context = utils::settings_context(settings);
     let network_id = "10200";
     let request: Value =
         send_get_request(&base, &format!("/api/v1/{network_id}/domains/levvv.gno")).await;
     assert_eq!(
         request,
-        data_file_as_json!("domains/levvv_gno/detailed.json")
+        data_file_as_json!("domains/levvv_gno/detailed.json", &context)
     );
 
-    let expected_domains = data_file_as_json!("domains/lookup_genome.json")
+    let expected_domains = data_file_as_json!("domains/lookup_genome.json", &context)
         .as_array()
         .unwrap()
         .clone();
@@ -250,14 +263,15 @@ async fn genome_protocol_scenario(base: Url) {
     assert_eq!(actual, expected);
 }
 
-async fn different_protocols_scenario(base: Url) {
+async fn different_protocols_scenario(base: Url, settings: &Settings) {
+    let context = utils::settings_context(settings);
     let request: Value = send_get_request(&base, "/api/v1/1337/domains/levvv.gno").await;
     assert_eq!(
         request,
-        data_file_as_json!("domains/levvv_gno/detailed.json")
+        data_file_as_json!("domains/levvv_gno/detailed.json", &context)
     );
 
-    let expected_domains = data_file_as_json!("domains/lookup_genome.json")
+    let expected_domains = data_file_as_json!("domains/lookup_genome.json", &context)
         .as_array()
         .unwrap()
         .clone();
@@ -276,7 +290,7 @@ async fn different_protocols_scenario(base: Url) {
     assert_eq!(actual, expected);
 
     let page_token = "1571902007".to_string();
-    let expected_domains = data_file_as_json!("domains/lookup_ens.json")
+    let expected_domains = data_file_as_json!("domains/lookup_ens.json", &context)
         .as_array()
         .unwrap()
         .clone();

@@ -125,7 +125,7 @@ pub async fn get_domain(
         .only_active
         .then(|| format!("AND {DOMAIN_NOT_EXPIRED_WHERE_CLAUSE}"))
         .unwrap_or_default();
-    let schema = &domain_name.protocol.subgraph_schema;
+    let schema = &domain_name.deployed_protocol.protocol.subgraph_schema;
     let maybe_domain = sqlx::query_as(&format!(
         r#"
         SELECT
@@ -177,12 +177,17 @@ pub async fn find_domains(
         FindDomainsInput::Names(names) => {
             let unique_protocols = names
                 .iter()
-                .map(|name| (name.protocol.subgraph_schema.clone(), name.protocol))
+                .map(|name| {
+                    (
+                        name.deployed_protocol.protocol.subgraph_schema.clone(),
+                        name.deployed_protocol,
+                    )
+                })
                 .collect::<HashMap<_, _>>();
             unique_protocols
                 .values()
                 .map(|protocol| {
-                    let mut query = sql_gen::domain_select(protocol);
+                    let mut query = sql_gen::domain_select(protocol.protocol);
                     query.and_where(Expr::cust("id = ANY($1)")).to_owned()
                 })
                 .collect::<Vec<_>>()
