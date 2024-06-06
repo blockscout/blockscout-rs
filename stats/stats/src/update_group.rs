@@ -39,7 +39,6 @@ use itertools::Itertools;
 use sea_orm::{DatabaseConnection, DbErr};
 use thiserror::Error;
 use tokio::sync::{Mutex, MutexGuard};
-use tracing::warn;
 
 use crate::{data_source::UpdateParameters, ChartDynamic, UpdateError};
 
@@ -273,6 +272,9 @@ macro_rules! construct_update_group {
                 Ok(())
             }
 
+            // updates should be unique by group name & update time; this should allow to single out
+            // one update process in logs
+            #[::tracing::instrument(skip_all, fields(update_group=self.name(), update_time), level = tracing::Level::ERROR)]
             async fn update_charts<'a>(
                 &self,
                 params: $crate::data_source::UpdateParameters<'a>,
@@ -281,6 +283,7 @@ macro_rules! construct_update_group {
             ) -> Result<(), $crate::UpdateError> {
                 #[allow(unused)]
                 let cx: $crate::data_source::UpdateContext = params.into();
+                ::tracing::Span::current().record("update_time", ::std::format!("{}",&cx.time));
                 $(
                     if enabled_names.contains(<$member as $crate::Named>::NAME) {
                         <$member as $crate::data_source::DataSource>::update_recursively(&cx).await?;
@@ -377,7 +380,7 @@ impl SyncUpdateGroup {
         let mut result = HashSet::new();
         for name in chart_names {
             let Some(dependencies_ids) = self.inner.dependency_mutex_ids_of(name) else {
-                warn!(
+                tracing::warn!(
                     update_group=self.name(),
                     "`dependency_mutex_ids_of` of member chart '{name}' returned `None`. Expected `Some(..)`"
                 );
@@ -393,12 +396,13 @@ impl SyncUpdateGroup {
         // .iter() is ordered by key, so order is followed
         for (name, mutex) in self.dependencies_mutexes.iter() {
             if to_lock.remove(name) {
+                tracing::trace!(update_group = self.name(), mutex_id = name, "locking mutex");
                 let guard = match mutex.try_lock() {
                     Ok(v) => v,
                     Err(_) => {
-                        tracing::warn!(
+                        tracing::info!(
                             update_group = self.name(),
-                            chart_name = name,
+                            mutex_id = name,
                             "found locked update mutex, waiting for unlock"
                         );
                         mutex.lock().await
@@ -406,6 +410,14 @@ impl SyncUpdateGroup {
                 };
                 guards.push(guard);
             }
+        }
+        if !to_lock.is_empty() {
+            tracing::warn!(
+                update_group = self.name(),
+                "did not lock mutexes for all dependencies, this might lead \
+                to inaccuracies in calculations. missing mutexes for: {:?}",
+                to_lock
+            )
         }
         guards
     }
@@ -450,7 +462,13 @@ impl SyncUpdateGroup {
         enabled_names: &HashSet<String>,
     ) -> Result<(), UpdateError> {
         let (_joint_guard, enabled_members) = self.lock_enabled_dependencies(enabled_names).await;
-        self.inner.update_charts(params, &enabled_members).await
+        tracing::info!(
+            update_group = self.name(),
+            "updating group with enabled members {:?}",
+            enabled_members
+        );
+        self.inner.update_charts(params, &enabled_members).await?;
+        Ok(())
     }
 }
 

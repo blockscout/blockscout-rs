@@ -100,7 +100,7 @@ where
             cx,
             chart_id,
             min_blockscout_block,
-            Some(range),
+            range,
             remote_fetch_timer,
         )
         .await?;
@@ -115,16 +115,16 @@ async fn batch_update_values_step<U>(
     cx: &UpdateContext<'_>,
     chart_id: i32,
     min_blockscout_block: i64,
-    range: Option<RangeInclusive<DateTimeUtc>>,
+    range: RangeInclusive<DateTimeUtc>,
     remote_fetch_timer: &mut AggregateTimer,
 ) -> Result<usize, UpdateError>
 where
     U: BatchChart,
 {
     let primary_data =
-        U::PrimaryDependency::query_data(cx, range.clone(), remote_fetch_timer).await?;
+        U::PrimaryDependency::query_data(cx, Some(range.clone()), remote_fetch_timer).await?;
     let secondary_data: <<U as BatchChart>::SecondaryDependencies as DataSource>::Output =
-        U::SecondaryDependencies::query_data(cx, range, remote_fetch_timer).await?;
+        U::SecondaryDependencies::query_data(cx, Some(range), remote_fetch_timer).await?;
     let found = U::batch_update_values_step_with(
         cx.db,
         chart_id,

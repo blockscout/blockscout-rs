@@ -4,6 +4,7 @@ use blockscout_metrics_tools::AggregateTimer;
 use chrono::Utc;
 use futures::{future::BoxFuture, FutureExt};
 use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
+use tracing::instrument;
 
 use crate::UpdateError;
 
@@ -35,7 +36,6 @@ pub trait DataSource {
     /// In practice, primary/secondary are not distinguished. The
     /// naming is just for convenience/readability/indication.
     type SecondaryDependencies: DataSource;
-    // todo: make some kind of functor to allow `Option` + `Vec`, for example.
     /// Data that this source can provide
     type Output: Send;
 
@@ -118,18 +118,16 @@ pub trait DataSource {
     /// Should be idempontent with regards to `current_time` (in `cx`).
     /// It is a normal behaviour to call this method multiple times
     /// within single update.
+    #[instrument(skip_all, level = tracing::Level::DEBUG, fields(source_mutex_id = Self::MUTEX_ID))]
     fn update_recursively(
         cx: &UpdateContext<'_>,
     ) -> impl std::future::Future<Output = Result<(), UpdateError>> + std::marker::Send {
         async move {
-            // todo: log deps updated
-            // tracing::info!(
-            //     chart_name = Self::NAME,
-            //     parent_chart_name = P::NAME,
-            //     "updating parent"
-            // );
+            tracing::debug!("recursively updating primary dependency");
             Self::PrimaryDependency::update_recursively(cx).await?;
+            tracing::debug!("recursively updating secondary dependencies");
             Self::SecondaryDependencies::update_recursively(cx).await?;
+            tracing::debug!("updating itself");
             Self::update_itself(cx).await
         }
     }

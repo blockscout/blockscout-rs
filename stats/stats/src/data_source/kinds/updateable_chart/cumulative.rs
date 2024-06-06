@@ -85,6 +85,11 @@ where
             })
             .transpose()?;
         let partial_sum = partial_sum.unwrap_or(<T::DeltaChartPoint as DateValue>::Value::zero());
+        tracing::debug!(
+            partial_sum = %partial_sum,
+            delta_points_len = delta_data.len(),
+            "calculating cumulative sum"
+        );
         // it's ok to have missing points
         let data = cumsum::<T::DeltaChartPoint>(delta_data, partial_sum)?
             .into_iter()

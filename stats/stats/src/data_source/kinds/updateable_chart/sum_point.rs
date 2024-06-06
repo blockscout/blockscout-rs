@@ -49,6 +49,7 @@ impl<T: SumPointChart + Chart> UpdateableChart for SumPointChartLocalWrapper<T> 
     ) -> Result<(), UpdateError> {
         // it's possible to not request full data range and use `_last_accurate_point`; can be updated if needed
         let full_data = Self::PrimaryDependency::query_data(cx, None, remote_fetch_timer).await?;
+        tracing::debug!(points_len = full_data.len(), "calculating sum");
         let sum: DateValueString = sum::<DateValueInt>(&full_data, 0)?.into();
         let sum = sum.active_model(chart_id, Some(min_blockscout_block));
         insert_data_many(cx.db, vec![sum])

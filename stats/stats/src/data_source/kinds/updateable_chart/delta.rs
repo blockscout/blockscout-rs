@@ -84,6 +84,11 @@ where
             }
         }
         let range_start_value = range_start.into_parts().1;
+        tracing::debug!(
+            range_start_value = %range_start_value,
+            cumulative_points_len = cum_data.len(),
+            "calculating deltas from cumulative"
+        );
         let data = deltas::<T::CumulativeChartPoint>(cum_data.collect(), range_start_value)?
             .into_iter()
             .map(|value| {

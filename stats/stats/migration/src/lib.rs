@@ -27,7 +27,7 @@ pub async fn from_sql(manager: &SchemaManager<'_>, content: &str) -> Result<(), 
             st.to_string(),
         ))
         .await
-        .map_err(|e| DbErr::Migration(format!("{e}\nQuery: {st}")))?;
+        .map_err(|e| DbErr::Migration(::std::format!("{e}\nQuery: {st}")))?;
     }
     txn.commit().await
 }

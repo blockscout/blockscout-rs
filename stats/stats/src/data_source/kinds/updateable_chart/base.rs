@@ -71,6 +71,7 @@ pub trait UpdateableChart: Chart {
                 offset,
             )
             .await?;
+            tracing::info!(last_accurate_point =? last_accurate_point, chart_name = Self::NAME, "started chart data update");
             Self::update_values(
                 cx,
                 chart_id,
@@ -180,6 +181,7 @@ impl<C: UpdateableChart> DataSource for UpdateableChartWrapper<C> {
         let _update_timer = metrics::CHART_UPDATE_TIME
             .with_label_values(&[Self::NAME])
             .start_timer();
+        tracing::info!(chart = C::NAME, "started chart update");
 
         C::update_itself(cx, &mut remote_fetch_timer)
             .await

@@ -54,6 +54,7 @@ impl<T: LastPointChart + Chart> UpdateableChart for LastPointChartLocalWrapper<T
             remote_fetch_timer,
         )
         .await?;
+        tracing::debug!("picking last point from dependency");
         let last_point = data.last().cloned().or_else(|| {
             if T::InnerSource::missing_date_policy() == MissingDatePolicy::FillZero {
                 Some(DateValueString::from_parts(

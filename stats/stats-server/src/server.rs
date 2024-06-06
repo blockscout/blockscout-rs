@@ -67,7 +67,7 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
 
     let charts = Arc::new(RuntimeSetup::new(charts_config, update_schedule)?);
 
-    // TODO: may be run this with migrations or have special config
+    // TODO: maybe run this with migrations or have special config
     for group_entry in charts.update_groups.values() {
         group_entry
             .group
