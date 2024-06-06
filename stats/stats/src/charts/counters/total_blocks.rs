@@ -1,82 +1,91 @@
-use crate::{
-    data_source::{
-        kinds::{
-            remote::point::{RemotePointSource, RemotePointSourceWrapper},
-            updateable_chart::clone::point::{ClonePointChart, ClonePointChartWrapper},
+use crate::data_source::kinds::updateable_chart::clone::point::ClonePointChartWrapper;
+
+/// Items in this module are not intended to be used outside. They are only public
+/// since the actual public type is just an alias (to wrapper).
+///
+/// I.e. use [`super`]'s types.
+pub mod _inner {
+    use crate::{
+        data_source::{
+            kinds::{
+                remote::point::{RemotePointSource, RemotePointSourceWrapper},
+                updateable_chart::clone::point::ClonePointChart,
+            },
+            types::UpdateContext,
         },
-        types::UpdateContext,
-    },
-    Chart, DateValueString, Named, UpdateError,
-};
-use blockscout_db::entity::blocks;
-use chrono::NaiveDateTime;
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, sea_query::Expr, FromQueryResult, QuerySelect};
+        Chart, DateValueString, Named, UpdateError,
+    };
+    use blockscout_db::entity::blocks;
+    use chrono::NaiveDateTime;
+    use entity::sea_orm_active_enums::ChartType;
+    use sea_orm::{prelude::*, sea_query::Expr, FromQueryResult, QuerySelect};
 
-#[derive(FromQueryResult)]
-struct TotalBlocksData {
-    number: i64,
-    timestamp: NaiveDateTime,
-}
-
-pub struct TotalBlocksRemote;
-
-impl RemotePointSource for TotalBlocksRemote {
-    type Point = DateValueString;
-    fn get_query() -> sea_orm::Statement {
-        unreachable!("must not be called")
+    #[derive(FromQueryResult)]
+    struct TotalBlocksData {
+        number: i64,
+        timestamp: NaiveDateTime,
     }
 
-    async fn query_data(cx: &UpdateContext<'_>) -> Result<Self::Point, UpdateError> {
-        let data = blocks::Entity::find()
-            .select_only()
-            .column_as(Expr::col(blocks::Column::Number).count(), "number")
-            .column_as(Expr::col(blocks::Column::Timestamp).max(), "timestamp")
-            .filter(blocks::Column::Consensus.eq(true))
-            .into_model::<TotalBlocksData>()
-            .one(cx.blockscout)
-            .await
-            .map_err(UpdateError::BlockscoutDB)?
-            .ok_or_else(|| UpdateError::Internal("query returned nothing".into()))?;
+    pub struct TotalBlocksRemote;
 
-        let data = DateValueString {
-            date: data.timestamp.date(),
-            value: data.number.to_string(),
-        };
-        Ok(data)
+    impl RemotePointSource for TotalBlocksRemote {
+        type Point = DateValueString;
+        fn get_query() -> sea_orm::Statement {
+            unreachable!("must not be called")
+        }
+
+        async fn query_data(cx: &UpdateContext<'_>) -> Result<Self::Point, UpdateError> {
+            let data = blocks::Entity::find()
+                .select_only()
+                .column_as(Expr::col(blocks::Column::Number).count(), "number")
+                .column_as(Expr::col(blocks::Column::Timestamp).max(), "timestamp")
+                .filter(blocks::Column::Consensus.eq(true))
+                .into_model::<TotalBlocksData>()
+                .one(cx.blockscout)
+                .await
+                .map_err(UpdateError::BlockscoutDB)?
+                .ok_or_else(|| UpdateError::Internal("query returned nothing".into()))?;
+
+            let data = DateValueString {
+                date: data.timestamp.date(),
+                value: data.number.to_string(),
+            };
+            Ok(data)
+        }
+    }
+
+    pub struct TotalBlocksInner;
+
+    impl Named for TotalBlocksInner {
+        const NAME: &'static str = "totalBlocks";
+    }
+
+    impl Chart for TotalBlocksInner {
+        fn chart_type() -> ChartType {
+            ChartType::Counter
+        }
+    }
+
+    impl ClonePointChart for TotalBlocksInner {
+        type Dependency = RemotePointSourceWrapper<TotalBlocksRemote>;
     }
 }
 
-pub struct TotalBlocksInner;
-
-impl Named for TotalBlocksInner {
-    const NAME: &'static str = "totalBlocks";
-}
-
-impl Chart for TotalBlocksInner {
-    fn chart_type() -> ChartType {
-        ChartType::Counter
-    }
-}
-
-impl ClonePointChart for TotalBlocksInner {
-    type Dependency = RemotePointSourceWrapper<TotalBlocksRemote>;
-}
-
-pub type TotalBlocks = ClonePointChartWrapper<TotalBlocksInner>;
+pub type TotalBlocks = ClonePointChartWrapper<_inner::TotalBlocksInner>;
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
-        data_source::{DataSource, UpdateParameters},
+        data_source::{DataSource, UpdateContext, UpdateParameters},
         get_counters,
         tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
+        Named,
     };
     use chrono::NaiveDate;
     use entity::chart_data;
     use pretty_assertions::assert_eq;
-    use sea_orm::Set;
+    use sea_orm::{DatabaseConnection, EntityTrait, Set};
     use std::str::FromStr;
 
     #[tokio::test]

@@ -1,39 +1,50 @@
-use std::ops::RangeInclusive;
-
-use crate::{
-    charts::db_interaction::types::DateValueInt,
-    data_source::{
-        kinds::{
-            adapter::{ParseAdapter, ParseAdapterWrapper, ToStringAdapter, ToStringAdapterWrapper},
-            remote::{RemoteSource, RemoteSourceWrapper},
-            updateable_chart::clone::{CloneChart, CloneChartWrapper},
-        },
-        UpdateContext,
-    },
-    missing_date::trim_out_of_range_sorted,
-    Chart, Named, UpdateError,
+use crate::data_source::kinds::{
+    adapter::ParseAdapterWrapper, updateable_chart::clone::CloneChartWrapper,
 };
-use chrono::Duration;
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 
-/// Note:  The intended strategy is to update whole range at once, even
-/// though the implementation allows batching. The batching was done
-/// to simplify interface of the data source.
+/// Items in this module are not intended to be used outside. They are only public
+/// since the actual public type is just an alias (to wrapper).
 ///
-/// Thus, use max batch size in the dependant data sources.
-pub struct NewAccountsRemote;
+/// I.e. use [`super`]'s types.
+pub mod _inner {
+    use std::ops::RangeInclusive;
 
-impl RemoteSource for NewAccountsRemote {
-    type Point = DateValueInt;
+    use crate::{
+        charts::db_interaction::types::DateValueInt,
+        data_source::{
+            kinds::{
+                adapter::{ParseAdapter, ToStringAdapter, ToStringAdapterWrapper},
+                remote::{RemoteSource, RemoteSourceWrapper},
+                updateable_chart::clone::CloneChart,
+            },
+            UpdateContext,
+        },
+        missing_date::trim_out_of_range_sorted,
+        Chart, Named, UpdateError,
+    };
+    use chrono::Duration;
+    use entity::sea_orm_active_enums::ChartType;
+    use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 
-    fn get_query(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
-        // we want to consider the time at range end; thus optional
-        // filter
-        if let Some(range) = range {
-            Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
+    use super::NewAccounts;
+
+    /// Note:  The intended strategy is to update whole range at once, even
+    /// though the implementation allows batching. The batching was done
+    /// to simplify interface of the data source.
+    ///
+    /// Thus, use max batch size in the dependant data sources.
+    pub struct NewAccountsRemote;
+
+    impl RemoteSource for NewAccountsRemote {
+        type Point = DateValueInt;
+
+        fn get_query(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+            // we want to consider the time at range end; thus optional
+            // filter
+            if let Some(range) = range {
+                Statement::from_sql_and_values(
+                    DbBackend::Postgres,
+                    r#"
                 SELECT
                     first_tx.date as date,
                     count(*) as value
@@ -50,12 +61,12 @@ impl RemoteSource for NewAccountsRemote {
                 ) first_tx
                 GROUP BY first_tx.date;
             "#,
-                vec![(*range.end()).into()],
-            )
-        } else {
-            Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
+                    vec![(*range.end()).into()],
+                )
+            } else {
+                Statement::from_sql_and_values(
+                    DbBackend::Postgres,
+                    r#"
                 SELECT
                     first_tx.date as date,
                     count(*) as value
@@ -71,68 +82,68 @@ impl RemoteSource for NewAccountsRemote {
                 ) first_tx
                 GROUP BY first_tx.date;
             "#,
-                vec![],
-            )
+                    vec![],
+                )
+            }
+        }
+
+        async fn query_data(
+            cx: &UpdateContext<'_>,
+            range: Option<RangeInclusive<DateTimeUtc>>,
+        ) -> Result<Vec<Self::Point>, UpdateError> {
+            let query = Self::get_query(range.clone());
+            let mut data = Self::Point::find_by_statement(query)
+                .all(cx.blockscout)
+                .await
+                .map_err(UpdateError::BlockscoutDB)?;
+            // make sure that it's sorted
+            data.sort_by_key(|d| d.date);
+            if let Some(range) = range {
+                let range = range.start().date_naive()..=range.end().date_naive();
+                trim_out_of_range_sorted(&mut data, range);
+            }
+            Ok(data)
         }
     }
 
-    async fn query_data(
-        cx: &UpdateContext<'_>,
-        range: Option<RangeInclusive<DateTimeUtc>>,
-    ) -> Result<Vec<Self::Point>, UpdateError> {
-        let query = Self::get_query(range.clone());
-        let mut data = Self::Point::find_by_statement(query)
-            .all(cx.blockscout)
-            .await
-            .map_err(UpdateError::BlockscoutDB)?;
-        // make sure that it's sorted
-        data.sort_by_key(|d| d.date);
-        if let Some(range) = range {
-            let range = range.start().date_naive()..=range.end().date_naive();
-            trim_out_of_range_sorted(&mut data, range);
+    pub struct NewAccountsRemoteString;
+
+    impl ToStringAdapter for NewAccountsRemoteString {
+        type InnerSource = RemoteSourceWrapper<NewAccountsRemote>;
+        type ConvertFrom = <NewAccountsRemote as RemoteSource>::Point;
+    }
+
+    pub struct NewAccountsInner;
+
+    impl Named for NewAccountsInner {
+        const NAME: &'static str = "newAccounts";
+    }
+
+    impl Chart for NewAccountsInner {
+        fn chart_type() -> ChartType {
+            ChartType::Line
         }
-        Ok(data)
+    }
+
+    impl CloneChart for NewAccountsInner {
+        type Dependency = ToStringAdapterWrapper<NewAccountsRemoteString>;
+
+        fn batch_size() -> Duration {
+            // see `NewAccountsRemote` docs
+            Duration::max_value()
+        }
+    }
+
+    pub struct NewAccountsIntInner;
+
+    impl ParseAdapter for NewAccountsIntInner {
+        type InnerSource = NewAccounts;
+        type ParseInto = DateValueInt;
     }
 }
 
-pub struct NewAccountsRemoteString;
-
-impl ToStringAdapter for NewAccountsRemoteString {
-    type InnerSource = RemoteSourceWrapper<NewAccountsRemote>;
-    type ConvertFrom = <NewAccountsRemote as RemoteSource>::Point;
-}
-
-pub struct NewAccountsInner;
-
-impl Named for NewAccountsInner {
-    const NAME: &'static str = "newAccounts";
-}
-
-impl Chart for NewAccountsInner {
-    fn chart_type() -> ChartType {
-        ChartType::Line
-    }
-}
-
-impl CloneChart for NewAccountsInner {
-    type Dependency = ToStringAdapterWrapper<NewAccountsRemoteString>;
-
-    fn batch_size() -> Duration {
-        // see `NewAccountsRemote` docs
-        Duration::max_value()
-    }
-}
-
-pub type NewAccounts = CloneChartWrapper<NewAccountsInner>;
-
-pub struct NewAccountsIntInner;
-
-impl ParseAdapter for NewAccountsIntInner {
-    type InnerSource = NewAccounts;
-    type ParseInto = DateValueInt;
-}
-
-pub type NewAccountsInt = ParseAdapterWrapper<NewAccountsIntInner>;
+pub type NewAccounts = CloneChartWrapper<_inner::NewAccountsInner>;
+pub type NewAccountsInt = ParseAdapterWrapper<_inner::NewAccountsIntInner>;
 
 #[cfg(test)]
 mod tests {

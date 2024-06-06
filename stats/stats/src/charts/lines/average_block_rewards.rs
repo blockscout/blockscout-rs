@@ -1,27 +1,34 @@
-use crate::{
-    charts::db_interaction::types::DateValueDouble,
-    data_source::kinds::{
-        adapter::{ToStringAdapter, ToStringAdapterWrapper},
-        remote::{RemoteSource, RemoteSourceWrapper},
-        updateable_chart::clone::{CloneChart, CloneChartWrapper},
-    },
-    utils::sql_with_range_filter_opt,
-    Chart, Named,
-};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, Statement};
+use crate::data_source::kinds::updateable_chart::clone::CloneChartWrapper;
 
-const ETH: i64 = 1_000_000_000_000_000_000;
+/// Items in this module are not intended to be used outside. They are only public
+/// since the actual public type is just an alias (to wrapper).
+///
+/// I.e. use [`super`]'s types.
+pub mod _inner {
+    use crate::{
+        charts::db_interaction::types::DateValueDouble,
+        data_source::kinds::{
+            adapter::{ToStringAdapter, ToStringAdapterWrapper},
+            remote::{RemoteSource, RemoteSourceWrapper},
+            updateable_chart::clone::CloneChart,
+        },
+        utils::sql_with_range_filter_opt,
+        Chart, Named,
+    };
+    use entity::sea_orm_active_enums::ChartType;
+    use sea_orm::{prelude::*, DbBackend, Statement};
 
-pub struct AverageBlockRewardsRemote;
+    const ETH: i64 = 1_000_000_000_000_000_000;
 
-impl RemoteSource for AverageBlockRewardsRemote {
-    type Point = DateValueDouble;
+    pub struct AverageBlockRewardsRemote;
 
-    fn get_query(range: Option<std::ops::RangeInclusive<DateTimeUtc>>) -> Statement {
-        sql_with_range_filter_opt!(
-            DbBackend::Postgres,
-            r#"
+    impl RemoteSource for AverageBlockRewardsRemote {
+        type Point = DateValueDouble;
+
+        fn get_query(range: Option<std::ops::RangeInclusive<DateTimeUtc>>) -> Statement {
+            sql_with_range_filter_opt!(
+                DbBackend::Postgres,
+                r#"
                 SELECT
                     DATE(blocks.timestamp) as date,
                     (AVG(block_rewards.reward) / $1)::FLOAT as value
@@ -32,37 +39,38 @@ impl RemoteSource for AverageBlockRewardsRemote {
                     blocks.consensus = true {filter}
                 GROUP BY date
             "#,
-            [ETH.into()],
-            "blocks.timestamp",
-            range,
-        )
+                [ETH.into()],
+                "blocks.timestamp",
+                range,
+            )
+        }
+    }
+
+    pub struct AverageBlockRewardsRemoteString;
+
+    impl ToStringAdapter for AverageBlockRewardsRemoteString {
+        type InnerSource = RemoteSourceWrapper<AverageBlockRewardsRemote>;
+        type ConvertFrom = <AverageBlockRewardsRemote as RemoteSource>::Point;
+    }
+
+    pub struct AverageBlockRewardsInner;
+
+    impl Named for AverageBlockRewardsInner {
+        const NAME: &'static str = "averageBlockRewards";
+    }
+
+    impl Chart for AverageBlockRewardsInner {
+        fn chart_type() -> ChartType {
+            ChartType::Line
+        }
+    }
+
+    impl CloneChart for AverageBlockRewardsInner {
+        type Dependency = ToStringAdapterWrapper<AverageBlockRewardsRemoteString>;
     }
 }
 
-pub struct AverageBlockRewardsRemoteString;
-
-impl ToStringAdapter for AverageBlockRewardsRemoteString {
-    type InnerSource = RemoteSourceWrapper<AverageBlockRewardsRemote>;
-    type ConvertFrom = <AverageBlockRewardsRemote as RemoteSource>::Point;
-}
-
-pub struct AverageBlockRewardsInner;
-
-impl Named for AverageBlockRewardsInner {
-    const NAME: &'static str = "averageBlockRewards";
-}
-
-impl Chart for AverageBlockRewardsInner {
-    fn chart_type() -> ChartType {
-        ChartType::Line
-    }
-}
-
-impl CloneChart for AverageBlockRewardsInner {
-    type Dependency = ToStringAdapterWrapper<AverageBlockRewardsRemoteString>;
-}
-
-pub type AverageBlockRewards = CloneChartWrapper<AverageBlockRewardsInner>;
+pub type AverageBlockRewards = CloneChartWrapper<_inner::AverageBlockRewardsInner>;
 
 #[cfg(test)]
 mod tests {

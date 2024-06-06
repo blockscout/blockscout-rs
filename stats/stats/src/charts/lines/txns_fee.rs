@@ -1,27 +1,35 @@
 //! Total transaction fees for an interval
-use crate::{
-    charts::db_interaction::types::DateValueDouble,
-    data_source::kinds::{
-        adapter::{ToStringAdapter, ToStringAdapterWrapper},
-        remote::{RemoteSource, RemoteSourceWrapper},
-        updateable_chart::clone::{CloneChart, CloneChartWrapper},
-    },
-    utils::sql_with_range_filter_opt,
-    Chart, Named,
-};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, Statement};
 
-const ETHER: i64 = i64::pow(10, 18);
+use crate::data_source::kinds::updateable_chart::clone::CloneChartWrapper;
 
-pub struct TxnsFeeRemote;
+/// Items in this module are not intended to be used outside. They are only public
+/// since the actual public type is just an alias (to wrapper).
+///
+/// I.e. use [`super`]'s types.
+pub mod _inner {
+    use crate::{
+        charts::db_interaction::types::DateValueDouble,
+        data_source::kinds::{
+            adapter::{ToStringAdapter, ToStringAdapterWrapper},
+            remote::{RemoteSource, RemoteSourceWrapper},
+            updateable_chart::clone::CloneChart,
+        },
+        utils::sql_with_range_filter_opt,
+        Chart, Named,
+    };
+    use entity::sea_orm_active_enums::ChartType;
+    use sea_orm::{prelude::*, DbBackend, Statement};
 
-impl RemoteSource for TxnsFeeRemote {
-    type Point = DateValueDouble;
-    fn get_query(range: Option<std::ops::RangeInclusive<DateTimeUtc>>) -> Statement {
-        sql_with_range_filter_opt!(
-            DbBackend::Postgres,
-            r#"
+    const ETHER: i64 = i64::pow(10, 18);
+
+    pub struct TxnsFeeRemote;
+
+    impl RemoteSource for TxnsFeeRemote {
+        type Point = DateValueDouble;
+        fn get_query(range: Option<std::ops::RangeInclusive<DateTimeUtc>>) -> Statement {
+            sql_with_range_filter_opt!(
+                DbBackend::Postgres,
+                r#"
                 SELECT 
                     DATE(b.timestamp) as date, 
                     (SUM(t.gas_used * t.gas_price) / $1)::FLOAT as value
@@ -32,37 +40,38 @@ impl RemoteSource for TxnsFeeRemote {
                     b.consensus = true {filter}
                 GROUP BY DATE(b.timestamp)
             "#,
-            [ETHER.into()],
-            "b.timestamp",
-            range
-        )
+                [ETHER.into()],
+                "b.timestamp",
+                range
+            )
+        }
+    }
+
+    pub struct TxnsFeeRemoteString;
+
+    impl ToStringAdapter for TxnsFeeRemoteString {
+        type InnerSource = RemoteSourceWrapper<TxnsFeeRemote>;
+        type ConvertFrom = <TxnsFeeRemote as RemoteSource>::Point;
+    }
+
+    pub struct TxnsFeeInner;
+
+    impl Named for TxnsFeeInner {
+        const NAME: &'static str = "txnsFee";
+    }
+
+    impl Chart for TxnsFeeInner {
+        fn chart_type() -> ChartType {
+            ChartType::Line
+        }
+    }
+
+    impl CloneChart for TxnsFeeInner {
+        type Dependency = ToStringAdapterWrapper<TxnsFeeRemoteString>;
     }
 }
 
-pub struct TxnsFeeRemoteString;
-
-impl ToStringAdapter for TxnsFeeRemoteString {
-    type InnerSource = RemoteSourceWrapper<TxnsFeeRemote>;
-    type ConvertFrom = <TxnsFeeRemote as RemoteSource>::Point;
-}
-
-pub struct TxnsFeeInner;
-
-impl Named for TxnsFeeInner {
-    const NAME: &'static str = "txnsFee";
-}
-
-impl Chart for TxnsFeeInner {
-    fn chart_type() -> ChartType {
-        ChartType::Line
-    }
-}
-
-impl CloneChart for TxnsFeeInner {
-    type Dependency = ToStringAdapterWrapper<TxnsFeeRemoteString>;
-}
-
-pub type TxnsFee = CloneChartWrapper<TxnsFeeInner>;
+pub type TxnsFee = CloneChartWrapper<_inner::TxnsFeeInner>;
 
 #[cfg(test)]
 mod tests {

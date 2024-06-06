@@ -16,9 +16,9 @@
 //! [`CloneChartWrapper`](crate::data_source::kinds::updateable_chart::clone::CloneChartWrapper)
 //! ).
 //! For convenience, they may be type aliased:
-//! ```no_run
+//! ```text
 //! pub type SomeChart1 = CloneChartWrapper<SomeChart1Inner>;
-//! pub type SomeChart2 = BatchChartWrapper<SomeChart2Inner>;
+//! pub type SomePointChart1 = LastPointChart<SomeChart2Inner>;
 //! ```
 //! 2. Construct simple (non-sync) update groups via [`construct_update_group!`]
 //! 3. Create mutexes (1-1 for each chart)

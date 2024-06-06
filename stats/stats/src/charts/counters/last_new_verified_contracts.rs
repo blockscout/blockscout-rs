@@ -1,30 +1,37 @@
-use crate::{
-    data_source::kinds::updateable_chart::last_point::{LastPointChart, LastPointChartWrapper},
-    lines::NewVerifiedContracts,
-    Chart, Named,
-};
-use entity::sea_orm_active_enums::ChartType;
+use crate::data_source::kinds::updateable_chart::last_point::LastPointChartWrapper;
 
-pub struct LastNewVerifiedContractsInner;
+/// Items in this module are not intended to be used outside. They are only public
+/// since the actual public type is just an alias (to wrapper).
+///
+/// I.e. use [`super`]'s types.
+pub mod _inner {
+    use crate::{
+        data_source::kinds::updateable_chart::last_point::LastPointChart,
+        lines::NewVerifiedContracts, Chart, Named,
+    };
+    use entity::sea_orm_active_enums::ChartType;
 
-impl Named for LastNewVerifiedContractsInner {
-    const NAME: &'static str = "lastNewVerifiedContracts";
-}
+    pub struct LastNewVerifiedContractsInner;
 
-impl Chart for LastNewVerifiedContractsInner {
-    fn chart_type() -> ChartType {
-        ChartType::Counter
+    impl Named for LastNewVerifiedContractsInner {
+        const NAME: &'static str = "lastNewVerifiedContracts";
     }
-    fn relevant_or_zero() -> bool {
-        true
+
+    impl Chart for LastNewVerifiedContractsInner {
+        fn chart_type() -> ChartType {
+            ChartType::Counter
+        }
+        fn relevant_or_zero() -> bool {
+            true
+        }
+    }
+
+    impl LastPointChart for LastNewVerifiedContractsInner {
+        type InnerSource = NewVerifiedContracts;
     }
 }
 
-impl LastPointChart for LastNewVerifiedContractsInner {
-    type InnerSource = NewVerifiedContracts;
-}
-
-pub type LastNewVerifiedContracts = LastPointChartWrapper<LastNewVerifiedContractsInner>;
+pub type LastNewVerifiedContracts = LastPointChartWrapper<_inner::LastNewVerifiedContractsInner>;
 
 #[cfg(test)]
 mod tests {

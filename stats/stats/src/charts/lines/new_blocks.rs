@@ -1,24 +1,31 @@
-use std::ops::RangeInclusive;
+use crate::data_source::kinds::updateable_chart::clone::CloneChartWrapper;
 
-use crate::{
-    data_source::kinds::{
-        remote::{RemoteSource, RemoteSourceWrapper},
-        updateable_chart::clone::{CloneChart, CloneChartWrapper},
-    },
-    utils::sql_with_range_filter_opt,
-    Chart, DateValueString, Named,
-};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, Statement};
+/// Items in this module are not intended to be used outside. They are only public
+/// since the actual public type is just an alias (to wrapper).
+///
+/// I.e. use [`super`]'s types.
+pub mod _inner {
+    use std::ops::RangeInclusive;
 
-pub struct NewBlocksRemote;
+    use crate::{
+        data_source::kinds::{
+            remote::{RemoteSource, RemoteSourceWrapper},
+            updateable_chart::clone::CloneChart,
+        },
+        utils::sql_with_range_filter_opt,
+        Chart, DateValueString, Named,
+    };
+    use entity::sea_orm_active_enums::ChartType;
+    use sea_orm::{prelude::*, DbBackend, Statement};
 
-impl RemoteSource for NewBlocksRemote {
-    type Point = DateValueString;
-    fn get_query(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
-        sql_with_range_filter_opt!(
-            DbBackend::Postgres,
-            r#"
+    pub struct NewBlocksRemote;
+
+    impl RemoteSource for NewBlocksRemote {
+        type Point = DateValueString;
+        fn get_query(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+            sql_with_range_filter_opt!(
+                DbBackend::Postgres,
+                r#"
                     SELECT date(blocks.timestamp) as date, COUNT(*)::TEXT as value
                         FROM public.blocks
                         WHERE 
@@ -26,30 +33,31 @@ impl RemoteSource for NewBlocksRemote {
                             consensus = true {filter}
                         GROUP BY date;
             "#,
-            [],
-            "blocks.timestamp",
-            range
-        )
+                [],
+                "blocks.timestamp",
+                range
+            )
+        }
+    }
+
+    pub struct NewBlocksInner;
+
+    impl Named for NewBlocksInner {
+        const NAME: &'static str = "newBlocks";
+    }
+
+    impl Chart for NewBlocksInner {
+        fn chart_type() -> ChartType {
+            ChartType::Line
+        }
+    }
+
+    impl CloneChart for NewBlocksInner {
+        type Dependency = RemoteSourceWrapper<NewBlocksRemote>;
     }
 }
 
-pub struct NewBlocksInner;
-
-impl Named for NewBlocksInner {
-    const NAME: &'static str = "newBlocks";
-}
-
-impl Chart for NewBlocksInner {
-    fn chart_type() -> ChartType {
-        ChartType::Line
-    }
-}
-
-impl CloneChart for NewBlocksInner {
-    type Dependency = RemoteSourceWrapper<NewBlocksRemote>;
-}
-
-pub type NewBlocks = CloneChartWrapper<NewBlocksInner>;
+pub type NewBlocks = CloneChartWrapper<_inner::NewBlocksInner>;
 
 #[cfg(test)]
 mod tests {
@@ -59,12 +67,12 @@ mod tests {
         data_source::{DataSource, UpdateContext},
         get_chart_data,
         tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
-        ExtendedDateValue,
+        ExtendedDateValue, Named,
     };
     use chrono::{NaiveDate, Utc};
     use entity::chart_data;
     use pretty_assertions::assert_eq;
-    use sea_orm::Set;
+    use sea_orm::{DatabaseConnection, EntityTrait, Set};
     use std::str::FromStr;
 
     #[tokio::test]

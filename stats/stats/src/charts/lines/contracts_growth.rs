@@ -1,32 +1,38 @@
-use super::new_contracts::NewContractsInt;
-use crate::{
-    charts::db_interaction::types::DateValueInt,
-    data_source::kinds::updateable_chart::cumulative::{CumulativeChart, CumulativeChartWrapper},
-    Chart, MissingDatePolicy, Named,
-};
-use entity::sea_orm_active_enums::ChartType;
+use crate::data_source::kinds::updateable_chart::cumulative::CumulativeChartWrapper;
 
-pub struct ContractsGrowthInner;
+/// Items in this module are not intended to be used outside. They are only public
+/// since the actual public type is just an alias (to wrapper).
+///
+/// I.e. use [`super`]'s types.
+pub mod _inner {
+    use crate::{
+        charts::db_interaction::types::DateValueInt,
+        data_source::kinds::updateable_chart::cumulative::CumulativeChart,
+        lines::new_contracts::NewContractsInt, Chart, MissingDatePolicy, Named,
+    };
+    use entity::sea_orm_active_enums::ChartType;
 
-impl Named for ContractsGrowthInner {
-    const NAME: &'static str = "contractsGrowth";
-}
+    pub struct ContractsGrowthInner;
 
-impl Chart for ContractsGrowthInner {
-    fn chart_type() -> ChartType {
-        ChartType::Line
+    impl Named for ContractsGrowthInner {
+        const NAME: &'static str = "contractsGrowth";
     }
-    fn missing_date_policy() -> MissingDatePolicy {
-        MissingDatePolicy::FillPrevious
+
+    impl Chart for ContractsGrowthInner {
+        fn chart_type() -> ChartType {
+            ChartType::Line
+        }
+        fn missing_date_policy() -> MissingDatePolicy {
+            MissingDatePolicy::FillPrevious
+        }
+    }
+
+    impl CumulativeChart for ContractsGrowthInner {
+        type DeltaChart = NewContractsInt;
+        type DeltaChartPoint = DateValueInt;
     }
 }
-
-impl CumulativeChart for ContractsGrowthInner {
-    type DeltaChart = NewContractsInt;
-    type DeltaChartPoint = DateValueInt;
-}
-
-pub type ContractsGrowth = CumulativeChartWrapper<ContractsGrowthInner>;
+pub type ContractsGrowth = CumulativeChartWrapper<_inner::ContractsGrowthInner>;
 
 #[cfg(test)]
 mod tests {

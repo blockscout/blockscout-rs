@@ -1,25 +1,36 @@
-use crate::{
-    charts::db_interaction::types::DateValueInt,
-    data_source::kinds::{
-        adapter::{ParseAdapter, ParseAdapterWrapper},
-        remote::{RemoteSource, RemoteSourceWrapper},
-        updateable_chart::clone::{CloneChart, CloneChartWrapper},
-    },
-    utils::sql_with_range_filter_opt,
-    Chart, DateValueString, Named,
+use crate::data_source::kinds::{
+    adapter::ParseAdapterWrapper, updateable_chart::clone::CloneChartWrapper,
 };
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, Statement};
 
-pub struct NewTxnsRemote;
+/// Items in this module are not intended to be used outside. They are only public
+/// since the actual public type is just an alias (to wrapper).
+///
+/// I.e. use [`super`]'s types.
+pub mod _inner {
+    use crate::{
+        charts::db_interaction::types::DateValueInt,
+        data_source::kinds::{
+            adapter::ParseAdapter,
+            remote::{RemoteSource, RemoteSourceWrapper},
+            updateable_chart::clone::CloneChart,
+        },
+        utils::sql_with_range_filter_opt,
+        Chart, DateValueString, Named,
+    };
+    use entity::sea_orm_active_enums::ChartType;
+    use sea_orm::{prelude::*, DbBackend, Statement};
 
-impl RemoteSource for NewTxnsRemote {
-    type Point = DateValueString;
+    use super::NewTxns;
 
-    fn get_query(range: Option<std::ops::RangeInclusive<DateTimeUtc>>) -> Statement {
-        sql_with_range_filter_opt!(
-            DbBackend::Postgres,
-            r#"
+    pub struct NewTxnsRemote;
+
+    impl RemoteSource for NewTxnsRemote {
+        type Point = DateValueString;
+
+        fn get_query(range: Option<std::ops::RangeInclusive<DateTimeUtc>>) -> Statement {
+            sql_with_range_filter_opt!(
+                DbBackend::Postgres,
+                r#"
                 SELECT 
                     date(b.timestamp) as date, 
                     COUNT(*)::TEXT as value
@@ -30,39 +41,39 @@ impl RemoteSource for NewTxnsRemote {
                     b.consensus = true {filter}
                 GROUP BY date;
             "#,
-            [],
-            "b.timestamp",
-            range
-        )
+                [],
+                "b.timestamp",
+                range
+            )
+        }
+    }
+
+    pub struct NewTxnsInner;
+
+    impl Named for NewTxnsInner {
+        const NAME: &'static str = "newTxns";
+    }
+
+    impl Chart for NewTxnsInner {
+        fn chart_type() -> ChartType {
+            ChartType::Line
+        }
+    }
+
+    impl CloneChart for NewTxnsInner {
+        type Dependency = RemoteSourceWrapper<NewTxnsRemote>;
+    }
+
+    pub struct NewTxnsIntInner;
+
+    impl ParseAdapter for NewTxnsIntInner {
+        type InnerSource = NewTxns;
+        type ParseInto = DateValueInt;
     }
 }
 
-pub struct NewTxnsInner;
-
-impl Named for NewTxnsInner {
-    const NAME: &'static str = "newTxns";
-}
-
-impl Chart for NewTxnsInner {
-    fn chart_type() -> ChartType {
-        ChartType::Line
-    }
-}
-
-impl CloneChart for NewTxnsInner {
-    type Dependency = RemoteSourceWrapper<NewTxnsRemote>;
-}
-
-pub type NewTxns = CloneChartWrapper<NewTxnsInner>;
-
-pub struct NewTxnsIntInner;
-
-impl ParseAdapter for NewTxnsIntInner {
-    type InnerSource = NewTxns;
-    type ParseInto = DateValueInt;
-}
-
-pub type NewTxnsInt = ParseAdapterWrapper<NewTxnsIntInner>;
+pub type NewTxns = CloneChartWrapper<_inner::NewTxnsInner>;
+pub type NewTxnsInt = ParseAdapterWrapper<_inner::NewTxnsIntInner>;
 
 #[cfg(test)]
 mod tests {

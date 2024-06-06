@@ -1,21 +1,28 @@
-use crate::{
-    data_source::kinds::{
-        remote::point::{RemotePointSource, RemotePointSourceWrapper},
-        updateable_chart::clone::point::{ClonePointChart, ClonePointChartWrapper},
-    },
-    Chart, DateValueString, Named,
-};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{DbBackend, Statement};
+use crate::data_source::kinds::updateable_chart::clone::point::ClonePointChartWrapper;
 
-pub struct TotalAddressesRemote;
+/// Items in this module are not intended to be used outside. They are only public
+/// since the actual public type is just an alias (to wrapper).
+///
+/// I.e. use [`super`]'s types.
+pub mod _inner {
+    use crate::{
+        data_source::kinds::{
+            remote::point::{RemotePointSource, RemotePointSourceWrapper},
+            updateable_chart::clone::point::ClonePointChart,
+        },
+        Chart, DateValueString, Named,
+    };
+    use entity::sea_orm_active_enums::ChartType;
+    use sea_orm::{DbBackend, Statement};
 
-impl RemotePointSource for TotalAddressesRemote {
-    type Point = DateValueString;
-    fn get_query() -> Statement {
-        Statement::from_string(
-            DbBackend::Postgres,
-            r#"
+    pub struct TotalAddressesRemote;
+
+    impl RemotePointSource for TotalAddressesRemote {
+        type Point = DateValueString;
+        fn get_query() -> Statement {
+            Statement::from_string(
+                DbBackend::Postgres,
+                r#"
             SELECT date, value FROM ( 
                 SELECT (
                     SELECT COUNT(*)::TEXT as value FROM addresses
@@ -26,27 +33,28 @@ impl RemotePointSource for TotalAddressesRemote {
                 )
             ) as sub
             "#,
-        )
+            )
+        }
+    }
+
+    pub struct TotalAddressesInner;
+
+    impl Named for TotalAddressesInner {
+        const NAME: &'static str = "totalAddresses";
+    }
+
+    impl Chart for TotalAddressesInner {
+        fn chart_type() -> ChartType {
+            ChartType::Counter
+        }
+    }
+
+    impl ClonePointChart for TotalAddressesInner {
+        type Dependency = RemotePointSourceWrapper<TotalAddressesRemote>;
     }
 }
 
-pub struct TotalAddressesInner;
-
-impl Named for TotalAddressesInner {
-    const NAME: &'static str = "totalAddresses";
-}
-
-impl Chart for TotalAddressesInner {
-    fn chart_type() -> ChartType {
-        ChartType::Counter
-    }
-}
-
-impl ClonePointChart for TotalAddressesInner {
-    type Dependency = RemotePointSourceWrapper<TotalAddressesRemote>;
-}
-
-pub type TotalAddresses = ClonePointChartWrapper<TotalAddressesInner>;
+pub type TotalAddresses = ClonePointChartWrapper<_inner::TotalAddressesInner>;
 
 #[cfg(test)]
 mod tests {

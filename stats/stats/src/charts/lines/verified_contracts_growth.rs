@@ -1,32 +1,40 @@
-use super::new_verified_contracts::NewVerifiedContractsInt;
-use crate::{
-    charts::{chart::Chart, db_interaction::types::DateValueInt},
-    data_source::kinds::updateable_chart::cumulative::{CumulativeChart, CumulativeChartWrapper},
-    MissingDatePolicy, Named,
-};
-use entity::sea_orm_active_enums::ChartType;
+use crate::data_source::kinds::updateable_chart::cumulative::CumulativeChartWrapper;
 
-pub struct VerifiedContractsGrowthInner;
+/// Items in this module are not intended to be used outside. They are only public
+/// since the actual public type is just an alias (to wrapper).
+///
+/// I.e. use [`super`]'s types.
+pub mod _inner {
 
-impl Named for VerifiedContractsGrowthInner {
-    const NAME: &'static str = "verifiedContractsGrowth";
-}
+    use crate::{
+        charts::{chart::Chart, db_interaction::types::DateValueInt},
+        data_source::kinds::updateable_chart::cumulative::CumulativeChart,
+        lines::new_verified_contracts::NewVerifiedContractsInt,
+        MissingDatePolicy, Named,
+    };
+    use entity::sea_orm_active_enums::ChartType;
 
-impl Chart for VerifiedContractsGrowthInner {
-    fn chart_type() -> ChartType {
-        ChartType::Line
+    pub struct VerifiedContractsGrowthInner;
+
+    impl Named for VerifiedContractsGrowthInner {
+        const NAME: &'static str = "verifiedContractsGrowth";
     }
-    fn missing_date_policy() -> MissingDatePolicy {
-        MissingDatePolicy::FillPrevious
+
+    impl Chart for VerifiedContractsGrowthInner {
+        fn chart_type() -> ChartType {
+            ChartType::Line
+        }
+        fn missing_date_policy() -> MissingDatePolicy {
+            MissingDatePolicy::FillPrevious
+        }
+    }
+
+    impl CumulativeChart for VerifiedContractsGrowthInner {
+        type DeltaChartPoint = DateValueInt;
+        type DeltaChart = NewVerifiedContractsInt;
     }
 }
-
-impl CumulativeChart for VerifiedContractsGrowthInner {
-    type DeltaChartPoint = DateValueInt;
-    type DeltaChart = NewVerifiedContractsInt;
-}
-
-pub type VerifiedContractsGrowth = CumulativeChartWrapper<VerifiedContractsGrowthInner>;
+pub type VerifiedContractsGrowth = CumulativeChartWrapper<_inner::VerifiedContractsGrowthInner>;
 
 #[cfg(test)]
 mod tests {

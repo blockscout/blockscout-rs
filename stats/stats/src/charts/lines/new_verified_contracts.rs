@@ -1,26 +1,37 @@
-use std::ops::RangeInclusive;
-
-use crate::{
-    charts::db_interaction::types::DateValueInt,
-    data_source::kinds::{
-        adapter::{ParseAdapter, ParseAdapterWrapper},
-        remote::{RemoteSource, RemoteSourceWrapper},
-        updateable_chart::clone::{CloneChart, CloneChartWrapper},
-    },
-    utils::sql_with_range_filter_opt,
-    Chart, DateValueString, Named,
+use crate::data_source::kinds::{
+    adapter::ParseAdapterWrapper, updateable_chart::clone::CloneChartWrapper,
 };
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, Statement};
 
-pub struct NewVerifiedContractsRemote;
+/// Items in this module are not intended to be used outside. They are only public
+/// since the actual public type is just an alias (to wrapper).
+///
+/// I.e. use [`super`]'s types.
+pub mod _inner {
+    use std::ops::RangeInclusive;
 
-impl RemoteSource for NewVerifiedContractsRemote {
-    type Point = DateValueString;
-    fn get_query(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
-        sql_with_range_filter_opt!(
-            DbBackend::Postgres,
-            r#"
+    use crate::{
+        charts::db_interaction::types::DateValueInt,
+        data_source::kinds::{
+            adapter::ParseAdapter,
+            remote::{RemoteSource, RemoteSourceWrapper},
+            updateable_chart::clone::CloneChart,
+        },
+        utils::sql_with_range_filter_opt,
+        Chart, DateValueString, Named,
+    };
+    use entity::sea_orm_active_enums::ChartType;
+    use sea_orm::{prelude::*, DbBackend, Statement};
+
+    use super::NewVerifiedContracts;
+
+    pub struct NewVerifiedContractsRemote;
+
+    impl RemoteSource for NewVerifiedContractsRemote {
+        type Point = DateValueString;
+        fn get_query(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+            sql_with_range_filter_opt!(
+                DbBackend::Postgres,
+                r#"
                 SELECT
                     DATE(smart_contracts.inserted_at) as date,
                     COUNT(*)::TEXT as value
@@ -28,39 +39,39 @@ impl RemoteSource for NewVerifiedContractsRemote {
                 WHERE TRUE {filter}
                 GROUP BY DATE(smart_contracts.inserted_at)
             "#,
-            [],
-            "smart_contracts.inserted_at",
-            range
-        )
+                [],
+                "smart_contracts.inserted_at",
+                range
+            )
+        }
+    }
+
+    pub struct NewVerifiedContractsInner;
+
+    impl Named for NewVerifiedContractsInner {
+        const NAME: &'static str = "newVerifiedContracts";
+    }
+
+    impl Chart for NewVerifiedContractsInner {
+        fn chart_type() -> ChartType {
+            ChartType::Line
+        }
+    }
+
+    impl CloneChart for NewVerifiedContractsInner {
+        type Dependency = RemoteSourceWrapper<NewVerifiedContractsRemote>;
+    }
+
+    pub struct NewVerifiedContractsIntInner;
+
+    impl ParseAdapter for NewVerifiedContractsIntInner {
+        type InnerSource = NewVerifiedContracts;
+        type ParseInto = DateValueInt;
     }
 }
+pub type NewVerifiedContracts = CloneChartWrapper<_inner::NewVerifiedContractsInner>;
 
-pub struct NewVerifiedContractsInner;
-
-impl Named for NewVerifiedContractsInner {
-    const NAME: &'static str = "newVerifiedContracts";
-}
-
-impl Chart for NewVerifiedContractsInner {
-    fn chart_type() -> ChartType {
-        ChartType::Line
-    }
-}
-
-impl CloneChart for NewVerifiedContractsInner {
-    type Dependency = RemoteSourceWrapper<NewVerifiedContractsRemote>;
-}
-
-pub type NewVerifiedContracts = CloneChartWrapper<NewVerifiedContractsInner>;
-
-pub struct NewVerifiedContractsIntInner;
-
-impl ParseAdapter for NewVerifiedContractsIntInner {
-    type InnerSource = NewVerifiedContracts;
-    type ParseInto = DateValueInt;
-}
-
-pub type NewVerifiedContractsInt = ParseAdapterWrapper<NewVerifiedContractsIntInner>;
+pub type NewVerifiedContractsInt = ParseAdapterWrapper<_inner::NewVerifiedContractsIntInner>;
 
 #[cfg(test)]
 mod tests {

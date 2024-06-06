@@ -37,11 +37,6 @@ pub struct ChartMetadata {
     pub last_updated_at: Option<DateTime<Utc>>,
 }
 
-pub struct ChartData<Point> {
-    pub metadata: ChartMetadata,
-    pub values: Vec<Point>,
-}
-
 /// Type of the point stored in the chart.
 /// [`DateValueString`] can be used to avoid parsing the values,
 /// but [`crate::charts::db_interaction::types::DateValueDecimal`]

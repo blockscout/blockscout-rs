@@ -1,24 +1,31 @@
-use std::ops::RangeInclusive;
+use crate::data_source::kinds::updateable_chart::clone::CloneChartWrapper;
 
-use crate::{
-    data_source::kinds::{
-        remote::{RemoteSource, RemoteSourceWrapper},
-        updateable_chart::clone::{CloneChart, CloneChartWrapper},
-    },
-    utils::sql_with_range_filter_opt,
-    Chart, DateValueString, Named,
-};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, Statement};
+/// Items in this module are not intended to be used outside. They are only public
+/// since the actual public type is just an alias (to wrapper).
+///
+/// I.e. use [`super`]'s types.
+pub mod _inner {
+    use std::ops::RangeInclusive;
 
-pub struct NewNativeCoinTransfersRemote;
+    use crate::{
+        data_source::kinds::{
+            remote::{RemoteSource, RemoteSourceWrapper},
+            updateable_chart::clone::CloneChart,
+        },
+        utils::sql_with_range_filter_opt,
+        Chart, DateValueString, Named,
+    };
+    use entity::sea_orm_active_enums::ChartType;
+    use sea_orm::{prelude::*, DbBackend, Statement};
 
-impl RemoteSource for NewNativeCoinTransfersRemote {
-    type Point = DateValueString;
-    fn get_query(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
-        sql_with_range_filter_opt!(
-            DbBackend::Postgres,
-            r#"
+    pub struct NewNativeCoinTransfersRemote;
+
+    impl RemoteSource for NewNativeCoinTransfersRemote {
+        type Point = DateValueString;
+        fn get_query(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+            sql_with_range_filter_opt!(
+                DbBackend::Postgres,
+                r#"
                 SELECT 
                     DATE(b.timestamp) as date,
                     COUNT(*)::TEXT as value
@@ -31,30 +38,31 @@ impl RemoteSource for NewNativeCoinTransfersRemote {
                     t.value >= 0 {filter}
                 GROUP BY date
             "#,
-            [],
-            "b.timestamp",
-            range
-        )
+                [],
+                "b.timestamp",
+                range
+            )
+        }
+    }
+
+    pub struct NewNativeCoinTransfersInner;
+
+    impl Named for NewNativeCoinTransfersInner {
+        const NAME: &'static str = "newNativeCoinTransfers";
+    }
+
+    impl Chart for NewNativeCoinTransfersInner {
+        fn chart_type() -> ChartType {
+            ChartType::Line
+        }
+    }
+
+    impl CloneChart for NewNativeCoinTransfersInner {
+        type Dependency = RemoteSourceWrapper<NewNativeCoinTransfersRemote>;
     }
 }
 
-pub struct NewNativeCoinTransfersInner;
-
-impl Named for NewNativeCoinTransfersInner {
-    const NAME: &'static str = "newNativeCoinTransfers";
-}
-
-impl Chart for NewNativeCoinTransfersInner {
-    fn chart_type() -> ChartType {
-        ChartType::Line
-    }
-}
-
-impl CloneChart for NewNativeCoinTransfersInner {
-    type Dependency = RemoteSourceWrapper<NewNativeCoinTransfersRemote>;
-}
-
-pub type NewNativeCoinTransfers = CloneChartWrapper<NewNativeCoinTransfersInner>;
+pub type NewNativeCoinTransfers = CloneChartWrapper<_inner::NewNativeCoinTransfersInner>;
 
 #[cfg(test)]
 mod tests {

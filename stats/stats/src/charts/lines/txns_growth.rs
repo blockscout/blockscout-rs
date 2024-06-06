@@ -1,32 +1,40 @@
-use super::new_txns::NewTxnsInt;
-use crate::{
-    charts::{chart::Chart, db_interaction::types::DateValueInt},
-    data_source::kinds::updateable_chart::cumulative::{CumulativeChart, CumulativeChartWrapper},
-    MissingDatePolicy, Named,
-};
-use entity::sea_orm_active_enums::ChartType;
+use crate::data_source::kinds::updateable_chart::cumulative::CumulativeChartWrapper;
 
-pub struct TxnsGrowthInner;
+/// Items in this module are not intended to be used outside. They are only public
+/// since the actual public type is just an alias (to wrapper).
+///
+/// I.e. use [`super`]'s types.
+pub mod _inner {
 
-impl Named for TxnsGrowthInner {
-    const NAME: &'static str = "txnsGrowth";
-}
+    use crate::{
+        charts::{chart::Chart, db_interaction::types::DateValueInt},
+        data_source::kinds::updateable_chart::cumulative::CumulativeChart,
+        lines::NewTxnsInt,
+        MissingDatePolicy, Named,
+    };
+    use entity::sea_orm_active_enums::ChartType;
 
-impl Chart for TxnsGrowthInner {
-    fn chart_type() -> ChartType {
-        ChartType::Line
+    pub struct TxnsGrowthInner;
+
+    impl Named for TxnsGrowthInner {
+        const NAME: &'static str = "txnsGrowth";
     }
-    fn missing_date_policy() -> MissingDatePolicy {
-        MissingDatePolicy::FillPrevious
+
+    impl Chart for TxnsGrowthInner {
+        fn chart_type() -> ChartType {
+            ChartType::Line
+        }
+        fn missing_date_policy() -> MissingDatePolicy {
+            MissingDatePolicy::FillPrevious
+        }
+    }
+
+    impl CumulativeChart for TxnsGrowthInner {
+        type DeltaChartPoint = DateValueInt;
+        type DeltaChart = NewTxnsInt;
     }
 }
-
-impl CumulativeChart for TxnsGrowthInner {
-    type DeltaChartPoint = DateValueInt;
-    type DeltaChart = NewTxnsInt;
-}
-
-pub type TxnsGrowth = CumulativeChartWrapper<TxnsGrowthInner>;
+pub type TxnsGrowth = CumulativeChartWrapper<_inner::TxnsGrowthInner>;
 
 #[cfg(test)]
 mod tests {

@@ -1,27 +1,38 @@
-use std::ops::RangeInclusive;
-
-use crate::{
-    charts::db_interaction::types::DateValueInt,
-    data_source::kinds::{
-        adapter::{ParseAdapter, ParseAdapterWrapper},
-        remote::{RemoteSource, RemoteSourceWrapper},
-        updateable_chart::clone::{CloneChart, CloneChartWrapper},
-    },
-    utils::sql_with_range_filter_opt,
-    Chart, DateValueString, Named,
+use crate::data_source::kinds::{
+    adapter::ParseAdapterWrapper, updateable_chart::clone::CloneChartWrapper,
 };
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::DateTimeUtc, DbBackend, Statement};
 
-pub struct NewContractsRemote;
+/// Items in this module are not intended to be used outside. They are only public
+/// since the actual public type is just an alias (to wrapper).
+///
+/// I.e. use [`super`]'s types.
+pub mod _inner {
+    use std::ops::RangeInclusive;
 
-impl RemoteSource for NewContractsRemote {
-    type Point = DateValueString;
+    use crate::{
+        charts::db_interaction::types::DateValueInt,
+        data_source::kinds::{
+            adapter::ParseAdapter,
+            remote::{RemoteSource, RemoteSourceWrapper},
+            updateable_chart::clone::CloneChart,
+        },
+        utils::sql_with_range_filter_opt,
+        Chart, DateValueString, Named,
+    };
+    use entity::sea_orm_active_enums::ChartType;
+    use sea_orm::{prelude::DateTimeUtc, DbBackend, Statement};
 
-    fn get_query(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
-        sql_with_range_filter_opt!(
-            DbBackend::Postgres,
-            r#"SELECT day AS date, COUNT(*)::text AS value
+    use super::NewContracts;
+
+    pub struct NewContractsRemote;
+
+    impl RemoteSource for NewContractsRemote {
+        type Point = DateValueString;
+
+        fn get_query(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+            sql_with_range_filter_opt!(
+                DbBackend::Postgres,
+                r#"SELECT day AS date, COUNT(*)::text AS value
                 FROM (
                     SELECT 
                         DISTINCT ON (txns_plus_internal_txns.hash)
@@ -50,39 +61,39 @@ impl RemoteSource for NewContractsRemote {
                 ) sub
                 GROUP BY sub.day;
             "#,
-            [],
-            "b.timestamp",
-            range,
-        )
+                [],
+                "b.timestamp",
+                range,
+            )
+        }
+    }
+
+    pub struct NewContractsInner;
+
+    impl Named for NewContractsInner {
+        const NAME: &'static str = "newContracts";
+    }
+
+    impl Chart for NewContractsInner {
+        fn chart_type() -> ChartType {
+            ChartType::Line
+        }
+    }
+
+    impl CloneChart for NewContractsInner {
+        type Dependency = RemoteSourceWrapper<NewContractsRemote>;
+    }
+
+    pub struct NewContractsIntInner;
+
+    impl ParseAdapter for NewContractsIntInner {
+        type InnerSource = NewContracts;
+        type ParseInto = DateValueInt;
     }
 }
 
-pub struct NewAccountsInner;
-
-impl Named for NewAccountsInner {
-    const NAME: &'static str = "newContracts";
-}
-
-impl Chart for NewAccountsInner {
-    fn chart_type() -> ChartType {
-        ChartType::Line
-    }
-}
-
-impl CloneChart for NewAccountsInner {
-    type Dependency = RemoteSourceWrapper<NewContractsRemote>;
-}
-
-pub type NewContracts = CloneChartWrapper<NewAccountsInner>;
-
-pub struct NewContractsIntInner;
-
-impl ParseAdapter for NewContractsIntInner {
-    type InnerSource = NewContracts;
-    type ParseInto = DateValueInt;
-}
-
-pub type NewContractsInt = ParseAdapterWrapper<NewContractsIntInner>;
+pub type NewContracts = CloneChartWrapper<_inner::NewContractsInner>;
+pub type NewContractsInt = ParseAdapterWrapper<_inner::NewContractsIntInner>;
 
 #[cfg(test)]
 mod tests {

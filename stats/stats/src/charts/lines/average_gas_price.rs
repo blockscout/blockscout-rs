@@ -1,27 +1,34 @@
-use crate::{
-    charts::db_interaction::types::DateValueDouble,
-    data_source::kinds::{
-        adapter::{ToStringAdapter, ToStringAdapterWrapper},
-        remote::{RemoteSource, RemoteSourceWrapper},
-        updateable_chart::clone::{CloneChart, CloneChartWrapper},
-    },
-    utils::sql_with_range_filter_opt,
-    Chart, Named,
-};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, Statement};
+use crate::data_source::kinds::updateable_chart::clone::CloneChartWrapper;
 
-const GWEI: i64 = 1_000_000_000;
+/// Items in this module are not intended to be used outside. They are only public
+/// since the actual public type is just an alias (to wrapper).
+///
+/// I.e. use [`super`]'s types.
+pub mod _inner {
+    use crate::{
+        charts::db_interaction::types::DateValueDouble,
+        data_source::kinds::{
+            adapter::{ToStringAdapter, ToStringAdapterWrapper},
+            remote::{RemoteSource, RemoteSourceWrapper},
+            updateable_chart::clone::CloneChart,
+        },
+        utils::sql_with_range_filter_opt,
+        Chart, Named,
+    };
+    use entity::sea_orm_active_enums::ChartType;
+    use sea_orm::{prelude::*, DbBackend, Statement};
 
-pub struct AverageGasPriceRemote;
+    const GWEI: i64 = 1_000_000_000;
 
-impl RemoteSource for AverageGasPriceRemote {
-    type Point = DateValueDouble;
+    pub struct AverageGasPriceRemote;
 
-    fn get_query(range: Option<std::ops::RangeInclusive<DateTimeUtc>>) -> Statement {
-        sql_with_range_filter_opt!(
-            DbBackend::Postgres,
-            r#"
+    impl RemoteSource for AverageGasPriceRemote {
+        type Point = DateValueDouble;
+
+        fn get_query(range: Option<std::ops::RangeInclusive<DateTimeUtc>>) -> Statement {
+            sql_with_range_filter_opt!(
+                DbBackend::Postgres,
+                r#"
                     SELECT
                         blocks.timestamp::date as date,
                         (AVG(
@@ -40,37 +47,38 @@ impl RemoteSource for AverageGasPriceRemote {
                         blocks.consensus = true {filter}
                     GROUP BY date
             "#,
-            [GWEI.into()],
-            "blocks.timestamp",
-            range,
-        )
+                [GWEI.into()],
+                "blocks.timestamp",
+                range,
+            )
+        }
+    }
+
+    pub struct AverageGasPriceRemoteString;
+
+    impl ToStringAdapter for AverageGasPriceRemoteString {
+        type InnerSource = RemoteSourceWrapper<AverageGasPriceRemote>;
+        type ConvertFrom = <AverageGasPriceRemote as RemoteSource>::Point;
+    }
+
+    pub struct AverageGasPriceInner;
+
+    impl Named for AverageGasPriceInner {
+        const NAME: &'static str = "averageGasPrice";
+    }
+
+    impl Chart for AverageGasPriceInner {
+        fn chart_type() -> ChartType {
+            ChartType::Line
+        }
+    }
+
+    impl CloneChart for AverageGasPriceInner {
+        type Dependency = ToStringAdapterWrapper<AverageGasPriceRemoteString>;
     }
 }
 
-pub struct AverageGasPriceRemoteString;
-
-impl ToStringAdapter for AverageGasPriceRemoteString {
-    type InnerSource = RemoteSourceWrapper<AverageGasPriceRemote>;
-    type ConvertFrom = <AverageGasPriceRemote as RemoteSource>::Point;
-}
-
-pub struct AverageGasPriceInner;
-
-impl Named for AverageGasPriceInner {
-    const NAME: &'static str = "averageGasPrice";
-}
-
-impl Chart for AverageGasPriceInner {
-    fn chart_type() -> ChartType {
-        ChartType::Line
-    }
-}
-
-impl CloneChart for AverageGasPriceInner {
-    type Dependency = ToStringAdapterWrapper<AverageGasPriceRemoteString>;
-}
-
-pub type AverageGasPrice = CloneChartWrapper<AverageGasPriceInner>;
+pub type AverageGasPrice = CloneChartWrapper<_inner::AverageGasPriceInner>;
 
 #[cfg(test)]
 mod tests {

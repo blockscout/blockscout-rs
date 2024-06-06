@@ -1,33 +1,41 @@
-use crate::{
-    charts::db_interaction::types::DateValueInt,
-    data_source::kinds::updateable_chart::cumulative::{CumulativeChart, CumulativeChartWrapper},
-    Chart, MissingDatePolicy, Named,
-};
-use entity::sea_orm_active_enums::ChartType;
+//! Cumulative total number of accounts in the network.
 
-use super::new_accounts::NewAccountsInt;
+use crate::data_source::kinds::updateable_chart::cumulative::CumulativeChartWrapper;
 
-pub struct AccountsGrowthInner;
+/// Items in this module are not intended to be used outside. They are only public
+/// since the actual public type is just an alias (to wrapper).
+///
+/// I.e. use [`super`]'s types.
+pub mod _inner {
+    use crate::{
+        charts::db_interaction::types::DateValueInt,
+        data_source::kinds::updateable_chart::cumulative::CumulativeChart,
+        lines::new_accounts::NewAccountsInt, Chart, MissingDatePolicy, Named,
+    };
+    use entity::sea_orm_active_enums::ChartType;
 
-impl Named for AccountsGrowthInner {
-    const NAME: &'static str = "accountsGrowth";
-}
+    pub struct AccountsGrowthInner;
 
-impl Chart for AccountsGrowthInner {
-    fn chart_type() -> ChartType {
-        ChartType::Line
+    impl Named for AccountsGrowthInner {
+        const NAME: &'static str = "accountsGrowth";
     }
-    fn missing_date_policy() -> MissingDatePolicy {
-        MissingDatePolicy::FillPrevious
+
+    impl Chart for AccountsGrowthInner {
+        fn chart_type() -> ChartType {
+            ChartType::Line
+        }
+        fn missing_date_policy() -> MissingDatePolicy {
+            MissingDatePolicy::FillPrevious
+        }
+    }
+
+    impl CumulativeChart for AccountsGrowthInner {
+        type DeltaChart = NewAccountsInt;
+        type DeltaChartPoint = DateValueInt;
     }
 }
 
-impl CumulativeChart for AccountsGrowthInner {
-    type DeltaChart = NewAccountsInt;
-    type DeltaChartPoint = DateValueInt;
-}
-
-pub type AccountsGrowth = CumulativeChartWrapper<AccountsGrowthInner>;
+pub type AccountsGrowth = CumulativeChartWrapper<_inner::AccountsGrowthInner>;
 
 #[cfg(test)]
 mod tests {

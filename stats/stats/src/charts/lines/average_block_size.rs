@@ -1,23 +1,30 @@
-use crate::{
-    data_source::kinds::{
-        remote::{RemoteSource, RemoteSourceWrapper},
-        updateable_chart::clone::{CloneChart, CloneChartWrapper},
-    },
-    utils::sql_with_range_filter_opt,
-    Chart, DateValueString, Named,
-};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, Statement};
+use crate::data_source::kinds::updateable_chart::clone::CloneChartWrapper;
 
-pub struct AverageBlockSizeRemote;
+/// Items in this module are not intended to be used outside. They are only public
+/// since the actual public type is just an alias (to wrapper).
+///
+/// I.e. use [`super`]'s types.
+pub mod _inner {
+    use crate::{
+        data_source::kinds::{
+            remote::{RemoteSource, RemoteSourceWrapper},
+            updateable_chart::clone::CloneChart,
+        },
+        utils::sql_with_range_filter_opt,
+        Chart, DateValueString, Named,
+    };
+    use entity::sea_orm_active_enums::ChartType;
+    use sea_orm::{prelude::*, DbBackend, Statement};
 
-impl RemoteSource for AverageBlockSizeRemote {
-    type Point = DateValueString;
+    pub struct AverageBlockSizeRemote;
 
-    fn get_query(range: Option<std::ops::RangeInclusive<DateTimeUtc>>) -> Statement {
-        sql_with_range_filter_opt!(
-            DbBackend::Postgres,
-            r#"
+    impl RemoteSource for AverageBlockSizeRemote {
+        type Point = DateValueString;
+
+        fn get_query(range: Option<std::ops::RangeInclusive<DateTimeUtc>>) -> Statement {
+            sql_with_range_filter_opt!(
+                DbBackend::Postgres,
+                r#"
                 SELECT
                     DATE(blocks.timestamp) as date,
                     ROUND(AVG(blocks.size))::TEXT as value
@@ -27,30 +34,31 @@ impl RemoteSource for AverageBlockSizeRemote {
                     consensus = true {filter}
                 GROUP BY date
             "#,
-            [],
-            "blocks.timestamp",
-            range,
-        )
+                [],
+                "blocks.timestamp",
+                range,
+            )
+        }
+    }
+
+    pub struct AverageBlockSizeInner;
+
+    impl Named for AverageBlockSizeInner {
+        const NAME: &'static str = "averageBlockSize";
+    }
+
+    impl Chart for AverageBlockSizeInner {
+        fn chart_type() -> ChartType {
+            ChartType::Line
+        }
+    }
+
+    impl CloneChart for AverageBlockSizeInner {
+        type Dependency = RemoteSourceWrapper<AverageBlockSizeRemote>;
     }
 }
 
-pub struct AverageBlockSizeInner;
-
-impl Named for AverageBlockSizeInner {
-    const NAME: &'static str = "averageBlockSize";
-}
-
-impl Chart for AverageBlockSizeInner {
-    fn chart_type() -> ChartType {
-        ChartType::Line
-    }
-}
-
-impl CloneChart for AverageBlockSizeInner {
-    type Dependency = RemoteSourceWrapper<AverageBlockSizeRemote>;
-}
-
-pub type AverageBlockSize = CloneChartWrapper<AverageBlockSizeInner>;
+pub type AverageBlockSize = CloneChartWrapper<_inner::AverageBlockSizeInner>;
 
 #[cfg(test)]
 mod tests {

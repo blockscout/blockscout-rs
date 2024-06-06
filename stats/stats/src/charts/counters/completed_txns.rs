@@ -1,21 +1,28 @@
-use crate::{
-    data_source::kinds::{
-        remote::point::{RemotePointSource, RemotePointSourceWrapper},
-        updateable_chart::clone::point::{ClonePointChart, ClonePointChartWrapper},
-    },
-    Chart, DateValueString, Named,
-};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{DbBackend, Statement};
+use crate::data_source::kinds::updateable_chart::clone::point::ClonePointChartWrapper;
 
-pub struct CompletedTxnsRemote;
+/// Items in this module are not intended to be used outside. They are only public
+/// since the actual public type is just an alias (to wrapper).
+///
+/// I.e. use [`super`]'s types.
+pub mod _inner {
+    use crate::{
+        data_source::kinds::{
+            remote::point::{RemotePointSource, RemotePointSourceWrapper},
+            updateable_chart::clone::point::ClonePointChart,
+        },
+        Chart, DateValueString, Named,
+    };
+    use entity::sea_orm_active_enums::ChartType;
+    use sea_orm::{DbBackend, Statement};
 
-impl RemotePointSource for CompletedTxnsRemote {
-    type Point = DateValueString;
-    fn get_query() -> Statement {
-        Statement::from_string(
-            DbBackend::Postgres,
-            r#"
+    pub struct CompletedTxnsRemote;
+
+    impl RemotePointSource for CompletedTxnsRemote {
+        type Point = DateValueString;
+        fn get_query() -> Statement {
+            Statement::from_string(
+                DbBackend::Postgres,
+                r#"
             SELECT (all_success - all_success_dropped)::TEXT AS value, last_block_date AS date 
             FROM (
                 SELECT (
@@ -34,27 +41,28 @@ impl RemotePointSource for CompletedTxnsRemote {
                 )
             ) AS sub
             "#,
-        )
+            )
+        }
+    }
+
+    pub struct CompletedTxnsInner;
+
+    impl Named for CompletedTxnsInner {
+        const NAME: &'static str = "completedTxns";
+    }
+
+    impl Chart for CompletedTxnsInner {
+        fn chart_type() -> ChartType {
+            ChartType::Counter
+        }
+    }
+
+    impl ClonePointChart for CompletedTxnsInner {
+        type Dependency = RemotePointSourceWrapper<CompletedTxnsRemote>;
     }
 }
 
-pub struct CompletedTxnsInner;
-
-impl Named for CompletedTxnsInner {
-    const NAME: &'static str = "completedTxns";
-}
-
-impl Chart for CompletedTxnsInner {
-    fn chart_type() -> ChartType {
-        ChartType::Counter
-    }
-}
-
-impl ClonePointChart for CompletedTxnsInner {
-    type Dependency = RemotePointSourceWrapper<CompletedTxnsRemote>;
-}
-
-pub type CompletedTxns = ClonePointChartWrapper<CompletedTxnsInner>;
+pub type CompletedTxns = ClonePointChartWrapper<_inner::CompletedTxnsInner>;
 
 #[cfg(test)]
 mod tests {

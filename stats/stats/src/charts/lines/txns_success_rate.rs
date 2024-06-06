@@ -1,26 +1,33 @@
-use std::ops::RangeInclusive;
+use crate::data_source::kinds::updateable_chart::clone::CloneChartWrapper;
 
-use crate::{
-    charts::db_interaction::types::DateValueDouble,
-    data_source::kinds::{
-        adapter::{ToStringAdapter, ToStringAdapterWrapper},
-        remote::{RemoteSource, RemoteSourceWrapper},
-        updateable_chart::clone::{CloneChart, CloneChartWrapper},
-    },
-    utils::sql_with_range_filter_opt,
-    Chart, Named,
-};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, Statement};
+/// Items in this module are not intended to be used outside. They are only public
+/// since the actual public type is just an alias (to wrapper).
+///
+/// I.e. use [`super`]'s types.
+pub mod _inner {
+    use std::ops::RangeInclusive;
 
-pub struct TxnsSuccessRateRemote;
+    use crate::{
+        charts::db_interaction::types::DateValueDouble,
+        data_source::kinds::{
+            adapter::{ToStringAdapter, ToStringAdapterWrapper},
+            remote::{RemoteSource, RemoteSourceWrapper},
+            updateable_chart::clone::CloneChart,
+        },
+        utils::sql_with_range_filter_opt,
+        Chart, Named,
+    };
+    use entity::sea_orm_active_enums::ChartType;
+    use sea_orm::{prelude::*, DbBackend, Statement};
 
-impl RemoteSource for TxnsSuccessRateRemote {
-    type Point = DateValueDouble;
-    fn get_query(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
-        sql_with_range_filter_opt!(
-            DbBackend::Postgres,
-            r#"
+    pub struct TxnsSuccessRateRemote;
+
+    impl RemoteSource for TxnsSuccessRateRemote {
+        type Point = DateValueDouble;
+        fn get_query(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+            sql_with_range_filter_opt!(
+                DbBackend::Postgres,
+                r#"
                 SELECT 
                     DATE(b.timestamp) as date, 
                     COUNT(CASE WHEN t.error IS NULL THEN 1 END)::FLOAT
@@ -34,37 +41,37 @@ impl RemoteSource for TxnsSuccessRateRemote {
                     (t.error IS NULL OR t.error::text != 'dropped/replaced') {filter}
                 GROUP BY DATE(b.timestamp)
             "#,
-            [],
-            "b.timestamp",
-            range
-        )
+                [],
+                "b.timestamp",
+                range
+            )
+        }
+    }
+
+    pub struct TxnsSuccessRateRemoteString;
+
+    impl ToStringAdapter for TxnsSuccessRateRemoteString {
+        type InnerSource = RemoteSourceWrapper<TxnsSuccessRateRemote>;
+        type ConvertFrom = <TxnsSuccessRateRemote as RemoteSource>::Point;
+    }
+
+    pub struct TxnsSuccessRateInner;
+
+    impl Named for TxnsSuccessRateInner {
+        const NAME: &'static str = "txnsSuccessRate";
+    }
+
+    impl Chart for TxnsSuccessRateInner {
+        fn chart_type() -> ChartType {
+            ChartType::Line
+        }
+    }
+
+    impl CloneChart for TxnsSuccessRateInner {
+        type Dependency = ToStringAdapterWrapper<TxnsSuccessRateRemoteString>;
     }
 }
-
-pub struct TxnsSuccessRateRemoteString;
-
-impl ToStringAdapter for TxnsSuccessRateRemoteString {
-    type InnerSource = RemoteSourceWrapper<TxnsSuccessRateRemote>;
-    type ConvertFrom = <TxnsSuccessRateRemote as RemoteSource>::Point;
-}
-
-pub struct TxnsSuccessRateInner;
-
-impl Named for TxnsSuccessRateInner {
-    const NAME: &'static str = "txnsSuccessRate";
-}
-
-impl Chart for TxnsSuccessRateInner {
-    fn chart_type() -> ChartType {
-        ChartType::Line
-    }
-}
-
-impl CloneChart for TxnsSuccessRateInner {
-    type Dependency = ToStringAdapterWrapper<TxnsSuccessRateRemoteString>;
-}
-
-pub type TxnsSuccessRate = CloneChartWrapper<TxnsSuccessRateInner>;
+pub type TxnsSuccessRate = CloneChartWrapper<_inner::TxnsSuccessRateInner>;
 
 #[cfg(test)]
 mod tests {

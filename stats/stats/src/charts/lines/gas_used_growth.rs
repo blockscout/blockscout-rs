@@ -1,25 +1,32 @@
-use crate::{
-    charts::db_interaction::types::DateValueDecimal,
-    data_source::kinds::{
-        adapter::{SourceAdapter, SourceAdapterWrapper},
-        remote::{RemoteSource, RemoteSourceWrapper},
-        updateable_chart::cumulative::{CumulativeChart, CumulativeChartWrapper},
-    },
-    utils::sql_with_range_filter_opt,
-    Chart, MissingDatePolicy, Named, UpdateError,
-};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, Statement};
+use crate::data_source::kinds::updateable_chart::cumulative::CumulativeChartWrapper;
 
-pub struct GasUsedPartialRemote;
+/// Items in this module are not intended to be used outside. They are only public
+/// since the actual public type is just an alias (to wrapper).
+///
+/// I.e. use [`super`]'s types.
+pub mod _inner {
+    use crate::{
+        charts::db_interaction::types::DateValueDecimal,
+        data_source::kinds::{
+            adapter::{SourceAdapter, SourceAdapterWrapper},
+            remote::{RemoteSource, RemoteSourceWrapper},
+            updateable_chart::cumulative::CumulativeChart,
+        },
+        utils::sql_with_range_filter_opt,
+        Chart, MissingDatePolicy, Named, UpdateError,
+    };
+    use entity::sea_orm_active_enums::ChartType;
+    use sea_orm::{prelude::*, DbBackend, Statement};
 
-impl RemoteSource for GasUsedPartialRemote {
-    type Point = DateValueDecimal;
+    pub struct GasUsedPartialRemote;
 
-    fn get_query(range: Option<std::ops::RangeInclusive<DateTimeUtc>>) -> Statement {
-        sql_with_range_filter_opt!(
-            DbBackend::Postgres,
-            r#"
+    impl RemoteSource for GasUsedPartialRemote {
+        type Point = DateValueDecimal;
+
+        fn get_query(range: Option<std::ops::RangeInclusive<DateTimeUtc>>) -> Statement {
+            sql_with_range_filter_opt!(
+                DbBackend::Postgres,
+                r#"
                     SELECT 
                         DATE(blocks.timestamp) as date, 
                         (sum(sum(blocks.gas_used)) OVER (ORDER BY date(blocks.timestamp))) AS value
@@ -30,60 +37,58 @@ impl RemoteSource for GasUsedPartialRemote {
                     GROUP BY date(blocks.timestamp)
                     ORDER BY date;
             "#,
-            [],
-            "blocks.timestamp",
-            range
-        )
+                [],
+                "blocks.timestamp",
+                range
+            )
+        }
+    }
+
+    pub type GasUsedPartial = RemoteSourceWrapper<GasUsedPartialRemote>;
+
+    pub struct NewGasUsedRemote;
+
+    impl SourceAdapter for NewGasUsedRemote {
+        type InnerSource = GasUsedPartial;
+        type Output = Vec<DateValueDecimal>;
+
+        fn function(
+            inner_data: Vec<DateValueDecimal>,
+        ) -> Result<Vec<DateValueDecimal>, UpdateError> {
+            Ok(inner_data
+                .into_iter()
+                .scan(Decimal::ZERO, |state, mut next| {
+                    let next_diff = next.value.saturating_sub(*state);
+                    *state = next.value;
+                    next.value = next_diff;
+                    Some(next)
+                })
+                .collect())
+        }
+    }
+
+    pub struct GasUsedGrowthInner;
+
+    impl Named for GasUsedGrowthInner {
+        const NAME: &'static str = "gasUsedGrowth";
+    }
+
+    impl Chart for GasUsedGrowthInner {
+        fn chart_type() -> ChartType {
+            ChartType::Line
+        }
+        fn missing_date_policy() -> MissingDatePolicy {
+            MissingDatePolicy::FillPrevious
+        }
+    }
+
+    impl CumulativeChart for GasUsedGrowthInner {
+        type DeltaChart = SourceAdapterWrapper<NewGasUsedRemote>;
+        type DeltaChartPoint = DateValueDecimal;
     }
 }
 
-pub type GasUsedPartial = RemoteSourceWrapper<GasUsedPartialRemote>;
-
-pub struct NewGasUsedRemote;
-
-// for `Cumulative` error reporting
-impl Named for NewGasUsedRemote {
-    const NAME: &'static str = "newGasUsedAdapter";
-}
-
-impl SourceAdapter for NewGasUsedRemote {
-    type InnerSource = GasUsedPartial;
-    type Output = Vec<DateValueDecimal>;
-
-    fn function(inner_data: Vec<DateValueDecimal>) -> Result<Vec<DateValueDecimal>, UpdateError> {
-        Ok(inner_data
-            .into_iter()
-            .scan(Decimal::ZERO, |state, mut next| {
-                let next_diff = next.value.saturating_sub(*state);
-                *state = next.value;
-                next.value = next_diff;
-                Some(next)
-            })
-            .collect())
-    }
-}
-
-pub struct GasUsedGrowthInner;
-
-impl Named for GasUsedGrowthInner {
-    const NAME: &'static str = "gasUsedGrowth";
-}
-
-impl Chart for GasUsedGrowthInner {
-    fn chart_type() -> ChartType {
-        ChartType::Line
-    }
-    fn missing_date_policy() -> MissingDatePolicy {
-        MissingDatePolicy::FillPrevious
-    }
-}
-
-impl CumulativeChart for GasUsedGrowthInner {
-    type DeltaChart = SourceAdapterWrapper<NewGasUsedRemote>;
-    type DeltaChartPoint = DateValueDecimal;
-}
-
-pub type GasUsedGrowth = CumulativeChartWrapper<GasUsedGrowthInner>;
+pub type GasUsedGrowth = CumulativeChartWrapper<_inner::GasUsedGrowthInner>;
 
 #[cfg(test)]
 mod tests {

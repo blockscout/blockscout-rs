@@ -1,27 +1,34 @@
-use crate::{
-    data_source::kinds::updateable_chart::sum_point::{SumPointChart, SumPointChartWrapper},
-    lines::NewTxnsInt,
-    Chart, Named,
-};
-use entity::sea_orm_active_enums::ChartType;
+use crate::data_source::kinds::updateable_chart::sum_point::SumPointChartWrapper;
 
-pub struct TotalTxnsInner;
+/// Items in this module are not intended to be used outside. They are only public
+/// since the actual public type is just an alias (to wrapper).
+///
+/// I.e. use [`super`]'s types.
+pub mod _inner {
+    use crate::{
+        data_source::kinds::updateable_chart::sum_point::SumPointChart, lines::NewTxnsInt, Chart,
+        Named,
+    };
+    use entity::sea_orm_active_enums::ChartType;
 
-impl Named for TotalTxnsInner {
-    const NAME: &'static str = "totalTxns";
-}
+    pub struct TotalTxnsInner;
 
-impl Chart for TotalTxnsInner {
-    fn chart_type() -> ChartType {
-        ChartType::Counter
+    impl Named for TotalTxnsInner {
+        const NAME: &'static str = "totalTxns";
+    }
+
+    impl Chart for TotalTxnsInner {
+        fn chart_type() -> ChartType {
+            ChartType::Counter
+        }
+    }
+
+    impl SumPointChart for TotalTxnsInner {
+        type InnerSource = NewTxnsInt;
     }
 }
 
-impl SumPointChart for TotalTxnsInner {
-    type InnerSource = NewTxnsInt;
-}
-
-pub type TotalTxns = SumPointChartWrapper<TotalTxnsInner>;
+pub type TotalTxns = SumPointChartWrapper<_inner::TotalTxnsInner>;
 
 #[cfg(test)]
 mod tests {

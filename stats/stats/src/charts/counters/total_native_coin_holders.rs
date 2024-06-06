@@ -1,27 +1,34 @@
-use crate::{
-    data_source::kinds::updateable_chart::last_point::{LastPointChart, LastPointChartWrapper},
-    lines::NativeCoinHoldersGrowth,
-    Chart, Named,
-};
-use entity::sea_orm_active_enums::ChartType;
+use crate::data_source::kinds::updateable_chart::last_point::LastPointChartWrapper;
 
-pub struct TotalNativeCoinHoldersInner;
+/// Items in this module are not intended to be used outside. They are only public
+/// since the actual public type is just an alias (to wrapper).
+///
+/// I.e. use [`super`]'s types.
+pub mod _inner {
+    use crate::{
+        data_source::kinds::updateable_chart::last_point::LastPointChart,
+        lines::NativeCoinHoldersGrowth, Chart, Named,
+    };
+    use entity::sea_orm_active_enums::ChartType;
 
-impl Named for TotalNativeCoinHoldersInner {
-    const NAME: &'static str = "totalNativeCoinHolders";
-}
+    pub struct TotalNativeCoinHoldersInner;
 
-impl Chart for TotalNativeCoinHoldersInner {
-    fn chart_type() -> ChartType {
-        ChartType::Counter
+    impl Named for TotalNativeCoinHoldersInner {
+        const NAME: &'static str = "totalNativeCoinHolders";
+    }
+
+    impl Chart for TotalNativeCoinHoldersInner {
+        fn chart_type() -> ChartType {
+            ChartType::Counter
+        }
+    }
+
+    impl LastPointChart for TotalNativeCoinHoldersInner {
+        type InnerSource = NativeCoinHoldersGrowth;
     }
 }
 
-impl LastPointChart for TotalNativeCoinHoldersInner {
-    type InnerSource = NativeCoinHoldersGrowth;
-}
-
-pub type TotalNativeCoinHolders = LastPointChartWrapper<TotalNativeCoinHoldersInner>;
+pub type TotalNativeCoinHolders = LastPointChartWrapper<_inner::TotalNativeCoinHoldersInner>;
 
 #[cfg(test)]
 mod tests {
