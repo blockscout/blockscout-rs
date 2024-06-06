@@ -2,7 +2,27 @@ syntax = "proto3";
 
 package blockscout.bens.v1;
 
+import "protoc-gen-openapiv2/options/annotations.proto";
+
 option go_package = "github.com/blockscout/blockscout-rs/bens";
+
+option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
+  info: {
+    title: "Blockscout ENS";
+    version: "1.3.0";
+    contact: {
+      name: "Blockscout";
+      url: "https://blockscout.com";
+      email: "support@blockscout.com";
+    };
+  };
+  host: "bens.services.blockscout.com"
+  external_docs: {
+    url: "https://github.com/blockscout/blockscout-rs";
+    description: "More about blockscout microservices";
+  }
+};
+
 
 service DomainsExtractor {
   // Get detailed information about domain for Detailed domain page
