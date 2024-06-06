@@ -1,7 +1,3 @@
-//! In chart definitions there are modules named `_inner`
-//! that contain types that are not expected to be used
-//! from outside. They were made to make interface cleaner
-
 mod accounts_growth;
 mod active_accounts;
 mod average_block_rewards;
@@ -11,7 +7,6 @@ mod average_gas_price;
 mod average_txn_fee;
 mod contracts_growth;
 mod gas_used_growth;
-// mod mock;
 mod native_coin_holders_growth;
 mod native_coin_supply;
 mod new_accounts;
@@ -26,6 +21,9 @@ mod txns_growth;
 mod txns_success_rate;
 mod verified_contracts_growth;
 
+#[cfg(test)]
+mod mock;
+
 pub use accounts_growth::AccountsGrowth;
 pub use active_accounts::ActiveAccounts;
 pub use average_block_rewards::AverageBlockRewards;
@@ -35,7 +33,6 @@ pub use average_gas_price::AverageGasPrice;
 pub use average_txn_fee::AverageTxnFee;
 pub use contracts_growth::ContractsGrowth;
 pub use gas_used_growth::GasUsedGrowth;
-// pub use mock::MockLine;
 pub use native_coin_holders_growth::NativeCoinHoldersGrowth;
 pub use native_coin_supply::NativeCoinSupply;
 pub use new_accounts::NewAccounts;
@@ -49,3 +46,6 @@ pub use txns_fee::TxnsFee;
 pub use txns_growth::TxnsGrowth;
 pub use txns_success_rate::TxnsSuccessRate;
 pub use verified_contracts_growth::VerifiedContractsGrowth;
+
+#[cfg(test)]
+pub use mock::MockLine;
