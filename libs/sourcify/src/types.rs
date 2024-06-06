@@ -116,8 +116,11 @@ mod get_source_files_response {
                     .path
                     .as_path()
                     .iter()
-                    .skip_while(|segment| segment != &std::ffi::OsStr::new("repository"))
-                    .skip(5);
+                    .skip_while(|segment| {
+                        segment != &std::ffi::OsStr::new("full_match")
+                            && segment != &std::ffi::OsStr::new("partial_match")
+                    })
+                    .skip(3);
 
                 match iterator.next() {
                     Some(segment) if segment == std::ffi::OsStr::new("sources") => {
