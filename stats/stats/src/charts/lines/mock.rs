@@ -1,6 +1,6 @@
 use crate::data_source::kinds::updateable_chart::clone::CloneChartWrapper;
 
-pub mod _inner {
+mod _inner {
     use crate::{
         data_source::{
             kinds::{

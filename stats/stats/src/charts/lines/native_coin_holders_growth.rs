@@ -1,19 +1,15 @@
 use crate::data_source::kinds::{
-    adapter::ParseAdapterWrapper, updateable_chart::UpdateableChartWrapper,
+    adapter::parse::ParseAdapterWrapper, updateable_chart::UpdateableChartWrapper,
 };
 
-/// Items in this module are not intended to be used outside. They are only public
-/// since the actual public type is just an alias (to wrapper).
-///
-/// I.e. use [`super`]'s types.
-pub mod _inner {
+mod _inner {
     use crate::{
         charts::db_interaction::{
             types::DateValueInt,
             write::{create_chart, insert_data_many},
         },
         data_source::{
-            kinds::{adapter::ParseAdapter, updateable_chart::UpdateableChart},
+            kinds::{adapter::parse::ParseAdapter, updateable_chart::UpdateableChart},
             UpdateContext,
         },
         Chart, DateValueString, MissingDatePolicy, Named, UpdateError,

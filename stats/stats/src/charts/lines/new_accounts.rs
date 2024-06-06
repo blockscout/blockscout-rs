@@ -1,19 +1,18 @@
 use crate::data_source::kinds::{
-    adapter::ParseAdapterWrapper, updateable_chart::clone::CloneChartWrapper,
+    adapter::parse::ParseAdapterWrapper, updateable_chart::clone::CloneChartWrapper,
 };
 
-/// Items in this module are not intended to be used outside. They are only public
-/// since the actual public type is just an alias (to wrapper).
-///
-/// I.e. use [`super`]'s types.
-pub mod _inner {
+mod _inner {
     use std::ops::RangeInclusive;
 
     use crate::{
         charts::db_interaction::types::DateValueInt,
         data_source::{
             kinds::{
-                adapter::{ParseAdapter, ToStringAdapter, ToStringAdapterWrapper},
+                adapter::{
+                    parse::ParseAdapter,
+                    to_string::{ToStringAdapter, ToStringAdapterWrapper},
+                },
                 remote::{RemoteSource, RemoteSourceWrapper},
                 updateable_chart::clone::CloneChart,
             },

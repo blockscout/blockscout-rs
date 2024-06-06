@@ -2,11 +2,7 @@
 
 use crate::data_source::kinds::updateable_chart::clone::CloneChartWrapper;
 
-/// Items in this module are not intended to be used outside. They are only public
-/// since the actual public type is just an alias (to wrapper).
-///
-/// I.e. use [`super`]'s types.
-pub mod _inner {
+mod _inner {
     use crate::{
         data_source::kinds::{
             remote::{RemoteSource, RemoteSourceWrapper},

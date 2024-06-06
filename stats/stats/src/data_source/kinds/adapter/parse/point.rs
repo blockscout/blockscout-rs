@@ -1,11 +1,13 @@
 use std::{fmt::Display, marker::PhantomData, str::FromStr};
 
 use crate::{
-    charts::db_interaction::types::DateValue, data_source::DataSource, DateValueString, Named,
-    UpdateError,
+    charts::db_interaction::types::DateValue,
+    data_source::{
+        kinds::adapter::{SourceAdapter, SourceAdapterWrapper},
+        DataSource,
+    },
+    DateValueString, Named, UpdateError,
 };
-
-use super::{SourceAdapter, SourceAdapterWrapper};
 
 pub trait ParsePointAdapter {
     // todo: try iterator
@@ -38,29 +40,5 @@ where
                 ))
             })?;
         Ok(T::ParseInto::from_parts(date, val_parsed))
-    }
-}
-
-pub trait ToStringPointAdapter {
-    type InnerSource: DataSource;
-}
-
-/// Wrapper to convert type implementing [`ToStringPointAdapter`] to another that implements [`DataSource`]
-pub type ToStringPointAdapterWrapper<T> = SourceAdapterWrapper<ToStringPointAdapterLocalWrapper<T>>;
-
-/// Wrapper to get type implementing "parent" trait. Use [`ToStringPointAdapterWrapper`] to get [`DataSource`]
-pub struct ToStringPointAdapterLocalWrapper<T>(PhantomData<T>);
-
-impl<T: ToStringPointAdapter> SourceAdapter for ToStringPointAdapterLocalWrapper<T>
-where
-    <T::InnerSource as DataSource>::Output: Into<DateValueString>,
-{
-    type InnerSource = T::InnerSource;
-    type Output = DateValueString;
-
-    fn function(
-        inner_data: <Self::InnerSource as DataSource>::Output,
-    ) -> Result<Self::Output, UpdateError> {
-        Ok(inner_data.into())
     }
 }

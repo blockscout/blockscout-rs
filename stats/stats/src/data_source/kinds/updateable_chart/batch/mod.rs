@@ -3,22 +3,11 @@
 //! It means that update for some period P can be done
 //! only with dependencies' data for the same exact period P.
 
-use std::{marker::PhantomData, ops::RangeInclusive, time::Instant};
-
-use blockscout_metrics_tools::AggregateTimer;
-use chrono::{DateTime, Days, Duration, Utc};
-use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, TransactionTrait};
+use chrono::Utc;
+use sea_orm::DatabaseConnection;
 
 use super::{UpdateableChart, UpdateableChartWrapper};
-use crate::{
-    charts::{
-        chart::{chart_portrait, Point},
-        db_interaction::read::get_min_date_blockscout,
-    },
-    data_source::{source::DataSource, types::UpdateContext},
-    utils::day_start,
-    Chart, DateValueString, Named, UpdateError,
-};
+use crate::{charts::chart::Point, data_source::source::DataSource, Chart, UpdateError};
 
 /// See [module-level documentation](self) for details.
 pub trait BatchChart: Chart {
@@ -49,200 +38,216 @@ pub trait BatchChart: Chart {
 }
 
 /// Wrapper to convert type implementing [`BatchChart`] to another that implements [`DataSource`]
-pub type BatchChartWrapper<T> = UpdateableChartWrapper<BatchChartLocalWrapper<T>>;
+pub type BatchChartWrapper<T> = UpdateableChartWrapper<_inner::BatchChartLocalWrapper<T>>;
 
-/// Wrapper to get type implementing "parent" trait. Use [`BatchChartWrapper`] to get [`DataSource`]
-pub struct BatchChartLocalWrapper<T: BatchChart>(PhantomData<T>);
+mod _inner {
+    use std::{marker::PhantomData, ops::RangeInclusive, time::Instant};
 
-impl<T: BatchChart + Named> Named for BatchChartLocalWrapper<T> {
-    const NAME: &'static str = T::NAME;
-}
+    use blockscout_metrics_tools::AggregateTimer;
+    use chrono::{DateTime, Days, Duration, Utc};
+    use sea_orm::{prelude::DateTimeUtc, TransactionTrait};
 
-#[portrait::fill(portrait::delegate(T))]
-impl<T: BatchChart + Chart> Chart for BatchChartLocalWrapper<T> {}
-
-/// Perform update utilizing batching
-async fn batch_update_values<U>(
-    cx: &UpdateContext<'_>,
-    chart_id: i32,
-    last_accurate_point: Option<DateValueString>,
-    min_blockscout_block: i64,
-    remote_fetch_timer: &mut AggregateTimer,
-) -> Result<(), UpdateError>
-where
-    U: BatchChart,
-{
-    let now = cx.time;
-    let txn = cx
-        .blockscout
-        .begin()
-        .await
-        .map_err(UpdateError::BlockscoutDB)?;
-    let update_from_date = last_accurate_point
-        .map(|p| p.date.checked_add_days(Days::new(1)))
-        .flatten();
-    let first_date = match update_from_date {
-        Some(d) => d,
-        None => get_min_date_blockscout(&txn)
-            .await
-            .map(|time| time.date())
-            .map_err(UpdateError::BlockscoutDB)?,
+    use super::{BatchChart, UpdateableChart};
+    use crate::{
+        charts::{chart::chart_portrait, db_interaction::read::get_min_date_blockscout},
+        data_source::{source::DataSource, types::UpdateContext},
+        utils::day_start,
+        Chart, DateValueString, Named, UpdateError,
     };
-    let first_date_time = day_start(first_date);
 
-    let steps = generate_date_time_ranges(first_date_time, now, U::batch_len());
-    let n = steps.len();
+    /// Wrapper to get type implementing "parent" trait. Use [`super::BatchChartWrapper`] to get [`DataSource`]
+    pub struct BatchChartLocalWrapper<T: BatchChart>(PhantomData<T>);
 
-    for (i, range) in steps.into_iter().enumerate() {
-        tracing::info!(from =? range.start(), to =? range.end() , "run {}/{} step of batch update", i + 1, n);
-        let now = Instant::now();
-        let found = batch_update_values_step::<U>(
-            cx,
-            chart_id,
-            min_blockscout_block,
-            range,
-            remote_fetch_timer,
-        )
-        .await?;
-        let elapsed: std::time::Duration = now.elapsed();
-        tracing::info!(found =? found, elapsed =? elapsed, "{}/{} step of batch done", i + 1, n);
+    impl<T: BatchChart + Named> Named for BatchChartLocalWrapper<T> {
+        const NAME: &'static str = T::NAME;
     }
-    Ok(())
-}
 
-/// Returns how many records were found
-async fn batch_update_values_step<U>(
-    cx: &UpdateContext<'_>,
-    chart_id: i32,
-    min_blockscout_block: i64,
-    range: RangeInclusive<DateTimeUtc>,
-    remote_fetch_timer: &mut AggregateTimer,
-) -> Result<usize, UpdateError>
-where
-    U: BatchChart,
-{
-    let primary_data =
-        U::PrimaryDependency::query_data(cx, Some(range.clone()), remote_fetch_timer).await?;
-    let secondary_data: <<U as BatchChart>::SecondaryDependencies as DataSource>::Output =
-        U::SecondaryDependencies::query_data(cx, Some(range), remote_fetch_timer).await?;
-    let found = U::batch_update_values_step_with(
-        cx.db,
-        chart_id,
-        cx.time,
-        min_blockscout_block,
-        primary_data,
-        secondary_data,
-    )
-    .await?;
-    Ok(found)
-}
+    #[portrait::fill(portrait::delegate(T))]
+    impl<T: BatchChart + Chart> Chart for BatchChartLocalWrapper<T> {}
 
-impl<T: BatchChart> UpdateableChart for BatchChartLocalWrapper<T>
-where
-    <T::PrimaryDependency as DataSource>::Output: Send,
-    <T::SecondaryDependencies as DataSource>::Output: Send,
-{
-    type PrimaryDependency = T::PrimaryDependency;
-    type SecondaryDependencies = T::SecondaryDependencies;
-
-    async fn update_values(
+    /// Perform update utilizing batching
+    async fn batch_update_values<U>(
         cx: &UpdateContext<'_>,
         chart_id: i32,
         last_accurate_point: Option<DateValueString>,
         min_blockscout_block: i64,
         remote_fetch_timer: &mut AggregateTimer,
-    ) -> Result<(), UpdateError> {
-        batch_update_values::<T>(
-            cx,
+    ) -> Result<(), UpdateError>
+    where
+        U: BatchChart,
+    {
+        let now = cx.time;
+        let txn = cx
+            .blockscout
+            .begin()
+            .await
+            .map_err(UpdateError::BlockscoutDB)?;
+        let update_from_date = last_accurate_point
+            .map(|p| p.date.checked_add_days(Days::new(1)))
+            .flatten();
+        let first_date = match update_from_date {
+            Some(d) => d,
+            None => get_min_date_blockscout(&txn)
+                .await
+                .map(|time| time.date())
+                .map_err(UpdateError::BlockscoutDB)?,
+        };
+        let first_date_time = day_start(first_date);
+
+        let steps = generate_date_time_ranges(first_date_time, now, U::batch_len());
+        let n = steps.len();
+
+        for (i, range) in steps.into_iter().enumerate() {
+            tracing::info!(from =? range.start(), to =? range.end() , "run {}/{} step of batch update", i + 1, n);
+            let now = Instant::now();
+            let found = batch_update_values_step::<U>(
+                cx,
+                chart_id,
+                min_blockscout_block,
+                range,
+                remote_fetch_timer,
+            )
+            .await?;
+            let elapsed: std::time::Duration = now.elapsed();
+            tracing::info!(found =? found, elapsed =? elapsed, "{}/{} step of batch done", i + 1, n);
+        }
+        Ok(())
+    }
+
+    /// Returns how many records were found
+    async fn batch_update_values_step<U>(
+        cx: &UpdateContext<'_>,
+        chart_id: i32,
+        min_blockscout_block: i64,
+        range: RangeInclusive<DateTimeUtc>,
+        remote_fetch_timer: &mut AggregateTimer,
+    ) -> Result<usize, UpdateError>
+    where
+        U: BatchChart,
+    {
+        let primary_data =
+            U::PrimaryDependency::query_data(cx, Some(range.clone()), remote_fetch_timer).await?;
+        let secondary_data: <<U as BatchChart>::SecondaryDependencies as DataSource>::Output =
+            U::SecondaryDependencies::query_data(cx, Some(range), remote_fetch_timer).await?;
+        let found = U::batch_update_values_step_with(
+            cx.db,
             chart_id,
-            last_accurate_point,
+            cx.time,
             min_blockscout_block,
-            remote_fetch_timer,
+            primary_data,
+            secondary_data,
         )
-        .await
-    }
-}
-
-/// Split the range [`start`, `end`] into multiple
-/// with maximum length `step`
-fn generate_date_time_ranges(
-    start: DateTimeUtc,
-    end: DateTimeUtc,
-    max_step: Duration,
-) -> Vec<RangeInclusive<DateTimeUtc>> {
-    let mut date_range = Vec::new();
-    let mut current_date_time = start;
-
-    while current_date_time < end {
-        // saturating add, since `step` is expected to be positive
-        let next_date = current_date_time
-            .checked_add_signed(max_step)
-            .unwrap_or(DateTime::<Utc>::MAX_UTC)
-            .min(end); // finish the ranges right at the end
-        date_range.push(RangeInclusive::new(current_date_time, next_date));
-        current_date_time = next_date;
+        .await?;
+        Ok(found)
     }
 
-    date_range
-}
+    impl<T: BatchChart> UpdateableChart for BatchChartLocalWrapper<T>
+    where
+        <T::PrimaryDependency as DataSource>::Output: Send,
+        <T::SecondaryDependencies as DataSource>::Output: Send,
+    {
+        type PrimaryDependency = T::PrimaryDependency;
+        type SecondaryDependencies = T::SecondaryDependencies;
 
-#[cfg(test)]
-mod tests {
-    use crate::tests::point_construction::{d, dt};
-
-    use super::*;
-    use chrono::{NaiveDate, NaiveTime};
-    use pretty_assertions::assert_eq;
-
-    // there are leap seconds and such, thus for testing only
-    fn day_end_ish(date: NaiveDate) -> DateTimeUtc {
-        date.and_time(NaiveTime::from_hms_opt(23, 59, 59).expect("correct time"))
-            .and_utc()
+        async fn update_values(
+            cx: &UpdateContext<'_>,
+            chart_id: i32,
+            last_accurate_point: Option<DateValueString>,
+            min_blockscout_block: i64,
+            remote_fetch_timer: &mut AggregateTimer,
+        ) -> Result<(), UpdateError> {
+            batch_update_values::<T>(
+                cx,
+                chart_id,
+                last_accurate_point,
+                min_blockscout_block,
+                remote_fetch_timer,
+            )
+            .await
+        }
     }
 
-    #[test]
-    fn test_generate_date_ranges() {
-        for ((from, to), expected) in [
-            (
-                (day_start(d("2022-01-01")), day_end_ish(d("2022-03-14"))),
-                vec![
-                    (day_start(d("2022-01-01")), day_start(d("2022-01-31"))),
-                    (day_start(d("2022-01-31")), day_start(d("2022-03-02"))),
-                    (day_start(d("2022-03-02")), day_end_ish(d("2022-03-14"))),
-                ],
-            ),
-            (
-                (day_start(d("2015-07-20")), day_end_ish(d("2015-12-31"))),
-                vec![
-                    (day_start(d("2015-07-20")), day_start(d("2015-08-19"))),
-                    (day_start(d("2015-08-19")), day_start(d("2015-09-18"))),
-                    (day_start(d("2015-09-18")), day_start(d("2015-10-18"))),
-                    (day_start(d("2015-10-18")), day_start(d("2015-11-17"))),
-                    (day_start(d("2015-11-17")), day_start(d("2015-12-17"))),
-                    (day_start(d("2015-12-17")), day_end_ish(d("2015-12-31"))),
-                ],
-            ),
-            (
-                (day_start(d("2015-07-20")), day_start(d("2015-07-20"))),
-                vec![],
-            ),
-            (
+    /// Split the range [`start`, `end`] into multiple
+    /// with maximum length `step`
+    fn generate_date_time_ranges(
+        start: DateTimeUtc,
+        end: DateTimeUtc,
+        max_step: Duration,
+    ) -> Vec<RangeInclusive<DateTimeUtc>> {
+        let mut date_range = Vec::new();
+        let mut current_date_time = start;
+
+        while current_date_time < end {
+            // saturating add, since `step` is expected to be positive
+            let next_date = current_date_time
+                .checked_add_signed(max_step)
+                .unwrap_or(DateTime::<Utc>::MAX_UTC)
+                .min(end); // finish the ranges right at the end
+            date_range.push(RangeInclusive::new(current_date_time, next_date));
+            current_date_time = next_date;
+        }
+
+        date_range
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use crate::tests::point_construction::{d, dt};
+
+        use super::*;
+        use chrono::{NaiveDate, NaiveTime};
+        use pretty_assertions::assert_eq;
+
+        // there are leap seconds and such, thus for testing only
+        fn day_end_ish(date: NaiveDate) -> DateTimeUtc {
+            date.and_time(NaiveTime::from_hms_opt(23, 59, 59).expect("correct time"))
+                .and_utc()
+        }
+
+        #[test]
+        fn test_generate_date_ranges() {
+            for ((from, to), expected) in [
                 (
-                    dt("2015-07-20T12:12:12").and_utc(),
-                    dt("2015-07-20T20:20:20").and_utc(),
+                    (day_start(d("2022-01-01")), day_end_ish(d("2022-03-14"))),
+                    vec![
+                        (day_start(d("2022-01-01")), day_start(d("2022-01-31"))),
+                        (day_start(d("2022-01-31")), day_start(d("2022-03-02"))),
+                        (day_start(d("2022-03-02")), day_end_ish(d("2022-03-14"))),
+                    ],
                 ),
-                vec![(
-                    dt("2015-07-20T12:12:12").and_utc(),
-                    dt("2015-07-20T20:20:20").and_utc(),
-                )],
-            ),
-        ] {
-            let expected: Vec<_> = expected
-                .into_iter()
-                .map(|r| RangeInclusive::new(r.0, r.1))
-                .collect();
-            let actual = generate_date_time_ranges(from, to, Duration::days(30));
-            assert_eq!(expected, actual);
+                (
+                    (day_start(d("2015-07-20")), day_end_ish(d("2015-12-31"))),
+                    vec![
+                        (day_start(d("2015-07-20")), day_start(d("2015-08-19"))),
+                        (day_start(d("2015-08-19")), day_start(d("2015-09-18"))),
+                        (day_start(d("2015-09-18")), day_start(d("2015-10-18"))),
+                        (day_start(d("2015-10-18")), day_start(d("2015-11-17"))),
+                        (day_start(d("2015-11-17")), day_start(d("2015-12-17"))),
+                        (day_start(d("2015-12-17")), day_end_ish(d("2015-12-31"))),
+                    ],
+                ),
+                (
+                    (day_start(d("2015-07-20")), day_start(d("2015-07-20"))),
+                    vec![],
+                ),
+                (
+                    (
+                        dt("2015-07-20T12:12:12").and_utc(),
+                        dt("2015-07-20T20:20:20").and_utc(),
+                    ),
+                    vec![(
+                        dt("2015-07-20T12:12:12").and_utc(),
+                        dt("2015-07-20T20:20:20").and_utc(),
+                    )],
+                ),
+            ] {
+                let expected: Vec<_> = expected
+                    .into_iter()
+                    .map(|r| RangeInclusive::new(r.0, r.1))
+                    .collect();
+                let actual = generate_date_time_ranges(from, to, Duration::days(30));
+                assert_eq!(expected, actual);
+            }
         }
     }
 }

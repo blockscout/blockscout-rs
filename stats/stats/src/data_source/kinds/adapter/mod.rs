@@ -5,19 +5,19 @@
 //! Kinda like `map` for a data source. I.e. applies
 //! a function to the output.
 
-pub mod point;
-
-use std::{fmt::Display, marker::PhantomData, ops::RangeInclusive, str::FromStr};
+use std::{marker::PhantomData, ops::RangeInclusive};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::Utc;
 use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
 
 use crate::{
-    charts::db_interaction::types::DateValue,
     data_source::{DataSource, UpdateContext},
-    DateValueString, Named, UpdateError,
+    UpdateError,
 };
+
+pub mod parse;
+pub mod to_string;
 
 pub trait SourceAdapter {
     type InnerSource: DataSource;
@@ -60,70 +60,5 @@ impl<T: SourceAdapter> DataSource for SourceAdapterWrapper<T> {
             <T::InnerSource as DataSource>::query_data(cx, range, remote_fetch_timer).await?;
         let transformed = T::function(inner_data)?;
         Ok(transformed)
-    }
-}
-
-pub trait ParseAdapter {
-    // todo: try iterator
-    type InnerSource: DataSource<Output = Vec<DateValueString>> + Named;
-    type ParseInto: DateValue + Send;
-}
-
-/// Wrapper to convert type implementing [`ParseAdapter`] to another that implements [`DataSource`]
-pub type ParseAdapterWrapper<T> = SourceAdapterWrapper<ParseAdapterLocalWrapper<T>>;
-
-/// Wrapper to get type implementing "parent" trait. Use [`ParseAdapterWrapper`] to get [`DataSource`]
-pub struct ParseAdapterLocalWrapper<T: ParseAdapter>(PhantomData<T>);
-
-impl<T: ParseAdapter> SourceAdapter for ParseAdapterLocalWrapper<T>
-where
-    <T::ParseInto as DateValue>::Value: FromStr,
-    <<T::ParseInto as DateValue>::Value as FromStr>::Err: Display,
-{
-    type InnerSource = T::InnerSource;
-    type Output = Vec<T::ParseInto>;
-
-    fn function(inner_data: Vec<DateValueString>) -> Result<Self::Output, UpdateError> {
-        let parsed_data = inner_data
-            .into_iter()
-            .map(|p| {
-                let (date, val_str) = p.into_parts();
-                let val_parsed = val_str
-                    .parse::<<T::ParseInto as DateValue>::Value>()
-                    .map_err(|e| {
-                        UpdateError::Internal(format!(
-                            "failed to parse values in chart '{}': {e}",
-                            T::InnerSource::NAME
-                        ))
-                    })?;
-                Ok(T::ParseInto::from_parts(date, val_parsed))
-            })
-            .collect::<Result<Vec<T::ParseInto>, UpdateError>>()?;
-        Ok(parsed_data)
-    }
-}
-
-pub trait ToStringAdapter {
-    type InnerSource: DataSource<Output = Vec<Self::ConvertFrom>>;
-    // only need because couldn't figure out how to "extract" generic
-    // T from `Vec` and place bounds on it
-    /// Type of elements in the output of [`InnerSource`](ToStringAdapter::InnerSource)
-    type ConvertFrom: Into<DateValueString>;
-}
-
-/// Wrapper to convert type implementing [`ToStringAdapter`] to another that implements [`DataSource`]
-pub type ToStringAdapterWrapper<T> = SourceAdapterWrapper<ToStringAdapterLocalWrapper<T>>;
-
-/// Wrapper to get type implementing "parent" trait. Use [`ToStringAdapterWrapper`] to get [`DataSource`]
-pub struct ToStringAdapterLocalWrapper<T>(PhantomData<T>);
-
-impl<T: ToStringAdapter> SourceAdapter for ToStringAdapterLocalWrapper<T> {
-    type InnerSource = T::InnerSource;
-    type Output = Vec<DateValueString>;
-
-    fn function(
-        inner_data: <Self::InnerSource as DataSource>::Output,
-    ) -> Result<Self::Output, UpdateError> {
-        Ok(inner_data.into_iter().map(|p| p.into()).collect())
     }
 }

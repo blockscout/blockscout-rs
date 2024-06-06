@@ -1,6 +1,6 @@
 use crate::data_source::kinds::updateable_chart::cumulative::CumulativeChartWrapper;
 
-pub mod _inner {
+mod _inner {
 
     use crate::{
         charts::{chart::Chart, db_interaction::types::DateValueInt},
