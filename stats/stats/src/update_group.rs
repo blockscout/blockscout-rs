@@ -43,7 +43,7 @@ use tracing::warn;
 
 use crate::{data_source::UpdateParameters, ChartDynamic, UpdateError};
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq)]
 #[error("Could not initialize update group: mutexes for {missing_mutexes:?} were not provided")]
 pub struct InitializationError {
     pub missing_mutexes: Vec<String>,
@@ -57,7 +57,7 @@ pub struct InitializationError {
 /// should be used instead. It provides synchronization mechanism
 /// that prevents data races between the groups.
 #[async_trait]
-pub trait UpdateGroup {
+pub trait UpdateGroup: core::fmt::Debug {
     // &self is only to make fns dispatchable (and trait to be object-safe)
     /// Group name
     fn name(&self) -> String;
@@ -216,6 +216,7 @@ macro_rules! construct_update_group {
             $(,)?
         ] $(,)?
     }) => {
+        #[derive(::core::fmt::Debug)]
         pub struct $group_name;
 
         #[::async_trait::async_trait]
@@ -306,7 +307,7 @@ pub type ArcUpdateGroup = Arc<dyn for<'a> UpdateGroup + Send + Sync + 'static>;
 /// For more info see [link, section "lock ordering"](https://www.cs.cornell.edu/courses/cs4410/2017su/lectures/lec09-deadlock.html)
 ///
 /// The order is a lexicographical order of chart (data source) mutex IDs
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct SyncUpdateGroup {
     /// Mutexes. Acquired in lexicographical order (=order within `BTreeMap`)
     dependencies_mutexes: BTreeMap<String, Arc<Mutex<()>>>,
@@ -455,8 +456,50 @@ impl SyncUpdateGroup {
 
 #[cfg(test)]
 mod tests {
+    use std::{collections::BTreeMap, sync::Arc};
+    use tokio::sync::Mutex;
+
+    use crate::{
+        counters::TotalVerifiedContracts,
+        lines::{NewVerifiedContracts, VerifiedContractsGrowth},
+        update_group::InitializationError,
+        Named,
+    };
+
+    use super::SyncUpdateGroup;
+
+    construct_update_group!(GroupWithoutDependencies {
+        name: "newChecksMutexesGroup",
+        charts: [TotalVerifiedContracts],
+    });
+
     #[test]
     fn new_checks_mutexes() {
-        // todo: test
+        let mutexes: BTreeMap<String, Arc<Mutex<()>>> = [(
+            TotalVerifiedContracts::NAME.to_string(),
+            Arc::new(Mutex::new(())),
+        )]
+        .into();
+
+        // need for consistent comparison of errors
+        fn sorted_init_error(e: InitializationError) -> InitializationError {
+            let InitializationError {
+                mut missing_mutexes,
+            } = e;
+            missing_mutexes.sort();
+            InitializationError { missing_mutexes }
+        }
+
+        assert_eq!(
+            SyncUpdateGroup::new(&mutexes, Arc::new(GroupWithoutDependencies))
+                .map_err(sorted_init_error)
+                .unwrap_err(),
+            sorted_init_error(InitializationError {
+                missing_mutexes: vec![
+                    VerifiedContractsGrowth::NAME.to_string(),
+                    NewVerifiedContracts::NAME.to_string()
+                ]
+            })
+        );
     }
 }

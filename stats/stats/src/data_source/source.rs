@@ -103,7 +103,8 @@ pub trait DataSource {
         if let Some(self_id) = Self::MUTEX_ID {
             let is_not_duplicate = ids.insert(self_id);
             // Type system shouldn't allow same type to be present in the dependencies,
-            // so it is a duplicate name
+            // so it is a duplicate name. Fail fast to detect the problem early and
+            // not cause any disruptions in database.
             assert!(
                 is_not_duplicate,
                 "Data sources `MUTEX_ID`s must be unique. ID '{self_id}' is duplicate",
