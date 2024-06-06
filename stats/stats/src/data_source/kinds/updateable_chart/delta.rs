@@ -71,21 +71,16 @@ mod _inner {
                     .await?;
             let mut cum_data = cum_data.into_iter();
             let Some(range_start) = cum_data.next() else {
-                // todo: check what happens with missing points (and when they do occur)
-                // also check if filling the points in query_data is needed (probably yes)
-                // todo: maybe additional data structure that stores lazy data but allows lookup
-                tracing::warn!(
-                    // todo: chart name and other tracing info
-                    "Value before the range was not found, finishing update"
-                );
+                tracing::warn!("Value before the range was not found, finishing update");
                 return Ok(());
             };
             if let Some(p) = last_accurate_point {
                 if range_start.get_parts().0 != &p.date {
                     tracing::warn!(
-                        // todo: chart name and other tracing info
+                        range_start = %range_start.get_parts().0,
+                        last_accurate_point = %p.date,
                         "Unexpected first point date, this might be a reason for inaccurate data \
-                    after the update."
+                        after the update."
                     );
                 }
             }

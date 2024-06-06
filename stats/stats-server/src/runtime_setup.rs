@@ -42,7 +42,6 @@ pub struct UpdateGroupEntry {
     pub enabled_members: HashSet<String>,
 }
 
-// todo: rename
 pub struct RuntimeSetup {
     pub lines_layout: LinesInfo<EnabledChartSettings>,
     pub update_groups: BTreeMap<String, UpdateGroupEntry>,

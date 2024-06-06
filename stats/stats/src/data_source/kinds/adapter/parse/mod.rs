@@ -10,7 +10,6 @@ use super::{SourceAdapter, SourceAdapterWrapper};
 pub mod point;
 
 pub trait ParseAdapter {
-    // todo: try iterator
     type InnerSource: DataSource<Output = Vec<DateValueString>> + Named;
     type ParseInto: DateValue + Send;
 }

@@ -53,6 +53,7 @@ pub trait DataSource {
     /// If the source was initialized before, keep old values. In other words,
     /// the method should be idempotent, as it is expected to be called on
     /// previously initialized sources.
+    #[instrument(skip_all, level = tracing::Level::DEBUG, fields(source_mutex_id = Self::MUTEX_ID))]
     fn init_recursively<'a>(
         db: &'a DatabaseConnection,
         init_time: &'a chrono::DateTime<Utc>,
@@ -65,14 +66,11 @@ pub trait DataSource {
             //     C → D
             //   ↗   ↗
             // A → B
-            // todo: log deps init??
-            // tracing::info!(
-            //     chart_name = Self::NAME,
-            //     parent_chart_name = P::NAME,
-            //     "init parent"
-            // );
+            tracing::debug!("recursively initializing primary dependency");
             Self::PrimaryDependency::init_recursively(db, init_time).await?;
+            tracing::debug!("recursively initializing secondary dependency");
             Self::SecondaryDependencies::init_recursively(db, init_time).await?;
+            tracing::debug!("initializing itself");
             Self::init_itself(db, init_time).await
         }
         .boxed()
@@ -118,6 +116,7 @@ pub trait DataSource {
     /// Should be idempontent with regards to `current_time` (in `cx`).
     /// It is a normal behaviour to call this method multiple times
     /// within single update.
+    // aboba
     #[instrument(skip_all, level = tracing::Level::DEBUG, fields(source_mutex_id = Self::MUTEX_ID))]
     fn update_recursively(
         cx: &UpdateContext<'_>,

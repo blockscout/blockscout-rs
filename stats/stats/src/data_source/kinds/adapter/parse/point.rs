@@ -10,7 +10,6 @@ use crate::{
 };
 
 pub trait ParsePointAdapter {
-    // todo: try iterator
     type InnerSource: DataSource<Output = DateValueString> + Named;
     type ParseInto: DateValue + Send;
 }
