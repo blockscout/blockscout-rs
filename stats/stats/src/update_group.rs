@@ -333,7 +333,6 @@ impl SyncUpdateGroup {
             all_chart_mutexes.keys().map(|n| (*n).deref()).collect();
         let missing_mutexes = dependencies
             .difference(&received_charts)
-            .into_iter()
             .map(|s| (*s).to_owned())
             .collect_vec();
 
@@ -347,10 +346,10 @@ impl SyncUpdateGroup {
                 })?;
             dependencies_mutexes.insert(dependency_name.to_owned(), mutex.clone());
         }
-        return Ok(Self {
+        Ok(Self {
             dependencies_mutexes,
-            inner: inner,
-        });
+            inner,
+        })
     }
 
     /// See [`UpdateGroup::name`]

@@ -114,8 +114,8 @@ mod tests {
             update_time_override: Some(current_time),
             force_full: true,
         };
-        let mut cx = UpdateContext::from(parameters.clone());
-        TotalBlocks::update_recursively(&mut cx).await.unwrap();
+        let cx = UpdateContext::from(parameters.clone());
+        TotalBlocks::update_recursively(&cx).await.unwrap();
         let data = get_counters(&db).await.unwrap();
         assert_eq!("13", data[TotalBlocks::NAME].value);
     }
@@ -140,8 +140,8 @@ mod tests {
             update_time_override: Some(current_time),
             force_full: true,
         };
-        let mut cx = UpdateContext::from(parameters.clone());
-        TotalBlocks::update_recursively(&mut cx).await.unwrap();
+        let cx = UpdateContext::from(parameters.clone());
+        TotalBlocks::update_recursively(&cx).await.unwrap();
         let data = get_counters(&db).await.unwrap();
         assert_eq!("9", data[TotalBlocks::NAME].value);
     }
@@ -176,8 +176,8 @@ mod tests {
             update_time_override: Some(current_time),
             force_full: true,
         };
-        let mut cx = UpdateContext::from(parameters.clone());
-        TotalBlocks::update_recursively(&mut cx).await.unwrap();
+        let cx = UpdateContext::from(parameters.clone());
+        TotalBlocks::update_recursively(&cx).await.unwrap();
         let data = get_counters(&db).await.unwrap();
         assert_eq!("13", data[TotalBlocks::NAME].value);
     }

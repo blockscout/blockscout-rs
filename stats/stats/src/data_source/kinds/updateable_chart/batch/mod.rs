@@ -83,8 +83,7 @@ mod _inner {
             .await
             .map_err(UpdateError::BlockscoutDB)?;
         let update_from_date = last_accurate_point
-            .map(|p| p.date.checked_add_days(Days::new(1)))
-            .flatten();
+            .and_then(|p| p.date.checked_add_days(Days::new(1)));
         let first_date = match update_from_date {
             Some(d) => d,
             None => get_min_date_blockscout(&txn)

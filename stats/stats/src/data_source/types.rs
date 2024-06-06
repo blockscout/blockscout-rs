@@ -26,7 +26,7 @@ impl<'a> From<UpdateParameters<'a>> for UpdateContext<'a> {
         Self {
             db: value.db,
             blockscout: value.blockscout,
-            time: value.update_time_override.unwrap_or_else(|| Utc::now()),
+            time: value.update_time_override.unwrap_or_else(Utc::now),
             force_full: value.force_full,
         }
     }

@@ -108,7 +108,7 @@ where
     Ok(Some(point))
 }
 
-pub fn sum<DV>(data: &Vec<DV>, mut partial_sum: DV::Value) -> Result<DV, UpdateError>
+pub fn sum<DV>(data: &[DV], mut partial_sum: DV::Value) -> Result<DV, UpdateError>
 where
     DV: DateValue + Default,
     DV::Value: AddAssign + Clone,

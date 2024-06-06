@@ -26,13 +26,13 @@ pub fn v(date: &str, value: &str) -> DateValueString {
 pub fn v_int(date: &str, value: i64) -> DateValueInt {
     DateValueInt {
         date: d(date),
-        value: value,
+        value,
     }
 }
 
 pub fn v_decimal(date: &str, value: Decimal) -> DateValueDecimal {
     DateValueDecimal {
         date: d(date),
-        value: value,
+        value,
     }
 }

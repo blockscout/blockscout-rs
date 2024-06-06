@@ -97,7 +97,7 @@ pub trait DataSource {
 
     fn all_dependencies_mutex_ids() -> HashSet<&'static str> {
         let mut ids = Self::PrimaryDependency::all_dependencies_mutex_ids();
-        ids.extend(Self::SecondaryDependencies::all_dependencies_mutex_ids().into_iter());
+        ids.extend(Self::SecondaryDependencies::all_dependencies_mutex_ids());
         if let Some(self_id) = Self::MUTEX_ID {
             let is_not_duplicate = ids.insert(self_id);
             // Type system shouldn't allow same type to be present in the dependencies,

@@ -16,7 +16,7 @@ mod tests {
     use cron::Schedule;
     use pretty_assertions::assert_eq;
 
-    const EXAMPLE_CONFIG: &'static str = r#"{
+    const EXAMPLE_CONFIG: &str = r#"{
         "update_groups": {
             "average_block_time": {
                 "update_schedule": "0 0 15 * * * *"
@@ -37,7 +37,7 @@ mod tests {
 
     #[test]
     fn config_parses_correctly() {
-        let config: Config = serde_json::from_str(&EXAMPLE_CONFIG).expect("should be valid config");
+        let config: Config = serde_json::from_str(EXAMPLE_CONFIG).expect("should be valid config");
 
         assert_eq!(
             config,

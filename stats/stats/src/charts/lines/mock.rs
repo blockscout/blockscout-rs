@@ -73,13 +73,13 @@ mod _inner {
             range: Option<RangeInclusive<DateTimeUtc>>,
         ) -> Result<Vec<Self::Point>, UpdateError> {
             let date_range_start = if let Some(r) = range.clone() {
-                r.start().clone()
+                *r.start()
             } else {
                 DateTimeUtc::MIN_UTC
             };
             let mut date_range_end = cx.time;
             if let Some(r) = range {
-                date_range_end = date_range_end.min(r.end().clone())
+                date_range_end = date_range_end.min(*r.end())
             }
             let full_data = mocked_lines(ValueRange::get());
             let data = fit_into_range(

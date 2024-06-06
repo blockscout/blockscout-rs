@@ -50,7 +50,7 @@ pub trait RemoteSource {
                 .await
                 .map_err(UpdateError::BlockscoutDB)?;
             // linear time for sorted sequences
-            data.sort_unstable_by(|a, b| a.get_parts().0.cmp(&b.get_parts().0));
+            data.sort_unstable_by(|a, b| a.get_parts().0.cmp(b.get_parts().0));
             // can't use sort_*_by_key: https://github.com/rust-lang/rust/issues/34162
             Ok(data)
         }

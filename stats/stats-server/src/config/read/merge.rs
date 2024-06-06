@@ -117,7 +117,7 @@ mod override_field {
         source: LineChartCategoryOrdered,
     ) -> Result<(), anyhow::Error> {
         if let Some(title) = source.title {
-            *(&mut target.title) = title;
+            target.title = title;
         }
         override_ordered(&mut target.charts, source.charts, line_chart_info)
             .context("updating charts in category")
@@ -143,7 +143,7 @@ pub fn override_charts(
     .context("updating line categories")?;
     target
         .template_values
-        .extend(source.template_values.into_iter());
+        .extend(source.template_values);
     Ok(())
 }
 
@@ -164,7 +164,7 @@ pub fn override_update_schedule(
                     .or(target_group.update_schedule.take());
 
                 for (chart_name, new_ignore_status) in added_settings.ignore_charts {
-                    if new_ignore_status == true {
+                    if new_ignore_status {
                         target_group.ignore_charts.insert(chart_name);
                     } else {
                         target_group.ignore_charts.remove(&chart_name);
@@ -188,7 +188,7 @@ mod tests {
 
     use super::*;
 
-    const EXAMPLE_CHART_CONFIG: &'static str = r#"{
+    const EXAMPLE_CHART_CONFIG: &str = r#"{
         "counters": [
             {
                 "id": "total_blocks",
@@ -232,7 +232,7 @@ mod tests {
     #[test]
     fn charts_overridden_correctly() {
         let mut json_config: json::charts::Config =
-            serde_json::from_str(&EXAMPLE_CHART_CONFIG).unwrap();
+            serde_json::from_str(EXAMPLE_CHART_CONFIG).unwrap();
 
         let env_override: env::charts::Config = config_from_env(HashMap::from_iter(
             [
@@ -297,7 +297,7 @@ mod tests {
         assert_eq!(overridden_config, expected_config)
     }
 
-    const EXAMPLE_SCHEDULE_CONFIG: &'static str = r#"{
+    const EXAMPLE_SCHEDULE_CONFIG: &str = r#"{
         "update_groups": {
             "average_block_time": {
                 "update_schedule": "0 0 15 * * * *"
@@ -319,7 +319,7 @@ mod tests {
     #[test]
     fn schedule_overridden_correctly() {
         let mut json_config: json::update_schedule::Config =
-            serde_json::from_str(&EXAMPLE_SCHEDULE_CONFIG).unwrap();
+            serde_json::from_str(EXAMPLE_SCHEDULE_CONFIG).unwrap();
 
         let env_override: env::update_schedule::Config = config_from_env(HashMap::from_iter(
             [

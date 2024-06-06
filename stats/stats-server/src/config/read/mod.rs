@@ -30,7 +30,7 @@ where
             .try_deserialize()?;
         let env_config: EnvConfig = config::Config::builder()
             .add_source(
-                config::Environment::with_prefix(&env_prefix)
+                config::Environment::with_prefix(env_prefix)
                     .separator("__")
                     .try_parsing(true),
             )

@@ -25,7 +25,7 @@ mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
 
-    const EXAMPLE_CONFIG: &'static str = r#"{
+    const EXAMPLE_CONFIG: &str = r#"{
         "counters": [
             {
                 "id": "total_blocks",
@@ -68,12 +68,12 @@ mod tests {
 
     #[test]
     fn config_parses() {
-        let _: Config = serde_json::from_str(&EXAMPLE_CONFIG).expect("should be valid config");
+        let _: Config = serde_json::from_str(EXAMPLE_CONFIG).expect("should be valid config");
     }
 
     #[test]
     fn render_works() {
-        let config: Config = serde_json::from_str(&EXAMPLE_CONFIG).expect("should be valid config");
+        let config: Config = serde_json::from_str(EXAMPLE_CONFIG).expect("should be valid config");
 
         let config = serde_json::to_value(
             config
@@ -84,7 +84,7 @@ mod tests {
 
         let expected_config_str = &EXAMPLE_CONFIG.replace("{{native_coin_symbol}}", "USDT");
         let expected_config: Config =
-            serde_json::from_str(&expected_config_str).expect("should be valid config");
+            serde_json::from_str(expected_config_str).expect("should be valid config");
         let expected_config = serde_json::to_value(expected_config).unwrap();
 
         assert_eq!(config, expected_config);

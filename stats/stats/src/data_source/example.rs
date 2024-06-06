@@ -80,7 +80,7 @@ impl RemoteSource for NewContractsRemote {
                     "#
         );
 
-        Statement::from_sql_and_values(DbBackend::Postgres, &sql, values)
+        Statement::from_sql_and_values(DbBackend::Postgres, sql, values)
     }
 }
 

@@ -132,6 +132,7 @@ pub async fn get_chart_metadata(
 ///
 /// Note: if some dates within interval `(from, to)` fall on the future, no data points
 /// for them are returned.
+#[allow(clippy::too_many_arguments)]
 pub async fn get_chart_data(
     db: &DatabaseConnection,
     name: &str,

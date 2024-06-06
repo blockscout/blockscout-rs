@@ -32,7 +32,7 @@ pub fn fit_into_range(
                     data.iter().take_while(|p| p.get_parts().0 < &from).last()
                 {
                     if let Err(insert_idx) =
-                        data.binary_search_by_key(&from, |p| p.get_parts().0.clone())
+                        data.binary_search_by_key(&from, |p| *p.get_parts().0)
                     {
                         // `data` does not contain point for `from`, need to insert by `FillPrevious` logic
                         let new_point =
@@ -63,7 +63,7 @@ pub fn trim_out_of_range_sorted<DV: DateValue>(
                 .end()
                 .checked_add_days(Days::new(1))
                 .unwrap_or(NaiveDate::MAX)),
-            |p| p.get_parts().0.clone(),
+            |p| *p.get_parts().0,
         )
         .unwrap_or_else(|i| i);
     data.truncate(trim_from_idx);
