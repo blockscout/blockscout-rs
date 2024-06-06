@@ -68,6 +68,7 @@ pub mod _inner {
 
 // todo: reconsider once #845 is solved
 // https://github.com/blockscout/blockscout-rs/issues/845
+// + change update group once changed back
 pub type TotalContracts = ClonePointChartWrapper<_inner::TotalContractsInnerFixed>;
 
 #[cfg(test)]

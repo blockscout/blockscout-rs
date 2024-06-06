@@ -110,6 +110,7 @@ pub mod _inner {
         type Dependency = ToStringAdapterWrapper<NativeCoinSupplyRemoteString>;
     }
 }
+
 pub type NativeCoinSupply = CloneChartWrapper<_inner::NativeCoinSupplyInner>;
 
 #[cfg(test)]

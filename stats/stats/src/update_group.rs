@@ -18,7 +18,7 @@
 //! For convenience, they may be type aliased:
 //! ```text
 //! pub type SomeChart1 = CloneChartWrapper<SomeChart1Inner>;
-//! pub type SomePointChart1 = LastPointChart<SomeChart2Inner>;
+//! pub type SomePointChart1 = BatchChartWrapper<SomeChart2Inner>;
 //! ```
 //! 2. Construct simple (non-sync) update groups via [`construct_update_group!`]
 //! 3. Create mutexes (1-1 for each chart)
@@ -95,7 +95,6 @@ pub trait UpdateGroup {
 // reexport some dependencies for macro to reference
 pub mod macro_reexport {
     pub use chrono;
-    pub use paste;
 }
 
 /// Construct update group that implemants [`UpdateGroup`]. The main purpose of the

@@ -184,7 +184,34 @@ impl RuntimeSetup {
     }
 
     fn all_update_groups() -> Vec<ArcUpdateGroup> {
-        vec![Arc::new(update_groups::Contracts)]
+        use update_groups::*;
+        vec![
+            // singletons
+            Arc::new(ActiveAccountsGroup),
+            Arc::new(AverageBlockRewardsGroup),
+            Arc::new(AverageBlockSizeGroup),
+            Arc::new(AverageGasLimitGroup),
+            Arc::new(AverageGasPriceGroup),
+            Arc::new(AverageTxnFeeGroup),
+            Arc::new(GasUsedGrowthGroup),
+            Arc::new(NativeCoinSupplyGroup),
+            Arc::new(NewBlocksGroup),
+            Arc::new(TxnsFeeGroup),
+            Arc::new(TxnsSuccessRateGroup),
+            Arc::new(AverageBlockTimeGroup),
+            Arc::new(CompletedTxnsGroup),
+            Arc::new(TotalAddressesGroup),
+            Arc::new(TotalBlocksGroup),
+            Arc::new(TotalContractsGroup),
+            Arc::new(TotalTokensGroup),
+            // complex groups
+            Arc::new(AccountsIncrease),
+            Arc::new(ContractsIncrease),
+            Arc::new(TransactionsIncrease),
+            Arc::new(VerifiedContracts),
+            Arc::new(NativeCoinHolders),
+            Arc::new(NativeCoinTransfers),
+        ]
     }
 
     fn create_all_dependencies_mutexes(
