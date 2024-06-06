@@ -13,10 +13,10 @@ pub trait ParsePointAdapter {
     type ParseInto: DateValue + Send;
 }
 
-/// Wrapper to convert type implementing [`ParseAdapter`] to another that implements [`DataSource`]
+/// Wrapper to convert type implementing [`ParsePointAdapter`] to another that implements [`DataSource`]
 pub type ParsePointAdapterWrapper<T> = SourceAdapterWrapper<ParsePointAdapterLocalWrapper<T>>;
 
-/// Wrapper to get type implementing "parent" trait. Use [`ParseAdapterWrapper`] to get [`DataSource`]
+/// Wrapper to get type implementing "parent" trait. Use [`ParsePointAdapterWrapper`] to get [`DataSource`]
 pub struct ParsePointAdapterLocalWrapper<T: ParsePointAdapter>(PhantomData<T>);
 
 impl<T: ParsePointAdapter> SourceAdapter for ParsePointAdapterLocalWrapper<T>
@@ -48,7 +48,7 @@ pub trait ToStringPointAdapter {
 /// Wrapper to convert type implementing [`ToStringPointAdapter`] to another that implements [`DataSource`]
 pub type ToStringPointAdapterWrapper<T> = SourceAdapterWrapper<ToStringPointAdapterLocalWrapper<T>>;
 
-/// Wrapper to get type implementing "parent" trait. Use [`ToStringAdapterWrapper`] to get [`DataSource`]
+/// Wrapper to get type implementing "parent" trait. Use [`ToStringPointAdapterWrapper`] to get [`DataSource`]
 pub struct ToStringPointAdapterLocalWrapper<T>(PhantomData<T>);
 
 impl<T: ToStringPointAdapter> SourceAdapter for ToStringPointAdapterLocalWrapper<T>

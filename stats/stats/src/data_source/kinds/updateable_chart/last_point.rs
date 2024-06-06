@@ -27,7 +27,7 @@ pub trait LastPointChart {
 /// Wrapper to convert type implementing [`LastPointChart`] to another that implements [`DataSource`]
 pub type LastPointChartWrapper<T> = UpdateableChartWrapper<LastPointChartLocalWrapper<T>>;
 
-/// Wrapper to get type implementing "parent" trait. Use [`DeltaChartWrapper`] to get [`DataSource`]
+/// Wrapper to get type implementing "parent" trait. Use [`LastPointChartWrapper`] to get [`DataSource`]
 pub struct LastPointChartLocalWrapper<T: LastPointChart>(PhantomData<T>);
 
 impl<T: LastPointChart + Named> Named for LastPointChartLocalWrapper<T> {

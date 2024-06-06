@@ -26,7 +26,7 @@ pub trait SumPointChart {
 /// Wrapper to convert type implementing [`SumPointChart`] to another that implements [`DataSource`]
 pub type SumPointChartWrapper<T> = UpdateableChartWrapper<SumPointChartLocalWrapper<T>>;
 
-/// Wrapper to get type implementing "parent" trait. Use [`DeltaChartWrapper`] to get [`DataSource`]
+/// Wrapper to get type implementing "parent" trait. Use [`SumPointChartWrapper`] to get [`DataSource`]
 pub struct SumPointChartLocalWrapper<T: SumPointChart>(PhantomData<T>);
 
 impl<T: SumPointChart + Named> Named for SumPointChartLocalWrapper<T> {

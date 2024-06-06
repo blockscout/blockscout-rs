@@ -37,7 +37,7 @@ pub trait RemotePointSource {
     }
 }
 
-/// Wrapper to convert type implementing [`RemoteSource`] to another that implements [`DataSource`]
+/// Wrapper to convert type implementing [`RemotePointSource`] to another that implements [`DataSource`]
 pub struct RemotePointSourceWrapper<T: RemotePointSource>(PhantomData<T>);
 
 impl<T: RemotePointSource + Named> Named for RemotePointSourceWrapper<T> {
