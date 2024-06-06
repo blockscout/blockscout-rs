@@ -1,6 +1,7 @@
 use super::artifacts::CompilerInput;
-use crate::compiler::{EvmCompiler, Version};
+use crate::compiler::{self, EvmCompiler, Version};
 use ethers_solc::{error::SolcError, CompilerOutput, Solc};
+use foundry_compilers::artifacts::output_selection::OutputSelection;
 use std::path::Path;
 
 #[derive(Default)]
@@ -9,6 +10,39 @@ pub struct VyperCompiler {}
 impl VyperCompiler {
     pub fn new() -> Self {
         VyperCompiler {}
+    }
+}
+
+impl compiler::CompilerInput for CompilerInput {
+    fn modify(mut self) -> Self {
+        self.sources.iter_mut().for_each(|(_file, source)| {
+            let mut modified_content = source.content.as_ref().clone();
+            modified_content.push(' ');
+            source.content = std::sync::Arc::new(modified_content);
+        });
+        self
+    }
+
+    // Starting from pre-release versions of 0.4.0 interfaces are missing from input standard-json.
+    // Due to that, we cannot specify output selection for all files (via "*" wildcard),
+    // as some of them may be interfaces, which should not be compiled.
+    // Thus, we start specifying required outputs only for those files
+    // that already exists in the provided output_selection.
+    fn normalize_output_selection(&mut self, version: &Version) {
+        // v0.3.10 was the latest release prior to v0.4.0 pre-releases
+        if version.version() > &semver::Version::new(0, 3, 10) {
+            let default_output_selection = vec![
+                "abi".to_string(),
+                "evm.bytecode".to_string(),
+                "evm.deployedBytecode".to_string(),
+                "evm.methodIdentifiers".to_string(),
+            ];
+            for (_key, value) in self.settings.output_selection.iter_mut() {
+                value.clone_from(&default_output_selection);
+            }
+        } else {
+            self.settings.output_selection = OutputSelection::default_file_output_selection()
+        }
     }
 }
 
@@ -23,11 +57,50 @@ impl EvmCompiler for VyperCompiler {
         input: &Self::CompilerInput,
     ) -> Result<(serde_json::Value, CompilerOutput), SolcError> {
         let raw = Solc::from(path).async_compile_output(input).await?;
-        let vyper_output: types::VyperCompilerOutput = serde_json::from_slice(&raw)?;
-        Ok((
-            serde_json::from_slice(&raw)?,
-            CompilerOutput::from(vyper_output),
-        ))
+
+        let mut raw_output = serde_json::from_slice(&raw)?;
+        update_source_map(&mut raw_output);
+
+        let vyper_output: types::VyperCompilerOutput = serde_json::from_value(raw_output.clone())?;
+
+        Ok((raw_output, CompilerOutput::from(vyper_output)))
+    }
+}
+
+// TODO: that should be replaced with an actual vyper CompilerOutput struct deserialization
+fn update_source_map(raw_output: &mut serde_json::Value) {
+    let update = |bytecode: &mut serde_json::Value| {
+        if let Some(bytecode) = bytecode.as_object_mut() {
+            if let Some(source_map) = bytecode.get("sourceMap") {
+                if let Some(source_map_object) = source_map.as_object() {
+                    if let Some(source_map_string) = source_map_object.get("pc_pos_map_compressed")
+                    {
+                        bytecode.insert("sourceMap".to_string(), source_map_string.clone());
+                    }
+                }
+            }
+        }
+    };
+
+    if let Some(output) = raw_output.as_object_mut() {
+        if let Some(contract_files) = output.get_mut("contracts") {
+            if let Some(contract_files) = contract_files.as_object_mut() {
+                for (_file, contracts) in contract_files {
+                    if let Some(contracts) = contracts.as_object_mut() {
+                        for (_name, contract) in contracts {
+                            if let Some(bytecode) = contract.pointer_mut("/evm/bytecode") {
+                                update(bytecode)
+                            }
+                            if let Some(deployed_bytecode) =
+                                contract.pointer_mut("/evm/deployedBytecode")
+                            {
+                                update(deployed_bytecode)
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
