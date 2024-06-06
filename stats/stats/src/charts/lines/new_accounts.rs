@@ -45,43 +45,43 @@ pub mod _inner {
                 Statement::from_sql_and_values(
                     DbBackend::Postgres,
                     r#"
-                SELECT
-                    first_tx.date as date,
-                    count(*) as value
-                FROM (
-                    SELECT DISTINCT ON (t.from_address_hash)
-                        b.timestamp::date as date
-                    FROM transactions  t
-                    JOIN blocks        b ON t.block_hash = b.hash
-                    WHERE
-                        b.timestamp != to_timestamp(0) AND
-                        b.consensus = true AND
-                        b.timestamp <= $1
-                    ORDER BY t.from_address_hash, b.timestamp
-                ) first_tx
-                GROUP BY first_tx.date;
-            "#,
+                        SELECT
+                            first_tx.date as date,
+                            count(*) as value
+                        FROM (
+                            SELECT DISTINCT ON (t.from_address_hash)
+                                b.timestamp::date as date
+                            FROM transactions  t
+                            JOIN blocks        b ON t.block_hash = b.hash
+                            WHERE
+                                b.timestamp != to_timestamp(0) AND
+                                b.consensus = true AND
+                                b.timestamp <= $1
+                            ORDER BY t.from_address_hash, b.timestamp
+                        ) first_tx
+                        GROUP BY first_tx.date;
+                    "#,
                     vec![(*range.end()).into()],
                 )
             } else {
                 Statement::from_sql_and_values(
                     DbBackend::Postgres,
                     r#"
-                SELECT
-                    first_tx.date as date,
-                    count(*) as value
-                FROM (
-                    SELECT DISTINCT ON (t.from_address_hash)
-                        b.timestamp::date as date
-                    FROM transactions  t
-                    JOIN blocks        b ON t.block_hash = b.hash
-                    WHERE
-                        b.timestamp != to_timestamp(0) AND
-                        b.consensus = true
-                    ORDER BY t.from_address_hash, b.timestamp
-                ) first_tx
-                GROUP BY first_tx.date;
-            "#,
+                        SELECT
+                            first_tx.date as date,
+                            count(*) as value
+                        FROM (
+                            SELECT DISTINCT ON (t.from_address_hash)
+                                b.timestamp::date as date
+                            FROM transactions  t
+                            JOIN blocks        b ON t.block_hash = b.hash
+                            WHERE
+                                b.timestamp != to_timestamp(0) AND
+                                b.consensus = true
+                            ORDER BY t.from_address_hash, b.timestamp
+                        ) first_tx
+                        GROUP BY first_tx.date;
+                    "#,
                     vec![],
                 )
             }

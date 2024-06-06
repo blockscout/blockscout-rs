@@ -27,15 +27,15 @@ pub mod _inner {
             sql_with_range_filter_opt!(
                 DbBackend::Postgres,
                 r#"
-                SELECT 
-                    DATE(blocks.timestamp) as date, 
-                    COUNT(DISTINCT from_address_hash)::TEXT as value
-                FROM transactions 
-                JOIN blocks on transactions.block_hash = blocks.hash
-                WHERE 
-                    blocks.timestamp != to_timestamp(0) AND
-                    blocks.consensus = true {filter}
-                GROUP BY date(blocks.timestamp);
+                    SELECT 
+                        DATE(blocks.timestamp) as date, 
+                        COUNT(DISTINCT from_address_hash)::TEXT as value
+                    FROM transactions 
+                    JOIN blocks on transactions.block_hash = blocks.hash
+                    WHERE 
+                        blocks.timestamp != to_timestamp(0) AND
+                        blocks.consensus = true {filter}
+                    GROUP BY date(blocks.timestamp);
                 "#,
                 [],
                 "blocks.timestamp",

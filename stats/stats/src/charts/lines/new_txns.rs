@@ -31,16 +31,16 @@ pub mod _inner {
             sql_with_range_filter_opt!(
                 DbBackend::Postgres,
                 r#"
-                SELECT 
-                    date(b.timestamp) as date, 
-                    COUNT(*)::TEXT as value
-                FROM transactions t
-                JOIN blocks       b ON t.block_hash = b.hash
-                WHERE 
-                    b.timestamp != to_timestamp(0) AND
-                    b.consensus = true {filter}
-                GROUP BY date;
-            "#,
+                    SELECT 
+                        date(b.timestamp) as date, 
+                        COUNT(*)::TEXT as value
+                    FROM transactions t
+                    JOIN blocks       b ON t.block_hash = b.hash
+                    WHERE 
+                        b.timestamp != to_timestamp(0) AND
+                        b.consensus = true {filter}
+                    GROUP BY date;
+                "#,
                 [],
                 "b.timestamp",
                 range

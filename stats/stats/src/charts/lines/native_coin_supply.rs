@@ -39,45 +39,45 @@ pub mod _inner {
                 Some(range) => Statement::from_sql_and_values(
                     DbBackend::Postgres,
                     r"
-                    SELECT date, value FROM 
-                    (
-                        SELECT
-                            day as date,
-                            (sum(
-                                CASE 
-                                    WHEN address_hash = '\x0000000000000000000000000000000000000000' THEN -value
-                                    ELSE value
-                                END
-                            ) / $1)::float AS value
-                        FROM address_coin_balances_daily
-                        WHERE  day != to_timestamp(0) AND
-                                            day <= $3 AND
-                                            day >= $2
-                        GROUP BY day
-                    ) as intermediate
-                    WHERE value is not NULL;
-                ",
+                        SELECT date, value FROM 
+                        (
+                            SELECT
+                                day as date,
+                                (sum(
+                                    CASE 
+                                        WHEN address_hash = '\x0000000000000000000000000000000000000000' THEN -value
+                                        ELSE value
+                                    END
+                                ) / $1)::float AS value
+                            FROM address_coin_balances_daily
+                            WHERE  day != to_timestamp(0) AND
+                                                day <= $3 AND
+                                                day >= $2
+                            GROUP BY day
+                        ) as intermediate
+                        WHERE value is not NULL;
+                    ",
                     vec![ETH.into(), (*range.start()).into(), (*range.end()).into()],
                 ),
                 None => Statement::from_sql_and_values(
                     DbBackend::Postgres,
                     r"
-                    SELECT date, value FROM 
-                    (
-                        SELECT
-                            day as date,
-                            (sum(
-                                CASE 
-                                    WHEN address_hash = '\x0000000000000000000000000000000000000000' THEN -value
-                                    ELSE value
-                                END
-                            ) / $1)::float AS value
-                        FROM address_coin_balances_daily
-                        WHERE  day != to_timestamp(0)
-                        GROUP BY day
-                    ) as intermediate
-                    WHERE value is not NULL;
-                ",
+                        SELECT date, value FROM 
+                        (
+                            SELECT
+                                day as date,
+                                (sum(
+                                    CASE 
+                                        WHEN address_hash = '\x0000000000000000000000000000000000000000' THEN -value
+                                        ELSE value
+                                    END
+                                ) / $1)::float AS value
+                            FROM address_coin_balances_daily
+                            WHERE  day != to_timestamp(0)
+                            GROUP BY day
+                        ) as intermediate
+                        WHERE value is not NULL;
+                    ",
                     vec![ETH.into()],
                 ),
             }

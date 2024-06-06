@@ -28,19 +28,19 @@ pub mod _inner {
             sql_with_range_filter_opt!(
                 DbBackend::Postgres,
                 r#"
-                SELECT 
-                    DATE(b.timestamp) as date, 
-                    COUNT(CASE WHEN t.error IS NULL THEN 1 END)::FLOAT
-                        / COUNT(*)::FLOAT as value
-                FROM transactions t
-                JOIN blocks       b ON t.block_hash = b.hash
-                WHERE 
-                    b.timestamp != to_timestamp(0) AND
-                    b.consensus = true AND
-                    t.block_hash IS NOT NULL AND 
-                    (t.error IS NULL OR t.error::text != 'dropped/replaced') {filter}
-                GROUP BY DATE(b.timestamp)
-            "#,
+                    SELECT 
+                        DATE(b.timestamp) as date, 
+                        COUNT(CASE WHEN t.error IS NULL THEN 1 END)::FLOAT
+                            / COUNT(*)::FLOAT as value
+                    FROM transactions t
+                    JOIN blocks       b ON t.block_hash = b.hash
+                    WHERE 
+                        b.timestamp != to_timestamp(0) AND
+                        b.consensus = true AND
+                        t.block_hash IS NOT NULL AND 
+                        (t.error IS NULL OR t.error::text != 'dropped/replaced') {filter}
+                    GROUP BY DATE(b.timestamp)
+                "#,
                 [],
                 "b.timestamp",
                 range

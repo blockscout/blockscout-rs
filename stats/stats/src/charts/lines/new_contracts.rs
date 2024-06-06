@@ -32,7 +32,8 @@ pub mod _inner {
         fn get_query(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
             sql_with_range_filter_opt!(
                 DbBackend::Postgres,
-                r#"SELECT day AS date, COUNT(*)::text AS value
+                r#"
+                SELECT day AS date, COUNT(*)::text AS value
                 FROM (
                     SELECT 
                         DISTINCT ON (txns_plus_internal_txns.hash)
@@ -60,7 +61,7 @@ pub mod _inner {
                     ) txns_plus_internal_txns
                 ) sub
                 GROUP BY sub.day;
-            "#,
+                "#,
                 [],
                 "b.timestamp",
                 range,

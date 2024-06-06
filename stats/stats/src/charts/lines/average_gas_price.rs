@@ -46,7 +46,7 @@ pub mod _inner {
                         blocks.timestamp != to_timestamp(0) AND
                         blocks.consensus = true {filter}
                     GROUP BY date
-            "#,
+                "#,
                 [GWEI.into()],
                 "blocks.timestamp",
                 range,

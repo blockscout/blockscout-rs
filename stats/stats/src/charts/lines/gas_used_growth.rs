@@ -36,7 +36,7 @@ pub mod _inner {
                         blocks.consensus = true {filter}
                     GROUP BY date(blocks.timestamp)
                     ORDER BY date;
-            "#,
+                "#,
                 [],
                 "blocks.timestamp",
                 range

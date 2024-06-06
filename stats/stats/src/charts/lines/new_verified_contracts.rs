@@ -32,13 +32,13 @@ pub mod _inner {
             sql_with_range_filter_opt!(
                 DbBackend::Postgres,
                 r#"
-                SELECT
-                    DATE(smart_contracts.inserted_at) as date,
-                    COUNT(*)::TEXT as value
-                FROM smart_contracts
-                WHERE TRUE {filter}
-                GROUP BY DATE(smart_contracts.inserted_at)
-            "#,
+                    SELECT
+                        DATE(smart_contracts.inserted_at) as date,
+                        COUNT(*)::TEXT as value
+                    FROM smart_contracts
+                    WHERE TRUE {filter}
+                    GROUP BY DATE(smart_contracts.inserted_at)
+                "#,
                 [],
                 "smart_contracts.inserted_at",
                 range

@@ -26,13 +26,15 @@ pub mod _inner {
             sql_with_range_filter_opt!(
                 DbBackend::Postgres,
                 r#"
-                    SELECT date(blocks.timestamp) as date, COUNT(*)::TEXT as value
-                        FROM public.blocks
-                        WHERE 
-                            blocks.timestamp != to_timestamp(0) AND
-                            consensus = true {filter}
-                        GROUP BY date;
-            "#,
+                    SELECT
+                        date(blocks.timestamp) as date,
+                        COUNT(*)::TEXT as value
+                    FROM public.blocks
+                    WHERE 
+                        blocks.timestamp != to_timestamp(0) AND
+                        consensus = true {filter}
+                    GROUP BY date;
+                "#,
                 [],
                 "blocks.timestamp",
                 range
