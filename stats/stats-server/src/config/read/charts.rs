@@ -4,6 +4,7 @@ use crate::config::{
         AllChartSettings, CounterInfo, EnabledChartSettings, LineChartCategory, LineChartInfo,
     },
 };
+use convert_case::{Case, Casing};
 use serde::Deserialize;
 use stats_proto::blockscout::stats::v1 as proto;
 
@@ -53,9 +54,25 @@ pub struct Config<ChartSettings> {
 
 impl From<json::charts::Config> for Config<AllChartSettings> {
     fn from(value: json::charts::Config) -> Self {
+        let counters = value
+            .counters
+            .into_iter()
+            .map(|c| CounterInfo {
+                id: c.id.from_case(Case::Snake).to_case(Case::Camel),
+                ..c
+            })
+            .collect();
+        let lines = value
+            .line_categories
+            .into_iter()
+            .map(|l| LineChartCategory {
+                id: l.id.from_case(Case::Snake).to_case(Case::Camel),
+                ..l
+            })
+            .collect();
         Self {
-            counters: value.counters,
-            lines: LinesInfo(value.line_categories),
+            counters,
+            lines: LinesInfo(lines),
         }
     }
 }
