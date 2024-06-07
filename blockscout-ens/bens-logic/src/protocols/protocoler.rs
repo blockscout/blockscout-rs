@@ -94,20 +94,23 @@ impl Protocoler {
         networks: HashMap<i64, Network>,
         protocols: HashMap<String, Protocol>,
     ) -> Result<Self, anyhow::Error> {
-        for network in networks.values() {
+        for (id, network) in networks.iter() {
             if let Some(name) = network
                 .use_protocols
                 .iter()
                 .find(|&name| !protocols.contains_key(name))
             {
-                return Err(anyhow!("unknown protocol {name}"));
+                return Err(anyhow!("unknown protocol '{name}' in network '{id}'",));
             }
         }
 
         for protocol in protocols.values() {
             let network_id = protocol.info.network_id;
             if !networks.contains_key(&network_id) {
-                return Err(anyhow!("unknown network id {network_id}"));
+                return Err(anyhow!(
+                    "unknown network id '{network_id}' for protocol '{}'",
+                    protocol.info.slug
+                ));
             }
         }
 
@@ -122,9 +125,11 @@ impl Protocoler {
     }
 
     pub fn protocol_by_slug(&self, slug: &str) -> Option<DeployedProtocol> {
-        self.protocols
-            .get(slug)
-            .map(|protocol| protocol.deployed_on_network(self))
+        self.protocols.get(slug).map(|protocol| {
+            protocol
+                .deployed_on_network(self)
+                .expect("protocoler should be correctly initialized")
+        })
     }
 
     pub fn protocols_of_network(
@@ -144,7 +149,9 @@ impl Protocoler {
                     .protocols
                     .get(name)
                     .expect("protocol should be in the map");
-                protocol.deployed_on_network(self)
+                protocol
+                    .deployed_on_network(self)
+                    .expect("protocoler should be correctly initialized")
             })
             .collect::<Vec<_>>();
         let net_protocols = if let Some(filter) = maybe_filter {
@@ -240,14 +247,16 @@ impl Protocol {
         (Alias::new(&self.subgraph_schema), Alias::new(table)).into_table_ref()
     }
 
-    pub fn deployed_on_network<'a>(&'a self, protocoler: &'a Protocoler) -> DeployedProtocol<'a> {
-        let network = protocoler
+    pub fn deployed_on_network<'a>(
+        &'a self,
+        protocoler: &'a Protocoler,
+    ) -> Option<DeployedProtocol<'a>> {
+        protocoler
             .networks
             .get(&self.info.network_id)
-            .expect("network should be in the map");
-        DeployedProtocol {
-            protocol: self,
-            deployment_network: network,
-        }
+            .map(|network| DeployedProtocol {
+                protocol: self,
+                deployment_network: network,
+            })
     }
 }
