@@ -4886,7 +4886,7 @@ dependencies = [
 [[package]]
 name = "sourcify"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs?rev=34827ae#34827ae1c21407e8712a788bf1c7ccef5fca3920"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=6e78959b#6e78959ba1d206be9723a699ba7561d52ee381de"
 dependencies = [
  "anyhow",
  "blockscout-display-bytes",
