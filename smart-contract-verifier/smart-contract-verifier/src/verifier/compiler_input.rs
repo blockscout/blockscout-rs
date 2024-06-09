@@ -1,7 +1,7 @@
 #[macro_export]
 macro_rules! impl_compiler_input {
     ($target:path) => {
-        impl crate::verifier::CompilerInput for $target {
+        impl $crate::verifier::CompilerInput for $target {
             fn modify(mut self) -> Self {
                 // TODO: could we update some other field to avoid copying strings?
                 self.sources.iter_mut().for_each(|(_file, source)| {

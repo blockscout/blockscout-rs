@@ -10,5 +10,5 @@ pub mod lossless_compiler_output;
 
 pub use base::LocalBytecodeParts;
 pub use bytecode::{split, BytecodePart};
-pub use compiler_input::{CompilerInput, impl_compiler_input};
+pub use compiler_input::{impl_compiler_input, CompilerInput};
 pub use contract_verifier::{ContractVerifier, Error, Success};

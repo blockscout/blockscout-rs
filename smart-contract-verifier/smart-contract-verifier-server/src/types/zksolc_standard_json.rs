@@ -4,7 +4,7 @@ use amplify::{From, Wrapper};
 use anyhow::anyhow;
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use smart_contract_verifier::{
-    zksolc::{standard_json::Content, VerificationRequest},
+    zksync::{zksolc_standard_json, VerificationRequest},
     CompactVersion, DetailedVersion,
 };
 use std::str::FromStr;
@@ -12,7 +12,7 @@ use std::str::FromStr;
 #[derive(Wrapper, From, Clone, Debug, PartialEq)]
 pub struct VerifyStandardJsonRequestWrapper(VerifyStandardJsonRequest);
 
-impl TryFrom<VerifyStandardJsonRequestWrapper> for VerificationRequest<Content> {
+impl TryFrom<VerifyStandardJsonRequestWrapper> for VerificationRequest {
     type Error = StandardJsonParseError;
 
     fn try_from(request: VerifyStandardJsonRequestWrapper) -> Result<Self, Self::Error> {
@@ -33,7 +33,7 @@ impl TryFrom<VerifyStandardJsonRequestWrapper> for VerificationRequest<Content> 
         let solc_compiler = DetailedVersion::from_str(&request.solc_compiler)
             .map_err(|err| anyhow!("Invalid solc compiler: {}", err))?;
 
-        let content: Content = serde_json::from_str(&request.input)?;
+        let content: zksolc_standard_json::input::Input = serde_json::from_str(&request.input)?;
 
         Ok(Self {
             code,

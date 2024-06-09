@@ -1845,6 +1845,7 @@ dependencies = [
  "cfg-if",
  "dirs 5.0.1",
  "dunce",
+ "futures-util",
  "home",
  "itertools 0.12.1",
  "md-5",
@@ -1859,6 +1860,7 @@ dependencies = [
  "solang-parser",
  "svm-rs",
  "thiserror",
+ "tokio",
  "tracing",
  "walkdir",
  "yansi",
@@ -2829,6 +2831,12 @@ dependencies = [
  "memchr",
  "minimal-lexical",
 ]
+
+[[package]]
+name = "nonempty"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "303e8749c804ccd6ca3b428de7fe0d86cb86bc7606bc15291f100fd487960bb8"
 
 [[package]]
 name = "normalize-line-endings"
@@ -4806,6 +4814,7 @@ dependencies = [
  "minicbor",
  "mismatch",
  "mockall 0.11.4",
+ "nonempty",
  "parking_lot 0.12.2",
  "pretty_assertions",
  "primitive-types",
@@ -5777,6 +5786,7 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 [[package]]
 name = "verification-common"
 version = "0.1.0"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=7a6e9400#7a6e9400e26772a7e387d6aebb807eccf166872b"
 dependencies = [
  "bytes",
 ]

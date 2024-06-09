@@ -1,6 +1,6 @@
+use crate::compiler;
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
-use crate::{compiler};
 
 #[derive(Error, Debug)]
 pub enum BatchError {
@@ -17,16 +17,6 @@ impl From<compiler::Error> for BatchError {
         match error {
             compiler::Error::VersionNotFound(version) => BatchError::VersionNotFound(version),
             compiler::Error::Compilation(details) => BatchError::Compilation(details),
-            err => BatchError::Internal(anyhow::anyhow!(err)),
-        }
-    }
-}
-
-impl From<compiler::ZkError> for BatchError {
-    fn from(error: compiler::ZkError) -> Self {
-        match error {
-            compiler::ZkError::CompilerNotFound(version) => BatchError::VersionNotFound(version),
-            compiler::ZkError::Compilation(details) => BatchError::Compilation(details),
             err => BatchError::Internal(anyhow::anyhow!(err)),
         }
     }

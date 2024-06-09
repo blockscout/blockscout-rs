@@ -1,10 +1,18 @@
-use crate::types::zksolc_standard_json::VerifyStandardJsonRequestWrapper;
-use crate::{proto::zksync::solidity::{
-    verifier_server::Verifier, ListCompilersRequest, ListCompilersResponse, VerifyResponse,
-    VerifyStandardJsonRequest,
-}, services::common, settings::ZksyncSoliditySettings, types, types::StandardJsonParseError};
+use crate::{
+    proto::zksync::solidity::{
+        verifier_server::Verifier, ListCompilersRequest, ListCompilersResponse, VerifyResponse,
+        VerifyStandardJsonRequest,
+    },
+    services::common,
+    settings::ZksyncSoliditySettings,
+    types::{zksolc_standard_json::VerifyStandardJsonRequestWrapper, StandardJsonParseError},
+};
 use anyhow::Context;
-use smart_contract_verifier::{zksolc, SolcValidator, ZkSolcCompiler, ZkSyncCompilers};
+use smart_contract_verifier::{
+    zksync,
+    zksync::{ZkSolcCompiler, ZkSyncCompilers},
+    SolcValidator,
+};
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 use tonic::{Request, Response, Status};
@@ -55,29 +63,38 @@ impl Verifier for Service {
     ) -> Result<Response<VerifyResponse>, Status> {
         let request: VerifyStandardJsonRequestWrapper = request.into_inner().into();
 
-        let verification_request = {
+        let verification_request: zksync::VerificationRequest = {
             let request: Result<_, StandardJsonParseError> = request.try_into();
             if let Err(err) = request {
                 return match err {
                     StandardJsonParseError::InvalidContent(_) => {
-                        Ok(types::zksync_verification::compilation_error(format!(
-                            "Invalid standard json: {err}"
-                        )))
+                        // Ok(types::zksync_verification::compilation_error(format!(
+                        //     "Invalid standard json: {err}"
+                        // )))
+                        todo!()
                     }
                     StandardJsonParseError::BadRequest(_) => {
                         tracing::info!(err=%err, "Bad request");
                         Err(Status::invalid_argument(err.to_string()))
                     }
-                }
+                };
             }
             request.unwrap()
         };
-        let result = zksolc::standard_json::verify(&self.compilers, verification_request).await;
 
-        match result {
-            Ok(result) => types::zksync_verification::process_verification_result(result),
-            Err(err) => types::zksync_verification::process_batch_error(err),
+        let result = zksync::verify(&self.compilers, verification_request).await;
+        if let Err(err) = result {
+            println!("[ERROR] {err:#}")
         }
+
+        // match result {
+        //     Ok(result) => types::zksync_verification::process_verification_result(result),
+        //     Err(err) => types::zksync_verification::process_batch_error(err),
+        // }
+
+        Ok(Response::new(smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::zksync::solidity::VerifyResponse {
+            verify_response: None,
+        }))
     }
 
     async fn list_compilers(

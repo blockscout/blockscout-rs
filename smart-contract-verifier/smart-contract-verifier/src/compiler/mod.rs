@@ -1,5 +1,4 @@
 mod compilers;
-mod compilers_zksync;
 mod download_cache;
 mod fetcher;
 mod fetcher_list;
@@ -9,8 +8,8 @@ mod version_compact;
 mod version_detailed;
 
 pub use compilers::{Compilers, Error, EvmCompiler};
-pub use compilers_zksync::{ZkSyncCompiler, ZkSyncCompilers, ZkError};
-pub use fetcher::{Fetcher, FileValidator, Version};
+pub use download_cache::DownloadCache;
+pub use fetcher::{FetchError, Fetcher, FileValidator, Version};
 pub use fetcher_list::ListFetcher;
 pub use fetcher_s3::S3Fetcher;
 pub use version_compact::CompactVersion;

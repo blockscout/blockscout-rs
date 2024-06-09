@@ -2,10 +2,9 @@ use crate::{
     batch_verifier::{
         artifacts::{cbor_auxdata, CodeArtifacts},
         compilation::{self, CompilationResult},
-        errors::{VerificationError, BatchError, VerificationErrorKind},
+        errors::{BatchError, VerificationError, VerificationErrorKind},
         transformations,
     },
-    compiler,
     verifier::CompilerInput,
     Compilers, Contract, DetailedVersion, MatchType, SolidityCompiler,
 };
