@@ -5,7 +5,7 @@ use crate::{
         errors::{BatchError, VerificationError, VerificationErrorKind},
         transformations,
     },
-    verifier::CompilerInput,
+    compiler::CompilerInput,
     Compilers, Contract, DetailedVersion, MatchType, SolidityCompiler,
 };
 use std::collections::BTreeMap;

@@ -3,10 +3,10 @@ use super::{
     base::LocalBytecodeParts,
     bytecode::{CreationTxInput, CreationTxInputWithoutConstructorArgs, DeployedBytecode},
     errors::{BytecodeInitError, VerificationError, VerificationErrorKind},
-    lossless_compiler_output, CompilerInput,
+    lossless_compiler_output,
 };
 use crate::{
-    compiler::{self, Compilers, EvmCompiler},
+    compiler::{self, CompilerInput, Compilers, EvmCompiler},
     DisplayBytes, MatchType,
 };
 use anyhow::{anyhow, Context};

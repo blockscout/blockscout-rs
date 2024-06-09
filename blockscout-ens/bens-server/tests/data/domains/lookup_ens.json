@@ -1,0 +1,58 @@
+[
+  {
+    "expiry_date": "2038-01-19T03:14:07.000Z",
+    "id": "0x68b620f61c87062cf680144f898582a631c90e39dd1badb35c241be0a7284fff",
+    "name": "sashaxyz.eth",
+    "owner": {
+      "hash": "0x66A6f7744ce4DEa450910B81A7168588F992eAfB"
+    },
+    "wrapped_owner": null,
+    "registration_date": "2021-12-24T10:23:57.000Z",
+    "resolved_address": {
+      "hash": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
+    },
+    "protocol": {{ ens_protocol | json_encode() | safe }}
+  },
+  {
+    "expiry_date": "2038-01-19T03:14:07.000Z",
+    "id": "0x5d438d292de31e08576d5bcd8a93aa41b401b9d9aeaba57da1a32c003e5fd5f5",
+    "name": "wa🇬🇲i.eth",
+    "owner": {
+      "hash": "0xD4416b13d2b3a9aBae7AcD5D6C2BbDBE25686401"
+    },
+    "wrapped_owner": {
+      "hash": "0x9C996076A85B46061D9a70ff81F013853A86b619"
+    },
+    "registration_date": "2021-11-12T11:36:46.000Z",
+    "resolved_address": {
+      "hash": "0x9C996076A85B46061D9a70ff81F013853A86b619"
+    },
+    "protocol": {{ ens_protocol | json_encode() | safe }}
+  },
+  {
+    "expiry_date": "2038-01-19T03:14:07.000Z",
+    "id": "0xeb4f647bea6caa36333c816d7b46fdcb05f9466ecacc140ea8c66faf15b3d9f1",
+    "name": "test.eth",
+    "owner": {
+      "hash": "0xbD6BBE64Bf841b81FC5A6e2b760029e316F2783B"
+    },
+    "wrapped_owner": null,
+    "registration_date": "2019-10-24T07:26:47.000Z",
+    "resolved_address": {
+      "hash": "0xeefB13C7D42eFCc655E528dA6d6F7bBcf9A2251d"
+    },
+    "protocol": {{ ens_protocol | json_encode() | safe }}
+  },
+  {
+    "expiry_date": null,
+    "id": "0x6db3aa7fbaf005b22a12dd698aa41e3456ea93d2ab312796ee29fca980c99dcd",
+    "name": "biglobe.eth",
+    "owner": {
+      "hash": "0x916a3bC6F0306426adAAA101FE28Fea7A5f69b06"
+    },
+    "registration_date": "2017-07-08T02:11:54.000Z",
+    "resolved_address": null,
+    "wrapped_owner": null,
+    "protocol": {{ ens_protocol | json_encode() | safe }}
+  }
+]

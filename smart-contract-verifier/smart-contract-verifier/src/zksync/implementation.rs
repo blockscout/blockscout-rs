@@ -1,11 +1,7 @@
 use crate::{
     compiler::{CompactVersion, DetailedVersion, DownloadCache, FetchError, Fetcher},
     decode_hex,
-    zksync::zksolc_standard_json::{
-        input::{settings::selection::Selection, Input},
-        output,
-        output::contract::Contract,
-    },
+    zksync::zksolc_standard_json::{input::Input, output, output::contract::Contract},
 };
 use alloy_dyn_abi::JsonAbiExt;
 use anyhow::Context;
@@ -73,7 +69,7 @@ pub async fn verify(
     let evm_compiler_version = request.solc_compiler;
     let mut compiler_input = request.content;
 
-    compiler_input.settings.output_selection = normalized_output_selection(&zk_compiler_version);
+    compiler_input.normalize_output_selection(&zk_compiler_version);
 
     let (compiler_output, raw_compiler_output) = compilers
         .compile(&zk_compiler_version, &evm_compiler_version, &compiler_input)
@@ -187,6 +183,28 @@ fn check_constructor_arguments(
         _ => false,
     };
     Ok(are_valid)
+}
+
+pub trait CompilerInput {
+    /// Modifies input so that the corresponding bytecode
+    /// should have modified metadata hash, if any.
+    fn modify(self) -> Self;
+
+    fn normalize_output_selection(&mut self, version: &CompactVersion);
+}
+
+impl CompilerInput for Input {
+    fn modify(mut self) -> Self {
+        // TODO: could we update some other field to avoid copying strings?
+        self.sources.iter_mut().for_each(|(_file, source)| {
+            let mut modified_content = source.content.as_ref().clone();
+            modified_content.push(' ');
+            source.content = Arc::new(modified_content);
+        });
+        self
+    }
+
+    fn normalize_output_selection(&mut self, _version: &CompactVersion) {}
 }
 
 pub trait CompilerOutput {
@@ -334,8 +352,4 @@ impl ZkSyncCompiler for ZkSolcCompiler {
             .async_compile_as(input)
             .await
     }
-}
-
-fn normalized_output_selection(_zk_compiler_version: &CompactVersion) -> Option<Selection> {
-    None
 }

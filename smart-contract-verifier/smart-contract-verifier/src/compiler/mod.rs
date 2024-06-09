@@ -7,7 +7,7 @@ mod fetcher_versions;
 mod version_compact;
 mod version_detailed;
 
-pub use compilers::{Compilers, Error, EvmCompiler};
+pub use compilers::{CompilerInput, Compilers, Error, EvmCompiler};
 pub use download_cache::DownloadCache;
 pub use fetcher::{FetchError, Fetcher, FileValidator, Version};
 pub use fetcher_list::ListFetcher;

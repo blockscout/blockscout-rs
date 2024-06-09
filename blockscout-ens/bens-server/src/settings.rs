@@ -1,15 +1,16 @@
-use bens_logic::subgraphs_reader::AddressResolveTechnique;
+use bens_logic::protocols::{AddressResolveTechnique, ProtocolMeta, Tld};
 use blockscout_service_launcher::{
     database::{DatabaseConnectSettings, DatabaseSettings},
     launcher::{ConfigSettings, MetricsSettings, ServerSettings},
     tracing::{JaegerSettings, TracingSettings},
 };
-use ethers::types::{Address, Bytes};
-use serde::Deserialize;
+use ethers::{addressbook::Address, prelude::Bytes};
+use nonempty::NonEmpty;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use url::Url;
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Settings {
     #[serde(default)]
@@ -29,19 +30,15 @@ impl ConfigSettings for Settings {
     const SERVICE_NAME: &'static str = "BENS";
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct SubgraphsReaderSettings {
+    #[serde(default)]
+    pub protocols: HashMap<String, ProtocolSettings>,
     #[serde(default)]
     pub networks: HashMap<i64, NetworkSettings>,
     #[serde(default = "default_refresh_cache_schedule")]
     pub refresh_cache_schedule: String,
-    #[serde(default = "default_cache_enabled")]
-    pub cache_enabled: bool,
-}
-
-fn default_cache_enabled() -> bool {
-    true
 }
 
 fn default_refresh_cache_schedule() -> String {
@@ -52,47 +49,35 @@ impl Default for SubgraphsReaderSettings {
     fn default() -> Self {
         Self {
             networks: Default::default(),
+            protocols: Default::default(),
             refresh_cache_schedule: default_refresh_cache_schedule(),
-            cache_enabled: default_cache_enabled(),
         }
     }
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq, Default)]
-pub struct NetworkSettings {
-    pub blockscout: BlockscoutSettings,
-    #[serde(default)]
-    pub subgraphs: HashMap<String, SubgraphSettings>,
-}
-
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-pub struct SubgraphSettings {
-    #[serde(default = "default_use_cache")]
-    pub use_cache: bool,
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct ProtocolSettings {
+    pub tld_list: NonEmpty<Tld>,
+    pub subgraph_name: String,
     #[serde(default)]
     pub address_resolve_technique: AddressResolveTechnique,
     #[serde(default)]
     pub empty_label_hash: Option<Bytes>,
-    #[serde(default)]
     pub native_token_contract: Option<Address>,
+    pub meta: ProtocolSettingsMeta,
 }
 
-fn default_use_cache() -> bool {
-    true
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct ProtocolSettingsMeta(pub ProtocolMeta);
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct NetworkSettings {
+    pub blockscout: BlockscoutSettings,
+    #[serde(default)]
+    pub use_protocols: NonEmpty<String>,
 }
 
-impl From<SubgraphSettings> for bens_logic::subgraphs_reader::SubgraphSettings {
-    fn from(value: SubgraphSettings) -> Self {
-        Self {
-            use_cache: value.use_cache,
-            address_resolve_technique: value.address_resolve_technique,
-            empty_label_hash: value.empty_label_hash,
-            native_token_contract: value.native_token_contract,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields, default)]
 pub struct BlockscoutSettings {
     pub url: Url,

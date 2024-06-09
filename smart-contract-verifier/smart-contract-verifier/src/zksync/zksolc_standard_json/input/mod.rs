@@ -34,5 +34,3 @@ impl Input {
         self.settings.normalize(version);
     }
 }
-
-crate::verifier::impl_compiler_input!(Input);

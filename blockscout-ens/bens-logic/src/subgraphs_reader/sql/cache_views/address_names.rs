@@ -1,14 +1,14 @@
 use super::CachedView;
 use crate::{
     entity::subgraph::domain::DomainWithAddress,
-    subgraphs_reader::{
-        sql::{
-            bind_string_list, DOMAIN_BLOCK_RANGE_WHERE_CLAUSE, DOMAIN_NONEMPTY_LABEL_WHERE_CLAUSE,
-            DOMAIN_NOT_EXPIRED_WHERE_CLAUSE,
-        },
-        SubgraphReadError,
+    protocols::Protocol,
+    subgraphs_reader::sql::{
+        utils, DbErr, DOMAIN_BLOCK_RANGE_WHERE_CLAUSE, DOMAIN_NONEMPTY_LABEL_WHERE_CLAUSE,
+        DOMAIN_NOT_EXPIRED_WHERE_CLAUSE,
     },
 };
+use nonempty::NonEmpty;
+use sea_query::{Alias, Expr, PostgresQueryBuilder};
 use sqlx::PgPool;
 use tracing::instrument;
 
@@ -51,29 +51,35 @@ impl AddressNamesView {
     // TODO: rewrite to sea_query generation
     #[instrument(
         name = "AddressNamesView::batch_search_addresses",
-        skip(pool, addresses),
-        fields(job_size = addresses.len()),
+        skip_all,
+        fields(
+            job_size = addresses.len(),
+            protocols_size = protocols.len(),
+            fist_protocol_schema = protocols.head.subgraph_schema),
         err(level = "error"),
         level = "info",
     )]
     pub async fn batch_search_addresses(
         pool: &PgPool,
-        schema: &str,
+        protocols: &NonEmpty<&Protocol>,
         addresses: &[impl AsRef<str>],
-    ) -> Result<Vec<DomainWithAddress>, SubgraphReadError> {
+    ) -> Result<Vec<DomainWithAddress>, DbErr> {
         let view_table_name = Self::view_table_name();
-        let domains: Vec<DomainWithAddress> = sqlx::query_as(&format!(
-            r#"
-            SELECT id, domain_name, resolved_address
-            FROM {schema}.{view_table_name}
-            where
-                resolved_address = ANY($1)
-            "#
-        ))
-        .bind(bind_string_list(addresses))
-        .fetch_all(pool)
-        .await?;
-
+        let queries = NonEmpty::collect(protocols.into_iter().map(|p| {
+            sea_query::Query::select()
+                .expr(Expr::cust("id"))
+                .expr(Expr::cust("domain_name"))
+                .expr(Expr::cust("resolved_address"))
+                .from((Alias::new(&p.subgraph_schema), Alias::new(view_table_name)))
+                .and_where(Expr::cust("resolved_address = ANY($1)"))
+                .to_owned()
+        }))
+        .expect("protocols is nonempty");
+        let sql = utils::union_domain_queries(queries, None, None)?.to_string(PostgresQueryBuilder);
+        let domains = sqlx::query_as(&sql)
+            .bind(utils::bind_string_list(addresses))
+            .fetch_all(pool)
+            .await?;
         Ok(domains)
     }
 }

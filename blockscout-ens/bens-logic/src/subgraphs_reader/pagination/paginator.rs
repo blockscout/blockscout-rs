@@ -15,7 +15,7 @@ pub struct PaginationInput<S> {
     pub page_token: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct PaginatedList<I> {
     pub items: Vec<I>,
     pub next_page_token: Option<String>,
@@ -31,14 +31,14 @@ impl<I> PaginatedList<I> {
 }
 
 macro_rules! paginate_list {
-    ($items:ident, $page_size:expr, $order_field:ident) => {{
+    ($items:ident, $page_size:expr, $($order_field:ident).+) => {{
         let page_size = $page_size as usize;
         let (items, next_page_token) = match $items.get(page_size) {
             Some(item) => (
                 $items[0..page_size].to_vec(),
-                Some(item.$order_field.clone().to_string()),
+                Some(item.$($order_field).+.clone().to_string()),
             ),
-            None => ($items, None),
+            None => ($items.clone(), None),
         };
 
         PaginatedList {

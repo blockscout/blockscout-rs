@@ -1,14 +1,17 @@
 use bens_logic::subgraphs_reader::Order;
 use bens_proto::blockscout::bens::v1 as proto;
 use ethers::{addressbook::Address, utils::to_checksum};
+use nonempty::NonEmpty;
 use std::str::FromStr;
 use thiserror::Error;
 
 mod domain;
 mod events;
+mod protocol;
 
 pub use domain::*;
 pub use events::*;
+pub use protocol::*;
 
 #[derive(Error, Debug)]
 pub enum ConversionError {
@@ -51,4 +54,9 @@ pub fn address_from_str_logic(
     let addr = Address::from_str(addr)
         .map_err(|e| ConversionError::LogicOutput(format!("invalid address '{addr}': {e}")))?;
     Ok(address_from_logic(&addr, chain_id))
+}
+
+#[inline]
+pub fn maybe_protocol_filter_from_inner(maybe_filter: Option<String>) -> Option<NonEmpty<String>> {
+    maybe_filter.and_then(|f| NonEmpty::collect(f.split(',').map(|s| s.to_string())))
 }

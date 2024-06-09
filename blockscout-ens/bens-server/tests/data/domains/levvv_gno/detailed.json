@@ -1,0 +1,25 @@
+{
+  "expiry_date": "2025-02-26T14:58:37.000Z",
+  "id": "0xa3504cdec527495c69c760c85d5be9996252f853b91fd0df04c5b6aa2deb3347",
+  "name": "levvv.gno",
+  "other_addresses": {},
+  "owner": {
+    "hash": "0xc0De20A37E2dAC848F81A93BD85FE4ACDdE7C0DE"
+  },
+  "wrapped_owner": null,
+  "registrant": {
+    "hash": "0xc0De20A37E2dAC848F81A93BD85FE4ACDdE7C0DE"
+  },
+  "registration_date": "2023-11-29T09:09:25.000Z",
+  "resolved_address": {
+    "hash": "0xc0De20A37E2dAC848F81A93BD85FE4ACDdE7C0DE"
+  },
+  "tokens": [
+    {
+      "id": "11990319655936053415661126359086567018700354293176496925267203544835860524390",
+      "contract_hash": "0xfd3d666dB2557983F3F04d61f90E35cc696f6D60",
+      "type": "NATIVE_DOMAIN_TOKEN"
+    }
+  ],
+  "protocol": {{ genome_protocol | json_encode() | safe }}
+}

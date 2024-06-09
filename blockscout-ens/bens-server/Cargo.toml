@@ -26,6 +26,8 @@ hex = "0.4"
 thiserror = "1"
 chrono = "0.4"
 tokio-cron-scheduler = "0.9.4"
+nonempty = { version = "0.10.0", features = ["serde", "serialize"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [dependencies.sqlx]
 version = "0.7"
@@ -39,5 +41,6 @@ features = [
 [dev-dependencies]
 bens-logic = { path = "../bens-logic", features = ["test-utils"] }
 blockscout-service-launcher = { workspace = true, features = [ "database-0_12", "test-server" ] }
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 pretty_assertions = "1.4.0"
+tera = "1"
+reqwest = "0.12.4"

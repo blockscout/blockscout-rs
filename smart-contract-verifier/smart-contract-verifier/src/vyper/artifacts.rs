@@ -1,4 +1,3 @@
-use crate::verifier;
 use foundry_compilers::artifacts::{
     output_selection::{FileOutputSelection, OutputSelection},
     serde_helpers, Source, Sources,
@@ -23,8 +22,6 @@ pub struct CompilerInput {
     pub settings: Settings,
 }
 
-verifier::impl_compiler_input!(CompilerInput);
-
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Settings {
@@ -48,6 +45,12 @@ pub struct Settings {
     /// checking, but will not generate any outputs apart from errors.
     #[serde(default)]
     pub output_selection: FileOutputSelection,
+    #[serde(
+        rename = "search_paths",
+        default,
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub search_paths: Vec<String>,
 }
 
 impl Default for Settings {
@@ -57,6 +60,7 @@ impl Default for Settings {
             evm_version: None,
             optimize: None,
             bytecode_metadata: None,
+            search_paths: Vec::new(),
         }
     }
 }
