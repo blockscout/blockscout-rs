@@ -37,7 +37,7 @@ serde_json = "1"
 serde_with = "2"
 sha2 = "0.10"
 solidity-metadata = "1.0"
-sourcify = { git = "https://github.com/blockscout/blockscout-rs", rev = "34827ae" }
+sourcify = { git = "https://github.com/blockscout/blockscout-rs", rev = "6e78959b" }
 sscanf = "0.3"
 tempfile = "3.3"
 thiserror = "1.0"
