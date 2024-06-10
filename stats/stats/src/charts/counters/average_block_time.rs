@@ -4,7 +4,7 @@ mod _inner {
     use crate::{
         charts::db_interaction::types::DateValueDouble,
         data_source::kinds::{
-            adapter::to_string::MapToString,
+            map::to_string::MapToString,
             remote_db::{PullOne, RemoteDatabaseSource, StatementForOne},
             updateable_chart::clone::point::ClonePointChart,
         },

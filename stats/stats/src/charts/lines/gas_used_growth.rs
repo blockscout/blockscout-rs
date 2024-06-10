@@ -6,7 +6,7 @@ mod _inner {
     use crate::{
         charts::db_interaction::types::DateValueDecimal,
         data_source::kinds::{
-            adapter::{Map, MapFunction},
+            map::{Map, MapFunction},
             remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
             updateable_chart::cumulative::CumulativeChart,
         },

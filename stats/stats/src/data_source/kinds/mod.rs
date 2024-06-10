@@ -26,6 +26,6 @@
 //! ...some other stuff I forgor...
 //!
 
-pub mod adapter;
+pub mod map;
 pub mod remote_db;
 pub mod updateable_chart;

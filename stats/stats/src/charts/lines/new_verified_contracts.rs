@@ -1,6 +1,6 @@
 use crate::{
     charts::db_interaction::types::DateValueInt,
-    data_source::kinds::{adapter::parse::MapParseTo, updateable_chart::clone::CloneChartWrapper},
+    data_source::kinds::{map::parse::MapParseTo, updateable_chart::clone::CloneChartWrapper},
 };
 
 mod _inner {

@@ -1,6 +1,6 @@
 use crate::{
     charts::db_interaction::types::DateValueInt,
-    data_source::kinds::{adapter::parse::MapParseTo, updateable_chart::clone::CloneChartWrapper},
+    data_source::kinds::{map::parse::MapParseTo, updateable_chart::clone::CloneChartWrapper},
 };
 
 mod _inner {
@@ -10,7 +10,7 @@ mod _inner {
         charts::db_interaction::types::DateValueInt,
         data_source::{
             kinds::{
-                adapter::to_string::MapToString,
+                map::to_string::MapToString,
                 remote_db::{QueryBehaviour, RemoteDatabaseSource, StatementFromRange},
                 updateable_chart::clone::CloneChart,
             },
