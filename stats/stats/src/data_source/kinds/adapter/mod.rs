@@ -19,23 +19,24 @@ use crate::{
 pub mod parse;
 pub mod to_string;
 
-pub trait SourceAdapter {
-    type InnerSource: DataSource;
+pub trait MapFunction<Input> {
     type Output: Send;
-    fn function(
-        inner_data: <Self::InnerSource as DataSource>::Output,
-    ) -> Result<Self::Output, UpdateError>;
+    fn function(inner_data: Input) -> Result<Self::Output, UpdateError>;
 }
 
-/// Wrapper to convert type implementing [`SourceAdapter`] to another implementing [`DataSource`]
-pub struct SourceAdapterWrapper<T: SourceAdapter>(PhantomData<T>);
+pub struct Map<D, F>(PhantomData<(D, F)>)
+where
+    D: DataSource,
+    F: MapFunction<D::Output>;
 
-impl<T: SourceAdapter> DataSource for SourceAdapterWrapper<T> {
-    type PrimaryDependency = T::InnerSource;
-    type SecondaryDependencies = ();
-    type Output = T::Output;
-
-    // Adapter by itself does not store anything
+impl<D, F> DataSource for Map<D, F>
+where
+    D: DataSource,
+    F: MapFunction<D::Output>,
+{
+    type MainDependencies = D;
+    type ResolutionDependencies = ();
+    type Output = F::Output;
     const MUTEX_ID: Option<&'static str> = None;
 
     async fn init_itself(
@@ -56,9 +57,8 @@ impl<T: SourceAdapter> DataSource for SourceAdapterWrapper<T> {
         range: Option<RangeInclusive<DateTimeUtc>>,
         remote_fetch_timer: &mut AggregateTimer,
     ) -> Result<Self::Output, UpdateError> {
-        let inner_data =
-            <T::InnerSource as DataSource>::query_data(cx, range, remote_fetch_timer).await?;
-        let transformed = T::function(inner_data)?;
+        let inner_data = <D as DataSource>::query_data(cx, range, remote_fetch_timer).await?;
+        let transformed = F::function(inner_data)?;
         Ok(transformed)
     }
 }

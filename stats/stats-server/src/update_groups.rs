@@ -49,6 +49,7 @@ singleton_groups!(
 );
 
 construct_update_group!(AccountsIncrease {
+    // todo: add group at the end + autogenerate names
     name: "accountsIncrease",
     charts: [AccountsGrowth, NewAccounts, TotalAccounts]
 });

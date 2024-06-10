@@ -25,17 +25,11 @@ use super::types::UpdateContext;
 ///
 /// See [`super::kinds`] for less general cases.
 pub trait DataSource {
-    /// Dependency that is considered "main" for this data source.
-    ///
-    /// In practice, primary/secondary are not distinguished. The
-    /// naming is just for convenience/readability/indication.
-    type PrimaryDependency: DataSource;
-    /// Dependency that is considered less important than [`DataSource::PrimaryDependency`]
-    /// for this data source.
-    ///
-    /// In practice, primary/secondary are not distinguished. The
-    /// naming is just for convenience/readability/indication.
-    type SecondaryDependencies: DataSource;
+    /// This data source relies on these sources for 'core' of its data
+    type MainDependencies: DataSource;
+    /// Data sources that are used for computing various resolutions of data
+    /// for now empty; until resolutions are introduced TODO: remove this part when resolutions are finished
+    type ResolutionDependencies: DataSource;
     /// Data that this source can provide
     type Output: Send;
 
@@ -66,10 +60,10 @@ pub trait DataSource {
             //     C → D
             //   ↗   ↗
             // A → B
-            tracing::debug!("recursively initializing primary dependency");
-            Self::PrimaryDependency::init_recursively(db, init_time).await?;
-            tracing::debug!("recursively initializing secondary dependency");
-            Self::SecondaryDependencies::init_recursively(db, init_time).await?;
+            tracing::debug!("recursively initializing main dependencies");
+            Self::MainDependencies::init_recursively(db, init_time).await?;
+            tracing::debug!("recursively initializing resolution dependencies");
+            Self::ResolutionDependencies::init_recursively(db, init_time).await?;
             tracing::debug!("initializing itself");
             Self::init_itself(db, init_time).await
         }
@@ -96,8 +90,8 @@ pub trait DataSource {
     ) -> impl std::future::Future<Output = Result<(), DbErr>> + Send;
 
     fn all_dependencies_mutex_ids() -> HashSet<&'static str> {
-        let mut ids = Self::PrimaryDependency::all_dependencies_mutex_ids();
-        ids.extend(Self::SecondaryDependencies::all_dependencies_mutex_ids());
+        let mut ids = Self::MainDependencies::all_dependencies_mutex_ids();
+        ids.extend(Self::ResolutionDependencies::all_dependencies_mutex_ids());
         if let Some(self_id) = Self::MUTEX_ID {
             let is_not_duplicate = ids.insert(self_id);
             // Type system shouldn't allow same type to be present in the dependencies,
@@ -123,9 +117,9 @@ pub trait DataSource {
     ) -> impl std::future::Future<Output = Result<(), UpdateError>> + std::marker::Send {
         async move {
             tracing::debug!("recursively updating primary dependency");
-            Self::PrimaryDependency::update_recursively(cx).await?;
+            Self::MainDependencies::update_recursively(cx).await?;
             tracing::debug!("recursively updating secondary dependencies");
-            Self::SecondaryDependencies::update_recursively(cx).await?;
+            Self::ResolutionDependencies::update_recursively(cx).await?;
             tracing::debug!("updating itself");
             Self::update_itself(cx).await
         }
@@ -163,8 +157,8 @@ pub trait DataSource {
 
 // Base case for recursive type
 impl DataSource for () {
-    type PrimaryDependency = ();
-    type SecondaryDependencies = ();
+    type MainDependencies = ();
+    type ResolutionDependencies = ();
     type Output = ();
     const MUTEX_ID: Option<&'static str> = None;
 
@@ -210,8 +204,8 @@ where
     T1: DataSource,
     T2: DataSource,
 {
-    type PrimaryDependency = T1;
-    type SecondaryDependencies = T2;
+    type MainDependencies = T1;
+    type ResolutionDependencies = T2;
     type Output = (T1::Output, T2::Output);
 
     // only dependencies' ids matter

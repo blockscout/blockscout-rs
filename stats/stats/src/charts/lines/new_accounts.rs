@@ -1,5 +1,6 @@
-use crate::data_source::kinds::{
-    adapter::parse::ParseAdapterWrapper, updateable_chart::clone::CloneChartWrapper,
+use crate::{
+    charts::db_interaction::types::DateValueInt,
+    data_source::kinds::{adapter::parse::MapParseTo, updateable_chart::clone::CloneChartWrapper},
 };
 
 mod _inner {
@@ -9,10 +10,7 @@ mod _inner {
         charts::db_interaction::types::DateValueInt,
         data_source::{
             kinds::{
-                adapter::{
-                    parse::ParseAdapter,
-                    to_string::{ToStringAdapter, ToStringAdapterWrapper},
-                },
+                adapter::to_string::MapToString,
                 remote::{RemoteSource, RemoteSourceWrapper},
                 updateable_chart::clone::CloneChart,
             },
@@ -105,12 +103,7 @@ mod _inner {
         }
     }
 
-    pub struct NewAccountsRemoteString;
-
-    impl ToStringAdapter for NewAccountsRemoteString {
-        type InnerSource = RemoteSourceWrapper<NewAccountsRemote>;
-        type ConvertFrom = <NewAccountsRemote as RemoteSource>::Point;
-    }
+    pub type NewAccountsRemoteString = MapToString<RemoteSourceWrapper<NewAccountsRemote>>;
 
     pub struct NewAccountsInner;
 
@@ -125,24 +118,17 @@ mod _inner {
     }
 
     impl CloneChart for NewAccountsInner {
-        type Dependency = ToStringAdapterWrapper<NewAccountsRemoteString>;
+        type Dependency = NewAccountsRemoteString;
 
         fn batch_size() -> Duration {
             // see `NewAccountsRemote` docs
             Duration::max_value()
         }
     }
-
-    pub struct NewAccountsIntInner;
-
-    impl ParseAdapter for NewAccountsIntInner {
-        type InnerSource = NewAccounts;
-        type ParseInto = DateValueInt;
-    }
 }
 
 pub type NewAccounts = CloneChartWrapper<_inner::NewAccountsInner>;
-pub type NewAccountsInt = ParseAdapterWrapper<_inner::NewAccountsIntInner>;
+pub type NewAccountsInt = MapParseTo<NewAccounts, DateValueInt>;
 
 #[cfg(test)]
 mod tests {

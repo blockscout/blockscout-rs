@@ -6,7 +6,7 @@ mod _inner {
     use crate::{
         charts::db_interaction::types::DateValueDouble,
         data_source::kinds::{
-            adapter::to_string::{ToStringAdapter, ToStringAdapterWrapper},
+            adapter::to_string::MapToString,
             remote::{RemoteSource, RemoteSourceWrapper},
             updateable_chart::clone::CloneChart,
         },
@@ -44,12 +44,7 @@ mod _inner {
         }
     }
 
-    pub struct TxnsSuccessRateRemoteString;
-
-    impl ToStringAdapter for TxnsSuccessRateRemoteString {
-        type InnerSource = RemoteSourceWrapper<TxnsSuccessRateRemote>;
-        type ConvertFrom = <TxnsSuccessRateRemote as RemoteSource>::Point;
-    }
+    pub type TxnsSuccessRateRemoteString = MapToString<RemoteSourceWrapper<TxnsSuccessRateRemote>>;
 
     pub struct TxnsSuccessRateInner;
 
@@ -64,7 +59,7 @@ mod _inner {
     }
 
     impl CloneChart for TxnsSuccessRateInner {
-        type Dependency = ToStringAdapterWrapper<TxnsSuccessRateRemoteString>;
+        type Dependency = TxnsSuccessRateRemoteString;
     }
 }
 pub type TxnsSuccessRate = CloneChartWrapper<_inner::TxnsSuccessRateInner>;

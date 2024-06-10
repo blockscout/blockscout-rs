@@ -1,5 +1,6 @@
-use crate::data_source::kinds::{
-    adapter::parse::ParseAdapterWrapper, updateable_chart::UpdateableChartWrapper,
+use crate::{
+    charts::db_interaction::types::DateValueInt,
+    data_source::kinds::{adapter::parse::MapParseTo, updateable_chart::UpdateableChartWrapper},
 };
 
 mod _inner {
@@ -8,10 +9,7 @@ mod _inner {
             types::DateValueInt,
             write::{create_chart, insert_data_many},
         },
-        data_source::{
-            kinds::{adapter::parse::ParseAdapter, updateable_chart::UpdateableChart},
-            UpdateContext,
-        },
+        data_source::{kinds::updateable_chart::UpdateableChart, UpdateContext},
         Chart, DateValueString, MissingDatePolicy, Named, UpdateError,
     };
     use blockscout_db::entity::address_coin_balances_daily;
@@ -93,13 +91,6 @@ mod _inner {
             .await?;
             Ok(())
         }
-    }
-
-    pub struct NativeCoinHoldersGrowthIntInner;
-
-    impl ParseAdapter for NativeCoinHoldersGrowthIntInner {
-        type InnerSource = super::NativeCoinHoldersGrowth;
-        type ParseInto = DateValueInt;
     }
 
     // TODO: move common logic to new updater trait
@@ -378,7 +369,7 @@ mod _inner {
 
 pub type NativeCoinHoldersGrowth = UpdateableChartWrapper<_inner::NativeCoinHoldersGrowthInner>;
 
-pub type NativeCoinHoldersGrowthInt = ParseAdapterWrapper<_inner::NativeCoinHoldersGrowthIntInner>;
+pub type NativeCoinHoldersGrowthInt = MapParseTo<NativeCoinHoldersGrowth, DateValueInt>;
 
 #[cfg(test)]
 mod tests {

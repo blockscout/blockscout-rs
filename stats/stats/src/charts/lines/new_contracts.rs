@@ -1,5 +1,6 @@
-use crate::data_source::kinds::{
-    adapter::parse::ParseAdapterWrapper, updateable_chart::clone::CloneChartWrapper,
+use crate::{
+    charts::db_interaction::types::DateValueInt,
+    data_source::kinds::{adapter::parse::MapParseTo, updateable_chart::clone::CloneChartWrapper},
 };
 
 mod _inner {
@@ -8,7 +9,6 @@ mod _inner {
     use crate::{
         charts::db_interaction::types::DateValueInt,
         data_source::kinds::{
-            adapter::parse::ParseAdapter,
             remote::{RemoteSource, RemoteSourceWrapper},
             updateable_chart::clone::CloneChart,
         },
@@ -80,17 +80,10 @@ mod _inner {
     impl CloneChart for NewContractsInner {
         type Dependency = RemoteSourceWrapper<NewContractsRemote>;
     }
-
-    pub struct NewContractsIntInner;
-
-    impl ParseAdapter for NewContractsIntInner {
-        type InnerSource = NewContracts;
-        type ParseInto = DateValueInt;
-    }
 }
 
 pub type NewContracts = CloneChartWrapper<_inner::NewContractsInner>;
-pub type NewContractsInt = ParseAdapterWrapper<_inner::NewContractsIntInner>;
+pub type NewContractsInt = MapParseTo<NewContracts, DateValueInt>;
 
 #[cfg(test)]
 mod tests {

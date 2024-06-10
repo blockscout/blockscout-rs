@@ -4,7 +4,7 @@ mod _inner {
     use crate::{
         charts::db_interaction::types::DateValueDouble,
         data_source::kinds::{
-            adapter::to_string::point::{ToStringPointAdapter, ToStringPointAdapterWrapper},
+            adapter::to_string::MapToString,
             remote::point::{RemotePointSource, RemotePointSourceWrapper},
             updateable_chart::clone::point::ClonePointChart,
         },
@@ -41,11 +41,8 @@ mod _inner {
         }
     }
 
-    pub struct AverageBlockTimeRemoteString;
-
-    impl ToStringPointAdapter for AverageBlockTimeRemoteString {
-        type InnerSource = RemotePointSourceWrapper<AverageBlockTimeRemote>;
-    }
+    pub type AverageBlockTimeRemoteString =
+        MapToString<RemotePointSourceWrapper<AverageBlockTimeRemote>>;
 
     pub struct AverageBlockTimeInner;
 
@@ -60,7 +57,7 @@ mod _inner {
     }
 
     impl ClonePointChart for AverageBlockTimeInner {
-        type Dependency = ToStringPointAdapterWrapper<AverageBlockTimeRemoteString>;
+        type Dependency = AverageBlockTimeRemoteString;
     }
 }
 

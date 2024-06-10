@@ -6,7 +6,7 @@ mod _inner {
     use crate::{
         charts::db_interaction::types::DateValueDouble,
         data_source::kinds::{
-            adapter::to_string::{ToStringAdapter, ToStringAdapterWrapper},
+            adapter::to_string::MapToString,
             remote::{RemoteSource, RemoteSourceWrapper},
             updateable_chart::clone::CloneChart,
         },
@@ -83,12 +83,8 @@ mod _inner {
     // for some reason it was queried as double and then converted to string.
     // keeping this behaviour just in case. can be removed after checking
     // for correctness.
-    pub struct NativeCoinSupplyRemoteString;
-
-    impl ToStringAdapter for NativeCoinSupplyRemoteString {
-        type InnerSource = RemoteSourceWrapper<NativeCoinSupplyRemote>;
-        type ConvertFrom = DateValueDouble;
-    }
+    pub type NativeCoinSupplyRemoteString =
+        MapToString<RemoteSourceWrapper<NativeCoinSupplyRemote>>;
 
     pub struct NativeCoinSupplyInner;
 
@@ -103,7 +99,7 @@ mod _inner {
     }
 
     impl CloneChart for NativeCoinSupplyInner {
-        type Dependency = ToStringAdapterWrapper<NativeCoinSupplyRemoteString>;
+        type Dependency = NativeCoinSupplyRemoteString;
     }
 }
 

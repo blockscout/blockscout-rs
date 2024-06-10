@@ -57,6 +57,7 @@ pub trait Named {
     const NAME: &'static str;
 }
 
+// todo: chart properties
 #[portrait::make(import(
     crate::charts::chart::MissingDatePolicy,
     entity::sea_orm_active_enums::ChartType,

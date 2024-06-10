@@ -4,7 +4,7 @@ mod _inner {
     use crate::{
         charts::db_interaction::types::DateValueDouble,
         data_source::kinds::{
-            adapter::to_string::{ToStringAdapter, ToStringAdapterWrapper},
+            adapter::to_string::MapToString,
             remote::{RemoteSource, RemoteSourceWrapper},
             updateable_chart::clone::CloneChart,
         },
@@ -50,12 +50,7 @@ mod _inner {
         }
     }
 
-    pub struct AverageGasPriceRemoteString;
-
-    impl ToStringAdapter for AverageGasPriceRemoteString {
-        type InnerSource = RemoteSourceWrapper<AverageGasPriceRemote>;
-        type ConvertFrom = <AverageGasPriceRemote as RemoteSource>::Point;
-    }
+    pub type AverageGasPriceRemoteString = MapToString<RemoteSourceWrapper<AverageGasPriceRemote>>;
 
     pub struct AverageGasPriceInner;
 
@@ -70,7 +65,7 @@ mod _inner {
     }
 
     impl CloneChart for AverageGasPriceInner {
-        type Dependency = ToStringAdapterWrapper<AverageGasPriceRemoteString>;
+        type Dependency = AverageGasPriceRemoteString;
     }
 }
 

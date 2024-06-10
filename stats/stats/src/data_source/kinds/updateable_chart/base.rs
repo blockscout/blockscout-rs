@@ -162,8 +162,8 @@ impl<C: UpdateableChart> DataSourceMetrics for UpdateableChartWrapper<C> {
 }
 
 impl<C: UpdateableChart> DataSource for UpdateableChartWrapper<C> {
-    type PrimaryDependency = C::PrimaryDependency;
-    type SecondaryDependencies = C::SecondaryDependencies;
+    type MainDependencies = C::PrimaryDependency;
+    type ResolutionDependencies = C::SecondaryDependencies;
     type Output = Vec<DateValueString>;
 
     const MUTEX_ID: Option<&'static str> = Some(<C as Named>::NAME);

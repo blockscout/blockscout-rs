@@ -4,7 +4,7 @@ mod _inner {
     use crate::{
         charts::db_interaction::types::DateValueDecimal,
         data_source::kinds::{
-            adapter::{SourceAdapter, SourceAdapterWrapper},
+            adapter::{Map, MapFunction},
             remote::{RemoteSource, RemoteSourceWrapper},
             updateable_chart::cumulative::CumulativeChart,
         },
@@ -42,15 +42,11 @@ mod _inner {
 
     pub type GasUsedPartial = RemoteSourceWrapper<GasUsedPartialRemote>;
 
-    pub struct NewGasUsedRemote;
+    pub struct IncrementsFromPartialSum;
 
-    impl SourceAdapter for NewGasUsedRemote {
-        type InnerSource = GasUsedPartial;
+    impl MapFunction<Vec<DateValueDecimal>> for IncrementsFromPartialSum {
         type Output = Vec<DateValueDecimal>;
-
-        fn function(
-            inner_data: Vec<DateValueDecimal>,
-        ) -> Result<Vec<DateValueDecimal>, UpdateError> {
+        fn function(inner_data: Vec<DateValueDecimal>) -> Result<Self::Output, UpdateError> {
             Ok(inner_data
                 .into_iter()
                 .scan(Decimal::ZERO, |state, mut next| {
@@ -62,6 +58,8 @@ mod _inner {
                 .collect())
         }
     }
+
+    pub type NewGasUsedRemote = Map<GasUsedPartial, IncrementsFromPartialSum>;
 
     pub struct GasUsedGrowthInner;
 
@@ -79,7 +77,7 @@ mod _inner {
     }
 
     impl CumulativeChart for GasUsedGrowthInner {
-        type DeltaChart = SourceAdapterWrapper<NewGasUsedRemote>;
+        type DeltaChart = NewGasUsedRemote;
         type DeltaChartPoint = DateValueDecimal;
     }
 }

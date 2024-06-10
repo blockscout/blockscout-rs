@@ -6,7 +6,7 @@ mod _inner {
     use crate::{
         charts::db_interaction::types::DateValueDouble,
         data_source::kinds::{
-            adapter::to_string::{ToStringAdapter, ToStringAdapterWrapper},
+            adapter::to_string::MapToString,
             remote::{RemoteSource, RemoteSourceWrapper},
             updateable_chart::clone::CloneChart,
         },
@@ -43,12 +43,7 @@ mod _inner {
         }
     }
 
-    pub struct TxnsFeeRemoteString;
-
-    impl ToStringAdapter for TxnsFeeRemoteString {
-        type InnerSource = RemoteSourceWrapper<TxnsFeeRemote>;
-        type ConvertFrom = <TxnsFeeRemote as RemoteSource>::Point;
-    }
+    pub type TxnsFeeRemoteString = MapToString<RemoteSourceWrapper<TxnsFeeRemote>>;
 
     pub struct TxnsFeeInner;
 
@@ -63,7 +58,7 @@ mod _inner {
     }
 
     impl CloneChart for TxnsFeeInner {
-        type Dependency = ToStringAdapterWrapper<TxnsFeeRemoteString>;
+        type Dependency = TxnsFeeRemoteString;
     }
 }
 

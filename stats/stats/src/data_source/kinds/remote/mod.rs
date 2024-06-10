@@ -65,8 +65,8 @@ impl<T: RemoteSource + Named> Named for RemoteSourceWrapper<T> {
 }
 
 impl<T: RemoteSource> DataSource for RemoteSourceWrapper<T> {
-    type PrimaryDependency = ();
-    type SecondaryDependencies = ();
+    type MainDependencies = ();
+    type ResolutionDependencies = ();
     type Output = Vec<T::Point>;
     // No local state => no race conditions expected
     const MUTEX_ID: Option<&'static str> = None;
