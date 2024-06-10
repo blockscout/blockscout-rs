@@ -13,7 +13,8 @@ use crate::{
         domain_event::{DomainEvent, DomainEventTransaction},
     },
     protocols::{
-        AddressResolveTechnique, Network, Protocol, ProtocolError, ProtocolInfo, Protocoler,
+        AddressResolveTechnique, DeployedProtocol, Network, Protocol, ProtocolError, ProtocolInfo,
+        Protocoler,
     },
     subgraphs_reader::{
         resolve_addresses::resolve_addresses,
@@ -182,11 +183,11 @@ impl SubgraphReader {
         self.protocoler.iter_protocols()
     }
 
-    pub fn protocols_of_network(&self, network_id: i64) -> Vec<&Protocol> {
-        self.protocoler
-            .protocols_of_network(network_id, None)
-            .map(|(_, protocols)| protocols.into_iter().collect())
-            .unwrap_or_default()
+    pub fn protocols_of_network(
+        &self,
+        network_id: i64,
+    ) -> Result<NonEmpty<DeployedProtocol>, ProtocolError> {
+        self.protocoler.protocols_of_network(network_id, None)
     }
 }
 
@@ -195,7 +196,7 @@ impl SubgraphReader {
         &self,
         input: GetDomainInput,
     ) -> Result<Option<GetDomainOutput>, SubgraphReadError> {
-        let (_, name) = self.protocoler.main_name_in_network(
+        let name = self.protocoler.main_name_in_network(
             &input.name,
             input.network_id,
             input.protocol_id.clone().map(|p| nonempty![p]),
@@ -205,13 +206,16 @@ impl SubgraphReader {
                 .await?
                 .map(|domain| patch_detailed_domain(self.pool.clone(), domain, &name));
         if let Some(domain) = maybe_domain {
-            let tokens =
-                extract_tokens_from_domain(&domain, name.protocol.info.native_token_contract)
-                    .map_err(|e| anyhow!("failed to extract domain tokens: {e}"))?;
+            let tokens = extract_tokens_from_domain(
+                &domain,
+                name.deployed_protocol.protocol.info.native_token_contract,
+            )
+            .map_err(|e| anyhow!("failed to extract domain tokens: {e}"))?;
             Ok(Some(GetDomainOutput {
                 tokens,
                 domain,
-                protocol: name.protocol.clone(),
+                protocol: name.deployed_protocol.protocol.clone(),
+                deployment_network: name.deployed_protocol.deployment_network.clone(),
             }))
         } else {
             Ok(None)
@@ -222,16 +226,26 @@ impl SubgraphReader {
         &self,
         input: GetDomainHistoryInput,
     ) -> Result<Vec<DomainEvent>, SubgraphReadError> {
-        let (network, name) = self.protocoler.main_name_in_network(
+        let name = self.protocoler.main_name_in_network(
             &input.name,
             input.network_id,
             input.protocol_id.clone().map(|p| nonempty![p]),
         )?;
-        let domain_txns: Vec<DomainEventTransaction> =
-            sql::find_transaction_events(self.pool.as_ref(), name.protocol, &name.inner, &input)
-                .await?;
-        let domain_events =
-            events_from_transactions(network.blockscout_client.clone(), domain_txns).await?;
+        let domain_txns: Vec<DomainEventTransaction> = sql::find_transaction_events(
+            self.pool.as_ref(),
+            name.deployed_protocol.protocol,
+            &name.inner,
+            &input,
+        )
+        .await?;
+        let domain_events = events_from_transactions(
+            name.deployed_protocol
+                .deployment_network
+                .blockscout_client
+                .clone(),
+            domain_txns,
+        )
+        .await?;
         Ok(domain_events)
     }
 
@@ -245,14 +259,14 @@ impl SubgraphReader {
                 input.network_id,
                 input.maybe_filter_protocols,
             ) {
-                Ok((_, name_options)) => sql::FindDomainsInput::Names(name_options),
+                Ok(name_options) => sql::FindDomainsInput::Names(name_options),
                 Err(_) => return Ok(PaginatedList::empty()),
             }
         } else {
-            let (_, protocols) = self
+            let protocols = self
                 .protocoler
                 .protocols_of_network(input.network_id, input.maybe_filter_protocols)?;
-            sql::FindDomainsInput::Protocols(protocols.into_iter().collect())
+            sql::FindDomainsInput::Protocols(protocols.map(|p| p.protocol).into_iter().collect())
         };
 
         let domains = sql::find_domains(
@@ -266,8 +280,9 @@ impl SubgraphReader {
         .map(|domain| {
             // if domain is found by name, patch it with user input
             if let sql::FindDomainsInput::Names(names) = &find_domains_input {
-                if let Some(from_user) = names.iter().find(|n| {
-                    n.inner.id == domain.id && n.protocol.info.slug == domain.protocol_slug
+                if let Some(from_user) = names.iter().find(|name| {
+                    name.inner.id == domain.id
+                        && name.deployed_protocol.protocol.info.slug == domain.protocol_slug
                 }) {
                     return patch_domain(self.pool.clone(), domain, from_user);
                 }
@@ -289,9 +304,10 @@ impl SubgraphReader {
         if address_should_be_ignored(&input.address) {
             return Ok(PaginatedList::empty());
         }
-        let (_, protocols) = self
+        let protocols = self
             .protocoler
-            .protocols_of_network(input.network_id, input.maybe_filter_protocols.clone())?;
+            .protocols_of_network(input.network_id, input.maybe_filter_protocols.clone())?
+            .map(|p| p.protocol);
         let domains = sql::find_resolved_addresses(self.pool.as_ref(), protocols, &input).await?;
         let output = lookup_output_from_domains(domains, &self.protocoler)?;
         let paginated = input
@@ -305,10 +321,13 @@ impl SubgraphReader {
         &self,
         input: GetAddressInput,
     ) -> Result<Option<GetDomainOutput>, SubgraphReadError> {
-        let (_, protocols) = self.protocoler.protocols_of_network(
-            input.network_id,
-            input.protocol_id.clone().map(|p| nonempty![p]),
-        )?;
+        let protocols = self
+            .protocoler
+            .protocols_of_network(
+                input.network_id,
+                input.protocol_id.clone().map(|p| nonempty![p]),
+            )?
+            .map(|p| p.protocol);
         let maybe_domain_name =
             resolve_addresses(self.pool.as_ref(), protocols, vec![input.address])
                 .await?
@@ -343,7 +362,10 @@ impl SubgraphReader {
         resolved_to: bool,
         owned_by: bool,
     ) -> Result<i64, SubgraphReadError> {
-        let (_, protocols) = self.protocoler.protocols_of_network(network_id, None)?;
+        let protocols = self
+            .protocoler
+            .protocols_of_network(network_id, None)?
+            .map(|p| p.protocol);
         let only_active = true;
         let count = sql::count_domains_by_address(
             self.pool.as_ref(),
@@ -361,9 +383,10 @@ impl SubgraphReader {
         &self,
         input: BatchResolveAddressNamesInput,
     ) -> Result<BTreeMap<String, String>, SubgraphReadError> {
-        let (_, protocols) = self
+        let protocols = self
             .protocoler
-            .protocols_of_network(input.network_id, None)?;
+            .protocols_of_network(input.network_id, None)?
+            .map(|p| p.protocol);
         // remove duplicates
         let addresses = remove_addresses_from_batch(input.addresses);
         let addresses_len = addresses.len();
@@ -460,9 +483,12 @@ fn lookup_output_from_domains(
         .map(|domain| {
             let protocol = protocoler
                 .protocol_by_slug(&domain.protocol_slug)
-                .ok_or_else(|| anyhow!("protocol not found"))?
-                .clone();
-            Ok(LookupOutput { domain, protocol })
+                .ok_or_else(|| anyhow!("protocol not found"))?;
+            Ok(LookupOutput {
+                domain,
+                protocol: protocol.protocol.clone(),
+                deployment_network: protocol.deployment_network.clone(),
+            })
         })
         .collect()
 }
@@ -797,7 +823,6 @@ mod tests {
             .protocoler
             .protocols_of_network(DEFAULT_CHAIN_ID, None)
             .expect("failed to get protocol")
-            .1
             .head;
 
         // Make sure that database contains unresolved domain

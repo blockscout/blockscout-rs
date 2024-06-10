@@ -108,6 +108,7 @@ pub async fn mocked_networks_and_protocols(
         "ens".to_string(),
         ProtocolInfo {
             slug: "ens".to_string(),
+            network_id: 1,
             tld_list: nonempty![Tld::new("eth")],
             subgraph_name: "ens-subgraph".to_string(),
             ..Default::default()

@@ -71,7 +71,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     ]));
     compile(
         &["proto/bens.proto", "proto/health.proto"],
-        &["proto"],
+        &["proto", "../../proto"],
         gens,
     )?;
     Ok(())

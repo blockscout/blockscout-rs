@@ -1,4 +1,5 @@
-use super::{domain_id, Protocol, ProtocolError};
+use super::{domain_id, ProtocolError};
+use crate::protocols::protocoler::DeployedProtocol;
 use ethers::types::{Address, Bytes};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -51,16 +52,19 @@ impl DomainName {
 #[derive(Debug, Clone)]
 pub struct DomainNameOnProtocol<'a> {
     pub inner: DomainName,
-    pub protocol: &'a Protocol,
+    pub deployed_protocol: DeployedProtocol<'a>,
 }
 
 impl<'a> DomainNameOnProtocol<'a> {
-    pub fn new(name: &str, protocol: &'a Protocol) -> Result<Self, ProtocolError> {
-        let name = DomainName::new(name, protocol.info.empty_label_hash.clone())?;
+    pub fn new(name: &str, protocol_network: DeployedProtocol<'a>) -> Result<Self, ProtocolError> {
+        let name = DomainName::new(
+            name,
+            protocol_network.protocol.info.empty_label_hash.clone(),
+        )?;
 
         Ok(Self {
             inner: name,
-            protocol,
+            deployed_protocol: protocol_network,
         })
     }
 }

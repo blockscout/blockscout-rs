@@ -156,6 +156,8 @@ jobs:
         with:
           context: "blockscout-ens"
           file: "blockscout-ens/Dockerfile"
+          build-contexts: |
+            proto=proto
           push: ${{ steps.tags_extractor.outputs.tags != '' }}
           tags: ${{ steps.tags_extractor.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

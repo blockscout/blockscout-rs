@@ -56,8 +56,10 @@ impl Default for SubgraphsReaderSettings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(deny_unknown_fields)]
 pub struct ProtocolSettings {
     pub tld_list: NonEmpty<Tld>,
+    pub network_id: i64,
     pub subgraph_name: String,
     #[serde(default)]
     pub address_resolve_technique: AddressResolveTechnique,
@@ -71,6 +73,7 @@ pub struct ProtocolSettings {
 pub struct ProtocolSettingsMeta(pub ProtocolMeta);
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(deny_unknown_fields)]
 pub struct NetworkSettings {
     pub blockscout: BlockscoutSettings,
     #[serde(default)]
