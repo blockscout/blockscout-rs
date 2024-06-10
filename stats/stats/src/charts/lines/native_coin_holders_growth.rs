@@ -5,10 +5,7 @@ use crate::{
 
 mod _inner {
     use crate::{
-        charts::db_interaction::{
-            types::DateValueInt,
-            write::{create_chart, insert_data_many},
-        },
+        charts::db_interaction::write::{create_chart, insert_data_many},
         data_source::{kinds::updateable_chart::UpdateableChart, UpdateContext},
         Chart, DateValueString, MissingDatePolicy, Named, UpdateError,
     };

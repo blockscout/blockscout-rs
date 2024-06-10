@@ -3,11 +3,13 @@
 use crate::data_source::kinds::updateable_chart::clone::CloneChartWrapper;
 
 mod _inner {
+    use std::ops::RangeInclusive;
+
     use crate::{
         charts::db_interaction::types::DateValueDouble,
         data_source::kinds::{
             adapter::to_string::MapToString,
-            remote::{RemoteSource, RemoteSourceWrapper},
+            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
             updateable_chart::clone::CloneChart,
         },
         utils::sql_with_range_filter_opt,
@@ -18,12 +20,10 @@ mod _inner {
 
     const ETHER: i64 = i64::pow(10, 18);
 
-    pub struct AverageTxnFeeRemote;
+    pub struct AverageTxnFeeStatement;
 
-    impl RemoteSource for AverageTxnFeeRemote {
-        type Point = DateValueDouble;
-
-        fn get_query(range: Option<std::ops::RangeInclusive<DateTimeUtc>>) -> Statement {
+    impl StatementFromRange for AverageTxnFeeStatement {
+        fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
             sql_with_range_filter_opt!(
                 DbBackend::Postgres,
                 r#"
@@ -44,7 +44,10 @@ mod _inner {
         }
     }
 
-    pub type AverageTxnFeeRemoteString = MapToString<RemoteSourceWrapper<AverageTxnFeeRemote>>;
+    pub type AverageTxnFeeRemote =
+        RemoteDatabaseSource<PullAllWithAndSort<AverageTxnFeeStatement, DateValueDouble>>;
+
+    pub type AverageTxnFeeRemoteString = MapToString<AverageTxnFeeRemote>;
 
     pub struct AverageTxnFeeInner;
 

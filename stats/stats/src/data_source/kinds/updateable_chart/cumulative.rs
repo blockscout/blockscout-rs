@@ -18,6 +18,7 @@ pub trait CumulativeChart: Chart {
     // T from `Vec` and place bounds on it
     /// Type of elements in the output of [`DeltaChart`](CumulativeChart::DeltaChart)
     type DeltaChartPoint: Point + Default;
+    // todo: rename to source
     type DeltaChart: DataSource<Output = Vec<Self::DeltaChartPoint>>;
 }
 

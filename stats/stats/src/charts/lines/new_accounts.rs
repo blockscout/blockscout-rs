@@ -11,7 +11,7 @@ mod _inner {
         data_source::{
             kinds::{
                 adapter::to_string::MapToString,
-                remote::{RemoteSource, RemoteSourceWrapper},
+                remote_db::{QueryBehaviour, RemoteDatabaseSource, StatementFromRange},
                 updateable_chart::clone::CloneChart,
             },
             UpdateContext,
@@ -23,19 +23,10 @@ mod _inner {
     use entity::sea_orm_active_enums::ChartType;
     use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 
-    use super::NewAccounts;
+    pub struct NewAccountsStatement;
 
-    /// Note:  The intended strategy is to update whole range at once, even
-    /// though the implementation allows batching. The batching was done
-    /// to simplify interface of the data source.
-    ///
-    /// Thus, use max batch size in the dependant data sources.
-    pub struct NewAccountsRemote;
-
-    impl RemoteSource for NewAccountsRemote {
-        type Point = DateValueInt;
-
-        fn get_query(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+    impl StatementFromRange for NewAccountsStatement {
+        fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
             // we want to consider the time at range end; thus optional
             // filter
             if let Some(range) = range {
@@ -83,13 +74,19 @@ mod _inner {
                 )
             }
         }
+    }
+
+    pub struct NewAccountsQueryBehaviour;
+
+    impl QueryBehaviour for NewAccountsQueryBehaviour {
+        type Output = Vec<DateValueInt>;
 
         async fn query_data(
             cx: &UpdateContext<'_>,
             range: Option<RangeInclusive<DateTimeUtc>>,
-        ) -> Result<Vec<Self::Point>, UpdateError> {
-            let query = Self::get_query(range.clone());
-            let mut data = Self::Point::find_by_statement(query)
+        ) -> Result<Vec<DateValueInt>, UpdateError> {
+            let query = NewAccountsStatement::get_statement(range.clone());
+            let mut data = DateValueInt::find_by_statement(query)
                 .all(cx.blockscout)
                 .await
                 .map_err(UpdateError::BlockscoutDB)?;
@@ -103,7 +100,14 @@ mod _inner {
         }
     }
 
-    pub type NewAccountsRemoteString = MapToString<RemoteSourceWrapper<NewAccountsRemote>>;
+    /// Note:  The intended strategy is to update whole range at once, even
+    /// though the implementation allows batching. The batching was done
+    /// to simplify interface of the data source.
+    ///
+    /// Thus, use max batch size in the dependant data sources.
+    pub type NewAccountsRemote = RemoteDatabaseSource<NewAccountsQueryBehaviour>;
+
+    pub type NewAccountsRemoteString = MapToString<NewAccountsRemote>;
 
     pub struct NewAccountsInner;
 

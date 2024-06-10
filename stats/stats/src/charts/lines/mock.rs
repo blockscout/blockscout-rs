@@ -4,7 +4,7 @@ mod _inner {
     use crate::{
         data_source::{
             kinds::{
-                remote::{RemoteSource, RemoteSourceWrapper},
+                remote_db::{QueryBehaviour, RemoteDatabaseSource},
                 updateable_chart::clone::CloneChart,
             },
             UpdateContext,
@@ -17,7 +17,7 @@ mod _inner {
     use chrono::{Duration, NaiveDate};
     use entity::sea_orm_active_enums::ChartType;
     use rand::{distributions::uniform::SampleUniform, rngs::StdRng, Rng, SeedableRng};
-    use sea_orm::{prelude::*, Statement};
+    use sea_orm::prelude::*;
     use std::{
         marker::PhantomData,
         ops::{Range, RangeInclusive},
@@ -55,23 +55,22 @@ mod _inner {
 
     /// Mock remote source. Can only return values from `mocked_lines`, but respects query time
     /// to not include future data.
-    pub struct MockLineRemote<ValueRange, Value, Policy>(PhantomData<(ValueRange, Value, Policy)>);
+    pub struct MockLineRetrieve<ValueRange, Value, Policy>(
+        PhantomData<(ValueRange, Value, Policy)>,
+    );
 
-    impl<ValueRange, Value, Policy> RemoteSource for MockLineRemote<ValueRange, Value, Policy>
+    impl<ValueRange, Value, Policy> QueryBehaviour for MockLineRetrieve<ValueRange, Value, Policy>
     where
         ValueRange: Get<Range<Value>>,
         Value: SampleUniform + PartialOrd + Clone + ToString + Send + Sync + 'static,
         Policy: Get<MissingDatePolicy>,
     {
-        type Point = DateValueString;
-        fn get_query(_range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
-            unreachable!()
-        }
+        type Output = Vec<DateValueString>;
 
         async fn query_data(
             cx: &UpdateContext<'_>,
             range: Option<RangeInclusive<DateTimeUtc>>,
-        ) -> Result<Vec<Self::Point>, UpdateError> {
+        ) -> Result<Vec<DateValueString>, UpdateError> {
             let date_range_start = if let Some(r) = range.clone() {
                 *r.start()
             } else {
@@ -115,7 +114,7 @@ mod _inner {
         Value: SampleUniform + PartialOrd + Clone + ToString + Send + Sync + 'static,
         Policy: Get<MissingDatePolicy> + Sync,
     {
-        type Dependency = RemoteSourceWrapper<MockLineRemote<ValueRange, Value, Policy>>;
+        type Dependency = RemoteDatabaseSource<MockLineRetrieve<ValueRange, Value, Policy>>;
     }
 }
 

@@ -5,7 +5,7 @@ mod _inner {
 
     use crate::{
         data_source::kinds::{
-            remote::{RemoteSource, RemoteSourceWrapper},
+            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
             updateable_chart::clone::CloneChart,
         },
         utils::sql_with_range_filter_opt,
@@ -14,11 +14,10 @@ mod _inner {
     use entity::sea_orm_active_enums::ChartType;
     use sea_orm::{prelude::*, DbBackend, Statement};
 
-    pub struct NewBlocksRemote;
+    pub struct NewBlocksStatement;
 
-    impl RemoteSource for NewBlocksRemote {
-        type Point = DateValueString;
-        fn get_query(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+    impl StatementFromRange for NewBlocksStatement {
+        fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
             sql_with_range_filter_opt!(
                 DbBackend::Postgres,
                 r#"
@@ -38,6 +37,9 @@ mod _inner {
         }
     }
 
+    pub type NewBlocksRemote =
+        RemoteDatabaseSource<PullAllWithAndSort<NewBlocksStatement, DateValueString>>;
+
     pub struct NewBlocksInner;
 
     impl Named for NewBlocksInner {
@@ -51,7 +53,7 @@ mod _inner {
     }
 
     impl CloneChart for NewBlocksInner {
-        type Dependency = RemoteSourceWrapper<NewBlocksRemote>;
+        type Dependency = NewBlocksRemote;
     }
 }
 

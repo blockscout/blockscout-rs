@@ -3,7 +3,7 @@ use crate::data_source::kinds::updateable_chart::clone::point::ClonePointChartWr
 mod _inner {
     use crate::{
         data_source::kinds::{
-            remote::point::{RemotePointSource, RemotePointSourceWrapper},
+            remote_db::{PullOne, RemoteDatabaseSource, StatementForOne},
             updateable_chart::clone::point::ClonePointChart,
         },
         Chart, DateValueString, Named,
@@ -11,11 +11,10 @@ mod _inner {
     use entity::sea_orm_active_enums::ChartType;
     use sea_orm::{DbBackend, Statement};
 
-    pub struct CompletedTxnsRemote;
+    pub struct CompletedTxnsStatement;
 
-    impl RemotePointSource for CompletedTxnsRemote {
-        type Point = DateValueString;
-        fn get_query() -> Statement {
+    impl StatementForOne for CompletedTxnsStatement {
+        fn get_statement() -> Statement {
             Statement::from_string(
                 DbBackend::Postgres,
                 r#"
@@ -43,6 +42,9 @@ mod _inner {
         }
     }
 
+    pub type CompletedTxnsRemote =
+        RemoteDatabaseSource<PullOne<CompletedTxnsStatement, DateValueString>>;
+
     pub struct CompletedTxnsInner;
 
     impl Named for CompletedTxnsInner {
@@ -56,7 +58,7 @@ mod _inner {
     }
 
     impl ClonePointChart for CompletedTxnsInner {
-        type Dependency = RemotePointSourceWrapper<CompletedTxnsRemote>;
+        type Dependency = CompletedTxnsRemote;
     }
 }
 

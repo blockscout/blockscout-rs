@@ -7,7 +7,7 @@ mod _inner {
         charts::db_interaction::types::DateValueDouble,
         data_source::kinds::{
             adapter::to_string::MapToString,
-            remote::{RemoteSource, RemoteSourceWrapper},
+            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
             updateable_chart::clone::CloneChart,
         },
         utils::sql_with_range_filter_opt,
@@ -16,11 +16,10 @@ mod _inner {
     use entity::sea_orm_active_enums::ChartType;
     use sea_orm::{prelude::*, DbBackend, Statement};
 
-    pub struct TxnsSuccessRateRemote;
+    pub struct TxnsSuccessRateStatement;
 
-    impl RemoteSource for TxnsSuccessRateRemote {
-        type Point = DateValueDouble;
-        fn get_query(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+    impl StatementFromRange for TxnsSuccessRateStatement {
+        fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
             sql_with_range_filter_opt!(
                 DbBackend::Postgres,
                 r#"
@@ -44,7 +43,10 @@ mod _inner {
         }
     }
 
-    pub type TxnsSuccessRateRemoteString = MapToString<RemoteSourceWrapper<TxnsSuccessRateRemote>>;
+    pub type TxnsSuccessRateRemote =
+        RemoteDatabaseSource<PullAllWithAndSort<TxnsSuccessRateStatement, DateValueDouble>>;
+
+    pub type TxnsSuccessRateRemoteString = MapToString<TxnsSuccessRateRemote>;
 
     pub struct TxnsSuccessRateInner;
 

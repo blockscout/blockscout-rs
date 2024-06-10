@@ -7,9 +7,8 @@ mod _inner {
     use std::ops::RangeInclusive;
 
     use crate::{
-        charts::db_interaction::types::DateValueInt,
         data_source::kinds::{
-            remote::{RemoteSource, RemoteSourceWrapper},
+            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
             updateable_chart::clone::CloneChart,
         },
         utils::sql_with_range_filter_opt,
@@ -18,13 +17,10 @@ mod _inner {
     use entity::sea_orm_active_enums::ChartType;
     use sea_orm::{prelude::*, DbBackend, Statement};
 
-    use super::NewVerifiedContracts;
+    pub struct NewVerifiedContractsStatement;
 
-    pub struct NewVerifiedContractsRemote;
-
-    impl RemoteSource for NewVerifiedContractsRemote {
-        type Point = DateValueString;
-        fn get_query(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+    impl StatementFromRange for NewVerifiedContractsStatement {
+        fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
             sql_with_range_filter_opt!(
                 DbBackend::Postgres,
                 r#"
@@ -42,6 +38,9 @@ mod _inner {
         }
     }
 
+    pub type NewVerifiedContractsRemote =
+        RemoteDatabaseSource<PullAllWithAndSort<NewVerifiedContractsStatement, DateValueString>>;
+
     pub struct NewVerifiedContractsInner;
 
     impl Named for NewVerifiedContractsInner {
@@ -55,7 +54,7 @@ mod _inner {
     }
 
     impl CloneChart for NewVerifiedContractsInner {
-        type Dependency = RemoteSourceWrapper<NewVerifiedContractsRemote>;
+        type Dependency = NewVerifiedContractsRemote;
     }
 }
 pub type NewVerifiedContracts = CloneChartWrapper<_inner::NewVerifiedContractsInner>;

@@ -7,7 +7,7 @@ use tokio::sync::Mutex;
 
 use super::{
     kinds::{
-        remote::{RemoteSource, RemoteSourceWrapper},
+        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
         updateable_chart::{
             batch::{BatchChart, BatchChartWrapper},
             clone::{CloneChart, CloneChartWrapper},
@@ -22,67 +22,55 @@ use crate::{
     data_processing::parse_and_cumsum,
     tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
     update_group::{SyncUpdateGroup, UpdateGroup},
+    utils::sql_with_range_filter_opt,
     Chart, DateValueString, MissingDatePolicy, Named, UpdateError,
 };
 
-pub struct NewContractsRemote;
+pub struct NewContractsQuery;
 
-impl NewContractsRemote {
-    fn date_sql_filter(range: Option<RangeInclusive<DateTimeUtc>>) -> (String, Vec<Value>) {
-        if let Some(range) = range {
-            (
-                r#"AND
-                    b.timestamp < $2 AND
-                    b.timestamp >= $1"#
-                    .to_owned(),
-                vec![(*range.start()).into(), (*range.end()).into()],
-            )
-        } else {
-            ("".to_owned(), vec![])
-        }
-    }
-}
-
-impl RemoteSource for NewContractsRemote {
-    type Point = DateValueString;
-
-    fn get_query(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
-        let (filter_statement, values) = Self::date_sql_filter(range);
-        let sql = format!(
-            r#"SELECT day AS date, COUNT(*)::text AS value
+impl StatementFromRange for NewContractsQuery {
+    fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+        sql_with_range_filter_opt!(
+            DbBackend::Postgres,
+            r#"
+                SELECT day AS date, COUNT(*)::text AS value
+                FROM (
+                    SELECT
+                        DISTINCT ON (txns_plus_internal_txns.hash)
+                        txns_plus_internal_txns.day
                     FROM (
                         SELECT
-                            DISTINCT ON (txns_plus_internal_txns.hash)
-                            txns_plus_internal_txns.day
-                        FROM (
-                            SELECT
-                                t.created_contract_address_hash AS hash,
-                                b.timestamp::date AS day
-                            FROM transactions t
-                                JOIN blocks b ON b.hash = t.block_hash
-                            WHERE
-                                t.created_contract_address_hash NOTNULL AND
-                                b.consensus = TRUE AND
-                                b.timestamp != to_timestamp(0) {filter_statement}
-                            UNION
-                            SELECT
-                                it.created_contract_address_hash AS hash,
-                                b.timestamp::date AS day
-                            FROM internal_transactions it
-                                JOIN blocks b ON b.hash = it.block_hash
-                            WHERE
-                                it.created_contract_address_hash NOTNULL AND
-                                b.consensus = TRUE AND
-                                b.timestamp != to_timestamp(0) {filter_statement}
-                        ) txns_plus_internal_txns
-                    ) sub
-                    GROUP BY sub.day;
-                    "#
-        );
-
-        Statement::from_sql_and_values(DbBackend::Postgres, sql, values)
+                            t.created_contract_address_hash AS hash,
+                            b.timestamp::date AS day
+                        FROM transactions t
+                            JOIN blocks b ON b.hash = t.block_hash
+                        WHERE
+                            t.created_contract_address_hash NOTNULL AND
+                            b.consensus = TRUE AND
+                            b.timestamp != to_timestamp(0) {filter}
+                        UNION
+                        SELECT
+                            it.created_contract_address_hash AS hash,
+                            b.timestamp::date AS day
+                        FROM internal_transactions it
+                            JOIN blocks b ON b.hash = it.block_hash
+                        WHERE
+                            it.created_contract_address_hash NOTNULL AND
+                            b.consensus = TRUE AND
+                            b.timestamp != to_timestamp(0) {filter}
+                    ) txns_plus_internal_txns
+                ) sub
+                GROUP BY sub.day;
+            "#,
+            [],
+            "b.timestamp",
+            range
+        )
     }
 }
+
+pub type NewContractsRemote =
+    RemoteDatabaseSource<PullAllWithAndSort<NewContractsQuery, DateValueString>>;
 
 pub struct NewContractsChart;
 
@@ -99,7 +87,7 @@ impl Chart for NewContractsChart {
 // Directly uses results of SQL query (from `NewContractsRemote`),
 // thus `CloneChart`.
 impl CloneChart for NewContractsChart {
-    type Dependency = RemoteSourceWrapper<NewContractsRemote>;
+    type Dependency = NewContractsRemote;
 }
 
 // Wrap the earth out of it to obtain `DataSource`-implementing type.

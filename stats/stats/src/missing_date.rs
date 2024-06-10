@@ -31,8 +31,7 @@ pub fn fit_into_range(
                 if let Some(last_point_before) =
                     data.iter().take_while(|p| p.get_parts().0 < &from).last()
                 {
-                    if let Err(insert_idx) =
-                        data.binary_search_by_key(&from, |p| *p.get_parts().0)
+                    if let Err(insert_idx) = data.binary_search_by_key(&from, |p| *p.get_parts().0)
                     {
                         // `data` does not contain point for `from`, need to insert by `FillPrevious` logic
                         let new_point =

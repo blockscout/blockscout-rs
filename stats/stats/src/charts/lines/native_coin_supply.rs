@@ -7,7 +7,7 @@ mod _inner {
         charts::db_interaction::types::DateValueDouble,
         data_source::kinds::{
             adapter::to_string::MapToString,
-            remote::{RemoteSource, RemoteSourceWrapper},
+            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
             updateable_chart::clone::CloneChart,
         },
         Chart, Named,
@@ -19,11 +19,10 @@ mod _inner {
 
     const ETH: i64 = 1_000_000_000_000_000_000;
 
-    pub struct NativeCoinSupplyRemote;
+    pub struct NativeCoinSupplyStatement;
 
-    impl RemoteSource for NativeCoinSupplyRemote {
-        type Point = DateValueDouble;
-        fn get_query(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+    impl StatementFromRange for NativeCoinSupplyStatement {
+        fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
             let day_range: Option<RangeInclusive<NaiveDate>> = range.map(|r| {
                 let (start, end) = r.into_inner();
                 // chart is off anyway, so shouldn't be a big deal
@@ -80,11 +79,13 @@ mod _inner {
         }
     }
 
+    pub type NativeCoinSupplyRemote =
+        RemoteDatabaseSource<PullAllWithAndSort<NativeCoinSupplyStatement, DateValueDouble>>;
+
     // for some reason it was queried as double and then converted to string.
     // keeping this behaviour just in case. can be removed after checking
     // for correctness.
-    pub type NativeCoinSupplyRemoteString =
-        MapToString<RemoteSourceWrapper<NativeCoinSupplyRemote>>;
+    pub type NativeCoinSupplyRemoteString = MapToString<NativeCoinSupplyRemote>;
 
     pub struct NativeCoinSupplyInner;
 

@@ -9,10 +9,6 @@ use crate::{
 /// See [module-level documentation](self) for details.
 pub trait ClonePointChart: Chart {
     type Dependency: DataSource<Output = DateValueString>;
-
-    fn batch_size() -> chrono::Duration {
-        chrono::Duration::days(30)
-    }
 }
 
 /// Wrapper to convert type implementing [`ClonePointChart`] to another that implements [`DataSource`]

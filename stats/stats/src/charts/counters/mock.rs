@@ -3,13 +3,13 @@ use _inner::MockCounterInner;
 use crate::data_source::kinds::updateable_chart::clone::point::ClonePointChartWrapper;
 
 mod _inner {
-    use std::marker::PhantomData;
+    use std::{marker::PhantomData, ops::RangeInclusive};
 
     use crate::{
         charts::db_interaction::types::DateValue,
         data_source::{
             kinds::{
-                remote::point::{RemotePointSource, RemotePointSourceWrapper},
+                remote_db::{QueryBehaviour, RemoteDatabaseSource},
                 updateable_chart::clone::point::ClonePointChart,
             },
             UpdateContext,
@@ -20,22 +20,24 @@ mod _inner {
 
     use chrono::{DateTime, Utc};
     use entity::sea_orm_active_enums::ChartType;
+    use sea_orm::prelude::DateTimeUtc;
 
-    pub struct MockCounterRemote<PointDateTime: Get<DateTime<Utc>>, Value: Get<String>>(
-        PhantomData<(PointDateTime, Value)>,
-    );
+    pub struct MockCounterRetrieve<PointDateTime, Value>(PhantomData<(PointDateTime, Value)>)
+    where
+        PointDateTime: Get<DateTime<Utc>>,
+        Value: Get<String>;
 
-    impl<PointDateTime, Value> RemotePointSource for MockCounterRemote<PointDateTime, Value>
+    impl<PointDateTime, Value> QueryBehaviour for MockCounterRetrieve<PointDateTime, Value>
     where
         PointDateTime: Get<DateTime<Utc>>,
         Value: Get<String>,
     {
-        type Point = DateValueString;
-        fn get_query() -> sea_orm::Statement {
-            unreachable!()
-        }
+        type Output = DateValueString;
 
-        async fn query_data(cx: &UpdateContext<'_>) -> Result<Self::Point, UpdateError> {
+        async fn query_data(
+            cx: &UpdateContext<'_>,
+            _range: Option<RangeInclusive<DateTimeUtc>>,
+        ) -> Result<Self::Output, UpdateError> {
             if cx.time >= PointDateTime::get() {
                 Ok(DateValueString::from_parts(
                     PointDateTime::get().date_naive(),
@@ -75,7 +77,7 @@ mod _inner {
         PointDateTime: Get<DateTime<Utc>> + Sync,
         Value: Get<String> + Sync,
     {
-        type Dependency = RemotePointSourceWrapper<MockCounterRemote<PointDateTime, Value>>;
+        type Dependency = RemoteDatabaseSource<MockCounterRetrieve<PointDateTime, Value>>;
     }
 }
 

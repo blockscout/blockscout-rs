@@ -1,30 +1,31 @@
 use crate::data_source::kinds::updateable_chart::clone::point::ClonePointChartWrapper;
 
 mod _inner {
+    use std::ops::RangeInclusive;
+
     use crate::{
         data_source::{
             kinds::{
-                remote::point::{RemotePointSource, RemotePointSourceWrapper},
-                updateable_chart::{clone::point::ClonePointChart, last_point::LastPointChart},
+                remote_db::{QueryBehaviour, RemoteDatabaseSource},
+                updateable_chart::clone::point::ClonePointChart,
             },
             UpdateContext,
         },
-        lines::ContractsGrowth,
         Chart, DateValueString, Named, UpdateError,
     };
     use blockscout_db::entity::addresses;
     use entity::sea_orm_active_enums::ChartType;
     use sea_orm::prelude::*;
 
-    pub struct TotalContractsRemote;
+    pub struct TotalContractsQueryBehaviour;
 
-    impl RemotePointSource for TotalContractsRemote {
-        type Point = DateValueString;
-        fn get_query() -> sea_orm::Statement {
-            unreachable!("must not be called")
-        }
+    impl QueryBehaviour for TotalContractsQueryBehaviour {
+        type Output = DateValueString;
 
-        async fn query_data(cx: &UpdateContext<'_>) -> Result<Self::Point, UpdateError> {
+        async fn query_data(
+            cx: &UpdateContext<'_>,
+            _range: Option<RangeInclusive<DateTimeUtc>>,
+        ) -> Result<Self::Output, UpdateError> {
             let value = addresses::Entity::find()
                 .filter(addresses::Column::ContractCode.is_not_null())
                 .filter(addresses::Column::InsertedAt.lte(cx.time))
@@ -39,33 +40,30 @@ mod _inner {
         }
     }
 
-    pub struct TotalContractsInnerFixed;
+    pub type TotalContractsRemote = RemoteDatabaseSource<TotalContractsQueryBehaviour>;
 
-    impl Named for TotalContractsInnerFixed {
+    pub struct TotalContractsInner;
+
+    impl Named for TotalContractsInner {
         const NAME: &'static str = "totalContracts";
     }
 
-    impl Chart for TotalContractsInnerFixed {
+    impl Chart for TotalContractsInner {
         fn chart_type() -> ChartType {
             ChartType::Counter
         }
     }
 
-    impl ClonePointChart for TotalContractsInnerFixed {
-        type Dependency = RemotePointSourceWrapper<TotalContractsRemote>;
-    }
-
-    pub struct TotalContractsInner;
-
-    impl LastPointChart for TotalContractsInner {
-        type InnerSource = ContractsGrowth;
+    impl ClonePointChart for TotalContractsInner {
+        // todo: reconsider once #845 is solved
+        // https://github.com/blockscout/blockscout-rs/issues/845
+        // + change update group once changed back
+        // i.e. set to LastPointChart<ContractsGrowth>
+        type Dependency = TotalContractsRemote;
     }
 }
 
-// todo: reconsider once #845 is solved
-// https://github.com/blockscout/blockscout-rs/issues/845
-// + change update group once changed back
-pub type TotalContracts = ClonePointChartWrapper<_inner::TotalContractsInnerFixed>;
+pub type TotalContracts = ClonePointChartWrapper<_inner::TotalContractsInner>;
 
 #[cfg(test)]
 mod tests {

@@ -1,9 +1,11 @@
 use crate::data_source::kinds::updateable_chart::clone::CloneChartWrapper;
 
 mod _inner {
+    use std::ops::RangeInclusive;
+
     use crate::{
         data_source::kinds::{
-            remote::{RemoteSource, RemoteSourceWrapper},
+            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
             updateable_chart::clone::CloneChart,
         },
         utils::sql_with_range_filter_opt,
@@ -13,12 +15,10 @@ mod _inner {
     use entity::sea_orm_active_enums::ChartType;
     use sea_orm::{prelude::*, DbBackend, Statement};
 
-    pub struct AverageGasLimitRemote;
+    pub struct AverageGasLimitStatement;
 
-    impl RemoteSource for AverageGasLimitRemote {
-        type Point = DateValueString;
-
-        fn get_query(range: Option<std::ops::RangeInclusive<DateTimeUtc>>) -> Statement {
+    impl StatementFromRange for AverageGasLimitStatement {
+        fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
             sql_with_range_filter_opt!(
                 DbBackend::Postgres,
                 r#"
@@ -38,6 +38,9 @@ mod _inner {
         }
     }
 
+    pub type AverageGasLimitRemote =
+        RemoteDatabaseSource<PullAllWithAndSort<AverageGasLimitStatement, DateValueString>>;
+
     pub struct AverageGasLimitInner;
 
     impl Named for AverageGasLimitInner {
@@ -51,7 +54,7 @@ mod _inner {
     }
 
     impl CloneChart for AverageGasLimitInner {
-        type Dependency = RemoteSourceWrapper<AverageGasLimitRemote>;
+        type Dependency = AverageGasLimitRemote;
     }
 }
 

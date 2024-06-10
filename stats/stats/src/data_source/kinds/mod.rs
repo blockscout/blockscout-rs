@@ -27,5 +27,5 @@
 //!
 
 pub mod adapter;
-pub mod remote;
+pub mod remote_db;
 pub mod updateable_chart;

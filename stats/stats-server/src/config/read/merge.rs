@@ -141,9 +141,7 @@ pub fn override_charts(
         override_field::line_categories,
     )
     .context("updating line categories")?;
-    target
-        .template_values
-        .extend(source.template_values);
+    target.template_values.extend(source.template_values);
     Ok(())
 }
 

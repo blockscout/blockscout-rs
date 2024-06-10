@@ -5,7 +5,7 @@ mod _inner {
 
     use crate::{
         data_source::kinds::{
-            remote::{RemoteSource, RemoteSourceWrapper},
+            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
             updateable_chart::clone::CloneChart,
         },
         utils::sql_with_range_filter_opt,
@@ -14,11 +14,10 @@ mod _inner {
     use entity::sea_orm_active_enums::ChartType;
     use sea_orm::{prelude::*, DbBackend, Statement};
 
-    pub struct NewNativeCoinTransfersRemote;
+    pub struct NewNativeCoinTransfersStatement;
 
-    impl RemoteSource for NewNativeCoinTransfersRemote {
-        type Point = DateValueString;
-        fn get_query(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+    impl StatementFromRange for NewNativeCoinTransfersStatement {
+        fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
             sql_with_range_filter_opt!(
                 DbBackend::Postgres,
                 r#"
@@ -41,6 +40,9 @@ mod _inner {
         }
     }
 
+    pub type NewNativeCoinTransfersRemote =
+        RemoteDatabaseSource<PullAllWithAndSort<NewNativeCoinTransfersStatement, DateValueString>>;
+
     pub struct NewNativeCoinTransfersInner;
 
     impl Named for NewNativeCoinTransfersInner {
@@ -54,7 +56,7 @@ mod _inner {
     }
 
     impl CloneChart for NewNativeCoinTransfersInner {
-        type Dependency = RemoteSourceWrapper<NewNativeCoinTransfersRemote>;
+        type Dependency = NewNativeCoinTransfersRemote;
     }
 }
 

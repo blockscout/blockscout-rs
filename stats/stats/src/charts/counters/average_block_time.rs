@@ -5,7 +5,7 @@ mod _inner {
         charts::db_interaction::types::DateValueDouble,
         data_source::kinds::{
             adapter::to_string::MapToString,
-            remote::point::{RemotePointSource, RemotePointSourceWrapper},
+            remote_db::{PullOne, RemoteDatabaseSource, StatementForOne},
             updateable_chart::clone::point::ClonePointChart,
         },
         Chart, Named,
@@ -13,12 +13,10 @@ mod _inner {
     use entity::sea_orm_active_enums::ChartType;
     use sea_orm::{DbBackend, Statement};
 
-    /// Use of batching does not make sense; set the max/no range
-    pub struct AverageBlockTimeRemote;
+    pub struct AverageBlockTimeStatement;
 
-    impl RemotePointSource for AverageBlockTimeRemote {
-        type Point = DateValueDouble;
-        fn get_query() -> Statement {
+    impl StatementForOne for AverageBlockTimeStatement {
+        fn get_statement() -> Statement {
             Statement::from_sql_and_values(
                 DbBackend::Postgres,
                 r#"
@@ -41,8 +39,10 @@ mod _inner {
         }
     }
 
-    pub type AverageBlockTimeRemoteString =
-        MapToString<RemotePointSourceWrapper<AverageBlockTimeRemote>>;
+    pub type AverageBlockTimeRemote =
+        RemoteDatabaseSource<PullOne<AverageBlockTimeStatement, DateValueDouble>>;
+
+    pub type AverageBlockTimeRemoteString = MapToString<AverageBlockTimeRemote>;
 
     pub struct AverageBlockTimeInner;
 

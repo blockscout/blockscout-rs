@@ -1,11 +1,13 @@
 use crate::data_source::kinds::updateable_chart::clone::CloneChartWrapper;
 
 mod _inner {
+    use std::ops::RangeInclusive;
+
     use crate::{
         charts::db_interaction::types::DateValueDouble,
         data_source::kinds::{
             adapter::to_string::MapToString,
-            remote::{RemoteSource, RemoteSourceWrapper},
+            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
             updateable_chart::clone::CloneChart,
         },
         utils::sql_with_range_filter_opt,
@@ -16,12 +18,10 @@ mod _inner {
 
     const ETH: i64 = 1_000_000_000_000_000_000;
 
-    pub struct AverageBlockRewardsRemote;
+    pub struct AverageBlockRewardsQuery;
 
-    impl RemoteSource for AverageBlockRewardsRemote {
-        type Point = DateValueDouble;
-
-        fn get_query(range: Option<std::ops::RangeInclusive<DateTimeUtc>>) -> Statement {
+    impl StatementFromRange for AverageBlockRewardsQuery {
+        fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
             sql_with_range_filter_opt!(
                 DbBackend::Postgres,
                 r#"
@@ -42,8 +42,10 @@ mod _inner {
         }
     }
 
-    pub type AverageBlockRewardsRemoteString =
-        MapToString<RemoteSourceWrapper<AverageBlockRewardsRemote>>;
+    pub type AverageBlockRewardsRemote =
+        RemoteDatabaseSource<PullAllWithAndSort<AverageBlockRewardsQuery, DateValueDouble>>;
+
+    pub type AverageBlockRewardsRemoteString = MapToString<AverageBlockRewardsRemote>;
 
     pub struct AverageBlockRewardsInner;
 

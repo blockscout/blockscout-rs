@@ -1,10 +1,12 @@
 use crate::data_source::kinds::updateable_chart::clone::point::ClonePointChartWrapper;
 
 mod _inner {
+    use std::ops::RangeInclusive;
+
     use crate::{
         data_source::{
             kinds::{
-                remote::point::{RemotePointSource, RemotePointSourceWrapper},
+                remote_db::{QueryBehaviour, RemoteDatabaseSource},
                 updateable_chart::clone::point::ClonePointChart,
             },
             types::UpdateContext,
@@ -22,15 +24,15 @@ mod _inner {
         timestamp: NaiveDateTime,
     }
 
-    pub struct TotalBlocksRemote;
+    pub struct TotalBlocksQueryBehaviour;
 
-    impl RemotePointSource for TotalBlocksRemote {
-        type Point = DateValueString;
-        fn get_query() -> sea_orm::Statement {
-            unreachable!("must not be called")
-        }
+    impl QueryBehaviour for TotalBlocksQueryBehaviour {
+        type Output = DateValueString;
 
-        async fn query_data(cx: &UpdateContext<'_>) -> Result<Self::Point, UpdateError> {
+        async fn query_data(
+            cx: &UpdateContext<'_>,
+            _range: Option<RangeInclusive<DateTimeUtc>>,
+        ) -> Result<Self::Output, UpdateError> {
             let data = blocks::Entity::find()
                 .select_only()
                 .column_as(Expr::col(blocks::Column::Number).count(), "number")
@@ -50,6 +52,8 @@ mod _inner {
         }
     }
 
+    pub type TotalBlocksRemote = RemoteDatabaseSource<TotalBlocksQueryBehaviour>;
+
     pub struct TotalBlocksInner;
 
     impl Named for TotalBlocksInner {
@@ -63,7 +67,7 @@ mod _inner {
     }
 
     impl ClonePointChart for TotalBlocksInner {
-        type Dependency = RemotePointSourceWrapper<TotalBlocksRemote>;
+        type Dependency = TotalBlocksRemote;
     }
 }
 
