@@ -21,9 +21,7 @@ on:
                 required: true
             project_name:
                 description: Project name
-                type: choice
-                options:
-                    - blockscout-ens
+                type: string
                 required: true
 
 jobs:
