@@ -28,6 +28,8 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     name: Publish package to NPM registry
+    permissions:
+        id-token: write
 
     steps:
         - name: Checkout repo
@@ -39,6 +41,9 @@ jobs:
           with:
             node-version: '20.x'
             registry-url: 'https://registry.npmjs.org'
+
+        - name: Install Protoc
+          uses: arduino/setup-protoc@v3
 
         - name: Update package version
           run: |
