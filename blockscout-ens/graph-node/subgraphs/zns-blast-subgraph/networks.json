@@ -1,0 +1,8 @@
+{
+  "blast-mainnet": {
+    "ZNSRegistry": {
+      "address": "0x59B9Ac688e39A14b938AC8C3269db66D8aDB9aF6",
+      "startBlock": 4178183
+    }
+  }
+}
