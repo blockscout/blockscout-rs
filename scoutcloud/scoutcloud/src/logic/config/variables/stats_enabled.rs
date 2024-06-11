@@ -37,7 +37,7 @@ impl UserVariable for StatsEnabled {
             }
             let cors = [
                 base_url.as_str().trim_end_matches('/'),
-                "https://*.k8s-dev.blockscout.com",
+                "https://*.cloud.blockscout.com",
                 "https://*.blockscout.com",
                 "http://localhost:3000",
             ]

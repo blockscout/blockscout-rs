@@ -4,15 +4,15 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum PromoError {
-    #[error("Promo code not found")]
+    #[error("promo code not found")]
     NotFound,
-    #[error("Promo code already used")]
+    #[error("promo code already used or expired")]
     AlreadyUsed,
-    #[error("Db error: {0}")]
+    #[error("db error: {0}")]
     Db(#[from] DbErr),
 }
 
-pub async fn try_use_promo<C: ConnectionTrait>(
+pub async fn try_find_promo<C: ConnectionTrait>(
     db: &C,
     code: &str,
 ) -> Result<register_promo::Model, PromoError> {

@@ -34,7 +34,7 @@ impl StoppingTask {
 #[typetag::serde]
 #[fang::async_trait]
 impl AsyncRunnable for StoppingTask {
-    #[tracing::instrument(err(Debug), skip(_client), level = "info")]
+    #[tracing::instrument(err(Debug), skip(_client), level = "debug")]
     async fn run(&self, _client: &dyn AsyncQueueable) -> Result<(), FangError> {
         let db = global::DATABASE.get().await;
         let github = global::GITHUB.get().await;

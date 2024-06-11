@@ -1,5 +1,5 @@
 use crate::{
-    logic::{users::register_promo::try_use_promo, AuthError, UserToken},
+    logic::{users::register_promo::try_find_promo, AuthError, UserToken},
     server::proto,
 };
 use sea_orm::{
@@ -13,7 +13,7 @@ pub async fn register_profile(
     profile: &proto::RegisterProfileRequestInternal,
 ) -> Result<proto::RegisterProfileResponseInternal, AuthError> {
     let maybe_promo = if let Some(promo) = &profile.promo {
-        Some(try_use_promo(db, promo).await?)
+        Some(try_find_promo(db, promo).await?)
     } else {
         None
     };

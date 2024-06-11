@@ -1115,7 +1115,8 @@ dependencies = [
 
 [[package]]
 name = "blockscout-client"
-version = "0.1.0"
+version = "0.1.1"
+source = "git+https://github.com/blockscout/blockscout-rs?branch=ll/bclient-add-health#b0551cf61ab5615d5dcf3ffb256d8705bd203f46"
 dependencies = [
  "anyhow",
  "chrono",

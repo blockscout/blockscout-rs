@@ -500,8 +500,6 @@ definitions:
     properties:
       instance_id:
         type: string
-      deployment_id:
-        type: string
       name:
         type: string
       slug:
@@ -510,8 +508,8 @@ definitions:
         type: string
       config:
         $ref: '#/definitions/v1DeployConfig'
-      deployment_status:
-        $ref: '#/definitions/v1DeploymentStatus'
+      deployment:
+        $ref: '#/definitions/v1Deployment'
   v1ListDeploymentsResponse:
     type: object
     properties:

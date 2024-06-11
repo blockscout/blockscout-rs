@@ -217,7 +217,7 @@ mod tests {
                         "repository": "blockscout/blockscout-stability",
                     },
                     "ingress": {
-                        "hostname": "hostname-test.k8s-dev.blockscout.com",
+                        "hostname": "hostname-test.cloud.blockscout.com",
                     },
                     "env": {
                         "CHAIN_TYPE": "stability",
@@ -239,7 +239,7 @@ mod tests {
                 },
                 "frontend": {
                     "ingress": {
-                        "hostname": "hostname-test.k8s-dev.blockscout.com",
+                        "hostname": "hostname-test.cloud.blockscout.com",
                     },
                     "env": {
                         "NEXT_PUBLIC_HOMEPAGE_PLATE_BACKGROUND": "#111111",
@@ -306,7 +306,7 @@ mod tests {
             json!({
                 "blockscout": {
                     "ingress": {
-                        "hostname": "test-client.k8s-dev.blockscout.com",
+                        "hostname": "test-client.cloud.blockscout.com",
                     },
                     "env": {
                         "ETHEREUM_JSONRPC_HTTP_URL": server.url("/"),
@@ -325,7 +325,7 @@ mod tests {
                 },
                 "frontend": {
                     "ingress": {
-                        "hostname": "test-client.k8s-dev.blockscout.com",
+                        "hostname": "test-client.cloud.blockscout.com",
                     },
                 },
                 "config": {
@@ -353,7 +353,7 @@ mod tests {
             .await
             .expect("failed to generate config");
 
-        let correct_cors = format!("{base_url}, https://*.k8s-dev.blockscout.com, https://*.blockscout.com, http://localhost:3000",
+        let correct_cors = format!("{base_url}, https://*.cloud.blockscout.com, https://*.blockscout.com, http://localhost:3000",
                                    base_url = blockscout.base_url()
         );
 
@@ -419,7 +419,7 @@ mod tests {
     tag: 6.5.0
   ingress:
     enabled: true
-    hostname: hostname-test.k8s-dev.blockscout.com
+    hostname: hostname-test.cloud.blockscout.com
   resources:
     limits:
       cpu: '2'
@@ -463,7 +463,7 @@ frontend:
     tag: v1.29.2
   ingress:
     enabled: true
-    hostname: hostname-test.k8s-dev.blockscout.com
+    hostname: hostname-test.cloud.blockscout.com
   replicas:
     app: 2
   resources: null

@@ -1,11 +1,12 @@
 #![allow(clippy::blocks_in_conditions)]
 
-use super::global;
+use super::{global, supervisor};
 use crate::logic::{DeployError, Deployment, GithubClient, Instance};
 use fang::{typetag, AsyncQueueable, AsyncRunnable, FangError, Scheduled};
 use scoutcloud_entity::sea_orm_active_enums::DeploymentStatusType;
 use sea_orm::DatabaseConnection;
 use std::time::Duration;
+use tracing::instrument;
 
 // some actions may be really long
 // https://github.com/blockscout/autodeploy/actions/runs/8816771748
@@ -38,7 +39,7 @@ impl StartingTask {
 #[typetag::serde]
 #[fang::async_trait]
 impl AsyncRunnable for StartingTask {
-    #[tracing::instrument(err(Debug), skip(_client), level = "info")]
+    #[instrument(err(Debug), skip(_client), level = "debug")]
     async fn run(&self, _client: &dyn AsyncQueueable) -> Result<(), FangError> {
         let db = global::DATABASE.get().await;
         let github = global::GITHUB.get().await;
@@ -55,7 +56,9 @@ impl AsyncRunnable for StartingTask {
         let result = match &deployment.model.status {
             DeploymentStatusType::Created
             | DeploymentStatusType::Stopped
-            | DeploymentStatusType::Running => {
+            | DeploymentStatusType::Running
+            | DeploymentStatusType::Unhealthy
+            | DeploymentStatusType::Failed => {
                 self.github_deploy_and_wait(
                     db.as_ref(),
                     github.as_ref(),
@@ -64,10 +67,7 @@ impl AsyncRunnable for StartingTask {
                 )
                 .await
             }
-            DeploymentStatusType::Pending
-            | DeploymentStatusType::Stopping
-            | DeploymentStatusType::Failed
-            | DeploymentStatusType::Unhealthy => {
+            DeploymentStatusType::Pending | DeploymentStatusType::Stopping => {
                 tracing::warn!(
                     "cannot start deployment '{}': state '{:?}' is invalid",
                     self.deployment_id,
@@ -108,8 +108,7 @@ impl StartingTask {
         github
             .wait_for_success_workflow(&run, self.workflow_timeout, self.workflow_check_interval)
             .await?;
-
-        deployment.mark_as_running(db).await?;
+        supervisor::check_deployment_health(db, deployment).await?;
         Ok(())
     }
 }
@@ -117,7 +116,12 @@ impl StartingTask {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests_utils;
+    use crate::{
+        tests_utils,
+        tests_utils::blockscout::{
+            start_blockscout_and_set_url, update_blockscout_url_of_all_instances,
+        },
+    };
 
     #[tokio::test]
     #[serial_test::serial]
@@ -125,6 +129,7 @@ mod tests {
         let (db, _github, repo, runner) =
             tests_utils::init::jobs_runner_test_case("starting_task_works").await;
         let conn = db.client();
+        let _blockscout = start_blockscout_and_set_url(conn.as_ref(), true, true).await;
         let _handles = repo.build_handles();
 
         let not_started_deployment_id = 4;
@@ -147,8 +152,19 @@ mod tests {
             "deployment is not running. error: {:?}",
             deployment.model.error
         );
-        // handles.assert_hits("dispatch_deploy_yaml", 1);
-        // handles.assert_hits("runs_deploy_yaml", 1);
-        // handles.assert_hits("single_run_deploy_yaml", 1);
+
+        update_blockscout_url_of_all_instances(conn.as_ref(), "http://localhost:1234").await;
+        runner.insert_task(&task).await.unwrap();
+        tests_utils::db::wait_for_empty_fang_tasks(conn.clone())
+            .await
+            .unwrap();
+        let deployment = Deployment::get(conn.as_ref(), not_started_deployment_id)
+            .await
+            .unwrap();
+        assert_eq!(
+            deployment.model.status,
+            DeploymentStatusType::Unhealthy,
+            "deployment should be unhealthy"
+        );
     }
 }

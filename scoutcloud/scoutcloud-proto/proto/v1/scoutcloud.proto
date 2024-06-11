@@ -269,12 +269,11 @@ message UpdateInstanceStatusResponse {
 
 message Instance {
   string instance_id = 1;
-  optional string deployment_id = 2;
   string name = 3;
   string slug = 4;
   string created_at = 5;
   DeployConfig config = 6;
-  DeploymentStatus deployment_status = 7;
+  Deployment deployment = 7;
 }
 
 message Deployment {

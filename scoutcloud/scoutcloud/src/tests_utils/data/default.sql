@@ -28,4 +28,5 @@ VALUES
     (1, 1, 1, NOW() - INTERVAL '5 hours', NOW() - INTERVAL '4 hours', 'running', '{}', '{"frontend": {"ingress": {"hostname": "instance.example.com"}}}'),
     (2, 2, 1, NOW() - INTERVAL '4 hours', NOW() - INTERVAL '3 hours', 'stopped', '{}', '{"frontend": {"ingress": {"hostname": "instance.example.com"}}}'),
     (3, 2, 1, NOW() - INTERVAL '3 hours', NOW() - INTERVAL '2 hours', 'failed', '{}', '{"frontend": {"ingress": {"hostname": "instance.example.com"}}}'),
-    (4, 3, 1, NOW() - INTERVAL '2 hours', NULL, 'created', '{}', '{"frontend": {"ingress": {"hostname": "instance.example.com"}}}');
+    (4, 3, 1, NOW() - INTERVAL '2 hours', NULL, 'created', '{}', '{"frontend": {"ingress": {"hostname": "instance.example.com"}}}'),
+    (5, 1, 1, NOW() - INTERVAL '1 hours', NULL, 'unhealthy', '{}', '{"frontend": {"ingress": {"hostname": "instance.example.com"}}}');

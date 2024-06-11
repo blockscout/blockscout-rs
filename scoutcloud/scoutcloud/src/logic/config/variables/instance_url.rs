@@ -15,7 +15,7 @@ impl Display for InstanceUrl {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             InstanceUrl::Host(v) => write!(f, "{v}"),
-            InstanceUrl::Prefix(v) => write!(f, "{v}.k8s-dev.blockscout.com"),
+            InstanceUrl::Prefix(v) => write!(f, "{v}.cloud.blockscout.com"),
         }
     }
 }

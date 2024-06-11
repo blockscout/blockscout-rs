@@ -142,6 +142,10 @@ impl Deployment {
         Instance::get(db, self.model.instance_id).await
     }
 
+    pub fn is_started(&self) -> bool {
+        self.model.started_at.is_some()
+    }
+
     pub async fn update_status<C>(
         &mut self,
         db: &C,
@@ -197,7 +201,7 @@ impl Deployment {
         Ok(self)
     }
 
-    pub async fn mark_as_running<C>(&mut self, db: &C) -> Result<&mut Self, DeployError>
+    pub async fn mark_as_started<C>(&mut self, db: &C) -> Result<&mut Self, DeployError>
     where
         C: ConnectionTrait,
     {
@@ -206,6 +210,10 @@ impl Deployment {
         model.status = Set(DeploymentStatusType::Running);
         model.started_at = Set(Some(chrono::Utc::now().fixed_offset()));
         model.instance_url = Set(Some(instance_url.to_string()));
+        if let Some(err) = &self.model.error {
+            tracing::info!("deployment {} started after error: {}", self.model.id, err);
+        }
+        model.error = Set(None);
         self.model = model.update(db).await?;
         Ok(self)
     }
@@ -222,4 +230,23 @@ pub fn map_deployment_status(status: Option<&DeploymentStatusType>) -> proto::De
         Some(DeploymentStatusType::Stopped) => proto::DeploymentStatus::Stopped,
         Some(DeploymentStatusType::Unhealthy) => proto::DeploymentStatus::Unhealthy,
     }
+}
+
+pub fn convert_deployment_from_logic(
+    deployment: Deployment,
+    instance: &Instance,
+) -> Result<proto::DeploymentInternal, anyhow::Error> {
+    let config = deployment.user_config()?;
+    Ok(proto::DeploymentInternal {
+        deployment_id: deployment.model.external_id.to_string(),
+        instance_id: instance.model.external_id.to_string(),
+        status: map_deployment_status(Some(&deployment.model.status)),
+        error: deployment.model.error,
+        created_at: deployment.model.created_at.to_string(),
+        started_at: deployment.model.started_at.map(|t| t.to_string()),
+        finished_at: deployment.model.finished_at.map(|t| t.to_string()),
+        config: Some(config.internal),
+        blockscout_url: deployment.model.instance_url,
+        total_cost: deployment.model.total_cost.to_string(),
+    })
 }
