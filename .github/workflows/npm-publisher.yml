@@ -40,6 +40,9 @@ jobs:
             node-version: '20.x'
             registry-url: 'https://registry.npmjs.org'
 
+        - name: Install Protoc
+          uses: arduino/setup-protoc@v3
+
         - name: Update package version
           run: |
             cd ./${{ inputs.project_name }}/types
