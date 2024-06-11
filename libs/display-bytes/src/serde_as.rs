@@ -4,12 +4,10 @@
 //!
 //! Please check the documentation on the [`Hex`] type for details.
 
-use serde_with::formats;
-use serde_with::{SerializeAs, DeserializeAs};
-use serde::{Serializer, Deserializer, Deserialize, de::Error as DeError};
-use std::marker::PhantomData;
-use std::borrow::Cow;
 use crate::ToHex;
+use serde::{de::Error as DeError, Deserialize, Deserializer, Serializer};
+use serde_with::{formats, DeserializeAs, SerializeAs};
+use std::{borrow::Cow, marker::PhantomData};
 
 /// Serialize bytes as a hex string
 ///
@@ -100,37 +98,37 @@ use crate::ToHex;
 pub struct Hex<FORMAT: formats::Format = formats::Lowercase>(PhantomData<FORMAT>);
 
 impl<T> SerializeAs<T> for Hex<formats::Lowercase>
-    where
-        T: AsRef<[u8]>,
+where
+    T: AsRef<[u8]>,
 {
     fn serialize_as<S>(source: &T, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
+    where
+        S: Serializer,
     {
         serializer.serialize_str(&ToHex::to_hex(source))
     }
 }
 
 impl<T> SerializeAs<T> for Hex<formats::Uppercase>
-    where
-        T: AsRef<[u8]>,
+where
+    T: AsRef<[u8]>,
 {
     fn serialize_as<S>(source: &T, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
+    where
+        S: Serializer,
     {
         serializer.serialize_str(&ToHex::to_hex_upper(source))
     }
 }
 
 impl<'de, T, FORMAT> DeserializeAs<'de, T> for Hex<FORMAT>
-    where
-        T: TryFrom<Vec<u8>>,
-        FORMAT: formats::Format,
+where
+    T: TryFrom<Vec<u8>>,
+    FORMAT: formats::Format,
 {
     fn deserialize_as<D>(deserializer: D) -> Result<T, D::Error>
-        where
-            D: Deserializer<'de>,
+    where
+        D: Deserializer<'de>,
     {
         <Cow<'de, str> as Deserialize<'de>>::deserialize(deserializer)
             .and_then(|s| crate::decode_hex(s.as_ref()).map_err(DeError::custom))
