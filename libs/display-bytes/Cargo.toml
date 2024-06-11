@@ -1,6 +1,6 @@
 [package]
 name = "blockscout-display-bytes"
-version = "1.0.0"
+version = "1.1.0"
 description = "Wrapper type around Bytes to deserialize/serialize \"0x\" prefixed hex strings."
 license = "MIT"
 repository = "https://github.com/blockscout/blockscout-rs"
