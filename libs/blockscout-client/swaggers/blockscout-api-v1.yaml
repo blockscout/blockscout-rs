@@ -1,0 +1,75 @@
+openapi: 3.0.1
+info:
+  title: Blockscout v1
+  version: 1.0.0
+servers:
+  - url: /
+tags:
+  - name: Health
+paths:
+  /api/v1/health:
+    get:
+      tags:
+        - Health
+      operationId: Health
+      responses:
+        "200":
+          description: A successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/v1HealthCheckResponse'
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/rpcStatus'
+components:
+  schemas:
+    protobufAny:
+      type: object
+      properties:
+        '@type':
+          type: string
+      additionalProperties:
+        type: object
+    rpcStatus:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            $ref: '#/components/schemas/protobufAny'
+    v1Data:
+      title: |-
+        "data": {
+        "cache_latest_block_inserted_at": "2024-06-12 10:01:47.000000Z",
+        "cache_latest_block_number": "20075019",
+        "latest_block_inserted_at": "2024-06-12 10:01:47.000000Z",
+        "latest_block_number": "20075019"
+        },
+        "healthy": true
+      type: object
+      properties:
+        cache_latest_block_inserted_at:
+          type: string
+        cache_latest_block_number:
+          type: string
+        latest_block_inserted_at:
+          type: string
+        latest_block_number:
+          type: string
+    v1HealthCheckResponse:
+      type: object
+      properties:
+        healthy:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/v1Data'
+x-original-swagger-version: "2.0"

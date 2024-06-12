@@ -1,0 +1,27 @@
+[package]
+name = "blockscout-client"
+version = "0.1.0"
+authors = ["l.lymarenko@blockscout.com"]
+description = "API for BlockScout web app"
+license = "Apache 2.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "^1.0", features = ["derive"] }
+serde_json = { package = "serde_json_path_to_error", version = "0.1.4" }
+url = "^2.5"
+uuid = { version = "^1.8", features = ["serde", "v4"] }
+reqwest = { version = "^0.12", features = ["json", "multipart"] }
+reqwest-middleware = { version = "^0.3", features = ["json", "multipart"] }
+serde_with = "3.8.1"
+derive-new = "0.6.0"
+reqwest-retry = "0.5.0"
+
+
+[dev-dependencies]
+asserhttp = "0.7.1"
+pretty_assertions = "1.4.0"
+rstest = "0.21.0"
+stubr = { version = "0.6.2", features = ["record-reqwest", "record-standalone"] }
+tokio = { version = "1.38.0", features = ["full"] }
+
