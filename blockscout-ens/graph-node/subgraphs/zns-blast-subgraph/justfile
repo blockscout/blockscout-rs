@@ -1,7 +1,7 @@
 graph_node_url := "http://127.0.0.1:8020"
 ipfs_url := "http://127.0.0.1:5001"
-network := "polygon-mainnet"
-name := "zns-subgraph"
+network := "blast-mainnet"
+name := "zns-blast-subgraph"
 
 init:
     yarn install
