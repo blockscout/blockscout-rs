@@ -9,24 +9,15 @@
  */
 
 use crate::models;
+use derive_new::new;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(new, Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct DecodedInputParameter {
     #[serde(rename = "name")]
     pub name: String,
     #[serde(rename = "type")]
     pub r#type: String,
     #[serde(rename = "value")]
-    pub value: String,
-}
-
-impl DecodedInputParameter {
-    pub fn new(name: String, r#type: String, value: String) -> DecodedInputParameter {
-        DecodedInputParameter {
-            name,
-            r#type,
-            value,
-        }
-    }
+    pub value: serde_json::Value,
 }

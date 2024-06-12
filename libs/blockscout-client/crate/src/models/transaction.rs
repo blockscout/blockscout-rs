@@ -38,9 +38,9 @@ pub struct Transaction {
     #[serde(rename = "to")]
     pub to: models::AddressParam,
     #[serde(rename = "tx_burnt_fee")]
-    pub tx_burnt_fee: String,
+    pub tx_burnt_fee: Option<String>,
     #[serde(rename = "max_fee_per_gas")]
-    pub max_fee_per_gas: String,
+    pub max_fee_per_gas: Option<String>,
     #[serde(rename = "result")]
     pub result: String,
     #[serde(rename = "hash")]
@@ -48,7 +48,7 @@ pub struct Transaction {
     #[serde(rename = "gas_price")]
     pub gas_price: String,
     #[serde(rename = "priority_fee")]
-    pub priority_fee: String,
+    pub priority_fee: Option<String>,
     #[serde(rename = "base_fee_per_gas")]
     pub base_fee_per_gas: String,
     #[serde(rename = "from")]
@@ -79,9 +79,9 @@ pub struct Transaction {
     #[serde(rename = "value")]
     pub value: String,
     #[serde(rename = "max_priority_fee_per_gas")]
-    pub max_priority_fee_per_gas: String,
+    pub max_priority_fee_per_gas: Option<String>,
     #[serde(rename = "revert_reason")]
-    pub revert_reason: Option<String>,
+    pub revert_reason: Option<serde_json::Value>,
     #[serde(rename = "confirmation_duration")]
     pub confirmation_duration: serde_json::Value,
     #[serde(rename = "tx_tag")]
