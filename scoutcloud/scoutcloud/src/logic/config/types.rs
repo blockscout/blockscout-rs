@@ -1,5 +1,5 @@
 use crate::logic::config::ConfigError;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum ParsedVariableKey {
@@ -37,9 +37,6 @@ pub trait UserVariable: Send + Sync {
         None
     }
 }
-
-#[derive(Clone, Default)]
-pub struct ParsedVars(pub BTreeMap<ParsedVariableKey, serde_json::Value>);
 
 #[derive(Clone)]
 pub struct ConfigValidationContext {
