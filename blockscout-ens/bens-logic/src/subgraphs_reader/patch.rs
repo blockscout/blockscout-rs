@@ -61,7 +61,11 @@ pub fn patch_detailed_domain(
 }
 
 fn update_domain_name_in_background(pool: Arc<PgPool>, domain_name: DomainNameOnProtocol) {
-    let schema = domain_name.protocol.subgraph_schema.clone();
+    let schema = domain_name
+        .deployed_protocol
+        .protocol
+        .subgraph_schema
+        .clone();
     let domain_name = domain_name.inner.clone();
     tokio::spawn(async move {
         let name = domain_name.name.clone();

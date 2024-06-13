@@ -10,6 +10,14 @@
           "ens"
         ]
       },
+      "10": {
+        "blockscout": {
+          "url": "https://optimism.blockscout.com/"
+        },
+        "use_protocols": [
+          "ens"
+        ]
+      },
       "30": {
         "blockscout": {
           "url": "https://rootstock.blockscout.com"
@@ -32,6 +40,22 @@
         },
         "use_protocols": [
           "zns"
+        ]
+      },
+      "690": {
+        "blockscout": {
+          "url": "https://explorer.redstone.xyz/"
+        },
+        "use_protocols": [
+          "ens"
+        ]
+      },
+      "17069": {
+        "blockscout": {
+          "url": "https://explorer.garnetchain.com/"
+        },
+        "use_protocols": [
+          "ens"
         ]
       },
       "8453": {
@@ -57,6 +81,14 @@
         "use_protocols": [
           "lightlink"
         ]
+      },
+      "11155420": {
+        "blockscout": {
+          "url": "https://optimism-sepolia.blockscout.com/"
+        },
+        "use_protocols": [
+          "ens"
+        ]
       }
     },
     "protocols": {
@@ -64,6 +96,7 @@
         "tld_list": [
           "eth"
         ],
+        "network_id": 1,
         "subgraph_name": "ens-subgraph",
         "address_resolve_technique": "reverse_registry",
         "native_token_contract": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85",
@@ -79,6 +112,7 @@
         "tld_list": [
           "gno"
         ],
+        "network_id": 100,
         "subgraph_name": "genome-subgraph",
         "address_resolve_technique": "reverse_registry",
         "empty_label_hash": "0xc4a8c56f9b0096f720f38bd557d30306dbd78f7751d277e05f062d1b85912a63",
@@ -95,6 +129,7 @@
         "tld_list": [
           "rsk"
         ],
+        "network_id": 30,
         "subgraph_name": "rns-subgraph",
         "address_resolve_technique": "all_domains",
         "native_token_contract": "0x45d3E4fB311982a06ba52359d44cB4f5980e0ef1",
@@ -110,6 +145,7 @@
         "tld_list": [
           "base"
         ],
+        "network_id": 8453,
         "subgraph_name": "base-name-service-subgraph",
         "address_resolve_technique": "reverse_registry",
         "native_token_contract": "0xaCe5602d169Edeb874bfE584a651801B8ac67093",
@@ -125,6 +161,7 @@
         "tld_list": [
           "mode"
         ],
+        "network_id": 34443,
         "subgraph_name": "mode-subgraph",
         "address_resolve_technique": "reverse_registry",
         "native_token_contract": "0x2ad86eeec513ac16804bb05310214c3fd496835b",
@@ -141,6 +178,7 @@
         "tld_list": [
           "ll"
         ],
+        "network_id": 1890,
         "subgraph_name": "lightlink-subgraph",
         "address_resolve_technique": "reverse_registry",
         "native_token_contract": "0x5183ba1dee9770760360533cf00b9d8e26495927",
@@ -157,6 +195,7 @@
         "tld_list": [
           "poly"
         ],
+        "network_id": 137,
         "subgraph_name": "zns-subgraph",
         "address_resolve_technique": "all_domains",
         "meta": {

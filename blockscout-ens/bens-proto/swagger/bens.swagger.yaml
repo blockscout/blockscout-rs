@@ -1,10 +1,15 @@
 swagger: "2.0"
 info:
-  title: bens.proto
-  version: version not set
+  title: Blockscout ENS
+  version: 1.3.0
+  contact:
+    name: Blockscout
+    url: https://blockscout.com
+    email: support@blockscout.com
 tags:
   - name: DomainsExtractor
   - name: Health
+host: bens.services.blockscout.com
 consumes:
   - application/json
 produces:
@@ -545,6 +550,8 @@ definitions:
         type: string
       description:
         type: string
+      deployment_blockscout_base_url:
+        type: string
       tld_list:
         type: array
         items:
@@ -568,3 +575,6 @@ definitions:
       - NATIVE_DOMAIN_TOKEN
       - WRAPPED_DOMAIN_TOKEN
     default: NATIVE_DOMAIN_TOKEN
+externalDocs:
+  description: More about blockscout microservices
+  url: https://github.com/blockscout/blockscout-rs

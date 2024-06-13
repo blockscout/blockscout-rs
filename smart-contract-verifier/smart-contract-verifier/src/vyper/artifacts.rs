@@ -1,4 +1,3 @@
-use crate::verifier;
 use foundry_compilers::artifacts::{
     output_selection::{FileOutputSelection, OutputSelection},
     serde_helpers, Source, Sources,
@@ -21,17 +20,6 @@ pub struct CompilerInput {
     pub interfaces: Interfaces,
     #[serde(default)]
     pub settings: Settings,
-}
-
-impl verifier::CompilerInput for CompilerInput {
-    fn modify(mut self) -> Self {
-        self.sources.iter_mut().for_each(|(_file, source)| {
-            let mut modified_content = source.content.as_ref().clone();
-            modified_content.push(' ');
-            source.content = std::sync::Arc::new(modified_content);
-        });
-        self
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -57,6 +45,12 @@ pub struct Settings {
     /// checking, but will not generate any outputs apart from errors.
     #[serde(default)]
     pub output_selection: FileOutputSelection,
+    #[serde(
+        rename = "search_paths",
+        default,
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub search_paths: Vec<String>,
 }
 
 impl Default for Settings {
@@ -66,6 +60,7 @@ impl Default for Settings {
             evm_version: None,
             optimize: None,
             bytecode_metadata: None,
+            search_paths: Vec::new(),
         }
     }
 }

@@ -125,6 +125,7 @@ pub fn detailed_domain_from_logic(
 ) -> Result<proto::DetailedDomain, ConversionError> {
     let domain = output.domain;
     let protocol = output.protocol;
+    let network = output.deployment_network;
     let owner = Some(address_from_str_logic(&domain.owner, chain_id)?);
     let resolved_address = domain
         .resolved_address
@@ -144,7 +145,7 @@ pub fn detailed_domain_from_logic(
         .into_iter()
         .map(|t| domain_token_from_logic(t, chain_id))
         .collect();
-    let protocol = Some(protocol_from_logic(protocol));
+    let protocol = Some(protocol_from_logic(protocol, network));
     Ok(proto::DetailedDomain {
         id: domain.id,
         name: domain.name.unwrap_or_default(),
@@ -174,7 +175,10 @@ pub fn domain_from_logic(
         .wrapped_owner
         .map(|wrapped_owner| address_from_str_logic(&wrapped_owner, chain_id))
         .transpose()?;
-    let protocol = Some(protocol_from_logic(output.protocol));
+    let protocol = Some(protocol_from_logic(
+        output.protocol,
+        output.deployment_network,
+    ));
     Ok(proto::Domain {
         id: domain.id,
         name: domain.name.unwrap_or_default(),
@@ -203,13 +207,7 @@ pub fn address_from_str_inner(addr: &str) -> Result<Address, ConversionError> {
 }
 
 fn name_from_inner(name: String) -> Result<String, ConversionError> {
-    let name = name.trim_matches('.');
-    if name.is_empty() {
-        return Err(ConversionError::UserRequest(
-            "empty name provided".to_string(),
-        ));
-    };
-    Ok(name.to_string())
+    Ok(name)
 }
 
 fn page_size_from_inner(page_size: Option<u32>) -> u32 {

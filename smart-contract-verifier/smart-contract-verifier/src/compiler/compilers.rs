@@ -28,9 +28,17 @@ pub enum Error {
     Acquire(#[from] AcquireError),
 }
 
+pub trait CompilerInput {
+    /// Modifies input so that the corresponding bytecode
+    /// should have modified metadata hash, if any.
+    fn modify(self) -> Self;
+
+    fn normalize_output_selection(&mut self, version: &Version);
+}
+
 #[async_trait::async_trait]
 pub trait EvmCompiler {
-    type CompilerInput;
+    type CompilerInput: CompilerInput + Clone;
 
     async fn compile(
         &self,
@@ -70,6 +78,8 @@ where
         input: &C::CompilerInput,
         chain_id: Option<&str>,
     ) -> Result<(serde_json::Value, CompilerOutput), Error> {
+        let mut input = input.clone();
+        input.normalize_output_selection(compiler_version);
         let path_result = {
             self.cache
                 .get(self.fetcher.as_ref(), compiler_version)
@@ -96,7 +106,7 @@ where
                 .start_timer();
             let _compile_gauge_guard = metrics::COMPILATIONS_IN_FLIGHT.guarded_inc();
             self.evm_compiler
-                .compile(&path, compiler_version, input)
+                .compile(&path, compiler_version, &input)
                 .await?
         };
 
