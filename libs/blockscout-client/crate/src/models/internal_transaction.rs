@@ -9,17 +9,16 @@
  */
 
 use crate::models;
-use derive_new::new;
 use serde::{Deserialize, Serialize};
 
-#[derive(new, Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(derive_new::new, Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct InternalTransaction {
     #[serde(rename = "block")]
     pub block: i32,
     #[serde(rename = "created_contract")]
-    pub created_contract: Option<models::AddressParam>,
+    pub created_contract: Option<models::AddressParam>, // changed
     #[serde(rename = "error")]
-    pub error: Option<String>,
+    pub error: Option<String>, // changed
     #[serde(rename = "from")]
     pub from: models::AddressParam,
     #[serde(rename = "gas_limit")]

@@ -9,17 +9,14 @@
  */
 
 use crate::models;
-use derive_new::new;
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 
-#[serde_as]
-#[derive(new, Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(derive_new::new, Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SmartContractForList {
     #[serde(rename = "address")]
     pub address: models::AddressParam,
     #[serde(rename = "coin_balance")]
-    pub coin_balance: Option<String>,
+    pub coin_balance: Option<String>, // changed
     #[serde(rename = "compiler_version")]
     pub compiler_version: String,
     #[serde(rename = "language")]
@@ -29,10 +26,9 @@ pub struct SmartContractForList {
     #[serde(rename = "optimization_enabled")]
     pub optimization_enabled: bool,
     #[serde(rename = "tx_count")]
-    pub tx_count: Option<i32>,
+    pub tx_count: Option<i32>, // changed
     #[serde(rename = "verified_at")]
     pub verified_at: String,
     #[serde(rename = "market_cap", skip_serializing_if = "Option::is_none")]
-    #[serde_as(as = "Option<serde_with::DisplayFromStr>")]
-    pub market_cap: Option<f64>,
+    pub market_cap: Option<String>, // changed
 }

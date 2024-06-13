@@ -9,17 +9,16 @@
  */
 
 use crate::models;
-use derive_new::new;
 use serde::{Deserialize, Serialize};
 
-#[derive(new, Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(derive_new::new, Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AddressParam {
     #[serde(rename = "hash")]
     pub hash: String,
     #[serde(rename = "implementation_name")]
-    pub implementation_name: Option<String>,
+    pub implementation_name: Option<String>, // changed
     #[serde(rename = "name")]
-    pub name: Option<String>,
+    pub name: Option<String>, // changed
     #[serde(rename = "is_contract")]
     pub is_contract: bool,
     #[serde(rename = "private_tags")]
@@ -29,5 +28,5 @@ pub struct AddressParam {
     #[serde(rename = "public_tags")]
     pub public_tags: Vec<models::AddressTag>,
     #[serde(rename = "is_verified")]
-    pub is_verified: Option<bool>,
+    pub is_verified: Option<bool>, // changed
 }

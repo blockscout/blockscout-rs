@@ -9,16 +9,12 @@
  */
 
 use crate::models;
-use derive_new::new;
 use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, DisplayFromStr};
 
-#[serde_as]
-#[derive(new, Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(derive_new::new, Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Reward {
     #[serde(rename = "reward")]
-    #[serde_as(as = "DisplayFromStr")]
-    pub reward: i64,
+    pub reward: String, // changed
     #[serde(rename = "type")]
     pub r#type: String,
 }

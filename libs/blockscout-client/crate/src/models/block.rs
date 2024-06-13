@@ -9,10 +9,9 @@
  */
 
 use crate::models;
-use derive_new::new;
 use serde::{Deserialize, Serialize};
 
-#[derive(new, Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(derive_new::new, Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Block {
     #[serde(rename = "base_fee_per_gas")]
     pub base_fee_per_gas: String,
@@ -23,7 +22,7 @@ pub struct Block {
     #[serde(rename = "difficulty")]
     pub difficulty: String,
     #[serde(rename = "extra_data")]
-    pub extra_data: Option<String>,
+    pub extra_data: Option<String>, // changed
     #[serde(rename = "gas_limit")]
     pub gas_limit: String,
     #[serde(rename = "gas_target_percentage")]
@@ -49,7 +48,7 @@ pub struct Block {
     #[serde(rename = "size")]
     pub size: i32,
     #[serde(rename = "state_root")]
-    pub state_root: Option<String>,
+    pub state_root: Option<String>, // changed
     #[serde(rename = "timestamp")]
     pub timestamp: String,
     #[serde(rename = "total_difficulty")]
@@ -63,5 +62,5 @@ pub struct Block {
     #[serde(rename = "uncles_hashes")]
     pub uncles_hashes: Vec<String>,
     #[serde(rename = "withdrawals_count")]
-    pub withdrawals_count: Option<i32>,
+    pub withdrawals_count: Option<i32>, // changed
 }

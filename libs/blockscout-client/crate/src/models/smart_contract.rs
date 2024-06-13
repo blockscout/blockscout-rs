@@ -9,10 +9,9 @@
  */
 
 use crate::models;
-use derive_new::new;
 use serde::{Deserialize, Serialize};
 
-#[derive(new, Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(derive_new::new, Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SmartContract {
     #[serde(
         rename = "verified_twin_address_hash",
@@ -75,7 +74,7 @@ pub struct SmartContract {
     #[serde(rename = "verified_at", skip_serializing_if = "Option::is_none")]
     pub verified_at: Option<String>,
     #[serde(rename = "abi", skip_serializing_if = "Option::is_none")]
-    pub abi: Option<serde_json::Value>,
+    pub abi: Option<serde_json::Value>, // changed
     #[serde(rename = "source_code", skip_serializing_if = "Option::is_none")]
     pub source_code: Option<String>,
     #[serde(rename = "file_path", skip_serializing_if = "Option::is_none")]

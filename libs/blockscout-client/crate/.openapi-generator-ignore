@@ -41,9 +41,9 @@ src/apis/configuration.rs
 # ======
 src/models/address_param.rs
 src/models/block.rs
-src/models/reward.rs
-src/models/transaction.rs
-src/models/internal_transaction.rs
-src/models/smart_contract_for_list.rs
-src/models/smart_contract.rs
 src/models/decoded_input_parameter.rs
+src/models/internal_transaction.rs
+src/models/reward.rs
+src/models/smart_contract.rs
+src/models/smart_contract_for_list.rs
+src/models/transaction.rs
