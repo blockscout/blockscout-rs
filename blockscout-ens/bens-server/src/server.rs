@@ -98,6 +98,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
                 name.clone(),
                 ProtocolInfo {
                     slug: name,
+                    network_id: p.network_id,
                     tld_list: p.tld_list,
                     subgraph_name: p.subgraph_name,
                     address_resolve_technique: p.address_resolve_technique,

@@ -151,13 +151,24 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: "blockscout-ens"
           file: "blockscout-ens/Dockerfile"
+          build-contexts: |
+            proto=proto
           push: ${{ steps.tags_extractor.outputs.tags != '' }}
           tags: ${{ steps.tags_extractor.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:build-cache
           cache-to: ${{ github.ref == 'refs/heads/main' && format('type=registry,ref={0}/{1}:build-cache,mode=max', env.REGISTRY, env.IMAGE_NAME) || '' }}
+
+      - name: Publish types package
+        uses: './.github/workflows/npm-publisher.yml'
+        if: steps.regex.outputs.group2 != ''
+        continue-on-error: true
+        with:
+          version: ${{ steps.regex.outputs.group2 }}
+          project_name: blockscout-ens

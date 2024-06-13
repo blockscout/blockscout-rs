@@ -1,6 +1,7 @@
 use super::solc_cli;
-use crate::compiler::{EvmCompiler, Version};
+use crate::compiler::{self, EvmCompiler, Version};
 use ethers_solc::{error::SolcError, CompilerOutput, Solc};
+use foundry_compilers::artifacts::output_selection::OutputSelection;
 use std::path::Path;
 
 #[derive(Default)]
@@ -9,6 +10,22 @@ pub struct SolidityCompiler {}
 impl SolidityCompiler {
     pub fn new() -> Self {
         SolidityCompiler {}
+    }
+}
+
+impl compiler::CompilerInput for foundry_compilers::CompilerInput {
+    fn modify(mut self) -> Self {
+        // TODO: could we update some other field to avoid copying strings?
+        self.sources.iter_mut().for_each(|(_file, source)| {
+            let mut modified_content = source.content.as_ref().clone();
+            modified_content.push(' ');
+            source.content = std::sync::Arc::new(modified_content);
+        });
+        self
+    }
+
+    fn normalize_output_selection(&mut self, _version: &Version) {
+        self.settings.output_selection = OutputSelection::complete_output_selection();
     }
 }
 
