@@ -32,6 +32,7 @@ git_push.sh
 docs/*.md
 .travis.yml
 
+src/lib.rs
 
 # ===
 # api

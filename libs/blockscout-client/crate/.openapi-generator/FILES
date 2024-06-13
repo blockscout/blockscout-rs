@@ -10,7 +10,6 @@ src/apis/stats_api.rs
 src/apis/tokens_api.rs
 src/apis/transactions_api.rs
 src/apis/withdrawals_api.rs
-src/lib.rs
 src/models/address.rs
 src/models/address_counters.rs
 src/models/address_tag.rs
