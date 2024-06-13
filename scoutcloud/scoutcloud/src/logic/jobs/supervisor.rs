@@ -1,6 +1,7 @@
 #![allow(clippy::blocks_in_conditions)]
 
-use crate::logic::{blockscout::blockscout_health, jobs::global, DeployError, Deployment};
+use crate::logic::{jobs::global, DeployError, Deployment};
+use blockscout_client::{apis::health_api, Configuration};
 use fang::{typetag, AsyncQueueable, AsyncRunnable, FangError, Scheduled};
 use scoutcloud_entity::sea_orm_active_enums::DeploymentStatusType;
 use sea_orm::prelude::*;
@@ -56,7 +57,8 @@ pub async fn check_deployment_health<C: ConnectionTrait>(
     deployment: &mut Deployment,
 ) -> Result<(), DeployError> {
     let instance_url = deployment.instance_config().parse_instance_url()?;
-    match blockscout_health(&instance_url).await {
+    let health_response = health_api::health(&Configuration::new(instance_url.clone())).await;
+    match health_response {
         Ok(response) if response.healthy.unwrap_or_default() => {
             if !deployment.is_started() {
                 deployment.mark_as_started(db).await?;

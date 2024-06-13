@@ -29,7 +29,7 @@ scoutcloud-migration = { path = "../scoutcloud-migration" }
 actix-web = "4.2"
 async-trait = "0.1"
 blockscout-service-launcher = { workspace = true, features = [ "database-0_12", "env-collector"] }
-blockscout-client = { git = "https://github.com/blockscout/blockscout-rs", branch = "ll/new-bclient" }
+blockscout-client = { git = "https://github.com/blockscout/blockscout-rs", branch = "main" }
 config = "0.13"
 tonic = "0.8"
 chrono = "0.4.35"
