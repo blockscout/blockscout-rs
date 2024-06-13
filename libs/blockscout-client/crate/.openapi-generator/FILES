@@ -24,7 +24,6 @@ src/models/contract_source.rs
 src/models/decoded_input.rs
 src/models/decoded_input_log.rs
 src/models/decoded_input_log_parameter.rs
-src/models/decoded_input_parameter.rs
 src/models/error.rs
 src/models/extended_revert_reason_as_map.rs
 src/models/external_library.rs
