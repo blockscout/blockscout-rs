@@ -9,6 +9,7 @@
  */
 use reqwest_middleware::ClientBuilder;
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
+use url::Url;
 
 #[derive(Debug, Clone)]
 pub struct Configuration {
@@ -31,12 +32,15 @@ pub struct ApiKey {
 }
 
 impl Configuration {
-    pub fn new(base_path: String) -> Configuration {
+    pub fn new(base_path: Url) -> Configuration {
         Configuration::default().with_base_path(base_path)
     }
 
-    pub fn with_base_path(mut self, base_path: String) -> Configuration {
-        self.base_path = base_path;
+    pub fn with_base_path(mut self, base_path: Url) -> Configuration {
+        base_path
+            .as_str()
+            .trim_end_matches('/')
+            .clone_into(&mut self.base_path);
         self
     }
 

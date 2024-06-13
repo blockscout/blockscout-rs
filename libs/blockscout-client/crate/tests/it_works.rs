@@ -90,5 +90,5 @@ fn blockscout() -> Stubr {
 }
 
 fn get_config_from_stubr(stubr: &Stubr) -> Configuration {
-    Configuration::new(stubr.uri()).with_client_max_retry(3)
+    Configuration::new(stubr.uri().parse().unwrap()).with_client_max_retry(3)
 }
