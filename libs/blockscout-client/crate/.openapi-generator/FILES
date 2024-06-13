@@ -1,4 +1,3 @@
-.travis.yml
 src/apis/addresses_api.rs
 src/apis/blocks_api.rs
 src/apis/config_api.rs

@@ -30,6 +30,8 @@ README.md
 git_push.sh
 .gitignore
 docs/*.md
+.travis.yml
+
 
 # ===
 # api
