@@ -57,7 +57,7 @@ pub async fn check_deployment_health<C: ConnectionTrait>(
 ) -> Result<(), DeployError> {
     let instance_url = deployment.instance_config().parse_instance_url()?;
     match blockscout_health(&instance_url).await {
-        Ok(response) if response.healthy => {
+        Ok(response) if response.healthy.unwrap_or_default() => {
             if !deployment.is_started() {
                 deployment.mark_as_started(db).await?;
             }
