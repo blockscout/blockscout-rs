@@ -11,7 +11,7 @@ use eth_bytecode_db_proto::blockscout::eth_bytecode_db::{
         EventDescription, SearchAllSourcesRequest, SearchAllSourcesResponse,
         SearchAllianceSourcesRequest, SearchEventDescriptionsRequest,
         SearchEventDescriptionsResponse, SearchSourcesRequest, SearchSourcesResponse,
-        /*SearchSourcifySourcesRequest,*/ Source,
+        SearchSourcifySourcesRequest, Source,
     },
 };
 use pretty_assertions::assert_eq;
@@ -48,8 +48,7 @@ fn service() -> MockSolidityVerifierService {
     MockSolidityVerifierService::new()
 }
 
-// TODO: uncomment when sourcify search is fixed
-/*#[rstest]
+#[rstest]
 #[tokio::test]
 #[timeout(std::time::Duration::from_secs(60))]
 #[ignore = "Needs database to run"]
@@ -103,7 +102,7 @@ async fn search_sourcify_sources(service: MockSolidityVerifierService) {
         expected_sources, verification_response.sources,
         "Invalid sources returned"
     );
-}*/
+}
 
 #[rstest]
 #[tokio::test]
@@ -197,7 +196,7 @@ async fn search_all_sources(
     let verification_response: SearchAllSourcesResponse =
         test_server::send_post_request(&eth_bytecode_db_with_alliance_base, ROUTE, &request).await;
 
-    let _expected_sourcify_sources = match only_local {
+    let expected_sourcify_sources = match only_local {
         Some(true) => vec![],
         None | Some(false) =>
             vec![
@@ -221,9 +220,7 @@ async fn search_all_sources(
 
     let expected_response = SearchAllSourcesResponse {
         eth_bytecode_db_sources: vec![test_data.eth_bytecode_db_response.source.unwrap()],
-        // TODO: uncomment when sourcify search is fixed
-        // sourcify_sources: expected_sourcify_sources,
-        sourcify_sources: vec![],
+        sourcify_sources: expected_sourcify_sources,
         alliance_sources: vec![test_case
             .to_test_input_data()
             .eth_bytecode_db_response
