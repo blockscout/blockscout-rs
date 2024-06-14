@@ -1,29 +1,25 @@
+use std::ops::RangeInclusive;
+
 use crate::{
     charts::db_interaction::types::DateValueInt,
-    data_source::kinds::{map::parse::MapParseTo, updateable_chart::clone::CloneChartWrapper},
+    data_source::kinds::{
+        data_manipulation::map::MapParseTo,
+        local_db::DirectVecLocalDbChartSource,
+        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
+    },
+    utils::sql_with_range_filter_opt,
+    ChartProperties, DateValueString, Named,
 };
+use entity::sea_orm_active_enums::ChartType;
+use sea_orm::{prelude::DateTimeUtc, DbBackend, Statement};
 
-mod _inner {
-    use std::ops::RangeInclusive;
+pub struct NewContractsStatement;
 
-    use crate::{
-        data_source::kinds::{
-            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
-            updateable_chart::clone::CloneChart,
-        },
-        utils::sql_with_range_filter_opt,
-        Chart, DateValueString, Named,
-    };
-    use entity::sea_orm_active_enums::ChartType;
-    use sea_orm::{prelude::DateTimeUtc, DbBackend, Statement};
-
-    pub struct NewContractsStatement;
-
-    impl StatementFromRange for NewContractsStatement {
-        fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
-            sql_with_range_filter_opt!(
-                DbBackend::Postgres,
-                r#"
+impl StatementFromRange for NewContractsStatement {
+    fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+        sql_with_range_filter_opt!(
+            DbBackend::Postgres,
+            r#"
                 SELECT day AS date, COUNT(*)::text AS value
                 FROM (
                     SELECT 
@@ -53,34 +49,29 @@ mod _inner {
                 ) sub
                 GROUP BY sub.day;
                 "#,
-                [],
-                "b.timestamp",
-                range,
-            )
-        }
-    }
-
-    pub type NewContractsRemote =
-        RemoteDatabaseSource<PullAllWithAndSort<NewContractsStatement, DateValueString>>;
-
-    pub struct NewContractsInner;
-
-    impl Named for NewContractsInner {
-        const NAME: &'static str = "newContracts";
-    }
-
-    impl Chart for NewContractsInner {
-        fn chart_type() -> ChartType {
-            ChartType::Line
-        }
-    }
-
-    impl CloneChart for NewContractsInner {
-        type Dependency = NewContractsRemote;
+            [],
+            "b.timestamp",
+            range,
+        )
     }
 }
 
-pub type NewContracts = CloneChartWrapper<_inner::NewContractsInner>;
+pub type NewContractsRemote =
+    RemoteDatabaseSource<PullAllWithAndSort<NewContractsStatement, DateValueString>>;
+
+pub struct NewContractsProperties;
+
+impl Named for NewContractsProperties {
+    const NAME: &'static str = "newContracts";
+}
+
+impl ChartProperties for NewContractsProperties {
+    fn chart_type() -> ChartType {
+        ChartType::Line
+    }
+}
+
+pub type NewContracts = DirectVecLocalDbChartSource<NewContractsRemote, NewContractsProperties>;
 pub type NewContractsInt = MapParseTo<NewContracts, DateValueInt>;
 
 #[cfg(test)]

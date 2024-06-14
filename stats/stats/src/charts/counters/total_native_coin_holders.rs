@@ -1,30 +1,31 @@
-use crate::data_source::kinds::updateable_chart::last_point::LastPointChartWrapper;
+use crate::{
+    data_source::kinds::{
+        data_manipulation::last_point::LastPoint, local_db::DirectPointLocalDbChartSource,
+    },
+    lines::NativeCoinHoldersGrowth,
+    ChartProperties, MissingDatePolicy, Named,
+};
+use entity::sea_orm_active_enums::ChartType;
 
-mod _inner {
-    use crate::{
-        data_source::kinds::updateable_chart::last_point::LastPointChart,
-        lines::NativeCoinHoldersGrowth, Chart, Named,
-    };
-    use entity::sea_orm_active_enums::ChartType;
+pub struct TotalNativeCoinHoldersProperties;
 
-    pub struct TotalNativeCoinHoldersInner;
+impl Named for TotalNativeCoinHoldersProperties {
+    const NAME: &'static str = "totalNativeCoinHolders";
+}
 
-    impl Named for TotalNativeCoinHoldersInner {
-        const NAME: &'static str = "totalNativeCoinHolders";
+impl ChartProperties for TotalNativeCoinHoldersProperties {
+    fn chart_type() -> ChartType {
+        ChartType::Counter
     }
-
-    impl Chart for TotalNativeCoinHoldersInner {
-        fn chart_type() -> ChartType {
-            ChartType::Counter
-        }
-    }
-
-    impl LastPointChart for TotalNativeCoinHoldersInner {
-        type InnerSource = NativeCoinHoldersGrowth;
+    fn missing_date_policy() -> MissingDatePolicy {
+        MissingDatePolicy::FillPrevious
     }
 }
 
-pub type TotalNativeCoinHolders = LastPointChartWrapper<_inner::TotalNativeCoinHoldersInner>;
+pub type TotalNativeCoinHolders = DirectPointLocalDbChartSource<
+    LastPoint<NativeCoinHoldersGrowth>,
+    TotalNativeCoinHoldersProperties,
+>;
 
 #[cfg(test)]
 mod tests {

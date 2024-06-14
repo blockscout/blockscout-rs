@@ -1,28 +1,26 @@
-use crate::data_source::kinds::updateable_chart::cumulative::CumulativeChartWrapper;
+use std::ops::RangeInclusive;
 
-mod _inner {
-    use std::ops::RangeInclusive;
+use crate::{
+    charts::db_interaction::types::DateValueDecimal,
+    data_source::kinds::{
+        data_manipulation::map::{Map, MapFunction},
+        local_db::CumulativeLocalDbChartSource,
+        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
+    },
+    utils::sql_with_range_filter_opt,
+    ChartProperties, MissingDatePolicy, Named, UpdateError,
+};
 
-    use crate::{
-        charts::db_interaction::types::DateValueDecimal,
-        data_source::kinds::{
-            map::{Map, MapFunction},
-            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
-            updateable_chart::cumulative::CumulativeChart,
-        },
-        utils::sql_with_range_filter_opt,
-        Chart, MissingDatePolicy, Named, UpdateError,
-    };
-    use entity::sea_orm_active_enums::ChartType;
-    use sea_orm::{prelude::*, DbBackend, Statement};
+use entity::sea_orm_active_enums::ChartType;
+use sea_orm::{prelude::*, DbBackend, Statement};
 
-    pub struct GasUsedPartialStatement;
+pub struct GasUsedPartialStatement;
 
-    impl StatementFromRange for GasUsedPartialStatement {
-        fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
-            sql_with_range_filter_opt!(
-                DbBackend::Postgres,
-                r#"
+impl StatementFromRange for GasUsedPartialStatement {
+    fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+        sql_with_range_filter_opt!(
+            DbBackend::Postgres,
+            r#"
                     SELECT 
                         DATE(blocks.timestamp) as date, 
                         (sum(sum(blocks.gas_used)) OVER (ORDER BY date(blocks.timestamp))) AS value
@@ -33,57 +31,51 @@ mod _inner {
                     GROUP BY date(blocks.timestamp)
                     ORDER BY date;
                 "#,
-                [],
-                "blocks.timestamp",
-                range
-            )
-        }
-    }
-
-    pub type GasUsedPartialRemote =
-        RemoteDatabaseSource<PullAllWithAndSort<GasUsedPartialStatement, DateValueDecimal>>;
-
-    pub struct IncrementsFromPartialSum;
-
-    impl MapFunction<Vec<DateValueDecimal>> for IncrementsFromPartialSum {
-        type Output = Vec<DateValueDecimal>;
-        fn function(inner_data: Vec<DateValueDecimal>) -> Result<Self::Output, UpdateError> {
-            Ok(inner_data
-                .into_iter()
-                .scan(Decimal::ZERO, |state, mut next| {
-                    let next_diff = next.value.saturating_sub(*state);
-                    *state = next.value;
-                    next.value = next_diff;
-                    Some(next)
-                })
-                .collect())
-        }
-    }
-
-    pub type NewGasUsedRemote = Map<GasUsedPartialRemote, IncrementsFromPartialSum>;
-
-    pub struct GasUsedGrowthInner;
-
-    impl Named for GasUsedGrowthInner {
-        const NAME: &'static str = "gasUsedGrowth";
-    }
-
-    impl Chart for GasUsedGrowthInner {
-        fn chart_type() -> ChartType {
-            ChartType::Line
-        }
-        fn missing_date_policy() -> MissingDatePolicy {
-            MissingDatePolicy::FillPrevious
-        }
-    }
-
-    impl CumulativeChart for GasUsedGrowthInner {
-        type DeltaChart = NewGasUsedRemote;
-        type DeltaChartPoint = DateValueDecimal;
+            [],
+            "blocks.timestamp",
+            range
+        )
     }
 }
 
-pub type GasUsedGrowth = CumulativeChartWrapper<_inner::GasUsedGrowthInner>;
+pub type GasUsedPartialRemote =
+    RemoteDatabaseSource<PullAllWithAndSort<GasUsedPartialStatement, DateValueDecimal>>;
+
+pub struct IncrementsFromPartialSum;
+
+impl MapFunction<Vec<DateValueDecimal>> for IncrementsFromPartialSum {
+    type Output = Vec<DateValueDecimal>;
+    fn function(inner_data: Vec<DateValueDecimal>) -> Result<Self::Output, UpdateError> {
+        Ok(inner_data
+            .into_iter()
+            .scan(Decimal::ZERO, |state, mut next| {
+                let next_diff = next.value.saturating_sub(*state);
+                *state = next.value;
+                next.value = next_diff;
+                Some(next)
+            })
+            .collect())
+    }
+}
+
+pub type NewGasUsedRemote = Map<GasUsedPartialRemote, IncrementsFromPartialSum>;
+
+pub struct GasUsedGrowthProperties;
+
+impl Named for GasUsedGrowthProperties {
+    const NAME: &'static str = "gasUsedGrowth";
+}
+
+impl ChartProperties for GasUsedGrowthProperties {
+    fn chart_type() -> ChartType {
+        ChartType::Line
+    }
+    fn missing_date_policy() -> MissingDatePolicy {
+        MissingDatePolicy::FillPrevious
+    }
+}
+
+pub type GasUsedGrowth = CumulativeLocalDbChartSource<NewGasUsedRemote, GasUsedGrowthProperties>;
 
 #[cfg(test)]
 mod tests {

@@ -1,33 +1,29 @@
-use crate::data_source::kinds::updateable_chart::last_point::LastPointChartWrapper;
+use crate::{
+    data_source::kinds::{
+        data_manipulation::last_point::LastPoint, local_db::DirectPointLocalDbChartSource,
+    },
+    lines::NewVerifiedContracts,
+    ChartProperties, Named,
+};
 
-mod _inner {
-    use crate::{
-        data_source::kinds::updateable_chart::last_point::LastPointChart,
-        lines::NewVerifiedContracts, Chart, Named,
-    };
-    use entity::sea_orm_active_enums::ChartType;
+use entity::sea_orm_active_enums::ChartType;
 
-    pub struct LastNewVerifiedContractsInner;
+pub struct LastNewVerifiedContractsProperties;
 
-    impl Named for LastNewVerifiedContractsInner {
-        const NAME: &'static str = "lastNewVerifiedContracts";
-    }
+impl Named for LastNewVerifiedContractsProperties {
+    const NAME: &'static str = "lastNewVerifiedContracts";
+}
 
-    impl Chart for LastNewVerifiedContractsInner {
-        fn chart_type() -> ChartType {
-            ChartType::Counter
-        }
-        fn relevant_or_zero() -> bool {
-            true
-        }
-    }
-
-    impl LastPointChart for LastNewVerifiedContractsInner {
-        type InnerSource = NewVerifiedContracts;
+impl ChartProperties for LastNewVerifiedContractsProperties {
+    fn chart_type() -> ChartType {
+        ChartType::Counter
     }
 }
 
-pub type LastNewVerifiedContracts = LastPointChartWrapper<_inner::LastNewVerifiedContractsInner>;
+pub type LastNewVerifiedContracts = DirectPointLocalDbChartSource<
+    LastPoint<NewVerifiedContracts>,
+    LastNewVerifiedContractsProperties,
+>;
 
 #[cfg(test)]
 mod tests {

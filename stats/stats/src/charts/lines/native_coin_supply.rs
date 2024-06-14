@@ -1,39 +1,36 @@
-use crate::data_source::kinds::updateable_chart::clone::CloneChartWrapper;
+use std::ops::RangeInclusive;
 
-mod _inner {
-    use std::ops::RangeInclusive;
+use crate::{
+    charts::db_interaction::types::DateValueDouble,
+    data_source::kinds::{
+        data_manipulation::map::MapToString,
+        local_db::DirectVecLocalDbChartSource,
+        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
+    },
+    ChartProperties, Named,
+};
 
-    use crate::{
-        charts::db_interaction::types::DateValueDouble,
-        data_source::kinds::{
-            map::to_string::MapToString,
-            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
-            updateable_chart::clone::CloneChart,
-        },
-        Chart, Named,
-    };
+use chrono::NaiveDate;
+use entity::sea_orm_active_enums::ChartType;
+use sea_orm::{prelude::*, DbBackend, Statement};
 
-    use chrono::NaiveDate;
-    use entity::sea_orm_active_enums::ChartType;
-    use sea_orm::{prelude::*, DbBackend, Statement};
+const ETH: i64 = 1_000_000_000_000_000_000;
 
-    const ETH: i64 = 1_000_000_000_000_000_000;
+pub struct NativeCoinSupplyStatement;
 
-    pub struct NativeCoinSupplyStatement;
-
-    impl StatementFromRange for NativeCoinSupplyStatement {
-        fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
-            let day_range: Option<RangeInclusive<NaiveDate>> = range.map(|r| {
-                let (start, end) = r.into_inner();
-                // chart is off anyway, so shouldn't be a big deal
-                start.date_naive()..=end.date_naive()
-            });
-            // query uses date, therefore `sql_with_range_filter_opt` does not quite fit
-            // (making it parameter-agnostic seems not straightforward, let's keep it as-is)
-            match day_range {
-                Some(range) => Statement::from_sql_and_values(
-                    DbBackend::Postgres,
-                    r"
+impl StatementFromRange for NativeCoinSupplyStatement {
+    fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+        let day_range: Option<RangeInclusive<NaiveDate>> = range.map(|r| {
+            let (start, end) = r.into_inner();
+            // chart is off anyway, so shouldn't be a big deal
+            start.date_naive()..=end.date_naive()
+        });
+        // query uses date, therefore `sql_with_range_filter_opt` does not quite fit
+        // (making it parameter-agnostic seems not straightforward, let's keep it as-is)
+        match day_range {
+            Some(range) => Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                r"
                         SELECT date, value FROM 
                         (
                             SELECT
@@ -52,11 +49,11 @@ mod _inner {
                         ) as intermediate
                         WHERE value is not NULL;
                     ",
-                    vec![ETH.into(), (*range.start()).into(), (*range.end()).into()],
-                ),
-                None => Statement::from_sql_and_values(
-                    DbBackend::Postgres,
-                    r"
+                vec![ETH.into(), (*range.start()).into(), (*range.end()).into()],
+            ),
+            None => Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                r"
                         SELECT date, value FROM 
                         (
                             SELECT
@@ -73,38 +70,34 @@ mod _inner {
                         ) as intermediate
                         WHERE value is not NULL;
                     ",
-                    vec![ETH.into()],
-                ),
-            }
+                vec![ETH.into()],
+            ),
         }
-    }
-
-    pub type NativeCoinSupplyRemote =
-        RemoteDatabaseSource<PullAllWithAndSort<NativeCoinSupplyStatement, DateValueDouble>>;
-
-    // for some reason it was queried as double and then converted to string.
-    // keeping this behaviour just in case. can be removed after checking
-    // for correctness.
-    pub type NativeCoinSupplyRemoteString = MapToString<NativeCoinSupplyRemote>;
-
-    pub struct NativeCoinSupplyInner;
-
-    impl Named for NativeCoinSupplyInner {
-        const NAME: &'static str = "nativeCoinSupply";
-    }
-
-    impl Chart for NativeCoinSupplyInner {
-        fn chart_type() -> ChartType {
-            ChartType::Line
-        }
-    }
-
-    impl CloneChart for NativeCoinSupplyInner {
-        type Dependency = NativeCoinSupplyRemoteString;
     }
 }
 
-pub type NativeCoinSupply = CloneChartWrapper<_inner::NativeCoinSupplyInner>;
+pub type NativeCoinSupplyRemote =
+    RemoteDatabaseSource<PullAllWithAndSort<NativeCoinSupplyStatement, DateValueDouble>>;
+
+// todo: for some reason it was queried as double and then converted to string.
+// keeping this behaviour just in case. can be removed after checking
+// for correctness.
+pub type NativeCoinSupplyRemoteString = MapToString<NativeCoinSupplyRemote>;
+
+pub struct NativeCoinSupplyProperties;
+
+impl Named for NativeCoinSupplyProperties {
+    const NAME: &'static str = "nativeCoinSupply";
+}
+
+impl ChartProperties for NativeCoinSupplyProperties {
+    fn chart_type() -> ChartType {
+        ChartType::Line
+    }
+}
+
+pub type NativeCoinSupply =
+    DirectVecLocalDbChartSource<NativeCoinSupplyRemoteString, NativeCoinSupplyProperties>;
 
 #[cfg(test)]
 mod tests {

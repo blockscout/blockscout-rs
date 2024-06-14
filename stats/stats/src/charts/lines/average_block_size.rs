@@ -1,26 +1,24 @@
-use crate::data_source::kinds::updateable_chart::clone::CloneChartWrapper;
+use std::ops::RangeInclusive;
 
-mod _inner {
-    use std::ops::RangeInclusive;
+use crate::{
+    data_source::kinds::{
+        local_db::DirectVecLocalDbChartSource,
+        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
+    },
+    utils::sql_with_range_filter_opt,
+    ChartProperties, DateValueString, Named,
+};
 
-    use crate::{
-        data_source::kinds::{
-            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
-            updateable_chart::clone::CloneChart,
-        },
-        utils::sql_with_range_filter_opt,
-        Chart, DateValueString, Named,
-    };
-    use entity::sea_orm_active_enums::ChartType;
-    use sea_orm::{prelude::*, DbBackend, Statement};
+use entity::sea_orm_active_enums::ChartType;
+use sea_orm::{prelude::*, DbBackend, Statement};
 
-    pub struct AverageBlockSizeStatement;
+pub struct AverageBlockSizeStatement;
 
-    impl StatementFromRange for AverageBlockSizeStatement {
-        fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
-            sql_with_range_filter_opt!(
-                DbBackend::Postgres,
-                r#"
+impl StatementFromRange for AverageBlockSizeStatement {
+    fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+        sql_with_range_filter_opt!(
+            DbBackend::Postgres,
+            r#"
                     SELECT
                         DATE(blocks.timestamp) as date,
                         ROUND(AVG(blocks.size))::TEXT as value
@@ -30,34 +28,30 @@ mod _inner {
                         consensus = true {filter}
                     GROUP BY date
                 "#,
-                [],
-                "blocks.timestamp",
-                range,
-            )
-        }
-    }
-
-    pub type AverageBlockSizeRemote =
-        RemoteDatabaseSource<PullAllWithAndSort<AverageBlockSizeStatement, DateValueString>>;
-
-    pub struct AverageBlockSizeInner;
-
-    impl Named for AverageBlockSizeInner {
-        const NAME: &'static str = "averageBlockSize";
-    }
-
-    impl Chart for AverageBlockSizeInner {
-        fn chart_type() -> ChartType {
-            ChartType::Line
-        }
-    }
-
-    impl CloneChart for AverageBlockSizeInner {
-        type Dependency = AverageBlockSizeRemote;
+            [],
+            "blocks.timestamp",
+            range,
+        )
     }
 }
 
-pub type AverageBlockSize = CloneChartWrapper<_inner::AverageBlockSizeInner>;
+pub type AverageBlockSizeRemote =
+    RemoteDatabaseSource<PullAllWithAndSort<AverageBlockSizeStatement, DateValueString>>;
+
+pub struct AverageBlockSizeProperties;
+
+impl Named for AverageBlockSizeProperties {
+    const NAME: &'static str = "averageBlockSize";
+}
+
+impl ChartProperties for AverageBlockSizeProperties {
+    fn chart_type() -> ChartType {
+        ChartType::Line
+    }
+}
+
+pub type AverageBlockSize =
+    DirectVecLocalDbChartSource<AverageBlockSizeRemote, AverageBlockSizeProperties>;
 
 #[cfg(test)]
 mod tests {

@@ -1,27 +1,26 @@
 //! Active accounts on each day.
 
-use crate::data_source::kinds::updateable_chart::clone::CloneChartWrapper;
+use std::ops::RangeInclusive;
 
-mod _inner {
-    use std::ops::RangeInclusive;
+use crate::{
+    data_source::kinds::{
+        local_db::DirectVecLocalDbChartSource,
+        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
+    },
+    utils::sql_with_range_filter_opt,
+    ChartProperties, DateValueString, Named,
+};
 
-    use crate::{
-        data_source::kinds::{
-            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
-            updateable_chart::clone::CloneChart,
-        },
-        utils::sql_with_range_filter_opt,
-        Chart, DateValueString, Named,
-    };
-    use entity::sea_orm_active_enums::ChartType;
-    use sea_orm::{prelude::*, DbBackend, Statement};
-    pub struct ActiveAccountsStatement;
+use entity::sea_orm_active_enums::ChartType;
+use sea_orm::{prelude::*, DbBackend, Statement};
 
-    impl StatementFromRange for ActiveAccountsStatement {
-        fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
-            sql_with_range_filter_opt!(
-                DbBackend::Postgres,
-                r#"
+pub struct ActiveAccountsStatement;
+
+impl StatementFromRange for ActiveAccountsStatement {
+    fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+        sql_with_range_filter_opt!(
+            DbBackend::Postgres,
+            r#"
                     SELECT 
                         DATE(blocks.timestamp) as date, 
                         COUNT(DISTINCT from_address_hash)::TEXT as value
@@ -32,34 +31,30 @@ mod _inner {
                         blocks.consensus = true {filter}
                     GROUP BY date(blocks.timestamp);
                 "#,
-                [],
-                "blocks.timestamp",
-                range
-            )
-        }
-    }
-
-    pub type ActiveAccountsRemote =
-        RemoteDatabaseSource<PullAllWithAndSort<ActiveAccountsStatement, DateValueString>>;
-
-    pub struct ActiveAccountsInner;
-
-    impl Named for ActiveAccountsInner {
-        const NAME: &'static str = "activeAccounts";
-    }
-
-    impl Chart for ActiveAccountsInner {
-        fn chart_type() -> ChartType {
-            ChartType::Line
-        }
-    }
-
-    impl CloneChart for ActiveAccountsInner {
-        type Dependency = ActiveAccountsRemote;
+            [],
+            "blocks.timestamp",
+            range
+        )
     }
 }
 
-pub type ActiveAccounts = CloneChartWrapper<_inner::ActiveAccountsInner>;
+pub type ActiveAccountsRemote =
+    RemoteDatabaseSource<PullAllWithAndSort<ActiveAccountsStatement, DateValueString>>;
+
+pub struct ActiveAccountsProperties;
+
+impl Named for ActiveAccountsProperties {
+    const NAME: &'static str = "activeAccounts";
+}
+
+impl ChartProperties for ActiveAccountsProperties {
+    fn chart_type() -> ChartType {
+        ChartType::Line
+    }
+}
+
+pub type ActiveAccounts =
+    DirectVecLocalDbChartSource<ActiveAccountsRemote, ActiveAccountsProperties>;
 
 #[cfg(test)]
 mod tests {

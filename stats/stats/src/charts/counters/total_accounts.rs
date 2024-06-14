@@ -1,30 +1,30 @@
-use crate::data_source::kinds::updateable_chart::last_point::LastPointChartWrapper;
+use crate::{
+    data_source::kinds::{
+        data_manipulation::last_point::LastPoint, local_db::DirectPointLocalDbChartSource,
+    },
+    lines::AccountsGrowth,
+    ChartProperties, MissingDatePolicy, Named,
+};
 
-mod _inner {
-    use crate::{
-        data_source::kinds::updateable_chart::last_point::LastPointChart, lines::AccountsGrowth,
-        Chart, Named,
-    };
-    use entity::sea_orm_active_enums::ChartType;
+use entity::sea_orm_active_enums::ChartType;
 
-    pub struct TotalAccountsInner;
+pub struct TotalAccountsProperties;
 
-    impl Named for TotalAccountsInner {
-        const NAME: &'static str = "totalAccounts";
+impl Named for TotalAccountsProperties {
+    const NAME: &'static str = "totalAccounts";
+}
+
+impl ChartProperties for TotalAccountsProperties {
+    fn chart_type() -> ChartType {
+        ChartType::Counter
     }
-
-    impl Chart for TotalAccountsInner {
-        fn chart_type() -> ChartType {
-            ChartType::Counter
-        }
-    }
-
-    impl LastPointChart for TotalAccountsInner {
-        type InnerSource = AccountsGrowth;
+    fn missing_date_policy() -> MissingDatePolicy {
+        MissingDatePolicy::FillPrevious
     }
 }
 
-pub type TotalAccounts = LastPointChartWrapper<_inner::TotalAccountsInner>;
+pub type TotalAccounts =
+    DirectPointLocalDbChartSource<LastPoint<AccountsGrowth>, TotalAccountsProperties>;
 
 #[cfg(test)]
 mod tests {

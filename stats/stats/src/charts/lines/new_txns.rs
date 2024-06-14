@@ -1,29 +1,25 @@
+use std::ops::RangeInclusive;
+
 use crate::{
     charts::db_interaction::types::DateValueInt,
-    data_source::kinds::{map::parse::MapParseTo, updateable_chart::clone::CloneChartWrapper},
+    data_source::kinds::{
+        data_manipulation::map::MapParseTo,
+        local_db::DirectVecLocalDbChartSource,
+        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
+    },
+    utils::sql_with_range_filter_opt,
+    ChartProperties, DateValueString, Named,
 };
+use entity::sea_orm_active_enums::ChartType;
+use sea_orm::{prelude::*, DbBackend, Statement};
 
-mod _inner {
-    use std::ops::RangeInclusive;
+pub struct NewTxnsStatement;
 
-    use crate::{
-        data_source::kinds::{
-            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
-            updateable_chart::clone::CloneChart,
-        },
-        utils::sql_with_range_filter_opt,
-        Chart, DateValueString, Named,
-    };
-    use entity::sea_orm_active_enums::ChartType;
-    use sea_orm::{prelude::*, DbBackend, Statement};
-
-    pub struct NewTxnsStatement;
-
-    impl StatementFromRange for NewTxnsStatement {
-        fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
-            sql_with_range_filter_opt!(
-                DbBackend::Postgres,
-                r#"
+impl StatementFromRange for NewTxnsStatement {
+    fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+        sql_with_range_filter_opt!(
+            DbBackend::Postgres,
+            r#"
                     SELECT 
                         date(b.timestamp) as date, 
                         COUNT(*)::TEXT as value
@@ -34,34 +30,29 @@ mod _inner {
                         b.consensus = true {filter}
                     GROUP BY date;
                 "#,
-                [],
-                "b.timestamp",
-                range
-            )
-        }
-    }
-
-    pub type NewTxnsRemote =
-        RemoteDatabaseSource<PullAllWithAndSort<NewTxnsStatement, DateValueString>>;
-
-    pub struct NewTxnsInner;
-
-    impl Named for NewTxnsInner {
-        const NAME: &'static str = "newTxns";
-    }
-
-    impl Chart for NewTxnsInner {
-        fn chart_type() -> ChartType {
-            ChartType::Line
-        }
-    }
-
-    impl CloneChart for NewTxnsInner {
-        type Dependency = NewTxnsRemote;
+            [],
+            "b.timestamp",
+            range
+        )
     }
 }
 
-pub type NewTxns = CloneChartWrapper<_inner::NewTxnsInner>;
+pub type NewTxnsRemote =
+    RemoteDatabaseSource<PullAllWithAndSort<NewTxnsStatement, DateValueString>>;
+
+pub struct NewTxnsProperties;
+
+impl Named for NewTxnsProperties {
+    const NAME: &'static str = "newTxns";
+}
+
+impl ChartProperties for NewTxnsProperties {
+    fn chart_type() -> ChartType {
+        ChartType::Line
+    }
+}
+
+pub type NewTxns = DirectVecLocalDbChartSource<NewTxnsRemote, NewTxnsProperties>;
 pub type NewTxnsInt = MapParseTo<NewTxns, DateValueInt>;
 
 #[cfg(test)]

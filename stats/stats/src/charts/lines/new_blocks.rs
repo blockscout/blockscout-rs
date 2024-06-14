@@ -1,26 +1,23 @@
-use crate::data_source::kinds::updateable_chart::clone::CloneChartWrapper;
+use std::ops::RangeInclusive;
 
-mod _inner {
-    use std::ops::RangeInclusive;
+use crate::{
+    data_source::kinds::{
+        local_db::DirectVecLocalDbChartSource,
+        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
+    },
+    utils::sql_with_range_filter_opt,
+    ChartProperties, DateValueString, Named,
+};
+use entity::sea_orm_active_enums::ChartType;
+use sea_orm::{prelude::*, DbBackend, Statement};
 
-    use crate::{
-        data_source::kinds::{
-            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
-            updateable_chart::clone::CloneChart,
-        },
-        utils::sql_with_range_filter_opt,
-        Chart, DateValueString, Named,
-    };
-    use entity::sea_orm_active_enums::ChartType;
-    use sea_orm::{prelude::*, DbBackend, Statement};
+pub struct NewBlocksStatement;
 
-    pub struct NewBlocksStatement;
-
-    impl StatementFromRange for NewBlocksStatement {
-        fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
-            sql_with_range_filter_opt!(
-                DbBackend::Postgres,
-                r#"
+impl StatementFromRange for NewBlocksStatement {
+    fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+        sql_with_range_filter_opt!(
+            DbBackend::Postgres,
+            r#"
                     SELECT
                         date(blocks.timestamp) as date,
                         COUNT(*)::TEXT as value
@@ -30,34 +27,29 @@ mod _inner {
                         consensus = true {filter}
                     GROUP BY date;
                 "#,
-                [],
-                "blocks.timestamp",
-                range
-            )
-        }
-    }
-
-    pub type NewBlocksRemote =
-        RemoteDatabaseSource<PullAllWithAndSort<NewBlocksStatement, DateValueString>>;
-
-    pub struct NewBlocksInner;
-
-    impl Named for NewBlocksInner {
-        const NAME: &'static str = "newBlocks";
-    }
-
-    impl Chart for NewBlocksInner {
-        fn chart_type() -> ChartType {
-            ChartType::Line
-        }
-    }
-
-    impl CloneChart for NewBlocksInner {
-        type Dependency = NewBlocksRemote;
+            [],
+            "blocks.timestamp",
+            range
+        )
     }
 }
 
-pub type NewBlocks = CloneChartWrapper<_inner::NewBlocksInner>;
+pub type NewBlocksRemote =
+    RemoteDatabaseSource<PullAllWithAndSort<NewBlocksStatement, DateValueString>>;
+
+pub struct NewBlocksProperties;
+
+impl Named for NewBlocksProperties {
+    const NAME: &'static str = "newBlocks";
+}
+
+impl ChartProperties for NewBlocksProperties {
+    fn chart_type() -> ChartType {
+        ChartType::Line
+    }
+}
+
+pub type NewBlocks = DirectVecLocalDbChartSource<NewBlocksRemote, NewBlocksProperties>;
 
 #[cfg(test)]
 mod tests {
@@ -65,7 +57,7 @@ mod tests {
     use crate::{
         charts::db_interaction::read::get_min_block_blockscout,
         data_source::{DataSource, UpdateContext},
-        get_chart_data,
+        get_line_chart_data,
         tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
         ExtendedDateValue, Named,
     };
@@ -118,7 +110,7 @@ mod tests {
             force_full: false,
         };
         NewBlocks::update_recursively(&cx).await.unwrap();
-        let data = get_chart_data(
+        let data = get_line_chart_data(
             &db,
             NewBlocks::NAME,
             None,
@@ -154,7 +146,7 @@ mod tests {
         // need to update time so that the update is not ignored as the same one
         cx.time = chrono::DateTime::<Utc>::from_str("2022-11-12T13:00:00Z").unwrap();
         NewBlocks::update_recursively(&cx).await.unwrap();
-        let data = get_chart_data(
+        let data = get_line_chart_data(
             &db,
             NewBlocks::NAME,
             None,
@@ -211,7 +203,7 @@ mod tests {
             force_full: true,
         };
         NewBlocks::update_recursively(&cx).await.unwrap();
-        let data = get_chart_data(
+        let data = get_line_chart_data(
             &db,
             NewBlocks::NAME,
             None,
@@ -305,7 +297,7 @@ mod tests {
             force_full: false,
         };
         NewBlocks::update_recursively(&cx).await.unwrap();
-        let data = get_chart_data(
+        let data = get_line_chart_data(
             &db,
             NewBlocks::NAME,
             None,

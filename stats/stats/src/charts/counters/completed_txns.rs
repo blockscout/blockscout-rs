@@ -1,23 +1,21 @@
-use crate::data_source::kinds::updateable_chart::clone::point::ClonePointChartWrapper;
+use crate::{
+    data_source::kinds::{
+        local_db::DirectPointLocalDbChartSource,
+        remote_db::{PullOne, RemoteDatabaseSource, StatementForOne},
+    },
+    ChartProperties, DateValueString, MissingDatePolicy, Named,
+};
 
-mod _inner {
-    use crate::{
-        data_source::kinds::{
-            remote_db::{PullOne, RemoteDatabaseSource, StatementForOne},
-            updateable_chart::clone::point::ClonePointChart,
-        },
-        Chart, DateValueString, Named,
-    };
-    use entity::sea_orm_active_enums::ChartType;
-    use sea_orm::{DbBackend, Statement};
+use entity::sea_orm_active_enums::ChartType;
+use sea_orm::{DbBackend, Statement};
 
-    pub struct CompletedTxnsStatement;
+pub struct CompletedTxnsStatement;
 
-    impl StatementForOne for CompletedTxnsStatement {
-        fn get_statement() -> Statement {
-            Statement::from_string(
-                DbBackend::Postgres,
-                r#"
+impl StatementForOne for CompletedTxnsStatement {
+    fn get_statement() -> Statement {
+        Statement::from_string(
+            DbBackend::Postgres,
+            r#"
                     SELECT
                         (all_success - all_success_dropped)::TEXT AS value,
                         last_block_date AS date 
@@ -38,31 +36,30 @@ mod _inner {
                         )
                     ) AS sub
                 "#,
-            )
-        }
-    }
-
-    pub type CompletedTxnsRemote =
-        RemoteDatabaseSource<PullOne<CompletedTxnsStatement, DateValueString>>;
-
-    pub struct CompletedTxnsInner;
-
-    impl Named for CompletedTxnsInner {
-        const NAME: &'static str = "completedTxns";
-    }
-
-    impl Chart for CompletedTxnsInner {
-        fn chart_type() -> ChartType {
-            ChartType::Counter
-        }
-    }
-
-    impl ClonePointChart for CompletedTxnsInner {
-        type Dependency = CompletedTxnsRemote;
+        )
     }
 }
 
-pub type CompletedTxns = ClonePointChartWrapper<_inner::CompletedTxnsInner>;
+pub type CompletedTxnsRemote =
+    RemoteDatabaseSource<PullOne<CompletedTxnsStatement, DateValueString>>;
+
+pub struct CompletedTxnsProperties;
+
+impl Named for CompletedTxnsProperties {
+    const NAME: &'static str = "completedTxns";
+}
+
+impl ChartProperties for CompletedTxnsProperties {
+    fn chart_type() -> ChartType {
+        ChartType::Counter
+    }
+    fn missing_date_policy() -> MissingDatePolicy {
+        MissingDatePolicy::FillPrevious
+    }
+}
+
+pub type CompletedTxns =
+    DirectPointLocalDbChartSource<CompletedTxnsRemote, CompletedTxnsProperties>;
 
 #[cfg(test)]
 mod tests {

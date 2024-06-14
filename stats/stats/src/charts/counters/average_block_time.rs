@@ -1,25 +1,23 @@
-use crate::data_source::kinds::updateable_chart::clone::point::ClonePointChartWrapper;
+use crate::{
+    charts::db_interaction::types::DateValueDouble,
+    data_source::kinds::{
+        data_manipulation::map::MapToString,
+        local_db::DirectPointLocalDbChartSource,
+        remote_db::{PullOne, RemoteDatabaseSource, StatementForOne},
+    },
+    ChartProperties, MissingDatePolicy, Named,
+};
 
-mod _inner {
-    use crate::{
-        charts::db_interaction::types::DateValueDouble,
-        data_source::kinds::{
-            map::to_string::MapToString,
-            remote_db::{PullOne, RemoteDatabaseSource, StatementForOne},
-            updateable_chart::clone::point::ClonePointChart,
-        },
-        Chart, Named,
-    };
-    use entity::sea_orm_active_enums::ChartType;
-    use sea_orm::{DbBackend, Statement};
+use entity::sea_orm_active_enums::ChartType;
+use sea_orm::{DbBackend, Statement};
 
-    pub struct AverageBlockTimeStatement;
+pub struct AverageBlockTimeStatement;
 
-    impl StatementForOne for AverageBlockTimeStatement {
-        fn get_statement() -> Statement {
-            Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
+impl StatementForOne for AverageBlockTimeStatement {
+    fn get_statement() -> Statement {
+        Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            r#"
                     SELECT
                         max(timestamp)::date as date, 
                         (CASE WHEN avg(diff) IS NULL THEN 0 ELSE avg(diff) END)::float as value
@@ -34,34 +32,33 @@ mod _inner {
                         WHERE b.timestamp != to_timestamp(0) AND consensus = true
                     ) t
                 "#,
-                vec![],
-            )
-        }
-    }
-
-    pub type AverageBlockTimeRemote =
-        RemoteDatabaseSource<PullOne<AverageBlockTimeStatement, DateValueDouble>>;
-
-    pub type AverageBlockTimeRemoteString = MapToString<AverageBlockTimeRemote>;
-
-    pub struct AverageBlockTimeInner;
-
-    impl Named for AverageBlockTimeInner {
-        const NAME: &'static str = "averageBlockTime";
-    }
-
-    impl Chart for AverageBlockTimeInner {
-        fn chart_type() -> ChartType {
-            ChartType::Counter
-        }
-    }
-
-    impl ClonePointChart for AverageBlockTimeInner {
-        type Dependency = AverageBlockTimeRemoteString;
+            vec![],
+        )
     }
 }
 
-pub type AverageBlockTime = ClonePointChartWrapper<_inner::AverageBlockTimeInner>;
+pub type AverageBlockTimeRemote =
+    RemoteDatabaseSource<PullOne<AverageBlockTimeStatement, DateValueDouble>>;
+
+pub type AverageBlockTimeRemoteString = MapToString<AverageBlockTimeRemote>;
+
+pub struct AverageBlockTimeProperties;
+
+impl Named for AverageBlockTimeProperties {
+    const NAME: &'static str = "averageBlockTime";
+}
+
+impl ChartProperties for AverageBlockTimeProperties {
+    fn chart_type() -> ChartType {
+        ChartType::Counter
+    }
+    fn missing_date_policy() -> MissingDatePolicy {
+        MissingDatePolicy::FillPrevious
+    }
+}
+
+pub type AverageBlockTime =
+    DirectPointLocalDbChartSource<AverageBlockTimeRemoteString, AverageBlockTimeProperties>;
 
 #[cfg(test)]
 mod tests {

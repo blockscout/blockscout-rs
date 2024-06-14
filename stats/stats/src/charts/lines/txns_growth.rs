@@ -1,36 +1,25 @@
-use crate::data_source::kinds::updateable_chart::cumulative::CumulativeChartWrapper;
+use crate::{
+    charts::chart::ChartProperties, data_source::kinds::local_db::CumulativeLocalDbChartSource,
+    lines::NewTxnsInt, MissingDatePolicy, Named,
+};
+use entity::sea_orm_active_enums::ChartType;
 
-mod _inner {
+pub struct TxnsGrowthProperties;
 
-    use crate::{
-        charts::{chart::Chart, db_interaction::types::DateValueInt},
-        data_source::kinds::updateable_chart::cumulative::CumulativeChart,
-        lines::NewTxnsInt,
-        MissingDatePolicy, Named,
-    };
-    use entity::sea_orm_active_enums::ChartType;
+impl Named for TxnsGrowthProperties {
+    const NAME: &'static str = "txnsGrowth";
+}
 
-    pub struct TxnsGrowthInner;
-
-    impl Named for TxnsGrowthInner {
-        const NAME: &'static str = "txnsGrowth";
+impl ChartProperties for TxnsGrowthProperties {
+    fn chart_type() -> ChartType {
+        ChartType::Line
     }
-
-    impl Chart for TxnsGrowthInner {
-        fn chart_type() -> ChartType {
-            ChartType::Line
-        }
-        fn missing_date_policy() -> MissingDatePolicy {
-            MissingDatePolicy::FillPrevious
-        }
-    }
-
-    impl CumulativeChart for TxnsGrowthInner {
-        type DeltaChartPoint = DateValueInt;
-        type DeltaChart = NewTxnsInt;
+    fn missing_date_policy() -> MissingDatePolicy {
+        MissingDatePolicy::FillPrevious
     }
 }
-pub type TxnsGrowth = CumulativeChartWrapper<_inner::TxnsGrowthInner>;
+
+pub type TxnsGrowth = CumulativeLocalDbChartSource<NewTxnsInt, TxnsGrowthProperties>;
 
 #[cfg(test)]
 mod tests {

@@ -39,7 +39,7 @@ pub use new_accounts::NewAccounts;
 pub use new_blocks::NewBlocks;
 pub use new_contracts::NewContracts;
 pub use new_native_coin_holders::NewNativeCoinHolders;
-pub use new_native_coin_transfers::NewNativeCoinTransfers;
+pub use new_native_coin_transfers::{NewNativeCoinTransfers, NewNativeCoinTransfersInt};
 pub use new_txns::{NewTxns, NewTxnsInt};
 pub use new_verified_contracts::NewVerifiedContracts;
 pub use txns_fee::TxnsFee;

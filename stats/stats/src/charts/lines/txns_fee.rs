@@ -1,32 +1,29 @@
 //! Total transaction fees for an interval
 
-use crate::data_source::kinds::updateable_chart::clone::CloneChartWrapper;
+use std::ops::RangeInclusive;
 
-mod _inner {
-    use std::ops::RangeInclusive;
+use crate::{
+    charts::db_interaction::types::DateValueDouble,
+    data_source::kinds::{
+        data_manipulation::map::MapToString,
+        local_db::DirectVecLocalDbChartSource,
+        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
+    },
+    utils::sql_with_range_filter_opt,
+    ChartProperties, Named,
+};
+use entity::sea_orm_active_enums::ChartType;
+use sea_orm::{prelude::*, DbBackend, Statement};
 
-    use crate::{
-        charts::db_interaction::types::DateValueDouble,
-        data_source::kinds::{
-            map::to_string::MapToString,
-            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
-            updateable_chart::clone::CloneChart,
-        },
-        utils::sql_with_range_filter_opt,
-        Chart, Named,
-    };
-    use entity::sea_orm_active_enums::ChartType;
-    use sea_orm::{prelude::*, DbBackend, Statement};
+const ETHER: i64 = i64::pow(10, 18);
 
-    const ETHER: i64 = i64::pow(10, 18);
+pub struct TxnsFeeStatement;
 
-    pub struct TxnsFeeStatement;
-
-    impl StatementFromRange for TxnsFeeStatement {
-        fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
-            sql_with_range_filter_opt!(
-                DbBackend::Postgres,
-                r#"
+impl StatementFromRange for TxnsFeeStatement {
+    fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+        sql_with_range_filter_opt!(
+            DbBackend::Postgres,
+            r#"
                     SELECT 
                         DATE(b.timestamp) as date, 
                         (SUM(t.gas_used * t.gas_price) / $1)::FLOAT as value
@@ -37,36 +34,31 @@ mod _inner {
                         b.consensus = true {filter}
                     GROUP BY DATE(b.timestamp)
                 "#,
-                [ETHER.into()],
-                "b.timestamp",
-                range
-            )
-        }
-    }
-
-    pub type TxnsFeeRemote =
-        RemoteDatabaseSource<PullAllWithAndSort<TxnsFeeStatement, DateValueDouble>>;
-
-    pub type TxnsFeeRemoteString = MapToString<TxnsFeeRemote>;
-
-    pub struct TxnsFeeInner;
-
-    impl Named for TxnsFeeInner {
-        const NAME: &'static str = "txnsFee";
-    }
-
-    impl Chart for TxnsFeeInner {
-        fn chart_type() -> ChartType {
-            ChartType::Line
-        }
-    }
-
-    impl CloneChart for TxnsFeeInner {
-        type Dependency = TxnsFeeRemoteString;
+            [ETHER.into()],
+            "b.timestamp",
+            range
+        )
     }
 }
 
-pub type TxnsFee = CloneChartWrapper<_inner::TxnsFeeInner>;
+pub type TxnsFeeRemote =
+    RemoteDatabaseSource<PullAllWithAndSort<TxnsFeeStatement, DateValueDouble>>;
+
+pub type TxnsFeeRemoteString = MapToString<TxnsFeeRemote>;
+
+pub struct TxnsFeeProperties;
+
+impl Named for TxnsFeeProperties {
+    const NAME: &'static str = "txnsFee";
+}
+
+impl ChartProperties for TxnsFeeProperties {
+    fn chart_type() -> ChartType {
+        ChartType::Line
+    }
+}
+
+pub type TxnsFee = DirectVecLocalDbChartSource<TxnsFeeRemoteString, TxnsFeeProperties>;
 
 #[cfg(test)]
 mod tests {

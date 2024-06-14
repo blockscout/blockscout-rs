@@ -1,23 +1,20 @@
-use crate::data_source::kinds::updateable_chart::clone::point::ClonePointChartWrapper;
+use crate::{
+    data_source::kinds::{
+        local_db::DirectPointLocalDbChartSource,
+        remote_db::{PullOne, RemoteDatabaseSource, StatementForOne},
+    },
+    ChartProperties, DateValueString, MissingDatePolicy, Named,
+};
+use entity::sea_orm_active_enums::ChartType;
+use sea_orm::{DbBackend, Statement};
 
-mod _inner {
-    use crate::{
-        data_source::kinds::{
-            remote_db::{PullOne, RemoteDatabaseSource, StatementForOne},
-            updateable_chart::clone::point::ClonePointChart,
-        },
-        Chart, DateValueString, Named,
-    };
-    use entity::sea_orm_active_enums::ChartType;
-    use sea_orm::{DbBackend, Statement};
+pub struct TotalAddressesStatement;
 
-    pub struct TotalAddressesStatement;
-
-    impl StatementForOne for TotalAddressesStatement {
-        fn get_statement() -> Statement {
-            Statement::from_string(
-                DbBackend::Postgres,
-                r#"
+impl StatementForOne for TotalAddressesStatement {
+    fn get_statement() -> Statement {
+        Statement::from_string(
+            DbBackend::Postgres,
+            r#"
                     SELECT
                         date, value
                     FROM ( 
@@ -30,31 +27,30 @@ mod _inner {
                         )
                     ) as sub
                 "#,
-            )
-        }
-    }
-
-    pub type TotalAddressesRemote =
-        RemoteDatabaseSource<PullOne<TotalAddressesStatement, DateValueString>>;
-
-    pub struct TotalAddressesInner;
-
-    impl Named for TotalAddressesInner {
-        const NAME: &'static str = "totalAddresses";
-    }
-
-    impl Chart for TotalAddressesInner {
-        fn chart_type() -> ChartType {
-            ChartType::Counter
-        }
-    }
-
-    impl ClonePointChart for TotalAddressesInner {
-        type Dependency = TotalAddressesRemote;
+        )
     }
 }
 
-pub type TotalAddresses = ClonePointChartWrapper<_inner::TotalAddressesInner>;
+pub type TotalAddressesRemote =
+    RemoteDatabaseSource<PullOne<TotalAddressesStatement, DateValueString>>;
+
+pub struct TotalAddressesProperties;
+
+impl Named for TotalAddressesProperties {
+    const NAME: &'static str = "totalAddresses";
+}
+
+impl ChartProperties for TotalAddressesProperties {
+    fn chart_type() -> ChartType {
+        ChartType::Counter
+    }
+    fn missing_date_policy() -> MissingDatePolicy {
+        MissingDatePolicy::FillPrevious
+    }
+}
+
+pub type TotalAddresses =
+    DirectPointLocalDbChartSource<TotalAddressesRemote, TotalAddressesProperties>;
 
 #[cfg(test)]
 mod tests {

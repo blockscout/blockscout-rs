@@ -1,34 +1,26 @@
-use crate::data_source::kinds::updateable_chart::cumulative::CumulativeChartWrapper;
+use crate::{
+    data_source::kinds::local_db::CumulativeLocalDbChartSource,
+    lines::new_contracts::NewContractsInt, ChartProperties, MissingDatePolicy, Named,
+};
 
-mod _inner {
-    use crate::{
-        charts::db_interaction::types::DateValueInt,
-        data_source::kinds::updateable_chart::cumulative::CumulativeChart,
-        lines::new_contracts::NewContractsInt, Chart, MissingDatePolicy, Named,
-    };
-    use entity::sea_orm_active_enums::ChartType;
+use entity::sea_orm_active_enums::ChartType;
 
-    pub struct ContractsGrowthInner;
+pub struct ContractsGrowthProperties;
 
-    impl Named for ContractsGrowthInner {
-        const NAME: &'static str = "contractsGrowth";
+impl Named for ContractsGrowthProperties {
+    const NAME: &'static str = "contractsGrowth";
+}
+
+impl ChartProperties for ContractsGrowthProperties {
+    fn chart_type() -> ChartType {
+        ChartType::Line
     }
-
-    impl Chart for ContractsGrowthInner {
-        fn chart_type() -> ChartType {
-            ChartType::Line
-        }
-        fn missing_date_policy() -> MissingDatePolicy {
-            MissingDatePolicy::FillPrevious
-        }
-    }
-
-    impl CumulativeChart for ContractsGrowthInner {
-        type DeltaChart = NewContractsInt;
-        type DeltaChartPoint = DateValueInt;
+    fn missing_date_policy() -> MissingDatePolicy {
+        MissingDatePolicy::FillPrevious
     }
 }
-pub type ContractsGrowth = CumulativeChartWrapper<_inner::ContractsGrowthInner>;
+
+pub type ContractsGrowth = CumulativeLocalDbChartSource<NewContractsInt, ContractsGrowthProperties>;
 
 #[cfg(test)]
 mod tests {

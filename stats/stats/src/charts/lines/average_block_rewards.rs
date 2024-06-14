@@ -1,30 +1,28 @@
-use crate::data_source::kinds::updateable_chart::clone::CloneChartWrapper;
+use std::ops::RangeInclusive;
 
-mod _inner {
-    use std::ops::RangeInclusive;
+use crate::{
+    charts::db_interaction::types::DateValueDouble,
+    data_source::kinds::{
+        data_manipulation::map::MapToString,
+        local_db::DirectVecLocalDbChartSource,
+        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
+    },
+    utils::sql_with_range_filter_opt,
+    ChartProperties, Named,
+};
 
-    use crate::{
-        charts::db_interaction::types::DateValueDouble,
-        data_source::kinds::{
-            map::to_string::MapToString,
-            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
-            updateable_chart::clone::CloneChart,
-        },
-        utils::sql_with_range_filter_opt,
-        Chart, Named,
-    };
-    use entity::sea_orm_active_enums::ChartType;
-    use sea_orm::{prelude::*, DbBackend, Statement};
+use entity::sea_orm_active_enums::ChartType;
+use sea_orm::{prelude::*, DbBackend, Statement};
 
-    const ETH: i64 = 1_000_000_000_000_000_000;
+const ETH: i64 = 1_000_000_000_000_000_000;
 
-    pub struct AverageBlockRewardsQuery;
+pub struct AverageBlockRewardsQuery;
 
-    impl StatementFromRange for AverageBlockRewardsQuery {
-        fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
-            sql_with_range_filter_opt!(
-                DbBackend::Postgres,
-                r#"
+impl StatementFromRange for AverageBlockRewardsQuery {
+    fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+        sql_with_range_filter_opt!(
+            DbBackend::Postgres,
+            r#"
                     SELECT
                         DATE(blocks.timestamp) as date,
                         (AVG(block_rewards.reward) / $1)::FLOAT as value
@@ -35,36 +33,32 @@ mod _inner {
                         blocks.consensus = true {filter}
                     GROUP BY date
                 "#,
-                [ETH.into()],
-                "blocks.timestamp",
-                range,
-            )
-        }
-    }
-
-    pub type AverageBlockRewardsRemote =
-        RemoteDatabaseSource<PullAllWithAndSort<AverageBlockRewardsQuery, DateValueDouble>>;
-
-    pub type AverageBlockRewardsRemoteString = MapToString<AverageBlockRewardsRemote>;
-
-    pub struct AverageBlockRewardsInner;
-
-    impl Named for AverageBlockRewardsInner {
-        const NAME: &'static str = "averageBlockRewards";
-    }
-
-    impl Chart for AverageBlockRewardsInner {
-        fn chart_type() -> ChartType {
-            ChartType::Line
-        }
-    }
-
-    impl CloneChart for AverageBlockRewardsInner {
-        type Dependency = AverageBlockRewardsRemoteString;
+            [ETH.into()],
+            "blocks.timestamp",
+            range,
+        )
     }
 }
 
-pub type AverageBlockRewards = CloneChartWrapper<_inner::AverageBlockRewardsInner>;
+pub type AverageBlockRewardsRemote =
+    RemoteDatabaseSource<PullAllWithAndSort<AverageBlockRewardsQuery, DateValueDouble>>;
+
+pub type AverageBlockRewardsRemoteString = MapToString<AverageBlockRewardsRemote>;
+
+pub struct AverageBlockRewardsProperties;
+
+impl Named for AverageBlockRewardsProperties {
+    const NAME: &'static str = "averageBlockRewards";
+}
+
+impl ChartProperties for AverageBlockRewardsProperties {
+    fn chart_type() -> ChartType {
+        ChartType::Line
+    }
+}
+
+pub type AverageBlockRewards =
+    DirectVecLocalDbChartSource<AverageBlockRewardsRemoteString, AverageBlockRewardsProperties>;
 
 #[cfg(test)]
 mod tests {

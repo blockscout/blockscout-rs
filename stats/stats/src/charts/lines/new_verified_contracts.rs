@@ -1,29 +1,25 @@
+use std::ops::RangeInclusive;
+
 use crate::{
     charts::db_interaction::types::DateValueInt,
-    data_source::kinds::{map::parse::MapParseTo, updateable_chart::clone::CloneChartWrapper},
+    data_source::kinds::{
+        data_manipulation::map::MapParseTo,
+        local_db::DirectVecLocalDbChartSource,
+        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
+    },
+    utils::sql_with_range_filter_opt,
+    ChartProperties, DateValueString, Named,
 };
+use entity::sea_orm_active_enums::ChartType;
+use sea_orm::{prelude::*, DbBackend, Statement};
 
-mod _inner {
-    use std::ops::RangeInclusive;
+pub struct NewVerifiedContractsStatement;
 
-    use crate::{
-        data_source::kinds::{
-            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
-            updateable_chart::clone::CloneChart,
-        },
-        utils::sql_with_range_filter_opt,
-        Chart, DateValueString, Named,
-    };
-    use entity::sea_orm_active_enums::ChartType;
-    use sea_orm::{prelude::*, DbBackend, Statement};
-
-    pub struct NewVerifiedContractsStatement;
-
-    impl StatementFromRange for NewVerifiedContractsStatement {
-        fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
-            sql_with_range_filter_opt!(
-                DbBackend::Postgres,
-                r#"
+impl StatementFromRange for NewVerifiedContractsStatement {
+    fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+        sql_with_range_filter_opt!(
+            DbBackend::Postgres,
+            r#"
                     SELECT
                         DATE(smart_contracts.inserted_at) as date,
                         COUNT(*)::TEXT as value
@@ -31,33 +27,30 @@ mod _inner {
                     WHERE TRUE {filter}
                     GROUP BY DATE(smart_contracts.inserted_at)
                 "#,
-                [],
-                "smart_contracts.inserted_at",
-                range
-            )
-        }
-    }
-
-    pub type NewVerifiedContractsRemote =
-        RemoteDatabaseSource<PullAllWithAndSort<NewVerifiedContractsStatement, DateValueString>>;
-
-    pub struct NewVerifiedContractsInner;
-
-    impl Named for NewVerifiedContractsInner {
-        const NAME: &'static str = "newVerifiedContracts";
-    }
-
-    impl Chart for NewVerifiedContractsInner {
-        fn chart_type() -> ChartType {
-            ChartType::Line
-        }
-    }
-
-    impl CloneChart for NewVerifiedContractsInner {
-        type Dependency = NewVerifiedContractsRemote;
+            [],
+            "smart_contracts.inserted_at",
+            range
+        )
     }
 }
-pub type NewVerifiedContracts = CloneChartWrapper<_inner::NewVerifiedContractsInner>;
+
+pub type NewVerifiedContractsRemote =
+    RemoteDatabaseSource<PullAllWithAndSort<NewVerifiedContractsStatement, DateValueString>>;
+
+pub struct NewVerifiedContractsProperties;
+
+impl Named for NewVerifiedContractsProperties {
+    const NAME: &'static str = "newVerifiedContracts";
+}
+
+impl ChartProperties for NewVerifiedContractsProperties {
+    fn chart_type() -> ChartType {
+        ChartType::Line
+    }
+}
+
+pub type NewVerifiedContracts =
+    DirectVecLocalDbChartSource<NewVerifiedContractsRemote, NewVerifiedContractsProperties>;
 
 pub type NewVerifiedContractsInt = MapParseTo<NewVerifiedContracts, DateValueInt>;
 

@@ -1,38 +1,41 @@
+use std::ops::RangeInclusive;
+
 use crate::{
     charts::db_interaction::types::DateValueInt,
-    data_source::kinds::{map::parse::MapParseTo, updateable_chart::clone::CloneChartWrapper},
+    data_source::{
+        kinds::{
+            data_manipulation::map::{MapParseTo, MapToString},
+            local_db::{
+                parameters::{
+                    update::batching::{
+                        parameters::{BatchMax, PassVecStep},
+                        BatchUpdate,
+                    },
+                    DefaultCreate, DefaultQueryVec,
+                },
+                LocalDbChartSource,
+            },
+            remote_db::{QueryBehaviour, RemoteDatabaseSource, StatementFromRange},
+        },
+        UpdateContext,
+    },
+    missing_date::trim_out_of_range_sorted,
+    ChartProperties, Named, UpdateError,
 };
 
-mod _inner {
-    use std::ops::RangeInclusive;
+use entity::sea_orm_active_enums::ChartType;
+use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 
-    use crate::{
-        charts::db_interaction::types::DateValueInt,
-        data_source::{
-            kinds::{
-                map::to_string::MapToString,
-                remote_db::{QueryBehaviour, RemoteDatabaseSource, StatementFromRange},
-                updateable_chart::clone::CloneChart,
-            },
-            UpdateContext,
-        },
-        missing_date::trim_out_of_range_sorted,
-        Chart, Named, UpdateError,
-    };
-    use chrono::Duration;
-    use entity::sea_orm_active_enums::ChartType;
-    use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
+pub struct NewAccountsStatement;
 
-    pub struct NewAccountsStatement;
-
-    impl StatementFromRange for NewAccountsStatement {
-        fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
-            // we want to consider the time at range end; thus optional
-            // filter
-            if let Some(range) = range {
-                Statement::from_sql_and_values(
-                    DbBackend::Postgres,
-                    r#"
+impl StatementFromRange for NewAccountsStatement {
+    fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+        // we want to consider the time at range end; thus optional
+        // filter
+        if let Some(range) = range {
+            Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                r#"
                         SELECT
                             first_tx.date as date,
                             count(*) as value
@@ -49,12 +52,12 @@ mod _inner {
                         ) first_tx
                         GROUP BY first_tx.date;
                     "#,
-                    vec![(*range.end()).into()],
-                )
-            } else {
-                Statement::from_sql_and_values(
-                    DbBackend::Postgres,
-                    r#"
+                vec![(*range.end()).into()],
+            )
+        } else {
+            Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                r#"
                         SELECT
                             first_tx.date as date,
                             count(*) as value
@@ -70,68 +73,73 @@ mod _inner {
                         ) first_tx
                         GROUP BY first_tx.date;
                     "#,
-                    vec![],
-                )
-            }
-        }
-    }
-
-    pub struct NewAccountsQueryBehaviour;
-
-    impl QueryBehaviour for NewAccountsQueryBehaviour {
-        type Output = Vec<DateValueInt>;
-
-        async fn query_data(
-            cx: &UpdateContext<'_>,
-            range: Option<RangeInclusive<DateTimeUtc>>,
-        ) -> Result<Vec<DateValueInt>, UpdateError> {
-            let query = NewAccountsStatement::get_statement(range.clone());
-            let mut data = DateValueInt::find_by_statement(query)
-                .all(cx.blockscout)
-                .await
-                .map_err(UpdateError::BlockscoutDB)?;
-            // make sure that it's sorted
-            data.sort_by_key(|d| d.date);
-            if let Some(range) = range {
-                let range = range.start().date_naive()..=range.end().date_naive();
-                trim_out_of_range_sorted(&mut data, range);
-            }
-            Ok(data)
-        }
-    }
-
-    /// Note:  The intended strategy is to update whole range at once, even
-    /// though the implementation allows batching. The batching was done
-    /// to simplify interface of the data source.
-    ///
-    /// Thus, use max batch size in the dependant data sources.
-    pub type NewAccountsRemote = RemoteDatabaseSource<NewAccountsQueryBehaviour>;
-
-    pub type NewAccountsRemoteString = MapToString<NewAccountsRemote>;
-
-    pub struct NewAccountsInner;
-
-    impl Named for NewAccountsInner {
-        const NAME: &'static str = "newAccounts";
-    }
-
-    impl Chart for NewAccountsInner {
-        fn chart_type() -> ChartType {
-            ChartType::Line
-        }
-    }
-
-    impl CloneChart for NewAccountsInner {
-        type Dependency = NewAccountsRemoteString;
-
-        fn batch_size() -> Duration {
-            // see `NewAccountsRemote` docs
-            Duration::max_value()
+                vec![],
+            )
         }
     }
 }
 
-pub type NewAccounts = CloneChartWrapper<_inner::NewAccountsInner>;
+pub struct NewAccountsQueryBehaviour;
+
+impl QueryBehaviour for NewAccountsQueryBehaviour {
+    type Output = Vec<DateValueInt>;
+
+    async fn query_data(
+        cx: &UpdateContext<'_>,
+        range: Option<RangeInclusive<DateTimeUtc>>,
+    ) -> Result<Vec<DateValueInt>, UpdateError> {
+        let query = NewAccountsStatement::get_statement(range.clone());
+        let mut data = DateValueInt::find_by_statement(query)
+            .all(cx.blockscout)
+            .await
+            .map_err(UpdateError::BlockscoutDB)?;
+        // make sure that it's sorted
+        data.sort_by_key(|d| d.date);
+        if let Some(range) = range {
+            let range = range.start().date_naive()..=range.end().date_naive();
+            trim_out_of_range_sorted(&mut data, range);
+        }
+        Ok(data)
+    }
+}
+
+/// Note:  The intended strategy is to update whole range at once, even
+/// though the implementation allows batching. The batching was done
+/// to simplify interface of the data source.
+///
+/// Thus, use max batch size in the dependant data sources.
+pub type NewAccountsRemote = RemoteDatabaseSource<NewAccountsQueryBehaviour>;
+
+pub type NewAccountsRemoteString = MapToString<NewAccountsRemote>;
+
+pub struct Properties;
+
+impl Named for Properties {
+    const NAME: &'static str = "newAccounts";
+}
+
+impl ChartProperties for Properties {
+    fn chart_type() -> ChartType {
+        ChartType::Line
+    }
+}
+
+pub type NewAccounts = LocalDbChartSource<
+    NewAccountsRemoteString,
+    (),
+    DefaultCreate<Properties>,
+    BatchUpdate<
+        NewAccountsRemoteString,
+        (),
+        PassVecStep,
+        // see `NewAccountsRemote` docs
+        BatchMax,
+        Properties,
+    >,
+    DefaultQueryVec<Properties>,
+    Properties,
+>;
+
 pub type NewAccountsInt = MapParseTo<NewAccounts, DateValueInt>;
 
 #[cfg(test)]

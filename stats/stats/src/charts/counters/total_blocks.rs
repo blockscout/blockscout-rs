@@ -1,84 +1,80 @@
-use crate::data_source::kinds::updateable_chart::clone::point::ClonePointChartWrapper;
+use std::ops::RangeInclusive;
 
-mod _inner {
-    use std::ops::RangeInclusive;
-
-    use crate::{
-        data_source::{
-            kinds::{
-                remote_db::{QueryBehaviour, RemoteDatabaseSource},
-                updateable_chart::clone::point::ClonePointChart,
-            },
-            types::UpdateContext,
+use crate::{
+    data_source::{
+        kinds::{
+            local_db::DirectPointLocalDbChartSource,
+            remote_db::{QueryBehaviour, RemoteDatabaseSource},
         },
-        Chart, DateValueString, Named, UpdateError,
-    };
-    use blockscout_db::entity::blocks;
-    use chrono::NaiveDateTime;
-    use entity::sea_orm_active_enums::ChartType;
-    use sea_orm::{prelude::*, sea_query::Expr, FromQueryResult, QuerySelect};
+        types::UpdateContext,
+    },
+    ChartProperties, DateValueString, MissingDatePolicy, Named, UpdateError,
+};
 
-    #[derive(FromQueryResult)]
-    struct TotalBlocksData {
-        number: i64,
-        timestamp: NaiveDateTime,
-    }
+use blockscout_db::entity::blocks;
+use chrono::NaiveDateTime;
+use entity::sea_orm_active_enums::ChartType;
+use sea_orm::{prelude::*, sea_query::Expr, FromQueryResult, QuerySelect};
 
-    pub struct TotalBlocksQueryBehaviour;
+#[derive(FromQueryResult)]
+struct TotalBlocksData {
+    number: i64,
+    timestamp: NaiveDateTime,
+}
 
-    impl QueryBehaviour for TotalBlocksQueryBehaviour {
-        type Output = DateValueString;
+pub struct TotalBlocksQueryBehaviour;
 
-        async fn query_data(
-            cx: &UpdateContext<'_>,
-            _range: Option<RangeInclusive<DateTimeUtc>>,
-        ) -> Result<Self::Output, UpdateError> {
-            let data = blocks::Entity::find()
-                .select_only()
-                .column_as(Expr::col(blocks::Column::Number).count(), "number")
-                .column_as(Expr::col(blocks::Column::Timestamp).max(), "timestamp")
-                .filter(blocks::Column::Consensus.eq(true))
-                .into_model::<TotalBlocksData>()
-                .one(cx.blockscout)
-                .await
-                .map_err(UpdateError::BlockscoutDB)?
-                .ok_or_else(|| UpdateError::Internal("query returned nothing".into()))?;
+impl QueryBehaviour for TotalBlocksQueryBehaviour {
+    type Output = DateValueString;
 
-            let data = DateValueString {
-                date: data.timestamp.date(),
-                value: data.number.to_string(),
-            };
-            Ok(data)
-        }
-    }
+    async fn query_data(
+        cx: &UpdateContext<'_>,
+        _range: Option<RangeInclusive<DateTimeUtc>>,
+    ) -> Result<Self::Output, UpdateError> {
+        let data = blocks::Entity::find()
+            .select_only()
+            .column_as(Expr::col(blocks::Column::Number).count(), "number")
+            .column_as(Expr::col(blocks::Column::Timestamp).max(), "timestamp")
+            .filter(blocks::Column::Consensus.eq(true))
+            .into_model::<TotalBlocksData>()
+            .one(cx.blockscout)
+            .await
+            .map_err(UpdateError::BlockscoutDB)?
+            .ok_or_else(|| UpdateError::Internal("query returned nothing".into()))?;
 
-    pub type TotalBlocksRemote = RemoteDatabaseSource<TotalBlocksQueryBehaviour>;
-
-    pub struct TotalBlocksInner;
-
-    impl Named for TotalBlocksInner {
-        const NAME: &'static str = "totalBlocks";
-    }
-
-    impl Chart for TotalBlocksInner {
-        fn chart_type() -> ChartType {
-            ChartType::Counter
-        }
-    }
-
-    impl ClonePointChart for TotalBlocksInner {
-        type Dependency = TotalBlocksRemote;
+        let data = DateValueString {
+            date: data.timestamp.date(),
+            value: data.number.to_string(),
+        };
+        Ok(data)
     }
 }
 
-pub type TotalBlocks = ClonePointChartWrapper<_inner::TotalBlocksInner>;
+pub type TotalBlocksRemote = RemoteDatabaseSource<TotalBlocksQueryBehaviour>;
+
+pub struct TotalBlocksProperties;
+
+impl Named for TotalBlocksProperties {
+    const NAME: &'static str = "totalBlocks";
+}
+
+impl ChartProperties for TotalBlocksProperties {
+    fn chart_type() -> ChartType {
+        ChartType::Counter
+    }
+    fn missing_date_policy() -> MissingDatePolicy {
+        MissingDatePolicy::FillPrevious
+    }
+}
+
+pub type TotalBlocks = DirectPointLocalDbChartSource<TotalBlocksRemote, TotalBlocksProperties>;
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
         data_source::{DataSource, UpdateContext, UpdateParameters},
-        get_counters,
+        get_raw_counters,
         tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
         Named,
     };
@@ -120,7 +116,7 @@ mod tests {
         };
         let cx = UpdateContext::from(parameters.clone());
         TotalBlocks::update_recursively(&cx).await.unwrap();
-        let data = get_counters(&db).await.unwrap();
+        let data = get_raw_counters(&db).await.unwrap();
         assert_eq!("13", data[TotalBlocks::NAME].value);
     }
 
@@ -146,7 +142,7 @@ mod tests {
         };
         let cx = UpdateContext::from(parameters.clone());
         TotalBlocks::update_recursively(&cx).await.unwrap();
-        let data = get_counters(&db).await.unwrap();
+        let data = get_raw_counters(&db).await.unwrap();
         assert_eq!("9", data[TotalBlocks::NAME].value);
     }
 
@@ -182,7 +178,7 @@ mod tests {
         };
         let cx = UpdateContext::from(parameters.clone());
         TotalBlocks::update_recursively(&cx).await.unwrap();
-        let data = get_counters(&db).await.unwrap();
+        let data = get_raw_counters(&db).await.unwrap();
         assert_eq!("13", data[TotalBlocks::NAME].value);
     }
 }

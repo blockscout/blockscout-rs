@@ -1,37 +1,29 @@
 //! Cumulative total number of accounts in the network.
 
-use crate::data_source::kinds::updateable_chart::cumulative::CumulativeChartWrapper;
+use super::new_accounts::NewAccountsInt;
+use crate::{
+    data_source::kinds::local_db::CumulativeLocalDbChartSource, ChartProperties, MissingDatePolicy,
+    Named,
+};
 
-mod _inner {
-    use crate::{
-        charts::db_interaction::types::DateValueInt,
-        data_source::kinds::updateable_chart::cumulative::CumulativeChart,
-        lines::new_accounts::NewAccountsInt, Chart, MissingDatePolicy, Named,
-    };
-    use entity::sea_orm_active_enums::ChartType;
+use entity::sea_orm_active_enums::ChartType;
 
-    pub struct AccountsGrowthInner;
+pub struct AccountsGrowthProperties;
 
-    impl Named for AccountsGrowthInner {
-        const NAME: &'static str = "accountsGrowth";
+impl Named for AccountsGrowthProperties {
+    const NAME: &'static str = "accountsGrowth";
+}
+
+impl ChartProperties for AccountsGrowthProperties {
+    fn chart_type() -> ChartType {
+        ChartType::Line
     }
-
-    impl Chart for AccountsGrowthInner {
-        fn chart_type() -> ChartType {
-            ChartType::Line
-        }
-        fn missing_date_policy() -> MissingDatePolicy {
-            MissingDatePolicy::FillPrevious
-        }
-    }
-
-    impl CumulativeChart for AccountsGrowthInner {
-        type DeltaChart = NewAccountsInt;
-        type DeltaChartPoint = DateValueInt;
+    fn missing_date_policy() -> MissingDatePolicy {
+        MissingDatePolicy::FillPrevious
     }
 }
 
-pub type AccountsGrowth = CumulativeChartWrapper<_inner::AccountsGrowthInner>;
+pub type AccountsGrowth = CumulativeLocalDbChartSource<NewAccountsInt, AccountsGrowthProperties>;
 
 #[cfg(test)]
 mod tests {

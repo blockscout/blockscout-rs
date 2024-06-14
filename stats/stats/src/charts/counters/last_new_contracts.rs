@@ -1,33 +1,27 @@
-use crate::data_source::kinds::updateable_chart::last_point::LastPointChartWrapper;
+use crate::{
+    data_source::kinds::{
+        data_manipulation::last_point::LastPoint, local_db::DirectPointLocalDbChartSource,
+    },
+    lines::NewContracts,
+    ChartProperties, Named,
+};
 
-mod _inner {
-    use crate::{
-        data_source::kinds::updateable_chart::last_point::LastPointChart, lines::NewContracts,
-        Chart, Named,
-    };
-    use entity::sea_orm_active_enums::ChartType;
+use entity::sea_orm_active_enums::ChartType;
 
-    pub struct LastNewContractsInner;
+pub struct LastNewContractsProperties;
 
-    impl Named for LastNewContractsInner {
-        const NAME: &'static str = "lastNewContracts";
-    }
+impl Named for LastNewContractsProperties {
+    const NAME: &'static str = "lastNewContracts";
+}
 
-    impl Chart for LastNewContractsInner {
-        fn chart_type() -> ChartType {
-            ChartType::Counter
-        }
-        fn relevant_or_zero() -> bool {
-            true
-        }
-    }
-
-    impl LastPointChart for LastNewContractsInner {
-        type InnerSource = NewContracts;
+impl ChartProperties for LastNewContractsProperties {
+    fn chart_type() -> ChartType {
+        ChartType::Counter
     }
 }
 
-pub type LastNewContracts = LastPointChartWrapper<_inner::LastNewContractsInner>;
+pub type LastNewContracts =
+    DirectPointLocalDbChartSource<LastPoint<NewContracts>, LastNewContractsProperties>;
 
 #[cfg(test)]
 mod tests {

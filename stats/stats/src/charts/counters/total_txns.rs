@@ -1,30 +1,30 @@
-use crate::data_source::kinds::updateable_chart::sum_point::SumPointChartWrapper;
+use crate::{
+    data_source::kinds::{
+        data_manipulation::{map::MapToString, sum_point::Sum},
+        local_db::DirectPointLocalDbChartSource,
+    },
+    lines::NewTxnsInt,
+    ChartProperties, MissingDatePolicy, Named,
+};
+use entity::sea_orm_active_enums::ChartType;
 
-mod _inner {
-    use crate::{
-        data_source::kinds::updateable_chart::sum_point::SumPointChart, lines::NewTxnsInt, Chart,
-        Named,
-    };
-    use entity::sea_orm_active_enums::ChartType;
+pub struct TotalTxnsProperties;
 
-    pub struct TotalTxnsInner;
+impl Named for TotalTxnsProperties {
+    const NAME: &'static str = "totalTxns";
+}
 
-    impl Named for TotalTxnsInner {
-        const NAME: &'static str = "totalTxns";
+impl ChartProperties for TotalTxnsProperties {
+    fn chart_type() -> ChartType {
+        ChartType::Counter
     }
-
-    impl Chart for TotalTxnsInner {
-        fn chart_type() -> ChartType {
-            ChartType::Counter
-        }
-    }
-
-    impl SumPointChart for TotalTxnsInner {
-        type InnerSource = NewTxnsInt;
+    fn missing_date_policy() -> MissingDatePolicy {
+        MissingDatePolicy::FillPrevious
     }
 }
 
-pub type TotalTxns = SumPointChartWrapper<_inner::TotalTxnsInner>;
+pub type TotalTxns =
+    DirectPointLocalDbChartSource<MapToString<Sum<NewTxnsInt>>, TotalTxnsProperties>;
 
 #[cfg(test)]
 mod tests {

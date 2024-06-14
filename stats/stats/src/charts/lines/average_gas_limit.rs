@@ -1,27 +1,24 @@
-use crate::data_source::kinds::updateable_chart::clone::CloneChartWrapper;
+use std::ops::RangeInclusive;
 
-mod _inner {
-    use std::ops::RangeInclusive;
+use crate::{
+    data_source::kinds::{
+        local_db::DirectVecLocalDbChartSource,
+        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
+    },
+    utils::sql_with_range_filter_opt,
+    ChartProperties, DateValueString, Named,
+};
 
-    use crate::{
-        data_source::kinds::{
-            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
-            updateable_chart::clone::CloneChart,
-        },
-        utils::sql_with_range_filter_opt,
-        Chart, DateValueString, Named,
-    };
+use entity::sea_orm_active_enums::ChartType;
+use sea_orm::{prelude::*, DbBackend, Statement};
 
-    use entity::sea_orm_active_enums::ChartType;
-    use sea_orm::{prelude::*, DbBackend, Statement};
+pub struct AverageGasLimitStatement;
 
-    pub struct AverageGasLimitStatement;
-
-    impl StatementFromRange for AverageGasLimitStatement {
-        fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
-            sql_with_range_filter_opt!(
-                DbBackend::Postgres,
-                r#"
+impl StatementFromRange for AverageGasLimitStatement {
+    fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+        sql_with_range_filter_opt!(
+            DbBackend::Postgres,
+            r#"
                     SELECT 
                         DATE(blocks.timestamp) as date,
                         ROUND(AVG(blocks.gas_limit))::TEXT as value
@@ -31,34 +28,30 @@ mod _inner {
                         blocks.consensus = true {filter}
                     GROUP BY date
                 "#,
-                [],
-                "blocks.timestamp",
-                range
-            )
-        }
-    }
-
-    pub type AverageGasLimitRemote =
-        RemoteDatabaseSource<PullAllWithAndSort<AverageGasLimitStatement, DateValueString>>;
-
-    pub struct AverageGasLimitInner;
-
-    impl Named for AverageGasLimitInner {
-        const NAME: &'static str = "averageGasLimit";
-    }
-
-    impl Chart for AverageGasLimitInner {
-        fn chart_type() -> ChartType {
-            ChartType::Line
-        }
-    }
-
-    impl CloneChart for AverageGasLimitInner {
-        type Dependency = AverageGasLimitRemote;
+            [],
+            "blocks.timestamp",
+            range
+        )
     }
 }
 
-pub type AverageGasLimit = CloneChartWrapper<_inner::AverageGasLimitInner>;
+pub type AverageGasLimitRemote =
+    RemoteDatabaseSource<PullAllWithAndSort<AverageGasLimitStatement, DateValueString>>;
+
+pub struct AverageGasLimitProperties;
+
+impl Named for AverageGasLimitProperties {
+    const NAME: &'static str = "averageGasLimit";
+}
+
+impl ChartProperties for AverageGasLimitProperties {
+    fn chart_type() -> ChartType {
+        ChartType::Line
+    }
+}
+
+pub type AverageGasLimit =
+    DirectVecLocalDbChartSource<AverageGasLimitRemote, AverageGasLimitProperties>;
 
 #[cfg(test)]
 mod tests {

@@ -1,26 +1,25 @@
-use crate::data_source::kinds::updateable_chart::clone::CloneChartWrapper;
+use std::ops::RangeInclusive;
 
-mod _inner {
-    use std::ops::RangeInclusive;
+use crate::{
+    charts::db_interaction::types::DateValueInt,
+    data_source::kinds::{
+        data_manipulation::map::MapParseTo,
+        local_db::DirectVecLocalDbChartSource,
+        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
+    },
+    utils::sql_with_range_filter_opt,
+    ChartProperties, DateValueString, Named,
+};
+use entity::sea_orm_active_enums::ChartType;
+use sea_orm::{prelude::*, DbBackend, Statement};
 
-    use crate::{
-        data_source::kinds::{
-            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
-            updateable_chart::clone::CloneChart,
-        },
-        utils::sql_with_range_filter_opt,
-        Chart, DateValueString, Named,
-    };
-    use entity::sea_orm_active_enums::ChartType;
-    use sea_orm::{prelude::*, DbBackend, Statement};
+pub struct NewNativeCoinTransfersStatement;
 
-    pub struct NewNativeCoinTransfersStatement;
-
-    impl StatementFromRange for NewNativeCoinTransfersStatement {
-        fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
-            sql_with_range_filter_opt!(
-                DbBackend::Postgres,
-                r#"
+impl StatementFromRange for NewNativeCoinTransfersStatement {
+    fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+        sql_with_range_filter_opt!(
+            DbBackend::Postgres,
+            r#"
                     SELECT 
                         DATE(b.timestamp) as date,
                         COUNT(*)::TEXT as value
@@ -33,34 +32,32 @@ mod _inner {
                         t.value >= 0 {filter}
                     GROUP BY date
                 "#,
-                [],
-                "b.timestamp",
-                range
-            )
-        }
-    }
-
-    pub type NewNativeCoinTransfersRemote =
-        RemoteDatabaseSource<PullAllWithAndSort<NewNativeCoinTransfersStatement, DateValueString>>;
-
-    pub struct NewNativeCoinTransfersInner;
-
-    impl Named for NewNativeCoinTransfersInner {
-        const NAME: &'static str = "newNativeCoinTransfers";
-    }
-
-    impl Chart for NewNativeCoinTransfersInner {
-        fn chart_type() -> ChartType {
-            ChartType::Line
-        }
-    }
-
-    impl CloneChart for NewNativeCoinTransfersInner {
-        type Dependency = NewNativeCoinTransfersRemote;
+            [],
+            "b.timestamp",
+            range
+        )
     }
 }
 
-pub type NewNativeCoinTransfers = CloneChartWrapper<_inner::NewNativeCoinTransfersInner>;
+pub type NewNativeCoinTransfersRemote =
+    RemoteDatabaseSource<PullAllWithAndSort<NewNativeCoinTransfersStatement, DateValueString>>;
+
+pub struct NewNativeCoinTransfersProperties;
+
+impl Named for NewNativeCoinTransfersProperties {
+    const NAME: &'static str = "newNativeCoinTransfers";
+}
+
+impl ChartProperties for NewNativeCoinTransfersProperties {
+    fn chart_type() -> ChartType {
+        ChartType::Line
+    }
+}
+
+pub type NewNativeCoinTransfers =
+    DirectVecLocalDbChartSource<NewNativeCoinTransfersRemote, NewNativeCoinTransfersProperties>;
+
+pub type NewNativeCoinTransfersInt = MapParseTo<NewNativeCoinTransfers, DateValueInt>;
 
 #[cfg(test)]
 mod tests {

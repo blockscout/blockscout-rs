@@ -1,30 +1,28 @@
-use crate::data_source::kinds::updateable_chart::clone::CloneChartWrapper;
+use std::ops::RangeInclusive;
 
-mod _inner {
-    use std::ops::RangeInclusive;
+use crate::{
+    charts::db_interaction::types::DateValueDouble,
+    data_source::kinds::{
+        data_manipulation::map::MapToString,
+        local_db::DirectVecLocalDbChartSource,
+        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
+    },
+    utils::sql_with_range_filter_opt,
+    ChartProperties, Named,
+};
 
-    use crate::{
-        charts::db_interaction::types::DateValueDouble,
-        data_source::kinds::{
-            map::to_string::MapToString,
-            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
-            updateable_chart::clone::CloneChart,
-        },
-        utils::sql_with_range_filter_opt,
-        Chart, Named,
-    };
-    use entity::sea_orm_active_enums::ChartType;
-    use sea_orm::{prelude::*, DbBackend, Statement};
+use entity::sea_orm_active_enums::ChartType;
+use sea_orm::{prelude::*, DbBackend, Statement};
 
-    const GWEI: i64 = 1_000_000_000;
+const GWEI: i64 = 1_000_000_000;
 
-    pub struct AverageGasPriceStatement;
+pub struct AverageGasPriceStatement;
 
-    impl StatementFromRange for AverageGasPriceStatement {
-        fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
-            sql_with_range_filter_opt!(
-                DbBackend::Postgres,
-                r#"
+impl StatementFromRange for AverageGasPriceStatement {
+    fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+        sql_with_range_filter_opt!(
+            DbBackend::Postgres,
+            r#"
                     SELECT
                         blocks.timestamp::date as date,
                         (AVG(
@@ -43,36 +41,32 @@ mod _inner {
                         blocks.consensus = true {filter}
                     GROUP BY date
                 "#,
-                [GWEI.into()],
-                "blocks.timestamp",
-                range,
-            )
-        }
-    }
-
-    pub type AverageGasPriceRemote =
-        RemoteDatabaseSource<PullAllWithAndSort<AverageGasPriceStatement, DateValueDouble>>;
-
-    pub type AverageGasPriceRemoteString = MapToString<AverageGasPriceRemote>;
-
-    pub struct AverageGasPriceInner;
-
-    impl Named for AverageGasPriceInner {
-        const NAME: &'static str = "averageGasPrice";
-    }
-
-    impl Chart for AverageGasPriceInner {
-        fn chart_type() -> ChartType {
-            ChartType::Line
-        }
-    }
-
-    impl CloneChart for AverageGasPriceInner {
-        type Dependency = AverageGasPriceRemoteString;
+            [GWEI.into()],
+            "blocks.timestamp",
+            range,
+        )
     }
 }
 
-pub type AverageGasPrice = CloneChartWrapper<_inner::AverageGasPriceInner>;
+pub type AverageGasPriceRemote =
+    RemoteDatabaseSource<PullAllWithAndSort<AverageGasPriceStatement, DateValueDouble>>;
+
+pub type AverageGasPriceRemoteString = MapToString<AverageGasPriceRemote>;
+
+pub struct AverageGasPriceProperties;
+
+impl Named for AverageGasPriceProperties {
+    const NAME: &'static str = "averageGasPrice";
+}
+
+impl ChartProperties for AverageGasPriceProperties {
+    fn chart_type() -> ChartType {
+        ChartType::Line
+    }
+}
+
+pub type AverageGasPrice =
+    DirectVecLocalDbChartSource<AverageGasPriceRemoteString, AverageGasPriceProperties>;
 
 #[cfg(test)]
 mod tests {

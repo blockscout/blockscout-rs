@@ -1,69 +1,65 @@
-use crate::data_source::kinds::updateable_chart::clone::point::ClonePointChartWrapper;
+use std::ops::RangeInclusive;
 
-mod _inner {
-    use std::ops::RangeInclusive;
-
-    use crate::{
-        data_source::{
-            kinds::{
-                remote_db::{QueryBehaviour, RemoteDatabaseSource},
-                updateable_chart::clone::point::ClonePointChart,
-            },
-            UpdateContext,
+use crate::{
+    data_source::{
+        kinds::{
+            local_db::DirectPointLocalDbChartSource,
+            remote_db::{QueryBehaviour, RemoteDatabaseSource},
         },
-        Chart, DateValueString, Named, UpdateError,
-    };
-    use blockscout_db::entity::addresses;
-    use entity::sea_orm_active_enums::ChartType;
-    use sea_orm::prelude::*;
+        UpdateContext,
+    },
+    ChartProperties, DateValueString, MissingDatePolicy, Named, UpdateError,
+};
+use blockscout_db::entity::addresses;
+use entity::sea_orm_active_enums::ChartType;
+use sea_orm::prelude::*;
 
-    pub struct TotalContractsQueryBehaviour;
+pub struct TotalContractsQueryBehaviour;
 
-    impl QueryBehaviour for TotalContractsQueryBehaviour {
-        type Output = DateValueString;
+impl QueryBehaviour for TotalContractsQueryBehaviour {
+    type Output = DateValueString;
 
-        async fn query_data(
-            cx: &UpdateContext<'_>,
-            _range: Option<RangeInclusive<DateTimeUtc>>,
-        ) -> Result<Self::Output, UpdateError> {
-            let value = addresses::Entity::find()
-                .filter(addresses::Column::ContractCode.is_not_null())
-                .filter(addresses::Column::InsertedAt.lte(cx.time))
-                .count(cx.blockscout)
-                .await
-                .map_err(UpdateError::BlockscoutDB)?;
-            let date = cx.time.date_naive();
-            Ok(DateValueString {
-                date,
-                value: value.to_string(),
-            })
-        }
-    }
-
-    pub type TotalContractsRemote = RemoteDatabaseSource<TotalContractsQueryBehaviour>;
-
-    pub struct TotalContractsInner;
-
-    impl Named for TotalContractsInner {
-        const NAME: &'static str = "totalContracts";
-    }
-
-    impl Chart for TotalContractsInner {
-        fn chart_type() -> ChartType {
-            ChartType::Counter
-        }
-    }
-
-    impl ClonePointChart for TotalContractsInner {
-        // todo: reconsider once #845 is solved
-        // https://github.com/blockscout/blockscout-rs/issues/845
-        // + change update group once changed back
-        // i.e. set to LastPointChart<ContractsGrowth>
-        type Dependency = TotalContractsRemote;
+    async fn query_data(
+        cx: &UpdateContext<'_>,
+        _range: Option<RangeInclusive<DateTimeUtc>>,
+    ) -> Result<Self::Output, UpdateError> {
+        let value = addresses::Entity::find()
+            .filter(addresses::Column::ContractCode.is_not_null())
+            .filter(addresses::Column::InsertedAt.lte(cx.time))
+            .count(cx.blockscout)
+            .await
+            .map_err(UpdateError::BlockscoutDB)?;
+        let date = cx.time.date_naive();
+        Ok(DateValueString {
+            date,
+            value: value.to_string(),
+        })
     }
 }
 
-pub type TotalContracts = ClonePointChartWrapper<_inner::TotalContractsInner>;
+pub type TotalContractsRemote = RemoteDatabaseSource<TotalContractsQueryBehaviour>;
+
+pub struct TotalContractsProperties;
+
+impl Named for TotalContractsProperties {
+    const NAME: &'static str = "totalContracts";
+}
+
+impl ChartProperties for TotalContractsProperties {
+    fn chart_type() -> ChartType {
+        ChartType::Counter
+    }
+    fn missing_date_policy() -> MissingDatePolicy {
+        MissingDatePolicy::FillPrevious
+    }
+}
+
+// todo: reconsider once #845 is solved
+// https://github.com/blockscout/blockscout-rs/issues/845
+// + change update group once changed back
+// i.e. set dependency to LastPointChart<ContractsGrowth>
+pub type TotalContracts =
+    DirectPointLocalDbChartSource<TotalContractsRemote, TotalContractsProperties>;
 
 #[cfg(test)]
 mod tests {
