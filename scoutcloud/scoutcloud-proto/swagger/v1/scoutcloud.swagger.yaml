@@ -320,16 +320,22 @@ definitions:
     properties:
       config:
         $ref: '#/definitions/v1DeployConfig'
+    required:
+      - config
   ScoutcloudUpdateConfigPartialBody:
     type: object
     properties:
       config:
         $ref: '#/definitions/v1DeployConfigPartial'
+    required:
+      - config
   ScoutcloudUpdateInstanceStatusBody:
     type: object
     properties:
       action:
         $ref: '#/definitions/v1UpdateInstanceAction'
+    required:
+      - action
   protobufAny:
     type: object
     properties:
@@ -358,6 +364,10 @@ definitions:
         type: string
       created_at:
         type: string
+    required:
+      - name
+      - token_value
+      - created_at
   v1CreateInstanceRequest:
     type: object
     properties:
@@ -366,11 +376,16 @@ definitions:
       config:
         $ref: '#/definitions/v1DeployConfig'
         title: initial config
+    required:
+      - name
+      - config
   v1CreateInstanceResponse:
     type: object
     properties:
       instance_id:
         type: string
+    required:
+      - instance_id
   v1DeleteInstanceResponse:
     type: object
   v1DeployConfig:
@@ -410,6 +425,9 @@ definitions:
         type: string
       wallet_connect_project_id:
         type: string
+    required:
+      - rpc_url
+      - server_size
   v1DeployConfigPartial:
     type: object
     properties:
@@ -470,6 +488,13 @@ definitions:
         type: string
       total_cost:
         type: string
+    required:
+      - deployment_id
+      - instance_id
+      - status
+      - created_at
+      - config
+      - total_cost
   v1DeploymentStatus:
     type: string
     enum:
@@ -510,6 +535,13 @@ definitions:
         $ref: '#/definitions/v1DeployConfig'
       deployment:
         $ref: '#/definitions/v1Deployment'
+    required:
+      - instance_id
+      - name
+      - slug
+      - created_at
+      - config
+      - deployment
   v1ListDeploymentsResponse:
     type: object
     properties:
@@ -535,6 +567,9 @@ definitions:
         type: string
       promo:
         type: string
+    required:
+      - email
+      - project_title
   v1RegisterProfileResponse:
     type: object
     properties:
@@ -547,6 +582,8 @@ definitions:
     properties:
       config:
         $ref: '#/definitions/v1DeployConfig'
+    required:
+      - config
   v1UpdateInstanceAction:
     type: string
     enum:
@@ -561,6 +598,9 @@ definitions:
         $ref: '#/definitions/v1DeploymentStatus'
       deployment_id:
         type: string
+    required:
+      - status
+      - deployment_id
   v1UserAction:
     type: object
     properties:
@@ -570,6 +610,9 @@ definitions:
         type: string
       timestamp:
         type: string
+    required:
+      - action
+      - timestamp
   v1UserProfile:
     type: object
     properties:
@@ -586,6 +629,10 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1UserAction'
+    required:
+      - email
+      - created_at
+      - balance
 securityDefinitions:
   ApiKeyAuth:
     type: apiKey

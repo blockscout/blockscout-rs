@@ -4,6 +4,8 @@ package blockscout.scoutcloud.v1;
 
 import "convert/convert_options.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
+import "google/api/field_behavior.proto";
+
 
 option go_package = "github.com/blockscout/blockscout-rs/scoutcloud";
 option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
@@ -168,8 +170,8 @@ message DeployConfig {
   option (convert_options.derive) = {name: "serde::Serialize"};
   option (convert_options.derive) = {name: "serde::Deserialize"};
 
-  string rpc_url = 1 [(convert_options.convert) = {type: "url::Url"}];
-  string server_size = 2;
+  string rpc_url = 1 [(convert_options.convert) = {type: "url::Url"}, (google.api.field_behavior) = REQUIRED];
+  string server_size = 2 [(google.api.field_behavior) = REQUIRED];
   optional string chain_type = 3;
   optional string node_type = 12;
   optional string chain_id = 4;
@@ -211,33 +213,33 @@ message DeployConfigPartial {
 }
 
 message CreateInstanceRequest {
-  string name = 1;
+  string name = 1 [(google.api.field_behavior) = REQUIRED];
   // initial config
-  DeployConfig config = 2;
+  DeployConfig config = 2 [(google.api.field_behavior) = REQUIRED];
 }
 
 message CreateInstanceResponse {
-  string instance_id = 1;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED];
 }
 
 message DeleteInstanceRequest {
-  string instance_id = 1;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED];
 }
 
 message DeleteInstanceResponse {}
 
 message UpdateConfigRequest {
-  string instance_id = 1;
-  DeployConfig config = 2;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED];
+  DeployConfig config = 2 [(google.api.field_behavior) = REQUIRED];
 }
 
 message UpdateConfigResponse {
-  DeployConfig config = 1;
+  DeployConfig config = 1 [(google.api.field_behavior) = REQUIRED];
 }
 
 message UpdateConfigPartialRequest {
-  string instance_id = 1;
-  DeployConfigPartial config = 2;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED];
+  DeployConfigPartial config = 2 [(google.api.field_behavior) = REQUIRED];
 }
 
 enum DeploymentStatus {
@@ -258,39 +260,39 @@ enum UpdateInstanceAction {
 }
 
 message UpdateInstanceStatusRequest {
-  string instance_id = 1;
-  UpdateInstanceAction action = 2;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED];
+  UpdateInstanceAction action = 2 [(google.api.field_behavior) = REQUIRED];
 }
 
 message UpdateInstanceStatusResponse {
-  DeploymentStatus status = 1;
-  string deployment_id = 2;
+  DeploymentStatus status = 1 [(google.api.field_behavior) = REQUIRED];
+  string deployment_id = 2 [(google.api.field_behavior) = REQUIRED];
 }
 
 message Instance {
-  string instance_id = 1;
-  string name = 3;
-  string slug = 4;
-  string created_at = 5;
-  DeployConfig config = 6;
-  Deployment deployment = 7;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED];
+  string name = 3 [(google.api.field_behavior) = REQUIRED];
+  string slug = 4 [(google.api.field_behavior) = REQUIRED];
+  string created_at = 5 [(google.api.field_behavior) = REQUIRED];
+  DeployConfig config = 6 [(google.api.field_behavior) = REQUIRED];
+  Deployment deployment = 7 [(google.api.field_behavior) = REQUIRED];
 }
 
 message Deployment {
-  string deployment_id = 1;
-  string instance_id = 2;
-  DeploymentStatus status = 3;
+  string deployment_id = 1 [(google.api.field_behavior) = REQUIRED];
+  string instance_id = 2 [(google.api.field_behavior) = REQUIRED];
+  DeploymentStatus status = 3 [(google.api.field_behavior) = REQUIRED];
   optional string error = 4;
-  string created_at = 5;
+  string created_at = 5 [(google.api.field_behavior) = REQUIRED];
   optional string started_at = 6;
   optional string finished_at = 7;
-  DeployConfig config = 8;
+  DeployConfig config = 8 [(google.api.field_behavior) = REQUIRED];
   optional string blockscout_url = 9;
-  string total_cost = 10;
+  string total_cost = 10 [(google.api.field_behavior) = REQUIRED];
 }
 
 message GetInstanceRequest {
-  string instance_id = 1;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED];
 }
 
 message ListInstancesRequest {}
@@ -300,11 +302,11 @@ message ListInstancesResponse {
 }
 
 message GetDeploymentRequest {
-  string deployment_id = 1;
+  string deployment_id = 1 [(google.api.field_behavior) = REQUIRED];
 }
 
 message ListDeploymentsRequest {
-  string instance_id = 1;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED];
 }
 
 message ListDeploymentsResponse {
@@ -312,7 +314,7 @@ message ListDeploymentsResponse {
 }
 
 message GetCurrentDeploymentRequest {
-  string instance_id = 1;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED];
 }
 
 // Users
@@ -320,23 +322,23 @@ message GetCurrentDeploymentRequest {
 message GetProfileRequest {}
 
 message UserAction {
-  string action = 1;
+  string action = 1 [(google.api.field_behavior) = REQUIRED];
   optional string instance_id = 2;
-  string timestamp = 3;
+  string timestamp = 3 [(google.api.field_behavior) = REQUIRED];
 }
 
 message UserProfile {
-  string email = 1;
+  string email = 1 [(google.api.field_behavior) = REQUIRED];
   optional string project_title = 2;
-  string created_at = 3;
-  string balance = 4;
+  string created_at = 3 [(google.api.field_behavior) = REQUIRED];
+  string balance = 4 [(google.api.field_behavior) = REQUIRED];
   repeated UserAction recent_actions = 5;
 }
 
 message AuthToken {
-  string name = 1;
-  string token_value = 2;
-  string created_at = 3;
+  string name = 1 [(google.api.field_behavior) = REQUIRED];
+  string token_value = 2 [(google.api.field_behavior) = REQUIRED];
+  string created_at = 3 [(google.api.field_behavior) = REQUIRED];
 }
 
 message GetAuthTokensResponse {
@@ -344,8 +346,8 @@ message GetAuthTokensResponse {
 }
 
 message RegisterProfileRequest {
-  string email = 1;
-  string project_title = 2;
+  string email = 1 [(google.api.field_behavior) = REQUIRED];
+  string project_title = 2 [(google.api.field_behavior) = REQUIRED];
   optional string promo = 3;
 }
 
@@ -355,5 +357,5 @@ message RegisterProfileResponse {
 }
 
 message IssueAuthTokenRequest {
-    string name = 1;
+    string name = 1 [(google.api.field_behavior) = REQUIRED];
 }
