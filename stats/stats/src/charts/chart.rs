@@ -1,3 +1,9 @@
+//! There is no unified trait for "chart". However, within the
+//! scope of this project, "chart" can be thought of as
+//! something that implements [`DataSource`](crate::data_source::DataSource),
+//! [`ChartProperties`], and is stored in local database (e.g.
+//! [`LocalDbChartSource`](crate::data_source::kinds::local_db))
+
 use crate::{DateValueString, ReadError};
 use chrono::{DateTime, Duration, Utc};
 use entity::sea_orm_active_enums::ChartType;
@@ -57,12 +63,11 @@ pub trait Named {
     const NAME: &'static str;
 }
 
-// todo: chart properties
 #[portrait::make(import(
     crate::charts::chart::MissingDatePolicy,
     entity::sea_orm_active_enums::ChartType,
 ))]
-pub trait Chart: Sync + Named {
+pub trait ChartProperties: Sync + Named {
     fn chart_type() -> ChartType;
     fn missing_date_policy() -> MissingDatePolicy {
         MissingDatePolicy::FillZero
@@ -99,11 +104,11 @@ pub trait Chart: Sync + Named {
     }
 }
 
-/// Dynamic version of trait `Chart`.
+/// Dynamic version of trait `ChartProperties`.
 ///
 /// Helpful when need a unified type for different charts
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChartDynamic {
+pub struct ChartPropertiesObject {
     pub name: String,
     pub chart_type: ChartType,
     pub missing_date_policy: MissingDatePolicy,
@@ -111,8 +116,8 @@ pub struct ChartDynamic {
     pub approximate_trailing_points: u64,
 }
 
-impl ChartDynamic {
-    pub fn construct_from_chart<T: Chart>() -> Self {
+impl ChartPropertiesObject {
+    pub fn construct_from_chart<T: ChartProperties>() -> Self {
         Self {
             name: T::NAME.to_owned(),
             chart_type: T::chart_type(),

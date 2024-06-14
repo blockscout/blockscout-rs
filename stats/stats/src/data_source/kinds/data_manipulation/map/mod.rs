@@ -16,18 +16,21 @@ use crate::{
     UpdateError,
 };
 
-pub mod parse;
-pub mod to_string;
+mod parse;
+mod to_string;
 
-pub trait MapFunction<Input> {
-    type Output: Send;
-    fn function(inner_data: Input) -> Result<Self::Output, UpdateError>;
-}
+pub use parse::MapParseTo;
+pub use to_string::MapToString;
 
 pub struct Map<D, F>(PhantomData<(D, F)>)
 where
     D: DataSource,
     F: MapFunction<D::Output>;
+
+pub trait MapFunction<Input> {
+    type Output: Send;
+    fn function(inner_data: Input) -> Result<Self::Output, UpdateError>;
+}
 
 impl<D, F> DataSource for Map<D, F>
 where
@@ -55,9 +58,10 @@ where
     async fn query_data(
         cx: &UpdateContext<'_>,
         range: Option<RangeInclusive<DateTimeUtc>>,
-        remote_fetch_timer: &mut AggregateTimer,
+        dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<Self::Output, UpdateError> {
-        let inner_data = <D as DataSource>::query_data(cx, range, remote_fetch_timer).await?;
+        let inner_data =
+            <D as DataSource>::query_data(cx, range, dependency_data_fetch_timer).await?;
         let transformed = F::function(inner_data)?;
         Ok(transformed)
     }

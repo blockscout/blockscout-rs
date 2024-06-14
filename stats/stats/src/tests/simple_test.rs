@@ -4,7 +4,7 @@ use crate::{
         source::DataSource,
         types::{UpdateContext, UpdateParameters},
     },
-    get_chart_data, get_counters, Chart, MissingDatePolicy,
+    get_line_chart_data, get_raw_counters, ChartProperties, MissingDatePolicy,
 };
 use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use pretty_assertions::assert_eq;
@@ -18,7 +18,7 @@ fn map_str_tuple_to_owned(l: Vec<(&str, &str)>) -> Vec<(String, String)> {
 }
 
 /// `test_name` must be unique to avoid db clashes
-pub async fn simple_test_chart<C: DataSource + Chart>(
+pub async fn simple_test_chart<C: DataSource + ChartProperties>(
     test_name: &str,
     expected: Vec<(&str, &str)>,
 ) {
@@ -70,7 +70,7 @@ pub async fn simple_test_chart<C: DataSource + Chart>(
 }
 
 /// `test_name` must be unique to avoid db clashes
-pub async fn ranged_test_chart<C: DataSource + Chart>(
+pub async fn ranged_test_chart<C: DataSource + ChartProperties>(
     test_name: &str,
     expected: Vec<(&str, &str)>,
     from: NaiveDate,
@@ -126,7 +126,7 @@ pub async fn ranged_test_chart<C: DataSource + Chart>(
     );
 }
 
-async fn get_chart<C: DataSource + Chart>(
+async fn get_chart<C: DataSource + ChartProperties>(
     db: &DatabaseConnection,
     from: Option<NaiveDate>,
     to: Option<NaiveDate>,
@@ -134,7 +134,7 @@ async fn get_chart<C: DataSource + Chart>(
     fill_missing_dates: bool,
     approximate_trailing_points: u64,
 ) -> Vec<(String, String)> {
-    let data = get_chart_data(
+    let data = get_line_chart_data(
         db,
         C::NAME,
         from,
@@ -152,7 +152,7 @@ async fn get_chart<C: DataSource + Chart>(
 }
 
 /// `test_name` must be unique to avoid db clashes
-pub async fn simple_test_counter<C: DataSource + Chart>(
+pub async fn simple_test_counter<C: DataSource + ChartProperties>(
     test_name: &str,
     expected: &str,
     update_time: Option<NaiveDateTime>,
@@ -181,8 +181,8 @@ pub async fn simple_test_counter<C: DataSource + Chart>(
     assert_eq!(expected, get_counter::<C>(&db).await);
 }
 
-async fn get_counter<C: Chart>(db: &DatabaseConnection) -> String {
-    let data = get_counters(db).await.unwrap();
+async fn get_counter<C: ChartProperties>(db: &DatabaseConnection) -> String {
+    let data = get_raw_counters(db).await.unwrap();
     let data = &data[C::NAME];
     data.value.clone()
 }

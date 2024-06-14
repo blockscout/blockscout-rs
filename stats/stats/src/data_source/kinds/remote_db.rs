@@ -14,7 +14,11 @@
 //! [`CloneChart`](`crate::data_source::kinds::updateable_chart::clone::CloneChart`)
 //! can be helpful to reuse the query results (by storing it locally).
 
-use std::{marker::PhantomData, ops::RangeInclusive};
+use std::{
+    future::Future,
+    marker::{PhantomData, Send},
+    ops::RangeInclusive,
+};
 
 use blockscout_metrics_tools::AggregateTimer;
 use sea_orm::{prelude::DateTimeUtc, Statement};
@@ -35,7 +39,7 @@ pub trait QueryBehaviour {
     fn query_data(
         cx: &UpdateContext<'_>,
         range: Option<RangeInclusive<DateTimeUtc>>,
-    ) -> impl std::future::Future<Output = Result<Self::Output, UpdateError>> + std::marker::Send;
+    ) -> impl Future<Output = Result<Self::Output, UpdateError>> + Send;
 }
 
 impl<Q: QueryBehaviour> DataSource for RemoteDatabaseSource<Q> {

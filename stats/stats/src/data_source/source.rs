@@ -1,4 +1,4 @@
-use std::{collections::HashSet, ops::RangeInclusive};
+use std::{collections::HashSet, future::Future, marker::Send, ops::RangeInclusive};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::Utc;
@@ -28,7 +28,8 @@ pub trait DataSource {
     /// This data source relies on these sources for 'core' of its data
     type MainDependencies: DataSource;
     /// Data sources that are used for computing various resolutions of data
-    /// for now empty; until resolutions are introduced TODO: remove this part when resolutions are finished
+    /// for now empty; until resolutions are introduced
+    /// TODO: remove this ^ part when resolutions are finished
     type ResolutionDependencies: DataSource;
     /// Data that this source can provide
     type Output: Send;
@@ -87,7 +88,7 @@ pub trait DataSource {
     fn init_itself(
         db: &DatabaseConnection,
         init_time: &chrono::DateTime<Utc>,
-    ) -> impl std::future::Future<Output = Result<(), DbErr>> + Send;
+    ) -> impl Future<Output = Result<(), DbErr>> + Send;
 
     fn all_dependencies_mutex_ids() -> HashSet<&'static str> {
         let mut ids = Self::MainDependencies::all_dependencies_mutex_ids();
@@ -114,7 +115,7 @@ pub trait DataSource {
     #[instrument(skip_all, level = tracing::Level::DEBUG, fields(source_mutex_id = Self::MUTEX_ID))]
     fn update_recursively(
         cx: &UpdateContext<'_>,
-    ) -> impl std::future::Future<Output = Result<(), UpdateError>> + std::marker::Send {
+    ) -> impl Future<Output = Result<(), UpdateError>> + Send {
         async move {
             tracing::debug!("recursively updating primary dependency");
             Self::MainDependencies::update_recursively(cx).await?;
@@ -139,7 +140,7 @@ pub trait DataSource {
     /// Update only thise data source's data (values + metadat)
     fn update_itself(
         cx: &UpdateContext<'_>,
-    ) -> impl std::future::Future<Output = Result<(), UpdateError>> + std::marker::Send;
+    ) -> impl Future<Output = Result<(), UpdateError>> + Send;
 
     /// Retrieve chart data.
     /// If `range` is `Some`, should return data within the range. Otherwise - all data.
@@ -151,8 +152,8 @@ pub trait DataSource {
     fn query_data(
         cx: &UpdateContext<'_>,
         range: Option<RangeInclusive<DateTimeUtc>>,
-        remote_fetch_timer: &mut AggregateTimer,
-    ) -> impl std::future::Future<Output = Result<Self::Output, UpdateError>> + std::marker::Send;
+        dependency_data_fetch_timer: &mut AggregateTimer,
+    ) -> impl Future<Output = Result<Self::Output, UpdateError>> + Send;
 }
 
 // Base case for recursive type
@@ -199,6 +200,8 @@ impl DataSource for () {
     }
 }
 
+// todo: impl for tuples (i.e. up to 4-5) with macro
+// and without violating main/resolution deps difference
 impl<T1, T2> DataSource for (T1, T2)
 where
     T1: DataSource,
@@ -240,7 +243,7 @@ where
 mod tests {
     use std::collections::HashSet;
 
-    use crate::data_source::example::{ContractsGrowth, NewContracts};
+    use crate::data_source::tests::{ContractsGrowth, NewContracts};
 
     use super::DataSource;
 

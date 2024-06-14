@@ -1,7 +1,7 @@
 use crate::{
     charts::chart::ChartMetadata,
     missing_date::{fill_and_filter_chart, fit_into_range},
-    Chart, DateValueString, ExtendedDateValue, MissingDatePolicy, UpdateError,
+    ChartProperties, DateValueString, ExtendedDateValue, MissingDatePolicy, UpdateError,
 };
 use blockscout_db::entity::blocks;
 use chrono::{Duration, NaiveDate, NaiveDateTime, Utc};
@@ -46,7 +46,9 @@ struct CounterData {
     value: String,
 }
 
-pub async fn get_counters(
+/// Get counters with raw values
+/// (i.e. with date relevance not handled)
+pub async fn get_raw_counters(
     db: &DatabaseConnection,
 ) -> Result<HashMap<String, DateValueString>, ReadError> {
     let data = CounterData::find_by_statement(Statement::from_string(
@@ -77,6 +79,42 @@ pub async fn get_counters(
         .collect();
 
     Ok(counters)
+}
+
+/// Get counter value for the requested date
+pub async fn get_counter_data(
+    db: &DatabaseConnection,
+    name: &str,
+    date: Option<NaiveDate>,
+    policy: MissingDatePolicy,
+) -> Result<Option<DateValueString>, ReadError> {
+    let current_date = date.unwrap_or(Utc::now().date_naive());
+    let raw_data = DateValueString::find_by_statement(Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        r#"
+            SELECT distinct on (charts.id) data.date, data.value
+            FROM "chart_data" "data"
+            INNER JOIN "charts"
+                ON data.chart_id = charts.id
+            WHERE
+                charts.chart_type = 'COUNTER' AND
+                charts.name = $1 AND
+                data.date <= $2
+            ORDER BY charts.id, data.id DESC;
+        "#,
+        vec![name.into(), current_date.into()],
+    ))
+    .one(db)
+    .await?;
+    let data = raw_data.map(|mut p| {
+        if policy == MissingDatePolicy::FillZero {
+            p.relevant_or_zero(current_date)
+        } else {
+            p.date = current_date;
+            p
+        }
+    });
+    Ok(data)
 }
 
 /// Mark corresponding data points as approximate.
@@ -133,7 +171,7 @@ pub async fn get_chart_metadata(
 /// Note: if some dates within interval `(from, to)` fall on the future, no data points
 /// for them are returned.
 #[allow(clippy::too_many_arguments)]
-pub async fn get_chart_data(
+pub async fn get_line_chart_data(
     db: &DatabaseConnection,
     name: &str,
     from: Option<NaiveDate>,
@@ -151,7 +189,7 @@ pub async fn get_chart_data(
         .ok_or_else(|| ReadError::ChartNotFound(name.into()))?;
 
     // may contain points outside the range, need to figure it out
-    let db_data = get_raw_chart_data(db, chart.id, from, to).await?;
+    let db_data = get_raw_line_chart_data(db, chart.id, from, to).await?;
 
     let last_updated_at = chart.last_updated_at.map(|t| t.date_naive());
     if last_updated_at.is_none() && !db_data.is_empty() {
@@ -191,7 +229,7 @@ pub async fn get_chart_data(
 ///
 /// I.e. if today there was no data, but `from` is today, yesterday's
 /// point will be also retrieved.
-async fn get_raw_chart_data(
+async fn get_raw_line_chart_data(
     db: &DatabaseConnection,
     chart_id: i32,
     from: Option<NaiveDate>,
@@ -290,7 +328,7 @@ pub async fn last_accurate_point<C>(
     offset: Option<u64>,
 ) -> Result<Option<DateValueString>, UpdateError>
 where
-    C: Chart + ?Sized,
+    C: ChartProperties + ?Sized,
 {
     let offset = offset.unwrap_or(0);
     let row = if force_full {
@@ -442,7 +480,7 @@ mod tests {
 
         let db = init_db("get_counters_mock").await;
         insert_mock_data(&db).await;
-        let counters = get_counters(&db).await.unwrap();
+        let counters = get_raw_counters(&db).await.unwrap();
         assert_eq!(
             HashMap::from_iter([("totalBlocks".into(), value("2022-11-12", "1350"))]),
             counters
@@ -456,7 +494,7 @@ mod tests {
 
         let db = init_db("get_chart_int_mock").await;
         insert_mock_data(&db).await;
-        let chart = get_chart_data(
+        let chart = get_line_chart_data(
             &db,
             "newBlocksPerDay",
             None,
@@ -497,7 +535,7 @@ mod tests {
 
         let db = init_db("get_chart_data_skipped_works").await;
         insert_mock_data(&db).await;
-        let chart = get_chart_data(
+        let chart = get_line_chart_data(
             &db,
             "newVerifiedContracts",
             Some(d("2022-11-14")),

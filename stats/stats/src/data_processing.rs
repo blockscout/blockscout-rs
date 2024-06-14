@@ -110,7 +110,7 @@ where
 
 pub fn sum<DV>(data: &[DV], mut partial_sum: DV::Value) -> Result<DV, UpdateError>
 where
-    DV: DateValue + Default,
+    DV: DateValue,
     DV::Value: AddAssign + Clone,
 {
     let mut max_date = NaiveDate::MIN;

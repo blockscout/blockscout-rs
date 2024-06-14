@@ -13,7 +13,7 @@ use itertools::Itertools;
 use stats::{
     entity::sea_orm_active_enums::ChartType,
     update_group::{ArcUpdateGroup, SyncUpdateGroup},
-    ChartDynamic,
+    ChartProperties, ChartPropertiesObject,
 };
 use std::{
     collections::{btree_map::Entry, BTreeMap, HashSet},
@@ -26,7 +26,7 @@ use tokio::sync::Mutex;
 pub struct EnabledChartEntry {
     pub settings: EnabledChartSettings,
     /// Static information presented as dynamic object
-    pub static_info: ChartDynamic,
+    pub static_info: ChartPropertiesObject,
 }
 
 /// Everything needed to operate update group
@@ -334,7 +334,7 @@ impl RuntimeSetup {
     }
 
     /// List all charts that are members of at least 1 group.
-    fn all_member_charts() -> BTreeMap<String, ChartDynamic> {
+    fn all_member_charts() -> BTreeMap<String, ChartPropertiesObject> {
         let charts_with_duplicates = Self::all_update_groups()
             .into_iter()
             .flat_map(|g| g.list_charts())

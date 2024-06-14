@@ -40,7 +40,7 @@ use sea_orm::{DatabaseConnection, DbErr};
 use thiserror::Error;
 use tokio::sync::{Mutex, MutexGuard};
 
-use crate::{data_source::UpdateParameters, ChartDynamic, UpdateError};
+use crate::{charts::ChartPropertiesObject, data_source::UpdateParameters, UpdateError};
 
 #[derive(Error, Debug, PartialEq)]
 #[error("Could not initialize update group: mutexes for {missing_mutexes:?} were not provided")]
@@ -50,9 +50,11 @@ pub struct InitializationError {
 
 // todo: use `trait-variant` once updated, probably
 // only `async_trait` currently allows making trait objects
+// https://github.com/rust-lang/impl-trait-utils/issues/34
+
 /// Directed Acyclic Connected Graph of charts.
 ///
-/// Generally (when there are >1 update group), [`SyncUpdateGroup`]
+/// Generally (when there are >1 update groups), [`SyncUpdateGroup`]
 /// should be used instead. It provides synchronization mechanism
 /// that prevents data races between the groups.
 #[async_trait]
@@ -61,7 +63,7 @@ pub trait UpdateGroup: core::fmt::Debug {
     /// Group name
     fn name(&self) -> String;
     /// List names of charts - members of the group.
-    fn list_charts(&self) -> Vec<ChartDynamic>;
+    fn list_charts(&self) -> Vec<ChartPropertiesObject>;
     /// List mutex ids of group members + their dependencies.
     /// Dependencies participate in updates, thus access to them needs to be
     /// synchronized.
@@ -99,7 +101,7 @@ pub mod macro_reexport {
 /// Construct update group that implemants [`UpdateGroup`]. The main purpose of the
 /// group is to update its members together.
 ///
-/// All membere must implement [`crate::Chart`] and [`crate::data_source::DataSource`].
+/// All membere must implement [`crate::ChartProperties`] and [`crate::data_source::DataSource`].
 ///
 /// The behaviour is the following:
 /// 1. when `create` or `update` is triggered, each member's correspinding method is triggered
@@ -225,10 +227,10 @@ macro_rules! construct_update_group {
                 $name.into()
             }
 
-            fn list_charts(&self) -> ::std::vec::Vec<$crate::ChartDynamic> {
+            fn list_charts(&self) -> ::std::vec::Vec<$crate::ChartPropertiesObject> {
                 std::vec![
                     $(
-                        $crate::ChartDynamic::construct_from_chart::<$member>(),
+                        $crate::ChartPropertiesObject::construct_from_chart::<$member>(),
                     )*
                 ]
             }
@@ -298,7 +300,8 @@ macro_rules! construct_update_group {
 
 pub type ArcUpdateGroup = Arc<dyn for<'a> UpdateGroup + Send + Sync + 'static>;
 
-/// Synchronized update group.
+/// Synchronized update group. Wrapper around [`UpdateGroup`] with
+/// synchronization mechanism.
 ///
 /// ## Deadlock-free
 /// Deadlock-free, as long as only `SyncUpdateGroup`s are used
@@ -358,7 +361,7 @@ impl SyncUpdateGroup {
     }
 
     /// See [`UpdateGroup::list_charts``]
-    pub fn list_charts(&self) -> Vec<ChartDynamic> {
+    pub fn list_charts(&self) -> Vec<ChartPropertiesObject> {
         self.inner.list_charts()
     }
 

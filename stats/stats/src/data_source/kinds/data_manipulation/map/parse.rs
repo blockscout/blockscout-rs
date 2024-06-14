@@ -1,8 +1,8 @@
 use std::{fmt::Display, marker::PhantomData, str::FromStr};
 
 use crate::{
-    charts::db_interaction::types::DateValue, data_source::kinds::map::MapFunction,
-    DateValueString, UpdateError,
+    charts::db_interaction::types::DateValue,
+    data_source::kinds::data_manipulation::map::MapFunction, DateValueString, UpdateError,
 };
 
 use super::Map;

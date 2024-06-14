@@ -1,29 +1,30 @@
 use std::{collections::HashSet, ops::RangeInclusive, str::FromStr, sync::Arc};
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, Statement};
 use tokio::sync::Mutex;
 
 use super::{
     kinds::{
-        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
-        updateable_chart::{
-            batch::{BatchChart, BatchChartWrapper},
-            clone::{CloneChart, CloneChartWrapper},
+        data_manipulation::map::MapParseTo,
+        local_db::{
+            parameters::update::batching::parameter_traits::BatchStepBehaviour,
+            BatchLocalDbChartSourceWithDefaultParams, CumulativeLocalDbChartSource,
+            DirectVecLocalDbChartSource,
         },
+        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
-    source::DataSource,
     types::UpdateParameters,
 };
 use crate::{
-    charts::db_interaction::write::insert_data_many,
+    charts::db_interaction::types::DateValueInt,
     construct_update_group,
-    data_processing::parse_and_cumsum,
+    data_source::kinds::local_db::parameters::update::batching::parameters::PassVecStep,
     tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
     update_group::{SyncUpdateGroup, UpdateGroup},
     utils::sql_with_range_filter_opt,
-    Chart, DateValueString, MissingDatePolicy, Named, UpdateError,
+    ChartProperties, DateValueString, MissingDatePolicy, Named, UpdateError,
 };
 
 pub struct NewContractsQuery;
@@ -72,35 +73,31 @@ impl StatementFromRange for NewContractsQuery {
 pub type NewContractsRemote =
     RemoteDatabaseSource<PullAllWithAndSort<NewContractsQuery, DateValueString>>;
 
-pub struct NewContractsChart;
+pub struct NewContractsChartProperties;
 
-impl Named for NewContractsChart {
+impl Named for NewContractsChartProperties {
     const NAME: &'static str = "newContracts";
 }
 
-impl Chart for NewContractsChart {
+impl ChartProperties for NewContractsChartProperties {
     fn chart_type() -> ChartType {
         ChartType::Line
     }
 }
 
-// Directly uses results of SQL query (from `NewContractsRemote`),
-// thus `CloneChart`.
-impl CloneChart for NewContractsChart {
-    type Dependency = NewContractsRemote;
-}
+// Directly uses results of SQL query (from `NewContractsRemote`)
+pub type NewContracts =
+    DirectVecLocalDbChartSource<NewContractsRemote, NewContractsChartProperties>;
 
-// Wrap the earth out of it to obtain `DataSource`-implementing type.
-// `Chart` implementation is propageted through the wrappers.
-pub type NewContracts = CloneChartWrapper<NewContractsChart>;
+pub type NewContractsInt = MapParseTo<NewContracts, DateValueInt>;
 
-pub struct ContractsGrowthChart;
+pub struct ContractsGrowthProperties;
 
-impl Named for ContractsGrowthChart {
+impl Named for ContractsGrowthProperties {
     const NAME: &'static str = "contractsGrowth";
 }
 
-impl Chart for ContractsGrowthChart {
+impl ChartProperties for ContractsGrowthProperties {
     fn chart_type() -> ChartType {
         ChartType::Line
     }
@@ -109,38 +106,47 @@ impl Chart for ContractsGrowthChart {
     }
 }
 
-// We want to do some custom logic based on data from `NewContracts`.
-// However, batch logic fits this dependency. Therefore, `BatchChart`.
-impl BatchChart for ContractsGrowthChart {
-    type PrimaryDependency = NewContracts;
-    type SecondaryDependencies = ();
-    type Point = DateValueString;
+// We can use convenient common implementation to get growth chart
+pub type ContractsGrowth = CumulativeLocalDbChartSource<NewContractsInt, ContractsGrowthProperties>;
 
-    fn batch_len() -> chrono::Duration {
-        // we need to count cumulative from the beginning
-        chrono::Duration::max_value()
-    }
+// Alternatively, if we wanted to preform some custom logic on each batch step, we can do
+#[allow(unused)]
+struct ContractsGrowthCustomBatchStepBehaviour;
 
+impl BatchStepBehaviour<Vec<DateValueString>, ()> for ContractsGrowthCustomBatchStepBehaviour {
     async fn batch_update_values_step_with(
-        db: &DatabaseConnection,
-        chart_id: i32,
-        _update_time: chrono::DateTime<Utc>,
-        min_blockscout_block: i64,
-        primary_data: <Self::PrimaryDependency as DataSource>::Output,
-        _secondary_data: <Self::SecondaryDependencies as DataSource>::Output,
+        _db: &DatabaseConnection,
+        _chart_id: i32,
+        _update_time: DateTime<Utc>,
+        _min_blockscout_block: i64,
+        _last_accurate_point: Option<DateValueString>,
+        _main_data: Vec<DateValueString>,
+        _resolution_data: (),
     ) -> Result<usize, UpdateError> {
-        let found = primary_data.len();
-        let values = parse_and_cumsum::<i64>(primary_data, Self::PrimaryDependency::NAME, 0)?
-            .into_iter()
-            .map(|value| value.active_model(chart_id, Some(min_blockscout_block)));
-        insert_data_many(db, values)
-            .await
-            .map_err(UpdateError::StatsDB)?;
-        Ok(found)
+        // do something
+        todo!();
+        // save data
+        #[allow(unreachable_code)]
+        PassVecStep::batch_update_values_step_with(
+            _db,
+            _chart_id,
+            _update_time,
+            _min_blockscout_block,
+            _last_accurate_point,
+            _main_data,
+            _resolution_data,
+        )
+        .await
     }
 }
 
-pub type ContractsGrowth = BatchChartWrapper<ContractsGrowthChart>;
+#[allow(unused)]
+type AlternativeContractsGrowth = BatchLocalDbChartSourceWithDefaultParams<
+    NewContracts,
+    (),
+    ContractsGrowthCustomBatchStepBehaviour,
+    ContractsGrowthProperties,
+>;
 
 // Put the data sources into the group
 construct_update_group!(ExampleUpdateGroup {
@@ -153,11 +159,16 @@ construct_update_group!(ExampleUpdateGroup {
 async fn update_examples() {
     let _ = tracing_subscriber::fmt::try_init();
     let (db, blockscout) = init_db_all("update_examples").await;
-    let current_time = chrono::DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap();
+    let current_time = DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap();
     let current_date = current_time.date_naive();
     fill_mock_blockscout_data(&blockscout, current_date).await;
-    let enabled =
-        HashSet::from([NewContractsChart::NAME, ContractsGrowthChart::NAME].map(|l| l.to_owned()));
+    let enabled = HashSet::from(
+        [
+            NewContractsChartProperties::NAME,
+            ContractsGrowthProperties::NAME,
+        ]
+        .map(|l| l.to_owned()),
+    );
 
     // In this case plain `ExampleUpdateGroup` would suffice, but the example
     // shows what to do in case of >1 groups (to keep it concise there's no 2nd group)

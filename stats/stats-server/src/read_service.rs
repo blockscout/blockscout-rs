@@ -60,7 +60,7 @@ impl StatsService for ReadService {
         &self,
         _request: Request<GetCountersRequest>,
     ) -> Result<Response<Counters>, Status> {
-        let mut data = stats::get_counters(&self.db)
+        let mut data = stats::get_raw_counters(&self.db)
             .await
             .map_err(map_read_error)?;
 
@@ -109,7 +109,7 @@ impl StatsService for ReadService {
         let policy = chart_info.static_info.missing_date_policy;
         let mark_approx = chart_info.static_info.approximate_trailing_points;
         let interval_limit = Some(self.limits.request_interval_limit);
-        let data = stats::get_chart_data(
+        let data = stats::get_line_chart_data(
             &self.db,
             &request.name,
             from,
