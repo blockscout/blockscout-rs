@@ -1,7 +1,7 @@
 use super::pagination::{DomainPaginationInput, Order};
 use crate::{
     entity::subgraph::domain::{DetailedDomain, Domain},
-    protocols::Protocol,
+    protocols::{Network, Protocol},
 };
 use ethers::types::Address;
 use nonempty::NonEmpty;
@@ -104,6 +104,7 @@ pub struct GetDomainOutput {
     pub domain: DetailedDomain,
     pub tokens: Vec<DomainToken>,
     pub protocol: Protocol,
+    pub deployment_network: Network,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -123,4 +124,5 @@ pub enum DomainTokenType {
 pub struct LookupOutput {
     pub domain: Domain,
     pub protocol: Protocol,
+    pub deployment_network: Network,
 }

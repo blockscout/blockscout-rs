@@ -1,0 +1,64 @@
+name: Publish types package to NPM
+
+on:
+    workflow_dispatch:
+        inputs:
+            version:
+                description: Package version
+                type: string
+                required: true
+            project_name:
+                description: Project name
+                type: choice
+                options:
+                    - blockscout-ens
+                required: true
+    workflow_call:
+        inputs:
+            version:
+                description: Package version
+                type: string
+                required: true
+            project_name:
+                description: Project name
+                type: string
+                required: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    name: Publish package to NPM registry
+    permissions:
+        id-token: write
+
+    steps:
+        - name: Checkout repo
+          uses: actions/checkout@v4
+
+        # Also it will setup .npmrc file to publish to npm
+        - name: Setup node
+          uses: actions/setup-node@v4
+          with:
+            node-version: '20.x'
+            registry-url: 'https://registry.npmjs.org'
+
+        - name: Install Protoc
+          uses: arduino/setup-protoc@v3
+
+        - name: Update package version
+          run: |
+            cd ./${{ inputs.project_name }}/types
+            npm version ${{ inputs.version }}
+      
+        - name: Build the package
+          run: |
+            cd ./${{ inputs.project_name }}/types
+            npm install
+            npm run build
+      
+        - name: Publish to NPM registry
+          run: |
+            cd ./${{ inputs.project_name }}/types
+            npm publish --provenance --access public
+          env:
+            NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

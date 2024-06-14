@@ -1,7 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: {{ .Release.Name }}-configmap
-data:
-  config.toml: |-
-{{ .Files.Get .Values.config | indent 4 }}

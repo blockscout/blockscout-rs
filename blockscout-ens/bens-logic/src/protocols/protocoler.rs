@@ -27,8 +27,15 @@ pub struct Protocol {
     pub subgraph_schema: String,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct DeployedProtocol<'a> {
+    pub protocol: &'a Protocol,
+    pub deployment_network: &'a Network,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct ProtocolInfo {
+    pub network_id: i64,
     pub slug: String,
     pub tld_list: NonEmpty<Tld>,
     pub subgraph_name: String,
@@ -87,13 +94,23 @@ impl Protocoler {
         networks: HashMap<i64, Network>,
         protocols: HashMap<String, Protocol>,
     ) -> Result<Self, anyhow::Error> {
-        for network in networks.values() {
+        for (id, network) in networks.iter() {
             if let Some(name) = network
                 .use_protocols
                 .iter()
                 .find(|&name| !protocols.contains_key(name))
             {
-                return Err(anyhow!("unknown protocol {name}"));
+                return Err(anyhow!("unknown protocol '{name}' in network '{id}'",));
+            }
+        }
+
+        for protocol in protocols.values() {
+            let network_id = protocol.info.network_id;
+            if !networks.contains_key(&network_id) {
+                return Err(anyhow!(
+                    "unknown network id '{network_id}' for protocol '{}'",
+                    protocol.info.slug
+                ));
             }
         }
 
@@ -107,15 +124,19 @@ impl Protocoler {
         self.protocols.values()
     }
 
-    pub fn protocol_by_slug(&self, slug: &str) -> Option<&Protocol> {
-        self.protocols.get(slug)
+    pub fn protocol_by_slug(&self, slug: &str) -> Option<DeployedProtocol> {
+        self.protocols.get(slug).map(|protocol| {
+            protocol
+                .deployed_on_network(self)
+                .expect("protocoler should be correctly initialized")
+        })
     }
 
     pub fn protocols_of_network(
         &self,
         network_id: i64,
         maybe_filter: Option<NonEmpty<String>>,
-    ) -> Result<(&Network, NonEmpty<&Protocol>), ProtocolError> {
+    ) -> Result<NonEmpty<DeployedProtocol<'_>>, ProtocolError> {
         let network = self
             .networks
             .get(&network_id)
@@ -124,9 +145,13 @@ impl Protocoler {
             .use_protocols
             .iter()
             .map(|name| {
-                self.protocols
+                let protocol = self
+                    .protocols
                     .get(name)
-                    .expect("protocol should be in the map")
+                    .expect("protocol should be in the map");
+                protocol
+                    .deployed_on_network(self)
+                    .expect("protocoler should be correctly initialized")
             })
             .collect::<Vec<_>>();
         let net_protocols = if let Some(filter) = maybe_filter {
@@ -136,7 +161,7 @@ impl Protocoler {
                     .map(|f| {
                         net_protocols
                             .iter()
-                            .find(|&p| p.info.slug == f)
+                            .find(|&p| p.protocol.info.slug == f)
                             .copied()
                             .ok_or_else(|| ProtocolError::ProtocolNotFound(f))
                     })
@@ -146,16 +171,16 @@ impl Protocoler {
         } else {
             NonEmpty::from_vec(net_protocols).expect("build from nonempty iterator")
         };
-        Ok((network, net_protocols))
+        Ok(net_protocols)
     }
 
     pub fn main_protocol_of_network(
         &self,
         network_id: i64,
         maybe_filter: Option<NonEmpty<String>>,
-    ) -> Result<(&Network, &Protocol), ProtocolError> {
+    ) -> Result<DeployedProtocol<'_>, ProtocolError> {
         self.protocols_of_network(network_id, maybe_filter)
-            .map(|(n, p)| (n, p.head))
+            .map(|p| p.head)
     }
 
     pub fn protocols_of_network_for_tld(
@@ -163,13 +188,13 @@ impl Protocoler {
         network_id: i64,
         tld: Tld,
         maybe_filter: Option<NonEmpty<String>>,
-    ) -> Result<(&Network, Vec<&Protocol>), ProtocolError> {
-        let (network, protocols) = self.protocols_of_network(network_id, maybe_filter)?;
+    ) -> Result<Vec<DeployedProtocol<'_>>, ProtocolError> {
+        let protocols = self.protocols_of_network(network_id, maybe_filter)?;
         let protocols = protocols
             .into_iter()
-            .filter(|p| p.info.tld_list.contains(&tld))
+            .filter(|p| p.protocol.info.tld_list.contains(&tld))
             .collect();
-        Ok((network, protocols))
+        Ok(protocols)
     }
 
     pub fn names_options_in_network(
@@ -177,16 +202,15 @@ impl Protocoler {
         name: &str,
         network_id: i64,
         maybe_filter: Option<NonEmpty<String>>,
-    ) -> Result<(&Network, Vec<DomainNameOnProtocol>), ProtocolError> {
+    ) -> Result<Vec<DomainNameOnProtocol>, ProtocolError> {
         let tld = Tld::from_domain_name(name)
             .ok_or_else(|| ProtocolError::InvalidName(name.to_string()))?;
-        let (network, protocols) =
-            self.protocols_of_network_for_tld(network_id, tld, maybe_filter)?;
+        let protocols = self.protocols_of_network_for_tld(network_id, tld, maybe_filter)?;
         let names_with_protocols = protocols
             .into_iter()
-            .filter_map(|protocol| DomainNameOnProtocol::new(name, protocol).ok())
+            .filter_map(|p| DomainNameOnProtocol::new(name, p).ok())
             .collect();
-        Ok((network, names_with_protocols))
+        Ok(names_with_protocols)
     }
 
     pub fn main_name_in_network(
@@ -194,12 +218,12 @@ impl Protocoler {
         name: &str,
         network_id: i64,
         maybe_filter: Option<NonEmpty<String>>,
-    ) -> Result<(&Network, DomainNameOnProtocol), ProtocolError> {
-        let (network, maybe_name) = self
+    ) -> Result<DomainNameOnProtocol, ProtocolError> {
+        let maybe_name = self
             .names_options_in_network(name, network_id, maybe_filter)
-            .map(|(n, mut names)| (n, names.pop()))?;
+            .map(|mut names| names.pop())?;
         let name = maybe_name.ok_or_else(|| ProtocolError::InvalidName(name.to_string()))?;
-        Ok((network, name))
+        Ok(name)
     }
 
     pub fn name_in_protocol(
@@ -208,18 +232,31 @@ impl Protocoler {
         network_id: i64,
         protocol_id: &str,
         maybe_filter: Option<NonEmpty<String>>,
-    ) -> Result<(&Network, DomainNameOnProtocol), ProtocolError> {
-        let (network, protocols) = self.names_options_in_network(name, network_id, maybe_filter)?;
-        let protocol = protocols
+    ) -> Result<DomainNameOnProtocol, ProtocolError> {
+        let names = self.names_options_in_network(name, network_id, maybe_filter)?;
+        let name = names
             .into_iter()
-            .find(|p| p.protocol.info.slug == protocol_id)
+            .find(|name| name.deployed_protocol.protocol.info.slug == protocol_id)
             .ok_or_else(|| ProtocolError::ProtocolNotFound(protocol_id.to_string()))?;
-        Ok((network, protocol))
+        Ok(name)
     }
 }
 
 impl Protocol {
     pub fn subgraph_table(&self, table: &str) -> TableRef {
         (Alias::new(&self.subgraph_schema), Alias::new(table)).into_table_ref()
+    }
+
+    pub fn deployed_on_network<'a>(
+        &'a self,
+        protocoler: &'a Protocoler,
+    ) -> Option<DeployedProtocol<'a>> {
+        protocoler
+            .networks
+            .get(&self.info.network_id)
+            .map(|network| DeployedProtocol {
+                protocol: self,
+                deployment_network: network,
+            })
     }
 }

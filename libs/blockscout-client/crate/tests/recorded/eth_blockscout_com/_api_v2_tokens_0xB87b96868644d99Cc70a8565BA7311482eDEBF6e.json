@@ -1,0 +1,13 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPath": "/api/v2/tokens/0xB87b96868644d99Cc70a8565BA7311482eDEBF6e"
+  },
+  "response": {
+    "status": 200,
+    "body": "{\"address\":\"0xB87b96868644d99Cc70a8565BA7311482eDEBF6e\",\"circulating_market_cap\":\"88922.10329684395\",\"decimals\":\"18\",\"exchange_rate\":\"1010.87\",\"holders\":\"315\",\"icon_url\":\"https://assets.coingecko.com/coins/images/35271/small/download_%282%29.png?1708017745\",\"name\":\"OnChain Pepe 404\",\"symbol\":\"OCP404\",\"total_supply\":\"88000000000000000000\",\"type\":\"ERC-721\",\"volume_24h\":\"12655.63581384809\"}",
+    "headers": {
+      "Content-Type": "application/json"
+    }
+  }
+}
