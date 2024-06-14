@@ -19,7 +19,7 @@ use crate::{
     UpdateError,
 };
 
-struct Sum<D>(PhantomData<D>)
+pub struct Sum<D>(PhantomData<D>)
 where
     D: DataSource;
 

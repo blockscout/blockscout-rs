@@ -7,6 +7,8 @@
 //!
 //! ## Usage
 //!
+//!  todo: update
+//!
 //! (you can also check [`crate::data_source`] or example.rs)
 //!
 //! 1. Create multiple connected charts
@@ -17,8 +19,8 @@
 //! ).
 //! For convenience, they may be type aliased:
 //! ```text
-//! pub type SomeChart1 = CloneChartWrapper<SomeChart1Inner>;
-//! pub type SomePointChart1 = BatchChartWrapper<SomeChart2Inner>;
+//! pub type SomeChart1 = CloneChartWrapper<SomeChart1Properties>;
+//! pub type SomePointChart1 = BatchChartWrapper<SomeChart2Properties>;
 //! ```
 //! 2. Construct simple (non-sync) update groups via [`construct_update_group!`]
 //! 3. Create mutexes (1-1 for each chart)

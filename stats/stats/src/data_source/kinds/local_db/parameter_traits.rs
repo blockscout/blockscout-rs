@@ -20,6 +20,8 @@ pub trait CreateBehaviour {
     ) -> impl Future<Output = Result<(), DbErr>> + Send;
 }
 
+// generic parameters are to ensure that dependencies in implementations
+// of this trait match dependencies in `impl DataSource for LocalDbChartSource<..>`
 pub trait UpdateBehaviour<MainDep, ResolutionDep>
 where
     MainDep: DataSource,

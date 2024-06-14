@@ -13,7 +13,7 @@ use itertools::Itertools;
 use stats::{
     entity::sea_orm_active_enums::ChartType,
     update_group::{ArcUpdateGroup, SyncUpdateGroup},
-    ChartProperties, ChartPropertiesObject,
+    ChartPropertiesObject,
 };
 use std::{
     collections::{btree_map::Entry, BTreeMap, HashSet},

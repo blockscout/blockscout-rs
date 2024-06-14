@@ -2,7 +2,8 @@
 use std::ops::RangeInclusive;
 
 use crate::{
-    charts::db_interaction::types::DateValue, DateValueString, MissingDatePolicy, ReadError,
+    charts::db_interaction::types::{DateValue, ZeroDateValue},
+    DateValueString, MissingDatePolicy, ReadError,
 };
 use chrono::{Days, Duration, NaiveDate};
 
@@ -150,7 +151,7 @@ fn filled_zeros_data(
                 i += 1;
                 value.clone()
             }
-            None => DateValueString::zero(current_date),
+            None => DateValueString::with_zero_value(current_date),
         };
         new_data.push(value);
         current_date += Duration::days(1);
@@ -183,7 +184,7 @@ fn filled_previous_data(
                     date: current_date,
                     value: value.value.clone(),
                 })
-                .unwrap_or_else(|| DateValueString::zero(current_date)),
+                .unwrap_or_else(|| DateValueString::with_zero_value(current_date)),
         };
         new_data.push(value);
         current_date += Duration::days(1);

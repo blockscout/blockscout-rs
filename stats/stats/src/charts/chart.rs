@@ -72,9 +72,6 @@ pub trait ChartProperties: Sync + Named {
     fn missing_date_policy() -> MissingDatePolicy {
         MissingDatePolicy::FillZero
     }
-    fn relevant_or_zero() -> bool {
-        false
-    }
     /// Number of last values that are considered approximate.
     /// (ordered by time)
     ///
@@ -112,7 +109,6 @@ pub struct ChartPropertiesObject {
     pub name: String,
     pub chart_type: ChartType,
     pub missing_date_policy: MissingDatePolicy,
-    pub relevant_or_zero: bool,
     pub approximate_trailing_points: u64,
 }
 
@@ -122,7 +118,6 @@ impl ChartPropertiesObject {
             name: T::NAME.to_owned(),
             chart_type: T::chart_type(),
             missing_date_policy: T::missing_date_policy(),
-            relevant_or_zero: T::relevant_or_zero(),
             approximate_trailing_points: T::approximate_trailing_points(),
         }
     }

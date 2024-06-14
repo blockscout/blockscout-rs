@@ -1,15 +1,17 @@
+use std::{str::FromStr, sync::Arc};
+
 use crate::{
     runtime_setup::RuntimeSetup, serializers::serialize_line_points, settings::LimitsSettings,
 };
+
 use async_trait::async_trait;
 use chrono::{Duration, NaiveDate, Utc};
 use sea_orm::{DatabaseConnection, DbErr};
-use stats::{entity::sea_orm_active_enums::ChartType, ReadError};
+use stats::{entity::sea_orm_active_enums::ChartType, MissingDatePolicy, ReadError, ZeroDateValue};
 use stats_proto::blockscout::stats::v1::{
     stats_service_server::StatsService, Counter, Counters, GetCountersRequest, GetLineChartRequest,
     GetLineChartsRequest, LineChart, LineCharts,
 };
-use std::{str::FromStr, sync::Arc};
 use tonic::{Request, Response, Status};
 
 #[derive(Clone)]
@@ -71,11 +73,12 @@ impl StatsService for ReadService {
             .filter(|(_, chart)| chart.static_info.chart_type == ChartType::Counter)
             .filter_map(|(name, counter)| {
                 data.remove(name).map(|point| {
-                    let point: stats::DateValueString = if counter.static_info.relevant_or_zero {
-                        point.relevant_or_zero(Utc::now().date_naive())
-                    } else {
-                        point
-                    };
+                    let point: stats::DateValueString =
+                        if counter.static_info.missing_date_policy == MissingDatePolicy::FillZero {
+                            point.relevant_or_zero(Utc::now().date_naive())
+                        } else {
+                            point
+                        };
                     Counter {
                         id: counter.static_info.name.clone(),
                         value: point.value,

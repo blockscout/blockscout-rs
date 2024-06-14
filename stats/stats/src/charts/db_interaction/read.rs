@@ -1,8 +1,9 @@
 use crate::{
-    charts::chart::ChartMetadata,
+    charts::{chart::ChartMetadata, db_interaction::types::ZeroDateValue},
     missing_date::{fill_and_filter_chart, fit_into_range},
     ChartProperties, DateValueString, ExtendedDateValue, MissingDatePolicy, UpdateError,
 };
+
 use blockscout_db::entity::blocks;
 use chrono::{Duration, NaiveDate, NaiveDateTime, Utc};
 use entity::{chart_data, charts};

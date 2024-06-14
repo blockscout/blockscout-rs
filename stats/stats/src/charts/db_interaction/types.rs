@@ -2,6 +2,7 @@ use std::num::ParseIntError;
 
 use chrono::NaiveDate;
 use entity::chart_data;
+
 use sea_orm::{prelude::*, FromQueryResult, Set};
 
 pub trait DateValue {
@@ -54,6 +55,7 @@ create_date_value_with!(DateValueInt, i64);
 create_date_value_with!(DateValueDouble, f64);
 create_date_value_with!(DateValueDecimal, Decimal);
 
+// todo: remove or adapt instead of parse
 impl TryFrom<DateValueString> for DateValueInt {
     type Error = ParseIntError;
 
@@ -88,19 +90,46 @@ impl DateValueString {
             min_blockscout_block: Set(min_blockscout_block),
         }
     }
+}
 
-    pub fn zero(date: NaiveDate) -> Self {
+pub trait ZeroDateValue: DateValue + Sized {
+    fn with_zero_value(date: NaiveDate) -> Self;
+
+    fn relevant_or_zero(self, current_date: NaiveDate) -> Self {
+        if self.get_parts().0 < &current_date {
+            Self::with_zero_value(current_date)
+        } else {
+            self
+        }
+    }
+}
+
+impl ZeroDateValue for DateValueString {
+    fn with_zero_value(date: NaiveDate) -> Self {
         Self {
             date,
             value: "0".to_string(),
         }
     }
+}
 
-    pub fn relevant_or_zero(self, current_date: NaiveDate) -> DateValueString {
-        if self.date < current_date {
-            DateValueString::zero(current_date)
-        } else {
-            self
+impl ZeroDateValue for DateValueInt {
+    fn with_zero_value(date: NaiveDate) -> Self {
+        Self { date, value: 0 }
+    }
+}
+
+impl ZeroDateValue for DateValueDouble {
+    fn with_zero_value(date: NaiveDate) -> Self {
+        Self { date, value: 0.0 }
+    }
+}
+
+impl ZeroDateValue for DateValueDecimal {
+    fn with_zero_value(date: NaiveDate) -> Self {
+        Self {
+            date,
+            value: 0.into(),
         }
     }
 }

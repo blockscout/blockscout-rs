@@ -6,11 +6,13 @@ use std::{marker::PhantomData, ops::RangeInclusive};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Utc};
-use rust_decimal::prelude::Zero;
 use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
 
 use crate::{
-    charts::{chart::ChartProperties, db_interaction::types::DateValue},
+    charts::{
+        chart::ChartProperties,
+        db_interaction::types::{DateValue, ZeroDateValue},
+    },
     data_source::{source::DataSource, UpdateContext},
     utils::day_start,
     MissingDatePolicy, UpdateError,
@@ -23,8 +25,7 @@ where
 impl<D, DV> DataSource for LastPoint<D>
 where
     D: DataSource<Output = Vec<DV>> + ChartProperties,
-    DV: DateValue + Send,
-    DV::Value: Zero,
+    DV: DateValue + ZeroDateValue + Send,
 {
     type MainDependencies = D;
     type ResolutionDependencies = ();
@@ -58,7 +59,7 @@ where
         tracing::debug!("picking last point from dependency");
         let last_point = data.into_iter().next_back().or_else(|| {
             if D::missing_date_policy() == MissingDatePolicy::FillZero {
-                Some(DV::from_parts(cx.time.date_naive(), DV::Value::zero()))
+                Some(DV::with_zero_value(cx.time.date_naive()))
             } else {
                 None
             }
