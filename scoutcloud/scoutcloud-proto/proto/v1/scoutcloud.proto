@@ -298,7 +298,7 @@ message GetInstanceRequest {
 message ListInstancesRequest {}
 
 message ListInstancesResponse {
-  repeated Instance items = 1;
+  repeated Instance items = 1 [(google.api.field_behavior) = REQUIRED];
 }
 
 message GetDeploymentRequest {
@@ -310,7 +310,7 @@ message ListDeploymentsRequest {
 }
 
 message ListDeploymentsResponse {
-  repeated Deployment items = 1;
+  repeated Deployment items = 1 [(google.api.field_behavior) = REQUIRED];
 }
 
 message GetCurrentDeploymentRequest {
@@ -332,7 +332,7 @@ message UserProfile {
   optional string project_title = 2;
   string created_at = 3 [(google.api.field_behavior) = REQUIRED];
   string balance = 4 [(google.api.field_behavior) = REQUIRED];
-  repeated UserAction recent_actions = 5;
+  repeated UserAction recent_actions = 5 [(google.api.field_behavior) = REQUIRED];
 }
 
 message AuthToken {
@@ -342,7 +342,7 @@ message AuthToken {
 }
 
 message GetAuthTokensResponse {
-  repeated AuthToken items = 1;
+  repeated AuthToken items = 1 [(google.api.field_behavior) = REQUIRED];
 }
 
 message RegisterProfileRequest {

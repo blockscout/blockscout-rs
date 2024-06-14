@@ -515,6 +515,8 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1AuthToken'
+    required:
+      - items
   v1HealthCheckResponse:
     type: object
     properties:
@@ -550,6 +552,8 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1Deployment'
+    required:
+      - items
   v1ListInstancesResponse:
     type: object
     properties:
@@ -558,6 +562,8 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1Instance'
+    required:
+      - items
   v1RegisterProfileRequest:
     type: object
     properties:
@@ -633,6 +639,7 @@ definitions:
       - email
       - created_at
       - balance
+      - recent_actions
 securityDefinitions:
   ApiKeyAuth:
     type: apiKey
