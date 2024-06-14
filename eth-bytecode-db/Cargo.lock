@@ -5807,7 +5807,7 @@ checksum = "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67"
 [[package]]
 name = "smart-contract-verifier-proto"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs?rev=b855922a#b855922a4d96f38b9bb12e7868044e86110f1dd9"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=7a6e9400#7a6e9400e26772a7e387d6aebb807eccf166872b"
 dependencies = [
  "actix-prost",
  "actix-prost-build",
@@ -5879,7 +5879,7 @@ dependencies = [
 [[package]]
 name = "sourcify"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs?rev=6a12a22#6a12a229d22ae36e3c727cebc16890b91589e629"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=457af68#457af68c8c09046530ec174112be6443ae34ff19"
 dependencies = [
  "anyhow",
  "blockscout-display-bytes",
@@ -7043,7 +7043,7 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 [[package]]
 name = "verification-common"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs?rev=b855922a#b855922a4d96f38b9bb12e7868044e86110f1dd9"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=7a6e9400#7a6e9400e26772a7e387d6aebb807eccf166872b"
 dependencies = [
  "bytes",
 ]
