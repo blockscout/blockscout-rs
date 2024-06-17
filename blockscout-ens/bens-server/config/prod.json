@@ -92,7 +92,7 @@
       },
       "7777777": {
         "blockscout": {
-          "url": "https://zora.blockscout.com/"
+          "url": "https://explorer.zora.energy/"
         },
         "use_protocols": [
           "ens"
