@@ -89,6 +89,14 @@
         "use_protocols": [
           "ens"
         ]
+      },
+      "7777777": {
+        "blockscout": {
+          "url": "https://explorer.zora.energy/"
+        },
+        "use_protocols": [
+          "ens"
+        ]
       }
     },
     "protocols": {
