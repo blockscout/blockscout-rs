@@ -44,6 +44,7 @@ where
         main_data: Vec<DV>,
         _resolution_data: (),
     ) -> Result<usize, UpdateError> {
+        tracing::info!("{:?}", &last_accurate_point);
         let partial_sum = last_accurate_point
             .map(|p| {
                 p.value.parse::<DV::Value>().map_err(|e| {

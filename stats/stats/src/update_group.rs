@@ -400,7 +400,7 @@ impl SyncUpdateGroup {
         // .iter() is ordered by key, so order is followed
         for (name, mutex) in self.dependencies_mutexes.iter() {
             if to_lock.remove(name) {
-                tracing::trace!(update_group = self.name(), mutex_id = name, "locking mutex");
+                tracing::debug!(update_group = self.name(), mutex_id = name, "locking mutex");
                 let guard = match mutex.try_lock() {
                     Ok(v) => v,
                     Err(_) => {

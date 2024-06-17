@@ -5,6 +5,7 @@ use chrono::Utc;
 use futures::{future::BoxFuture, FutureExt};
 use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
 use tracing::instrument;
+use tynm::type_name;
 
 use crate::UpdateError;
 
@@ -117,6 +118,13 @@ pub trait DataSource {
         cx: &UpdateContext<'_>,
     ) -> impl Future<Output = Result<(), UpdateError>> + Send {
         async move {
+            // Couldn't figure out how to control level per-argument basis (in instrumentation)
+            // so this event is used insted, since the name is usually quite verbose
+            // + the type is still recursive and stacking them is kinda overwhelming.
+
+            // to check all logs within the type one can find the event with matching type
+            // and use `source_mutex_id` of the event. It should be suitable for general case.
+            tracing::debug!("updating {}", type_name::<Self>());
             tracing::debug!("recursively updating primary dependency");
             Self::MainDependencies::update_recursively(cx).await?;
             tracing::debug!("recursively updating secondary dependencies");

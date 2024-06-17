@@ -4092,6 +4092,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "tynm",
  "url",
 ]
 
@@ -4651,6 +4652,15 @@ name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
+
+[[package]]
+name = "tynm"
+version = "0.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bd30d05e69d1478e13fe3e7a853409cfec82cebc2cf9b8d613b3c6b0081781ed"
+dependencies = [
+ "nom",
+]
 
 [[package]]
 name = "typenum"
