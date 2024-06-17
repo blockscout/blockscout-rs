@@ -89,6 +89,14 @@
         "use_protocols": [
           "ens"
         ]
+      },
+      "7777777": {
+        "blockscout": {
+          "url": "https://zora.blockscout.com/"
+        },
+        "use_protocols": [
+          "ens"
+        ]
       }
     },
     "protocols": {
