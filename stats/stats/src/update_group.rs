@@ -154,11 +154,13 @@ pub mod macro_reexport {
 /// ## Example
 ///
 /// ```rust
-/// # use stats::{Chart, Named, construct_update_group, DateValueString, UpdateError};
+/// # use stats::data_source::kinds::{
+/// # };
+/// # use stats::{ChartProperties, Named, construct_update_group, DateValueString, UpdateError};
 /// # use stats::data_source::{
 /// #     kinds::{
-/// #         updateable_chart::clone::{CloneChart, CloneChartWrapper},
-/// #         remote::{RemoteSource, RemoteSourceWrapper},
+/// #         local_db::DirectVecLocalDbChartSource,
+/// #         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
 /// #     },
 /// #     types::{UpdateContext, UpdateParameters},
 /// # };
@@ -166,47 +168,34 @@ pub mod macro_reexport {
 /// # use entity::sea_orm_active_enums::ChartType;
 /// # use std::ops::RangeInclusive;
 /// # use sea_orm::prelude::DateTimeUtc;
+/// # use sea_orm::Statement;
 ///
-/// struct DummyRemoteSource;
+/// struct DummyRemoteStatement;
 ///
-/// impl RemoteSource for DummyRemoteSource {
-///     type Point = DateValueString;
-///
-///     fn get_query(range: Option<RangeInclusive<DateTimeUtc>>) -> sea_orm::Statement {
-///         // not called
-///         unimplemented!()
-///     }
-///     async fn query_data(
-///         cx: &UpdateContext<'_>,
-///         range: Option<RangeInclusive<DateTimeUtc>>,
-///     ) -> Result<Vec<Self::Point>, UpdateError> {
-///         Ok(vec![])
+/// impl StatementFromRange for DummyRemoteStatement {
+///     fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+///         todo!()
 ///     }
 /// }
 ///
-/// struct DummyChart;
+/// type DummyRemote = RemoteDatabaseSource<PullAllWithAndSort<DummyRemoteStatement, DateValueString>>;
 ///
-/// impl Named for DummyChart {
+/// struct DummyChartProperties;
+///
+/// impl Named for DummyChartProperties {
 ///     const NAME: &'static str = "dummyChart";
 /// }
-/// impl Chart for DummyChart {
+/// impl ChartProperties for DummyChartProperties {
 ///     fn chart_type() -> ChartType {
 ///         ChartType::Line
 ///     }
 /// }
 ///
-/// impl CloneChart for DummyChart {
-///     type Dependency = RemoteSourceWrapper<DummyRemoteSource>;
-/// }
-///
-/// // use wrappers to utilize existing implementation of `DataSource`
-/// // `Chart` impl is delegated to `DummyChart`.
-/// type DummyChartSource =
-///     CloneChartWrapper<DummyChart>;
+/// type DummyChart = DirectVecLocalDbChartSource<DummyRemote, DummyChartProperties>;
 ///
 /// construct_update_group!(ExampleUpdateGroup {
 ///     name: "exampleGroup",
-///     charts: [DummyChartSource],
+///     charts: [DummyChart],
 /// });
 /// ```
 ///
