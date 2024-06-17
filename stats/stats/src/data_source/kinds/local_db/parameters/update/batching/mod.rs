@@ -67,27 +67,30 @@ where
 
         let steps = generate_date_time_ranges(first_date_time, now, BatchSize::batch_max_size());
         let n = steps.len();
+        // disregard partial value(-s)
+        let mut previous_step_last_point = last_accurate_point;
 
         for (i, range) in steps.into_iter().enumerate() {
-            tracing::info!(from =? range.start(), to =? range.end() , "run {}/{} step of batch update", i + 1, n);
+            tracing::info!(from =? range.start(), to =? range.end(), previous_step_last_point =? previous_step_last_point, "run {}/{} step of batch update", i + 1, n);
             let now = Instant::now();
             let found = batch_update_values_step::<MainDep, ResolutionDep, BatchStep>(
                 cx,
                 chart_id,
                 min_blockscout_block,
-                last_accurate_point,
+                previous_step_last_point,
                 range,
                 dependency_data_fetch_timer,
             )
             .await?;
             let elapsed: std::time::Duration = now.elapsed();
             tracing::info!(found =? found, elapsed =? elapsed, "{}/{} step of batch done", i + 1, n);
-            last_accurate_point = db_interaction::read::last_accurate_point::<ChartProps>(
+            previous_step_last_point = db_interaction::read::last_accurate_point::<ChartProps>(
                 chart_id,
                 min_blockscout_block,
                 cx.db,
                 false,
-                Some(ChartProps::approximate_trailing_points()),
+                // we need the partial values for correct calculations
+                None,
             )
             .await?;
         }
