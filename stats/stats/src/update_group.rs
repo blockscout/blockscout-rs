@@ -7,21 +7,14 @@
 //!
 //! ## Usage
 //!
-//!  todo: update
-//!
-//! (you can also check [`crate::data_source`] or example.rs)
+//! (you can also check [`data_source` documentation](crate::data_source) or tests there)
 //!
 //! 1. Create multiple connected charts
 //! (e.g.
-//! [`UpdateableChartWrapper`](crate::data_source::kinds::updateable_chart::UpdateableChartWrapper)
+//! [`DirectVecLocalDbChartSource`](crate::data_source::kinds::local_db::DirectVecLocalDbChartSource)
 //! or
-//! [`CloneChartWrapper`](crate::data_source::kinds::updateable_chart::clone::CloneChartWrapper)
+//! [`CumulativeLocalDbChartSource`](crate::data_source::kinds::local_db::CumulativeLocalDbChartSource)
 //! ).
-//! For convenience, they may be type aliased:
-//! ```text
-//! pub type SomeChart1 = CloneChartWrapper<SomeChart1Properties>;
-//! pub type SomePointChart1 = BatchChartWrapper<SomeChart2Properties>;
-//! ```
 //! 2. Construct simple (non-sync) update groups via [`construct_update_group!`]
 //! 3. Create mutexes (1-1 for each chart)
 //! 4. Create synchronous versions of groups with [`SyncUpdateGroup::new`]

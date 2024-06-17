@@ -1,5 +1,5 @@
 //! To simplify implementation of overly-generic `DataSource` trait
-//! as well as to reduce code duplication, types in this module can
+//! as well as to reduce boilerblate, types in this module can
 //! be used.
 //!
 //! Generally, they are represented as types (or type aliases)

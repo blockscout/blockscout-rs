@@ -1,8 +1,7 @@
-use std::ops::RangeInclusive;
+use std::{future::Future, marker::Send, ops::RangeInclusive};
 
 use blockscout_metrics_tools::AggregateTimer;
-use chrono::Utc;
-use futures::Future;
+use chrono::{DateTime, Utc};
 use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
 
 use crate::{
@@ -16,7 +15,7 @@ pub trait CreateBehaviour {
     /// Create chart in db. Should not overwrite existing data.
     fn create(
         db: &DatabaseConnection,
-        init_time: &chrono::DateTime<Utc>,
+        init_time: &DateTime<Utc>,
     ) -> impl Future<Output = Result<(), DbErr>> + Send;
 }
 
@@ -43,7 +42,7 @@ where
     fn update_metadata(
         db: &DatabaseConnection,
         chart_id: i32,
-        update_time: chrono::DateTime<Utc>,
+        update_time: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), UpdateError>> + Send {
         async move {
             set_last_updated_at(chart_id, db, update_time)
@@ -62,5 +61,5 @@ pub trait QueryBehaviour {
     fn query_data(
         cx: &UpdateContext<'_>,
         range: Option<RangeInclusive<DateTimeUtc>>,
-    ) -> impl std::future::Future<Output = Result<Self::Output, UpdateError>> + std::marker::Send;
+    ) -> impl Future<Output = Result<Self::Output, UpdateError>> + Send;
 }

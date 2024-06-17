@@ -1,18 +1,20 @@
 //! Remote database source.
 //!
-//! The main application - SQL queries from remote database.
+//! The main application - SQL queries from remote (=blockscout) database.
 //!
-//! Usually used inside
-//! [`CloneChart`](`crate::data_source::kinds::updateable_chart::clone::CloneChart`)
-//! data source.
+//! ## Details
 //!
-//! Note that since each `query_data` performs (likely a heavy)
-//! query, it is undesireable to have this source present in
-//! different places. For each such appearance, the same data
-//! will be requested again.
-//! In this case,
-//! [`CloneChart`](`crate::data_source::kinds::updateable_chart::clone::CloneChart`)
-//! can be helpful to reuse the query results (by storing it locally).
+//! This source does not have any persistency and is only an adapter for representing
+//! a remote DB as a `DataSource`.
+//!
+//! Since each [`QueryBehaviour::query_data`] performs (likely a heavy) database
+//! query, it is undesireable to have this source present in more than one place.
+//! Each (independent) appearance will likely result in requesting the same data
+//! multiple times
+//!
+//! In this case, persistent behaviour of
+//! [types in `local_db`](`crate::data_source::kinds::local_db`) is largely
+//! helpful.
 
 use std::{
     future::Future,
@@ -21,7 +23,8 @@ use std::{
 };
 
 use blockscout_metrics_tools::AggregateTimer;
-use sea_orm::{prelude::DateTimeUtc, Statement};
+use chrono::{DateTime, Utc};
+use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr, Statement};
 
 use crate::{
     charts::chart::Point,
@@ -29,11 +32,10 @@ use crate::{
     UpdateError,
 };
 
-/// todo: docs
+/// See [module-level documentation](self)
 pub struct RemoteDatabaseSource<Q: QueryBehaviour>(PhantomData<Q>);
 
 pub trait QueryBehaviour {
-    /// Currently `P` or `Vec<P>`, where `P` is some type representing a data point
     type Output: Send;
 
     fn query_data(
@@ -50,9 +52,9 @@ impl<Q: QueryBehaviour> DataSource for RemoteDatabaseSource<Q> {
     const MUTEX_ID: Option<&'static str> = None;
 
     async fn init_itself(
-        _db: &::sea_orm::DatabaseConnection,
-        _init_time: &::chrono::DateTime<chrono::Utc>,
-    ) -> Result<(), ::sea_orm::DbErr> {
+        _db: &DatabaseConnection,
+        _init_time: &DateTime<Utc>,
+    ) -> Result<(), DbErr> {
         Ok(())
     }
 

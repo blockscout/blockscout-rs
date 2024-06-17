@@ -1,5 +1,3 @@
-use std::num::ParseIntError;
-
 use chrono::NaiveDate;
 use entity::chart_data;
 
@@ -54,18 +52,6 @@ macro_rules! create_date_value_with {
 create_date_value_with!(DateValueInt, i64);
 create_date_value_with!(DateValueDouble, f64);
 create_date_value_with!(DateValueDecimal, Decimal);
-
-// todo: remove or adapt instead of parse
-impl TryFrom<DateValueString> for DateValueInt {
-    type Error = ParseIntError;
-
-    fn try_from(value: DateValueString) -> Result<Self, Self::Error> {
-        Ok(Self {
-            date: value.date,
-            value: value.value.parse()?,
-        })
-    }
-}
 
 #[derive(FromQueryResult, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DateValueString {

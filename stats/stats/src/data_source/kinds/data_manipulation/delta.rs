@@ -1,8 +1,7 @@
 //! The opposite of [cumulative chart](crate::data_source::kinds::local_db::CumulativeLocalDbChartSource).
 //! However, it can be a not locally stored source, thus the different locations.
 //!
-//! I.e. chart "New accounts" is a delta
-//! of  "Total accounts".
+//! I.e. chart "New accounts" is a delta of  "Total accounts".
 
 use std::{
     fmt::Display,

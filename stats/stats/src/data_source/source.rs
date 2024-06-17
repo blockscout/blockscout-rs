@@ -26,7 +26,8 @@ use super::types::UpdateContext;
 ///
 /// See [`super::kinds`] for less general cases.
 pub trait DataSource {
-    /// This data source relies on these sources for 'core' of its data
+    /// This data source relies on these sources for 'core' of its data.
+    /// Tuple of data sources is also a data source.
     type MainDependencies: DataSource;
     /// Data sources that are used for computing various resolutions of data
     /// for now empty; until resolutions are introduced
@@ -208,44 +209,82 @@ impl DataSource for () {
     }
 }
 
-// todo: impl for tuples (i.e. up to 4-5) with macro
-// and without violating main/resolution deps difference
-impl<T1, T2> DataSource for (T1, T2)
-where
-    T1: DataSource,
-    T2: DataSource,
-{
-    type MainDependencies = T1;
-    type ResolutionDependencies = T2;
-    type Output = (T1::Output, T2::Output);
+macro_rules! impl_data_source_for_tuple {
+    (( $($element_generic_name:ident),+ $(,)? )) => {
+        impl< $($element_generic_name),+ > DataSource for ( $($element_generic_name),+ )
+        where
+            $(
+                $element_generic_name: DataSource
+            ),+
+        {
+            type MainDependencies = ();
+            type ResolutionDependencies = ();
+            type Output = ($(
+                $element_generic_name::Output
+            ),+);
 
-    // only dependencies' ids matter
-    const MUTEX_ID: Option<&'static str> = None;
+            // only dependencies' ids matter
+            const MUTEX_ID: Option<&'static str> = None;
 
-    async fn init_itself(
-        _db: &DatabaseConnection,
-        _init_time: &chrono::DateTime<Utc>,
-    ) -> Result<(), DbErr> {
-        // dependencies are called in `init_recursively`
-        // the tuple itself does not need any init
-        Ok(())
-    }
+            async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
+                Ok(())
+            }
 
-    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
-        Ok(())
-    }
+            async fn query_data(
+                cx: &UpdateContext<'_>,
+                range: Option<RangeInclusive<DateTimeUtc>>,
+                remote_fetch_timer: &mut AggregateTimer,
+            ) -> Result<Self::Output, UpdateError> {
+                Ok((
+                    $(
+                        $element_generic_name::query_data(cx, range.clone(), remote_fetch_timer).await?
+                    ),+
+                ))
+            }
 
-    async fn query_data(
-        cx: &UpdateContext<'_>,
-        range: Option<RangeInclusive<DateTimeUtc>>,
-        remote_fetch_timer: &mut AggregateTimer,
-    ) -> Result<Self::Output, UpdateError> {
-        Ok((
-            T1::query_data(cx, range.clone(), remote_fetch_timer).await?,
-            T2::query_data(cx, range, remote_fetch_timer).await?,
-        ))
-    }
+            fn init_recursively<'a>(
+                db: &'a DatabaseConnection,
+                init_time: &'a chrono::DateTime<Utc>,
+            ) -> BoxFuture<'a, Result<(), DbErr>> {
+                async move {
+                    $(
+                        $element_generic_name::init_recursively(db, init_time).await?;
+                    )+
+                    Ok(())
+                }
+                .boxed()
+            }
+
+            async fn init_itself(
+                _db: &DatabaseConnection,
+                _init_time: &chrono::DateTime<Utc>,
+            ) -> Result<(), DbErr> {
+                // dependencies are called in `init_recursively`
+                // the tuple itself does not need any init
+                Ok(())
+            }
+
+            fn all_dependencies_mutex_ids() -> HashSet<&'static str> {
+                let mut ids = HashSet::new();
+                $(
+                    ids.extend($element_generic_name::all_dependencies_mutex_ids());
+                )+
+                ids
+            }
+
+            async fn update_recursively(cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
+                $(
+                    $element_generic_name::update_recursively(cx).await?;
+                )+
+                Ok(())
+            }
+        }
+    };
 }
+
+// add more if needed
+impl_data_source_for_tuple!((T1, T2));
+impl_data_source_for_tuple!((T1, T2, T3));
 
 #[cfg(test)]
 mod tests {

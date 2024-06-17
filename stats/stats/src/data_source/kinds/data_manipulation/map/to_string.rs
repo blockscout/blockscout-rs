@@ -18,4 +18,5 @@ impl<D: Into<DateValueString>> MapFunction<D> for ToStringFunction {
     }
 }
 
+/// Convert (numeric) values to strings
 pub type MapToString<D> = Map<D, ToStringFunction>;

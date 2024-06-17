@@ -76,12 +76,10 @@ impl StatementFromRange for NativeCoinSupplyStatement {
     }
 }
 
+// query returns float value
 pub type NativeCoinSupplyRemote =
     RemoteDatabaseSource<PullAllWithAndSort<NativeCoinSupplyStatement, DateValueDouble>>;
 
-// todo: for some reason it was queried as double and then converted to string.
-// keeping this behaviour just in case. can be removed after checking
-// for correctness.
 pub type NativeCoinSupplyRemoteString = MapToString<NativeCoinSupplyRemote>;
 
 pub struct NativeCoinSupplyProperties;

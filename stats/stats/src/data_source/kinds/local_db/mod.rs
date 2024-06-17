@@ -12,7 +12,7 @@
 use std::{marker::PhantomData, ops::RangeInclusive, time::Duration};
 
 use blockscout_metrics_tools::AggregateTimer;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use parameter_traits::{CreateBehaviour, QueryBehaviour, UpdateBehaviour};
 use parameters::{
     update::{
@@ -100,7 +100,7 @@ pub type DirectPointLocalDbChartSource<Dependency, C> = LocalDbChartSource<
 /// Chart with cumulative data calculated from delta dependency
 /// (dependency with changes from previous point == increments+decrements or deltas)
 ///
-/// The opposite logic with [`DeltaLocalDbChartSource`] todo: fix
+/// The opposite logic to [`Delta`](`crate::data_source::kinds::data_manipulation::delta::Delta`)
 pub type CumulativeLocalDbChartSource<DeltaDep, C> = LocalDbChartSource<
     PartialCumulative<DeltaDep>,
     (),
@@ -182,10 +182,7 @@ where
 
     const MUTEX_ID: Option<&'static str> = Some(ChartProps::NAME);
 
-    async fn init_itself(
-        db: &DatabaseConnection,
-        init_time: &chrono::DateTime<Utc>,
-    ) -> Result<(), DbErr> {
+    async fn init_itself(db: &DatabaseConnection, init_time: &DateTime<Utc>) -> Result<(), DbErr> {
         Create::create(db, init_time).await
     }
 

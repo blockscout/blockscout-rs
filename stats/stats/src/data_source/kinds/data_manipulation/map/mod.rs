@@ -1,9 +1,5 @@
-//! Data source adapter.
-//! Allows manipulating data read from the inner
-//! data source.
-//!
-//! Kinda like `map` for a data source. I.e. applies
-//! a function to the output.
+//! `map` for a data source, i.e. applies a function to the output
+//! of some other source.
 
 use std::{marker::PhantomData, ops::RangeInclusive};
 
@@ -22,6 +18,7 @@ mod to_string;
 pub use parse::MapParseTo;
 pub use to_string::MapToString;
 
+/// Apply `F` to each value queried from data source `D`
 pub struct Map<D, F>(PhantomData<(D, F)>)
 where
     D: DataSource,

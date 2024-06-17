@@ -51,8 +51,6 @@ where
     }
 }
 
-// pub type ParseAdapterKekKek<D, P> = super::super::Map<D, ParseT>
-
 pub struct ParseToFunction<D: DateValue>(PhantomData<D>);
 
 impl<D> MapFunction<Vec<DateValueString>> for ParseToFunction<D>
@@ -95,4 +93,5 @@ where
     }
 }
 
+/// Parse string values to specified point type `P`
 pub type MapParseTo<D, P> = Map<D, ParseToFunction<P>>;
