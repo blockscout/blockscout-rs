@@ -1,6 +1,11 @@
 use crate::{
-    charts::ChartProperties, data_source::kinds::local_db::DeltaLocalDbChartSource,
-    lines::native_coin_holders_growth::NativeCoinHoldersGrowthInt, Named,
+    charts::ChartProperties,
+    data_source::kinds::{
+        data_manipulation::{delta::Delta, map::MapToString},
+        local_db::DirectVecLocalDbChartSource,
+    },
+    lines::native_coin_holders_growth::NativeCoinHoldersGrowthInt,
+    Named,
 };
 
 use entity::sea_orm_active_enums::ChartType;
@@ -17,8 +22,10 @@ impl ChartProperties for NewNativeCoinHoldersProperties {
     }
 }
 
-pub type NewNativeCoinHolders =
-    DeltaLocalDbChartSource<NativeCoinHoldersGrowthInt, NewNativeCoinHoldersProperties>;
+pub type NewNativeCoinHolders = DirectVecLocalDbChartSource<
+    MapToString<Delta<NativeCoinHoldersGrowthInt>>,
+    NewNativeCoinHoldersProperties,
+>;
 
 #[cfg(test)]
 mod tests {

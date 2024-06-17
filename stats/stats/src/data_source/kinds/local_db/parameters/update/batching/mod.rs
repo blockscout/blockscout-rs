@@ -43,7 +43,7 @@ where
     async fn update_values(
         cx: &UpdateContext<'_>,
         chart_id: i32,
-        mut last_accurate_point: Option<DateValueString>,
+        last_accurate_point: Option<DateValueString>,
         min_blockscout_block: i64,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<(), UpdateError> {

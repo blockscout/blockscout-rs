@@ -17,7 +17,7 @@ use parameter_traits::{CreateBehaviour, QueryBehaviour, UpdateBehaviour};
 use parameters::{
     update::{
         batching::{
-            parameters::{AddLastValueStep, Batch30Days, DeltaValuesStep, PassVecStep},
+            parameters::{AddLastValueStep, Batch30Days, PassVecStep},
             BatchUpdate,
         },
         point::PassPoint,
@@ -95,28 +95,17 @@ pub type DirectPointLocalDbChartSource<Dependency, C> = LocalDbChartSource<
     C,
 >;
 
+// not in `data_manipulation` because it requires retrieving latest value before
+// next batch
 /// Chart with cumulative data calculated from delta dependency
 /// (dependency with changes from previous point == increments+decrements or deltas)
 ///
-/// The opposite of [`DeltaLocalDbChartSource`]
+/// The opposite logic with [`DeltaLocalDbChartSource`] todo: fix
 pub type CumulativeLocalDbChartSource<DeltaDep, C> = LocalDbChartSource<
     PartialCumulative<DeltaDep>,
     (),
     DefaultCreate<C>,
     BatchUpdate<PartialCumulative<DeltaDep>, (), AddLastValueStep<C>, Batch30Days, C>,
-    DefaultQueryVec<C>,
-    C,
->;
-
-/// Chart with delta data calculated from cumulative dependency
-/// (dependency with accumulated value from the start == cumulative data)
-///
-/// The opposite of [`CumulativeLocalDbChartSource`]
-pub type DeltaLocalDbChartSource<CumulativeDep, C> = LocalDbChartSource<
-    CumulativeDep,
-    (),
-    DefaultCreate<C>,
-    BatchUpdate<CumulativeDep, (), DeltaValuesStep<C>, Batch30Days, C>,
     DefaultQueryVec<C>,
     C,
 >;

@@ -6,10 +6,8 @@ use crate::{charts::db_interaction::write::insert_data_many, DateValueString, Up
 use super::parameter_traits::{BatchSizeUpperBound, BatchStepBehaviour};
 
 mod cumulative;
-mod delta;
 
 pub use cumulative::*;
-pub use delta::*;
 
 pub struct Batch30Days;
 
