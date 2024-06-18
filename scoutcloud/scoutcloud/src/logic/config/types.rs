@@ -1,4 +1,5 @@
 use crate::logic::config::ConfigError;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum ParsedVariableKey {
@@ -40,4 +41,24 @@ pub trait UserVariable: Send + Sync {
 #[derive(Clone)]
 pub struct ConfigValidationContext {
     pub client_name: String,
+    pub current_parsed_config: HashMap<String, Vec<ParsedVariable>>,
+}
+
+impl ConfigValidationContext {
+    pub fn new(
+        client_name: String,
+        current_parsed_vars: HashMap<String, Vec<ParsedVariable>>,
+    ) -> Self {
+        Self {
+            client_name,
+            current_parsed_config: current_parsed_vars,
+        }
+    }
+
+    pub fn with_name(name: impl Into<String>) -> Self {
+        Self {
+            client_name: name.into(),
+            current_parsed_config: Default::default(),
+        }
+    }
 }

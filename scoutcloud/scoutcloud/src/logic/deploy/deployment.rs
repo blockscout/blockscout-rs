@@ -6,7 +6,9 @@ use crate::{
 
 use db::sea_orm_active_enums::DeploymentStatusType;
 use scoutcloud_entity as db;
-use sea_orm::{prelude::*, ActiveValue::Set, ConnectionTrait, IntoActiveModel, NotSet, QueryOrder};
+use sea_orm::{
+    prelude::*, ActiveValue::Set, Condition, ConnectionTrait, IntoActiveModel, NotSet, QueryOrder,
+};
 
 pub struct Deployment {
     pub model: db::deployments::Model,
@@ -93,6 +95,27 @@ impl Deployment {
             .map(|model| Deployment { model });
         Ok(deployment)
     }
+
+    pub async fn find_active<C: ConnectionTrait>(db: &C) -> Result<Vec<Self>, DbErr> {
+        let deployments = Self::default_select()
+            .filter(
+                Condition::any()
+                    .add(
+                        scoutcloud_entity::deployments::Column::Status
+                            .eq(DeploymentStatusType::Running),
+                    )
+                    .add(
+                        scoutcloud_entity::deployments::Column::Status
+                            .eq(DeploymentStatusType::Unhealthy),
+                    ),
+            )
+            .all(db)
+            .await?
+            .into_iter()
+            .map(Self::new)
+            .collect();
+        Ok(deployments)
+    }
 }
 
 impl Deployment {
@@ -117,6 +140,10 @@ impl Deployment {
         C: ConnectionTrait,
     {
         Instance::get(db, self.model.instance_id).await
+    }
+
+    pub fn is_started(&self) -> bool {
+        self.model.started_at.is_some()
     }
 
     pub async fn update_status<C>(
@@ -148,6 +175,21 @@ impl Deployment {
         Ok(self)
     }
 
+    pub async fn mark_as_unhealthy<C>(
+        &mut self,
+        db: &C,
+        maybe_error: Option<impl Into<String>>,
+    ) -> Result<&mut Self, DbErr>
+    where
+        C: ConnectionTrait,
+    {
+        let mut model = self.model.clone().into_active_model();
+        model.status = Set(DeploymentStatusType::Unhealthy);
+        model.error = Set(maybe_error.map(Into::into));
+        self.model = model.update(db).await?;
+        Ok(self)
+    }
+
     pub async fn mark_as_stopped<C>(&mut self, db: &C) -> Result<&mut Self, DbErr>
     where
         C: ConnectionTrait,
@@ -159,7 +201,7 @@ impl Deployment {
         Ok(self)
     }
 
-    pub async fn mark_as_running<C>(&mut self, db: &C) -> Result<&mut Self, DeployError>
+    pub async fn mark_as_started<C>(&mut self, db: &C) -> Result<&mut Self, DeployError>
     where
         C: ConnectionTrait,
     {
@@ -168,6 +210,10 @@ impl Deployment {
         model.status = Set(DeploymentStatusType::Running);
         model.started_at = Set(Some(chrono::Utc::now().fixed_offset()));
         model.instance_url = Set(Some(instance_url.to_string()));
+        if let Some(err) = &self.model.error {
+            tracing::info!("deployment {} started after error: {}", self.model.id, err);
+        }
+        model.error = Set(None);
         self.model = model.update(db).await?;
         Ok(self)
     }
@@ -182,5 +228,25 @@ pub fn map_deployment_status(status: Option<&DeploymentStatusType>) -> proto::De
         Some(DeploymentStatusType::Failed) => proto::DeploymentStatus::Failed,
         Some(DeploymentStatusType::Stopping) => proto::DeploymentStatus::Stopping,
         Some(DeploymentStatusType::Stopped) => proto::DeploymentStatus::Stopped,
+        Some(DeploymentStatusType::Unhealthy) => proto::DeploymentStatus::Unhealthy,
     }
+}
+
+pub fn convert_deployment_from_logic(
+    deployment: Deployment,
+    instance: &Instance,
+) -> Result<proto::DeploymentInternal, anyhow::Error> {
+    let config = deployment.user_config()?;
+    Ok(proto::DeploymentInternal {
+        deployment_id: deployment.model.external_id.to_string(),
+        instance_id: instance.model.external_id.to_string(),
+        status: map_deployment_status(Some(&deployment.model.status)),
+        error: deployment.model.error,
+        created_at: deployment.model.created_at.to_string(),
+        started_at: deployment.model.started_at.map(|t| t.to_string()),
+        finished_at: deployment.model.finished_at.map(|t| t.to_string()),
+        config: Some(config.internal),
+        blockscout_url: deployment.model.instance_url,
+        total_cost: deployment.model.total_cost.to_string(),
+    })
 }

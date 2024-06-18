@@ -44,7 +44,10 @@ async fn handle_instance_action(
             proto::DeploymentStatus::Failed,
         ],
         proto::UpdateInstanceAction::Stop | proto::UpdateInstanceAction::Restart => {
-            vec![proto::DeploymentStatus::Running]
+            vec![
+                proto::DeploymentStatus::Running,
+                proto::DeploymentStatus::Unhealthy,
+            ]
         }
     };
 

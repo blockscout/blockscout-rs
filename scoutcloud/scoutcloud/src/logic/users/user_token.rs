@@ -1,31 +1,15 @@
-use crate::{logic::Instance, uuid_eq};
+use crate::{
+    logic::{AuthError, Instance},
+    uuid_eq,
+};
 use scoutcloud_entity::{auth_tokens, server_specs, users};
 use sea_orm::{
     prelude::*, sea_query::Expr, ActiveModelTrait, ActiveValue::Set, ColumnTrait, QueryFilter,
 };
 use std::ops::Sub;
-use thiserror::Error;
 use tonic::codegen::http::HeaderMap;
 
 const AUTH_TOKEN_NAME: &str = "x-api-key";
-
-#[derive(Error, Debug)]
-pub enum AuthError {
-    #[error("no token provided, use x-api-key header to provide token")]
-    NoToken,
-    #[error("token not found")]
-    TokenNotFound,
-    #[error("requested resource not found")]
-    NotFound,
-    #[error("unauthorized: {0}")]
-    Unauthorized(String),
-    #[error("insufficient balance")]
-    InsufficientBalance,
-    #[error("internal error: {0}")]
-    Internal(#[from] anyhow::Error),
-    #[error("db error: {0}")]
-    Db(#[from] DbErr),
-}
 
 #[derive(Clone, Debug)]
 pub struct UserToken {
@@ -133,12 +117,13 @@ impl UserToken {
         Ok(())
     }
 
-    pub async fn create<C>(db: &C, user_id: i32) -> Result<Self, AuthError>
+    pub async fn create<C>(db: &C, user_id: i32, name: &str) -> Result<Self, AuthError>
     where
         C: ConnectionTrait,
     {
         let token = auth_tokens::ActiveModel {
             user_id: Set(user_id),
+            name: Set(name.to_string()),
             ..Default::default()
         }
         .insert(db)
