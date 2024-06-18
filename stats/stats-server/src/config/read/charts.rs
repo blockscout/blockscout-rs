@@ -1,8 +1,8 @@
+use std::collections::BTreeMap;
+
 use crate::config::{
     json,
-    types::{
-        AllChartSettings, CounterInfo, EnabledChartSettings, LineChartCategory, LineChartInfo,
-    },
+    types::{AllChartSettings, EnabledChartSettings, LineChartInfo},
 };
 use convert_case::{Case, Casing};
 use serde::Deserialize;
@@ -19,37 +19,20 @@ impl From<LineChartInfo<EnabledChartSettings>> for proto::LineChartInfo {
     }
 }
 
-impl From<LineChartCategory<EnabledChartSettings>> for proto::LineChartSection {
-    fn from(value: LineChartCategory<EnabledChartSettings>) -> Self {
-        Self {
-            id: value.id,
-            title: value.title,
-            charts: value.charts.into_iter().map(|x| x.into()).collect(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct LinesInfo<ChartSettings>(pub Vec<LineChartCategory<ChartSettings>>);
-
-impl From<LinesInfo<EnabledChartSettings>> for proto::LineCharts {
-    fn from(value: LinesInfo<EnabledChartSettings>) -> Self {
-        Self {
-            sections: value.0.into_iter().map(|x| x.into()).collect(),
-        }
-    }
-}
-
-impl<S> From<Vec<LineChartCategory<S>>> for LinesInfo<S> {
-    fn from(value: Vec<LineChartCategory<S>>) -> Self {
-        Self(value)
-    }
-}
+// impl From<LineChartCategory<EnabledChartSettings>> for proto::LineChartSection {
+//     fn from(value: LineChartCategory<EnabledChartSettings>) -> Self {
+//         Self {
+//             id: value.id,
+//             title: value.title,
+//             charts: value.charts.into_iter().map(|x| x.into()).collect(),
+//         }
+//     }
+// }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config<ChartSettings> {
-    pub counters: Vec<CounterInfo<ChartSettings>>,
-    pub lines: LinesInfo<ChartSettings>,
+    pub counters: BTreeMap<String, ChartSettings>,
+    pub lines: BTreeMap<String, ChartSettings>,
 }
 
 impl From<json::charts::Config> for Config<AllChartSettings> {
@@ -57,22 +40,16 @@ impl From<json::charts::Config> for Config<AllChartSettings> {
         let counters = value
             .counters
             .into_iter()
-            .map(|c| CounterInfo {
-                id: c.id.from_case(Case::Snake).to_case(Case::Camel),
-                ..c
-            })
+            .map(|(id, s)| (id.from_case(Case::Snake).to_case(Case::Camel), s))
             .collect();
         let lines = value
-            .line_categories
+            .line_charts
             .into_iter()
-            .map(|l| LineChartCategory {
-                id: l.id.from_case(Case::Snake).to_case(Case::Camel),
-                ..l
-            })
+            .map(|(id, s)| ((id, s)))
             .collect();
         Self {
             counters,
-            lines: LinesInfo(lines),
+            lines: lines,
         }
     }
 }

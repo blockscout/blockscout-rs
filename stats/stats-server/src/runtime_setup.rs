@@ -1,10 +1,7 @@
 use crate::{
     config::{
         self,
-        charts::LinesInfo,
-        types::{
-            AllChartSettings, CounterInfo, EnabledChartSettings, LineChartCategory, LineChartInfo,
-        },
+        types::{AllChartSettings, EnabledChartSettings, LineChartCategory},
     },
     update_groups,
 };
@@ -43,7 +40,7 @@ pub struct UpdateGroupEntry {
 }
 
 pub struct RuntimeSetup {
-    pub lines_layout: LinesInfo<EnabledChartSettings>,
+    pub lines_layout: Vec<LineChartCategory>,
     pub update_groups: BTreeMap<String, UpdateGroupEntry>,
     pub charts_info: BTreeMap<String, EnabledChartEntry>,
 }
@@ -64,28 +61,26 @@ fn new_set_check_duplicates<T: Hash + Eq, I: IntoIterator<Item = T>>(
 impl RuntimeSetup {
     pub fn new(
         charts: config::charts::Config<AllChartSettings>,
+        layout: config::layout::Config,
         update_schedule: config::update_schedule::Config,
     ) -> anyhow::Result<Self> {
-        Self::validated_and_initialized(charts, update_schedule)
+        Self::validated_and_initialized(charts, layout, update_schedule)
     }
 
     fn validated_and_initialized(
         charts: config::charts::Config<AllChartSettings>,
+        layout: config::layout::Config,
         update_schedule: config::update_schedule::Config,
     ) -> anyhow::Result<Self> {
         let enabled_charts_config = Self::remove_disabled_charts(charts);
         let enabled_counters = enabled_charts_config
             .counters
             .iter()
-            .map(|counter| counter.id.clone());
+            .map(|(id, _)| id.clone());
         let enabled_counters = new_set_check_duplicates(enabled_counters)
             .map_err(|id| anyhow::anyhow!("encountered same id twice: {}", id))?;
 
-        let enabled_lines = enabled_charts_config
-            .lines
-            .0
-            .iter()
-            .flat_map(|section| section.charts.iter().map(|chart| chart.id.clone()));
+        let enabled_lines = enabled_charts_config.lines.iter().map(|(id, _)| id.clone());
         let enabled_lines = new_set_check_duplicates(enabled_lines)
             .map_err(|id| anyhow::anyhow!("encountered same id twice: {}", id))?;
 
@@ -119,7 +114,7 @@ impl RuntimeSetup {
         let update_groups = Self::init_update_groups(update_schedule)?;
 
         Ok(Self {
-            lines_layout: enabled_charts_config.lines,
+            lines_layout: layout.line_chart_categories,
             update_groups,
             charts_info,
         })
@@ -133,34 +128,13 @@ impl RuntimeSetup {
         let counters = charts
             .counters
             .into_iter()
-            .filter_map(|info| {
-                Some(CounterInfo::<EnabledChartSettings> {
-                    id: info.id,
-                    settings: EnabledChartSettings::from_all(info.settings)?,
-                })
-            })
+            .filter_map(|(id, settings)| Some((id, EnabledChartSettings::from_all(settings)?)))
             .collect();
         let lines = charts
             .lines
-            .0
             .into_iter()
-            .map(|sec| LineChartCategory {
-                id: sec.id,
-                title: sec.title,
-                charts: sec
-                    .charts
-                    .into_iter()
-                    .filter_map(|info| {
-                        Some(LineChartInfo::<EnabledChartSettings> {
-                            id: info.id,
-                            settings: EnabledChartSettings::from_all(info.settings)?,
-                        })
-                    })
-                    .collect(),
-            })
-            .filter(|sec| !sec.charts.is_empty())
-            .collect::<Vec<_>>()
-            .into();
+            .filter_map(|(id, settings)| Some((id, EnabledChartSettings::from_all(settings)?)))
+            .collect();
         config::charts::Config { counters, lines }
     }
 
@@ -172,13 +146,13 @@ impl RuntimeSetup {
         config
             .counters
             .iter()
-            .map(|counter| (counter.id.clone(), counter.settings.clone()))
-            .chain(config.lines.0.iter().flat_map(|section| {
-                section
-                    .charts
+            .map(|(id, settings)| (id.clone(), settings.clone()))
+            .chain(
+                config
+                    .lines
                     .iter()
-                    .map(|chart| (chart.id.clone(), chart.settings.clone()))
-            }))
+                    .map(|(id, settings)| (id.clone(), settings.clone())),
+            )
             .collect()
     }
 

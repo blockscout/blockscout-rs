@@ -1,12 +1,12 @@
-use crate::config::types::{AllChartSettings, CounterInfo, LineChartCategory};
+use crate::config::types::AllChartSettings;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
-    pub counters: Vec<CounterInfo<AllChartSettings>>,
-    pub line_categories: Vec<LineChartCategory<AllChartSettings>>,
+    pub counters: BTreeMap<String, AllChartSettings>,
+    pub line_charts: BTreeMap<String, AllChartSettings>,
     pub template_values: BTreeMap<String, serde_json::Value>,
 }
 
@@ -26,41 +26,31 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     const EXAMPLE_CONFIG: &str = r#"{
-        "counters": [
-            {
-                "id": "total_blocks",
+        "counters": {
+            "total_blocks": {
                 "title": "Total Blocks",
                 "description": "Number of all blocks in the network",
                 "units": "blocks"
             },
-            {
-                "id": "total_txns",
+            "total_txns": {
                 "enabled": false,
                 "title": "Total txns",
                 "description": "All transactions including pending, dropped, replaced, failed transactions"
             }
-        ],
-        "line_categories": [
-            {
-                "id": "accounts",
-                "title": "Accounts",
-                "charts": [
-                    {
-                        "id": "average_txn_fee",
-                        "enabled": false,
-                        "title": "Average transaction fee",
-                        "description": "The average amount in {{native_coin_symbol}} spent per transaction",
-                        "units": "{{native_coin_symbol}}"
-                    },
-                    {
-                        "id": "txns_fee",
-                        "title": "Transactions fees",
-                        "description": "Amount of tokens paid as fees",
-                        "units": "{{native_coin_symbol}}"
-                    }
-                ]
+        },
+        "line_charts": {
+            "average_txn_fee": {
+                "enabled": false,
+                "title": "Average transaction fee",
+                "description": "The average amount in {{native_coin_symbol}} spent per transaction",
+                "units": "{{native_coin_symbol}}"
+            },
+            "txns_fee": {
+                "title": "Transactions fees",
+                "description": "Amount of tokens paid as fees",
+                "units": "{{native_coin_symbol}}"
             }
-        ],
+        },
         "template_values": {
             "native_coin_symbol": "USDT"
         }

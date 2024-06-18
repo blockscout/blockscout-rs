@@ -1,10 +1,13 @@
 //! Common types for the configs
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 
 use cron::Schedule;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
+use stats_proto::blockscout::stats::v1 as proto_v1;
+
+use crate::runtime_setup::EnabledChartEntry;
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -58,12 +61,45 @@ pub struct LineChartInfo<ChartSettings> {
     pub settings: ChartSettings,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
-pub struct LineChartCategory<ChartSettings> {
+pub struct LineChartCategory {
     pub id: String,
     pub title: String,
-    pub charts: Vec<LineChartInfo<ChartSettings>>,
+    pub charts_order: Vec<String>,
+}
+
+impl LineChartCategory {
+    pub fn insert_settings(
+        self,
+        settings: &BTreeMap<String, EnabledChartEntry>,
+    ) -> Option<proto_v1::LineChartSection> {
+        let charts: Option<Vec<_>> = self
+            .charts_order
+            .into_iter()
+            .map(|c| {
+                settings
+                    .get(&c)
+                    .map(|e| {
+                        LineChartInfo {
+                            id: c,
+                            settings: e.settings.clone(),
+                        }
+                        .into()
+                    })
+                    .clone()
+            })
+            .collect();
+        let Some(charts) = charts else {
+            tracing::error!("as");
+            return None;
+        };
+        Some(proto_v1::LineChartSection {
+            id: self.id,
+            title: self.title,
+            charts: charts,
+        })
+    }
 }
 
 #[serde_as]

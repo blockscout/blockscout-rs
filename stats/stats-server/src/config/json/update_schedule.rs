@@ -42,7 +42,7 @@ mod tests {
         assert_eq!(
             config,
             Config {
-                update_groups: BTreeMap::from_iter([
+                update_groups: BTreeMap::from([
                     (
                         "average_block_time".to_owned(),
                         UpdateGroup {

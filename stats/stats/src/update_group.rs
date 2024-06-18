@@ -183,7 +183,6 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// type DummyChart = DirectVecLocalDbChartSource<DummyRemote, DummyChartProperties>;
 ///
 /// construct_update_group!(ExampleUpdateGroup {
-///     name: "exampleGroup",
 ///     charts: [DummyChart],
 /// });
 /// ```

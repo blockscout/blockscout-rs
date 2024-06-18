@@ -1,17 +1,18 @@
-use std::{str::FromStr, sync::Arc};
+use std::{collections::BTreeMap, str::FromStr, sync::Arc};
 
 use crate::{
-    runtime_setup::RuntimeSetup, serializers::serialize_line_points, settings::LimitsSettings,
+    config::types,
+    runtime_setup::{EnabledChartEntry, RuntimeSetup},
+    serializers::serialize_line_points,
+    settings::LimitsSettings,
 };
 
 use async_trait::async_trait;
 use chrono::{Duration, NaiveDate, Utc};
+use proto_v1::stats_service_server::StatsService;
 use sea_orm::{DatabaseConnection, DbErr};
 use stats::{entity::sea_orm_active_enums::ChartType, MissingDatePolicy, ReadError, ZeroDateValue};
-use stats_proto::blockscout::stats::v1::{
-    stats_service_server::StatsService, Counter, Counters, GetCountersRequest, GetLineChartRequest,
-    GetLineChartsRequest, LineChart, LineCharts,
-};
+use stats_proto::blockscout::stats::v1 as proto_v1;
 use tonic::{Request, Response, Status};
 
 #[derive(Clone)]
@@ -56,12 +57,25 @@ fn map_read_error(err: ReadError) -> Status {
     }
 }
 
+/// Add chart settings to each chart id in layout
+///
+/// Returns `None` if settings were not found for some chart.
+fn add_settings_to_layout(
+    layout: Vec<types::LineChartCategory>,
+    settings: BTreeMap<String, EnabledChartEntry>,
+) -> Option<Vec<proto_v1::LineChartSection>> {
+    layout
+        .into_iter()
+        .map(|cat| cat.insert_settings(&settings))
+        .collect()
+}
+
 #[async_trait]
 impl StatsService for ReadService {
     async fn get_counters(
         &self,
-        _request: Request<GetCountersRequest>,
-    ) -> Result<Response<Counters>, Status> {
+        _request: Request<proto_v1::GetCountersRequest>,
+    ) -> Result<Response<proto_v1::Counters>, Status> {
         let mut data = stats::get_raw_counters(&self.db)
             .await
             .map_err(map_read_error)?;
@@ -79,7 +93,7 @@ impl StatsService for ReadService {
                         } else {
                             point
                         };
-                    Counter {
+                    proto_v1::Counter {
                         id: counter.static_info.name.clone(),
                         value: point.value,
                         title: counter.settings.title.clone(),
@@ -89,14 +103,14 @@ impl StatsService for ReadService {
                 })
             })
             .collect();
-        let counters = Counters { counters };
+        let counters = proto_v1::Counters { counters };
         Ok(Response::new(counters))
     }
 
     async fn get_line_chart(
         &self,
-        request: Request<GetLineChartRequest>,
-    ) -> Result<Response<LineChart>, Status> {
+        request: Request<proto_v1::GetLineChartRequest>,
+    ) -> Result<Response<proto_v1::LineChart>, Status> {
         let request = request.into_inner();
         let chart_info = self
             .charts
@@ -126,15 +140,21 @@ impl StatsService for ReadService {
         .map_err(map_read_error)?;
 
         let serialized_chart = serialize_line_points(data);
-        Ok(Response::new(LineChart {
+        Ok(Response::new(proto_v1::LineChart {
             chart: serialized_chart,
         }))
     }
 
     async fn get_line_charts(
         &self,
-        _request: Request<GetLineChartsRequest>,
-    ) -> Result<Response<LineCharts>, Status> {
-        Ok(Response::new(self.charts.lines_layout.clone().into()))
+        _request: Request<proto_v1::GetLineChartsRequest>,
+    ) -> Result<Response<proto_v1::LineCharts>, Status> {
+        let layout = self.charts.lines_layout.clone();
+        let settings = self.charts.charts_info.clone();
+        let sections = add_settings_to_layout(layout, settings).ok_or(
+            Status::internal(""), // todo: request id??
+        )?;
+
+        Ok(Response::new(proto_v1::LineCharts { sections }))
     }
 }

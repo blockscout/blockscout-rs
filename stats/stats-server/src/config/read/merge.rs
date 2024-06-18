@@ -4,12 +4,9 @@ use anyhow::Context;
 use itertools::Itertools;
 
 use crate::config::{
-    env::{
-        self,
-        charts::{CounterInfoOrdered, LineChartCategoryOrdered, LineChartInfoOrdered},
-    },
+    env::{self, charts::ChartSettingsOverwrite, layout::LineChartCategoryOrdered},
     json,
-    types::{CounterInfo, LineChartCategory, LineChartInfo},
+    types::{AllChartSettings, CounterInfo, LineChartCategory, LineChartInfo},
 };
 use std::collections::{btree_map::Entry, BTreeMap};
 
@@ -17,22 +14,26 @@ trait GetOrder {
     fn order(&self) -> Option<usize>;
 }
 
-macro_rules! impl_get_order {
-    ($type:ident) => {
-        impl GetOrder for $type {
-            fn order(&self) -> Option<usize> {
-                self.order
-            }
-        }
-    };
+impl GetOrder for usize {
+    fn order(&self) -> Option<usize> {
+        Some(*self)
+    }
 }
 
-impl_get_order!(CounterInfoOrdered);
-impl_get_order!(LineChartInfoOrdered);
-impl_get_order!(LineChartCategoryOrdered);
+impl GetOrder for LineChartCategoryOrdered {
+    fn order(&self) -> Option<usize> {
+        self.order
+    }
+}
 
 trait GetKey {
     fn key(&self) -> &str;
+}
+
+impl GetKey for String {
+    fn key(&self) -> &str {
+        self
+    }
 }
 
 macro_rules! impl_get_key {
@@ -54,7 +55,7 @@ macro_rules! impl_get_key {
 
 impl_get_key!(CounterInfo<C>);
 impl_get_key!(LineChartInfo<C>);
-impl_get_key!(LineChartCategory<C>);
+impl_get_key!(LineChartCategory);
 
 /// `update_t` should update 1st parameter with values from the 2nd
 fn override_ordered<T, S, F>(
@@ -91,37 +92,33 @@ where
 mod override_field {
     use super::*;
 
-    use crate::config::{
-        env::charts::{CounterInfoOrdered, LineChartCategoryOrdered, LineChartInfoOrdered},
-        types::{AllChartSettings, CounterInfo, LineChartCategory, LineChartInfo},
-    };
-
-    pub fn counter(
-        target: &mut CounterInfo<AllChartSettings>,
-        source: CounterInfoOrdered,
-    ) -> Result<(), anyhow::Error> {
-        source.settings.apply_to(&mut target.settings);
-        Ok(())
-    }
-
-    pub fn line_chart_info(
-        target: &mut LineChartInfo<AllChartSettings>,
-        source: LineChartInfoOrdered,
-    ) -> Result<(), anyhow::Error> {
-        source.settings.apply_to(&mut target.settings);
-        Ok(())
-    }
+    use crate::config::{env::layout::LineChartCategoryOrdered, types::LineChartCategory};
 
     pub fn line_categories(
-        target: &mut LineChartCategory<AllChartSettings>,
+        target: &mut LineChartCategory,
         source: LineChartCategoryOrdered,
     ) -> Result<(), anyhow::Error> {
         if let Some(title) = source.title {
             target.title = title;
         }
-        override_ordered(&mut target.charts, source.charts, line_chart_info)
+        override_ordered(&mut target.charts_order, source.charts_order, |_, _| Ok(()))
             .context("updating charts in category")
     }
+}
+
+fn override_chart_settings(
+    target: &mut BTreeMap<String, AllChartSettings>,
+    source: BTreeMap<String, ChartSettingsOverwrite>,
+) -> Result<(), anyhow::Error> {
+    for (id, settings) in source {
+        match target.entry(id) {
+            Entry::Vacant(v) => {
+                v.insert(settings.try_into()?);
+            }
+            Entry::Occupied(mut o) => settings.apply_to(o.get_mut()),
+        }
+    }
+    Ok(())
 }
 
 /// Prioritize values from environment
@@ -129,19 +126,25 @@ pub fn override_charts(
     target: &mut json::charts::Config,
     source: env::charts::Config,
 ) -> Result<(), anyhow::Error> {
-    override_ordered(
-        &mut target.counters,
-        source.counters,
-        override_field::counter,
-    )
-    .context("updating counters")?;
-    override_ordered(
-        &mut target.line_categories,
-        source.line_categories,
-        override_field::line_categories,
-    )
-    .context("updating line categories")?;
+    override_chart_settings(&mut target.counters, source.counters).context("updating counters")?;
+    override_chart_settings(&mut target.line_charts, source.line_charts)
+        .context("updating line categories")?;
     target.template_values.extend(source.template_values);
+    Ok(())
+}
+
+pub fn override_layout(
+    target: &mut json::layout::Config,
+    source: env::layout::Config,
+) -> Result<(), anyhow::Error> {
+    override_ordered(&mut target.counters_order, source.counters_order, |_, _| {
+        Ok(())
+    })?;
+    override_ordered(
+        &mut target.line_chart_categories,
+        source.line_chart_categories,
+        override_field::line_categories,
+    )?;
     Ok(())
 }
 
@@ -187,41 +190,31 @@ mod tests {
     use super::*;
 
     const EXAMPLE_CHART_CONFIG: &str = r#"{
-        "counters": [
-            {
-                "id": "total_blocks",
+        "counters": {
+            "total_blocks": {
                 "title": "Total Blocks",
                 "description": "Number of all blocks in the network",
                 "units": "blocks"
             },
-            {
-                "id": "total_txns",
+            "total_txns": {
                 "enabled": false,
                 "title": "Total txns",
                 "description": "All transactions including pending, dropped, replaced, failed transactions"
             }
-        ],
-        "line_categories": [
-            {
-                "id": "accounts",
-                "title": "Accounts",
-                "charts": [
-                    {
-                        "id": "average_txn_fee",
-                        "enabled": false,
-                        "title": "Average transaction fee",
-                        "description": "The average amount in {{native_coin_symbol}} spent per transaction",
-                        "units": "{{native_coin_symbol}}"
-                    },
-                    {
-                        "id": "txns_fee",
-                        "title": "Transactions fees",
-                        "description": "Amount of tokens paid as fees",
-                        "units": "{{native_coin_symbol}}"
-                    }
-                ]
+        },
+        "line_charts": {
+            "average_txn_fee": {
+                "enabled": false,
+                "title": "Average transaction fee",
+                "description": "The average amount in {{native_coin_symbol}} spent per transaction",
+                "units": "{{native_coin_symbol}}"
+            },
+            "txns_fee": {
+                "title": "Transactions fees",
+                "description": "Amount of tokens paid as fees",
+                "units": "{{native_coin_symbol}}"
             }
-        ],
+        },
         "template_values": {
             "native_coin_symbol": "USDT"
         }
@@ -237,10 +230,7 @@ mod tests {
                 ("STATS_CHARTS__TEMPLATE_VALUES__NATIVE_COIN_SYMBOL", "USDC"),
                 ("STATS_CHARTS__COUNTERS__TOTAL_BLOCKS__ENABLED", "false"),
                 ("STATS_CHARTS__COUNTERS__TOTAL_TXNS__ENABLED", "true"),
-                (
-                    "STATS_CHARTS__LINE_CATEGORIES__ACCOUNTS__CHARTS__TXNS_FEE__UNITS",
-                    "k USDC",
-                ),
+                ("STATS_CHARTS__LINE_CHARTS__TXNS_FEE__UNITS", "k USDC"),
             ]
             .map(|(a, b)| (a.to_owned(), b.to_owned())),
         ))
@@ -250,46 +240,121 @@ mod tests {
         let overridden_config = serde_json::to_value(json_config).unwrap();
 
         let expected_config: json::charts::Config = serde_json::from_str(r#"{
-            "counters": [
-                {
-                    "id": "total_blocks",
+            "counters": {
+                "total_blocks": {
                     "title": "Total Blocks",
                     "description": "Number of all blocks in the network",
                     "units": "blocks",
                     "enabled": false
                 },
-                {
-                    "id": "total_txns",
+                "total_txns": {
                     "enabled": true,
                     "title": "Total txns",
                     "description": "All transactions including pending, dropped, replaced, failed transactions"
                 }
-            ],
-            "line_categories": [
-                {
-                    "id": "accounts",
-                    "title": "Accounts",
-                    "charts": [
-                        {
-                            "id": "average_txn_fee",
-                            "enabled": false,
-                            "title": "Average transaction fee",
-                            "description": "The average amount in {{native_coin_symbol}} spent per transaction",
-                            "units": "{{native_coin_symbol}}"
-                        },
-                        {
-                            "id": "txns_fee",
-                            "title": "Transactions fees",
-                            "description": "Amount of tokens paid as fees",
-                            "units": "k USDC"
-                        }
-                    ]
+            },
+            "line_charts": {
+                "average_txn_fee": {
+                    "enabled": false,
+                    "title": "Average transaction fee",
+                    "description": "The average amount in {{native_coin_symbol}} spent per transaction",
+                    "units": "{{native_coin_symbol}}"
+                },
+                "txns_fee": {
+                    "title": "Transactions fees",
+                    "description": "Amount of tokens paid as fees",
+                    "units": "k USDC"
                 }
-            ],
+            },
             "template_values": {
                 "native_coin_symbol": "USDC"
             }
         }"#).unwrap();
+        let expected_config = serde_json::to_value(expected_config).unwrap();
+
+        assert_eq!(overridden_config, expected_config)
+    }
+
+    const EXAMPLE_LAYOUT_CONFIG: &str = r#"{
+        "counters_order": [
+            "total_blocks",
+            "total_txns"
+        ],
+        "line_chart_categories": [
+            {
+                "id": "accounts",
+                "title": "Accounts",
+                "charts_order": [
+                    "new_accounts",
+                    "accounts_growth"
+                ]
+            },
+            {
+                "id": "transactions",
+                "title": "Transactions",
+                "charts_order": [
+                    "average_txn_fee",
+                    "txns_fee"
+                ]
+            }
+        ]
+    }"#;
+
+    #[test]
+    fn layout_overridden_correctly() {
+        let mut json_config: json::layout::Config =
+            serde_json::from_str(EXAMPLE_LAYOUT_CONFIG).unwrap();
+
+        let env_override: env::layout::Config = config_from_env(HashMap::from_iter(
+            [
+                ("STATS_CHARTS__COUNTERS_ORDER__TOTAL_BLOCKS", "256"),
+                (
+                    "STATS_CHARTS__LINE_CHART_CATEGORIES__TRANSACTIONS__ORDER",
+                    "1",
+                ),
+                (
+                    "STATS_CHARTS__LINE_CHART_CATEGORIES__TRANSACTIONS__TITLE",
+                    "CoolTransactions",
+                ),
+                (
+                    "STATS_CHARTS__LINE_CHART_CATEGORIES__ACCOUNTS__CHARTS_ORDER__ACCOUNTS_GROWTH",
+                    "0",
+                ),
+            ]
+            .map(|(a, b)| (a.to_owned(), b.to_owned())),
+        ))
+        .unwrap();
+
+        override_layout(&mut json_config, env_override).unwrap();
+        let overridden_config = serde_json::to_value(json_config).unwrap();
+
+        let expected_config: json::layout::Config = serde_json::from_str(
+            r#"{
+                "counters_order": [
+                    "total_txns",
+                    "total_blocks"
+                ],
+                "line_chart_categories": [
+                    {
+                        "id": "accounts",
+                        "title": "Accounts",
+                        "charts_order": [
+                            "accounts_growth",
+                            "new_accounts"
+                        ]
+                    },
+                    {
+                        "id": "transactions",
+                        "title": "CoolTransactions",
+                        "charts_order": [
+                            "average_txn_fee",
+                            "txns_fee"
+                        ]
+                    }
+                ]
+            }"#,
+        )
+        .unwrap();
         let expected_config = serde_json::to_value(expected_config).unwrap();
 
         assert_eq!(overridden_config, expected_config)

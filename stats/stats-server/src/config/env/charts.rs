@@ -75,33 +75,9 @@ impl TryFrom<ChartSettingsOverwrite> for AllChartSettings {
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
-pub struct CounterInfoOrdered {
-    pub order: Option<usize>,
-    #[serde(flatten)]
-    pub settings: ChartSettingsOverwrite,
-}
-
-#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(default, deny_unknown_fields)]
-pub struct LineChartInfoOrdered {
-    pub order: Option<usize>,
-    #[serde(flatten)]
-    pub settings: ChartSettingsOverwrite,
-}
-
-#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(default, deny_unknown_fields)]
-pub struct LineChartCategoryOrdered {
-    pub order: Option<usize>,
-    pub title: Option<String>,
-    pub charts: BTreeMap<String, LineChartInfoOrdered>,
-}
-
-#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(default, deny_unknown_fields)]
 pub struct Config {
-    pub counters: BTreeMap<String, CounterInfoOrdered>,
-    pub line_categories: BTreeMap<String, LineChartCategoryOrdered>,
+    pub counters: BTreeMap<String, ChartSettingsOverwrite>,
+    pub line_charts: BTreeMap<String, ChartSettingsOverwrite>,
     pub template_values: BTreeMap<String, serde_json::Value>,
 }
 
@@ -128,8 +104,8 @@ mod tests {
             .into(),
             Config {
                 counters: BTreeMap::new(),
-                line_categories: BTreeMap::new(),
-                template_values: BTreeMap::from_iter([(
+                line_charts: BTreeMap::new(),
+                template_values: BTreeMap::from([(
                     "native_coin_symbol".to_owned(),
                     serde_json::Value::String("USDT".to_owned()),
                 )]),
@@ -139,35 +115,22 @@ mod tests {
     }
 
     #[test]
-    fn single_attribute_overwrite_works_for_line() {
+    fn single_attribute_overwrite_works_for_line_charts() {
         check_envs_parsed_to(
             [(
-                "STATS_CHARTS__LINE_CATEGORIES__TRANSACTIONS__CHARTS__AVERAGE_TXN_FEE__DESCRIPTION"
-                    .to_owned(),
+                "STATS_CHARTS__LINE_CHARTS__AVERAGE_TXN_FEE__DESCRIPTION".to_owned(),
                 "Some runtime-overwritten description".to_owned(),
             )]
             .into(),
             Config {
                 counters: BTreeMap::new(),
-                line_categories: BTreeMap::from_iter([(
-                    "transactions".to_owned(),
-                    LineChartCategoryOrdered {
-                        order: None,
+                line_charts: BTreeMap::from([(
+                    "average_txn_fee".to_owned(),
+                    ChartSettingsOverwrite {
+                        enabled: None,
                         title: None,
-                        charts: BTreeMap::from_iter([(
-                            "average_txn_fee".to_owned(),
-                            LineChartInfoOrdered {
-                                order: None,
-                                settings: ChartSettingsOverwrite {
-                                    enabled: None,
-                                    title: None,
-                                    description: Some(
-                                        "Some runtime-overwritten description".to_owned(),
-                                    ),
-                                    units: None,
-                                },
-                            },
-                        )]),
+                        description: Some("Some runtime-overwritten description".to_owned()),
+                        units: None,
                     },
                 )]),
                 template_values: BTreeMap::new(),
@@ -177,51 +140,19 @@ mod tests {
 
         check_envs_parsed_to(
             [(
-                "STATS_CHARTS__LINE_CATEGORIES__TRANSACTIONS__CHARTS__AVERAGE_TXN_FEE__ORDER"
-                    .to_owned(),
-                "1".to_owned(),
+                "STATS_CHARTS__LINE_CHARTS__AVERAGE_TXN_FEE__ENABLED".to_owned(),
+                "true".to_owned(),
             )]
             .into(),
             Config {
                 counters: BTreeMap::new(),
-                line_categories: BTreeMap::from_iter([(
-                    "transactions".to_owned(),
-                    LineChartCategoryOrdered {
-                        order: None,
+                line_charts: BTreeMap::from([(
+                    "average_txn_fee".to_owned(),
+                    ChartSettingsOverwrite {
+                        enabled: Some(true),
                         title: None,
-                        charts: BTreeMap::from_iter([(
-                            "average_txn_fee".to_owned(),
-                            LineChartInfoOrdered {
-                                order: Some(1),
-                                settings: ChartSettingsOverwrite {
-                                    enabled: None,
-                                    title: None,
-                                    description: None,
-                                    units: None,
-                                },
-                            },
-                        )]),
-                    },
-                )]),
-                template_values: BTreeMap::new(),
-            },
-        )
-        .unwrap();
-
-        check_envs_parsed_to(
-            [(
-                "STATS_CHARTS__LINE_CATEGORIES__TRANSACTIONS__TITLE".to_owned(),
-                "Trans chart".to_owned(),
-            )]
-            .into(),
-            Config {
-                counters: BTreeMap::new(),
-                line_categories: BTreeMap::from_iter([(
-                    "transactions".to_owned(),
-                    LineChartCategoryOrdered {
-                        order: None,
-                        title: Some("Trans chart".to_owned()),
-                        charts: BTreeMap::new(),
+                        description: None,
+                        units: None,
                     },
                 )]),
                 template_values: BTreeMap::new(),
@@ -234,49 +165,21 @@ mod tests {
     fn single_attribute_overwrite_works_for_counters() {
         check_envs_parsed_to(
             [(
-                "STATS_CHARTS__COUNTERS__AVERAGE_BLOCK_TIME__ORDER".to_owned(),
-                "1".to_owned(),
-            )]
-            .into(),
-            Config {
-                counters: BTreeMap::from_iter([(
-                    "average_block_time".to_owned(),
-                    CounterInfoOrdered {
-                        order: Some(1),
-                        settings: ChartSettingsOverwrite {
-                            enabled: None,
-                            title: None,
-                            description: None,
-                            units: None,
-                        },
-                    },
-                )]),
-                line_categories: BTreeMap::new(),
-                template_values: BTreeMap::new(),
-            },
-        )
-        .unwrap();
-
-        check_envs_parsed_to(
-            [(
                 "STATS_CHARTS__COUNTERS__AVERAGE_BLOCK_TIME__ENABLED".to_owned(),
                 "true".to_owned(),
             )]
             .into(),
             Config {
-                counters: BTreeMap::from_iter([(
+                counters: BTreeMap::from([(
                     "average_block_time".to_owned(),
-                    CounterInfoOrdered {
-                        order: None,
-                        settings: ChartSettingsOverwrite {
-                            enabled: Some(true),
-                            title: None,
-                            description: None,
-                            units: None,
-                        },
+                    ChartSettingsOverwrite {
+                        enabled: Some(true),
+                        title: None,
+                        description: None,
+                        units: None,
                     },
                 )]),
-                line_categories: BTreeMap::new(),
+                line_charts: BTreeMap::new(),
                 template_values: BTreeMap::new(),
             },
         )
@@ -284,7 +187,7 @@ mod tests {
     }
 
     #[test]
-    fn arbitrary_env_parsed_correctly() {
+    fn arbitrary_envs_parsed_correctly() {
         let envs: HashMap<_, _> = [
             ("STATS_CHARTS__TEMPLATE_VALUES__NATIVE_COIN_SYMBOL", "USDC"),
             (
@@ -300,61 +203,40 @@ mod tests {
                 "Some description kek",
             ),
             ("STATS_CHARTS__COUNTERS__AVERAGE_BLOCK_TIME__UNITS", "s"),
-            ("STATS_CHARTS__LINE_CATEGORIES__TRANSACTIONS__ORDER", "123"),
             (
-                "STATS_CHARTS__LINE_CATEGORIES__TRANSACTIONS__TITLE",
-                "Transactions",
-            ),
-            (
-                "STATS_CHARTS__LINE_CATEGORIES__TRANSACTIONS__CHARTS__AVERAGE_TXN_FEE__DESCRIPTION",
+                "STATS_CHARTS__LINE_CHARTS__AVERAGE_TXN_FEE__DESCRIPTION",
                 "Some runtime-overwritten description",
             ),
             (
-                "STATS_CHARTS__LINE_CATEGORIES__TRANSACTIONS__CHARTS__AVERAGE_TXN_FEE__ENABLED",
+                "STATS_CHARTS__LINE_CHARTS__AVERAGE_TXN_FEE__ENABLED",
                 "false",
             ),
         ]
         .map(|(s1, s2)| (s1.to_owned(), s2.to_owned()))
         .into();
 
-        let expected_counter = CounterInfoOrdered {
-            settings: ChartSettingsOverwrite {
-                enabled: Some(true),
-                title: Some("Average block time".to_owned()),
-                description: Some("Some description kek".to_owned()),
-                units: Some("s".to_owned()),
-            },
-            order: None,
+        let expected_counter = ChartSettingsOverwrite {
+            enabled: Some(true),
+            title: Some("Average block time".to_owned()),
+            description: Some("Some description kek".to_owned()),
+            units: Some("s".to_owned()),
         };
-        let expected_line_category = LineChartCategoryOrdered {
-            order: Some(123),
-            title: Some("Transactions".to_owned()),
-            charts: BTreeMap::from_iter([(
-                "average_txn_fee".to_owned(),
-                LineChartInfoOrdered {
-                    order: None,
-                    settings: ChartSettingsOverwrite {
-                        enabled: Some(false),
-                        title: None,
-                        description: Some("Some runtime-overwritten description".to_owned()),
-                        units: None,
-                    },
-                },
-            )]),
+        let expected_line_category = ChartSettingsOverwrite {
+            enabled: Some(false),
+            title: None,
+            description: Some("Some runtime-overwritten description".to_owned()),
+            units: None,
         };
 
         check_envs_parsed_to(
             envs,
             Config {
-                counters: BTreeMap::from_iter([(
-                    "average_block_time".to_owned(),
-                    expected_counter,
-                )]),
-                line_categories: BTreeMap::from_iter([(
-                    "transactions".to_owned(),
+                counters: BTreeMap::from([("average_block_time".to_owned(), expected_counter)]),
+                line_charts: BTreeMap::from([(
+                    "average_txn_fee".to_owned(),
                     expected_line_category,
                 )]),
-                template_values: BTreeMap::from_iter([(
+                template_values: BTreeMap::from([(
                     "native_coin_symbol".to_owned(),
                     serde_json::Value::String("USDC".to_owned()),
                 )]),

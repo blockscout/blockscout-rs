@@ -51,7 +51,7 @@ mod tests {
             )]
             .into(),
             Config {
-                update_groups: BTreeMap::from_iter([(
+                update_groups: BTreeMap::from([(
                     "average_block_time".to_owned(),
                     UpdateGroup {
                         update_schedule: Some(Schedule::from_str("0 0 15 * * * *").unwrap()),
@@ -70,11 +70,11 @@ mod tests {
             )]
             .into(),
             Config {
-                update_groups: BTreeMap::from_iter([(
+                update_groups: BTreeMap::from([(
                     "average_block_time".to_owned(),
                     UpdateGroup {
                         update_schedule: None,
-                        ignore_charts: BTreeMap::from_iter([("some_poor_chart".to_owned(), true)]),
+                        ignore_charts: BTreeMap::from([("some_poor_chart".to_owned(), true)]),
                     },
                 )]),
             },

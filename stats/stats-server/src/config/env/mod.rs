@@ -8,6 +8,7 @@
 //! before launch.
 
 pub mod charts;
+pub mod layout;
 pub mod update_schedule;
 
 #[cfg(test)]

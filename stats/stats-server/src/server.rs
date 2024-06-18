@@ -1,5 +1,5 @@
 use crate::{
-    config::{read_charts_config, read_update_schedule_config},
+    config::{read_charts_config, read_layout_config, read_update_schedule_config},
     health::HealthService,
     read_service::ReadService,
     runtime_setup::RuntimeSetup,
@@ -50,6 +50,7 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
         Some(FilterFn::new(|_| true)),
     )?;
     let charts_config = read_charts_config(&settings.charts_config)?;
+    let layout_config = read_layout_config(&settings.layout_config)?;
     let update_schedule = read_update_schedule_config(&settings.update_schedule_config)?;
     let mut opt = ConnectOptions::new(settings.db_url.clone());
     opt.sqlx_logging_level(tracing::log::LevelFilter::Debug);
@@ -65,7 +66,11 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
     opt.sqlx_logging_level(tracing::log::LevelFilter::Debug);
     let blockscout = Arc::new(Database::connect(opt).await?);
 
-    let charts = Arc::new(RuntimeSetup::new(charts_config, update_schedule)?);
+    let charts = Arc::new(RuntimeSetup::new(
+        charts_config,
+        layout_config,
+        update_schedule,
+    )?);
 
     // TODO: maybe run this with migrations or have special config
     for group_entry in charts.update_groups.values() {
