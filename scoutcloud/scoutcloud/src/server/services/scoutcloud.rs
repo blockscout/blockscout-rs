@@ -259,24 +259,24 @@ impl Scoutcloud for ScoutcloudService {
         Ok(Response::new(result))
     }
 
-    async fn issue_auth_token(
+    async fn create_auth_token(
         &self,
-        request: Request<IssueAuthTokenRequest>,
+        request: Request<CreateAuthTokenRequest>,
     ) -> Result<Response<AuthToken>, Status> {
-        let (request, user_token): (IssueAuthTokenRequestInternal, _) =
+        let (request, user_token): (CreateAuthTokenRequestInternal, _) =
             parse_request_with_headers(self.db.as_ref(), request).await?;
         let internal =
-            logic::users::issue_auth_token(self.db.as_ref(), user_token.user.id, &request.name)
+            logic::users::create_auth_token(self.db.as_ref(), user_token.user.id, &request.name)
                 .await
                 .map_err(map_auth_error)?;
         let result = AuthToken::try_convert(internal).map_err(map_convert_error)?;
         Ok(Response::new(result))
     }
 
-    async fn get_auth_tokens(
+    async fn list_auth_tokens(
         &self,
         request: Request<GetProfileRequest>,
-    ) -> Result<Response<GetAuthTokensResponse>, Status> {
+    ) -> Result<Response<ListAuthTokensResponse>, Status> {
         let (_, user_token): (GetProfileRequestInternal, _) =
             parse_request_with_headers(self.db.as_ref(), request).await?;
         let items = logic::users::get_auth_tokens(self.db.as_ref(), &user_token)
@@ -286,7 +286,7 @@ impl Scoutcloud for ScoutcloudService {
             .into_iter()
             .map(|internal| TryConvert::try_convert(internal).map_err(map_convert_error))
             .collect::<Result<Vec<_>, _>>()
-            .map(|items| GetAuthTokensResponse { items })
+            .map(|items| ListAuthTokensResponse { items })
             .map(Response::new)
     }
 }

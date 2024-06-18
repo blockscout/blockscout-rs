@@ -43,15 +43,15 @@ http:
       get: /api/v1/users/profile
 
     - selector: blockscout.scoutcloud.v1.Scoutcloud.RegisterProfile
-      post: /api/v1/users/profile
+      post: /api/v1/users/profile:register
       body: "*"
 
-    - selector: blockscout.scoutcloud.v1.Scoutcloud.IssueAuthKey
-      post: /api/v1/users/authkeys
+    - selector: blockscout.scoutcloud.v1.Scoutcloud.CreateAuthToken
+      post: /api/v1/users/auth-tokens
       body: "*"
 
-    - selector: blockscout.scoutcloud.v1.Scoutcloud.GetAuthKeys
-      get: /api/v1/users/authkeys
+    - selector: blockscout.scoutcloud.v1.Scoutcloud.ListAuthTokens
+      get: /api/v1/users/auth-tokens
 
     #################### Health ####################
 

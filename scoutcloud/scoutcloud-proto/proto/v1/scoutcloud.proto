@@ -147,7 +147,7 @@ service Scoutcloud {
     };
   }
     // Generate auth api token for current account
-    rpc IssueAuthToken(IssueAuthTokenRequest) returns (AuthToken) {
+    rpc CreateAuthToken(CreateAuthTokenRequest) returns (AuthToken) {
         option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
             security: {
                 security_requirement: {key: "ApiKeyAuth"}
@@ -156,7 +156,7 @@ service Scoutcloud {
         };
     }
     // Get list of all auth tokens for current account
-    rpc GetAuthTokens(GetProfileRequest) returns (GetAuthTokensResponse) {
+    rpc ListAuthTokens(GetProfileRequest) returns (ListAuthTokensResponse) {
         option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
             security: {
                 security_requirement: {key: "ApiKeyAuth"}
@@ -341,7 +341,7 @@ message AuthToken {
   string created_at = 3 [(google.api.field_behavior) = REQUIRED];
 }
 
-message GetAuthTokensResponse {
+message ListAuthTokensResponse {
   repeated AuthToken items = 1 [(google.api.field_behavior) = REQUIRED];
 }
 
@@ -356,6 +356,6 @@ message RegisterProfileResponse {
     AuthToken initial_token = 2;
 }
 
-message IssueAuthTokenRequest {
+message CreateAuthTokenRequest {
     string name = 1 [(google.api.field_behavior) = REQUIRED];
 }

@@ -12,12 +12,12 @@ pub async fn register_profile(
     db: &DatabaseConnection,
     profile: &proto::RegisterProfileRequestInternal,
 ) -> Result<proto::RegisterProfileResponseInternal, AuthError> {
+    let tx = db.begin().await?;
     let maybe_promo = if let Some(promo) = &profile.promo {
-        Some(try_find_promo(db, promo).await?)
+        Some(try_find_promo(&tx, promo).await?)
     } else {
         None
     };
-    let tx = db.begin().await?;
     let user = scoutcloud_entity::users::ActiveModel {
         project_title: Set(Some(profile.project_title.to_string())),
         email: Set(profile.email.to_string()),
@@ -40,10 +40,10 @@ pub async fn register_profile(
         .insert(&tx)
         .await?;
     }
-    let token = issue_auth_token(&tx, user.id, "initial token").await?;
+    let token = create_auth_token(&tx, user.id, "initial token").await?;
+    let user_token = UserToken::try_from_token_value(&tx, &token.token_value).await?;
+    let profile = get_profile(&tx, &user_token).await?;
     tx.commit().await?;
-    let user_token = UserToken::try_from_token_value(db, &token.token_value).await?;
-    let profile = get_profile(db, &user_token).await?;
 
     Ok(proto::RegisterProfileResponseInternal {
         profile: Some(profile),
@@ -51,8 +51,8 @@ pub async fn register_profile(
     })
 }
 
-pub async fn get_profile(
-    db: &DatabaseConnection,
+pub async fn get_profile<C: ConnectionTrait>(
+    db: &C,
     user_token: &UserToken,
 ) -> Result<proto::UserProfileInternal, AuthError> {
     let recent_actions = get_user_actions(db, user_token, RECENT_ACTIONS_LIMIT).await?;
@@ -66,7 +66,7 @@ pub async fn get_profile(
     Ok(profile)
 }
 
-pub async fn issue_auth_token<C: ConnectionTrait>(
+pub async fn create_auth_token<C: ConnectionTrait>(
     db: &C,
     user_id: i32,
     token_name: &str,
@@ -85,6 +85,7 @@ pub async fn get_auth_tokens<C: ConnectionTrait>(
 ) -> Result<Vec<proto::AuthTokenInternal>, AuthError> {
     let tokens = scoutcloud_entity::auth_tokens::Entity::find()
         .filter(scoutcloud_entity::auth_tokens::Column::UserId.eq(user_token.user.id))
+        .filter(scoutcloud_entity::auth_tokens::Column::Deleted.eq(false))
         .all(db)
         .await?;
     Ok(tokens

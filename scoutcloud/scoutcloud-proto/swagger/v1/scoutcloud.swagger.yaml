@@ -246,6 +246,45 @@ paths:
         - Instances
       security:
         - ApiKeyAuth: []
+  /api/v1/users/auth-tokens:
+    get:
+      summary: Get list of all auth tokens for current account
+      operationId: Scoutcloud_ListAuthTokens
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListAuthTokensResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - Users
+      security:
+        - ApiKeyAuth: []
+    post:
+      summary: Generate auth api token for current account
+      operationId: Scoutcloud_CreateAuthToken
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1AuthToken'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1CreateAuthTokenRequest'
+      tags:
+        - Users
+      security:
+        - ApiKeyAuth: []
   /api/v1/users/profile:
     get:
       summary: Get information about current account
@@ -263,6 +302,7 @@ paths:
         - Users
       security:
         - ApiKeyAuth: []
+  /api/v1/users/profile:register:
     post:
       summary: Register new profile
       operationId: Scoutcloud_RegisterProfile
@@ -368,6 +408,13 @@ definitions:
       - name
       - token_value
       - created_at
+  v1CreateAuthTokenRequest:
+    type: object
+    properties:
+      name:
+        type: string
+    required:
+      - name
   v1CreateInstanceRequest:
     type: object
     properties:
@@ -507,16 +554,6 @@ definitions:
       - FAILED
       - UNHEALTHY
     default: NO_STATUS
-  v1GetAuthTokensResponse:
-    type: object
-    properties:
-      items:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1AuthToken'
-    required:
-      - items
   v1HealthCheckResponse:
     type: object
     properties:
@@ -544,6 +581,16 @@ definitions:
       - created_at
       - config
       - deployment
+  v1ListAuthTokensResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1AuthToken'
+    required:
+      - items
   v1ListDeploymentsResponse:
     type: object
     properties:
