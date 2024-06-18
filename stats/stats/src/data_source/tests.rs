@@ -150,7 +150,6 @@ type AlternativeContractsGrowth = BatchLocalDbChartSourceWithDefaultParams<
 
 // Put the data sources into the group
 construct_update_group!(ExampleUpdateGroup {
-    name: "exampleGroup",
     charts: [NewContracts, ContractsGrowth],
 });
 

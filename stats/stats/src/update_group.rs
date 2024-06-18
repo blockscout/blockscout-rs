@@ -54,8 +54,9 @@ pub struct InitializationError {
 /// that prevents data races between the groups.
 #[async_trait]
 pub trait UpdateGroup: core::fmt::Debug {
-    // &self is only to make fns dispatchable (and trait to be object-safe)
-    /// Group name
+    // &self's is only to make fns dispatchable (and trait to be object-safe)
+
+    /// Group name (usually equal to type name for simplicity)
     fn name(&self) -> String;
     /// List names of charts - members of the group.
     fn list_charts(&self) -> Vec<ChartPropertiesObject>;
@@ -86,11 +87,6 @@ pub trait UpdateGroup: core::fmt::Debug {
         params: UpdateParameters<'a>,
         enabled_names: &HashSet<String>,
     ) -> Result<(), UpdateError>;
-}
-
-// reexport some dependencies for macro to reference
-pub mod macro_reexport {
-    pub use chrono;
 }
 
 /// Construct update group that implemants [`UpdateGroup`]. The main purpose of the
@@ -195,7 +191,6 @@ pub mod macro_reexport {
 #[macro_export]
 macro_rules! construct_update_group {
     ($group_name:ident {
-        name: $name:literal,
         charts: [
             $($member:path),*
             $(,)?
@@ -208,7 +203,7 @@ macro_rules! construct_update_group {
         impl $crate::update_group::UpdateGroup for $group_name
         {
             fn name(&self) -> ::std::string::String {
-                $name.into()
+                stringify!($group_name).into()
             }
 
             fn list_charts(&self) -> ::std::vec::Vec<$crate::ChartPropertiesObject> {
@@ -242,14 +237,12 @@ macro_rules! construct_update_group {
                 db: &sea_orm::DatabaseConnection,
                 #[allow(unused)]
                 creation_time_override: ::std::option::Option<
-                    $crate::update_group::macro_reexport::chrono::DateTime<
-                        $crate::update_group::macro_reexport::chrono::Utc
-                    >
+                    ::chrono::DateTime<::chrono::Utc>
                 >,
                 #[allow(unused)]
                 enabled_names: &::std::collections::HashSet<String>,
             ) -> Result<(), sea_orm::DbErr> {
-                let current_time = creation_time_override.unwrap_or_else(|| $crate::update_group::macro_reexport::chrono::Utc::now());
+                let current_time = creation_time_override.unwrap_or_else(|| ::chrono::Utc::now());
                 $(
                     if enabled_names.contains(<$member as $crate::Named>::NAME) {
                         <$member as $crate::data_source::DataSource>::init_recursively(db, &current_time).await?;
@@ -473,7 +466,6 @@ mod tests {
     use super::SyncUpdateGroup;
 
     construct_update_group!(GroupWithoutDependencies {
-        name: "newChecksMutexesGroup",
         charts: [TotalVerifiedContracts],
     });
 

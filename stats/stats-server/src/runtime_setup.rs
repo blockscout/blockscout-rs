@@ -201,15 +201,14 @@ impl RuntimeSetup {
             Arc::new(CompletedTxnsGroup),
             Arc::new(TotalAddressesGroup),
             Arc::new(TotalBlocksGroup),
-            Arc::new(TotalContractsGroup),
             Arc::new(TotalTokensGroup),
             // complex groups
-            Arc::new(AccountsIncrease),
-            Arc::new(ContractsIncrease),
-            Arc::new(TransactionsIncrease),
-            Arc::new(VerifiedContracts),
-            Arc::new(NativeCoinHolders),
-            Arc::new(NativeCoinTransfers),
+            Arc::new(NewAccountsGroup),
+            Arc::new(NewContractsGroup),
+            Arc::new(NewTxnsGroup),
+            Arc::new(NewVerifiedContractsGroup),
+            Arc::new(NativeCoinHoldersGrowthGroup),
+            Arc::new(NewNativeCoinTransfersGroup),
         ]
     }
 

@@ -6,7 +6,7 @@ option go_package = "github.com/blockscout/blockscout-rs/stats";
 
 service StatsService {
   rpc GetCounters(GetCountersRequest) returns (Counters);
-  rpc GetLineCharts(GetLineChartsRequest) returns (LineCharts); // todo: rename
+  rpc GetLineCharts(GetLineChartsRequest) returns (LineCharts);
   rpc GetLineChart(GetLineChartRequest) returns (LineChart);
 }
 

@@ -56,7 +56,7 @@ impl_get_key!(CounterInfo<C>);
 impl_get_key!(LineChartInfo<C>);
 impl_get_key!(LineChartCategory<C>);
 
-/// `overwrite_f` should update 1st parameter with values from the 2nd
+/// `update_t` should update 1st parameter with values from the 2nd
 fn override_ordered<T, S, F>(
     target: &mut Vec<T>,
     source: BTreeMap<String, S>,

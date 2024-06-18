@@ -16,11 +16,10 @@ use stats::{
 
 macro_rules! singleton_groups {
     // we want explicit naming for easier observation of duplicate names
-    ($($chart: ident -> $name:literal),+ $(,)?) => {
+    ($($chart: ident),+ $(,)?) => {
         $(
             ::paste::paste!(
                 construct_update_group!([< $chart Group >] {
-                    name: $name,
                     charts: [$chart]
                 });
             );
@@ -29,53 +28,54 @@ macro_rules! singleton_groups {
 }
 
 singleton_groups!(
-    ActiveAccounts -> "activeAccountsGroup",
-    AverageBlockRewards -> "averageBlockRewardsGroup",
-    AverageBlockSize -> "averageBlockSizeGroup",
-    AverageGasLimit -> "averageGasLimitGroup",
-    AverageGasPrice -> "averageGasPriceGroup",
-    AverageTxnFee -> "averageTxnFeeGroup",
-    GasUsedGrowth -> "gasUsedGrowthGroup",
-    NativeCoinSupply -> "nativeCoinSupplyGroup",
-    NewBlocks -> "newBlocksGroup",
-    TxnsFee -> "txnsFeeGroup",
-    TxnsSuccessRate -> "txnsSuccessRateGroup",
-    AverageBlockTime -> "averageBlockTimeGroup",
-    CompletedTxns -> "completedTxnsGroup",
-    TotalAddresses -> "totalAddressesGroup",
-    TotalBlocks -> "totalBlocksGroup",
-    TotalContracts -> "totalContractsGroup",
-    TotalTokens -> "totalTokensGroup",
+    ActiveAccounts,
+    AverageBlockRewards,
+    AverageBlockSize,
+    AverageGasLimit,
+    AverageGasPrice,
+    AverageTxnFee,
+    GasUsedGrowth,
+    NativeCoinSupply,
+    NewBlocks,
+    TxnsFee,
+    TxnsSuccessRate,
+    AverageBlockTime,
+    CompletedTxns,
+    TotalAddresses,
+    TotalBlocks,
+    TotalTokens,
 );
 
-construct_update_group!(AccountsIncrease {
-    // todo: add group at the end + autogenerate names
-    name: "accountsIncrease",
-    charts: [AccountsGrowth, NewAccounts, TotalAccounts]
+construct_update_group!(NewAccountsGroup {
+    charts: [NewAccounts, AccountsGrowth, TotalAccounts]
 });
 
-construct_update_group!(ContractsIncrease {
-    name: "contractsIncrease",
-    charts: [NewContracts, ContractsGrowth, LastNewContracts],
-});
-
-construct_update_group!(TransactionsIncrease {
-    name: "transactionsIncrease",
-    charts: [NewTxns, TxnsGrowth, TotalTxns],
-});
-
-construct_update_group!(VerifiedContracts {
-    name: "verifiedContracts",
+construct_update_group!(NewContractsGroup {
     charts: [
-        NewVerifiedContracts,
-        VerifiedContractsGrowth,
-        LastNewVerifiedContracts,
-        TotalVerifiedContracts
+        NewContracts,
+        ContractsGrowth,
+        // currently can be in a separate group but after #845
+        // it's expected to join the group. placing it here to avoid
+        // updating config after the fix (todo: remove (#845))
+        TotalContracts,
+        LastNewContracts
     ],
 });
 
-construct_update_group!(NativeCoinHolders {
-    name: "nativeCoinHolders",
+construct_update_group!(NewTxnsGroup {
+    charts: [NewTxns, TxnsGrowth, TotalTxns],
+});
+
+construct_update_group!(NewVerifiedContractsGroup {
+    charts: [
+        NewVerifiedContracts,
+        VerifiedContractsGrowth,
+        TotalVerifiedContracts,
+        LastNewVerifiedContracts
+    ],
+});
+
+construct_update_group!(NativeCoinHoldersGrowthGroup {
     charts: [
         NativeCoinHoldersGrowth,
         NewNativeCoinHolders,
@@ -83,7 +83,6 @@ construct_update_group!(NativeCoinHolders {
     ],
 });
 
-construct_update_group!(NativeCoinTransfers {
-    name: "nativeCoinTransfers",
-    charts: [NewNativeCoinTransfers, TotalNativeCoinTransfers,],
+construct_update_group!(NewNativeCoinTransfersGroup {
+    charts: [NewNativeCoinTransfers, TotalNativeCoinTransfers],
 });

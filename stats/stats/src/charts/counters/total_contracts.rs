@@ -56,7 +56,6 @@ impl ChartProperties for TotalContractsProperties {
 
 // todo: reconsider once #845 is solved
 // https://github.com/blockscout/blockscout-rs/issues/845
-// + change update group once changed back
 // i.e. set dependency to LastPointChart<ContractsGrowth>
 pub type TotalContracts =
     DirectPointLocalDbChartSource<TotalContractsRemote, TotalContractsProperties>;
