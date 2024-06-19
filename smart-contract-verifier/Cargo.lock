@@ -1064,7 +1064,7 @@ dependencies = [
 [[package]]
 name = "blockscout-display-bytes"
 version = "1.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs/?branch=rimrakhimov/blockscout-display-bytes/public-methods#3b5a0b1cf3a98c98deb4418b140e2a2b44dc6e26"
+source = "git+https://github.com/blockscout/blockscout-rs/?branch=rimrakhimov/blockscout-display-bytes/public-methods#26fa3a31a0fa4e5ec98b9f5333dd1ace74197670"
 dependencies = [
  "bytes",
  "hex",
