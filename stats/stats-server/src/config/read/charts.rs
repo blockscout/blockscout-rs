@@ -35,11 +35,8 @@ impl From<json::charts::Config> for Config<AllChartSettings> {
         let lines = value
             .line_charts
             .into_iter()
-            .map(|(id, s)| ((id.from_case(Case::Snake).to_case(Case::Camel), s)))
+            .map(|(id, s)| (id.from_case(Case::Snake).to_case(Case::Camel), s))
             .collect();
-        Self {
-            counters,
-            lines: lines,
-        }
+        Self { counters, lines }
     }
 }

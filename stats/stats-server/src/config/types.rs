@@ -97,7 +97,7 @@ impl LineChartCategory {
         Some(proto_v1::LineChartSection {
             id: self.id,
             title: self.title,
-            charts: charts,
+            charts,
         })
     }
 }

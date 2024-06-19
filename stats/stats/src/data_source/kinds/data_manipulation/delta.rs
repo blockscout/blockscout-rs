@@ -65,7 +65,7 @@ where
                 .start()
                 .checked_sub_signed(TimeDelta::days(1))
                 .unwrap_or(DateTime::<Utc>::MAX_UTC);
-            let end = r.end().clone();
+            let end = *r.end();
             start..=end
         });
         let cum_data: Vec<DV> =

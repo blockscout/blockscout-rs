@@ -54,9 +54,7 @@ where
     ) -> Result<Self::Output, UpdateError> {
         // it's possible to not request full data range and use last value; can be updated
         // similarly to cumulative
-        let full_data: Vec<_> = D::query_data(cx, None, dependency_data_fetch_timer)
-            .await?
-            .into();
+        let full_data = D::query_data(cx, None, dependency_data_fetch_timer).await?;
         tracing::debug!(points_len = full_data.len(), "calculating sum");
         let zero = <DV as DateValue>::Value::zero();
         let sum = sum::<DV>(&full_data, zero)?;

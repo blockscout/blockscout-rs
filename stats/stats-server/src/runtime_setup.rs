@@ -73,14 +73,11 @@ impl RuntimeSetup {
         update_schedule: config::update_schedule::Config,
     ) -> anyhow::Result<Self> {
         let enabled_charts_config = Self::remove_disabled_charts(charts);
-        let enabled_counters = enabled_charts_config
-            .counters
-            .iter()
-            .map(|(id, _)| id.clone());
+        let enabled_counters = enabled_charts_config.counters.keys().cloned();
         let enabled_counters = new_set_check_duplicates(enabled_counters)
             .map_err(|id| anyhow::anyhow!("encountered same id twice: {}", id))?;
 
-        let enabled_lines = enabled_charts_config.lines.iter().map(|(id, _)| id.clone());
+        let enabled_lines = enabled_charts_config.lines.keys().cloned();
         let enabled_lines = new_set_check_duplicates(enabled_lines)
             .map_err(|id| anyhow::anyhow!("encountered same id twice: {}", id))?;
 
