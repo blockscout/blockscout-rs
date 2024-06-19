@@ -6,7 +6,14 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+alloy-dyn-abi = "0.7"
+alloy-json-abi = "0.7"
+anyhow = "1.0"
+blockscout-display-bytes = { git = "https://github.com/blockscout/blockscout-rs/", branch = "rimrakhimov/blockscout-display-bytes/public-methods" }
 bytes = "1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_with = "3.8"
 
 [dev-dependencies]
 hex = "0.4.3"
