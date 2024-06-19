@@ -19,16 +19,6 @@ impl From<LineChartInfo<EnabledChartSettings>> for proto::LineChartInfo {
     }
 }
 
-// impl From<LineChartCategory<EnabledChartSettings>> for proto::LineChartSection {
-//     fn from(value: LineChartCategory<EnabledChartSettings>) -> Self {
-//         Self {
-//             id: value.id,
-//             title: value.title,
-//             charts: value.charts.into_iter().map(|x| x.into()).collect(),
-//         }
-//     }
-// }
-
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config<ChartSettings> {
     pub counters: BTreeMap<String, ChartSettings>,
@@ -45,7 +35,7 @@ impl From<json::charts::Config> for Config<AllChartSettings> {
         let lines = value
             .line_charts
             .into_iter()
-            .map(|(id, s)| ((id, s)))
+            .map(|(id, s)| ((id.from_case(Case::Snake).to_case(Case::Camel), s)))
             .collect();
         Self {
             counters,

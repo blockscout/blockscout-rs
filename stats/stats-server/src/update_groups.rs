@@ -15,7 +15,6 @@ use stats::{
 };
 
 macro_rules! singleton_groups {
-    // we want explicit naming for easier observation of duplicate names
     ($($chart: ident),+ $(,)?) => {
         $(
             ::paste::paste!(

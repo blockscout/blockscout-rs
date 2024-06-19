@@ -1,24 +1,24 @@
 {
     "update_groups": {
-        "average_block_time": {
+        "average_block_time_group": {
             "update_schedule": "0 0 15 * * * *"
         },
-        "transactions": {
+        "transactions_group": {
             "update_schedule": "0 0 7 * * * *",
             "ignore_charts": [
                 "total_txns"
             ]
         },
-        "new_transactions_only": {
+        "new_transactions_group": {
             "update_schedule": "0 10 */3 * * * *"
         },
-        "blocks": {
+        "blocks_group": {
             "update_schedule": "0 0 8 * * * *"
         },
-        "new_native_coin_transfers": {
+        "new_native_coin_transfers_group": {
             "update_schedule": "0 0 3 * * * *"
         },
-        "average_gas_price": {
+        "average_gas_price_group": {
             "update_schedule": "0 0 14 * * * *"
         }
     }

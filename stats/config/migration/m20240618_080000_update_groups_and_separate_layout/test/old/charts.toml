@@ -1,11 +1,14 @@
+
 [[counters]]
 id = "averageBlockTime"
+description = "Average time taken in seconds for a block to be included in the blockchain"
 title = "Average block time"
 units = "s"
 update_schedule = "0 0 15 * * * *"
 
 [[counters]]
 id = "totalTxns"
+description = "All transactions including pending, dropped, replaced, failed transactions"
 title = "Total txns"
 update_schedule = "0 10 */3 * * * *"
 
@@ -63,11 +66,30 @@ update_schedule = "0 0 20 * * * *"
 id = "tokens"
 title = "Tokens"
 
+# [[lines.sections.charts]]
+# id = "nativeCoinHoldersGrowth"
+# title = "Native coin holders growth"
+# description = "Cumulative token holders number for the period"
+# update_schedule = "0 0 10 * * * *"
+
+# [[lines.sections.charts]]
+# id = "newNativeCoinHolders"
+# title = "New native coin holders"
+# description = "New token holders number per day"
+# update_schedule = "0 0 22 * * * *"
+
 [[lines.sections.charts]]
 id = "newNativeCoinTransfers"
 title = "New native coins transfers"
 description = "New token transfers number for the period"
 update_schedule = "0 0 3 * * * *"
+
+# [[lines.sections.charts]]
+# id = "nativeCoinSupply"
+# title = "Native coin circulating supply"
+# description = "Amount of token circulating supply for the period"
+# units = "ETH"
+# update_schedule = "0 0 11 * * * *"
 
 
 [[lines.sections]]
