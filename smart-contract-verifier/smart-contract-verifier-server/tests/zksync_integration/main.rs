@@ -1,3 +1,4 @@
+mod types;
 mod zksync_solidity;
 
 async fn start() -> url::Url {

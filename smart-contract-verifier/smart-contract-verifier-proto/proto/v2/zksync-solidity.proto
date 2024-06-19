@@ -2,11 +2,9 @@ syntax = "proto3";
 
 package blockscout.smartContractVerifier.v2.zksync.solidity;
 
-//import "v2/zksync.proto";
-
 option go_package = "github.com/blockscout/blockscout-rs/smart-contract-verifier/zksync/solidity";
 
-service Verifier {
+service ZkSyncSolidityVerifier {
   rpc VerifyStandardJson(VerifyStandardJsonRequest) returns (VerifyResponse) {}
 
   rpc ListCompilers(ListCompilersRequest) returns (ListCompilersResponse) {}
@@ -29,7 +27,21 @@ message VerificationFailure {
 }
 
 message VerificationSuccess {
+  string file_name = 1;
+  string contract_name = 2;
+  string zk_compiler = 3;
+  string zk_compiler_version = 4;
+  string evm_compiler = 5;
+  string evm_compiler_version = 6;
+  string language = 7;
+  string compiler_settings = 8;
+  map <string, string> sources = 9;
+  string compilation_artifacts = 10;
+  string creation_code_artifacts = 11;
+  string runtime_code_artifacts = 12;
 
+  optional Match creation_match = 13;
+  Match runtime_match = 14;
 }
 
 message VerifyResponse {
@@ -45,4 +57,15 @@ message ListCompilersRequest {}
 message ListCompilersResponse {
   repeated string zk_compilers = 1;
   repeated string solc_compilers = 2;
+}
+
+message Match {
+  enum MatchType {
+    MATCH_TYPE_UNSPECIFIED = 0;
+    PARTIAL = 1;
+    FULL = 2;
+  }
+  MatchType type = 1;
+  string values = 2;
+  string transformations = 3;
 }

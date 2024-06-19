@@ -1,7 +1,8 @@
 use crate::{
     proto::zksync::solidity::{
-        verifier_server::Verifier, ListCompilersRequest, ListCompilersResponse, VerifyResponse,
-        VerifyStandardJsonRequest,
+        verify_response, zk_sync_solidity_verifier_server::ZkSyncSolidityVerifier,
+        CompilationFailure, ListCompilersRequest, ListCompilersResponse, VerificationFailure,
+        VerificationSuccess, VerifyResponse, VerifyStandardJsonRequest,
     },
     services::common,
     settings::ZksyncSoliditySettings,
@@ -13,9 +14,13 @@ use smart_contract_verifier::{
     zksync::{ZkSolcCompiler, ZkSyncCompilers},
     SolcValidator,
 };
+use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::zksync::solidity::{
+    r#match::MatchType, Match,
+};
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 use tonic::{Request, Response, Status};
+use verification_common::verifier_alliance;
 
 pub struct Service {
     compilers: ZkSyncCompilers<ZkSolcCompiler>,
@@ -56,7 +61,7 @@ impl Service {
 }
 
 #[async_trait::async_trait]
-impl Verifier for Service {
+impl ZkSyncSolidityVerifier for Service {
     async fn verify_standard_json(
         &self,
         request: Request<VerifyStandardJsonRequest>,
@@ -68,10 +73,8 @@ impl Verifier for Service {
             if let Err(err) = request {
                 return match err {
                     StandardJsonParseError::InvalidContent(_) => {
-                        // Ok(types::zksync_verification::compilation_error(format!(
-                        //     "Invalid standard json: {err}"
-                        // )))
-                        todo!()
+                        let response = compilation_failure(format!("Invalid standard json: {err}"));
+                        Ok(Response::new(response))
                     }
                     StandardJsonParseError::BadRequest(_) => {
                         tracing::info!(err=%err, "Bad request");
@@ -83,18 +86,9 @@ impl Verifier for Service {
         };
 
         let result = zksync::verify(&self.compilers, verification_request).await;
-        if let Err(err) = result {
-            println!("[ERROR] {err:#}")
-        }
 
-        // match result {
-        //     Ok(result) => types::zksync_verification::process_verification_result(result),
-        //     Err(err) => types::zksync_verification::process_batch_error(err),
-        // }
-
-        Ok(Response::new(smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::zksync::solidity::VerifyResponse {
-            verify_response: None,
-        }))
+        let response = process_verification_result(result)?;
+        Ok(Response::new(response))
     }
 
     async fn list_compilers(
@@ -105,5 +99,77 @@ impl Verifier for Service {
             solc_compilers: self.compilers.all_evm_versions_sorted_str(),
             zk_compilers: self.compilers.all_zk_versions_sorted_str(),
         }))
+    }
+}
+
+fn process_verification_result(
+    result: Result<zksync::VerificationResult, zksync::Error>,
+) -> Result<VerifyResponse, Status> {
+    match result {
+        Ok(result) => match zksync::choose_best_success(result.successes) {
+            Some(success) => {
+                let proto_success = VerificationSuccess {
+                    file_name: success.file_path,
+                    contract_name: success.contract_name,
+                    zk_compiler: result.zk_compiler,
+                    zk_compiler_version: result.zk_compiler_version.to_string(),
+                    evm_compiler: result.evm_compiler,
+                    evm_compiler_version: result.evm_compiler_version.to_string(),
+                    language: result.language,
+                    compiler_settings: result.compiler_settings.to_string(),
+                    sources: result.sources,
+                    compilation_artifacts: serde_json::Value::from(success.compilation_artifacts)
+                        .to_string(),
+                    creation_code_artifacts: serde_json::Value::from(
+                        success.creation_code_artifacts,
+                    )
+                    .to_string(),
+                    runtime_code_artifacts: serde_json::Value::from(success.runtime_code_artifacts)
+                        .to_string(),
+                    creation_match: success.creation_match.map(process_match),
+                    runtime_match: Some(process_match(success.runtime_match)),
+                };
+
+                Ok(VerifyResponse {
+                    verify_response: Some(verify_response::VerifyResponse::VerificationSuccess(
+                        proto_success,
+                    )),
+                })
+            }
+            None => Ok(VerifyResponse {
+                verify_response: Some(verify_response::VerifyResponse::VerificationFailure(
+                    VerificationFailure {
+                        message: "No contract could be verified with provided data".to_string(),
+                    },
+                )),
+            }),
+        },
+        Err(ref err) => match err {
+            zksync::Error::Compilation(_) => Ok(compilation_failure(err.to_string())),
+            zksync::Error::ZkCompilerNotFound(_) | zksync::Error::EvmCompilerNotFound(_) => {
+                Err(Status::invalid_argument(err.to_string()))
+            }
+            zksync::Error::Internal(_) => Err(Status::internal(err.to_string())),
+        },
+    }
+}
+
+fn process_match(internal_match: verifier_alliance::Match) -> Match {
+    let match_type = match internal_match.r#type {
+        verifier_alliance::MatchType::Full => MatchType::Full,
+        verifier_alliance::MatchType::Partial => MatchType::Partial,
+    };
+    Match {
+        r#type: match_type.into(),
+        values: serde_json::Value::from(internal_match.values).to_string(),
+        transformations: serde_json::Value::from(internal_match.transformations).to_string(),
+    }
+}
+
+fn compilation_failure(message: String) -> VerifyResponse {
+    VerifyResponse {
+        verify_response: Some(verify_response::VerifyResponse::CompilationFailure(
+            CompilationFailure { message },
+        )),
     }
 }

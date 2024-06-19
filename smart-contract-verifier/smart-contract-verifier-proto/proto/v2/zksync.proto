@@ -1,9 +1,0 @@
-syntax = "proto3";
-
-package blockscout.smartContractVerifier.v2.zksync;
-
-option go_package = "github.com/blockscout/blockscout-rs/smart-contract-verifier/zk-sync";
-
-//message VerifyResponse {
-//
-//}

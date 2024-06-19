@@ -11,7 +11,7 @@ alloy-dyn-abi = "0.6.4"
 alloy-json-abi = "0.6.4"
 anyhow = "1.0"
 async-trait = "0.1"
-blockscout-display-bytes = { version = "1.0" }
+blockscout-display-bytes = { workspace = true }
 bytes = "1.2"
 chrono = "0.4"
 cron = "0.11"
@@ -45,7 +45,7 @@ thiserror = "1.0"
 tokio = { version = "1", features = ["macros"] }
 tracing = "0.1"
 url = { version = "2.4", features = ["serde"] }
-verification-common = { git = "https://github.com/blockscout/blockscout-rs", rev = "7a6e940" }
+verification-common = { workspace = true }
 
 era-compiler-common = { git = "https://github.com/matter-labs/era-compiler-common", rev = "9969de1" }
 

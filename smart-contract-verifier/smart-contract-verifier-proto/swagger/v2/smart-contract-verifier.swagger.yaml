@@ -6,7 +6,7 @@ tags:
   - name: SolidityVerifier
   - name: VyperVerifier
   - name: SourcifyVerifier
-  - name: Verifier
+  - name: ZkSyncSolidityVerifier
   - name: Health
 consumes:
   - application/json
@@ -223,7 +223,7 @@ paths:
         - VyperVerifier
   /api/v2/zksync-verifier/solidity/sources:verify-standard-json:
     post:
-      operationId: Verifier_VerifyStandardJson
+      operationId: ZkSyncSolidityVerifier_VerifyStandardJson
       responses:
         "200":
           description: A successful response.
@@ -238,12 +238,12 @@ paths:
           in: body
           required: true
           schema:
-            $ref: '#/definitions/zksyncsolidityVerifyStandardJsonRequest'
+            $ref: '#/definitions/solidityVerifyStandardJsonRequest'
       tags:
-        - Verifier
+        - ZkSyncSolidityVerifier
   /api/v2/zksync-verifier/solidity/versions:
     get:
-      operationId: Verifier_ListCompilers
+      operationId: ZkSyncSolidityVerifier_ListCompilers
       responses:
         "200":
           description: A successful response.
@@ -254,7 +254,7 @@ paths:
           schema:
             $ref: '#/definitions/googlerpcStatus'
       tags:
-        - Verifier
+        - ZkSyncSolidityVerifier
   /health:
     get:
       summary: |-
@@ -421,6 +421,22 @@ definitions:
         type: array
         items:
           type: string
+  solidityMatch:
+    type: object
+    properties:
+      type:
+        $ref: '#/definitions/solidityMatchMatchType'
+      values:
+        type: string
+      transformations:
+        type: string
+  solidityMatchMatchType:
+    type: string
+    enum:
+      - MATCH_TYPE_UNSPECIFIED
+      - PARTIAL
+      - FULL
+    default: MATCH_TYPE_UNSPECIFIED
   solidityVerificationFailure:
     type: object
     properties:
@@ -428,6 +444,50 @@ definitions:
         type: string
   solidityVerificationSuccess:
     type: object
+    properties:
+      fileName:
+        type: string
+      contractName:
+        type: string
+      zkCompiler:
+        type: string
+      zkCompilerVersion:
+        type: string
+      evmCompiler:
+        type: string
+      evmCompilerVersion:
+        type: string
+      language:
+        type: string
+      compilerSettings:
+        type: string
+      sources:
+        type: object
+        additionalProperties:
+          type: string
+      compilationArtifacts:
+        type: string
+      creationCodeArtifacts:
+        type: string
+      runtimeCodeArtifacts:
+        type: string
+      creationMatch:
+        $ref: '#/definitions/solidityMatch'
+      runtimeMatch:
+        $ref: '#/definitions/solidityMatch'
+  solidityVerifyStandardJsonRequest:
+    type: object
+    properties:
+      code:
+        type: string
+      constructorArguments:
+        type: string
+      zkCompiler:
+        type: string
+      solcCompiler:
+        type: string
+      input:
+        type: string
   v2BatchVerifyResponse:
     type: object
     properties:
@@ -823,18 +883,3 @@ definitions:
         $ref: '#/definitions/solidityVerificationFailure'
       verificationSuccess:
         $ref: '#/definitions/solidityVerificationSuccess'
-  zksyncsolidityVerifyStandardJsonRequest:
-    type: object
-    properties:
-      code:
-        type: string
-      constructorArguments:
-        type: string
-      zkCompiler:
-        type: string
-      solcCompiler:
-        type: string
-      input:
-        type: string
-  zksyncvyperVerifyResponse:
-    type: object

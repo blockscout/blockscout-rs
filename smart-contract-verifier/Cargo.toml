@@ -8,4 +8,8 @@ members = [
 ]
 
 [workspace.dependencies]
-blockscout-service-launcher = "=0.10.0"
+blockscout-display-bytes = { git = "https://github.com/blockscout/blockscout-rs/", branch = "rimrakhimov/blockscout-display-bytes/public-methods" }
+#blockscout-display-bytes = "1.0.0"
+blockscout-service-launcher = "0.12.0"
+#verification-common = { git = "https://github.com/blockscout/blockscout-rs", rev = "7a6e940" }
+verification-common = { git = "https://github.com/blockscout/blockscout-rs/", branch = "rimrakhimov/verifier/zksolc-support" }

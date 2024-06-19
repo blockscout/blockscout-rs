@@ -54,18 +54,12 @@ http:
 
     #################### ZkSync Solidity Verifier ####################
 
-    - selector: blockscout.smartContractVerifier.v2.zksync.solidity.Verifier.VerifyStandardJson
+    - selector: blockscout.smartContractVerifier.v2.zksync.solidity.ZkSyncSolidityVerifier.VerifyStandardJson
       post: /api/v2/zksync-verifier/solidity/sources:verify-standard-json
       body: "*"
 
-    - selector: blockscout.smartContractVerifier.v2.zksync.solidity.Verifier.ListCompilers
+    - selector: blockscout.smartContractVerifier.v2.zksync.solidity.ZkSyncSolidityVerifier.ListCompilers
       get: /api/v2/zksync-verifier/solidity/versions
-
-#    #################### ZkSync Vyper Verifier ####################
-#
-#    - selector: blockscout.smartContractVerifier.v2.zksync.vyper.Verifier.VerifyStandardJson
-#      post: /api/v2/zksync-verifier/vyper/sources:verify-standard-json
-#      body: "*"
 
     #################### Health ####################
 

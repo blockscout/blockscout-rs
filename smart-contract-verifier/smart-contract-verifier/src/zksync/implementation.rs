@@ -1,9 +1,8 @@
 use crate::{
     compiler::{CompactVersion, DetailedVersion, DownloadCache, FetchError, Fetcher},
     decode_hex,
-    zksync::zksolc_standard_json::{input::Input, output, output::contract::Contract},
+    zksync::zksolc_standard_json::{input, input::Input, output, output::contract::Contract},
 };
-use alloy_dyn_abi::JsonAbiExt;
 use anyhow::Context;
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -13,12 +12,17 @@ use nonempty::NonEmpty;
 use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::Value;
 use std::{
+    collections::BTreeMap,
     marker::PhantomData,
     path::{Path, PathBuf},
     sync::Arc,
 };
 use thiserror::Error;
 use tokio::sync::Semaphore;
+use verification_common::verifier_alliance::{
+    CompilationArtifacts, CreationCodeArtifacts, Match, MatchBuilder, RuntimeCodeArtifacts,
+    ToCompilationArtifacts, ToCreationCodeArtifacts, ToRuntimeCodeArtifacts,
+};
 
 #[derive(Clone, Debug)]
 pub struct VerificationRequest {
@@ -33,8 +37,11 @@ pub struct VerificationRequest {
 pub struct VerificationSuccess {
     pub file_path: String,
     pub contract_name: String,
-    pub creation_match: bool,
-    pub runtime_match: bool,
+    pub compilation_artifacts: CompilationArtifacts,
+    pub creation_code_artifacts: CreationCodeArtifacts,
+    pub runtime_code_artifacts: RuntimeCodeArtifacts,
+    pub creation_match: Option<Match>,
+    pub runtime_match: Match,
 }
 
 #[derive(Clone, Debug)]
@@ -45,8 +52,31 @@ pub struct VerificationFailure {
 }
 
 pub struct VerificationResult {
+    pub zk_compiler: String,
+    pub zk_compiler_version: CompactVersion,
+    pub evm_compiler: String,
+    pub evm_compiler_version: DetailedVersion,
+    pub language: String,
+    pub compiler_settings: Value,
+    pub sources: BTreeMap<String, String>,
     pub successes: Vec<VerificationSuccess>,
     pub failures: Vec<VerificationFailure>,
+}
+
+// TODO: uses on assumption, that only full matches are detected. Should be
+//       updated, when zksync verifier starts to detect partial matches as well.
+pub fn choose_best_success(successes: Vec<VerificationSuccess>) -> Option<VerificationSuccess> {
+    let mut best = None;
+    for success in successes {
+        if success.creation_match.is_some() {
+            best = Some(success);
+            break;
+        } else if best.is_none() {
+            best = Some(success)
+        }
+    }
+
+    best
 }
 
 #[derive(Error, Debug)]
@@ -71,7 +101,7 @@ pub async fn verify(
 
     compiler_input.normalize_output_selection(&zk_compiler_version);
 
-    let (compiler_output, raw_compiler_output) = compilers
+    let (compiler_output, _raw_compiler_output) = compilers
         .compile(&zk_compiler_version, &evm_compiler_version, &compiler_input)
         .await?;
 
@@ -82,17 +112,17 @@ pub async fn verify(
             match check_contract(
                 file.clone(),
                 name,
-                &request.code,
-                request.constructor_arguments.as_ref(),
+                request.code.clone(),
+                request.constructor_arguments.clone(),
                 contract,
             )? {
                 Ok(success) => {
                     tracing::trace!(
                         file = success.file_path,
                         contract = success.contract_name,
-                        "contract matches; creation_match={}, runtime_match={}",
-                        success.creation_match,
-                        success.runtime_match
+                        "contract matches; creation_match={:?}, runtime_match={}",
+                        success.creation_match.as_ref().map(|v| &v.r#type),
+                        success.runtime_match.r#type
                     );
                     successes.push(success);
                 }
@@ -109,9 +139,20 @@ pub async fn verify(
         }
     }
 
-    println!("{raw_compiler_output:#?}");
-
+    let sources = compiler_input
+        .sources
+        .into_iter()
+        .map(|(file, source)| (file, source.content.to_string()))
+        .collect();
     Ok(VerificationResult {
+        zk_compiler: "zksolc".to_string(),
+        zk_compiler_version,
+        evm_compiler: "solc".to_string(),
+        evm_compiler_version,
+        language: "solidity".to_string(),
+        compiler_settings: serde_json::to_value(compiler_input.settings)
+            .context("compiler settings serialization")?,
+        sources,
         successes,
         failures,
     })
@@ -120,8 +161,8 @@ pub async fn verify(
 fn check_contract(
     file_path: String,
     contract_name: String,
-    code: &Bytes,
-    constructor_arguments: Option<&Bytes>,
+    code: Bytes,
+    constructor_arguments: Option<Bytes>,
     contract: Contract,
 ) -> Result<Result<VerificationSuccess, VerificationFailure>, anyhow::Error> {
     let failure = |message: String| {
@@ -132,16 +173,35 @@ fn check_contract(
         }))
     };
 
-    if let Some(bytecode) = contract.evm.and_then(|evm| evm.bytecode) {
+    if let Some(bytecode) = contract.evm.as_ref().and_then(|evm| evm.bytecode.as_ref()) {
         let compiled_code = decode_hex(&bytecode.object);
         if let Ok(compiled_code) = compiled_code {
-            if compiled_code == code.as_ref() {
-                let runtime_match = true;
-                let creation_match =
-                    check_constructor_arguments(constructor_arguments, contract.abi.as_ref())?;
+            let compilation_artifacts = CompilationArtifacts::from(&contract);
+            let creation_code_artifacts = CreationCodeArtifacts::from(&contract);
+            let runtime_code_artifacts = RuntimeCodeArtifacts::from(&contract);
+
+            let runtime_match = build_runtime_match(
+                code.as_ref(),
+                compiled_code.clone(),
+                &runtime_code_artifacts,
+            )
+            .context("runtime match")?;
+            if let Some(runtime_match) = runtime_match {
+                let mut creation_code = code.to_vec();
+                creation_code.extend(constructor_arguments.unwrap_or_default());
+                let creation_match = build_creation_match(
+                    &creation_code,
+                    compiled_code,
+                    &creation_code_artifacts,
+                    &compilation_artifacts,
+                )
+                .context("creation match")?;
                 Ok(Ok(VerificationSuccess {
                     file_path,
                     contract_name,
+                    compilation_artifacts,
+                    creation_code_artifacts,
+                    runtime_code_artifacts,
                     creation_match,
                     runtime_match,
                 }))
@@ -160,29 +220,41 @@ fn check_contract(
     }
 }
 
-fn check_constructor_arguments(
-    constructor_arguments: Option<&Bytes>,
-    raw_abi: Option<&Value>,
-) -> Result<bool, anyhow::Error> {
-    let are_valid = match (constructor_arguments, raw_abi) {
-        (Some(constructor_arguments), Some(abi)) => {
-            let abi = alloy_json_abi::JsonAbi::deserialize(abi)
-                .context("parsing compiled contract abi")?;
-            match abi.constructor {
-                None if constructor_arguments.is_empty() => true,
-                Some(constructor)
-                    if constructor
-                        .abi_decode_input(constructor_arguments, true)
-                        .is_ok() =>
-                {
-                    true
-                }
-                _ => false,
-            }
-        }
-        _ => false,
+fn build_runtime_match(
+    code: &[u8],
+    compiled_code: Vec<u8>,
+    runtime_code_artifacts: &RuntimeCodeArtifacts,
+) -> Result<Option<Match>, anyhow::Error> {
+    let runtime_match_builder = MatchBuilder::new(code, compiled_code.clone());
+    let runtime_match = if let Some(runtime_match_builder) = runtime_match_builder {
+        runtime_match_builder
+            .set_has_cbor_auxdata(true)
+            .apply_runtime_code_transformations(runtime_code_artifacts)
+            .context("applying transformations")?
+            .verify_and_build()
+    } else {
+        None
     };
-    Ok(are_valid)
+    Ok(runtime_match)
+}
+
+fn build_creation_match(
+    code: &[u8],
+    compiled_code: Vec<u8>,
+    creation_code_artifacts: &CreationCodeArtifacts,
+    compilation_artifacts: &CompilationArtifacts,
+) -> Result<Option<Match>, anyhow::Error> {
+    let creation_match_builder = MatchBuilder::new(code, compiled_code);
+    let creation_match = if let Some(creation_match_builder) = creation_match_builder {
+        creation_match_builder
+            .set_has_cbor_auxdata(true)
+            .apply_creation_code_transformations(creation_code_artifacts, compilation_artifacts)
+            .context("applying transformations")?
+            .verify_and_build()
+    } else {
+        None
+    };
+    Ok(creation_match)
 }
 
 pub trait CompilerInput {
@@ -204,7 +276,21 @@ impl CompilerInput for Input {
         self
     }
 
-    fn normalize_output_selection(&mut self, _version: &CompactVersion) {}
+    fn normalize_output_selection(&mut self, _version: &CompactVersion) {
+        use input::settings::selection::{
+            file::{flag::Flag, File},
+            Selection,
+        };
+        let output_selection = Selection {
+            all: Some(File {
+                per_file: None,
+                per_contract: Some(
+                    [Flag::ABI, Flag::Devdoc, Flag::Userdoc, Flag::StorageLayout].into(),
+                ),
+            }),
+        };
+        self.settings.output_selection = Some(output_selection);
+    }
 }
 
 pub trait CompilerOutput {
@@ -223,6 +309,27 @@ impl CompilerOutput for output::Output {
         NonEmpty::from_vec(errors)
     }
 }
+
+impl ToCompilationArtifacts for Contract {
+    fn abi(&self) -> Option<Value> {
+        self.abi.clone()
+    }
+
+    fn devdoc(&self) -> Option<Value> {
+        self.devdoc.clone()
+    }
+
+    fn userdoc(&self) -> Option<Value> {
+        self.userdoc.clone()
+    }
+    fn storage_layout(&self) -> Option<Value> {
+        self.storage_layout.clone()
+    }
+}
+
+impl ToCreationCodeArtifacts for Contract {}
+
+impl ToRuntimeCodeArtifacts for Contract {}
 
 #[async_trait]
 pub trait ZkSyncCompiler {
