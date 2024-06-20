@@ -74,25 +74,27 @@ impl LineChartCategory {
         self,
         settings: &BTreeMap<String, EnabledChartEntry>,
     ) -> Option<proto_v1::LineChartSection> {
-        let charts: Option<Vec<_>> = self
+        let charts: Result<Vec<_>, String> = self
             .charts_order
             .into_iter()
-            .map(|c| {
-                settings
-                    .get(&c)
-                    .map(|e| {
-                        LineChartInfo {
-                            id: c,
-                            settings: e.settings.clone(),
-                        }
-                        .into()
-                    })
-                    .clone()
+            .map(|c: String| {
+                if let Some(e) = settings.get(&c) {
+                    Ok(LineChartInfo {
+                        id: c,
+                        settings: e.settings.clone(),
+                    }
+                    .into())
+                } else {
+                    Err(c)
+                }
             })
             .collect();
-        let Some(charts) = charts else {
-            tracing::error!("as");
-            return None;
+        let charts = match charts {
+            Ok(c) => c,
+            Err(missing_settings) => {
+                tracing::error!("Did not find settings for chart {missing_settings}");
+                return None;
+            }
         };
         Some(proto_v1::LineChartSection {
             id: self.id,
