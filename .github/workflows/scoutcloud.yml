@@ -180,4 +180,9 @@ jobs:
     name: Test scoutcloud
     needs: [deploy]
     uses: blockscout/blockscout-ci-cd/.github/workflows/e2e_scoutcloud.yaml@master
+    with:
+      server_size: small
+      rpc_url: https://sepolia.drpc.org
+      chain_type: ethereum
+      node_type: geth
     secrets: inherit
