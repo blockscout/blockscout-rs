@@ -196,7 +196,7 @@ jobs:
           client_payload: '{ "instance": "scoutcloud", "globalEnv": "production"}'
   e2e_test:
     name: Test scoutcloud
-    needs: deploy_stage
+    needs: deploy_prod
     if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     permissions: write-all
