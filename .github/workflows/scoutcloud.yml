@@ -173,7 +173,7 @@ jobs:
       appName: scoutcloud
       globalEnv: production
       helmfileDir: deploy
-      kubeConfigSecret: ci/data/dev/kubeconfig/k8s-pg
+      kubeConfigSecret: ci/data/prod/kubeconfig/k8s-pg
       vaultRole: ci-prod
     secrets: inherit
   e2e_test:
