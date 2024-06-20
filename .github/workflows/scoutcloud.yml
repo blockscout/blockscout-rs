@@ -220,6 +220,6 @@ jobs:
           repo: blockscout-ci-cd
           github_token: ${{ env.WORKFLOW_TRIGGER_TOKEN }}
           workflow_file_name: e2e_scoutcloud.yaml
-          ref: main
+          ref: master
           wait_interval: 30
           client_payload: '{ "server_size": "small", "rpc_url": "https://sepolia.drpc.org", "chain_type": "ethereum", "node_type": "geth"}'
