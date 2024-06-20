@@ -39,6 +39,7 @@ impl From<ReadError> for UpdateError {
 #[derive(Clone)]
 pub struct ChartMetadata {
     pub id: i32,
+    #[allow(unused)]
     pub created_at: DateTime<Utc>,
     pub last_updated_at: Option<DateTime<Utc>>,
 }
