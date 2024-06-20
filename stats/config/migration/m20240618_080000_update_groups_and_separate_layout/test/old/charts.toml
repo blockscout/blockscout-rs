@@ -16,9 +16,11 @@ update_schedule = "0 10 */3 * * * *"
 [[lines.sections]]
 id = "transactions"
 title = "Transactions"
+order = 1
 
 [[lines.sections.charts]]
 id = "averageTxnFee"
+enabled = false
 title = "Average transaction fee"
 description = "The average amount in ETH spent per transaction"
 units = "ETH"

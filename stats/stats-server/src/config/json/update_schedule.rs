@@ -10,7 +10,7 @@ pub struct Config {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashSet, str::FromStr};
+    use std::str::FromStr;
 
     use super::*;
     use cron::Schedule;
@@ -22,15 +22,10 @@ mod tests {
                 "update_schedule": "0 0 15 * * * *"
             },
             "transactions": {
-                "update_schedule": "0 0 7 * * * *",
-                "ignore_charts": [
-                    "total_txns",
-                    "average_txn_fee"
-                ]
+                "update_schedule": "0 0 7 * * * *"
             },
             "new_transactions_only": {
-                "update_schedule": "0 10 */3 * * * *",
-                "ignore_charts": [ ]
+                "update_schedule": "0 10 */3 * * * *"
             }
         }
     }"#;
@@ -46,25 +41,19 @@ mod tests {
                     (
                         "average_block_time".to_owned(),
                         UpdateGroup {
-                            update_schedule: Some(Schedule::from_str("0 0 15 * * * *").unwrap()),
-                            ignore_charts: HashSet::new()
+                            update_schedule: Some(Schedule::from_str("0 0 15 * * * *").unwrap())
                         }
                     ),
                     (
                         "transactions".to_owned(),
                         UpdateGroup {
-                            update_schedule: Some(Schedule::from_str("0 0 7 * * * *").unwrap()),
-                            ignore_charts: HashSet::from_iter([
-                                "total_txns".to_owned(),
-                                "average_txn_fee".to_owned()
-                            ])
+                            update_schedule: Some(Schedule::from_str("0 0 7 * * * *").unwrap())
                         }
                     ),
                     (
                         "new_transactions_only".to_owned(),
                         UpdateGroup {
-                            update_schedule: Some(Schedule::from_str("0 10 */3 * * * *").unwrap()),
-                            ignore_charts: HashSet::new()
+                            update_schedule: Some(Schedule::from_str("0 10 */3 * * * *").unwrap())
                         }
                     ),
                 ])

@@ -9,22 +9,12 @@ use std::collections::BTreeMap;
 pub struct UpdateGroup {
     #[serde_as(as = "Option<DisplayFromStr>")]
     pub update_schedule: Option<Schedule>,
-    // weird design because it's env...
-    /// true - ignore;
-    /// false - leave as-is
-    pub ignore_charts: BTreeMap<String, bool>,
 }
 
 impl From<UpdateGroup> for crate::config::types::UpdateGroup {
     fn from(value: UpdateGroup) -> Self {
         Self {
             update_schedule: value.update_schedule,
-            ignore_charts: value
-                .ignore_charts
-                .into_iter()
-                .filter(|(_, ignore)| *ignore)
-                .map(|(name, _)| name)
-                .collect(),
         }
     }
 }
@@ -55,26 +45,6 @@ mod tests {
                     "average_block_time".to_owned(),
                     UpdateGroup {
                         update_schedule: Some(Schedule::from_str("0 0 15 * * * *").unwrap()),
-                        ignore_charts: BTreeMap::new(),
-                    },
-                )]),
-            },
-        )
-        .unwrap();
-
-        check_envs_parsed_to(
-            [(
-                "STATS_CHARTS__UPDATE_GROUPS__AVERAGE_BLOCK_TIME__IGNORE_CHARTS__SOME_POOR_CHART"
-                    .to_owned(),
-                "1".to_owned(),
-            )]
-            .into(),
-            Config {
-                update_groups: BTreeMap::from([(
-                    "average_block_time".to_owned(),
-                    UpdateGroup {
-                        update_schedule: None,
-                        ignore_charts: BTreeMap::from([("some_poor_chart".to_owned(), true)]),
                     },
                 )]),
             },

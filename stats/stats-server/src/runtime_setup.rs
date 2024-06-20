@@ -33,9 +33,7 @@ pub struct UpdateGroupEntry {
     pub update_schedule: Option<Schedule>,
     /// Handle for operating the group
     pub group: SyncUpdateGroup,
-    /// Members that are enabled both
-    /// - in the charts config
-    /// - in update group config (=not disabled there)
+    /// Members that are enabled in the charts config
     pub enabled_members: HashSet<String>,
 }
 
@@ -108,7 +106,7 @@ impl RuntimeSetup {
             ));
         }
 
-        let update_groups = Self::init_update_groups(update_schedule)?;
+        let update_groups = Self::init_update_groups(update_schedule, &charts_info)?;
 
         Ok(Self {
             lines_layout: layout.line_chart_categories,
@@ -267,6 +265,7 @@ impl RuntimeSetup {
     /// All initialization of update groups happens here
     fn init_update_groups(
         schedule_config: config::update_schedule::Config,
+        charts_info: &BTreeMap<String, EnabledChartEntry>,
     ) -> anyhow::Result<BTreeMap<String, UpdateGroupEntry>> {
         let update_groups = Self::all_update_groups();
         let dep_mutexes = Self::create_all_dependencies_mutexes(update_groups.clone());
@@ -282,13 +281,11 @@ impl RuntimeSetup {
                 .update_groups
                 .get(&name)
                 .expect("config verification did not catch missing group config");
-            let disabled_members: HashSet<String> =
-                group_config.ignore_charts.iter().cloned().collect();
             let enabled_members = group
                 .list_charts()
                 .into_iter()
+                .filter(|m| charts_info.contains_key(&m.name))
                 .map(|m| m.name)
-                .filter(|member| !disabled_members.contains(member))
                 .collect();
             let sync_group = SyncUpdateGroup::new(&dep_mutexes, group)?;
             result.insert(

@@ -4,10 +4,7 @@
             "update_schedule": "0 0 15 * * * *"
         },
         "transactions_group": {
-            "update_schedule": "0 0 7 * * * *",
-            "ignore_charts": [
-                "total_txns"
-            ]
+            "update_schedule": "0 0 7 * * * *"
         },
         "new_transactions_group": {
             "update_schedule": "0 10 */3 * * * *"

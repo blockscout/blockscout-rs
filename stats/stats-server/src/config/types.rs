@@ -1,6 +1,6 @@
 //! Common types for the configs
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 
 use cron::Schedule;
 use serde::{Deserialize, Serialize};
@@ -108,8 +108,4 @@ impl LineChartCategory {
 pub struct UpdateGroup {
     #[serde_as(as = "Option<DisplayFromStr>")]
     pub update_schedule: Option<Schedule>,
-    /// Dynamically disable some group members.
-    /// These charts won't get directly updated by the group
-    /// (they can still get updated if they are depended upon)
-    pub ignore_charts: HashSet<String>,
 }

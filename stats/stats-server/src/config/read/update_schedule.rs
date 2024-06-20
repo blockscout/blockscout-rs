@@ -14,14 +14,7 @@ impl From<json::update_schedule::Config> for Config {
         let update_groups_fixed_case = value
             .update_groups
             .into_iter()
-            .map(|(name, mut group)| {
-                group.ignore_charts = group
-                    .ignore_charts
-                    .into_iter()
-                    .map(|chart_name| chart_name.from_case(Case::Snake).to_case(Case::Camel))
-                    .collect();
-                (name.from_case(Case::Snake).to_case(Case::Pascal), group)
-            })
+            .map(|(name, group)| (name.from_case(Case::Snake).to_case(Case::Pascal), group))
             .collect();
         Self {
             update_groups: update_groups_fixed_case,

@@ -163,14 +163,6 @@ pub fn override_update_schedule(
                 target_group.update_schedule = added_settings
                     .update_schedule
                     .or(target_group.update_schedule.take());
-
-                for (chart_name, new_ignore_status) in added_settings.ignore_charts {
-                    if new_ignore_status {
-                        target_group.ignore_charts.insert(chart_name);
-                    } else {
-                        target_group.ignore_charts.remove(&chart_name);
-                    }
-                }
             }
         }
     }
@@ -366,15 +358,10 @@ mod tests {
                 "update_schedule": "0 0 15 * * * *"
             },
             "transactions": {
-                "update_schedule": "0 0 7 * * * *",
-                "ignore_charts": [
-                    "total_txns",
-                    "average_txn_fee"
-                ]
+                "update_schedule": "0 0 7 * * * *"
             },
             "new_transactions_only": {
-                "update_schedule": "0 10 */3 * * * *",
-                "ignore_charts": [ ]
+                "update_schedule": "0 10 */3 * * * *"
             }
         }
     }"#;
@@ -386,10 +373,14 @@ mod tests {
 
         let env_override: env::update_schedule::Config = config_from_env(HashMap::from_iter(
             [
-                ("STATS_CHARTS__UPDATE_GROUPS__AVERAGE_BLOCK_TIME__IGNORE_CHARTS__AVERAGE_BLOCK_TIME", "true"),
-                ("STATS_CHARTS__UPDATE_GROUPS__TRANSACTIONS__IGNORE_CHARTS__AVERAGE_TXN_FEE", "false"),
-                ("STATS_CHARTS__UPDATE_GROUPS__TRANSACTIONS__UPDATE_SCHEDULE", "0 0 3 * * * *"),
-                ("STATS_CHARTS__UPDATE_GROUPS__NEW_CONTRACTS__UPDATE_SCHEDULE", "0 0 1 * * * *"),
+                (
+                    "STATS_CHARTS__UPDATE_GROUPS__TRANSACTIONS__UPDATE_SCHEDULE",
+                    "0 0 3 * * * *",
+                ),
+                (
+                    "STATS_CHARTS__UPDATE_GROUPS__NEW_CONTRACTS__UPDATE_SCHEDULE",
+                    "0 0 1 * * * *",
+                ),
             ]
             .map(|(a, b)| (a.to_owned(), b.to_owned())),
         ))
@@ -402,24 +393,16 @@ mod tests {
             r#"{
             "update_groups": {
                 "average_block_time": {
-                    "update_schedule": "0 0 15 * * * *",
-                    "ignore_charts": [
-                        "average_block_time"
-                    ]
+                    "update_schedule": "0 0 15 * * * *"
                 },
                 "transactions": {
-                    "update_schedule": "0 0 3 * * * *",
-                    "ignore_charts": [
-                        "total_txns"
-                    ]
+                    "update_schedule": "0 0 3 * * * *"
                 },
                 "new_transactions_only": {
-                    "update_schedule": "0 10 */3 * * * *",
-                    "ignore_charts": [ ]
+                    "update_schedule": "0 10 */3 * * * *"
                 },
                 "new_contracts": {
-                    "update_schedule": "0 0 1 * * * *",
-                    "ignore_charts": [ ]
+                    "update_schedule": "0 0 1 * * * *"
                 }
             }
         }"#,
