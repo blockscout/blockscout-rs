@@ -165,24 +165,61 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:build-cache
           cache-to: ${{ github.ref == 'refs/heads/main' && format('type=registry,ref={0}/{1}:build-cache,mode=max', env.REGISTRY, env.IMAGE_NAME) || '' }}
-  deploy:
-    name: Deploy scoutcloud
-    needs: [ push ]
-    uses: blockscout/blockscout-ci-cd/.github/workflows/deploy_helmfile.yaml@master
-    with:
-      appName: scoutcloud
-      globalEnv: production
-      helmfileDir: deploy
-      kubeConfigSecret: ci/data/prod/kubeconfig/k8s-pg
-      vaultRole: ci-prod
-    secrets: inherit
+  deploy_prod:
+    name: Deploy prod instance
+    needs: push
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    permissions: write-all
+    steps:
+      - name: Get Vault credentials
+        id: retrieve-vault-secrets
+        uses: hashicorp/vault-action@v2.4.1
+        with:
+          url: https://vault.k8s.blockscout.com
+          role: ci-dev
+          path: github-jwt
+          method: jwt
+          tlsSkipVerify: false
+          exportToken: true
+          secrets: |
+            ci/data/dev/github token | WORKFLOW_TRIGGER_TOKEN ;
+      - name: Trigger deploy
+        uses: convictional/trigger-workflow-and-wait@v1.6.1
+        with:
+          owner: blockscout
+          repo: deployment-values
+          github_token: ${{ env.WORKFLOW_TRIGGER_TOKEN }}
+          workflow_file_name: deploy_services.yaml
+          ref: main
+          wait_interval: 30
+          client_payload: '{ "instance": "scoutcloud", "globalEnv": "production"}'
   e2e_test:
     name: Test scoutcloud
-    needs: [deploy]
-    uses: blockscout/blockscout-ci-cd/.github/workflows/e2e_scoutcloud.yaml@master
-    with:
-      server_size: small
-      rpc_url: https://sepolia.drpc.org
-      chain_type: ethereum
-      node_type: geth
-    secrets: inherit
+    needs: deploy_stage
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    permissions: write-all
+    steps:
+      - name: Get Vault credentials
+        id: retrieve-vault-secrets
+        uses: hashicorp/vault-action@v2.4.1
+        with:
+          url: https://vault.k8s.blockscout.com
+          role: ci-dev
+          path: github-jwt
+          method: jwt
+          tlsSkipVerify: false
+          exportToken: true
+          secrets: |
+            ci/data/dev/github token | WORKFLOW_TRIGGER_TOKEN ;
+      - name: Trigger Tests
+        uses: convictional/trigger-workflow-and-wait@v1.6.1
+        with:
+          owner: blockscout
+          repo: blockscout-ci-cd
+          github_token: ${{ env.WORKFLOW_TRIGGER_TOKEN }}
+          workflow_file_name: e2e_scoutcloud.yaml
+          ref: main
+          wait_interval: 30
+          client_payload: '{ "server_size": "small", "rpc_url": "https://sepolia.drpc.org", "chain_type": "ethereum", "node_type": "geth"}'
