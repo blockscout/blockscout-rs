@@ -8,6 +8,7 @@ update_schedule = "0 0 15 * * * *"
 
 [[counters]]
 id = "totalTxns"
+enabled = false
 description = "All transactions including pending, dropped, replaced, failed transactions"
 title = "Total txns"
 update_schedule = "0 10 */3 * * * *"
