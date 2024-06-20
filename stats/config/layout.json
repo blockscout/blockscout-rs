@@ -1,0 +1,77 @@
+{
+    "counters_order": [
+        "total_blocks",
+        "total_addresses",
+        "average_block_time",
+        "completed_txns",
+        "total_accounts",
+        "total_native_coin_transfers",
+        "total_tokens",
+        "total_txns",
+        "last_new_contracts",
+        "total_contracts",
+        "last_new_verified_contracts",
+        "total_verified_contracts",
+        "total_native_coin_holders"
+    ],
+    "line_chart_categories": [
+        {
+            "id": "accounts",
+            "title": "Accounts",
+            "charts_order": [
+                "active_accounts",
+                "accounts_growth",
+                "new_accounts"
+            ]
+        },
+        {
+            "id": "transactions",
+            "title": "Transactions",
+            "charts_order": [
+                "average_txn_fee",
+                "txns_fee",
+                "new_txns",
+                "txns_growth",
+                "txns_success_rate"
+            ]
+        },
+        {
+            "id": "blocks",
+            "title": "Blocks",
+            "charts_order": [
+                "new_blocks",
+                "average_block_size",
+                "average_block_rewards"
+            ]
+        },
+        {
+            "id": "tokens",
+            "title": "Tokens",
+            "charts_order": [
+                "new_native_coin_transfers",
+                "native_coin_holders_growth",
+                "new_native_coin_holders",
+                "native_coin_supply"
+            ]
+        },
+        {
+            "id": "gas",
+            "title": "Gas",
+            "charts_order": [
+                "average_gas_limit",
+                "gas_used_growth",
+                "average_gas_price"
+            ]
+        },
+        {
+            "id": "contracts",
+            "title": "Contracts",
+            "charts_order": [
+                "new_verified_contracts",
+                "verified_contracts_growth",
+                "new_contracts",
+                "contracts_growth"
+            ]
+        }
+    ]
+}

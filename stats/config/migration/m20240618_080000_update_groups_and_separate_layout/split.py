@@ -183,15 +183,17 @@ def all_charts_iter(parsed_config: dict) -> iter:
     return itertools.chain(parsed_config["counters"], line_charts_iter(parsed_config))
 
 def prompt_candidate_choice(group_name: str, candidates: list) -> int:
-    print("Only one update schedule can be set for group", group_name, "(see `README.md` for details).")
+    print("{} - only one update schedule can be set for group (see `README.md` for details).".format(group_name))
     while True:
         for (i, c) in enumerate(candidates):
             print("{}: {}".format(i, c))
-        choice = input("Type number ({}-{}) to choose: ".format(0, len(candidates)-1)).strip()
+        choice = input("Type number ({}-{}) to choose or provide new cron expression in double quotes (e.g. \"<new expression>\"): ".format(0, len(candidates)-1)).strip()
+        if choice[0] == '"' and choice[-1] == '"':
+            return (choice[1:-1], 'custom')
         try:
             choice = int(choice)
             if choice >= 0 and choice < len(candidates):
-                return choice
+                return candidates[choice]
         except Exception as e:
             print("error:", e)
             continue
@@ -207,8 +209,7 @@ def construct_update_schedule(parsed_config: dict) -> dict:
     for (group_name, candidates) in schedule_candidates.items():
         chosen_schedule = candidates[0]
         if len(candidates) > 1:
-            choice_idx = prompt_candidate_choice(group_name, candidates)
-            chosen_schedule = candidates[choice_idx]
+            chosen_schedule = prompt_candidate_choice(group_name, candidates)
         update_schedule[group_name] = chosen_schedule[0]
     return { "update_groups": update_schedule }
 
@@ -250,17 +251,30 @@ def save_config(path: str, config: dict):
     with open(path, 'x') as f:
         json.dump(config, f, indent=4)
 
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog="migrateConfigs",description="A script to simplify config migration to the new format")
-    parser.add_argument('filename', help="old config file location")
-    parser.add_argument('-o', '--output', metavar='output_folder', help="folder to put the results in")
-    args = parser.parse_args()
-    parsed_file = load_file(args.filename)
+    j = load_file("./charts.json")
+    t = load_file("./charts.toml")
+    j = render_json(j)
+    
+    j_s = json.dumps(j, sort_keys=True, indent=2)
+    t_s = json.dumps(t, sort_keys=True, indent=2)
+    print(j_s)
+    print(t_s)
+    print()
+    print(j_s == t_s)
 
-    if args.output is None:
-        print("Please specify output folder")
-        exit()
+# if __name__ == "__main__":
+#     parser = argparse.ArgumentParser(prog="migrateConfigs",description="A script to simplify config migration to the new format")
+#     parser.add_argument('filename', help="old config file location")
+#     parser.add_argument('-o', '--output', metavar='output_folder', help="folder to put the results in")
+#     args = parser.parse_args()
+#     parsed_file = load_file(args.filename)
 
-    save_config(args.output + "/charts.json", construct_charts(parsed_file))
-    save_config(args.output + "/layout.json", construct_layout(parsed_file))
-    save_config(args.output + "/update_schedule.json", construct_update_schedule(parsed_file))
+#     if args.output is None:
+#         print("Please specify output folder")
+#         exit()
+
+#     save_config(args.output + "/charts.json", construct_charts(parsed_file))
+#     save_config(args.output + "/layout.json", construct_layout(parsed_file))
+#     save_config(args.output + "/update_schedule.json", construct_update_schedule(parsed_file))
