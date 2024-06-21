@@ -8,6 +8,12 @@ pub struct AggregateTimer {
     recorded_time_secs: Duration,
 }
 
+impl Default for AggregateTimer {
+    fn default() -> Self {
+        AggregateTimer::new()
+    }
+}
+
 impl AggregateTimer {
     pub fn new() -> Self {
         Self {

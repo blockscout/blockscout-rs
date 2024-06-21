@@ -156,7 +156,7 @@ pub fn override_update_groups(
     for (group_name, added_settings) in source.schedules {
         match target.schedules.entry(group_name) {
             Entry::Vacant(v) => {
-                v.insert(added_settings.into());
+                v.insert(added_settings);
             }
             Entry::Occupied(mut o) => {
                 let target_group = o.get_mut();
