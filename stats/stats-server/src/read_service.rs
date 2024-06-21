@@ -66,7 +66,7 @@ fn add_settings_to_layout(
 ) -> Option<Vec<proto_v1::LineChartSection>> {
     layout
         .into_iter()
-        .map(|cat| cat.insert_settings(&settings))
+        .map(|cat| cat.intersect_settings(&settings))
         .collect()
 }
 

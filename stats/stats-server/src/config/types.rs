@@ -70,32 +70,27 @@ pub struct LineChartCategory {
 }
 
 impl LineChartCategory {
-    pub fn insert_settings(
+    /// Add settings to the charts within category.
+    ///
+    /// If the settings are not present - remove the chart (i.e. remove disabled
+    /// or nonexistent charts)
+    pub fn intersect_settings(
         self,
         settings: &BTreeMap<String, EnabledChartEntry>,
     ) -> Option<proto_v1::LineChartSection> {
-        let charts: Result<Vec<_>, String> = self
+        let charts: Vec<_> = self
             .charts_order
             .into_iter()
-            .map(|c: String| {
-                if let Some(e) = settings.get(&c) {
-                    Ok(LineChartInfo {
+            .flat_map(|c: String| {
+                settings.get(&c).map(|e| {
+                    LineChartInfo {
                         id: c,
                         settings: e.settings.clone(),
                     }
-                    .into())
-                } else {
-                    Err(c)
-                }
+                    .into()
+                })
             })
             .collect();
-        let charts = match charts {
-            Ok(c) => c,
-            Err(missing_settings) => {
-                tracing::error!("Did not find settings for chart {missing_settings}");
-                return None;
-            }
-        };
         Some(proto_v1::LineChartSection {
             id: self.id,
             title: self.title,

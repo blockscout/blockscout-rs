@@ -19,7 +19,7 @@ use std::{
 };
 use tokio::sync::Mutex;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct EnabledChartEntry {
     pub settings: EnabledChartSettings,
     /// Static information presented as dynamic object
