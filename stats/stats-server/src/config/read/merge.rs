@@ -215,15 +215,18 @@ mod tests {
         let mut json_config: json::charts::Config =
             serde_json::from_str(EXAMPLE_CHART_CONFIG).unwrap();
 
-        let env_override: env::charts::Config = config_from_env(HashMap::from_iter(
-            [
-                ("STATS_CHARTS__TEMPLATE_VALUES__NATIVE_COIN_SYMBOL", "USDC"),
-                ("STATS_CHARTS__COUNTERS__TOTAL_BLOCKS__ENABLED", "false"),
-                ("STATS_CHARTS__COUNTERS__TOTAL_TXNS__ENABLED", "true"),
-                ("STATS_CHARTS__LINE_CHARTS__TXNS_FEE__UNITS", "k USDC"),
-            ]
-            .map(|(a, b)| (a.to_owned(), b.to_owned())),
-        ))
+        let env_override: env::charts::Config = config_from_env(
+            "STATS_CHARTS",
+            HashMap::from_iter(
+                [
+                    ("STATS_CHARTS__TEMPLATE_VALUES__NATIVE_COIN_SYMBOL", "USDC"),
+                    ("STATS_CHARTS__COUNTERS__TOTAL_BLOCKS__ENABLED", "false"),
+                    ("STATS_CHARTS__COUNTERS__TOTAL_TXNS__ENABLED", "true"),
+                    ("STATS_CHARTS__LINE_CHARTS__TXNS_FEE__UNITS", "k USDC"),
+                ]
+                .map(|(a, b)| (a.to_owned(), b.to_owned())),
+            ),
+        )
         .unwrap();
 
         override_charts(&mut json_config, env_override).unwrap();
@@ -295,19 +298,21 @@ mod tests {
         let mut json_config: json::layout::Config =
             serde_json::from_str(EXAMPLE_LAYOUT_CONFIG).unwrap();
 
-        let env_override: env::layout::Config = config_from_env(HashMap::from_iter(
+        let env_override: env::layout::Config = config_from_env(
+            "STATS_LAYOUT",
+            HashMap::from_iter(
             [
-                ("STATS_CHARTS__COUNTERS_ORDER__TOTAL_BLOCKS", "256"),
+                ("STATS_LAYOUT__COUNTERS_ORDER__TOTAL_BLOCKS", "256"),
                 (
-                    "STATS_CHARTS__LINE_CHART_CATEGORIES__TRANSACTIONS__ORDER",
+                    "STATS_LAYOUT__LINE_CHART_CATEGORIES__TRANSACTIONS__ORDER",
                     "1",
                 ),
                 (
-                    "STATS_CHARTS__LINE_CHART_CATEGORIES__TRANSACTIONS__TITLE",
+                    "STATS_LAYOUT__LINE_CHART_CATEGORIES__TRANSACTIONS__TITLE",
                     "CoolTransactions",
                 ),
                 (
-                    "STATS_CHARTS__LINE_CHART_CATEGORIES__ACCOUNTS__CHARTS_ORDER__ACCOUNTS_GROWTH",
+                    "STATS_LAYOUT__LINE_CHART_CATEGORIES__ACCOUNTS__CHARTS_ORDER__ACCOUNTS_GROWTH",
                     "0",
                 ),
             ]
@@ -363,13 +368,22 @@ mod tests {
         let mut json_config: json::update_groups::Config =
             serde_json::from_str(EXAMPLE_SCHEDULE_CONFIG).unwrap();
 
-        let env_override: env::update_groups::Config = config_from_env(HashMap::from_iter(
-            [
-                ("STATS_CHARTS__SCHEDULES__TRANSACTIONS", "0 0 3 * * * *"),
-                ("STATS_CHARTS__SCHEDULES__NEW_CONTRACTS", "0 0 1 * * * *"),
-            ]
-            .map(|(a, b)| (a.to_owned(), b.to_owned())),
-        ))
+        let env_override: env::update_groups::Config = config_from_env(
+            "STATS_UPDATE_GROUPS",
+            HashMap::from_iter(
+                [
+                    (
+                        "STATS_UPDATE_GROUPS__SCHEDULES__TRANSACTIONS",
+                        "0 0 3 * * * *",
+                    ),
+                    (
+                        "STATS_UPDATE_GROUPS__SCHEDULES__NEW_CONTRACTS",
+                        "0 0 1 * * * *",
+                    ),
+                ]
+                .map(|(a, b)| (a.to_owned(), b.to_owned())),
+            ),
+        )
         .unwrap();
 
         override_update_groups(&mut json_config, env_override).unwrap();

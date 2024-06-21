@@ -21,8 +21,9 @@ mod tests {
     #[test]
     fn single_attribute_overwrite_works() {
         check_envs_parsed_to(
+            "STATS_UPDATE_GROUPS",
             [(
-                "STATS_CHARTS__SCHEDULES__AVERAGE_BLOCK_TIME".to_owned(),
+                "STATS_UPDATE_GROUPS__SCHEDULES__AVERAGE_BLOCK_TIME".to_owned(),
                 "0 0 15 * * * *".to_owned(),
             )]
             .into(),

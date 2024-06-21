@@ -97,6 +97,7 @@ mod tests {
         // purpose of env is to overwrite some attributes in existing configurations
         // therefore it should be possible to do it a granular manner
         check_envs_parsed_to(
+            "STATS_CHARTS",
             [(
                 "STATS_CHARTS__TEMPLATE_VALUES__NATIVE_COIN_SYMBOL".to_owned(),
                 "USDT".to_owned(),
@@ -117,6 +118,7 @@ mod tests {
     #[test]
     fn single_attribute_overwrite_works_for_line_charts() {
         check_envs_parsed_to(
+            "STATS_CHARTS",
             [(
                 "STATS_CHARTS__LINE_CHARTS__AVERAGE_TXN_FEE__DESCRIPTION".to_owned(),
                 "Some runtime-overwritten description".to_owned(),
@@ -139,6 +141,7 @@ mod tests {
         .unwrap();
 
         check_envs_parsed_to(
+            "STATS_CHARTS",
             [(
                 "STATS_CHARTS__LINE_CHARTS__AVERAGE_TXN_FEE__ENABLED".to_owned(),
                 "true".to_owned(),
@@ -164,6 +167,7 @@ mod tests {
     #[test]
     fn single_attribute_overwrite_works_for_counters() {
         check_envs_parsed_to(
+            "STATS_CHARTS",
             [(
                 "STATS_CHARTS__COUNTERS__AVERAGE_BLOCK_TIME__ENABLED".to_owned(),
                 "true".to_owned(),
@@ -229,6 +233,7 @@ mod tests {
         };
 
         check_envs_parsed_to(
+            "STATS_CHARTS",
             envs,
             Config {
                 counters: BTreeMap::from([("average_block_time".to_owned(), expected_counter)]),

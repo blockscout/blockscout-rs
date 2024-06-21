@@ -31,8 +31,9 @@ mod tests {
     #[test]
     fn single_attribute_overwrite_works_for_line() {
         check_envs_parsed_to(
+            "STATS_LAYOUT",
             [(
-                "STATS_CHARTS__LINE_CHART_CATEGORIES__TRANSACTIONS__CHARTS_ORDER__AVERAGE_TXN_FEE"
+                "STATS_LAYOUT__LINE_CHART_CATEGORIES__TRANSACTIONS__CHARTS_ORDER__AVERAGE_TXN_FEE"
                     .to_owned(),
                 "1".to_owned(),
             )]
@@ -52,8 +53,9 @@ mod tests {
         .unwrap();
 
         check_envs_parsed_to(
+            "STATS_LAYOUT",
             [(
-                "STATS_CHARTS__LINE_CHART_CATEGORIES__TRANSACTIONS__TITLE".to_owned(),
+                "STATS_LAYOUT__LINE_CHART_CATEGORIES__TRANSACTIONS__TITLE".to_owned(),
                 "Trans chart".to_owned(),
             )]
             .into(),
@@ -75,8 +77,9 @@ mod tests {
     #[test]
     fn single_attribute_overwrite_works_for_counters() {
         check_envs_parsed_to(
+            "STATS_LAYOUT",
             [(
-                "STATS_CHARTS__COUNTERS_ORDER__AVERAGE_BLOCK_TIME".to_owned(),
+                "STATS_LAYOUT__COUNTERS_ORDER__AVERAGE_BLOCK_TIME".to_owned(),
                 "1".to_owned(),
             )]
             .into(),
@@ -91,17 +94,17 @@ mod tests {
     #[test]
     fn arbitrary_envs_parsed_correctly() {
         let envs: HashMap<_, _> = [
-            ("STATS_CHARTS__COUNTERS_ORDER__AVERAGE_BLOCK_TIME", "1"),
+            ("STATS_LAYOUT__COUNTERS_ORDER__AVERAGE_BLOCK_TIME", "1"),
             (
-                "STATS_CHARTS__LINE_CHART_CATEGORIES__TRANSACTIONS__ORDER",
+                "STATS_LAYOUT__LINE_CHART_CATEGORIES__TRANSACTIONS__ORDER",
                 "123",
             ),
             (
-                "STATS_CHARTS__LINE_CHART_CATEGORIES__TRANSACTIONS__TITLE",
+                "STATS_LAYOUT__LINE_CHART_CATEGORIES__TRANSACTIONS__TITLE",
                 "Transactions",
             ),
             (
-                "STATS_CHARTS__LINE_CHART_CATEGORIES__TRANSACTIONS__CHARTS_ORDER__AVERAGE_TXN_FEE",
+                "STATS_LAYOUT__LINE_CHART_CATEGORIES__TRANSACTIONS__CHARTS_ORDER__AVERAGE_TXN_FEE",
                 "321",
             ),
         ]
@@ -115,6 +118,7 @@ mod tests {
         };
 
         check_envs_parsed_to(
+            "STATS_LAYOUT",
             envs,
             Config {
                 counters_order: BTreeMap::from([("average_block_time".to_owned(), 1)]),

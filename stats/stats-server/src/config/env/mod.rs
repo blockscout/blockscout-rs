@@ -16,11 +16,14 @@ pub mod test_utils {
     use pretty_assertions::Comparison;
     use std::collections::HashMap;
 
-    pub fn config_from_env<Config>(values: HashMap<String, String>) -> anyhow::Result<Config>
+    pub fn config_from_env<Config>(
+        prefix: &str,
+        values: HashMap<String, String>,
+    ) -> anyhow::Result<Config>
     where
         Config: serde::de::DeserializeOwned + std::fmt::Debug + PartialEq,
     {
-        let env_source = config::Environment::with_prefix("STATS_CHARTS")
+        let env_source = config::Environment::with_prefix(prefix)
             .separator("__")
             .try_parsing(true)
             .source(Some(values));
@@ -34,13 +37,14 @@ pub mod test_utils {
     // returns result to see the line where panic happens
     /// env prefix "STATS_CHARTS" is assumed
     pub fn check_envs_parsed_to<T>(
+        prefix: &str,
         env_values: std::collections::HashMap<String, String>,
         expected: T,
     ) -> anyhow::Result<()>
     where
         T: serde::de::DeserializeOwned + std::fmt::Debug + PartialEq,
     {
-        let config: T = config_from_env(env_values)?;
+        let config: T = config_from_env(prefix, env_values)?;
         if config != expected {
             return Err(anyhow::anyhow!(
                 "Parsed config does not match expected. Left = parsed, right = expected: {}",

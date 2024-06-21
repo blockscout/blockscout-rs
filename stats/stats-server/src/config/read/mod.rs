@@ -59,7 +59,7 @@ pub fn read_layout_config(path: &Path) -> Result<layout::Config, anyhow::Error> 
     let overridden_json_config = read_json_override_from_env_config::<
         json::layout::Config,
         env::layout::Config,
-    >(path, "STATS_CHARTS", override_layout)?;
+    >(path, "STATS_LAYOUT", override_layout)?;
     Ok(overridden_json_config.into())
 }
 
@@ -67,6 +67,6 @@ pub fn read_update_groups_config(path: &Path) -> Result<update_groups::Config, a
     let overridden_json_config = read_json_override_from_env_config::<
         json::update_groups::Config,
         env::update_groups::Config,
-    >(path, "STATS_CHARTS", override_update_groups)?;
+    >(path, "STATS_UPDATE_GROUPS", override_update_groups)?;
     Ok(overridden_json_config.into())
 }
