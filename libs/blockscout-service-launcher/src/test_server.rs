@@ -6,7 +6,7 @@ use std::{
     str::FromStr,
     time::Duration,
 };
-use tokio::time::timeout;
+use tokio::{task::JoinHandle, time::timeout};
 
 fn get_free_port() -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -22,7 +22,7 @@ pub fn get_test_server_settings() -> (ServerSettings, Url) {
     (server, base)
 }
 
-pub async fn init_server<F, R>(run: F, base: &Url)
+pub async fn init_server<F, R>(run: F, base: &Url) -> JoinHandle<Result<(), anyhow::Error>>
 where
     F: FnOnce() -> R + Send + 'static,
     R: Future<Output = Result<(), anyhow::Error>> + Send,
@@ -58,6 +58,8 @@ where
             }
         }
     }
+
+    server_handle
 }
 
 async fn send_annotated_request<Response: for<'a> serde::Deserialize<'a>>(
