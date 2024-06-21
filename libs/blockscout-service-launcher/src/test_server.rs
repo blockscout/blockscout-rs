@@ -27,7 +27,7 @@ where
     F: FnOnce() -> R + Send + 'static,
     R: Future<Output = Result<(), anyhow::Error>> + Send,
 {
-    tokio::spawn(async move { run().await });
+    let server_handle = tokio::spawn(async move { run().await });
 
     let client = reqwest::Client::new();
     let health_endpoint = base.join("health").unwrap();
@@ -46,7 +46,17 @@ where
     };
     // Wait for the server to start
     if (timeout(Duration::from_secs(10), wait_health_check).await).is_err() {
-        panic!("Server did not start in time");
+        match timeout(Duration::from_secs(1), server_handle).await {
+            Ok(Ok(result)) => {
+                panic!("Server terminated with: {result:?}")
+            }
+            Ok(Err(_)) => {
+                panic!("Server start terminated with exit error")
+            }
+            Err(_) => {
+                panic!("Server did not start in time, but did not terminate");
+            }
+        }
     }
 }
 
