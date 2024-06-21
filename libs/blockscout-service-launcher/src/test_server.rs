@@ -6,7 +6,7 @@ use std::{
     str::FromStr,
     time::Duration,
 };
-use tokio::time::timeout;
+use tokio::{task::JoinHandle, time::timeout};
 
 fn get_free_port() -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -22,12 +22,12 @@ pub fn get_test_server_settings() -> (ServerSettings, Url) {
     (server, base)
 }
 
-pub async fn init_server<F, R>(run: F, base: &Url)
+pub async fn init_server<F, R>(run: F, base: &Url) -> JoinHandle<Result<(), anyhow::Error>>
 where
     F: FnOnce() -> R + Send + 'static,
     R: Future<Output = Result<(), anyhow::Error>> + Send,
 {
-    tokio::spawn(async move { run().await });
+    let server_handle = tokio::spawn(async move { run().await });
 
     let client = reqwest::Client::new();
     let health_endpoint = base.join("health").unwrap();
@@ -46,8 +46,20 @@ where
     };
     // Wait for the server to start
     if (timeout(Duration::from_secs(10), wait_health_check).await).is_err() {
-        panic!("Server did not start in time");
+        match timeout(Duration::from_secs(1), server_handle).await {
+            Ok(Ok(result)) => {
+                panic!("Server terminated with: {result:?}")
+            }
+            Ok(Err(_)) => {
+                panic!("Server start terminated with exit error")
+            }
+            Err(_) => {
+                panic!("Server did not start in time, but did not terminate");
+            }
+        }
     }
+
+    server_handle
 }
 
 async fn send_annotated_request<Response: for<'a> serde::Deserialize<'a>>(
