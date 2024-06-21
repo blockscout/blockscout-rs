@@ -15,7 +15,7 @@ use crate::{
     },
     data_source::{source::DataSource, UpdateContext},
     utils::day_start,
-    MissingDatePolicy, UpdateError,
+    UpdateError,
 };
 
 pub struct LastPoint<D>(PhantomData<D>)
@@ -57,17 +57,13 @@ where
         )
         .await?;
         tracing::debug!("picking last point from dependency");
-        let last_point = data.into_iter().next_back().or_else(|| {
-            if D::missing_date_policy() == MissingDatePolicy::FillZero {
-                Some(DV::with_zero_value(cx.time.date_naive()))
-            } else {
-                None
-            }
-        });
-        let last_point = last_point.ok_or(UpdateError::Internal(format!(
-            "'{}' returned no data to choose last point from",
-            D::NAME
-        )))?;
+        let last_point = data
+            .into_iter()
+            .next_back()
+            // `None` from `query_data` means that there is absolutely no data
+            // in the dependency, which in all (current) cases means that
+            // the value is 0
+            .unwrap_or(DV::with_zero_value(cx.time.date_naive()));
         Ok(last_point)
     }
 }
