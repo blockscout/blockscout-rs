@@ -79,5 +79,6 @@ cargo run --bin stats-server
 Alternatively, you can use `docker-compose.dev.yml` for simplicity.
 
 + Set `ETHEREUM_JSONRPC_HTTP_URL` and `ETHEREUM_JSONRPC_TRACE_URL` to ethereum node you have access to (in `backend` (Blockscout) service)
++ Set `FIRST_BLOCK` to some quite-recent block for less load on the node
 + Update `ETHEREUM_JSONRPC_VARIANT` if necessary
 + Run `docker compose -f docker-compose.dev.yml up -d`
