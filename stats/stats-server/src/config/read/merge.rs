@@ -1,14 +1,14 @@
 //! Combination of env and json configs
 
 use anyhow::Context;
-use itertools::Itertools;
+use itertools::{Either, Itertools};
 
 use crate::config::{
     env::{self, charts::ChartSettingsOverwrite, layout::LineChartCategoryOrdered},
     json,
     types::{AllChartSettings, CounterInfo, LineChartCategory, LineChartInfo},
 };
-use std::collections::{btree_map::Entry, BTreeMap};
+use std::collections::{btree_map::Entry, BTreeMap, VecDeque};
 
 trait GetOrder {
     fn order(&self) -> Option<usize>;
@@ -64,28 +64,69 @@ fn override_ordered<T, S, F>(
     update_t: F,
 ) -> Result<(), anyhow::Error>
 where
-    T: GetKey,
+    T: GetKey + Clone,
     S: GetOrder,
     F: Fn(&mut T, S) -> Result<(), anyhow::Error>,
 {
-    let mut target_with_order: BTreeMap<String, (usize, T)> = std::mem::take(target)
+    // // Override values
+    // // ...
+
+    // // Override order
+    // let new_target = vec![];
+    // let overridden_orders: BTreeMap<_, _> = source.iter().filter_map(|(key, val)| Some((val.order()?, key))).collect();
+    // // they will be placed
+    // let keys_with_overridden_orders
+    // let mut i = 0;
+    // for item in target {
+    //     if source.
+    // }
+    // for (key, val_with_order) in source {
+    //     if let Some(target_val_idx) = target.iter().find_position(|val| val.key() == key) {
+    //         target.
+    //     };
+    //     update_t(target_val, val_with_order)
+    //         .context(format!("updating values for key: {}", key))?;
+    // }
+    let mut target_with_order: BTreeMap<String, (Option<usize>, T)> = std::mem::take(target)
         .into_iter()
-        .enumerate()
-        .map(|(i, t)| (t.key().to_owned(), (i, t)))
+        .map(|t| (t.key().to_owned(), (None, t)))
         .collect();
     for (key, val_with_order) in source {
         let Some((target_order, target_val)) = target_with_order.get_mut(&key) else {
             return Err(anyhow::anyhow!("Unknown key: {}", key));
         };
         if let Some(order_override) = val_with_order.order() {
-            *target_order = order_override;
+            *target_order = Some(order_override);
         }
         update_t(target_val, val_with_order)
             .context(format!("updating values for key: {}", key))?;
     }
-    let mut target_with_order = target_with_order.into_values().collect_vec();
-    target_with_order.sort_by_key(|t| t.0);
-    *target = target_with_order.into_iter().map(|t| t.1).collect();
+    let total_items = target_with_order.len();
+    let (mut target_overridden_order, mut target_default_order): (BTreeMap<usize, T>, VecDeque<T>) =
+        target_with_order.into_values().partition_map(|(order, v)| {
+            if let Some(o) = order {
+                Either::Left((o, v.clone()))
+            } else {
+                Either::Right(v.clone())
+            }
+        });
+    let new_target = {
+        let mut v = Vec::with_capacity(total_items);
+        for i in 0..total_items {
+            if let Some(value) = target_overridden_order.remove(&i) {
+                v.push(value)
+            } else {
+                if let Some(value) = target_default_order.pop_front() {
+                    v.push(value)
+                } else {
+                    v.extend(target_overridden_order.into_values());
+                    break;
+                }
+            }
+        }
+        v
+    };
+    *target = new_target;
     Ok(())
 }
 

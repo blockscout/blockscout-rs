@@ -26,6 +26,8 @@ macro_rules! singleton_groups {
     };
 }
 
+// Group for chart `Name` is called
+// `NameGroup`
 singleton_groups!(
     ActiveAccounts,
     AverageBlockRewards,
