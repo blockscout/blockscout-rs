@@ -3,7 +3,7 @@
 //! Currently the configs are read from json files. Values can be overridden with env variables
 //! for convenience.
 
-use merge::{override_charts, override_layout, override_update_schedule};
+use merge::{override_charts, override_layout, override_update_groups};
 use serde::{de::DeserializeOwned, Serialize};
 
 use super::{env, json, types::AllChartSettings};
@@ -12,7 +12,7 @@ use std::path::Path;
 pub mod charts;
 pub mod layout;
 mod merge;
-pub mod update_schedule;
+pub mod update_groups;
 
 fn read_json_override_from_env_config<JsonConfig, EnvConfig>(
     json_path: &Path,
@@ -63,10 +63,10 @@ pub fn read_layout_config(path: &Path) -> Result<layout::Config, anyhow::Error> 
     Ok(overridden_json_config.into())
 }
 
-pub fn read_update_schedule_config(path: &Path) -> Result<update_schedule::Config, anyhow::Error> {
+pub fn read_update_groups_config(path: &Path) -> Result<update_groups::Config, anyhow::Error> {
     let overridden_json_config = read_json_override_from_env_config::<
-        json::update_schedule::Config,
-        env::update_schedule::Config,
-    >(path, "STATS_CHARTS", override_update_schedule)?;
+        json::update_groups::Config,
+        env::update_groups::Config,
+    >(path, "STATS_CHARTS", override_update_groups)?;
     Ok(overridden_json_config.into())
 }

@@ -60,15 +60,15 @@ impl RuntimeSetup {
     pub fn new(
         charts: config::charts::Config<AllChartSettings>,
         layout: config::layout::Config,
-        update_schedule: config::update_schedule::Config,
+        update_groups: config::update_groups::Config,
     ) -> anyhow::Result<Self> {
-        Self::validated_and_initialized(charts, layout, update_schedule)
+        Self::validated_and_initialized(charts, layout, update_groups)
     }
 
     fn validated_and_initialized(
         charts: config::charts::Config<AllChartSettings>,
         layout: config::layout::Config,
-        update_schedule: config::update_schedule::Config,
+        update_groups: config::update_groups::Config,
     ) -> anyhow::Result<Self> {
         let enabled_charts_config = Self::remove_disabled_charts(charts);
         let enabled_counters = enabled_charts_config.counters.keys().cloned();
@@ -106,7 +106,7 @@ impl RuntimeSetup {
             ));
         }
 
-        let update_groups = Self::init_update_groups(update_schedule, &charts_info)?;
+        let update_groups = Self::init_update_groups(update_groups, &charts_info)?;
 
         Ok(Self {
             lines_layout: layout.line_chart_categories,
@@ -197,25 +197,17 @@ impl RuntimeSetup {
     }
 
     /// Returns more user-friendly errors
-    fn verify_schedule_config(
+    fn verify_groups_config(
         update_groups: &BTreeMap<String, ArcUpdateGroup>,
-        schedule_config: &config::update_schedule::Config,
+        update_groups_config: &config::update_groups::Config,
     ) -> anyhow::Result<()> {
         let all_names: HashSet<_> = update_groups.keys().collect();
-        let config_names: HashSet<_> = schedule_config.update_groups.keys().collect();
-        let missing_group_settings = all_names.difference(&config_names).collect_vec();
+        let config_names: HashSet<_> = update_groups_config.schedules.keys().collect();
         let unknown_group_settings = config_names.difference(&all_names).collect_vec();
-        let mut error_messages = Vec::new();
-        if !missing_group_settings.is_empty() {
-            error_messages.push(format!("Missing groups: {:?}", missing_group_settings));
-        }
         if !unknown_group_settings.is_empty() {
-            error_messages.push(format!("Unknown groups: {:?}", unknown_group_settings))
-        }
-        if !error_messages.is_empty() {
             return Err(anyhow::anyhow!(
-                "Failed to parse update schedule config: {}",
-                error_messages.join(", ")
+                "Unknown groups in update groups config: {:?}",
+                unknown_group_settings
             ));
         }
         Ok(())
@@ -264,7 +256,7 @@ impl RuntimeSetup {
 
     /// All initialization of update groups happens here
     fn init_update_groups(
-        schedule_config: config::update_schedule::Config,
+        groups_config: config::update_groups::Config,
         charts_info: &BTreeMap<String, EnabledChartEntry>,
     ) -> anyhow::Result<BTreeMap<String, UpdateGroupEntry>> {
         let update_groups = Self::all_update_groups();
@@ -273,14 +265,14 @@ impl RuntimeSetup {
         let mut result = BTreeMap::new();
 
         // checks that all groups are present in config.
-        Self::verify_schedule_config(&update_groups, &schedule_config)?;
+        Self::verify_groups_config(&update_groups, &groups_config)?;
         Self::warn_non_member_charts(&update_groups);
 
         for (name, group) in update_groups {
-            let group_config = schedule_config
-                .update_groups
+            let update_schedule = groups_config
+                .schedules
                 .get(&name)
-                .expect("config verification did not catch missing group config");
+                .map(|e| e.update_schedule.clone());
             let enabled_members = group
                 .list_charts()
                 .into_iter()
@@ -291,7 +283,7 @@ impl RuntimeSetup {
             result.insert(
                 name,
                 UpdateGroupEntry {
-                    update_schedule: group_config.update_schedule.clone(),
+                    update_schedule,
                     group: sync_group,
                     enabled_members,
                 },

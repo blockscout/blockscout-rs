@@ -149,20 +149,18 @@ pub fn override_layout(
 }
 
 /// Prioritize values from environment
-pub fn override_update_schedule(
-    target: &mut json::update_schedule::Config,
-    source: env::update_schedule::Config,
+pub fn override_update_groups(
+    target: &mut json::update_groups::Config,
+    source: env::update_groups::Config,
 ) -> Result<(), anyhow::Error> {
-    for (group_name, added_settings) in source.update_groups {
-        match target.update_groups.entry(group_name) {
+    for (group_name, added_settings) in source.schedules {
+        match target.schedules.entry(group_name) {
             Entry::Vacant(v) => {
                 v.insert(added_settings.into());
             }
             Entry::Occupied(mut o) => {
                 let target_group = o.get_mut();
-                target_group.update_schedule = added_settings
-                    .update_schedule
-                    .or(target_group.update_schedule.take());
+                target_group.update_schedule = added_settings.update_schedule;
             }
         }
     }
@@ -353,59 +351,39 @@ mod tests {
     }
 
     const EXAMPLE_SCHEDULE_CONFIG: &str = r#"{
-        "update_groups": {
-            "average_block_time": {
-                "update_schedule": "0 0 15 * * * *"
-            },
-            "transactions": {
-                "update_schedule": "0 0 7 * * * *"
-            },
-            "new_transactions_only": {
-                "update_schedule": "0 10 */3 * * * *"
-            }
+        "schedules": {
+            "average_block_time": "0 0 15 * * * *",
+            "transactions": "0 0 7 * * * *",
+            "new_transactions_only": "0 10 */3 * * * *"
         }
     }"#;
 
     #[test]
     fn schedule_overridden_correctly() {
-        let mut json_config: json::update_schedule::Config =
+        let mut json_config: json::update_groups::Config =
             serde_json::from_str(EXAMPLE_SCHEDULE_CONFIG).unwrap();
 
-        let env_override: env::update_schedule::Config = config_from_env(HashMap::from_iter(
+        let env_override: env::update_groups::Config = config_from_env(HashMap::from_iter(
             [
-                (
-                    "STATS_CHARTS__UPDATE_GROUPS__TRANSACTIONS__UPDATE_SCHEDULE",
-                    "0 0 3 * * * *",
-                ),
-                (
-                    "STATS_CHARTS__UPDATE_GROUPS__NEW_CONTRACTS__UPDATE_SCHEDULE",
-                    "0 0 1 * * * *",
-                ),
+                ("STATS_CHARTS__SCHEDULES__TRANSACTIONS", "0 0 3 * * * *"),
+                ("STATS_CHARTS__SCHEDULES__NEW_CONTRACTS", "0 0 1 * * * *"),
             ]
             .map(|(a, b)| (a.to_owned(), b.to_owned())),
         ))
         .unwrap();
 
-        override_update_schedule(&mut json_config, env_override).unwrap();
+        override_update_groups(&mut json_config, env_override).unwrap();
         let overridden_config = serde_json::to_value(json_config).unwrap();
 
-        let expected_config: json::update_schedule::Config = serde_json::from_str(
+        let expected_config: json::update_groups::Config = serde_json::from_str(
             r#"{
-            "update_groups": {
-                "average_block_time": {
-                    "update_schedule": "0 0 15 * * * *"
-                },
-                "transactions": {
-                    "update_schedule": "0 0 3 * * * *"
-                },
-                "new_transactions_only": {
-                    "update_schedule": "0 10 */3 * * * *"
-                },
-                "new_contracts": {
-                    "update_schedule": "0 0 1 * * * *"
+                "schedules": {
+                    "average_block_time": "0 0 15 * * * *",
+                    "transactions": "0 0 3 * * * *",
+                    "new_transactions_only": "0 10 */3 * * * *",
+                    "new_contracts": "0 0 1 * * * *"
                 }
-            }
-        }"#,
+            }"#,
         )
         .unwrap();
         let expected_config = serde_json::to_value(expected_config).unwrap();

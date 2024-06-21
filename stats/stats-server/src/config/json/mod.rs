@@ -2,4 +2,4 @@
 
 pub mod charts;
 pub mod layout;
-pub mod update_schedule;
+pub mod update_groups;

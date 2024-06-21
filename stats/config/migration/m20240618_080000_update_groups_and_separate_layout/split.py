@@ -199,7 +199,7 @@ def prompt_candidate_choice(group_name: str, candidates: list) -> int:
             continue
 
 
-def construct_update_schedule(parsed_config: dict) -> dict:
+def construct_update_groups(parsed_config: dict) -> dict:
     schedule_candidates = defaultdict(list)
     for chart_entry in all_charts_iter(parsed_config):
         id = chart_entry["id"]
@@ -211,7 +211,7 @@ def construct_update_schedule(parsed_config: dict) -> dict:
         if len(candidates) > 1:
             chosen_schedule = prompt_candidate_choice(group_name, candidates)
         update_schedule[group_name] = chosen_schedule[0]
-    return { "update_groups": update_schedule }
+    return { "schedules": update_schedule }
 
 def construct_layout(parsed_config: dict) -> dict:
     layout = {}
@@ -251,30 +251,17 @@ def save_config(path: str, config: dict):
     with open(path, 'x') as f:
         json.dump(config, f, indent=4)
 
-
 if __name__ == "__main__":
-    j = load_file("./charts.json")
-    t = load_file("./charts.toml")
-    j = render_json(j)
-    
-    j_s = json.dumps(j, sort_keys=True, indent=2)
-    t_s = json.dumps(t, sort_keys=True, indent=2)
-    print(j_s)
-    print(t_s)
-    print()
-    print(j_s == t_s)
+    parser = argparse.ArgumentParser(prog="migrateConfigs",description="A script to simplify config migration to the new format")
+    parser.add_argument('filename', help="old config file location")
+    parser.add_argument('-o', '--output', metavar='output_folder', help="folder to put the results in")
+    args = parser.parse_args()
+    parsed_file = load_file(args.filename)
 
-# if __name__ == "__main__":
-#     parser = argparse.ArgumentParser(prog="migrateConfigs",description="A script to simplify config migration to the new format")
-#     parser.add_argument('filename', help="old config file location")
-#     parser.add_argument('-o', '--output', metavar='output_folder', help="folder to put the results in")
-#     args = parser.parse_args()
-#     parsed_file = load_file(args.filename)
+    if args.output is None:
+        print("Please specify output folder")
+        exit()
 
-#     if args.output is None:
-#         print("Please specify output folder")
-#         exit()
-
-#     save_config(args.output + "/charts.json", construct_charts(parsed_file))
-#     save_config(args.output + "/layout.json", construct_layout(parsed_file))
-#     save_config(args.output + "/update_schedule.json", construct_update_schedule(parsed_file))
+    save_config(args.output + "/charts.json", construct_charts(parsed_file))
+    save_config(args.output + "/layout.json", construct_layout(parsed_file))
+    save_config(args.output + "/update_groups.json", construct_update_groups(parsed_file))

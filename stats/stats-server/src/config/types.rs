@@ -105,9 +105,9 @@ impl LineChartCategory {
 }
 
 #[serde_as]
-#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(default, deny_unknown_fields)]
-pub struct UpdateGroup {
-    #[serde_as(as = "Option<DisplayFromStr>")]
-    pub update_schedule: Option<Schedule>,
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields, transparent)]
+pub struct UpdateSchedule {
+    #[serde_as(as = "DisplayFromStr")]
+    pub update_schedule: Schedule,
 }

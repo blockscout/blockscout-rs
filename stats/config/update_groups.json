@@ -1,5 +1,5 @@
 {
-    "update_groups": {
+    "schedules": {
         "total_blocks_group": "0 0 */3 * * * *",
         "total_addresses_group": "0 0 */3 * * * *",
         "average_block_time_group": "0 0 15 * * * *",

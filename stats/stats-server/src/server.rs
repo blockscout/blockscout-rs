@@ -1,11 +1,12 @@
 use crate::{
-    config::{read_charts_config, read_layout_config, read_update_schedule_config},
+    config::{read_charts_config, read_layout_config, read_update_groups_config},
     health::HealthService,
     read_service::ReadService,
     runtime_setup::RuntimeSetup,
     settings::Settings,
     update_service::UpdateService,
 };
+use anyhow::Context;
 use blockscout_service_launcher::launcher::{self, LaunchSettings};
 use sea_orm::{ConnectOptions, Database};
 use stats_proto::blockscout::stats::v1::{
@@ -15,7 +16,6 @@ use stats_proto::blockscout::stats::v1::{
     stats_service_server::{StatsService, StatsServiceServer},
 };
 use std::sync::Arc;
-use tracing_subscriber::filter::FilterFn;
 
 const SERVICE_NAME: &str = "stats";
 
@@ -47,11 +47,13 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
         SERVICE_NAME,
         &settings.tracing,
         &settings.jaeger,
-        Some(FilterFn::new(|_| true)),
     )?;
-    let charts_config = read_charts_config(&settings.charts_config)?;
-    let layout_config = read_layout_config(&settings.layout_config)?;
-    let update_schedule = read_update_schedule_config(&settings.update_schedule_config)?;
+    let charts_config =
+        read_charts_config(&settings.charts_config).context("charts config read failed")?;
+    let layout_config =
+        read_layout_config(&settings.layout_config).context("layout config read failed")?;
+    let update_groups_config = read_update_groups_config(&settings.update_groups_config)
+        .context("update groups config read failed")?;
     let mut opt = ConnectOptions::new(settings.db_url.clone());
     opt.sqlx_logging_level(tracing::log::LevelFilter::Debug);
     blockscout_service_launcher::database::initialize_postgres::<stats::migration::Migrator>(
@@ -69,7 +71,7 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
     let charts = Arc::new(RuntimeSetup::new(
         charts_config,
         layout_config,
-        update_schedule,
+        update_groups_config,
     )?);
 
     // TODO: maybe run this with migrations or have special config

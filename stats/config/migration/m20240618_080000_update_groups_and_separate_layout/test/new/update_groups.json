@@ -1,5 +1,5 @@
 {
-    "update_groups": {
+    "schedules": {
         "average_block_time_group": "0 0 15 * * * *",
         "new_txns_group": "0 0 2 * * * *",
         "average_txn_fee_group": "0 0 6 * * * *",

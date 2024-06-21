@@ -32,12 +32,12 @@ rust_decimal = "1.27"
 # Dependencies for test-utils only
 pretty_assertions = { version= "1.2", optional = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
-blockscout-service-launcher = { version = "0.10.0", features = [ "database-0_12", "test-database" ], optional = true }
+blockscout-service-launcher = { version = "0.12.0", features = [ "database-0_12", "test-database" ], optional = true }
 
 [dev-dependencies]
 pretty_assertions = "1.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-blockscout-service-launcher = { version = "0.10.0", features = [ "database-0_12", "test-database" ] }
+blockscout-service-launcher = { version = "0.12.0", features = [ "database-0_12", "test-database" ] }
 rust_decimal = "1.27"
 rust_decimal_macros = "1.27"
 
