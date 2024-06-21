@@ -252,7 +252,7 @@ macro_rules! construct_update_group {
 
             // updates should be unique by group name & update time; this should allow to single out
             // one update process in logs
-            #[::tracing::instrument(skip_all, fields(update_group=self.name(), update_time), level = tracing::Level::ERROR)]
+            #[::tracing::instrument(skip_all, fields(update_group=self.name(), update_time), level = tracing::Level::INFO)]
             async fn update_charts<'a>(
                 &self,
                 params: $crate::data_source::UpdateParameters<'a>,
