@@ -1,4 +1,4 @@
-name: Docker reusable
+name: Docker build and docker push (reusable)
 
 on:
   workflow_call:
@@ -7,6 +7,9 @@ on:
         required: true
         type: string
       image-name:
+        required: true
+        type: string
+      service-name:
         required: true
         type: string
 
@@ -42,21 +45,21 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ inputs.registry }}/${{ inputs.image-name }}
-#
-#      - name: Set up Docker Buildx
-#        uses: docker/setup-buildx-action@v3
-#      - name: Build and push
-#        uses: docker/build-push-action@v5
-#        with:
-#          context: "visualizer"
-#          file: "visualizer/Dockerfile"
-#          build-contexts: |
-#            proto=proto
-#          push: ${{ steps.tags_extractor.outputs.tags != '' }}
-#          tags: ${{ steps.tags_extractor.outputs.tags }}
-#          # platforms: |
-#          #   linux/amd64
-#          #   linux/arm64/v8
-#          labels: ${{ steps.meta.outputs.labels }}
-#          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:build-cache
-#          cache-to: ${{ github.ref == 'refs/heads/main' && format('type=registry,ref={0}/{1}:build-cache,mode=max', env.REGISTRY, env.IMAGE_NAME) || '' }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ inputs.service-name }}
+          file: ${{ inputs.service-name }}/Dockerfile
+          build-contexts: |
+            proto=proto
+          push: ${{ steps.tags_extractor.outputs.tags != '' }}
+          tags: ${{ steps.tags_extractor.outputs.tags }}
+          # platforms: |
+          #   linux/amd64
+          #   linux/arm64/v8
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ inputs.registry }}/${{ inputs.image-name }}:build-cache
+          cache-to: ${{ github.ref == 'refs/heads/main' && format('type=registry,ref={0}/{1}:build-cache,mode=max', inputs.registry, inputs.image-name) || '' }}
