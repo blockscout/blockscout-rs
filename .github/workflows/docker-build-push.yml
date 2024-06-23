@@ -16,6 +16,7 @@ on:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    timeout-minutes: 300
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -24,7 +25,7 @@ jobs:
         id: regex
         with:
           text: ${{ github.ref }}
-          regex: '^(refs\/tags\/visualizer\/(v\d+\.\d+\.\d+))|(refs\/heads\/(main))$'
+          regex: '^(refs\/tags\/${{ inputs.service-name }}\/(v\d+\.\d+\.\d+))|(refs\/heads\/(main))$'
 
       - name: Extract tag name
         id: tags_extractor
