@@ -4,10 +4,14 @@ on:
   workflow_call:
     inputs:
       registry:
-        required: true
+        description: 'A container registry where the image is stored'
+        default: 'ghcr.io'
+        required: false
         type: string
-      image-name:
-        required: true
+      organization:
+        description: 'An organization the image is associated with'
+        default: 'blockscout'
+        required: false
         type: string
       service-name:
         required: true
@@ -17,6 +21,8 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     timeout-minutes: 300
+    env:
+      IMAGE_NAME: '${{ inputs.registry }}/${{ inputs.organization }}/${{ inputs.service-name }}'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -32,7 +38,7 @@ jobs:
         run: |
           t=${{ steps.regex.outputs.group2 }}
           m=${{ steps.regex.outputs.group4 }}
-          (if ! [[ "$t" == "" ]]; then echo tags=${{ inputs.registry }}/${{ inputs.image-name }}:$t, ${{ inputs.registry }}/${{ inputs.image-name }}:latest; elif ! [[ "$m" == "" ]]; then echo tags=${{ inputs.registry }}/${{ inputs.image-name }}:$m; else echo tags=; fi) >> $GITHUB_OUTPUT
+          (if ! [[ "$t" == "" ]]; then echo tags=${{ env.IMAGE_NAME }}:$t, ${{ env.IMAGE_NAME }}:latest; elif ! [[ "$m" == "" ]]; then echo tags=${{ env.IMAGE_NAME }}:$m; else echo tags=; fi) >> $GITHUB_OUTPUT
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
@@ -45,7 +51,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ inputs.registry }}/${{ inputs.image-name }}
+          images: ${{ env.IMAGE_NAME }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -53,7 +59,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ${{ inputs.service-name }}
-          file: ${{ inputs.service-name }}/Dockerfile
+          file: '${{ inputs.service-name }}/Dockerfile'
           build-contexts: |
             proto=proto
           push: ${{ steps.tags_extractor.outputs.tags != '' }}
@@ -62,5 +68,5 @@ jobs:
           #   linux/amd64
           #   linux/arm64/v8
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=${{ inputs.registry }}/${{ inputs.image-name }}:build-cache
-          cache-to: ${{ github.ref == 'refs/heads/main' && format('type=registry,ref={0}/{1}:build-cache,mode=max', inputs.registry, inputs.image-name) || '' }}
+          cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:build-cache
+          cache-to: ${{ github.ref == 'refs/heads/main' && format('type=registry,ref={0}:build-cache,mode=max', env.IMAGE_NAME) || '' }}
