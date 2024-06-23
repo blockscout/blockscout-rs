@@ -480,7 +480,7 @@ dependencies = [
 [[package]]
 name = "blockscout-service-health"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs?rev=1d7c72d6#1d7c72d6c1041d9352e33abc3864b69251408b6a"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=fe733cf#fe733cfadaa0cb3407f6f98c5186168b7377bfe9"
 dependencies = [
  "actix-prost",
  "actix-prost-build",
@@ -496,9 +496,9 @@ dependencies = [
 
 [[package]]
 name = "blockscout-service-launcher"
-version = "0.10.1"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89e47d2a34ea77ee36884f5b2b3224908836a239132c5ecb7b38a61705d3e0af"
+checksum = "a78f3c680d4ae2ad571097fc87d9cacf27f29bf0a4ecb5df10bd3845b62e8b65"
 dependencies = [
  "actix-cors",
  "actix-web",
