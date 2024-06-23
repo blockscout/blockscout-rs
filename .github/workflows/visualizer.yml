@@ -27,90 +27,90 @@ defaults:
     working-directory: visualizer
 
 jobs:
-  push:
-    name: Docker build and docker push
-#    needs:
-#      - test
-#      - lint
-#    if: |
-#      always() &&
-#      (needs.test.result == 'success' || needs.test.result == 'cancelled') &&
-#      (needs.lint.result == 'success' || needs.lint.result == 'cancelled')
-    uses: ./.github/workflows/docker-build-push.yml
-    with:
-      registry: ghcr.io
-      image-name: blockscout/visualizer
-      service-name: visualizer
+    test:
+      name: Unit, doc and integration tests
+      runs-on: ubuntu-latest
+      steps:
+        - name: Checkout sources
+          uses: actions/checkout@v4
 
-#  test:
-#    name: Unit, doc and integration tests
-#    runs-on: ubuntu-latest
-#    steps:
-#      - name: Checkout sources
-#        uses: actions/checkout@v4
-#
-#      - name: Install deps
-#        uses: ./.github/actions/deps
-#
-#      - uses: actions/setup-node@v3
-#        with:
-#          node-version: 16
-#
-#      - name: Install sol2uml
-#        run: |
-#          npm install phantom
-#          npm link sol2uml@2.1 --only=production
-#
-#      - name: Install toolchain
-#        uses: actions-rs/toolchain@v1
-#        with:
-#          toolchain: stable
-#          profile: minimal
-#          override: true
-#
-#      - name: Rust cache
-#        uses: Swatinem/rust-cache@v2
-#        with:
-#          cache-on-failure: true
-#          workspaces: visualizer -> target
-#
-#      - name: Unit tests
-#        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture
-#        if: success() || failure()
-#
-#      - name: Doc tests
-#        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --doc -- --skip proto
-#        if: success() || failure()
-#
-#      - name: Integration tests
-#        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --test '*' -- --nocapture
-#        if: success() || failure()
-#
-#  lint:
-#    name: Linting
-#    runs-on: ubuntu-latest
-#    steps:
-#      - name: Checkout sources
-#        uses: actions/checkout@v4
-#
-#      - name: Install deps
-#        uses: ./.github/actions/deps
-#
-#      - name: Install toolchain
-#        uses: actions-rs/toolchain@v1
-#        with:
-#          toolchain: stable
-#          profile: minimal
-#          components: rustfmt, clippy
-#          override: true
-#
-#      - uses: Swatinem/rust-cache@v2
-#        with:
-#          cache-on-failure: true
-#          workspaces: visualizer -> target
-#
-#      - name: cargo fmt
-#        run: cargo fmt --all -- --check --config imports_granularity=Crate
-#
-#      - name: cargo clippy
-#        run: cargo clippy --all --all-targets --all-features -- -D warnings
+        - name: Install deps
+          uses: ./.github/actions/deps
+
+        - uses: actions/setup-node@v3
+          with:
+            node-version: 16
+
+        - name: Install sol2uml
+          run: |
+            npm install phantom
+            npm link sol2uml@2.1 --only=production
+
+        - name: Install toolchain
+          uses: actions-rs/toolchain@v1
+          with:
+            toolchain: stable
+            profile: minimal
+            override: true
+
+        - name: Rust cache
+          uses: Swatinem/rust-cache@v2
+          with:
+            cache-on-failure: true
+            workspaces: visualizer -> target
+
+        - name: Unit tests
+          run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture
+          if: success() || failure()
+
+        - name: Doc tests
+          run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --doc -- --skip proto
+          if: success() || failure()
+
+        - name: Integration tests
+          run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --test '*' -- --nocapture
+          if: success() || failure()
+
+    lint:
+      name: Linting
+      runs-on: ubuntu-latest
+      steps:
+        - name: Checkout sources
+          uses: actions/checkout@v4
+
+        - name: Install deps
+          uses: ./.github/actions/deps
+
+        - name: Install toolchain
+          uses: actions-rs/toolchain@v1
+          with:
+            toolchain: stable
+            profile: minimal
+            components: rustfmt, clippy
+            override: true
+
+        - uses: Swatinem/rust-cache@v2
+          with:
+            cache-on-failure: true
+            workspaces: visualizer -> target
+
+        - name: cargo fmt
+          run: cargo fmt --all -- --check --config imports_granularity=Crate
+
+        - name: cargo clippy
+          run: cargo clippy --all --all-targets --all-features -- -D warnings
+
+    docker:
+      name: Docker build and docker push
+      needs:
+        - test
+        - lint
+      if: |
+        always() &&
+        (needs.test.result == 'success' || needs.test.result == 'cancelled') &&
+        (needs.lint.result == 'success' || needs.lint.result == 'cancelled')
+      uses: ./.github/workflows/docker-build-push.yml
+      with:
+        registry: ghcr.io
+        image-name: blockscout/visualizer
+        service-name: visualizer
