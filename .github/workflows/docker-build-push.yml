@@ -30,12 +30,12 @@ jobs:
           m=${{ steps.regex.outputs.group4 }}
           (if ! [[ "$t" == "" ]]; then echo tags=${{ inputs.registry }}/${{ inputs.image-name }}:$t, ${{ inputs.registry }}/${{ inputs.image-name }}:latest; elif ! [[ "$m" == "" ]]; then echo tags=${{ inputs.registry }}/${{ inputs.image-name }}:$m; else echo tags=; fi) >> $GITHUB_OUTPUT
 
-#      - name: Login to GitHub Container Registry
-#        uses: docker/login-action@v3
-#        with:
-#          registry: ${{ inputs.registry }}
-#          username: ${{ github.actor }}
-#          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ inputs.registry }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 #
 #      - name: Extract metadata for Docker
 #        id: meta
