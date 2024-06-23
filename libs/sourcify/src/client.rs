@@ -283,6 +283,8 @@ mod tests {
     fn client() -> Client {
         let rate_limiter = rate_limiter_middleware().clone();
         ClientBuilder::default()
+            .try_base_url("https://staging.sourcify.dev/server/")
+            .unwrap()
             .max_retries(3)
             .with_arc_middleware(rate_limiter)
             .build()
@@ -298,24 +300,24 @@ mod tests {
             "status": "full",
             "files": [
                 {
+                    "name": "Example.sol",
+                    "path": "contracts/full_match/11155111/0x4E7095a3519A33dF3D25774c2F9D7a89eB99745D/sources/contracts/Example.sol",
+                    "content": "library Lib {\n    function sum(uint256 a, uint256 b) external returns (uint256) {\n        return a + b;\n    }\n}\n\ncontract A {\n    function sum(uint256 a, uint256 b) external returns (uint256) {\n        return Lib.sum(a, b);\n    }\n}\n"
+                },
+                {
                     "name": "creator-tx-hash.txt",
-                    "path": "/home/app/repository/contracts/full_match/11155111/0x4E7095a3519A33dF3D25774c2F9D7a89eB99745D/creator-tx-hash.txt",
+                    "path": "contracts/full_match/11155111/0x4E7095a3519A33dF3D25774c2F9D7a89eB99745D/creator-tx-hash.txt",
                     "content": "0x4b511e8d9bcd56407bc348631d04a673b39c859a036e5cd49df7526a8de29b93"
                 },
                 {
                     "name": "library-map.json",
-                    "path": "/home/app/repository/contracts/full_match/11155111/0x4E7095a3519A33dF3D25774c2F9D7a89eB99745D/library-map.json",
-                    "content": "{\"__$50698f9fab9190debff1c0247749d3c3d0$__\":\"f145e3a26c6706f64d95dc8d9d45022d8b3d676b\"}"
+                    "path": "contracts/full_match/11155111/0x4E7095a3519A33dF3D25774c2F9D7a89eB99745D/library-map.json",
+                    "content": "{\"__$50698f9fab9190debff1c0247749d3c3d0$__\":\"0xf145e3a26c6706f64d95dc8d9d45022d8b3d676b\"}"
                 },
                 {
                     "name": "metadata.json",
-                    "path": "/home/app/repository/contracts/full_match/11155111/0x4E7095a3519A33dF3D25774c2F9D7a89eB99745D/metadata.json",
+                    "path": "contracts/full_match/11155111/0x4E7095a3519A33dF3D25774c2F9D7a89eB99745D/metadata.json",
                     "content": "{\"compiler\":{\"version\":\"0.8.20+commit.a1b79de6\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"a\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"b\",\"type\":\"uint256\"}],\"name\":\"sum\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}],\"devdoc\":{\"kind\":\"dev\",\"methods\":{},\"version\":1},\"userdoc\":{\"kind\":\"user\",\"methods\":{},\"version\":1}},\"settings\":{\"compilationTarget\":{\"contracts/Example.sol\":\"A\"},\"evmVersion\":\"istanbul\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]},\"sources\":{\"contracts/Example.sol\":{\"keccak256\":\"0x74f0b08e915377a73ed19a56ae3bfce73f4a75c2b9c76ce3c450c2e3f35ad730\",\"urls\":[\"bzz-raw://57df7d0de4fd2c829d638021ea6ed9845fe04c6ad68ed9bd516ca82295ffbfea\",\"dweb:/ipfs/QmR8QjtWYAW2RuyvZVKJMNS3Wp38rRQP33FxviuRdf1Vek\"]}},\"version\":1}"
-                },
-                {
-                    "name": "Example.sol",
-                    "path": "/home/app/repository/contracts/full_match/11155111/0x4E7095a3519A33dF3D25774c2F9D7a89eB99745D/sources/contracts/Example.sol",
-                    "content": "library Lib {\n    function sum(uint256 a, uint256 b) external returns (uint256) {\n        return a + b;\n    }\n}\n\ncontract A {\n    function sum(uint256 a, uint256 b) external returns (uint256) {\n        return Lib.sum(a, b);\n    }\n}\n"
                 }
             ]
         })).unwrap();

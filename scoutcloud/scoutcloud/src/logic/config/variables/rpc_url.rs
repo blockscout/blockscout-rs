@@ -17,7 +17,7 @@ impl UserVariable for RpcUrl {
 
     async fn build_config_vars(
         &self,
-        _config: &ConfigValidationContext,
+        context: &ConfigValidationContext,
     ) -> Result<Vec<ParsedVariable>, ConfigError> {
         let mut parsed = vec![];
 
@@ -72,19 +72,21 @@ impl UserVariable for RpcUrl {
             }
         };
 
-        // check websocket
-        if let Some(ws_url) = get_any_healthy_ws_url(self.0.clone())
-            .await
-            .map_err(ConfigError::Internal)?
-        {
-            parsed.push((
-                ParsedVariableKey::BackendEnv("ETHEREUM_JSONRPC_WS_URL".to_string()),
-                serde_json::Value::String(ws_url.to_string()),
-            ));
-        } else {
-            tracing::warn!(
-                "no valid websocket url found for `rpc_url`, skipping websocket configuration"
-            );
+        if !context.current_parsed_config.contains_key("rpc_ws_url") {
+            // check websocket
+            if let Some(ws_url) = get_any_healthy_ws_url(self.0.clone())
+                .await
+                .map_err(ConfigError::Internal)?
+            {
+                parsed.push((
+                    ParsedVariableKey::BackendEnv("ETHEREUM_JSONRPC_WS_URL".to_string()),
+                    serde_json::Value::String(ws_url.to_string()),
+                ));
+            } else {
+                tracing::warn!(
+                    "no valid websocket url found for `rpc_url`, skipping websocket configuration"
+                );
+            }
         }
         Ok(parsed)
     }

@@ -1,6 +1,12 @@
-use crate::subgraphs_reader::{blockscout::BlockscoutClient, NetworkInfo};
+use crate::{
+    blockscout::BlockscoutClient,
+    protocols::{Network, ProtocolInfo, Tld},
+    subgraphs_reader::SubgraphReader,
+};
 use ethers::types::TxHash;
-use std::collections::HashMap;
+use nonempty::nonempty;
+use sqlx::PgPool;
+use std::{collections::HashMap, sync::Arc};
 use wiremock::{
     matchers::{method, path},
     Mock, MockServer, ResponseTemplate,
@@ -87,7 +93,35 @@ pub async fn mocked_blockscout_client() -> BlockscoutClient {
     BlockscoutClient::new(url, 1, 30)
 }
 
-pub async fn mocked_networks_with_blockscout() -> HashMap<i64, NetworkInfo> {
+pub async fn mocked_networks_and_protocols(
+) -> (HashMap<i64, Network>, HashMap<String, ProtocolInfo>) {
     let client = mocked_blockscout_client().await;
-    HashMap::from_iter([(1, NetworkInfo::from_client(client))])
+    let networks = HashMap::from_iter([(
+        1,
+        Network {
+            blockscout_client: Arc::new(client),
+            use_protocols: nonempty!["ens".to_string()],
+        },
+    )]);
+
+    let protocols = HashMap::from_iter([(
+        "ens".to_string(),
+        ProtocolInfo {
+            slug: "ens".to_string(),
+            network_id: 1,
+            tld_list: nonempty![Tld::new("eth")],
+            subgraph_name: "ens-subgraph".to_string(),
+            ..Default::default()
+        },
+    )]);
+
+    (networks, protocols)
+}
+
+pub async fn mocked_reader(pool: PgPool) -> SubgraphReader {
+    let pool = Arc::new(pool);
+    let (networks, protocols) = mocked_networks_and_protocols().await;
+    SubgraphReader::initialize(pool.clone(), networks, protocols)
+        .await
+        .expect("failed to init reader")
 }

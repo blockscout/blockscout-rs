@@ -1,6 +1,7 @@
 use crate::{
     logic::{
-        deploy::deployment::map_deployment_status, DeployError, Deployment, Instance, UserToken,
+        deploy::deployment::{convert_deployment_from_logic, map_deployment_status},
+        DeployError, Deployment, Instance, UserToken,
     },
     server::proto,
     uuid_eq,
@@ -117,9 +118,11 @@ impl TryFrom<InstanceDeployment> for proto::InstanceInternal {
     type Error = DeployError;
 
     fn try_from(value: InstanceDeployment) -> Result<Self, Self::Error> {
-        let status = value.deployment_status();
         let instance = value.instance;
-        let deployment = value.deployment;
+        let deployment = value
+            .deployment
+            .map(|deployment| convert_deployment_from_logic(deployment, &instance))
+            .transpose()?;
         let user_config = instance.user_config()?;
         let proto_instance = proto::InstanceInternal {
             instance_id: instance.model.external_id.to_string(),
@@ -127,8 +130,7 @@ impl TryFrom<InstanceDeployment> for proto::InstanceInternal {
             slug: instance.model.slug.clone(),
             created_at: instance.model.created_at.to_string(),
             config: Some(user_config.internal),
-            deployment_id: deployment.as_ref().map(|d| d.model.external_id.to_string()),
-            deployment_status: status,
+            deployment,
         };
         Ok(proto_instance)
     }
@@ -140,18 +142,7 @@ impl TryFrom<InstanceDeployment> for proto::DeploymentInternal {
     fn try_from(value: InstanceDeployment) -> Result<Self, Self::Error> {
         let instance = value.instance;
         let deployment = value.deployment.ok_or(DeployError::DeploymentNotFound)?;
-        let config = deployment.user_config()?;
-        Ok(Self {
-            deployment_id: deployment.model.external_id.to_string(),
-            instance_id: instance.model.external_id.to_string(),
-            status: map_deployment_status(Some(&deployment.model.status)),
-            error: deployment.model.error,
-            created_at: deployment.model.created_at.to_string(),
-            started_at: deployment.model.started_at.map(|t| t.to_string()),
-            finished_at: deployment.model.finished_at.map(|t| t.to_string()),
-            config: Some(config.internal),
-            blockscout_url: deployment.model.instance_url,
-            total_cost: deployment.model.total_cost.to_string(),
-        })
+        let proto_deployment = convert_deployment_from_logic(deployment, &instance)?;
+        Ok(proto_deployment)
     }
 }

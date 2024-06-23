@@ -10,7 +10,7 @@ blockscout:
 
   env:
     HEART_BEAT_TIMEOUT: 30
-    HEALTHY_BLOCKS_PERIOD: 60
+    HEALTHY_BLOCKS_PERIOD: 720h
     TXS_STATS_DAYS_TO_COMPILE_AT_INIT: 10
     COIN_BALANCE_HISTORY_DAYS: 90
     POOL_SIZE: 200
@@ -29,6 +29,7 @@ blockscout:
     DISABLE_EXCHANGE_RATES: 'true'
     SOURCIFY_INTEGRATION_ENABLED: 'true'
     GRAPHIQL_TRANSACTION: 0xbf69c7abc4fee283b59a9633dadfdaedde5c5ee0fba3e80a08b5b8a3acbd4363
+
 frontend:
   enabled: true
   image:
@@ -64,3 +65,17 @@ postgresql:
     requests:
       cpu: 300m
       memory: 512Mi
+
+stats:
+  enabled: false
+  ingress:
+    enabled: false
+    tls:
+      enabled: true
+  resources:
+    limits:
+      memory: "0.1Gi"
+      cpu: "0.1"
+    requests:
+      memory: "0.1Gi"
+      cpu: "0.1"

@@ -1,0 +1,1 @@
+{{ ens_protocol | json_encode() | safe }}

@@ -176,6 +176,7 @@ impl TestCase for Flattened {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct MultiPart {
+    #[allow(unused)]
     pub deployed_bytecode: String,
     pub creation_bytecode: String,
     pub compiler_version: String,
@@ -254,6 +255,7 @@ impl TestCase for MultiPart {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct StandardJson {
+    #[allow(unused)]
     pub deployed_bytecode: String,
     pub creation_bytecode: String,
     pub compiler_version: String,

@@ -1,0 +1,13 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPath": "/api/v2/transactions/0x4dd7e3f4522fcf2483ae422fd007492380051d87de6fdb17be71c7134e26857e/internal-transactions"
+  },
+  "response": {
+    "status": 200,
+    "body": "{\"items\":[{\"block\":20077921,\"block_index\":750,\"created_contract\":null,\"error\":null,\"from\":{\"ens_domain_name\":null,\"hash\":\"0x90B0c836a19A74195d45Fad2d2D3895a7a3eab08\",\"implementation_name\":\"FeeRecipient_R1\",\"implementations\":[{\"name\":\"FeeRecipient_R1\"}],\"is_contract\":true,\"is_verified\":true,\"metadata\":null,\"name\":\"AdminUpgradeabilityProxy\",\"private_tags\":[],\"public_tags\":[],\"watchlist_names\":[]},\"gas_limit\":\"1514\",\"index\":1,\"success\":true,\"timestamp\":\"2024-06-12T19:45:23.000000Z\",\"to\":{\"ens_domain_name\":null,\"hash\":\"0x219A4E8f8c73d977F8d69596D434B5961068B26b\",\"implementation_name\":null,\"implementations\":[],\"is_contract\":true,\"is_verified\":true,\"metadata\":null,\"name\":\"FeeRecipient_R1\",\"private_tags\":[],\"public_tags\":[],\"watchlist_names\":[]},\"transaction_hash\":\"0x4dd7e3f4522fcf2483ae422fd007492380051d87de6fdb17be71c7134e26857e\",\"type\":\"delegatecall\",\"value\":\"2498258890879368298\"}],\"next_page_params\":null}",
+    "headers": {
+      "Content-Type": "application/json"
+    }
+  }
+}

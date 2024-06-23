@@ -36,6 +36,7 @@ pub struct Domain {
     pub created_at: BigDecimal,
     pub expiry_date: Option<chrono::DateTime<Utc>>,
     pub is_expired: bool,
+    pub protocol_slug: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, sqlx::FromRow)]
@@ -49,6 +50,7 @@ pub struct DomainWithAddress {
 pub struct ReverseRecord {
     pub addr_reverse_id: String,
     pub reversed_name: String,
+    pub protocol_id: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, sqlx::FromRow)]

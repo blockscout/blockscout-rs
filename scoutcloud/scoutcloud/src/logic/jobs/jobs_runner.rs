@@ -1,5 +1,5 @@
 use crate::logic::{
-    jobs::{balance::CheckBalanceTask, StartingTask, StoppingTask},
+    jobs::{balance::CheckBalanceTask, supervisor::SuperviseTask, StartingTask, StoppingTask},
     DeployError, GithubClient,
 };
 use anyhow::Context;
@@ -39,7 +39,7 @@ impl JobsRunner {
             sleep_step: Duration::from_secs(1),
         };
         let runner = Self::start_pool(fang_db_url, sleep_params).await?;
-        runner.schedule_tasks().await?;
+        runner.schedule_all_background_tasks().await?;
         Ok(runner)
     }
 
@@ -73,9 +73,10 @@ impl JobsRunner {
         Ok(Self { queue })
     }
 
-    pub async fn schedule_tasks(&self) -> Result<(), anyhow::Error> {
+    pub async fn schedule_all_background_tasks(&self) -> Result<(), anyhow::Error> {
         let queue = self.queue.lock().await;
         queue.schedule_task(&CheckBalanceTask::default()).await?;
+        queue.schedule_task(&SuperviseTask::default()).await?;
         Ok(())
     }
 

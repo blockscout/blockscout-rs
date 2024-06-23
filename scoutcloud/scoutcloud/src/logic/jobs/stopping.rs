@@ -34,7 +34,7 @@ impl StoppingTask {
 #[typetag::serde]
 #[fang::async_trait]
 impl AsyncRunnable for StoppingTask {
-    #[tracing::instrument(err(Debug), skip(_client), level = "info")]
+    #[tracing::instrument(err(Debug), skip(_client), level = "debug")]
     async fn run(&self, _client: &dyn AsyncQueueable) -> Result<(), FangError> {
         let db = global::DATABASE.get().await;
         let github = global::GITHUB.get().await;
@@ -49,7 +49,7 @@ impl AsyncRunnable for StoppingTask {
 
         // todo: save run_id to database and if deployment in stopping state, watch for it
         let result = match deployment.model.status {
-            DeploymentStatusType::Running => {
+            DeploymentStatusType::Running | DeploymentStatusType::Unhealthy => {
                 self.github_stop_and_wait(db.as_ref(), github.as_ref(), &instance, &mut deployment)
                     .await
             }

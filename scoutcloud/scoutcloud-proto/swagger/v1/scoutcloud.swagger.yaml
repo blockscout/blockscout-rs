@@ -1,10 +1,18 @@
 swagger: "2.0"
 info:
-  title: v1/scoutcloud.proto
-  version: version not set
+  title: Scoutcloud service
+  version: 0.1.1
+  contact:
+    name: Blockscout
+    url: https://blockscout.com
+    email: support@blockscout.com
 tags:
+  - name: Instances
+  - name: Deployments
+  - name: Users
   - name: Scoutcloud
   - name: Health
+host: scoutcloud.services.blockscout.com
 consumes:
   - application/json
 produces:
@@ -12,6 +20,7 @@ produces:
 paths:
   /api/v1/deployments/{deployment_id}:
     get:
+      summary: Get detailed information about specific deployment
       operationId: Scoutcloud_GetDeployment
       responses:
         "200":
@@ -28,9 +37,12 @@ paths:
           required: true
           type: string
       tags:
-        - Scoutcloud
+        - Deployments
+      security:
+        - ApiKeyAuth: []
   /api/v1/instances:
     get:
+      summary: Get list of all owned instances
       operationId: Scoutcloud_ListInstances
       responses:
         "200":
@@ -42,8 +54,11 @@ paths:
           schema:
             $ref: '#/definitions/rpcStatus'
       tags:
-        - Scoutcloud
+        - Instances
+      security:
+        - ApiKeyAuth: []
     post:
+      summary: Creating blockscout instance with config
       operationId: Scoutcloud_CreateInstance
       responses:
         "200":
@@ -61,9 +76,12 @@ paths:
           schema:
             $ref: '#/definitions/v1CreateInstanceRequest'
       tags:
-        - Scoutcloud
+        - Instances
+      security:
+        - ApiKeyAuth: []
   /api/v1/instances/{instance_id}:
     get:
+      summary: Get detailed information of the instance
       operationId: Scoutcloud_GetInstance
       responses:
         "200":
@@ -80,8 +98,11 @@ paths:
           required: true
           type: string
       tags:
-        - Scoutcloud
+        - Instances
+      security:
+        - ApiKeyAuth: []
     delete:
+      summary: Delete instance
       operationId: Scoutcloud_DeleteInstance
       responses:
         "200":
@@ -98,9 +119,12 @@ paths:
           required: true
           type: string
       tags:
-        - Scoutcloud
+        - Instances
+      security:
+        - ApiKeyAuth: []
   /api/v1/instances/{instance_id}/config:
     put:
+      summary: Update configuration of blockscout instance
       operationId: Scoutcloud_UpdateConfig
       responses:
         "200":
@@ -122,8 +146,11 @@ paths:
           schema:
             $ref: '#/definitions/ScoutcloudUpdateConfigBody'
       tags:
-        - Scoutcloud
+        - Instances
+      security:
+        - ApiKeyAuth: []
     patch:
+      summary: Update configuration of blockscout instance (partially)
       operationId: Scoutcloud_UpdateConfigPartial
       responses:
         "200":
@@ -145,9 +172,12 @@ paths:
           schema:
             $ref: '#/definitions/ScoutcloudUpdateConfigPartialBody'
       tags:
-        - Scoutcloud
+        - Instances
+      security:
+        - ApiKeyAuth: []
   /api/v1/instances/{instance_id}/deployments:
     get:
+      summary: Get list of deployments of the instance
       operationId: Scoutcloud_ListDeployments
       responses:
         "200":
@@ -164,9 +194,12 @@ paths:
           required: true
           type: string
       tags:
-        - Scoutcloud
+        - Deployments
+      security:
+        - ApiKeyAuth: []
   /api/v1/instances/{instance_id}/deployments/current:
     get:
+      summary: Get detailed information about current deployment of the instance
       operationId: Scoutcloud_GetCurrentDeployment
       responses:
         "200":
@@ -183,9 +216,12 @@ paths:
           required: true
           type: string
       tags:
-        - Scoutcloud
+        - Deployments
+      security:
+        - ApiKeyAuth: []
   /api/v1/instances/{instance_id}/status:update:
     post:
+      summary: Start or finish the instance
       operationId: Scoutcloud_UpdateInstanceStatus
       responses:
         "200":
@@ -207,9 +243,51 @@ paths:
           schema:
             $ref: '#/definitions/ScoutcloudUpdateInstanceStatusBody'
       tags:
-        - Scoutcloud
+        - Instances
+      security:
+        - ApiKeyAuth: []
+  /api/v1/users/auth-tokens:
+    get:
+      summary: Get list of all auth tokens for current account
+      operationId: Scoutcloud_ListAuthTokens
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListAuthTokensResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - Users
+      security:
+        - ApiKeyAuth: []
+    post:
+      summary: Generate auth api token for current account
+      operationId: Scoutcloud_CreateAuthToken
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1AuthToken'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1CreateAuthTokenRequest'
+      tags:
+        - Users
+      security:
+        - ApiKeyAuth: []
   /api/v1/users/profile:
     get:
+      summary: Get information about current account
       operationId: Scoutcloud_GetProfile
       responses:
         "200":
@@ -221,7 +299,30 @@ paths:
           schema:
             $ref: '#/definitions/rpcStatus'
       tags:
-        - Scoutcloud
+        - Users
+      security:
+        - ApiKeyAuth: []
+  /api/v1/users/profile:register:
+    post:
+      summary: Register new profile
+      operationId: Scoutcloud_RegisterProfile
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1RegisterProfileResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1RegisterProfileRequest'
+      tags:
+        - Users
   /health:
     get:
       summary: |-
@@ -259,16 +360,22 @@ definitions:
     properties:
       config:
         $ref: '#/definitions/v1DeployConfig'
+    required:
+      - config
   ScoutcloudUpdateConfigPartialBody:
     type: object
     properties:
       config:
         $ref: '#/definitions/v1DeployConfigPartial'
+    required:
+      - config
   ScoutcloudUpdateInstanceStatusBody:
     type: object
     properties:
       action:
         $ref: '#/definitions/v1UpdateInstanceAction'
+    required:
+      - action
   protobufAny:
     type: object
     properties:
@@ -288,6 +395,26 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/protobufAny'
+  v1AuthToken:
+    type: object
+    properties:
+      name:
+        type: string
+      token_value:
+        type: string
+      created_at:
+        type: string
+    required:
+      - name
+      - token_value
+      - created_at
+  v1CreateAuthTokenRequest:
+    type: object
+    properties:
+      name:
+        type: string
+    required:
+      - name
   v1CreateInstanceRequest:
     type: object
     properties:
@@ -296,11 +423,16 @@ definitions:
       config:
         $ref: '#/definitions/v1DeployConfig'
         title: initial config
+    required:
+      - name
+      - config
   v1CreateInstanceResponse:
     type: object
     properties:
       instance_id:
         type: string
+    required:
+      - instance_id
   v1DeleteInstanceResponse:
     type: object
   v1DeployConfig:
@@ -332,6 +464,17 @@ definitions:
         type: string
       is_testnet:
         type: boolean
+      stats_enabled:
+        type: boolean
+      rpc_ws_url:
+        type: string
+      public_rpc_url:
+        type: string
+      wallet_connect_project_id:
+        type: string
+    required:
+      - rpc_url
+      - server_size
   v1DeployConfigPartial:
     type: object
     properties:
@@ -361,6 +504,14 @@ definitions:
         type: string
       is_testnet:
         type: boolean
+      stats_enabled:
+        type: boolean
+      rpc_ws_url:
+        type: string
+      public_rpc_url:
+        type: string
+      wallet_connect_project_id:
+        type: string
   v1Deployment:
     type: object
     properties:
@@ -384,6 +535,13 @@ definitions:
         type: string
       total_cost:
         type: string
+    required:
+      - deployment_id
+      - instance_id
+      - status
+      - created_at
+      - config
+      - total_cost
   v1DeploymentStatus:
     type: string
     enum:
@@ -394,6 +552,7 @@ definitions:
       - STOPPING
       - STOPPED
       - FAILED
+      - UNHEALTHY
     default: NO_STATUS
   v1HealthCheckResponse:
     type: object
@@ -405,8 +564,6 @@ definitions:
     properties:
       instance_id:
         type: string
-      deployment_id:
-        type: string
       name:
         type: string
       slug:
@@ -415,8 +572,25 @@ definitions:
         type: string
       config:
         $ref: '#/definitions/v1DeployConfig'
-      deployment_status:
-        $ref: '#/definitions/v1DeploymentStatus'
+      deployment:
+        $ref: '#/definitions/v1Deployment'
+    required:
+      - instance_id
+      - name
+      - slug
+      - created_at
+      - config
+      - deployment
+  v1ListAuthTokensResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1AuthToken'
+    required:
+      - items
   v1ListDeploymentsResponse:
     type: object
     properties:
@@ -425,6 +599,8 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1Deployment'
+    required:
+      - items
   v1ListInstancesResponse:
     type: object
     properties:
@@ -433,11 +609,34 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1Instance'
+    required:
+      - items
+  v1RegisterProfileRequest:
+    type: object
+    properties:
+      email:
+        type: string
+      project_title:
+        type: string
+      promo:
+        type: string
+    required:
+      - email
+      - project_title
+  v1RegisterProfileResponse:
+    type: object
+    properties:
+      profile:
+        $ref: '#/definitions/v1UserProfile'
+      initial_token:
+        $ref: '#/definitions/v1AuthToken'
   v1UpdateConfigResponse:
     type: object
     properties:
       config:
         $ref: '#/definitions/v1DeployConfig'
+    required:
+      - config
   v1UpdateInstanceAction:
     type: string
     enum:
@@ -452,6 +651,9 @@ definitions:
         $ref: '#/definitions/v1DeploymentStatus'
       deployment_id:
         type: string
+    required:
+      - status
+      - deployment_id
   v1UserAction:
     type: object
     properties:
@@ -461,6 +663,9 @@ definitions:
         type: string
       timestamp:
         type: string
+    required:
+      - action
+      - timestamp
   v1UserProfile:
     type: object
     properties:
@@ -477,3 +682,16 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1UserAction'
+    required:
+      - email
+      - created_at
+      - balance
+      - recent_actions
+securityDefinitions:
+  ApiKeyAuth:
+    type: apiKey
+    name: x-api-key
+    in: header
+externalDocs:
+  description: More about blockscout microservices
+  url: https://github.com/blockscout/blockscout-rs
