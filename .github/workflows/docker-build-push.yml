@@ -36,12 +36,12 @@ jobs:
           registry: ${{ inputs.registry }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-#
-#      - name: Extract metadata for Docker
-#        id: meta
-#        uses: docker/metadata-action@v5
-#        with:
-#          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ inputs.registry }}/${{ inputs.image-name }}
 #
 #      - name: Set up Docker Buildx
 #        uses: docker/setup-buildx-action@v3
