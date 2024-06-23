@@ -17,19 +17,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-#      - uses: actions-ecosystem/action-regex-match@v2
-#        id: regex
-#        with:
-#          text: ${{ github.ref }}
-#          regex: '^(refs\/tags\/visualizer\/(v\d+\.\d+\.\d+))|(refs\/heads\/(main))$'
-#
-#      - name: Extract tag name
-#        id: tags_extractor
-#        run: |
-#          t=${{ steps.regex.outputs.group2 }}
-#          m=${{ steps.regex.outputs.group4 }}
-#          (if ! [[ "$t" == "" ]]; then echo tags=${{ inputs.registry }}/${{ inputs.image-name }}:$t, ${{ inputs.registry }}/${{ inputs.image-name }}:latest; elif ! [[ "$m" == "" ]]; then echo tags=${{ inputs.registry }}/${{ inputs.image-name }}:$m; else echo tags=; fi) >> $GITHUB_OUTPUT
-#
+      - uses: actions-ecosystem/action-regex-match@v2
+        id: regex
+        with:
+          text: ${{ github.ref }}
+          regex: '^(refs\/tags\/visualizer\/(v\d+\.\d+\.\d+))|(refs\/heads\/(main))$'
+
+      - name: Extract tag name
+        id: tags_extractor
+        run: |
+          t=${{ steps.regex.outputs.group2 }}
+          m=${{ steps.regex.outputs.group4 }}
+          (if ! [[ "$t" == "" ]]; then echo tags=${{ inputs.registry }}/${{ inputs.image-name }}:$t, ${{ inputs.registry }}/${{ inputs.image-name }}:latest; elif ! [[ "$m" == "" ]]; then echo tags=${{ inputs.registry }}/${{ inputs.image-name }}:$m; else echo tags=; fi) >> $GITHUB_OUTPUT
+
 #      - name: Login to GitHub Container Registry
 #        uses: docker/login-action@v3
 #        with:
