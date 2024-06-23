@@ -111,6 +111,4 @@ jobs:
 #        (needs.lint.result == 'success' || needs.lint.result == 'cancelled')
       uses: ./.github/workflows/docker-build-push.yml
       with:
-        registry: ghcr.io
-        organization: blockscout
         service-name: visualizer
