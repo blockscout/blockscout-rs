@@ -39,8 +39,8 @@ jobs:
 #    timeout-minutes: 300
     uses: ./.github/workflows/docker-build-push.yml
     with:
-      registry: ${{ env.REGISTRY }}
-      image-name: ${{ env.IMAGE_NAME }}
+      registry: ghcr.io
+      image-name: blockscout/visualizer
 
 #  test:
 #    name: Unit, doc and integration tests
