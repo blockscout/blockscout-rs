@@ -41,6 +41,7 @@ jobs:
     with:
       registry: ghcr.io
       image-name: blockscout/visualizer
+      service-name: visualizer
 
 #  test:
 #    name: Unit, doc and integration tests
