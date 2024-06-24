@@ -4,7 +4,7 @@ use crate::{
     charts::db_interaction::types::DateValueInt,
     data_source::{
         kinds::{
-            data_manipulation::map::{MapParseTo, MapToString},
+            data_manipulation::map::MapParseTo,
             local_db::{
                 parameters::{
                     update::batching::{
@@ -21,7 +21,7 @@ use crate::{
     },
     missing_date::trim_out_of_range_sorted,
     utils::sql_with_range_filter_opt,
-    ChartProperties, Named, UpdateError,
+    ChartProperties, DateValueString, Named, UpdateError,
 };
 
 use entity::sea_orm_active_enums::ChartType;
@@ -42,7 +42,7 @@ impl StatementFromRange for NewAccountsStatement {
             r#"
                 SELECT
                     first_tx.date as date,
-                    count(*) as value
+                    count(*)::TEXT as value
                 FROM (
                     SELECT DISTINCT ON (t.from_address_hash)
                         b.timestamp::date as date
@@ -65,14 +65,14 @@ impl StatementFromRange for NewAccountsStatement {
 pub struct NewAccountsQueryBehaviour;
 
 impl QueryBehaviour for NewAccountsQueryBehaviour {
-    type Output = Vec<DateValueInt>;
+    type Output = Vec<DateValueString>;
 
     async fn query_data(
         cx: &UpdateContext<'_>,
         range: Option<RangeInclusive<DateTimeUtc>>,
-    ) -> Result<Vec<DateValueInt>, UpdateError> {
+    ) -> Result<Vec<DateValueString>, UpdateError> {
         let query = NewAccountsStatement::get_statement(range.clone());
-        let mut data = DateValueInt::find_by_statement(query)
+        let mut data = DateValueString::find_by_statement(query)
             .all(cx.blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?;
@@ -93,8 +93,6 @@ impl QueryBehaviour for NewAccountsQueryBehaviour {
 /// Thus, use max batch size in the dependant data sources.
 pub type NewAccountsRemote = RemoteDatabaseSource<NewAccountsQueryBehaviour>;
 
-pub type NewAccountsRemoteString = MapToString<NewAccountsRemote>;
-
 pub struct Properties;
 
 impl Named for Properties {
@@ -108,11 +106,11 @@ impl ChartProperties for Properties {
 }
 
 pub type NewAccounts = LocalDbChartSource<
-    NewAccountsRemoteString,
+    NewAccountsRemote,
     (),
     DefaultCreate<Properties>,
     BatchUpdate<
-        NewAccountsRemoteString,
+        NewAccountsRemote,
         (),
         PassVecStep,
         // see `NewAccountsRemote` docs
