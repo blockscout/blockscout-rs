@@ -1,9 +1,6 @@
-use crate::{
-    config::{
-        self,
-        types::{AllChartSettings, EnabledChartSettings, LineChartCategory},
-    },
-    update_groups,
+use crate::config::{
+    self,
+    types::{AllChartSettings, EnabledChartSettings, LineChartCategory},
 };
 use cron::Schedule;
 use itertools::Itertools;
@@ -152,7 +149,8 @@ impl RuntimeSetup {
     }
 
     fn all_update_groups() -> Vec<ArcUpdateGroup> {
-        use update_groups::*;
+        use stats::update_groups::*;
+
         vec![
             // singletons
             Arc::new(ActiveAccountsGroup),

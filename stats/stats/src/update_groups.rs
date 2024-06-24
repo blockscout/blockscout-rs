@@ -1,4 +1,4 @@
-use stats::{
+use crate::{
     construct_update_group,
     counters::{
         AverageBlockTime, CompletedTxns, LastNewContracts, LastNewVerifiedContracts, TotalAccounts,

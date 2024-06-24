@@ -5,8 +5,6 @@ mod runtime_setup;
 mod serializers;
 mod server;
 mod settings;
-mod update_groups;
-// mod sync;
 mod update_service;
 
 pub use read_service::ReadService;

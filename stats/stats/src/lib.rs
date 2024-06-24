@@ -4,6 +4,7 @@ pub mod data_source;
 pub mod metrics;
 mod missing_date;
 pub mod update_group;
+pub mod update_groups;
 pub(crate) mod utils;
 
 #[cfg(any(feature = "test-utils", test))]
