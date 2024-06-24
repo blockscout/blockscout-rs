@@ -68,25 +68,7 @@ where
     S: GetOrder,
     F: Fn(&mut T, S) -> Result<(), anyhow::Error>,
 {
-    // // Override values
-    // // ...
-
-    // // Override order
-    // let new_target = vec![];
-    // let overridden_orders: BTreeMap<_, _> = source.iter().filter_map(|(key, val)| Some((val.order()?, key))).collect();
-    // // they will be placed
-    // let keys_with_overridden_orders
-    // let mut i = 0;
-    // for item in target {
-    //     if source.
-    // }
-    // for (key, val_with_order) in source {
-    //     if let Some(target_val_idx) = target.iter().find_position(|val| val.key() == key) {
-    //         target.
-    //     };
-    //     update_t(target_val, val_with_order)
-    //         .context(format!("updating values for key: {}", key))?;
-    // }
+    // Override values and order
     let mut target_with_order: BTreeMap<String, (Option<usize>, T)> = std::mem::take(target)
         .into_iter()
         .map(|t| (t.key().to_owned(), (None, t)))
@@ -101,6 +83,7 @@ where
         update_t(target_val, val_with_order)
             .context(format!("updating values for key: {}", key))?;
     }
+    // Sort according to original & overridden order
     let total_items = target_with_order.len();
     let (mut target_overridden_order, mut target_default_order): (BTreeMap<usize, T>, VecDeque<T>) =
         target_with_order.into_values().partition_map(|(order, v)| {
