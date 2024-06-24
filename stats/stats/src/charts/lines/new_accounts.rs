@@ -20,6 +20,7 @@ use crate::{
         UpdateContext,
     },
     missing_date::trim_out_of_range_sorted,
+    utils::sql_with_range_filter_opt,
     ChartProperties, Named, UpdateError,
 };
 
@@ -30,52 +31,34 @@ pub struct NewAccountsStatement;
 
 impl StatementFromRange for NewAccountsStatement {
     fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
-        // we want to consider the time at range end; thus optional
-        // filter
-        if let Some(range) = range {
-            Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
-                        SELECT
-                            first_tx.date as date,
-                            count(*) as value
-                        FROM (
-                            SELECT DISTINCT ON (t.from_address_hash)
-                                b.timestamp::date as date
-                            FROM transactions  t
-                            JOIN blocks        b ON t.block_hash = b.hash
-                            WHERE
-                                b.timestamp != to_timestamp(0) AND
-                                b.consensus = true AND
-                                b.timestamp <= $1
-                            ORDER BY t.from_address_hash, b.timestamp
-                        ) first_tx
-                        GROUP BY first_tx.date;
-                    "#,
-                vec![(*range.end()).into()],
-            )
-        } else {
-            Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
-                        SELECT
-                            first_tx.date as date,
-                            count(*) as value
-                        FROM (
-                            SELECT DISTINCT ON (t.from_address_hash)
-                                b.timestamp::date as date
-                            FROM transactions  t
-                            JOIN blocks        b ON t.block_hash = b.hash
-                            WHERE
-                                b.timestamp != to_timestamp(0) AND
-                                b.consensus = true
-                            ORDER BY t.from_address_hash, b.timestamp
-                        ) first_tx
-                        GROUP BY first_tx.date;
-                    "#,
-                vec![],
-            )
-        }
+        // `MIN_UTC` does not fit into postgres' timestamp. Unix epoch start should be enough
+        let min_timestamp = DateTimeUtc::UNIX_EPOCH;
+        // All transactions from the beginning must be considered to calculate new accounts correctly.
+        // E.g. if account was first active both before `range.start()` and within the range,
+        // we don't want to count it within the range (as it's not a *new* account).
+        let range = range.map(|r| (min_timestamp..=r.into_inner().1));
+        sql_with_range_filter_opt!(
+            DbBackend::Postgres,
+            r#"
+                SELECT
+                    first_tx.date as date,
+                    count(*) as value
+                FROM (
+                    SELECT DISTINCT ON (t.from_address_hash)
+                        b.timestamp::date as date
+                    FROM transactions  t
+                    JOIN blocks        b ON t.block_hash = b.hash
+                    WHERE
+                        b.timestamp != to_timestamp(0) AND
+                        b.consensus = true {filter}
+                    ORDER BY t.from_address_hash, b.timestamp
+                ) first_tx
+                GROUP BY first_tx.date;
+            "#,
+            [],
+            "b.timestamp",
+            range
+        )
     }
 }
 
