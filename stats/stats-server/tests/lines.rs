@@ -37,11 +37,11 @@ async fn test_lines_ok() {
         .collect();
     let expected_sections = [
         "accounts",
-        "transactions",
         "blocks",
-        "tokens",
-        "gas",
         "contracts",
+        "gas",
+        "tokens",
+        "transactions",
     ];
     assert_eq!(sections, expected_sections, "wrong sections response");
 
