@@ -63,7 +63,7 @@ fn map_read_error(err: ReadError) -> Status {
 fn add_settings_to_layout(
     layout: Vec<types::LineChartCategory>,
     settings: BTreeMap<String, EnabledChartEntry>,
-) -> Option<Vec<proto_v1::LineChartSection>> {
+) -> Vec<proto_v1::LineChartSection> {
     layout
         .into_iter()
         .map(|cat| cat.intersect_settings(&settings))
@@ -151,9 +151,7 @@ impl StatsService for ReadService {
     ) -> Result<Response<proto_v1::LineCharts>, Status> {
         let layout = self.charts.lines_layout.clone();
         let settings = self.charts.charts_info.clone();
-        let sections = add_settings_to_layout(layout, settings).ok_or(
-            Status::internal(""), // todo: request id??
-        )?;
+        let sections = add_settings_to_layout(layout, settings);
 
         Ok(Response::new(proto_v1::LineCharts { sections }))
     }

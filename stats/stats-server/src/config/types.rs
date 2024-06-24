@@ -77,7 +77,7 @@ impl LineChartCategory {
     pub fn intersect_settings(
         self,
         settings: &BTreeMap<String, EnabledChartEntry>,
-    ) -> Option<proto_v1::LineChartSection> {
+    ) -> proto_v1::LineChartSection {
         let charts: Vec<_> = self
             .charts_order
             .into_iter()
@@ -91,11 +91,11 @@ impl LineChartCategory {
                 })
             })
             .collect();
-        Some(proto_v1::LineChartSection {
+        proto_v1::LineChartSection {
             id: self.id,
             title: self.title,
             charts,
-        })
+        }
     }
 }
 
