@@ -115,13 +115,11 @@ where
         for i in 0..total_items {
             if let Some(value) = target_overridden_order.remove(&i) {
                 v.push(value)
+            } else if let Some(value) = target_default_order.pop_front() {
+                v.push(value)
             } else {
-                if let Some(value) = target_default_order.pop_front() {
-                    v.push(value)
-                } else {
-                    v.extend(target_overridden_order.into_values());
-                    break;
-                }
+                v.extend(target_overridden_order.into_values());
+                break;
             }
         }
         v
