@@ -55,7 +55,7 @@ Unchanged variables:
 - `STATS_CHARTS__COUNTERS__<NAME>__*` (except `..__UPDATE_SCHEDULE`) 
 - `STATS_CHARTS__TEMPLATE_VALUES__*`
 
-Here are instructions on migrating the envs:
+Below are instructions on migrating other env variables.
 
 #### Update schedule
 
@@ -77,12 +77,17 @@ Line charts:
 
 Counters' settings are not touched.
 
-Line charts:
-
-- Old name - `STATS_CHARTS__LINES__<1>__CHARTS__<2>__*` (except schedule)
+- Old name - `STATS_CHARTS__LINES__<1>__CHARTS__<2>__*` (except `..__UPDATE_SCHEDULE`)
 - New name - `STATS_CHARTS__LINE_CHARTS__<2>__*`
 
 #### Line chart layout
+
+Category settings:
+
+- Old - `STATS_CHARTS__LINES__<1>__TITLE` or `STATS_CHARTS__LINES__<1>__ORDER`
+- New - `STATS_LAYOUT__LINE_CHART_CATEGORIES__<1>__TITLE` or `STATS_LAYOUT__LINE_CHART_CATEGORIES__<1>__ORDER`
+
+Chart location (order) in category:
 
 - Old - `STATS_CHARTS__LINES__<1>__CHARTS__<2>` (i.e. chart `2` is in category `1`)
 - New - `STATS_LAYOUT__LINE_CHART_CATEGORIES__<1>__CHARTS_ORDER__<2>=N`
