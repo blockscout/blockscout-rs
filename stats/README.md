@@ -35,21 +35,37 @@ stats-server
 
 ### Env
 
-| Variable                        | Description                                          | Default value        |
-| ------------------------------- | ---------------------------------------------------- | -------------------- |
-| STATS__DB_URL                   | Postgres URL to stats db                             | ''                   |
-| STATS__BLOCKSCOUT_DB_URL        | Postgres URL to blockscout db                        | ''                   |
-| STATS__CREATE_DATABASE          | Boolean. Creates database on start                   | false                |
-| STATS__RUN_MIGRATIONS           | Boolean. Runs migrations on start                    | false                |
-| STATS__CHARTS_CONFIG            | Path to charts.toml config file                      | ./config/charts.toml |
-| STATS__FORCE_UPDATE_ON_START    | Boolean. Fully recalculates all charts on start      | false                |
-| STATS__CONCURRENT_START_UPDATES | Integer. Amount of concurrent charts update on start | 3                    |
+| Variable                        | Description                                          | Default value               |
+| ------------------------------- | ---------------------------------------------------- | --------------------------- |
+| STATS__DB_URL                   | Postgres URL to stats db                             | ''                          |
+| STATS__BLOCKSCOUT_DB_URL        | Postgres URL to blockscout db                        | ''                          |
+| STATS__CREATE_DATABASE          | Boolean. Creates database on start                   | false                       |
+| STATS__RUN_MIGRATIONS           | Boolean. Runs migrations on start                    | false                       |
+| STATS__CHARTS_CONFIG            | Path to `charts.json` config file                    | ./config/charts.json        |
+| STATS__LAYOUT_CONFIG            | Path to `layout.json` config file                    | ./config/layout.json        |
+| STATS__UPDATE_GROUPS_CONFIG     | Path to `update_groups.json` config file             | ./config/update_groups.json |
+| STATS__FORCE_UPDATE_ON_START    | Boolean. Fully recalculates all charts on start      | false                       |
+| STATS__CONCURRENT_START_UPDATES | Integer. Amount of concurrent charts update on start | 3                           |
 
-### Charts config
+### Config
 
-Blockscout provides a collection of predefined charts to visualize statistics. You can enable or disable these charts by modifying the charts.toml file. The default configuration for the charts can be found [here](./config/charts.toml). You can use this file as a template for customization.
+Blockscout provides a collection of predefined charts to visualize statistics. You can enable or disable these charts by modifying the `charts.json` file. Layout of the charts (which is returned by the server) is configurable in `layout.json`. Schedule of updated charts for each group is set up in `update_groups.json`. 
 
-To remove unnecessary or unrelated charts, simply open the `charts.toml` file and delete the corresponding chart entries. In addition to modifying the `charts.toml` file, it is important to provide the `STATS__CHARTS_CONFIG` variable with the path to the updated configuration file.
+The default configurations can be found [here](./config/). You can use these files as a base for customization.
+
+If non-default config files are used, respective environment variables (e.g. `STATS__CHARTS_CONFIG`) should be set to the new files.
+
+#### Charts parameters
+
+To disable unnecessary charts, open the `charts.json` file and set `enabled: false` for them. Other parameters can also be set/modified there. 
+
+#### Layout configuration
+
+Categories for line charts, category metadata, and chart order within category are set in `layout.json`.
+
+#### Update groups config
+
+Charts dependant on each other are combined in update groups. Charts within one update group are updated **together** according to their dependency relations. Updates are scheduled for each such group in `update_groups.json` file.
 
 ## For development
 
@@ -69,7 +85,7 @@ just start-postgres
 
 ```console
 export STATS__RUN_MIGRATIONS=true
-export STATS__DB_URl="postgres://postgres:admin@localhost:5432/stats"
+export STATS__DB_URL="postgres://postgres:admin@localhost:5432/stats"
 export STATS__BLOCKSCOUT_DB_URL="postgres://postgres:admin@localhost:5432/blockscout" 
 cargo run --bin stats-server
 ```
