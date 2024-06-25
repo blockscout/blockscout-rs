@@ -15,6 +15,7 @@ use sea_orm::{
     ActiveValue::Set,
     DatabaseConnection, DatabaseTransaction, EntityTrait, TransactionTrait,
 };
+use sha3::{Digest, Keccak256, Sha3_256};
 use smart_contract_verifier_proto::{
     blockscout::smart_contract_verifier::v2::{VerifyResponse, VerifySolidityStandardJsonRequest},
     http_client::mock::{MockSolidityVerifierService, SmartContractVerifierServer},
@@ -249,31 +250,40 @@ async fn insert_contract(
 
     contracts::ActiveModel {
         id: Default::default(),
-        creation_code_hash: Set(creation_code_hash.0.to_vec()),
-        runtime_code_hash: Set(runtime_code_hash.0.to_vec()),
+        creation_code_hash: Set(creation_code_hash.clone()),
+        runtime_code_hash: Set(runtime_code_hash.clone()),
     }
     .insert(txn)
     .await
     .unwrap_or_else(|err| {
         panic!(
             "insertion of a contract failed; \
-            creation_code_hash: {creation_code_hash}, \
-            runtime_code_hash: {runtime_code_hash}, \
-            err: {err}"
+            creation_code_hash: {}, \
+            runtime_code_hash: {}, \
+            err: {err}",
+            hex::encode(&creation_code_hash),
+            hex::encode(&runtime_code_hash)
         )
     })
     .id
 }
 
-async fn insert_code(txn: &DatabaseTransaction, code: Vec<u8>) -> keccak_hash::H256 {
-    let code_hash = keccak_hash::keccak(&code);
+async fn insert_code(txn: &DatabaseTransaction, code: Vec<u8>) -> Vec<u8> {
+    let code_hash = Sha3_256::digest(&code).to_vec();
+    let code_hash_keccak = Keccak256::digest(&code).to_vec();
     code::ActiveModel {
-        code_hash: Set(code_hash.0.to_vec()),
+        code_hash: Set(code_hash.clone()),
+        code_hash_keccak: Set(code_hash_keccak),
         code: Set(Some(code)),
     }
     .insert(txn)
     .await
-    .unwrap_or_else(|err| panic!("insertion of a code failed; code_hash: {code_hash}, err: {err}"));
+    .unwrap_or_else(|err| {
+        panic!(
+            "insertion of a code failed; code_hash: {}, err: {err}",
+            hex::encode(&code_hash)
+        )
+    });
     code_hash
 }
 
@@ -366,12 +376,8 @@ async fn check_compiled_contract(db: &DatabaseConnection, test_case: &TestCase) 
         .expect("The data has not been added into `compiled_contracts` table");
 
     let test_case_sources = serde_json::to_value(test_case.sources.clone()).unwrap();
-    let test_case_creation_code_hash = keccak_hash::keccak(&test_case.compiled_creation_code)
-        .0
-        .to_vec();
-    let test_case_runtime_code_hash = keccak_hash::keccak(&test_case.compiled_runtime_code)
-        .0
-        .to_vec();
+    let test_case_creation_code_hash = Sha3_256::digest(&test_case.compiled_creation_code).to_vec();
+    let test_case_runtime_code_hash = Sha3_256::digest(&test_case.compiled_runtime_code).to_vec();
 
     assert_eq!(
         test_case.compiler, compiled_contract.compiler,

@@ -7,6 +7,7 @@ use sea_orm::{
     entity::prelude::ColumnTrait, ActiveValue::Set, ConnectionTrait, DatabaseConnection,
     EntityTrait, QueryFilter, TransactionTrait,
 };
+use sha3::{Digest, Keccak256, Sha3_256};
 use verifier_alliance_entity::{
     code, compiled_contracts, contract_deployments, contracts, verified_contracts,
 };
@@ -346,19 +347,16 @@ async fn insert_code<C: ConnectionTrait>(
     db: &C,
     code: Vec<u8>,
 ) -> Result<code::Model, anyhow::Error> {
-    let code_hash = keccak_hash::keccak(&code);
+    let code_hash = Sha3_256::digest(&code).to_vec();
+    let code_hash_keccak = Keccak256::digest(&code).to_vec();
 
     let active_model = code::ActiveModel {
-        code_hash: Set(code_hash.0.to_vec()),
+        code_hash: Set(code_hash.clone()),
+        code_hash_keccak: Set(code_hash_keccak),
         code: Set(Some(code)),
     };
-    let (code, _inserted) = insert_then_select!(
-        db,
-        code,
-        active_model,
-        false,
-        [(CodeHash, code_hash.0.to_vec())]
-    )?;
+    let (code, _inserted) =
+        insert_then_select!(db, code, active_model, false, [(CodeHash, code_hash)])?;
 
     Ok(code)
 }
