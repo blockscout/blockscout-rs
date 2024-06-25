@@ -9,6 +9,7 @@ use sea_orm::{
     ColumnTrait, DatabaseConnection, DatabaseTransaction, EntityTrait, QueryFilter,
     TransactionTrait,
 };
+use sha3::{Digest, Keccak256, Sha3_256};
 use std::{path::PathBuf, sync::Arc};
 use verification_test_helpers::{
     verifier_alliance_setup::{Setup, SetupData},
@@ -250,10 +251,10 @@ async fn insert_contract(
     runtime_code: Vec<u8>,
 ) -> Uuid {
     let creation_code_hash = match creation_code {
-        Some(creation_code) => insert_code(txn, creation_code).await.0.to_vec(),
+        Some(creation_code) => insert_code(txn, creation_code).await,
         None => Vec::new(),
     };
-    let runtime_code_hash = insert_code(txn, runtime_code).await.0.to_vec();
+    let runtime_code_hash = insert_code(txn, runtime_code).await;
 
     contracts::ActiveModel {
         id: Default::default(),
@@ -275,15 +276,22 @@ async fn insert_contract(
     .id
 }
 
-async fn insert_code(txn: &DatabaseTransaction, code: Vec<u8>) -> keccak_hash::H256 {
-    let code_hash = keccak_hash::keccak(&code);
+async fn insert_code(txn: &DatabaseTransaction, code: Vec<u8>) -> Vec<u8> {
+    let code_hash = Sha3_256::digest(&code).to_vec();
+    let code_hash_keccak = Keccak256::digest(&code).to_vec();
     code::ActiveModel {
-        code_hash: Set(code_hash.0.to_vec()),
+        code_hash: Set(code_hash.clone()),
+        code_hash_keccak: Set(code_hash_keccak),
         code: Set(Some(code)),
     }
     .insert(txn)
     .await
-    .unwrap_or_else(|err| panic!("insertion of a code failed; code_hash: {code_hash}, err: {err}"));
+    .unwrap_or_else(|err| {
+        panic!(
+            "insertion of a code failed; code_hash: {}, err: {err}",
+            hex::encode(&code_hash)
+        )
+    });
     code_hash
 }
 

@@ -1,4 +1,5 @@
 use super::TransformationStatus;
+use sha3::{Digest, Keccak256};
 use verifier_alliance_entity::verified_contracts;
 
 pub fn derive_transaction_hash(
@@ -14,7 +15,7 @@ pub fn derive_transaction_hash(
                 .into_iter()
                 .chain(runtime_code.unwrap_or_default())
                 .collect();
-            Some(keccak_hash::keccak(combined_hash).0.to_vec())
+            Some(Keccak256::digest(combined_hash).to_vec())
         }
         None => None,
     }

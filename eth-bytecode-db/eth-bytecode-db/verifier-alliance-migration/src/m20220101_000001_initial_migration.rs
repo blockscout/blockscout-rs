@@ -24,7 +24,7 @@ impl MigrationTrait for Migration {
 
 fn get_table_definitions() -> Vec<String> {
     let sql = r#"
-        /* Needed for gen_random_uuid() */
+        /* Needed for gen_random_uuid() and digest(..) */
         CREATE EXTENSION pgcrypto;
 
         /*
@@ -41,15 +41,29 @@ fn get_table_definitions() -> Vec<String> {
         */
         CREATE TABLE code
         (
-            /* the keccak256 hash of the `code` column */
+            /* the sha3-256 hash of the `code` column */
             code_hash   bytea NOT NULL PRIMARY KEY,
+
+            /*
+                 the keccak256 hash of the `code` column
+
+                 can be useful for lookups, as keccak256 is more common for Ethereum
+                 but we cannot use it as a primary key because postgres does not support the keccak256, and
+                 we cannot guarantee at the database level that provided value is the correct `code` hash
+            */
+            code_hash_keccak bytea NOT NULL,
 
             /* the bytecode */
             code    bytea
+
+            CONSTRAINT code_hash_check
+                CHECK (code IS NOT NULL and code_hash = digest(code, 'sha3-256') or code IS NULL and code_hash = '\x')
         );
 
+        CREATE INDEX code_code_hash_keccak ON code USING btree(code_hash_keccak);
+
         /* ensure the sentinel value exists */
-        INSERT INTO code (code_hash, code) VALUES ('\x', NULL);
+        INSERT INTO code (code_hash, code_hash_keccak, code) VALUES ('\x', '\x', NULL);
 
         /*
             The `contracts` table stores information which can be used to identify a unique contract in a
