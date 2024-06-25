@@ -4143,7 +4143,6 @@ dependencies = [
  "stats",
  "stats-proto",
  "tokio",
- "toml",
  "tonic",
  "tracing",
  "tracing-subscriber",
