@@ -2,7 +2,6 @@ use crate::config::types::UpdateSchedule;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-// #[serde_as]
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {

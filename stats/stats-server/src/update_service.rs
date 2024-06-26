@@ -79,7 +79,7 @@ impl UpdateService {
 
     async fn update(self: Arc<Self>, group_entry: UpdateGroupEntry, force_full: bool) {
         tracing::info!(
-            // instrumentation is inside `construct_update_group`'s update
+            // instrumentation is inside `update_charts_with_mutexes`
             update_group = group_entry.group.name(),
             force_update = force_full,
             "updating group of charts"

@@ -15,18 +15,18 @@ impl StatementForOne for TotalAddressesStatement {
         Statement::from_string(
             DbBackend::Postgres,
             r#"
-                    SELECT
-                        date, value
-                    FROM ( 
-                        SELECT (
-                            SELECT COUNT(*)::TEXT as value FROM addresses
-                        ), (
-                            SELECT MAX(b.timestamp)::DATE AS date
-                            FROM blocks b
-                            WHERE b.consensus = true
-                        )
-                    ) as sub
-                "#,
+                SELECT
+                    date, value
+                FROM ( 
+                    SELECT (
+                        SELECT COUNT(*)::TEXT as value FROM addresses
+                    ), (
+                        SELECT MAX(b.timestamp)::DATE AS date
+                        FROM blocks b
+                        WHERE b.consensus = true
+                    )
+                ) as sub
+            "#,
         )
     }
 }

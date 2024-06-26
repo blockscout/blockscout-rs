@@ -16,26 +16,26 @@ impl StatementForOne for CompletedTxnsStatement {
         Statement::from_string(
             DbBackend::Postgres,
             r#"
-                    SELECT
-                        (all_success - all_success_dropped)::TEXT AS value,
-                        last_block_date AS date 
-                    FROM (
-                        SELECT (
-                            SELECT COUNT(*) AS all_success
-                            FROM transactions t
-                            WHERE t.status = 1
-                        ), (
-                            SELECT COUNT(*) as all_success_dropped
-                            FROM transactions t
-                            JOIN blocks b ON t.block_hash = b.hash
-                            WHERE t.status = 1 AND b.consensus = false
-                        ), (
-                            SELECT MAX(b.timestamp)::DATE AS last_block_date
-                            FROM blocks b
-                            WHERE b.consensus = true
-                        )
-                    ) AS sub
-                "#,
+                SELECT
+                    (all_success - all_success_dropped)::TEXT AS value,
+                    last_block_date AS date 
+                FROM (
+                    SELECT (
+                        SELECT COUNT(*) AS all_success
+                        FROM transactions t
+                        WHERE t.status = 1
+                    ), (
+                        SELECT COUNT(*) as all_success_dropped
+                        FROM transactions t
+                        JOIN blocks b ON t.block_hash = b.hash
+                        WHERE t.status = 1 AND b.consensus = false
+                    ), (
+                        SELECT MAX(b.timestamp)::DATE AS last_block_date
+                        FROM blocks b
+                        WHERE b.consensus = true
+                    )
+                ) AS sub
+            "#,
         )
     }
 }

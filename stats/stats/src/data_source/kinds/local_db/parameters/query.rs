@@ -14,7 +14,7 @@ pub struct DefaultQueryVec<C: ChartProperties>(PhantomData<C>);
 impl<C: ChartProperties> QueryBehaviour for DefaultQueryVec<C> {
     type Output = Vec<DateValueString>;
 
-    /// Retrieve chart data from (local) storage.
+    /// Retrieve chart data from local storage.
     ///
     /// Note that the data might have missing points for efficiency reasons.
     async fn query_data(
@@ -49,9 +49,6 @@ pub struct DefaultQueryLast<C: ChartProperties>(PhantomData<C>);
 impl<C: ChartProperties> QueryBehaviour for DefaultQueryLast<C> {
     type Output = DateValueString;
 
-    /// Retrieve chart data from (local) storage.
-    ///
-    /// Note that the data might have missing points for efficiency reasons.
     async fn query_data(
         cx: &UpdateContext<'_>,
         _range: Option<RangeInclusive<DateTimeUtc>>,

@@ -1,6 +1,6 @@
 mod env;
 mod json;
-pub mod read;
-pub(crate) mod types;
+mod read;
+pub mod types;
 
 pub use read::*;

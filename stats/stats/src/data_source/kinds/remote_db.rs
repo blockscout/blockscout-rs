@@ -27,7 +27,7 @@ use chrono::{DateTime, Utc};
 use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr, Statement};
 
 use crate::{
-    charts::chart::Point,
+    charts::Point,
     data_source::{source::DataSource, types::UpdateContext},
     UpdateError,
 };
@@ -76,6 +76,9 @@ pub trait StatementFromRange {
     fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement;
 }
 
+/// Pull data from remote (blockscout) db according to statement
+/// `S` and sort it by date.
+///
 /// `P` - Type of point to retrieve within query.
 /// `DateValueString` can be used to avoid parsing the values,
 /// but `DateValueDecimal` or other types can be useful sometimes.

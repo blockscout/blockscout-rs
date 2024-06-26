@@ -48,7 +48,7 @@ impl StatementFromRange for NewContractsStatement {
                     ) txns_plus_internal_txns
                 ) sub
                 GROUP BY sub.day;
-                "#,
+            "#,
             [],
             "b.timestamp",
             range,

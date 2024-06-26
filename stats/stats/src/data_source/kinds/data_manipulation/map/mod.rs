@@ -59,7 +59,6 @@ where
     ) -> Result<Self::Output, UpdateError> {
         let inner_data =
             <D as DataSource>::query_data(cx, range, dependency_data_fetch_timer).await?;
-        let transformed = F::function(inner_data)?;
-        Ok(transformed)
+        F::function(inner_data)
     }
 }

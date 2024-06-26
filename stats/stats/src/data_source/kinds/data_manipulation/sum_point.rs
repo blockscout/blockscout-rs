@@ -19,6 +19,13 @@ use crate::{
     UpdateError,
 };
 
+/// Sum all dependency's data.
+///
+/// Missing points in dependency's output are expected to mean zero value
+/// (==`MissingDatePolicy::FillZero`).
+/// [see "Dependency requirements" here](crate::data_source::kinds)
+///
+/// See [module-level documentation](self) for more details.
 pub struct Sum<D>(PhantomData<D>)
 where
     D: DataSource;
@@ -52,12 +59,11 @@ where
         _range: Option<RangeInclusive<DateTimeUtc>>,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<Self::Output, UpdateError> {
-        // it's possible to not request full data range and use last value; can be updated
-        // similarly to cumulative
+        // it's possible to not request full data range and use last accurate point;
+        // can be updated to work similarly to cumulative
         let full_data = D::query_data(cx, None, dependency_data_fetch_timer).await?;
         tracing::debug!(points_len = full_data.len(), "calculating sum");
         let zero = <DV as DateValue>::Value::zero();
-        let sum = sum::<DV>(&full_data, zero)?;
-        Ok(sum)
+        sum::<DV>(&full_data, zero)
     }
 }

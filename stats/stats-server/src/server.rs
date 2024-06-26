@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{
     config::{read_charts_config, read_layout_config, read_update_groups_config},
     health::HealthService,
@@ -6,7 +8,7 @@ use crate::{
     settings::Settings,
     update_service::UpdateService,
 };
-use anyhow::Context;
+
 use blockscout_service_launcher::launcher::{self, LaunchSettings};
 use sea_orm::{ConnectOptions, Database};
 use stats_proto::blockscout::stats::v1::{
@@ -15,7 +17,6 @@ use stats_proto::blockscout::stats::v1::{
     stats_service_actix::route_stats_service,
     stats_service_server::{StatsService, StatsServiceServer},
 };
-use std::sync::Arc;
 
 const SERVICE_NAME: &str = "stats";
 
@@ -48,12 +49,9 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
         &settings.tracing,
         &settings.jaeger,
     )?;
-    let charts_config =
-        read_charts_config(&settings.charts_config).context("charts config read failed")?;
-    let layout_config =
-        read_layout_config(&settings.layout_config).context("layout config read failed")?;
-    let update_groups_config = read_update_groups_config(&settings.update_groups_config)
-        .context("update groups config read failed")?;
+    let charts_config = read_charts_config(&settings.charts_config)?;
+    let layout_config = read_layout_config(&settings.layout_config)?;
+    let update_groups_config = read_update_groups_config(&settings.update_groups_config)?;
     let mut opt = ConnectOptions::new(settings.db_url.clone());
     opt.sqlx_logging_level(tracing::log::LevelFilter::Debug);
     blockscout_service_launcher::database::initialize_postgres::<stats::migration::Migrator>(

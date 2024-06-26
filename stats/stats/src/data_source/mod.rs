@@ -13,8 +13,8 @@
 //! Conveniently, rust types are also composable as DAG (ignoring pointer types that allow recursion).
 //! Therefore, each "node" in stats (charts + deps) is represented by a separate type.
 //!
-//! These types have common trait ([`DataSource`]) with relationships being represented
-//! as associated types ([`MainDependencies`](DataSource::MainDependencies) and
+//! All these types have common trait ([`DataSource`]) with relationships
+//! being associated types ([`MainDependencies`](DataSource::MainDependencies) and
 //! [`ResolutionDependencies`](DataSource::ResolutionDependencies)).
 //! They can be [initialized](`DataSource::init_recursively`), [updated](DataSource::update_recursively),
 //! or [queried](DataSource::query_data).
@@ -28,15 +28,14 @@
 //!
 //! In general, it is easier to use types from [`kinds`] to get a [`DataSource`]. For example,
 //! sources with data pulled from external DB should fit [`kinds::remote_db`], and locally-stored
-//! charts - [`kinds::local_db`].
-//!
-//! More variations can be found in [`kinds`].
+//! charts - [`kinds::local_db`]. More variations can be found in [`kinds`].
 //!
 //! ## Usage
 //!
 //! The `DataSource`s methods are not intended to be called directly. Since the charts comprise
 //! a DAG, it is usually not possible to traverse (and, thus, update) the connected graph from a single node.
-//! We would like to have all 'source' nodes (w/o dependants) to be updated simultaneously.
+//! We would like to have all nodes in the group with their dependencies to be updated simultaneously
+//! (at the same 'update').
 //!
 //! For example, it makes sense to update C and D together, since in this case it's possible to
 //! 'reuse' update of A and B:
@@ -54,6 +53,11 @@
 //!
 //! Therefore, the charts (`DataSource`s that also implement `ChartProperties`) are combined into
 //! [update groups](crate::update_group). In particular, [`SyncUpdateGroup`](crate::update_group::SyncUpdateGroup).
+//!
+//! To make the 'simultaneous' update work, the update timestamp is recursively passed inside
+//! [`UpdateContext`]. This way, SQL queries can use this time to get data relevant at this particular
+//! timestamp.
+//!
 //! See (module & struct) documentation for details.
 
 pub mod kinds;

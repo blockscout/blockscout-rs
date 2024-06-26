@@ -33,13 +33,13 @@ pub trait DataSource {
     /// for now empty; until resolutions are introduced
     /// TODO: remove this ^ part when resolutions are finished
     type ResolutionDependencies: DataSource;
-    /// Data that this source can provide
+    /// Data that this source provides
     type Output: Send;
 
     /// Unique identifier of this data source that is used for synchronizing updates.
     ///
     /// Must be set to `Some` if the source stores some (local) data (i.e. `update_itself`
-    /// does something)
+    /// does something) (e.g. [`local_db`](super::kinds::local_db))
     const MUTEX_ID: Option<&'static str>;
 
     /// Initialize the data source and its dependencies.
@@ -77,7 +77,7 @@ pub trait DataSource {
     }
 
     /// **DO NOT CALL DIRECTLY** unless you don't want dependencies to be initialized.
-    /// During normal operation this method is likely invalid.
+    /// During normal operation calling this method directly is likely invalid.
     ///
     /// This fn is intended to be implemented
     /// by types, as recursive logic of [`DataSource::init_recursively`] is
@@ -92,6 +92,8 @@ pub trait DataSource {
         init_time: &chrono::DateTime<Utc>,
     ) -> impl Future<Output = Result<(), DbErr>> + Send;
 
+    /// List MUTEX_ID's of itself (if any) and all of it's dependencies
+    /// combined
     fn all_dependencies_mutex_ids() -> HashSet<&'static str> {
         let mut ids = Self::MainDependencies::all_dependencies_mutex_ids();
         ids.extend(Self::ResolutionDependencies::all_dependencies_mutex_ids());
@@ -113,7 +115,6 @@ pub trait DataSource {
     /// Should be idempontent with regards to `current_time` (in `cx`).
     /// It is a normal behaviour to call this method multiple times
     /// within single update.
-    // aboba
     #[instrument(skip_all, level = tracing::Level::DEBUG, fields(source_mutex_id = Self::MUTEX_ID))]
     fn update_recursively(
         cx: &UpdateContext<'_>,
@@ -136,7 +137,7 @@ pub trait DataSource {
     }
 
     /// **DO NOT CALL DIRECTLY** unless you don't want dependencies to be updated.
-    /// During normal operation this method is likely invalid, as to update
+    /// During normal operation calling this method directly is likely invalid, as to update
     /// this source, dependencies have to be in a relevant state.
     ///
     /// This fn is intended to be implemented
@@ -154,7 +155,11 @@ pub trait DataSource {
     /// Retrieve chart data.
     /// If `range` is `Some`, should return data within the range. Otherwise - all data.
     ///
-    /// Note that the data might have missing points for efficiency reasons.
+    /// Note that the returned data might have missing points for efficiency reasons.
+    /// Meaning of the missing points is marked separately by `MissingDatePolicy`
+    /// (for example, set in `ChartProperties`) or is just intrinsic to particular
+    /// data source (i.e. it's not mentioned anywhere, should be checked
+    /// case-by-case).
     ///
     /// **Does not perform an update!** If you need relevant data, you likely need
     /// to call [`DataSource::update_recursively`] beforehand.
@@ -226,7 +231,16 @@ macro_rules! impl_data_source_for_tuple {
             // only dependencies' ids matter
             const MUTEX_ID: Option<&'static str> = None;
 
+            async fn update_recursively(cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
+                $(
+                    $element_generic_name::update_recursively(cx).await?;
+                )+
+                Ok(())
+            }
+
             async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
+                // dependencies are called in `update_recursively`
+                // the tuple itself does not need any init
                 Ok(())
             }
 
@@ -270,13 +284,6 @@ macro_rules! impl_data_source_for_tuple {
                     ids.extend($element_generic_name::all_dependencies_mutex_ids());
                 )+
                 ids
-            }
-
-            async fn update_recursively(cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
-                $(
-                    $element_generic_name::update_recursively(cx).await?;
-                )+
-                Ok(())
             }
         }
     };

@@ -21,16 +21,16 @@ impl StatementFromRange for GasUsedPartialStatement {
         sql_with_range_filter_opt!(
             DbBackend::Postgres,
             r#"
-                    SELECT 
-                        DATE(blocks.timestamp) as date, 
-                        (sum(sum(blocks.gas_used)) OVER (ORDER BY date(blocks.timestamp))) AS value
-                    FROM blocks
-                    WHERE 
-                        blocks.timestamp != to_timestamp(0) AND 
-                        blocks.consensus = true {filter}
-                    GROUP BY date(blocks.timestamp)
-                    ORDER BY date;
-                "#,
+                SELECT 
+                    DATE(blocks.timestamp) as date, 
+                    (sum(sum(blocks.gas_used)) OVER (ORDER BY date(blocks.timestamp))) AS value
+                FROM blocks
+                WHERE 
+                    blocks.timestamp != to_timestamp(0) AND 
+                    blocks.consensus = true {filter}
+                GROUP BY date(blocks.timestamp)
+                ORDER BY date;
+            "#,
             [],
             "blocks.timestamp",
             range

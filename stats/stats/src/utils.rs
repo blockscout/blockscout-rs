@@ -44,7 +44,7 @@ pub(crate) fn produce_filter_and_values(
 /// Add filter statement, if `range` provided.
 ///
 /// `statement_with_filter_placeholder` must have `filter` named parameter
-/// `filter_by` is a column/property(?) in SQL
+/// `filter_by` is a column/property(?) in SQL used to generate string for `filter`
 macro_rules! sql_with_range_filter_opt {
     (
         $db_backend: expr,

@@ -169,8 +169,64 @@ pub async fn get_chart_metadata(
 /// `interval_limit` - max interval (from, to). If `from` or `to` are none,
 /// min or max date in DB are calculated.
 ///
-/// Note: if some dates within interval `(from, to)` fall on the future, no data points
-/// for them are returned.
+/// Note: if some dates within interval `(from, to)` fall on the future, data points
+/// for these dates are not returned (makes sense, since it's future).
+///
+/// ## Missing points and `fill_missing_dates`
+/// If `fill_missing_dates` is `false`, some dates might be missing from the result.
+/// It means these dates have values according to corresponding underlying `MissingDatePolicy`
+/// (in particular, the one that was set during update (should be == to `policy` in practice)).
+///
+/// Because of this, returned data may slightly differ from records in DB. In any way, the data
+/// is semantically equivalent.
+///
+/// `fill_missing_dates=true` takes care of it. In this case, values for the whole range
+/// are returned (except for the future).
+///
+/// ### `MissingDatePolicy::FillPrevious` example
+///
+/// DB data (empty value means no record in DB):
+///
+/// ```text
+///   date  | 1 | 2 | 3 | 4
+///  -------|---|---|---|---
+///   value | A |   | B |   
+/// ```
+/// (2 records in DB: `1: A`, `3: B`)
+///
+/// `get_line_chart_data` with range `2..=4` will return 2 records : `2: A`, `3: B`. It can be
+/// represented like this:
+/// ```text
+///   date  | 2 | 3 | 4
+///  -------|---|---|---
+///   value | A | B |   
+/// ```
+///
+/// - Value `A` is moved to correctly represent value at date `2`. Value for `1`
+/// is outside the range, thus we move the value.
+/// - Date 4 is still omitted, because it can be calculated from `3`
+///
+/// ### `MissingDatePolicy::FillZero` example
+///
+/// DB data (empty value means no record in DB):
+///
+/// ```text
+///   date  | 1 | 2 | 3 | 4
+///  -------|---|---|---|---
+///   value | A |   | B |   
+/// ```
+/// (2 records in DB: `1: A`, `3: B`)
+///
+/// `get_line_chart_data` with range `2..=4` will return 1 record : `3: B`. It can be
+/// represented like this:
+/// ```text
+///   date  | 2 | 3 | 4
+///  -------|---|---|---
+///   value |   | B |   
+/// ```
+///
+/// - Caller can deduce that no record for date `2` means that value there is 0
+///
 #[allow(clippy::too_many_arguments)]
 pub async fn get_line_chart_data(
     db: &DatabaseConnection,

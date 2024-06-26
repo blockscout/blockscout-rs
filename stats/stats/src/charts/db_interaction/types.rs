@@ -10,6 +10,18 @@ pub trait DateValue {
     fn from_parts(date: NaiveDate, value: Self::Value) -> Self;
 }
 
+pub trait ZeroDateValue: DateValue + Sized {
+    fn with_zero_value(date: NaiveDate) -> Self;
+
+    fn relevant_or_zero(self, current_date: NaiveDate) -> Self {
+        if self.get_parts().0 < &current_date {
+            Self::with_zero_value(current_date)
+        } else {
+            self
+        }
+    }
+}
+
 macro_rules! impl_date_value_decomposition {
     ($name: ident, $val_type:ty) => {
         impl DateValue for $name {
@@ -27,7 +39,41 @@ macro_rules! impl_date_value_decomposition {
     };
 }
 
-/// Implement non-base date-value type
+#[derive(FromQueryResult, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct DateValueString {
+    pub date: NaiveDate,
+    pub value: String,
+}
+
+impl_date_value_decomposition!(DateValueString, String);
+
+impl ZeroDateValue for DateValueString {
+    fn with_zero_value(date: NaiveDate) -> Self {
+        Self {
+            date,
+            value: "0".to_string(),
+        }
+    }
+}
+
+impl DateValueString {
+    pub fn active_model(
+        &self,
+        chart_id: i32,
+        min_blockscout_block: Option<i64>,
+    ) -> chart_data::ActiveModel {
+        chart_data::ActiveModel {
+            id: Default::default(),
+            chart_id: Set(chart_id),
+            date: Set(self.date),
+            value: Set(self.value.clone()),
+            created_at: Default::default(),
+            min_blockscout_block: Set(min_blockscout_block),
+        }
+    }
+}
+
+/// Implement non-string date-value type
 macro_rules! create_date_value_with {
     ($name:ident, $val_type:ty) => {
         #[derive(FromQueryResult, Debug, Clone, Default, PartialEq)]
@@ -53,52 +99,6 @@ create_date_value_with!(DateValueInt, i64);
 create_date_value_with!(DateValueDouble, f64);
 create_date_value_with!(DateValueDecimal, Decimal);
 
-#[derive(FromQueryResult, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct DateValueString {
-    pub date: NaiveDate,
-    pub value: String,
-}
-
-impl_date_value_decomposition!(DateValueString, String);
-
-impl DateValueString {
-    pub fn active_model(
-        &self,
-        chart_id: i32,
-        min_blockscout_block: Option<i64>,
-    ) -> chart_data::ActiveModel {
-        chart_data::ActiveModel {
-            id: Default::default(),
-            chart_id: Set(chart_id),
-            date: Set(self.date),
-            value: Set(self.value.clone()),
-            created_at: Default::default(),
-            min_blockscout_block: Set(min_blockscout_block),
-        }
-    }
-}
-
-pub trait ZeroDateValue: DateValue + Sized {
-    fn with_zero_value(date: NaiveDate) -> Self;
-
-    fn relevant_or_zero(self, current_date: NaiveDate) -> Self {
-        if self.get_parts().0 < &current_date {
-            Self::with_zero_value(current_date)
-        } else {
-            self
-        }
-    }
-}
-
-impl ZeroDateValue for DateValueString {
-    fn with_zero_value(date: NaiveDate) -> Self {
-        Self {
-            date,
-            value: "0".to_string(),
-        }
-    }
-}
-
 impl ZeroDateValue for DateValueInt {
     fn with_zero_value(date: NaiveDate) -> Self {
         Self { date, value: 0 }
@@ -120,6 +120,7 @@ impl ZeroDateValue for DateValueDecimal {
     }
 }
 
+/// Marked as precise or approximate
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ExtendedDateValue {
     pub date: NaiveDate,

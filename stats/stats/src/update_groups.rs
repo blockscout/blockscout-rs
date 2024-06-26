@@ -26,8 +26,7 @@ macro_rules! singleton_groups {
     };
 }
 
-// Group for chart `Name` is called
-// `NameGroup`
+// Group for chart `Name` is called `NameGroup`
 singleton_groups!(
     ActiveAccounts,
     AverageBlockRewards,
@@ -56,7 +55,7 @@ construct_update_group!(NewContractsGroup {
         NewContracts,
         ContractsGrowth,
         // currently can be in a separate group but after #845
-        // it's expected to join the group. placing it here to avoid
+        // it's expected to join this group. placing it here to avoid
         // updating config after the fix (todo: remove (#845))
         TotalContracts,
         LastNewContracts

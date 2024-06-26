@@ -16,17 +16,17 @@ impl StatementForOne for TotalTokensStatement {
         Statement::from_string(
             DbBackend::Postgres,
             r#"
-                    SELECT 
-                        (
-                            SELECT count(*)::text
-                                FROM tokens
-                        ) AS "value",
-                        (
-                            SELECT max(timestamp)::date as "date" 
-                                FROM blocks
-                                WHERE blocks.consensus = true
-                        ) AS "date"
-                "#,
+                SELECT 
+                    (
+                        SELECT count(*)::text
+                            FROM tokens
+                    ) AS "value",
+                    (
+                        SELECT max(timestamp)::date as "date" 
+                            FROM blocks
+                            WHERE blocks.consensus = true
+                    ) AS "date"
+            "#,
         )
     }
 }

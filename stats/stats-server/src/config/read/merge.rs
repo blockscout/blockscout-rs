@@ -1,4 +1,4 @@
-//! Combination of env and json configs
+//! Logic for overwriting config values from some env variables.
 
 use anyhow::Context;
 use itertools::{Either, Itertools};
@@ -155,6 +155,7 @@ pub fn override_charts(
     Ok(())
 }
 
+/// Prioritize values from environment
 pub fn override_layout(
     target: &mut json::layout::Config,
     source: env::layout::Config,

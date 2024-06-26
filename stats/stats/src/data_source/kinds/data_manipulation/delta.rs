@@ -1,5 +1,5 @@
 //! The opposite of [cumulative chart](crate::data_source::kinds::local_db::CumulativeLocalDbChartSource).
-//! However, it can be a not locally stored source, thus the different locations.
+//! However, it can also work on remotely stored sources, thus different location of the type.
 //!
 //! I.e. chart "New accounts" is a delta of  "Total accounts".
 
@@ -16,13 +16,17 @@ use rust_decimal::prelude::Zero;
 use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
 
 use crate::{
-    charts::chart::Point,
+    charts::Point,
     data_processing::deltas,
     data_source::{DataSource, UpdateContext},
     UpdateError,
 };
 
-/// Makes delta data from cumulative dependency
+/// Calculate delta data from cumulative dependency.
+///
+/// Missing points in dependency's output are expected to mean "the value is the
+/// same as in previous point" (==`MissingDatePolicy::FillPrevious`).
+/// [see "Dependency requirements" here](crate::data_source::kinds)
 ///
 /// See [module-level documentation](self) for more details.
 pub struct Delta<D>(PhantomData<D>)
@@ -60,7 +64,6 @@ where
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<Self::Output, UpdateError> {
         let request_range = range.clone().map(|r| {
-            // tricks to show that there are no gaps and folds in utc
             let start = r
                 .start()
                 .checked_sub_signed(TimeDelta::days(1))

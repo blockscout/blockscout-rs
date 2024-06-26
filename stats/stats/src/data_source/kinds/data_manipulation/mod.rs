@@ -1,7 +1,7 @@
 //! Data sources that manipulate data received from other sources.
 //!
 //! These sources do not store any state, use [`local_db` sources](super::local_db)
-//! for persistency.
+//! for persistent sources that retrieve local data on query.
 
 pub mod delta;
 pub mod last_point;

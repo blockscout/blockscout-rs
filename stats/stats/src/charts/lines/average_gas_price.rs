@@ -23,24 +23,24 @@ impl StatementFromRange for AverageGasPriceStatement {
         sql_with_range_filter_opt!(
             DbBackend::Postgres,
             r#"
-                    SELECT
-                        blocks.timestamp::date as date,
-                        (AVG(
-                            COALESCE(
-                                transactions.gas_price,
-                                blocks.base_fee_per_gas + LEAST(
-                                    transactions.max_priority_fee_per_gas,
-                                    transactions.max_fee_per_gas - blocks.base_fee_per_gas
-                                )
+                SELECT
+                    blocks.timestamp::date as date,
+                    (AVG(
+                        COALESCE(
+                            transactions.gas_price,
+                            blocks.base_fee_per_gas + LEAST(
+                                transactions.max_priority_fee_per_gas,
+                                transactions.max_fee_per_gas - blocks.base_fee_per_gas
                             )
-                        ) / $1)::float as value
-                    FROM transactions
-                    JOIN blocks ON transactions.block_hash = blocks.hash
-                    WHERE 
-                        blocks.timestamp != to_timestamp(0) AND
-                        blocks.consensus = true {filter}
-                    GROUP BY date
-                "#,
+                        )
+                    ) / $1)::float as value
+                FROM transactions
+                JOIN blocks ON transactions.block_hash = blocks.hash
+                WHERE
+                    blocks.timestamp != to_timestamp(0) AND
+                    blocks.consensus = true {filter}
+                GROUP BY date
+            "#,
             [GWEI.into()],
             "blocks.timestamp",
             range,

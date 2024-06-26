@@ -3,6 +3,7 @@
 //! Currently the configs are read from json files. Values can be overridden with env variables
 //! for convenience.
 
+use anyhow::Context;
 use merge::{override_charts, override_layout, override_update_groups};
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -27,17 +28,21 @@ where
     if extension == Some(std::ffi::OsStr::new("json")) {
         let mut json_config: JsonConfig = config::Config::builder()
             .add_source(config::File::from(json_path))
-            .build()?
-            .try_deserialize()?;
+            .build()
+            .context("json config read")?
+            .try_deserialize()
+            .context("json parse")?;
         let env_config: EnvConfig = config::Config::builder()
             .add_source(
                 config::Environment::with_prefix(env_prefix)
                     .separator("__")
                     .try_parsing(true),
             )
-            .build()?
-            .try_deserialize()?;
-        override_fn(&mut json_config, env_config)?;
+            .build()
+            .context("envs read")?
+            .try_deserialize()
+            .context("envs parse")?;
+        override_fn(&mut json_config, env_config).context("overriding values")?;
         Ok(json_config)
     } else {
         Err(anyhow::anyhow!(
@@ -50,8 +55,11 @@ pub fn read_charts_config(path: &Path) -> Result<charts::Config<AllChartSettings
     let overridden_json_config = read_json_override_from_env_config::<
         json::charts::Config,
         env::charts::Config,
-    >(path, "STATS_CHARTS", override_charts)?;
-    let rendered_config = overridden_json_config.render_with_template_values()?;
+    >(path, "STATS_CHARTS", override_charts)
+    .context("charts config")?;
+    let rendered_config = overridden_json_config
+        .render_with_template_values()
+        .context("rendering charts config")?;
     Ok(rendered_config.into())
 }
 
@@ -59,7 +67,8 @@ pub fn read_layout_config(path: &Path) -> Result<layout::Config, anyhow::Error> 
     let overridden_json_config = read_json_override_from_env_config::<
         json::layout::Config,
         env::layout::Config,
-    >(path, "STATS_LAYOUT", override_layout)?;
+    >(path, "STATS_LAYOUT", override_layout)
+    .context("layout config")?;
     Ok(overridden_json_config.into())
 }
 
@@ -67,6 +76,7 @@ pub fn read_update_groups_config(path: &Path) -> Result<update_groups::Config, a
     let overridden_json_config = read_json_override_from_env_config::<
         json::update_groups::Config,
         env::update_groups::Config,
-    >(path, "STATS_UPDATE_GROUPS", override_update_groups)?;
+    >(path, "STATS_UPDATE_GROUPS", override_update_groups)
+    .context("update groups config")?;
     Ok(overridden_json_config.into())
 }

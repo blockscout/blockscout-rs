@@ -37,7 +37,7 @@ pub async fn simple_test_chart<C: DataSource + ChartProperties>(
         update_time_override: Some(current_time),
         force_full: true,
     };
-    let cx = UpdateContext::from(parameters.clone());
+    let cx = UpdateContext::from_params_now_or_override(parameters.clone());
     C::update_recursively(&cx).await.unwrap();
     assert_eq!(
         &get_chart::<C>(
@@ -53,7 +53,7 @@ pub async fn simple_test_chart<C: DataSource + ChartProperties>(
     );
 
     parameters.force_full = false;
-    let cx = UpdateContext::from(parameters);
+    let cx = UpdateContext::from_params_now_or_override(parameters);
     C::update_recursively(&cx).await.unwrap();
     assert_eq!(
         &get_chart::<C>(
@@ -94,7 +94,7 @@ pub async fn ranged_test_chart<C: DataSource + ChartProperties>(
         update_time_override: Some(current_time),
         force_full: true,
     };
-    let cx = UpdateContext::from(parameters.clone());
+    let cx = UpdateContext::from_params_now_or_override(parameters.clone());
     C::update_recursively(&cx).await.unwrap();
     assert_eq!(
         &get_chart::<C>(
@@ -110,7 +110,7 @@ pub async fn ranged_test_chart<C: DataSource + ChartProperties>(
     );
 
     parameters.force_full = false;
-    let cx = UpdateContext::from(parameters);
+    let cx = UpdateContext::from_params_now_or_override(parameters);
     C::update_recursively(&cx).await.unwrap();
     assert_eq!(
         &get_chart::<C>(
@@ -172,11 +172,11 @@ pub async fn simple_test_counter<C: DataSource + ChartProperties>(
         update_time_override: Some(current_time),
         force_full: true,
     };
-    let cx = UpdateContext::from(parameters.clone());
+    let cx = UpdateContext::from_params_now_or_override(parameters.clone());
     C::update_recursively(&cx).await.unwrap();
     assert_eq!(expected, get_counter::<C>(&db).await);
     parameters.force_full = false;
-    let cx = UpdateContext::from(parameters.clone());
+    let cx = UpdateContext::from_params_now_or_override(parameters.clone());
     C::update_recursively(&cx).await.unwrap();
     assert_eq!(expected, get_counter::<C>(&db).await);
 }

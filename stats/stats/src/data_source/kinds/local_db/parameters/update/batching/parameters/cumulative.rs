@@ -1,12 +1,4 @@
-//! Chart that accumulates values of another chart.
-//!
-//! For example, chart "Total accounts" is a cumulative
-//! of "New accounts".
-//!
-//! So, if the values of `NewItemsChart` are [1, 2, 3, 4], then
-//! cumulative chart will produce [1, 3, 6, 10].
-//!
-//! The opposite of this chart is [delta chart](super::delta).
+//! Batch step logic for [cumulative chart](`crate::data_source::kinds::local_db::CumulativeLocalDbChartSource`)
 
 use std::{fmt::Display, marker::PhantomData, ops::Add, str::FromStr};
 
@@ -25,7 +17,7 @@ use super::PassVecStep;
 /// Add last value to all points received from main dependency
 /// and store as usual.
 ///
-/// Used in cumulative charts, for example
+/// Used in cumulative charts
 pub struct AddLastValueStep<ChartProps>(PhantomData<ChartProps>);
 
 impl<DV, ChartProps> BatchStepBehaviour<Vec<DV>, ()> for AddLastValueStep<ChartProps>

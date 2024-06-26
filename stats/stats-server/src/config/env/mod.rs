@@ -1,6 +1,6 @@
 //! Basically the same as normal (JSON) config but without lists.
-//! Lists are currently not supported by `config` crate with environmental vars
-//! (and it is quite not clear how to implement them).
+//! Lists are not supported by `config` crate with environmental vars
+//! (and are not expected to, since lists are not present in env).
 //!
 //! Instead, we have the same items but with `order` field that defines relative position between them.
 //!
@@ -35,7 +35,6 @@ pub mod test_utils {
     }
 
     // returns result to see the line where panic happens
-    /// env prefix "STATS_CHARTS" is assumed
     pub fn check_envs_parsed_to<T>(
         prefix: &str,
         env_values: std::collections::HashMap<String, String>,

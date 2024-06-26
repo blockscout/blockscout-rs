@@ -9,9 +9,9 @@ use stats_proto::blockscout::stats::v1 as proto_v1;
 
 use crate::runtime_setup::EnabledChartEntry;
 
+/// Includes disabled charts
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
-/// includes disabled charts
 pub struct AllChartSettings {
     #[serde(default = "enabled_default")]
     pub enabled: bool,

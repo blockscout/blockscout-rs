@@ -18,20 +18,20 @@ impl StatementForOne for AverageBlockTimeStatement {
         Statement::from_sql_and_values(
             DbBackend::Postgres,
             r#"
+                SELECT
+                    max(timestamp)::date as date, 
+                    (CASE WHEN avg(diff) IS NULL THEN 0 ELSE avg(diff) END)::float as value
+                FROM
+                (
                     SELECT
-                        max(timestamp)::date as date, 
-                        (CASE WHEN avg(diff) IS NULL THEN 0 ELSE avg(diff) END)::float as value
-                    FROM
-                    (
-                        SELECT
-                            timestamp,
-                            EXTRACT(
-                                EPOCH FROM timestamp - lag(timestamp) OVER (ORDER BY timestamp)
-                            ) as diff
-                        FROM blocks b
-                        WHERE b.timestamp != to_timestamp(0) AND consensus = true
-                    ) t
-                "#,
+                        timestamp,
+                        EXTRACT(
+                            EPOCH FROM timestamp - lag(timestamp) OVER (ORDER BY timestamp)
+                        ) as diff
+                    FROM blocks b
+                    WHERE b.timestamp != to_timestamp(0) AND consensus = true
+                ) t
+            "#,
             vec![],
         )
     }

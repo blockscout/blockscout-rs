@@ -2,7 +2,7 @@
 //!
 //! ## Justification
 //!
-//! Reasons to have update groups are listed in [data source module docs](crate::data_source)
+//! Reasons to have update groups are listed in [data source module docs (Usage)](crate::data_source)
 //! and [`construct_update_group` macro docs](construct_update_group).
 //!
 //! ## Usage
@@ -58,11 +58,11 @@ pub trait UpdateGroup: core::fmt::Debug {
 
     /// Group name (usually equal to type name for simplicity)
     fn name(&self) -> String;
-    /// List names of charts - members of the group.
+    /// List chart properties - members of the group.
     fn list_charts(&self) -> Vec<ChartPropertiesObject>;
     /// List mutex ids of group members + their dependencies.
     /// Dependencies participate in updates, thus access to them needs to be
-    /// synchronized.
+    /// synchronized as well.
     fn list_dependency_mutex_ids(&self) -> HashSet<&'static str>;
     /// List mutex ids of particular group member dependencies (including the member itself).
     ///
@@ -71,8 +71,8 @@ pub trait UpdateGroup: core::fmt::Debug {
     /// Create/init enabled charts with their dependencies (in DB) recursively.
     /// Idempotent, does nothing if the charts were previously initialized.
     ///
-    /// `creation_time_override` for overriding creation time (only works for not initialized
-    /// charts). Helpful for testing.
+    /// `creation_time_override` is for overriding creation time (only works for not
+    /// initialized charts). Helpful for testing.
     async fn create_charts(
         &self,
         db: &DatabaseConnection,
@@ -112,13 +112,13 @@ pub trait UpdateGroup: core::fmt::Debug {
 ///
 /// > A ⇨ B
 ///
-/// See possible configurations for chart availability (e.g. for data requests):
+/// See possible configurations of enabled charts:
 /// - Both `A` and `B` are enabled:\
 /// > **A** ➡ **B**\
-/// Group triggres `A`, which triggers `B`. Everything is fine.
+/// Group triggers `A`, which triggers `B`. Everything is fine.
 /// - `A` is on, `B` is off:\
 /// > **A** ➡ **B**\
-/// Group triggres `A`, which triggers `B`. Everything is fine.
+/// Group triggers `A`, which triggers `B`. Everything is fine.
 /// - `A` is off, `B` is on:\
 /// > A ⇨ B\
 /// Group only contains `A`, which means nothing is triggered. Quite counter-intuitive
@@ -191,7 +191,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 macro_rules! construct_update_group {
     ($group_name:ident {
         charts: [
-            $($member:path),*
+            $($member:path),+
             $(,)?
         ] $(,)?
     }) => {
@@ -250,8 +250,8 @@ macro_rules! construct_update_group {
                 Ok(())
             }
 
-            // updates should be unique by group name & update time; this should allow to single out
-            // one update process in logs
+            // updates are expected to be unique by group name & update time; this instrumentation
+            // should allow to single out one update process in logs
             #[::tracing::instrument(skip_all, fields(update_group=self.name(), update_time), level = tracing::Level::INFO)]
             async fn update_charts<'a>(
                 &self,
@@ -259,8 +259,7 @@ macro_rules! construct_update_group {
                 #[allow(unused)]
                 enabled_names: &::std::collections::HashSet<String>,
             ) -> Result<(), $crate::UpdateError> {
-                #[allow(unused)]
-                let cx: $crate::data_source::UpdateContext = params.into();
+                let cx = $crate::data_source::UpdateContext::from_params_now_or_override(params);
                 ::tracing::Span::current().record("update_time", ::std::format!("{}",&cx.time));
                 $(
                     if enabled_names.contains(<$member as $crate::Named>::NAME) {
@@ -297,9 +296,10 @@ pub struct SyncUpdateGroup {
 }
 
 impl SyncUpdateGroup {
-    /// `chart_mutexes` must contain mutexes for all members of the group + their dependencies.
+    /// `all_chart_mutexes` must contain mutexes for all members of the group + their dependencies
+    /// (will return error otherwise).
     ///
-    /// These mutexes must be shared across all groups.
+    /// These mutexes must be shared across all groups in order for synchronization to work.
     pub fn new(
         all_chart_mutexes: &BTreeMap<String, Arc<Mutex<()>>>,
         inner: ArcUpdateGroup,
@@ -402,7 +402,7 @@ impl SyncUpdateGroup {
 
     /// Lock only enabled charts and their dependencies
     ///
-    /// Returns (joint mutex guard) and (enabled group members list)
+    /// Returns joint mutex guard and enabled group members list
     async fn lock_enabled_dependencies(
         &self,
         enabled_names: &HashSet<String>,

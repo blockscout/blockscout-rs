@@ -21,8 +21,8 @@ pub struct UpdateContext<'a> {
     pub force_full: bool,
 }
 
-impl<'a> From<UpdateParameters<'a>> for UpdateContext<'a> {
-    fn from(value: UpdateParameters<'a>) -> Self {
+impl<'a> UpdateContext<'a> {
+    pub fn from_params_now_or_override(value: UpdateParameters<'a>) -> Self {
         Self {
             db: value.db,
             blockscout: value.blockscout,

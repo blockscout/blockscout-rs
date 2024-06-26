@@ -23,16 +23,16 @@ impl StatementFromRange for AverageBlockRewardsQuery {
         sql_with_range_filter_opt!(
             DbBackend::Postgres,
             r#"
-                    SELECT
-                        DATE(blocks.timestamp) as date,
-                        (AVG(block_rewards.reward) / $1)::FLOAT as value
-                    FROM block_rewards
-                    JOIN blocks ON block_rewards.block_hash = blocks.hash
-                    WHERE 
-                        blocks.timestamp != to_timestamp(0) AND 
-                        blocks.consensus = true {filter}
-                    GROUP BY date
-                "#,
+                SELECT
+                    DATE(blocks.timestamp) as date,
+                    (AVG(block_rewards.reward) / $1)::FLOAT as value
+                FROM block_rewards
+                JOIN blocks ON block_rewards.block_hash = blocks.hash
+                WHERE
+                    blocks.timestamp != to_timestamp(0) AND
+                    blocks.consensus = true {filter}
+                GROUP BY date
+            "#,
             [ETH.into()],
             "blocks.timestamp",
             range,

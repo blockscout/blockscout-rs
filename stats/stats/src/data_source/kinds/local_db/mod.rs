@@ -28,11 +28,12 @@ use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
 
 use crate::{
     charts::{
-        chart::chart_properties_portrait,
+        chart_properties_portrait,
         db_interaction::read::{get_chart_metadata, get_min_block_blockscout, last_accurate_point},
+        ChartProperties, Named,
     },
     data_source::{DataSource, UpdateContext},
-    metrics, ChartProperties, Named, UpdateError,
+    metrics, UpdateError,
 };
 
 use super::auxiliary::PartialCumulative;
@@ -47,8 +48,8 @@ pub mod parameters;
 ///
 ///
 /// There are types that implement each of the behaviour type in
-/// [`parameters`]; also there are type aliases in [`self`] that
-/// for some common parameter combinations.
+/// [`parameters`]; also there are type aliases in [`self`]
+/// with common parameter combinations.
 ///
 /// See [module-level documentation](self) for more details.
 pub struct LocalDbChartSource<MainDep, ResolutionDep, Create, Update, Query, ChartProps>(
@@ -73,6 +74,28 @@ pub type BatchLocalDbChartSourceWithDefaultParams<MainDep, ResolutionDep, BatchS
         ChartProps,
     >;
 
+// not in `data_manipulation` because it requires retrieving latest (self) value before
+// next batch
+/// Chart with cumulative data calculated from delta dependency
+/// (dependency with changes from previous point == increments+decrements or deltas)
+///
+/// So, if the values of `NewItemsChart` are [1, 2, 3, 4], then
+/// cumulative chart will produce [1, 3, 6, 10].
+///
+/// Missing points in dependency's output are expected to mean zero value
+/// (==`MissingDatePolicy::FillZero`).
+/// [see "Dependency requirements" here](crate::data_source::kinds)
+///
+/// The opposite logic to [`Delta`](`crate::data_source::kinds::data_manipulation::delta::Delta`)
+pub type CumulativeLocalDbChartSource<DeltaDep, C> = LocalDbChartSource<
+    PartialCumulative<DeltaDep>,
+    (),
+    DefaultCreate<C>,
+    BatchUpdate<PartialCumulative<DeltaDep>, (), AddLastValueStep<C>, Batch30Days, C>,
+    DefaultQueryVec<C>,
+    C,
+>;
+
 /// Chart that stores vector data received from provided dependency (without
 /// any manipulations)
 pub type DirectVecLocalDbChartSource<Dependency, C> = LocalDbChartSource<
@@ -95,21 +118,6 @@ pub type DirectPointLocalDbChartSource<Dependency, C> = LocalDbChartSource<
     C,
 >;
 
-// not in `data_manipulation` because it requires retrieving latest value before
-// next batch
-/// Chart with cumulative data calculated from delta dependency
-/// (dependency with changes from previous point == increments+decrements or deltas)
-///
-/// The opposite logic to [`Delta`](`crate::data_source::kinds::data_manipulation::delta::Delta`)
-pub type CumulativeLocalDbChartSource<DeltaDep, C> = LocalDbChartSource<
-    PartialCumulative<DeltaDep>,
-    (),
-    DefaultCreate<C>,
-    BatchUpdate<PartialCumulative<DeltaDep>, (), AddLastValueStep<C>, Batch30Days, C>,
-    DefaultQueryVec<C>,
-    C,
->;
-
 impl<MainDep, ResolutionDep, Create, Update, Query, ChartProps>
     LocalDbChartSource<MainDep, ResolutionDep, Create, Update, Query, ChartProps>
 where
@@ -120,6 +128,8 @@ where
     Query: QueryBehaviour,
     ChartProps: ChartProperties,
 {
+    /// Performs common checks and prepares values useful for further
+    /// update. Then proceeds to update according to parameters.
     async fn update_itself(
         cx: &UpdateContext<'_>,
         dependency_data_fetch_timer: &mut AggregateTimer,
@@ -127,7 +137,9 @@ where
         let metadata = get_chart_metadata(cx.db, ChartProps::NAME).await?;
         if let Some(last_updated_at) = metadata.last_updated_at {
             if cx.time == last_updated_at {
-                // no need to perform update
+                // no need to perform update.
+                // mostly catches second call to update e.g. when both
+                // dependency and this source are in one group and enabled.
                 return Ok(());
             }
         }
@@ -144,7 +156,7 @@ where
             offset,
         )
         .await?;
-        tracing::info!(last_accurate_point =? last_accurate_point, chart_name = ChartProps::NAME, "started chart data update");
+        tracing::info!(last_accurate_point =? last_accurate_point, chart_name = ChartProps::NAME, "updating chart values");
         Update::update_values(
             cx,
             chart_id,
@@ -153,6 +165,7 @@ where
             dependency_data_fetch_timer,
         )
         .await?;
+        tracing::info!(chart_name = ChartProps::NAME, "updating chart metadata");
         Update::update_metadata(cx.db, chart_id, cx.time).await?;
         Ok(())
     }
@@ -187,7 +200,7 @@ where
     }
 
     async fn update_itself(cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
-        // metrics + logs
+        // set up metrics + write some logs
 
         let mut dependency_data_fetch_timer = AggregateTimer::new();
         let _update_timer = metrics::CHART_UPDATE_TIME

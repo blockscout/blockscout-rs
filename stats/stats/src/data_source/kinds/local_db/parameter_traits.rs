@@ -57,7 +57,7 @@ pub trait QueryBehaviour {
     /// Currently `P` or `Vec<P>`, where `P` is some type representing a data point
     type Output: Send;
 
-    /// Retrieve chart data from (local) storage.
+    /// Retrieve chart data from local storage.
     fn query_data(
         cx: &UpdateContext<'_>,
         range: Option<RangeInclusive<DateTimeUtc>>,

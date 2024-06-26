@@ -47,7 +47,7 @@ pub fn fit_into_range(
     }
 }
 
-/// the vector must be sorted
+/// The vector must be sorted
 pub fn trim_out_of_range_sorted<DV: DateValue>(
     data: &mut Vec<DV>,
     range: RangeInclusive<NaiveDate>,
