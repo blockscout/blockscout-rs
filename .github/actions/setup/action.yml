@@ -8,6 +8,7 @@ inputs:
   components:
     description: 'Comma-separated list of components to be additionally installed'
     required: false
+    default: ''
 
 runs:
   using: 'composite'
