@@ -7,14 +7,14 @@ on:
     paths:
       - da-indexer/**
       - .github/workflows/da-indexer.yml
-      - .github/actions/deps/**
       - .github/workflows/_*.yml
+      - .github/actions/**
   pull_request:
     paths:
       - da-indexer/**
       - .github/workflows/da-indexer.yml
-      - .github/actions/deps/**
       - .github/workflows/_*.yml
+      - .github/actions/**
 
 name: Test, lint and docker (da-indexer)
 
@@ -40,24 +40,10 @@ jobs:
         ports:
           - 5432:5432
     steps:
-      - name: Checkout sources
-        uses: actions/checkout@v2
-
-      - name: Install deps
-        uses: ./.github/actions/deps
-
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
+      - name: Setup
+        uses: ./.github/actions/setup
         with:
-          toolchain: stable
-          profile: minimal
-          override: true
-
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          workspaces: da-indexer -> target
+          service-name: da-indexer
 
       - name: Unit tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture
@@ -80,24 +66,11 @@ jobs:
     name: Linting
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout sources
-        uses: actions/checkout@v2
-
-      - name: Install deps
-        uses: ./.github/actions/deps
-
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
+      - name: Setup
+        uses: ./.github/actions/setup
         with:
-          toolchain: stable
-          profile: minimal
+          service-name: da-indexer
           components: rustfmt, clippy
-          override: true
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          workspaces: da-indexer -> target
 
       - name: cargo fmt
         run: cargo fmt --all -- --check --config imports_granularity=Crate
