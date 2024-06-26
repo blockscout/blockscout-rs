@@ -8,13 +8,13 @@ on:
       - visualizer/**
       - .github/workflows/visualizer.yml
       - .github/actions/deps/**
-       - .github/workflows/_*.yml
+      - .github/workflows/_*.yml
   pull_request:
     paths:
       - visualizer/**
       - .github/workflows/visualizer.yml
       - .github/actions/deps/**
-       - .github/workflows/_*.yml
+      - .github/workflows/_*.yml
 
 name: Test, lint and docker (visualizer)
 
