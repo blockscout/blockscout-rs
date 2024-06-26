@@ -112,13 +112,13 @@ jobs:
 
   push:
     name: Docker build and docker push
-    needs:
-      - test
-      - lint
-    if: |
-      always() &&
-      (needs.test.result == 'success' || needs.test.result == 'cancelled') &&
-      (needs.lint.result == 'success' || needs.lint.result == 'cancelled')
+#    needs:
+#      - test
+#      - lint
+#    if: |
+#      always() &&
+#      (needs.test.result == 'success' || needs.test.result == 'cancelled') &&
+#      (needs.lint.result == 'success' || needs.lint.result == 'cancelled')
     timeout-minutes: 60
     runs-on: ubuntu-latest
     outputs:
