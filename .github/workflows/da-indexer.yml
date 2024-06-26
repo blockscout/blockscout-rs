@@ -8,13 +8,13 @@ on:
       - da-indexer/**
       - .github/workflows/da-indexer.yml
       - .github/actions/deps/**
-      - .github/workflows/docker-build-push.yml
+       - .github/workflows/_*.yml
   pull_request:
     paths:
       - da-indexer/**
       - .github/workflows/da-indexer.yml
       - .github/actions/deps/**
-      - .github/workflows/docker-build-push.yml
+       - .github/workflows/_*.yml
 
 name: Test, lint and docker (da-indexer)
 

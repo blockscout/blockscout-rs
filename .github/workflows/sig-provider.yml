@@ -8,13 +8,13 @@ on:
       - sig-provider/**
       - .github/workflows/sig-provider.yml
       - .github/actions/deps/**
-      - .github/workflows/docker-build-push.yml
+       - .github/workflows/_*.yml
   pull_request:
     paths:
       - sig-provider/**
       - .github/workflows/sig-provider.yml
       - .github/actions/deps/**
-      - .github/workflows/docker-build-push.yml
+       - .github/workflows/_*.yml
 
 name: Test, lint and docker (sig-provider)
 

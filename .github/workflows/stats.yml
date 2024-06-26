@@ -8,13 +8,13 @@ on:
       - stats/**
       - .github/workflows/stats.yml
       - .github/actions/deps/**
-      - .github/workflows/docker-build-push.yml
+       - .github/workflows/_*.yml
   pull_request:
     paths:
       - stats/**
       - .github/workflows/stats.yml
       - .github/actions/deps/**
-      - .github/workflows/docker-build-push.yml
+       - .github/workflows/_*.yml
 
 name: Test, lint and docker (stats)
 

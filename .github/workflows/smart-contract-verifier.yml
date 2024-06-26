@@ -8,13 +8,13 @@ on:
       - smart-contract-verifier/**
       - .github/workflows/smart-contract-verifier.yml
       - .github/actions/deps/**
-      - .github/workflows/docker-build-push.yml
+       - .github/workflows/_*.yml
   pull_request:
     paths:
       - smart-contract-verifier/**
       - .github/workflows/smart-contract-verifier.yml
       - .github/actions/deps/**
-      - .github/workflows/docker-build-push.yml
+       - .github/workflows/_*.yml
 
 name: Test, lint and docker (smart-contract-verifier)
 
