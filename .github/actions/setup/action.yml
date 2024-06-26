@@ -5,10 +5,10 @@ inputs:
   service-name:
     description: 'A directory name where the service target is located'
     required: true
-  components:
-    description: 'Comma-separated list of components to be additionally installed'
+  is-linting:
+    description: 'If true, additional rustfmt and clippy components will be installed'
     required: false
-    default: ''
+    default: 'false'
 
 runs:
   using: 'composite'
@@ -18,9 +18,17 @@ runs:
 
     - name: Install toolchain
       uses: dtolnay/rust-toolchain
+      if: ${{ inputs.is-linting == 'true' }}
       with:
         toolchain: stable
-        components: ${{ inputs.components }}
+        components: rustfmt, clippy
+
+    - name: Install toolchain
+      uses: dtolnay/rust-toolchain
+      if: ${{ inputs.is-linting == 'false' }}
+      with:
+        toolchain: stable
+        components: rustfmt, clippy
 
     - name: Rust cache
       uses: Swatinem/rust-cache@v2
