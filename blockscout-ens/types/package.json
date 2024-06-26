@@ -11,7 +11,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/blockscout/blockscout-rs.git",
+    "url": "git+https://github.com/blockscout/blockscout-rs.git",
     "directory": "blockscout-ens/types"
   },
   "license": "MIT",
