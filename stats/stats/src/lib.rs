@@ -17,7 +17,7 @@ pub use charts::{
     counters,
     db_interaction::{
         read::{get_line_chart_data, get_raw_counters, ReadError},
-        types::{DateValueString, ExtendedDateValue, ZeroDateValue},
+        types::{self, DateValueString, ExtendedDateValue, ZeroDateValue},
     },
     lines, ChartProperties, ChartPropertiesObject, MissingDatePolicy, Named, Point, UpdateError,
 };

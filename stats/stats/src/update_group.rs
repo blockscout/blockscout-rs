@@ -3,7 +3,7 @@
 //! ## Justification
 //!
 //! Reasons to have update groups are listed in [data source module docs (Usage)](crate::data_source)
-//! and [`construct_update_group` macro docs](construct_update_group).
+//! and `construct_update_group` macro docs.
 //!
 //! ## Usage
 //!
@@ -15,7 +15,7 @@
 //! or
 //! [`CumulativeLocalDbChartSource`](crate::data_source::kinds::local_db::CumulativeLocalDbChartSource)
 //! ).
-//! 2. Construct simple (non-sync) update groups via [`construct_update_group!`]
+//! 2. Construct simple (non-sync) update groups via `construct_update_group!`
 //! 3. Create mutexes (1-1 for each chart)
 //! 4. Create synchronous versions of groups with [`SyncUpdateGroup::new`]
 //!
@@ -92,7 +92,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// Construct update group that implemants [`UpdateGroup`]. The main purpose of the
 /// group is to update its members together.
 ///
-/// All membere must implement [`crate::ChartProperties`] and [`crate::data_source::DataSource`].
+/// All membere must implement [`trait@crate::ChartProperties`] and [`crate::data_source::DataSource`].
 ///
 /// The behaviour is the following:
 /// 1. when `create` or `update` is triggered, each member's correspinding method is triggered

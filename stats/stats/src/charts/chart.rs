@@ -1,7 +1,7 @@
 //! There is no unified trait for "chart". However, within the
 //! scope of this project, "chart" can be thought of as
 //! something that implements [`DataSource`](crate::data_source::DataSource),
-//! [`ChartProperties`], and is stored in local database (e.g.
+//! [`trait@ChartProperties`], and is stored in local database (e.g.
 //! [`LocalDbChartSource`](crate::data_source::kinds::local_db))
 
 use crate::{DateValueString, ReadError};
