@@ -172,6 +172,7 @@ jobs:
     uses: './.github/workflows/npm-publisher.yml'
     needs: push
     if: needs.push.outputs.semver != ''
+    secrets: inherit
     with:
       version: ${{ needs.push.outputs.semver }}
       project_name: blockscout-ens
