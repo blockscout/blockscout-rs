@@ -12,9 +12,6 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Checkout sources
-      uses: actions/checkout@v4
-
     - name: Install deps
       uses: ./.github/actions/deps
 
