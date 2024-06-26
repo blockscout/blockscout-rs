@@ -16,20 +16,11 @@ runs:
     - name: Install deps
       uses: ./.github/actions/deps
 
-#    - name: Install toolchain
-#      uses: dtolnay/rust-toolchain
-#      with:
-#        toolchain: stable
-#        components: rustfmt, clippy
-
     - name: Install toolchain
-      uses: actions-rs/toolchain@v1
+      uses: dtolnay/rust-toolchain
       if: ${{ inputs.is-linting == 'false' }}
       with:
         toolchain: stable
-        profile: minimal
-        components: rustfmt, clippy
-        override: true
 
     - name: Install toolchain
       uses: actions-rs/toolchain@v1
@@ -37,6 +28,7 @@ runs:
       with:
         toolchain: stable
         profile: minimal
+        components: rustfmt, clippy
         override: true
 
     - name: Rust cache
