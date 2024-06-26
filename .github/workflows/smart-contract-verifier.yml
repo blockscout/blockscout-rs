@@ -96,6 +96,6 @@ jobs:
       always() &&
       (needs.test.result == 'success' || needs.test.result == 'cancelled') &&
       (needs.lint.result == 'success' || needs.lint.result == 'cancelled')
-    uses: ./.github/workflows/docker-build-push.yml
+    uses: ./.github/workflows/_docker-build-push.yml
     with:
       service-name: smart-contract-verifier
