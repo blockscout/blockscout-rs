@@ -1,21 +1,26 @@
+use std::ops::RangeInclusive;
+
 use crate::{
-    charts::db_interaction::chart_updaters::{ChartBatchUpdater, ChartUpdater},
-    UpdateError,
+    charts::db_interaction::types::DateValueInt,
+    data_source::kinds::{
+        data_manipulation::map::MapParseTo,
+        local_db::DirectVecLocalDbChartSource,
+        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
+    },
+    utils::sql_with_range_filter_opt,
+    ChartProperties, DateValueString, Named,
 };
-use async_trait::async_trait;
-use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, Statement};
+use sea_orm::{prelude::DateTimeUtc, DbBackend, Statement};
 
-#[derive(Default, Debug)]
-pub struct NewContracts {}
+pub struct NewContractsStatement;
 
-#[async_trait]
-impl ChartBatchUpdater for NewContracts {
-    fn get_query(&self, from: NaiveDate, to: NaiveDate) -> Statement {
-        Statement::from_sql_and_values(
+impl StatementFromRange for NewContractsStatement {
+    fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+        sql_with_range_filter_opt!(
             DbBackend::Postgres,
-            r#"SELECT day AS date, COUNT(*)::text AS value
+            r#"
+                SELECT day AS date, COUNT(*)::text AS value
                 FROM (
                     SELECT 
                         DISTINCT ON (txns_plus_internal_txns.hash)
@@ -29,9 +34,7 @@ impl ChartBatchUpdater for NewContracts {
                         WHERE
                             t.created_contract_address_hash NOTNULL AND
                             b.consensus = TRUE AND
-                            b.timestamp != to_timestamp(0) AND
-                            b.timestamp::date < $2 AND
-                            b.timestamp::date >= $1
+                            b.timestamp != to_timestamp(0) {filter}
                         UNION
                         SELECT
                             it.created_contract_address_hash AS hash,
@@ -41,55 +44,49 @@ impl ChartBatchUpdater for NewContracts {
                         WHERE
                             it.created_contract_address_hash NOTNULL AND
                             b.consensus = TRUE AND
-                            b.timestamp != to_timestamp(0) AND
-                            b.timestamp::date < $2 AND
-                            b.timestamp::date >= $1
+                            b.timestamp != to_timestamp(0) {filter}
                     ) txns_plus_internal_txns
                 ) sub
                 GROUP BY sub.day;
-                "#,
-            vec![from.into(), to.into()],
+            "#,
+            [],
+            "b.timestamp",
+            range,
         )
     }
 }
 
-#[async_trait]
-impl crate::Chart for NewContracts {
-    fn name(&self) -> &str {
-        "newContracts"
-    }
+pub type NewContractsRemote =
+    RemoteDatabaseSource<PullAllWithAndSort<NewContractsStatement, DateValueString>>;
 
-    fn chart_type(&self) -> ChartType {
+pub struct NewContractsProperties;
+
+impl Named for NewContractsProperties {
+    const NAME: &'static str = "newContracts";
+}
+
+impl ChartProperties for NewContractsProperties {
+    fn chart_type() -> ChartType {
         ChartType::Line
     }
 }
 
-#[async_trait]
-impl ChartUpdater for NewContracts {
-    async fn update_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<chrono::Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, current_time, force_full)
-            .await
-    }
-}
+pub type NewContracts = DirectVecLocalDbChartSource<NewContractsRemote, NewContractsProperties>;
+pub type NewContractsInt = MapParseTo<NewContracts, DateValueInt>;
 
 #[cfg(test)]
 mod tests {
     use super::NewContracts;
-    use crate::tests::simple_test::simple_test_chart;
+    use crate::tests::{
+        point_construction::{d, dt},
+        simple_test::{ranged_test_chart, simple_test_chart},
+    };
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_new_contracts() {
-        let chart = NewContracts::default();
-        simple_test_chart(
+        simple_test_chart::<NewContracts>(
             "update_new_contracts",
-            chart,
             vec![
                 ("2022-11-09", "3"),
                 ("2022-11-10", "6"),
@@ -99,6 +96,23 @@ mod tests {
                 ("2023-01-01", "1"),
                 ("2023-02-01", "1"),
             ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn ranged_update_new_contracts() {
+        ranged_test_chart::<NewContracts>(
+            "ranged_update_new_contracts",
+            vec![
+                ("2022-11-11", "8"),
+                ("2022-11-12", "2"),
+                ("2022-12-01", "2"),
+            ],
+            d("2022-11-11"),
+            d("2022-12-01"),
+            Some(dt("2022-12-01T12:00:00")),
         )
         .await;
     }

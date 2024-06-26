@@ -1,5 +1,5 @@
 pub use sea_orm_migration::prelude::*;
-use sea_orm_migration::sea_orm::{ConnectionTrait, Statement, TransactionTrait};
+use sea_orm_migration::sea_orm::{Statement, TransactionTrait};
 
 mod m20220101_000001_init;
 mod m20230814_105206_drop_zero_timestamp;
@@ -27,7 +27,7 @@ pub async fn from_sql(manager: &SchemaManager<'_>, content: &str) -> Result<(), 
             st.to_string(),
         ))
         .await
-        .map_err(|e| DbErr::Migration(format!("{e}\nQuery: {st}")))?;
+        .map_err(|e| DbErr::Migration(::std::format!("{e}\nQuery: {st}")))?;
     }
     txn.commit().await
 }

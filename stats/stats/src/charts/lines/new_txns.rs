@@ -1,90 +1,59 @@
+use std::ops::RangeInclusive;
+
 use crate::{
-    charts::db_interaction::{
-        chart_updaters::{ChartPartialUpdater, ChartUpdater},
-        types::DateValue,
+    charts::db_interaction::types::DateValueInt,
+    data_source::kinds::{
+        data_manipulation::map::MapParseTo,
+        local_db::DirectVecLocalDbChartSource,
+        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
-    UpdateError,
+    utils::sql_with_range_filter_opt,
+    ChartProperties, DateValueString, Named,
 };
-use async_trait::async_trait;
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
+use sea_orm::{prelude::*, DbBackend, Statement};
 
-#[derive(Default, Debug)]
-pub struct NewTxns {}
+pub struct NewTxnsStatement;
 
-#[async_trait]
-impl ChartPartialUpdater for NewTxns {
-    async fn get_values(
-        &self,
-        blockscout: &DatabaseConnection,
-        last_updated_row: Option<DateValue>,
-    ) -> Result<Vec<DateValue>, UpdateError> {
-        let stmnt = match last_updated_row {
-            Some(row) => Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
-                SELECT 
-                    date(b.timestamp) as date, 
-                    COUNT(*)::TEXT as value
-                FROM transactions t
-                JOIN blocks       b ON t.block_hash = b.hash
-                WHERE 
-                    b.timestamp != to_timestamp(0) AND
-                    date(b.timestamp) > $1 AND 
-                    b.consensus = true
-                GROUP BY date;
-                "#,
-                vec![row.date.into()],
-            ),
-            None => Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
-                SELECT 
-                    date(b.timestamp) as date, 
+impl StatementFromRange for NewTxnsStatement {
+    fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+        sql_with_range_filter_opt!(
+            DbBackend::Postgres,
+            r#"
+                SELECT
+                    date(b.timestamp) as date,
                     COUNT(*)::TEXT as value
                 FROM transactions t
                 JOIN blocks       b ON t.block_hash = b.hash
                 WHERE
-                    b.timestamp != to_timestamp(0) AND 
-                    b.consensus = true
+                    b.timestamp != to_timestamp(0) AND
+                    b.consensus = true {filter}
                 GROUP BY date;
-                "#,
-                vec![],
-            ),
-        };
-
-        let data = DateValue::find_by_statement(stmnt)
-            .all(blockscout)
-            .await
-            .map_err(UpdateError::BlockscoutDB)?;
-        Ok(data)
+            "#,
+            [],
+            "b.timestamp",
+            range
+        )
     }
 }
 
-#[async_trait]
-impl crate::Chart for NewTxns {
-    fn name(&self) -> &str {
-        "newTxns"
-    }
+pub type NewTxnsRemote =
+    RemoteDatabaseSource<PullAllWithAndSort<NewTxnsStatement, DateValueString>>;
 
-    fn chart_type(&self) -> ChartType {
+pub struct NewTxnsProperties;
+
+impl Named for NewTxnsProperties {
+    const NAME: &'static str = "newTxns";
+}
+
+impl ChartProperties for NewTxnsProperties {
+    fn chart_type() -> ChartType {
         ChartType::Line
     }
 }
 
-#[async_trait]
-impl ChartUpdater for NewTxns {
-    async fn update_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<chrono::Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, current_time, force_full)
-            .await
-    }
-}
+pub type NewTxns = DirectVecLocalDbChartSource<NewTxnsRemote, NewTxnsProperties>;
+pub type NewTxnsInt = MapParseTo<NewTxns, DateValueInt>;
 
 #[cfg(test)]
 mod tests {
@@ -94,10 +63,8 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_new_txns() {
-        let chart = NewTxns::default();
-        simple_test_chart(
+        simple_test_chart::<NewTxns>(
             "update_new_txns",
-            chart,
             vec![
                 ("2022-11-09", "5"),
                 ("2022-11-10", "12"),
@@ -115,38 +82,18 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn ranged_update_new_txns() {
-        let chart = NewTxns::default();
-        ranged_test_chart(
+        ranged_test_chart::<NewTxns>(
             "ranged_update_new_txns",
-            chart,
             vec![
-                ("2022-11-08", "0"),
                 ("2022-11-09", "5"),
                 ("2022-11-10", "12"),
                 ("2022-11-11", "14"),
                 ("2022-11-12", "5"),
-                ("2022-11-13", "0"),
-                ("2022-11-14", "0"),
-                ("2022-11-15", "0"),
-                ("2022-11-16", "0"),
-                ("2022-11-17", "0"),
-                ("2022-11-18", "0"),
-                ("2022-11-19", "0"),
-                ("2022-11-20", "0"),
-                ("2022-11-21", "0"),
-                ("2022-11-22", "0"),
-                ("2022-11-23", "0"),
-                ("2022-11-24", "0"),
-                ("2022-11-25", "0"),
-                ("2022-11-26", "0"),
-                ("2022-11-27", "0"),
-                ("2022-11-28", "0"),
-                ("2022-11-29", "0"),
-                ("2022-11-30", "0"),
                 ("2022-12-01", "5"),
             ],
             "2022-11-08".parse().unwrap(),
             "2022-12-01".parse().unwrap(),
+            None,
         )
         .await;
     }

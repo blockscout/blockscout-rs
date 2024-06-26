@@ -1,120 +1,163 @@
+use std::ops::RangeInclusive;
+
 use crate::{
-    charts::{
-        cache::Cache,
-        db_interaction::{
-            chart_updaters::{ChartFullUpdater, ChartUpdater},
-            types::{DateValue, DateValueInt},
+    charts::db_interaction::types::DateValueInt,
+    data_source::{
+        kinds::{
+            data_manipulation::map::MapParseTo,
+            local_db::{
+                parameters::{
+                    update::batching::{
+                        parameters::{BatchMax, PassVecStep},
+                        BatchUpdate,
+                    },
+                    DefaultCreate, DefaultQueryVec,
+                },
+                LocalDbChartSource,
+            },
+            remote_db::{QueryBehaviour, RemoteDatabaseSource, StatementFromRange},
         },
+        UpdateContext,
     },
-    UpdateError,
+    missing_date::trim_out_of_range_sorted,
+    utils::sql_with_range_filter_opt,
+    ChartProperties, DateValueString, Named, UpdateError,
 };
-use async_trait::async_trait;
+
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
-use tokio::sync::Mutex;
 
-pub struct NewAccounts {
-    cache: Mutex<Cache<Vec<DateValueInt>>>,
-}
+pub struct NewAccountsStatement;
 
-impl NewAccounts {
-    pub fn new(cache: Cache<Vec<DateValueInt>>) -> Self {
-        Self {
-            cache: Mutex::new(cache),
-        }
-    }
-
-    pub async fn read_values(
-        blockscout: &DatabaseConnection,
-    ) -> Result<Vec<DateValueInt>, UpdateError> {
-        let stmnt = Statement::from_sql_and_values(
+impl StatementFromRange for NewAccountsStatement {
+    fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+        // `MIN_UTC` does not fit into postgres' timestamp. Unix epoch start should be enough
+        let min_timestamp = DateTimeUtc::UNIX_EPOCH;
+        // All transactions from the beginning must be considered to calculate new accounts correctly.
+        // E.g. if account was first active both before `range.start()` and within the range,
+        // we don't want to count it within the range (as it's not a *new* account).
+        let range = range.map(|r| (min_timestamp..=r.into_inner().1));
+        sql_with_range_filter_opt!(
             DbBackend::Postgres,
             r#"
-                SELECT 
+                SELECT
                     first_tx.date as date,
-                    count(*) as value
+                    count(*)::TEXT as value
                 FROM (
                     SELECT DISTINCT ON (t.from_address_hash)
                         b.timestamp::date as date
                     FROM transactions  t
                     JOIN blocks        b ON t.block_hash = b.hash
-                    WHERE 
-                        b.timestamp != to_timestamp(0) AND 
-                        b.consensus = true
+                    WHERE
+                        b.timestamp != to_timestamp(0) AND
+                        b.consensus = true {filter}
                     ORDER BY t.from_address_hash, b.timestamp
                 ) first_tx
                 GROUP BY first_tx.date;
-                "#,
-            vec![],
-        );
+            "#,
+            [],
+            "b.timestamp",
+            range
+        )
+    }
+}
 
-        let mut data = DateValueInt::find_by_statement(stmnt)
-            .all(blockscout)
+pub struct NewAccountsQueryBehaviour;
+
+impl QueryBehaviour for NewAccountsQueryBehaviour {
+    type Output = Vec<DateValueString>;
+
+    async fn query_data(
+        cx: &UpdateContext<'_>,
+        range: Option<RangeInclusive<DateTimeUtc>>,
+    ) -> Result<Vec<DateValueString>, UpdateError> {
+        let query = NewAccountsStatement::get_statement(range.clone());
+        let mut data = DateValueString::find_by_statement(query)
+            .all(cx.blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?;
-        data.sort_by_key(|v| v.date);
+        // make sure that it's sorted
+        data.sort_by_key(|d| d.date);
+        if let Some(range) = range {
+            let range = range.start().date_naive()..=range.end().date_naive();
+            trim_out_of_range_sorted(&mut data, range);
+        }
         Ok(data)
     }
 }
 
-#[async_trait]
-impl ChartFullUpdater for NewAccounts {
-    async fn get_values(
-        &self,
-        blockscout: &DatabaseConnection,
-    ) -> Result<Vec<DateValue>, UpdateError> {
-        let mut cache = self.cache.lock().await;
-        Ok(cache
-            .get_or_update(async move { Self::read_values(blockscout).await })
-            .await?
-            .into_iter()
-            .map(DateValue::from)
-            .collect())
-    }
+/// Note:  The intended strategy is to update whole range at once, even
+/// though the implementation allows batching. The batching was done
+/// to simplify interface of the data source.
+///
+/// Thus, use max batch size in the dependant data sources.
+pub type NewAccountsRemote = RemoteDatabaseSource<NewAccountsQueryBehaviour>;
+
+pub struct Properties;
+
+impl Named for Properties {
+    const NAME: &'static str = "newAccounts";
 }
 
-#[async_trait]
-impl crate::Chart for NewAccounts {
-    fn name(&self) -> &str {
-        "newAccounts"
-    }
-    fn chart_type(&self) -> ChartType {
+impl ChartProperties for Properties {
+    fn chart_type() -> ChartType {
         ChartType::Line
     }
 }
 
-#[async_trait]
-impl ChartUpdater for NewAccounts {
-    async fn update_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<chrono::Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, current_time, force_full)
-            .await
-    }
-}
+pub type NewAccounts = LocalDbChartSource<
+    NewAccountsRemote,
+    (),
+    DefaultCreate<Properties>,
+    BatchUpdate<
+        NewAccountsRemote,
+        (),
+        PassVecStep,
+        // see `NewAccountsRemote` docs
+        BatchMax,
+        Properties,
+    >,
+    DefaultQueryVec<Properties>,
+    Properties,
+>;
+
+pub type NewAccountsInt = MapParseTo<NewAccounts, DateValueInt>;
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::simple_test::simple_test_chart;
+    use crate::tests::simple_test::{ranged_test_chart, simple_test_chart};
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_new_accounts() {
-        let chart = NewAccounts::new(Cache::default());
-        simple_test_chart(
+        simple_test_chart::<NewAccounts>(
             "update_new_accounts",
-            chart,
             vec![
                 ("2022-11-09", "1"),
                 ("2022-11-10", "3"),
                 ("2022-11-11", "4"),
                 ("2023-03-01", "1"),
             ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn ranged_update_new_accounts() {
+        ranged_test_chart::<NewAccounts>(
+            "ranged_update_new_accounts",
+            vec![
+                ("2022-11-09", "1"),
+                ("2022-11-10", "3"),
+                // only half of the tx's should be detected; others were created
+                // later than update time
+                ("2022-11-11", "2"),
+            ],
+            "2022-11-09".parse().unwrap(),
+            "2022-11-11".parse().unwrap(),
+            Some("2022-11-11T14:00:00".parse().unwrap()),
         )
         .await;
     }

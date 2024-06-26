@@ -1,108 +1,72 @@
-use crate::{
-    charts::db_interaction::{
-        chart_updaters::{ChartPartialUpdater, ChartUpdater},
-        types::{DateValue, DateValueDouble},
-    },
-    UpdateError,
-};
-use async_trait::async_trait;
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
+use std::ops::RangeInclusive;
 
-#[derive(Default, Debug)]
-pub struct AverageGasPrice {}
+use crate::{
+    charts::db_interaction::types::DateValueDouble,
+    data_source::kinds::{
+        data_manipulation::map::MapToString,
+        local_db::DirectVecLocalDbChartSource,
+        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
+    },
+    utils::sql_with_range_filter_opt,
+    ChartProperties, Named,
+};
+
+use entity::sea_orm_active_enums::ChartType;
+use sea_orm::{prelude::*, DbBackend, Statement};
 
 const GWEI: i64 = 1_000_000_000;
 
-#[async_trait]
-impl ChartPartialUpdater for AverageGasPrice {
-    async fn get_values(
-        &self,
-        blockscout: &DatabaseConnection,
-        last_updated_row: Option<DateValue>,
-    ) -> Result<Vec<DateValue>, UpdateError> {
-        let stmnt = match last_updated_row {
-            Some(row) => Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
-                    SELECT
-                        blocks.timestamp::date as date,
-                        (AVG(
-                            COALESCE(
-                                transactions.gas_price,
-                                blocks.base_fee_per_gas + LEAST(
-                                    transactions.max_priority_fee_per_gas,
-                                    transactions.max_fee_per_gas - blocks.base_fee_per_gas
-                                )
-                            )
-                        ) / $1)::float as value
-                    FROM transactions
-                    JOIN blocks ON transactions.block_hash = blocks.hash
-                    WHERE 
-                        blocks.timestamp != to_timestamp(0) AND
-                        date(blocks.timestamp) > $2 AND
-                        blocks.consensus = true
-                    GROUP BY date
-                    "#,
-                vec![GWEI.into(), row.date.into()],
-            ),
-            None => Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
-                    SELECT
-                        blocks.timestamp::date as date,
-                        (AVG(
-                            COALESCE(
-                                transactions.gas_price,
-                                blocks.base_fee_per_gas + LEAST(
-                                    transactions.max_priority_fee_per_gas,
-                                    transactions.max_fee_per_gas - blocks.base_fee_per_gas
-                                )
-                            )
-                        ) / $1)::float as value
-                    FROM transactions
-                    JOIN blocks ON transactions.block_hash = blocks.hash
-                    WHERE 
-                        blocks.timestamp != to_timestamp(0) AND
-                        blocks.consensus = true
-                    GROUP BY date
-                    "#,
-                vec![GWEI.into()],
-            ),
-        };
+pub struct AverageGasPriceStatement;
 
-        let data = DateValueDouble::find_by_statement(stmnt)
-            .all(blockscout)
-            .await
-            .map_err(UpdateError::BlockscoutDB)?;
-        let data = data.into_iter().map(DateValue::from).collect();
-        Ok(data)
+impl StatementFromRange for AverageGasPriceStatement {
+    fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+        sql_with_range_filter_opt!(
+            DbBackend::Postgres,
+            r#"
+                SELECT
+                    blocks.timestamp::date as date,
+                    (AVG(
+                        COALESCE(
+                            transactions.gas_price,
+                            blocks.base_fee_per_gas + LEAST(
+                                transactions.max_priority_fee_per_gas,
+                                transactions.max_fee_per_gas - blocks.base_fee_per_gas
+                            )
+                        )
+                    ) / $1)::float as value
+                FROM transactions
+                JOIN blocks ON transactions.block_hash = blocks.hash
+                WHERE
+                    blocks.timestamp != to_timestamp(0) AND
+                    blocks.consensus = true {filter}
+                GROUP BY date
+            "#,
+            [GWEI.into()],
+            "blocks.timestamp",
+            range,
+        )
     }
 }
 
-#[async_trait]
-impl crate::Chart for AverageGasPrice {
-    fn name(&self) -> &str {
-        "averageGasPrice"
-    }
-    fn chart_type(&self) -> ChartType {
+pub type AverageGasPriceRemote =
+    RemoteDatabaseSource<PullAllWithAndSort<AverageGasPriceStatement, DateValueDouble>>;
+
+pub type AverageGasPriceRemoteString = MapToString<AverageGasPriceRemote>;
+
+pub struct AverageGasPriceProperties;
+
+impl Named for AverageGasPriceProperties {
+    const NAME: &'static str = "averageGasPrice";
+}
+
+impl ChartProperties for AverageGasPriceProperties {
+    fn chart_type() -> ChartType {
         ChartType::Line
     }
 }
 
-#[async_trait]
-impl ChartUpdater for AverageGasPrice {
-    async fn update_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<chrono::Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, current_time, force_full)
-            .await
-    }
-}
+pub type AverageGasPrice =
+    DirectVecLocalDbChartSource<AverageGasPriceRemoteString, AverageGasPriceProperties>;
 
 #[cfg(test)]
 mod tests {
@@ -112,11 +76,8 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_average_gas_price() {
-        let chart = AverageGasPrice::default();
-
-        simple_test_chart(
+        simple_test_chart::<AverageGasPrice>(
             "update_average_gas_price",
-            chart,
             vec![
                 ("2022-11-09", "0.4493827156"),
                 ("2022-11-10", "1.96604938075"),

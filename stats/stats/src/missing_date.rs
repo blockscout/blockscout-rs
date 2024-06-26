@@ -1,16 +1,83 @@
-use crate::{DateValue, MissingDatePolicy, ReadError};
-use chrono::{Duration, NaiveDate};
+//! Tools for operating with missing data
+use std::ops::RangeInclusive;
+
+use crate::{
+    charts::db_interaction::types::{DateValue, ZeroDateValue},
+    DateValueString, MissingDatePolicy, ReadError,
+};
+use chrono::{Days, Duration, NaiveDate};
+
+/// Fits the `data` within the range (`from`, `to`), preserving
+/// information nearby the boundaries according to `policy`.
+///
+/// Assumes the data is sorted.
+pub fn fit_into_range(
+    mut data: Vec<DateValueString>,
+    from: Option<NaiveDate>,
+    to: Option<NaiveDate>,
+    policy: MissingDatePolicy,
+) -> Vec<DateValueString> {
+    let trim_range =
+        RangeInclusive::new(from.unwrap_or(NaiveDate::MIN), to.unwrap_or(NaiveDate::MAX));
+    match policy {
+        MissingDatePolicy::FillZero => {
+            // (potential) missing values at the boundaries
+            // will be just considered zero
+            trim_out_of_range_sorted(&mut data, trim_range);
+            data
+        }
+        MissingDatePolicy::FillPrevious => {
+            // preserve the point before the range (if needed)
+            if let Some(from) = from {
+                if let Some(last_point_before) =
+                    data.iter().take_while(|p| p.get_parts().0 < &from).last()
+                {
+                    if let Err(insert_idx) = data.binary_search_by_key(&from, |p| *p.get_parts().0)
+                    {
+                        // `data` does not contain point for `from`, need to insert by `FillPrevious` logic
+                        let new_point =
+                            DateValueString::from_parts(from, last_point_before.value.clone());
+                        data.insert(insert_idx, new_point);
+                    }
+                }
+            }
+            trim_out_of_range_sorted(&mut data, trim_range);
+            data
+        }
+    }
+}
+
+/// The vector must be sorted
+pub fn trim_out_of_range_sorted<DV: DateValue>(
+    data: &mut Vec<DV>,
+    range: RangeInclusive<NaiveDate>,
+) {
+    // start of relevant section
+    let keep_from_idx = data
+        .binary_search_by_key(&range.start(), |p| p.get_parts().0)
+        .unwrap_or_else(|i| i);
+    // irrelevant tail start
+    let trim_from_idx = data
+        .binary_search_by_key(
+            &(range
+                .end()
+                .checked_add_days(Days::new(1))
+                .unwrap_or(NaiveDate::MAX)),
+            |p| *p.get_parts().0,
+        )
+        .unwrap_or_else(|i| i);
+    data.truncate(trim_from_idx);
+    data.drain(..keep_from_idx);
+}
 
 /// Fills missing points according to policy and filters out points outside of range.
-///
-/// Note that values outside of the range can still affect the filled values.
 pub fn fill_and_filter_chart(
-    data: Vec<DateValue>,
+    data: Vec<DateValueString>,
     from: Option<NaiveDate>,
     to: Option<NaiveDate>,
     policy: MissingDatePolicy,
     interval_limit: Option<Duration>,
-) -> Result<Vec<DateValue>, ReadError> {
+) -> Result<Vec<DateValueString>, ReadError> {
     let retrieved_count = data.len();
     let data_filled = fill_missing_points(data, policy, from, to, interval_limit)?;
     if let Some(filled_count) = data_filled.len().checked_sub(retrieved_count) {
@@ -31,14 +98,14 @@ pub fn fill_and_filter_chart(
 /// Fills values for all dates from `min(data.first(), from)` to `max(data.last(), to)` according
 /// to `policy`.
 ///
-/// See [`fill_zeros`] and [`fill_previous`] for details on the policies.
+/// See [`filled_zeros_data`] and [`filled_previous_data`] for details on the policies.
 pub fn fill_missing_points(
-    data: Vec<DateValue>,
+    data: Vec<DateValueString>,
     policy: MissingDatePolicy,
     from: Option<NaiveDate>,
     to: Option<NaiveDate>,
     interval_limit: Option<Duration>,
-) -> Result<Vec<DateValue>, ReadError> {
+) -> Result<Vec<DateValueString>, ReadError> {
     let from = vec![from.as_ref(), data.first().map(|v| &v.date)]
         .into_iter()
         .flatten()
@@ -66,9 +133,13 @@ pub fn fill_missing_points(
 }
 
 /// Inserts zero values in `data` for all missing dates in inclusive range `[from; to]`
-fn filled_zeros_data(data: &[DateValue], from: NaiveDate, to: NaiveDate) -> Vec<DateValue> {
+fn filled_zeros_data(
+    data: &[DateValueString],
+    from: NaiveDate,
+    to: NaiveDate,
+) -> Vec<DateValueString> {
     let n = (to - from).num_days() as usize;
-    let mut new_data: Vec<DateValue> = Vec::with_capacity(n);
+    let mut new_data: Vec<DateValueString> = Vec::with_capacity(n);
 
     let mut current_date = from;
     let mut i = 0;
@@ -80,7 +151,7 @@ fn filled_zeros_data(data: &[DateValue], from: NaiveDate, to: NaiveDate) -> Vec<
                 i += 1;
                 value.clone()
             }
-            None => DateValue::zero(current_date),
+            None => DateValueString::with_zero_value(current_date),
         };
         new_data.push(value);
         current_date += Duration::days(1);
@@ -91,9 +162,13 @@ fn filled_zeros_data(data: &[DateValue], from: NaiveDate, to: NaiveDate) -> Vec<
 
 /// Inserts last existing values in `data` for all missing dates in inclusive range `[from; to]`.
 /// For all leading missing dates inserts zero.
-fn filled_previous_data(data: &[DateValue], from: NaiveDate, to: NaiveDate) -> Vec<DateValue> {
+fn filled_previous_data(
+    data: &[DateValueString],
+    from: NaiveDate,
+    to: NaiveDate,
+) -> Vec<DateValueString> {
     let n = (to - from).num_days() as usize;
-    let mut new_data: Vec<DateValue> = Vec::with_capacity(n);
+    let mut new_data: Vec<DateValueString> = Vec::with_capacity(n);
     let mut current_date = from;
     let mut i = 0;
     while current_date <= to {
@@ -105,11 +180,11 @@ fn filled_previous_data(data: &[DateValue], from: NaiveDate, to: NaiveDate) -> V
             }
             None => new_data
                 .last()
-                .map(|value| DateValue {
+                .map(|value| DateValueString {
                     date: current_date,
                     value: value.value.clone(),
                 })
-                .unwrap_or_else(|| DateValue::zero(current_date)),
+                .unwrap_or_else(|| DateValueString::with_zero_value(current_date)),
         };
         new_data.push(value);
         current_date += Duration::days(1);
@@ -118,11 +193,11 @@ fn filled_previous_data(data: &[DateValue], from: NaiveDate, to: NaiveDate) -> V
 }
 
 pub(crate) fn filter_within_range(
-    data: Vec<DateValue>,
+    data: Vec<DateValueString>,
     maybe_from: Option<NaiveDate>,
     maybe_to: Option<NaiveDate>,
-) -> Vec<DateValue> {
-    let is_within_range = |v: &DateValue| -> bool {
+) -> Vec<DateValueString> {
+    let is_within_range = |v: &DateValueString| -> bool {
         if let Some(from) = maybe_from {
             if v.date < from {
                 return false;
@@ -141,19 +216,14 @@ pub(crate) fn filter_within_range(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use chrono::NaiveDate;
-    use pretty_assertions::assert_eq;
+    use crate::{
+        charts::db_interaction::types::DateValueInt,
+        tests::point_construction::{d, v, v_int},
+    };
 
-    fn d(date: &str) -> NaiveDate {
-        date.parse().unwrap()
-    }
-    fn v(date: &str, value: &str) -> DateValue {
-        DateValue {
-            date: d(date),
-            value: value.to_string(),
-        }
-    }
+    use super::*;
+
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn fill_zeros_works() {
@@ -415,6 +485,220 @@ mod tests {
                 Some(limit)
             ),
             Err(ReadError::IntervalLimitExceeded(limit))
+        );
+    }
+
+    #[test]
+    fn trim_range_works() {
+        // Empty vector
+        let mut data: Vec<DateValueInt> = vec![];
+        trim_out_of_range_sorted(&mut data, d("2100-01-02")..=d("2100-01-04"));
+        assert_eq!(data, vec![]);
+        trim_out_of_range_sorted(&mut data, NaiveDate::MIN..=NaiveDate::MAX);
+
+        // No elements in range (before)
+        let mut data = vec![
+            v_int("2100-01-01", 1),
+            v_int("2100-01-02", 2),
+            v_int("2100-01-03", 3),
+        ];
+        trim_out_of_range_sorted(&mut data, d("2099-12-30")..=d("2099-12-31"));
+        assert_eq!(data, vec![]);
+
+        // No elements in range (after)
+        let mut data = vec![
+            v_int("2100-01-01", 1),
+            v_int("2100-01-02", 2),
+            v_int("2100-01-03", 3),
+        ];
+        trim_out_of_range_sorted(&mut data, d("2100-01-04")..=d("2100-01-05"));
+        assert_eq!(data, vec![]);
+
+        // All elements in range
+        let mut data = vec![
+            v_int("2100-01-01", 1),
+            v_int("2100-01-02", 2),
+            v_int("2100-01-03", 3),
+        ];
+        trim_out_of_range_sorted(&mut data, d("2100-01-01")..=d("2100-01-03"));
+        assert_eq!(
+            data,
+            vec![
+                v_int("2100-01-01", 1),
+                v_int("2100-01-02", 2),
+                v_int("2100-01-03", 3),
+            ]
+        );
+
+        // Partial elements in range
+        let mut data = vec![
+            v_int("2100-01-01", 1),
+            v_int("2100-01-02", 2),
+            v_int("2100-01-03", 3),
+        ];
+        trim_out_of_range_sorted(&mut data, d("2100-01-02")..=d("2100-01-10"));
+        assert_eq!(data, vec![v_int("2100-01-02", 2), v_int("2100-01-03", 3)]);
+
+        // Single element in range
+        let mut data = vec![
+            v_int("2100-01-01", 1),
+            v_int("2100-01-02", 2),
+            v_int("2100-01-03", 3),
+        ];
+        trim_out_of_range_sorted(&mut data, d("2100-01-02")..=d("2100-01-02"));
+        assert_eq!(data, vec![v_int("2100-01-02", 2)]);
+    }
+
+    #[test]
+    fn fit_into_range_works() {
+        // Empty vector
+        assert_eq!(
+            fit_into_range(
+                vec![],
+                Some(d("2100-01-02")),
+                Some(d("2100-01-04")),
+                MissingDatePolicy::FillZero
+            ),
+            vec![]
+        );
+        assert_eq!(
+            fit_into_range(
+                vec![],
+                Some(d("2100-01-02")),
+                Some(d("2100-01-04")),
+                MissingDatePolicy::FillPrevious
+            ),
+            vec![]
+        );
+
+        let data = vec![
+            v("2100-01-01", "1"),
+            v("2100-01-02", "2"),
+            v("2100-01-03", "3"),
+        ];
+
+        // No elements in range
+        assert_eq!(
+            fit_into_range(
+                data.clone(),
+                Some(d("2099-12-30")),
+                Some(d("2099-12-31")),
+                MissingDatePolicy::FillZero
+            ),
+            vec![]
+        );
+        assert_eq!(
+            fit_into_range(
+                data.clone(),
+                Some(d("2099-12-04")),
+                Some(d("2099-12-05")),
+                MissingDatePolicy::FillZero
+            ),
+            vec![]
+        );
+        assert_eq!(
+            fit_into_range(
+                data.clone(),
+                Some(d("2099-12-30")),
+                Some(d("2099-12-31")),
+                MissingDatePolicy::FillPrevious
+            ),
+            vec![]
+        );
+        assert_eq!(
+            fit_into_range(
+                data.clone(),
+                Some(d("2099-12-04")),
+                Some(d("2099-12-05")),
+                MissingDatePolicy::FillPrevious
+            ),
+            vec![]
+        );
+        // All elements in range
+        assert_eq!(
+            fit_into_range(
+                data.clone(),
+                Some(d("2100-01-01")),
+                Some(d("2100-01-03")),
+                MissingDatePolicy::FillZero
+            ),
+            vec![
+                v("2100-01-01", "1"),
+                v("2100-01-02", "2"),
+                v("2100-01-03", "3"),
+            ]
+        );
+
+        // All elements in range with FillPrevious policy
+        assert_eq!(
+            fit_into_range(
+                data.clone(),
+                Some(d("2100-01-01")),
+                Some(d("2100-01-03")),
+                MissingDatePolicy::FillPrevious
+            ),
+            vec![
+                v("2100-01-01", "1"),
+                v("2100-01-02", "2"),
+                v("2100-01-03", "3"),
+            ]
+        );
+
+        // Partial elements in range
+        let data = vec![
+            v("2100-01-01", "1"),
+            v("2100-01-02", "2"),
+            v("2100-01-03", "3"),
+        ];
+        assert_eq!(
+            fit_into_range(
+                data.clone(),
+                Some(d("2100-01-02")),
+                Some(d("2100-01-10")),
+                MissingDatePolicy::FillZero
+            ),
+            vec![v("2100-01-02", "2"), v("2100-01-03", "3"),]
+        );
+        assert_eq!(
+            fit_into_range(
+                data.clone(),
+                Some(d("2100-01-02")),
+                Some(d("2100-01-10")),
+                MissingDatePolicy::FillPrevious
+            ),
+            vec![v("2100-01-02", "2"), v("2100-01-03", "3"),]
+        );
+
+        // Range includes dates outside of the provided data with FillZero policy
+        let data = vec![
+            v("2100-01-03", "3"),
+            v("2100-01-05", "5"),
+            v("2100-01-07", "7"),
+        ];
+        assert_eq!(
+            fit_into_range(
+                data.clone(),
+                Some(d("2100-01-04")),
+                Some(d("2100-01-06")),
+                MissingDatePolicy::FillZero
+            ),
+            vec![v("2100-01-05", "5"),]
+        );
+
+        // Range includes dates outside of the provided data with FillPrevious policy
+        let data = vec![
+            v("2100-01-03", "3"),
+            v("2100-01-05", "5"),
+            v("2100-01-07", "7"),
+        ];
+        assert_eq!(
+            fit_into_range(
+                data.clone(),
+                Some(d("2100-01-04")),
+                Some(d("2100-01-06")),
+                MissingDatePolicy::FillPrevious
+            ),
+            vec![v("2100-01-04", "3"), v("2100-01-05", "5"),]
         );
     }
 }

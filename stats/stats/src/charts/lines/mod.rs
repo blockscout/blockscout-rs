@@ -1,5 +1,3 @@
-mod mock;
-
 mod accounts_growth;
 mod active_accounts;
 mod average_block_rewards;
@@ -23,6 +21,9 @@ mod txns_growth;
 mod txns_success_rate;
 mod verified_contracts_growth;
 
+#[cfg(test)]
+mod mock;
+
 pub use accounts_growth::AccountsGrowth;
 pub use active_accounts::ActiveAccounts;
 pub use average_block_rewards::AverageBlockRewards;
@@ -32,17 +33,19 @@ pub use average_gas_price::AverageGasPrice;
 pub use average_txn_fee::AverageTxnFee;
 pub use contracts_growth::ContractsGrowth;
 pub use gas_used_growth::GasUsedGrowth;
-pub use mock::MockLine;
 pub use native_coin_holders_growth::NativeCoinHoldersGrowth;
 pub use native_coin_supply::NativeCoinSupply;
 pub use new_accounts::NewAccounts;
 pub use new_blocks::NewBlocks;
 pub use new_contracts::NewContracts;
 pub use new_native_coin_holders::NewNativeCoinHolders;
-pub use new_native_coin_transfers::NewNativeCoinTransfers;
-pub use new_txns::NewTxns;
+pub use new_native_coin_transfers::{NewNativeCoinTransfers, NewNativeCoinTransfersInt};
+pub use new_txns::{NewTxns, NewTxnsInt};
 pub use new_verified_contracts::NewVerifiedContracts;
 pub use txns_fee::TxnsFee;
 pub use txns_growth::TxnsGrowth;
 pub use txns_success_rate::TxnsSuccessRate;
 pub use verified_contracts_growth::VerifiedContractsGrowth;
+
+#[cfg(test)]
+pub use mock::MockLine;

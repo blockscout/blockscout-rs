@@ -1,9 +1,16 @@
-use crate::ReadError;
-use async_trait::async_trait;
-use chrono::Duration;
-use entity::{charts, sea_orm_active_enums::ChartType};
-use sea_orm::{prelude::*, sea_query, FromQueryResult, QuerySelect, Set};
+//! There is no unified trait for "chart". However, within the
+//! scope of this project, "chart" can be thought of as
+//! something that implements [`DataSource`](crate::data_source::DataSource),
+//! [`trait@ChartProperties`], and is stored in local database (e.g.
+//! [`LocalDbChartSource`](crate::data_source::kinds::local_db))
+
+use crate::{DateValueString, ReadError};
+use chrono::{DateTime, Duration, Utc};
+use entity::sea_orm_active_enums::ChartType;
+use sea_orm::{prelude::*, FromQueryResult};
 use thiserror::Error;
+
+use super::db_interaction::types::DateValue;
 
 #[derive(Error, Debug)]
 pub enum UpdateError {
@@ -12,7 +19,7 @@ pub enum UpdateError {
     #[error("stats database error: {0}")]
     StatsDB(DbErr),
     #[error("chart {0} not found")]
-    NotFound(String),
+    ChartNotFound(String),
     #[error("date interval limit ({limit}) is exceeded; choose smaller time interval.")]
     IntervalLimitExceeded { limit: Duration },
     #[error("internal error: {0}")]
@@ -23,11 +30,28 @@ impl From<ReadError> for UpdateError {
     fn from(read: ReadError) -> Self {
         match read {
             ReadError::DB(db) => UpdateError::StatsDB(db),
-            ReadError::NotFound(err) => UpdateError::NotFound(err),
+            ReadError::ChartNotFound(err) => UpdateError::ChartNotFound(err),
             ReadError::IntervalLimitExceeded(limit) => UpdateError::IntervalLimitExceeded { limit },
         }
     }
 }
+
+#[derive(Clone)]
+pub struct ChartMetadata {
+    pub id: i32,
+    #[allow(unused)]
+    pub created_at: DateTime<Utc>,
+    pub last_updated_at: Option<DateTime<Utc>>,
+}
+
+/// Type of the point stored in the chart.
+/// [`DateValueString`] can be used to avoid parsing the values,
+/// but [`crate::charts::db_interaction::types::DateValueDecimal`]
+/// or other types can be useful sometimes
+/// (e.g. for cumulative chart).
+pub trait Point: FromQueryResult + DateValue + Into<DateValueString> + Send + Sync {}
+
+impl<T: FromQueryResult + DateValue + Into<DateValueString> + Send + Sync> Point for T {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MissingDatePolicy {
@@ -35,21 +59,25 @@ pub enum MissingDatePolicy {
     FillPrevious,
 }
 
-#[async_trait]
-pub trait Chart: Sync {
-    fn name(&self) -> &str;
-    fn chart_type(&self) -> ChartType;
-    fn missing_date_policy(&self) -> MissingDatePolicy {
+pub trait Named {
+    /// Must be unique
+    const NAME: &'static str;
+}
+
+#[portrait::make(import(
+    crate::charts::chart::MissingDatePolicy,
+    entity::sea_orm_active_enums::ChartType,
+))]
+pub trait ChartProperties: Sync + Named {
+    fn chart_type() -> ChartType;
+    fn missing_date_policy() -> MissingDatePolicy {
         MissingDatePolicy::FillZero
-    }
-    fn relevant_or_zero(&self) -> bool {
-        false
     }
     /// Number of last values that are considered approximate.
     /// (ordered by time)
     ///
     /// E.g. how many end values should be recalculated on (kinda)
-    /// lazy update (where `get_last_row` is retrieved successfully).
+    /// lazy update (where `get_update_start` is retrieved successfully).
     /// Also controls marking points as approximate when returning data.
     ///
     /// ## Value
@@ -60,57 +88,38 @@ pub trait Chart: Sync {
     ///
     /// I.e. for number of blocks per day, stats for current day (0) are
     /// not complete because blocks will be produced till the end of the day.
+    /// ```text
     ///    |===|=  |
     /// day -1   0
-    fn approximate_trailing_points(&self) -> u64 {
-        if self.chart_type() == ChartType::Counter {
+    /// ```
+    fn approximate_trailing_points() -> u64 {
+        if Self::chart_type() == ChartType::Counter {
             // there's only one value in counter
             0
         } else {
             1
         }
     }
+}
 
-    async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
-        create_chart(db, self.name().into(), self.chart_type()).await
+/// Dynamic version of trait `ChartProperties`.
+///
+/// Helpful when need a unified type for different charts
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChartPropertiesObject {
+    pub name: String,
+    pub chart_type: ChartType,
+    pub missing_date_policy: MissingDatePolicy,
+    pub approximate_trailing_points: u64,
+}
+
+impl ChartPropertiesObject {
+    pub fn construct_from_chart<T: ChartProperties>() -> Self {
+        Self {
+            name: T::NAME.to_owned(),
+            chart_type: T::chart_type(),
+            missing_date_policy: T::missing_date_policy(),
+            approximate_trailing_points: T::approximate_trailing_points(),
+        }
     }
-}
-
-#[derive(Debug, FromQueryResult)]
-struct ChartID {
-    id: i32,
-}
-
-pub async fn find_chart(db: &DatabaseConnection, name: &str) -> Result<Option<i32>, DbErr> {
-    charts::Entity::find()
-        .column(charts::Column::Id)
-        .filter(charts::Column::Name.eq(name))
-        .into_model::<ChartID>()
-        .one(db)
-        .await
-        .map(|id| id.map(|id| id.id))
-}
-
-pub async fn create_chart(
-    db: &DatabaseConnection,
-    name: String,
-    chart_type: ChartType,
-) -> Result<(), DbErr> {
-    let id = find_chart(db, &name).await?;
-    if id.is_some() {
-        return Ok(());
-    }
-    charts::Entity::insert(charts::ActiveModel {
-        name: Set(name),
-        chart_type: Set(chart_type),
-        ..Default::default()
-    })
-    .on_conflict(
-        sea_query::OnConflict::column(charts::Column::Name)
-            .do_nothing()
-            .to_owned(),
-    )
-    .exec(db)
-    .await?;
-    Ok(())
 }

@@ -1,13 +1,14 @@
-use crate::charts::{ArcChartUpdater, Charts};
+use crate::runtime_setup::{RuntimeSetup, UpdateGroupEntry};
 use chrono::Utc;
 use cron::Schedule;
 use sea_orm::{DatabaseConnection, DbErr};
+use stats::data_source::types::UpdateParameters;
 use std::sync::Arc;
 
 pub struct UpdateService {
     db: Arc<DatabaseConnection>,
     blockscout: Arc<DatabaseConnection>,
-    charts: Arc<Charts>,
+    charts: Arc<RuntimeSetup>,
 }
 
 fn time_till_next_call(schedule: &Schedule) -> std::time::Duration {
@@ -24,7 +25,7 @@ impl UpdateService {
     pub async fn new(
         db: Arc<DatabaseConnection>,
         blockscout: Arc<DatabaseConnection>,
-        charts: Arc<Charts>,
+        charts: Arc<RuntimeSetup>,
     ) -> Result<Self, DbErr> {
         Ok(Self {
             db,
@@ -41,19 +42,19 @@ impl UpdateService {
         let semaphore = Arc::new(tokio::sync::Semaphore::new(concurrent_tasks));
         let tasks = self
             .charts
-            .charts_info
+            .update_groups
             .values()
-            .map(|chart_info| {
+            .map(|group| {
                 let this = self.clone();
-                let chart = chart_info.chart.clone();
+                let group_entry = group.clone();
                 let default_schedule = default_schedule.clone();
                 let sema = semaphore.clone();
                 async move {
                     let _permit = sema.acquire().await.expect("failed to acquire permit");
                     if let Some(force_full) = force_update_on_start {
-                        this.clone().update(chart.clone(), force_full).await
+                        this.clone().update(group_entry.clone(), force_full).await
                     };
-                    this.spawn_chart_updater(chart, &default_schedule);
+                    this.spawn_group_updater(group_entry, &default_schedule);
                 }
             })
             .collect::<Vec<_>>();
@@ -61,16 +62,14 @@ impl UpdateService {
         tracing::info!("initial update is done");
     }
 
-    fn spawn_chart_updater(self: &Arc<Self>, chart: ArcChartUpdater, default_schedule: &Schedule) {
-        let chart_info = self
-            .charts
-            .charts_info
-            .get(chart.name())
-            .expect("enabled chart must contain settings");
+    fn spawn_group_updater(
+        self: &Arc<Self>,
+        group_entry: UpdateGroupEntry,
+        default_schedule: &Schedule,
+    ) {
         let this = self.clone();
-        let chart = chart.clone();
-        let schedule = chart_info
-            .settings
+        let chart = group_entry.clone();
+        let schedule = group_entry
             .update_schedule
             .as_ref()
             .unwrap_or(default_schedule)
@@ -78,36 +77,49 @@ impl UpdateService {
         tokio::spawn(async move { this.run_cron(chart, schedule).await });
     }
 
-    async fn update(self: Arc<Self>, chart: ArcChartUpdater, force_full: bool) {
-        tracing::info!(chart = chart.name(), "updating chart");
+    async fn update(self: Arc<Self>, group_entry: UpdateGroupEntry, force_full: bool) {
+        tracing::info!(
+            // instrumentation is inside `update_charts_with_mutexes`
+            update_group = group_entry.group.name(),
+            force_update = force_full,
+            "updating group of charts"
+        );
         let result = {
-            let _timer = stats::metrics::CHART_UPDATE_TIME
-                .with_label_values(&[chart.name()])
-                .start_timer();
-            chart
-                .update_with_mutex(&self.db, &self.blockscout, chrono::Utc::now(), force_full)
+            let update_parameters = UpdateParameters {
+                db: &self.db,
+                blockscout: &self.blockscout,
+                update_time_override: None,
+                force_full,
+            };
+            group_entry
+                .group
+                .update_charts_with_mutexes(update_parameters, &group_entry.enabled_members)
                 .await
         };
         if let Err(err) = result {
-            stats::metrics::UPDATE_ERRORS
-                .with_label_values(&[chart.name()])
-                .inc();
-            tracing::error!(chart = chart.name(), "error during updating chart: {}", err);
+            tracing::error!(
+                update_group = group_entry.group.name(),
+                "error during updating group: {}",
+                err
+            );
         } else {
-            tracing::info!(chart = chart.name(), "successfully updated chart");
+            tracing::info!(
+                update_group = group_entry.group.name(),
+                "successfully updated group"
+            );
         }
     }
 
-    async fn run_cron(self: Arc<Self>, chart: ArcChartUpdater, schedule: Schedule) {
+    async fn run_cron(self: Arc<Self>, group_entry: UpdateGroupEntry, schedule: Schedule) {
         loop {
             let sleep_duration = time_till_next_call(&schedule);
             tracing::info!(
-                chart = chart.name(),
-                "scheduled next run of chart update in {:?}",
+                update_group = group_entry.group.name(),
+                "scheduled next run of group update in {:?}",
                 sleep_duration
             );
             tokio::time::sleep(sleep_duration).await;
-            self.clone().update(chart.clone(), false).await;
+            self.clone().update(group_entry.clone(), false).await;
         }
     }
 }
