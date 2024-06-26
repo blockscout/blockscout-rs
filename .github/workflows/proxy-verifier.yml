@@ -8,13 +8,13 @@ on:
       - proxy-verifier/**
       - .github/workflows/proxy-verifier.yml
       - .github/actions/deps/**
-      - .github/workflows/docker-build-push.yml
+      - .github/workflows/_*.yml
   pull_request:
     paths:
       - proxy-verifier/**
       - .github/workflows/proxy-verifier.yml
       - .github/actions/deps/**
-      - .github/workflows/docker-build-push.yml
+      - .github/workflows/_*.yml
 
 name: Test, lint and docker (proxy-verifier)
 
@@ -96,6 +96,6 @@ jobs:
       always() &&
       (needs.test.result == 'success' || needs.test.result == 'cancelled') &&
       (needs.lint.result == 'success' || needs.lint.result == 'cancelled')
-    uses: ./.github/workflows/docker-build-push.yml
+    uses: ./.github/workflows/_docker-build-push.yml
     with:
       service-name: proxy-verifier

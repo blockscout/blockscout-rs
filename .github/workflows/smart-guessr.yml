@@ -7,12 +7,12 @@ on:
     paths:
       - smart-guessr/**
       - .github/workflows/smart-guessr.yml
-      - .github/workflows/docker-build-push.yml
+      - .github/workflows/_*.yml
   pull_request:
     paths:
       - smart-guessr/**
       - .github/workflows/smart-guessr.yml
-      - .github/workflows/docker-build-push.yml
+      - .github/workflows/_*.yml
 
 name: Test and docker (smart-guessr)
 
@@ -45,6 +45,6 @@ jobs:
     if: |
       always() &&
       (needs.test.result == 'success' || needs.test.result == 'cancelled')
-    uses: ./.github/workflows/docker-build-push.yml
+    uses: ./.github/workflows/_docker-build-push.yml
     with:
       service-name: smart-guessr

@@ -8,13 +8,13 @@ on:
       - da-indexer/**
       - .github/workflows/da-indexer.yml
       - .github/actions/deps/**
-      - .github/workflows/docker-build-push.yml
+      - .github/workflows/_*.yml
   pull_request:
     paths:
       - da-indexer/**
       - .github/workflows/da-indexer.yml
       - .github/actions/deps/**
-      - .github/workflows/docker-build-push.yml
+      - .github/workflows/_*.yml
 
 name: Test, lint and docker (da-indexer)
 
@@ -114,6 +114,6 @@ jobs:
       always() &&
       (needs.test.result == 'success' || needs.test.result == 'cancelled') &&
       (needs.lint.result == 'success' || needs.lint.result == 'cancelled')
-    uses: ./.github/workflows/docker-build-push.yml
+    uses: ./.github/workflows/_docker-build-push.yml
     with:
       service-name: da-indexer
