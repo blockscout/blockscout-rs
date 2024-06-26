@@ -76,7 +76,7 @@ jobs:
         uses: ./.github/actions/setup
         with:
           service-name: da-indexer
-          components: rustfmt, clippy
+          components: 'rustfmt, clippy'
 
       - name: cargo fmt
         run: cargo fmt --all -- --check --config imports_granularity=Crate
