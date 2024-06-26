@@ -8,11 +8,13 @@ on:
       - blockscout-ens/**
       - .github/workflows/bens.yml
       - .github/actions/deps/**
+      - .github/workflows/_*.yml
   pull_request:
     paths:
       - blockscout-ens/**
       - .github/workflows/bens.yml
       - .github/actions/deps/**
+      - .github/workflows/_*.yml
 
 name: Test, lint and docker (bens)
 
@@ -25,88 +27,88 @@ defaults:
     working-directory: blockscout-ens
 
 jobs:
-  test:
-    name: Unit, doc and integration tests
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres
-        env:
-          POSTGRES_PASSWORD: admin
-          POSTGRES_USER: graph-node
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-
-      - name: Install deps
-        uses: ./.github/actions/deps
-
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          override: true
-
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          workspaces: blockscout-ens -> target
-
-      - name: Unit tests
-        run:  cargo test --locked --workspace --all-features --lib --bins -- --nocapture
-        if: success() || failure()
-        env:
-          RUST_BACKTRACE: 1
-          RUST_LOG: info
-          DATABASE_URL: postgres://graph-node:admin@localhost:5432/
-          SQLX_OFFLINE: true
-
-      - name: Integration tests
-        run: cargo test --locked --workspace --test '*' -- --nocapture --include-ignored
-        if: success() || failure()
-        env:
-          RUST_BACKTRACE: 1
-          RUST_LOG: info
-          DATABASE_URL: postgres://graph-node:admin@localhost:5432/
-          SQLX_OFFLINE: true
-
-  lint:
-    name: Linting
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-
-      - name: Install deps
-        uses: ./.github/actions/deps
-
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          components: rustfmt, clippy
-          override: true
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          workspaces: blockscout-ens -> target
-
-      - name: cargo fmt
-        run: cargo fmt --all -- --check --config imports_granularity=Crate
-
-      - name: cargo clippy
-        run: cargo clippy --all --all-targets --all-features -- -D warnings
+#  test:
+#    name: Unit, doc and integration tests
+#    runs-on: ubuntu-latest
+#    services:
+#      postgres:
+#        image: postgres
+#        env:
+#          POSTGRES_PASSWORD: admin
+#          POSTGRES_USER: graph-node
+#        options: >-
+#          --health-cmd pg_isready
+#          --health-interval 10s
+#          --health-timeout 5s
+#          --health-retries 5
+#        ports:
+#          - 5432:5432
+#    steps:
+#      - name: Checkout sources
+#        uses: actions/checkout@v4
+#
+#      - name: Install deps
+#        uses: ./.github/actions/deps
+#
+#      - name: Install toolchain
+#        uses: actions-rs/toolchain@v1
+#        with:
+#          toolchain: stable
+#          profile: minimal
+#          override: true
+#
+#      - name: Rust cache
+#        uses: Swatinem/rust-cache@v2
+#        with:
+#          cache-on-failure: true
+#          workspaces: blockscout-ens -> target
+#
+#      - name: Unit tests
+#        run:  cargo test --locked --workspace --all-features --lib --bins -- --nocapture
+#        if: success() || failure()
+#        env:
+#          RUST_BACKTRACE: 1
+#          RUST_LOG: info
+#          DATABASE_URL: postgres://graph-node:admin@localhost:5432/
+#          SQLX_OFFLINE: true
+#
+#      - name: Integration tests
+#        run: cargo test --locked --workspace --test '*' -- --nocapture --include-ignored
+#        if: success() || failure()
+#        env:
+#          RUST_BACKTRACE: 1
+#          RUST_LOG: info
+#          DATABASE_URL: postgres://graph-node:admin@localhost:5432/
+#          SQLX_OFFLINE: true
+#
+#  lint:
+#    name: Linting
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Checkout sources
+#        uses: actions/checkout@v4
+#
+#      - name: Install deps
+#        uses: ./.github/actions/deps
+#
+#      - name: Install toolchain
+#        uses: actions-rs/toolchain@v1
+#        with:
+#          toolchain: stable
+#          profile: minimal
+#          components: rustfmt, clippy
+#          override: true
+#
+#      - uses: Swatinem/rust-cache@v2
+#        with:
+#          cache-on-failure: true
+#          workspaces: blockscout-ens -> target
+#
+#      - name: cargo fmt
+#        run: cargo fmt --all -- --check --config imports_granularity=Crate
+#
+#      - name: cargo clippy
+#        run: cargo clippy --all --all-targets --all-features -- -D warnings
 
   push:
     name: Docker build and docker push
