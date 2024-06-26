@@ -124,7 +124,7 @@ jobs:
 
   deploy_prod:
     name: Deploy prod instance
-    needs: push
+    needs: docker
     if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     permissions: write-all
