@@ -7,10 +7,6 @@ on:
         required: true
         type: string
 
-defaults:
-  run:
-    working-directory: ${{ inputs.working-directory }}
-
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -23,6 +19,9 @@ jobs:
         with:
           working-directory: ${{ inputs.working-directory }}
           components: rustfmt, clippy
+
+      - name: Enter working directory
+        run: cd ${{ inputs.working-directory }}
 
       - name: cargo fmt
         run: cargo fmt --all -- --check --config imports_granularity=Crate
