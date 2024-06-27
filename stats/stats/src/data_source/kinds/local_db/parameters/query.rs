@@ -25,7 +25,13 @@ impl<C: ChartProperties> QueryBehaviour for DefaultQueryVec<C> {
         // Currently we store data with date precision. Update-time relevance for local charts
         // is achieved while requestind remote source data
         let start = start.map(|s| s.date_naive());
-        let end = end.map(|s| s.date_naive());
+        let end = end.map(|s| {
+            // the `end` point is excluded from the range, meaning
+            // inclusive range will be until `end-1`
+            s.checked_sub_signed(chrono::Duration::nanoseconds(1))
+                .unwrap_or(DateTimeUtc::MIN_UTC)
+                .date_naive()
+        });
         let values: Vec<DateValueString> = get_line_chart_data(
             cx.db,
             C::NAME,
