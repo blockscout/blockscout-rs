@@ -1,4 +1,4 @@
-use std::{future::Future, marker::Send, ops::RangeInclusive};
+use std::{future::Future, marker::Send, ops::Range};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Utc};
@@ -60,6 +60,6 @@ pub trait QueryBehaviour {
     /// Retrieve chart data from local storage.
     fn query_data(
         cx: &UpdateContext<'_>,
-        range: Option<RangeInclusive<DateTimeUtc>>,
+        range: Option<Range<DateTimeUtc>>,
     ) -> impl Future<Output = Result<Self::Output, UpdateError>> + Send;
 }

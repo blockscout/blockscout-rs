@@ -9,7 +9,7 @@
 //! Charts are intended to be such persisted sources,
 //! because their data is directly retreived from the database (on requests).
 
-use std::{marker::PhantomData, ops::RangeInclusive, time::Duration};
+use std::{marker::PhantomData, ops::Range, time::Duration};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Utc};
@@ -228,7 +228,7 @@ where
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        range: Option<RangeInclusive<DateTimeUtc>>,
+        range: Option<Range<DateTimeUtc>>,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<Self::Output, UpdateError> {
         let _timer = dependency_data_fetch_timer.start_interval();

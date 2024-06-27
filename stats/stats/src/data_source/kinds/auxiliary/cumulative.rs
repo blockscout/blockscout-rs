@@ -42,7 +42,7 @@ where
 
     async fn query_data(
         cx: &crate::data_source::UpdateContext<'_>,
-        range: Option<std::ops::RangeInclusive<sea_orm::prelude::DateTimeUtc>>,
+        range: Option<std::ops::Range<sea_orm::prelude::DateTimeUtc>>,
         dependency_data_fetch_timer: &mut blockscout_metrics_tools::AggregateTimer,
     ) -> Result<Self::Output, crate::UpdateError> {
         let delta_data = Delta::query_data(cx, range, dependency_data_fetch_timer).await?;

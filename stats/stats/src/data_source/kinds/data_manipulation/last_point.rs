@@ -2,7 +2,7 @@
 //!
 //! Takes last data point from some other (vector) source
 
-use std::{marker::PhantomData, ops::RangeInclusive};
+use std::{marker::PhantomData, ops::Range};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Utc};
@@ -47,12 +47,12 @@ where
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        _range: Option<RangeInclusive<DateTimeUtc>>,
+        _range: Option<Range<DateTimeUtc>>,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<Self::Output, UpdateError> {
         let data = D::query_data(
             cx,
-            Some(day_start(cx.time.date_naive())..=cx.time),
+            Some(day_start(cx.time.date_naive())..cx.time),
             dependency_data_fetch_timer,
         )
         .await?;

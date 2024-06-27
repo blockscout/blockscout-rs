@@ -19,7 +19,7 @@
 use std::{
     future::Future,
     marker::{PhantomData, Send},
-    ops::RangeInclusive,
+    ops::Range,
 };
 
 use blockscout_metrics_tools::AggregateTimer;
@@ -40,7 +40,7 @@ pub trait QueryBehaviour {
 
     fn query_data(
         cx: &UpdateContext<'_>,
-        range: Option<RangeInclusive<DateTimeUtc>>,
+        range: Option<Range<DateTimeUtc>>,
     ) -> impl Future<Output = Result<Self::Output, UpdateError>> + Send;
 }
 
@@ -60,7 +60,7 @@ impl<Q: QueryBehaviour> DataSource for RemoteDatabaseSource<Q> {
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        range: Option<RangeInclusive<DateTimeUtc>>,
+        range: Option<Range<DateTimeUtc>>,
         remote_fetch_timer: &mut AggregateTimer,
     ) -> Result<<Self as DataSource>::Output, UpdateError> {
         let _interval = remote_fetch_timer.start_interval();
@@ -73,7 +73,7 @@ impl<Q: QueryBehaviour> DataSource for RemoteDatabaseSource<Q> {
 }
 
 pub trait StatementFromRange {
-    fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement;
+    fn get_statement(range: Option<Range<DateTimeUtc>>) -> Statement;
 }
 
 /// Pull data from remote (blockscout) db according to statement
@@ -93,7 +93,7 @@ where
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        range: Option<RangeInclusive<DateTimeUtc>>,
+        range: Option<Range<DateTimeUtc>>,
     ) -> Result<Vec<P>, UpdateError> {
         let query = S::get_statement(range);
         let mut data = P::find_by_statement(query)
@@ -111,6 +111,9 @@ pub trait StatementForOne {
     fn get_statement() -> Statement;
 }
 
+/// Get a single record from remote (blockscout) DB using statement
+/// `S`.
+///
 /// `P` - Type of point to retrieve within query.
 /// `DateValueString` can be used to avoid parsing the values,
 /// but `DateValueDecimal` or other types can be useful sometimes.
@@ -125,7 +128,7 @@ where
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        _range: Option<RangeInclusive<DateTimeUtc>>,
+        _range: Option<Range<DateTimeUtc>>,
     ) -> Result<P, UpdateError> {
         let query = S::get_statement();
         let data = P::find_by_statement(query)

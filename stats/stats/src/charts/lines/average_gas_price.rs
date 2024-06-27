@@ -1,4 +1,4 @@
-use std::ops::RangeInclusive;
+use std::ops::Range;
 
 use crate::{
     charts::db_interaction::types::DateValueDouble,
@@ -19,7 +19,7 @@ const GWEI: i64 = 1_000_000_000;
 pub struct AverageGasPriceStatement;
 
 impl StatementFromRange for AverageGasPriceStatement {
-    fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+    fn get_statement(range: Option<Range<DateTimeUtc>>) -> Statement {
         sql_with_range_filter_opt!(
             DbBackend::Postgres,
             r#"

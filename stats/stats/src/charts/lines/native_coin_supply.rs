@@ -1,4 +1,4 @@
-use std::ops::RangeInclusive;
+use std::ops::Range;
 
 use crate::{
     charts::db_interaction::types::DateValueDouble,
@@ -19,11 +19,11 @@ const ETH: i64 = 1_000_000_000_000_000_000;
 pub struct NativeCoinSupplyStatement;
 
 impl StatementFromRange for NativeCoinSupplyStatement {
-    fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
-        let day_range: Option<RangeInclusive<NaiveDate>> = range.map(|r| {
-            let (start, end) = r.into_inner();
+    fn get_statement(range: Option<Range<DateTimeUtc>>) -> Statement {
+        let day_range: Option<Range<NaiveDate>> = range.map(|r| {
+            let Range { start, end } = r;
             // chart is off anyway, so shouldn't be a big deal
-            start.date_naive()..=end.date_naive()
+            start.date_naive()..end.date_naive()
         });
         // query uses date, therefore `sql_with_range_filter_opt` does not quite fit
         // (making it parameter-agnostic seems not straightforward, let's keep it as-is)
@@ -49,7 +49,7 @@ impl StatementFromRange for NativeCoinSupplyStatement {
                     ) as intermediate
                     WHERE value is not NULL;
                 ",
-                vec![ETH.into(), (*range.start()).into(), (*range.end()).into()],
+                vec![ETH.into(), range.start.into(), range.end.into()],
             ),
             None => Statement::from_sql_and_values(
                 DbBackend::Postgres,

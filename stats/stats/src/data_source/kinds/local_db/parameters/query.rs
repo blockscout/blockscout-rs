@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, ops::RangeInclusive};
+use std::{marker::PhantomData, ops::Range};
 
 use sea_orm::prelude::DateTimeUtc;
 
@@ -19,10 +19,11 @@ impl<C: ChartProperties> QueryBehaviour for DefaultQueryVec<C> {
     /// Note that the data might have missing points for efficiency reasons.
     async fn query_data(
         cx: &UpdateContext<'_>,
-        range: Option<RangeInclusive<DateTimeUtc>>,
+        range: Option<Range<DateTimeUtc>>,
     ) -> Result<Self::Output, UpdateError> {
-        let (start, end) = range.map(|r| (*r.start(), *r.end())).unzip();
-        // Currently we store data with date precision
+        let (start, end) = range.map(|r| (r.start, r.end)).unzip();
+        // Currently we store data with date precision. Update-time relevance for local charts
+        // is achieved while requestind remote source data
         let start = start.map(|s| s.date_naive());
         let end = end.map(|s| s.date_naive());
         let values: Vec<DateValueString> = get_line_chart_data(
@@ -51,7 +52,7 @@ impl<C: ChartProperties> QueryBehaviour for DefaultQueryLast<C> {
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        _range: Option<RangeInclusive<DateTimeUtc>>,
+        _range: Option<Range<DateTimeUtc>>,
     ) -> Result<Self::Output, UpdateError> {
         let value = get_counter_data(
             cx.db,

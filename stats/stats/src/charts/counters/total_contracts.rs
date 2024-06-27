@@ -1,4 +1,4 @@
-use std::ops::RangeInclusive;
+use std::ops::Range;
 
 use crate::{
     data_source::{
@@ -21,7 +21,7 @@ impl QueryBehaviour for TotalContractsQueryBehaviour {
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        _range: Option<RangeInclusive<DateTimeUtc>>,
+        _range: Option<Range<DateTimeUtc>>,
     ) -> Result<Self::Output, UpdateError> {
         let value = addresses::Entity::find()
             .filter(addresses::Column::ContractCode.is_not_null())

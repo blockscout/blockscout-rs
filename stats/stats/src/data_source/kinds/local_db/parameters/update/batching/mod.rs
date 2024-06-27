@@ -3,7 +3,7 @@
 //! Update for some period P can be done only with dependencies'
 //! data for the same exact period P.
 
-use std::{marker::PhantomData, ops::RangeInclusive, time::Instant};
+use std::{marker::PhantomData, ops::Range, time::Instant};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Days, Utc};
@@ -79,7 +79,7 @@ where
         let mut previous_step_last_point = last_accurate_point;
 
         for (i, range) in steps.into_iter().enumerate() {
-            tracing::info!(from =? range.start(), to =? range.end(), previous_step_last_point =? previous_step_last_point, "run {}/{} step of batch update", i + 1, n);
+            tracing::info!(from =? range.start, to =? range.end, previous_step_last_point =? previous_step_last_point, "run {}/{} step of batch update", i + 1, n);
             let now = Instant::now();
             let found = batch_update_values_step::<MainDep, ResolutionDep, BatchStep>(
                 cx,
@@ -112,7 +112,7 @@ async fn batch_update_values_step<MainDep, ResolutionDep, BatchStep>(
     chart_id: i32,
     min_blockscout_block: i64,
     last_accurate_point: Option<DateValueString>,
-    range: RangeInclusive<DateTime<Utc>>,
+    range: Range<DateTime<Utc>>,
     dependency_data_fetch_timer: &mut AggregateTimer,
 ) -> Result<usize, UpdateError>
 where
@@ -137,24 +137,28 @@ where
     Ok(found)
 }
 
-/// Split the range [`start`, `end`] into multiple
+/// Split the range [`start`, `end`) into multiple
 /// with maximum length `step`
 fn generate_date_time_ranges(
     start: DateTime<Utc>,
     end: DateTime<Utc>,
     max_step: chrono::Duration,
-) -> Vec<RangeInclusive<DateTime<Utc>>> {
+) -> Vec<Range<DateTime<Utc>>> {
+    debug_assert!(
+        max_step > chrono::Duration::nanoseconds(1),
+        "step must always be positive"
+    );
     let mut date_range = Vec::new();
-    let mut current_date_time = start;
+    let mut current_start = start;
 
-    while current_date_time < end {
+    while current_start < end {
         // saturating add, since `step` is expected to be positive
-        let next_date = current_date_time
+        let next_start = current_start
             .checked_add_signed(max_step)
             .unwrap_or(DateTime::<Utc>::MAX_UTC)
             .min(end); // finish the ranges right at the end
-        date_range.push(RangeInclusive::new(current_date_time, next_date));
-        current_date_time = next_date;
+        date_range.push(current_start..next_start);
+        current_start = next_start;
     }
 
     date_range
@@ -165,35 +169,28 @@ mod tests {
     use crate::tests::point_construction::{d, dt};
 
     use super::*;
-    use chrono::{NaiveDate, NaiveTime};
     use pretty_assertions::assert_eq;
-
-    // there are leap seconds and such, thus for testing only
-    fn day_end_ish(date: NaiveDate) -> DateTime<Utc> {
-        date.and_time(NaiveTime::from_hms_opt(23, 59, 59).expect("correct time"))
-            .and_utc()
-    }
 
     #[test]
     fn test_generate_date_ranges() {
         for ((from, to), expected) in [
             (
-                (day_start(d("2022-01-01")), day_end_ish(d("2022-03-14"))),
+                (day_start(d("2022-01-01")), day_start(d("2022-03-15"))),
                 vec![
                     (day_start(d("2022-01-01")), day_start(d("2022-01-31"))),
                     (day_start(d("2022-01-31")), day_start(d("2022-03-02"))),
-                    (day_start(d("2022-03-02")), day_end_ish(d("2022-03-14"))),
+                    (day_start(d("2022-03-02")), day_start(d("2022-03-15"))),
                 ],
             ),
             (
-                (day_start(d("2015-07-20")), day_end_ish(d("2015-12-31"))),
+                (day_start(d("2015-07-20")), day_start(d("2016-01-01"))),
                 vec![
                     (day_start(d("2015-07-20")), day_start(d("2015-08-19"))),
                     (day_start(d("2015-08-19")), day_start(d("2015-09-18"))),
                     (day_start(d("2015-09-18")), day_start(d("2015-10-18"))),
                     (day_start(d("2015-10-18")), day_start(d("2015-11-17"))),
                     (day_start(d("2015-11-17")), day_start(d("2015-12-17"))),
-                    (day_start(d("2015-12-17")), day_end_ish(d("2015-12-31"))),
+                    (day_start(d("2015-12-17")), day_start(d("2016-01-01"))),
                 ],
             ),
             (
@@ -211,13 +208,31 @@ mod tests {
                 )],
             ),
         ] {
-            let expected: Vec<_> = expected
-                .into_iter()
-                .map(|r| RangeInclusive::new(r.0, r.1))
-                .collect();
+            let expected: Vec<_> = expected.into_iter().map(|r| r.0..r.1).collect();
             let actual = generate_date_time_ranges(from, to, chrono::Duration::days(30));
             assert_eq!(expected, actual);
         }
+
+        // 1 day batch
+        assert_eq!(
+            vec![day_start(d("2015-07-20"))..day_start(d("2015-07-21"))],
+            generate_date_time_ranges(
+                day_start(d("2015-07-20")),
+                day_start(d("2015-07-21")),
+                chrono::Duration::days(1)
+            )
+        );
+        assert_eq!(
+            vec![
+                day_start(d("2015-07-20"))..day_start(d("2015-07-21")),
+                day_start(d("2015-07-21"))..day_start(d("2015-07-22"))
+            ],
+            generate_date_time_ranges(
+                day_start(d("2015-07-20")),
+                day_start(d("2015-07-22")),
+                chrono::Duration::days(1)
+            )
+        )
     }
 
     mod test_batch_step_receives_correct_data {

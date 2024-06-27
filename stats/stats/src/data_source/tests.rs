@@ -1,4 +1,4 @@
-use std::{collections::HashSet, ops::RangeInclusive, str::FromStr, sync::Arc};
+use std::{collections::HashSet, ops::Range, str::FromStr, sync::Arc};
 
 use chrono::{DateTime, Utc};
 use entity::sea_orm_active_enums::ChartType;
@@ -30,7 +30,7 @@ use crate::{
 pub struct NewContractsQuery;
 
 impl StatementFromRange for NewContractsQuery {
-    fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+    fn get_statement(range: Option<Range<DateTimeUtc>>) -> Statement {
         sql_with_range_filter_opt!(
             DbBackend::Postgres,
             r#"

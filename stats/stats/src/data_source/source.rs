@@ -1,4 +1,4 @@
-use std::{collections::HashSet, future::Future, marker::Send, ops::RangeInclusive};
+use std::{collections::HashSet, future::Future, marker::Send, ops::Range};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::Utc;
@@ -165,7 +165,7 @@ pub trait DataSource {
     /// to call [`DataSource::update_recursively`] beforehand.
     fn query_data(
         cx: &UpdateContext<'_>,
-        range: Option<RangeInclusive<DateTimeUtc>>,
+        range: Option<Range<DateTimeUtc>>,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> impl Future<Output = Result<Self::Output, UpdateError>> + Send;
 }
@@ -207,7 +207,7 @@ impl DataSource for () {
 
     async fn query_data(
         _cx: &UpdateContext<'_>,
-        _range: Option<RangeInclusive<DateTimeUtc>>,
+        _range: Option<Range<DateTimeUtc>>,
         _remote_fetch_timer: &mut AggregateTimer,
     ) -> Result<Self::Output, UpdateError> {
         Ok(())
@@ -246,7 +246,7 @@ macro_rules! impl_data_source_for_tuple {
 
             async fn query_data(
                 cx: &UpdateContext<'_>,
-                range: Option<RangeInclusive<DateTimeUtc>>,
+                range: Option<Range<DateTimeUtc>>,
                 remote_fetch_timer: &mut AggregateTimer,
             ) -> Result<Self::Output, UpdateError> {
                 Ok((

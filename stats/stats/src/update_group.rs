@@ -155,7 +155,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// # };
 /// # use chrono::NaiveDate;
 /// # use entity::sea_orm_active_enums::ChartType;
-/// # use std::ops::RangeInclusive;
+/// # use std::ops::Range;
 /// # use sea_orm::prelude::DateTimeUtc;
 /// # use sea_orm::Statement;
 ///
