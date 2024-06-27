@@ -1,0 +1,30 @@
+name: Linting (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      service-name:
+        required: true
+        type: string
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          service-name: ${{ inputs.service-name }}
+          components: rustfmt, clippy
+
+      - name: cargo fmt
+        run: cargo fmt --all -- --check --config imports_granularity=Crate
+
+      - name: cargo clippy
+        run: cargo clippy --all --all-targets --all-features -- -D warnings
+
+      - name: cargo doc
+        run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items

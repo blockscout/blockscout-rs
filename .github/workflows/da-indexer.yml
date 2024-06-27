@@ -8,12 +8,14 @@ on:
       - da-indexer/**
       - .github/workflows/da-indexer.yml
       - .github/workflows/_*.yml
+      - .github/workflows/r_*.yml
       - .github/actions/**
   pull_request:
     paths:
       - da-indexer/**
       - .github/workflows/da-indexer.yml
       - .github/workflows/_*.yml
+      - .github/workflows/r_*.yml
       - .github/actions/**
 
 name: Test, lint and docker (da-indexer)
@@ -67,22 +69,9 @@ jobs:
 
   lint:
     name: Linting
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-
-      - name: Setup
-        uses: ./.github/actions/setup
-        with:
-          service-name: da-indexer
-          components: rustfmt, clippy
-
-      - name: cargo fmt
-        run: cargo fmt --all -- --check --config imports_granularity=Crate
-
-      - name: cargo clippy
-        run: cargo clippy --all --all-targets --all-features -- -D warnings
+    uses: ./.github/workflows/r_linting.yml
+    with:
+      service-name: da-indexer
 
   docker:
     name: Docker build and docker push
