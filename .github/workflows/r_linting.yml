@@ -20,14 +20,14 @@ jobs:
           working-directory: ${{ inputs.working-directory }}
           components: rustfmt, clippy
 
-      - name: Enter working directory
-        run: cd ${{ inputs.working-directory }}
-
       - name: cargo fmt
         run: cargo fmt --all -- --check --config imports_granularity=Crate
+        working-directory: ${{ inputs.working-directory }}
 
       - name: cargo clippy
         run: cargo clippy --all --all-targets --all-features -- -D warnings
+        working-directory: ${{ inputs.working-directory }}
 
       - name: cargo doc
         run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items
+        working-directory: ${{ inputs.working-directory }}
