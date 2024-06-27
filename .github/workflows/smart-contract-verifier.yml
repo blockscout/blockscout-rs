@@ -7,14 +7,14 @@ on:
     paths:
       - smart-contract-verifier/**
       - .github/workflows/smart-contract-verifier.yml
-      - .github/actions/deps/**
       - .github/workflows/_*.yml
+      - .github/actions/**
   pull_request:
     paths:
       - smart-contract-verifier/**
       - .github/workflows/smart-contract-verifier.yml
-      - .github/actions/deps/**
       - .github/workflows/_*.yml
+      - .github/actions/**
 
 name: Test, lint and docker (smart-contract-verifier)
 
@@ -30,21 +30,10 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v4
 
-      - name: Install deps
-        uses: ./.github/actions/deps
-
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
+      - name: Setup
+        uses: ./.github/actions/setup
         with:
-          toolchain: stable
-          profile: minimal
-          override: true
-
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          workspaces: smart-contract-verifier -> target
+          working-directory: smart-contract-verifier
 
       - name: Unit tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture
@@ -60,32 +49,9 @@ jobs:
 
   lint:
     name: Linting
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-
-      - name: Install deps
-        uses: ./.github/actions/deps
-
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          components: rustfmt, clippy
-          override: true
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          workspaces: smart-contract-verifier -> target
-
-      - name: cargo fmt
-        run: cargo fmt --all -- --check --config imports_granularity=Crate
-
-      - name: cargo clippy
-        run: cargo clippy --all --all-targets --all-features -- -D warnings
+    uses: ./.github/workflows/_linting.yml
+    with:
+      working-directory: smart-contract-verifier
 
   docker:
     name: Docker build and docker push

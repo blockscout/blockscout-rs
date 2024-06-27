@@ -7,14 +7,14 @@ on:
     paths:
       - stats/**
       - .github/workflows/stats.yml
-      - .github/actions/deps/**
       - .github/workflows/_*.yml
+      - .github/actions/**
   pull_request:
     paths:
       - stats/**
       - .github/workflows/stats.yml
-      - .github/actions/deps/**
       - .github/workflows/_*.yml
+      - .github/actions/**
 
 name: Test, lint and docker (stats)
 
@@ -43,21 +43,10 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v4
 
-      - name: Install deps
-        uses: ./.github/actions/deps
-
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
+      - name: Setup
+        uses: ./.github/actions/setup
         with:
-          toolchain: stable
-          profile: minimal
-          override: true
-
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          workspaces: stats -> target
+          working-directory: stats
 
       - name: Unit tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture
@@ -79,35 +68,9 @@ jobs:
 
   lint:
     name: Linting
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-
-      - name: Install deps
-        uses: ./.github/actions/deps
-
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          components: rustfmt, clippy
-          override: true
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          workspaces: stats -> target
-
-      - name: cargo fmt
-        run: cargo fmt --all -- --check --config imports_granularity=Crate
-
-      - name: cargo clippy
-        run: cargo clippy --all --all-targets --all-features -- -D warnings
-
-      - name: cargo doc
-        run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items
+    uses: ./.github/workflows/_linting.yml
+    with:
+      working-directory: stats
 
   docker:
     name: Docker build and docker push

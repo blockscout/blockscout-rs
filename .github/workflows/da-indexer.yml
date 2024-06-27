@@ -8,14 +8,12 @@ on:
       - da-indexer/**
       - .github/workflows/da-indexer.yml
       - .github/workflows/_*.yml
-      - .github/workflows/r_*.yml
       - .github/actions/**
   pull_request:
     paths:
       - da-indexer/**
       - .github/workflows/da-indexer.yml
       - .github/workflows/_*.yml
-      - .github/workflows/r_*.yml
       - .github/actions/**
 
 name: Test, lint and docker (da-indexer)
@@ -69,7 +67,7 @@ jobs:
 
   lint:
     name: Linting
-    uses: ./.github/workflows/r_linting.yml
+    uses: ./.github/workflows/_linting.yml
     with:
       working-directory: da-indexer
 

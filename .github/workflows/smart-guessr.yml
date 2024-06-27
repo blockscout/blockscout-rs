@@ -7,12 +7,12 @@ on:
     paths:
       - smart-guessr/**
       - .github/workflows/smart-guessr.yml
-      - .github/workflows/_*.yml
+      - .github/workflows/_docker-build-push.yml
   pull_request:
     paths:
       - smart-guessr/**
       - .github/workflows/smart-guessr.yml
-      - .github/workflows/_*.yml
+      - .github/workflows/_docker-build-push.yml
 
 name: Test and docker (smart-guessr)
 

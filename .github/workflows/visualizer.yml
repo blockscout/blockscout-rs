@@ -7,14 +7,14 @@ on:
     paths:
       - visualizer/**
       - .github/workflows/visualizer.yml
-      - .github/actions/deps/**
       - .github/workflows/_*.yml
+      - .github/actions/**
   pull_request:
     paths:
       - visualizer/**
       - .github/workflows/visualizer.yml
-      - .github/actions/deps/**
       - .github/workflows/_*.yml
+      - .github/actions/**
 
 name: Test, lint and docker (visualizer)
 
@@ -30,8 +30,10 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v4
 
-      - name: Install deps
-        uses: ./.github/actions/deps
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          working-directory: visualizer
 
       - uses: actions/setup-node@v3
         with:
@@ -41,19 +43,6 @@ jobs:
         run: |
           npm install phantom
           npm link sol2uml@2.1 --only=production
-
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          override: true
-
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          workspaces: visualizer -> target
 
       - name: Unit tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture
@@ -69,32 +58,9 @@ jobs:
 
   lint:
     name: Linting
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-
-      - name: Install deps
-        uses: ./.github/actions/deps
-
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          components: rustfmt, clippy
-          override: true
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          workspaces: visualizer -> target
-
-      - name: cargo fmt
-        run: cargo fmt --all -- --check --config imports_granularity=Crate
-
-      - name: cargo clippy
-        run: cargo clippy --all --all-targets --all-features -- -D warnings
+    uses: ./.github/workflows/_linting.yml
+    with:
+      working-directory: visualizer
 
   docker:
     name: Docker build and docker push

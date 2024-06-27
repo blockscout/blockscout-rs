@@ -7,14 +7,14 @@ on:
     paths:
       - eth-bytecode-db/**
       - .github/workflows/eth-bytecode-db.yml
-      - .github/actions/deps/**
       - .github/workflows/_*.yml
+      - .github/actions/**
   pull_request:
     paths:
       - eth-bytecode-db/**
       - .github/workflows/eth-bytecode-db.yml
-      - .github/actions/deps/**
       - .github/workflows/_*.yml
+      - .github/actions/**
 
 name: Test, lint and docker (eth-bytecode-db)
 
@@ -45,6 +45,11 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v4
 
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          working-directory: eth-bytecode-db
+
       - name: Set postgres max_connections
         run: |
           psql -h localhost -p 5432 -c "ALTER SYSTEM SET max_connections = 500;" -d postgres
@@ -57,22 +62,6 @@ jobs:
         uses: docker://docker
         with:
           args: docker restart postgres
-
-      - name: Install deps
-        uses: ./.github/actions/deps
-
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          override: true
-
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          workspaces: eth-bytecode-db -> target
 
       - name: Unit tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture
@@ -90,32 +79,9 @@ jobs:
 
   lint:
     name: Linting
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-
-      - name: Install deps
-        uses: ./.github/actions/deps
-
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          components: rustfmt, clippy
-          override: true
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          workspaces: eth-bytecode-db -> target
-
-      - name: cargo fmt
-        run: cargo fmt --all -- --check --config imports_granularity=Crate
-
-      - name: cargo clippy
-        run: cargo clippy --all --all-targets --all-features -- -D warnings
+    uses: ./.github/workflows/_linting.yml
+    with:
+      working-directory: eth-bytecode-db
 
   docker:
     name: Docker build and docker push
