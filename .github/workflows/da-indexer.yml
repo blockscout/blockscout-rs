@@ -48,7 +48,7 @@ jobs:
       - name: Setup
         uses: ./.github/actions/setup
         with:
-          service-name: da-indexer
+          working-directory: da-indexer
 
       - name: Unit tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture
@@ -71,7 +71,7 @@ jobs:
     name: Linting
     uses: ./.github/workflows/r_linting.yml
     with:
-      service-name: da-indexer
+      working-directory: da-indexer
 
   docker:
     name: Docker build and docker push

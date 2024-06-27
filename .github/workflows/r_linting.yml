@@ -3,9 +3,13 @@ name: Linting (reusable)
 on:
   workflow_call:
     inputs:
-      service-name:
+      working-directory:
         required: true
         type: string
+
+defaults:
+  run:
+    working-directory: ${{ inputs.working-directory }}
 
 jobs:
   lint:
@@ -17,7 +21,7 @@ jobs:
       - name: Setup
         uses: ./.github/actions/setup
         with:
-          service-name: ${{ inputs.service-name }}
+          working-directory: ${{ inputs.working-directory }}
           components: rustfmt, clippy
 
       - name: cargo fmt

@@ -2,8 +2,8 @@ name: 'Setup'
 description: 'Checkout repository, setup rust toolchain and dependencies'
 
 inputs:
-  service-name:
-    description: 'A directory name where the service target is located'
+  working-directory:
+    description: 'A directory where the service code is located'
     required: true
   components:
     description: Comma-separated list of components to be additionally installed
@@ -24,4 +24,4 @@ runs:
       uses: Swatinem/rust-cache@v2
       with:
         cache-on-failure: true
-        workspaces: '${{ inputs.workspaces }} -> target'
+        workspaces: '${{ inputs.working-directory }} -> target'
