@@ -5,11 +5,6 @@ use sea_orm::DatabaseConnection;
 
 use crate::{DateValueString, UpdateError};
 
-pub trait BatchSizeUpperBound {
-    /// Upper bound of batch interval
-    fn batch_max_size() -> chrono::Duration;
-}
-
 pub trait BatchStepBehaviour<MainInput, ResolutionInput>
 where
     MainInput: Send,

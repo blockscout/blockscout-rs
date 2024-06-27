@@ -7,12 +7,14 @@ use std::{marker::PhantomData, ops::RangeInclusive, time::Instant};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Days, Utc};
-use parameter_traits::{BatchSizeUpperBound, BatchStepBehaviour};
+use parameter_traits::BatchStepBehaviour;
 use sea_orm::TransactionTrait;
 
 use crate::{
     charts::db_interaction::{self, read::get_min_date_blockscout},
-    data_source::{kinds::local_db::UpdateBehaviour, source::DataSource, UpdateContext},
+    data_source::{
+        kinds::local_db::UpdateBehaviour, source::DataSource, types::Get, UpdateContext,
+    },
     utils::day_start,
     ChartProperties, DateValueString, UpdateError,
 };
@@ -20,24 +22,30 @@ use crate::{
 pub mod parameter_traits;
 pub mod parameters;
 
-pub struct BatchUpdate<MainDep, ResolutionDep, BatchStep, BatchSize, ChartProps>(
-    PhantomData<(MainDep, ResolutionDep, BatchStep, BatchSize, ChartProps)>,
+pub struct BatchUpdate<MainDep, ResolutionDep, BatchStep, BatchSizeUpperBound, ChartProps>(
+    PhantomData<(
+        MainDep,
+        ResolutionDep,
+        BatchStep,
+        BatchSizeUpperBound,
+        ChartProps,
+    )>,
 )
 where
     MainDep: DataSource,
     ResolutionDep: DataSource,
     BatchStep: BatchStepBehaviour<MainDep::Output, ResolutionDep::Output>,
-    BatchSize: BatchSizeUpperBound,
+    BatchSizeUpperBound: Get<chrono::Duration>,
     ChartProps: ChartProperties;
 
-impl<MainDep, ResolutionDep, BatchStep, BatchSize, ChartProps>
+impl<MainDep, ResolutionDep, BatchStep, BatchSizeUpperBound, ChartProps>
     UpdateBehaviour<MainDep, ResolutionDep>
-    for BatchUpdate<MainDep, ResolutionDep, BatchStep, BatchSize, ChartProps>
+    for BatchUpdate<MainDep, ResolutionDep, BatchStep, BatchSizeUpperBound, ChartProps>
 where
     MainDep: DataSource,
     ResolutionDep: DataSource,
     BatchStep: BatchStepBehaviour<MainDep::Output, ResolutionDep::Output>,
-    BatchSize: BatchSizeUpperBound,
+    BatchSizeUpperBound: Get<chrono::Duration>,
     ChartProps: ChartProperties,
 {
     async fn update_values(
@@ -65,7 +73,7 @@ where
         };
         let first_date_time = day_start(first_date);
 
-        let steps = generate_date_time_ranges(first_date_time, now, BatchSize::batch_max_size());
+        let steps = generate_date_time_ranges(first_date_time, now, BatchSizeUpperBound::get());
         let n = steps.len();
         // disregard partial value(-s)
         let mut previous_step_last_point = last_accurate_point;
@@ -209,6 +217,171 @@ mod tests {
                 .collect();
             let actual = generate_date_time_ranges(from, to, chrono::Duration::days(30));
             assert_eq!(expected, actual);
+        }
+    }
+
+    mod test_batch_step_receives_correct_data {
+        use std::{
+            ops::Deref,
+            str::FromStr,
+            sync::{Arc, Mutex, OnceLock},
+        };
+
+        use chrono::{DateTime, Days, Utc};
+        use entity::sea_orm_active_enums::ChartType;
+        use pretty_assertions::assert_eq;
+
+        use crate::{
+            data_source::{
+                kinds::local_db::{
+                    parameters::{
+                        update::batching::{parameters::mock::RecordingPassStep, BatchUpdate},
+                        DefaultCreate, DefaultQueryVec,
+                    },
+                    LocalDbChartSource,
+                },
+                types::Get,
+            },
+            gettable_const,
+            lines::AccountsGrowth,
+            tests::{
+                point_construction::d,
+                recorder::InMemoryRecorder,
+                simple_test::{map_str_tuple_to_owned, simple_test_chart},
+            },
+            ChartProperties, DateValueString, MissingDatePolicy, Named,
+        };
+
+        use super::parameters::mock::StepInput;
+
+        type VecStringStepInput = StepInput<Vec<DateValueString>, ()>;
+        type SharedInputsStorage = Arc<Mutex<Vec<VecStringStepInput>>>;
+
+        static INPUTS: OnceLock<SharedInputsStorage> = OnceLock::new();
+
+        gettable_const!(ThisInputsStorage: SharedInputsStorage = INPUTS.get_or_init(|| Arc::new(Mutex::new(vec![]))).clone());
+        gettable_const!(Batch1Day: chrono::Duration = chrono::Duration::days(1));
+
+        type ThisRecordingStep =
+            RecordingPassStep<InMemoryRecorder<VecStringStepInput, ThisInputsStorage>>;
+        struct ThisTestChartProps;
+
+        impl Named for ThisTestChartProps {
+            const NAME: &'static str = "test_batch_step_receives_correct_data_chart";
+        }
+
+        impl ChartProperties for ThisTestChartProps {
+            fn chart_type() -> ChartType {
+                ChartType::Line
+            }
+            fn missing_date_policy() -> MissingDatePolicy {
+                MissingDatePolicy::FillPrevious
+            }
+        }
+
+        type ThisRecordingBatchUpdate =
+            BatchUpdate<AccountsGrowth, (), ThisRecordingStep, Batch1Day, ThisTestChartProps>;
+
+        type RecordingChart = LocalDbChartSource<
+            AccountsGrowth,
+            (),
+            DefaultCreate<ThisTestChartProps>,
+            ThisRecordingBatchUpdate,
+            DefaultQueryVec<ThisTestChartProps>,
+            ThisTestChartProps,
+        >;
+
+        fn repeat_value_for_dates(
+            from: &'static str,
+            to: &'static str,
+            value: &'static str,
+        ) -> Vec<(String, String)> {
+            let from = d(from);
+            let to = d(to);
+            let mut result = Vec::new();
+            let mut next_date = from;
+            while next_date <= to {
+                result.push((next_date.to_string(), value.to_owned()));
+                next_date = next_date.checked_add_days(Days::new(1)).unwrap();
+            }
+            result
+        }
+
+        fn clear_inputs(storage: SharedInputsStorage) {
+            storage.lock().unwrap().clear();
+        }
+
+        fn verify_inputs(storage: SharedInputsStorage) {
+            let mut prev_input: Option<&StepInput<Vec<DateValueString>, ()>> = None;
+            for input in storage.lock().unwrap().deref() {
+                assert_eq!(input.chart_id, 3);
+                assert_eq!(
+                    input.update_time,
+                    DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap()
+                );
+                assert_eq!(input.min_blockscout_block, 0);
+                // batch step = 1 day
+                dbg!(&input);
+                assert_eq!(input.main_data.len(), 1);
+                if let Some(prev_input) = prev_input {
+                    assert!(
+                        input.last_accurate_point.is_some(),
+                        "must have prev point at this moment"
+                    );
+                    assert_eq!(
+                        input.last_accurate_point.as_ref().unwrap(),
+                        &prev_input.main_data[0]
+                    );
+                    assert_eq!(
+                        input
+                            .last_accurate_point
+                            .as_ref()
+                            .unwrap()
+                            .date
+                            .checked_add_days(Days::new(1))
+                            .unwrap(),
+                        input.main_data[0].date
+                    );
+                }
+                prev_input = Some(input);
+            }
+        }
+
+        #[tokio::test]
+        #[ignore = "needs database to run"]
+        async fn test_batch_step_receives_correct_data() {
+            let expected_data = [
+                map_str_tuple_to_owned(vec![
+                    ("2022-11-09", "1"),
+                    ("2022-11-10", "4"),
+                    ("2022-11-11", "8"),
+                ]),
+                repeat_value_for_dates("2022-11-12", "2023-02-28", "8"),
+                map_str_tuple_to_owned(vec![("2023-03-01", "9")]),
+            ]
+            .concat();
+
+            simple_test_chart::<RecordingChart>(
+                "test_batch_step_receives_correct_data",
+                expected_data
+                    .iter()
+                    .map(|p| (p.0.as_str(), p.1.as_str()))
+                    .collect(),
+            )
+            .await;
+            verify_inputs(ThisInputsStorage::get());
+            clear_inputs(ThisInputsStorage::get());
+
+            // force update should work when existing data is present
+            simple_test_chart::<RecordingChart>(
+                "test_batch_step_receives_correct_data",
+                expected_data
+                    .iter()
+                    .map(|p| (p.0.as_str(), p.1.as_str()))
+                    .collect(),
+            )
+            .await;
+            verify_inputs(ThisInputsStorage::get());
         }
     }
 }

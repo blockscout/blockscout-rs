@@ -4,10 +4,10 @@ use crate::{
             local_db::DirectVecLocalDbChartSource,
             remote_db::{QueryBehaviour, RemoteDatabaseSource},
         },
+        types::Get,
         UpdateContext,
     },
     missing_date::fit_into_range,
-    tests::types::Get,
     ChartProperties, DateValueString, MissingDatePolicy, Named, UpdateError,
 };
 

@@ -1,29 +1,20 @@
 use chrono::{DateTime, Utc};
 use sea_orm::DatabaseConnection;
 
-use crate::{charts::db_interaction::write::insert_data_many, DateValueString, UpdateError};
+use crate::{
+    charts::db_interaction::write::insert_data_many, gettable_const, DateValueString, UpdateError,
+};
 
-use super::parameter_traits::{BatchSizeUpperBound, BatchStepBehaviour};
+use super::parameter_traits::BatchStepBehaviour;
 
 mod cumulative;
+#[cfg(any(feature = "test-utils", test))]
+pub mod mock;
 
 pub use cumulative::*;
 
-pub struct Batch30Days;
-
-impl BatchSizeUpperBound for Batch30Days {
-    fn batch_max_size() -> chrono::Duration {
-        chrono::Duration::days(30)
-    }
-}
-
-pub struct BatchMax;
-
-impl BatchSizeUpperBound for BatchMax {
-    fn batch_max_size() -> chrono::Duration {
-        chrono::Duration::max_value()
-    }
-}
+gettable_const!(Batch30Days: chrono::Duration = chrono::Duration::days(30));
+gettable_const!(BatchMax: chrono::Duration = chrono::Duration::max_value());
 
 /// Pass the vector data from main dependency right into the database
 pub struct PassVecStep;

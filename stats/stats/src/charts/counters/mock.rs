@@ -7,9 +7,9 @@ use crate::{
             local_db::DirectPointLocalDbChartSource,
             remote_db::{QueryBehaviour, RemoteDatabaseSource},
         },
+        types::Get,
         UpdateContext,
     },
-    tests::types::Get,
     ChartProperties, DateValueString, Named, UpdateError,
 };
 

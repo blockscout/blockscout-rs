@@ -11,7 +11,7 @@ use pretty_assertions::assert_eq;
 use sea_orm::DatabaseConnection;
 use std::str::FromStr;
 
-fn map_str_tuple_to_owned(l: Vec<(&str, &str)>) -> Vec<(String, String)> {
+pub fn map_str_tuple_to_owned(l: Vec<(&str, &str)>) -> Vec<(String, String)> {
     l.into_iter()
         .map(|t| (t.0.to_string(), t.1.to_string()))
         .collect()

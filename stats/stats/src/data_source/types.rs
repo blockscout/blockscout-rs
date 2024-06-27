@@ -31,3 +31,19 @@ impl<'a> UpdateContext<'a> {
         }
     }
 }
+
+pub trait Get<T> {
+    fn get() -> T;
+}
+
+#[macro_export]
+macro_rules! gettable_const {
+    ($name:ident: $type:ty = $value:expr) => {
+        pub struct $name;
+        impl $crate::data_source::types::Get<$type> for $name {
+            fn get() -> $type {
+                $value
+            }
+        }
+    };
+}
