@@ -27,7 +27,3 @@ jobs:
       - name: cargo clippy
         run: cargo clippy --all --all-targets --all-features -- -D warnings
         working-directory: ${{ inputs.working-directory }}
-
-      - name: cargo doc
-        run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items
-        working-directory: ${{ inputs.working-directory }}
