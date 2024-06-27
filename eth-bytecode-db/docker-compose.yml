@@ -20,8 +20,8 @@ services:
     ## you can build an image locally, or use pre-built images from registry
 #    image: ghcr.io/blockscout/eth-bytecode-db:main
     build:
-      context: ..
-      dockerfile: ./eth-bytecode-db-server/Dockerfile
+      context: .
+      dockerfile: ./Dockerfile
     container_name: 'eth-bytecode-db'
     restart: always
     depends_on:
@@ -39,7 +39,7 @@ services:
       ETH_BYTECODE_DB__DATABASE__RUN_MIGRATIONS: true
     env_file:
       ## optional: if provided, would overwrite values from configuration file
-      - ./config/base.env
+      - ./eth-bytecode-db-server/config/base.env
     volumes:
       ## optional: you can use default config or provide custom via file
-      - ./config/base.toml:/app/config.toml
+      - ./eth-bytecode-db-server/config/base.toml:/app/config.toml

@@ -16,6 +16,10 @@ on:
       service-name:
         required: true
         type: string
+    outputs:
+      tag-value:
+        description: 'A semver compatible version retrieved from the tag'
+        value: ${{ jobs.build-and-push.tag-value }}
 
 jobs:
   build-and-push:
@@ -23,6 +27,8 @@ jobs:
     timeout-minutes: 300
     env:
       IMAGE_NAME: '${{ inputs.registry }}/${{ inputs.organization }}/${{ inputs.service-name }}'
+    outputs:
+      tag-value: ${{ steps.regex.outputs.group2 }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
