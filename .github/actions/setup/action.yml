@@ -17,10 +17,8 @@ runs:
       uses: ./.github/actions/deps
 
     - name: Install toolchain
-      uses: dtolnay/rust-toolchain
+      uses: dtolnay/rust-toolchain@stable
       if: ${{ inputs.is-linting == 'false' }}
-      with:
-        toolchain: stable
 
     - name: Install toolchain
       uses: actions-rs/toolchain@v1
