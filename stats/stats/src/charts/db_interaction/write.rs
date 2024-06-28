@@ -44,6 +44,7 @@ where
                     chart_data::Column::Date,
                 ])
                 .update_column(chart_data::Column::Value)
+                .update_column(chart_data::Column::MinBlockscoutBlock)
                 .to_owned(),
             )
             .exec(db)
