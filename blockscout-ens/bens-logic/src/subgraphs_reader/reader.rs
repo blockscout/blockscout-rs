@@ -95,7 +95,7 @@ impl SubgraphReader {
             .collect::<HashMap<_, _>>();
 
         let networks = networks.into_iter()
-            .filter_map(|(chain_id, network)| {
+            .map(|(chain_id, network)| {
                 let (found_protocols, unknown_protocols): (Vec<_>, _) = network
                     .use_protocols
                     .into_iter()
@@ -103,17 +103,10 @@ impl SubgraphReader {
                 if !unknown_protocols.is_empty() {
                     tracing::warn!("found unknown protocols for network with id={chain_id}: {unknown_protocols:?}")
                 }
-                if let Some(use_protocols) = NonEmpty::collect(found_protocols) {
-                    Some(
-                        (chain_id, Network {
-                            blockscout_client: network.blockscout_client,
-                            use_protocols,
-                        })
-                    )
-                } else {
-                    tracing::warn!("skip network with id={chain_id} since no protocols found");
-                    None
-                }
+                (chain_id, Network {
+                    blockscout_client: network.blockscout_client,
+                    use_protocols: found_protocols,
+                })
             })
             .collect::<HashMap<_, _>>();
 

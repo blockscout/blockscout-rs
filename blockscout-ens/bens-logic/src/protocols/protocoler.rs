@@ -18,7 +18,7 @@ pub struct Protocoler {
 #[derive(Debug, Clone)]
 pub struct Network {
     pub blockscout_client: Arc<BlockscoutClient>,
-    pub use_protocols: NonEmpty<String>,
+    pub use_protocols: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -155,22 +155,22 @@ impl Protocoler {
             })
             .collect::<Vec<_>>();
         let net_protocols = if let Some(filter) = maybe_filter {
-            NonEmpty::collect(
-                filter
-                    .into_iter()
-                    .map(|f| {
-                        net_protocols
-                            .iter()
-                            .find(|&p| p.protocol.info.slug == f)
-                            .copied()
-                            .ok_or_else(|| ProtocolError::ProtocolNotFound(f))
-                    })
-                    .collect::<Result<Vec<_>, _>>()?,
-            )
-            .expect("build from nonempty iterator")
+            filter
+                .into_iter()
+                .map(|f| {
+                    net_protocols
+                        .iter()
+                        .find(|&p| p.protocol.info.slug == f)
+                        .copied()
+                        .ok_or_else(|| ProtocolError::ProtocolNotFound(f))
+                })
+                .collect::<Result<Vec<_>, _>>()?
         } else {
-            NonEmpty::from_vec(net_protocols).expect("build from nonempty iterator")
+            net_protocols
         };
+        let net_protocols = NonEmpty::from_vec(net_protocols).ok_or_else(|| {
+            ProtocolError::ProtocolNotFound("no protocols found for network".to_string())
+        })?;
         Ok(net_protocols)
     }
 

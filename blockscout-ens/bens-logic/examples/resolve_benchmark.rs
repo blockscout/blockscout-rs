@@ -37,14 +37,14 @@ async fn main() -> Result<(), anyhow::Error> {
             1,
             Network {
                 blockscout_client: Arc::new(eth_client),
-                use_protocols: nonempty!["ens".to_string()],
+                use_protocols: vec!["ens".to_string()],
             },
         ),
         (
             30,
             Network {
                 blockscout_client: Arc::new(rootstock_client),
-                use_protocols: nonempty!["rns".to_string()],
+                use_protocols: vec!["rns".to_string()],
             },
         ),
     ]);
