@@ -273,7 +273,6 @@ mod tests {
             sync::{Arc, Mutex, OnceLock},
         };
 
-        use blockscout_metrics_tools::AggregateTimer;
         use chrono::{DateTime, Days, Utc};
         use entity::sea_orm_active_enums::ChartType;
         use pretty_assertions::assert_eq;
@@ -288,7 +287,6 @@ mod tests {
                     LocalDbChartSource,
                 },
                 types::Get,
-                DataSource, UpdateContext, UpdateParameters,
             },
             gettable_const,
             lines::AccountsGrowth,

@@ -90,8 +90,8 @@ pub async fn dirty_force_update_and_check<C: DataSource + ChartProperties>(
     let approximate_trailing_points = C::approximate_trailing_points();
 
     let parameters = UpdateParameters {
-        db: db,
-        blockscout: blockscout,
+        db,
+        blockscout,
         update_time_override: Some(current_time),
         force_full: true,
     };
@@ -99,7 +99,7 @@ pub async fn dirty_force_update_and_check<C: DataSource + ChartProperties>(
     C::update_recursively(&cx).await.unwrap();
     assert_eq!(
         &get_chart::<C>(
-            &db,
+            db,
             None,
             None,
             C::missing_date_policy(),
