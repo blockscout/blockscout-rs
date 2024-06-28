@@ -10,8 +10,6 @@ mod vyper_standard_json;
 pub mod zksolc_standard_json;
 
 pub mod batch_verification;
-pub mod zksync_verification;
-
 mod lookup_methods;
 
 pub use self::sourcify::VerifySourcifyRequestWrapper;
