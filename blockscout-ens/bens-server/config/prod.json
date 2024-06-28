@@ -63,7 +63,7 @@
           "url": "https://base.blockscout.com"
         },
         "use_protocols": [
-          "base-name-service"
+          "base-name-service", "ens"
         ]
       },
       "34443": {
@@ -85,6 +85,14 @@
       "11155420": {
         "blockscout": {
           "url": "https://optimism-sepolia.blockscout.com/"
+        },
+        "use_protocols": [
+          "ens"
+        ]
+      },
+      "7777777": {
+        "blockscout": {
+          "url": "https://explorer.zora.energy/"
         },
         "use_protocols": [
           "ens"

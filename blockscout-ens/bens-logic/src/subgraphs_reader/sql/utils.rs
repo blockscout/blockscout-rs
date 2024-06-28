@@ -17,6 +17,16 @@ pub fn union_domain_queries(
     let select_clause = Expr::cust(select_clause.unwrap_or("*"));
     let sub_query = protocol_queries
         .into_iter()
+        .map(|mut q| {
+            if let Some(pagination) = pagination {
+                pagination
+                    .add_to_query(&mut q)
+                    .context("adding pagination to query")?;
+            }
+            Ok(q.to_owned())
+        })
+        .collect::<Result<Vec<SelectStatement>, anyhow::Error>>()?
+        .into_iter()
         .reduce(|mut acc, new| acc.union(UnionType::All, new).to_owned())
         .expect("reduce from non empty iterator");
 

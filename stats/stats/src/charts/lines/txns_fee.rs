@@ -1,95 +1,64 @@
-use crate::{
-    charts::db_interaction::{
-        chart_updaters::{ChartPartialUpdater, ChartUpdater},
-        types::{DateValue, DateValueDouble},
-    },
-    UpdateError,
-};
-use async_trait::async_trait;
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
+//! Total transaction fees for an interval
 
-#[derive(Default, Debug)]
-pub struct TxnsFee {}
+use std::ops::RangeInclusive;
+
+use crate::{
+    charts::db_interaction::types::DateValueDouble,
+    data_source::kinds::{
+        data_manipulation::map::MapToString,
+        local_db::DirectVecLocalDbChartSource,
+        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
+    },
+    utils::sql_with_range_filter_opt,
+    ChartProperties, Named,
+};
+use entity::sea_orm_active_enums::ChartType;
+use sea_orm::{prelude::*, DbBackend, Statement};
 
 const ETHER: i64 = i64::pow(10, 18);
 
-#[async_trait]
-impl ChartPartialUpdater for TxnsFee {
-    async fn get_values(
-        &self,
-        blockscout: &DatabaseConnection,
-        last_updated_row: Option<DateValue>,
-    ) -> Result<Vec<DateValue>, UpdateError> {
-        let stmnt = match last_updated_row {
-            Some(row) => Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
-                SELECT 
-                    DATE(b.timestamp) as date, 
+pub struct TxnsFeeStatement;
+
+impl StatementFromRange for TxnsFeeStatement {
+    fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+        sql_with_range_filter_opt!(
+            DbBackend::Postgres,
+            r#"
+                SELECT
+                    DATE(b.timestamp) as date,
                     (SUM(t.gas_used * t.gas_price) / $1)::FLOAT as value
                 FROM transactions t
                 JOIN blocks       b ON t.block_hash = b.hash
                 WHERE
                     b.timestamp != to_timestamp(0) AND
-                    DATE(b.timestamp) > $2 AND
-                    b.consensus = true
+                    b.consensus = true {filter}
                 GROUP BY DATE(b.timestamp)
-                "#,
-                vec![ETHER.into(), row.date.into()],
-            ),
-            None => Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
-                SELECT 
-                    DATE(b.timestamp) as date, 
-                    (SUM(t.gas_used * t.gas_price) / $1)::FLOAT as value
-                FROM transactions t
-                JOIN blocks       b ON t.block_hash = b.hash
-                WHERE
-                    b.timestamp != to_timestamp(0) AND 
-                    b.consensus = true
-                GROUP BY DATE(b.timestamp)
-                "#,
-                vec![ETHER.into()],
-            ),
-        };
-
-        let data = DateValueDouble::find_by_statement(stmnt)
-            .all(blockscout)
-            .await
-            .map_err(UpdateError::BlockscoutDB)?
-            .into_iter()
-            .map(DateValue::from)
-            .collect::<Vec<_>>();
-        Ok(data)
+            "#,
+            [ETHER.into()],
+            "b.timestamp",
+            range
+        )
     }
 }
 
-#[async_trait]
-impl crate::Chart for TxnsFee {
-    fn name(&self) -> &str {
-        "txnsFee"
-    }
+pub type TxnsFeeRemote =
+    RemoteDatabaseSource<PullAllWithAndSort<TxnsFeeStatement, DateValueDouble>>;
 
-    fn chart_type(&self) -> ChartType {
+pub type TxnsFeeRemoteString = MapToString<TxnsFeeRemote>;
+
+pub struct TxnsFeeProperties;
+
+impl Named for TxnsFeeProperties {
+    const NAME: &'static str = "txnsFee";
+}
+
+impl ChartProperties for TxnsFeeProperties {
+    fn chart_type() -> ChartType {
         ChartType::Line
     }
 }
 
-#[async_trait]
-impl ChartUpdater for TxnsFee {
-    async fn update_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<chrono::Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, current_time, force_full)
-            .await
-    }
-}
+pub type TxnsFee = DirectVecLocalDbChartSource<TxnsFeeRemoteString, TxnsFeeProperties>;
 
 #[cfg(test)]
 mod tests {
@@ -99,10 +68,8 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_txns_fee() {
-        let chart = TxnsFee::default();
-        simple_test_chart(
+        simple_test_chart::<TxnsFee>(
             "update_txns_fee",
-            chart,
             vec![
                 ("2022-11-09", "0.000047185185138"),
                 ("2022-11-10", "0.000495444443949"),

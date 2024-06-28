@@ -1,0 +1,27 @@
+name: 'Setup'
+description: 'Checkout repository, setup rust toolchain and dependencies'
+
+inputs:
+  working-directory:
+    description: 'A directory where the service code is located'
+    required: true
+  components:
+    description: Comma-separated list of components to be additionally installed
+    required: false
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install deps
+      uses: ./.github/actions/deps
+
+    - name: Install toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: ${{ inputs.components }}
+
+    - name: Rust cache
+      uses: Swatinem/rust-cache@v2
+      with:
+        cache-on-failure: true
+        workspaces: '${{ inputs.working-directory }} -> target'

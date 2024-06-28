@@ -1,99 +1,64 @@
+use std::ops::RangeInclusive;
+
 use crate::{
-    charts::db_interaction::{
-        chart_updaters::{ChartPartialUpdater, ChartUpdater},
-        types::{DateValue, DateValueDouble},
+    charts::db_interaction::types::DateValueDouble,
+    data_source::kinds::{
+        data_manipulation::map::MapToString,
+        local_db::DirectVecLocalDbChartSource,
+        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
-    UpdateError,
+    utils::sql_with_range_filter_opt,
+    ChartProperties, Named,
 };
-use async_trait::async_trait;
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
+use sea_orm::{prelude::*, DbBackend, Statement};
 
-#[derive(Default, Debug)]
-pub struct TxnsSuccessRate {}
+pub struct TxnsSuccessRateStatement;
 
-#[async_trait]
-impl ChartPartialUpdater for TxnsSuccessRate {
-    async fn get_values(
-        &self,
-        blockscout: &DatabaseConnection,
-        last_updated_row: Option<DateValue>,
-    ) -> Result<Vec<DateValue>, UpdateError> {
-        let stmnt = match last_updated_row {
-            Some(row) => Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
-                SELECT 
-                    DATE(b.timestamp) as date, 
+impl StatementFromRange for TxnsSuccessRateStatement {
+    fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+        sql_with_range_filter_opt!(
+            DbBackend::Postgres,
+            r#"
+                SELECT
+                    DATE(b.timestamp) as date,
                     COUNT(CASE WHEN t.error IS NULL THEN 1 END)::FLOAT
                         / COUNT(*)::FLOAT as value
                 FROM transactions t
                 JOIN blocks       b ON t.block_hash = b.hash
-                WHERE 
-                    b.timestamp != to_timestamp(0) AND
-                    b.consensus = true AND
-                    t.block_hash IS NOT NULL AND 
-                    (t.error IS NULL OR t.error::text != 'dropped/replaced') AND
-                    DATE(b.timestamp) > $1
-                GROUP BY DATE(b.timestamp)
-                "#,
-                vec![row.date.into()],
-            ),
-            None => Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
-                SELECT 
-                    DATE(b.timestamp) as date, 
-                    COUNT(CASE WHEN t.error IS NULL THEN 1 END)::FLOAT
-                        / COUNT(*)::FLOAT as value
-                FROM transactions t
-                JOIN blocks       b ON t.block_hash = b.hash
-                WHERE 
+                WHERE
                     b.timestamp != to_timestamp(0) AND
                     b.consensus = true AND
                     t.block_hash IS NOT NULL AND
-                    (t.error IS NULL OR t.error::text != 'dropped/replaced')
+                    (t.error IS NULL OR t.error::text != 'dropped/replaced') {filter}
                 GROUP BY DATE(b.timestamp)
                 "#,
-                vec![],
-            ),
-        };
-
-        let data = DateValueDouble::find_by_statement(stmnt)
-            .all(blockscout)
-            .await
-            .map_err(UpdateError::BlockscoutDB)?
-            .into_iter()
-            .map(DateValue::from)
-            .collect::<Vec<_>>();
-        Ok(data)
+            [],
+            "b.timestamp",
+            range
+        )
     }
 }
 
-#[async_trait]
-impl crate::Chart for TxnsSuccessRate {
-    fn name(&self) -> &str {
-        "txnsSuccessRate"
-    }
+pub type TxnsSuccessRateRemote =
+    RemoteDatabaseSource<PullAllWithAndSort<TxnsSuccessRateStatement, DateValueDouble>>;
 
-    fn chart_type(&self) -> ChartType {
+pub type TxnsSuccessRateRemoteString = MapToString<TxnsSuccessRateRemote>;
+
+pub struct TxnsSuccessRateProperties;
+
+impl Named for TxnsSuccessRateProperties {
+    const NAME: &'static str = "txnsSuccessRate";
+}
+
+impl ChartProperties for TxnsSuccessRateProperties {
+    fn chart_type() -> ChartType {
         ChartType::Line
     }
 }
 
-#[async_trait]
-impl ChartUpdater for TxnsSuccessRate {
-    async fn update_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<chrono::Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, current_time, force_full)
-            .await
-    }
-}
+pub type TxnsSuccessRate =
+    DirectVecLocalDbChartSource<TxnsSuccessRateRemoteString, TxnsSuccessRateProperties>;
 
 #[cfg(test)]
 mod tests {
@@ -103,10 +68,8 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_txns_success_rate() {
-        let chart = TxnsSuccessRate::default();
-        simple_test_chart(
+        simple_test_chart::<TxnsSuccessRate>(
             "update_txns_success_rate",
-            chart,
             vec![
                 ("2022-11-09", "1"),
                 ("2022-11-10", "1"),

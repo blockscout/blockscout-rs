@@ -31,5 +31,7 @@ RUN chown -R $APP_USER:$APP_USER /app
 USER app
 
 COPY ./config/charts.json ./config/charts.json
+COPY ./config/layout.json ./config/layout.json
+COPY ./config/update_groups.json ./config/update_groups.json
 
 CMD ["./stats-server"]

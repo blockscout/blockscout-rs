@@ -12,10 +12,19 @@ pub struct Model {
     pub amount: Decimal,
     pub created_at: DateTimeWithTimeZone,
     pub note: Option<String>,
+    pub register_promo_id: Option<i32>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::register_promo::Entity",
+        from = "Column::RegisterPromoId",
+        to = "super::register_promo::Column::Id",
+        on_update = "NoAction",
+        on_delete = "SetNull"
+    )]
+    RegisterPromo,
     #[sea_orm(
         belongs_to = "super::users::Entity",
         from = "Column::ChangedByUserId",
@@ -32,6 +41,12 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     Users1,
+}
+
+impl Related<super::register_promo::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::RegisterPromo.def()
+    }
 }
 
 impl ActiveModelBehavior for ActiveModel {}

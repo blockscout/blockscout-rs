@@ -29,6 +29,7 @@ scoutcloud-migration = { path = "../scoutcloud-migration" }
 actix-web = "4.2"
 async-trait = "0.1"
 blockscout-service-launcher = { workspace = true, features = [ "database-0_12", "env-collector"] }
+blockscout-client = { git = "https://github.com/blockscout/blockscout-rs", branch = "main" }
 config = "0.13"
 tonic = "0.8"
 chrono = "0.4.35"
@@ -45,6 +46,7 @@ convert-trait = { git = "https://github.com/blockscout/actix-prost", tag="v1.0.0
 rust_decimal = "1.35.0"
 fang = { version = "0.11.0-rc1", features = [
     "asynk-postgres", "asynk-sqlx", "derive-error", "blocking-postgres"] , default-features = false}
+uuid = { version = "1.8.0", features = ["v4"] }
 
 
 

@@ -85,7 +85,7 @@ migrate-down:
 insert-test-data:
     docker exec -i {{docker-name}} psql -U {{db-user}} -d {{db-name}} -c "\
     insert into users(id,email) values (1, 'lymarenko.lev@gmail.com');\
-    insert into auth_tokens(user_id) values (1); select token_value from auth_tokens;\
+    insert into auth_tokens(user_id, name) values (1, 'token'); select token_value from auth_tokens;\
     insert into balance_changes(user_id, amount) values (1, 100);"
 
 check-envs:
