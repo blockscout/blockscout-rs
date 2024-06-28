@@ -262,7 +262,9 @@ mod tests {
             tests::{
                 point_construction::d,
                 recorder::InMemoryRecorder,
-                simple_test::{map_str_tuple_to_owned, simple_test_chart},
+                simple_test::{
+                    dirty_force_update_and_check, map_str_tuple_to_owned, simple_test_chart,
+                },
             },
             ChartProperties, DateValueString, MissingDatePolicy, Named,
         };
@@ -365,7 +367,7 @@ mod tests {
         #[tokio::test]
         #[ignore = "needs database to run"]
         async fn test_batch_step_receives_correct_data() {
-            let expected_data = [
+            let expected_data_owned = [
                 map_str_tuple_to_owned(vec![
                     ("2022-11-09", "1"),
                     ("2022-11-10", "4"),
@@ -375,27 +377,21 @@ mod tests {
                 map_str_tuple_to_owned(vec![("2023-03-01", "9")]),
             ]
             .concat();
+            let expected_data: Vec<(&str, &str)> = expected_data_owned
+                .iter()
+                .map(|p| (p.0.as_str(), p.1.as_str()))
+                .collect();
 
-            simple_test_chart::<RecordingChart>(
+            let (db, blockscout) = simple_test_chart::<RecordingChart>(
                 "test_batch_step_receives_correct_data",
-                expected_data
-                    .iter()
-                    .map(|p| (p.0.as_str(), p.1.as_str()))
-                    .collect(),
+                expected_data.clone(),
             )
             .await;
             verify_inputs(ThisInputsStorage::get());
             clear_inputs(ThisInputsStorage::get());
 
             // force update should work when existing data is present
-            simple_test_chart::<RecordingChart>(
-                "test_batch_step_receives_correct_data",
-                expected_data
-                    .iter()
-                    .map(|p| (p.0.as_str(), p.1.as_str()))
-                    .collect(),
-            )
-            .await;
+            dirty_force_update_and_check::<RecordingChart>(&db, &blockscout, expected_data).await;
             verify_inputs(ThisInputsStorage::get());
         }
     }

@@ -6,6 +6,7 @@ use crate::{
     },
     get_line_chart_data, get_raw_counters, ChartProperties, MissingDatePolicy,
 };
+use blockscout_service_launcher::test_database::TestDbGuard;
 use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use pretty_assertions::assert_eq;
 use sea_orm::DatabaseConnection;
@@ -18,10 +19,12 @@ pub fn map_str_tuple_to_owned(l: Vec<(&str, &str)>) -> Vec<(String, String)> {
 }
 
 /// `test_name` must be unique to avoid db clashes
+///
+/// returns db handles to continue testing if needed
 pub async fn simple_test_chart<C: DataSource + ChartProperties>(
     test_name: &str,
     expected: Vec<(&str, &str)>,
-) {
+) -> (TestDbGuard, TestDbGuard) {
     let _ = tracing_subscriber::fmt::try_init();
     let expected = map_str_tuple_to_owned(expected);
     let (db, blockscout) = init_db_all(test_name).await;
@@ -54,6 +57,42 @@ pub async fn simple_test_chart<C: DataSource + ChartProperties>(
 
     parameters.force_full = false;
     let cx = UpdateContext::from_params_now_or_override(parameters);
+    C::update_recursively(&cx).await.unwrap();
+    assert_eq!(
+        &get_chart::<C>(
+            &db,
+            None,
+            None,
+            C::missing_date_policy(),
+            false,
+            approximate_trailing_points,
+        )
+        .await,
+        &expected
+    );
+    (db, blockscout)
+}
+
+/// Expects to have `test_name` db's initialized (e.g. by [`simple_test_chart`]).
+///
+/// Tests that force update with existing data works correctly
+pub async fn dirty_force_update_and_check<C: DataSource + ChartProperties>(
+    db: &DatabaseConnection,
+    blockscout: &DatabaseConnection,
+    expected: Vec<(&str, &str)>,
+) {
+    let _ = tracing_subscriber::fmt::try_init();
+    let expected = map_str_tuple_to_owned(expected);
+    let current_time = DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
+    let approximate_trailing_points = C::approximate_trailing_points();
+
+    let parameters = UpdateParameters {
+        db: db,
+        blockscout: blockscout,
+        update_time_override: Some(current_time),
+        force_full: true,
+    };
+    let cx = UpdateContext::from_params_now_or_override(parameters.clone());
     C::update_recursively(&cx).await.unwrap();
     assert_eq!(
         &get_chart::<C>(
