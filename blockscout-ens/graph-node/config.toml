@@ -20,6 +20,11 @@ provider = [
 ]
 shard = "primary"
 
+[chains.sepolia]
+provider = [
+    { label = "sepolia", url = "https://sepolia.gateway.tenderly.co", features = [] }
+]
+
 [chains.gnosis-chiado]
 provider = [
     { label = "gnosis-chiado", url = "https://rpc.eu-central-2.gateway.fm/v4/gnosis/archival/chiado", features = [] }
