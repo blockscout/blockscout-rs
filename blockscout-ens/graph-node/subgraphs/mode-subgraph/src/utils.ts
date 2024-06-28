@@ -1,8 +1,15 @@
 import { BigInt, ByteArray, Bytes, crypto, ethereum, log } from "@graphprotocol/graph-ts";
 import { Account, Domain } from "../generated/schema";
 
-// export const BASE_NODE_HASH = "2f0e9a68fa134a18a7181045c3549d639665fe43df78e882d8adea865a4bb153" // mainnet base node hash
-export const BASE_NODE_HASH = "9217c94fd014da21f5c43a1fcae4154a2bbfce43eb48bb33f7f6473c68ee16b6" // sepolia base node hash
+
+const NETWORK = "{{network}}"
+
+export let BASE_NODE_HASH = "2f0e9a68fa134a18a7181045c3549d639665fe43df78e882d8adea865a4bb153" // mainnet base node hash
+// @ts-ignore
+if (NETWORK == "mode-sepolia") {
+  BASE_NODE_HASH = "9217c94fd014da21f5c43a1fcae4154a2bbfce43eb48bb33f7f6473c68ee16b6" // sepolia base node hash
+}
+
 export const BASE_NODE = ".mode";
 export const COIN_TYPE      = 2147518091 // 34443
 export const COIN_TYPE_SEPOLIA      = 2147484567 // 919
