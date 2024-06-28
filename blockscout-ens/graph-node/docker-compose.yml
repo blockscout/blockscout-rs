@@ -2,7 +2,7 @@ version: '3'
 services:
   graph-node:
     container_name: graph-node-dev
-    image: graphprotocol/graph-node
+    image: graphprotocol/graph-node:v0.34.1
     ports:
       - '8000:8000'
       - '8001:8001'
@@ -20,10 +20,10 @@ services:
       postgres_pass: let-me-in
       postgres_db: graph-node
       ipfs: 'ipfs:5001'
-      ethereum: 'mainnet:https://api.zmok.io/mainnet/oaen6dy8ff6hju9k gnosis-chiado:https://rpc.eu-central-2.gateway.fm/v4/gnosis/archival/chiado mode-sepolia:https://sepolia.mode.network'
+      GRAPH_NODE_CONFIG: /root/config.toml
       GRAPH_LOG: info
     volumes:
-      - ./gn-config.toml:/root/gn-config.toml
+      - ./config.toml:/root/config.toml
   ipfs:
     container_name: gn-ipfs-dev
     image: ipfs/kubo:v0.14.0
@@ -57,4 +57,3 @@ services:
 
 
 
-      

@@ -100,7 +100,7 @@ pub async fn mocked_networks_and_protocols(
         1,
         Network {
             blockscout_client: Arc::new(client),
-            use_protocols: nonempty!["ens".to_string()],
+            use_protocols: vec!["ens".to_string()],
         },
     )]);
 

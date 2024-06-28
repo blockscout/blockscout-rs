@@ -77,7 +77,7 @@ pub struct ProtocolSettingsMeta(pub ProtocolMeta);
 pub struct NetworkSettings {
     pub blockscout: BlockscoutSettings,
     #[serde(default)]
-    pub use_protocols: NonEmpty<String>,
+    pub use_protocols: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
