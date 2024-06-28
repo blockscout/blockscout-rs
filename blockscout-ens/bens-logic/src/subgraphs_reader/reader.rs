@@ -59,6 +59,7 @@ pub struct SubgraphReader {
 }
 
 impl SubgraphReader {
+    #[instrument(name = "SubgraphReader::initialize", skip_all, err, level = "info")]
     pub async fn initialize(
         pool: Arc<PgPool>,
         networks: HashMap<i64, Network>,
@@ -155,10 +156,12 @@ impl SubgraphReader {
         Ok(())
     }
 
+    #[instrument(skip_all, err, level = "info")]
     pub async fn init_cache(&self) -> Result<(), anyhow::Error> {
         for protocol in self.iter_protocols() {
             let schema = &protocol.subgraph_schema;
             let address_resolve_technique = &protocol.info.address_resolve_technique;
+            tracing::info!("start initializing cache table for schema {schema}");
             match address_resolve_technique {
                 AddressResolveTechnique::ReverseRegistry => {
                     sql::AddrReverseNamesView::create_view(self.pool.as_ref(), schema)

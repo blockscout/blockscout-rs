@@ -83,11 +83,11 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         })
         .collect::<HashMap<_, _>>();
     tracing::info!(
-        "networks from config: {:?}",
-        networks
+        "networks from config: {}",
+        serde_json::json!(networks
             .iter()
             .map(|(id, n)| (id, n.use_protocols.iter().collect::<Vec<_>>()))
-            .collect::<Vec<_>>()
+            .collect::<HashMap<_, _>>())
     );
     let protocols = settings
         .subgraphs_reader
@@ -115,11 +115,10 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         protocols.keys().collect::<Vec<_>>()
     );
 
-    let subgraph_reader = Arc::new(
-        SubgraphReader::initialize(pool, networks, protocols)
-            .await
-            .context("failed to initialize subgraph-reader")?,
-    );
+    let subgraph_reader = SubgraphReader::initialize(pool, networks, protocols)
+        .await
+        .context("failed to initialize subgraph-reader")?;
+    let subgraph_reader = Arc::new(subgraph_reader);
     let domains_extractor = Arc::new(DomainsExtractorService::new(subgraph_reader.clone()));
 
     let scheduler = JobScheduler::new().await?;
@@ -129,6 +128,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             subgraph_reader.clone(),
         )?)
         .await?;
+    tracing::info!("starting job scheduler");
     scheduler.start().await?;
 
     let router = Router {
@@ -145,5 +145,6 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         metrics: settings.metrics,
     };
 
+    tracing::info!("launching web service");
     launcher::launch(&launch_settings, http_router, grpc_router).await
 }
