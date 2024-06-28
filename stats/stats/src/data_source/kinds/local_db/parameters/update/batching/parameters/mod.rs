@@ -25,7 +25,7 @@ impl BatchStepBehaviour<Vec<DateValueString>, ()> for PassVecStep {
         chart_id: i32,
         _update_time: DateTime<Utc>,
         min_blockscout_block: i64,
-        _last_accurate_point: Option<DateValueString>,
+        _last_accurate_point: DateValueString,
         main_data: Vec<DateValueString>,
         _resolution_data: (),
     ) -> Result<usize, UpdateError> {

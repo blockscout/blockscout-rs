@@ -119,7 +119,7 @@ impl BatchStepBehaviour<Vec<DateValueString>, ()> for ContractsGrowthCustomBatch
         _chart_id: i32,
         _update_time: DateTime<Utc>,
         _min_blockscout_block: i64,
-        _last_accurate_point: Option<DateValueString>,
+        _last_accurate_point: DateValueString,
         _main_data: Vec<DateValueString>,
         _resolution_data: (),
     ) -> Result<usize, UpdateError> {

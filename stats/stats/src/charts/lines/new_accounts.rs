@@ -115,6 +115,7 @@ pub type NewAccounts = LocalDbChartSource<
         PassVecStep,
         // see `NewAccountsRemote` docs
         BatchMax,
+        DefaultQueryVec<Properties>,
         Properties,
     >,
     DefaultQueryVec<Properties>,

@@ -69,7 +69,14 @@ pub type BatchLocalDbChartSourceWithDefaultParams<MainDep, ResolutionDep, BatchS
         MainDep,
         ResolutionDep,
         DefaultCreate<ChartProps>,
-        BatchUpdate<MainDep, ResolutionDep, BatchStep, Batch30Days, ChartProps>,
+        BatchUpdate<
+            MainDep,
+            ResolutionDep,
+            BatchStep,
+            Batch30Days,
+            DefaultQueryVec<ChartProps>,
+            ChartProps,
+        >,
         DefaultQueryVec<ChartProps>,
         ChartProps,
     >;
@@ -91,7 +98,14 @@ pub type CumulativeLocalDbChartSource<DeltaDep, C> = LocalDbChartSource<
     PartialCumulative<DeltaDep>,
     (),
     DefaultCreate<C>,
-    BatchUpdate<PartialCumulative<DeltaDep>, (), AddLastValueStep<C>, Batch30Days, C>,
+    BatchUpdate<
+        PartialCumulative<DeltaDep>,
+        (),
+        AddLastValueStep<C>,
+        Batch30Days,
+        DefaultQueryVec<C>,
+        C,
+    >,
     DefaultQueryVec<C>,
     C,
 >;
@@ -102,7 +116,7 @@ pub type DirectVecLocalDbChartSource<Dependency, C> = LocalDbChartSource<
     Dependency,
     (),
     DefaultCreate<C>,
-    BatchUpdate<Dependency, (), PassVecStep, Batch30Days, C>,
+    BatchUpdate<Dependency, (), PassVecStep, Batch30Days, DefaultQueryVec<C>, C>,
     DefaultQueryVec<C>,
     C,
 >;

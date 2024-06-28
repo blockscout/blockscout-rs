@@ -11,23 +11,27 @@ use parameter_traits::BatchStepBehaviour;
 use sea_orm::TransactionTrait;
 
 use crate::{
-    charts::db_interaction::{self, read::get_min_date_blockscout},
+    charts::db_interaction::read::get_min_date_blockscout,
     data_source::{
-        kinds::local_db::UpdateBehaviour, source::DataSource, types::Get, UpdateContext,
+        kinds::local_db::{parameter_traits::QueryBehaviour, UpdateBehaviour},
+        source::DataSource,
+        types::Get,
+        UpdateContext,
     },
     utils::day_start,
-    ChartProperties, DateValueString, UpdateError,
+    ChartProperties, DateValueString, UpdateError, ZeroDateValue,
 };
 
 pub mod parameter_traits;
 pub mod parameters;
 
-pub struct BatchUpdate<MainDep, ResolutionDep, BatchStep, BatchSizeUpperBound, ChartProps>(
+pub struct BatchUpdate<MainDep, ResolutionDep, BatchStep, BatchSizeUpperBound, Query, ChartProps>(
     PhantomData<(
         MainDep,
         ResolutionDep,
         BatchStep,
         BatchSizeUpperBound,
+        Query,
         ChartProps,
     )>,
 )
@@ -36,16 +40,18 @@ where
     ResolutionDep: DataSource,
     BatchStep: BatchStepBehaviour<MainDep::Output, ResolutionDep::Output>,
     BatchSizeUpperBound: Get<chrono::Duration>,
+    Query: QueryBehaviour<Output = Vec<DateValueString>>,
     ChartProps: ChartProperties;
 
-impl<MainDep, ResolutionDep, BatchStep, BatchSizeUpperBound, ChartProps>
+impl<MainDep, ResolutionDep, BatchStep, BatchSizeUpperBound, Query, ChartProps>
     UpdateBehaviour<MainDep, ResolutionDep>
-    for BatchUpdate<MainDep, ResolutionDep, BatchStep, BatchSizeUpperBound, ChartProps>
+    for BatchUpdate<MainDep, ResolutionDep, BatchStep, BatchSizeUpperBound, Query, ChartProps>
 where
     MainDep: DataSource,
     ResolutionDep: DataSource,
     BatchStep: BatchStepBehaviour<MainDep::Output, ResolutionDep::Output>,
     BatchSizeUpperBound: Get<chrono::Duration>,
+    Query: QueryBehaviour<Output = Vec<DateValueString>>,
     ChartProps: ChartProperties,
 {
     async fn update_values(
@@ -75,10 +81,10 @@ where
 
         let steps = generate_date_time_ranges(first_date_time, now, BatchSizeUpperBound::get());
         let n = steps.len();
-        // disregard partial value(-s)
-        let mut previous_step_last_point = last_accurate_point;
 
         for (i, range) in steps.into_iter().enumerate() {
+            let previous_step_last_point =
+                get_previous_step_last_point::<Query>(cx, range.clone()).await?;
             tracing::info!(from =? range.start, to =? range.end, previous_step_last_point =? previous_step_last_point, "run {}/{} step of batch update", i + 1, n);
             let now = Instant::now();
             let found = batch_update_values_step::<MainDep, ResolutionDep, BatchStep>(
@@ -92,18 +98,43 @@ where
             .await?;
             let elapsed: std::time::Duration = now.elapsed();
             tracing::info!(found =? found, elapsed =? elapsed, "{}/{} step of batch done", i + 1, n);
-            previous_step_last_point = db_interaction::read::last_accurate_point::<ChartProps>(
-                chart_id,
-                min_blockscout_block,
-                cx.db,
-                false,
-                // we need the partial values for correct calculations
-                None,
-            )
-            .await?;
         }
         Ok(())
     }
+}
+
+/// Errors if no point is found
+async fn get_previous_step_last_point<Query>(
+    cx: &UpdateContext<'_>,
+    this_step_range: Range<DateTime<Utc>>,
+) -> Result<DateValueString, UpdateError>
+where
+    Query: QueryBehaviour<Output = Vec<DateValueString>>,
+{
+    // for now the only resolution is 1 day
+    let resolution = chrono::Duration::days(1);
+    let last_point_range = (this_step_range.start - resolution)..this_step_range.start;
+    // must be within the same day
+    debug_assert_eq!(
+        day_start(last_point_range.start.date_naive()),
+        day_start((last_point_range.end - chrono::Duration::nanoseconds(1)).date_naive())
+    );
+    let last_point_range_values = Query::query_data(cx, Some(last_point_range.clone())).await?;
+    let previous_step_last_point = last_point_range_values
+        .last()
+        .cloned()
+        // `None` means
+        // - if `MissingDatePolicy` is `FillZero` = the value is 0
+        // - if `MissingDatePolicy` is `FillPrevious` = no previous value was found at this moment in time = value at the point is 0
+        .unwrap_or(DateValueString::with_zero_value(
+            // we store/operate with dates only for now
+            last_point_range.start.date_naive(),
+        ));
+    if last_point_range_values.len() > 1 {
+        // return error because it's likely that date in `previous_step_last_point` is incorrect
+        return Err(UpdateError::Internal("Retrieved 2 points from previous step; probably an issue with range construction and handling".to_owned()));
+    }
+    Ok(previous_step_last_point)
 }
 
 /// Returns how many records were found
@@ -111,7 +142,7 @@ async fn batch_update_values_step<MainDep, ResolutionDep, BatchStep>(
     cx: &UpdateContext<'_>,
     chart_id: i32,
     min_blockscout_block: i64,
-    last_accurate_point: Option<DateValueString>,
+    last_accurate_point: DateValueString,
     range: Range<DateTime<Utc>>,
     dependency_data_fetch_timer: &mut AggregateTimer,
 ) -> Result<usize, UpdateError>
@@ -298,8 +329,14 @@ mod tests {
             }
         }
 
-        type ThisRecordingBatchUpdate =
-            BatchUpdate<AccountsGrowth, (), ThisRecordingStep, Batch1Day, ThisTestChartProps>;
+        type ThisRecordingBatchUpdate = BatchUpdate<
+            AccountsGrowth,
+            (),
+            ThisRecordingStep,
+            Batch1Day,
+            DefaultQueryVec<ThisTestChartProps>,
+            ThisTestChartProps,
+        >;
 
         type RecordingChart = LocalDbChartSource<
             AccountsGrowth,
@@ -342,22 +379,12 @@ mod tests {
                 assert_eq!(input.update_time, expected_update_time);
                 assert_eq!(input.min_blockscout_block, 0);
                 // batch step = 1 day
-                dbg!(&input);
                 assert_eq!(input.main_data.len(), 1);
                 if let Some(prev_input) = prev_input {
-                    assert!(
-                        input.last_accurate_point.is_some(),
-                        "must have prev point at this moment"
-                    );
-                    assert_eq!(
-                        input.last_accurate_point.as_ref().unwrap(),
-                        &prev_input.main_data[0]
-                    );
+                    assert_eq!(&input.last_accurate_point, &prev_input.main_data[0]);
                     assert_eq!(
                         input
                             .last_accurate_point
-                            .as_ref()
-                            .unwrap()
                             .date
                             .checked_add_days(Days::new(1))
                             .unwrap(),
@@ -393,20 +420,6 @@ mod tests {
             .await;
             verify_inputs(ThisInputsStorage::get(), None);
             clear_inputs(ThisInputsStorage::get());
-
-            let data = RecordingChart::query_data(
-                &UpdateContext::from_params_now_or_override(UpdateParameters {
-                    db: &db,
-                    blockscout: &blockscout,
-                    update_time_override: None,
-                    force_full: false,
-                }),
-                None,
-                &mut AggregateTimer::new(),
-            )
-            .await
-            .unwrap();
-            dbg!(data);
 
             // force update should work when existing data is present
             let later_time = DateTime::<Utc>::from_str("2023-03-01T12:00:01Z").unwrap();

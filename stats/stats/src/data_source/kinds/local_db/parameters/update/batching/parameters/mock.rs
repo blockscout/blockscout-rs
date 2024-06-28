@@ -15,7 +15,7 @@ pub struct StepInput<MI, RI> {
     pub chart_id: i32,
     pub update_time: DateTime<Utc>,
     pub min_blockscout_block: i64,
-    pub last_accurate_point: Option<DateValueString>,
+    pub last_accurate_point: DateValueString,
     pub main_data: MI,
     pub resolution_data: RI,
 }
@@ -37,7 +37,7 @@ where
         chart_id: i32,
         update_time: DateTime<Utc>,
         min_blockscout_block: i64,
-        last_accurate_point: Option<DateValueString>,
+        last_accurate_point: DateValueString,
         main_data: Vec<DateValueString>,
         resolution_data: (),
     ) -> Result<usize, UpdateError> {

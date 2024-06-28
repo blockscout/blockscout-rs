@@ -18,7 +18,7 @@ where
         chart_id: i32,
         update_time: DateTime<Utc>,
         min_blockscout_block: i64,
-        last_accurate_point: Option<DateValueString>,
+        last_accurate_point: DateValueString,
         main_data: MainInput,
         resolution_data: ResolutionInput,
     ) -> impl Future<Output = Result<usize, UpdateError>> + std::marker::Send;
