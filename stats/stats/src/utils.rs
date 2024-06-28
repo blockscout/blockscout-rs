@@ -97,7 +97,7 @@ mod test {
             produce_filter_and_values(Some(time_1..time_2), "aboba", 123),
             (
                 " AND
-                aboba <= $124 AND
+                aboba < $124 AND
                 aboba >= $123"
                     .to_string(),
                 vec![time_1.into(), time_2.into()]
@@ -120,7 +120,7 @@ mod test {
                 WHERE 
                     blocks.timestamp != to_timestamp(0) AND 
                     blocks.consensus = true AND
-                    blocks.timestamp <= $3 AND
+                    blocks.timestamp < $3 AND
                     blocks.timestamp >= $2
                 GROUP BY date
                 "#,

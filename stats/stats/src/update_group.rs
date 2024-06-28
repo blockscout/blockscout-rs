@@ -162,7 +162,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// struct DummyRemoteStatement;
 ///
 /// impl StatementFromRange for DummyRemoteStatement {
-///     fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+///     fn get_statement(range: Option<Range<DateTimeUtc>>) -> Statement {
 ///         todo!()
 ///     }
 /// }
