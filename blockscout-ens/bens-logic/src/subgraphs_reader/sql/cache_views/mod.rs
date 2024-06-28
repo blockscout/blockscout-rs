@@ -1,5 +1,5 @@
 use anyhow::Context;
-use sqlx::{Executor, PgPool};
+use sqlx::{Executor, PgPool, Row};
 
 mod addr_reverse_names;
 mod address_names;
@@ -21,6 +21,20 @@ pub trait CachedView {
         let unique_field = Self::unique_field();
         let table_sql = Self::table_sql(schema);
         let mut tx = pool.begin().await?;
+
+        // https://stackoverflow.com/questions/20582500/how-to-check-if-a-table-exists-in-a-given-schema
+        let exists = tx
+            .fetch_one(sqlx::query(&format!(
+                "SELECT to_regclass('{schema}.{view_table_name}') is not null;",
+            )))
+            .await?
+            .try_get::<bool, _>(0)
+            .context("checking if view exists")?;
+        if exists {
+            tracing::info!("view {} already exists, skipping creation", view_table_name);
+            return Ok(());
+        }
+
         tx.execute(sqlx::query(&format!(
             r#"
             CREATE MATERIALIZED VIEW IF NOT EXISTS {schema}.{view_table_name} AS
