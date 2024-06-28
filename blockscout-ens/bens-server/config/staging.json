@@ -4,42 +4,10 @@
     "networks": {
       "11155111": {
         "blockscout": {
-          "url": "https://eth-sepolia.blockscout.com"
+          "url": "https://eth-sepolia.k8s-dev.com"
         },
         "use_protocols": [
-          "ens", "genome", "rns", "base-name-service", "mode"
-        ]
-      },
-      "10200": {
-        "blockscout": {
-          "url": "https://gnosis-chiado.blockscout.com"
-        },
-        "use_protocols": [
-          "genome"
-        ]
-      },
-      "31": {
-        "blockscout": {
-          "url": "https://rootstock-testnet.blockscout.com"
-        },
-        "use_protocols": [
-          "rns"
-        ]
-      },
-      "84531": {
-        "blockscout": {
-          "url": "https://base-goerli.blockscout.com"
-        },
-        "use_protocols": [
-          "base-name-service"
-        ]
-      },
-      "919": {
-        "blockscout": {
-          "url": "https://sepolia.explorer.mode.network"
-        },
-        "use_protocols": [
-          "mode"
+          "ens", "genome", "base-name-service", "mode"
         ]
       }
     },
@@ -71,20 +39,6 @@
           "description": "GNO Domains Connecting gnosis chain",
           "icon_url": "https://i.imgur.com/xlDoPfF.png",
           "docs_url": "https://genomedomains.com/"
-        }
-      },
-      "rns": {
-        "tld_list": ["rsk"],
-        "network_id": 31,
-        "subgraph_name": "rns-subgraph",
-        "address_resolve_technique": "all_domains",
-        "native_token_contract": "0xca0a477e19bac7e0e172ccfd2e3c28a7200bdb71",
-        "meta": {
-          "short_name": "RNS",
-          "title": "Rootstock Name Service (Testnet)",
-          "description": "Rootstock Name Service (RNS) is a decentralized naming service, which allows users to have a readable domain name for their addresses.",
-          "icon_url": "https://i.imgur.com/o0MATMs.png",
-          "docs_url": "https://dev.rootstock.io/rif/rns/"
         }
       },
       "base-name-service": {

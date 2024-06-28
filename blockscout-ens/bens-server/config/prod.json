@@ -26,6 +26,14 @@
           "rns"
         ]
       },
+      "31": {
+        "blockscout": {
+          "url": "https://rootstock-testnet.blockscout.com"
+        },
+        "use_protocols": [
+          "rns-testnet"
+        ]
+      },
       "100": {
         "blockscout": {
           "url": "https://gnosis.blockscout.com/"
@@ -48,6 +56,14 @@
         },
         "use_protocols": [
           "ens"
+        ]
+      },
+      "10200": {
+        "blockscout": {
+          "url": "https://gnosis-chiado.blockscout.com"
+        },
+        "use_protocols": [
+          "genome-chiado"
         ]
       },
       "17069": {
@@ -74,6 +90,14 @@
           "mode"
         ]
       },
+      "919": {
+        "blockscout": {
+          "url": "https://sepolia.explorer.mode.network"
+        },
+        "use_protocols": [
+          "mode-sepolia"
+        ]
+      },
       "1890": {
         "blockscout": {
           "url": "https://phoenix.lightlink.io"
@@ -88,6 +112,14 @@
         },
         "use_protocols": [
           "ens"
+        ]
+      },
+      "11155111": {
+        "blockscout": {
+          "url": "https://eth-sepolia.blockscout.com"
+        },
+        "use_protocols": [
+          "ens-sepolia"
         ]
       },
       "7777777": {
@@ -116,6 +148,20 @@
           "docs_url": "https://docs.ens.domains/"
         }
       },
+      "ens-sepolia": {
+        "tld_list": ["eth"],
+        "network_id": 11155111,
+        "subgraph_name": "ens-sepolia-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "native_token_contract": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85",
+        "meta": {
+          "short_name": "ENS (Testnet)",
+          "title": "Ethereum Name Service (Testnet)",
+          "description": "The Ethereum Name Service (ENS) is a distributed, open, and extensible naming system based on the Ethereum blockchain.",
+          "icon_url": "https://i.imgur.com/GOfUwCb.jpeg",
+          "docs_url": "https://docs.ens.domains/"
+        }
+      },
       "genome": {
         "tld_list": [
           "gno"
@@ -133,6 +179,21 @@
           "docs_url": "https://genomedomains.com/"
         }
       },
+      "genome-chiado": {
+        "tld_list": ["gno"],
+        "network_id": 10200,
+        "subgraph_name": "genome-chiado-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "empty_label_hash": "0x1a13b687a5ff1d8ab1a9e189e1507a6abe834a9296cc8cff937905e3dee0c4f6",
+        "native_token_contract": "0xfd3d666dB2557983F3F04d61f90E35cc696f6D60",
+        "meta": {
+          "short_name": "Genome (Testnet)",
+          "title": "Genome Domains (Testnet)",
+          "description": "GNO Domains Connecting gnosis chain",
+          "icon_url": "https://i.imgur.com/xlDoPfF.png",
+          "docs_url": "https://genomedomains.com/"
+        }
+      },
       "rns": {
         "tld_list": [
           "rsk"
@@ -144,6 +205,20 @@
         "meta": {
           "short_name": "RNS",
           "title": "Rootstock Name Service",
+          "description": "Rootstock Name Service (RNS) is a decentralized naming service, which allows users to have a readable domain name for their addresses.",
+          "icon_url": "https://i.imgur.com/o0MATMs.png",
+          "docs_url": "https://dev.rootstock.io/rif/rns/"
+        }
+      },
+      "rns-testnet": {
+        "tld_list": ["rsk"],
+        "network_id": 31,
+        "subgraph_name": "rns-testnet-subgraph",
+        "address_resolve_technique": "all_domains",
+        "native_token_contract": "0xca0a477e19bac7e0e172ccfd2e3c28a7200bdb71",
+        "meta": {
+          "short_name": "RNS (Testnet)",
+          "title": "Rootstock Name Service (Testnet)",
           "description": "Rootstock Name Service (RNS) is a decentralized naming service, which allows users to have a readable domain name for their addresses.",
           "icon_url": "https://i.imgur.com/o0MATMs.png",
           "docs_url": "https://dev.rootstock.io/rif/rns/"
@@ -177,6 +252,21 @@
         "meta": {
           "short_name": "MNS",
           "title": "Mode Name Service",
+          "description": "Mode Name Service (MNS) is a decentralized naming service, which allows users to have a readable domain name for their addresses.",
+          "icon_url": "https://i.imgur.com/6QXp70g.png",
+          "docs_url": "https://docs.modedomains.xyz/"
+        }
+      },
+      "mode-sepolia": {
+        "tld_list": ["mode"],
+        "network_id": 919,
+        "subgraph_name": "mode-sepolia-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "native_token_contract": "0xCa3a57e014937C29526De98e4A8A334a7D04792b",
+        "empty_label_hash": "0xea1eb1136f380e6643b69866632ce3b493100790c9c84416f2769d996a1c38b1",
+        "meta": {
+          "short_name": "MNS (Testnet)",
+          "title": "Mode Name Service (Testnet)",
           "description": "Mode Name Service (MNS) is a decentralized naming service, which allows users to have a readable domain name for their addresses.",
           "icon_url": "https://i.imgur.com/6QXp70g.png",
           "docs_url": "https://docs.modedomains.xyz/"
