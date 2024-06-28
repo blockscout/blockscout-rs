@@ -242,6 +242,7 @@ mod tests {
             sync::{Arc, Mutex, OnceLock},
         };
 
+        use blockscout_metrics_tools::AggregateTimer;
         use chrono::{DateTime, Days, Utc};
         use entity::sea_orm_active_enums::ChartType;
         use pretty_assertions::assert_eq;
@@ -256,6 +257,7 @@ mod tests {
                     LocalDbChartSource,
                 },
                 types::Get,
+                DataSource, UpdateContext, UpdateParameters,
             },
             gettable_const,
             lines::AccountsGrowth,
@@ -328,14 +330,16 @@ mod tests {
             storage.lock().unwrap().clear();
         }
 
-        fn verify_inputs(storage: SharedInputsStorage) {
+        fn verify_inputs(
+            storage: SharedInputsStorage,
+            expected_update_time: Option<DateTime<Utc>>,
+        ) {
             let mut prev_input: Option<&StepInput<Vec<DateValueString>, ()>> = None;
+            let expected_update_time = expected_update_time
+                .unwrap_or(DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap());
             for input in storage.lock().unwrap().deref() {
                 assert_eq!(input.chart_id, 3);
-                assert_eq!(
-                    input.update_time,
-                    DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap()
-                );
+                assert_eq!(input.update_time, expected_update_time);
                 assert_eq!(input.min_blockscout_block, 0);
                 // batch step = 1 day
                 dbg!(&input);
@@ -387,12 +391,33 @@ mod tests {
                 expected_data.clone(),
             )
             .await;
-            verify_inputs(ThisInputsStorage::get());
+            verify_inputs(ThisInputsStorage::get(), None);
             clear_inputs(ThisInputsStorage::get());
 
+            let data = RecordingChart::query_data(
+                &UpdateContext::from_params_now_or_override(UpdateParameters {
+                    db: &db,
+                    blockscout: &blockscout,
+                    update_time_override: None,
+                    force_full: false,
+                }),
+                None,
+                &mut AggregateTimer::new(),
+            )
+            .await
+            .unwrap();
+            dbg!(data);
+
             // force update should work when existing data is present
-            dirty_force_update_and_check::<RecordingChart>(&db, &blockscout, expected_data).await;
-            verify_inputs(ThisInputsStorage::get());
+            let later_time = DateTime::<Utc>::from_str("2023-03-01T12:00:01Z").unwrap();
+            dirty_force_update_and_check::<RecordingChart>(
+                &db,
+                &blockscout,
+                expected_data,
+                Some(later_time),
+            )
+            .await;
+            verify_inputs(ThisInputsStorage::get(), Some(later_time));
         }
     }
 }

@@ -80,10 +80,13 @@ pub async fn dirty_force_update_and_check<C: DataSource + ChartProperties>(
     db: &DatabaseConnection,
     blockscout: &DatabaseConnection,
     expected: Vec<(&str, &str)>,
+    update_time_override: Option<DateTime<Utc>>,
 ) {
     let _ = tracing_subscriber::fmt::try_init();
     let expected = map_str_tuple_to_owned(expected);
-    let current_time = DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
+    // some later time so that the update is not skipped
+    let current_time =
+        update_time_override.unwrap_or(DateTime::from_str("2023-03-01T12:00:01Z").unwrap());
     let approximate_trailing_points = C::approximate_trailing_points();
 
     let parameters = UpdateParameters {
