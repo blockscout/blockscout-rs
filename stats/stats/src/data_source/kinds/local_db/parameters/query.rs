@@ -23,7 +23,7 @@ impl<C: ChartProperties> QueryBehaviour for DefaultQueryVec<C> {
     ) -> Result<Self::Output, UpdateError> {
         let (start, end) = range.map(|r| (r.start, r.end)).unzip();
         // Currently we store data with date precision. Update-time relevance for local charts
-        // is achieved while requestind remote source data
+        // is achieved while requesting remote source data
         let start = start.map(|s| s.date_naive());
         let end = end.map(|s| {
             // the `end` point is excluded from the range, meaning
