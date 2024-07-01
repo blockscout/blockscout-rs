@@ -11,7 +11,7 @@ categories = ["parsing"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-minicbor = { version = "0.18", features = ["std"] }
+minicbor = { version = "0.24", features = ["std"] }
 semver = "1.0"
 thiserror = "1.0"
 blockscout-display-bytes = "1.1.0"
