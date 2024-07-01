@@ -39,5 +39,5 @@ If you want to help us improve the project, you can contribute code. To do so, f
 * Fork (https://github.com/blockscout/blockscout-rs/fork) the repository and make changes on your fork in a feature branch.
 * Create your branch with name `<name>/<short-slug-of-your-feature-or-fix>`
 * Write code to implement features or fix bugs. Make sure your code is well-tested
-* Commit your changes. Commit messages **SHOULD** follows [commit message conventions](https://www.conventionalcommits.org/en/v1.0.0/), for example `feat: add new feature` or `fix: correct issue with...` 
+* Commit your changes. Commit messages **SHOULD** follow [commit message conventions](https://www.conventionalcommits.org/en/v1.0.0/), for example `feat: add new feature` or `fix: correct issue with...` 
 * Create a pull request. The title of Pull Request **MUST** follow the conventional commits format. Moreover, after `<type>` please specify the service name, for example `feat(stats): add new feature` or `fix(stats): correct issue with...`
