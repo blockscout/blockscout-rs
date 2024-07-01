@@ -154,6 +154,9 @@ where
                 // no need to perform update.
                 // mostly catches second call to update e.g. when both
                 // dependency and this source are in one group and enabled.
+                tracing::info!(
+                    "Not updating the chart because it was already handled within ongoing update"
+                );
                 return Ok(());
             }
         }
