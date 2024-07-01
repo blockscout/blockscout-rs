@@ -1051,20 +1051,9 @@ dependencies = [
 
 [[package]]
 name = "blockscout-display-bytes"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f4acc2bb1d1de55a55f818c10cdbc4a698f778666a7b17d2eab737aa6ed1b5e"
-dependencies = [
- "bytes",
- "hex",
- "serde",
- "thiserror",
-]
-
-[[package]]
-name = "blockscout-display-bytes"
 version = "1.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs/?branch=rimrakhimov/blockscout-display-bytes/public-methods#26fa3a31a0fa4e5ec98b9f5333dd1ace74197670"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "34a6e9076f2cb26f696b58c0dfed47cf4b7499b4328b1fa797b3a34d747712e5"
 dependencies = [
  "bytes",
  "hex",
@@ -2828,22 +2817,22 @@ dependencies = [
 
 [[package]]
 name = "minicbor"
-version = "0.18.0"
+version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a20020e8e2d1881d8736f64011bb5ff99f1db9947ce3089706945c8915695cb"
+checksum = "5f8e213c36148d828083ae01948eed271d03f95f7e72571fa242d78184029af2"
 dependencies = [
  "minicbor-derive",
 ]
 
 [[package]]
 name = "minicbor-derive"
-version = "0.12.0"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8608fb1c805b5b6b3d5ab7bd95c40c396df622b64d77b2d621a5eae1eed050ee"
+checksum = "a6bdc119b1a405df86a8cde673295114179dbd0ebe18877c26ba89fb080365c2"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.66",
 ]
 
 [[package]]
@@ -4923,7 +4912,7 @@ dependencies = [
  "alloy-json-abi 0.6.4",
  "anyhow",
  "async-trait",
- "blockscout-display-bytes 1.1.0",
+ "blockscout-display-bytes",
  "bytes",
  "chrono",
  "const_format",
@@ -4936,7 +4925,6 @@ dependencies = [
  "futures",
  "hex",
  "lazy_static",
- "minicbor",
  "mismatch",
  "mockall 0.11.4",
  "nonempty",
@@ -5003,7 +4991,7 @@ dependencies = [
  "amplify",
  "anyhow",
  "async-trait",
- "blockscout-display-bytes 1.1.0",
+ "blockscout-display-bytes",
  "blockscout-service-launcher",
  "bytes",
  "config",
@@ -5084,11 +5072,10 @@ dependencies = [
 
 [[package]]
 name = "solidity-metadata"
-version = "1.0.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18f0ee752c2f80c87498dba10c2120492c42073f73b37ffb49e79fcd1e91bff3"
+checksum = "27866969b7fa575837afa26079574f78f1e8223ac2f933e5808060b204ba23d8"
 dependencies = [
- "blockscout-display-bytes 1.0.0",
  "minicbor",
  "semver 1.0.17",
  "thiserror",
@@ -5097,10 +5084,10 @@ dependencies = [
 [[package]]
 name = "sourcify"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs?rev=457af68#457af68c8c09046530ec174112be6443ae34ff19"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=c4261d0#c4261d0f7bec3c250a979b416ed48ab13853c9d6"
 dependencies = [
  "anyhow",
- "blockscout-display-bytes 1.0.0",
+ "blockscout-display-bytes",
  "bytes",
  "reqwest",
  "reqwest-middleware 0.2.4",
@@ -5914,12 +5901,12 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 [[package]]
 name = "verification-common"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs/?branch=rimrakhimov/verifier/zksolc-support#e5b7bff6b326f65c534d096b48930468f38d37c8"
+source = "git+https://github.com/blockscout/blockscout-rs/?branch=rimrakhimov/verifier/zksolc-support#ebcd9e62fdbe9cb1b2f8fcc3a73ca0ec6d2b3eeb"
 dependencies = [
  "alloy-dyn-abi 0.7.6",
  "alloy-json-abi 0.7.6",
  "anyhow",
- "blockscout-display-bytes 1.1.0",
+ "blockscout-display-bytes",
  "bytes",
  "serde",
  "serde_json",
