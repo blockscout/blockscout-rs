@@ -5,7 +5,7 @@ use crate::{
     },
     Error, SourcifyError, VerifyFromEtherscanError,
 };
-use blockscout_display_bytes::Bytes as DisplayBytes;
+use blockscout_display_bytes::ToHex;
 use bytes::Bytes;
 use reqwest::{Response, StatusCode};
 use reqwest_middleware::{ClientWithMiddleware, Middleware};
@@ -126,9 +126,14 @@ impl Client {
         chain_id: &str,
         contract_address: Bytes,
     ) -> Result<GetSourceFilesResponse, Error<EmptyCustomError>> {
-        let contract_address = DisplayBytes::from(contract_address);
-        let url =
-            self.generate_url(format!("files/any/{}/{}", chain_id, contract_address).as_str());
+        let url = self.generate_url(
+            format!(
+                "files/any/{}/{}",
+                chain_id,
+                ToHex::to_hex(&contract_address)
+            )
+            .as_str(),
+        );
 
         let response = self
             .reqwest_client
@@ -148,7 +153,6 @@ impl Client {
         chain_id: &str,
         contract_address: Bytes,
     ) -> Result<VerifyFromEtherscanResponse, Error<VerifyFromEtherscanError>> {
-        let contract_address = DisplayBytes::from(contract_address);
         let url = self.generate_url("verify/etherscan");
 
         #[derive(Serialize)]
@@ -160,7 +164,7 @@ impl Client {
 
         let request = Request {
             chain_id,
-            address: contract_address.to_string(),
+            address: ToHex::to_hex(&contract_address),
         };
 
         let response = self
@@ -251,6 +255,7 @@ impl Client {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use blockscout_display_bytes::decode_hex;
     use governor::{
         clock::DefaultClock,
         middleware::NoOpMiddleware,
@@ -263,7 +268,7 @@ mod tests {
     use std::num::NonZeroU32;
 
     fn parse_contract_address(contract_address: &str) -> Bytes {
-        DisplayBytes::from_str(contract_address).unwrap().0
+        decode_hex(contract_address).unwrap().into()
     }
 
     static RATE_LIMITER_MIDDLEWARE: OnceCell<
