@@ -8,25 +8,45 @@ assignees: ''
 ---
 
 **Describe the bug**
+
+<!--
 A clear and concise description of what the bug is.
+-->
 
 **To Reproduce**
+
+<!--
 Steps to reproduce the behavior in as many details as possible:
+-->
 1. Go to '...'
 2. Click on '....'
 3. Scroll down to '....'
 4. See error
 
 **Observed behavior**
+
+<!--
 The behavior you observed after following the steps and point out the problem.
+-->
 
 **Expected behavior**
+
+<!--
 A clear and concise description of what you expected to happen and why.
+-->
 
 **Screenshots**
-If applicable, add screenshots to help explain your problem.
 
-**Desktop (please complete the following information):**
+<!--
+If applicable, add screenshots to help explain your problem.
+-->
+
+**Desktop:**
+
+<!--
+Please complete the following information
+-->
+
  - OS: [e.g. macOS]
  - OS version [e.g. 14.5 (23F79)]
  - rustc version (`rustc --version`) [e.g. `rustc 1.79.0 (129f3b996 2024-06-10)`]
