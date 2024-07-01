@@ -1,4 +1,7 @@
-use std::{marker::PhantomData, ops::Range};
+use std::{
+    marker::PhantomData,
+    ops::{Range, RangeInclusive},
+};
 
 use sea_orm::prelude::DateTimeUtc;
 
@@ -21,17 +24,21 @@ impl<C: ChartProperties> QueryBehaviour for DefaultQueryVec<C> {
         cx: &UpdateContext<'_>,
         range: Option<Range<DateTimeUtc>>,
     ) -> Result<Self::Output, UpdateError> {
-        let (start, end) = range.map(|r| (r.start, r.end)).unzip();
-        // Currently we store data with date precision. Update-time relevance for local charts
-        // is achieved while requesting remote source data
+        // In DB we store data with date precision. Also, `get_line_chart_data`
+        // works with inclusive range. Therefore, we need to convert the range and
+        // get date without time.
+        let range = range.map(exclusive_datetime_range_to_inclusive);
+        let (start, end) = range.map(|r| r.into_inner()).unzip();
+
+        // At the same time, update-time relevance for local charts
+        // is achieved while requesting remote source data.
+        // I.e. if the range end is at some time X today,
+        // the dependency will be updated with update time X,
+        // so data in local DB will be relevant for time X
+        // (it's reflected in `update_time` column of `charts`),
+        // and `get_line_chart_data` will return the relevant data
         let start = start.map(|s| s.date_naive());
-        let end = end.map(|s| {
-            // the `end` point is excluded from the range, meaning
-            // inclusive range will be until `end-1`
-            s.checked_sub_signed(chrono::Duration::nanoseconds(1))
-                .unwrap_or(DateTimeUtc::MIN_UTC)
-                .date_naive()
-        });
+        let end = end.map(|e| e.date_naive());
         let values: Vec<DateValueString> = get_line_chart_data(
             cx.db,
             C::NAME,
@@ -48,6 +55,16 @@ impl<C: ChartProperties> QueryBehaviour for DefaultQueryVec<C> {
         .collect();
         Ok(values)
     }
+}
+
+fn exclusive_datetime_range_to_inclusive(r: Range<DateTimeUtc>) -> RangeInclusive<DateTimeUtc> {
+    // subtract the smallest unit of time to get semantically the same range
+    // but inclusive
+    let new_end = r
+        .end
+        .checked_sub_signed(chrono::Duration::nanoseconds(1))
+        .unwrap_or(DateTimeUtc::MIN_UTC); // saturating sub
+    r.start..=new_end
 }
 
 /// Usually the choice for line counters
