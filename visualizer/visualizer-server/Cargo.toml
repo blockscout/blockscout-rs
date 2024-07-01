@@ -16,6 +16,7 @@ actix-web = "4"
 amplify = { version = "3.13.0", features = ["derive"] }
 anyhow = "1.0"
 async-trait = "0.1"
+blockscout-service-health = { git = "https://github.com/blockscout/blockscout-rs", rev = "fe733cf" }
 blockscout-service-launcher = { workspace = true }
 bytes = "1.2"
 config = "0.13"
