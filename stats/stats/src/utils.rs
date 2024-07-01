@@ -1,6 +1,6 @@
 //! Common utilities used across statistics
 
-use std::ops::RangeInclusive;
+use std::ops::Range;
 
 use chrono::{NaiveDate, NaiveTime};
 use sea_orm::{prelude::DateTimeUtc, Value};
@@ -19,7 +19,7 @@ pub fn day_start(date: NaiveDate) -> DateTimeUtc {
 /// Vec should be appended to the args.
 /// String should be inserted in places for filter.
 pub(crate) fn produce_filter_and_values(
-    range: Option<RangeInclusive<DateTimeUtc>>,
+    range: Option<Range<DateTimeUtc>>,
     filter_by: &str,
     filter_arg_number_start: usize,
 ) -> (String, Vec<Value>) {
@@ -29,10 +29,10 @@ pub(crate) fn produce_filter_and_values(
         (
             format!(
                 " AND
-                {filter_by} <= ${arg_n_2} AND
+                {filter_by} < ${arg_n_2} AND
                 {filter_by} >= ${arg_n_1}"
             ),
-            vec![(*range.start()).into(), (*range.end()).into()],
+            vec![range.start.into(), range.end.into()],
         )
     } else {
         ("".to_owned(), vec![])
@@ -94,10 +94,10 @@ mod test {
         let time_1 = DateTimeUtc::from_timestamp(1234567, 0).unwrap();
         let time_2 = DateTimeUtc::from_timestamp(7654321, 0).unwrap();
         assert_eq!(
-            produce_filter_and_values(Some(time_1..=time_2), "aboba", 123),
+            produce_filter_and_values(Some(time_1..time_2), "aboba", 123),
             (
                 " AND
-                aboba <= $124 AND
+                aboba < $124 AND
                 aboba >= $123"
                     .to_string(),
                 vec![time_1.into(), time_2.into()]
@@ -107,7 +107,7 @@ mod test {
 
     const ETH: i64 = 1_000_000_000_000_000_000;
 
-    fn naive_sql_selector(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+    fn naive_sql_selector(range: Option<Range<DateTimeUtc>>) -> Statement {
         match range {
             Some(range) => Statement::from_sql_and_values(
                 DbBackend::Postgres,
@@ -120,11 +120,11 @@ mod test {
                 WHERE 
                     blocks.timestamp != to_timestamp(0) AND 
                     blocks.consensus = true AND
-                    blocks.timestamp <= $3 AND
+                    blocks.timestamp < $3 AND
                     blocks.timestamp >= $2
                 GROUP BY date
                 "#,
-                vec![ETH.into(), (*range.start()).into(), (*range.end()).into()],
+                vec![ETH.into(), range.start.into(), range.end.into()],
             ),
             None => Statement::from_sql_and_values(
                 DbBackend::Postgres,
@@ -173,7 +173,7 @@ mod test {
     fn sql_with_range_filter_some_works() {
         let range = Some(
             DateTimeUtc::from_timestamp(1234567, 0).unwrap()
-                ..=DateTimeUtc::from_timestamp(7654321, 0).unwrap(),
+                ..DateTimeUtc::from_timestamp(7654321, 0).unwrap(),
         );
         assert_eq!(
             compact_sql(naive_sql_selector(range.clone())),

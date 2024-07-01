@@ -1,4 +1,4 @@
-use std::ops::RangeInclusive;
+use std::ops::Range;
 
 use crate::{
     charts::db_interaction::types::DateValueInt,
@@ -30,13 +30,13 @@ use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 pub struct NewAccountsStatement;
 
 impl StatementFromRange for NewAccountsStatement {
-    fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+    fn get_statement(range: Option<Range<DateTimeUtc>>) -> Statement {
         // `MIN_UTC` does not fit into postgres' timestamp. Unix epoch start should be enough
         let min_timestamp = DateTimeUtc::UNIX_EPOCH;
         // All transactions from the beginning must be considered to calculate new accounts correctly.
         // E.g. if account was first active both before `range.start()` and within the range,
         // we don't want to count it within the range (as it's not a *new* account).
-        let range = range.map(|r| (min_timestamp..=r.into_inner().1));
+        let range = range.map(|r| (min_timestamp..r.end));
         sql_with_range_filter_opt!(
             DbBackend::Postgres,
             r#"
@@ -69,7 +69,7 @@ impl QueryBehaviour for NewAccountsQueryBehaviour {
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        range: Option<RangeInclusive<DateTimeUtc>>,
+        range: Option<Range<DateTimeUtc>>,
     ) -> Result<Vec<DateValueString>, UpdateError> {
         let query = NewAccountsStatement::get_statement(range.clone());
         let mut data = DateValueString::find_by_statement(query)
@@ -79,7 +79,7 @@ impl QueryBehaviour for NewAccountsQueryBehaviour {
         // make sure that it's sorted
         data.sort_by_key(|d| d.date);
         if let Some(range) = range {
-            let range = range.start().date_naive()..=range.end().date_naive();
+            let range = range.start.date_naive()..=range.end.date_naive();
             trim_out_of_range_sorted(&mut data, range);
         }
         Ok(data)
@@ -115,6 +115,7 @@ pub type NewAccounts = LocalDbChartSource<
         PassVecStep,
         // see `NewAccountsRemote` docs
         BatchMax,
+        DefaultQueryVec<Properties>,
         Properties,
     >,
     DefaultQueryVec<Properties>,

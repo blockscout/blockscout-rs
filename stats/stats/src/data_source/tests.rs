@@ -1,4 +1,4 @@
-use std::{collections::HashSet, ops::RangeInclusive, str::FromStr, sync::Arc};
+use std::{collections::HashSet, ops::Range, str::FromStr, sync::Arc};
 
 use chrono::{DateTime, Utc};
 use entity::sea_orm_active_enums::ChartType;
@@ -30,7 +30,7 @@ use crate::{
 pub struct NewContractsQuery;
 
 impl StatementFromRange for NewContractsQuery {
-    fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+    fn get_statement(range: Option<Range<DateTimeUtc>>) -> Statement {
         sql_with_range_filter_opt!(
             DbBackend::Postgres,
             r#"
@@ -119,7 +119,7 @@ impl BatchStepBehaviour<Vec<DateValueString>, ()> for ContractsGrowthCustomBatch
         _chart_id: i32,
         _update_time: DateTime<Utc>,
         _min_blockscout_block: i64,
-        _last_accurate_point: Option<DateValueString>,
+        _last_accurate_point: DateValueString,
         _main_data: Vec<DateValueString>,
         _resolution_data: (),
     ) -> Result<usize, UpdateError> {

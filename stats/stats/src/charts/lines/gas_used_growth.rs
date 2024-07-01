@@ -1,4 +1,4 @@
-use std::ops::RangeInclusive;
+use std::ops::Range;
 
 use crate::{
     charts::db_interaction::types::DateValueDecimal,
@@ -17,7 +17,7 @@ use sea_orm::{prelude::*, DbBackend, Statement};
 pub struct GasUsedPartialStatement;
 
 impl StatementFromRange for GasUsedPartialStatement {
-    fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+    fn get_statement(range: Option<Range<DateTimeUtc>>) -> Statement {
         sql_with_range_filter_opt!(
             DbBackend::Postgres,
             r#"

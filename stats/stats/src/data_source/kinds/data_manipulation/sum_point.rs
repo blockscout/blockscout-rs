@@ -4,7 +4,7 @@
 
 use std::{
     marker::PhantomData,
-    ops::{AddAssign, RangeInclusive},
+    ops::{AddAssign, Range},
 };
 
 use blockscout_metrics_tools::AggregateTimer;
@@ -56,7 +56,7 @@ where
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        _range: Option<RangeInclusive<DateTimeUtc>>,
+        _range: Option<Range<DateTimeUtc>>,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<Self::Output, UpdateError> {
         // it's possible to not request full data range and use last accurate point;

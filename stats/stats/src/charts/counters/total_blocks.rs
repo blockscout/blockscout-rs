@@ -1,4 +1,4 @@
-use std::ops::RangeInclusive;
+use std::ops::Range;
 
 use crate::{
     data_source::{
@@ -29,7 +29,7 @@ impl QueryBehaviour for TotalBlocksQueryBehaviour {
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        _range: Option<RangeInclusive<DateTimeUtc>>,
+        _range: Option<Range<DateTimeUtc>>,
     ) -> Result<Self::Output, UpdateError> {
         let data = blocks::Entity::find()
             .select_only()

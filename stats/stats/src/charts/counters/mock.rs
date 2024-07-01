@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, ops::RangeInclusive};
+use std::{marker::PhantomData, ops::Range};
 
 use crate::{
     charts::db_interaction::types::DateValue,
@@ -7,9 +7,9 @@ use crate::{
             local_db::DirectPointLocalDbChartSource,
             remote_db::{QueryBehaviour, RemoteDatabaseSource},
         },
+        types::Get,
         UpdateContext,
     },
-    tests::types::Get,
     ChartProperties, DateValueString, Named, UpdateError,
 };
 
@@ -31,7 +31,7 @@ where
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        _range: Option<RangeInclusive<DateTimeUtc>>,
+        _range: Option<Range<DateTimeUtc>>,
     ) -> Result<Self::Output, UpdateError> {
         if cx.time >= PointDateTime::get() {
             Ok(DateValueString::from_parts(

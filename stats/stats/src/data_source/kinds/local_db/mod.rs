@@ -9,7 +9,7 @@
 //! Charts are intended to be such persisted sources,
 //! because their data is directly retreived from the database (on requests).
 
-use std::{marker::PhantomData, ops::RangeInclusive, time::Duration};
+use std::{marker::PhantomData, ops::Range, time::Duration};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Utc};
@@ -69,7 +69,14 @@ pub type BatchLocalDbChartSourceWithDefaultParams<MainDep, ResolutionDep, BatchS
         MainDep,
         ResolutionDep,
         DefaultCreate<ChartProps>,
-        BatchUpdate<MainDep, ResolutionDep, BatchStep, Batch30Days, ChartProps>,
+        BatchUpdate<
+            MainDep,
+            ResolutionDep,
+            BatchStep,
+            Batch30Days,
+            DefaultQueryVec<ChartProps>,
+            ChartProps,
+        >,
         DefaultQueryVec<ChartProps>,
         ChartProps,
     >;
@@ -91,7 +98,14 @@ pub type CumulativeLocalDbChartSource<DeltaDep, C> = LocalDbChartSource<
     PartialCumulative<DeltaDep>,
     (),
     DefaultCreate<C>,
-    BatchUpdate<PartialCumulative<DeltaDep>, (), AddLastValueStep<C>, Batch30Days, C>,
+    BatchUpdate<
+        PartialCumulative<DeltaDep>,
+        (),
+        AddLastValueStep<C>,
+        Batch30Days,
+        DefaultQueryVec<C>,
+        C,
+    >,
     DefaultQueryVec<C>,
     C,
 >;
@@ -102,7 +116,7 @@ pub type DirectVecLocalDbChartSource<Dependency, C> = LocalDbChartSource<
     Dependency,
     (),
     DefaultCreate<C>,
-    BatchUpdate<Dependency, (), PassVecStep, Batch30Days, C>,
+    BatchUpdate<Dependency, (), PassVecStep, Batch30Days, DefaultQueryVec<C>, C>,
     DefaultQueryVec<C>,
     C,
 >;
@@ -228,7 +242,7 @@ where
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        range: Option<RangeInclusive<DateTimeUtc>>,
+        range: Option<Range<DateTimeUtc>>,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<Self::Output, UpdateError> {
         let _timer = dependency_data_fetch_timer.start_interval();

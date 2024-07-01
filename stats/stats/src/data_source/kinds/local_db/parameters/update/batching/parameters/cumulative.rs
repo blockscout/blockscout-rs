@@ -32,21 +32,19 @@ where
         chart_id: i32,
         update_time: DateTime<Utc>,
         min_blockscout_block: i64,
-        last_accurate_point: Option<DateValueString>,
+        last_accurate_point: DateValueString,
         main_data: Vec<DV>,
         _resolution_data: (),
     ) -> Result<usize, UpdateError> {
         let partial_sum = last_accurate_point
-            .map(|p| {
-                p.value.parse::<DV::Value>().map_err(|e| {
-                    UpdateError::Internal(format!(
-                        "failed to parse value in chart '{}': {e}",
-                        ChartProps::NAME
-                    ))
-                })
-            })
-            .transpose()?;
-        let partial_sum = partial_sum.unwrap_or(DV::Value::zero());
+            .value
+            .parse::<DV::Value>()
+            .map_err(|e| {
+                UpdateError::Internal(format!(
+                    "failed to parse value in chart '{}': {e}",
+                    ChartProps::NAME
+                ))
+            })?;
         let main_data = main_data
             .into_iter()
             .map(|dv| {
@@ -60,7 +58,7 @@ where
             chart_id,
             update_time,
             min_blockscout_block,
-            None, // ignored anyway
+            last_accurate_point,
             main_data,
             (),
         )

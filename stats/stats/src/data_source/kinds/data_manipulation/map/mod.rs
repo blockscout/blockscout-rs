@@ -1,7 +1,7 @@
 //! `map` for a data source, i.e. applies a function to the output
 //! of some other source.
 
-use std::{marker::PhantomData, ops::RangeInclusive};
+use std::{marker::PhantomData, ops::Range};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::Utc;
@@ -54,7 +54,7 @@ where
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        range: Option<RangeInclusive<DateTimeUtc>>,
+        range: Option<Range<DateTimeUtc>>,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<Self::Output, UpdateError> {
         let inner_data =

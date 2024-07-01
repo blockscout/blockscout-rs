@@ -1,6 +1,6 @@
 //! Total transaction fees for an interval
 
-use std::ops::RangeInclusive;
+use std::ops::Range;
 
 use crate::{
     charts::db_interaction::types::DateValueDouble,
@@ -20,7 +20,7 @@ const ETHER: i64 = i64::pow(10, 18);
 pub struct TxnsFeeStatement;
 
 impl StatementFromRange for TxnsFeeStatement {
-    fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+    fn get_statement(range: Option<Range<DateTimeUtc>>) -> Statement {
         sql_with_range_filter_opt!(
             DbBackend::Postgres,
             r#"

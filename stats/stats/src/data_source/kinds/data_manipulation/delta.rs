@@ -6,7 +6,7 @@
 use std::{
     fmt::Display,
     marker::PhantomData,
-    ops::{RangeInclusive, SubAssign},
+    ops::{Range, SubAssign},
     str::FromStr,
 };
 
@@ -60,16 +60,16 @@ where
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        range: Option<RangeInclusive<DateTimeUtc>>,
+        range: Option<Range<DateTimeUtc>>,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<Self::Output, UpdateError> {
         let request_range = range.clone().map(|r| {
             let start = r
-                .start()
+                .start
                 .checked_sub_signed(TimeDelta::days(1))
                 .unwrap_or(DateTime::<Utc>::MAX_UTC);
-            let end = *r.end();
-            start..=end
+            let end = r.end;
+            start..end
         });
         let cum_data: Vec<DV> =
             D::query_data(cx, request_range, dependency_data_fetch_timer).await?;

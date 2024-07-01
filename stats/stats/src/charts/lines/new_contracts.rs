@@ -1,4 +1,4 @@
-use std::ops::RangeInclusive;
+use std::ops::Range;
 
 use crate::{
     charts::db_interaction::types::DateValueInt,
@@ -16,7 +16,7 @@ use sea_orm::{prelude::DateTimeUtc, DbBackend, Statement};
 pub struct NewContractsStatement;
 
 impl StatementFromRange for NewContractsStatement {
-    fn get_statement(range: Option<RangeInclusive<DateTimeUtc>>) -> Statement {
+    fn get_statement(range: Option<Range<DateTimeUtc>>) -> Statement {
         sql_with_range_filter_opt!(
             DbBackend::Postgres,
             r#"
