@@ -14,4 +14,6 @@ categories = ["parsing"]
 minicbor = { version = "0.24", features = ["std"] }
 semver = "1.0"
 thiserror = "1.0"
+
+[dev-dependencies]
 blockscout-display-bytes = "1.1.0"

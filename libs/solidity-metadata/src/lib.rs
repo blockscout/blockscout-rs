@@ -114,7 +114,7 @@ impl<'b> Decode<'b, DecodeContext> for MetadataHash {
 #[cfg(test)]
 mod metadata_hash_deserialization_tests {
     use super::*;
-    use blockscout_display_bytes::Bytes as DisplayBytes;
+    use blockscout_display_bytes::decode_hex;
     use std::str::FromStr;
 
     fn is_valid_custom_error(
@@ -142,7 +142,7 @@ mod metadata_hash_deserialization_tests {
         // { "bzzr0": b"d4fba422541feba2d648f6657d9354ec14ea9f5919b520abe0feb60981d7b17c" }
         let hex =
             "a165627a7a72305820d4fba422541feba2d648f6657d9354ec14ea9f5919b520abe0feb60981d7b17c";
-        let encoded = DisplayBytes::from_str(hex).unwrap().0;
+        let encoded = decode_hex(hex).unwrap();
         let expected = MetadataHash { solc: None };
         let expected_size = encoded.len();
 
@@ -160,7 +160,7 @@ mod metadata_hash_deserialization_tests {
         // given
         // { "ipfs": b"1220BCC988B1311237F2C00CCD0BFBD8B01D24DC18F720603B0DE93FE6327DF53625", "solc": b'00080e' }
         let hex = "a2646970667358221220bcc988b1311237f2c00ccd0bfbd8b01d24dc18f720603b0de93fe6327df5362564736f6c634300080e";
-        let encoded = DisplayBytes::from_str(hex).unwrap().0;
+        let encoded = decode_hex(hex).unwrap();
         let expected = MetadataHash {
             solc: Some(Version::new(0, 8, 14)),
         };
@@ -180,7 +180,7 @@ mod metadata_hash_deserialization_tests {
         // given
         // {"ipfs": b'1220BA5AF27FE13BC83E671BD6981216D35DF49AB3AC923741B8948B277F93FBF732', "solc": "0.8.15-ci.2022.5.23+commit.21591531"}
         let hex = "a2646970667358221220ba5af27fe13bc83e671bd6981216d35df49ab3ac923741b8948b277f93fbf73264736f6c637823302e382e31352d63692e323032322e352e32332b636f6d6d69742e3231353931353331";
-        let encoded = DisplayBytes::from_str(hex).unwrap().0;
+        let encoded = decode_hex(hex).unwrap();
         let expected = MetadataHash {
             solc: Some(
                 Version::from_str("0.8.15-ci.2022.5.23+commit.21591531")
@@ -207,11 +207,11 @@ mod metadata_hash_deserialization_tests {
         let second =
             "a165627a7a72305820d4fba422541feba2d648f6657d9354ec14ea9f5919b520abe0feb60981d7b17c";
         let hex = format!("{first}{second}");
-        let encoded = DisplayBytes::from_str(&hex).unwrap().0;
+        let encoded = decode_hex(&hex).unwrap();
         let expected = MetadataHash {
             solc: Some(Version::new(0, 8, 14)),
         };
-        let expected_size = DisplayBytes::from_str(first).unwrap().0.len();
+        let expected_size = decode_hex(first).unwrap().len();
 
         // when
         let (decoded, decoded_size) = MetadataHash::from_cbor(encoded.as_ref())
@@ -226,7 +226,7 @@ mod metadata_hash_deserialization_tests {
     fn deserialization_of_non_cbor_hex_should_fail() {
         // given
         let hex = "1234567890";
-        let encoded = DisplayBytes::from_str(hex).unwrap().0;
+        let encoded = decode_hex(hex).unwrap();
 
         // when
         let decoded = MetadataHash::from_cbor(encoded.as_ref());
@@ -244,7 +244,7 @@ mod metadata_hash_deserialization_tests {
         // given
         // "solc"
         let hex = "64736f6c63";
-        let encoded = DisplayBytes::from_str(hex).unwrap().0;
+        let encoded = decode_hex(hex).unwrap();
 
         // when
         let decoded = MetadataHash::from_cbor(encoded.as_ref());
@@ -262,7 +262,7 @@ mod metadata_hash_deserialization_tests {
         // given
         // { "solc": b'000400', "ipfs": b"1220BCC988B1311237F2C00CCD0BFBD8B01D24DC18F720603B0DE93FE6327DF53625", "solc": b'00080e' }
         let hex = "a364736f6c6343000400646970667358221220bcc988b1311237f2c00ccd0bfbd8b01d24dc18f720603b0de93fe6327df5362564736f6c634300080e";
-        let encoded = DisplayBytes::from_str(hex).unwrap().0;
+        let encoded = decode_hex(hex).unwrap();
 
         // when
         let decoded = MetadataHash::from_cbor(encoded.as_ref());
@@ -281,7 +281,7 @@ mod metadata_hash_deserialization_tests {
         // 3 elements expected in the map but got only 2:
         // { "ipfs": b"1220BCC988B1311237F2C00CCD0BFBD8B01D24DC18F720603B0DE93FE6327DF53625", "solc": b'00080e' }
         let hex = "a3646970667358221220bcc988b1311237f2c00ccd0bfbd8b01d24dc18f720603b0de93fe6327df5362564736f6c634300080e";
-        let encoded = DisplayBytes::from_str(hex).unwrap().0;
+        let encoded = decode_hex(hex).unwrap();
 
         // when
         let decoded = MetadataHash::from_cbor(encoded.as_ref());
@@ -299,7 +299,7 @@ mod metadata_hash_deserialization_tests {
         // given
         // { "ipfs": b"1220BCC988B1311237F2C00CCD0BFBD8B01D24DC18F720603B0DE93FE6327DF53625", "solc": 123 } \
         let hex= "a2646970667358221220bcc988b1311237f2c00ccd0bfbd8b01d24dc18f720603b0de93fe6327df5362564736f6c63187B";
-        let encoded = DisplayBytes::from_str(hex).unwrap().0;
+        let encoded = decode_hex(hex).unwrap();
 
         // when
         let decoded = MetadataHash::from_cbor(encoded.as_ref());
