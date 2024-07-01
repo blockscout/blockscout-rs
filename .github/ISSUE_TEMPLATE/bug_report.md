@@ -31,6 +31,37 @@ If applicable, add screenshots to help explain your problem.
  - OS version [e.g. 14.5 (23F79)]
  - rustc version (`rustc --version`) [e.g. `rustc 1.79.0 (129f3b996 2024-06-10)`]
 
+
+<details><summary>Environmental variables</summary>
+<p>
+
+<!--
+List environmental variables that were used when running the project.
+In particular, settings for the respective service.
+-->
+
+```
+<envs>
+```
+
+</p>
+</details>
+
+<details><summary>Config files</summary>
+<p>
+
+<!--
+Attach relevant configuration files that were used.
+-->
+
+`config_file_1.json`:
+```
+<file contents>
+```
+
+</p>
+</details>
+
 **Additional context**
 Add any other context about the problem here.
 
