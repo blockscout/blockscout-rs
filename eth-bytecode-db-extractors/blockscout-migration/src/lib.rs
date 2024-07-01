@@ -3,7 +3,6 @@ use sea_orm_migration::sea_orm::{Statement, TransactionTrait};
 
 mod m20230426_170496_create_functions;
 mod m20230426_170508_create_language_enum;
-mod m20230426_170520_create_status_enum;
 mod m20230426_170541_create_contract_addresses_table;
 mod m20230426_170553_create_contract_details_table;
 
@@ -13,9 +12,9 @@ pub struct Migrator;
 impl MigratorTrait for Migrator {
     fn migrations() -> Vec<Box<dyn MigrationTrait>> {
         vec![
+            Box::new(job_queue::migration::Migration),
             Box::new(m20230426_170496_create_functions::Migration),
             Box::new(m20230426_170508_create_language_enum::Migration),
-            Box::new(m20230426_170520_create_status_enum::Migration),
             Box::new(m20230426_170541_create_contract_addresses_table::Migration),
             Box::new(m20230426_170553_create_contract_details_table::Migration),
         ]
