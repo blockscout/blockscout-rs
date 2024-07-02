@@ -36,7 +36,7 @@ If you want to help us improve the project, you can contribute code. To do so, f
 * Create your branch with the name `<name>/<short-slug-of-your-feature-or-fix>`
 * Write code to implement features or fix bugs. Make sure your code is well-tested
 * Commit your changes. Commit messages **SHOULD** follow our [commit message conventions](#commit-messages-guidelines) format.
-* Create a pull request. The title of Pull Request **MUST** follow the [commit message conventions](#commit-messages-guidelines) format.
+* Create a pull request. The title of the pull request **MUST** follow the [commit message conventions](#commit-messages-guidelines) format.
 
 
 ### Commit Messages Guidelines
@@ -72,8 +72,10 @@ If you want to help us improve the project, you can contribute code. To do so, f
 
 5. Pull Request Titles
 
-   * **MUST** include service name after `<type>`.
+   * **SHOULD** include service name (in `lower-kebab-case`) or other scope of change after `<type>`
    * Examples:
      * `feat(stats): add resolution for newAccounts chart`
      * `fix(stats): correct wrong update bug`
+     * `docs: add CONTRIBUTING.md`
+     * `ci(verifier): update docker build step`
 
