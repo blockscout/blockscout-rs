@@ -1,6 +1,8 @@
+use std::fmt;
+
 use crate::indexer::Job;
 
-#[derive(Debug, Hash, PartialEq, Eq, Clone)]
+#[derive(Hash, PartialEq, Eq, Clone)]
 pub struct CelestiaJob {
     pub height: u64,
 }
@@ -11,5 +13,11 @@ impl From<Job> for CelestiaJob {
             Job::Celestia(job) => job,
             _ => unreachable!(),
         }
+    }
+}
+
+impl fmt::Debug for CelestiaJob {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "height = {}", self.height)
     }
 }

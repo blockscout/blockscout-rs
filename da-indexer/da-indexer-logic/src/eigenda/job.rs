@@ -66,6 +66,6 @@ impl TryFrom<Log> for EigenDAJob {
 
 impl fmt::Debug for EigenDAJob {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Job(batchId = {})", self.batch_id)
+        write!(f, "batchId = {}", self.batch_id)
     }
 }
