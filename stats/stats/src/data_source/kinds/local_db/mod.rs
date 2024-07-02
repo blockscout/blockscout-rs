@@ -154,10 +154,16 @@ where
                 // no need to perform update.
                 // mostly catches second call to update e.g. when both
                 // dependency and this source are in one group and enabled.
-                tracing::info!(
+                tracing::debug!(
                     "Not updating the chart because it was already handled within ongoing update"
                 );
                 return Ok(());
+            } else {
+                tracing::debug!(
+                    last_updated_at =? last_updated_at,
+                    update_timestamp =? cx.time,
+                    "Performing an update"
+                );
             }
         }
         let chart_id = metadata.id;
