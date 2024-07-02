@@ -1,16 +1,18 @@
 use anyhow::{Error, Result};
 use async_trait::async_trait;
 use futures::{
+    future,
     stream::{self, repeat_with, select_with_strategy, BoxStream, PollNext},
     Stream, StreamExt,
 };
 use sea_orm::DatabaseConnection;
-use tracing::instrument;
 use std::{collections::HashSet, sync::Arc, time::Duration};
 use tokio::{sync::RwLock, time::sleep};
+use tracing::instrument;
 
 use crate::{
-    celestia, eigenda, settings::{DASettings, IndexerSettings},
+    celestia, eigenda,
+    settings::{DASettings, IndexerSettings},
 };
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
@@ -103,6 +105,7 @@ impl Indexer {
                 )
                 .ok()
         })
+        .take_while(|jobs| future::ready(!jobs.is_empty()))
         .flat_map(stream::iter)
     }
 

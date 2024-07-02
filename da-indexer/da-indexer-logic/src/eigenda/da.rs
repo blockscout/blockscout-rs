@@ -116,11 +116,7 @@ impl DA for EigenDA {
         }
 
         let blobs_len = blob_index;
-        tracing::info!(
-            batch_id = job.batch_id,
-            "retrieved {} blobs",
-            blobs_len
-        );
+        tracing::info!(batch_id = job.batch_id, "retrieved {} blobs", blobs_len);
 
         if blobs_len == 0
             && self.last_known_block.load(Ordering::Relaxed) - job.block_number

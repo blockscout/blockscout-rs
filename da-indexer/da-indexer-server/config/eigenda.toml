@@ -7,6 +7,24 @@ max_body_size = 2097152
 enabled = false
 addr = "0.0.0.0:8051"
 
+[database]
+connect.url = "postgres://postgres:admin@127.0.0.1:9432/blockscout" # (required) no default value available
+create_database = true
+run_migrations = true
+
+[metrics]
+enabled = true
+addr = "0.0.0.0:6060"
+route = "/metrics"
+
+[jaeger]
+enabled = false
+agent_endpoint = "localhost:6831"
+
+[tracing]
+enabled = true
+format = "default"
+
 [indexer]
 concurrency = 4
 restart_delay = 5
@@ -25,21 +43,3 @@ pruning_block_threshold = 1000
 [indexer.da.rpc]
 url = "https://holesky.drpc.org"
 batch_size = 100
-
-[database]
-connect.url = "postgres://postgres:admin@127.0.0.1:9432/blockscout" # (required) no default value available
-create_database = true
-run_migrations = true
-
-[metrics]
-enabled = true
-addr = "0.0.0.0:6060"
-route = "/metrics"
-
-[jaeger]
-enabled = false
-agent_endpoint = "localhost:6831"
-
-[tracing]
-enabled = true
-format = "default"

@@ -110,7 +110,7 @@ impl DA for CelestiaDA {
     }
 
     async fn unprocessed_jobs(&self) -> anyhow::Result<Vec<Job>> {
-        if self.catch_up_processed.load(Ordering::Relaxed) {
+        if self.catch_up_processed.load(Ordering::Acquire) {
             return Ok(vec![]);
         }
 
@@ -123,7 +123,7 @@ impl DA for CelestiaDA {
         let gaps = blocks::find_gaps(&self.db, last_known_height).await?;
 
         tracing::info!("catch up gaps: [{:?}]", gaps);
-        self.catch_up_processed.store(true, Ordering::Relaxed);
+        self.catch_up_processed.store(true, Ordering::Release);
 
         Ok(gaps
             .into_iter()
