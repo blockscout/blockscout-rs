@@ -6,8 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-actix-prost = { git = "https://github.com/blockscout/actix-prost" }
-actix-prost-macros = { git = "https://github.com/blockscout/actix-prost" }
+actix-prost = { git = "https://github.com/blockscout/actix-prost", rev = "9cc47aa1" }
+actix-prost-macros = { git = "https://github.com/blockscout/actix-prost", rev = "9cc47aa1" }
 actix-web = "4"
 async-trait = "0.1"
 prost = "0.11"
@@ -25,7 +25,7 @@ mockall = { version = "0.12.1", optional = true }
 tokio = { version = "1", optional = true }
 
 [build-dependencies]
-actix-prost-build = { git = "https://github.com/blockscout/actix-prost" }
+actix-prost-build = { git = "https://github.com/blockscout/actix-prost", rev = "9cc47aa1" }
 tonic-build = "0.8"
 prost-build = "0.11"
 
