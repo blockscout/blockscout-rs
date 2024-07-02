@@ -5901,7 +5901,7 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 [[package]]
 name = "verification-common"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs/?branch=rimrakhimov/verifier/zksolc-support#ebcd9e62fdbe9cb1b2f8fcc3a73ca0ec6d2b3eeb"
+source = "git+https://github.com/blockscout/blockscout-rs/?rev=bd6352d#bd6352d6cf777030acd08f3d40960c635ca91713"
 dependencies = [
  "alloy-dyn-abi 0.7.6",
  "alloy-json-abi 0.7.6",
