@@ -259,7 +259,25 @@ fn get_table_definitions() -> Vec<String> {
             runtime_values          jsonb,
             runtime_transformations jsonb,
 
-            CONSTRAINT verified_contracts_pseudo_pkey UNIQUE (compilation_id, deployment_id)
+            CONSTRAINT verified_contracts_pseudo_pkey UNIQUE (compilation_id, deployment_id),
+
+            CONSTRAINT verified_contracts_creation_values_is_object
+                CHECK (creation_values IS NULL OR jsonb_typeof(creation_values) = 'object'),
+            CONSTRAINT verified_contracts_creation_transformations_is_array
+                CHECK (creation_transformations IS NULL OR jsonb_typeof(creation_transformations) = 'array'),
+
+            CONSTRAINT verified_contracts_runtime_values_is_object
+                CHECK (runtime_values IS NULL OR jsonb_typeof(runtime_values) = 'object'),
+            CONSTRAINT verified_contracts_runtime_transformations_is_array
+                CHECK (runtime_transformations IS NULL OR jsonb_typeof(runtime_transformations) = 'array'),
+
+
+            CONSTRAINT verified_contracts_creation_match_integrity
+                CHECK ((creation_match = false AND creation_values IS NULL AND creation_transformations IS NULL) OR
+                       (creation_match = true AND creation_values IS NOT NULL AND creation_transformations IS NOT NULL)),
+            CONSTRAINT verified_contracts_runtime_match_integrity
+                CHECK ((runtime_match = false AND runtime_values IS NULL AND runtime_transformations IS NULL) OR
+                       (runtime_match = true AND runtime_values IS NOT NULL AND runtime_transformations IS NOT NULL))
         );
 
         CREATE INDEX verified_contracts_deployment_id ON verified_contracts USING btree (deployment_id);
