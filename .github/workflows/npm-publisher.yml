@@ -12,6 +12,8 @@ on:
                 type: choice
                 options:
                     - blockscout-ens
+                    - stats
+                    - visualizer
                 required: true
     workflow_call:
         inputs:

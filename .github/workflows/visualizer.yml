@@ -74,3 +74,13 @@ jobs:
     uses: ./.github/workflows/_docker-build-push.yml
     with:
       service-name: visualizer
+
+  publish_types_package:
+    name: Publish types package
+    uses: './.github/workflows/npm-publisher.yml'
+    needs: docker
+    if: needs.docker.outputs.tag-value != ''
+    secrets: inherit
+    with:
+      version: ${{ needs.docker.outputs.tag-value }}
+      project_name: visualizer
