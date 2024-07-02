@@ -41,7 +41,7 @@ fn get_table_definitions() -> Vec<String> {
         */
         CREATE TABLE code
         (
-            /* the sha3-256 hash of the `code` column */
+            /* the sha256 hash of the `code` column */
             code_hash   bytea NOT NULL PRIMARY KEY,
 
             /*
@@ -57,7 +57,7 @@ fn get_table_definitions() -> Vec<String> {
             code    bytea
 
             CONSTRAINT code_hash_check
-                CHECK (code IS NOT NULL and code_hash = digest(code, 'sha3-256') or code IS NULL and code_hash = '\x')
+                CHECK (code IS NOT NULL and code_hash = digest(code, 'sha256') or code IS NULL and code_hash = '\x')
         );
 
         CREATE INDEX code_code_hash_keccak ON code USING btree(code_hash_keccak);

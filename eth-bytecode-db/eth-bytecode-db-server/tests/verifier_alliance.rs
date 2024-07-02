@@ -9,7 +9,7 @@ use sea_orm::{
     ColumnTrait, DatabaseConnection, DatabaseTransaction, EntityTrait, QueryFilter,
     TransactionTrait,
 };
-use sha3::{Digest, Keccak256, Sha3_256};
+use sha2::{Digest, Sha256};
 use std::{path::PathBuf, sync::Arc};
 use verification_test_helpers::{
     verifier_alliance_setup::{Setup, SetupData},
@@ -277,8 +277,8 @@ async fn insert_contract(
 }
 
 async fn insert_code(txn: &DatabaseTransaction, code: Vec<u8>) -> Vec<u8> {
-    let code_hash = Sha3_256::digest(&code).to_vec();
-    let code_hash_keccak = Keccak256::digest(&code).to_vec();
+    let code_hash = Sha256::digest(&code).to_vec();
+    let code_hash_keccak = keccak_hash::keccak(&code).0.to_vec();
     code::ActiveModel {
         code_hash: Set(code_hash.clone()),
         code_hash_keccak: Set(code_hash_keccak),
