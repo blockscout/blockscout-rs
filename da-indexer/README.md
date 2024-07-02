@@ -36,7 +36,7 @@ The Celestia indexer runs on top of the [Celestia light node](https://docs.celes
 | DA_INDEXER__INDEXER__DA__CONTRACT_ADDRESS               | Address of the `EigenDAServiceManager`                 |                                  |
 | DA_INDEXER__INDEXER__DA__CONTRACT_CREATION_BLOCK        | The `EigenDAServiceManager` creation block             |                                  |
 | DA_INDEXER__INDEXER__DA__RPC__URL                       | Mainnet or Testnet `RPC_URL`                           |                                  |
-| DA_INDEXER__INDEXER__DA__RPC__BATCH_SIZE                | Batch size to use in the `eth_getLogs requests`        |                                  |
+| DA_INDEXER__INDEXER__DA__RPC__BATCH_SIZE                | Batch size to use in the `eth_getLogs` requests        |                                  |
 | DA_INDEXER__INDEXER__DA__START_HEIGHT                   | The number of the block to start with                  | The latest block number          |
 | DA_INDEXER__INDEXER__DA__SAVE_BATCH_SIZE                | The number of blobs to save per db transaction         |                                  |
 | DA_INDEXER__INDEXER__DA__PRUNING_BLOCK_THRESHOLD        | The theshold above which blobs might be unavailabl     |                                  |
