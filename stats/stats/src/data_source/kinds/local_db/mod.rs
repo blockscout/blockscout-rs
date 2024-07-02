@@ -286,3 +286,177 @@ where
     ChartProps: ChartProperties,
 {
 }
+
+#[cfg(test)]
+mod tests {
+    mod update_itself_is_triggered_once_per_group {
+        use std::{
+            collections::HashSet,
+            ops::DerefMut,
+            str::FromStr,
+            sync::{Arc, OnceLock},
+        };
+
+        use blockscout_metrics_tools::AggregateTimer;
+        use chrono::{DateTime, Days, Utc};
+        use entity::sea_orm_active_enums::ChartType;
+        use tokio::sync::Mutex;
+
+        use crate::{
+            charts::db_interaction::write::insert_data_many,
+            construct_update_group,
+            data_source::{
+                kinds::local_db::{
+                    parameter_traits::UpdateBehaviour,
+                    parameters::{DefaultCreate, DefaultQueryLast},
+                    DirectPointLocalDbChartSource, LocalDbChartSource,
+                },
+                types::Get,
+                DataSource, UpdateContext, UpdateParameters,
+            },
+            gettable_const,
+            tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
+            update_group::{SyncUpdateGroup, UpdateGroup},
+            ChartProperties, DateValueString, Named, UpdateError,
+        };
+
+        type WasTriggeredStorage = Arc<Mutex<bool>>;
+
+        // `OnceLock` in order to return the same instance each time
+        gettable_const!(WasTriggered: WasTriggeredStorage = OnceLock::new().get_or_init(|| Arc::new(Mutex::new(false))).clone());
+
+        struct UpdateSingleTriggerAsserter;
+
+        impl UpdateSingleTriggerAsserter {
+            pub async fn record_trigger() {
+                let was_triggered_mutex = WasTriggered::get();
+                let mut was_triggered_guard = was_triggered_mutex.lock().await;
+                let was_triggered = was_triggered_guard.deref_mut();
+                assert!(!*was_triggered, "update triggered twice");
+                *was_triggered = true;
+            }
+
+            pub async fn reset_triggers() {
+                let was_triggered_mutex = WasTriggered::get();
+                let mut was_triggered_guard = was_triggered_mutex.lock().await;
+                let was_triggered = was_triggered_guard.deref_mut();
+                *was_triggered = false;
+            }
+        }
+
+        impl<M, R> UpdateBehaviour<M, R> for UpdateSingleTriggerAsserter
+        where
+            M: DataSource,
+            R: DataSource,
+        {
+            async fn update_values(
+                cx: &UpdateContext<'_>,
+                chart_id: i32,
+                _last_accurate_point: Option<DateValueString>,
+                min_blockscout_block: i64,
+                _dependency_data_fetch_timer: &mut AggregateTimer,
+            ) -> Result<(), UpdateError> {
+                Self::record_trigger().await;
+                // insert smth for dependency to work well
+                let data = DateValueString {
+                    date: cx.time.date_naive(),
+                    value: "0".to_owned(),
+                };
+                let value = data.active_model(chart_id, Some(min_blockscout_block));
+                insert_data_many(cx.db, vec![value])
+                    .await
+                    .map_err(UpdateError::StatsDB)?;
+                Ok(())
+            }
+        }
+
+        struct TestedChartProps;
+
+        impl Named for TestedChartProps {
+            const NAME: &'static str = "double_update_tested_chart";
+        }
+
+        impl ChartProperties for TestedChartProps {
+            fn chart_type() -> ChartType {
+                ChartType::Counter
+            }
+        }
+
+        type TestedChart = LocalDbChartSource<
+            (),
+            (),
+            DefaultCreate<TestedChartProps>,
+            UpdateSingleTriggerAsserter,
+            DefaultQueryLast<TestedChartProps>,
+            TestedChartProps,
+        >;
+
+        struct ChartDependedOnTestedProps;
+
+        impl Named for ChartDependedOnTestedProps {
+            const NAME: &'static str = "double_update_dependant_chart";
+        }
+
+        impl ChartProperties for ChartDependedOnTestedProps {
+            fn chart_type() -> ChartType {
+                ChartType::Counter
+            }
+        }
+
+        type ChartDependedOnTested =
+            DirectPointLocalDbChartSource<TestedChart, ChartDependedOnTestedProps>;
+
+        construct_update_group!(TestUpdateGroup {
+            charts: [TestedChart, ChartDependedOnTested]
+        });
+
+        #[tokio::test]
+        async fn update_itself_is_triggered_once_per_group() {
+            let _ = tracing_subscriber::fmt::try_init();
+            let (db, blockscout) = init_db_all("update_itself_is_triggered_once_per_group").await;
+            let current_time = DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap();
+            let current_date = current_time.date_naive();
+            fill_mock_blockscout_data(&blockscout, current_date).await;
+            let enabled = HashSet::from(
+                [TestedChartProps::NAME, ChartDependedOnTestedProps::NAME].map(|l| l.to_owned()),
+            );
+            let mutexes = TestUpdateGroup
+                .list_dependency_mutex_ids()
+                .into_iter()
+                .map(|id| (id.to_owned(), Arc::new(Mutex::new(()))))
+                .collect();
+            dbg!(&mutexes);
+            let group = SyncUpdateGroup::new(&mutexes, Arc::new(TestUpdateGroup)).unwrap();
+            group
+                .create_charts_with_mutexes(&db, Some(current_time), &enabled)
+                .await
+                .unwrap();
+
+            let next_time = current_time.checked_add_days(Days::new(1)).unwrap();
+            let parameters = UpdateParameters {
+                db: &db,
+                blockscout: &blockscout,
+                update_time_override: Some(next_time),
+                force_full: true,
+            };
+            group
+                .update_charts_with_mutexes(parameters, &enabled)
+                .await
+                .unwrap();
+
+            UpdateSingleTriggerAsserter::reset_triggers().await;
+
+            let next_next_time = next_time.checked_add_days(Days::new(1)).unwrap();
+            let parameters = UpdateParameters {
+                db: &db,
+                blockscout: &blockscout,
+                update_time_override: Some(next_next_time),
+                force_full: true,
+            };
+            group
+                .update_charts_with_mutexes(parameters, &enabled)
+                .await
+                .unwrap();
+        }
+    }
+}
