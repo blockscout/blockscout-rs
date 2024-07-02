@@ -461,6 +461,36 @@ mod tests {
                 .update_charts_with_mutexes(parameters, &enabled)
                 .await
                 .unwrap();
+
+            UpdateSingleTriggerAsserter::reset_triggers().await;
+
+            // also test if there is any rounding when inserting metadata
+            let next_next_time = next_time.checked_add_days(Days::new(1)).unwrap();
+            let next_next_time = next_next_time + TimeDelta::nanoseconds(500);
+            let parameters = UpdateParameters {
+                db: &db,
+                blockscout: &blockscout,
+                update_time_override: Some(next_next_time),
+                force_full: true,
+            };
+            group
+                .update_charts_with_mutexes(parameters, &enabled)
+                .await
+                .unwrap();
+
+            // also test if there is any rounding when inserting metadata
+            let next_next_time = next_time.checked_add_days(Days::new(1)).unwrap();
+            let next_next_time = next_next_time + TimeDelta::nanoseconds(999);
+            let parameters = UpdateParameters {
+                db: &db,
+                blockscout: &blockscout,
+                update_time_override: Some(next_next_time),
+                force_full: true,
+            };
+            group
+                .update_charts_with_mutexes(parameters, &enabled)
+                .await
+                .unwrap();
         }
     }
 }
