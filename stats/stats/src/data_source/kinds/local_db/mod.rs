@@ -298,7 +298,7 @@ mod tests {
         };
 
         use blockscout_metrics_tools::AggregateTimer;
-        use chrono::{DateTime, Days, Utc};
+        use chrono::{DateTime, Days, TimeDelta, Utc};
         use entity::sea_orm_active_enums::ChartType;
         use tokio::sync::Mutex;
 
@@ -446,6 +446,11 @@ mod tests {
             UpdateSingleTriggerAsserter::reset_triggers().await;
 
             let next_next_time = next_time.checked_add_days(Days::new(1)).unwrap();
+            // it also works with high-precision timestamps
+            //
+            // regression: had a bug where due to postgres having resolution of 1 microsecond stored a different
+            // timestamp to the one provided
+            let next_next_time = next_next_time + TimeDelta::nanoseconds(1);
             let parameters = UpdateParameters {
                 db: &db,
                 blockscout: &blockscout,
