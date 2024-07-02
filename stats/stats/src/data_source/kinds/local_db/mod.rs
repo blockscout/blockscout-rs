@@ -12,7 +12,7 @@
 use std::{marker::PhantomData, ops::Range, time::Duration};
 
 use blockscout_metrics_tools::AggregateTimer;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, SubsecRound, Utc};
 use parameter_traits::{CreateBehaviour, QueryBehaviour, UpdateBehaviour};
 use parameters::{
     update::{
@@ -150,7 +150,8 @@ where
     ) -> Result<(), UpdateError> {
         let metadata = get_chart_metadata(cx.db, ChartProps::NAME).await?;
         if let Some(last_updated_at) = metadata.last_updated_at {
-            if cx.time == last_updated_at {
+            let update_time = cx.time.trunc_subsecs(6);
+            if update_time == last_updated_at {
                 // no need to perform update.
                 // mostly catches second call to update e.g. when both
                 // dependency and this source are in one group and enabled.
@@ -161,7 +162,7 @@ where
             } else {
                 tracing::debug!(
                     last_updated_at =? last_updated_at,
-                    update_timestamp =? cx.time,
+                    update_timestamp =? update_time,
                     "Performing an update"
                 );
             }
