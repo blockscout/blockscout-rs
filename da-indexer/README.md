@@ -6,6 +6,9 @@ The DA Indexer service collects blobs from different DA solutions (currently onl
 ## Celestia
 The Celestia indexer runs on top of the [Celestia light node](https://docs.celestia.org/nodes/light-node). It is worth noting that the indexer collects only blobs and some block metadata, it does not collect full blocks, transactions, etc.
 
+## EigenDA
+The EigenDA indexer runs on top of the EigenDA disperser. It is worth mentioning that the disperser does not store blobs older than two weeks, so these blobs will be unavailable.
+
 ## Env
 
 ### General
@@ -39,7 +42,7 @@ The Celestia indexer runs on top of the [Celestia light node](https://docs.celes
 | DA_INDEXER__INDEXER__DA__RPC__BATCH_SIZE                | Batch size to use in the `eth_getLogs` requests        |                                  |
 | DA_INDEXER__INDEXER__DA__START_HEIGHT                   | The number of the block to start with                  | The latest block number          |
 | DA_INDEXER__INDEXER__DA__SAVE_BATCH_SIZE                | The number of blobs to save per db transaction         |                                  |
-| DA_INDEXER__INDEXER__DA__PRUNING_BLOCK_THRESHOLD        | The theshold above which blobs might be unavailabl     |                                  |
+| DA_INDEXER__INDEXER__DA__PRUNING_BLOCK_THRESHOLD        | The threshold above which blobs might be unavailable   |                                  |
 
 
 ## Dev
