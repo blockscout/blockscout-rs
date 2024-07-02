@@ -425,7 +425,6 @@ mod tests {
                 .into_iter()
                 .map(|id| (id.to_owned(), Arc::new(Mutex::new(()))))
                 .collect();
-            dbg!(&mutexes);
             let group = SyncUpdateGroup::new(&mutexes, Arc::new(TestUpdateGroup)).unwrap();
             group
                 .create_charts_with_mutexes(&db, Some(current_time), &enabled)
