@@ -452,11 +452,11 @@ mod tests {
             //
             // regression: had a bug where due to postgres having resolution of 1 microsecond stored a different
             // timestamp to the one provided
-            let next_next_time = next_next_time + TimeDelta::nanoseconds(1);
+            let time = next_next_time + TimeDelta::nanoseconds(1);
             let parameters = UpdateParameters {
                 db: &db,
                 blockscout: &blockscout,
-                update_time_override: Some(next_next_time),
+                update_time_override: Some(time),
                 force_full: true,
             };
             group
@@ -467,12 +467,11 @@ mod tests {
             UpdateSingleTriggerAsserter::reset_triggers().await;
 
             // also test if there is any rounding when inserting metadata
-            let next_next_time = next_time.checked_add_days(Days::new(1)).unwrap();
-            let next_next_time = next_next_time + TimeDelta::nanoseconds(500);
+            let time = next_next_time + TimeDelta::nanoseconds(500);
             let parameters = UpdateParameters {
                 db: &db,
                 blockscout: &blockscout,
-                update_time_override: Some(next_next_time),
+                update_time_override: Some(time),
                 force_full: true,
             };
             group
@@ -481,12 +480,11 @@ mod tests {
                 .unwrap();
 
             // also test if there is any rounding when inserting metadata
-            let next_next_time = next_time.checked_add_days(Days::new(1)).unwrap();
-            let next_next_time = next_next_time + TimeDelta::nanoseconds(999);
+            let time = next_next_time + TimeDelta::nanoseconds(999);
             let parameters = UpdateParameters {
                 db: &db,
                 blockscout: &blockscout,
-                update_time_override: Some(next_next_time),
+                update_time_override: Some(time),
                 force_full: true,
             };
             group
