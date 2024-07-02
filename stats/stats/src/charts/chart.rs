@@ -41,6 +41,8 @@ pub struct ChartMetadata {
     pub id: i32,
     #[allow(unused)]
     pub created_at: DateTime<Utc>,
+    /// NOTE: this timestamp is truncated when inserted
+    /// into a database
     pub last_updated_at: Option<DateTime<Utc>>,
 }
 

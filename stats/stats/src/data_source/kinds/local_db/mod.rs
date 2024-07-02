@@ -150,6 +150,7 @@ where
     ) -> Result<(), UpdateError> {
         let metadata = get_chart_metadata(cx.db, ChartProps::NAME).await?;
         if let Some(last_updated_at) = metadata.last_updated_at {
+            // DB stores timestamps with microsecond precision
             let update_time = cx.time.trunc_subsecs(6);
             if update_time == last_updated_at {
                 // no need to perform update.

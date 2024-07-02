@@ -145,6 +145,8 @@ fn mark_approximate(
         .collect()
 }
 
+/// Note: timestamp has microsecond precision
+/// (postgres default timestamp)
 pub async fn get_chart_metadata(
     db: &DatabaseConnection,
     name: &str,
