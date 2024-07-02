@@ -27,8 +27,6 @@ format = "default"
 
 [indexer]
 concurrency = 4
-restart_delay = 5
-catchup_interval = 0
 retry_interval = 180
 polling_interval = 12
 

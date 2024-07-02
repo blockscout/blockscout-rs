@@ -7,15 +7,6 @@ max_body_size = 2097152
 enabled = false
 addr = "0.0.0.0:8051"
 
-[indexer]
-concurrency = 1
-
-[indexer.da]
-type = "Celestia"
-
-[indexer.da.rpc]
-url = "http://host.docker.internal:26658"
-
 [database]
 connect.url = "postgres://postgres:admin@127.0.0.1:9432/blockscout" # (required) no default value available
 create_database = true
@@ -33,3 +24,14 @@ agent_endpoint = "localhost:6831"
 [tracing]
 enabled = true
 format = "default"
+
+[indexer]
+concurrency = 15
+retry_interval = 180
+polling_interval = 12
+
+[indexer.da]
+type = "Celestia"
+
+[indexer.da.rpc]
+url = "http://host.docker.internal:26658"
