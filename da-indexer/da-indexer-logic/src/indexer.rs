@@ -56,12 +56,11 @@ impl Indexer {
     pub async fn start(&self) -> anyhow::Result<()> {
         let mut stream = stream::SelectAll::<BoxStream<Job>>::new();
         stream.push(Box::pin(self.catch_up()));
-        stream.push(Box::pin(self.retry_failed_blocks()));
-        let stream = select_with_strategy(
-            Box::pin(self.poll_for_new_blocks()),
-            stream,
-            |_: &mut ()| PollNext::Left,
-        );
+        stream.push(Box::pin(self.retry_failed_jobs()));
+        let stream =
+            select_with_strategy(Box::pin(self.poll_for_new_jobs()), stream, |_: &mut ()| {
+                PollNext::Left
+            });
 
         stream
             .for_each_concurrent(Some(self.settings.concurrency as usize), |job| async move {
@@ -109,7 +108,7 @@ impl Indexer {
         .flat_map(stream::iter)
     }
 
-    fn poll_for_new_blocks(&self) -> impl Stream<Item = Job> + '_ {
+    fn poll_for_new_jobs(&self) -> impl Stream<Item = Job> + '_ {
         repeat_with(|| async {
             sleep(self.settings.polling_interval).await;
             tracing::info!("polling for new jobs");
@@ -123,7 +122,7 @@ impl Indexer {
         .flat_map(stream::iter)
     }
 
-    fn retry_failed_blocks(&self) -> impl Stream<Item = Job> + '_ {
+    fn retry_failed_jobs(&self) -> impl Stream<Item = Job> + '_ {
         repeat_with(|| async {
             sleep(self.settings.retry_interval).await;
             // we can safely drain the failed blocks here
