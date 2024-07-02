@@ -5,11 +5,21 @@ package blockscout.daIndexer.v1;
 option go_package = "github.com/blockscout/blockscout-rs/da-indexer";
 
 
-service DaService {
-  rpc GetCelestiaBlob(GetCelestiaBlobRequest) returns (Blob) {}
+service CelestiaService {
+  rpc GetBlob(GetCelestiaBlobRequest) returns (CelestiaBlob) {}
 }
 
-message Blob {
+service EigenDaService {
+  rpc GetBlob(GetEigenDaBlobRequest) returns (EigenDaBlob) {}
+}
+
+message GetCelestiaBlobRequest {
+  uint64 height = 1;
+  string commitment = 2;
+  optional bool skip_data = 3;
+}
+
+message CelestiaBlob {
   uint64 height = 1;
   string namespace = 2;
   string commitment = 3;
@@ -18,8 +28,18 @@ message Blob {
   optional string data = 6;
 }
 
-message GetCelestiaBlobRequest {
-  uint64 height = 1;
-  string commitment = 2;
+message GetEigenDaBlobRequest {
+  string batch_header_hash = 1;
+  uint32 blob_index = 2;
   optional bool skip_data = 3;
+}
+
+message EigenDaBlob {
+  string batch_header_hash = 1;
+  uint64 batch_id = 2;
+  uint32 blob_index = 3;
+  uint64 l1_confirmation_block = 4;
+  string l1_confirmation_tx_hash = 5;
+  uint64 size = 6;
+  optional string data = 7;
 }

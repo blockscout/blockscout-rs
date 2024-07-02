@@ -8,13 +8,23 @@ enabled = false
 addr = "0.0.0.0:8051"
 
 [indexer]
-concurrency = 1
+concurrency = 4
+restart_delay = 5
+catchup_interval = 0
+retry_interval = 180
+polling_interval = 12
 
 [indexer.da]
-type = "Celestia"
+type = "EigenDA"
+disperser = "https://disperser-holesky.eigenda.xyz:443"
+contract_address = "0xD4A7E1Bd8015057293f0D0A557088c286942e84b"
+contract_creation_block = 1168412
+save_batch_size = 20
+pruning_block_threshold = 1000 
 
 [indexer.da.rpc]
-url = "http://host.docker.internal:26658"
+url = "https://holesky.drpc.org"
+batch_size = 100
 
 [database]
 connect.url = "postgres://postgres:admin@127.0.0.1:9432/blockscout" # (required) no default value available
