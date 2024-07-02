@@ -307,7 +307,9 @@ mod tests {
         type SharedInputsStorage = Arc<Mutex<Vec<VecStringStepInput>>>;
 
         // `OnceLock` in order to return the same instance each time
-        gettable_const!(ThisInputs: SharedInputsStorage = OnceLock::new().get_or_init(|| Arc::new(Mutex::new(vec![]))).clone());
+        static INPUTS: OnceLock<SharedInputsStorage> = OnceLock::new();
+
+        gettable_const!(ThisInputs: SharedInputsStorage = INPUTS.get_or_init(|| Arc::new(Mutex::new(vec![]))).clone());
         gettable_const!(Batch1Day: chrono::Duration = chrono::Duration::days(1));
 
         type ThisRecordingStep =

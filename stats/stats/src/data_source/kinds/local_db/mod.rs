@@ -323,22 +323,22 @@ mod tests {
         type WasTriggeredStorage = Arc<Mutex<bool>>;
 
         // `OnceLock` in order to return the same instance each time
-        gettable_const!(WasTriggered: WasTriggeredStorage = OnceLock::new().get_or_init(|| Arc::new(Mutex::new(false))).clone());
+        static FLAG: OnceLock<WasTriggeredStorage> = OnceLock::new();
+
+        gettable_const!(WasTriggered: WasTriggeredStorage = FLAG.get_or_init(|| Arc::new(Mutex::new(false))).clone());
 
         struct UpdateSingleTriggerAsserter;
 
         impl UpdateSingleTriggerAsserter {
             pub async fn record_trigger() {
-                let was_triggered_mutex = WasTriggered::get();
-                let mut was_triggered_guard = was_triggered_mutex.lock().await;
+                let mut was_triggered_guard = WasTriggered::get().lock_owned().await;
                 let was_triggered = was_triggered_guard.deref_mut();
                 assert!(!*was_triggered, "update triggered twice");
                 *was_triggered = true;
             }
 
             pub async fn reset_triggers() {
-                let was_triggered_mutex = WasTriggered::get();
-                let mut was_triggered_guard = was_triggered_mutex.lock().await;
+                let mut was_triggered_guard = WasTriggered::get().lock_owned().await;
                 let was_triggered = was_triggered_guard.deref_mut();
                 *was_triggered = false;
             }
