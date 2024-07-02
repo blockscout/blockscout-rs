@@ -35,12 +35,12 @@ The EigenDA indexer runs on top of the EigenDA disperser. It is worth mentioning
 ### EigenDA
 | Variable                                                | Description                                            | Default value                    |
 |---------------------------------------------------------|--------------------------------------------------------|----------------------------------|
-| DA_INDEXER__INDEXER__DA__DISPERSER                      | EigenDA disperser url                                  |                                  |
-| DA_INDEXER__INDEXER__DA__CONTRACT_ADDRESS               | Address of the `EigenDAServiceManager`                 |                                  |
-| DA_INDEXER__INDEXER__DA__CONTRACT_CREATION_BLOCK        | The `EigenDAServiceManager` creation block             |                                  |
+| DA_INDEXER__INDEXER__DA__DISPERSER_URL                  | EigenDA disperser url                                  |                                  |
+| DA_INDEXER__INDEXER__DA__EIGENDA_ADDRESS                | Address of the `EigenDAServiceManager`                 |                                  |
+| DA_INDEXER__INDEXER__DA__EIGENDA_CREATION_BLOCK         | The `EigenDAServiceManager` creation block             |                                  |
 | DA_INDEXER__INDEXER__DA__RPC__URL                       | Mainnet or Testnet `RPC_URL`                           |                                  |
 | DA_INDEXER__INDEXER__DA__RPC__BATCH_SIZE                | Batch size to use in the `eth_getLogs` requests        |                                  |
-| DA_INDEXER__INDEXER__DA__START_HEIGHT                   | The number of the block to start with                  | The latest block number          |
+| DA_INDEXER__INDEXER__DA__START_BLOCK                    | The number of the block to start with                  | The latest block number          |
 | DA_INDEXER__INDEXER__DA__SAVE_BATCH_SIZE                | The number of blobs to save per db transaction         |                                  |
 | DA_INDEXER__INDEXER__DA__PRUNING_BLOCK_THRESHOLD        | The threshold above which blobs might be unavailable   |                                  |
 
@@ -48,7 +48,7 @@ The EigenDA indexer runs on top of the EigenDA disperser. It is worth mentioning
 ## Dev
 
 + Install [just](https://github.com/casey/just) cli. Just is like make but better.
-+ Execute `just` to see avaliable dev commands
++ Execute `just` to see available dev commands
 
 ```bash
 just
