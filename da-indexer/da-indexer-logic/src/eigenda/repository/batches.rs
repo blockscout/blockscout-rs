@@ -16,7 +16,7 @@ pub async fn find_gaps(
     // add the gap between the contract creation block and the first saved batch
     match find_min_batch_id(db).await? {
         Some((min_batch_id, min_l1_block)) if min_batch_id > 0 => {
-            gaps.push(Gap::new(contract_creation_block, min_l1_block - 1));
+            gaps.push(Gap::new(contract_creation_block, min_l1_block));
         }
         None => {
             gaps.push(Gap::new(contract_creation_block, to_block));
@@ -29,8 +29,8 @@ pub async fn find_gaps(
         &mut Gap::find_by_statement(Statement::from_sql_and_values(
             db.get_database_backend(),
             r#"
-        SELECT l1_block + 1 as start, 
-                next_l1_block - 1 as end
+        SELECT l1_block as start, 
+                next_l1_block as end
         FROM (
             SELECT batch_id, l1_block, lead(batch_id) OVER (ORDER BY batch_id) as next_batch_id, 
                 lead(l1_block) OVER (ORDER BY batch_id) as next_l1_block
@@ -49,9 +49,9 @@ pub async fn find_gaps(
         .map(|gap| gap.end)
         .unwrap_or(contract_creation_block);
     match find_max_l1_block_in_range(db, gaps_end, to_block).await? {
-        Some(max_height) if max_height < to_block => {
+        Some(max_l1_block) if max_l1_block < to_block => {
             gaps.push(Gap {
-                start: max_height + 1,
+                start: max_l1_block,
                 end: to_block,
             });
         }
@@ -124,4 +124,8 @@ pub async fn upsert<C: ConnectionTrait>(
         .exec(db)
         .await?;
     Ok(())
+}
+
+pub async fn exists(db: &DatabaseConnection, batch_id: u64) -> Result<bool, anyhow::Error> {
+    Ok(Entity::find_by_id(batch_id as i64).one(db).await?.is_some())
 }

@@ -73,7 +73,7 @@ impl Indexer {
 
     async fn process_job_with_retries(&self, job: &Job) {
         let mut backoff = vec![5, 20].into_iter().map(Duration::from_secs);
-        while let Err(err) = &self.process_job(job).await {
+        while let Err(err) = &self.da.process_job(job.clone()).await {
             match backoff.next() {
                 Some(delay) => {
                     tracing::warn!(error = ?err, job = ?job, ?delay, "failed to process job, retrying");
@@ -86,10 +86,6 @@ impl Indexer {
                 }
             };
         }
-    }
-
-    async fn process_job(&self, job: &Job) -> Result<()> {
-        self.da.process_job(job.clone()).await
     }
 
     fn catch_up(&self) -> impl Stream<Item = Job> + '_ {

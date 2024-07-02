@@ -20,6 +20,13 @@ impl EigenDAJob {
             _ => unreachable!(),
         }
     }
+
+    pub fn batch_id(job: &Job) -> u64 {
+        match job {
+            Job::EigenDA(job) => job.batch_id,
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl From<Job> for EigenDAJob {

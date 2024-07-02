@@ -26,15 +26,15 @@ enabled = true
 format = "default"
 
 [indexer]
-concurrency = 4
+concurrency = 5
 retry_interval = 180
 polling_interval = 12
 
 [indexer.da]
 type = "EigenDA"
-disperser = "https://disperser-holesky.eigenda.xyz:443"
-contract_address = "0xD4A7E1Bd8015057293f0D0A557088c286942e84b"
-contract_creation_block = 1168412
+disperser_url = "https://disperser-holesky.eigenda.xyz:443"
+eigenda_address = "0xD4A7E1Bd8015057293f0D0A557088c286942e84b"
+eigenda_creation_block = 1168412
 save_batch_size = 20
 pruning_block_threshold = 1000 
 

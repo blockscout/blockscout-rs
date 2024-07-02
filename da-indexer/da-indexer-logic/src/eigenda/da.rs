@@ -30,13 +30,13 @@ pub struct EigenDA {
 impl EigenDA {
     pub async fn new(db: Arc<DatabaseConnection>, settings: IndexerSettings) -> Result<Self> {
         let provider = EthProvider::new(&settings.rpc.url).await?;
-        let client = Client::new(&settings.disperser, vec![5, 15, 30]).await?;
+        let client = Client::new(&settings.disperser_url, vec![5, 15, 30]).await?;
         let start_from = settings
-            .start_height
+            .start_block
             .unwrap_or(provider.get_block_number().await?);
         let gaps = batches::find_gaps(
             &db,
-            settings.contract_creation_block as i64,
+            settings.eigenda_creation_block as i64,
             start_from as i64,
         )
         .await?;
@@ -59,7 +59,7 @@ impl EigenDA {
         let jobs = self
             .provider
             .get_logs(
-                &self.settings.contract_address,
+                &self.settings.eigenda_address,
                 "BatchConfirmed(bytes32,uint32)",
                 from,
                 to,
@@ -157,30 +157,45 @@ impl DA for EigenDA {
         let mut new_gaps = vec![];
 
         for gap in unprocessed_gaps.iter() {
-            match jobs.is_empty() {
-                true => {
-                    let jobs_in_range = self
-                        .jobs_from_block_range(gap.start as u64, gap.end as u64, Some(1))
-                        .await?;
+            if !jobs.is_empty() {
+                new_gaps.push(gap.clone());
+                continue;
+            }
 
-                    if !jobs_in_range.is_empty() {
-                        let block_number = EigenDAJob::block_number(jobs_in_range.first().unwrap());
-                        // in case there are multiple batches in the same block
-                        jobs.extend(
-                            jobs_in_range
-                                .into_iter()
-                                .take_while(|job| EigenDAJob::block_number(job) == block_number),
-                        );
+            let jobs_in_range = self
+                .jobs_from_block_range(gap.start as u64, gap.end as u64, Some(1))
+                .await?;
 
-                        if block_number < gap.end as u64 {
-                            new_gaps.push(Gap {
-                                start: block_number as i64 + 1,
-                                end: gap.end,
-                            });
-                        }
+            if jobs_in_range.is_empty() {
+                continue;
+            }
+
+            let mut block_number = EigenDAJob::block_number(jobs_in_range.first().unwrap());
+            // there might be multiple batches in the same block
+            for job in jobs_in_range.into_iter() {
+                if EigenDAJob::block_number(&job) != block_number {
+                    if jobs.is_empty() {
+                        block_number = EigenDAJob::block_number(&job);
+                    } else {
+                        break;
                     }
                 }
-                false => new_gaps.push(gap.clone()),
+
+                // batches on the edge of the gap might be already processed
+                if (block_number == gap.start as u64 || block_number == gap.end as u64)
+                    && batches::exists(self.db.as_ref(), EigenDAJob::batch_id(&job)).await?
+                {
+                    continue;
+                }
+
+                jobs.push(job);
+            }
+
+            if block_number < gap.end as u64 {
+                new_gaps.push(Gap {
+                    start: block_number as i64 + 1,
+                    end: gap.end,
+                });
             }
         }
         *unprocessed_gaps = new_gaps;

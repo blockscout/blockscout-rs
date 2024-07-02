@@ -20,7 +20,7 @@ pub struct CelestiaDA {
     db: Arc<DatabaseConnection>,
 
     last_known_height: AtomicU64,
-    catch_up_processed: AtomicBool,
+    catch_up_completed: AtomicBool,
 }
 
 impl CelestiaDA {
@@ -48,7 +48,7 @@ impl CelestiaDA {
             client,
             db,
             last_known_height: AtomicU64::new(start_from.saturating_sub(1)),
-            catch_up_processed: AtomicBool::new(false),
+            catch_up_completed: AtomicBool::new(false),
         })
     }
 
@@ -110,7 +110,7 @@ impl DA for CelestiaDA {
     }
 
     async fn unprocessed_jobs(&self) -> anyhow::Result<Vec<Job>> {
-        if self.catch_up_processed.load(Ordering::Acquire) {
+        if self.catch_up_completed.load(Ordering::Acquire) {
             return Ok(vec![]);
         }
 
@@ -123,7 +123,7 @@ impl DA for CelestiaDA {
         let gaps = blocks::find_gaps(&self.db, last_known_height).await?;
 
         tracing::info!("catch up gaps: [{:?}]", gaps);
-        self.catch_up_processed.store(true, Ordering::Release);
+        self.catch_up_completed.store(true, Ordering::Release);
 
         Ok(gaps
             .into_iter()
