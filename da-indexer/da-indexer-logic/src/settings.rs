@@ -1,7 +1,9 @@
 use std::time;
 
-use crate::celestia::settings::IndexerSettings as CelestiaSettings;
-use crate::eigenda::settings::IndexerSettings as EigendaSettings;
+use crate::{
+    celestia::settings::IndexerSettings as CelestiaSettings,
+    eigenda::settings::IndexerSettings as EigendaSettings,
+};
 use serde::Deserialize;
 use serde_with::serde_as;
 

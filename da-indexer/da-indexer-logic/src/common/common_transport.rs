@@ -4,15 +4,10 @@ use ethers::prelude::{Http, JsonRpcClient, ProviderError, PubsubClient, Ws};
 use serde::{de::DeserializeOwned, Serialize};
 use std::{fmt::Debug, str::FromStr};
 
-#[cfg(test)]
-use ethers::prelude::MockProvider;
-
 #[derive(Clone, Debug)]
 pub enum CommonTransport {
     Ws(Ws),
     Http(Http),
-    #[cfg(test)]
-    Mock(MockProvider),
 }
 
 impl CommonTransport {
@@ -45,11 +40,6 @@ impl JsonRpcClient for CommonTransport {
                 .await
                 .map_err(ProviderError::from),
             CommonTransport::Http(http) => http
-                .request(method, params)
-                .await
-                .map_err(ProviderError::from),
-            #[cfg(test)]
-            CommonTransport::Mock(mock) => mock
                 .request(method, params)
                 .await
                 .map_err(ProviderError::from),
