@@ -413,6 +413,7 @@ mod tests {
         });
 
         #[tokio::test]
+        #[ignore = "needs database to run"]
         async fn update_itself_is_triggered_once_per_group() {
             let _ = tracing_subscriber::fmt::try_init();
             let (db, blockscout) = init_db_all("update_itself_is_triggered_once_per_group").await;

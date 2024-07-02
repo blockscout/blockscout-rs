@@ -113,14 +113,17 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// #     kinds::{
 /// #         local_db::DirectVecLocalDbChartSource,
 /// #         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
+/// #         data_manipulation::map::MapToString,
 /// #     },
 /// #     types::{UpdateContext, UpdateParameters},
 /// # };
+/// # use stats::lines::NewBlocks;
 /// # use chrono::NaiveDate;
 /// # use entity::sea_orm_active_enums::ChartType;
 /// # use std::ops::RangeInclusive;
 /// # use sea_orm::prelude::DateTimeUtc;
 /// # use sea_orm::Statement;
+/// #
 /// # struct DummyChartProperties;
 /// #
 /// # impl Named for DummyChartProperties {
@@ -132,7 +135,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// #     }
 /// # }
 /// #
-/// # type DummyChart = MapToString<(), DummyChartProperties>;
+/// # type DummyChart = DirectVecLocalDbChartSource<NewBlocks, DummyChartProperties>;
 ///
 /// construct_update_group!(ExampleUpdateGroup {
 ///     charts: [DummyChart],
