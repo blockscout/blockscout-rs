@@ -1,30 +1,30 @@
 use std::str::FromStr;
 
-use crate::proto::da_service_server::DaService as Da;
+use crate::proto::celestia_service_server::CelestiaService as Celestia;
 use base64::prelude::*;
 use blockscout_display_bytes::Bytes;
 use da_indexer_logic::celestia::repository::blobs;
-use da_indexer_proto::blockscout::da_indexer::v1::{Blob, GetCelestiaBlobRequest};
+use da_indexer_proto::blockscout::da_indexer::v1::{CelestiaBlob, GetCelestiaBlobRequest};
 use sea_orm::DatabaseConnection;
 use tonic::{Request, Response, Status};
 
 #[derive(Default)]
-pub struct DaService {
+pub struct CelestiaService {
     db: DatabaseConnection,
 }
 
-impl DaService {
+impl CelestiaService {
     pub fn new(db: DatabaseConnection) -> Self {
         Self { db }
     }
 }
 
 #[async_trait::async_trait]
-impl Da for DaService {
-    async fn get_celestia_blob(
+impl Celestia for CelestiaService {
+    async fn get_blob(
         &self,
         request: Request<GetCelestiaBlobRequest>,
-    ) -> Result<Response<Blob>, Status> {
+    ) -> Result<Response<CelestiaBlob>, Status> {
         let inner = request.into_inner();
 
         let height = inner.height;
@@ -47,7 +47,7 @@ impl Da for DaService {
         let data =
             (!inner.skip_data.unwrap_or_default()).then_some(BASE64_STANDARD.encode(&blob.data));
 
-        Ok(Response::new(Blob {
+        Ok(Response::new(CelestiaBlob {
             height: blob.height as u64,
             namespace: hex::encode(blob.namespace),
             commitment: inner.commitment,

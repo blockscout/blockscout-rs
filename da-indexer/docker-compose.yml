@@ -10,6 +10,8 @@ services:
       POSTGRES_HOST_AUTH_METHOD: 'trust'
     ports:
       - "9432:5432"
+    volumes:
+      - ./database:/var/lib/postgresql/data
   
   da-indexer:
     build:
@@ -25,7 +27,6 @@ services:
     environment:
       ## optional: if provided, would be used as a configuration file
       DA_INDEXER__CONFIG: /app/config.toml
-      DA_INDEXER__CELESTIA_INDEXER__RPC__URL: http://host.docker.internal:26658
       DA_INDEXER__DATABASE__CONNECT__URL: postgres://postgres:@database:5432/blockscout
       DA_INDEXER__DATABASE__CREATE_DATABASE: "true"
       DA_INDEXER__DATABASE__RUN_MIGRATIONS: "true"
@@ -34,6 +35,6 @@ services:
       - ./da-indexer-server/config/base.env
     volumes:
       ## optional: you can use default config or provide custom via file
-      - ./da-indexer-server/config/base.toml:/app/config.toml
+      - ./da-indexer-server/config/eigenda.toml:/app/config.toml
     extra_hosts:
       - "host.docker.internal:host-gateway"

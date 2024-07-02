@@ -8,7 +8,7 @@ use sha3::{Digest, Sha3_256};
 
 #[tokio::test]
 async fn smoke_test() {
-    let db = init_db("blobs_db_smoke").await;
+    let db = init_db("celestia_blobs_smoke_test").await;
     let height_range = 1..=5;
     let blobs_range = 1..=5;
 
