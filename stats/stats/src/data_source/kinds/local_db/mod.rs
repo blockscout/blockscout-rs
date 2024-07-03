@@ -150,20 +150,20 @@ where
     ) -> Result<(), UpdateError> {
         let metadata = get_chart_metadata(cx.db, ChartProps::NAME).await?;
         if let Some(last_updated_at) = metadata.last_updated_at {
-            // DB stores timestamps with microsecond precision
-            let update_time = cx.time.trunc_subsecs(6);
-            if update_time == last_updated_at {
+            if postgres_timestamps_eq(cx.time, last_updated_at) {
                 // no need to perform update.
                 // mostly catches second call to update e.g. when both
                 // dependency and this source are in one group and enabled.
                 tracing::debug!(
+                    last_updated_at =? last_updated_at,
+                    update_timestamp =? cx.time,
                     "Not updating the chart because it was already handled within ongoing update"
                 );
                 return Ok(());
             } else {
                 tracing::debug!(
                     last_updated_at =? last_updated_at,
-                    update_timestamp =? update_time,
+                    update_timestamp =? cx.time,
                     "Performing an update"
                 );
             }
@@ -202,6 +202,14 @@ where
                 .observe(time.as_secs_f64());
         }
     }
+}
+
+/// Compare timestamps as they're seen in Postgres (compare up to microseconds)
+fn postgres_timestamps_eq(time_1: DateTime<Utc>, time_2: DateTime<Utc>) -> bool {
+    // PostgreSQL stores timestamps with microsecond precision
+    // therefore, we need to drop any values smaller than microsecond
+    // microsecond = 10^(-6) => compare up to 6 digits after comma
+    time_1.trunc_subsecs(6).eq(&time_2.trunc_subsecs(6))
 }
 
 impl<MainDep, ResolutionDep, Create, Update, Query, ChartProps> DataSource
