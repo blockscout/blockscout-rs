@@ -129,6 +129,14 @@
         "use_protocols": [
           "ens"
         ]
+      },
+      "81457": {
+        "blockscout": {
+          "url": "https://blast.blockscout.com/"
+        },
+        "use_protocols": [
+          "zns-blast"
+        ]
       }
     },
     "protocols": {
@@ -300,6 +308,21 @@
           "short_name": "ZNS",
           "title": "ZNS Connect Domains",
           "description": "ZNS Connect is a decentralized naming system designed to simplify Web3 by offering user-friendly and memorable domain names",
+          "icon_url": "https://i.imgur.com/c7QnsBF.png",
+          "docs_url": "https://docs.znsconnect.io/"
+        }
+      },
+      "zns-blast": {
+        "tld_list": [
+          "blast"
+        ],
+        "network_id": 81457,
+        "subgraph_name": "zns-blast-subgraph",
+        "address_resolve_technique": "all_domains",
+        "meta": {
+          "short_name": "ZNS",
+          "title": "ZNS Connect Domains",
+          "description": "ZNS Blast is a decentralized naming system designed to simplify Web3 by offering user-friendly and memorable domain names",
           "icon_url": "https://i.imgur.com/c7QnsBF.png",
           "docs_url": "https://docs.znsconnect.io/"
         }
