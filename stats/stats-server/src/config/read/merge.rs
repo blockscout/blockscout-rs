@@ -378,6 +378,58 @@ mod tests {
         assert_eq!(overridden_config, expected_config)
     }
 
+    const EXAMPLE_LAYOUT_CONFIG_2: &str = r#"{
+        "counters_order": [
+            "total_txns",
+            "total_blocks",
+            "total_accounts"
+        ],
+        "line_chart_categories": [
+            {
+                "id": "transactions",
+                "title": "Transactions",
+                "charts_order": [
+                    "average_txn_fee",
+                    "txns_fee"
+                ]
+            },
+            {
+                "id": "blocks",
+                "title": "Blocks",
+                "charts_order": [
+                    "total_blocks",
+                    "blocks_growth"
+                ]
+            },
+            {
+                "id": "accounts",
+                "title": "Accounts",
+                "charts_order": [
+                    "new_accounts",
+                    "accounts_growth"
+                ]
+            }
+        ]
+    }"#;
+
+    #[test]
+    fn layout_order_is_preserved() {
+        let mut json_config: json::layout::Config =
+            serde_json::from_str(EXAMPLE_LAYOUT_CONFIG).unwrap();
+
+        let env_override: env::layout::Config =
+            config_from_env("STATS_LAYOUT", HashMap::new()).unwrap();
+
+        override_layout(&mut json_config, env_override).unwrap();
+        let overridden_config = serde_json::to_value(json_config).unwrap();
+
+        let expected_config: json::layout::Config =
+            serde_json::from_str(EXAMPLE_LAYOUT_CONFIG_2).unwrap();
+        let expected_config = serde_json::to_value(expected_config).unwrap();
+
+        assert_eq!(overridden_config, expected_config)
+    }
+
     const EXAMPLE_SCHEDULE_CONFIG: &str = r#"{
         "schedules": {
             "average_block_time": "0 0 15 * * * *",
