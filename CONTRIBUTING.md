@@ -50,7 +50,7 @@ If you want to help us improve the project, you can contribute code. To do so, f
    * `feat`: New feature
    * `fix`: Bug fix
    * `perf`: Performance improvement
-   * `chore`: Maintenance tasks
+   * `chore`: Maintenance tasks (including code changes that do not fit other types)
    * `refactor`: Code restructuring
    * `ci`: Continuous Integration changes
    * `docs`: Documentation updates
