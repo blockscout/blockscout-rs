@@ -92,10 +92,12 @@ where
                 chart_id,
                 min_blockscout_block,
                 previous_step_last_point,
-                range,
+                range.clone(),
                 dependency_data_fetch_timer,
             )
             .await?;
+            // for query in `get_previous_step_last_point` to work correctly
+            Self::update_metadata(cx.db, chart_id, range.end).await?;
             let elapsed: std::time::Duration = now.elapsed();
             tracing::info!(found =? found, elapsed =? elapsed, "{}/{} step of batch done", i + 1, n);
         }

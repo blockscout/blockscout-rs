@@ -1,14 +1,13 @@
-use std::{
-    marker::PhantomData,
-    ops::{Range, RangeInclusive},
-};
+use std::{marker::PhantomData, ops::Range};
 
 use sea_orm::prelude::DateTimeUtc;
 
 use crate::{
     charts::db_interaction::read::get_counter_data,
     data_source::{kinds::local_db::parameter_traits::QueryBehaviour, UpdateContext},
-    get_line_chart_data, ChartProperties, DateValueString, UpdateError,
+    get_line_chart_data,
+    utils::exclusive_datetime_range_to_inclusive,
+    ChartProperties, DateValueString, UpdateError,
 };
 
 /// Usually the choice for line charts
@@ -20,6 +19,8 @@ impl<C: ChartProperties> QueryBehaviour for DefaultQueryVec<C> {
     /// Retrieve chart data from local storage.
     ///
     /// Note that the data might have missing points for efficiency reasons.
+    ///
+    /// Expects metadata to be consistent with stored data
     async fn query_data(
         cx: &UpdateContext<'_>,
         range: Option<Range<DateTimeUtc>>,
@@ -55,16 +56,6 @@ impl<C: ChartProperties> QueryBehaviour for DefaultQueryVec<C> {
         .collect();
         Ok(values)
     }
-}
-
-fn exclusive_datetime_range_to_inclusive(r: Range<DateTimeUtc>) -> RangeInclusive<DateTimeUtc> {
-    // subtract the smallest unit of time to get semantically the same range
-    // but inclusive
-    let new_end = r
-        .end
-        .checked_sub_signed(chrono::Duration::nanoseconds(1))
-        .unwrap_or(DateTimeUtc::MIN_UTC); // saturating sub
-    r.start..=new_end
 }
 
 /// Usually the choice for line counters
