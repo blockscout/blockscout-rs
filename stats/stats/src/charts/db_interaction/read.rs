@@ -253,9 +253,9 @@ pub async fn get_line_chart_data(
 
     let last_updated_at = chart.last_updated_at.map(|t| {
         // last_updated_at timestamp is not included in the range
-        let _inclusive_last_updated_at_end =
+        let inclusive_last_updated_at_end =
             exclusive_datetime_range_to_inclusive(DateTime::<Utc>::MIN_UTC..t.to_utc());
-        _inclusive_last_updated_at_end.end().date_naive()
+        inclusive_last_updated_at_end.end().date_naive()
     });
     if last_updated_at.is_none() && !db_data.is_empty() {
         tracing::warn!(
