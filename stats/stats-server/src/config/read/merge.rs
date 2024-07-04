@@ -8,16 +8,7 @@ use crate::config::{
     json,
     types::{AllChartSettings, CounterInfo, LineChartCategory, LineChartInfo},
 };
-use std::{
-    collections::{btree_map::Entry, BTreeMap, VecDeque},
-    fmt::Debug,
-};
-
-#[derive(Debug)]
-enum Order {
-    Original(usize),
-    Overwritten(usize),
-}
+use std::collections::{btree_map::Entry, BTreeMap};
 
 trait GetOrder {
     fn order(&self) -> Option<usize>;
@@ -66,10 +57,33 @@ impl_get_key!(CounterInfo<C>);
 impl_get_key!(LineChartInfo<C>);
 impl_get_key!(LineChartCategory);
 
+/// Returns `target` with updated order of elements.
+///
+/// Each element with key in `new_order` is placed on `new_order.get(key)`'th position
+/// in `target` (or at the end, if the position exceeds target's length).
+fn with_updated_order<T: GetKey>(target: Vec<T>, new_order: BTreeMap<String, usize>) -> Vec<T> {
+    let (moved_elements, mut other_elements): (BTreeMap<_, _>, Vec<_>) =
+        target.into_iter().partition_map(|t| {
+            if let Some(move_to) = new_order.get(t.key()) {
+                Either::Left((move_to, t))
+            } else {
+                Either::Right(t)
+            }
+        });
+    for (&new_idx, element) in moved_elements {
+        if new_idx <= other_elements.len() {
+            other_elements.insert(new_idx, element)
+        } else {
+            other_elements.push(element)
+        }
+    }
+    other_elements
+}
+
 /// `update_t` should update 1st parameter with values from the 2nd
 fn override_ordered<T, S, F>(
     target: &mut Vec<T>,
-    source: BTreeMap<String, S>,
+    mut source: BTreeMap<String, S>,
     update_t: F,
 ) -> Result<(), anyhow::Error>
 where
@@ -77,49 +91,20 @@ where
     S: GetOrder,
     F: Fn(&mut T, S) -> Result<(), anyhow::Error>,
 {
-    // Override values and order
-    let mut target_with_order: BTreeMap<String, (Order, T)> = std::mem::take(target)
-        .into_iter()
-        .enumerate()
-        .map(|(i, t)| (t.key().to_owned(), (Order::Original(i), t)))
+    // elements with overwritten order (collect to safely consume `source`)
+    let orders_overwrite: BTreeMap<_, _> = source
+        .iter()
+        .filter_map(|(key, val)| Some((key.clone(), val.order()?)))
         .collect();
-    for (key, val_with_order) in source {
-        let Some((target_order, target_val)) = target_with_order.get_mut(&key) else {
-            return Err(anyhow::anyhow!("Unknown key: {}", key));
-        };
-        if let Some(order_override) = val_with_order.order() {
-            *target_order = Order::Overwritten(order_override);
+
+    // first overwrite only contents (not order)
+    for element in target.iter_mut() {
+        if let Some(overwrite) = source.remove(element.key()) {
+            update_t(element, overwrite)?
         }
-        update_t(target_val, val_with_order)
-            .context(format!("updating values for key: {}", key))?;
     }
-    // Sort according to original & overridden order
-    let total_items = target_with_order.len();
-    let (mut target_overridden_order, target_default_order): (
-        BTreeMap<usize, T>,
-        BTreeMap<usize, T>,
-    ) = target_with_order
-        .into_values()
-        .partition_map(|(order, v)| match order {
-            Order::Overwritten(o) => Either::Left((o, v.clone())),
-            Order::Original(o) => Either::Right((o, v.clone())),
-        });
-    let mut target_default_order: VecDeque<_> = target_default_order.into_values().collect();
-    let new_target = {
-        let mut v = Vec::with_capacity(total_items);
-        for i in 0..total_items {
-            if let Some(value) = target_overridden_order.remove(&i) {
-                v.push(value)
-            } else if let Some(value) = target_default_order.pop_front() {
-                v.push(value)
-            } else {
-                v.extend(target_overridden_order.into_values());
-                break;
-            }
-        }
-        v
-    };
-    *target = new_target;
+    // overwrite order
+    *target = with_updated_order(std::mem::take(target), orders_overwrite);
     Ok(())
 }
 
