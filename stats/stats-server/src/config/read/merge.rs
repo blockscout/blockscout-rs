@@ -8,7 +8,54 @@ use crate::config::{
     json,
     types::{AllChartSettings, CounterInfo, LineChartCategory, LineChartInfo},
 };
-use std::collections::{btree_map::Entry, BTreeMap, VecDeque};
+use std::collections::{btree_map::Entry, BTreeMap};
+
+/// Prioritize values from environment
+pub fn override_charts(
+    target: &mut json::charts::Config,
+    source: env::charts::Config,
+) -> Result<(), anyhow::Error> {
+    override_chart_settings(&mut target.counters, source.counters).context("updating counters")?;
+    override_chart_settings(&mut target.line_charts, source.line_charts)
+        .context("updating line categories")?;
+    target.template_values.extend(source.template_values);
+    Ok(())
+}
+
+/// Prioritize values from environment
+pub fn override_layout(
+    target: &mut json::layout::Config,
+    source: env::layout::Config,
+) -> Result<(), anyhow::Error> {
+    override_ordered(&mut target.counters_order, source.counters_order, |_, _| {
+        Ok(())
+    })?;
+    override_ordered(
+        &mut target.line_chart_categories,
+        source.line_chart_categories,
+        override_field::line_categories,
+    )?;
+    Ok(())
+}
+
+/// Prioritize values from environment
+pub fn override_update_groups(
+    target: &mut json::update_groups::Config,
+    source: env::update_groups::Config,
+) -> Result<(), anyhow::Error> {
+    for (group_name, added_settings) in source.schedules {
+        match target.schedules.entry(group_name) {
+            Entry::Vacant(v) => {
+                v.insert(added_settings);
+            }
+            Entry::Occupied(mut o) => {
+                let target_group = o.get_mut();
+                target_group.update_schedule = added_settings.update_schedule;
+            }
+        }
+    }
+    Ok(())
+}
 
 trait GetOrder {
     fn order(&self) -> Option<usize>;
@@ -57,10 +104,35 @@ impl_get_key!(CounterInfo<C>);
 impl_get_key!(LineChartInfo<C>);
 impl_get_key!(LineChartCategory);
 
+/// Returns `target` with updated order of elements.
+///
+/// Each element with key in `new_order` is placed on `new_order.get(key)`'th position
+/// in `target` (or at the end, if the position exceeds target's length).
+fn with_updated_order<T: GetKey>(target: Vec<T>, new_order: BTreeMap<String, usize>) -> Vec<T> {
+    let (moved_elements, mut other_elements): (BTreeMap<_, _>, Vec<_>) =
+        target.into_iter().partition_map(|t| {
+            if let Some(move_to) = new_order.get(t.key()) {
+                Either::Left((move_to, t))
+            } else {
+                Either::Right(t)
+            }
+        });
+    // it's important to iterate in ascending order to not mess up
+    // ordering of previous elements
+    for (&new_idx, element) in moved_elements {
+        if new_idx <= other_elements.len() {
+            other_elements.insert(new_idx, element)
+        } else {
+            other_elements.push(element)
+        }
+    }
+    other_elements
+}
+
 /// `update_t` should update 1st parameter with values from the 2nd
 fn override_ordered<T, S, F>(
     target: &mut Vec<T>,
-    source: BTreeMap<String, S>,
+    mut source: BTreeMap<String, S>,
     update_t: F,
 ) -> Result<(), anyhow::Error>
 where
@@ -68,46 +140,20 @@ where
     S: GetOrder,
     F: Fn(&mut T, S) -> Result<(), anyhow::Error>,
 {
-    // Override values and order
-    let mut target_with_order: BTreeMap<String, (Option<usize>, T)> = std::mem::take(target)
-        .into_iter()
-        .map(|t| (t.key().to_owned(), (None, t)))
+    // elements with overwritten order (collect to safely consume `source`)
+    let orders_overwrite: BTreeMap<_, _> = source
+        .iter()
+        .filter_map(|(key, val)| Some((key.clone(), val.order()?)))
         .collect();
-    for (key, val_with_order) in source {
-        let Some((target_order, target_val)) = target_with_order.get_mut(&key) else {
-            return Err(anyhow::anyhow!("Unknown key: {}", key));
-        };
-        if let Some(order_override) = val_with_order.order() {
-            *target_order = Some(order_override);
+
+    // first overwrite only contents (not order)
+    for element in target.iter_mut() {
+        if let Some(overwrite) = source.remove(element.key()) {
+            update_t(element, overwrite)?
         }
-        update_t(target_val, val_with_order)
-            .context(format!("updating values for key: {}", key))?;
     }
-    // Sort according to original & overridden order
-    let total_items = target_with_order.len();
-    let (mut target_overridden_order, mut target_default_order): (BTreeMap<usize, T>, VecDeque<T>) =
-        target_with_order.into_values().partition_map(|(order, v)| {
-            if let Some(o) = order {
-                Either::Left((o, v.clone()))
-            } else {
-                Either::Right(v.clone())
-            }
-        });
-    let new_target = {
-        let mut v = Vec::with_capacity(total_items);
-        for i in 0..total_items {
-            if let Some(value) = target_overridden_order.remove(&i) {
-                v.push(value)
-            } else if let Some(value) = target_default_order.pop_front() {
-                v.push(value)
-            } else {
-                v.extend(target_overridden_order.into_values());
-                break;
-            }
-        }
-        v
-    };
-    *target = new_target;
+    // overwrite order
+    *target = with_updated_order(std::mem::take(target), orders_overwrite);
     Ok(())
 }
 
@@ -138,53 +184,6 @@ fn override_chart_settings(
                 v.insert(settings.try_into()?);
             }
             Entry::Occupied(mut o) => settings.apply_to(o.get_mut()),
-        }
-    }
-    Ok(())
-}
-
-/// Prioritize values from environment
-pub fn override_charts(
-    target: &mut json::charts::Config,
-    source: env::charts::Config,
-) -> Result<(), anyhow::Error> {
-    override_chart_settings(&mut target.counters, source.counters).context("updating counters")?;
-    override_chart_settings(&mut target.line_charts, source.line_charts)
-        .context("updating line categories")?;
-    target.template_values.extend(source.template_values);
-    Ok(())
-}
-
-/// Prioritize values from environment
-pub fn override_layout(
-    target: &mut json::layout::Config,
-    source: env::layout::Config,
-) -> Result<(), anyhow::Error> {
-    override_ordered(&mut target.counters_order, source.counters_order, |_, _| {
-        Ok(())
-    })?;
-    override_ordered(
-        &mut target.line_chart_categories,
-        source.line_chart_categories,
-        override_field::line_categories,
-    )?;
-    Ok(())
-}
-
-/// Prioritize values from environment
-pub fn override_update_groups(
-    target: &mut json::update_groups::Config,
-    source: env::update_groups::Config,
-) -> Result<(), anyhow::Error> {
-    for (group_name, added_settings) in source.schedules {
-        match target.schedules.entry(group_name) {
-            Entry::Vacant(v) => {
-                v.insert(added_settings);
-            }
-            Entry::Occupied(mut o) => {
-                let target_group = o.get_mut();
-                target_group.update_schedule = added_settings.update_schedule;
-            }
         }
     }
     Ok(())
@@ -373,6 +372,58 @@ mod tests {
             }"#,
         )
         .unwrap();
+        let expected_config = serde_json::to_value(expected_config).unwrap();
+
+        assert_eq!(overridden_config, expected_config)
+    }
+
+    const EXAMPLE_LAYOUT_CONFIG_2: &str = r#"{
+        "counters_order": [
+            "total_txns",
+            "total_blocks",
+            "total_accounts"
+        ],
+        "line_chart_categories": [
+            {
+                "id": "transactions",
+                "title": "Transactions",
+                "charts_order": [
+                    "average_txn_fee",
+                    "txns_fee"
+                ]
+            },
+            {
+                "id": "blocks",
+                "title": "Blocks",
+                "charts_order": [
+                    "total_blocks",
+                    "blocks_growth"
+                ]
+            },
+            {
+                "id": "accounts",
+                "title": "Accounts",
+                "charts_order": [
+                    "new_accounts",
+                    "accounts_growth"
+                ]
+            }
+        ]
+    }"#;
+
+    #[test]
+    fn layout_order_is_preserved() {
+        let mut json_config: json::layout::Config =
+            serde_json::from_str(EXAMPLE_LAYOUT_CONFIG_2).unwrap();
+
+        let env_override: env::layout::Config =
+            config_from_env("STATS_LAYOUT", HashMap::new()).unwrap();
+
+        override_layout(&mut json_config, env_override).unwrap();
+        let overridden_config = serde_json::to_value(json_config).unwrap();
+
+        let expected_config: json::layout::Config =
+            serde_json::from_str(EXAMPLE_LAYOUT_CONFIG_2).unwrap();
         let expected_config = serde_json::to_value(expected_config).unwrap();
 
         assert_eq!(overridden_config, expected_config)
