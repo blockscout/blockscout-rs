@@ -12,7 +12,7 @@
 use std::{marker::PhantomData, ops::Range, time::Duration};
 
 use blockscout_metrics_tools::AggregateTimer;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, SubsecRound, Utc};
 use parameter_traits::{CreateBehaviour, QueryBehaviour, UpdateBehaviour};
 use parameters::{
     update::{
@@ -150,11 +150,13 @@ where
     ) -> Result<(), UpdateError> {
         let metadata = get_chart_metadata(cx.db, ChartProps::NAME).await?;
         if let Some(last_updated_at) = metadata.last_updated_at {
-            if cx.time == last_updated_at {
+            if postgres_timestamps_eq(cx.time, last_updated_at) {
                 // no need to perform update.
                 // mostly catches second call to update e.g. when both
                 // dependency and this source are in one group and enabled.
                 tracing::debug!(
+                    last_updated_at =? last_updated_at,
+                    update_timestamp =? cx.time,
                     "Not updating the chart because it was already handled within ongoing update"
                 );
                 return Ok(());
@@ -200,6 +202,14 @@ where
                 .observe(time.as_secs_f64());
         }
     }
+}
+
+/// Compare timestamps as they're seen in Postgres (compare up to microseconds)
+fn postgres_timestamps_eq(time_1: DateTime<Utc>, time_2: DateTime<Utc>) -> bool {
+    // PostgreSQL stores timestamps with microsecond precision
+    // therefore, we need to drop any values smaller than microsecond
+    // microsecond = 10^(-6) => compare up to 6 digits after comma
+    time_1.trunc_subsecs(6).eq(&time_2.trunc_subsecs(6))
 }
 
 impl<MainDep, ResolutionDep, Create, Update, Query, ChartProps> DataSource
@@ -285,4 +295,211 @@ where
     Query: QueryBehaviour + Sync,
     ChartProps: ChartProperties,
 {
+}
+
+#[cfg(test)]
+mod tests {
+    mod update_itself_is_triggered_once_per_group {
+        use std::{
+            collections::HashSet,
+            ops::DerefMut,
+            str::FromStr,
+            sync::{Arc, OnceLock},
+        };
+
+        use blockscout_metrics_tools::AggregateTimer;
+        use chrono::{DateTime, Days, TimeDelta, Utc};
+        use entity::sea_orm_active_enums::ChartType;
+        use tokio::sync::Mutex;
+
+        use crate::{
+            charts::db_interaction::write::insert_data_many,
+            construct_update_group,
+            data_source::{
+                kinds::local_db::{
+                    parameter_traits::UpdateBehaviour,
+                    parameters::{DefaultCreate, DefaultQueryLast},
+                    DirectPointLocalDbChartSource, LocalDbChartSource,
+                },
+                types::Get,
+                DataSource, UpdateContext, UpdateParameters,
+            },
+            gettable_const,
+            tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
+            update_group::{SyncUpdateGroup, UpdateGroup},
+            ChartProperties, DateValueString, Named, UpdateError,
+        };
+
+        type WasTriggeredStorage = Arc<Mutex<bool>>;
+
+        // `OnceLock` in order to return the same instance each time
+        static FLAG: OnceLock<WasTriggeredStorage> = OnceLock::new();
+
+        gettable_const!(WasTriggered: WasTriggeredStorage = FLAG.get_or_init(|| Arc::new(Mutex::new(false))).clone());
+
+        struct UpdateSingleTriggerAsserter;
+
+        impl UpdateSingleTriggerAsserter {
+            pub async fn record_trigger() {
+                let mut was_triggered_guard = WasTriggered::get().lock_owned().await;
+                let was_triggered = was_triggered_guard.deref_mut();
+                assert!(!*was_triggered, "update triggered twice");
+                *was_triggered = true;
+            }
+
+            pub async fn reset_triggers() {
+                let mut was_triggered_guard = WasTriggered::get().lock_owned().await;
+                let was_triggered = was_triggered_guard.deref_mut();
+                *was_triggered = false;
+            }
+        }
+
+        impl<M, R> UpdateBehaviour<M, R> for UpdateSingleTriggerAsserter
+        where
+            M: DataSource,
+            R: DataSource,
+        {
+            async fn update_values(
+                cx: &UpdateContext<'_>,
+                chart_id: i32,
+                _last_accurate_point: Option<DateValueString>,
+                min_blockscout_block: i64,
+                _dependency_data_fetch_timer: &mut AggregateTimer,
+            ) -> Result<(), UpdateError> {
+                Self::record_trigger().await;
+                // insert smth for dependency to work well
+                let data = DateValueString {
+                    date: cx.time.date_naive(),
+                    value: "0".to_owned(),
+                };
+                let value = data.active_model(chart_id, Some(min_blockscout_block));
+                insert_data_many(cx.db, vec![value])
+                    .await
+                    .map_err(UpdateError::StatsDB)?;
+                Ok(())
+            }
+        }
+
+        struct TestedChartProps;
+
+        impl Named for TestedChartProps {
+            const NAME: &'static str = "double_update_tested_chart";
+        }
+
+        impl ChartProperties for TestedChartProps {
+            fn chart_type() -> ChartType {
+                ChartType::Counter
+            }
+        }
+
+        type TestedChart = LocalDbChartSource<
+            (),
+            (),
+            DefaultCreate<TestedChartProps>,
+            UpdateSingleTriggerAsserter,
+            DefaultQueryLast<TestedChartProps>,
+            TestedChartProps,
+        >;
+
+        struct ChartDependedOnTestedProps;
+
+        impl Named for ChartDependedOnTestedProps {
+            const NAME: &'static str = "double_update_dependant_chart";
+        }
+
+        impl ChartProperties for ChartDependedOnTestedProps {
+            fn chart_type() -> ChartType {
+                ChartType::Counter
+            }
+        }
+
+        type ChartDependedOnTested =
+            DirectPointLocalDbChartSource<TestedChart, ChartDependedOnTestedProps>;
+
+        construct_update_group!(TestUpdateGroup {
+            charts: [TestedChart, ChartDependedOnTested]
+        });
+
+        #[tokio::test]
+        #[ignore = "needs database to run"]
+        async fn update_itself_is_triggered_once_per_group() {
+            let _ = tracing_subscriber::fmt::try_init();
+            let (db, blockscout) = init_db_all("update_itself_is_triggered_once_per_group").await;
+            let current_time = DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap();
+            let current_date = current_time.date_naive();
+            fill_mock_blockscout_data(&blockscout, current_date).await;
+            let enabled = HashSet::from(
+                [TestedChartProps::NAME, ChartDependedOnTestedProps::NAME].map(|l| l.to_owned()),
+            );
+            let mutexes = TestUpdateGroup
+                .list_dependency_mutex_ids()
+                .into_iter()
+                .map(|id| (id.to_owned(), Arc::new(Mutex::new(()))))
+                .collect();
+            let group = SyncUpdateGroup::new(&mutexes, Arc::new(TestUpdateGroup)).unwrap();
+            group
+                .create_charts_with_mutexes(&db, Some(current_time), &enabled)
+                .await
+                .unwrap();
+
+            let next_time = current_time.checked_add_days(Days::new(1)).unwrap();
+            let parameters = UpdateParameters {
+                db: &db,
+                blockscout: &blockscout,
+                update_time_override: Some(next_time),
+                force_full: true,
+            };
+            group
+                .update_charts_with_mutexes(parameters, &enabled)
+                .await
+                .unwrap();
+
+            UpdateSingleTriggerAsserter::reset_triggers().await;
+
+            let next_next_time = next_time.checked_add_days(Days::new(1)).unwrap();
+            // it also works with high-precision timestamps
+            //
+            // regression: had a bug where due to postgres having resolution of 1 microsecond stored a different
+            // timestamp to the one provided
+            let time = next_next_time + TimeDelta::nanoseconds(1);
+            let parameters = UpdateParameters {
+                db: &db,
+                blockscout: &blockscout,
+                update_time_override: Some(time),
+                force_full: true,
+            };
+            group
+                .update_charts_with_mutexes(parameters, &enabled)
+                .await
+                .unwrap();
+
+            UpdateSingleTriggerAsserter::reset_triggers().await;
+
+            // also test if there is any rounding when inserting metadata
+            let time = next_next_time + TimeDelta::nanoseconds(500);
+            let parameters = UpdateParameters {
+                db: &db,
+                blockscout: &blockscout,
+                update_time_override: Some(time),
+                force_full: true,
+            };
+            group
+                .update_charts_with_mutexes(parameters, &enabled)
+                .await
+                .unwrap();
+
+            // also test if there is any rounding when inserting metadata
+            let time = next_next_time + TimeDelta::nanoseconds(999);
+            let parameters = UpdateParameters {
+                db: &db,
+                blockscout: &blockscout,
+                update_time_override: Some(time),
+                force_full: true,
+            };
+            group
+                .update_charts_with_mutexes(parameters, &enabled)
+                .await
+                .unwrap();
+        }
+    }
 }

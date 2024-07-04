@@ -48,7 +48,8 @@ where
             last_accurate_point: last_accurate_point.clone(),
             main_data: main_data.clone(),
             resolution_data,
-        });
+        })
+        .await;
         PassVecStep::batch_update_values_step_with(
             db,
             chart_id,
