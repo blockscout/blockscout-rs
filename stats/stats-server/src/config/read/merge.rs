@@ -10,6 +10,53 @@ use crate::config::{
 };
 use std::collections::{btree_map::Entry, BTreeMap};
 
+/// Prioritize values from environment
+pub fn override_charts(
+    target: &mut json::charts::Config,
+    source: env::charts::Config,
+) -> Result<(), anyhow::Error> {
+    override_chart_settings(&mut target.counters, source.counters).context("updating counters")?;
+    override_chart_settings(&mut target.line_charts, source.line_charts)
+        .context("updating line categories")?;
+    target.template_values.extend(source.template_values);
+    Ok(())
+}
+
+/// Prioritize values from environment
+pub fn override_layout(
+    target: &mut json::layout::Config,
+    source: env::layout::Config,
+) -> Result<(), anyhow::Error> {
+    override_ordered(&mut target.counters_order, source.counters_order, |_, _| {
+        Ok(())
+    })?;
+    override_ordered(
+        &mut target.line_chart_categories,
+        source.line_chart_categories,
+        override_field::line_categories,
+    )?;
+    Ok(())
+}
+
+/// Prioritize values from environment
+pub fn override_update_groups(
+    target: &mut json::update_groups::Config,
+    source: env::update_groups::Config,
+) -> Result<(), anyhow::Error> {
+    for (group_name, added_settings) in source.schedules {
+        match target.schedules.entry(group_name) {
+            Entry::Vacant(v) => {
+                v.insert(added_settings);
+            }
+            Entry::Occupied(mut o) => {
+                let target_group = o.get_mut();
+                target_group.update_schedule = added_settings.update_schedule;
+            }
+        }
+    }
+    Ok(())
+}
+
 trait GetOrder {
     fn order(&self) -> Option<usize>;
 }
@@ -137,53 +184,6 @@ fn override_chart_settings(
                 v.insert(settings.try_into()?);
             }
             Entry::Occupied(mut o) => settings.apply_to(o.get_mut()),
-        }
-    }
-    Ok(())
-}
-
-/// Prioritize values from environment
-pub fn override_charts(
-    target: &mut json::charts::Config,
-    source: env::charts::Config,
-) -> Result<(), anyhow::Error> {
-    override_chart_settings(&mut target.counters, source.counters).context("updating counters")?;
-    override_chart_settings(&mut target.line_charts, source.line_charts)
-        .context("updating line categories")?;
-    target.template_values.extend(source.template_values);
-    Ok(())
-}
-
-/// Prioritize values from environment
-pub fn override_layout(
-    target: &mut json::layout::Config,
-    source: env::layout::Config,
-) -> Result<(), anyhow::Error> {
-    override_ordered(&mut target.counters_order, source.counters_order, |_, _| {
-        Ok(())
-    })?;
-    override_ordered(
-        &mut target.line_chart_categories,
-        source.line_chart_categories,
-        override_field::line_categories,
-    )?;
-    Ok(())
-}
-
-/// Prioritize values from environment
-pub fn override_update_groups(
-    target: &mut json::update_groups::Config,
-    source: env::update_groups::Config,
-) -> Result<(), anyhow::Error> {
-    for (group_name, added_settings) in source.schedules {
-        match target.schedules.entry(group_name) {
-            Entry::Vacant(v) => {
-                v.insert(added_settings);
-            }
-            Entry::Occupied(mut o) => {
-                let target_group = o.get_mut();
-                target_group.update_schedule = added_settings.update_schedule;
-            }
         }
     }
     Ok(())
