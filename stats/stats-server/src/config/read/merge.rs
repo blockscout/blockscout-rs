@@ -70,6 +70,8 @@ fn with_updated_order<T: GetKey>(target: Vec<T>, new_order: BTreeMap<String, usi
                 Either::Right(t)
             }
         });
+    // it's important to iterate in ascending order to not mess up
+    // ordering of previous elements
     for (&new_idx, element) in moved_elements {
         if new_idx <= other_elements.len() {
             other_elements.insert(new_idx, element)
