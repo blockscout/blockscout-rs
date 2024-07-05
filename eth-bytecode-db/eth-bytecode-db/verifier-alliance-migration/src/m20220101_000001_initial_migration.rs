@@ -44,6 +44,14 @@ fn get_table_definitions() -> Vec<String> {
             /* the sha256 hash of the `code` column */
             code_hash   bytea NOT NULL PRIMARY KEY,
 
+            /* timestamps */
+            created_at  timestamptz NOT NULL DEFAULT NOW(),
+            updated_at  timestamptz NOT NULL DEFAULT NOW(),
+
+            /* ownership */
+            created_by  varchar NOT NULL DEFAULT (current_user),
+            updated_by  varchar NOT NULL DEFAULT (current_user),
+
             /*
                  the keccak256 hash of the `code` column
 
@@ -76,6 +84,14 @@ fn get_table_definitions() -> Vec<String> {
             /* an opaque id */
             id  uuid NOT NULL PRIMARY KEY DEFAULT gen_random_uuid(),
 
+            /* timestamps */
+            created_at  timestamptz NOT NULL DEFAULT NOW(),
+            updated_at  timestamptz NOT NULL DEFAULT NOW(),
+
+            /* ownership */
+            created_by  varchar NOT NULL DEFAULT (current_user),
+            updated_by  varchar NOT NULL DEFAULT (current_user),
+
             /*
                 the creation code is the calldata (for eoa creations) or the instruction input (for create/create2)
                 the runtime code is the bytecode that's returned by the creation code and stored on-chain
@@ -102,6 +118,14 @@ fn get_table_definitions() -> Vec<String> {
         (
             /* an opaque id*/
             id  uuid NOT NULL PRIMARY KEY DEFAULT gen_random_uuid(),
+
+            /* timestamps */
+            created_at  timestamptz NOT NULL DEFAULT NOW(),
+            updated_at  timestamptz NOT NULL DEFAULT NOW(),
+
+            /* ownership */
+            created_by  varchar NOT NULL DEFAULT (current_user),
+            updated_by  varchar NOT NULL DEFAULT (current_user),
 
             /*
                 these three fields uniquely identify a specific deployment of a contract, assuming
@@ -271,7 +295,8 @@ fn get_table_definitions() -> Vec<String> {
             CONSTRAINT verified_contracts_runtime_transformations_is_array
                 CHECK (runtime_transformations IS NULL OR jsonb_typeof(runtime_transformations) = 'array'),
 
-
+            CONSTRAINT verified_contracts_match_exists
+                CHECK (creation_match = true OR runtime_match = true),
             CONSTRAINT verified_contracts_creation_match_integrity
                 CHECK ((creation_match = false AND creation_values IS NULL AND creation_transformations IS NULL) OR
                        (creation_match = true AND creation_values IS NOT NULL AND creation_transformations IS NOT NULL)),
@@ -327,7 +352,7 @@ fn get_timestamp_triggers() -> Vec<String> {
             CREATE FUNCTION trigger_set_updated_at()
             RETURNS TRIGGER AS $$
             BEGIN
-                NEW.updated_by = NOW();
+                NEW.updated_at = NOW();
                 RETURN NEW;
             END;
             $$ LANGUAGE plpgsql;
@@ -338,7 +363,10 @@ fn get_timestamp_triggers() -> Vec<String> {
                 DECLARE
                     t_name text;
                 BEGIN
-                    FOR t_name IN (VALUES ('compiled_contracts'),
+                    FOR t_name IN (VALUES ('code'),
+                                          ('contracts'),
+                                          ('contract_deployments'),
+                                          ('compiled_contracts'),
                                           ('verified_contracts'))
                         LOOP
                             EXECUTE format('CREATE TRIGGER insert_set_created_at
@@ -421,7 +449,10 @@ fn get_ownership_triggers() -> Vec<String> {
                 DECLARE
                     t_name text;
                 BEGIN
-                    FOR t_name IN (VALUES ('compiled_contracts'),
+                    FOR t_name IN (VALUES ('code'),
+                                          ('contracts'),
+                                          ('contract_deployments'),
+                                          ('compiled_contracts'),
                                           ('verified_contracts'))
                         LOOP
                             EXECUTE format('CREATE TRIGGER insert_set_created_by
