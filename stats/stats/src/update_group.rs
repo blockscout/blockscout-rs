@@ -104,6 +104,44 @@ pub trait UpdateGroup: core::fmt::Debug {
 ///
 /// ## Usage
 ///
+/// Basic usage:
+/// ```rust
+/// # use stats::data_source::kinds::{
+/// # };
+/// # use stats::{ChartProperties, Named, construct_update_group, DateValueString, UpdateError};
+/// # use stats::data_source::{
+/// #     kinds::{
+/// #         local_db::DirectVecLocalDbChartSource,
+/// #         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
+/// #         data_manipulation::map::MapToString,
+/// #     },
+/// #     types::{UpdateContext, UpdateParameters},
+/// # };
+/// # use stats::lines::NewBlocks;
+/// # use chrono::NaiveDate;
+/// # use entity::sea_orm_active_enums::ChartType;
+/// # use std::ops::RangeInclusive;
+/// # use sea_orm::prelude::DateTimeUtc;
+/// # use sea_orm::Statement;
+/// #
+/// # struct DummyChartProperties;
+/// #
+/// # impl Named for DummyChartProperties {
+/// #     const NAME: &'static str = "dummyChart";
+/// # }
+/// # impl ChartProperties for DummyChartProperties {
+/// #     fn chart_type() -> ChartType {
+/// #         ChartType::Line
+/// #     }
+/// # }
+/// #
+/// # type DummyChart = DirectVecLocalDbChartSource<NewBlocks, DummyChartProperties>;
+///
+/// construct_update_group!(ExampleUpdateGroup {
+///     charts: [DummyChart],
+/// });
+/// ```
+///
 /// Since `update` and `create` are performed recursively it makes sense to include
 /// all ancestors of members (i.e. dependencies, dependencies of them, etc.) into the group.
 /// Otherwise the following may occur:

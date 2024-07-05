@@ -54,6 +54,11 @@
         "subgraph_path": "../subgraphs/zns-subgraph",
         "subgraph_name": "zns-subgraph",
         "network": "polygon-mainnet"
+    },
+    "zns-blast": {
+        "subgraph_path": "../subgraphs/zns-subgraph",
+        "subgraph_name": "zns-blast-subgraph",
+        "network": "blast-mainnet"
     }
   }
 }

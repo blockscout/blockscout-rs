@@ -1,5 +1,5 @@
 use super::artifacts::{self};
-use crate::{verifier::lossless_compiler_output, Version};
+use crate::{verifier::lossless_compiler_output, DetailedVersion};
 use anyhow::Context;
 use artifacts::LinkReferences;
 use bytes::Bytes;
@@ -40,7 +40,7 @@ mod solidity {
     use artifacts::cbor_auxdata::{self, CborAuxdata};
 
     pub fn parse_contracts(
-        compiler_version: Version,
+        compiler_version: DetailedVersion,
         compiler_input: &foundry_compilers::CompilerInput,
         compiler_output: serde_json::Value,
         modified_compiler_output: serde_json::Value,

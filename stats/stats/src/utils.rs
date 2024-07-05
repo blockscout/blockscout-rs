@@ -1,6 +1,6 @@
 //! Common utilities used across statistics
 
-use std::ops::Range;
+use std::ops::{Range, RangeInclusive};
 
 use chrono::{NaiveDate, NaiveTime};
 use sea_orm::{prelude::DateTimeUtc, Value};
@@ -8,6 +8,16 @@ use sea_orm::{prelude::DateTimeUtc, Value};
 pub fn day_start(date: NaiveDate) -> DateTimeUtc {
     date.and_time(NaiveTime::from_hms_opt(0, 0, 0).expect("correct time"))
         .and_utc()
+}
+
+pub fn exclusive_datetime_range_to_inclusive(r: Range<DateTimeUtc>) -> RangeInclusive<DateTimeUtc> {
+    // subtract the smallest unit of time to get semantically the same range
+    // but inclusive
+    let new_end = r
+        .end
+        .checked_sub_signed(chrono::Duration::nanoseconds(1))
+        .unwrap_or(DateTimeUtc::MIN_UTC); // saturating sub
+    r.start..=new_end
 }
 
 /// Used inside [`sql_with_range_filter_opt`]

@@ -1,14 +1,13 @@
 use super::{
-    fetcher::{FetchError, Fetcher, FileValidator},
-    version::Version,
-    versions_fetcher::{VersionsFetcher, VersionsRefresher},
+    fetcher::{FetchError, Fetcher, FileValidator, Version},
+    fetcher_versions::{VersionsFetcher, VersionsRefresher},
 };
 use async_trait::async_trait;
 use bytes::Bytes;
 use cron::Schedule;
 use primitive_types::H256;
 use s3::{request_trait::ResponseData, Bucket};
-use std::{collections::HashSet, path::PathBuf, str::FromStr, sync::Arc};
+use std::{collections::HashSet, marker::PhantomData, path::PathBuf, str::FromStr, sync::Arc};
 use thiserror::Error;
 use tokio::task::JoinHandle;
 use tracing::{debug, instrument};
@@ -19,19 +18,23 @@ enum ListError {
     Fetch(s3::error::S3Error),
 }
 
-struct S3VersionFetcher {
+struct S3VersionFetcher<Ver> {
     bucket: Arc<Bucket>,
+    _phantom_data: PhantomData<Ver>,
 }
 
-impl S3VersionFetcher {
-    fn new(bucket: Arc<Bucket>) -> S3VersionFetcher {
-        S3VersionFetcher { bucket }
+impl<Ver> S3VersionFetcher<Ver> {
+    fn new(bucket: Arc<Bucket>) -> S3VersionFetcher<Ver> {
+        S3VersionFetcher {
+            bucket,
+            _phantom_data: Default::default(),
+        }
     }
 }
 
 #[async_trait]
-impl VersionsFetcher for S3VersionFetcher {
-    type Versions = HashSet<Version>;
+impl<Ver: Version> VersionsFetcher for S3VersionFetcher<Ver> {
+    type Versions = HashSet<Ver>;
     type Error = ListError;
 
     fn len(vers: &Self::Versions) -> usize {
@@ -46,11 +49,11 @@ impl VersionsFetcher for S3VersionFetcher {
             .await
             .map_err(ListError::Fetch)?;
 
-        let fetched_versions: HashSet<Version> = folders
+        let fetched_versions: HashSet<Ver> = folders
             .into_iter()
             .filter_map(|x| x.common_prefixes)
             .flatten()
-            .filter_map(|v| Version::from_str(v.prefix.trim_end_matches('/')).ok())
+            .filter_map(|v| Ver::from_str(v.prefix.trim_end_matches('/')).ok())
             .collect();
         debug!(
             "found version on bucket of len = {}",
@@ -60,11 +63,11 @@ impl VersionsFetcher for S3VersionFetcher {
     }
 }
 
-pub struct S3Fetcher {
+pub struct S3Fetcher<Ver: Version> {
     bucket: Arc<Bucket>,
     folder: PathBuf,
-    versions: VersionsRefresher<HashSet<Version>>,
-    validator: Option<Arc<dyn FileValidator>>,
+    versions: VersionsRefresher<HashSet<Ver>>,
+    validator: Option<Arc<dyn FileValidator<Ver>>>,
 }
 
 fn spawn_fetch_s3(
@@ -88,13 +91,13 @@ fn status_code_error(name: &str, status_code: u16) -> FetchError {
     ))
 }
 
-impl S3Fetcher {
+impl<Ver: Version> S3Fetcher<Ver> {
     pub async fn new(
         bucket: Arc<Bucket>,
         folder: PathBuf,
         refresh_schedule: Option<Schedule>,
-        validator: Option<Arc<dyn FileValidator>>,
-    ) -> anyhow::Result<S3Fetcher> {
+        validator: Option<Arc<dyn FileValidator<Ver>>>,
+    ) -> anyhow::Result<S3Fetcher<Ver>> {
         let fetcher = Arc::new(S3VersionFetcher::new(bucket.clone()));
         let versions = VersionsRefresher::new(fetcher, refresh_schedule).await?;
         Ok(S3Fetcher {
@@ -106,11 +109,11 @@ impl S3Fetcher {
     }
 
     #[instrument(skip(self), level = "debug")]
-    async fn fetch_file(&self, ver: &Version) -> Result<(Bytes, H256), FetchError> {
+    async fn fetch_file(&self, ver: &Ver) -> Result<(Bytes, H256), FetchError> {
         {
             let versions = self.versions.read();
             if !versions.contains(ver) {
-                return Err(FetchError::NotFound(ver.clone()));
+                return Err(FetchError::NotFound(ver.clone().to_string()));
             }
         }
 
@@ -138,14 +141,16 @@ impl S3Fetcher {
 }
 
 #[async_trait]
-impl Fetcher for S3Fetcher {
-    async fn fetch(&self, ver: &Version) -> Result<PathBuf, FetchError> {
+impl<Ver: Version> Fetcher for S3Fetcher<Ver> {
+    type Version = Ver;
+
+    async fn fetch(&self, ver: &Self::Version) -> Result<PathBuf, FetchError> {
         let (data, hash) = self.fetch_file(ver).await?;
         super::fetcher::write_executable(data, hash, &self.folder, ver, self.validator.as_deref())
             .await
     }
 
-    fn all_versions(&self) -> Vec<Version> {
+    fn all_versions(&self) -> Vec<Self::Version> {
         let versions = self.versions.read();
         versions.iter().cloned().collect()
     }
@@ -153,7 +158,7 @@ impl Fetcher for S3Fetcher {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{super::version_detailed as evm_version, *};
     use pretty_assertions::assert_eq;
     use s3::{creds::Credentials, Region};
     use serde::Serialize;
@@ -258,8 +263,8 @@ mod tests {
         .await;
 
         let versions = vec![
-            Version::from_str("v0.4.10+commit.f0d539ae").unwrap(),
-            Version::from_str("v0.4.11+commit.68ef5810").unwrap(),
+            evm_version::DetailedVersion::from_str("v0.4.10+commit.f0d539ae").unwrap(),
+            evm_version::DetailedVersion::from_str("v0.4.11+commit.68ef5810").unwrap(),
         ];
 
         // create type directly to avoid extra work in constructor
@@ -296,7 +301,7 @@ mod tests {
             "v0.5.1+commit.c8a2cb62",
         ]
         .into_iter()
-        .map(Version::from_str)
+        .map(evm_version::DetailedVersion::from_str)
         .map(|x| x.unwrap())
         .collect();
 
@@ -322,7 +327,7 @@ mod tests {
             "v0.5.1+commit.c8a2cb62",
         ]
         .into_iter()
-        .map(Version::from_str)
+        .map(evm_version::DetailedVersion::from_str)
         .map(|x| x.unwrap())
         .collect();
 

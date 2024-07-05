@@ -10,6 +10,15 @@ pub mod blockscout {
                 env!("OUT_DIR"),
                 "/blockscout.smart_contract_verifier.v2.rs"
             ));
+
+            pub mod zksync {
+                pub mod solidity {
+                    include!(concat!(
+                        env!("OUT_DIR"),
+                        "/blockscout.smart_contract_verifier.v2.zksync.solidity.rs"
+                    ));
+                }
+            }
         }
     }
 }
