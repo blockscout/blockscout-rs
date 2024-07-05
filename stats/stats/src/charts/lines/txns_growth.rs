@@ -1,5 +1,5 @@
 use crate::{
-    charts::chart::ChartProperties, data_source::kinds::local_db::CumulativeLocalDbChartSource,
+    charts::chart::ChartProperties, data_source::kinds::local_db::DailyCumulativeLocalDbChartSource,
     lines::NewTxnsInt, MissingDatePolicy, Named,
 };
 use entity::sea_orm_active_enums::ChartType;
@@ -19,7 +19,7 @@ impl ChartProperties for TxnsGrowthProperties {
     }
 }
 
-pub type TxnsGrowth = CumulativeLocalDbChartSource<NewTxnsInt, TxnsGrowthProperties>;
+pub type TxnsGrowth = DailyCumulativeLocalDbChartSource<NewTxnsInt, TxnsGrowthProperties>;
 
 #[cfg(test)]
 mod tests {

@@ -10,7 +10,7 @@ use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, FromQueryResult};
 use thiserror::Error;
 
-use super::db_interaction::types::DateValue;
+use super::types::DateValue;
 
 #[derive(Error, Debug)]
 pub enum UpdateError {
@@ -48,7 +48,7 @@ pub struct ChartMetadata {
 
 /// Type of the point stored in the chart.
 /// [`DateValueString`] can be used to avoid parsing the values,
-/// but [`crate::charts::db_interaction::types::DateValueDecimal`]
+/// but [`crate::charts::types::DateValueDecimal`]
 /// or other types can be useful sometimes
 /// (e.g. for cumulative chart).
 pub trait Point: FromQueryResult + DateValue + Into<DateValueString> + Send + Sync {}

@@ -1,9 +1,9 @@
 use std::collections::{BTreeMap, HashSet};
 
 use crate::{
-    charts::db_interaction::{
+    charts::{
+        db_interaction::write::{create_chart, insert_data_many},
         types::DateValueInt,
-        write::{create_chart, insert_data_many},
     },
     data_source::{
         kinds::{

@@ -2,7 +2,7 @@
 use std::ops::RangeInclusive;
 
 use crate::{
-    charts::db_interaction::types::{DateValue, ZeroDateValue},
+    charts::types::{DateValue, ZeroDateValue},
     DateValueString, MissingDatePolicy, ReadError,
 };
 use chrono::{Days, Duration, NaiveDate};
@@ -217,7 +217,7 @@ pub(crate) fn filter_within_range(
 #[cfg(test)]
 mod tests {
     use crate::{
-        charts::db_interaction::types::DateValueInt,
+        charts::types::DateValueInt,
         tests::point_construction::{d, v, v_int},
     };
 

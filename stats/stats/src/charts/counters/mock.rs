@@ -1,7 +1,7 @@
 use std::{marker::PhantomData, ops::Range};
 
 use crate::{
-    charts::db_interaction::types::DateValue,
+    charts::types::DateValue,
     data_source::{
         kinds::{
             local_db::DirectPointLocalDbChartSource,

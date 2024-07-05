@@ -2,7 +2,7 @@
 
 use super::new_accounts::NewAccountsInt;
 use crate::{
-    data_source::kinds::local_db::CumulativeLocalDbChartSource, ChartProperties, MissingDatePolicy,
+    data_source::kinds::local_db::DailyCumulativeLocalDbChartSource, ChartProperties, MissingDatePolicy,
     Named,
 };
 
@@ -23,7 +23,7 @@ impl ChartProperties for AccountsGrowthProperties {
     }
 }
 
-pub type AccountsGrowth = CumulativeLocalDbChartSource<NewAccountsInt, AccountsGrowthProperties>;
+pub type AccountsGrowth = DailyCumulativeLocalDbChartSource<NewAccountsInt, AccountsGrowthProperties>;
 
 #[cfg(test)]
 mod tests {

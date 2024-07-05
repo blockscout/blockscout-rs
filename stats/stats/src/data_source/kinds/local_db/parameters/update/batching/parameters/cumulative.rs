@@ -7,7 +7,7 @@ use rust_decimal::prelude::Zero;
 use sea_orm::DatabaseConnection;
 
 use crate::{
-    charts::db_interaction::types::DateValue,
+    charts::types::DateValue,
     data_source::kinds::local_db::parameters::update::batching::parameter_traits::BatchStepBehaviour,
     ChartProperties, DateValueString, UpdateError,
 };

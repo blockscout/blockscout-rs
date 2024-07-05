@@ -4,7 +4,7 @@ use chrono::{NaiveDate, NaiveDateTime};
 use rust_decimal::Decimal;
 
 use crate::{
-    charts::db_interaction::types::{DateValueDecimal, DateValueInt},
+    charts::types::{DateValueDecimal, DateValueInt},
     DateValueString,
 };
 

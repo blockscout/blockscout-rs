@@ -1,7 +1,7 @@
 use chrono::NaiveDate;
 
 use crate::{
-    charts::db_interaction::types::{DateValue, DateValueString},
+    charts::types::{DateValue, DateValueString},
     UpdateError,
 };
 use std::{

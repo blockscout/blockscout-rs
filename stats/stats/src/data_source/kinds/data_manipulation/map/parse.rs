@@ -1,7 +1,7 @@
 use std::{fmt::Display, marker::PhantomData, str::FromStr};
 
 use crate::{
-    charts::db_interaction::types::DateValue,
+    charts::types::DateValue,
     data_source::kinds::data_manipulation::map::MapFunction, DateValueString, UpdateError,
 };
 

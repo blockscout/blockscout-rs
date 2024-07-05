@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use crate::{
-    charts::db_interaction::types::DateValueInt,
+    charts::types::DateValueInt,
     data_source::{
         kinds::{
             data_manipulation::map::MapParseTo,

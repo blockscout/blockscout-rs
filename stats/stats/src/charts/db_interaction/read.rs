@@ -1,8 +1,8 @@
 use crate::{
-    charts::{chart::ChartMetadata, db_interaction::types::ZeroDateValue},
+    charts::{chart::ChartMetadata, types::ZeroDateValue},
     missing_date::{fill_and_filter_chart, fit_into_range},
     utils::exclusive_datetime_range_to_inclusive,
-    ChartProperties, DateValueString, ExtendedDateValue, MissingDatePolicy, UpdateError,
+    ChartProperties, DateValueString, ExtendedDateValueString, MissingDatePolicy, UpdateError,
 };
 
 use blockscout_db::entity::blocks;
@@ -130,7 +130,7 @@ fn mark_approximate(
     data: Vec<DateValueString>,
     last_updated_at: NaiveDate,
     approximate_until_updated: u64,
-) -> Vec<ExtendedDateValue> {
+) -> Vec<ExtendedDateValueString> {
     // saturating sub/add
     let next_after_updated_at = last_updated_at
         .checked_add_days(chrono::Days::new(1))
@@ -141,7 +141,7 @@ fn mark_approximate(
     data.into_iter()
         .map(|dv| {
             let is_marked = dv.date >= mark_from_date;
-            ExtendedDateValue::from_date_value(dv, is_marked)
+            ExtendedDateValueString::from_date_value(dv, is_marked)
         })
         .collect()
 }
@@ -240,7 +240,7 @@ pub async fn get_line_chart_data(
     policy: MissingDatePolicy,
     fill_missing_dates: bool,
     approximate_trailing_points: u64,
-) -> Result<Vec<ExtendedDateValue>, ReadError> {
+) -> Result<Vec<ExtendedDateValueString>, ReadError> {
     let chart = charts::Entity::find()
         .column(charts::Column::Id)
         .filter(charts::Column::Name.eq(name))
@@ -573,17 +573,17 @@ mod tests {
         .unwrap();
         assert_eq!(
             vec![
-                ExtendedDateValue {
+                ExtendedDateValueString {
                     date: NaiveDate::from_str("2022-11-10").unwrap(),
                     value: "100".into(),
                     is_approximate: false,
                 },
-                ExtendedDateValue {
+                ExtendedDateValueString {
                     date: NaiveDate::from_str("2022-11-11").unwrap(),
                     value: "150".into(),
                     is_approximate: false,
                 },
-                ExtendedDateValue {
+                ExtendedDateValueString {
                     date: NaiveDate::from_str("2022-11-12").unwrap(),
                     value: "200".into(),
                     is_approximate: true,
@@ -614,12 +614,12 @@ mod tests {
         .unwrap();
         assert_eq!(
             vec![
-                ExtendedDateValue {
+                ExtendedDateValueString {
                     date: NaiveDate::from_str("2022-11-14").unwrap(),
                     value: "2".into(),
                     is_approximate: false,
                 },
-                ExtendedDateValue {
+                ExtendedDateValueString {
                     date: NaiveDate::from_str("2022-11-15").unwrap(),
                     value: "3".into(),
                     is_approximate: true,

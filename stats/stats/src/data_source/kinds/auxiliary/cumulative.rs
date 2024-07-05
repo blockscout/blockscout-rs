@@ -2,9 +2,7 @@ use std::{marker::PhantomData, ops::AddAssign};
 
 use rust_decimal::prelude::Zero;
 
-use crate::{
-    charts::db_interaction::types::DateValue, data_processing::cumsum, data_source::DataSource,
-};
+use crate::{charts::types::DateValue, data_processing::cumsum, data_source::DataSource};
 
 /// Auxiliary source for cumulative chart.
 ///

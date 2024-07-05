@@ -10,7 +10,7 @@ use super::{
         data_manipulation::map::MapParseTo,
         local_db::{
             parameters::update::batching::parameter_traits::BatchStepBehaviour,
-            BatchLocalDbChartSourceWithDefaultParams, CumulativeLocalDbChartSource,
+            BatchLocalDbChartSourceWithDefaultParams, DailyCumulativeLocalDbChartSource,
             DirectVecLocalDbChartSource,
         },
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
@@ -18,7 +18,7 @@ use super::{
     types::UpdateParameters,
 };
 use crate::{
-    charts::db_interaction::types::DateValueInt,
+    charts::types::DateValueInt,
     construct_update_group,
     data_source::kinds::local_db::parameters::update::batching::parameters::PassVecStep,
     tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
@@ -107,7 +107,8 @@ impl ChartProperties for ContractsGrowthProperties {
 }
 
 // We can use convenient common implementation to get growth chart
-pub type ContractsGrowth = CumulativeLocalDbChartSource<NewContractsInt, ContractsGrowthProperties>;
+pub type ContractsGrowth =
+    DailyCumulativeLocalDbChartSource<NewContractsInt, ContractsGrowthProperties>;
 
 // Alternatively, if we wanted to preform some custom logic on each batch step, we can do
 #[allow(unused)]

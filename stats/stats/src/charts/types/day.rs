@@ -122,13 +122,13 @@ impl ZeroDateValue for DateValueDecimal {
 
 /// Marked as precise or approximate
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ExtendedDateValue {
+pub struct ExtendedDateValueString {
     pub date: NaiveDate,
     pub value: String,
     pub is_approximate: bool,
 }
 
-impl ExtendedDateValue {
+impl ExtendedDateValueString {
     pub fn from_date_value(dv: DateValueString, is_approximate: bool) -> Self {
         Self {
             date: dv.date,
@@ -138,8 +138,8 @@ impl ExtendedDateValue {
     }
 }
 
-impl From<ExtendedDateValue> for DateValueString {
-    fn from(dv: ExtendedDateValue) -> Self {
+impl From<ExtendedDateValueString> for DateValueString {
+    fn from(dv: ExtendedDateValueString) -> Self {
         DateValueString {
             date: dv.date,
             value: dv.value,

@@ -1,5 +1,5 @@
 use crate::{
-    charts::db_interaction::types::DateValueDouble,
+    charts::types::DateValueDouble,
     data_source::kinds::{
         data_manipulation::map::MapToString,
         local_db::DirectPointLocalDbChartSource,

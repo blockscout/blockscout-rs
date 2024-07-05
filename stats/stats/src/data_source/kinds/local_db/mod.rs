@@ -94,7 +94,7 @@ pub type BatchLocalDbChartSourceWithDefaultParams<MainDep, ResolutionDep, BatchS
 /// [see "Dependency requirements" here](crate::data_source::kinds)
 ///
 /// The opposite logic to [`Delta`](`crate::data_source::kinds::data_manipulation::delta::Delta`)
-pub type CumulativeLocalDbChartSource<DeltaDep, C> = LocalDbChartSource<
+pub type DailyCumulativeLocalDbChartSource<DeltaDep, C> = LocalDbChartSource<
     PartialCumulative<DeltaDep>,
     (),
     DefaultCreate<C>,

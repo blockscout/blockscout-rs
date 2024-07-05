@@ -1,5 +1,5 @@
 use crate::{
-    data_source::kinds::local_db::CumulativeLocalDbChartSource,
+    data_source::kinds::local_db::DailyCumulativeLocalDbChartSource,
     lines::new_contracts::NewContractsInt, ChartProperties, MissingDatePolicy, Named,
 };
 
@@ -20,7 +20,8 @@ impl ChartProperties for ContractsGrowthProperties {
     }
 }
 
-pub type ContractsGrowth = CumulativeLocalDbChartSource<NewContractsInt, ContractsGrowthProperties>;
+pub type ContractsGrowth =
+    DailyCumulativeLocalDbChartSource<NewContractsInt, ContractsGrowthProperties>;
 
 #[cfg(test)]
 mod tests {

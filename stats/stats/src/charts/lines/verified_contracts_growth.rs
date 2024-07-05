@@ -1,5 +1,5 @@
 use crate::{
-    charts::chart::ChartProperties, data_source::kinds::local_db::CumulativeLocalDbChartSource,
+    charts::chart::ChartProperties, data_source::kinds::local_db::DailyCumulativeLocalDbChartSource,
     lines::new_verified_contracts::NewVerifiedContractsInt, MissingDatePolicy, Named,
 };
 use entity::sea_orm_active_enums::ChartType;
@@ -20,7 +20,7 @@ impl ChartProperties for VerifiedContractsGrowthProperties {
 }
 
 pub type VerifiedContractsGrowth =
-    CumulativeLocalDbChartSource<NewVerifiedContractsInt, VerifiedContractsGrowthProperties>;
+    DailyCumulativeLocalDbChartSource<NewVerifiedContractsInt, VerifiedContractsGrowthProperties>;
 
 #[cfg(test)]
 mod tests {

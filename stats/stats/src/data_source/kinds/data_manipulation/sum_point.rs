@@ -13,7 +13,7 @@ use rust_decimal::prelude::Zero;
 use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
 
 use crate::{
-    charts::db_interaction::types::DateValue,
+    charts::types::DateValue,
     data_processing::sum,
     data_source::{source::DataSource, UpdateContext},
     UpdateError,

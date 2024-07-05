@@ -10,7 +10,7 @@ use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
 
 use crate::{
     charts::{
-        db_interaction::types::{DateValue, ZeroDateValue},
+        types::{DateValue, ZeroDateValue},
         ChartProperties,
     },
     data_source::{source::DataSource, UpdateContext},

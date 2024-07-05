@@ -1,10 +1,10 @@
 use std::ops::Range;
 
 use crate::{
-    charts::db_interaction::types::DateValueDecimal,
+    charts::types::DateValueDecimal,
     data_source::kinds::{
         data_manipulation::map::{Map, MapFunction},
-        local_db::CumulativeLocalDbChartSource,
+        local_db::DailyCumulativeLocalDbChartSource,
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
     utils::sql_with_range_filter_opt,
@@ -75,7 +75,8 @@ impl ChartProperties for GasUsedGrowthProperties {
     }
 }
 
-pub type GasUsedGrowth = CumulativeLocalDbChartSource<NewGasUsedRemote, GasUsedGrowthProperties>;
+pub type GasUsedGrowth =
+    DailyCumulativeLocalDbChartSource<NewGasUsedRemote, GasUsedGrowthProperties>;
 
 #[cfg(test)]
 mod tests {

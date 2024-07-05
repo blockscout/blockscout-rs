@@ -59,7 +59,7 @@ mod tests {
         data_source::{DataSource, UpdateContext},
         get_line_chart_data,
         tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
-        ExtendedDateValue, Named,
+        ExtendedDateValueString, Named,
     };
     use chrono::{NaiveDate, Utc};
     use entity::chart_data;
@@ -123,17 +123,17 @@ mod tests {
         .await
         .unwrap();
         let expected = vec![
-            ExtendedDateValue {
+            ExtendedDateValueString {
                 date: NaiveDate::from_str("2022-11-10").unwrap(),
                 value: "3".into(),
                 is_approximate: false,
             },
-            ExtendedDateValue {
+            ExtendedDateValueString {
                 date: NaiveDate::from_str("2022-11-11").unwrap(),
                 value: "4".into(),
                 is_approximate: false,
             },
-            ExtendedDateValue {
+            ExtendedDateValueString {
                 date: NaiveDate::from_str("2022-11-12").unwrap(),
                 value: "1".into(),
                 is_approximate: true,
@@ -159,22 +159,22 @@ mod tests {
         .await
         .unwrap();
         let expected = vec![
-            ExtendedDateValue {
+            ExtendedDateValueString {
                 date: NaiveDate::from_str("2022-11-09").unwrap(),
                 value: "1".into(),
                 is_approximate: false,
             },
-            ExtendedDateValue {
+            ExtendedDateValueString {
                 date: NaiveDate::from_str("2022-11-10").unwrap(),
                 value: "3".into(),
                 is_approximate: false,
             },
-            ExtendedDateValue {
+            ExtendedDateValueString {
                 date: NaiveDate::from_str("2022-11-11").unwrap(),
                 value: "4".into(),
                 is_approximate: false,
             },
-            ExtendedDateValue {
+            ExtendedDateValueString {
                 date: NaiveDate::from_str("2022-11-12").unwrap(),
                 value: "1".into(),
                 is_approximate: true,
@@ -216,22 +216,22 @@ mod tests {
         .await
         .unwrap();
         let expected = vec![
-            ExtendedDateValue {
+            ExtendedDateValueString {
                 date: NaiveDate::from_str("2022-11-09").unwrap(),
                 value: "1".into(),
                 is_approximate: false,
             },
-            ExtendedDateValue {
+            ExtendedDateValueString {
                 date: NaiveDate::from_str("2022-11-10").unwrap(),
                 value: "3".into(),
                 is_approximate: false,
             },
-            ExtendedDateValue {
+            ExtendedDateValueString {
                 date: NaiveDate::from_str("2022-11-11").unwrap(),
                 value: "4".into(),
                 is_approximate: false,
             },
-            ExtendedDateValue {
+            ExtendedDateValueString {
                 date: NaiveDate::from_str("2022-11-12").unwrap(),
                 value: "1".into(),
                 is_approximate: false,
@@ -310,22 +310,22 @@ mod tests {
         .await
         .unwrap();
         let expected = vec![
-            ExtendedDateValue {
+            ExtendedDateValueString {
                 date: NaiveDate::from_str("2022-11-09").unwrap(),
                 value: "2".into(),
                 is_approximate: false,
             },
-            ExtendedDateValue {
+            ExtendedDateValueString {
                 date: NaiveDate::from_str("2022-11-10").unwrap(),
                 value: "4".into(),
                 is_approximate: false,
             },
-            ExtendedDateValue {
+            ExtendedDateValueString {
                 date: NaiveDate::from_str("2022-11-11").unwrap(),
                 value: "5".into(),
                 is_approximate: false,
             },
-            ExtendedDateValue {
+            ExtendedDateValueString {
                 date: NaiveDate::from_str("2022-11-12").unwrap(),
                 value: "1".into(),
                 is_approximate: true,
