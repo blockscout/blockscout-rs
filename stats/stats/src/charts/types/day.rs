@@ -3,28 +3,22 @@ use entity::chart_data;
 
 use sea_orm::{prelude::*, FromQueryResult, Set};
 
-pub trait DateValue {
-    type Value;
-    fn get_parts(&self) -> (&NaiveDate, &Self::Value);
-    fn into_parts(self) -> (NaiveDate, Self::Value);
-    fn from_parts(date: NaiveDate, value: Self::Value) -> Self;
-}
+use super::{TimespanValue, ZeroTimespanValue};
 
-pub trait ZeroDateValue: DateValue + Sized {
-    fn with_zero_value(date: NaiveDate) -> Self;
+// todo: remove the traits probably
 
-    fn relevant_or_zero(self, current_date: NaiveDate) -> Self {
-        if self.get_parts().0 < &current_date {
-            Self::with_zero_value(current_date)
-        } else {
-            self
-        }
-    }
-}
+pub trait DateValue: TimespanValue<Timespan = NaiveDate> {}
+
+impl<DV> DateValue for DV where DV: TimespanValue<Timespan = NaiveDate> {}
+
+pub trait ZeroDateValue: ZeroTimespanValue<Timespan = NaiveDate> {}
+
+impl<DV> ZeroDateValue for DV where DV: ZeroTimespanValue<Timespan = NaiveDate> {}
 
 macro_rules! impl_date_value_decomposition {
     ($name: ident, $val_type:ty) => {
-        impl DateValue for $name {
+        impl TimespanValue for $name {
+            type Timespan = NaiveDate;
             type Value = $val_type;
             fn get_parts(&self) -> (&NaiveDate, &Self::Value) {
                 (&self.date, &self.value)
@@ -47,7 +41,7 @@ pub struct DateValueString {
 
 impl_date_value_decomposition!(DateValueString, String);
 
-impl ZeroDateValue for DateValueString {
+impl ZeroTimespanValue for DateValueString {
     fn with_zero_value(date: NaiveDate) -> Self {
         Self {
             date,
@@ -99,19 +93,19 @@ create_date_value_with!(DateValueInt, i64);
 create_date_value_with!(DateValueDouble, f64);
 create_date_value_with!(DateValueDecimal, Decimal);
 
-impl ZeroDateValue for DateValueInt {
+impl ZeroTimespanValue for DateValueInt {
     fn with_zero_value(date: NaiveDate) -> Self {
         Self { date, value: 0 }
     }
 }
 
-impl ZeroDateValue for DateValueDouble {
+impl ZeroTimespanValue for DateValueDouble {
     fn with_zero_value(date: NaiveDate) -> Self {
         Self { date, value: 0.0 }
     }
 }
 
-impl ZeroDateValue for DateValueDecimal {
+impl ZeroTimespanValue for DateValueDecimal {
     fn with_zero_value(date: NaiveDate) -> Self {
         Self {
             date,

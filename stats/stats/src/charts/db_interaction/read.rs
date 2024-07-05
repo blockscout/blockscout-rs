@@ -1,6 +1,7 @@
 use crate::{
-    charts::{chart::ChartMetadata, types::ZeroDateValue},
+    charts::chart::ChartMetadata,
     missing_date::{fill_and_filter_chart, fit_into_range},
+    types::ZeroTimespanValue,
     utils::exclusive_datetime_range_to_inclusive,
     ChartProperties, DateValueString, ExtendedDateValueString, MissingDatePolicy, UpdateError,
 };

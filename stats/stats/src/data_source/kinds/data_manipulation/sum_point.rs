@@ -16,6 +16,7 @@ use crate::{
     charts::types::DateValue,
     data_processing::sum,
     data_source::{source::DataSource, UpdateContext},
+    types::TimespanValue,
     UpdateError,
 };
 
@@ -63,7 +64,7 @@ where
         // can be updated to work similarly to cumulative
         let full_data = D::query_data(cx, None, dependency_data_fetch_timer).await?;
         tracing::debug!(points_len = full_data.len(), "calculating sum");
-        let zero = <DV as DateValue>::Value::zero();
+        let zero = <DV as TimespanValue>::Value::zero();
         sum::<DV>(&full_data, zero)
     }
 }

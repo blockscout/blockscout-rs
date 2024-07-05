@@ -1,7 +1,6 @@
 use std::{marker::PhantomData, ops::Range};
 
 use crate::{
-    charts::types::DateValue,
     data_source::{
         kinds::{
             local_db::DirectPointLocalDbChartSource,
@@ -10,6 +9,7 @@ use crate::{
         types::Get,
         UpdateContext,
     },
+    types::TimespanValue,
     ChartProperties, DateValueString, Named, UpdateError,
 };
 

@@ -9,7 +9,7 @@ use sea_orm::DatabaseConnection;
 use crate::{
     charts::types::DateValue,
     data_source::kinds::local_db::parameters::update::batching::parameter_traits::BatchStepBehaviour,
-    ChartProperties, DateValueString, UpdateError,
+    types::TimespanValue, ChartProperties, DateValueString, UpdateError,
 };
 
 use super::PassVecStep;

@@ -1,8 +1,8 @@
 use std::{fmt::Display, marker::PhantomData, str::FromStr};
 
 use crate::{
-    charts::types::DateValue,
-    data_source::kinds::data_manipulation::map::MapFunction, DateValueString, UpdateError,
+    charts::types::DateValue, data_source::kinds::data_manipulation::map::MapFunction,
+    types::TimespanValue, DateValueString, UpdateError,
 };
 
 use super::Map;

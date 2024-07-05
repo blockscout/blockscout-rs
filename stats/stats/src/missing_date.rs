@@ -2,7 +2,8 @@
 use std::ops::RangeInclusive;
 
 use crate::{
-    charts::types::{DateValue, ZeroDateValue},
+    charts::types::DateValue,
+    types::{TimespanValue, ZeroTimespanValue},
     DateValueString, MissingDatePolicy, ReadError,
 };
 use chrono::{Days, Duration, NaiveDate};

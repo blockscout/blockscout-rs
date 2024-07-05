@@ -33,7 +33,9 @@ use crate::{
         ChartProperties, Named,
     },
     data_source::{DataSource, UpdateContext},
-    metrics, UpdateError,
+    metrics,
+    types::DateValue,
+    UpdateError,
 };
 
 use super::auxiliary::PartialCumulative;
@@ -131,6 +133,28 @@ pub type DirectPointLocalDbChartSource<Dependency, C> = LocalDbChartSource<
     DefaultQueryLast<C>,
     C,
 >;
+
+pub struct WeeklyLocalDbChartSource<DailyLocalDbChartSource, AggregationBehaviour>(
+    PhantomData<(DailyLocalDbChartSource, AggregationBehaviour)>,
+)
+where
+    DailyLocalDbChartSource: DataSource,
+    DailyLocalDbChartSource::Output: DateValue;
+
+pub type MonthlyLocalDbChartSource<DailySource, AggregationBehaviour> =
+    (DailySource, AggregationBehaviour);
+
+pub type YearlyLocalDbChartSource<MonthlySource, AggregationBehaviour> =
+    (MonthlySource, AggregationBehaviour);
+
+// pub type
+
+// pub type AverageLocalDbChartSource<DailyAverageSource, DayWeightSource, C> =
+//     (DailyAverageSource, DayWeightSource, C);
+
+// pub type CumulativeLocalDbChartSource<DailyGrowthSource, C> = (DailyGrowthSource, C);
+
+// pub type DeltaLocalDbChartSource<DailyDeltaSource, C> = (DailyDeltaSource, C);
 
 impl<MainDep, ResolutionDep, Create, Update, Query, ChartProps>
     LocalDbChartSource<MainDep, ResolutionDep, Create, Update, Query, ChartProps>
