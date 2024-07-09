@@ -36,6 +36,16 @@ pub trait Get<T> {
     fn get() -> T;
 }
 
+/// Usage:
+/// ```
+/// # use stats::gettable_const;
+/// # use crate::stats::data_source::types::Get;
+/// gettable_const!(ConstName: u64 = 123);
+///
+/// fn get_value_example() -> u64 {
+///     ConstName::get()
+/// }
+/// ```
 #[macro_export]
 macro_rules! gettable_const {
     ($name:ident: $type:ty = $value:expr) => {

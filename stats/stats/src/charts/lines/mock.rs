@@ -15,8 +15,9 @@ use chrono::{Duration, NaiveDate};
 use entity::sea_orm_active_enums::ChartType;
 use rand::{distributions::uniform::SampleUniform, rngs::StdRng, Rng, SeedableRng};
 use sea_orm::prelude::*;
-use std::{marker::PhantomData, ops::Range, str::FromStr};
+use std::{marker::PhantomData, ops::Range};
 
+/// non-inclusive range
 fn generate_intervals(mut start: NaiveDate, end: NaiveDate) -> Vec<NaiveDate> {
     let mut times = vec![];
     while start < end {
@@ -27,31 +28,33 @@ fn generate_intervals(mut start: NaiveDate, end: NaiveDate) -> Vec<NaiveDate> {
 }
 
 pub fn mocked_lines<T: SampleUniform + PartialOrd + Clone + ToString>(
-    range: Range<T>,
+    dates_range: Range<NaiveDate>,
+    values_range: Range<T>,
 ) -> Vec<DateValueString> {
     let mut rng = StdRng::seed_from_u64(222);
-    generate_intervals(
-        NaiveDate::from_str("2022-01-01").unwrap(),
-        NaiveDate::from_str("2022-04-01").unwrap(),
-    )
-    .into_iter()
-    .map(|date| {
-        let range = range.clone();
-        let value = rng.gen_range(range);
-        DateValueString {
-            date,
-            value: value.to_string(),
-        }
-    })
-    .collect()
+    generate_intervals(dates_range.start, dates_range.end)
+        .into_iter()
+        .map(|date| {
+            let range = values_range.clone();
+            let value = rng.gen_range(range);
+            DateValueString {
+                date,
+                value: value.to_string(),
+            }
+        })
+        .collect()
 }
 
 /// Mock remote source. Can only return values from `mocked_lines`, but respects query time
 /// to not include future data.
-pub struct MockLineRetrieve<ValueRange, Value, Policy>(PhantomData<(ValueRange, Value, Policy)>);
+pub struct MockLineRetrieve<DateRange, ValueRange, Value, Policy>(
+    PhantomData<(DateRange, ValueRange, Value, Policy)>,
+);
 
-impl<ValueRange, Value, Policy> QueryBehaviour for MockLineRetrieve<ValueRange, Value, Policy>
+impl<DateRange, ValueRange, Value, Policy> QueryBehaviour
+    for MockLineRetrieve<DateRange, ValueRange, Value, Policy>
 where
+    DateRange: Get<Range<NaiveDate>>,
     ValueRange: Get<Range<Value>>,
     Value: SampleUniform + PartialOrd + Clone + ToString + Send + Sync + 'static,
     Policy: Get<MissingDatePolicy>,
@@ -71,26 +74,26 @@ where
         if let Some(r) = range {
             date_range_end = date_range_end.min(r.end)
         }
-        let full_data = mocked_lines(ValueRange::get());
+        let full_data = mocked_lines(DateRange::get(), ValueRange::get());
         let data = fit_into_range(
             full_data,
             Some(date_range_start.date_naive()),
             Some(date_range_end.date_naive()),
             Policy::get(),
         );
+
         Ok(data)
     }
 }
 
-pub struct MockLineProperties<ValueRange, Value, Policy>(PhantomData<(ValueRange, Value, Policy)>);
+pub struct MockLineProperties<Value, Policy>(PhantomData<(Value, Policy)>);
 
-impl<ValueRange, Value, Policy> Named for MockLineProperties<ValueRange, Value, Policy> {
+impl<Value, Policy> Named for MockLineProperties<Value, Policy> {
     const NAME: &'static str = "mockLine";
 }
 
-impl<ValueRange, Value, Policy> ChartProperties for MockLineProperties<ValueRange, Value, Policy>
+impl<Value, Policy> ChartProperties for MockLineProperties<Value, Policy>
 where
-    ValueRange: Sync,
     Value: Sync,
     Policy: Sync,
 {
@@ -99,10 +102,10 @@ where
     }
 }
 
-pub type MockRetrieve<ValueRange, Value, Policy> =
-    RemoteDatabaseSource<MockLineRetrieve<ValueRange, Value, Policy>>;
+pub type MockRetrieve<DateRange, ValueRange, Value, Policy> =
+    RemoteDatabaseSource<MockLineRetrieve<DateRange, ValueRange, Value, Policy>>;
 
-pub type MockLine<ValueRange, Value, Policy> = DirectVecLocalDbChartSource<
-    MockRetrieve<ValueRange, Value, Policy>,
-    MockLineProperties<ValueRange, Value, Policy>,
+pub type MockLine<DateRange, ValueRange, Value, Policy> = DirectVecLocalDbChartSource<
+    MockRetrieve<DateRange, ValueRange, Value, Policy>,
+    MockLineProperties<Value, Policy>,
 >;

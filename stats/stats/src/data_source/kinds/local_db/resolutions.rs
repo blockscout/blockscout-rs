@@ -225,3 +225,204 @@ fn weekly_average_from(
     );
     weekly_averages
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        data_source::kinds::data_manipulation::map::MapParseTo,
+        gettable_const,
+        lines::MockRetrieve,
+        tests::point_construction::{d, dt, v, v_double, v_int, week_of, week_v_double},
+        DateValueString, MissingDatePolicy,
+    };
+
+    use super::*;
+
+    use chrono::NaiveDate;
+    use itertools::Itertools;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn date_range_to_weeks_works() {
+        // weeks for this month are
+        // 8-14, 15-21, 22-28
+
+        assert_eq!(
+            date_range_to_weeks(
+                dt("2024-07-08T09:00:00").and_utc()..dt("2024-07-14T09:00:00").and_utc()
+            ),
+            week_of("2024-07-08")..=week_of("2024-07-08")
+        );
+        assert_eq!(
+            date_range_to_weeks(
+                dt("2024-07-08T09:00:00").and_utc()..dt("2024-07-14T23:59:59").and_utc()
+            ),
+            week_of("2024-07-08")..=week_of("2024-07-08")
+        );
+        assert_eq!(
+            date_range_to_weeks(
+                dt("2024-07-08T09:00:00").and_utc()..dt("2024-07-15T00:00:00").and_utc()
+            ),
+            week_of("2024-07-08")..=week_of("2024-07-08")
+        );
+        assert_eq!(
+            date_range_to_weeks(
+                dt("1995-12-31T09:00:00").and_utc()..dt("1995-12-31T23:59:60").and_utc()
+            ),
+            week_of("1995-12-31")..=week_of("1995-12-31")
+        );
+        assert_eq!(
+            date_range_to_weeks(
+                dt("1995-12-31T09:00:00").and_utc()..dt("1996-01-01T00:00:00").and_utc()
+            ),
+            week_of("1995-12-31")..=week_of("1995-12-31")
+        );
+
+        assert_eq!(
+            date_range_to_weeks(
+                dt("2024-07-08T09:00:00").and_utc()..dt("2024-07-15T00:00:01").and_utc()
+            ),
+            week_of("2024-07-08")..=week_of("2024-07-15")
+        );
+        assert_eq!(
+            date_range_to_weeks(
+                dt("1995-12-31T09:00:00").and_utc()..dt("1996-01-01T00:00:01").and_utc()
+            ),
+            week_of("1995-12-31")..=week_of("1996-01-01")
+        );
+    }
+
+    #[test]
+    fn zip_same_timespan_works() {
+        assert_eq!(
+            zip_same_timespan::<DateValueInt, DateValueString>(vec![], vec![]),
+            vec![]
+        );
+        assert_eq!(
+            zip_same_timespan::<DateValueInt, _>(
+                vec![],
+                vec![
+                    v("2024-07-05", "5R"),
+                    v("2024-07-07", "7R"),
+                    v("2024-07-08", "8R"),
+                    v("2024-07-11", "11R"),
+                ]
+            ),
+            vec![
+                (d("2024-07-05"), EitherOrBoth::Right("5R".to_string())),
+                (d("2024-07-07"), EitherOrBoth::Right("7R".to_string())),
+                (d("2024-07-08"), EitherOrBoth::Right("8R".to_string())),
+                (d("2024-07-11"), EitherOrBoth::Right("11R".to_string())),
+            ]
+        );
+        assert_eq!(
+            zip_same_timespan::<_, DateValueInt>(
+                vec![
+                    v("2024-07-05", "5L"),
+                    v("2024-07-07", "7L"),
+                    v("2024-07-08", "8L"),
+                    v("2024-07-11", "11L"),
+                ],
+                vec![]
+            ),
+            vec![
+                (d("2024-07-05"), EitherOrBoth::Left("5L".to_string())),
+                (d("2024-07-07"), EitherOrBoth::Left("7L".to_string())),
+                (d("2024-07-08"), EitherOrBoth::Left("8L".to_string())),
+                (d("2024-07-11"), EitherOrBoth::Left("11L".to_string())),
+            ]
+        );
+        assert_eq!(
+            zip_same_timespan(
+                vec![
+                    v("2024-07-08", "8L"),
+                    v("2024-07-09", "9L"),
+                    v("2024-07-10", "10L"),
+                ],
+                vec![
+                    v("2024-07-05", "5R"),
+                    v("2024-07-07", "7R"),
+                    v("2024-07-08", "8R"),
+                    v("2024-07-11", "11R"),
+                ]
+            ),
+            vec![
+                (d("2024-07-05"), EitherOrBoth::Right("5R".to_string())),
+                (d("2024-07-07"), EitherOrBoth::Right("7R".to_string())),
+                (
+                    d("2024-07-08"),
+                    EitherOrBoth::Both("8L".to_string(), "8R".to_string())
+                ),
+                (d("2024-07-09"), EitherOrBoth::Left("9L".to_string())),
+                (d("2024-07-10"), EitherOrBoth::Left("10L".to_string())),
+                (d("2024-07-11"), EitherOrBoth::Right("11R".to_string())),
+            ]
+        )
+    }
+
+    #[test]
+    fn weekly_average_from_works() {
+        // weeks for this month are
+        // 8-14, 15-21, 22-28
+
+        let week_1_average = (5.0 * 100.0 + 34.2 * 2.0 + 10.3 * 12.0) / (100.0 + 2.0 + 12.0);
+        assert_eq!(
+            weekly_average_from(
+                vec![
+                    v_double("2024-07-08", 5.0),
+                    v_double("2024-07-10", 34.2),
+                    v_double("2024-07-14", 10.3),
+                    v_double("2024-07-17", 5.0)
+                ],
+                vec![
+                    v_int("2024-07-08", 100),
+                    v_int("2024-07-10", 2),
+                    v_int("2024-07-14", 12),
+                    v_int("2024-07-17", 5)
+                ]
+            ),
+            vec![
+                week_v_double("2024-07-08", week_1_average),
+                week_v_double("2024-07-15", 5.0)
+            ],
+        )
+    }
+
+    #[tokio::test]
+    async fn weekly_average_source_queries_correct_range() {
+        gettable_const!(Dates: Range<NaiveDate> = d("2024-07-01")..d("2024-07-31"));
+        gettable_const!(RandomAveragesRange: Range<f64> = 1.0..5.0);
+        gettable_const!(RandomWeightsRange: Range<u64> = 1..5);
+        gettable_const!(Policy: MissingDatePolicy = MissingDatePolicy::FillZero);
+
+        type TestedAverageSource = WeeklyAverage<
+            MapParseTo<MockRetrieve<Dates, RandomAveragesRange, f64, Policy>, DateValueDouble>,
+            MapParseTo<MockRetrieve<Dates, RandomWeightsRange, u64, Policy>, DateValueInt>,
+        >;
+
+        // weeks for this month are
+        // 8-14, 15-21, 22-28
+
+        // db is not used in mock
+        let db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
+        let output = TestedAverageSource::query_data(
+            &UpdateContext {
+                db: &db,
+                blockscout: &db,
+                time: dt("2024-07-15T09:00:00").and_utc(),
+                force_full: false,
+            },
+            Some(dt("2024-07-08T09:00:00").and_utc()..dt("2024-07-15T00:00:01").and_utc()),
+            &mut AggregateTimer::new(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            output
+                .into_iter()
+                .map(|week_value| week_value.into_parts().0)
+                .collect_vec(),
+            vec![week_of("2024-07-08"), week_of("2024-07-15"),]
+        );
+    }
+}

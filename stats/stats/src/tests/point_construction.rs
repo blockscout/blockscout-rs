@@ -5,8 +5,16 @@ use rust_decimal::Decimal;
 
 use crate::{
     charts::types::{DateValueDecimal, DateValueInt},
+    types::{
+        week::{Week, WeekValueDouble},
+        DateValueDouble,
+    },
     DateValueString,
 };
+
+pub fn week_of(date: &str) -> Week {
+    Week::new(d(date))
+}
 
 pub fn d(date: &str) -> NaiveDate {
     date.parse().unwrap()
@@ -33,6 +41,20 @@ pub fn v_int(date: &str, value: i64) -> DateValueInt {
 pub fn v_decimal(date: &str, value: Decimal) -> DateValueDecimal {
     DateValueDecimal {
         date: d(date),
+        value,
+    }
+}
+
+pub fn v_double(date: &str, value: f64) -> DateValueDouble {
+    DateValueDouble {
+        date: d(date),
+        value,
+    }
+}
+
+pub fn week_v_double(week_of_date: &str, value: f64) -> WeekValueDouble {
+    WeekValueDouble {
+        week: week_of(week_of_date),
         value,
     }
 }

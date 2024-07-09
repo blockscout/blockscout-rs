@@ -200,3 +200,67 @@ impl ZeroTimespanValue for WeekValueDecimal {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use itertools::Itertools;
+
+    use crate::tests::point_construction::week_of;
+
+    use super::*;
+
+    #[test]
+    fn week_eq_works() {
+        // weeks for this month are
+        // 8-14, 15-21
+
+        assert_eq!(week_of("2024-07-08"), week_of("2024-07-08"));
+        assert_eq!(week_of("2024-07-08"), week_of("2024-07-09"));
+        assert_eq!(week_of("2024-07-08"), week_of("2024-07-14"));
+
+        assert_eq!(week_of("2024-07-15"), week_of("2024-07-15"));
+        assert_eq!(week_of("2024-07-15"), week_of("2024-07-21"));
+
+        assert_ne!(week_of("2024-07-14"), week_of("2024-07-15"));
+    }
+
+    #[test]
+    fn week_iterator_works() {
+        // weeks for this month are
+        // 8-14, 15-21, 22-28
+
+        for range in [
+            week_of("2024-07-08")..week_of("2024-07-22"),
+            week_of("2024-07-08")..week_of("2024-07-28"),
+            week_of("2024-07-14")..week_of("2024-07-28"),
+        ] {
+            assert_eq!(
+                Week::range_into_iter(range.clone()).collect_vec(),
+                vec![week_of("2024-07-08"), week_of("2024-07-15")]
+            );
+            assert_eq!(
+                Week::range_inclusive_into_iter(range.start..=range.end).collect_vec(),
+                vec![
+                    week_of("2024-07-08"),
+                    week_of("2024-07-15"),
+                    week_of("2024-07-22")
+                ]
+            );
+        }
+
+        for range in [
+            week_of("2024-07-08")..week_of("2024-07-15"),
+            week_of("2024-07-08")..week_of("2024-07-21"),
+            week_of("2024-07-14")..week_of("2024-07-21"),
+        ] {
+            assert_eq!(
+                Week::range_into_iter(range.clone()).collect_vec(),
+                vec![week_of("2024-07-08")]
+            );
+            assert_eq!(
+                Week::range_inclusive_into_iter(range.start..=range.end).collect_vec(),
+                vec![week_of("2024-07-08"), week_of("2024-07-15")]
+            );
+        }
+    }
+}
