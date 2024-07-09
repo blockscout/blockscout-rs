@@ -1,6 +1,6 @@
-use std::ops::RangeInclusive;
+use std::ops::{Range, RangeInclusive};
 
-use chrono::{NaiveDate, NaiveWeek, Weekday};
+use chrono::{Days, NaiveDate, NaiveWeek, Weekday};
 use entity::chart_data;
 use rust_decimal::Decimal;
 use sea_orm::{FromQueryResult, Set, TryGetable};
@@ -9,10 +9,15 @@ use super::{TimespanValue, ZeroTimespanValue};
 
 pub const WEEK_START: Weekday = Weekday::Mon;
 
-#[derive(Debug)]
 pub struct Week(NaiveWeek);
 
-// `NaiveWeek` doesn't implement commong traits, we have to do it by hand
+impl std::fmt::Debug for Week {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Week").field(&self.days()).finish()
+    }
+}
+
+// `NaiveWeek` doesn't implement common traits, we have to do it by hand
 
 impl PartialEq for Week {
     fn eq(&self, other: &Self) -> bool {
@@ -56,6 +61,44 @@ impl Week {
 
     pub fn days(&self) -> RangeInclusive<NaiveDate> {
         self.0.days()
+    }
+
+    pub fn saturating_next_week(&self) -> Week {
+        let next_week_first_day = self
+            .0
+            .last_day()
+            .checked_add_days(Days::new(1))
+            .unwrap_or(NaiveDate::MAX);
+        Week::new(next_week_first_day)
+    }
+
+    // iterating over ranges with custom inner types is nightly-only
+    // https://users.rust-lang.org/t/implement-trait-step-in-1-76-0/108204/8
+    pub fn range_into_iter(range: Range<Week>) -> WeekRangeIterator {
+        WeekRangeIterator(range)
+    }
+
+    // iterating over ranges with custom inner types is nightly-only
+    // https://users.rust-lang.org/t/implement-trait-step-in-1-76-0/108204/8
+    pub fn range_inclusive_into_iter(range: RangeInclusive<Week>) -> WeekRangeIterator {
+        let (start, end) = range.into_inner();
+        WeekRangeIterator(start..(&end).saturating_next_week())
+    }
+}
+
+pub struct WeekRangeIterator(Range<Week>);
+
+impl Iterator for WeekRangeIterator {
+    type Item = Week;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.0.is_empty() {
+            None
+        } else {
+            let next = self.0.start.clone();
+            self.0.start = next.saturating_next_week();
+            Some(next)
+        }
     }
 }
 

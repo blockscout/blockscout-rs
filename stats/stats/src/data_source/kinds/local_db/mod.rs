@@ -33,15 +33,14 @@ use crate::{
         ChartProperties, Named,
     },
     data_source::{DataSource, UpdateContext},
-    metrics,
-    types::DateValue,
-    UpdateError,
+    metrics, UpdateError,
 };
 
 use super::auxiliary::PartialCumulative;
 
 pub mod parameter_traits;
 pub mod parameters;
+pub mod resolutions;
 
 /// The source is configurable in many aspects. In particular,
 /// - dependencies
@@ -133,13 +132,6 @@ pub type DirectPointLocalDbChartSource<Dependency, C> = LocalDbChartSource<
     DefaultQueryLast<C>,
     C,
 >;
-
-pub struct WeeklyLocalDbChartSource<DailyLocalDbChartSource, AggregationBehaviour>(
-    PhantomData<(DailyLocalDbChartSource, AggregationBehaviour)>,
-)
-where
-    DailyLocalDbChartSource: DataSource,
-    DailyLocalDbChartSource::Output: DateValue;
 
 pub type MonthlyLocalDbChartSource<DailySource, AggregationBehaviour> =
     (DailySource, AggregationBehaviour);
