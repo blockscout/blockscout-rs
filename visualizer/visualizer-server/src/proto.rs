@@ -6,6 +6,6 @@ pub use visualizer_proto::{
     google::protobuf::FieldMask,
 };
 
-pub use visualizer_proto::grpc::health::v1::{
+pub use blockscout_service_health::grpc::health::v1::{
     health_actix, health_check_response, health_server, HealthCheckRequest, HealthCheckResponse,
 };

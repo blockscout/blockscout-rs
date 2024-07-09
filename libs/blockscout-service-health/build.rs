@@ -14,9 +14,13 @@ fn compile(
         .compile_well_known_types()
         .protoc_arg("--openapiv2_out=swagger")
         .protoc_arg("--openapiv2_opt")
-        .protoc_arg("grpc_api_configuration=proto/api_config_http.yaml,output_format=yaml,allow_merge=true,merge_file_name=visualizer")
+        .protoc_arg("grpc_api_configuration=proto/api_config_http.yaml,output_format=yaml,allow_merge=true,merge_file_name=health")
         .bytes(["."])
-        .type_attribute(".", "#[actix_prost_macros::serde]");
+        .type_attribute(".", "#[actix_prost_macros::serde]")
+        .field_attribute(
+            ".grpc.health.v1.HealthCheckRequest.service",
+            "#[serde(default)]"
+        );
     config.compile_protos(protos, includes)?;
     Ok(())
 }
@@ -31,6 +35,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         tonic_build::configure().service_generator(),
         Box::new(ActixGenerator::new("proto/api_config_http.yaml").unwrap()),
     ]));
-    compile(&["proto/visualizer.proto"], &["../../proto", "proto"], gens)?;
+    compile(
+        &["../../proto/health/v1/health.proto"],
+        &["../../proto", "proto"],
+        gens,
+    )?;
     Ok(())
 }
