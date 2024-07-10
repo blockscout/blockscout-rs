@@ -450,13 +450,9 @@ definitions:
       contractName:
         type: string
       zkCompiler:
-        type: string
-      zkCompilerVersion:
-        type: string
+        $ref: '#/definitions/solidityVerificationSuccessCompiler'
       evmCompiler:
-        type: string
-      evmCompilerVersion:
-        type: string
+        $ref: '#/definitions/solidityVerificationSuccessCompiler'
       language:
         type: string
       compilerSettings:
@@ -475,6 +471,13 @@ definitions:
         $ref: '#/definitions/solidityMatch'
       runtimeMatch:
         $ref: '#/definitions/solidityMatch'
+  solidityVerificationSuccessCompiler:
+    type: object
+    properties:
+      compiler:
+        type: string
+      version:
+        type: string
   solidityVerifyStandardJsonRequest:
     type: object
     properties:
