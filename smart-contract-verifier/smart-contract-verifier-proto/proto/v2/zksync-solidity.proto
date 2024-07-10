@@ -27,16 +27,22 @@ message VerificationFailure {
 }
 
 message VerificationSuccess {
+  string file_name = 1;
+  string contract_name = 2;
+
   message Compiler {
     string compiler = 1;
     string version = 2;
   }
-
-  string file_name = 1;
-  string contract_name = 2;
   Compiler zk_compiler = 3;
   Compiler evm_compiler = 4;
-  string language = 5;
+
+  enum Language {
+    LANGUAGE_UNKNOWN = 0;
+    SOLIDITY = 1;
+  }
+  Language language = 5;
+
   string compiler_settings = 6;
   map <string, string> sources = 7;
   string compilation_artifacts = 8;

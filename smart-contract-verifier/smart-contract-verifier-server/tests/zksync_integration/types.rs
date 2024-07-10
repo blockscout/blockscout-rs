@@ -102,7 +102,7 @@ impl TestCase for StandardJson {
                 Input::deserialize(&self.input).expect("expected language field deserialization");
             assert_eq!(
                 input.language.to_lowercase(),
-                success.language.to_lowercase(),
+                success.language().as_str_name().to_lowercase(),
                 "invalid language"
             );
         }

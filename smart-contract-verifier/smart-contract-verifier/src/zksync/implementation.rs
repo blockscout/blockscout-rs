@@ -23,6 +23,7 @@ use verification_common::verifier_alliance::{
     CompilationArtifacts, CreationCodeArtifacts, Match, MatchBuilder, RuntimeCodeArtifacts,
     ToCompilationArtifacts, ToCreationCodeArtifacts, ToRuntimeCodeArtifacts,
 };
+use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::zksync::solidity::verification_success::Language;
 
 #[derive(Clone, Debug)]
 pub struct VerificationRequest {
@@ -56,7 +57,7 @@ pub struct VerificationResult {
     pub zk_compiler_version: CompactVersion,
     pub evm_compiler: String,
     pub evm_compiler_version: DetailedVersion,
-    pub language: String,
+    pub language: Language,
     pub compiler_settings: Value,
     pub sources: BTreeMap<String, String>,
     pub successes: Vec<VerificationSuccess>,
@@ -149,7 +150,7 @@ pub async fn verify(
         zk_compiler_version,
         evm_compiler: "solc".to_string(),
         evm_compiler_version,
-        language: "solidity".to_string(),
+        language: Language::Solidity,
         compiler_settings: serde_json::to_value(compiler_input.settings)
             .context("compiler settings serialization")?,
         sources,

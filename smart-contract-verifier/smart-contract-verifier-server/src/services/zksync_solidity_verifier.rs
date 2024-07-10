@@ -120,7 +120,7 @@ fn process_verification_result(
                         compiler: result.evm_compiler,
                         version: result.evm_compiler_version.to_string(),
                     }),
-                    language: result.language,
+                    language: result.language.into(),
                     compiler_settings: result.compiler_settings.to_string(),
                     sources: result.sources,
                     compilation_artifacts: serde_json::Value::from(success.compilation_artifacts)

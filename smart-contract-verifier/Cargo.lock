@@ -4944,6 +4944,7 @@ dependencies = [
  "serde_json",
  "serde_with 2.3.3",
  "sha2",
+ "smart-contract-verifier-proto",
  "solidity-metadata",
  "sourcify",
  "sscanf",

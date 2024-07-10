@@ -454,7 +454,7 @@ definitions:
       evmCompiler:
         $ref: '#/definitions/solidityVerificationSuccessCompiler'
       language:
-        type: string
+        $ref: '#/definitions/solidityVerificationSuccessLanguage'
       compilerSettings:
         type: string
       sources:
@@ -478,6 +478,12 @@ definitions:
         type: string
       version:
         type: string
+  solidityVerificationSuccessLanguage:
+    type: string
+    enum:
+      - LANGUAGE_UNKNOWN
+      - SOLIDITY
+    default: LANGUAGE_UNKNOWN
   solidityVerifyStandardJsonRequest:
     type: object
     properties:
