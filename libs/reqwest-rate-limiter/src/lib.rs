@@ -49,7 +49,7 @@ where
     async fn handle(
         &self,
         req: Request,
-        extensions: &mut task_local_extensions::Extensions,
+        extensions: &mut http::Extensions,
         next: Next<'_>,
     ) -> reqwest_middleware::Result<Response> {
         self.rate_limiter.until_ready().await;
