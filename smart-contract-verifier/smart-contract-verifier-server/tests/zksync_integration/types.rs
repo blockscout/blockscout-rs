@@ -72,14 +72,24 @@ impl TestCase for StandardJson {
             self.contract_name, success.contract_name,
             "invalid contract name"
         );
-        assert_eq!("zksolc", success.zk_compiler, "invalid zk-compiler");
         assert_eq!(
-            self.zk_compiler_version, success.zk_compiler_version,
+            "zksolc",
+            success.zk_compiler.as_ref().unwrap().compiler,
+            "invalid zk-compiler"
+        );
+        assert_eq!(
+            self.zk_compiler_version,
+            success.zk_compiler.as_ref().unwrap().version,
             "invalid zk-compiler version"
         );
-        assert_eq!("solc", success.evm_compiler, "invalid evm-compiler");
         assert_eq!(
-            self.evm_compiler_version, success.evm_compiler_version,
+            "solc",
+            success.evm_compiler.as_ref().unwrap().compiler,
+            "invalid evm-compiler"
+        );
+        assert_eq!(
+            self.evm_compiler_version,
+            success.evm_compiler.as_ref().unwrap().version,
             "invalid evm-compiler version"
         );
 
@@ -92,7 +102,7 @@ impl TestCase for StandardJson {
                 Input::deserialize(&self.input).expect("expected language field deserialization");
             assert_eq!(
                 input.language.to_lowercase(),
-                success.language.to_lowercase(),
+                success.language().as_str_name().to_lowercase(),
                 "invalid language"
             );
         }

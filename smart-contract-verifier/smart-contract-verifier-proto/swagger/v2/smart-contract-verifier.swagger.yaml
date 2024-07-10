@@ -450,15 +450,11 @@ definitions:
       contractName:
         type: string
       zkCompiler:
-        type: string
-      zkCompilerVersion:
-        type: string
+        $ref: '#/definitions/solidityVerificationSuccessCompiler'
       evmCompiler:
-        type: string
-      evmCompilerVersion:
-        type: string
+        $ref: '#/definitions/solidityVerificationSuccessCompiler'
       language:
-        type: string
+        $ref: '#/definitions/solidityVerificationSuccessLanguage'
       compilerSettings:
         type: string
       sources:
@@ -475,6 +471,19 @@ definitions:
         $ref: '#/definitions/solidityMatch'
       runtimeMatch:
         $ref: '#/definitions/solidityMatch'
+  solidityVerificationSuccessCompiler:
+    type: object
+    properties:
+      compiler:
+        type: string
+      version:
+        type: string
+  solidityVerificationSuccessLanguage:
+    type: string
+    enum:
+      - LANGUAGE_UNKNOWN
+      - SOLIDITY
+    default: LANGUAGE_UNKNOWN
   solidityVerifyStandardJsonRequest:
     type: object
     properties:

@@ -1,8 +1,9 @@
 use crate::{
     proto::zksync::solidity::{
-        verify_response, zk_sync_solidity_verifier_server::ZkSyncSolidityVerifier,
-        CompilationFailure, ListCompilersRequest, ListCompilersResponse, VerificationFailure,
-        VerificationSuccess, VerifyResponse, VerifyStandardJsonRequest,
+        verification_success, verify_response,
+        zk_sync_solidity_verifier_server::ZkSyncSolidityVerifier, CompilationFailure,
+        ListCompilersRequest, ListCompilersResponse, VerificationFailure, VerificationSuccess,
+        VerifyResponse, VerifyStandardJsonRequest,
     },
     services::common,
     settings::ZksyncSoliditySettings,
@@ -111,11 +112,15 @@ fn process_verification_result(
                 let proto_success = VerificationSuccess {
                     file_name: success.file_path,
                     contract_name: success.contract_name,
-                    zk_compiler: result.zk_compiler,
-                    zk_compiler_version: result.zk_compiler_version.to_string(),
-                    evm_compiler: result.evm_compiler,
-                    evm_compiler_version: result.evm_compiler_version.to_string(),
-                    language: result.language,
+                    zk_compiler: Some(verification_success::Compiler {
+                        compiler: result.zk_compiler,
+                        version: result.zk_compiler_version.to_string(),
+                    }),
+                    evm_compiler: Some(verification_success::Compiler {
+                        compiler: result.evm_compiler,
+                        version: result.evm_compiler_version.to_string(),
+                    }),
+                    language: result.language.into(),
                     compiler_settings: result.compiler_settings.to_string(),
                     sources: result.sources,
                     compilation_artifacts: serde_json::Value::from(success.compilation_artifacts)
