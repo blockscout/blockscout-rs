@@ -8,16 +8,23 @@ pub type DefaultRateLimiterMiddleware<
 > = RateLimiterMiddleware<state::direct::NotKeyed, state::InMemoryState, clock::DefaultClock, MW>;
 
 impl DefaultRateLimiterMiddleware {
+    /// Default rate limiter splits the given period evenly between quotas
+    /// and allows only 1 request per the cell.
+    const BURST_SIZE: NonZeroU32 = unsafe { NonZeroU32::new_unchecked(1) };
+
     pub fn per_second(max_burst: NonZeroU32) -> Self {
-        RateLimiterMiddleware::new(RateLimiter::direct(governor::Quota::per_second(max_burst)))
+        let quota = governor::Quota::per_second(max_burst).allow_burst(Self::BURST_SIZE);
+        RateLimiterMiddleware::new(RateLimiter::direct(quota))
     }
 
     pub fn per_minute(max_burst: NonZeroU32) -> Self {
-        RateLimiterMiddleware::new(RateLimiter::direct(governor::Quota::per_minute(max_burst)))
+        let quota = governor::Quota::per_minute(max_burst).allow_burst(Self::BURST_SIZE);
+        RateLimiterMiddleware::new(RateLimiter::direct(quota))
     }
 
     pub fn per_hour(max_burst: NonZeroU32) -> Self {
-        RateLimiterMiddleware::new(RateLimiter::direct(governor::Quota::per_hour(max_burst)))
+        let quota = governor::Quota::per_hour(max_burst).allow_burst(Self::BURST_SIZE);
+        RateLimiterMiddleware::new(RateLimiter::direct(quota))
     }
 }
 
