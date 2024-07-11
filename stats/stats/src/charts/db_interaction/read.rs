@@ -1,9 +1,10 @@
 use crate::{
     charts::chart::ChartMetadata,
+    data_source::kinds::local_db::parameter_traits::QueryBehaviour,
     missing_date::{fill_and_filter_chart, fit_into_range},
-    types::ZeroTimespanValue,
+    types::{TimespanValue, ZeroTimespanValue},
     utils::exclusive_datetime_range_to_inclusive,
-    ChartProperties, DateValueString, ExtendedDateValueString, MissingDatePolicy, UpdateError,
+    DateValueString, ExtendedDateValueString, MissingDatePolicy, Named, UpdateError,
 };
 
 use blockscout_db::entity::blocks;
@@ -384,17 +385,52 @@ struct SyncInfo {
 
 /// Get last 'finalized' row (for which no recomputations needed).
 ///
-/// Retrieves `offset`th latest data point from DB, if any.
-/// In case of inconsistencies or set `force_full`, also returns `None`.
-pub async fn last_accurate_point<C>(
+/// Retrieves data for `(offset+1)`th latest timespan, if any.
+/// In case of inconsistencies or set `force_full`, returns `None`.
+pub async fn last_accurate_point<ChartProps, TimespanString, Query>(
     chart_id: i32,
     min_blockscout_block: i64,
     db: &DatabaseConnection,
     force_full: bool,
     offset: Option<u64>,
+    policy: MissingDatePolicy,
+) -> Result<Option<TimespanString>, UpdateError>
+where
+    ChartProps: Named + ?Sized,
+    TimespanString: TimespanValue<Value = String>,
+    TimespanString::Timespan: From<NaiveDate>,
+    Query: QueryBehaviour,
+{
+    let Some(day_point) = last_accurate_point_raw::<ChartProps, Query>(
+        chart_id,
+        min_blockscout_block,
+        db,
+        force_full,
+        offset,
+        policy,
+    )
+    .await?
+    else {
+        return Ok(None);
+    };
+    let (day, value) = day_point.into_parts();
+    let timespan: TimespanString::Timespan = day.into();
+    Ok(Some(TimespanString::from_parts(timespan, value)))
+}
+
+/// `last_accurate_point` but without converting to the requested
+/// timespan
+async fn last_accurate_point_raw<C, Q>(
+    chart_id: i32,
+    min_blockscout_block: i64,
+    db: &DatabaseConnection,
+    force_full: bool,
+    offset: Option<u64>,
+    policy: MissingDatePolicy,
 ) -> Result<Option<DateValueString>, UpdateError>
 where
-    C: ChartProperties + ?Sized,
+    C: Named + ?Sized,
+    Q: QueryBehaviour,
 {
     let offset = offset.unwrap_or(0);
     let row = if force_full {
@@ -469,6 +505,8 @@ mod tests {
     use super::*;
     use crate::{
         counters::TotalBlocks,
+        data_source::kinds::local_db::parameters::DefaultQueryVec,
+        lines::{TxnsGrowth, VerifiedContractsGrowth},
         tests::{init_db::init_db, point_construction::d},
         Named,
     };
@@ -483,6 +521,7 @@ mod tests {
             chart_id: Set(chart_id),
             date: Set(NaiveDate::from_str(date).unwrap()),
             value: Set(value.to_string()),
+            min_blockscout_block: Set(Some(1)),
             ..Default::default()
         }
     }
@@ -513,6 +552,14 @@ mod tests {
                 )),
                 ..Default::default()
             },
+            charts::ActiveModel {
+                name: Set(TxnsGrowth::NAME.to_string()),
+                chart_type: Set(ChartType::Line),
+                last_updated_at: Set(Some(
+                    DateTime::parse_from_rfc3339("2022-11-30T08:08:08+00:00").unwrap(),
+                )),
+                ..Default::default()
+            },
         ])
         .exec(db)
         .await
@@ -526,6 +573,9 @@ mod tests {
             mock_chart_data(2, "2022-11-12", 200),
             mock_chart_data(3, "2022-11-13", 2),
             mock_chart_data(3, "2022-11-15", 3),
+            mock_chart_data(4, "2022-11-17", 123),
+            mock_chart_data(4, "2022-11-19", 323),
+            mock_chart_data(4, "2022-11-29", 1000),
         ])
         .exec(db)
         .await
@@ -627,6 +677,184 @@ mod tests {
                 },
             ],
             chart
+        );
+    }
+
+    async fn chart_id_matches_name(
+        db: &DatabaseConnection,
+        chart_id: i32,
+        name: &'static str,
+    ) -> bool {
+        let metadata = get_chart_metadata(db, &name).await.unwrap();
+        metadata.id == chart_id
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn last_accurate_point_daily_works() {
+        let _ = tracing_subscriber::fmt::try_init();
+        let db = init_db("last_accurate_point_daily_works").await;
+        insert_mock_data(&db).await;
+
+        // No missing points
+        assert!(chart_id_matches_name(&db, 1, "totalBlocks").await);
+        assert_eq!(
+            last_accurate_point::<TotalBlocks, DateValueString, DefaultQueryVec<TotalBlocks>>(
+                1,
+                1,
+                &db,
+                false,
+                None,
+                MissingDatePolicy::FillPrevious
+            )
+            .await
+            .unwrap(),
+            Some(DateValueString {
+                date: d("2022-11-12"),
+                value: "1350".to_string()
+            })
+        );
+        assert_eq!(
+            last_accurate_point::<TotalBlocks, DateValueString, DefaultQueryVec<TotalBlocks>>(
+                1,
+                1,
+                &db,
+                false,
+                Some(0),
+                MissingDatePolicy::FillPrevious
+            )
+            .await
+            .unwrap(),
+            Some(DateValueString {
+                date: d("2022-11-12"),
+                value: "1350".to_string()
+            })
+        );
+        assert_eq!(
+            last_accurate_point::<TotalBlocks, DateValueString, DefaultQueryVec<TotalBlocks>>(
+                1,
+                1,
+                &db,
+                false,
+                Some(1),
+                MissingDatePolicy::FillPrevious
+            )
+            .await
+            .unwrap(),
+            Some(DateValueString {
+                date: d("2022-11-11"),
+                value: "1150".to_string()
+            })
+        );
+        assert_eq!(
+            last_accurate_point::<TotalBlocks, DateValueString, DefaultQueryVec<TotalBlocks>>(
+                1,
+                1,
+                &db,
+                false,
+                Some(2),
+                MissingDatePolicy::FillPrevious
+            )
+            .await
+            .unwrap(),
+            Some(DateValueString {
+                date: d("2022-11-10"),
+                value: "1000".to_string()
+            })
+        );
+
+        // Missing points
+        assert!(chart_id_matches_name(&db, 4, TxnsGrowth::NAME).await);
+        assert_eq!(
+            last_accurate_point::<TxnsGrowth, DateValueString, DefaultQueryVec<TxnsGrowth>>(
+                4,
+                1,
+                &db,
+                false,
+                None,
+                MissingDatePolicy::FillPrevious
+            )
+            .await
+            .unwrap(),
+            Some(DateValueString {
+                date: d("2022-11-30"),
+                value: "1000".to_string()
+            })
+        );
+        assert_eq!(
+            last_accurate_point::<TxnsGrowth, DateValueString, DefaultQueryVec<TxnsGrowth>>(
+                4,
+                1,
+                &db,
+                false,
+                Some(0),
+                MissingDatePolicy::FillPrevious
+            )
+            .await
+            .unwrap(),
+            Some(DateValueString {
+                date: d("2022-11-30"),
+                value: "1000".to_string()
+            })
+        );
+        assert_eq!(
+            last_accurate_point::<TxnsGrowth, DateValueString, DefaultQueryVec<TxnsGrowth>>(
+                4,
+                1,
+                &db,
+                false,
+                Some(1),
+                MissingDatePolicy::FillPrevious
+            )
+            .await
+            .unwrap(),
+            Some(DateValueString {
+                date: d("2022-11-29"),
+                value: "1000".to_string()
+            })
+        );
+        assert_eq!(
+            last_accurate_point::<TxnsGrowth, DateValueString, DefaultQueryVec<TxnsGrowth>>(
+                4,
+                1,
+                &db,
+                false,
+                Some(2),
+                MissingDatePolicy::FillPrevious
+            )
+            .await
+            .unwrap(),
+            Some(DateValueString {
+                date: d("2022-11-28"),
+                value: "323".to_string()
+            })
+        );
+    }
+
+    // todo: test missed points with both policies
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn last_accurate_point_resolutions_work() {
+        let _ = tracing_subscriber::fmt::try_init();
+        let db = init_db("last_accurate_point_resolutions_work").await;
+        insert_mock_data(&db).await;
+
+        assert!(chart_id_matches_name(&db, 1, "totalBlocks").await);
+        assert_eq!(
+            last_accurate_point::<TotalBlocks, DateValueString, DefaultQueryVec<TotalBlocks>>(
+                1,
+                1,
+                &db,
+                false,
+                Some(1),
+                MissingDatePolicy::FillPrevious
+            )
+            .await
+            .unwrap(),
+            Some(DateValueString {
+                date: d("2022-11-11"),
+                value: "1150".to_string()
+            })
         );
     }
 }

@@ -33,7 +33,7 @@ use crate::{
         ChartProperties, Named,
     },
     data_source::{DataSource, UpdateContext},
-    metrics, UpdateError,
+    metrics, DateValueString, UpdateError,
 };
 
 use super::auxiliary::PartialCumulative;
@@ -189,12 +189,13 @@ where
             .await
             .map_err(UpdateError::BlockscoutDB)?;
         let offset = Some(ChartProps::approximate_trailing_points());
-        let last_accurate_point = last_accurate_point::<ChartProps>(
+        let last_accurate_point = last_accurate_point::<ChartProps, DateValueString, Query>(
             chart_id,
             min_blockscout_block,
             cx.db,
             cx.force_full,
             offset,
+            ChartProps::missing_date_policy(),
         )
         .await?;
         tracing::info!(last_accurate_point =? last_accurate_point, chart_name = ChartProps::NAME, "updating chart values");
