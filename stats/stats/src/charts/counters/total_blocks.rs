@@ -4,7 +4,7 @@ use crate::{
     data_source::{
         kinds::{
             local_db::DirectPointLocalDbChartSource,
-            remote_db::{QueryBehaviour, RemoteDatabaseSource},
+            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour},
         },
         types::UpdateContext,
     },
@@ -24,7 +24,7 @@ struct TotalBlocksData {
 
 pub struct TotalBlocksQueryBehaviour;
 
-impl QueryBehaviour for TotalBlocksQueryBehaviour {
+impl RemoteQueryBehaviour for TotalBlocksQueryBehaviour {
     type Output = DateValueString;
 
     async fn query_data(

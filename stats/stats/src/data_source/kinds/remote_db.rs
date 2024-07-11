@@ -33,18 +33,19 @@ use crate::{
 };
 
 /// See [module-level documentation](self)
-pub struct RemoteDatabaseSource<Q: QueryBehaviour>(PhantomData<Q>);
+pub struct RemoteDatabaseSource<Q: RemoteQueryBehaviour>(PhantomData<Q>);
 
-pub trait QueryBehaviour {
+pub trait RemoteQueryBehaviour {
     type Output: Send;
 
+    /// Retrieve chart data from remote storage.
     fn query_data(
         cx: &UpdateContext<'_>,
         range: Option<Range<DateTimeUtc>>,
     ) -> impl Future<Output = Result<Self::Output, UpdateError>> + Send;
 }
 
-impl<Q: QueryBehaviour> DataSource for RemoteDatabaseSource<Q> {
+impl<Q: RemoteQueryBehaviour> DataSource for RemoteDatabaseSource<Q> {
     type MainDependencies = ();
     type ResolutionDependencies = ();
     type Output = Q::Output;
@@ -84,7 +85,7 @@ pub trait StatementFromRange {
 /// but `DateValueDecimal` or other types can be useful sometimes.
 pub struct PullAllWithAndSort<S: StatementFromRange, P: Point>(PhantomData<(S, P)>);
 
-impl<S, P> QueryBehaviour for PullAllWithAndSort<S, P>
+impl<S, P> RemoteQueryBehaviour for PullAllWithAndSort<S, P>
 where
     S: StatementFromRange,
     P: Point,
@@ -119,7 +120,7 @@ pub trait StatementForOne {
 /// but `DateValueDecimal` or other types can be useful sometimes.
 pub struct PullOne<S: StatementForOne, P: Point>(PhantomData<(S, P)>);
 
-impl<S, P> QueryBehaviour for PullOne<S, P>
+impl<S, P> RemoteQueryBehaviour for PullOne<S, P>
 where
     S: StatementForOne,
     P: Point,

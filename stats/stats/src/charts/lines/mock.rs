@@ -2,7 +2,7 @@ use crate::{
     data_source::{
         kinds::{
             local_db::DirectVecLocalDbChartSource,
-            remote_db::{QueryBehaviour, RemoteDatabaseSource},
+            remote_db::{RemoteQueryBehaviour, RemoteDatabaseSource},
         },
         types::Get,
         UpdateContext,
@@ -51,7 +51,7 @@ pub struct MockLineRetrieve<DateRange, ValueRange, Value, Policy>(
     PhantomData<(DateRange, ValueRange, Value, Policy)>,
 );
 
-impl<DateRange, ValueRange, Value, Policy> QueryBehaviour
+impl<DateRange, ValueRange, Value, Policy> RemoteQueryBehaviour
     for MockLineRetrieve<DateRange, ValueRange, Value, Policy>
 where
     DateRange: Get<Range<NaiveDate>>,

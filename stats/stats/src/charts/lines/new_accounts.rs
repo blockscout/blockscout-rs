@@ -15,7 +15,7 @@ use crate::{
                 },
                 LocalDbChartSource,
             },
-            remote_db::{QueryBehaviour, RemoteDatabaseSource, StatementFromRange},
+            remote_db::{RemoteQueryBehaviour, RemoteDatabaseSource, StatementFromRange},
         },
         UpdateContext,
     },
@@ -64,7 +64,7 @@ impl StatementFromRange for NewAccountsStatement {
 
 pub struct NewAccountsQueryBehaviour;
 
-impl QueryBehaviour for NewAccountsQueryBehaviour {
+impl RemoteQueryBehaviour for NewAccountsQueryBehaviour {
     type Output = Vec<DateValueString>;
 
     async fn query_data(

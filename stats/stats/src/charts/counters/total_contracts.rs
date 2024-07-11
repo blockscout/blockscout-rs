@@ -4,7 +4,7 @@ use crate::{
     data_source::{
         kinds::{
             local_db::DirectPointLocalDbChartSource,
-            remote_db::{QueryBehaviour, RemoteDatabaseSource},
+            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour},
         },
         UpdateContext,
     },
@@ -16,7 +16,7 @@ use sea_orm::prelude::*;
 
 pub struct TotalContractsQueryBehaviour;
 
-impl QueryBehaviour for TotalContractsQueryBehaviour {
+impl RemoteQueryBehaviour for TotalContractsQueryBehaviour {
     type Output = DateValueString;
 
     async fn query_data(

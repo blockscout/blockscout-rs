@@ -4,7 +4,7 @@ use crate::{
     data_source::{
         kinds::{
             local_db::DirectPointLocalDbChartSource,
-            remote_db::{QueryBehaviour, RemoteDatabaseSource},
+            remote_db::{RemoteQueryBehaviour, RemoteDatabaseSource},
         },
         types::Get,
         UpdateContext,
@@ -22,7 +22,7 @@ where
     PointDateTime: Get<DateTime<Utc>>,
     Value: Get<String>;
 
-impl<PointDateTime, Value> QueryBehaviour for MockCounterRetrieve<PointDateTime, Value>
+impl<PointDateTime, Value> RemoteQueryBehaviour for MockCounterRetrieve<PointDateTime, Value>
 where
     PointDateTime: Get<DateTime<Utc>>,
     Value: Get<String>,
