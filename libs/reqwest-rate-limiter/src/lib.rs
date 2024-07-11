@@ -1,8 +1,7 @@
-use std::num::NonZeroU32;
-use governor::{middleware, state, clock, NotUntil, RateLimiter};
+use governor::{clock, middleware, state, NotUntil, RateLimiter};
 use reqwest::{Request, Response};
 use reqwest_middleware::{Middleware, Next};
-use std::sync::Arc;
+use std::{num::NonZeroU32, sync::Arc};
 
 pub type DefaultRateLimiterMiddleware<
     MW = middleware::NoOpMiddleware<<clock::DefaultClock as clock::Clock>::Instant>,
@@ -10,21 +9,15 @@ pub type DefaultRateLimiterMiddleware<
 
 impl DefaultRateLimiterMiddleware {
     pub fn per_second(max_burst: NonZeroU32) -> Self {
-        RateLimiterMiddleware::new(RateLimiter::direct(
-            governor::Quota::per_second(max_burst),
-        ))
+        RateLimiterMiddleware::new(RateLimiter::direct(governor::Quota::per_second(max_burst)))
     }
 
     pub fn per_minute(max_burst: NonZeroU32) -> Self {
-        RateLimiterMiddleware::new(RateLimiter::direct(
-            governor::Quota::per_minute(max_burst),
-        ))
+        RateLimiterMiddleware::new(RateLimiter::direct(governor::Quota::per_minute(max_burst)))
     }
 
     pub fn per_hour(max_burst: NonZeroU32) -> Self {
-        RateLimiterMiddleware::new(RateLimiter::direct(
-            governor::Quota::per_hour(max_burst),
-        ))
+        RateLimiterMiddleware::new(RateLimiter::direct(governor::Quota::per_hour(max_burst)))
     }
 }
 
