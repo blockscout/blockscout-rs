@@ -387,7 +387,7 @@ pub type NativeCoinHoldersGrowth = LocalDbChartSource<
     NativeCoinHoldersGrowthProperties,
 >;
 
-pub type NativeCoinHoldersGrowthInt = MapParseTo<NativeCoinHoldersGrowth, DateValue<i64>>;
+pub type NativeCoinHoldersGrowthInt = MapParseTo<NativeCoinHoldersGrowth, i64>;
 
 #[cfg(test)]
 mod tests {

@@ -1,7 +1,6 @@
 use std::ops::Range;
 
 use crate::{
-    charts::types::DateValue,
     data_source::kinds::{
         data_manipulation::map::MapParseTo,
         local_db::DirectVecLocalDbChartSource,
@@ -59,7 +58,7 @@ impl ChartProperties for NewNativeCoinTransfersProperties {
 pub type NewNativeCoinTransfers =
     DirectVecLocalDbChartSource<NewNativeCoinTransfersRemote, NewNativeCoinTransfersProperties>;
 
-pub type NewNativeCoinTransfersInt = MapParseTo<NewNativeCoinTransfers, DateValue<i64>>;
+pub type NewNativeCoinTransfersInt = MapParseTo<NewNativeCoinTransfers, i64>;
 
 #[cfg(test)]
 mod tests {

@@ -122,7 +122,7 @@ pub type NewAccounts = LocalDbChartSource<
     Properties,
 >;
 
-pub type NewAccountsInt = MapParseTo<NewAccounts, DateValue<i64>>;
+pub type NewAccountsInt = MapParseTo<NewAccounts, i64>;
 
 #[cfg(test)]
 mod tests {

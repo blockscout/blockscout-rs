@@ -6,7 +6,6 @@ use crate::{
         local_db::DirectVecLocalDbChartSource,
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
-    types::DateValue,
     utils::sql_with_range_filter_opt,
     ChartProperties, Named,
 };
@@ -55,7 +54,7 @@ impl ChartProperties for NewTxnsProperties {
 }
 
 pub type NewTxns = DirectVecLocalDbChartSource<NewTxnsRemote, NewTxnsProperties>;
-pub type NewTxnsInt = MapParseTo<NewTxns, DateValue<i64>>;
+pub type NewTxnsInt = MapParseTo<NewTxns, i64>;
 
 #[cfg(test)]
 mod tests {

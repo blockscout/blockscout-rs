@@ -16,7 +16,6 @@ use super::{
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
     types::UpdateParameters,
-    DataSource,
 };
 use crate::{
     construct_update_group,
@@ -90,7 +89,7 @@ impl ChartProperties for NewContractsChartProperties {
 pub type NewContracts =
     DirectVecLocalDbChartSource<NewContractsRemote, NewContractsChartProperties>;
 
-pub type NewContractsInt = MapParseTo<NewContracts, DateValue<i64>>;
+pub type NewContractsInt = MapParseTo<NewContracts, i64>;
 
 pub struct ContractsGrowthProperties;
 
@@ -110,6 +109,8 @@ impl ChartProperties for ContractsGrowthProperties {
 // We can use convenient common implementation to get growth chart
 pub type ContractsGrowth =
     DailyCumulativeLocalDbChartSource<NewContractsInt, ContractsGrowthProperties>;
+
+// const B: <NewContracts as DataSource>::Output = 0;
 
 // Alternatively, if we wanted to preform some custom logic on each batch step, we can do
 #[allow(unused)]

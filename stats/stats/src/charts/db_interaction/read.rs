@@ -1,8 +1,8 @@
 use crate::{
-    charts::{chart::ChartMetadata, chart_properties_portrait::imports::ResolutionKind},
+    charts::chart::ChartMetadata,
     data_source::kinds::local_db::parameter_traits::QueryBehaviour,
     missing_date::{fill_and_filter_chart, fit_into_range},
-    types::{DateValue, ExtendedTimespanValue, Timespan, TimespanValue, ZeroTimespanValue},
+    types::{DateValue, ExtendedTimespanValue, Timespan, TimespanValue},
     utils::exclusive_datetime_range_to_inclusive,
     MissingDatePolicy, Named, UpdateError,
 };
