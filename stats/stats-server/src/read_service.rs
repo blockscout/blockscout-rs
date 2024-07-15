@@ -11,9 +11,7 @@ use async_trait::async_trait;
 use chrono::{Duration, NaiveDate, Utc};
 use proto_v1::stats_service_server::StatsService;
 use sea_orm::{DatabaseConnection, DbErr};
-use stats::{
-    entity::sea_orm_active_enums::ChartType, types::ZeroTimespanValue, MissingDatePolicy, ReadError,
-};
+use stats::{entity::sea_orm_active_enums::ChartType, MissingDatePolicy, ReadError};
 use stats_proto::blockscout::stats::v1 as proto_v1;
 use tonic::{Request, Response, Status};
 
@@ -89,7 +87,7 @@ impl StatsService for ReadService {
             .filter(|(_, chart)| chart.static_info.chart_type == ChartType::Counter)
             .filter_map(|(name, counter)| {
                 data.remove(name).map(|point| {
-                    let point: stats::DateValueString =
+                    let point =
                         if counter.static_info.missing_date_policy == MissingDatePolicy::FillZero {
                             point.relevant_or_zero(Utc::now().date_naive())
                         } else {
