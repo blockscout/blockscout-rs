@@ -1,10 +1,10 @@
 use crate::{
-    charts::chart::ChartMetadata,
+    charts::{chart::ChartMetadata, chart_properties_portrait::imports::ResolutionKind},
     data_source::kinds::local_db::parameter_traits::QueryBehaviour,
     missing_date::{fill_and_filter_chart, fit_into_range},
-    types::{TimespanValue, ZeroTimespanValue},
+    types::{DateValue, ExtendedTimespanValue, Timespan, TimespanValue, ZeroTimespanValue},
     utils::exclusive_datetime_range_to_inclusive,
-    DateValueString, ExtendedDateValueString, MissingDatePolicy, Named, UpdateError,
+    MissingDatePolicy, Named, UpdateError,
 };
 
 use blockscout_db::entity::blocks;
@@ -54,7 +54,7 @@ struct CounterData {
 /// (i.e. with date relevance not handled)
 pub async fn get_raw_counters(
     db: &DatabaseConnection,
-) -> Result<HashMap<String, DateValueString>, ReadError> {
+) -> Result<HashMap<String, DateValue<String>>, ReadError> {
     let data = CounterData::find_by_statement(Statement::from_string(
         DbBackend::Postgres,
         r#"
@@ -74,8 +74,8 @@ pub async fn get_raw_counters(
         .map(|data| {
             (
                 data.name,
-                DateValueString {
-                    date: data.date,
+                DateValue::<String> {
+                    timespan: data.date,
                     value: data.value,
                 },
             )
@@ -91,9 +91,9 @@ pub async fn get_counter_data(
     name: &str,
     date: Option<NaiveDate>,
     policy: MissingDatePolicy,
-) -> Result<Option<DateValueString>, ReadError> {
+) -> Result<Option<DateValue<String>>, ReadError> {
     let current_date = date.unwrap_or(Utc::now().date_naive());
-    let raw_data = DateValueString::find_by_statement(Statement::from_sql_and_values(
+    let raw_data = DateValue::<String>::find_by_statement(Statement::from_sql_and_values(
         DbBackend::Postgres,
         r#"
             SELECT distinct on (charts.id) data.date, data.value
@@ -114,7 +114,7 @@ pub async fn get_counter_data(
         if policy == MissingDatePolicy::FillZero {
             p.relevant_or_zero(current_date)
         } else {
-            p.date = current_date;
+            p.timespan = current_date;
             p
         }
     });
@@ -129,10 +129,10 @@ pub async fn get_counter_data(
 ///
 /// If `approximate_until_updated=0` - only future points are marked
 fn mark_approximate(
-    data: Vec<DateValueString>,
+    data: Vec<DateValue<String>>,
     last_updated_at: NaiveDate,
     approximate_until_updated: u64,
-) -> Vec<ExtendedDateValueString> {
+) -> Vec<ExtendedTimespanValue<NaiveDate, String>> {
     // saturating sub/add
     let next_after_updated_at = last_updated_at
         .checked_add_days(chrono::Days::new(1))
@@ -142,8 +142,8 @@ fn mark_approximate(
         .unwrap_or(NaiveDate::MIN);
     data.into_iter()
         .map(|dv| {
-            let is_marked = dv.date >= mark_from_date;
-            ExtendedDateValueString::from_date_value(dv, is_marked)
+            let is_marked: bool = dv.date >= mark_from_date;
+            ExtendedTimespanValue::<NaiveDate, String>::from_date_value(dv, is_marked)
         })
         .collect()
 }
@@ -242,7 +242,7 @@ pub async fn get_line_chart_data(
     policy: MissingDatePolicy,
     fill_missing_dates: bool,
     approximate_trailing_points: u64,
-) -> Result<Vec<ExtendedDateValueString>, ReadError> {
+) -> Result<Vec<ExtendedTimespanValue<NaiveDate, String>>, ReadError> {
     let chart = charts::Entity::find()
         .column(charts::Column::Id)
         .filter(charts::Column::Name.eq(name))
@@ -301,7 +301,7 @@ async fn get_raw_line_chart_data(
     chart_id: i32,
     from: Option<NaiveDate>,
     to: Option<NaiveDate>,
-) -> Result<Vec<DateValueString>, DbErr> {
+) -> Result<Vec<DateValue<String>>, DbErr> {
     let mut data_request = chart_data::Entity::find()
         .column(chart_data::Column::Date)
         .column(chart_data::Column::Value)
@@ -387,18 +387,17 @@ struct SyncInfo {
 ///
 /// Retrieves data for `(offset+1)`th latest timespan, if any.
 /// In case of inconsistencies or set `force_full`, returns `None`.
-pub async fn last_accurate_point<ChartProps, TimespanString, Query>(
+pub async fn last_accurate_point<Resolution, ChartProps, Query>(
     chart_id: i32,
     min_blockscout_block: i64,
     db: &DatabaseConnection,
     force_full: bool,
     offset: Option<u64>,
     policy: MissingDatePolicy,
-) -> Result<Option<TimespanString>, UpdateError>
+) -> Result<Option<TimespanValue<Resolution, String>>, UpdateError>
 where
     ChartProps: Named + ?Sized,
-    TimespanString: TimespanValue<Value = String>,
-    TimespanString::Timespan: From<NaiveDate>,
+    Resolution: Timespan,
     Query: QueryBehaviour,
 {
     let Some(day_point) = last_accurate_point_raw::<ChartProps, Query>(
@@ -413,9 +412,12 @@ where
     else {
         return Ok(None);
     };
-    let (day, value) = day_point.into_parts();
-    let timespan: TimespanString::Timespan = day.into();
-    Ok(Some(TimespanString::from_parts(timespan, value)))
+    let TimespanValue {
+        timespan: date,
+        value,
+    } = day_point;
+    let timespan: Resolution = Resolution::from_date(date);
+    Ok(Some(TimespanValue { timespan, value }))
 }
 
 /// `last_accurate_point` but without converting to the requested
@@ -427,7 +429,7 @@ async fn last_accurate_point_raw<C, Q>(
     force_full: bool,
     offset: Option<u64>,
     policy: MissingDatePolicy,
-) -> Result<Option<DateValueString>, UpdateError>
+) -> Result<Option<DateValue<String>>, UpdateError>
 where
     C: Named + ?Sized,
     Q: QueryBehaviour,
@@ -464,8 +466,8 @@ where
                             row = ?row,
                             "running partial update"
                         );
-                        Some(DateValueString {
-                            date: row.date,
+                        Some(DateValue::<String> {
+                            timespan: row.date,
                             value: row.value,
                         })
                     } else {
@@ -506,7 +508,7 @@ mod tests {
     use crate::{
         counters::TotalBlocks,
         data_source::kinds::local_db::parameters::DefaultQueryVec,
-        lines::{TxnsGrowth, VerifiedContractsGrowth},
+        lines::TxnsGrowth,
         tests::{init_db::init_db, point_construction::d},
         Named,
     };
@@ -582,9 +584,9 @@ mod tests {
         .unwrap();
     }
 
-    fn value(date: &str, value: &str) -> DateValueString {
-        DateValueString {
-            date: NaiveDate::from_str(date).unwrap(),
+    fn value(date: &str, value: &str) -> DateValue<String> {
+        DateValue::<String> {
+            timespan: NaiveDate::from_str(date).unwrap(),
             value: value.to_string(),
         }
     }
@@ -624,17 +626,17 @@ mod tests {
         .unwrap();
         assert_eq!(
             vec![
-                ExtendedDateValueString {
+                ExtendedTimespanValue {
                     date: NaiveDate::from_str("2022-11-10").unwrap(),
                     value: "100".into(),
                     is_approximate: false,
                 },
-                ExtendedDateValueString {
+                ExtendedTimespanValue {
                     date: NaiveDate::from_str("2022-11-11").unwrap(),
                     value: "150".into(),
                     is_approximate: false,
                 },
-                ExtendedDateValueString {
+                ExtendedTimespanValue {
                     date: NaiveDate::from_str("2022-11-12").unwrap(),
                     value: "200".into(),
                     is_approximate: true,
@@ -665,12 +667,12 @@ mod tests {
         .unwrap();
         assert_eq!(
             vec![
-                ExtendedDateValueString {
+                ExtendedTimespanValue {
                     date: NaiveDate::from_str("2022-11-14").unwrap(),
                     value: "2".into(),
                     is_approximate: false,
                 },
-                ExtendedDateValueString {
+                ExtendedTimespanValue {
                     date: NaiveDate::from_str("2022-11-15").unwrap(),
                     value: "3".into(),
                     is_approximate: true,
@@ -699,7 +701,7 @@ mod tests {
         // No missing points
         assert!(chart_id_matches_name(&db, 1, "totalBlocks").await);
         assert_eq!(
-            last_accurate_point::<TotalBlocks, DateValueString, DefaultQueryVec<TotalBlocks>>(
+            last_accurate_point::<TotalBlocks, DateValue<String>, DefaultQueryVec<TotalBlocks>>(
                 1,
                 1,
                 &db,
@@ -709,13 +711,13 @@ mod tests {
             )
             .await
             .unwrap(),
-            Some(DateValueString {
-                date: d("2022-11-12"),
+            Some(DateValue::<String> {
+                timespan: d("2022-11-12"),
                 value: "1350".to_string()
             })
         );
         assert_eq!(
-            last_accurate_point::<TotalBlocks, DateValueString, DefaultQueryVec<TotalBlocks>>(
+            last_accurate_point::<TotalBlocks, DateValue<String>, DefaultQueryVec<TotalBlocks>>(
                 1,
                 1,
                 &db,
@@ -725,13 +727,13 @@ mod tests {
             )
             .await
             .unwrap(),
-            Some(DateValueString {
-                date: d("2022-11-12"),
+            Some(DateValue::<String> {
+                timespan: d("2022-11-12"),
                 value: "1350".to_string()
             })
         );
         assert_eq!(
-            last_accurate_point::<TotalBlocks, DateValueString, DefaultQueryVec<TotalBlocks>>(
+            last_accurate_point::<TotalBlocks, DateValue<String>, DefaultQueryVec<TotalBlocks>>(
                 1,
                 1,
                 &db,
@@ -741,13 +743,13 @@ mod tests {
             )
             .await
             .unwrap(),
-            Some(DateValueString {
-                date: d("2022-11-11"),
+            Some(DateValue::<String> {
+                timespan: d("2022-11-11"),
                 value: "1150".to_string()
             })
         );
         assert_eq!(
-            last_accurate_point::<TotalBlocks, DateValueString, DefaultQueryVec<TotalBlocks>>(
+            last_accurate_point::<TotalBlocks, DateValue<String>, DefaultQueryVec<TotalBlocks>>(
                 1,
                 1,
                 &db,
@@ -757,8 +759,8 @@ mod tests {
             )
             .await
             .unwrap(),
-            Some(DateValueString {
-                date: d("2022-11-10"),
+            Some(DateValue::<String> {
+                timespan: d("2022-11-10"),
                 value: "1000".to_string()
             })
         );
@@ -766,7 +768,7 @@ mod tests {
         // Missing points
         assert!(chart_id_matches_name(&db, 4, TxnsGrowth::NAME).await);
         assert_eq!(
-            last_accurate_point::<TxnsGrowth, DateValueString, DefaultQueryVec<TxnsGrowth>>(
+            last_accurate_point::<TxnsGrowth, DateValue<String>, DefaultQueryVec<TxnsGrowth>>(
                 4,
                 1,
                 &db,
@@ -776,13 +778,13 @@ mod tests {
             )
             .await
             .unwrap(),
-            Some(DateValueString {
-                date: d("2022-11-30"),
+            Some(DateValue::<String> {
+                timespan: d("2022-11-30"),
                 value: "1000".to_string()
             })
         );
         assert_eq!(
-            last_accurate_point::<TxnsGrowth, DateValueString, DefaultQueryVec<TxnsGrowth>>(
+            last_accurate_point::<TxnsGrowth, DateValue<String>, DefaultQueryVec<TxnsGrowth>>(
                 4,
                 1,
                 &db,
@@ -792,13 +794,13 @@ mod tests {
             )
             .await
             .unwrap(),
-            Some(DateValueString {
-                date: d("2022-11-30"),
+            Some(DateValue::<String> {
+                timespan: d("2022-11-30"),
                 value: "1000".to_string()
             })
         );
         assert_eq!(
-            last_accurate_point::<TxnsGrowth, DateValueString, DefaultQueryVec<TxnsGrowth>>(
+            last_accurate_point::<TxnsGrowth, DateValue<String>, DefaultQueryVec<TxnsGrowth>>(
                 4,
                 1,
                 &db,
@@ -808,13 +810,13 @@ mod tests {
             )
             .await
             .unwrap(),
-            Some(DateValueString {
-                date: d("2022-11-29"),
+            Some(DateValue::<String> {
+                timespan: d("2022-11-29"),
                 value: "1000".to_string()
             })
         );
         assert_eq!(
-            last_accurate_point::<TxnsGrowth, DateValueString, DefaultQueryVec<TxnsGrowth>>(
+            last_accurate_point::<TxnsGrowth, DateValue<String>, DefaultQueryVec<TxnsGrowth>>(
                 4,
                 1,
                 &db,
@@ -824,8 +826,8 @@ mod tests {
             )
             .await
             .unwrap(),
-            Some(DateValueString {
-                date: d("2022-11-28"),
+            Some(DateValue::<String> {
+                timespan: d("2022-11-28"),
                 value: "323".to_string()
             })
         );
@@ -841,7 +843,7 @@ mod tests {
 
         assert!(chart_id_matches_name(&db, 1, "totalBlocks").await);
         assert_eq!(
-            last_accurate_point::<TotalBlocks, DateValueString, DefaultQueryVec<TotalBlocks>>(
+            last_accurate_point::<TotalBlocks, DateValue<String>, DefaultQueryVec<TotalBlocks>>(
                 1,
                 1,
                 &db,
@@ -851,8 +853,8 @@ mod tests {
             )
             .await
             .unwrap(),
-            Some(DateValueString {
-                date: d("2022-11-11"),
+            Some(DateValue::<String> {
+                timespan: d("2022-11-11"),
                 value: "1150".to_string()
             })
         );

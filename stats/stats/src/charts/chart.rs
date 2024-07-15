@@ -4,13 +4,11 @@
 //! [`trait@ChartProperties`], and is stored in local database (e.g.
 //! [`LocalDbChartSource`](crate::data_source::kinds::local_db))
 
-use crate::{DateValueString, ReadError};
+use crate::ReadError;
 use chrono::{DateTime, Duration, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, FromQueryResult};
+use sea_orm::prelude::*;
 use thiserror::Error;
-
-use super::types::DateValue;
 
 #[derive(Error, Debug)]
 pub enum UpdateError {
@@ -46,19 +44,18 @@ pub struct ChartMetadata {
     pub last_updated_at: Option<DateTime<Utc>>,
 }
 
-/// Type of the point stored in the chart.
-/// [`DateValueString`] can be used to avoid parsing the values,
-/// but [`crate::charts::types::DateValueDecimal`]
-/// or other types can be useful sometimes
-/// (e.g. for cumulative chart).
-pub trait Point: FromQueryResult + DateValue + Into<DateValueString> + Send + Sync {}
-
-impl<T: FromQueryResult + DateValue + Into<DateValueString> + Send + Sync> Point for T {}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MissingDatePolicy {
     FillZero,
     FillPrevious,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResolutionKind {
+    Day,
+    Week,
+    Month,
+    Year,
 }
 
 pub trait Named {
@@ -67,11 +64,14 @@ pub trait Named {
 }
 
 #[portrait::make(import(
-    crate::charts::chart::MissingDatePolicy,
+    crate::charts::chart::{MissingDatePolicy, ResolutionKind},
     entity::sea_orm_active_enums::ChartType,
 ))]
 pub trait ChartProperties: Sync + Named {
     fn chart_type() -> ChartType;
+    fn resolution() -> ResolutionKind {
+        ResolutionKind::Day
+    }
     fn missing_date_policy() -> MissingDatePolicy {
         MissingDatePolicy::FillZero
     }
@@ -111,6 +111,7 @@ pub trait ChartProperties: Sync + Named {
 pub struct ChartPropertiesObject {
     pub name: String,
     pub chart_type: ChartType,
+    pub resolution: ResolutionKind,
     pub missing_date_policy: MissingDatePolicy,
     pub approximate_trailing_points: u64,
 }
@@ -120,6 +121,7 @@ impl ChartPropertiesObject {
         Self {
             name: T::NAME.to_owned(),
             chart_type: T::chart_type(),
+            resolution: T::resolution(),
             missing_date_policy: T::missing_date_policy(),
             approximate_trailing_points: T::approximate_trailing_points(),
         }

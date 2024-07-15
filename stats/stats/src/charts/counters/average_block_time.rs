@@ -1,10 +1,10 @@
 use crate::{
-    charts::types::DateValueDouble,
     data_source::kinds::{
         data_manipulation::map::MapToString,
         local_db::DirectPointLocalDbChartSource,
         remote_db::{PullOne, RemoteDatabaseSource, StatementForOne},
     },
+    types::DateValue,
     ChartProperties, MissingDatePolicy, Named,
 };
 
@@ -38,7 +38,7 @@ impl StatementForOne for AverageBlockTimeStatement {
 }
 
 pub type AverageBlockTimeRemote =
-    RemoteDatabaseSource<PullOne<AverageBlockTimeStatement, DateValueDouble>>;
+    RemoteDatabaseSource<PullOne<AverageBlockTimeStatement, DateValue<f64>>>;
 
 pub type AverageBlockTimeRemoteString = MapToString<AverageBlockTimeRemote>;
 

@@ -2,7 +2,10 @@ use chrono::{DateTime, Utc};
 use sea_orm::DatabaseConnection;
 
 use crate::{
-    charts::db_interaction::write::insert_data_many, gettable_const, DateValueString, UpdateError,
+    charts::db_interaction::write::insert_data_many,
+    gettable_const,
+    types::{Timespan, TimespanValue},
+    UpdateError,
 };
 
 use super::parameter_traits::BatchStepBehaviour;
@@ -19,14 +22,18 @@ gettable_const!(BatchMax: chrono::Duration = chrono::Duration::max_value());
 /// Pass the vector data from main dependency right into the database
 pub struct PassVecStep;
 
-impl BatchStepBehaviour<Vec<DateValueString>, ()> for PassVecStep {
+impl<Resolution> BatchStepBehaviour<Resolution, Vec<TimespanValue<Resolution, String>>, ()>
+    for PassVecStep
+where
+    Resolution: Timespan + Clone + Send + Sync,
+{
     async fn batch_update_values_step_with(
         db: &DatabaseConnection,
         chart_id: i32,
         _update_time: DateTime<Utc>,
         min_blockscout_block: i64,
-        _last_accurate_point: DateValueString,
-        main_data: Vec<DateValueString>,
+        _last_accurate_point: TimespanValue<Resolution, String>,
+        main_data: Vec<TimespanValue<Resolution, String>>,
         _resolution_data: (),
     ) -> Result<usize, UpdateError> {
         let found = main_data.len();

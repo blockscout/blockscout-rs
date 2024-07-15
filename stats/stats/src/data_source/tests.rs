@@ -1,6 +1,6 @@
 use std::{collections::HashSet, ops::Range, str::FromStr, sync::Arc};
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, Statement};
 use tokio::sync::Mutex;
@@ -18,13 +18,13 @@ use super::{
     types::UpdateParameters,
 };
 use crate::{
-    charts::types::DateValueInt,
     construct_update_group,
     data_source::kinds::local_db::parameters::update::batching::parameters::PassVecStep,
     tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
+    types::DateValue,
     update_group::{SyncUpdateGroup, UpdateGroup},
     utils::sql_with_range_filter_opt,
-    ChartProperties, DateValueString, MissingDatePolicy, Named, UpdateError,
+    ChartProperties, MissingDatePolicy, Named, UpdateError,
 };
 
 pub struct NewContractsQuery;
@@ -71,7 +71,7 @@ impl StatementFromRange for NewContractsQuery {
 }
 
 pub type NewContractsRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<NewContractsQuery, DateValueString>>;
+    RemoteDatabaseSource<PullAllWithAndSort<NewContractsQuery, NaiveDate, String>>;
 
 pub struct NewContractsChartProperties;
 
@@ -89,7 +89,7 @@ impl ChartProperties for NewContractsChartProperties {
 pub type NewContracts =
     DirectVecLocalDbChartSource<NewContractsRemote, NewContractsChartProperties>;
 
-pub type NewContractsInt = MapParseTo<NewContracts, DateValueInt>;
+pub type NewContractsInt = MapParseTo<NewContracts, DateValue<i64>>;
 
 pub struct ContractsGrowthProperties;
 
@@ -114,14 +114,16 @@ pub type ContractsGrowth =
 #[allow(unused)]
 struct ContractsGrowthCustomBatchStepBehaviour;
 
-impl BatchStepBehaviour<Vec<DateValueString>, ()> for ContractsGrowthCustomBatchStepBehaviour {
+impl BatchStepBehaviour<NaiveDate, Vec<DateValue<String>>, ()>
+    for ContractsGrowthCustomBatchStepBehaviour
+{
     async fn batch_update_values_step_with(
         _db: &DatabaseConnection,
         _chart_id: i32,
         _update_time: DateTime<Utc>,
         _min_blockscout_block: i64,
-        _last_accurate_point: DateValueString,
-        _main_data: Vec<DateValueString>,
+        _last_accurate_point: DateValue<String>,
+        _main_data: Vec<DateValue<String>>,
         _resolution_data: (),
     ) -> Result<usize, UpdateError> {
         // do something

@@ -14,22 +14,22 @@ use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
 use crate::{
     data_source::{DataSource, UpdateContext},
     types::{
-        week::{Week, WeekValueDouble},
-        DateValueDouble, DateValueInt, TimespanValue,
+        week::{Week, WeekValue},
+        DateValue, TimespanValue,
     },
     utils::{day_start, exclusive_datetime_range_to_inclusive},
     UpdateError,
 };
 
-// todo: remove?
-pub trait AggregationBehaviour {
-    // this chart with other resolution
-    type ThisChart: DataSource;
-    // other deps needed for the aggregation
-    type ResolutionDependencies: DataSource;
+// // todo: remove?
+// pub trait AggregationBehaviour {
+//     // this chart with other resolution
+//     type ThisChart: DataSource;
+//     // other deps needed for the aggregation
+//     type ResolutionDependencies: DataSource;
 
-    type Output: TimespanValue<Timespan = Week> + Send;
-}
+//     type Output: TimespanValue<Timespan = Week> + Send;
+// }
 
 /// `DailyWeight` - weight of each day in average source.
 /// I.e. if it's average over blocks, then weight is daily number of blocks.
@@ -39,17 +39,17 @@ pub trait AggregationBehaviour {
 /// [see "Dependency requirements" here](crate::data_source::kinds)
 pub struct WeeklyAverage<DailyAverage, DailyWeight>(PhantomData<(DailyAverage, DailyWeight)>)
 where
-    DailyAverage: DataSource<Output = Vec<DateValueDouble>>,
-    DailyWeight: DataSource<Output = Vec<DateValueInt>>;
+    DailyAverage: DataSource<Output = Vec<DateValue<f64>>>,
+    DailyWeight: DataSource<Output = Vec<DateValue<i64>>>;
 
 impl<DailyAverage, DailyWeight> DataSource for WeeklyAverage<DailyAverage, DailyWeight>
 where
-    DailyAverage: DataSource<Output = Vec<DateValueDouble>>,
-    DailyWeight: DataSource<Output = Vec<DateValueInt>>,
+    DailyAverage: DataSource<Output = Vec<DateValue<f64>>>,
+    DailyWeight: DataSource<Output = Vec<DateValue<i64>>>,
 {
     type MainDependencies = DailyAverage;
     type ResolutionDependencies = DailyWeight;
-    type Output = Vec<WeekValueDouble>;
+    type Output = Vec<WeekValue<f64>>;
 
     const MUTEX_ID: Option<&'static str> = None;
 
@@ -106,17 +106,12 @@ fn date_range_to_weeks(range: Range<DateTime<Utc>>) -> RangeInclusive<Week> {
 ///
 /// If only one of the vectors contains a value for a date, it yields the value via `EitherOrBoth::Left`
 /// or `EitherOrBoth::Right`.
-fn zip_same_timespan<PointLeft, PointRight>(
-    left: Vec<PointLeft>,
-    right: Vec<PointRight>,
-) -> Vec<(
-    PointLeft::Timespan,
-    EitherOrBoth<PointLeft::Value, PointRight::Value>,
-)>
+fn zip_same_timespan<T, LeftValue, RightValue>(
+    left: Vec<TimespanValue<T, LeftValue>>,
+    right: Vec<TimespanValue<T, RightValue>>,
+) -> Vec<(T, EitherOrBoth<LeftValue, RightValue>)>
 where
-    PointLeft: TimespanValue,
-    PointRight: TimespanValue<Timespan = PointLeft::Timespan>,
-    PointLeft::Timespan: Ord,
+    T: Ord,
 {
     let mut left = left.into_iter().peekable();
     let mut right = right.into_iter().peekable();
@@ -124,39 +119,31 @@ where
     loop {
         match (left.peek(), right.peek()) {
             (Some(l), Some(r)) => {
-                let (left_t, right_t) = (l.get_parts().0, r.get_parts().0);
+                let (left_t, right_t) = (&l.timespan, &r.timespan);
                 match left_t.cmp(right_t) {
                     Ordering::Equal => {
                         let (l, r) = (
                             left.next().expect("peek just succeeded"),
                             right.next().expect("peek just succeeded"),
                         );
-                        let (t, left_v) = l.into_parts();
-                        let (_, right_v) = r.into_parts();
-                        result.push((t, EitherOrBoth::Both(left_v, right_v)))
+                        result.push((l.timespan, EitherOrBoth::Both(l.value, r.value)))
                     }
                     Ordering::Less => {
-                        let (t, left_v) = left.next().expect("peek just succeeded").into_parts();
-                        result.push((t, EitherOrBoth::Left(left_v)))
+                        let left_point = left.next().expect("peek just succeeded");
+                        result.push((left_point.timespan, EitherOrBoth::Left(left_point.value)))
                     }
                     Ordering::Greater => {
-                        let (t, right_v) = right.next().expect("peek just succeeded").into_parts();
-                        result.push((t, EitherOrBoth::Right(right_v)))
+                        let right_point = right.next().expect("peek just succeeded");
+                        result.push((right_point.timespan, EitherOrBoth::Right(right_point.value)))
                     }
                 }
             }
             (Some(_), None) => {
-                result.extend(left.map(|p| {
-                    let (t, v) = p.into_parts();
-                    (t, EitherOrBoth::Left(v))
-                }));
+                result.extend(left.map(|p| (p.timespan, EitherOrBoth::Left(p.value))));
                 break;
             }
             (None, Some(_)) => {
-                result.extend(right.map(|p| {
-                    let (t, v) = p.into_parts();
-                    (t, EitherOrBoth::Right(v))
-                }));
+                result.extend(right.map(|p| (p.timespan, EitherOrBoth::Right(p.value))));
                 break;
             }
             (None, None) => break,
@@ -166,9 +153,9 @@ where
 }
 
 fn weekly_average_from(
-    daily_average: Vec<DateValueDouble>,
-    day_weights: Vec<DateValueInt>,
-) -> Vec<WeekValueDouble> {
+    daily_average: Vec<DateValue<f64>>,
+    day_weights: Vec<DateValue<i64>>,
+) -> Vec<WeekValue<f64>> {
     // missing points mean zero, treat them as such
     let combined_data = zip_same_timespan(daily_average, day_weights);
     let mut weekly_averages = vec![];
@@ -179,13 +166,16 @@ fn weekly_average_from(
     let mut total_weight = 0;
 
     fn push_weekly_average(
-        averages: &mut Vec<WeekValueDouble>,
+        averages: &mut Vec<WeekValue<f64>>,
         week: Week,
         weight_times_avg_sum: &mut f64,
         total_weight: &mut i64,
     ) {
         let value = *weight_times_avg_sum / *total_weight as f64;
-        averages.push(WeekValueDouble { week, value });
+        averages.push(WeekValue::<f64> {
+            timespan: week,
+            value,
+        });
         *weight_times_avg_sum = 0.0;
         *total_weight = 0;
     }
@@ -233,7 +223,7 @@ mod tests {
         gettable_const,
         lines::MockRetrieve,
         tests::point_construction::{d, dt, v, v_double, v_int, week_of, week_v_double},
-        DateValueString, MissingDatePolicy,
+        MissingDatePolicy,
     };
 
     use super::*;
@@ -295,11 +285,11 @@ mod tests {
     #[test]
     fn zip_same_timespan_works() {
         assert_eq!(
-            zip_same_timespan::<DateValueInt, DateValueString>(vec![], vec![]),
+            zip_same_timespan::<NaiveDate, i64, String>(vec![], vec![]),
             vec![]
         );
         assert_eq!(
-            zip_same_timespan::<DateValueInt, _>(
+            zip_same_timespan::<NaiveDate, i64, _>(
                 vec![],
                 vec![
                     v("2024-07-05", "5R"),
@@ -316,7 +306,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            zip_same_timespan::<_, DateValueInt>(
+            zip_same_timespan::<NaiveDate, _, i64>(
                 vec![
                     v("2024-07-05", "5L"),
                     v("2024-07-07", "7L"),
@@ -396,8 +386,8 @@ mod tests {
         gettable_const!(Policy: MissingDatePolicy = MissingDatePolicy::FillZero);
 
         type TestedAverageSource = WeeklyAverage<
-            MapParseTo<MockRetrieve<Dates, RandomAveragesRange, f64, Policy>, DateValueDouble>,
-            MapParseTo<MockRetrieve<Dates, RandomWeightsRange, u64, Policy>, DateValueInt>,
+            MapParseTo<MockRetrieve<Dates, RandomAveragesRange, f64, Policy>, DateValue<f64>>,
+            MapParseTo<MockRetrieve<Dates, RandomWeightsRange, u64, Policy>, DateValue<i64>>,
         >;
 
         // weeks for this month are
@@ -405,7 +395,7 @@ mod tests {
 
         // db is not used in mock
         let db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
-        let output = TestedAverageSource::query_data(
+        let output: Vec<WeekValue<f64>> = TestedAverageSource::query_data(
             &UpdateContext {
                 db: &db,
                 blockscout: &db,
@@ -420,7 +410,7 @@ mod tests {
         assert_eq!(
             output
                 .into_iter()
-                .map(|week_value| week_value.into_parts().0)
+                .map(|week_value| week_value.timespan)
                 .collect_vec(),
             vec![week_of("2024-07-08"), week_of("2024-07-15"),]
         );

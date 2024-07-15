@@ -7,9 +7,9 @@ use rust_decimal::prelude::Zero;
 use sea_orm::DatabaseConnection;
 
 use crate::{
-    charts::types::DateValue,
     data_source::kinds::local_db::parameters::update::batching::parameter_traits::BatchStepBehaviour,
-    types::TimespanValue, ChartProperties, DateValueString, UpdateError,
+    types::{Timespan, TimespanValue},
+    ChartProperties, UpdateError,
 };
 
 use super::PassVecStep;
@@ -20,11 +20,13 @@ use super::PassVecStep;
 /// Used in cumulative charts
 pub struct AddLastValueStep<ChartProps>(PhantomData<ChartProps>);
 
-impl<DV, ChartProps> BatchStepBehaviour<Vec<DV>, ()> for AddLastValueStep<ChartProps>
+impl<Resolution, Value, ChartProps>
+    BatchStepBehaviour<Resolution, Vec<TimespanValue<Resolution, Value>>, ()>
+    for AddLastValueStep<ChartProps>
 where
-    DV: DateValue + Send,
-    DV::Value: FromStr + ToString + Add + Zero + Clone + Send,
-    <DV::Value as FromStr>::Err: Display,
+    Resolution: Timespan + Clone + Send + Sync,
+    Value: FromStr + ToString + Add + Zero + Clone + Send,
+    <Value as FromStr>::Err: Display,
     ChartProps: ChartProperties,
 {
     async fn batch_update_values_step_with(
@@ -32,28 +34,31 @@ where
         chart_id: i32,
         update_time: DateTime<Utc>,
         min_blockscout_block: i64,
-        last_accurate_point: DateValueString,
-        main_data: Vec<DV>,
+        last_accurate_point: TimespanValue<Resolution, String>,
+        main_data: Vec<TimespanValue<Resolution, Value>>,
         _resolution_data: (),
     ) -> Result<usize, UpdateError> {
-        let partial_sum = last_accurate_point
-            .value
-            .parse::<DV::Value>()
-            .map_err(|e| {
-                UpdateError::Internal(format!(
-                    "failed to parse value in chart '{}': {e}",
-                    ChartProps::NAME
-                ))
-            })?;
+        let partial_sum = last_accurate_point.value.parse::<Value>().map_err(|e| {
+            UpdateError::Internal(format!(
+                "failed to parse value in chart '{}': {e}",
+                ChartProps::NAME
+            ))
+        })?;
         let main_data = main_data
             .into_iter()
-            .map(|dv| {
-                let (d, v) = dv.into_parts();
-                let new_v = v + partial_sum.clone();
-                DateValueString::from_parts(d, new_v.to_string())
+            .map(|tv| {
+                let new_v = tv.value + partial_sum.clone();
+                TimespanValue::<Resolution, String> {
+                    timespan: tv.timespan,
+                    value: new_v.to_string(),
+                }
             })
             .collect();
-        PassVecStep::batch_update_values_step_with(
+        <PassVecStep as BatchStepBehaviour<
+            Resolution,
+            Vec<TimespanValue<Resolution, String>>,
+            (),
+        >>::batch_update_values_step_with(
             db,
             chart_id,
             update_time,

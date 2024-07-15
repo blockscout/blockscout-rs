@@ -6,7 +6,7 @@
 use std::{marker::PhantomData, ops::Range, time::Instant};
 
 use blockscout_metrics_tools::AggregateTimer;
-use chrono::{DateTime, Days, Utc};
+use chrono::{DateTime, Days, NaiveDate, Utc};
 use parameter_traits::BatchStepBehaviour;
 use sea_orm::TransactionTrait;
 
@@ -18,9 +18,9 @@ use crate::{
         types::Get,
         UpdateContext,
     },
-    types::ZeroTimespanValue,
+    types::DateValue,
     utils::day_start,
-    ChartProperties, DateValueString, UpdateError,
+    ChartProperties, UpdateError,
 };
 
 pub mod parameter_traits;
@@ -39,9 +39,9 @@ pub struct BatchUpdate<MainDep, ResolutionDep, BatchStep, BatchSizeUpperBound, Q
 where
     MainDep: DataSource,
     ResolutionDep: DataSource,
-    BatchStep: BatchStepBehaviour<MainDep::Output, ResolutionDep::Output>,
+    BatchStep: BatchStepBehaviour<NaiveDate, MainDep::Output, ResolutionDep::Output>,
     BatchSizeUpperBound: Get<chrono::Duration>,
-    Query: QueryBehaviour<Output = Vec<DateValueString>>,
+    Query: QueryBehaviour<Output = Vec<DateValue<String>>>,
     ChartProps: ChartProperties;
 
 impl<MainDep, ResolutionDep, BatchStep, BatchSizeUpperBound, Query, ChartProps>
@@ -50,15 +50,15 @@ impl<MainDep, ResolutionDep, BatchStep, BatchSizeUpperBound, Query, ChartProps>
 where
     MainDep: DataSource,
     ResolutionDep: DataSource,
-    BatchStep: BatchStepBehaviour<MainDep::Output, ResolutionDep::Output>,
+    BatchStep: BatchStepBehaviour<NaiveDate, MainDep::Output, ResolutionDep::Output>,
     BatchSizeUpperBound: Get<chrono::Duration>,
-    Query: QueryBehaviour<Output = Vec<DateValueString>>,
+    Query: QueryBehaviour<Output = Vec<DateValue<String>>>,
     ChartProps: ChartProperties,
 {
     async fn update_values(
         cx: &UpdateContext<'_>,
         chart_id: i32,
-        last_accurate_point: Option<DateValueString>,
+        last_accurate_point: Option<DateValue<String>>,
         min_blockscout_block: i64,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<(), UpdateError> {
@@ -70,7 +70,7 @@ where
             .map_err(UpdateError::BlockscoutDB)?;
         let update_from_date = last_accurate_point
             .clone()
-            .and_then(|p| p.date.checked_add_days(Days::new(1)));
+            .and_then(|p| p.timespan.checked_add_days(Days::new(1)));
         let first_date = match update_from_date {
             Some(d) => d,
             None => get_min_date_blockscout(&txn)
@@ -110,9 +110,9 @@ where
 async fn get_previous_step_last_point<Query>(
     cx: &UpdateContext<'_>,
     this_step_range: Range<DateTime<Utc>>,
-) -> Result<DateValueString, UpdateError>
+) -> Result<DateValue<String>, UpdateError>
 where
-    Query: QueryBehaviour<Output = Vec<DateValueString>>,
+    Query: QueryBehaviour<Output = Vec<DateValue<String>>>,
 {
     // for now the only resolution is 1 day
     let resolution = chrono::Duration::days(1);
@@ -129,7 +129,7 @@ where
         // `None` means
         // - if `MissingDatePolicy` is `FillZero` = the value is 0
         // - if `MissingDatePolicy` is `FillPrevious` = no previous value was found at this moment in time = value at the point is 0
-        .unwrap_or(DateValueString::with_zero_value(
+        .unwrap_or(DateValue::<String>::with_zero_value(
             // we store/operate with dates only for now
             last_point_range.start.date_naive(),
         ));
@@ -145,14 +145,14 @@ async fn batch_update_values_step<MainDep, ResolutionDep, BatchStep>(
     cx: &UpdateContext<'_>,
     chart_id: i32,
     min_blockscout_block: i64,
-    last_accurate_point: DateValueString,
+    last_accurate_point: DateValue<String>,
     range: Range<DateTime<Utc>>,
     dependency_data_fetch_timer: &mut AggregateTimer,
 ) -> Result<usize, UpdateError>
 where
     MainDep: DataSource,
     ResolutionDep: DataSource,
-    BatchStep: BatchStepBehaviour<MainDep::Output, ResolutionDep::Output>,
+    BatchStep: BatchStepBehaviour<NaiveDate, MainDep::Output, ResolutionDep::Output>,
 {
     let main_data =
         MainDep::query_data(cx, Some(range.clone()), dependency_data_fetch_timer).await?;
@@ -301,12 +301,12 @@ mod tests {
                     dirty_force_update_and_check, map_str_tuple_to_owned, simple_test_chart,
                 },
             },
-            ChartProperties, DateValueString, MissingDatePolicy, Named,
+            ChartProperties, MissingDatePolicy, Named,
         };
 
-        use super::parameters::mock::StepInput;
+        use super::{parameters::mock::StepInput, DateValue};
 
-        type VecStringStepInput = StepInput<Vec<DateValueString>, ()>;
+        type VecStringStepInput = StepInput<Vec<DateValue<String>>, ()>;
         type SharedInputsStorage = Arc<Mutex<Vec<VecStringStepInput>>>;
 
         // `OnceLock` in order to return the same instance each time
@@ -374,7 +374,7 @@ mod tests {
             storage: SharedInputsStorage,
             expected_update_time: Option<DateTime<Utc>>,
         ) {
-            let mut prev_input: Option<&StepInput<Vec<DateValueString>, ()>> = None;
+            let mut prev_input: Option<&StepInput<Vec<DateValue<String>>, ()>> = None;
             let expected_update_time = expected_update_time
                 .unwrap_or(DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap());
             for input in storage.lock().await.deref() {
@@ -388,10 +388,10 @@ mod tests {
                     assert_eq!(
                         input
                             .last_accurate_point
-                            .date
+                            .timespan
                             .checked_add_days(Days::new(1))
                             .unwrap(),
-                        input.main_data[0].date
+                        input.main_data[0].timespan
                     );
                 }
                 prev_input = Some(input);

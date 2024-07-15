@@ -12,7 +12,7 @@
 use std::{marker::PhantomData, ops::Range, time::Duration};
 
 use blockscout_metrics_tools::AggregateTimer;
-use chrono::{DateTime, SubsecRound, Utc};
+use chrono::{DateTime, NaiveDate, SubsecRound, Utc};
 use parameter_traits::{CreateBehaviour, QueryBehaviour, UpdateBehaviour};
 use parameters::{
     update::{
@@ -33,7 +33,7 @@ use crate::{
         ChartProperties, Named,
     },
     data_source::{DataSource, UpdateContext},
-    metrics, DateValueString, UpdateError,
+    metrics, UpdateError,
 };
 
 use super::auxiliary::PartialCumulative;
@@ -189,7 +189,7 @@ where
             .await
             .map_err(UpdateError::BlockscoutDB)?;
         let offset = Some(ChartProps::approximate_trailing_points());
-        let last_accurate_point = last_accurate_point::<ChartProps, DateValueString, Query>(
+        let last_accurate_point = last_accurate_point::<NaiveDate, ChartProps, Query>(
             chart_id,
             min_blockscout_block,
             cx.db,
@@ -343,8 +343,9 @@ mod tests {
             },
             gettable_const,
             tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
+            types::DateValue,
             update_group::{SyncUpdateGroup, UpdateGroup},
-            ChartProperties, DateValueString, Named, UpdateError,
+            ChartProperties, Named, UpdateError,
         };
 
         type WasTriggeredStorage = Arc<Mutex<bool>>;
@@ -379,14 +380,14 @@ mod tests {
             async fn update_values(
                 cx: &UpdateContext<'_>,
                 chart_id: i32,
-                _last_accurate_point: Option<DateValueString>,
+                _last_accurate_point: Option<DateValue<String>>,
                 min_blockscout_block: i64,
                 _dependency_data_fetch_timer: &mut AggregateTimer,
             ) -> Result<(), UpdateError> {
                 Self::record_trigger().await;
                 // insert smth for dependency to work well
-                let data = DateValueString {
-                    date: cx.time.date_naive(),
+                let data = DateValue::<String> {
+                    timespan: cx.time.date_naive(),
                     value: "0".to_owned(),
                 };
                 let value = data.active_model(chart_id, Some(min_blockscout_block));

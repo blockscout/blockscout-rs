@@ -6,15 +6,16 @@ use crate::{
     charts::db_interaction::read::get_counter_data,
     data_source::{kinds::local_db::parameter_traits::QueryBehaviour, UpdateContext},
     get_line_chart_data,
+    types::DateValue,
     utils::exclusive_datetime_range_to_inclusive,
-    ChartProperties, DateValueString, UpdateError,
+    ChartProperties, UpdateError,
 };
 
 /// Usually the choice for line charts
 pub struct DefaultQueryVec<C: ChartProperties>(PhantomData<C>);
 
 impl<C: ChartProperties> QueryBehaviour for DefaultQueryVec<C> {
-    type Output = Vec<DateValueString>;
+    type Output = Vec<DateValue<String>>;
 
     /// Retrieve chart data from local storage.
     ///
@@ -40,7 +41,7 @@ impl<C: ChartProperties> QueryBehaviour for DefaultQueryVec<C> {
         // and `get_line_chart_data` will return the relevant data
         let start = start.map(|s| s.date_naive());
         let end = end.map(|e| e.date_naive());
-        let values: Vec<DateValueString> = get_line_chart_data(
+        let values: Vec<DateValue<String>> = get_line_chart_data(
             cx.db,
             C::NAME,
             start,
@@ -52,7 +53,7 @@ impl<C: ChartProperties> QueryBehaviour for DefaultQueryVec<C> {
         )
         .await?
         .into_iter()
-        .map(DateValueString::from)
+        .map(DateValue::from)
         .collect();
         Ok(values)
     }
@@ -62,7 +63,7 @@ impl<C: ChartProperties> QueryBehaviour for DefaultQueryVec<C> {
 pub struct DefaultQueryLast<C: ChartProperties>(PhantomData<C>);
 
 impl<C: ChartProperties> QueryBehaviour for DefaultQueryLast<C> {
-    type Output = DateValueString;
+    type Output = DateValue<String>;
 
     async fn query_data(
         cx: &UpdateContext<'_>,

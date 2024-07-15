@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use crate::{
-    charts::types::DateValueInt,
+    charts::types::DateValue<i64>,
     data_source::{
         kinds::{
             data_manipulation::map::MapParseTo,
@@ -122,7 +122,7 @@ pub type NewAccounts = LocalDbChartSource<
     Properties,
 >;
 
-pub type NewAccountsInt = MapParseTo<NewAccounts, DateValueInt>;
+pub type NewAccountsInt = MapParseTo<NewAccounts, DateValue<i64>>;
 
 #[cfg(test)]
 mod tests {

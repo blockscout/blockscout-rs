@@ -3,23 +3,30 @@ use std::ops::RangeInclusive;
 
 use crate::{
     charts::types::DateValue,
-    types::{TimespanValue, ZeroTimespanValue},
-    DateValueString, MissingDatePolicy, ReadError,
+    types::{Timespan, TimespanValue, ZeroTimespanValue},
+    MissingDatePolicy, ReadError,
 };
-use chrono::{Days, Duration, NaiveDate};
+use chrono::{Duration, NaiveDate};
 
 /// Fits the `data` within the range (`from`, `to`), preserving
 /// information nearby the boundaries according to `policy`.
 ///
 /// Assumes the data is sorted.
-pub fn fit_into_range(
-    mut data: Vec<DateValueString>,
-    from: Option<NaiveDate>,
-    to: Option<NaiveDate>,
+pub fn fit_into_range<T, V>(
+    mut data: Vec<TimespanValue<T, V>>,
+    from: Option<T>,
+    to: Option<T>,
     policy: MissingDatePolicy,
-) -> Vec<DateValueString> {
-    let trim_range =
-        RangeInclusive::new(from.unwrap_or(NaiveDate::MIN), to.unwrap_or(NaiveDate::MAX));
+) -> Vec<TimespanValue<T, V>>
+where
+    T: Timespan + Ord + Clone,
+    // for<'a> &'a T: Ord,
+    V: Clone,
+{
+    let trim_range = RangeInclusive::new(
+        from.clone().unwrap_or(T::from_date(NaiveDate::MIN)),
+        to.unwrap_or(T::from_date(NaiveDate::MAX)),
+    );
     match policy {
         MissingDatePolicy::FillZero => {
             // (potential) missing values at the boundaries
@@ -31,13 +38,14 @@ pub fn fit_into_range(
             // preserve the point before the range (if needed)
             if let Some(from) = from {
                 if let Some(last_point_before) =
-                    data.iter().take_while(|p| p.get_parts().0 < &from).last()
+                    data.iter().take_while(|p| p.timespan < from).last()
                 {
-                    if let Err(insert_idx) = data.binary_search_by_key(&from, |p| *p.get_parts().0)
-                    {
+                    if let Err(insert_idx) = data.binary_search_by_key(&&from, |p| &p.timespan) {
                         // `data` does not contain point for `from`, need to insert by `FillPrevious` logic
-                        let new_point =
-                            DateValueString::from_parts(from, last_point_before.value.clone());
+                        let new_point = TimespanValue {
+                            timespan: from,
+                            value: last_point_before.value.clone(),
+                        };
                         data.insert(insert_idx, new_point);
                     }
                 }
@@ -49,36 +57,32 @@ pub fn fit_into_range(
 }
 
 /// The vector must be sorted
-pub fn trim_out_of_range_sorted<DV: DateValue>(
-    data: &mut Vec<DV>,
-    range: RangeInclusive<NaiveDate>,
-) {
+pub fn trim_out_of_range_sorted<Resolution, Value>(
+    data: &mut Vec<TimespanValue<Resolution, Value>>,
+    range: RangeInclusive<Resolution>,
+) where
+    Resolution: Timespan + Ord,
+{
     // start of relevant section
     let keep_from_idx = data
-        .binary_search_by_key(&range.start(), |p| p.get_parts().0)
+        .binary_search_by_key(&range.start(), |p| &p.timespan)
         .unwrap_or_else(|i| i);
     // irrelevant tail start
-    let trim_from_idx = data
-        .binary_search_by_key(
-            &(range
-                .end()
-                .checked_add_days(Days::new(1))
-                .unwrap_or(NaiveDate::MAX)),
-            |p| *p.get_parts().0,
-        )
+    let trim_until_idx = data
+        .binary_search_by_key(&range.end(), |p| &p.timespan)
         .unwrap_or_else(|i| i);
-    data.truncate(trim_from_idx);
+    data.truncate(trim_until_idx + 1);
     data.drain(..keep_from_idx);
 }
 
 /// Fills missing points according to policy and filters out points outside of range.
 pub fn fill_and_filter_chart(
-    data: Vec<DateValueString>,
+    data: Vec<DateValue<String>>,
     from: Option<NaiveDate>,
     to: Option<NaiveDate>,
     policy: MissingDatePolicy,
     interval_limit: Option<Duration>,
-) -> Result<Vec<DateValueString>, ReadError> {
+) -> Result<Vec<DateValue<String>>, ReadError> {
     let retrieved_count = data.len();
     let data_filled = fill_missing_points(data, policy, from, to, interval_limit)?;
     if let Some(filled_count) = data_filled.len().checked_sub(retrieved_count) {
@@ -96,22 +100,25 @@ pub fn fill_and_filter_chart(
     Ok(data_filtered)
 }
 
-/// Fills values for all dates from `min(data.first(), from)` to `max(data.last(), to)` according
+/// Fills values for all timespans from `min(data.first(), from)` to `max(data.last(), to)` according
 /// to `policy`.
 ///
 /// See [`filled_zeros_data`] and [`filled_previous_data`] for details on the policies.
-pub fn fill_missing_points(
-    data: Vec<DateValueString>,
+pub fn fill_missing_points<T>(
+    data: Vec<TimespanValue<T, String>>,
     policy: MissingDatePolicy,
-    from: Option<NaiveDate>,
-    to: Option<NaiveDate>,
+    from: Option<T>,
+    to: Option<T>,
     interval_limit: Option<Duration>,
-) -> Result<Vec<DateValueString>, ReadError> {
-    let from = vec![from.as_ref(), data.first().map(|v| &v.date)]
+) -> Result<Vec<TimespanValue<T, String>>, ReadError>
+where
+    T: Timespan + Ord + Clone,
+{
+    let from = vec![from.as_ref(), data.first().map(|v| &v.timespan)]
         .into_iter()
         .flatten()
         .min();
-    let to = vec![to.as_ref(), data.last().map(|v| &v.date)]
+    let to = vec![to.as_ref(), data.last().map(|v| &v.timespan)]
         .into_iter()
         .flatten()
         .max();
@@ -122,7 +129,7 @@ pub fn fill_missing_points(
     };
 
     if let Some(interval_limit) = interval_limit {
-        if to - from > interval_limit {
+        if to.clone().into_date() - from.clone().into_date() > interval_limit {
             return Err(ReadError::IntervalLimitExceeded(interval_limit));
         }
     }
@@ -134,28 +141,27 @@ pub fn fill_missing_points(
 }
 
 /// Inserts zero values in `data` for all missing dates in inclusive range `[from; to]`
-fn filled_zeros_data(
-    data: &[DateValueString],
-    from: NaiveDate,
-    to: NaiveDate,
-) -> Vec<DateValueString> {
-    let n = (to - from).num_days() as usize;
-    let mut new_data: Vec<DateValueString> = Vec::with_capacity(n);
+fn filled_zeros_data<T, V>(data: &[TimespanValue<T, V>], from: T, to: T) -> Vec<TimespanValue<T, V>>
+where
+    T: Timespan + Ord + Clone,
+    TimespanValue<T, V>: Clone + ZeroTimespanValue<T>,
+{
+    let mut new_data: Vec<TimespanValue<T, V>> = Vec::new();
 
-    let mut current_date = from;
+    let mut current_timespan = from;
     let mut i = 0;
-    while current_date <= to {
-        let maybe_value_exists = data.get(i).filter(|&v| v.date.eq(&current_date));
+    while current_timespan <= to {
+        let maybe_value_exists = data.get(i).filter(|&v| v.timespan.eq(&current_timespan));
 
         let value = match maybe_value_exists {
             Some(value) => {
                 i += 1;
                 value.clone()
             }
-            None => DateValueString::with_zero_value(current_date),
+            None => TimespanValue::<T, V>::with_zero_value(current_timespan.clone()),
         };
         new_data.push(value);
-        current_date += Duration::days(1);
+        current_timespan = current_timespan.next_timespan();
     }
 
     new_data
@@ -163,17 +169,21 @@ fn filled_zeros_data(
 
 /// Inserts last existing values in `data` for all missing dates in inclusive range `[from; to]`.
 /// For all leading missing dates inserts zero.
-fn filled_previous_data(
-    data: &[DateValueString],
-    from: NaiveDate,
-    to: NaiveDate,
-) -> Vec<DateValueString> {
-    let n = (to - from).num_days() as usize;
-    let mut new_data: Vec<DateValueString> = Vec::with_capacity(n);
-    let mut current_date = from;
+fn filled_previous_data<T, V>(
+    data: &[TimespanValue<T, V>],
+    from: T,
+    to: T,
+) -> Vec<TimespanValue<T, V>>
+where
+    T: Timespan + Ord + Clone,
+    V: Clone,
+    TimespanValue<T, V>: Clone + ZeroTimespanValue<T>,
+{
+    let mut new_data: Vec<TimespanValue<T, V>> = Vec::new();
+    let mut current_timespan = from;
     let mut i = 0;
-    while current_date <= to {
-        let maybe_value_exists = data.get(i).filter(|&v| v.date.eq(&current_date));
+    while current_timespan <= to {
+        let maybe_value_exists = data.get(i).filter(|&v| v.timespan.eq(&current_timespan));
         let value = match maybe_value_exists {
             Some(value) => {
                 i += 1;
@@ -181,31 +191,36 @@ fn filled_previous_data(
             }
             None => new_data
                 .last()
-                .map(|value| DateValueString {
-                    date: current_date,
+                .map(|value| TimespanValue {
+                    timespan: current_timespan.clone(),
                     value: value.value.clone(),
                 })
-                .unwrap_or_else(|| DateValueString::with_zero_value(current_date)),
+                .unwrap_or_else(|| {
+                    TimespanValue::<T, V>::with_zero_value(current_timespan.clone())
+                }),
         };
         new_data.push(value);
-        current_date += Duration::days(1);
+        current_timespan = current_timespan.next_timespan();
     }
     new_data
 }
 
-pub(crate) fn filter_within_range(
-    data: Vec<DateValueString>,
-    maybe_from: Option<NaiveDate>,
-    maybe_to: Option<NaiveDate>,
-) -> Vec<DateValueString> {
-    let is_within_range = |v: &DateValueString| -> bool {
-        if let Some(from) = maybe_from {
-            if v.date < from {
+pub(crate) fn filter_within_range<T, V>(
+    data: Vec<TimespanValue<T, V>>,
+    maybe_from: Option<T>,
+    maybe_to: Option<T>,
+) -> Vec<TimespanValue<T, V>>
+where
+    T: Ord,
+{
+    let is_within_range = |v: &TimespanValue<T, V>| -> bool {
+        if let Some(from) = &maybe_from {
+            if &v.timespan < from {
                 return false;
             }
         }
-        if let Some(to) = maybe_to {
-            if v.date > to {
+        if let Some(to) = &maybe_to {
+            if &v.timespan > to {
                 return false;
             }
         }
@@ -218,7 +233,7 @@ pub(crate) fn filter_within_range(
 #[cfg(test)]
 mod tests {
     use crate::{
-        charts::types::DateValueInt,
+        charts::types::DateValue,
         tests::point_construction::{d, v, v_int},
     };
 
@@ -492,7 +507,7 @@ mod tests {
     #[test]
     fn trim_range_works() {
         // Empty vector
-        let mut data: Vec<DateValueInt> = vec![];
+        let mut data: Vec<DateValue<i64>> = vec![];
         trim_out_of_range_sorted(&mut data, d("2100-01-02")..=d("2100-01-04"));
         assert_eq!(data, vec![]);
         trim_out_of_range_sorted(&mut data, NaiveDate::MIN..=NaiveDate::MAX);
@@ -554,7 +569,7 @@ mod tests {
     fn fit_into_range_works() {
         // Empty vector
         assert_eq!(
-            fit_into_range(
+            fit_into_range::<_, ()>(
                 vec![],
                 Some(d("2100-01-02")),
                 Some(d("2100-01-04")),
@@ -563,7 +578,7 @@ mod tests {
             vec![]
         );
         assert_eq!(
-            fit_into_range(
+            fit_into_range::<_, ()>(
                 vec![],
                 Some(d("2100-01-02")),
                 Some(d("2100-01-04")),

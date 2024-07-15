@@ -16,9 +16,9 @@ use rust_decimal::prelude::Zero;
 use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
 
 use crate::{
-    charts::Point,
     data_processing::deltas,
     data_source::{DataSource, UpdateContext},
+    types::TimespanValue,
     UpdateError,
 };
 
@@ -29,20 +29,21 @@ use crate::{
 /// [see "Dependency requirements" here](crate::data_source::kinds)
 ///
 /// See [module-level documentation](self) for more details.
-pub struct Delta<D>(PhantomData<D>)
+pub struct Delta<DS>(PhantomData<DS>)
 where
-    D: DataSource;
+    DS: DataSource;
 
-impl<D, DV> DataSource for Delta<D>
+impl<DS, Resolution, Value> DataSource for Delta<DS>
 where
-    D: DataSource<Output = Vec<DV>>,
-    DV: Point + Default,
-    DV::Value: FromStr + SubAssign + Zero + Clone + Display,
-    <DV::Value as FromStr>::Err: Display,
+    DS: DataSource<Output = Vec<TimespanValue<Resolution, Value>>>,
+    Resolution: Send,
+    Value: FromStr + SubAssign + Zero + Clone + Display + Send,
+    TimespanValue<Resolution, Value>: Default,
+    <Value as FromStr>::Err: Display,
 {
-    type MainDependencies = D;
+    type MainDependencies = DS;
     type ResolutionDependencies = ();
-    type Output = Vec<DV>;
+    type Output = Vec<TimespanValue<Resolution, Value>>;
     const MUTEX_ID: Option<&'static str> = None;
 
     async fn init_itself(
@@ -71,29 +72,27 @@ where
             let end = r.end;
             start..end
         });
-        let cum_data: Vec<DV> =
-            D::query_data(cx, request_range, dependency_data_fetch_timer).await?;
+        let cum_data = DS::query_data(cx, request_range, dependency_data_fetch_timer).await?;
         let (prev_value, cum_data) = if range.is_some() {
             let mut cum_data = cum_data.into_iter();
             let Some(range_start) = cum_data.next() else {
                 tracing::warn!("Value before the range was not found, finishing update");
                 return Ok(vec![]);
             };
-            let range_start_value = range_start.into_parts().1;
             tracing::debug!(
-                range_start_value = %range_start_value,
+                range_start_value = %range_start.value,
                 cumulative_points_len = cum_data.len(),
                 "calculating deltas from cumulative"
             );
-            (range_start_value, cum_data.collect())
+            (range_start.value, cum_data.collect())
         } else {
-            (DV::Value::zero(), cum_data)
+            (Value::zero(), cum_data)
         };
         tracing::debug!(
             prev_value = %prev_value,
             cumulative_points_len = cum_data.len(),
             "calculating deltas from cumulative"
         );
-        deltas::<DV>(cum_data, prev_value)
+        deltas::<Resolution, Value>(cum_data, prev_value)
     }
 }

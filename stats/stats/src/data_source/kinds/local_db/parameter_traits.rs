@@ -7,7 +7,8 @@ use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
 use crate::{
     charts::db_interaction::write::set_last_updated_at,
     data_source::{DataSource, UpdateContext},
-    DateValueString, UpdateError,
+    types::DateValue,
+    UpdateError,
 };
 
 /// In most cases, [`super::DefaultCreate`] is enough.
@@ -33,7 +34,7 @@ where
     fn update_values(
         cx: &UpdateContext<'_>,
         chart_id: i32,
-        last_accurate_point: Option<DateValueString>,
+        last_accurate_point: Option<DateValue<String>>,
         min_blockscout_block: i64,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> impl Future<Output = Result<(), UpdateError>> + Send;

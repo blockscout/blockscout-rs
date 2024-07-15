@@ -1,12 +1,12 @@
 use chrono::NaiveDate;
 
 use crate::{
-    charts::types::{DateValue, DateValueString},
+    charts::types::DateValue,
+    types::{Timespan, TimespanValue},
     UpdateError,
 };
 use std::{
     fmt::Display,
-    iter::Sum,
     mem,
     ops::{AddAssign, SubAssign},
     str::FromStr,
@@ -14,10 +14,10 @@ use std::{
 
 /// `prev_sum` - sum before this data segment
 pub fn parse_and_cumsum<T>(
-    mut data: Vec<DateValueString>,
+    mut data: Vec<DateValue<String>>,
     parent_name: &str,
     mut prev_sum: T,
-) -> Result<Vec<DateValueString>, UpdateError>
+) -> Result<Vec<DateValue<String>>, UpdateError>
 where
     T: AddAssign + FromStr + Default + Display,
     T::Err: Display,
@@ -38,15 +38,21 @@ where
 /// Assumes `data` is sorted.
 ///
 /// Semantically inverse to [`deltas`].
-pub fn cumsum<DV>(mut data: Vec<DV>, mut prev_sum: DV::Value) -> Result<Vec<DV>, UpdateError>
+pub fn cumsum<Resolution, Value>(
+    mut data: Vec<TimespanValue<Resolution, Value>>,
+    mut prev_sum: Value,
+) -> Result<Vec<TimespanValue<Resolution, Value>>, UpdateError>
 where
-    DV: DateValue + Default,
-    DV::Value: AddAssign + Clone,
+    Value: AddAssign + Clone,
+    TimespanValue<Resolution, Value>: Default,
 {
     for item in data.iter_mut() {
-        let (date, value) = mem::take(item).into_parts();
+        let TimespanValue { timespan, value } = mem::take(item);
         prev_sum.add_assign(value);
-        *item = DV::from_parts(date, prev_sum.clone());
+        *item = TimespanValue::<Resolution, Value> {
+            timespan,
+            value: prev_sum.clone(),
+        };
     }
     Ok(data)
 }
@@ -55,75 +61,88 @@ where
 /// Assumes `data` is sorted.
 ///
 /// Semantically inverse to [`cumsum`].
-pub fn deltas<DV>(mut data: Vec<DV>, mut prev_value: DV::Value) -> Result<Vec<DV>, UpdateError>
+pub fn deltas<Resolution, Value>(
+    mut data: Vec<TimespanValue<Resolution, Value>>,
+    mut prev_value: Value,
+) -> Result<Vec<TimespanValue<Resolution, Value>>, UpdateError>
 where
-    DV: DateValue + Default,
-    DV::Value: SubAssign + Clone,
+    Value: SubAssign + Clone,
+    TimespanValue<Resolution, Value>: Default,
 {
     for item in data.iter_mut() {
-        let (date, mut value) = mem::take(item).into_parts();
+        let TimespanValue {
+            timespan,
+            mut value,
+        } = mem::take(item);
         let prev_copy = prev_value.clone();
         prev_value = value.clone();
         value -= prev_copy;
-        *item = DV::from_parts(date, value);
+        *item = TimespanValue::<Resolution, Value> { timespan, value };
     }
     Ok(data)
 }
 
-pub fn parse_and_sum<T>(
-    data: Vec<DateValueString>,
-    chart_name: &str,
-    parent_name: &str,
-) -> Result<Option<DateValueString>, UpdateError>
-where
-    T: Sum + FromStr + Default + Display,
-    T::Err: Display,
-{
-    let max_date = match data.iter().max() {
-        Some(max_date) => max_date.date,
-        None => {
-            tracing::warn!(
-                chart_name = chart_name,
-                parent_chart_name = parent_name,
-                "parent doesn't have any data after update"
-            );
-            return Ok(None);
-        }
-    };
-    let total: T = data
-        .into_iter()
-        .map(|p| p.value.parse::<T>())
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| {
-            UpdateError::Internal(format!(
-                "failed to parse values in chart '{parent_name}': {e}",
-            ))
-        })?
-        .into_iter()
-        .sum();
-    let point = DateValueString {
-        date: max_date,
-        value: total.to_string(),
-    };
-    Ok(Some(point))
-}
+// todo: remove
+// pub fn parse_and_sum<T>(
+//     data: Vec<DateValueString>,
+//     chart_name: &str,
+//     parent_name: &str,
+// ) -> Result<Option<DateValueString>, UpdateError>
+// where
+//     T: Sum + FromStr + Default + Display,
+//     T::Err: Display,
+// {
+//     let max_date = match data.iter().max() {
+//         Some(max_date) => max_date.date,
+//         None => {
+//             tracing::warn!(
+//                 chart_name = chart_name,
+//                 parent_chart_name = parent_name,
+//                 "parent doesn't have any data after update"
+//             );
+//             return Ok(None);
+//         }
+//     };
+//     let total: T = data
+//         .into_iter()
+//         .map(|p| p.value.parse::<T>())
+//         .collect::<Result<Vec<_>, _>>()
+//         .map_err(|e| {
+//             UpdateError::Internal(format!(
+//                 "failed to parse values in chart '{parent_name}': {e}",
+//             ))
+//         })?
+//         .into_iter()
+//         .sum();
+//     let point = DateValueString {
+//         date: max_date,
+//         value: total.to_string(),
+//     };
+//     Ok(Some(point))
+// }
 
-pub fn sum<DV>(data: &[DV], mut partial_sum: DV::Value) -> Result<DV, UpdateError>
+pub fn sum<Resolution, Value>(
+    data: &[TimespanValue<Resolution, Value>],
+    mut partial_sum: Value,
+) -> Result<TimespanValue<Resolution, Value>, UpdateError>
 where
-    DV: DateValue,
-    DV::Value: AddAssign + Clone,
+    Resolution: Timespan + Clone + Ord,
+    Value: AddAssign + Clone,
 {
-    let mut max_date = NaiveDate::MIN;
+    let mut max_timespan = Resolution::from_date(NaiveDate::MIN);
     for item in data.iter() {
-        let (date, value) = item.get_parts();
+        let TimespanValue { timespan, value } = item;
         partial_sum.add_assign(value.clone());
-        max_date = max_date.max(*date);
+        max_timespan = max_timespan.max(timespan.clone());
     }
-    let sum_point = DV::from_parts(max_date, partial_sum);
+    let sum_point = TimespanValue::<Resolution, Value> {
+        timespan: max_timespan,
+        value: partial_sum,
+    };
     Ok(sum_point)
 }
 
-pub fn last_point(data: Vec<DateValueString>) -> Option<DateValueString> {
+pub fn last_point(data: Vec<DateValue<String>>) -> Option<DateValue<String>> {
     data.into_iter().max()
 }
 

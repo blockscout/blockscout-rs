@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use crate::{
-    charts::types::DateValueDouble,
+    charts::types::DateValue<f64>,
     data_source::kinds::{
         data_manipulation::map::MapToString,
         local_db::DirectVecLocalDbChartSource,
@@ -41,7 +41,7 @@ impl StatementFromRange for TxnsSuccessRateStatement {
 }
 
 pub type TxnsSuccessRateRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<TxnsSuccessRateStatement, DateValueDouble>>;
+    RemoteDatabaseSource<PullAllWithAndSort<TxnsSuccessRateStatement, DateValue<f64>>>;
 
 pub type TxnsSuccessRateRemoteString = MapToString<TxnsSuccessRateRemote>;
 

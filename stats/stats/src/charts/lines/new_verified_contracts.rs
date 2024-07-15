@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use crate::{
-    charts::types::DateValueInt,
+    charts::types::DateValue<i64>,
     data_source::kinds::{
         data_manipulation::map::MapParseTo,
         local_db::DirectVecLocalDbChartSource,
@@ -52,7 +52,7 @@ impl ChartProperties for NewVerifiedContractsProperties {
 pub type NewVerifiedContracts =
     DirectVecLocalDbChartSource<NewVerifiedContractsRemote, NewVerifiedContractsProperties>;
 
-pub type NewVerifiedContractsInt = MapParseTo<NewVerifiedContracts, DateValueInt>;
+pub type NewVerifiedContractsInt = MapParseTo<NewVerifiedContracts, DateValue<i64>>;
 
 #[cfg(test)]
 mod tests {

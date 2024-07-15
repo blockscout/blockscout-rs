@@ -24,11 +24,11 @@ use std::{
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Utc};
-use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr, Statement};
+use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr, FromQueryResult, Statement};
 
 use crate::{
-    charts::Point,
     data_source::{source::DataSource, types::UpdateContext},
+    types::TimespanValue,
     UpdateError,
 };
 
@@ -81,28 +81,35 @@ pub trait StatementFromRange {
 /// `S` and sort it by date.
 ///
 /// `P` - Type of point to retrieve within query.
-/// `DateValueString` can be used to avoid parsing the values,
-/// but `DateValueDecimal` or other types can be useful sometimes.
-pub struct PullAllWithAndSort<S: StatementFromRange, P: Point>(PhantomData<(S, P)>);
-
-impl<S, P> RemoteQueryBehaviour for PullAllWithAndSort<S, P>
+/// `DateValue<String>` can be used to avoid parsing the values,
+/// but `DateValue<Decimal>` or other types can be useful sometimes.
+pub struct PullAllWithAndSort<S, Resolution, Value>(PhantomData<(S, Resolution, Value)>)
 where
     S: StatementFromRange,
-    P: Point,
+    Resolution: Ord + Send,
+    Value: Send,
+    TimespanValue<Resolution, Value>: FromQueryResult;
+
+impl<S, Resolution, Value> RemoteQueryBehaviour for PullAllWithAndSort<S, Resolution, Value>
+where
+    S: StatementFromRange,
+    Resolution: Ord + Send,
+    Value: Send,
+    TimespanValue<Resolution, Value>: FromQueryResult,
 {
-    type Output = Vec<P>;
+    type Output = Vec<TimespanValue<Resolution, Value>>;
 
     async fn query_data(
         cx: &UpdateContext<'_>,
         range: Option<Range<DateTimeUtc>>,
-    ) -> Result<Vec<P>, UpdateError> {
+    ) -> Result<Vec<TimespanValue<Resolution, Value>>, UpdateError> {
         let query = S::get_statement(range);
-        let mut data = P::find_by_statement(query)
+        let mut data = TimespanValue::<Resolution, Value>::find_by_statement(query)
             .all(cx.blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?;
         // linear time for sorted sequences
-        data.sort_unstable_by(|a, b| a.get_parts().0.cmp(b.get_parts().0));
+        data.sort_unstable_by(|a, b| a.timespan.cmp(&b.timespan));
         // can't use sort_*_by_key: https://github.com/rust-lang/rust/issues/34162
         Ok(data)
     }
@@ -116,23 +123,30 @@ pub trait StatementForOne {
 /// `S`.
 ///
 /// `P` - Type of point to retrieve within query.
-/// `DateValueString` can be used to avoid parsing the values,
-/// but `DateValueDecimal` or other types can be useful sometimes.
-pub struct PullOne<S: StatementForOne, P: Point>(PhantomData<(S, P)>);
-
-impl<S, P> RemoteQueryBehaviour for PullOne<S, P>
+/// `DateValue<String>` can be used to avoid parsing the values,
+/// but `DateValue<Decimal>` or other types can be useful sometimes.
+pub struct PullOne<S, Resolution, Value>(PhantomData<(S, Resolution, Value)>)
 where
     S: StatementForOne,
-    P: Point,
+    Resolution: Ord + Send,
+    Value: Send,
+    TimespanValue<Resolution, Value>: FromQueryResult;
+
+impl<S, Resolution, Value> RemoteQueryBehaviour for PullOne<S, Resolution, Value>
+where
+    S: StatementForOne,
+    Resolution: Ord + Send,
+    Value: Send,
+    TimespanValue<Resolution, Value>: FromQueryResult,
 {
-    type Output = P;
+    type Output = TimespanValue<Resolution, Value>;
 
     async fn query_data(
         cx: &UpdateContext<'_>,
         _range: Option<Range<DateTimeUtc>>,
-    ) -> Result<P, UpdateError> {
+    ) -> Result<TimespanValue<Resolution, Value>, UpdateError> {
         let query = S::get_statement();
-        let data = P::find_by_statement(query)
+        let data = TimespanValue::<Resolution, Value>::find_by_statement(query)
             .one(cx.blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?

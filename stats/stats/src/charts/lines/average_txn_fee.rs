@@ -3,7 +3,7 @@
 use std::ops::Range;
 
 use crate::{
-    charts::types::DateValueDouble,
+    charts::types::DateValue<f64>,
     data_source::kinds::{
         data_manipulation::map::MapToString,
         local_db::DirectVecLocalDbChartSource,
@@ -43,7 +43,7 @@ impl StatementFromRange for AverageTxnFeeStatement {
 }
 
 pub type AverageTxnFeeRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<AverageTxnFeeStatement, DateValueDouble>>;
+    RemoteDatabaseSource<PullAllWithAndSort<AverageTxnFeeStatement, DateValue<f64>>>;
 
 pub type AverageTxnFeeRemoteString = MapToString<AverageTxnFeeRemote>;
 

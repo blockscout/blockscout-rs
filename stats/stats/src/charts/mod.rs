@@ -5,5 +5,5 @@ pub mod lines;
 pub mod types;
 pub use chart::{
     chart_properties_portrait, ChartProperties, ChartPropertiesObject, MissingDatePolicy, Named,
-    Point, UpdateError,
+    UpdateError,
 };

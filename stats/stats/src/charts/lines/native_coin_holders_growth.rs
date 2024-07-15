@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, HashSet};
 use crate::{
     charts::{
         db_interaction::write::{create_chart, insert_data_many},
-        types::DateValueInt,
+        types::DateValue<i64>,
     },
     data_source::{
         kinds::{
@@ -389,7 +389,7 @@ pub type NativeCoinHoldersGrowth = LocalDbChartSource<
     NativeCoinHoldersGrowthProperties,
 >;
 
-pub type NativeCoinHoldersGrowthInt = MapParseTo<NativeCoinHoldersGrowth, DateValueInt>;
+pub type NativeCoinHoldersGrowthInt = MapParseTo<NativeCoinHoldersGrowth, DateValue<i64>>;
 
 #[cfg(test)]
 mod tests {

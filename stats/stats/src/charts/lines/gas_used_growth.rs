@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use crate::{
-    charts::types::DateValueDecimal,
+    charts::types::DateValue<Decimal>,
     data_source::kinds::{
         data_manipulation::map::{Map, MapFunction},
         local_db::DailyCumulativeLocalDbChartSource,
@@ -39,13 +39,13 @@ impl StatementFromRange for GasUsedPartialStatement {
 }
 
 pub type GasUsedPartialRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<GasUsedPartialStatement, DateValueDecimal>>;
+    RemoteDatabaseSource<PullAllWithAndSort<GasUsedPartialStatement, DateValue<Decimal>>>;
 
 pub struct IncrementsFromPartialSum;
 
-impl MapFunction<Vec<DateValueDecimal>> for IncrementsFromPartialSum {
-    type Output = Vec<DateValueDecimal>;
-    fn function(inner_data: Vec<DateValueDecimal>) -> Result<Self::Output, UpdateError> {
+impl MapFunction<Vec<DateValue<Decimal>>> for IncrementsFromPartialSum {
+    type Output = Vec<DateValue<Decimal>>;
+    fn function(inner_data: Vec<DateValue<Decimal>>) -> Result<Self::Output, UpdateError> {
         Ok(inner_data
             .into_iter()
             .scan(Decimal::ZERO, |state, mut next| {

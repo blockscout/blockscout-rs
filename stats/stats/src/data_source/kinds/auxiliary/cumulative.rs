@@ -2,7 +2,7 @@ use std::{marker::PhantomData, ops::AddAssign};
 
 use rust_decimal::prelude::Zero;
 
-use crate::{charts::types::DateValue, data_processing::cumsum, data_source::DataSource};
+use crate::{data_processing::cumsum, data_source::DataSource, types::TimespanValue};
 
 /// Auxiliary source for cumulative chart.
 ///
@@ -12,15 +12,16 @@ pub struct PartialCumulative<Delta: DataSource>(PhantomData<Delta>);
 
 impl<Delta: DataSource> PartialCumulative<Delta> {}
 
-impl<Delta, DV> DataSource for PartialCumulative<Delta>
+impl<Delta, Resolution, Value> DataSource for PartialCumulative<Delta>
 where
-    Delta: DataSource<Output = Vec<DV>>,
-    DV: DateValue + Send + Default,
-    DV::Value: AddAssign + Zero + Clone,
+    Resolution: Send,
+    Value: AddAssign + Zero + Clone + Send,
+    TimespanValue<Resolution, Value>: Default,
+    Delta: DataSource<Output = Vec<TimespanValue<Resolution, Value>>>,
 {
     type MainDependencies = Delta;
     type ResolutionDependencies = ();
-    type Output = Vec<DV>;
+    type Output = Vec<TimespanValue<Resolution, Value>>;
     const MUTEX_ID: Option<&'static str> = None;
 
     async fn init_itself(
@@ -44,7 +45,7 @@ where
         dependency_data_fetch_timer: &mut blockscout_metrics_tools::AggregateTimer,
     ) -> Result<Self::Output, crate::UpdateError> {
         let delta_data = Delta::query_data(cx, range, dependency_data_fetch_timer).await?;
-        let data = cumsum::<DV>(delta_data, DV::Value::zero())?;
+        let data = cumsum::<Resolution, Value>(delta_data, Value::zero())?;
         Ok(data)
     }
 }
