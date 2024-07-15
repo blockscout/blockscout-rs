@@ -16,6 +16,7 @@ use super::{
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
     types::UpdateParameters,
+    DataSource,
 };
 use crate::{
     construct_update_group,

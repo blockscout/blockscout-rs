@@ -1,7 +1,6 @@
 use std::ops::Range;
 
 use crate::{
-    charts::types::DateValue<f64>,
     data_source::kinds::{
         data_manipulation::map::MapToString,
         local_db::DirectVecLocalDbChartSource,
@@ -78,7 +77,7 @@ impl StatementFromRange for NativeCoinSupplyStatement {
 
 // query returns float value
 pub type NativeCoinSupplyRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<NativeCoinSupplyStatement, DateValue<f64>>>;
+    RemoteDatabaseSource<PullAllWithAndSort<NativeCoinSupplyStatement, NaiveDate, f64>>;
 
 pub type NativeCoinSupplyRemoteString = MapToString<NativeCoinSupplyRemote>;
 

@@ -205,7 +205,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 ///     }
 /// }
 ///
-/// type DummyRemote = RemoteDatabaseSource<PullAllWithAndSort<DummyRemoteStatement, DateValueString>>;
+/// type DummyRemote = RemoteDatabaseSource<PullAllWithAndSort<DummyRemoteStatement, NaiveDate, String>>;
 ///
 /// struct DummyChartProperties;
 ///

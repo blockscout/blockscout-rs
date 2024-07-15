@@ -1,10 +1,7 @@
 use std::collections::{BTreeMap, HashSet};
 
 use crate::{
-    charts::{
-        db_interaction::write::{create_chart, insert_data_many},
-        types::DateValue<i64>,
-    },
+    charts::db_interaction::write::{create_chart, insert_data_many},
     data_source::{
         kinds::{
             data_manipulation::map::MapParseTo,
@@ -16,7 +13,8 @@ use crate::{
         },
         UpdateContext,
     },
-    ChartProperties, DateValueString, MissingDatePolicy, Named, UpdateError,
+    types::DateValue,
+    ChartProperties, MissingDatePolicy, Named, UpdateError,
 };
 
 use blockscout_db::entity::address_coin_balances_daily;
@@ -90,7 +88,7 @@ impl UpdateBehaviour<(), ()> for Update {
     async fn update_values(
         cx: &UpdateContext<'_>,
         chart_id: i32,
-        last_accurate_point: Option<DateValueString>,
+        last_accurate_point: Option<DateValue<String>>,
         min_blockscout_block: i64,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<(), UpdateError> {
@@ -109,7 +107,7 @@ impl UpdateBehaviour<(), ()> for Update {
 pub async fn update_sequentially_with_support_table(
     cx: &UpdateContext<'_>,
     chart_id: i32,
-    last_accurate_point: Option<DateValueString>,
+    last_accurate_point: Option<DateValue<String>>,
     min_blockscout_block: i64,
     remote_fetch_timer: &mut AggregateTimer,
 ) -> Result<(), UpdateError> {
@@ -119,7 +117,7 @@ pub async fn update_sequentially_with_support_table(
     );
     let all_days = match last_accurate_point {
         Some(last_row) => {
-            get_unique_ordered_days(cx.blockscout, Some(last_row.date), remote_fetch_timer)
+            get_unique_ordered_days(cx.blockscout, Some(last_row.timespan), remote_fetch_timer)
                 .await
                 .map_err(UpdateError::BlockscoutDB)?
         }
@@ -164,7 +162,7 @@ async fn calculate_days_using_support_table<C1, C2>(
     db: &C1,
     blockscout: &C2,
     days: impl IntoIterator<Item = NaiveDate>,
-) -> Result<Vec<DateValueString>, UpdateError>
+) -> Result<Vec<DateValue<String>>, UpdateError>
 where
     C1: ConnectionTrait,
     C2: ConnectionTrait,
@@ -197,8 +195,8 @@ where
         let new_count = count_current_holders(db)
             .await
             .map_err(|e| UpdateError::Internal(format!("cannot count holders: {e}")))?;
-        result.push(DateValueString {
-            date,
+        result.push(DateValue::<String> {
+            timespan: date,
             value: new_count.to_string(),
         });
     }

@@ -3,9 +3,10 @@ use crate::{
         local_db::DirectPointLocalDbChartSource,
         remote_db::{PullOne, RemoteDatabaseSource, StatementForOne},
     },
-    ChartProperties, DateValueString, MissingDatePolicy, Named,
+    ChartProperties, MissingDatePolicy, Named,
 };
 
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{DbBackend, Statement};
 
@@ -41,7 +42,7 @@ impl StatementForOne for CompletedTxnsStatement {
 }
 
 pub type CompletedTxnsRemote =
-    RemoteDatabaseSource<PullOne<CompletedTxnsStatement, DateValueString>>;
+    RemoteDatabaseSource<PullOne<CompletedTxnsStatement, NaiveDate, String>>;
 
 pub struct CompletedTxnsProperties;
 

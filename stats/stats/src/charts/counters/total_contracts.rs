@@ -8,7 +8,8 @@ use crate::{
         },
         UpdateContext,
     },
-    ChartProperties, DateValueString, MissingDatePolicy, Named, UpdateError,
+    types::DateValue,
+    ChartProperties, MissingDatePolicy, Named, UpdateError,
 };
 use blockscout_db::entity::addresses;
 use entity::sea_orm_active_enums::ChartType;
@@ -17,7 +18,7 @@ use sea_orm::prelude::*;
 pub struct TotalContractsQueryBehaviour;
 
 impl RemoteQueryBehaviour for TotalContractsQueryBehaviour {
-    type Output = DateValueString;
+    type Output = DateValue<String>;
 
     async fn query_data(
         cx: &UpdateContext<'_>,
@@ -29,9 +30,9 @@ impl RemoteQueryBehaviour for TotalContractsQueryBehaviour {
             .count(cx.blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?;
-        let date = cx.time.date_naive();
-        Ok(DateValueString {
-            date,
+        let timespan = cx.time.date_naive();
+        Ok(DateValue::<String> {
+            timespan,
             value: value.to_string(),
         })
     }

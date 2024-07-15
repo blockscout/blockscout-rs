@@ -1,8 +1,19 @@
-use std::{marker::PhantomData, ops::AddAssign};
+use std::{
+    marker::PhantomData,
+    ops::{AddAssign, Range},
+};
 
+use blockscout_metrics_tools::AggregateTimer;
+use chrono::{DateTime, Utc};
 use rust_decimal::prelude::Zero;
+use sea_orm::DatabaseConnection;
 
-use crate::{data_processing::cumsum, data_source::DataSource, types::TimespanValue};
+use crate::{
+    data_processing::cumsum,
+    data_source::{DataSource, UpdateContext},
+    types::TimespanValue,
+    UpdateError,
+};
 
 /// Auxiliary source for cumulative chart.
 ///
@@ -25,25 +36,23 @@ where
     const MUTEX_ID: Option<&'static str> = None;
 
     async fn init_itself(
-        _db: &sea_orm::DatabaseConnection,
-        _init_time: &chrono::DateTime<chrono::Utc>,
+        _db: &DatabaseConnection,
+        _init_time: &DateTime<Utc>,
     ) -> Result<(), sea_orm::DbErr> {
         // just an adapter; inner is handled recursively
         Ok(())
     }
 
-    async fn update_itself(
-        _cx: &crate::data_source::UpdateContext<'_>,
-    ) -> Result<(), crate::UpdateError> {
+    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
         // just an adapter; inner is handled recursively
         Ok(())
     }
 
     async fn query_data(
-        cx: &crate::data_source::UpdateContext<'_>,
-        range: Option<std::ops::Range<sea_orm::prelude::DateTimeUtc>>,
-        dependency_data_fetch_timer: &mut blockscout_metrics_tools::AggregateTimer,
-    ) -> Result<Self::Output, crate::UpdateError> {
+        cx: &UpdateContext<'_>,
+        range: Option<Range<DateTime<Utc>>>,
+        dependency_data_fetch_timer: &mut AggregateTimer,
+    ) -> Result<Self::Output, UpdateError> {
         let delta_data = Delta::query_data(cx, range, dependency_data_fetch_timer).await?;
         let data = cumsum::<Resolution, Value>(delta_data, Value::zero())?;
         Ok(data)

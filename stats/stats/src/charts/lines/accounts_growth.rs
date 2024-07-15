@@ -2,8 +2,8 @@
 
 use super::new_accounts::NewAccountsInt;
 use crate::{
-    data_source::kinds::local_db::DailyCumulativeLocalDbChartSource, ChartProperties, MissingDatePolicy,
-    Named,
+    data_source::kinds::local_db::DailyCumulativeLocalDbChartSource, ChartProperties,
+    MissingDatePolicy, Named,
 };
 
 use entity::sea_orm_active_enums::ChartType;
@@ -23,7 +23,8 @@ impl ChartProperties for AccountsGrowthProperties {
     }
 }
 
-pub type AccountsGrowth = DailyCumulativeLocalDbChartSource<NewAccountsInt, AccountsGrowthProperties>;
+pub type AccountsGrowth =
+    DailyCumulativeLocalDbChartSource<NewAccountsInt, AccountsGrowthProperties>;
 
 #[cfg(test)]
 mod tests {

@@ -3,7 +3,6 @@
 use std::ops::Range;
 
 use crate::{
-    charts::types::DateValue<f64>,
     data_source::kinds::{
         data_manipulation::map::MapToString,
         local_db::DirectVecLocalDbChartSource,
@@ -13,6 +12,7 @@ use crate::{
     ChartProperties, Named,
 };
 
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, Statement};
 
@@ -43,7 +43,7 @@ impl StatementFromRange for AverageTxnFeeStatement {
 }
 
 pub type AverageTxnFeeRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<AverageTxnFeeStatement, DateValue<f64>>>;
+    RemoteDatabaseSource<PullAllWithAndSort<AverageTxnFeeStatement, NaiveDate, f64>>;
 
 pub type AverageTxnFeeRemoteString = MapToString<AverageTxnFeeRemote>;
 

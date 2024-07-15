@@ -137,12 +137,12 @@ fn mark_approximate(
     let next_after_updated_at = last_updated_at
         .checked_add_days(chrono::Days::new(1))
         .unwrap_or(NaiveDate::MAX);
-    let mark_from_date = next_after_updated_at
+    let mark_from_timespan = next_after_updated_at
         .checked_sub_days(chrono::Days::new(approximate_until_updated))
         .unwrap_or(NaiveDate::MIN);
     data.into_iter()
         .map(|dv| {
-            let is_marked: bool = dv.date >= mark_from_date;
+            let is_marked: bool = dv.timespan >= mark_from_timespan;
             ExtendedTimespanValue::<NaiveDate, String>::from_date_value(dv, is_marked)
         })
         .collect()
@@ -701,7 +701,7 @@ mod tests {
         // No missing points
         assert!(chart_id_matches_name(&db, 1, "totalBlocks").await);
         assert_eq!(
-            last_accurate_point::<TotalBlocks, DateValue<String>, DefaultQueryVec<TotalBlocks>>(
+            last_accurate_point::<NaiveDate, TotalBlocks, DefaultQueryVec<TotalBlocks>>(
                 1,
                 1,
                 &db,
@@ -717,7 +717,7 @@ mod tests {
             })
         );
         assert_eq!(
-            last_accurate_point::<TotalBlocks, DateValue<String>, DefaultQueryVec<TotalBlocks>>(
+            last_accurate_point::<NaiveDate, TotalBlocks, DefaultQueryVec<TotalBlocks>>(
                 1,
                 1,
                 &db,
@@ -733,7 +733,7 @@ mod tests {
             })
         );
         assert_eq!(
-            last_accurate_point::<TotalBlocks, DateValue<String>, DefaultQueryVec<TotalBlocks>>(
+            last_accurate_point::<NaiveDate, TotalBlocks, DefaultQueryVec<TotalBlocks>>(
                 1,
                 1,
                 &db,
@@ -749,7 +749,7 @@ mod tests {
             })
         );
         assert_eq!(
-            last_accurate_point::<TotalBlocks, DateValue<String>, DefaultQueryVec<TotalBlocks>>(
+            last_accurate_point::<NaiveDate, TotalBlocks, DefaultQueryVec<TotalBlocks>>(
                 1,
                 1,
                 &db,
@@ -768,7 +768,7 @@ mod tests {
         // Missing points
         assert!(chart_id_matches_name(&db, 4, TxnsGrowth::NAME).await);
         assert_eq!(
-            last_accurate_point::<TxnsGrowth, DateValue<String>, DefaultQueryVec<TxnsGrowth>>(
+            last_accurate_point::<NaiveDate, TxnsGrowth, DefaultQueryVec<TxnsGrowth>>(
                 4,
                 1,
                 &db,
@@ -784,7 +784,7 @@ mod tests {
             })
         );
         assert_eq!(
-            last_accurate_point::<TxnsGrowth, DateValue<String>, DefaultQueryVec<TxnsGrowth>>(
+            last_accurate_point::<NaiveDate, TxnsGrowth, DefaultQueryVec<TxnsGrowth>>(
                 4,
                 1,
                 &db,
@@ -800,7 +800,7 @@ mod tests {
             })
         );
         assert_eq!(
-            last_accurate_point::<TxnsGrowth, DateValue<String>, DefaultQueryVec<TxnsGrowth>>(
+            last_accurate_point::<NaiveDate, TxnsGrowth, DefaultQueryVec<TxnsGrowth>>(
                 4,
                 1,
                 &db,
@@ -816,7 +816,7 @@ mod tests {
             })
         );
         assert_eq!(
-            last_accurate_point::<TxnsGrowth, DateValue<String>, DefaultQueryVec<TxnsGrowth>>(
+            last_accurate_point::<NaiveDate, TxnsGrowth, DefaultQueryVec<TxnsGrowth>>(
                 4,
                 1,
                 &db,
@@ -843,7 +843,7 @@ mod tests {
 
         assert!(chart_id_matches_name(&db, 1, "totalBlocks").await);
         assert_eq!(
-            last_accurate_point::<TotalBlocks, DateValue<String>, DefaultQueryVec<TotalBlocks>>(
+            last_accurate_point::<NaiveDate, TotalBlocks, DefaultQueryVec<TotalBlocks>>(
                 1,
                 1,
                 &db,

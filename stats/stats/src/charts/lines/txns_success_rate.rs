@@ -1,7 +1,6 @@
 use std::ops::Range;
 
 use crate::{
-    charts::types::DateValue<f64>,
     data_source::kinds::{
         data_manipulation::map::MapToString,
         local_db::DirectVecLocalDbChartSource,
@@ -10,6 +9,8 @@ use crate::{
     utils::sql_with_range_filter_opt,
     ChartProperties, Named,
 };
+
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, Statement};
 
@@ -41,7 +42,7 @@ impl StatementFromRange for TxnsSuccessRateStatement {
 }
 
 pub type TxnsSuccessRateRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<TxnsSuccessRateStatement, DateValue<f64>>>;
+    RemoteDatabaseSource<PullAllWithAndSort<TxnsSuccessRateStatement, NaiveDate, f64>>;
 
 pub type TxnsSuccessRateRemoteString = MapToString<TxnsSuccessRateRemote>;
 

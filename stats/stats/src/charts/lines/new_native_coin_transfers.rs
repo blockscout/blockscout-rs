@@ -1,15 +1,17 @@
 use std::ops::Range;
 
 use crate::{
-    charts::types::DateValue<i64>,
+    charts::types::DateValue,
     data_source::kinds::{
         data_manipulation::map::MapParseTo,
         local_db::DirectVecLocalDbChartSource,
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
     utils::sql_with_range_filter_opt,
-    ChartProperties, DateValueString, Named,
+    ChartProperties, Named,
 };
+
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, Statement};
 
@@ -40,7 +42,7 @@ impl StatementFromRange for NewNativeCoinTransfersStatement {
 }
 
 pub type NewNativeCoinTransfersRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<NewNativeCoinTransfersStatement, DateValueString>>;
+    RemoteDatabaseSource<PullAllWithAndSort<NewNativeCoinTransfersStatement, NaiveDate, String>>;
 
 pub struct NewNativeCoinTransfersProperties;
 

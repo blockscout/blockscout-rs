@@ -6,8 +6,10 @@ use crate::{
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
     utils::sql_with_range_filter_opt,
-    ChartProperties, DateValueString, Named,
+    ChartProperties, Named,
 };
+
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, Statement};
 
@@ -35,7 +37,7 @@ impl StatementFromRange for NewBlocksStatement {
 }
 
 pub type NewBlocksRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<NewBlocksStatement, DateValueString>>;
+    RemoteDatabaseSource<PullAllWithAndSort<NewBlocksStatement, NaiveDate, String>>;
 
 pub struct NewBlocksProperties;
 
@@ -59,7 +61,8 @@ mod tests {
         data_source::{DataSource, UpdateContext},
         get_line_chart_data,
         tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
-        ExtendedDateValueString, Named,
+        types::ExtendedTimespanValue,
+        Named,
     };
     use chrono::{NaiveDate, Utc};
     use entity::chart_data;
@@ -123,17 +126,17 @@ mod tests {
         .await
         .unwrap();
         let expected = vec![
-            ExtendedDateValueString {
+            ExtendedTimespanValue {
                 date: NaiveDate::from_str("2022-11-10").unwrap(),
                 value: "3".into(),
                 is_approximate: false,
             },
-            ExtendedDateValueString {
+            ExtendedTimespanValue {
                 date: NaiveDate::from_str("2022-11-11").unwrap(),
                 value: "4".into(),
                 is_approximate: false,
             },
-            ExtendedDateValueString {
+            ExtendedTimespanValue {
                 date: NaiveDate::from_str("2022-11-12").unwrap(),
                 value: "1".into(),
                 is_approximate: true,
@@ -159,22 +162,22 @@ mod tests {
         .await
         .unwrap();
         let expected = vec![
-            ExtendedDateValueString {
+            ExtendedTimespanValue {
                 date: NaiveDate::from_str("2022-11-09").unwrap(),
                 value: "1".into(),
                 is_approximate: false,
             },
-            ExtendedDateValueString {
+            ExtendedTimespanValue {
                 date: NaiveDate::from_str("2022-11-10").unwrap(),
                 value: "3".into(),
                 is_approximate: false,
             },
-            ExtendedDateValueString {
+            ExtendedTimespanValue {
                 date: NaiveDate::from_str("2022-11-11").unwrap(),
                 value: "4".into(),
                 is_approximate: false,
             },
-            ExtendedDateValueString {
+            ExtendedTimespanValue {
                 date: NaiveDate::from_str("2022-11-12").unwrap(),
                 value: "1".into(),
                 is_approximate: true,
@@ -216,22 +219,22 @@ mod tests {
         .await
         .unwrap();
         let expected = vec![
-            ExtendedDateValueString {
+            ExtendedTimespanValue {
                 date: NaiveDate::from_str("2022-11-09").unwrap(),
                 value: "1".into(),
                 is_approximate: false,
             },
-            ExtendedDateValueString {
+            ExtendedTimespanValue {
                 date: NaiveDate::from_str("2022-11-10").unwrap(),
                 value: "3".into(),
                 is_approximate: false,
             },
-            ExtendedDateValueString {
+            ExtendedTimespanValue {
                 date: NaiveDate::from_str("2022-11-11").unwrap(),
                 value: "4".into(),
                 is_approximate: false,
             },
-            ExtendedDateValueString {
+            ExtendedTimespanValue {
                 date: NaiveDate::from_str("2022-11-12").unwrap(),
                 value: "1".into(),
                 is_approximate: false,
@@ -310,22 +313,22 @@ mod tests {
         .await
         .unwrap();
         let expected = vec![
-            ExtendedDateValueString {
+            ExtendedTimespanValue {
                 date: NaiveDate::from_str("2022-11-09").unwrap(),
                 value: "2".into(),
                 is_approximate: false,
             },
-            ExtendedDateValueString {
+            ExtendedTimespanValue {
                 date: NaiveDate::from_str("2022-11-10").unwrap(),
                 value: "4".into(),
                 is_approximate: false,
             },
-            ExtendedDateValueString {
+            ExtendedTimespanValue {
                 date: NaiveDate::from_str("2022-11-11").unwrap(),
                 value: "5".into(),
                 is_approximate: false,
             },
-            ExtendedDateValueString {
+            ExtendedTimespanValue {
                 date: NaiveDate::from_str("2022-11-12").unwrap(),
                 value: "1".into(),
                 is_approximate: true,

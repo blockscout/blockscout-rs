@@ -1,17 +1,17 @@
 use std::ops::Range;
 
 use crate::{
-    charts::{chart_properties_portrait, types::DateValue<f64>},
+    charts::{chart_properties_portrait, types::DateValue},
     data_source::kinds::{
         data_manipulation::map::{MapParseTo, MapToString},
         local_db::{resolutions::WeeklyAverage, DirectVecLocalDbChartSource},
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
-    types::DateValue<i64>,
     utils::sql_with_range_filter_opt,
     ChartProperties, Named,
 };
 
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, Statement};
 
@@ -44,7 +44,7 @@ impl StatementFromRange for AverageBlockRewardsQuery {
 }
 
 pub type AverageBlockRewardsRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<AverageBlockRewardsQuery, DateValue<f64>>>;
+    RemoteDatabaseSource<PullAllWithAndSort<AverageBlockRewardsQuery, NaiveDate, f64>>;
 
 pub type AverageBlockRewardsRemoteString = MapToString<AverageBlockRewardsRemote>;
 

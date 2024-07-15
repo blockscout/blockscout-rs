@@ -8,7 +8,8 @@ use crate::{
         },
         types::UpdateContext,
     },
-    ChartProperties, DateValueString, MissingDatePolicy, Named, UpdateError,
+    types::DateValue,
+    ChartProperties, MissingDatePolicy, Named, UpdateError,
 };
 
 use blockscout_db::entity::blocks;
@@ -25,7 +26,7 @@ struct TotalBlocksData {
 pub struct TotalBlocksQueryBehaviour;
 
 impl RemoteQueryBehaviour for TotalBlocksQueryBehaviour {
-    type Output = DateValueString;
+    type Output = DateValue<String>;
 
     async fn query_data(
         cx: &UpdateContext<'_>,
@@ -42,8 +43,8 @@ impl RemoteQueryBehaviour for TotalBlocksQueryBehaviour {
             .map_err(UpdateError::BlockscoutDB)?
             .ok_or_else(|| UpdateError::Internal("query returned nothing".into()))?;
 
-        let data = DateValueString {
-            date: data.timestamp.date(),
+        let data = DateValue::<String> {
+            timespan: data.timestamp.date(),
             value: data.number.to_string(),
         };
         Ok(data)

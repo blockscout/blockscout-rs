@@ -32,10 +32,10 @@ impl super::Timespan for NaiveDate {
 /// Implement non-string date-value type
 macro_rules! impl_into_string_date_value {
     ($impl_for:ty) => {
-        impl From<$impl_for> for DbDateValue<String> {
+        impl From<$impl_for> for DateValue<String> {
             fn from(value: $impl_for) -> Self {
                 Self {
-                    date: value.timespan,
+                    timespan: value.timespan,
                     value: value.value.to_string(),
                 }
             }

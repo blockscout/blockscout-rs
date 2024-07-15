@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use crate::{
-    charts::types::DateValue<i64>,
+    charts::types::DateValue,
     data_source::{
         kinds::{
             data_manipulation::map::MapParseTo,
@@ -15,13 +15,13 @@ use crate::{
                 },
                 LocalDbChartSource,
             },
-            remote_db::{RemoteQueryBehaviour, RemoteDatabaseSource, StatementFromRange},
+            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour, StatementFromRange},
         },
         UpdateContext,
     },
     missing_date::trim_out_of_range_sorted,
     utils::sql_with_range_filter_opt,
-    ChartProperties, DateValueString, Named, UpdateError,
+    ChartProperties, Named, UpdateError,
 };
 
 use entity::sea_orm_active_enums::ChartType;
@@ -65,19 +65,19 @@ impl StatementFromRange for NewAccountsStatement {
 pub struct NewAccountsQueryBehaviour;
 
 impl RemoteQueryBehaviour for NewAccountsQueryBehaviour {
-    type Output = Vec<DateValueString>;
+    type Output = Vec<DateValue<String>>;
 
     async fn query_data(
         cx: &UpdateContext<'_>,
         range: Option<Range<DateTimeUtc>>,
-    ) -> Result<Vec<DateValueString>, UpdateError> {
+    ) -> Result<Vec<DateValue<String>>, UpdateError> {
         let query = NewAccountsStatement::get_statement(range.clone());
-        let mut data = DateValueString::find_by_statement(query)
+        let mut data = DateValue::<String>::find_by_statement(query)
             .all(cx.blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?;
         // make sure that it's sorted
-        data.sort_by_key(|d| d.date);
+        data.sort_by_key(|d| d.timespan);
         if let Some(range) = range {
             let range = range.start.date_naive()..=range.end.date_naive();
             trim_out_of_range_sorted(&mut data, range);

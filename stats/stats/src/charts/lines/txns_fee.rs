@@ -3,7 +3,7 @@
 use std::ops::Range;
 
 use crate::{
-    charts::types::DateValue<f64>,
+,
     data_source::kinds::{
         data_manipulation::map::MapToString,
         local_db::DirectVecLocalDbChartSource,
@@ -12,6 +12,8 @@ use crate::{
     utils::sql_with_range_filter_opt,
     ChartProperties, Named,
 };
+
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, Statement};
 
@@ -41,8 +43,7 @@ impl StatementFromRange for TxnsFeeStatement {
     }
 }
 
-pub type TxnsFeeRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<TxnsFeeStatement, DateValue<f64>>>;
+pub type TxnsFeeRemote = RemoteDatabaseSource<PullAllWithAndSort<TxnsFeeStatement, NaiveDate, f64>>;
 
 pub type TxnsFeeRemoteString = MapToString<TxnsFeeRemote>;
 

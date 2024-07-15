@@ -3,9 +3,10 @@ use crate::{
         local_db::DirectPointLocalDbChartSource,
         remote_db::{PullOne, RemoteDatabaseSource, StatementForOne},
     },
-    ChartProperties, DateValueString, MissingDatePolicy, Named,
+    ChartProperties, MissingDatePolicy, Named,
 };
 
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{DbBackend, Statement};
 
@@ -31,7 +32,7 @@ impl StatementForOne for TotalTokensStatement {
     }
 }
 
-pub type TotalTokensRemote = RemoteDatabaseSource<PullOne<TotalTokensStatement, DateValueString>>;
+pub type TotalTokensRemote = RemoteDatabaseSource<PullOne<TotalTokensStatement, NaiveDate, String>>;
 
 pub struct TotalTokensProperties;
 

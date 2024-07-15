@@ -1,16 +1,17 @@
 use std::ops::Range;
 
 use crate::{
-    charts::types::DateValue<Decimal>,
     data_source::kinds::{
         data_manipulation::map::{Map, MapFunction},
         local_db::DailyCumulativeLocalDbChartSource,
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
+    types::DateValue,
     utils::sql_with_range_filter_opt,
     ChartProperties, MissingDatePolicy, Named, UpdateError,
 };
 
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, Statement};
 
@@ -39,7 +40,7 @@ impl StatementFromRange for GasUsedPartialStatement {
 }
 
 pub type GasUsedPartialRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<GasUsedPartialStatement, DateValue<Decimal>>>;
+    RemoteDatabaseSource<PullAllWithAndSort<GasUsedPartialStatement, NaiveDate, Decimal>>;
 
 pub struct IncrementsFromPartialSum;
 

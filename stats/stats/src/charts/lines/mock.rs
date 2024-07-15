@@ -2,13 +2,14 @@ use crate::{
     data_source::{
         kinds::{
             local_db::DirectVecLocalDbChartSource,
-            remote_db::{RemoteQueryBehaviour, RemoteDatabaseSource},
+            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour},
         },
         types::Get,
         UpdateContext,
     },
     missing_date::fit_into_range,
-    ChartProperties, DateValueString, MissingDatePolicy, Named, UpdateError,
+    types::DateValue,
+    ChartProperties, MissingDatePolicy, Named, UpdateError,
 };
 
 use chrono::{Duration, NaiveDate};
@@ -30,15 +31,15 @@ fn generate_intervals(mut start: NaiveDate, end: NaiveDate) -> Vec<NaiveDate> {
 pub fn mocked_lines<T: SampleUniform + PartialOrd + Clone + ToString>(
     dates_range: Range<NaiveDate>,
     values_range: Range<T>,
-) -> Vec<DateValueString> {
+) -> Vec<DateValue<String>> {
     let mut rng = StdRng::seed_from_u64(222);
     generate_intervals(dates_range.start, dates_range.end)
         .into_iter()
-        .map(|date| {
+        .map(|timespan| {
             let range = values_range.clone();
             let value = rng.gen_range(range);
-            DateValueString {
-                date,
+            DateValue::<String> {
+                timespan,
                 value: value.to_string(),
             }
         })
@@ -59,12 +60,12 @@ where
     Value: SampleUniform + PartialOrd + Clone + ToString + Send + Sync + 'static,
     Policy: Get<MissingDatePolicy>,
 {
-    type Output = Vec<DateValueString>;
+    type Output = Vec<DateValue<String>>;
 
     async fn query_data(
         cx: &UpdateContext<'_>,
         range: Option<Range<DateTimeUtc>>,
-    ) -> Result<Vec<DateValueString>, UpdateError> {
+    ) -> Result<Vec<DateValue<String>>, UpdateError> {
         let date_range_start = if let Some(r) = range.clone() {
             r.start
         } else {

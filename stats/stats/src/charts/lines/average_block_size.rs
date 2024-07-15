@@ -6,9 +6,10 @@ use crate::{
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
     utils::sql_with_range_filter_opt,
-    ChartProperties, DateValueString, Named,
+    ChartProperties, Named,
 };
 
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, Statement};
 
@@ -36,7 +37,7 @@ impl StatementFromRange for AverageBlockSizeStatement {
 }
 
 pub type AverageBlockSizeRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<AverageBlockSizeStatement, DateValueString>>;
+    RemoteDatabaseSource<PullAllWithAndSort<AverageBlockSizeStatement, NaiveDate, String>>;
 
 pub struct AverageBlockSizeProperties;
 

@@ -4,10 +4,10 @@ use crate::{
         local_db::DirectPointLocalDbChartSource,
         remote_db::{PullOne, RemoteDatabaseSource, StatementForOne},
     },
-    types::DateValue,
     ChartProperties, MissingDatePolicy, Named,
 };
 
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{DbBackend, Statement};
 
@@ -38,7 +38,7 @@ impl StatementForOne for AverageBlockTimeStatement {
 }
 
 pub type AverageBlockTimeRemote =
-    RemoteDatabaseSource<PullOne<AverageBlockTimeStatement, DateValue<f64>>>;
+    RemoteDatabaseSource<PullOne<AverageBlockTimeStatement, NaiveDate, f64>>;
 
 pub type AverageBlockTimeRemoteString = MapToString<AverageBlockTimeRemote>;
 

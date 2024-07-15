@@ -4,13 +4,13 @@ use crate::{
     data_source::{
         kinds::{
             local_db::DirectPointLocalDbChartSource,
-            remote_db::{RemoteQueryBehaviour, RemoteDatabaseSource},
+            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour},
         },
         types::Get,
         UpdateContext,
     },
-    types::TimespanValue,
-    ChartProperties, DateValueString, Named, UpdateError,
+    types::DateValue,
+    ChartProperties, Named, UpdateError,
 };
 
 use chrono::{DateTime, Utc};
@@ -27,22 +27,22 @@ where
     PointDateTime: Get<DateTime<Utc>>,
     Value: Get<String>,
 {
-    type Output = DateValueString;
+    type Output = DateValue<String>;
 
     async fn query_data(
         cx: &UpdateContext<'_>,
         _range: Option<Range<DateTimeUtc>>,
     ) -> Result<Self::Output, UpdateError> {
         if cx.time >= PointDateTime::get() {
-            Ok(DateValueString::from_parts(
-                PointDateTime::get().date_naive(),
-                Value::get(),
-            ))
+            Ok(DateValue::<String> {
+                timespan: PointDateTime::get().date_naive(),
+                value: Value::get(),
+            })
         } else {
-            Ok(DateValueString::from_parts(
-                cx.time.date_naive(),
-                "0".to_string(),
-            ))
+            Ok(DateValue::<String> {
+                timespan: cx.time.date_naive(),
+                value: "0".to_string(),
+            })
         }
     }
 }
