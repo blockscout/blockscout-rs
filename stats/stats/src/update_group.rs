@@ -108,7 +108,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// ```rust
 /// # use stats::data_source::kinds::{
 /// # };
-/// # use stats::{ChartProperties, Named, construct_update_group, DateValueString, UpdateError};
+/// # use stats::{ChartProperties, Named, construct_update_group, types::DateValue, UpdateError};
 /// # use stats::data_source::{
 /// #     kinds::{
 /// #         local_db::DirectVecLocalDbChartSource,
@@ -130,6 +130,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// #     const NAME: &'static str = "dummyChart";
 /// # }
 /// # impl ChartProperties for DummyChartProperties {
+/// #     type Resolution = NaiveDate;
 /// #     fn chart_type() -> ChartType {
 /// #         ChartType::Line
 /// #     }
@@ -181,9 +182,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// ## Example
 ///
 /// ```rust
-/// # use stats::data_source::kinds::{
-/// # };
-/// # use stats::{ChartProperties, Named, construct_update_group, DateValueString, UpdateError};
+/// # use stats::{ChartProperties, Named, construct_update_group, types::DateValue, UpdateError};
 /// # use stats::data_source::{
 /// #     kinds::{
 /// #         local_db::DirectVecLocalDbChartSource,
@@ -213,6 +212,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 ///     const NAME: &'static str = "dummyChart";
 /// }
 /// impl ChartProperties for DummyChartProperties {
+///     type Resolution = NaiveDate;
 ///     fn chart_type() -> ChartType {
 ///         ChartType::Line
 ///     }
