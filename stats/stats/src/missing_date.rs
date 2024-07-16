@@ -68,10 +68,10 @@ pub fn trim_out_of_range_sorted<Resolution, Value>(
         .binary_search_by_key(&range.start(), |p| &p.timespan)
         .unwrap_or_else(|i| i);
     // irrelevant tail start
-    let trim_until_idx = data
-        .binary_search_by_key(&range.end(), |p| &p.timespan)
+    let trim_from_idx = data
+        .binary_search_by_key(&&range.end().next_timespan(), |p| &p.timespan)
         .unwrap_or_else(|i| i);
-    data.truncate(trim_until_idx + 1);
+    data.truncate(trim_from_idx);
     data.drain(..keep_from_idx);
 }
 
