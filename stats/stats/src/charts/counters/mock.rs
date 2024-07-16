@@ -13,7 +13,7 @@ use crate::{
     ChartProperties, Named, UpdateError,
 };
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::prelude::DateTimeUtc;
 
@@ -62,6 +62,8 @@ where
     PointDateTime: Get<DateTime<Utc>> + Sync,
     Value: Get<String> + Sync,
 {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Counter
     }

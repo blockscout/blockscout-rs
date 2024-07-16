@@ -49,6 +49,8 @@ impl Named for ActiveAccountsProperties {
 }
 
 impl ChartProperties for ActiveAccountsProperties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Line
     }

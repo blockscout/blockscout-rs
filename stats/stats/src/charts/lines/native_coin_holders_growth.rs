@@ -52,6 +52,8 @@ impl Named for NativeCoinHoldersGrowthProperties {
 }
 
 impl ChartProperties for NativeCoinHoldersGrowthProperties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Line
     }
@@ -84,7 +86,7 @@ impl CreateBehaviour for Create {
 
 pub struct Update;
 
-impl UpdateBehaviour<(), ()> for Update {
+impl UpdateBehaviour<(), (), NaiveDate> for Update {
     async fn update_values(
         cx: &UpdateContext<'_>,
         chart_id: i32,

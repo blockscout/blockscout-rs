@@ -67,6 +67,8 @@ impl Named for NewContractsProperties {
 }
 
 impl ChartProperties for NewContractsProperties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Line
     }

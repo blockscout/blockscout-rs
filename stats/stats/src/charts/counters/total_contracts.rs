@@ -11,7 +11,9 @@ use crate::{
     types::DateValue,
     ChartProperties, MissingDatePolicy, Named, UpdateError,
 };
+
 use blockscout_db::entity::addresses;
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::prelude::*;
 
@@ -47,6 +49,8 @@ impl Named for TotalContractsProperties {
 }
 
 impl ChartProperties for TotalContractsProperties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Counter
     }

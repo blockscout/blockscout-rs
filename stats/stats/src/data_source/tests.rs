@@ -80,6 +80,8 @@ impl Named for NewContractsChartProperties {
 }
 
 impl ChartProperties for NewContractsChartProperties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Line
     }
@@ -98,6 +100,8 @@ impl Named for ContractsGrowthProperties {
 }
 
 impl ChartProperties for ContractsGrowthProperties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Line
     }

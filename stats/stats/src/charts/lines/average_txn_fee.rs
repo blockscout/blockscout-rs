@@ -54,6 +54,8 @@ impl Named for AverageTxnFeeProperties {
 }
 
 impl ChartProperties for AverageTxnFeeProperties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Line
     }

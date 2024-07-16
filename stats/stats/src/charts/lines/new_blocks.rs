@@ -46,6 +46,8 @@ impl Named for NewBlocksProperties {
 }
 
 impl ChartProperties for NewBlocksProperties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Line
     }

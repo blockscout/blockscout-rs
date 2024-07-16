@@ -98,6 +98,8 @@ where
     Value: Sync,
     Policy: Sync,
 {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Line
     }

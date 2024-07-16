@@ -6,6 +6,7 @@ use crate::{
     ChartProperties, Named,
 };
 
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 
 pub struct LastNewVerifiedContractsProperties;
@@ -15,6 +16,8 @@ impl Named for LastNewVerifiedContractsProperties {
 }
 
 impl ChartProperties for LastNewVerifiedContractsProperties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Counter
     }

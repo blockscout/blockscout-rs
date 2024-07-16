@@ -46,6 +46,8 @@ impl Named for AverageBlockSizeProperties {
 }
 
 impl ChartProperties for AverageBlockSizeProperties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Line
     }

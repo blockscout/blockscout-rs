@@ -49,6 +49,8 @@ impl Named for AverageBlockTimeProperties {
 }
 
 impl ChartProperties for AverageBlockTimeProperties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Counter
     }

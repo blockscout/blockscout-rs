@@ -2,6 +2,8 @@ use chrono::{Days, NaiveDate};
 
 use sea_orm::{prelude::*, FromQueryResult, TryGetable};
 
+use crate::{charts::chart_properties_portrait::imports::ResolutionKind, utils::day_start};
+
 use super::{db::DbDateValue, TimespanValue};
 
 impl<V: TryGetable> FromQueryResult for TimespanValue<NaiveDate, V> {
@@ -21,9 +23,22 @@ impl super::Timespan for NaiveDate {
         self
     }
 
-    fn next_timespan(self) -> Self {
+    fn next_timespan(&self) -> Self {
         self.checked_add_days(Days::new(1))
             .unwrap_or(NaiveDate::MAX)
+    }
+
+    fn previous_timespan(&self) -> Self {
+        self.checked_sub_days(Days::new(1))
+            .unwrap_or(NaiveDate::MIN)
+    }
+
+    fn enum_variant() -> ResolutionKind {
+        ResolutionKind::Day
+    }
+
+    fn start_timestamp(&self) -> chrono::DateTime<chrono::Utc> {
+        day_start(self)
     }
 }
 

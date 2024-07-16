@@ -1,10 +1,10 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use sea_orm::DatabaseConnection;
 
 use crate::{
     charts::db_interaction::write::insert_data_many,
     gettable_const,
-    types::{Timespan, TimespanValue},
+    types::{Timespan, TimespanDuration, TimespanValue},
     UpdateError,
 };
 
@@ -16,8 +16,8 @@ pub mod mock;
 
 pub use cumulative::*;
 
-gettable_const!(Batch30Days: chrono::Duration = chrono::Duration::days(30));
-gettable_const!(BatchMax: chrono::Duration = chrono::Duration::max_value());
+gettable_const!(Batch30Days: TimespanDuration<NaiveDate> = TimespanDuration::days(30).unwrap());
+gettable_const!(BatchMaxDays: TimespanDuration<NaiveDate> = TimespanDuration::days(u64::MAX).unwrap());
 
 /// Pass the vector data from main dependency right into the database
 pub struct PassVecStep;

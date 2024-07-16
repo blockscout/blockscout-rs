@@ -4,7 +4,7 @@
 //! [`trait@ChartProperties`], and is stored in local database (e.g.
 //! [`LocalDbChartSource`](crate::data_source::kinds::local_db))
 
-use crate::ReadError;
+use crate::{types::Timespan, ReadError};
 use chrono::{DateTime, Duration, Utc};
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::prelude::*;
@@ -68,9 +68,11 @@ pub trait Named {
     entity::sea_orm_active_enums::ChartType,
 ))]
 pub trait ChartProperties: Sync + Named {
+    type Resolution: Timespan;
+
     fn chart_type() -> ChartType;
     fn resolution() -> ResolutionKind {
-        ResolutionKind::Day
+        Self::Resolution::enum_variant()
     }
     fn missing_date_policy() -> MissingDatePolicy {
         MissingDatePolicy::FillZero

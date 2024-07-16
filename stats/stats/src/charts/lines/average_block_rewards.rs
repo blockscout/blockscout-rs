@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use crate::{
-    charts::{chart_properties_portrait, types::DateValue},
+    charts::chart_properties_portrait,
     data_source::kinds::{
         data_manipulation::map::{MapParseTo, MapToString},
         local_db::{resolutions::WeeklyAverage, DirectVecLocalDbChartSource},
@@ -55,6 +55,8 @@ impl Named for Properties {
 }
 
 impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Line
     }

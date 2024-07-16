@@ -3,12 +3,11 @@
 //! Update for some period P can be done only with dependencies'
 //! data for the same exact period P.
 
-use std::{marker::PhantomData, ops::Range, time::Instant};
+use std::{fmt::Debug, marker::PhantomData, ops::Range, time::Instant};
 
 use blockscout_metrics_tools::AggregateTimer;
-use chrono::{DateTime, Days, NaiveDate, Utc};
+use chrono::{DateTime, Utc};
 use parameter_traits::BatchStepBehaviour;
-use sea_orm::TransactionTrait;
 
 use crate::{
     charts::db_interaction::read::get_min_date_blockscout,
@@ -18,8 +17,7 @@ use crate::{
         types::Get,
         UpdateContext,
     },
-    types::DateValue,
-    utils::day_start,
+    types::{Timespan, TimespanDuration, TimespanValue},
     ChartProperties, UpdateError,
 };
 
@@ -39,56 +37,61 @@ pub struct BatchUpdate<MainDep, ResolutionDep, BatchStep, BatchSizeUpperBound, Q
 where
     MainDep: DataSource,
     ResolutionDep: DataSource,
-    BatchStep: BatchStepBehaviour<NaiveDate, MainDep::Output, ResolutionDep::Output>,
-    BatchSizeUpperBound: Get<chrono::Duration>,
-    Query: QueryBehaviour<Output = Vec<DateValue<String>>>,
+    BatchStep: BatchStepBehaviour<ChartProps::Resolution, MainDep::Output, ResolutionDep::Output>,
+    BatchSizeUpperBound: Get<TimespanDuration<ChartProps::Resolution>>,
+    Query: QueryBehaviour<Output = Vec<TimespanValue<ChartProps::Resolution, String>>>,
     ChartProps: ChartProperties;
 
 impl<MainDep, ResolutionDep, BatchStep, BatchSizeUpperBound, Query, ChartProps>
-    UpdateBehaviour<MainDep, ResolutionDep>
+    UpdateBehaviour<MainDep, ResolutionDep, ChartProps::Resolution>
     for BatchUpdate<MainDep, ResolutionDep, BatchStep, BatchSizeUpperBound, Query, ChartProps>
 where
     MainDep: DataSource,
     ResolutionDep: DataSource,
-    BatchStep: BatchStepBehaviour<NaiveDate, MainDep::Output, ResolutionDep::Output>,
-    BatchSizeUpperBound: Get<chrono::Duration>,
-    Query: QueryBehaviour<Output = Vec<DateValue<String>>>,
+    BatchStep: BatchStepBehaviour<ChartProps::Resolution, MainDep::Output, ResolutionDep::Output>,
+    BatchSizeUpperBound: Get<TimespanDuration<ChartProps::Resolution>>,
+    Query: QueryBehaviour<Output = Vec<TimespanValue<ChartProps::Resolution, String>>>,
     ChartProps: ChartProperties,
+    ChartProps::Resolution: Timespan + Ord + Clone + Debug + Send,
 {
     async fn update_values(
         cx: &UpdateContext<'_>,
         chart_id: i32,
-        last_accurate_point: Option<DateValue<String>>,
+        last_accurate_point: Option<TimespanValue<ChartProps::Resolution, String>>,
         min_blockscout_block: i64,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<(), UpdateError> {
         let now = cx.time;
-        let txn = cx
-            .blockscout
-            .begin()
-            .await
-            .map_err(UpdateError::BlockscoutDB)?;
-        let update_from_date = last_accurate_point
+        let update_from = last_accurate_point
             .clone()
-            .and_then(|p| p.timespan.checked_add_days(Days::new(1)));
-        let first_date = match update_from_date {
+            .map(|p| p.timespan.next_timespan());
+        let update_range_start = match update_from {
             Some(d) => d,
-            None => get_min_date_blockscout(&txn)
-                .await
-                .map(|time| time.date())
-                .map_err(UpdateError::BlockscoutDB)?,
+            None => ChartProps::Resolution::from_date(
+                get_min_date_blockscout(cx.blockscout)
+                    .await
+                    .map(|time| time.date())
+                    .map_err(UpdateError::BlockscoutDB)?,
+            ),
         };
-        let first_date_time = day_start(first_date);
 
-        let steps = generate_date_time_ranges(first_date_time, now, BatchSizeUpperBound::get());
+        let steps = generate_batch_ranges(update_range_start, now, BatchSizeUpperBound::get());
         let n = steps.len();
 
         for (i, range) in steps.into_iter().enumerate() {
-            let previous_step_last_point =
-                get_previous_step_last_point::<Query>(cx, range.clone()).await?;
-            tracing::info!(from =? range.start, to =? range.end, previous_step_last_point =? previous_step_last_point, "run {}/{} step of batch update", i + 1, n);
+            let previous_step_last_point = get_previous_step_last_point::<
+                Query,
+                ChartProps::Resolution,
+            >(cx, range.start().clone())
+            .await?;
+            tracing::info!(range =? range.clone().into_date_time_range(), previous_step_last_point =? previous_step_last_point, "run {}/{} step of batch update", i + 1, n);
             let now = Instant::now();
-            let found = batch_update_values_step::<MainDep, ResolutionDep, BatchStep>(
+            let found = batch_update_values_step::<
+                MainDep,
+                ResolutionDep,
+                BatchStep,
+                ChartProps::Resolution,
+            >(
                 cx,
                 chart_id,
                 min_blockscout_block,
@@ -98,7 +101,7 @@ where
             )
             .await?;
             // for query in `get_previous_step_last_point` to work correctly
-            Self::update_metadata(cx.db, chart_id, range.end).await?;
+            Self::update_metadata(cx.db, chart_id, range.into_date_time_range().end).await?;
             let elapsed: std::time::Duration = now.elapsed();
             tracing::info!(found =? found, elapsed =? elapsed, "{}/{} step of batch done", i + 1, n);
         }
@@ -107,31 +110,28 @@ where
 }
 
 /// Errors if no point is found
-async fn get_previous_step_last_point<Query>(
+async fn get_previous_step_last_point<Query, Resolution>(
     cx: &UpdateContext<'_>,
-    this_step_range: Range<DateTime<Utc>>,
-) -> Result<DateValue<String>, UpdateError>
+    this_step_start: Resolution,
+) -> Result<TimespanValue<Resolution, String>, UpdateError>
 where
-    Query: QueryBehaviour<Output = Vec<DateValue<String>>>,
+    Resolution: Timespan + Clone,
+    Query: QueryBehaviour<Output = Vec<TimespanValue<Resolution, String>>>,
 {
-    // for now the only resolution is 1 day
-    let resolution = chrono::Duration::days(1);
-    let last_point_range = (this_step_range.start - resolution)..this_step_range.start;
-    // must be within the same day
-    debug_assert_eq!(
-        day_start(last_point_range.start.date_naive()),
-        day_start((last_point_range.end - chrono::Duration::nanoseconds(1)).date_naive())
-    );
-    let last_point_range_values = Query::query_data(cx, Some(last_point_range.clone())).await?;
+    let previous_step_last_point_timespan = this_step_start.previous_timespan();
+    let last_point_range_values = Query::query_data(
+        cx,
+        Some(previous_step_last_point_timespan.clone().into_time_range()),
+    )
+    .await?;
     let previous_step_last_point = last_point_range_values
         .last()
         .cloned()
         // `None` means
         // - if `MissingDatePolicy` is `FillZero` = the value is 0
         // - if `MissingDatePolicy` is `FillPrevious` = no previous value was found at this moment in time = value at the point is 0
-        .unwrap_or(DateValue::<String>::with_zero_value(
-            // we store/operate with dates only for now
-            last_point_range.start.date_naive(),
+        .unwrap_or(TimespanValue::with_zero_value(
+            previous_step_last_point_timespan,
         ));
     if last_point_range_values.len() > 1 {
         // return error because it's likely that date in `previous_step_last_point` is incorrect
@@ -141,23 +141,25 @@ where
 }
 
 /// Returns how many records were found
-async fn batch_update_values_step<MainDep, ResolutionDep, BatchStep>(
+async fn batch_update_values_step<MainDep, ResolutionDep, BatchStep, Resolution>(
     cx: &UpdateContext<'_>,
     chart_id: i32,
     min_blockscout_block: i64,
-    last_accurate_point: DateValue<String>,
-    range: Range<DateTime<Utc>>,
+    last_accurate_point: TimespanValue<Resolution, String>,
+    range: BatchRange<Resolution>,
     dependency_data_fetch_timer: &mut AggregateTimer,
 ) -> Result<usize, UpdateError>
 where
     MainDep: DataSource,
     ResolutionDep: DataSource,
-    BatchStep: BatchStepBehaviour<NaiveDate, MainDep::Output, ResolutionDep::Output>,
+    Resolution: Timespan,
+    BatchStep: BatchStepBehaviour<Resolution, MainDep::Output, ResolutionDep::Output>,
 {
+    let query_range = range.into_date_time_range();
     let main_data =
-        MainDep::query_data(cx, Some(range.clone()), dependency_data_fetch_timer).await?;
+        MainDep::query_data(cx, Some(query_range.clone()), dependency_data_fetch_timer).await?;
     let resolution_data =
-        ResolutionDep::query_data(cx, Some(range), dependency_data_fetch_timer).await?;
+        ResolutionDep::query_data(cx, Some(query_range), dependency_data_fetch_timer).await?;
     let found = BatchStep::batch_update_values_step_with(
         cx.db,
         chart_id,
@@ -171,28 +173,73 @@ where
     Ok(found)
 }
 
+/// Non-inclusive (end point is exlcuded)
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum BatchRange<Resolution> {
+    /// Range in non-divided `Resolution` intervals
+    Full(Range<Resolution>),
+    /// Range ends on some fraction of the `Resolution` interval
+    Partial {
+        start: Resolution,
+        end: DateTime<Utc>,
+    },
+}
+
+impl<Resolution> BatchRange<Resolution> {
+    pub fn start(&self) -> &Resolution {
+        match self {
+            BatchRange::Full(r) => &r.start,
+            BatchRange::Partial { start, end: _ } => start,
+        }
+    }
+}
+
+impl<Resolution: Timespan> BatchRange<Resolution> {
+    pub fn into_date_time_range(self) -> Range<DateTime<Utc>> {
+        match self {
+            BatchRange::Full(Range { start, end }) => {
+                start.start_timestamp()..end.into_time_range().end
+            }
+            BatchRange::Partial { start, end } => start.start_timestamp()..end,
+        }
+    }
+}
+
 /// Split the range [`start`, `end`) into multiple
 /// with maximum length `step`
-fn generate_date_time_ranges(
-    start: DateTime<Utc>,
+fn generate_batch_ranges<Resolution>(
+    start: Resolution,
     end: DateTime<Utc>,
-    max_step: chrono::Duration,
-) -> Vec<Range<DateTime<Utc>>> {
-    debug_assert!(
-        max_step > chrono::Duration::nanoseconds(1),
-        "step must always be positive"
-    );
+    max_step: TimespanDuration<Resolution>,
+) -> Vec<BatchRange<Resolution>>
+where
+    Resolution: Timespan + Ord + Clone,
+{
     let mut date_range = Vec::new();
     let mut current_start = start;
 
-    while current_start < end {
-        // saturating add, since `step` is expected to be positive
-        let next_start = current_start
-            .checked_add_signed(max_step)
-            .unwrap_or(DateTime::<Utc>::MAX_UTC)
-            .min(end); // finish the ranges right at the end
-        date_range.push(current_start..next_start);
+    loop {
+        let next_start = current_start.clone().add_duration(max_step.clone()); // finish the ranges right at the end
+        let next_start_timestamp = next_start.start_timestamp();
+        if next_start_timestamp > end {
+            if end == Resolution::from_date(end.date_naive()).start_timestamp() {
+                // the last interval can be represented as `Resolution` without
+                // any fractions
+                let end_timespan = Resolution::from_date(end.date_naive());
+                date_range.push(BatchRange::Full(current_start..end_timespan));
+            } else {
+                date_range.push(BatchRange::Partial {
+                    start: current_start,
+                    end,
+                });
+            }
+            break;
+        }
+        date_range.push(BatchRange::Full(current_start..next_start.clone()));
         current_start = next_start;
+        if next_start_timestamp == end {
+            break;
+        }
     }
 
     date_range
@@ -200,7 +247,10 @@ fn generate_date_time_ranges(
 
 #[cfg(test)]
 mod tests {
-    use crate::tests::point_construction::{d, dt};
+    use crate::{
+        tests::point_construction::{d, dt},
+        utils::day_start,
+    };
 
     use super::*;
     use pretty_assertions::assert_eq;
@@ -209,62 +259,56 @@ mod tests {
     fn test_generate_date_ranges() {
         for ((from, to), expected) in [
             (
-                (day_start(d("2022-01-01")), day_start(d("2022-03-15"))),
+                (d("2022-01-01"), day_start(&d("2022-03-15"))),
                 vec![
-                    (day_start(d("2022-01-01")), day_start(d("2022-01-31"))),
-                    (day_start(d("2022-01-31")), day_start(d("2022-03-02"))),
-                    (day_start(d("2022-03-02")), day_start(d("2022-03-15"))),
+                    BatchRange::Full(d("2022-01-01")..d("2022-01-31")),
+                    BatchRange::Full(d("2022-01-31")..d("2022-03-02")),
+                    BatchRange::Full(d("2022-03-02")..d("2022-03-15")),
                 ],
             ),
             (
-                (day_start(d("2015-07-20")), day_start(d("2016-01-01"))),
+                (d("2015-07-20"), day_start(&d("2016-01-01"))),
                 vec![
-                    (day_start(d("2015-07-20")), day_start(d("2015-08-19"))),
-                    (day_start(d("2015-08-19")), day_start(d("2015-09-18"))),
-                    (day_start(d("2015-09-18")), day_start(d("2015-10-18"))),
-                    (day_start(d("2015-10-18")), day_start(d("2015-11-17"))),
-                    (day_start(d("2015-11-17")), day_start(d("2015-12-17"))),
-                    (day_start(d("2015-12-17")), day_start(d("2016-01-01"))),
+                    BatchRange::Full(d("2015-07-20")..d("2015-08-19")),
+                    BatchRange::Full(d("2015-08-19")..d("2015-09-18")),
+                    BatchRange::Full(d("2015-09-18")..d("2015-10-18")),
+                    BatchRange::Full(d("2015-10-18")..d("2015-11-17")),
+                    BatchRange::Full(d("2015-11-17")..d("2015-12-17")),
+                    BatchRange::Full(d("2015-12-17")..d("2016-01-01")),
                 ],
             ),
+            ((d("2015-07-20"), day_start(&d("2015-07-20"))), vec![]),
             (
-                (day_start(d("2015-07-20")), day_start(d("2015-07-20"))),
-                vec![],
-            ),
-            (
-                (
-                    dt("2015-07-20T12:12:12").and_utc(),
-                    dt("2015-07-20T20:20:20").and_utc(),
-                ),
-                vec![(
-                    dt("2015-07-20T12:12:12").and_utc(),
-                    dt("2015-07-20T20:20:20").and_utc(),
-                )],
+                (d("2015-07-20"), dt("2015-07-20T20:20:20").and_utc()),
+                vec![BatchRange::Partial {
+                    start: d("2015-07-20"),
+                    end: dt("2015-07-20T20:20:20").and_utc(),
+                }],
             ),
         ] {
-            let expected: Vec<_> = expected.into_iter().map(|r| r.0..r.1).collect();
-            let actual = generate_date_time_ranges(from, to, chrono::Duration::days(30));
+            // let expected: Vec<_> = expected.into_iter().map(|r| r.0..r.1).collect();
+            let actual = generate_batch_ranges(from, to, TimespanDuration::days(30).unwrap());
             assert_eq!(expected, actual);
         }
 
         // 1 day batch
         assert_eq!(
-            vec![day_start(d("2015-07-20"))..day_start(d("2015-07-21"))],
-            generate_date_time_ranges(
-                day_start(d("2015-07-20")),
-                day_start(d("2015-07-21")),
-                chrono::Duration::days(1)
+            vec![BatchRange::Full(d("2015-07-20")..d("2015-07-21"))],
+            generate_batch_ranges(
+                d("2015-07-20"),
+                day_start(&d("2015-07-21")),
+                TimespanDuration::days(1).unwrap()
             )
         );
         assert_eq!(
             vec![
-                day_start(d("2015-07-20"))..day_start(d("2015-07-21")),
-                day_start(d("2015-07-21"))..day_start(d("2015-07-22"))
+                BatchRange::Full(d("2015-07-20")..d("2015-07-21")),
+                BatchRange::Full(d("2015-07-21")..d("2015-07-22"))
             ],
-            generate_date_time_ranges(
-                day_start(d("2015-07-20")),
-                day_start(d("2015-07-22")),
-                chrono::Duration::days(1)
+            generate_batch_ranges(
+                d("2015-07-20"),
+                day_start(&d("2015-07-22")),
+                TimespanDuration::days(1).unwrap()
             )
         )
     }
@@ -276,7 +320,7 @@ mod tests {
             sync::{Arc, OnceLock},
         };
 
-        use chrono::{DateTime, Days, Utc};
+        use chrono::{DateTime, Days, NaiveDate, Utc};
         use entity::sea_orm_active_enums::ChartType;
         use pretty_assertions::assert_eq;
         use tokio::sync::Mutex;
@@ -301,10 +345,11 @@ mod tests {
                     dirty_force_update_and_check, map_str_tuple_to_owned, simple_test_chart,
                 },
             },
+            types::DateValue,
             ChartProperties, MissingDatePolicy, Named,
         };
 
-        use super::{parameters::mock::StepInput, DateValue};
+        use super::{parameters::mock::StepInput, TimespanDuration};
 
         type VecStringStepInput = StepInput<Vec<DateValue<String>>, ()>;
         type SharedInputsStorage = Arc<Mutex<Vec<VecStringStepInput>>>;
@@ -313,7 +358,7 @@ mod tests {
         static INPUTS: OnceLock<SharedInputsStorage> = OnceLock::new();
 
         gettable_const!(ThisInputs: SharedInputsStorage = INPUTS.get_or_init(|| Arc::new(Mutex::new(vec![]))).clone());
-        gettable_const!(Batch1Day: chrono::Duration = chrono::Duration::days(1));
+        gettable_const!(Batch1Day: TimespanDuration<NaiveDate> = TimespanDuration::days(1).unwrap());
 
         type ThisRecordingStep =
             RecordingPassStep<InMemoryRecorder<VecStringStepInput, ThisInputs>>;
@@ -324,6 +369,8 @@ mod tests {
         }
 
         impl ChartProperties for ThisTestChartProps {
+            type Resolution = NaiveDate;
+
             fn chart_type() -> ChartType {
                 ChartType::Line
             }

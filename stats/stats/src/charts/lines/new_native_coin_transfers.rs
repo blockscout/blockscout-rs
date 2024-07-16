@@ -50,6 +50,8 @@ impl Named for NewNativeCoinTransfersProperties {
 }
 
 impl ChartProperties for NewNativeCoinTransfersProperties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Line
     }

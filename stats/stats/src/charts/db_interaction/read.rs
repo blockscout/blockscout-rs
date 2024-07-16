@@ -387,7 +387,7 @@ struct SyncInfo {
 ///
 /// Retrieves data for `(offset+1)`th latest timespan, if any.
 /// In case of inconsistencies or set `force_full`, returns `None`.
-pub async fn last_accurate_point<Resolution, ChartProps, Query>(
+pub async fn last_accurate_point<Resolution, ChartName, Query>(
     chart_id: i32,
     min_blockscout_block: i64,
     db: &DatabaseConnection,
@@ -396,11 +396,11 @@ pub async fn last_accurate_point<Resolution, ChartProps, Query>(
     policy: MissingDatePolicy,
 ) -> Result<Option<TimespanValue<Resolution, String>>, UpdateError>
 where
-    ChartProps: Named + ?Sized,
+    ChartName: Named + ?Sized,
     Resolution: Timespan,
     Query: QueryBehaviour,
 {
-    let Some(day_point) = last_accurate_point_raw::<ChartProps, Query>(
+    let Some(day_point) = last_accurate_point_raw::<ChartName, Query>(
         chart_id,
         min_blockscout_block,
         db,
@@ -422,7 +422,7 @@ where
 
 /// `last_accurate_point` but without converting to the requested
 /// timespan
-async fn last_accurate_point_raw<C, Q>(
+async fn last_accurate_point_raw<N, Q>(
     chart_id: i32,
     min_blockscout_block: i64,
     db: &DatabaseConnection,
@@ -431,14 +431,14 @@ async fn last_accurate_point_raw<C, Q>(
     policy: MissingDatePolicy,
 ) -> Result<Option<DateValue<String>>, UpdateError>
 where
-    C: Named + ?Sized,
+    N: Named + ?Sized,
     Q: QueryBehaviour,
 {
     let offset = offset.unwrap_or(0);
     let row = if force_full {
         tracing::info!(
             min_blockscout_block = min_blockscout_block,
-            chart = C::NAME,
+            chart = N::NAME,
             "running full update due to force override"
         );
         None
@@ -462,7 +462,7 @@ where
                         tracing::info!(
                             min_blockscout_block = min_blockscout_block,
                             min_chart_block = block,
-                            chart = C::NAME,
+                            chart = N::NAME,
                             row = ?row,
                             "running partial update"
                         );
@@ -474,7 +474,7 @@ where
                         tracing::info!(
                             min_blockscout_block = min_blockscout_block,
                             min_chart_block = block,
-                            chart = C::NAME,
+                            chart = N::NAME,
                             "running full update due to min blocks mismatch"
                         );
                         None
@@ -482,7 +482,7 @@ where
                 } else {
                     tracing::info!(
                         min_blockscout_block = min_blockscout_block,
-                        chart = C::NAME,
+                        chart = N::NAME,
                         "running full update due to lack of saved min block"
                     );
                     None
@@ -491,7 +491,7 @@ where
             None => {
                 tracing::info!(
                     min_blockscout_block = min_blockscout_block,
-                    chart = C::NAME,
+                    chart = N::NAME,
                     "running full update due to lack of history data"
                 );
                 None

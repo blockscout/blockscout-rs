@@ -3,6 +3,8 @@ use std::ops::{Range, RangeInclusive};
 use chrono::{Days, NaiveDate, NaiveWeek, Weekday};
 use rust_decimal::Decimal;
 
+use crate::charts::chart_properties_portrait::imports::ResolutionKind;
+
 use super::{db::DbDateValue, TimespanValue};
 
 pub const WEEK_START: Weekday = Weekday::Mon;
@@ -63,8 +65,20 @@ impl super::Timespan for Week {
         self.0.days().start().clone()
     }
 
-    fn next_timespan(self) -> Self {
+    fn next_timespan(&self) -> Self {
         self.saturating_next_week()
+    }
+
+    fn previous_timespan(&self) -> Self {
+        self.saturating_previous_week()
+    }
+
+    fn enum_variant() -> ResolutionKind {
+        ResolutionKind::Week
+    }
+
+    fn start_timestamp(&self) -> chrono::DateTime<chrono::Utc> {
+        self.days().start().start_timestamp()
     }
 }
 
@@ -84,6 +98,15 @@ impl Week {
             .checked_add_days(Days::new(1))
             .unwrap_or(NaiveDate::MAX);
         Week::new(next_week_first_day)
+    }
+
+    pub fn saturating_previous_week(&self) -> Week {
+        let prev_week_last_day = self
+            .0
+            .first_day()
+            .checked_sub_days(Days::new(1))
+            .unwrap_or(NaiveDate::MIN);
+        Week::new(prev_week_last_day)
     }
 
     // iterating over ranges with custom inner types is nightly-only

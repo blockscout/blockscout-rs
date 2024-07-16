@@ -9,10 +9,10 @@
 //! Charts are intended to be such persisted sources,
 //! because their data is directly retreived from the database (on requests).
 
-use std::{marker::PhantomData, ops::Range, time::Duration};
+use std::{fmt::Debug, marker::PhantomData, ops::Range, time::Duration};
 
 use blockscout_metrics_tools::AggregateTimer;
-use chrono::{DateTime, NaiveDate, SubsecRound, Utc};
+use chrono::{DateTime, SubsecRound, Utc};
 use parameter_traits::{CreateBehaviour, QueryBehaviour, UpdateBehaviour};
 use parameters::{
     update::{
@@ -60,7 +60,7 @@ where
     MainDep: DataSource,
     ResolutionDep: DataSource,
     Create: CreateBehaviour,
-    Update: UpdateBehaviour<MainDep, ResolutionDep>,
+    Update: UpdateBehaviour<MainDep, ResolutionDep, ChartProps::Resolution>,
     Query: QueryBehaviour,
     ChartProps: ChartProperties;
 
@@ -154,9 +154,10 @@ where
     MainDep: DataSource,
     ResolutionDep: DataSource,
     Create: CreateBehaviour,
-    Update: UpdateBehaviour<MainDep, ResolutionDep>,
+    Update: UpdateBehaviour<MainDep, ResolutionDep, ChartProps::Resolution>,
     Query: QueryBehaviour,
     ChartProps: ChartProperties,
+    ChartProps::Resolution: Debug,
 {
     /// Performs common checks and prepares values useful for further
     /// update. Then proceeds to update according to parameters.
@@ -189,7 +190,7 @@ where
             .await
             .map_err(UpdateError::BlockscoutDB)?;
         let offset = Some(ChartProps::approximate_trailing_points());
-        let last_accurate_point = last_accurate_point::<NaiveDate, ChartProps, Query>(
+        let last_accurate_point = last_accurate_point::<ChartProps::Resolution, ChartProps, Query>(
             chart_id,
             min_blockscout_block,
             cx.db,
@@ -235,9 +236,10 @@ where
     MainDep: DataSource,
     ResolutionDep: DataSource,
     Create: CreateBehaviour,
-    Update: UpdateBehaviour<MainDep, ResolutionDep>,
+    Update: UpdateBehaviour<MainDep, ResolutionDep, ChartProps::Resolution>,
     Query: QueryBehaviour,
     ChartProps: ChartProperties,
+    ChartProps::Resolution: Debug + Send,
 {
     type MainDependencies = MainDep;
     type ResolutionDependencies = ResolutionDep;
@@ -294,7 +296,7 @@ where
     MainDep: DataSource,
     ResolutionDep: DataSource,
     Create: CreateBehaviour,
-    Update: UpdateBehaviour<MainDep, ResolutionDep>,
+    Update: UpdateBehaviour<MainDep, ResolutionDep, ChartProps::Resolution>,
     Query: QueryBehaviour,
     ChartProps: ChartProperties + Named,
 {
@@ -308,7 +310,7 @@ where
     MainDep: DataSource + Sync,
     ResolutionDep: DataSource + Sync,
     Create: CreateBehaviour + Sync,
-    Update: UpdateBehaviour<MainDep, ResolutionDep> + Sync,
+    Update: UpdateBehaviour<MainDep, ResolutionDep, ChartProps::Resolution> + Sync,
     Query: QueryBehaviour + Sync,
     ChartProps: ChartProperties,
 {
@@ -325,7 +327,7 @@ mod tests {
         };
 
         use blockscout_metrics_tools::AggregateTimer;
-        use chrono::{DateTime, Days, TimeDelta, Utc};
+        use chrono::{DateTime, Days, NaiveDate, TimeDelta, Utc};
         use entity::sea_orm_active_enums::ChartType;
         use tokio::sync::Mutex;
 
@@ -343,7 +345,7 @@ mod tests {
             },
             gettable_const,
             tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
-            types::DateValue,
+            types::{DateValue, TimespanValue},
             update_group::{SyncUpdateGroup, UpdateGroup},
             ChartProperties, Named, UpdateError,
         };
@@ -372,15 +374,16 @@ mod tests {
             }
         }
 
-        impl<M, R> UpdateBehaviour<M, R> for UpdateSingleTriggerAsserter
+        impl<M, R, Resolution> UpdateBehaviour<M, R, Resolution> for UpdateSingleTriggerAsserter
         where
             M: DataSource,
             R: DataSource,
+            Resolution: Send,
         {
             async fn update_values(
                 cx: &UpdateContext<'_>,
                 chart_id: i32,
-                _last_accurate_point: Option<DateValue<String>>,
+                _last_accurate_point: Option<TimespanValue<Resolution, String>>,
                 min_blockscout_block: i64,
                 _dependency_data_fetch_timer: &mut AggregateTimer,
             ) -> Result<(), UpdateError> {
@@ -405,6 +408,8 @@ mod tests {
         }
 
         impl ChartProperties for TestedChartProps {
+            type Resolution = NaiveDate;
+
             fn chart_type() -> ChartType {
                 ChartType::Counter
             }
@@ -426,6 +431,8 @@ mod tests {
         }
 
         impl ChartProperties for ChartDependedOnTestedProps {
+            type Resolution = NaiveDate;
+
             fn chart_type() -> ChartType {
                 ChartType::Counter
             }

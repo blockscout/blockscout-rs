@@ -41,6 +41,8 @@ impl Named for TotalTokensProperties {
 }
 
 impl ChartProperties for TotalTokensProperties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Counter
     }

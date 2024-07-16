@@ -3,6 +3,7 @@ use crate::{
     lines::new_contracts::NewContractsInt, ChartProperties, MissingDatePolicy, Named,
 };
 
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 
 pub struct ContractsGrowthProperties;
@@ -12,6 +13,8 @@ impl Named for ContractsGrowthProperties {
 }
 
 impl ChartProperties for ContractsGrowthProperties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Line
     }

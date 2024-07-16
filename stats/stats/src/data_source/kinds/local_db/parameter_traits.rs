@@ -7,7 +7,7 @@ use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
 use crate::{
     charts::db_interaction::write::set_last_updated_at,
     data_source::{DataSource, UpdateContext},
-    types::DateValue,
+    types::TimespanValue,
     UpdateError,
 };
 
@@ -22,7 +22,7 @@ pub trait CreateBehaviour {
 
 // generic parameters are to ensure that dependencies in implementations
 // of this trait match dependencies in `impl DataSource for LocalDbChartSource<..>`
-pub trait UpdateBehaviour<MainDep, ResolutionDep>
+pub trait UpdateBehaviour<MainDep, ResolutionDep, Resolution>
 where
     MainDep: DataSource,
     ResolutionDep: DataSource,
@@ -34,7 +34,7 @@ where
     fn update_values(
         cx: &UpdateContext<'_>,
         chart_id: i32,
-        last_accurate_point: Option<DateValue<String>>,
+        last_accurate_point: Option<TimespanValue<Resolution, String>>,
         min_blockscout_block: i64,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> impl Future<Output = Result<(), UpdateError>> + Send;

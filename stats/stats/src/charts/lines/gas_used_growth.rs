@@ -68,6 +68,8 @@ impl Named for GasUsedGrowthProperties {
 }
 
 impl ChartProperties for GasUsedGrowthProperties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Line
     }

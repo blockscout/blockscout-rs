@@ -42,6 +42,8 @@ impl Named for TotalAddressesProperties {
 }
 
 impl ChartProperties for TotalAddressesProperties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Counter
     }

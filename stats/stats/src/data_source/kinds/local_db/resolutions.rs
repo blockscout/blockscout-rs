@@ -74,10 +74,10 @@ where
         let week_range = range.map(date_range_to_weeks);
         let time_range_for_weeks = week_range.map(|w| {
             // start of week containing range start
-            let start = day_start(*w.start().days().start());
+            let start = day_start(w.start().days().start());
             // start of week following range end (exclusive range again)
             let week_after_range = w.end().saturating_next_week();
-            let end = day_start(*week_after_range.days().start());
+            let end = day_start(week_after_range.days().start());
             start..end
         });
         let daily_averages = DailyAverage::query_data(

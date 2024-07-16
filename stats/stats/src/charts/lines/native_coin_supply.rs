@@ -88,6 +88,8 @@ impl Named for NativeCoinSupplyProperties {
 }
 
 impl ChartProperties for NativeCoinSupplyProperties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Line
     }

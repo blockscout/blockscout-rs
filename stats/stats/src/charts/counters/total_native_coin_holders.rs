@@ -5,6 +5,8 @@ use crate::{
     lines::NativeCoinHoldersGrowth,
     ChartProperties, MissingDatePolicy, Named,
 };
+
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 
 pub struct TotalNativeCoinHoldersProperties;
@@ -14,6 +16,8 @@ impl Named for TotalNativeCoinHoldersProperties {
 }
 
 impl ChartProperties for TotalNativeCoinHoldersProperties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Counter
     }

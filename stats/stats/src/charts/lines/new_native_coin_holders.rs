@@ -8,6 +8,7 @@ use crate::{
     Named,
 };
 
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 
 pub struct NewNativeCoinHoldersProperties;
@@ -17,6 +18,8 @@ impl Named for NewNativeCoinHoldersProperties {
 }
 
 impl ChartProperties for NewNativeCoinHoldersProperties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Line
     }

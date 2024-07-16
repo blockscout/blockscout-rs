@@ -1,7 +1,10 @@
 use crate::{
-    charts::chart::ChartProperties, data_source::kinds::local_db::DailyCumulativeLocalDbChartSource,
+    charts::chart::ChartProperties,
+    data_source::kinds::local_db::DailyCumulativeLocalDbChartSource,
     lines::new_verified_contracts::NewVerifiedContractsInt, MissingDatePolicy, Named,
 };
+
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 
 pub struct VerifiedContractsGrowthProperties;
@@ -11,6 +14,8 @@ impl Named for VerifiedContractsGrowthProperties {
 }
 
 impl ChartProperties for VerifiedContractsGrowthProperties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Line
     }

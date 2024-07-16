@@ -53,6 +53,8 @@ impl Named for TxnsSuccessRateProperties {
 }
 
 impl ChartProperties for TxnsSuccessRateProperties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Line
     }

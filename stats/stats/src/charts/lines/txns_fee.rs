@@ -53,6 +53,8 @@ impl Named for TxnsFeeProperties {
 }
 
 impl ChartProperties for TxnsFeeProperties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Line
     }

@@ -46,6 +46,8 @@ impl Named for AverageGasLimitProperties {
 }
 
 impl ChartProperties for AverageGasLimitProperties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Line
     }

@@ -52,7 +52,7 @@ where
     ) -> Result<Self::Output, UpdateError> {
         let data = DS::query_data(
             cx,
-            Some(day_start(cx.time.date_naive())..cx.time),
+            Some(day_start(&cx.time.date_naive())..cx.time),
             dependency_data_fetch_timer,
         )
         .await?;

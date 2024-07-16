@@ -6,6 +6,8 @@ use crate::{
     lines::NewNativeCoinTransfersInt,
     ChartProperties, MissingDatePolicy, Named,
 };
+
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 
 pub struct TotalNativeCoinTransfersProperties;
@@ -15,6 +17,8 @@ impl Named for TotalNativeCoinTransfersProperties {
 }
 
 impl ChartProperties for TotalNativeCoinTransfersProperties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Counter
     }

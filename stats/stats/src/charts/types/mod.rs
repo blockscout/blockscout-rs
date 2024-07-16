@@ -2,11 +2,15 @@ mod day;
 pub mod db;
 pub mod week;
 
-use chrono::NaiveDate;
+use std::{marker::PhantomData, num::NonZeroU64, ops::Range};
+
+use chrono::{DateTime, NaiveDate, Utc};
 pub use day::*;
 use entity::chart_data;
 use rust_decimal::Decimal;
 use sea_orm::Set;
+
+use super::chart_properties_portrait::imports::ResolutionKind;
 
 pub trait Timespan {
     /// Construct the timespan from a date within the timespan.
@@ -18,7 +22,31 @@ pub trait Timespan {
     /// to store in database.
     fn into_date(self) -> NaiveDate;
     /// Get the next interval right after the current one (saturating)
-    fn next_timespan(self) -> Self;
+    fn next_timespan(&self) -> Self;
+    /// Get the interval right before the current one (saturating)
+    fn previous_timespan(&self) -> Self;
+    /// Converting type into runtime enum variant
+    fn enum_variant() -> ResolutionKind;
+    /// Extract the start of given timespan as UTC timestamp
+    fn start_timestamp(&self) -> DateTime<Utc>;
+    /// Represent the timespan as UTC timestamp range
+    fn into_time_range(self) -> Range<DateTime<Utc>>
+    where
+        Self: Sized,
+    {
+        self.start_timestamp()..self.next_timespan().start_timestamp()
+    }
+    fn add_duration(mut self, duration: TimespanDuration<Self>) -> Self
+    where
+        Self: Sized,
+    {
+        // can't make efficient soluction for variable-sized timespans
+        // (such as months)
+        for _ in 0..duration.repeats().get() {
+            self = self.next_timespan();
+        }
+        self
+    }
 }
 
 /// Some value for some time interval
@@ -134,6 +162,35 @@ impl<T: Ord> ZeroTimespanValue<T> for TimespanValue<T, String> {
             timespan,
             value: "0".to_string(),
         }
+    }
+}
+
+/// Duration expressed as some timespan `T` repeated
+/// `n > 0` times
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct TimespanDuration<T> {
+    repeats: NonZeroU64,
+    timespan: PhantomData<T>,
+}
+
+impl<T> TimespanDuration<T> {
+    /// Create a duration consisting of timespan `T` repeated
+    /// `n` times.
+    pub fn timespan_repeats(n: NonZeroU64) -> Self {
+        Self {
+            repeats: n,
+            timespan: PhantomData,
+        }
+    }
+
+    pub fn repeats(&self) -> NonZeroU64 {
+        self.repeats
+    }
+}
+
+impl TimespanDuration<NaiveDate> {
+    pub fn days(n: u64) -> Option<Self> {
+        Some(Self::timespan_repeats(NonZeroU64::new(n)?))
     }
 }
 

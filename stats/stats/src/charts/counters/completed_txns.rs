@@ -51,6 +51,8 @@ impl Named for CompletedTxnsProperties {
 }
 
 impl ChartProperties for CompletedTxnsProperties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Counter
     }

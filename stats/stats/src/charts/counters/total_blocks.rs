@@ -13,7 +13,7 @@ use crate::{
 };
 
 use blockscout_db::entity::blocks;
-use chrono::NaiveDateTime;
+use chrono::{NaiveDate, NaiveDateTime};
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, sea_query::Expr, FromQueryResult, QuerySelect};
 
@@ -60,6 +60,8 @@ impl Named for TotalBlocksProperties {
 }
 
 impl ChartProperties for TotalBlocksProperties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Counter
     }

@@ -45,6 +45,8 @@ impl Named for NewVerifiedContractsProperties {
 }
 
 impl ChartProperties for NewVerifiedContractsProperties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Line
     }

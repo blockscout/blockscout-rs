@@ -6,6 +6,8 @@ use crate::{
     lines::NewTxnsInt,
     ChartProperties, MissingDatePolicy, Named,
 };
+
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 
 pub struct TotalTxnsProperties;
@@ -15,6 +17,8 @@ impl Named for TotalTxnsProperties {
 }
 
 impl ChartProperties for TotalTxnsProperties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Counter
     }

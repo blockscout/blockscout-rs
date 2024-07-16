@@ -8,7 +8,7 @@ use crate::{
             local_db::{
                 parameters::{
                     update::batching::{
-                        parameters::{BatchMax, PassVecStep},
+                        parameters::{BatchMaxDays, PassVecStep},
                         BatchUpdate,
                     },
                     DefaultCreate, DefaultQueryVec,
@@ -24,6 +24,7 @@ use crate::{
     ChartProperties, Named, UpdateError,
 };
 
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 
@@ -100,6 +101,8 @@ impl Named for Properties {
 }
 
 impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Line
     }
@@ -114,7 +117,7 @@ pub type NewAccounts = LocalDbChartSource<
         (),
         PassVecStep,
         // see `NewAccountsRemote` docs
-        BatchMax,
+        BatchMaxDays,
         DefaultQueryVec<Properties>,
         Properties,
     >,

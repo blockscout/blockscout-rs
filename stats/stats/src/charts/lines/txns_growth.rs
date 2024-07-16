@@ -1,7 +1,10 @@
 use crate::{
-    charts::chart::ChartProperties, data_source::kinds::local_db::DailyCumulativeLocalDbChartSource,
-    lines::NewTxnsInt, MissingDatePolicy, Named,
+    charts::chart::ChartProperties,
+    data_source::kinds::local_db::DailyCumulativeLocalDbChartSource, lines::NewTxnsInt,
+    MissingDatePolicy, Named,
 };
+
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 
 pub struct TxnsGrowthProperties;
@@ -11,6 +14,8 @@ impl Named for TxnsGrowthProperties {
 }
 
 impl ChartProperties for TxnsGrowthProperties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Line
     }
