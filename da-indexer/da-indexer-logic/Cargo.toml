@@ -27,19 +27,25 @@ futures = "0.3"
 jsonrpsee = { version = "0.20", features = ["client-core", "macros"] }
 serde = "1.0"
 serde_with = "3.6.1"
+serde_json = "1.0.96"
 async-trait = "0.1"
 http = "0.2.9"
 tonic = { version = "0.7", features = ["tls", "tls-roots"] }
 prost = "0.10"
 ethabi = "18.0"
 ethers = { version = "2.0.11", features = ["ws"] }
+reqwest = { version = "0.12.5", features = ["json"] }
+chrono = "0.4"
+toml = "0.8.14"
 
 [dev-dependencies]
 blockscout-service-launcher = { version = "0.9.0", features = ["test-database", "database-0_12"] }
 pretty_assertions = "1.3"
 da-indexer-migration = {path = "../da-indexer-migration"}
 serde_json = "1.0"
-base64 = "0.22.0"
+wiremock = "0.6"
+toml = "0.8.14"
+base64 = "0.22.1"
 
 [build-dependencies]
 tonic-build = "0.7"

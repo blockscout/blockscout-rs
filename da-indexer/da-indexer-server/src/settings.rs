@@ -3,7 +3,9 @@ use blockscout_service_launcher::{
     launcher::{ConfigSettings, MetricsSettings, ServerSettings},
     tracing::{JaegerSettings, TracingSettings},
 };
-use da_indexer_logic::settings::IndexerSettings;
+use da_indexer_logic::{
+    celestia::l2_router::settings::L2RouterSettings, settings::IndexerSettings,
+};
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -17,9 +19,10 @@ pub struct Settings {
     pub tracing: TracingSettings,
     #[serde(default)]
     pub jaeger: JaegerSettings,
-    pub database: DatabaseSettings,
 
-    pub indexer: IndexerSettings,
+    pub database: Option<DatabaseSettings>,
+    pub indexer: Option<IndexerSettings>,
+    pub l2_router: Option<L2RouterSettings>,
 }
 
 impl ConfigSettings for Settings {
@@ -33,12 +36,13 @@ impl Settings {
             metrics: Default::default(),
             tracing: Default::default(),
             jaeger: Default::default(),
-            database: DatabaseSettings {
+            database: Some(DatabaseSettings {
                 connect: DatabaseConnectSettings::Url(database_url),
                 create_database: Default::default(),
                 run_migrations: Default::default(),
-            },
-            indexer: Default::default(),
+            }),
+            indexer: Some(Default::default()),
+            l2_router: None,
         }
     }
 }

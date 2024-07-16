@@ -35,6 +35,6 @@ services:
       - ./da-indexer-server/config/base.env
     volumes:
       ## optional: you can use default config or provide custom via file
-      - ./da-indexer-server/config/eigenda.toml:/app/config.toml
+      - ./da-indexer-server/config/celestia.toml:/app/config.toml
     extra_hosts:
       - "host.docker.internal:host-gateway"
