@@ -226,7 +226,10 @@ where
                 // the last interval can be represented as `Resolution` without
                 // any fractions
                 let end_timespan = Resolution::from_date(end.date_naive());
-                date_range.push(BatchRange::Full(current_start..end_timespan));
+                let range = current_start..end_timespan;
+                if !range.is_empty() {
+                    date_range.push(BatchRange::Full(range));
+                }
             } else {
                 date_range.push(BatchRange::Partial {
                     start: current_start,
