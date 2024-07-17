@@ -62,12 +62,15 @@ mod tests {
         charts::db_interaction::read::get_min_block_blockscout,
         data_source::{DataSource, UpdateContext},
         get_line_chart_data,
-        tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
+        tests::{
+            init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data,
+            point_construction::dt,
+        },
         types::ExtendedTimespanValue,
         Named,
     };
     use chrono::{NaiveDate, Utc};
-    use entity::chart_data;
+    use entity::{chart_data, charts};
     use pretty_assertions::assert_eq;
     use sea_orm::{DatabaseConnection, EntityTrait, Set};
     use std::str::FromStr;
@@ -106,8 +109,19 @@ mod tests {
         .exec(&db as &DatabaseConnection)
         .await
         .unwrap();
+        // set corresponding `last_updated_at` for successful partial update
+        charts::Entity::update(charts::ActiveModel {
+            id: Set(1),
+            last_updated_at: Set(Some(dt("2022-11-12T11:00:00").and_utc().fixed_offset())),
+            ..Default::default()
+        })
+        // .filter(charts::Column::Id.eq(1))
+        .exec(&db as &DatabaseConnection)
+        .await
+        .unwrap();
 
-        // Note that update is not full, therefore there is no entry with date `2022-11-09`
+        // Note that update is not full, therefore there is no entry with date `2022-11-09` and
+        // wrong value is kept
         let mut cx = UpdateContext {
             db: &db,
             blockscout: &blockscout,
@@ -135,7 +149,7 @@ mod tests {
             },
             ExtendedTimespanValue {
                 timespan: NaiveDate::from_str("2022-11-11").unwrap(),
-                value: "4".into(),
+                value: "100".into(),
                 is_approximate: false,
             },
             ExtendedTimespanValue {
