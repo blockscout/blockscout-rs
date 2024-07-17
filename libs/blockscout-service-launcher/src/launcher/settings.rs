@@ -81,7 +81,7 @@ impl Default for CorsSettings {
             enabled: false,
             allowed_origin: "".to_string(),
             allowed_methods: "PUT, GET, POST, OPTIONS, DELETE, PATCH".to_string(),
-            allowed_credentials: true,
+            allowed_credentials: false,
             max_age: 3600,
             block_on_origin_mismatch: false,
             send_wildcard: false,
@@ -91,6 +91,9 @@ impl Default for CorsSettings {
 
 impl CorsSettings {
     pub fn build(self) -> Cors {
+        if !self.enabled {
+            return Cors::default();
+        }
         let mut cors = Cors::default()
             .allow_any_header()
             .allowed_methods(self.allowed_methods.split(", "))
