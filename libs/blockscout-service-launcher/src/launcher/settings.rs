@@ -72,6 +72,7 @@ pub struct CorsSettings {
     pub allowed_credentials: bool,
     pub max_age: usize,
     pub block_on_origin_mismatch: bool,
+    pub send_wildcard: bool,
 }
 
 impl Default for CorsSettings {
@@ -83,6 +84,7 @@ impl Default for CorsSettings {
             allowed_credentials: true,
             max_age: 3600,
             block_on_origin_mismatch: false,
+            send_wildcard: false,
         }
     }
 }
@@ -97,9 +99,17 @@ impl CorsSettings {
         if self.allowed_credentials {
             cors = cors.supports_credentials()
         }
-        for origin in self.allowed_origin.split(", ") {
-            cors = cors.allowed_origin(origin)
+        if self.send_wildcard {
+            cors = cors.send_wildcard()
         }
+        match self.allowed_origin.as_str() {
+            "*" => cors = cors.allow_any_origin(),
+            allowed_origin => {
+                for origin in allowed_origin.split(", ") {
+                    cors = cors.allowed_origin(origin)
+                }
+            }
+        };
         cors
     }
 }
