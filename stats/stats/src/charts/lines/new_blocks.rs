@@ -115,7 +115,6 @@ mod tests {
             last_updated_at: Set(Some(dt("2022-11-12T11:00:00").and_utc().fixed_offset())),
             ..Default::default()
         })
-        // .filter(charts::Column::Id.eq(1))
         .exec(&db as &DatabaseConnection)
         .await
         .unwrap();
@@ -273,7 +272,7 @@ mod tests {
             .unwrap();
 
         let min_blockscout_block = get_min_block_blockscout(&blockscout).await.unwrap();
-        // set wrong values and check, that they wasn't rewritten
+        // set wrong values and check, that they weren't rewritten
         // except the last one
         chart_data::Entity::insert_many([
             chart_data::ActiveModel {
@@ -305,6 +304,15 @@ mod tests {
                 ..Default::default()
             },
         ])
+        .exec(&db as &DatabaseConnection)
+        .await
+        .unwrap();
+        // set corresponding `last_updated_at` for successful partial update
+        charts::Entity::update(charts::ActiveModel {
+            id: Set(1),
+            last_updated_at: Set(Some(dt("2022-11-12T11:00:00").and_utc().fixed_offset())),
+            ..Default::default()
+        })
         .exec(&db as &DatabaseConnection)
         .await
         .unwrap();
