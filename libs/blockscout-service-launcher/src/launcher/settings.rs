@@ -81,7 +81,7 @@ impl Default for CorsSettings {
             enabled: false,
             allowed_origin: "".to_string(),
             allowed_methods: "PUT, GET, POST, OPTIONS, DELETE, PATCH".to_string(),
-            allowed_credentials: false,
+            allowed_credentials: true,
             max_age: 3600,
             block_on_origin_mismatch: false,
             send_wildcard: false,
