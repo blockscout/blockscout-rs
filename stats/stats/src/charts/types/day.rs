@@ -40,6 +40,22 @@ impl super::Timespan for NaiveDate {
     fn start_timestamp(&self) -> chrono::DateTime<chrono::Utc> {
         day_start(self)
     }
+
+    fn add_duration(&self, duration: super::TimespanDuration<Self>) -> Self
+    where
+        Self: Sized,
+    {
+        self.checked_add_days(Days::new(duration.repeats()))
+            .unwrap_or(NaiveDate::MAX)
+    }
+
+    fn sub_duration(&self, duration: super::TimespanDuration<Self>) -> Self
+    where
+        Self: Sized,
+    {
+        self.checked_sub_days(Days::new(duration.repeats()))
+            .unwrap_or(NaiveDate::MIN)
+    }
 }
 
 //todo: remove???

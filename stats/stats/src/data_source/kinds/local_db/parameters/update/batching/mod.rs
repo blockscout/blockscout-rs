@@ -75,7 +75,7 @@ where
             ),
         };
 
-        let steps = generate_batch_ranges(update_range_start, now, BatchSizeUpperBound::get());
+        let steps = generate_batch_ranges(update_range_start, now, BatchSizeUpperBound::get())?;
         let n = steps.len();
 
         for (i, range) in steps.into_iter().enumerate() {
@@ -211,10 +211,15 @@ fn generate_batch_ranges<Resolution>(
     start: Resolution,
     end: DateTime<Utc>,
     max_step: TimespanDuration<Resolution>,
-) -> Vec<BatchRange<Resolution>>
+) -> Result<Vec<BatchRange<Resolution>>, UpdateError>
 where
     Resolution: Timespan + Ord + Clone,
 {
+    if max_step.repeats() == 0 {
+        return Err(UpdateError::Internal(
+            "Zero maximum batch step is not allowed".into(),
+        ));
+    }
     let mut date_range = Vec::new();
     let mut current_start = start;
 
@@ -245,7 +250,7 @@ where
         }
     }
 
-    date_range
+    Ok(date_range)
 }
 
 #[cfg(test)]
@@ -290,7 +295,7 @@ mod tests {
             ),
         ] {
             // let expected: Vec<_> = expected.into_iter().map(|r| r.0..r.1).collect();
-            let actual = generate_batch_ranges(from, to, TimespanDuration::days(30).unwrap());
+            let actual = generate_batch_ranges(from, to, TimespanDuration::days(30)).unwrap();
             assert_eq!(expected, actual);
         }
 
@@ -300,8 +305,9 @@ mod tests {
             generate_batch_ranges(
                 d("2015-07-20"),
                 day_start(&d("2015-07-21")),
-                TimespanDuration::days(1).unwrap()
+                TimespanDuration::days(1)
             )
+            .unwrap()
         );
         assert_eq!(
             vec![
@@ -311,8 +317,9 @@ mod tests {
             generate_batch_ranges(
                 d("2015-07-20"),
                 day_start(&d("2015-07-22")),
-                TimespanDuration::days(1).unwrap()
+                TimespanDuration::days(1)
             )
+            .unwrap()
         )
     }
 
@@ -361,7 +368,7 @@ mod tests {
         static INPUTS: OnceLock<SharedInputsStorage> = OnceLock::new();
 
         gettable_const!(ThisInputs: SharedInputsStorage = INPUTS.get_or_init(|| Arc::new(Mutex::new(vec![]))).clone());
-        gettable_const!(Batch1Day: TimespanDuration<NaiveDate> = TimespanDuration::days(1).unwrap());
+        gettable_const!(Batch1Day: TimespanDuration<NaiveDate> = TimespanDuration::days(1));
 
         type ThisRecordingStep =
             RecordingPassStep<InMemoryRecorder<VecStringStepInput, ThisInputs>>;

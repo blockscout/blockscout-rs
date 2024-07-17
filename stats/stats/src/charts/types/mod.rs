@@ -2,7 +2,7 @@ mod day;
 pub mod db;
 pub mod week;
 
-use std::{marker::PhantomData, num::NonZeroU64, ops::Range};
+use std::{marker::PhantomData, ops::Range};
 
 use chrono::{DateTime, NaiveDate, Utc};
 pub use day::*;
@@ -36,17 +36,12 @@ pub trait Timespan {
     {
         self.start_timestamp()..self.next_timespan().start_timestamp()
     }
-    fn add_duration(mut self, duration: TimespanDuration<Self>) -> Self
+    fn add_duration(&self, duration: TimespanDuration<Self>) -> Self
     where
-        Self: Sized,
-    {
-        // can't make efficient soluction for variable-sized timespans
-        // (such as months)
-        for _ in 0..duration.repeats().get() {
-            self = self.next_timespan();
-        }
-        self
-    }
+        Self: Sized;
+    fn sub_duration(&self, duration: TimespanDuration<Self>) -> Self
+    where
+        Self: Sized;
 }
 
 /// Some value for some time interval
@@ -169,36 +164,35 @@ impl<T: Ord> ZeroTimespanValue<T> for TimespanValue<T, String> {
 /// `n > 0` times
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TimespanDuration<T> {
-    repeats: NonZeroU64,
+    repeats: u64,
     timespan: PhantomData<T>,
 }
 
 impl<T> TimespanDuration<T> {
     /// Create a duration consisting of timespan `T` repeated
     /// `n` times.
-    pub fn timespan_repeats(n: NonZeroU64) -> Self {
+    pub fn timespan_repeats(n: u64) -> Self {
         Self {
             repeats: n,
             timespan: PhantomData,
         }
     }
 
-    pub fn repeats(&self) -> NonZeroU64 {
+    pub fn repeats(&self) -> u64 {
         self.repeats
     }
 }
 
 impl TimespanDuration<NaiveDate> {
-    pub fn days(n: u64) -> Option<Self> {
-        Some(Self::timespan_repeats(NonZeroU64::new(n)?))
+    pub fn days(n: u64) -> Self {
+        Self::timespan_repeats(n)
     }
 }
 
 /// Marked as precise or approximate
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ExtendedTimespanValue<T, V> {
-    // todo: rename
-    pub date: T,
+    pub timespan: T,
     pub value: V,
     pub is_approximate: bool,
 }
@@ -206,7 +200,7 @@ pub struct ExtendedTimespanValue<T, V> {
 impl<T, V> ExtendedTimespanValue<T, V> {
     pub fn from_date_value(dv: TimespanValue<T, V>, is_approximate: bool) -> Self {
         Self {
-            date: dv.timespan,
+            timespan: dv.timespan,
             value: dv.value,
             is_approximate,
         }
@@ -216,7 +210,7 @@ impl<T, V> ExtendedTimespanValue<T, V> {
 impl<T, V> From<ExtendedTimespanValue<T, V>> for TimespanValue<T, V> {
     fn from(dv: ExtendedTimespanValue<T, V>) -> Self {
         Self {
-            timespan: dv.date,
+            timespan: dv.timespan,
             value: dv.value,
         }
     }

@@ -16,8 +16,8 @@ pub mod mock;
 
 pub use cumulative::*;
 
-gettable_const!(Batch30Days: TimespanDuration<NaiveDate> = TimespanDuration::days(30).unwrap());
-gettable_const!(BatchMaxDays: TimespanDuration<NaiveDate> = TimespanDuration::days(u64::MAX).unwrap());
+gettable_const!(Batch30Days: TimespanDuration<NaiveDate> = TimespanDuration::days(30));
+gettable_const!(BatchMaxDays: TimespanDuration<NaiveDate> = TimespanDuration::days(u64::MAX));
 
 /// Pass the vector data from main dependency right into the database
 pub struct PassVecStep;

@@ -129,17 +129,17 @@ mod tests {
         .unwrap();
         let expected = vec![
             ExtendedTimespanValue {
-                date: NaiveDate::from_str("2022-11-10").unwrap(),
+                timespan: NaiveDate::from_str("2022-11-10").unwrap(),
                 value: "3".into(),
                 is_approximate: false,
             },
             ExtendedTimespanValue {
-                date: NaiveDate::from_str("2022-11-11").unwrap(),
+                timespan: NaiveDate::from_str("2022-11-11").unwrap(),
                 value: "4".into(),
                 is_approximate: false,
             },
             ExtendedTimespanValue {
-                date: NaiveDate::from_str("2022-11-12").unwrap(),
+                timespan: NaiveDate::from_str("2022-11-12").unwrap(),
                 value: "1".into(),
                 is_approximate: true,
             },
@@ -165,22 +165,22 @@ mod tests {
         .unwrap();
         let expected = vec![
             ExtendedTimespanValue {
-                date: NaiveDate::from_str("2022-11-09").unwrap(),
+                timespan: NaiveDate::from_str("2022-11-09").unwrap(),
                 value: "1".into(),
                 is_approximate: false,
             },
             ExtendedTimespanValue {
-                date: NaiveDate::from_str("2022-11-10").unwrap(),
+                timespan: NaiveDate::from_str("2022-11-10").unwrap(),
                 value: "3".into(),
                 is_approximate: false,
             },
             ExtendedTimespanValue {
-                date: NaiveDate::from_str("2022-11-11").unwrap(),
+                timespan: NaiveDate::from_str("2022-11-11").unwrap(),
                 value: "4".into(),
                 is_approximate: false,
             },
             ExtendedTimespanValue {
-                date: NaiveDate::from_str("2022-11-12").unwrap(),
+                timespan: NaiveDate::from_str("2022-11-12").unwrap(),
                 value: "1".into(),
                 is_approximate: true,
             },
@@ -222,22 +222,22 @@ mod tests {
         .unwrap();
         let expected = vec![
             ExtendedTimespanValue {
-                date: NaiveDate::from_str("2022-11-09").unwrap(),
+                timespan: NaiveDate::from_str("2022-11-09").unwrap(),
                 value: "1".into(),
                 is_approximate: false,
             },
             ExtendedTimespanValue {
-                date: NaiveDate::from_str("2022-11-10").unwrap(),
+                timespan: NaiveDate::from_str("2022-11-10").unwrap(),
                 value: "3".into(),
                 is_approximate: false,
             },
             ExtendedTimespanValue {
-                date: NaiveDate::from_str("2022-11-11").unwrap(),
+                timespan: NaiveDate::from_str("2022-11-11").unwrap(),
                 value: "4".into(),
                 is_approximate: false,
             },
             ExtendedTimespanValue {
-                date: NaiveDate::from_str("2022-11-12").unwrap(),
+                timespan: NaiveDate::from_str("2022-11-12").unwrap(),
                 value: "1".into(),
                 is_approximate: false,
             },
@@ -316,22 +316,22 @@ mod tests {
         .unwrap();
         let expected = vec![
             ExtendedTimespanValue {
-                date: NaiveDate::from_str("2022-11-09").unwrap(),
+                timespan: NaiveDate::from_str("2022-11-09").unwrap(),
                 value: "2".into(),
                 is_approximate: false,
             },
             ExtendedTimespanValue {
-                date: NaiveDate::from_str("2022-11-10").unwrap(),
+                timespan: NaiveDate::from_str("2022-11-10").unwrap(),
                 value: "4".into(),
                 is_approximate: false,
             },
             ExtendedTimespanValue {
-                date: NaiveDate::from_str("2022-11-11").unwrap(),
+                timespan: NaiveDate::from_str("2022-11-11").unwrap(),
                 value: "5".into(),
                 is_approximate: false,
             },
             ExtendedTimespanValue {
-                date: NaiveDate::from_str("2022-11-12").unwrap(),
+                timespan: NaiveDate::from_str("2022-11-12").unwrap(),
                 value: "1".into(),
                 is_approximate: true,
             },

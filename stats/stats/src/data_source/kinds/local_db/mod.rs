@@ -189,13 +189,12 @@ where
         let min_blockscout_block = get_min_block_blockscout(cx.blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?;
-        let offset = Some(ChartProps::approximate_trailing_points());
         let last_accurate_point = last_accurate_point::<ChartProps::Resolution, ChartProps, Query>(
             chart_id,
             min_blockscout_block,
             cx.db,
             cx.force_full,
-            offset,
+            ChartProps::approximate_trailing_points(),
             ChartProps::missing_date_policy(),
         )
         .await?;

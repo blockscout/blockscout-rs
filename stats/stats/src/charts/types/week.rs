@@ -80,6 +80,30 @@ impl super::Timespan for Week {
     fn start_timestamp(&self) -> chrono::DateTime<chrono::Utc> {
         self.days().start().start_timestamp()
     }
+
+    fn add_duration(&self, duration: super::TimespanDuration<Self>) -> Self
+    where
+        Self: Sized,
+    {
+        let result_week_date = self
+            .0
+            .first_day()
+            .checked_add_days(Days::new(duration.repeats() * 7))
+            .unwrap_or(NaiveDate::MAX);
+        Self::from_date(result_week_date)
+    }
+
+    fn sub_duration(&self, duration: super::TimespanDuration<Self>) -> Self
+    where
+        Self: Sized,
+    {
+        let result_week_date = self
+            .0
+            .first_day()
+            .checked_sub_days(Days::new(duration.repeats() * 7))
+            .unwrap_or(NaiveDate::MIN);
+        Self::from_date(result_week_date)
+    }
 }
 
 impl Week {

@@ -1,8 +1,7 @@
 //! Tools for operating with missing data
-use std::ops::RangeInclusive;
+use std::{fmt::Debug, ops::RangeInclusive};
 
 use crate::{
-    charts::types::DateValue,
     types::{Timespan, TimespanValue, ZeroTimespanValue},
     MissingDatePolicy, ReadError,
 };
@@ -76,25 +75,28 @@ pub fn trim_out_of_range_sorted<Resolution, Value>(
 }
 
 /// Fills missing points according to policy and filters out points outside of range.
-pub fn fill_and_filter_chart(
-    data: Vec<DateValue<String>>,
-    from: Option<NaiveDate>,
-    to: Option<NaiveDate>,
+pub fn fill_and_filter_chart<Resolution>(
+    data: Vec<TimespanValue<Resolution, String>>,
+    from: Option<Resolution>,
+    to: Option<Resolution>,
     policy: MissingDatePolicy,
     interval_limit: Option<Duration>,
-) -> Result<Vec<DateValue<String>>, ReadError> {
+) -> Result<Vec<TimespanValue<Resolution, String>>, ReadError>
+where
+    Resolution: Timespan + Debug + Ord + Clone,
+{
     let retrieved_count = data.len();
-    let data_filled = fill_missing_points(data, policy, from, to, interval_limit)?;
+    let data_filled = fill_missing_points(data, policy, from.clone(), to.clone(), interval_limit)?;
     if let Some(filled_count) = data_filled.len().checked_sub(retrieved_count) {
         if filled_count > 0 {
             tracing::debug!(policy = ?policy, "{} missing points were filled", filled_count);
         }
     }
     let filled_len = data_filled.len();
-    let data_filtered = filter_within_range(data_filled, from, to);
+    let data_filtered = filter_within_range(data_filled, from.clone(), to.clone());
     if let Some(filtered) = filled_len.checked_sub(data_filtered.len()) {
         if filtered > 0 {
-            tracing::debug!(range = ?(from, to), "{} points outside of range were removed", filtered);
+            tracing::debug!(range_inclusive = ?(from, to), "{} points outside of range were removed", filtered);
         }
     }
     Ok(data_filtered)
@@ -230,6 +232,7 @@ where
     data.into_iter().filter(is_within_range).collect()
 }
 
+//todo: test other resolutions?? in particular, months (variable len)
 #[cfg(test)]
 mod tests {
     use crate::{

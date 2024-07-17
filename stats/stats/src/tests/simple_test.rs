@@ -189,7 +189,7 @@ async fn get_chart<C: DataSource + ChartProperties>(
     .await
     .unwrap();
     data.into_iter()
-        .map(|p| (p.date.to_string(), p.value))
+        .map(|p| (p.timespan.to_string(), p.value))
         .collect()
 }
 

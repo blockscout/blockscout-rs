@@ -2,20 +2,21 @@ use crate::{
     charts::chart::ChartMetadata,
     data_source::kinds::local_db::parameter_traits::QueryBehaviour,
     missing_date::{fill_and_filter_chart, fit_into_range},
-    types::{DateValue, ExtendedTimespanValue, Timespan, TimespanValue},
+    types::{DateValue, ExtendedTimespanValue, Timespan, TimespanDuration, TimespanValue},
     utils::exclusive_datetime_range_to_inclusive,
     MissingDatePolicy, Named, UpdateError,
 };
 
 use blockscout_db::entity::blocks;
-use chrono::{DateTime, Duration, NaiveDate, NaiveDateTime, Utc};
+use chrono::{DateTime, Days, Duration, NaiveDate, NaiveDateTime, Utc};
 use entity::{chart_data, charts};
+use itertools::Itertools;
 use sea_orm::{
     sea_query::{self, Expr},
     ColumnTrait, ConnectionTrait, DatabaseConnection, DbBackend, DbErr, EntityTrait,
     FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Statement,
 };
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Debug};
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq, Eq)]
@@ -124,26 +125,27 @@ pub async fn get_counter_data(
 /// Mark corresponding data points as approximate.
 ///
 /// Approximate are:
-/// - points after `last_updated_at` date
-/// - `approximate_until_updated` dates starting from `last_updated_at` and moving back
+/// - points after `last_updated_at`
+/// - `approximate_until_updated` points starting from `last_updated_at` and moving back
 ///
 /// If `approximate_until_updated=0` - only future points are marked
-fn mark_approximate(
-    data: Vec<DateValue<String>>,
-    last_updated_at: NaiveDate,
+fn mark_approximate<Resolution>(
+    data: Vec<TimespanValue<Resolution, String>>,
+    last_updated_at: Resolution,
     approximate_until_updated: u64,
-) -> Vec<ExtendedTimespanValue<NaiveDate, String>> {
+) -> Vec<ExtendedTimespanValue<Resolution, String>>
+where
+    Resolution: Timespan + Ord,
+{
     // saturating sub/add
-    let next_after_updated_at = last_updated_at
-        .checked_add_days(chrono::Days::new(1))
-        .unwrap_or(NaiveDate::MAX);
-    let mark_from_timespan = next_after_updated_at
-        .checked_sub_days(chrono::Days::new(approximate_until_updated))
-        .unwrap_or(NaiveDate::MIN);
+    let next_after_updated_at = last_updated_at.next_timespan();
+    let mark_from_timespan = next_after_updated_at.sub_duration(
+        TimespanDuration::timespan_repeats(approximate_until_updated),
+    );
     data.into_iter()
         .map(|dv| {
             let is_marked: bool = dv.timespan >= mark_from_timespan;
-            ExtendedTimespanValue::<NaiveDate, String>::from_date_value(dv, is_marked)
+            ExtendedTimespanValue::from_date_value(dv, is_marked)
         })
         .collect()
 }
@@ -171,10 +173,10 @@ pub async fn get_chart_metadata(
 ///
 /// `approximate_trailing_points` - number of trailing points to mark as approximate.
 ///
-/// `interval_limit` - max interval (from, to). If `from` or `to` are none,
-/// min or max date in DB are calculated.
+/// `interval_limit` - max interval [from, to]. If `from` or `to` are none,
+/// min or max date in DB are taken.
 ///
-/// Note: if some dates within interval `(from, to)` fall on the future, data points
+/// Note: if some dates within interval `[from, to]` fall on the future, data points
 /// for these dates are not returned (makes sense, since it's future).
 ///
 /// ## Missing points and `fill_missing_dates`
@@ -199,8 +201,8 @@ pub async fn get_chart_metadata(
 /// ```
 /// (2 records in DB: `1: A`, `3: B`)
 ///
-/// `get_line_chart_data` with range `2..=4` will return 2 records : `2: A`, `3: B`. It can be
-/// represented like this:
+/// `get_line_chart_data` with range `2..=4` and `fill_missing_dates=false` will return 2 records :
+/// `2: A`, `3: B`. It can be represented like this:
 /// ```text
 ///   date  | 2 | 3 | 4
 ///  -------|---|---|---
@@ -210,6 +212,20 @@ pub async fn get_chart_metadata(
 /// - Value `A` is moved to correctly represent value at date `2`. Value for `1`
 /// is outside the range, thus we move the value.
 /// - Date 4 is still omitted, because it can be calculated from `3`
+///
+/// with `fill_missing_dates=true`:
+/// ```text
+///   date  | 2 | 3 | 4
+///  -------|---|---|---
+///   value | A | B | B
+/// ```
+///
+/// `get_line_chart_data` with range `0..=2` and `fill_missing_dates=true`
+/// ```text
+///   date  | 0 | 1 | 2
+///  -------|---|---|---
+///   value | 0 | A | A
+/// ```
 ///
 /// ### `MissingDatePolicy::FillZero` example
 ///
@@ -222,8 +238,8 @@ pub async fn get_chart_metadata(
 /// ```
 /// (2 records in DB: `1: A`, `3: B`)
 ///
-/// `get_line_chart_data` with range `2..=4` will return 1 record : `3: B`. It can be
-/// represented like this:
+/// `get_line_chart_data` with range `2..=4` and `fill_missing_dates=false` will return 1 record :
+/// `3: B`. It can be represented like this:
 /// ```text
 ///   date  | 2 | 3 | 4
 ///  -------|---|---|---
@@ -232,17 +248,27 @@ pub async fn get_chart_metadata(
 ///
 /// - Caller can deduce that no record for date `2` means that value there is 0
 ///
+/// with `fill_missing_dates=true`:
+/// ```text
+///   date  | 2 | 3 | 4
+///  -------|---|---|---
+///   value | 0 | B | 0
+/// ```
+///
 #[allow(clippy::too_many_arguments)]
-pub async fn get_line_chart_data(
+pub async fn get_line_chart_data<Resolution>(
     db: &DatabaseConnection,
     name: &str,
-    from: Option<NaiveDate>,
-    to: Option<NaiveDate>,
+    from: Option<Resolution>,
+    to: Option<Resolution>,
     interval_limit: Option<Duration>,
     policy: MissingDatePolicy,
     fill_missing_dates: bool,
     approximate_trailing_points: u64,
-) -> Result<Vec<ExtendedTimespanValue<NaiveDate, String>>, ReadError> {
+) -> Result<Vec<ExtendedTimespanValue<Resolution, String>>, ReadError>
+where
+    Resolution: Timespan + Debug + Ord + Clone,
+{
     let chart = charts::Entity::find()
         .column(charts::Column::Id)
         .filter(charts::Column::Name.eq(name))
@@ -250,14 +276,15 @@ pub async fn get_line_chart_data(
         .await?
         .ok_or_else(|| ReadError::ChartNotFound(name.into()))?;
 
-    // may contain points outside the range, need to figure it out
-    let db_data = get_raw_line_chart_data(db, chart.id, from, to).await?;
+    // may contain points outside the range
+    let db_data =
+        get_raw_line_chart_data::<Resolution>(db, chart.id, from.clone(), to.clone()).await?;
 
     let last_updated_at = chart.last_updated_at.map(|t| {
         // last_updated_at timestamp is not included in the range
         let inclusive_last_updated_at_end =
             exclusive_datetime_range_to_inclusive(DateTime::<Utc>::MIN_UTC..t.to_utc());
-        inclusive_last_updated_at_end.end().date_naive()
+        Resolution::from_date(inclusive_last_updated_at_end.end().date_naive())
     });
     if last_updated_at.is_none() && !db_data.is_empty() {
         tracing::warn!(
@@ -271,13 +298,13 @@ pub async fn get_line_chart_data(
     // However, if some points are omitted, they should be filled according
     // to policy.
     // This fill makes sense up to the latest update.
-    let to = match (to, last_updated_at) {
+    let to = match (to.clone(), last_updated_at.clone()) {
         (Some(to), Some(last_updated_at)) => Some(to.min(last_updated_at)),
         (None, Some(d)) | (Some(d), None) => Some(d),
         (None, None) => None,
     };
 
-    let data_in_range = fit_into_range(db_data, from, to, policy);
+    let data_in_range = fit_into_range(db_data, from.clone(), to.clone(), policy);
 
     let data_unmarked = if fill_missing_dates {
         fill_and_filter_chart(data_in_range, from, to, policy, interval_limit)?
@@ -286,7 +313,7 @@ pub async fn get_line_chart_data(
     };
     let data = mark_approximate(
         data_unmarked,
-        last_updated_at.unwrap_or(NaiveDate::MAX),
+        last_updated_at.unwrap_or(Resolution::from_date(NaiveDate::MAX)),
         approximate_trailing_points,
     );
     Ok(data)
@@ -296,12 +323,15 @@ pub async fn get_line_chart_data(
 ///
 /// I.e. if today there was no data, but `from` is today, yesterday's
 /// point will be also retrieved.
-async fn get_raw_line_chart_data(
+async fn get_raw_line_chart_data<Resolution>(
     db: &DatabaseConnection,
     chart_id: i32,
-    from: Option<NaiveDate>,
-    to: Option<NaiveDate>,
-) -> Result<Vec<DateValue<String>>, DbErr> {
+    from: Option<Resolution>,
+    to: Option<Resolution>,
+) -> Result<Vec<TimespanValue<Resolution, String>>, DbErr>
+where
+    Resolution: Timespan,
+{
     let mut data_request = chart_data::Entity::find()
         .column(chart_data::Column::Date)
         .column(chart_data::Column::Value)
@@ -309,6 +339,7 @@ async fn get_raw_line_chart_data(
         .order_by_asc(chart_data::Column::Date);
 
     if let Some(from) = from {
+        let from = from.into_date();
         let custom_where = Expr::cust_with_values::<_, sea_orm::sea_query::Value, _>(
             "date >= (SELECT COALESCE(MAX(date), '1900-01-01'::date) FROM chart_data WHERE chart_id = $1 AND date <= $2)",
             [chart_id.into(), from.into()],
@@ -316,6 +347,7 @@ async fn get_raw_line_chart_data(
         QuerySelect::query(&mut data_request).cond_where(custom_where);
     }
     if let Some(to) = to {
+        let to = to.into_date();
         let custom_where = Expr::cust_with_values::<_, sea_orm::sea_query::Value, _>(
             "date <= (SELECT COALESCE(MIN(date), '9999-12-31'::date) FROM chart_data WHERE chart_id = $1 AND date >= $2)",
             [chart_id.into(), to.into()],
@@ -323,7 +355,19 @@ async fn get_raw_line_chart_data(
         QuerySelect::query(&mut data_request).cond_where(custom_where);
     };
 
-    let data = data_request.into_model().all(db).await?;
+    let data: Vec<DateValue<String>> = data_request.into_model().all(db).await?;
+    let data = data
+        .into_iter()
+        .map(
+            |TimespanValue {
+                 timespan: date,
+                 value,
+             }| TimespanValue {
+                timespan: Resolution::from_date(date),
+                value,
+            },
+        )
+        .collect_vec();
     Ok(data)
 }
 
@@ -378,21 +422,18 @@ where
 
 #[derive(Debug, FromQueryResult)]
 struct SyncInfo {
-    pub date: NaiveDate,
-    pub value: String,
     pub min_blockscout_block: Option<i64>,
 }
 
 /// Get last 'finalized' row (for which no recomputations needed).
 ///
-/// Retrieves data for `(offset+1)`th latest timespan, if any.
 /// In case of inconsistencies or set `force_full`, returns `None`.
 pub async fn last_accurate_point<Resolution, ChartName, Query>(
     chart_id: i32,
     min_blockscout_block: i64,
     db: &DatabaseConnection,
     force_full: bool,
-    offset: Option<u64>,
+    approximate_trailing_points: u64,
     policy: MissingDatePolicy,
 ) -> Result<Option<TimespanValue<Resolution, String>>, UpdateError>
 where
@@ -405,7 +446,7 @@ where
         min_blockscout_block,
         db,
         force_full,
-        offset,
+        approximate_trailing_points,
         policy,
     )
     .await?
@@ -427,14 +468,13 @@ async fn last_accurate_point_raw<N, Q>(
     min_blockscout_block: i64,
     db: &DatabaseConnection,
     force_full: bool,
-    offset: Option<u64>,
+    approximate_trailing_points: u64,
     policy: MissingDatePolicy,
 ) -> Result<Option<DateValue<String>>, UpdateError>
 where
     N: Named + ?Sized,
     Q: QueryBehaviour,
 {
-    let offset = offset.unwrap_or(0);
     let row = if force_full {
         tracing::info!(
             min_blockscout_block = min_blockscout_block,
@@ -443,33 +483,68 @@ where
         );
         None
     } else {
-        let row: Option<SyncInfo> = chart_data::Entity::find()
-            .column(chart_data::Column::Date)
-            .column(chart_data::Column::Value)
+        let recorded_min_blockscout_block: Option<SyncInfo> = chart_data::Entity::find()
             .column(chart_data::Column::MinBlockscoutBlock)
             .filter(chart_data::Column::ChartId.eq(chart_id))
             .order_by_desc(chart_data::Column::Date)
-            .offset(offset)
             .into_model()
             .one(db)
             .await
             .map_err(UpdateError::StatsDB)?;
+        let metadata = get_chart_metadata(db, N::NAME).await?;
 
-        match row {
-            Some(row) => {
-                if let Some(block) = row.min_blockscout_block {
+        match recorded_min_blockscout_block {
+            Some(recorded_min_blockscout_block) => {
+                let Some(last_updated_at) = metadata.last_updated_at else {
+                    // data is present, but `last_updated_at` is not set
+                    tracing::info!(
+                        min_blockscout_block = min_blockscout_block,
+                        chart = N::NAME,
+                        "running full update due to lack of last_updated_at"
+                    );
+                    return Ok(None);
+                };
+                let last_updated_date = last_updated_at.date_naive();
+
+                let data = get_line_chart_data(
+                    db,
+                    N::NAME,
+                    Some(
+                        last_updated_date
+                            .checked_sub_days(Days::new(approximate_trailing_points))
+                            .unwrap_or(NaiveDate::MIN),
+                    ),
+                    Some(last_updated_date),
+                    None,
+                    policy,
+                    true,
+                    approximate_trailing_points,
+                )
+                .await?;
+                let last_accurate_point = data.into_iter().rev().find_map(|p| {
+                    if p.is_approximate {
+                        None
+                    } else {
+                        Some(TimespanValue {
+                            timespan: p.timespan,
+                            value: p.value,
+                        })
+                    }
+                });
+                let Some(last_accurate_point) = last_accurate_point else {
+                    return Err(UpdateError::Internal("No accurate data whereas".into()));
+                };
+
+                if let Some(block) = recorded_min_blockscout_block.min_blockscout_block {
                     if block == min_blockscout_block {
                         tracing::info!(
                             min_blockscout_block = min_blockscout_block,
                             min_chart_block = block,
                             chart = N::NAME,
-                            row = ?row,
+                            last_accurate_point = ?last_accurate_point,
                             "running partial update"
                         );
-                        Some(DateValue::<String> {
-                            timespan: row.date,
-                            value: row.value,
-                        })
+                        Some(last_accurate_point)
                     } else {
                         tracing::info!(
                             min_blockscout_block = min_blockscout_block,
@@ -605,6 +680,7 @@ mod tests {
         );
     }
 
+    // todo: test other resolutions
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn get_chart_int_mock() {
@@ -612,7 +688,7 @@ mod tests {
 
         let db = init_db("get_chart_int_mock").await;
         insert_mock_data(&db).await;
-        let chart = get_line_chart_data(
+        let data = get_line_chart_data(
             &db,
             "newBlocksPerDay",
             None,
@@ -627,22 +703,22 @@ mod tests {
         assert_eq!(
             vec![
                 ExtendedTimespanValue {
-                    date: NaiveDate::from_str("2022-11-10").unwrap(),
+                    timespan: NaiveDate::from_str("2022-11-10").unwrap(),
                     value: "100".into(),
                     is_approximate: false,
                 },
                 ExtendedTimespanValue {
-                    date: NaiveDate::from_str("2022-11-11").unwrap(),
+                    timespan: NaiveDate::from_str("2022-11-11").unwrap(),
                     value: "150".into(),
                     is_approximate: false,
                 },
                 ExtendedTimespanValue {
-                    date: NaiveDate::from_str("2022-11-12").unwrap(),
+                    timespan: NaiveDate::from_str("2022-11-12").unwrap(),
                     value: "200".into(),
                     is_approximate: true,
                 },
             ],
-            chart
+            data
         );
     }
 
@@ -653,7 +729,7 @@ mod tests {
 
         let db = init_db("get_chart_data_skipped_works").await;
         insert_mock_data(&db).await;
-        let chart = get_line_chart_data(
+        let data = get_line_chart_data(
             &db,
             "newVerifiedContracts",
             Some(d("2022-11-14")),
@@ -668,17 +744,83 @@ mod tests {
         assert_eq!(
             vec![
                 ExtendedTimespanValue {
-                    date: NaiveDate::from_str("2022-11-14").unwrap(),
+                    timespan: NaiveDate::from_str("2022-11-14").unwrap(),
                     value: "2".into(),
                     is_approximate: false,
                 },
                 ExtendedTimespanValue {
-                    date: NaiveDate::from_str("2022-11-15").unwrap(),
+                    timespan: NaiveDate::from_str("2022-11-15").unwrap(),
                     value: "3".into(),
                     is_approximate: true,
                 },
             ],
-            chart
+            data
+        );
+
+        let data = get_line_chart_data(
+            &db,
+            "newVerifiedContracts",
+            Some(d("2022-11-12")),
+            Some(d("2022-11-14")),
+            None,
+            MissingDatePolicy::FillPrevious,
+            true,
+            1,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            vec![
+                ExtendedTimespanValue {
+                    timespan: NaiveDate::from_str("2022-11-12").unwrap(),
+                    value: "0".into(),
+                    is_approximate: false,
+                },
+                ExtendedTimespanValue {
+                    timespan: NaiveDate::from_str("2022-11-13").unwrap(),
+                    value: "2".into(),
+                    is_approximate: false,
+                },
+                ExtendedTimespanValue {
+                    timespan: NaiveDate::from_str("2022-11-14").unwrap(),
+                    value: "2".into(),
+                    is_approximate: false,
+                },
+            ],
+            data
+        );
+
+        let data = get_line_chart_data(
+            &db,
+            TxnsGrowth::NAME,
+            Some(d("2022-11-28")),
+            Some(d("2022-11-30")),
+            None,
+            MissingDatePolicy::FillPrevious,
+            true,
+            1,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            vec![
+                ExtendedTimespanValue {
+                    timespan: NaiveDate::from_str("2022-11-28").unwrap(),
+                    value: "323".into(),
+                    is_approximate: false,
+                },
+                ExtendedTimespanValue {
+                    timespan: NaiveDate::from_str("2022-11-29").unwrap(),
+                    value: "1000".into(),
+                    is_approximate: false,
+                },
+                ExtendedTimespanValue {
+                    timespan: NaiveDate::from_str("2022-11-30").unwrap(),
+                    value: "1000".into(),
+                    is_approximate: true,
+                },
+            ],
+            data
         );
     }
 
@@ -706,7 +848,7 @@ mod tests {
                 1,
                 &db,
                 false,
-                None,
+                0,
                 MissingDatePolicy::FillPrevious
             )
             .await
@@ -722,23 +864,7 @@ mod tests {
                 1,
                 &db,
                 false,
-                Some(0),
-                MissingDatePolicy::FillPrevious
-            )
-            .await
-            .unwrap(),
-            Some(DateValue::<String> {
-                timespan: d("2022-11-12"),
-                value: "1350".to_string()
-            })
-        );
-        assert_eq!(
-            last_accurate_point::<NaiveDate, TotalBlocks, DefaultQueryVec<TotalBlocks>>(
                 1,
-                1,
-                &db,
-                false,
-                Some(1),
                 MissingDatePolicy::FillPrevious
             )
             .await
@@ -754,7 +880,7 @@ mod tests {
                 1,
                 &db,
                 false,
-                Some(2),
+                2,
                 MissingDatePolicy::FillPrevious
             )
             .await
@@ -773,7 +899,7 @@ mod tests {
                 1,
                 &db,
                 false,
-                None,
+                0,
                 MissingDatePolicy::FillPrevious
             )
             .await
@@ -789,23 +915,7 @@ mod tests {
                 1,
                 &db,
                 false,
-                Some(0),
-                MissingDatePolicy::FillPrevious
-            )
-            .await
-            .unwrap(),
-            Some(DateValue::<String> {
-                timespan: d("2022-11-30"),
-                value: "1000".to_string()
-            })
-        );
-        assert_eq!(
-            last_accurate_point::<NaiveDate, TxnsGrowth, DefaultQueryVec<TxnsGrowth>>(
-                4,
                 1,
-                &db,
-                false,
-                Some(1),
                 MissingDatePolicy::FillPrevious
             )
             .await
@@ -821,7 +931,7 @@ mod tests {
                 1,
                 &db,
                 false,
-                Some(2),
+                2,
                 MissingDatePolicy::FillPrevious
             )
             .await
@@ -848,7 +958,7 @@ mod tests {
                 1,
                 &db,
                 false,
-                Some(1),
+                1,
                 MissingDatePolicy::FillPrevious
             )
             .await
