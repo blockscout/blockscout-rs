@@ -96,7 +96,7 @@ impl CorsSettings {
         }
         let mut cors = Cors::default()
             .allow_any_header()
-            .allowed_methods(self.allowed_methods.split(", "))
+            .allowed_methods(split_string(&self.allowed_methods))
             .max_age(Some(self.max_age))
             .block_on_origin_mismatch(self.block_on_origin_mismatch);
         if self.allowed_credentials {
@@ -108,7 +108,7 @@ impl CorsSettings {
         match self.allowed_origin.as_str() {
             "*" => cors = cors.allow_any_origin(),
             allowed_origin => {
-                for origin in allowed_origin.split(", ") {
+                for origin in split_string(allowed_origin) {
                     cors = cors.allowed_origin(origin)
                 }
             }
@@ -149,4 +149,8 @@ impl Default for MetricsSettings {
             route: "/metrics".to_string(),
         }
     }
+}
+
+fn split_string(s: &str) -> Vec<&str> {
+    s.split(',').map(|s| s.trim()).collect()
 }
