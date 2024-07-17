@@ -178,7 +178,8 @@ where
 enum BatchRange<Resolution> {
     /// Range in non-divided `Resolution` intervals
     Full(Range<Resolution>),
-    /// Range ends on some fraction of the `Resolution` interval
+    /// Range ends on some fraction of the `Resolution` interval.
+    /// The range is non-inclusive
     Partial {
         start: Resolution,
         end: DateTime<Utc>,
@@ -198,7 +199,7 @@ impl<Resolution: Timespan> BatchRange<Resolution> {
     pub fn into_date_time_range(self) -> Range<DateTime<Utc>> {
         match self {
             BatchRange::Full(Range { start, end }) => {
-                start.start_timestamp()..end.into_time_range().end
+                start.start_timestamp()..end.into_time_range().start
             }
             BatchRange::Partial { start, end } => start.start_timestamp()..end,
         }
@@ -257,6 +258,7 @@ where
 mod tests {
     use crate::{
         tests::point_construction::{d, dt},
+        types::week::Week,
         utils::day_start,
     };
 
@@ -321,6 +323,35 @@ mod tests {
             )
             .unwrap()
         )
+    }
+
+    #[test]
+    fn batch_range_into_timestamp_range_works() {
+        assert_eq!(
+            BatchRange::Full(d("2015-11-09")..d("2015-11-09")).into_date_time_range(),
+            dt("2015-11-09T00:00:00").and_utc()..dt("2015-11-09T00:00:00").and_utc()
+        );
+        assert_eq!(
+            BatchRange::Full(d("2015-11-09")..d("2015-11-10")).into_date_time_range(),
+            dt("2015-11-09T00:00:00").and_utc()..dt("2015-11-10T00:00:00").and_utc()
+        );
+        assert_eq!(
+            BatchRange::Full(d("2015-11-09")..d("2015-11-13")).into_date_time_range(),
+            dt("2015-11-09T00:00:00").and_utc()..dt("2015-11-13T00:00:00").and_utc()
+        );
+        assert_eq!(
+            BatchRange::Full(Week::from_date(d("2015-11-09"))..Week::from_date(d("2015-11-19")))
+                .into_date_time_range(),
+            dt("2015-11-09T00:00:00").and_utc()..dt("2015-11-16T00:00:00").and_utc()
+        );
+        assert_eq!(
+            BatchRange::Partial {
+                start: d("2015-11-09"),
+                end: dt("2015-11-10T09:12:34").and_utc()
+            }
+            .into_date_time_range(),
+            dt("2015-11-09T00:00:00").and_utc()..dt("2015-11-10T09:12:34").and_utc()
+        );
     }
 
     mod test_batch_step_receives_correct_data {
