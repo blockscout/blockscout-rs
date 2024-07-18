@@ -1,7 +1,6 @@
 use std::ops::Range;
 
 use crate::{
-    charts::chart_properties_portrait,
     data_source::kinds::{
         data_manipulation::map::{MapParseTo, MapToString},
         local_db::{
@@ -11,6 +10,7 @@ use crate::{
         },
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
+    delegated_properties,
     types::week::Week,
     utils::sql_with_range_filter_opt,
     ChartProperties, Named,
@@ -67,16 +67,11 @@ impl ChartProperties for Properties {
     }
 }
 
-pub struct WeeklyProperties;
-
-impl Named for WeeklyProperties {
-    const NAME: &'static str = "averageBlockRewardsWeekly";
-}
-
-#[portrait::fill(portrait::delegate(Properties))]
-impl ChartProperties for WeeklyProperties {
-    type Resolution = Week;
-}
+delegated_properties!(WeeklyProperties {
+    name: "averageBlockRewardsWeekly",
+    resolution: Week,
+    ..Properties
+});
 
 pub type AverageBlockRewards =
     DirectVecLocalDbChartSource<AverageBlockRewardsRemoteString, Batch30Days, Properties>;

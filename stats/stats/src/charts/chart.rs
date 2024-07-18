@@ -106,6 +106,26 @@ pub trait ChartProperties: Sync + Named {
     }
 }
 
+#[macro_export]
+macro_rules! delegated_properties {
+    ($type_name:ident {
+        name: $name:literal,
+        resolution: $res:ty,
+        ..$source_type:ty
+    }) => {
+        pub struct $type_name;
+
+        impl $crate::charts::chart::Named for $type_name {
+            const NAME: &'static str = $name;
+        }
+
+        #[portrait::fill(portrait::delegate($source_type))]
+        impl $crate::charts::chart::ChartProperties for $type_name {
+            type Resolution = $res;
+        }
+    };
+}
+
 /// Dynamic version of trait `ChartProperties`.
 ///
 /// Helpful when need a unified type for different charts
