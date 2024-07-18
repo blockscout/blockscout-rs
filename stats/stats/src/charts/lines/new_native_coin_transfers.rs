@@ -48,7 +48,9 @@ pub type NewNativeCoinTransfersRemote =
 pub struct NewNativeCoinTransfersProperties;
 
 impl Named for NewNativeCoinTransfersProperties {
-    const NAME: &'static str = "newNativeCoinTransfers";
+    fn name() -> String {
+                "newNativeCoinTransfers".into()
+            }
 }
 
 impl ChartProperties for NewNativeCoinTransfersProperties {

@@ -58,7 +58,9 @@ pub type AverageGasPriceRemoteString = MapToString<AverageGasPriceRemote>;
 pub struct AverageGasPriceProperties;
 
 impl Named for AverageGasPriceProperties {
-    const NAME: &'static str = "averageGasPrice";
+    fn name() -> String {
+                "averageGasPrice".into()
+            }
 }
 
 impl ChartProperties for AverageGasPriceProperties {

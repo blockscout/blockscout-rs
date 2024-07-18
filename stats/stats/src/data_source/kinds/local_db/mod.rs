@@ -165,7 +165,7 @@ where
         cx: &UpdateContext<'_>,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<(), UpdateError> {
-        let metadata = get_chart_metadata(cx.db, ChartProps::NAME).await?;
+        let metadata = get_chart_metadata(cx.db, &ChartProps::name()).await?;
         if let Some(last_updated_at) = metadata.last_updated_at {
             if postgres_timestamps_eq(cx.time, last_updated_at) {
                 // no need to perform update.
@@ -198,7 +198,7 @@ where
             ChartProps::missing_date_policy(),
         )
         .await?;
-        tracing::info!(last_accurate_point =? last_accurate_point, chart_name = ChartProps::NAME, "updating chart values");
+        tracing::info!(last_accurate_point =? last_accurate_point, chart_name = ChartProps::name(), "updating chart values");
         Update::update_values(
             cx,
             chart_id,
@@ -207,7 +207,7 @@ where
             dependency_data_fetch_timer,
         )
         .await?;
-        tracing::info!(chart_name = ChartProps::NAME, "updating chart metadata");
+        tracing::info!(chart_name = ChartProps::name(), "updating chart metadata");
         Update::update_metadata(cx.db, chart_id, cx.time).await?;
         Ok(())
     }
@@ -215,7 +215,7 @@ where
     fn observe_query_time(time: Duration) {
         if time > Duration::ZERO {
             metrics::CHART_FETCH_NEW_DATA_TIME
-                .with_label_values(&[Self::NAME])
+                .with_label_values(&[&Self::name()])
                 .observe(time.as_secs_f64());
         }
     }
@@ -244,7 +244,9 @@ where
     type ResolutionDependencies = ResolutionDep;
     type Output = Query::Output;
 
-    const MUTEX_ID: Option<&'static str> = Some(ChartProps::NAME);
+    fn mutex_id() -> Option<String> {
+        Some(ChartProps::name())
+    }
 
     async fn init_itself(db: &DatabaseConnection, init_time: &DateTime<Utc>) -> Result<(), DbErr> {
         Create::create(db, init_time).await
@@ -255,25 +257,25 @@ where
 
         let mut dependency_data_fetch_timer = AggregateTimer::new();
         let _update_timer = metrics::CHART_UPDATE_TIME
-            .with_label_values(&[ChartProps::NAME])
+            .with_label_values(&[&ChartProps::name()])
             .start_timer();
-        tracing::info!(chart = ChartProps::NAME, "started chart update");
+        tracing::info!(chart = ChartProps::name(), "started chart update");
 
         Self::update_itself(cx, &mut dependency_data_fetch_timer)
             .await
             .inspect_err(|err| {
                 metrics::UPDATE_ERRORS
-                    .with_label_values(&[ChartProps::NAME])
+                    .with_label_values(&[&ChartProps::name()])
                     .inc();
                 tracing::error!(
-                    chart = ChartProps::NAME,
+                    chart = ChartProps::name(),
                     "error during updating chart: {}",
                     err
                 );
             })?;
 
         Self::observe_query_time(dependency_data_fetch_timer.total_time());
-        tracing::info!(chart = ChartProps::NAME, "successfully updated chart");
+        tracing::info!(chart = ChartProps::name(), "successfully updated chart");
         Ok(())
     }
 
@@ -299,7 +301,9 @@ where
     Query: QueryBehaviour,
     ChartProps: ChartProperties + Named,
 {
-    const NAME: &'static str = ChartProps::NAME;
+    fn name() -> String {
+        ChartProps::name()
+    }
 }
 
 #[portrait::fill(portrait::delegate(ChartProps))]
@@ -403,7 +407,9 @@ mod tests {
         struct TestedChartProps;
 
         impl Named for TestedChartProps {
-            const NAME: &'static str = "double_update_tested_chart";
+            fn name() -> String {
+                "double_update_tested_chart".into()
+            }
         }
 
         impl ChartProperties for TestedChartProps {
@@ -426,7 +432,9 @@ mod tests {
         struct ChartDependedOnTestedProps;
 
         impl Named for ChartDependedOnTestedProps {
-            const NAME: &'static str = "double_update_dependant_chart";
+            fn name() -> String {
+                "double_update_dependant_chart".into()
+            }
         }
 
         impl ChartProperties for ChartDependedOnTestedProps {
@@ -453,7 +461,8 @@ mod tests {
             let current_date = current_time.date_naive();
             fill_mock_blockscout_data(&blockscout, current_date).await;
             let enabled = HashSet::from(
-                [TestedChartProps::NAME, ChartDependedOnTestedProps::NAME].map(|l| l.to_owned()),
+                [TestedChartProps::name(), ChartDependedOnTestedProps::name()]
+                    .map(|l| l.to_owned()),
             );
             let mutexes = TestUpdateGroup
                 .list_dependency_mutex_ids()

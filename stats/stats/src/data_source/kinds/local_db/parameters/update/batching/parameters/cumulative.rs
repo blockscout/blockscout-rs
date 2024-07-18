@@ -41,7 +41,7 @@ where
         let partial_sum = last_accurate_point.value.parse::<Value>().map_err(|e| {
             UpdateError::Internal(format!(
                 "failed to parse value in chart '{}': {e}",
-                ChartProps::NAME
+                ChartProps::name()
             ))
         })?;
         let main_data = main_data

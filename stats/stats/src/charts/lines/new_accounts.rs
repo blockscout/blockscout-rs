@@ -90,7 +90,9 @@ pub type NewAccountsRemote = RemoteDatabaseSource<NewAccountsQueryBehaviour>;
 pub struct Properties;
 
 impl Named for Properties {
-    const NAME: &'static str = "newAccounts";
+    fn name() -> String {
+        "newAccounts".into()
+    }
 }
 
 impl ChartProperties for Properties {

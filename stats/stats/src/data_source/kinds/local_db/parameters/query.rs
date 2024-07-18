@@ -49,7 +49,7 @@ where
         let values: Vec<TimespanValue<C::Resolution, String>> =
             get_line_chart_data::<C::Resolution>(
                 cx.db,
-                C::NAME,
+                &C::name(),
                 start,
                 end,
                 None,
@@ -77,14 +77,14 @@ impl<C: ChartProperties> QueryBehaviour for DefaultQueryLast<C> {
     ) -> Result<Self::Output, UpdateError> {
         let value = get_counter_data(
             cx.db,
-            C::NAME,
+            &C::name(),
             Some(cx.time.date_naive()),
             C::missing_date_policy(),
         )
         .await?
         .ok_or(UpdateError::Internal(format!(
             "no data for counter '{}' was found",
-            C::NAME
+            C::name()
         )))?;
         Ok(value)
     }

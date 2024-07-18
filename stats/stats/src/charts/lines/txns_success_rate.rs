@@ -51,7 +51,9 @@ pub type TxnsSuccessRateRemoteString = MapToString<TxnsSuccessRateRemote>;
 pub struct TxnsSuccessRateProperties;
 
 impl Named for TxnsSuccessRateProperties {
-    const NAME: &'static str = "txnsSuccessRate";
+    fn name() -> String {
+                "txnsSuccessRate".into()
+            }
 }
 
 impl ChartProperties for TxnsSuccessRateProperties {

@@ -50,7 +50,9 @@ impl<Q: RemoteQueryBehaviour> DataSource for RemoteDatabaseSource<Q> {
     type ResolutionDependencies = ();
     type Output = Q::Output;
     // No local state => no race conditions expected
-    const MUTEX_ID: Option<&'static str> = None;
+    fn mutex_id() -> Option<String> {
+        None
+    }
 
     async fn init_itself(
         _db: &DatabaseConnection,

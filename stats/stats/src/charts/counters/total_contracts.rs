@@ -45,7 +45,9 @@ pub type TotalContractsRemote = RemoteDatabaseSource<TotalContractsQueryBehaviou
 pub struct TotalContractsProperties;
 
 impl Named for TotalContractsProperties {
-    const NAME: &'static str = "totalContracts";
+    fn name() -> String {
+                "totalContracts".into()
+            }
 }
 
 impl ChartProperties for TotalContractsProperties {

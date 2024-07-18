@@ -54,7 +54,9 @@ pub struct MockCounterProperties<PointDateTime: Get<DateTime<Utc>>, Value: Get<S
 impl<PointDateTime: Get<DateTime<Utc>>, Value: Get<String>> Named
     for MockCounterProperties<PointDateTime, Value>
 {
-    const NAME: &'static str = "mockCounter";
+    fn name() -> String {
+                "mockCounter".into()
+            }
 }
 
 impl<PointDateTime, Value> ChartProperties for MockCounterProperties<PointDateTime, Value>

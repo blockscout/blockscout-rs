@@ -44,7 +44,9 @@ pub type AverageBlockSizeRemote =
 pub struct AverageBlockSizeProperties;
 
 impl Named for AverageBlockSizeProperties {
-    const NAME: &'static str = "averageBlockSize";
+    fn name() -> String {
+        "averageBlockSize".into()
+    }
 }
 
 impl ChartProperties for AverageBlockSizeProperties {

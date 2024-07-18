@@ -45,7 +45,9 @@ pub type AverageBlockTimeRemoteString = MapToString<AverageBlockTimeRemote>;
 pub struct AverageBlockTimeProperties;
 
 impl Named for AverageBlockTimeProperties {
-    const NAME: &'static str = "averageBlockTime";
+    fn name() -> String {
+                "averageBlockTime".into()
+            }
 }
 
 impl ChartProperties for AverageBlockTimeProperties {

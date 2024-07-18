@@ -48,7 +48,9 @@ mod db_address_balances {
 pub struct NativeCoinHoldersGrowthProperties;
 
 impl Named for NativeCoinHoldersGrowthProperties {
-    const NAME: &'static str = "nativeCoinHoldersGrowth";
+    fn name() -> String {
+        "nativeCoinHoldersGrowth".into()
+    }
 }
 
 impl ChartProperties for NativeCoinHoldersGrowthProperties {
@@ -76,7 +78,7 @@ impl CreateBehaviour for Create {
         create_support_table(db).await?;
         create_chart(
             db,
-            NativeCoinHoldersGrowthProperties::NAME.into(),
+            NativeCoinHoldersGrowthProperties::name(),
             NativeCoinHoldersGrowthProperties::chart_type(),
             init_time,
         )
@@ -115,7 +117,7 @@ pub async fn update_sequentially_with_support_table(
 ) -> Result<(), UpdateError> {
     tracing::info!(
         "start sequential update for chart {}",
-        NativeCoinHoldersGrowthProperties::NAME
+        NativeCoinHoldersGrowthProperties::name()
     );
     let all_days = match last_accurate_point {
         Some(last_row) => {

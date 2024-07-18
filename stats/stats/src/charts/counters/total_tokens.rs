@@ -37,7 +37,9 @@ pub type TotalTokensRemote = RemoteDatabaseSource<PullOne<TotalTokensStatement, 
 pub struct TotalTokensProperties;
 
 impl Named for TotalTokensProperties {
-    const NAME: &'static str = "totalTokens";
+    fn name() -> String {
+                "totalTokens".into()
+            }
 }
 
 impl ChartProperties for TotalTokensProperties {

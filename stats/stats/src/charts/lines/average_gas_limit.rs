@@ -44,7 +44,9 @@ pub type AverageGasLimitRemote =
 pub struct AverageGasLimitProperties;
 
 impl Named for AverageGasLimitProperties {
-    const NAME: &'static str = "averageGasLimit";
+    fn name() -> String {
+                "averageGasLimit".into()
+            }
 }
 
 impl ChartProperties for AverageGasLimitProperties {

@@ -12,6 +12,6 @@ pub struct DefaultCreate<C: ChartProperties>(PhantomData<C>);
 
 impl<C: ChartProperties> CreateBehaviour for DefaultCreate<C> {
     async fn create(db: &DatabaseConnection, init_time: &DateTime<Utc>) -> Result<(), DbErr> {
-        create_chart(db, C::NAME.into(), C::chart_type(), init_time).await
+        create_chart(db, C::name(), C::chart_type(), init_time).await
     }
 }

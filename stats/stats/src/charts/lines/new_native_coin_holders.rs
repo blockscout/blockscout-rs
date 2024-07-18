@@ -16,7 +16,9 @@ use entity::sea_orm_active_enums::ChartType;
 pub struct NewNativeCoinHoldersProperties;
 
 impl Named for NewNativeCoinHoldersProperties {
-    const NAME: &'static str = "newNativeCoinHolders";
+    fn name() -> String {
+                "newNativeCoinHolders".into()
+            }
 }
 
 impl ChartProperties for NewNativeCoinHoldersProperties {

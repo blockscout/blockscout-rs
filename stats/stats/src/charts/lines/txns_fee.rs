@@ -51,7 +51,9 @@ pub type TxnsFeeRemoteString = MapToString<TxnsFeeRemote>;
 pub struct TxnsFeeProperties;
 
 impl Named for TxnsFeeProperties {
-    const NAME: &'static str = "txnsFee";
+    fn name() -> String {
+                "txnsFee".into()
+            }
 }
 
 impl ChartProperties for TxnsFeeProperties {

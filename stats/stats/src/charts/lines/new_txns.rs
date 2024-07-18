@@ -46,7 +46,9 @@ pub type NewTxnsRemote =
 pub struct NewTxnsProperties;
 
 impl Named for NewTxnsProperties {
-    const NAME: &'static str = "newTxns";
+    fn name() -> String {
+                "newTxns".into()
+            }
 }
 
 impl ChartProperties for NewTxnsProperties {

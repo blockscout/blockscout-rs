@@ -56,7 +56,9 @@ pub type TotalBlocksRemote = RemoteDatabaseSource<TotalBlocksQueryBehaviour>;
 pub struct TotalBlocksProperties;
 
 impl Named for TotalBlocksProperties {
-    const NAME: &'static str = "totalBlocks";
+    fn name() -> String {
+        "totalBlocks".into()
+    }
 }
 
 impl ChartProperties for TotalBlocksProperties {
@@ -120,7 +122,7 @@ mod tests {
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
         TotalBlocks::update_recursively(&cx).await.unwrap();
         let data = get_raw_counters(&db).await.unwrap();
-        assert_eq!("13", data[TotalBlocks::NAME].value);
+        assert_eq!("13", data[&TotalBlocks::name()].value);
     }
 
     #[tokio::test]
@@ -146,7 +148,7 @@ mod tests {
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
         TotalBlocks::update_recursively(&cx).await.unwrap();
         let data = get_raw_counters(&db).await.unwrap();
-        assert_eq!("9", data[TotalBlocks::NAME].value);
+        assert_eq!("9", data[&TotalBlocks::name()].value);
     }
 
     #[tokio::test]
@@ -182,6 +184,6 @@ mod tests {
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
         TotalBlocks::update_recursively(&cx).await.unwrap();
         let data = get_raw_counters(&db).await.unwrap();
-        assert_eq!("13", data[TotalBlocks::NAME].value);
+        assert_eq!("13", data[&TotalBlocks::name()].value);
     }
 }

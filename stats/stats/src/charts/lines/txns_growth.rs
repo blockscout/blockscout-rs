@@ -10,7 +10,9 @@ use entity::sea_orm_active_enums::ChartType;
 pub struct TxnsGrowthProperties;
 
 impl Named for TxnsGrowthProperties {
-    const NAME: &'static str = "txnsGrowth";
+    fn name() -> String {
+                "txnsGrowth".into()
+            }
 }
 
 impl ChartProperties for TxnsGrowthProperties {

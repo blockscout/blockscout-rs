@@ -23,7 +23,6 @@
 use std::{
     collections::{BTreeMap, HashSet},
     marker::{Send, Sync},
-    ops::Deref,
     sync::Arc,
     vec::Vec,
 };
@@ -63,11 +62,11 @@ pub trait UpdateGroup: core::fmt::Debug {
     /// List mutex ids of group members + their dependencies.
     /// Dependencies participate in updates, thus access to them needs to be
     /// synchronized as well.
-    fn list_dependency_mutex_ids(&self) -> HashSet<&'static str>;
+    fn list_dependency_mutex_ids(&self) -> HashSet<String>;
     /// List mutex ids of particular group member dependencies (including the member itself).
     ///
     /// `None` if `chart_name` is not a member.
-    fn dependency_mutex_ids_of(&self, chart_name: &str) -> Option<HashSet<&'static str>>;
+    fn dependency_mutex_ids_of(&self, chart_name: &str) -> Option<HashSet<String>>;
     /// Create/init enabled charts with their dependencies (in DB) recursively.
     /// Idempotent, does nothing if the charts were previously initialized.
     ///
@@ -127,7 +126,9 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// # struct DummyChartProperties;
 /// #
 /// # impl Named for DummyChartProperties {
-/// #     const NAME: &'static str = "dummyChart";
+/// #     fn name() -> String {
+/// #         "dummyChart".into()
+/// #     }
 /// # }
 /// # impl ChartProperties for DummyChartProperties {
 /// #     type Resolution = NaiveDate;
@@ -209,7 +210,9 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// struct DummyChartProperties;
 ///
 /// impl Named for DummyChartProperties {
-///     const NAME: &'static str = "dummyChart";
+///     fn name() -> String {
+///         "dummyChart".into()
+///     }
 /// }
 /// impl ChartProperties for DummyChartProperties {
 ///     type Resolution = NaiveDate;
@@ -251,7 +254,7 @@ macro_rules! construct_update_group {
                 ]
             }
 
-            fn list_dependency_mutex_ids(&self) -> ::std::collections::HashSet<&'static str> {
+            fn list_dependency_mutex_ids(&self) -> ::std::collections::HashSet<String> {
                 let mut ids = ::std::collections::HashSet::new();
                 $(
                     ids.extend(<$member as $crate::data_source::DataSource>::all_dependencies_mutex_ids().into_iter());
@@ -259,9 +262,9 @@ macro_rules! construct_update_group {
                 ids
             }
 
-            fn dependency_mutex_ids_of(&self, chart_name: &str) -> Option<::std::collections::HashSet<&'static str>> {
+            fn dependency_mutex_ids_of(&self, chart_name: &str) -> Option<::std::collections::HashSet<String>> {
                 $(
-                    if chart_name == <$member as $crate::Named>::NAME {
+                    if chart_name == <$member as $crate::Named>::name() {
                         return Some(<$member as $crate::data_source::DataSource>::all_dependencies_mutex_ids());
                     }
                 )*
@@ -281,7 +284,7 @@ macro_rules! construct_update_group {
             ) -> Result<(), sea_orm::DbErr> {
                 let current_time = creation_time_override.unwrap_or_else(|| ::chrono::Utc::now());
                 $(
-                    if enabled_names.contains(<$member as $crate::Named>::NAME) {
+                    if enabled_names.contains(&<$member as $crate::Named>::name()) {
                         <$member as $crate::data_source::DataSource>::init_recursively(db, &current_time).await?;
                     }
                 )*
@@ -300,7 +303,7 @@ macro_rules! construct_update_group {
                 let cx = $crate::data_source::UpdateContext::from_params_now_or_override(params);
                 ::tracing::Span::current().record("update_time", ::std::format!("{}",&cx.time));
                 $(
-                    if enabled_names.contains(<$member as $crate::Named>::NAME) {
+                    if enabled_names.contains(&<$member as $crate::Named>::name()) {
                         <$member as $crate::data_source::DataSource>::update_recursively(&cx).await?;
                     }
                 )*
@@ -345,9 +348,8 @@ impl SyncUpdateGroup {
     where
         Self: Sized,
     {
-        let dependencies: HashSet<&str> = inner.list_dependency_mutex_ids();
-        let received_charts: HashSet<&str> =
-            all_chart_mutexes.keys().map(|n| (*n).deref()).collect();
+        let dependencies: HashSet<String> = inner.list_dependency_mutex_ids();
+        let received_charts: HashSet<String> = all_chart_mutexes.keys().cloned().collect();
         let missing_mutexes = dependencies
             .difference(&received_charts)
             .map(|s| (*s).to_owned())
@@ -357,7 +359,7 @@ impl SyncUpdateGroup {
 
         for dependency_name in dependencies {
             let mutex = all_chart_mutexes
-                .get(dependency_name)
+                .get(&dependency_name)
                 .ok_or(InitializationError {
                     missing_mutexes: missing_mutexes.clone(),
                 })?;
@@ -380,12 +382,12 @@ impl SyncUpdateGroup {
     }
 
     /// See [`UpdateGroup::list_dependency_mutex_ids`]
-    pub fn list_dependency_mutex_ids(&self) -> HashSet<&'static str> {
+    pub fn list_dependency_mutex_ids(&self) -> HashSet<String> {
         self.inner.list_dependency_mutex_ids()
     }
 
     /// See [`UpdateGroup::dependency_mutex_ids_of`]
-    pub fn dependency_mutex_ids_of(&self, chart_name: &str) -> Option<HashSet<&'static str>> {
+    pub fn dependency_mutex_ids_of(&self, chart_name: &str) -> Option<HashSet<String>> {
         self.inner.dependency_mutex_ids_of(chart_name)
     }
 }
@@ -509,7 +511,7 @@ mod tests {
     #[test]
     fn new_checks_mutexes() {
         let mutexes: BTreeMap<String, Arc<Mutex<()>>> = [(
-            TotalVerifiedContracts::NAME.to_string(),
+            TotalVerifiedContracts::name().to_string(),
             Arc::new(Mutex::new(())),
         )]
         .into();
@@ -529,8 +531,8 @@ mod tests {
                 .unwrap_err(),
             sorted_init_error(InitializationError {
                 missing_mutexes: vec![
-                    VerifiedContractsGrowth::NAME.to_string(),
-                    NewVerifiedContracts::NAME.to_string()
+                    VerifiedContractsGrowth::name().to_string(),
+                    NewVerifiedContracts::name().to_string()
                 ]
             })
         );

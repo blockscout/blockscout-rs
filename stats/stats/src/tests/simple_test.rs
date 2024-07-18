@@ -178,7 +178,7 @@ async fn get_chart<C: DataSource + ChartProperties>(
 ) -> Vec<(String, String)> {
     let data = get_line_chart_data(
         db,
-        C::NAME,
+        &C::name(),
         from,
         to,
         None,
@@ -225,6 +225,6 @@ pub async fn simple_test_counter<C: DataSource + ChartProperties>(
 
 async fn get_counter<C: ChartProperties>(db: &DatabaseConnection) -> String {
     let data = get_raw_counters(db).await.unwrap();
-    let data = &data[C::NAME];
+    let data = &data[&C::name()];
     data.value.clone()
 }

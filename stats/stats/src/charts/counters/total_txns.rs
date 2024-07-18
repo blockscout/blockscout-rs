@@ -13,7 +13,9 @@ use entity::sea_orm_active_enums::ChartType;
 pub struct TotalTxnsProperties;
 
 impl Named for TotalTxnsProperties {
-    const NAME: &'static str = "totalTxns";
+    fn name() -> String {
+                "totalTxns".into()
+            }
 }
 
 impl ChartProperties for TotalTxnsProperties {

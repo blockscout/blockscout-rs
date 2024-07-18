@@ -78,7 +78,9 @@ pub type NewContractsRemote =
 pub struct NewContractsChartProperties;
 
 impl Named for NewContractsChartProperties {
-    const NAME: &'static str = "newContracts";
+    fn name() -> String {
+        "newContracts".into()
+    }
 }
 
 impl ChartProperties for NewContractsChartProperties {
@@ -98,7 +100,9 @@ pub type NewContractsInt = MapParseTo<NewContracts, i64>;
 pub struct ContractsGrowthProperties;
 
 impl Named for ContractsGrowthProperties {
-    const NAME: &'static str = "contractsGrowth";
+    fn name() -> String {
+        "contractsGrowth".into()
+    }
 }
 
 impl ChartProperties for ContractsGrowthProperties {
@@ -174,8 +178,8 @@ async fn update_examples() {
     fill_mock_blockscout_data(&blockscout, current_date).await;
     let enabled = HashSet::from(
         [
-            NewContractsChartProperties::NAME,
-            ContractsGrowthProperties::NAME,
+            NewContractsChartProperties::name(),
+            ContractsGrowthProperties::name(),
         ]
         .map(|l| l.to_owned()),
     );

@@ -44,7 +44,9 @@ pub type NewBlocksRemote =
 pub struct NewBlocksProperties;
 
 impl Named for NewBlocksProperties {
-    const NAME: &'static str = "newBlocks";
+    fn name() -> String {
+        "newBlocks".into()
+    }
 }
 
 impl ChartProperties for NewBlocksProperties {
@@ -132,7 +134,7 @@ mod tests {
         NewBlocks::update_recursively(&cx).await.unwrap();
         let data = get_line_chart_data(
             &db,
-            NewBlocks::NAME,
+            &NewBlocks::name(),
             None,
             None,
             None,
@@ -168,7 +170,7 @@ mod tests {
         NewBlocks::update_recursively(&cx).await.unwrap();
         let data = get_line_chart_data(
             &db,
-            NewBlocks::NAME,
+            &NewBlocks::name(),
             None,
             None,
             None,
@@ -225,7 +227,7 @@ mod tests {
         NewBlocks::update_recursively(&cx).await.unwrap();
         let data = get_line_chart_data(
             &db,
-            NewBlocks::NAME,
+            &NewBlocks::name(),
             None,
             None,
             None,
@@ -328,7 +330,7 @@ mod tests {
         NewBlocks::update_recursively(&cx).await.unwrap();
         let data = get_line_chart_data(
             &db,
-            NewBlocks::NAME,
+            &NewBlocks::name(),
             None,
             None,
             None,

@@ -406,7 +406,9 @@ mod tests {
         struct ThisTestChartProps;
 
         impl Named for ThisTestChartProps {
-            const NAME: &'static str = "test_batch_step_receives_correct_data_chart";
+            fn name() -> String {
+                "test_batch_step_receives_correct_data_chart".into()
+            }
         }
 
         impl ChartProperties for ThisTestChartProps {

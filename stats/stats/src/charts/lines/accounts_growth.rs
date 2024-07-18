@@ -12,7 +12,9 @@ use entity::sea_orm_active_enums::ChartType;
 pub struct AccountsGrowthProperties;
 
 impl Named for AccountsGrowthProperties {
-    const NAME: &'static str = "accountsGrowth";
+    fn name() -> String {
+                "accountsGrowth".into()
+            }
 }
 
 impl ChartProperties for AccountsGrowthProperties {

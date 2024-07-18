@@ -60,7 +60,7 @@ pub enum ResolutionKind {
 
 pub trait Named {
     /// Must be unique
-    const NAME: &'static str;
+    fn name() -> String;
 }
 
 #[portrait::make(import(
@@ -107,16 +107,17 @@ pub trait ChartProperties: Sync + Named {
 }
 
 #[macro_export]
-macro_rules! delegated_properties {
+macro_rules! delegated_property_with_resolution {
     ($type_name:ident {
-        name: $name:literal,
         resolution: $res:ty,
         ..$source_type:ty
     }) => {
         pub struct $type_name;
 
         impl $crate::charts::chart::Named for $type_name {
-            const NAME: &'static str = $name;
+            fn name() -> ::std::string::String {
+                <$source_type as $crate::charts::chart::Named>::name()
+            }
         }
 
         #[portrait::fill(portrait::delegate($source_type))]
@@ -141,7 +142,7 @@ pub struct ChartPropertiesObject {
 impl ChartPropertiesObject {
     pub fn construct_from_chart<T: ChartProperties>() -> Self {
         Self {
-            name: T::NAME.to_owned(),
+            name: T::name(),
             chart_type: T::chart_type(),
             resolution: T::resolution(),
             missing_date_policy: T::missing_date_policy(),

@@ -40,7 +40,7 @@ pub trait DataSource {
     ///
     /// Must be set to `Some` if the source stores some (local) data (i.e. `update_itself`
     /// does something) (e.g. [`local_db`](super::kinds::local_db))
-    const MUTEX_ID: Option<&'static str>;
+    fn mutex_id() -> Option<String>;
 
     /// Initialize the data source and its dependencies.
     ///
@@ -50,7 +50,7 @@ pub trait DataSource {
     /// If the source was initialized before, keep old values. In other words,
     /// the method should be idempotent, as it is expected to be called on
     /// previously initialized sources.
-    #[instrument(skip_all, level = tracing::Level::DEBUG, fields(source_mutex_id = Self::MUTEX_ID))]
+    #[instrument(skip_all, level = tracing::Level::DEBUG, fields(source_mutex_id = Self::mutex_id()))]
     fn init_recursively<'a>(
         db: &'a DatabaseConnection,
         init_time: &'a chrono::DateTime<Utc>,
@@ -94,11 +94,11 @@ pub trait DataSource {
 
     /// List MUTEX_ID's of itself (if any) and all of it's dependencies
     /// combined
-    fn all_dependencies_mutex_ids() -> HashSet<&'static str> {
+    fn all_dependencies_mutex_ids() -> HashSet<String> {
         let mut ids = Self::MainDependencies::all_dependencies_mutex_ids();
         ids.extend(Self::ResolutionDependencies::all_dependencies_mutex_ids());
-        if let Some(self_id) = Self::MUTEX_ID {
-            let is_not_duplicate = ids.insert(self_id);
+        if let Some(self_id) = Self::mutex_id() {
+            let is_not_duplicate = ids.insert(self_id.clone());
             // Type system shouldn't allow same type to be present in the dependencies,
             // so it is a duplicate name. Fail fast to detect the problem early and
             // not cause any disruptions in database.
@@ -115,7 +115,7 @@ pub trait DataSource {
     /// Should be idempontent with regards to `current_time` (in `cx`).
     /// It is a normal behaviour to call this method multiple times
     /// within single update.
-    #[instrument(skip_all, level = tracing::Level::DEBUG, fields(source_mutex_id = Self::MUTEX_ID))]
+    #[instrument(skip_all, level = tracing::Level::DEBUG, fields(source_mutex_id = Self::mutex_id()))]
     fn update_recursively(
         cx: &UpdateContext<'_>,
     ) -> impl Future<Output = Result<(), UpdateError>> + Send {
@@ -175,7 +175,10 @@ impl DataSource for () {
     type MainDependencies = ();
     type ResolutionDependencies = ();
     type Output = ();
-    const MUTEX_ID: Option<&'static str> = None;
+
+    fn mutex_id() -> Option<String> {
+        None
+    }
 
     fn init_recursively<'a>(
         _db: &'a DatabaseConnection,
@@ -192,7 +195,7 @@ impl DataSource for () {
         unreachable!("not called by `init_recursively` and must not be called by anything else")
     }
 
-    fn all_dependencies_mutex_ids() -> HashSet<&'static str> {
+    fn all_dependencies_mutex_ids() -> HashSet<String> {
         HashSet::new()
     }
 
@@ -229,7 +232,9 @@ macro_rules! impl_data_source_for_tuple {
             ),+);
 
             // only dependencies' ids matter
-            const MUTEX_ID: Option<&'static str> = None;
+            fn mutex_id() -> Option<String> {
+                None
+            }
 
             async fn update_recursively(cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
                 $(
@@ -278,7 +283,7 @@ macro_rules! impl_data_source_for_tuple {
                 Ok(())
             }
 
-            fn all_dependencies_mutex_ids() -> HashSet<&'static str> {
+            fn all_dependencies_mutex_ids() -> HashSet<String> {
                 let mut ids = HashSet::new();
                 $(
                     ids.extend($element_generic_name::all_dependencies_mutex_ids());
@@ -306,13 +311,13 @@ mod tests {
         assert_eq!(
             ContractsGrowth::all_dependencies_mutex_ids(),
             HashSet::from([
-                ContractsGrowth::MUTEX_ID.unwrap(),
-                NewContracts::MUTEX_ID.unwrap(),
+                ContractsGrowth::mutex_id().unwrap(),
+                NewContracts::mutex_id().unwrap(),
             ])
         );
         assert_eq!(
             NewContracts::all_dependencies_mutex_ids(),
-            HashSet::from([NewContracts::MUTEX_ID.unwrap(),])
+            HashSet::from([NewContracts::mutex_id().unwrap(),])
         )
     }
 }

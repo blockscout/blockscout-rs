@@ -64,7 +64,9 @@ pub type NewGasUsedRemote = Map<GasUsedPartialRemote, IncrementsFromPartialSum>;
 pub struct GasUsedGrowthProperties;
 
 impl Named for GasUsedGrowthProperties {
-    const NAME: &'static str = "gasUsedGrowth";
+    fn name() -> String {
+                "gasUsedGrowth".into()
+            }
 }
 
 impl ChartProperties for GasUsedGrowthProperties {

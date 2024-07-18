@@ -38,7 +38,9 @@ pub type TotalAddressesRemote =
 pub struct TotalAddressesProperties;
 
 impl Named for TotalAddressesProperties {
-    const NAME: &'static str = "totalAddresses";
+    fn name() -> String {
+                "totalAddresses".into()
+            }
 }
 
 impl ChartProperties for TotalAddressesProperties {

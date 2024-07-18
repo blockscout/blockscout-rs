@@ -86,7 +86,9 @@ pub type NativeCoinSupplyRemoteString = MapToString<NativeCoinSupplyRemote>;
 pub struct NativeCoinSupplyProperties;
 
 impl Named for NativeCoinSupplyProperties {
-    const NAME: &'static str = "nativeCoinSupply";
+    fn name() -> String {
+                "nativeCoinSupply".into()
+            }
 }
 
 impl ChartProperties for NativeCoinSupplyProperties {

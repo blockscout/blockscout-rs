@@ -92,7 +92,9 @@ where
 pub struct MockLineProperties<Value, Policy>(PhantomData<(Value, Policy)>);
 
 impl<Value, Policy> Named for MockLineProperties<Value, Policy> {
-    const NAME: &'static str = "mockLine";
+    fn name() -> String {
+                "mockLine".into()
+            }
 }
 
 impl<Value, Policy> ChartProperties for MockLineProperties<Value, Policy>

@@ -47,7 +47,9 @@ pub type ActiveAccountsRemote =
 pub struct ActiveAccountsProperties;
 
 impl Named for ActiveAccountsProperties {
-    const NAME: &'static str = "activeAccounts";
+    fn name() -> String {
+        "activeAccounts".into()
+    }
 }
 
 impl ChartProperties for ActiveAccountsProperties {

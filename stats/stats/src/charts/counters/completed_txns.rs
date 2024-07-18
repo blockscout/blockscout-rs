@@ -47,7 +47,9 @@ pub type CompletedTxnsRemote =
 pub struct CompletedTxnsProperties;
 
 impl Named for CompletedTxnsProperties {
-    const NAME: &'static str = "completedTxns";
+    fn name() -> String {
+                "completedTxns".into()
+            }
 }
 
 impl ChartProperties for CompletedTxnsProperties {

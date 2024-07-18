@@ -39,7 +39,9 @@ where
     type MainDependencies = DS;
     type ResolutionDependencies = ();
     type Output = TimespanValue<Resolution, Value>;
-    const MUTEX_ID: Option<&'static str> = None;
+    fn mutex_id() -> Option<String> {
+                None
+            }
 
     async fn init_itself(
         _db: &DatabaseConnection,

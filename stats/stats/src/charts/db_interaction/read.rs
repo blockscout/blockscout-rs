@@ -478,7 +478,7 @@ where
     let row = if force_full {
         tracing::info!(
             min_blockscout_block = min_blockscout_block,
-            chart = N::NAME,
+            chart = N::name(),
             "running full update due to force override"
         );
         None
@@ -491,7 +491,7 @@ where
             .one(db)
             .await
             .map_err(UpdateError::StatsDB)?;
-        let metadata = get_chart_metadata(db, N::NAME).await?;
+        let metadata = get_chart_metadata(db, &N::name()).await?;
 
         match recorded_min_blockscout_block {
             Some(recorded_min_blockscout_block) => {
@@ -499,7 +499,7 @@ where
                     // data is present, but `last_updated_at` is not set
                     tracing::info!(
                         min_blockscout_block = min_blockscout_block,
-                        chart = N::NAME,
+                        chart = N::name(),
                         "running full update due to lack of last_updated_at"
                     );
                     return Ok(None);
@@ -508,7 +508,7 @@ where
 
                 let data = get_line_chart_data(
                     db,
-                    N::NAME,
+                    &N::name(),
                     Some(
                         last_updated_date
                             .checked_sub_days(Days::new(approximate_trailing_points))
@@ -540,7 +540,7 @@ where
                         tracing::info!(
                             min_blockscout_block = min_blockscout_block,
                             min_chart_block = block,
-                            chart = N::NAME,
+                            chart = N::name(),
                             last_accurate_point = ?last_accurate_point,
                             "running partial update"
                         );
@@ -549,7 +549,7 @@ where
                         tracing::info!(
                             min_blockscout_block = min_blockscout_block,
                             min_chart_block = block,
-                            chart = N::NAME,
+                            chart = N::name(),
                             "running full update due to min blocks mismatch"
                         );
                         None
@@ -557,7 +557,7 @@ where
                 } else {
                     tracing::info!(
                         min_blockscout_block = min_blockscout_block,
-                        chart = N::NAME,
+                        chart = N::name(),
                         "running full update due to lack of saved min block"
                     );
                     None
@@ -566,7 +566,7 @@ where
             None => {
                 tracing::info!(
                     min_blockscout_block = min_blockscout_block,
-                    chart = N::NAME,
+                    chart = N::name(),
                     "running full update due to lack of history data"
                 );
                 None
@@ -606,7 +606,7 @@ mod tests {
     async fn insert_mock_data(db: &DatabaseConnection) {
         charts::Entity::insert_many([
             charts::ActiveModel {
-                name: Set(TotalBlocks::NAME.to_string()),
+                name: Set(TotalBlocks::name().to_string()),
                 chart_type: Set(ChartType::Counter),
                 last_updated_at: Set(Some(
                     DateTime::parse_from_rfc3339("2022-11-12T08:08:08+00:00").unwrap(),
@@ -630,7 +630,7 @@ mod tests {
                 ..Default::default()
             },
             charts::ActiveModel {
-                name: Set(TxnsGrowth::NAME.to_string()),
+                name: Set(TxnsGrowth::name().to_string()),
                 chart_type: Set(ChartType::Line),
                 last_updated_at: Set(Some(
                     DateTime::parse_from_rfc3339("2022-11-30T08:08:08+00:00").unwrap(),
@@ -792,7 +792,7 @@ mod tests {
 
         let data = get_line_chart_data(
             &db,
-            TxnsGrowth::NAME,
+            &TxnsGrowth::name(),
             Some(d("2022-11-28")),
             Some(d("2022-11-30")),
             None,
@@ -824,12 +824,8 @@ mod tests {
         );
     }
 
-    async fn chart_id_matches_name(
-        db: &DatabaseConnection,
-        chart_id: i32,
-        name: &'static str,
-    ) -> bool {
-        let metadata = get_chart_metadata(db, &name).await.unwrap();
+    async fn chart_id_matches_name(db: &DatabaseConnection, chart_id: i32, name: &str) -> bool {
+        let metadata = get_chart_metadata(db, name).await.unwrap();
         metadata.id == chart_id
     }
 
@@ -892,7 +888,7 @@ mod tests {
         );
 
         // Missing points
-        assert!(chart_id_matches_name(&db, 4, TxnsGrowth::NAME).await);
+        assert!(chart_id_matches_name(&db, 4, &TxnsGrowth::name()).await);
         assert_eq!(
             last_accurate_point::<NaiveDate, TxnsGrowth, DefaultQueryVec<TxnsGrowth>>(
                 4,

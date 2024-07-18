@@ -52,7 +52,9 @@ pub type AverageTxnFeeRemoteString = MapToString<AverageTxnFeeRemote>;
 pub struct AverageTxnFeeProperties;
 
 impl Named for AverageTxnFeeProperties {
-    const NAME: &'static str = "averageTxnFee";
+    fn name() -> String {
+        "averageTxnFee".into()
+    }
 }
 
 impl ChartProperties for AverageTxnFeeProperties {

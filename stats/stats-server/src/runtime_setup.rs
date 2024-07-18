@@ -186,7 +186,7 @@ impl RuntimeSetup {
         for g in groups.into_iter() {
             let dependencies = g.list_dependency_mutex_ids();
             for d in dependencies {
-                if !mutexes.contains_key(d) {
+                if !mutexes.contains_key(&d) {
                     mutexes.insert(d.to_owned(), Arc::new(Mutex::new(())));
                 }
             }

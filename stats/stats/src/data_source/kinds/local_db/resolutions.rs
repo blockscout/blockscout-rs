@@ -51,7 +51,9 @@ where
     type ResolutionDependencies = DailyWeight;
     type Output = Vec<WeekValue<f64>>;
 
-    const MUTEX_ID: Option<&'static str> = None;
+    fn mutex_id() -> Option<String> {
+        None
+    }
 
     async fn init_itself(
         _db: &DatabaseConnection,

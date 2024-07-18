@@ -13,7 +13,9 @@ use entity::sea_orm_active_enums::ChartType;
 pub struct TotalNativeCoinTransfersProperties;
 
 impl Named for TotalNativeCoinTransfersProperties {
-    const NAME: &'static str = "totalNativeCoinTransfers";
+    fn name() -> String {
+                "totalNativeCoinTransfers".into()
+            }
 }
 
 impl ChartProperties for TotalNativeCoinTransfersProperties {

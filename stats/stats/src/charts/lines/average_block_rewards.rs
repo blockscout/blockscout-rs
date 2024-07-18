@@ -10,7 +10,7 @@ use crate::{
         },
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
-    delegated_properties,
+    delegated_property_with_resolution,
     types::week::Week,
     utils::sql_with_range_filter_opt,
     ChartProperties, Named,
@@ -56,7 +56,9 @@ pub type AverageBlockRewardsRemoteString = MapToString<AverageBlockRewardsRemote
 pub struct Properties;
 
 impl Named for Properties {
-    const NAME: &'static str = "averageBlockRewards";
+    fn name() -> String {
+        "averageBlockRewards".into()
+    }
 }
 
 impl ChartProperties for Properties {
@@ -67,8 +69,7 @@ impl ChartProperties for Properties {
     }
 }
 
-delegated_properties!(WeeklyProperties {
-    name: "averageBlockRewardsWeekly",
+delegated_property_with_resolution!(WeeklyProperties {
     resolution: Week,
     ..Properties
 });

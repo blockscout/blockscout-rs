@@ -65,7 +65,9 @@ pub type NewContractsRemote =
 pub struct NewContractsProperties;
 
 impl Named for NewContractsProperties {
-    const NAME: &'static str = "newContracts";
+    fn name() -> String {
+                "newContracts".into()
+            }
 }
 
 impl ChartProperties for NewContractsProperties {

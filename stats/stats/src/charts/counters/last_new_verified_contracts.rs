@@ -12,7 +12,9 @@ use entity::sea_orm_active_enums::ChartType;
 pub struct LastNewVerifiedContractsProperties;
 
 impl Named for LastNewVerifiedContractsProperties {
-    const NAME: &'static str = "lastNewVerifiedContracts";
+    fn name() -> String {
+                "lastNewVerifiedContracts".into()
+            }
 }
 
 impl ChartProperties for LastNewVerifiedContractsProperties {

@@ -12,7 +12,9 @@ use entity::sea_orm_active_enums::ChartType;
 pub struct TotalVerifiedContractsProperties;
 
 impl Named for TotalVerifiedContractsProperties {
-    const NAME: &'static str = "totalVerifiedContracts";
+    fn name() -> String {
+                "totalVerifiedContracts".into()
+            }
 }
 
 impl ChartProperties for TotalVerifiedContractsProperties {
