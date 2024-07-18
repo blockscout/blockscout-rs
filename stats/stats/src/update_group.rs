@@ -111,7 +111,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// # use stats::{ChartProperties, Named, construct_update_group, types::DateValue, UpdateError};
 /// # use stats::data_source::{
 /// #     kinds::{
-/// #         local_db::DirectVecLocalDbChartSource,
+/// #         local_db::{DirectVecLocalDbChartSource, parameters::update::batching::parameters::Batch30Days},
 /// #         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
 /// #         data_manipulation::map::MapToString,
 /// #     },
@@ -185,7 +185,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// # use stats::{ChartProperties, Named, construct_update_group, types::DateValue, UpdateError};
 /// # use stats::data_source::{
 /// #     kinds::{
-/// #         local_db::DirectVecLocalDbChartSource,
+/// #         local_db::{DirectVecLocalDbChartSource, parameters::update::batching::parameters::Batch30Days},
 /// #         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
 /// #     },
 /// #     types::{UpdateContext, UpdateParameters},
