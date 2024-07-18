@@ -2,17 +2,14 @@ use std::ops::Range;
 
 use crate::{
     charts::chart_properties_portrait,
-    data_source::{
-        kinds::{
-            data_manipulation::map::{MapParseTo, MapToString},
-            local_db::{
-                parameters::update::batching::parameters::{Batch30Days, Batch30Weeks},
-                resolutions::WeeklyAverage,
-                DirectVecLocalDbChartSource,
-            },
-            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
+    data_source::kinds::{
+        data_manipulation::map::{MapParseTo, MapToString},
+        local_db::{
+            parameters::update::batching::parameters::{Batch30Days, Batch30Weeks},
+            resolutions::WeeklyAverage,
+            DirectVecLocalDbChartSource,
         },
-        DataSource,
+        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
     types::week::Week,
     utils::sql_with_range_filter_opt,
@@ -119,15 +116,19 @@ mod tests {
     async fn update_average_block_rewards_weekly() {
         simple_test_chart::<AverageBlockRewardsWeekly>(
             "update_average_block_rewards_weekly",
+            // first week avgs and block counts (after /):
+            // ("2022-11-09", "0"),     / 1
+            // ("2022-11-10", "2"),     / 3
+            // ("2022-11-11", "1.75"),  / 4
+            // ("2022-11-12", "3"),     / 1
+            // avg = (2*3+1.75*4+3)/9 = 1.77777777778 ~ 1.7777777777777777
+            // other weeks just have date shifted to Mondays
             vec![
-                ("2022-11-09", "0"),
-                ("2022-11-10", "2"),
-                ("2022-11-11", "1.75"),
-                ("2022-11-12", "3"),
-                ("2022-12-01", "4"),
-                ("2023-01-01", "0"),
-                ("2023-02-01", "1"),
-                ("2023-03-01", "2"),
+                ("2022-11-07", "1.7777777777777777"),
+                ("2022-11-28", "4"),
+                ("2022-12-26", "0"),
+                ("2023-01-30", "1"),
+                ("2023-02-27", "2"),
             ],
         )
         .await;
