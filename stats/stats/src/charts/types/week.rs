@@ -170,10 +170,10 @@ pub type WeekValue<V> = TimespanValue<Week, V>;
 /// Implement non-string date-value type
 macro_rules! impl_into_string_date_value {
     ($impl_for:ty) => {
-        impl From<$impl_for> for DbDateValue<String> {
+        impl From<$impl_for> for WeekValue<String> {
             fn from(value: $impl_for) -> Self {
                 Self {
-                    date: *value.timespan.days().start(),
+                    timespan: value.timespan,
                     value: value.value.to_string(),
                 }
             }

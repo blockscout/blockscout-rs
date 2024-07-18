@@ -1,7 +1,9 @@
 use crate::{
     data_source::{
         kinds::{
-            local_db::DirectVecLocalDbChartSource,
+            local_db::{
+                parameters::update::batching::parameters::Batch30Days, DirectVecLocalDbChartSource,
+            },
             remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour},
         },
         types::Get,
@@ -110,5 +112,6 @@ pub type MockRetrieve<DateRange, ValueRange, Value, Policy> =
 
 pub type MockLine<DateRange, ValueRange, Value, Policy> = DirectVecLocalDbChartSource<
     MockRetrieve<DateRange, ValueRange, Value, Policy>,
+    Batch30Days,
     MockLineProperties<Value, Policy>,
 >;

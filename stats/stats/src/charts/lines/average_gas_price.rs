@@ -3,7 +3,9 @@ use std::ops::Range;
 use crate::{
     data_source::kinds::{
         data_manipulation::map::MapToString,
-        local_db::DirectVecLocalDbChartSource,
+        local_db::{
+            parameters::update::batching::parameters::Batch30Days, DirectVecLocalDbChartSource,
+        },
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
     utils::sql_with_range_filter_opt,
@@ -67,8 +69,11 @@ impl ChartProperties for AverageGasPriceProperties {
     }
 }
 
-pub type AverageGasPrice =
-    DirectVecLocalDbChartSource<AverageGasPriceRemoteString, AverageGasPriceProperties>;
+pub type AverageGasPrice = DirectVecLocalDbChartSource<
+    AverageGasPriceRemoteString,
+    Batch30Days,
+    AverageGasPriceProperties,
+>;
 
 #[cfg(test)]
 mod tests {

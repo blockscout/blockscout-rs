@@ -4,7 +4,9 @@ use std::ops::Range;
 
 use crate::{
     data_source::kinds::{
-        local_db::DirectVecLocalDbChartSource,
+        local_db::{
+            parameters::update::batching::parameters::Batch30Days, DirectVecLocalDbChartSource,
+        },
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
     utils::sql_with_range_filter_opt,
@@ -57,7 +59,7 @@ impl ChartProperties for ActiveAccountsProperties {
 }
 
 pub type ActiveAccounts =
-    DirectVecLocalDbChartSource<ActiveAccountsRemote, ActiveAccountsProperties>;
+    DirectVecLocalDbChartSource<ActiveAccountsRemote, Batch30Days, ActiveAccountsProperties>;
 
 #[cfg(test)]
 mod tests {

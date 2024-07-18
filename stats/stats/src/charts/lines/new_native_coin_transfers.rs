@@ -3,7 +3,9 @@ use std::ops::Range;
 use crate::{
     data_source::kinds::{
         data_manipulation::map::MapParseTo,
-        local_db::DirectVecLocalDbChartSource,
+        local_db::{
+            parameters::update::batching::parameters::Batch30Days, DirectVecLocalDbChartSource,
+        },
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
     utils::sql_with_range_filter_opt,
@@ -57,8 +59,11 @@ impl ChartProperties for NewNativeCoinTransfersProperties {
     }
 }
 
-pub type NewNativeCoinTransfers =
-    DirectVecLocalDbChartSource<NewNativeCoinTransfersRemote, NewNativeCoinTransfersProperties>;
+pub type NewNativeCoinTransfers = DirectVecLocalDbChartSource<
+    NewNativeCoinTransfersRemote,
+    Batch30Days,
+    NewNativeCoinTransfersProperties,
+>;
 
 pub type NewNativeCoinTransfersInt = MapParseTo<NewNativeCoinTransfers, i64>;
 

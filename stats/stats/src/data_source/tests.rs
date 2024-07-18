@@ -9,7 +9,9 @@ use super::{
     kinds::{
         data_manipulation::map::MapParseTo,
         local_db::{
-            parameters::update::batching::parameter_traits::BatchStepBehaviour,
+            parameters::update::batching::{
+                parameter_traits::BatchStepBehaviour, parameters::Batch30Days,
+            },
             BatchLocalDbChartSourceWithDefaultParams, DailyCumulativeLocalDbChartSource,
             DirectVecLocalDbChartSource,
         },
@@ -89,7 +91,7 @@ impl ChartProperties for NewContractsChartProperties {
 
 // Directly uses results of SQL query (from `NewContractsRemote`)
 pub type NewContracts =
-    DirectVecLocalDbChartSource<NewContractsRemote, NewContractsChartProperties>;
+    DirectVecLocalDbChartSource<NewContractsRemote, Batch30Days, NewContractsChartProperties>;
 
 pub type NewContractsInt = MapParseTo<NewContracts, i64>;
 

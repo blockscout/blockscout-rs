@@ -3,7 +3,9 @@ use std::ops::Range;
 use crate::{
     data_source::kinds::{
         data_manipulation::map::MapParseTo,
-        local_db::DirectVecLocalDbChartSource,
+        local_db::{
+            parameters::update::batching::parameters::Batch30Days, DirectVecLocalDbChartSource,
+        },
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
     utils::sql_with_range_filter_opt,
@@ -52,8 +54,11 @@ impl ChartProperties for NewVerifiedContractsProperties {
     }
 }
 
-pub type NewVerifiedContracts =
-    DirectVecLocalDbChartSource<NewVerifiedContractsRemote, NewVerifiedContractsProperties>;
+pub type NewVerifiedContracts = DirectVecLocalDbChartSource<
+    NewVerifiedContractsRemote,
+    Batch30Days,
+    NewVerifiedContractsProperties,
+>;
 
 pub type NewVerifiedContractsInt = MapParseTo<NewVerifiedContracts, i64>;
 

@@ -2,7 +2,9 @@ use crate::{
     charts::ChartProperties,
     data_source::kinds::{
         data_manipulation::{delta::Delta, map::MapToString},
-        local_db::DirectVecLocalDbChartSource,
+        local_db::{
+            parameters::update::batching::parameters::Batch30Days, DirectVecLocalDbChartSource,
+        },
     },
     lines::native_coin_holders_growth::NativeCoinHoldersGrowthInt,
     Named,
@@ -27,6 +29,7 @@ impl ChartProperties for NewNativeCoinHoldersProperties {
 
 pub type NewNativeCoinHolders = DirectVecLocalDbChartSource<
     MapToString<Delta<NativeCoinHoldersGrowthInt>>,
+    Batch30Days,
     NewNativeCoinHoldersProperties,
 >;
 

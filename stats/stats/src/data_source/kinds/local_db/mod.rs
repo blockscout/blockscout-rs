@@ -113,11 +113,11 @@ pub type DailyCumulativeLocalDbChartSource<DeltaDep, C> = LocalDbChartSource<
 
 /// Chart that stores vector data received from provided dependency (without
 /// any manipulations)
-pub type DirectVecLocalDbChartSource<Dependency, C> = LocalDbChartSource<
+pub type DirectVecLocalDbChartSource<Dependency, BatchSizeUpperBound, C> = LocalDbChartSource<
     Dependency,
     (),
     DefaultCreate<C>,
-    BatchUpdate<Dependency, (), PassVecStep, Batch30Days, DefaultQueryVec<C>, C>,
+    BatchUpdate<Dependency, (), PassVecStep, BatchSizeUpperBound, DefaultQueryVec<C>, C>,
     DefaultQueryVec<C>,
     C,
 >;

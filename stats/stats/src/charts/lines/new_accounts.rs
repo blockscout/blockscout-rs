@@ -6,14 +6,7 @@ use crate::{
         kinds::{
             data_manipulation::map::MapParseTo,
             local_db::{
-                parameters::{
-                    update::batching::{
-                        parameters::{BatchMaxDays, PassVecStep},
-                        BatchUpdate,
-                    },
-                    DefaultCreate, DefaultQueryVec,
-                },
-                LocalDbChartSource,
+                parameters::update::batching::parameters::BatchMaxDays, DirectVecLocalDbChartSource,
             },
             remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour, StatementFromRange},
         },
@@ -108,22 +101,7 @@ impl ChartProperties for Properties {
     }
 }
 
-pub type NewAccounts = LocalDbChartSource<
-    NewAccountsRemote,
-    (),
-    DefaultCreate<Properties>,
-    BatchUpdate<
-        NewAccountsRemote,
-        (),
-        PassVecStep,
-        // see `NewAccountsRemote` docs
-        BatchMaxDays,
-        DefaultQueryVec<Properties>,
-        Properties,
-    >,
-    DefaultQueryVec<Properties>,
-    Properties,
->;
+pub type NewAccounts = DirectVecLocalDbChartSource<NewAccountsRemote, BatchMaxDays, Properties>;
 
 pub type NewAccountsInt = MapParseTo<NewAccounts, i64>;
 

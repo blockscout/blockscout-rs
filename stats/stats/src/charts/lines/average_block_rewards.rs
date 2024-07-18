@@ -2,11 +2,19 @@ use std::ops::Range;
 
 use crate::{
     charts::chart_properties_portrait,
-    data_source::kinds::{
-        data_manipulation::map::{MapParseTo, MapToString},
-        local_db::{resolutions::WeeklyAverage, DirectVecLocalDbChartSource},
-        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
+    data_source::{
+        kinds::{
+            data_manipulation::map::{MapParseTo, MapToString},
+            local_db::{
+                parameters::update::batching::parameters::{Batch30Days, Batch30Weeks},
+                resolutions::WeeklyAverage,
+                DirectVecLocalDbChartSource,
+            },
+            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
+        },
+        DataSource,
     },
+    types::week::Week,
     utils::sql_with_range_filter_opt,
     ChartProperties, Named,
 };
@@ -69,14 +77,17 @@ impl Named for WeeklyProperties {
 }
 
 #[portrait::fill(portrait::delegate(Properties))]
-impl ChartProperties for WeeklyProperties {}
+impl ChartProperties for WeeklyProperties {
+    type Resolution = Week;
+}
 
 pub type AverageBlockRewards =
-    DirectVecLocalDbChartSource<AverageBlockRewardsRemoteString, Properties>;
+    DirectVecLocalDbChartSource<AverageBlockRewardsRemoteString, Batch30Days, Properties>;
 
 pub type AverageBlockRewardsWeekly = DirectVecLocalDbChartSource<
     MapToString<WeeklyAverage<MapParseTo<AverageBlockRewards, f64>, MapParseTo<NewBlocks, i64>>>,
-    Properties,
+    Batch30Weeks,
+    WeeklyProperties,
 >;
 
 #[cfg(test)]
@@ -103,22 +114,22 @@ mod tests {
         .await;
     }
 
-    // #[tokio::test]
-    // #[ignore = "needs database to run"]
-    // async fn update_average_block_rewards_weekly() {
-    //     simple_test_chart::<AverageBlockRewardsWeekly>(
-    //         "update_average_block_rewards_weekly",
-    //         vec![
-    //             ("2022-11-09", "0"),
-    //             ("2022-11-10", "2"),
-    //             ("2022-11-11", "1.75"),
-    //             ("2022-11-12", "3"),
-    //             ("2022-12-01", "4"),
-    //             ("2023-01-01", "0"),
-    //             ("2023-02-01", "1"),
-    //             ("2023-03-01", "2"),
-    //         ],
-    //     )
-    //     .await;
-    // }
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_average_block_rewards_weekly() {
+        simple_test_chart::<AverageBlockRewardsWeekly>(
+            "update_average_block_rewards_weekly",
+            vec![
+                ("2022-11-09", "0"),
+                ("2022-11-10", "2"),
+                ("2022-11-11", "1.75"),
+                ("2022-11-12", "3"),
+                ("2022-12-01", "4"),
+                ("2023-01-01", "0"),
+                ("2023-02-01", "1"),
+                ("2023-03-01", "2"),
+            ],
+        )
+        .await;
+    }
 }

@@ -3,7 +3,9 @@ use std::ops::Range;
 use crate::{
     data_source::kinds::{
         data_manipulation::map::MapParseTo,
-        local_db::DirectVecLocalDbChartSource,
+        local_db::{
+            parameters::update::batching::parameters::Batch30Days, DirectVecLocalDbChartSource,
+        },
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
     utils::sql_with_range_filter_opt,
@@ -55,7 +57,7 @@ impl ChartProperties for NewTxnsProperties {
     }
 }
 
-pub type NewTxns = DirectVecLocalDbChartSource<NewTxnsRemote, NewTxnsProperties>;
+pub type NewTxns = DirectVecLocalDbChartSource<NewTxnsRemote, Batch30Days, NewTxnsProperties>;
 pub type NewTxnsInt = MapParseTo<NewTxns, i64>;
 
 #[cfg(test)]

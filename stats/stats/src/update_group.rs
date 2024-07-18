@@ -136,7 +136,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// #     }
 /// # }
 /// #
-/// # type DummyChart = DirectVecLocalDbChartSource<NewBlocks, DummyChartProperties>;
+/// # type DummyChart = DirectVecLocalDbChartSource<NewBlocks, Batch30Days, DummyChartProperties>;
 ///
 /// construct_update_group!(ExampleUpdateGroup {
 ///     charts: [DummyChart],
@@ -218,7 +218,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 ///     }
 /// }
 ///
-/// type DummyChart = DirectVecLocalDbChartSource<DummyRemote, DummyChartProperties>;
+/// type DummyChart = DirectVecLocalDbChartSource<DummyRemote, Batch30Days, DummyChartProperties>;
 ///
 /// construct_update_group!(ExampleUpdateGroup {
 ///     charts: [DummyChart],

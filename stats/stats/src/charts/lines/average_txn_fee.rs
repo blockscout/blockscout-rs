@@ -5,7 +5,9 @@ use std::ops::Range;
 use crate::{
     data_source::kinds::{
         data_manipulation::map::MapToString,
-        local_db::DirectVecLocalDbChartSource,
+        local_db::{
+            parameters::update::batching::parameters::Batch30Days, DirectVecLocalDbChartSource,
+        },
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
     utils::sql_with_range_filter_opt,
@@ -62,7 +64,7 @@ impl ChartProperties for AverageTxnFeeProperties {
 }
 
 pub type AverageTxnFee =
-    DirectVecLocalDbChartSource<AverageTxnFeeRemoteString, AverageTxnFeeProperties>;
+    DirectVecLocalDbChartSource<AverageTxnFeeRemoteString, Batch30Days, AverageTxnFeeProperties>;
 
 #[cfg(test)]
 mod tests {

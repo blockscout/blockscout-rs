@@ -2,7 +2,9 @@ use std::ops::Range;
 
 use crate::{
     data_source::kinds::{
-        local_db::DirectVecLocalDbChartSource,
+        local_db::{
+            parameters::update::batching::parameters::Batch30Days, DirectVecLocalDbChartSource,
+        },
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
     utils::sql_with_range_filter_opt,
@@ -54,7 +56,7 @@ impl ChartProperties for AverageBlockSizeProperties {
 }
 
 pub type AverageBlockSize =
-    DirectVecLocalDbChartSource<AverageBlockSizeRemote, AverageBlockSizeProperties>;
+    DirectVecLocalDbChartSource<AverageBlockSizeRemote, Batch30Days, AverageBlockSizeProperties>;
 
 #[cfg(test)]
 mod tests {
