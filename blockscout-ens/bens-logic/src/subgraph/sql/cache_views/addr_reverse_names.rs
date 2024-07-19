@@ -7,7 +7,7 @@ use super::CachedView;
 use crate::{
     entity::subgraph::domain::AddrReverseDomainWithActualName,
     protocols::Protocol,
-    subgraphs_reader::sql::{utils, DbErr, DOMAIN_BLOCK_RANGE_WHERE_CLAUSE},
+    subgraph::sql::{utils, DbErr, DOMAIN_BLOCK_RANGE_WHERE_CLAUSE},
 };
 
 pub struct AddrReverseNamesView;

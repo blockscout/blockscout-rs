@@ -1,15 +1,15 @@
 use super::{
-    address_from_str_logic, checksummed, maybe_protocol_filter_from_inner, protocol_from_logic,
-    ConversionError,
+    address_from_str_logic, and_not_zero_address, checksummed, maybe_protocol_filter_from_inner,
+    protocol_from_logic, resolver_from_logic, ConversionError,
 };
 use crate::conversion::order_direction_from_inner;
-use bens_logic::subgraphs_reader::{
+use alloy::primitives::Address;
+use bens_logic::subgraph::{
     BatchResolveAddressNamesInput, DomainPaginationInput, DomainSortField, DomainToken,
     DomainTokenType, GetAddressInput, GetDomainInput, GetDomainOutput, LookupAddressInput,
     LookupDomainInput, LookupOutput,
 };
 use bens_proto::blockscout::bens::v1 as proto;
-use ethers::types::Address;
 use std::{collections::BTreeMap, str::FromStr};
 
 const DEFAULT_PAGE_SIZE: u32 = 50;
@@ -126,12 +126,16 @@ pub fn detailed_domain_from_logic(
     let domain = output.domain;
     let protocol = output.protocol;
     let network = output.deployment_network;
-    let owner = Some(address_from_str_logic(&domain.owner, chain_id)?);
+    let owner =
+        Some(address_from_str_logic(&domain.owner, chain_id)?).and_then(and_not_zero_address);
+    let resolver_address = domain
+        .resolver
+        .map(|resolver| resolver_from_logic(resolver, chain_id))
+        .transpose()?;
     let resolved_address = domain
         .resolved_address
         .map(|resolved_address| address_from_str_logic(&resolved_address, chain_id))
         .transpose()?;
-
     let wrapped_owner = domain
         .wrapped_owner
         .map(|wrapped_owner| address_from_str_logic(&wrapped_owner, chain_id))
@@ -158,6 +162,9 @@ pub fn detailed_domain_from_logic(
         other_addresses: domain.other_addresses.0.into_iter().collect(),
         tokens,
         protocol,
+        stored_offchain: domain.stored_offchain,
+        resolved_with_wildcard: domain.resolved_with_wildcard,
+        resolver_address,
     })
 }
 

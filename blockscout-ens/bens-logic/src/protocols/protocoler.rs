@@ -2,12 +2,13 @@ use crate::{
     blockscout::BlockscoutClient,
     protocols::{DomainNameOnProtocol, ProtocolError},
 };
+use alloy::primitives::{Address, B256};
 use anyhow::anyhow;
-use ethers::{addressbook::Address, prelude::Bytes};
 use nonempty::NonEmpty;
 use sea_query::{Alias, IntoTableRef, TableRef};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{collections::HashMap, sync::Arc};
+use url::Url;
 
 #[derive(Debug, Clone)]
 pub struct Protocoler {
@@ -19,6 +20,19 @@ pub struct Protocoler {
 pub struct Network {
     pub blockscout_client: Arc<BlockscoutClient>,
     pub use_protocols: Vec<String>,
+    pub rpc_url: Option<Url>,
+}
+
+impl Network {
+    pub fn rpc_url(&self) -> Url {
+        self.rpc_url.as_ref().cloned().unwrap_or_else(|| {
+            self.blockscout_client
+                .as_ref()
+                .url()
+                .join("/api/eth-rpc")
+                .expect("valid url")
+        })
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -40,9 +54,11 @@ pub struct ProtocolInfo {
     pub tld_list: NonEmpty<Tld>,
     pub subgraph_name: String,
     pub address_resolve_technique: AddressResolveTechnique,
-    pub empty_label_hash: Option<Bytes>,
+    pub empty_label_hash: Option<B256>,
     pub native_token_contract: Option<Address>,
+    pub registry_contract: Option<Address>,
     pub meta: ProtocolMeta,
+    pub try_offchain_resolve: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -77,6 +93,10 @@ impl Tld {
             .next()
             .filter(|c| !c.is_empty())
             .map(Self::new)
+    }
+
+    pub fn reverse() -> Self {
+        Self("reverse".to_string())
     }
 }
 
@@ -189,12 +209,17 @@ impl Protocoler {
         tld: Tld,
         maybe_filter: Option<NonEmpty<String>>,
     ) -> Result<Vec<DeployedProtocol<'_>>, ProtocolError> {
-        let protocols = self.protocols_of_network(network_id, maybe_filter)?;
-        let protocols = protocols
-            .into_iter()
+        let net_protocols = self.protocols_of_network(network_id, maybe_filter)?;
+        let protocols = net_protocols
+            .iter()
             .filter(|p| p.protocol.info.tld_list.contains(&tld))
-            .collect();
-        Ok(protocols)
+            .cloned()
+            .collect::<Vec<DeployedProtocol>>();
+        if protocols.is_empty() {
+            Ok(vec![net_protocols.head])
+        } else {
+            Ok(protocols)
+        }
     }
 
     pub fn names_options_in_network(
@@ -208,7 +233,7 @@ impl Protocoler {
         let protocols = self.protocols_of_network_for_tld(network_id, tld, maybe_filter)?;
         let names_with_protocols = protocols
             .into_iter()
-            .filter_map(|p| DomainNameOnProtocol::new(name, p).ok())
+            .filter_map(|p| DomainNameOnProtocol::from_str(name, p).ok())
             .collect();
         Ok(names_with_protocols)
     }

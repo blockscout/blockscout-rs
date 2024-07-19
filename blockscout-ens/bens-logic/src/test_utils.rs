@@ -1,9 +1,9 @@
 use crate::{
     blockscout::BlockscoutClient,
     protocols::{Network, ProtocolInfo, Tld},
-    subgraphs_reader::SubgraphReader,
+    subgraph::SubgraphReader,
 };
-use ethers::types::TxHash;
+use alloy::primitives::TxHash;
 use nonempty::nonempty;
 use sqlx::PgPool;
 use std::{collections::HashMap, sync::Arc};
@@ -101,6 +101,7 @@ pub async fn mocked_networks_and_protocols(
         Network {
             blockscout_client: Arc::new(client),
             use_protocols: vec!["ens".to_string()],
+            rpc_url: None,
         },
     )]);
 

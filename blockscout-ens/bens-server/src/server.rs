@@ -7,7 +7,7 @@ use anyhow::Context;
 use bens_logic::{
     blockscout::BlockscoutClient,
     protocols::{Network, ProtocolInfo},
-    subgraphs_reader::SubgraphReader,
+    subgraph::SubgraphReader,
 };
 use bens_proto::blockscout::bens::v1::{
     domains_extractor_actix::route_domains_extractor,
@@ -46,11 +46,10 @@ impl launcher::HttpRouter for Router {
 }
 
 pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
-    blockscout_service_launcher::tracing::init_logs::<_>(
+    blockscout_service_launcher::tracing::init_logs(
         SERVICE_NAME,
         &settings.tracing,
         &settings.jaeger,
-        Some(tracing_subscriber::filter::filter_fn(|_| true)),
     )?;
 
     let health = Arc::new(HealthService::default());
@@ -63,6 +62,9 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             .await
             .context("database connect")?,
     );
+    if settings.database.run_migrations {
+        bens_logic::migrations::run(&pool).await?;
+    }
     let networks = settings
         .subgraphs_reader
         .networks
@@ -78,6 +80,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
                 Network {
                     blockscout_client,
                     use_protocols: network.use_protocols,
+                    rpc_url: network.rpc_url,
                 },
             )
         })
@@ -105,6 +108,8 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
                     empty_label_hash: p.empty_label_hash,
                     native_token_contract: p.native_token_contract,
                     meta: p.meta.0,
+                    try_offchain_resolve: p.try_offchain_resolve,
+                    registry_contract: p.registry_contract,
                 },
             )
         })

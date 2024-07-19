@@ -1,5 +1,5 @@
 use super::{paginate_list, Order, PaginatedList, PaginationInput, Paginator};
-use crate::subgraphs_reader::{DomainSortField, LookupOutput};
+use crate::subgraph::{DomainSortField, LookupOutput};
 use anyhow::Context;
 use sea_query::{Expr, SelectStatement, SimpleExpr};
 

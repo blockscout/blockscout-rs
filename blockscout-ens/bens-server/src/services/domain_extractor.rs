@@ -5,7 +5,7 @@ use crate::conversion::{
 use async_trait::async_trait;
 use bens_logic::{
     protocols::ProtocolError,
-    subgraphs_reader::{LookupOutput, SubgraphReadError, SubgraphReader},
+    subgraph::{LookupOutput, SubgraphReadError, SubgraphReader},
 };
 use bens_proto::blockscout::bens::v1::{domains_extractor_server::DomainsExtractor, *};
 use std::sync::Arc;

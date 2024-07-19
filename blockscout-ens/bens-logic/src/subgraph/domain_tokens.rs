@@ -1,8 +1,8 @@
 use super::{DomainToken, DomainTokenType};
 use crate::entity::subgraph::domain::DetailedDomain;
+use alloy::primitives::Address;
 use anyhow::Context;
 use bigdecimal::{num_bigint::BigInt, Num};
-use ethers::types::Address;
 use std::str::FromStr;
 
 #[tracing::instrument(
@@ -26,7 +26,7 @@ pub fn extract_tokens_from_domain(
             .map(|name| name.matches('.').count() == 1)
             .unwrap_or(true);
         // native NFT exists only if domain is second level (like abc.eth and not abc.abc.eth)
-        if is_second_level_domain {
+        if is_second_level_domain && !domain.stored_offchain {
             let labelhash = domain
                 .labelhash
                 .as_ref()

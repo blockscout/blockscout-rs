@@ -4,7 +4,7 @@ use sqlx::{Executor, PgPool, Row};
 mod addr_reverse_names;
 mod address_names;
 
-use crate::subgraphs_reader::sql::DbErr;
+use crate::subgraph::sql::DbErr;
 pub use addr_reverse_names::AddrReverseNamesView;
 pub use address_names::AddressNamesView;
 

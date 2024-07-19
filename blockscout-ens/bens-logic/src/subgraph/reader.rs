@@ -1,9 +1,9 @@
 use super::{
     domain_tokens::extract_tokens_from_domain,
     pagination::{PaginatedList, Paginator},
-    patch::{patch_detailed_domain, patch_domain},
     sql,
     types::*,
+    SubgraphPatcher,
 };
 use crate::{
     blockscout,
@@ -16,13 +16,13 @@ use crate::{
         AddressResolveTechnique, DeployedProtocol, Network, Protocol, ProtocolError, ProtocolInfo,
         Protocoler,
     },
-    subgraphs_reader::{
+    subgraph::{
         resolve_addresses::resolve_addresses,
         sql::{CachedView, DbErr},
     },
 };
+use alloy::primitives::{Address, TxHash};
 use anyhow::{anyhow, Context};
-use ethers::types::{Address, TxHash};
 use nonempty::{nonempty, NonEmpty};
 use sqlx::postgres::PgPool;
 use std::{
@@ -56,6 +56,7 @@ pub enum SubgraphReadError {
 pub struct SubgraphReader {
     pool: Arc<PgPool>,
     protocoler: Protocoler,
+    patcher: SubgraphPatcher,
 }
 
 impl SubgraphReader {
@@ -106,19 +107,25 @@ impl SubgraphReader {
                 (chain_id, Network {
                     blockscout_client: network.blockscout_client,
                     use_protocols: found_protocols,
+                    rpc_url: network.rpc_url,
                 })
             })
             .collect::<HashMap<_, _>>();
 
         tracing::info!(networks =? networks.keys().collect::<Vec<_>>(), "initialized subgraph reader");
         let protocoler = Protocoler::initialize(networks, protocols)?;
-        let this = Self::new(pool, protocoler);
+        let patcher = SubgraphPatcher::new();
+        let this = Self::new(pool, protocoler, patcher);
         this.init_cache().await.context("init cache tables")?;
         Ok(this)
     }
 
-    pub fn new(pool: Arc<PgPool>, protocoler: Protocoler) -> Self {
-        Self { pool, protocoler }
+    pub fn new(pool: Arc<PgPool>, protocoler: Protocoler, patcher: SubgraphPatcher) -> Self {
+        Self {
+            pool,
+            protocoler,
+            patcher,
+        }
     }
 
     pub async fn refresh_cache(&self) -> Result<(), anyhow::Error> {
@@ -197,11 +204,15 @@ impl SubgraphReader {
             input.network_id,
             input.protocol_id.clone().map(|p| nonempty![p]),
         )?;
+        self.patcher
+            .handle_user_domain_names(self.pool.as_ref(), &name)
+            .await?;
         let maybe_domain: Option<DetailedDomain> =
-            sql::get_domain(self.pool.as_ref(), &name, &input)
-                .await?
-                .map(|domain| patch_detailed_domain(self.pool.clone(), domain, &name));
+            sql::get_domain(self.pool.as_ref(), &name, &input).await?;
         if let Some(domain) = maybe_domain {
+            let domain = self
+                .patcher
+                .patched_detailed_domain(self.pool.clone(), domain, &name);
             let tokens = extract_tokens_from_domain(
                 &domain,
                 name.deployed_protocol.protocol.info.native_token_contract,
@@ -265,6 +276,14 @@ impl SubgraphReader {
             sql::FindDomainsInput::Protocols(protocols.map(|p| p.protocol).into_iter().collect())
         };
 
+        if let sql::FindDomainsInput::Names(names) = &find_domains_input {
+            for name in names {
+                self.patcher
+                    .handle_user_domain_names(self.pool.as_ref(), name)
+                    .await?;
+            }
+        }
+
         let domains = sql::find_domains(
             self.pool.as_ref(),
             find_domains_input.clone(),
@@ -280,7 +299,9 @@ impl SubgraphReader {
                     name.inner.id == domain.id
                         && name.deployed_protocol.protocol.info.slug == domain.protocol_slug
                 }) {
-                    return patch_domain(self.pool.clone(), domain, from_user);
+                    return self
+                        .patcher
+                        .patched_domain(self.pool.clone(), domain, from_user);
                 }
             };
             domain
@@ -317,6 +338,9 @@ impl SubgraphReader {
         &self,
         input: GetAddressInput,
     ) -> Result<Option<GetDomainOutput>, SubgraphReadError> {
+        if address_should_be_ignored(&input.address) {
+            return Ok(Default::default());
+        }
         let protocols = self
             .protocoler
             .protocols_of_network(
@@ -358,6 +382,9 @@ impl SubgraphReader {
         resolved_to: bool,
         owned_by: bool,
     ) -> Result<i64, SubgraphReadError> {
+        if address_should_be_ignored(&address) {
+            return Ok(Default::default());
+        }
         let protocols = self
             .protocoler
             .protocols_of_network(network_id, None)?
@@ -411,6 +438,7 @@ fn remove_addresses_from_batch(addresses: impl IntoIterator<Item = Address>) -> 
 
 fn address_should_be_ignored(address: &Address) -> bool {
     let str = format!("{address:#x}");
+    tracing::info!("str={str}");
     UNRESOLVABLE_ADDRESSES_PREFIXES
         .iter()
         .any(|prefix| str.starts_with(prefix))
@@ -492,10 +520,8 @@ fn lookup_output_from_domains(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        protocols::DomainNameOnProtocol, subgraphs_reader::sql, test_utils::mocked_reader,
-    };
-    use ethers::types::Address;
+    use crate::{protocols::DomainNameOnProtocol, subgraph::sql, test_utils::mocked_reader};
+    use alloy::primitives::Address;
     use pretty_assertions::assert_eq;
 
     const DEFAULT_CHAIN_ID: i64 = 1;
@@ -824,7 +850,8 @@ mod tests {
         // Make sure that database contains unresolved domain
         let domain = sql::get_domain(
             reader.pool.as_ref(),
-            &DomainNameOnProtocol::new(unresolved, protocol).expect("unresolved name is valid"),
+            &DomainNameOnProtocol::from_str(unresolved, protocol)
+                .expect("unresolved name is valid"),
             &GetDomainInput {
                 network_id: DEFAULT_CHAIN_ID,
                 name: unresolved.to_string(),
@@ -860,7 +887,8 @@ mod tests {
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         let domain = sql::get_domain(
             reader.pool.as_ref(),
-            &DomainNameOnProtocol::new(unresolved, protocol).expect("unresolved name is valid"),
+            &DomainNameOnProtocol::from_str(unresolved, protocol)
+                .expect("unresolved name is valid"),
             &GetDomainInput {
                 network_id: DEFAULT_CHAIN_ID,
                 name: unresolved.to_string(),

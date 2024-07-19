@@ -1,8 +1,9 @@
 pub mod blockscout;
 pub mod coin_type;
 pub mod entity;
+pub mod migrations;
 pub mod protocols;
-pub mod subgraphs_reader;
+pub mod subgraph;
 #[cfg(feature = "test-utils")]
 pub mod test_utils;
 
