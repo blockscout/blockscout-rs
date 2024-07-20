@@ -46,8 +46,8 @@ pub struct AverageBlockTimeProperties;
 
 impl Named for AverageBlockTimeProperties {
     fn name() -> String {
-                "averageBlockTime".into()
-            }
+        "averageBlockTime".into()
+    }
 }
 
 impl ChartProperties for AverageBlockTimeProperties {

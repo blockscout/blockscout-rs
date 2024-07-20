@@ -45,8 +45,8 @@ where
     type ResolutionDependencies = ();
     type Output = Vec<TimespanValue<Resolution, Value>>;
     fn mutex_id() -> Option<String> {
-                None
-            }
+        None
+    }
 
     async fn init_itself(
         _db: &DatabaseConnection,

@@ -48,8 +48,8 @@ pub struct CompletedTxnsProperties;
 
 impl Named for CompletedTxnsProperties {
     fn name() -> String {
-                "completedTxns".into()
-            }
+        "completedTxns".into()
+    }
 }
 
 impl ChartProperties for CompletedTxnsProperties {

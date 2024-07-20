@@ -13,8 +13,8 @@ pub struct TotalAccountsProperties;
 
 impl Named for TotalAccountsProperties {
     fn name() -> String {
-                "totalAccounts".into()
-            }
+        "totalAccounts".into()
+    }
 }
 
 impl ChartProperties for TotalAccountsProperties {

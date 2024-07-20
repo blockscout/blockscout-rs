@@ -87,8 +87,8 @@ pub struct NativeCoinSupplyProperties;
 
 impl Named for NativeCoinSupplyProperties {
     fn name() -> String {
-                "nativeCoinSupply".into()
-            }
+        "nativeCoinSupply".into()
+    }
 }
 
 impl ChartProperties for NativeCoinSupplyProperties {

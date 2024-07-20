@@ -17,8 +17,8 @@ pub struct NewNativeCoinHoldersProperties;
 
 impl Named for NewNativeCoinHoldersProperties {
     fn name() -> String {
-                "newNativeCoinHolders".into()
-            }
+        "newNativeCoinHolders".into()
+    }
 }
 
 impl ChartProperties for NewNativeCoinHoldersProperties {

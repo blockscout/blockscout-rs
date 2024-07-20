@@ -65,8 +65,8 @@ pub struct GasUsedGrowthProperties;
 
 impl Named for GasUsedGrowthProperties {
     fn name() -> String {
-                "gasUsedGrowth".into()
-            }
+        "gasUsedGrowth".into()
+    }
 }
 
 impl ChartProperties for GasUsedGrowthProperties {

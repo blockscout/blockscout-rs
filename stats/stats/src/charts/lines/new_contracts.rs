@@ -66,8 +66,8 @@ pub struct NewContractsProperties;
 
 impl Named for NewContractsProperties {
     fn name() -> String {
-                "newContracts".into()
-            }
+        "newContracts".into()
+    }
 }
 
 impl ChartProperties for NewContractsProperties {

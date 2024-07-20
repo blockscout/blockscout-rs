@@ -46,8 +46,8 @@ pub struct TotalContractsProperties;
 
 impl Named for TotalContractsProperties {
     fn name() -> String {
-                "totalContracts".into()
-            }
+        "totalContracts".into()
+    }
 }
 
 impl ChartProperties for TotalContractsProperties {

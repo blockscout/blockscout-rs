@@ -47,8 +47,8 @@ pub struct NewTxnsProperties;
 
 impl Named for NewTxnsProperties {
     fn name() -> String {
-                "newTxns".into()
-            }
+        "newTxns".into()
+    }
 }
 
 impl ChartProperties for NewTxnsProperties {

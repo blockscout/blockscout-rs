@@ -52,8 +52,8 @@ pub struct TxnsSuccessRateProperties;
 
 impl Named for TxnsSuccessRateProperties {
     fn name() -> String {
-                "txnsSuccessRate".into()
-            }
+        "txnsSuccessRate".into()
+    }
 }
 
 impl ChartProperties for TxnsSuccessRateProperties {

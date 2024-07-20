@@ -39,8 +39,8 @@ pub struct TotalAddressesProperties;
 
 impl Named for TotalAddressesProperties {
     fn name() -> String {
-                "totalAddresses".into()
-            }
+        "totalAddresses".into()
+    }
 }
 
 impl ChartProperties for TotalAddressesProperties {

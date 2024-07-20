@@ -44,8 +44,8 @@ pub struct NewVerifiedContractsProperties;
 
 impl Named for NewVerifiedContractsProperties {
     fn name() -> String {
-                "newVerifiedContracts".into()
-            }
+        "newVerifiedContracts".into()
+    }
 }
 
 impl ChartProperties for NewVerifiedContractsProperties {

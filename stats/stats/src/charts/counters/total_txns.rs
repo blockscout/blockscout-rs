@@ -14,8 +14,8 @@ pub struct TotalTxnsProperties;
 
 impl Named for TotalTxnsProperties {
     fn name() -> String {
-                "totalTxns".into()
-            }
+        "totalTxns".into()
+    }
 }
 
 impl ChartProperties for TotalTxnsProperties {

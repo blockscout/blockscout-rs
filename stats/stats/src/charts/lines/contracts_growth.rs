@@ -10,8 +10,8 @@ pub struct ContractsGrowthProperties;
 
 impl Named for ContractsGrowthProperties {
     fn name() -> String {
-                "contractsGrowth".into()
-            }
+        "contractsGrowth".into()
+    }
 }
 
 impl ChartProperties for ContractsGrowthProperties {

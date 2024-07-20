@@ -38,8 +38,8 @@ where
     type ResolutionDependencies = ();
     type Output = F::Output;
     fn mutex_id() -> Option<String> {
-                None
-            }
+        None
+    }
 
     async fn init_itself(
         _db: &DatabaseConnection,

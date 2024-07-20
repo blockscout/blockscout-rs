@@ -13,8 +13,8 @@ pub struct TotalNativeCoinHoldersProperties;
 
 impl Named for TotalNativeCoinHoldersProperties {
     fn name() -> String {
-                "totalNativeCoinHolders".into()
-            }
+        "totalNativeCoinHolders".into()
+    }
 }
 
 impl ChartProperties for TotalNativeCoinHoldersProperties {

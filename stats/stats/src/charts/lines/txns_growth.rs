@@ -11,8 +11,8 @@ pub struct TxnsGrowthProperties;
 
 impl Named for TxnsGrowthProperties {
     fn name() -> String {
-                "txnsGrowth".into()
-            }
+        "txnsGrowth".into()
+    }
 }
 
 impl ChartProperties for TxnsGrowthProperties {

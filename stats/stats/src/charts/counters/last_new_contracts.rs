@@ -13,8 +13,8 @@ pub struct LastNewContractsProperties;
 
 impl Named for LastNewContractsProperties {
     fn name() -> String {
-                "lastNewContracts".into()
-            }
+        "lastNewContracts".into()
+    }
 }
 
 impl ChartProperties for LastNewContractsProperties {

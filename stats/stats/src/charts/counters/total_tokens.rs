@@ -38,8 +38,8 @@ pub struct TotalTokensProperties;
 
 impl Named for TotalTokensProperties {
     fn name() -> String {
-                "totalTokens".into()
-            }
+        "totalTokens".into()
+    }
 }
 
 impl ChartProperties for TotalTokensProperties {

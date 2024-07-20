@@ -52,8 +52,8 @@ pub struct TxnsFeeProperties;
 
 impl Named for TxnsFeeProperties {
     fn name() -> String {
-                "txnsFee".into()
-            }
+        "txnsFee".into()
+    }
 }
 
 impl ChartProperties for TxnsFeeProperties {

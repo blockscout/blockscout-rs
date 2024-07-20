@@ -45,8 +45,8 @@ pub struct AverageGasLimitProperties;
 
 impl Named for AverageGasLimitProperties {
     fn name() -> String {
-                "averageGasLimit".into()
-            }
+        "averageGasLimit".into()
+    }
 }
 
 impl ChartProperties for AverageGasLimitProperties {

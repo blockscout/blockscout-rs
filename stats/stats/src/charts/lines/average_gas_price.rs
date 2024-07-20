@@ -59,8 +59,8 @@ pub struct AverageGasPriceProperties;
 
 impl Named for AverageGasPriceProperties {
     fn name() -> String {
-                "averageGasPrice".into()
-            }
+        "averageGasPrice".into()
+    }
 }
 
 impl ChartProperties for AverageGasPriceProperties {

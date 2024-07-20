@@ -11,8 +11,8 @@ pub struct VerifiedContractsGrowthProperties;
 
 impl Named for VerifiedContractsGrowthProperties {
     fn name() -> String {
-                "verifiedContractsGrowth".into()
-            }
+        "verifiedContractsGrowth".into()
+    }
 }
 
 impl ChartProperties for VerifiedContractsGrowthProperties {

@@ -49,8 +49,8 @@ pub struct NewNativeCoinTransfersProperties;
 
 impl Named for NewNativeCoinTransfersProperties {
     fn name() -> String {
-                "newNativeCoinTransfers".into()
-            }
+        "newNativeCoinTransfers".into()
+    }
 }
 
 impl ChartProperties for NewNativeCoinTransfersProperties {

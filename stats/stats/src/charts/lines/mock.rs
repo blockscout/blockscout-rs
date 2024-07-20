@@ -93,8 +93,8 @@ pub struct MockLineProperties<Value, Policy>(PhantomData<(Value, Policy)>);
 
 impl<Value, Policy> Named for MockLineProperties<Value, Policy> {
     fn name() -> String {
-                "mockLine".into()
-            }
+        "mockLine".into()
+    }
 }
 
 impl<Value, Policy> ChartProperties for MockLineProperties<Value, Policy>

@@ -14,8 +14,8 @@ pub struct TotalNativeCoinTransfersProperties;
 
 impl Named for TotalNativeCoinTransfersProperties {
     fn name() -> String {
-                "totalNativeCoinTransfers".into()
-            }
+        "totalNativeCoinTransfers".into()
+    }
 }
 
 impl ChartProperties for TotalNativeCoinTransfersProperties {
