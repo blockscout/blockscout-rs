@@ -86,22 +86,36 @@ impl StatsService for ReadService {
             .charts
             .charts_info
             .iter()
-            .filter(|(_, chart)| chart.static_info.chart_type == ChartType::Counter)
+            .filter(|(_, chart)| {
+                chart
+                    .enabled_resolutions
+                    .iter()
+                    .all(|(_, static_info)| static_info.chart_type == ChartType::Counter)
+            })
             .filter_map(|(name, counter)| {
-                data.remove(name).map(|point| {
-                    let point =
-                        if counter.static_info.missing_date_policy == MissingDatePolicy::FillZero {
-                            point.relevant_or_zero(Utc::now().date_naive())
-                        } else {
-                            point
-                        };
-                    proto_v1::Counter {
-                        id: counter.static_info.name.clone(),
+                data.remove(name).and_then(|point| {
+                    // resolutions other than day are currently not supported
+                    // for counters
+                    let Some(static_info) = counter.enabled_resolutions.get(&ResolutionKind::Day)
+                    else {
+                        tracing::warn!(
+                            "No 'day' resolution enabled for counter {}, skipping its value",
+                            name
+                        );
+                        return None;
+                    };
+                    let point = if static_info.missing_date_policy == MissingDatePolicy::FillZero {
+                        point.relevant_or_zero(Utc::now().date_naive())
+                    } else {
+                        point
+                    };
+                    Some(proto_v1::Counter {
+                        id: static_info.name.clone(),
                         value: point.value,
                         title: counter.settings.title.clone(),
                         description: counter.settings.description.clone(),
                         units: counter.settings.units.clone(),
-                    }
+                    })
                 })
             })
             .collect();
@@ -114,19 +128,28 @@ impl StatsService for ReadService {
         request: Request<proto_v1::GetLineChartRequest>,
     ) -> Result<Response<proto_v1::LineChart>, Status> {
         let request = request.into_inner();
+        let resolution = ResolutionKind::decode_proto_enum(request.resolution)
+            .map_err(|n| Status::invalid_argument(format!("Incorrect resolution {n}")))?;
         let chart_info = self
             .charts
             .charts_info
             .get(&request.name)
-            .filter(|e| e.static_info.chart_type == ChartType::Line)
-            .ok_or_else(|| Status::not_found(format!("chart {} not found", request.name)))?;
+            .and_then(|e| e.enabled_resolutions.get(&resolution))
+            .filter(|static_info| static_info.chart_type == ChartType::Line)
+            .ok_or_else(|| {
+                Status::not_found(format!(
+                    "chart {}({}) not found",
+                    request.name,
+                    String::from(resolution)
+                ))
+            })?;
 
         let from = request
             .from
             .and_then(|date| NaiveDate::from_str(&date).ok());
         let to = request.to.and_then(|date| NaiveDate::from_str(&date).ok());
-        let policy = chart_info.static_info.missing_date_policy;
-        let mark_approx = chart_info.static_info.approximate_trailing_points;
+        let policy = chart_info.missing_date_policy;
+        let mark_approx = chart_info.approximate_trailing_points;
         let interval_limit = Some(self.limits.request_interval_limit);
         let data = stats::get_line_chart_data(
             &self.db,

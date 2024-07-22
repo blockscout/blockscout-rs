@@ -5,9 +5,62 @@ use std::collections::BTreeMap;
 use cron::Schedule;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
+use stats::ResolutionKind;
 use stats_proto::blockscout::stats::v1 as proto_v1;
 
 use crate::runtime_setup::EnabledChartEntry;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ResolutionsEnabled {
+    #[serde(default = "enabled_default")]
+    pub day: bool,
+    #[serde(default = "enabled_default")]
+    pub week: bool,
+    #[serde(default = "enabled_default")]
+    pub month: bool,
+    #[serde(default = "enabled_default")]
+    pub year: bool,
+}
+
+impl Default for ResolutionsEnabled {
+    fn default() -> Self {
+        Self {
+            day: enabled_default(),
+            week: enabled_default(),
+            month: enabled_default(),
+            year: enabled_default(),
+        }
+    }
+}
+
+impl ResolutionsEnabled {
+    pub fn into_enabled(self) -> Vec<ResolutionKind> {
+        [
+            ResolutionKind::Day,
+            ResolutionKind::Week,
+            ResolutionKind::Month,
+            ResolutionKind::Year,
+        ]
+        .into_iter()
+        .filter(|res| match res {
+            ResolutionKind::Day => self.day,
+            ResolutionKind::Week => self.week,
+            ResolutionKind::Month => self.month,
+            ResolutionKind::Year => self.year,
+        })
+        .collect()
+    }
+
+    pub fn is_enabled(&self, resolution: &ResolutionKind) -> bool {
+        match resolution {
+            ResolutionKind::Day => self.day,
+            ResolutionKind::Week => self.week,
+            ResolutionKind::Month => self.month,
+            ResolutionKind::Year => self.year,
+        }
+    }
+}
 
 /// Includes disabled charts
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
@@ -18,6 +71,8 @@ pub struct AllChartSettings {
     pub title: String,
     pub description: String,
     pub units: Option<String>,
+    #[serde(default = "ResolutionsEnabled::default")]
+    pub resolutions: ResolutionsEnabled,
 }
 
 fn enabled_default() -> bool {
@@ -29,6 +84,7 @@ pub struct EnabledChartSettings {
     pub title: String,
     pub description: String,
     pub units: Option<String>,
+    pub resolutions: ResolutionsEnabled,
 }
 
 impl EnabledChartSettings {
@@ -38,6 +94,7 @@ impl EnabledChartSettings {
                 units: value.units,
                 title: value.title,
                 description: value.description,
+                resolutions: value.resolutions,
             })
         } else {
             None

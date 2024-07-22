@@ -82,6 +82,30 @@ impl From<ResolutionKind> for ChartResolution {
     }
 }
 
+impl From<ResolutionKind> for String {
+    fn from(value: ResolutionKind) -> Self {
+        match value {
+            ResolutionKind::Day => "day",
+            ResolutionKind::Week => "week",
+            ResolutionKind::Month => "month",
+            ResolutionKind::Year => "year",
+        }
+        .into()
+    }
+}
+
+impl ResolutionKind {
+    pub fn decode_proto_enum(value: i32) -> Result<Self, i32> {
+        match value {
+            0 => Ok(Self::Day),
+            1 => Ok(Self::Week),
+            2 => Ok(Self::Month),
+            3 => Ok(Self::Year),
+            n => Err(n),
+        }
+    }
+}
+
 pub trait Named {
     /// Name of this data source that represents its contents
     fn name() -> String;
@@ -107,12 +131,7 @@ impl ChartKey {
     }
 
     pub fn as_string(&self) -> String {
-        let resolution_string = match self.resolution {
-            ResolutionKind::Day => "day",
-            ResolutionKind::Week => "week",
-            ResolutionKind::Month => "month",
-            ResolutionKind::Year => "year",
-        };
+        let resolution_string: String = self.resolution.into();
         format!("{}_{}", self.name, resolution_string)
     }
 }

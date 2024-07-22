@@ -65,6 +65,16 @@ paths:
           in: query
           required: false
           type: string
+        - name: resolution
+          in: query
+          required: false
+          type: string
+          enum:
+            - DAY
+            - WEEK
+            - MONTH
+            - YEAR
+          default: DAY
       tags:
         - StatsService
   /health:
@@ -163,6 +173,13 @@ definitions:
         type: string
       units:
         type: string
+      enabled_resolutions:
+        type: array
+        items:
+          type: string
+        title: |-
+          todo: replace with enum when supported
+          (probably this https://github.com/blockscout/actix-prost/pull/24/files)
   v1LineChartSection:
     type: object
     properties:
@@ -193,3 +210,11 @@ definitions:
       is_approximate:
         type: boolean
     title: All integers are encoded as strings to prevent data loss
+  v1Resolution:
+    type: string
+    enum:
+      - DAY
+      - WEEK
+      - MONTH
+      - YEAR
+    default: DAY
