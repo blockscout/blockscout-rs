@@ -220,6 +220,10 @@ async fn insert_contract_deployment(txn: &DatabaseTransaction, test_case: &TestC
 
     contract_deployments::ActiveModel {
         id: Default::default(),
+        created_at: Default::default(),
+        updated_at: Default::default(),
+        created_by: Default::default(),
+        updated_by: Default::default(),
         chain_id: Set(test_case.chain_id.into()),
         address: Set(test_case.address.to_vec()),
         transaction_hash: Set(test_case.transaction_hash.to_vec()),
@@ -250,6 +254,10 @@ async fn insert_contract(
 
     contracts::ActiveModel {
         id: Default::default(),
+        created_at: Default::default(),
+        updated_at: Default::default(),
+        created_by: Default::default(),
+        updated_by: Default::default(),
         creation_code_hash: Set(creation_code_hash.clone()),
         runtime_code_hash: Set(runtime_code_hash.clone()),
     }
@@ -273,6 +281,10 @@ async fn insert_code(txn: &DatabaseTransaction, code: Vec<u8>) -> Vec<u8> {
     let code_hash_keccak = keccak_hash::keccak(&code).0.to_vec();
     code::ActiveModel {
         code_hash: Set(code_hash.clone()),
+        created_at: Default::default(),
+        updated_at: Default::default(),
+        created_by: Default::default(),
+        updated_by: Default::default(),
         code_hash_keccak: Set(code_hash_keccak),
         code: Set(Some(code)),
     }
