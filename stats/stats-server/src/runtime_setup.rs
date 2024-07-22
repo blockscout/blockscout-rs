@@ -7,7 +7,7 @@ use itertools::Itertools;
 use stats::{
     entity::sea_orm_active_enums::ChartType,
     update_group::{ArcUpdateGroup, SyncUpdateGroup},
-    ChartPropertiesObject,
+    ChartKey, ChartPropertiesObject,
 };
 use std::{
     collections::{btree_map::Entry, BTreeMap, HashSet},
@@ -31,7 +31,7 @@ pub struct UpdateGroupEntry {
     /// Handle for operating the group
     pub group: SyncUpdateGroup,
     /// Members that are enabled in the charts config
-    pub enabled_members: HashSet<String>,
+    pub enabled_members: HashSet<ChartKey>,
 }
 
 pub struct RuntimeSetup {
@@ -79,11 +79,11 @@ impl RuntimeSetup {
         let mut counters_unknown = enabled_counters.clone();
         let mut lines_unknown = enabled_lines.clone();
         let settings = Self::extract_united_chart_settings(&enabled_charts_config);
-        let charts_info: BTreeMap<String, EnabledChartEntry> = Self::all_member_charts()
+        let charts_info: BTreeMap<ChartKey, EnabledChartEntry> = Self::all_member_charts()
             .into_iter()
-            .filter(|(name, chart)| match chart.chart_type {
-                ChartType::Counter => counters_unknown.remove(name),
-                ChartType::Line => lines_unknown.remove(name),
+            .filter(|(key, chart)| match chart.chart_type {
+                ChartType::Counter => counters_unknown.remove(key),
+                ChartType::Line => lines_unknown.remove(key),
             })
             .filter_map(|(name, chart)| {
                 settings.get(&name).map(|settings| {
@@ -255,7 +255,7 @@ impl RuntimeSetup {
     /// All initialization of update groups happens here
     fn init_update_groups(
         groups_config: config::update_groups::Config,
-        charts_info: &BTreeMap<String, EnabledChartEntry>,
+        charts_info: &BTreeMap<ChartKey, EnabledChartEntry>,
     ) -> anyhow::Result<BTreeMap<String, UpdateGroupEntry>> {
         let update_groups = Self::all_update_groups();
         let dep_mutexes = Self::create_all_dependencies_mutexes(update_groups.clone());
@@ -274,8 +274,8 @@ impl RuntimeSetup {
             let enabled_members = group
                 .list_charts()
                 .into_iter()
-                .filter(|m| charts_info.contains_key(&m.name))
-                .map(|m| m.name)
+                .filter(|m| charts_info.contains_key(&m.key))
+                .map(|m| m.key)
                 .collect();
             let sync_group = SyncUpdateGroup::new(&dep_mutexes, group)?;
             result.insert(
@@ -291,14 +291,14 @@ impl RuntimeSetup {
     }
 
     /// List all charts that are members of at least 1 group.
-    fn all_member_charts() -> BTreeMap<String, ChartPropertiesObject> {
+    fn all_member_charts() -> BTreeMap<ChartKey, ChartPropertiesObject> {
         let charts_with_duplicates = Self::all_update_groups()
             .into_iter()
             .flat_map(|g| g.list_charts())
             .collect_vec();
         let mut charts = BTreeMap::new();
         for chart in charts_with_duplicates {
-            match charts.entry(chart.name.clone()) {
+            match charts.entry(chart.key.clone()) {
                 Entry::Vacant(v) => {
                     v.insert(chart);
                 }
@@ -309,7 +309,7 @@ impl RuntimeSetup {
                     // i.e. this check does not guarantee that same mutex will not be
                     // used for 2 different charts (although it shouldn't lead to logical
                     // errors)
-                    assert_eq!(o.get(), &chart, "duplicate chart name '{}'", o.get().name);
+                    assert_eq!(o.get(), &chart, "duplicate chart key '{}'", o.get().key);
                 }
             }
         }

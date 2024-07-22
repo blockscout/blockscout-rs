@@ -4,9 +4,11 @@
 //! [`trait@ChartProperties`], and is stored in local database (e.g.
 //! [`LocalDbChartSource`](crate::data_source::kinds::local_db))
 
+use std::fmt::Display;
+
 use crate::{types::Timespan, ReadError};
 use chrono::{DateTime, Duration, Utc};
-use entity::sea_orm_active_enums::ChartType;
+use entity::sea_orm_active_enums::{ChartResolution, ChartType};
 use sea_orm::prelude::*;
 use thiserror::Error;
 
@@ -50,7 +52,7 @@ pub enum MissingDatePolicy {
     FillPrevious,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ResolutionKind {
     Day,
     Week,
@@ -58,22 +60,96 @@ pub enum ResolutionKind {
     Year,
 }
 
+impl From<ChartResolution> for ResolutionKind {
+    fn from(value: ChartResolution) -> Self {
+        match value {
+            ChartResolution::Day => ResolutionKind::Day,
+            ChartResolution::Week => ResolutionKind::Week,
+            ChartResolution::Month => ResolutionKind::Month,
+            ChartResolution::Year => ResolutionKind::Year,
+        }
+    }
+}
+
+impl From<ResolutionKind> for ChartResolution {
+    fn from(value: ResolutionKind) -> Self {
+        match value {
+            ResolutionKind::Day => ChartResolution::Day,
+            ResolutionKind::Week => ChartResolution::Week,
+            ResolutionKind::Month => ChartResolution::Month,
+            ResolutionKind::Year => ChartResolution::Year,
+        }
+    }
+}
+
 pub trait Named {
-    /// Must be unique
+    /// Name of this data source that represents its contents
     fn name() -> String;
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct ChartKey {
+    name: String,
+    resolution: ResolutionKind,
+}
+
+impl ChartKey {
+    pub fn new(name: String, resolution: ResolutionKind) -> Self {
+        Self { name, resolution }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn resolution(&self) -> &ResolutionKind {
+        &self.resolution
+    }
+
+    pub fn as_string(&self) -> String {
+        let resolution_string = match self.resolution {
+            ResolutionKind::Day => "day",
+            ResolutionKind::Week => "week",
+            ResolutionKind::Month => "month",
+            ResolutionKind::Year => "year",
+        };
+        format!("{}_{}", self.name, resolution_string)
+    }
+}
+
+impl Into<String> for ChartKey {
+    fn into(self) -> String {
+        self.as_string()
+    }
+}
+
+impl Display for ChartKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_string())
+    }
+}
+
 #[portrait::make(import(
-    crate::charts::chart::{MissingDatePolicy, ResolutionKind},
+    crate::charts::chart::{MissingDatePolicy, ResolutionKind, ChartKey},
     entity::sea_orm_active_enums::ChartType,
 ))]
 pub trait ChartProperties: Sync + Named {
+    /// Combination name + resolution must be unique for each chart
     type Resolution: Timespan;
 
     fn chart_type() -> ChartType;
     fn resolution() -> ResolutionKind {
         Self::Resolution::enum_variant()
     }
+
+    /// Expected but not guaranteed to be unique for each chart
+    fn key() -> ChartKey {
+        ChartKey {
+            name: Self::name(),
+            resolution: Self::resolution(),
+        }
+    }
+
     fn missing_date_policy() -> MissingDatePolicy {
         MissingDatePolicy::FillZero
     }
@@ -132,6 +208,8 @@ macro_rules! delegated_property_with_resolution {
 /// Helpful when need a unified type for different charts
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChartPropertiesObject {
+    /// unique identifier of the chart
+    pub key: ChartKey,
     pub name: String,
     pub chart_type: ChartType,
     pub resolution: ResolutionKind,
@@ -142,6 +220,7 @@ pub struct ChartPropertiesObject {
 impl ChartPropertiesObject {
     pub fn construct_from_chart<T: ChartProperties>() -> Self {
         Self {
+            key: T::key(),
             name: T::name(),
             chart_type: T::chart_type(),
             resolution: T::resolution(),

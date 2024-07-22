@@ -165,7 +165,7 @@ where
         cx: &UpdateContext<'_>,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<(), UpdateError> {
-        let metadata = get_chart_metadata(cx.db, &ChartProps::name()).await?;
+        let metadata = get_chart_metadata(cx.db, &ChartProps::key()).await?;
         if let Some(last_updated_at) = metadata.last_updated_at {
             if postgres_timestamps_eq(cx.time, last_updated_at) {
                 // no need to perform update.
@@ -245,7 +245,7 @@ where
     type Output = Query::Output;
 
     fn mutex_id() -> Option<String> {
-        Some(ChartProps::name())
+        Some(ChartProps::key().into())
     }
 
     async fn init_itself(db: &DatabaseConnection, init_time: &DateTime<Utc>) -> Result<(), DbErr> {
@@ -461,8 +461,7 @@ mod tests {
             let current_date = current_time.date_naive();
             fill_mock_blockscout_data(&blockscout, current_date).await;
             let enabled = HashSet::from(
-                [TestedChartProps::name(), ChartDependedOnTestedProps::name()]
-                    .map(|l| l.to_owned()),
+                [TestedChartProps::key(), ChartDependedOnTestedProps::key()].map(|l| l.to_owned()),
             );
             let mutexes = TestUpdateGroup
                 .list_dependency_mutex_ids()

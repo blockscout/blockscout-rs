@@ -11,7 +11,9 @@ use async_trait::async_trait;
 use chrono::{Duration, NaiveDate, Utc};
 use proto_v1::stats_service_server::StatsService;
 use sea_orm::{DatabaseConnection, DbErr};
-use stats::{entity::sea_orm_active_enums::ChartType, MissingDatePolicy, ReadError};
+use stats::{
+    entity::sea_orm_active_enums::ChartType, ChartKey, MissingDatePolicy, ReadError, ResolutionKind,
+};
 use stats_proto::blockscout::stats::v1 as proto_v1;
 use tonic::{Request, Response, Status};
 
@@ -128,7 +130,7 @@ impl StatsService for ReadService {
         let interval_limit = Some(self.limits.request_interval_limit);
         let data = stats::get_line_chart_data(
             &self.db,
-            &request.name,
+            &ChartKey::new(request.name, ResolutionKind::Day),
             from,
             to,
             interval_limit,

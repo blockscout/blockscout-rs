@@ -16,5 +16,6 @@ pub use migration;
 pub use charts::{
     counters,
     db_interaction::read::{get_line_chart_data, get_raw_counters, ReadError},
-    lines, types, ChartProperties, ChartPropertiesObject, MissingDatePolicy, Named, UpdateError,
+    lines, types, ChartKey, ChartProperties, ChartPropertiesObject, MissingDatePolicy, Named,
+    ResolutionKind, UpdateError,
 };

@@ -10,7 +10,7 @@ use entity::chart_data;
 use rust_decimal::Decimal;
 use sea_orm::Set;
 
-use super::chart_properties_portrait::imports::ResolutionKind;
+use crate::charts::ResolutionKind;
 
 pub trait Timespan {
     /// Construct the timespan from a date within the timespan.

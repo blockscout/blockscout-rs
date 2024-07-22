@@ -178,7 +178,7 @@ async fn get_chart<C: DataSource + ChartProperties>(
 ) -> Vec<(String, String)> {
     let data = get_line_chart_data(
         db,
-        &C::name(),
+        &C::key(),
         from,
         to,
         None,

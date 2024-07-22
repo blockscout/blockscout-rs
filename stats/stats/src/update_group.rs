@@ -34,7 +34,11 @@ use sea_orm::{DatabaseConnection, DbErr};
 use thiserror::Error;
 use tokio::sync::{Mutex, MutexGuard};
 
-use crate::{charts::ChartPropertiesObject, data_source::UpdateParameters, UpdateError};
+use crate::{
+    charts::{chart_properties_portrait::imports::ChartKey, ChartPropertiesObject},
+    data_source::UpdateParameters,
+    UpdateError,
+};
 
 #[derive(Error, Debug, PartialEq)]
 #[error("Could not initialize update group: mutexes for {missing_mutexes:?} were not provided")]
@@ -66,7 +70,7 @@ pub trait UpdateGroup: core::fmt::Debug {
     /// List mutex ids of particular group member dependencies (including the member itself).
     ///
     /// `None` if `chart_name` is not a member.
-    fn dependency_mutex_ids_of(&self, chart_name: &str) -> Option<HashSet<String>>;
+    fn dependency_mutex_ids_of(&self, chart_id: &ChartKey) -> Option<HashSet<String>>;
     /// Create/init enabled charts with their dependencies (in DB) recursively.
     /// Idempotent, does nothing if the charts were previously initialized.
     ///
@@ -76,7 +80,7 @@ pub trait UpdateGroup: core::fmt::Debug {
         &self,
         db: &DatabaseConnection,
         creation_time_override: Option<chrono::DateTime<Utc>>,
-        enabled_names: &HashSet<String>,
+        enabled_charts: &HashSet<ChartKey>,
     ) -> Result<(), DbErr>;
     /// Update enabled charts and their dependencies in one go.
     ///
@@ -84,7 +88,7 @@ pub trait UpdateGroup: core::fmt::Debug {
     async fn update_charts<'a>(
         &self,
         params: UpdateParameters<'a>,
-        enabled_names: &HashSet<String>,
+        enabled_charts: &HashSet<ChartKey>,
     ) -> Result<(), UpdateError>;
 }
 
@@ -262,9 +266,9 @@ macro_rules! construct_update_group {
                 ids
             }
 
-            fn dependency_mutex_ids_of(&self, chart_name: &str) -> Option<::std::collections::HashSet<String>> {
+            fn dependency_mutex_ids_of(&self, chart_id: &$crate::charts::ChartKey) -> Option<::std::collections::HashSet<String>> {
                 $(
-                    if chart_name == <$member as $crate::Named>::name() {
+                    if chart_id == &<$member as $crate::ChartProperties>::key() {
                         return Some(<$member as $crate::data_source::DataSource>::all_dependencies_mutex_ids());
                     }
                 )*
@@ -280,11 +284,11 @@ macro_rules! construct_update_group {
                     ::chrono::DateTime<::chrono::Utc>
                 >,
                 #[allow(unused)]
-                enabled_names: &::std::collections::HashSet<String>,
+                enabled_charts: &::std::collections::HashSet<$crate::charts::ChartKey>,
             ) -> Result<(), sea_orm::DbErr> {
                 let current_time = creation_time_override.unwrap_or_else(|| ::chrono::Utc::now());
                 $(
-                    if enabled_names.contains(&<$member as $crate::Named>::name()) {
+                    if enabled_charts.contains(&<$member as $crate::ChartProperties>::key()) {
                         <$member as $crate::data_source::DataSource>::init_recursively(db, &current_time).await?;
                     }
                 )*
@@ -298,12 +302,12 @@ macro_rules! construct_update_group {
                 &self,
                 params: $crate::data_source::UpdateParameters<'a>,
                 #[allow(unused)]
-                enabled_names: &::std::collections::HashSet<String>,
+                enabled_charts: &::std::collections::HashSet<$crate::charts::ChartKey>,
             ) -> Result<(), $crate::UpdateError> {
                 let cx = $crate::data_source::UpdateContext::from_params_now_or_override(params);
                 ::tracing::Span::current().record("update_time", ::std::format!("{}",&cx.time));
                 $(
-                    if enabled_names.contains(&<$member as $crate::Named>::name()) {
+                    if enabled_charts.contains(&<$member as $crate::charts::ChartProperties>::key()) {
                         <$member as $crate::data_source::DataSource>::update_recursively(&cx).await?;
                     }
                 )*
@@ -387,20 +391,23 @@ impl SyncUpdateGroup {
     }
 
     /// See [`UpdateGroup::dependency_mutex_ids_of`]
-    pub fn dependency_mutex_ids_of(&self, chart_name: &str) -> Option<HashSet<String>> {
-        self.inner.dependency_mutex_ids_of(chart_name)
+    pub fn dependency_mutex_ids_of(
+        &self,
+        chart_id: &crate::charts::ChartKey,
+    ) -> Option<HashSet<String>> {
+        self.inner.dependency_mutex_ids_of(chart_id)
     }
 }
 
 impl SyncUpdateGroup {
     /// Ignores missing elements
-    fn joint_dependencies_of(&self, chart_names: &HashSet<String>) -> HashSet<String> {
+    fn joint_dependencies_of(&self, charts: &HashSet<ChartKey>) -> HashSet<String> {
         let mut result = HashSet::new();
-        for name in chart_names {
-            let Some(dependencies_ids) = self.inner.dependency_mutex_ids_of(name) else {
+        for id in charts {
+            let Some(dependencies_ids) = self.inner.dependency_mutex_ids_of(id) else {
                 tracing::warn!(
                     update_group=self.name(),
-                    "`dependency_mutex_ids_of` of member chart '{name}' returned `None`. Expected `Some(..)`"
+                    "`dependency_mutex_ids_of` of member chart '{id}' returned `None`. Expected `Some(..)`"
                 );
                 continue;
             };
@@ -445,13 +452,13 @@ impl SyncUpdateGroup {
     /// Returns joint mutex guard and enabled group members list
     async fn lock_enabled_dependencies(
         &self,
-        enabled_names: &HashSet<String>,
-    ) -> (Vec<MutexGuard<()>>, HashSet<String>) {
-        let members: HashSet<String> = self.list_charts().into_iter().map(|c| c.name).collect();
+        enabled_charts: &HashSet<ChartKey>,
+    ) -> (Vec<MutexGuard<()>>, HashSet<ChartKey>) {
+        let members: HashSet<ChartKey> = self.list_charts().into_iter().map(|c| c.key).collect();
         // in-place intersection
-        let enabled_members: HashSet<String> = members
+        let enabled_members: HashSet<ChartKey> = members
             .into_iter()
-            .filter(|m| enabled_names.contains(m))
+            .filter(|m| enabled_charts.contains(m))
             .collect();
         let enabled_members_with_deps = self.joint_dependencies_of(&enabled_members);
         // order is very important to prevent deadlocks
@@ -464,9 +471,9 @@ impl SyncUpdateGroup {
         &self,
         db: &DatabaseConnection,
         creation_time_override: Option<chrono::DateTime<Utc>>,
-        enabled_names: &HashSet<String>,
+        enabled_charts: &HashSet<ChartKey>,
     ) -> Result<(), UpdateError> {
-        let (_joint_guard, enabled_members) = self.lock_enabled_dependencies(enabled_names).await;
+        let (_joint_guard, enabled_members) = self.lock_enabled_dependencies(enabled_charts).await;
         self.inner
             .create_charts(db, creation_time_override, &enabled_members)
             .await
@@ -477,9 +484,9 @@ impl SyncUpdateGroup {
     pub async fn update_charts_with_mutexes<'a>(
         &self,
         params: UpdateParameters<'a>,
-        enabled_names: &HashSet<String>,
+        enabled_charts: &HashSet<ChartKey>,
     ) -> Result<(), UpdateError> {
-        let (_joint_guard, enabled_members) = self.lock_enabled_dependencies(enabled_names).await;
+        let (_joint_guard, enabled_members) = self.lock_enabled_dependencies(enabled_charts).await;
         tracing::info!(
             update_group = self.name(),
             "updating group with enabled members {:?}",

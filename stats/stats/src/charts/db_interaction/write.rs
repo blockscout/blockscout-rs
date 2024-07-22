@@ -2,20 +2,23 @@ use chrono::{DateTime, Offset, TimeZone};
 use entity::{chart_data, charts, sea_orm_active_enums::ChartType};
 use sea_orm::{prelude::*, sea_query, ConnectionTrait, Set, Unchanged};
 
+use crate::charts::ChartKey;
+
 use super::read::find_chart;
 
 pub async fn create_chart<Tz: TimeZone>(
     db: &DatabaseConnection,
-    name: String,
+    key: ChartKey,
     chart_type: ChartType,
     creation_time: &DateTime<Tz>,
 ) -> Result<(), DbErr> {
-    let id = find_chart(db, &name).await?;
+    let id = find_chart(db, &key).await?;
     if id.is_some() {
         return Ok(());
     }
     charts::Entity::insert(charts::ActiveModel {
-        name: Set(name),
+        name: Set(key.name().into()),
+        resolution: Set((*key.resolution()).into()),
         chart_type: Set(chart_type),
         created_at: Set(creation_time.with_timezone(&creation_time.offset().fix())),
         ..Default::default()

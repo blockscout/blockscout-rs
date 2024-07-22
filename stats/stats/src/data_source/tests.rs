@@ -178,8 +178,8 @@ async fn update_examples() {
     fill_mock_blockscout_data(&blockscout, current_date).await;
     let enabled = HashSet::from(
         [
-            NewContractsChartProperties::name(),
-            ContractsGrowthProperties::name(),
+            NewContractsChartProperties::key(),
+            ContractsGrowthProperties::key(),
         ]
         .map(|l| l.to_owned()),
     );

@@ -78,7 +78,7 @@ impl CreateBehaviour for Create {
         create_support_table(db).await?;
         create_chart(
             db,
-            NativeCoinHoldersGrowthProperties::name(),
+            NativeCoinHoldersGrowthProperties::key(),
             NativeCoinHoldersGrowthProperties::chart_type(),
             init_time,
         )

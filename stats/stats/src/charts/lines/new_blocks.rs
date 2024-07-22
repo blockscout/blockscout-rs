@@ -134,7 +134,7 @@ mod tests {
         NewBlocks::update_recursively(&cx).await.unwrap();
         let data = get_line_chart_data(
             &db,
-            &NewBlocks::name(),
+            &NewBlocks::key(),
             None,
             None,
             None,
@@ -170,7 +170,7 @@ mod tests {
         NewBlocks::update_recursively(&cx).await.unwrap();
         let data = get_line_chart_data(
             &db,
-            &NewBlocks::name(),
+            &NewBlocks::key(),
             None,
             None,
             None,
@@ -227,7 +227,7 @@ mod tests {
         NewBlocks::update_recursively(&cx).await.unwrap();
         let data = get_line_chart_data(
             &db,
-            &NewBlocks::name(),
+            &NewBlocks::key(),
             None,
             None,
             None,
@@ -330,7 +330,7 @@ mod tests {
         NewBlocks::update_recursively(&cx).await.unwrap();
         let data = get_line_chart_data(
             &db,
-            &NewBlocks::name(),
+            &NewBlocks::key(),
             None,
             None,
             None,

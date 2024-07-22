@@ -3,7 +3,7 @@ use std::ops::{Range, RangeInclusive};
 use chrono::{Days, NaiveDate, NaiveWeek, Weekday};
 use rust_decimal::Decimal;
 
-use crate::charts::chart_properties_portrait::imports::ResolutionKind;
+use crate::charts::ResolutionKind;
 
 use super::TimespanValue;
 
