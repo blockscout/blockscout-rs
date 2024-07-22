@@ -18,8 +18,10 @@ impl DomainName {
         let name = ens_normalize(name)?;
         let (label_name, _) = name.split_once(SEPARATOR).unwrap_or((&name, ""));
         let id = domain_id(&name, empty_label_hash);
-        let tld = Tld::from_domain_name(&name)
-            .ok_or_else(|| ProtocolError::InvalidName("empty name".into()))?;
+        let tld = Tld::from_domain_name(&name).ok_or_else(|| ProtocolError::InvalidName {
+            name: name.clone(),
+            reason: "tld not found".to_string(),
+        })?;
         Ok(Self {
             id,
             label_name: label_name.to_string(),
@@ -111,12 +113,16 @@ impl<'a> DomainNameOnProtocol<'a> {
     }
 }
 
+// TODO: implement https://docs.ens.domains/ensip/15 here
 fn ens_normalize(name: &str) -> Result<String, ProtocolError> {
     let name = name.trim().trim_matches(SEPARATOR);
     if name.is_empty() {
-        return Err(ProtocolError::InvalidName("empty name".into()));
+        return Err(ProtocolError::InvalidName {
+            name: name.to_string(),
+            reason: "empty name".to_string(),
+        });
     }
-    idna::domain_to_ascii(name).map_err(|e| ProtocolError::InvalidName(e.to_string()))
+    Ok(name.to_string())
 }
 
 #[cfg(test)]
@@ -127,7 +133,7 @@ mod tests {
     use std::str::FromStr;
 
     #[test]
-    fn creation_works() {
+    fn domain_creation_works() {
         for (name, empty_label_hash, expected_id, expected_label, expected_name) in [
             (
                 "eth",
@@ -168,6 +174,13 @@ mod tests {
                 "0xa3504cdec527495c69c760c85d5be9996252f853b91fd0df04c5b6aa2deb3347",
                 "levvv",
                 "levvv.gno",
+            ),
+            (
+                "🏴󠁧󠁢󠁥󠁮󠁧󠁿.eth",
+                None,
+                "0x64b8e43c3907b77414f712a75c9718b0082ba41490806479e22d72b640c1445c",
+                "🏴󠁧󠁢󠁥󠁮󠁧󠁿",
+                "🏴󠁧󠁢󠁥󠁮󠁧󠁿.eth",
             ),
         ] {
             let domain_name =

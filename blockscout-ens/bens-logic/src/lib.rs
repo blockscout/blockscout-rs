@@ -1,6 +1,7 @@
 pub mod blockscout;
 pub mod coin_type;
 pub mod entity;
+mod metrics;
 pub mod migrations;
 pub mod protocols;
 pub mod subgraph;

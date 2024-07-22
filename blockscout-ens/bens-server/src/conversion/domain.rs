@@ -173,7 +173,8 @@ pub fn domain_from_logic(
     chain_id: i64,
 ) -> Result<proto::Domain, ConversionError> {
     let domain = output.domain;
-    let owner = Some(address_from_str_logic(&domain.owner, chain_id)?);
+    let owner =
+        Some(address_from_str_logic(&domain.owner, chain_id)?).and_then(and_not_zero_address);
     let resolved_address = domain
         .resolved_address
         .map(|resolved_address| address_from_str_logic(&resolved_address, chain_id))

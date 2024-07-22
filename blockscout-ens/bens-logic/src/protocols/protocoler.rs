@@ -4,7 +4,7 @@ use crate::{
 };
 use alloy::primitives::{Address, B256};
 use anyhow::anyhow;
-use nonempty::NonEmpty;
+use nonempty::{nonempty, NonEmpty};
 use sea_query::{Alias, IntoTableRef, TableRef};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{collections::HashMap, sync::Arc};
@@ -208,18 +208,16 @@ impl Protocoler {
         network_id: i64,
         tld: Tld,
         maybe_filter: Option<NonEmpty<String>>,
-    ) -> Result<Vec<DeployedProtocol<'_>>, ProtocolError> {
+    ) -> Result<NonEmpty<DeployedProtocol<'_>>, ProtocolError> {
         let net_protocols = self.protocols_of_network(network_id, maybe_filter)?;
         let protocols = net_protocols
             .iter()
             .filter(|p| p.protocol.info.tld_list.contains(&tld))
             .cloned()
             .collect::<Vec<DeployedProtocol>>();
-        if protocols.is_empty() {
-            Ok(vec![net_protocols.head])
-        } else {
-            Ok(protocols)
-        }
+        let protocols =
+            NonEmpty::from_vec(protocols).unwrap_or_else(|| nonempty![net_protocols.head]);
+        Ok(protocols)
     }
 
     pub fn names_options_in_network(
@@ -228,13 +226,15 @@ impl Protocoler {
         network_id: i64,
         maybe_filter: Option<NonEmpty<String>>,
     ) -> Result<Vec<DomainNameOnProtocol>, ProtocolError> {
-        let tld = Tld::from_domain_name(name)
-            .ok_or_else(|| ProtocolError::InvalidName(name.to_string()))?;
+        let tld = Tld::from_domain_name(name).ok_or_else(|| ProtocolError::InvalidName {
+            name: name.to_string(),
+            reason: "no tld found".to_string(),
+        })?;
         let protocols = self.protocols_of_network_for_tld(network_id, tld, maybe_filter)?;
         let names_with_protocols = protocols
             .into_iter()
-            .filter_map(|p| DomainNameOnProtocol::from_str(name, p).ok())
-            .collect();
+            .map(|p| DomainNameOnProtocol::from_str(name, p))
+            .collect::<Result<_, _>>()?;
         Ok(names_with_protocols)
     }
 
@@ -247,7 +247,10 @@ impl Protocoler {
         let maybe_name = self
             .names_options_in_network(name, network_id, maybe_filter)
             .map(|mut names| names.pop())?;
-        let name = maybe_name.ok_or_else(|| ProtocolError::InvalidName(name.to_string()))?;
+        let name = maybe_name.ok_or_else(|| ProtocolError::InvalidName {
+            name: name.to_string(),
+            reason: "no protocol found".to_string(),
+        })?;
         Ok(name)
     }
 

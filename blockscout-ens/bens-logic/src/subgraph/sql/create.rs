@@ -69,7 +69,7 @@ async fn update_domain(
         r#"
         UPDATE {schema}.domain
         SET
-            resolved_address = $1,
+            resolved_address = $1
         WHERE vid = $2
         "#
     ))

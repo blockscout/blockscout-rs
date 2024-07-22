@@ -2,13 +2,13 @@ use crate::{
     coin_type::Coin,
     entity::subgraph::domain::{DetailedDomain, Domain},
     protocols::DomainNameOnProtocol,
-    subgraph::{ens::maybe_wildcard_resolution, sql},
+    subgraph::{ens::maybe_wildcard_resolution_with_cache, sql},
 };
 use sqlx::PgPool;
 use std::sync::Arc;
 use tracing::instrument;
 
-const MAX_LEVEL: usize = 10;
+const MAX_LEVEL: usize = 5;
 
 #[derive(Debug, Default)]
 pub struct SubgraphPatcher {}
@@ -35,16 +35,8 @@ impl SubgraphPatcher {
         };
         let level_is_fine = range.contains(&level);
         if protocol.info.try_offchain_resolve && level_is_fine {
-            let maybe_domain = maybe_wildcard_resolution(db, from_user).await;
-            match maybe_domain {
-                cached::Return {
-                    was_cached: true, ..
-                } => {
-                    tracing::info!(
-                        name = from_user.inner.name,
-                        "domain was cached by ram cache, skip it"
-                    );
-                }
+            let maybe_domain_cached = maybe_wildcard_resolution_with_cache(db, from_user).await;
+            match maybe_domain_cached {
                 cached::Return {
                     value: Some(domain),
                     was_cached: false,
@@ -58,8 +50,16 @@ impl SubgraphPatcher {
                     );
                     sql::create_or_update_domain(db, domain, protocol).await?;
                 }
+                cached::Return {
+                    was_cached: true, ..
+                } => {
+                    tracing::debug!(
+                        name = from_user.inner.name,
+                        "domain was cached by ram cache, skip it"
+                    );
+                }
                 cached::Return { value: None, .. } => {
-                    tracing::info!("domain not found with wildcard resolution");
+                    tracing::debug!("domain not found with wildcard resolution");
                 }
             }
         };

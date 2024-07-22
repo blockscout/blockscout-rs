@@ -24,7 +24,7 @@ pub struct DomainInfoFromCcipRead {
     ret(level = "DEBUG"),
     level = "INFO",
 )]
-pub async fn ccip_call_to_resolver(
+pub async fn call_to_resolver(
     name: &DomainNameOnProtocol<'_>,
     resolver_address: Address,
 ) -> Result<DomainInfoFromCcipRead, anyhow::Error> {
