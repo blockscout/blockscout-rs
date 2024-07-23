@@ -143,6 +143,8 @@ impl Week {
     pub fn checked_first_day(&self) -> Option<NaiveDate> {
         // Current interface of `NaiveWeek` does not provide any way
         // of idiomatic overflow handling
+        // todo: change after https://github.com/chronotope/chrono/pull/1600
+        // is released
         std::panic::catch_unwind(|| self.0.first_day()).ok()
     }
 
