@@ -1,6 +1,6 @@
 use crate::config::{
     self,
-    types::{AllCounterSettings, AllLineSettings, EnabledChartSettings, LineChartCategory},
+    types::{AllChartSettings, EnabledChartSettings, LineChartCategory},
 };
 use cron::Schedule;
 use itertools::Itertools;
@@ -55,7 +55,7 @@ fn new_set_check_duplicates<T: Hash + Eq, I: IntoIterator<Item = T>>(
 
 impl RuntimeSetup {
     pub fn new(
-        charts: config::charts::Config<AllCounterSettings, AllLineSettings>,
+        charts: config::charts::Config<AllChartSettings>,
         layout: config::layout::Config,
         update_groups: config::update_groups::Config,
     ) -> anyhow::Result<Self> {
@@ -63,11 +63,17 @@ impl RuntimeSetup {
     }
 
     fn validated_and_initialized(
-        charts: config::charts::Config<AllCounterSettings, AllLineSettings>,
+        charts: config::charts::Config<AllChartSettings>,
         layout: config::layout::Config,
         update_groups: config::update_groups::Config,
     ) -> anyhow::Result<Self> {
-        let enabled_charts_config = Self::remove_disabled_charts(charts);
+        let enabled_charts_config = Self::keep_enabled(
+            charts,
+            Self::all_members()
+                .into_iter()
+                .map(|(key, _)| key)
+                .collect(),
+        )?;
         let enabled_counters = Self::enabled_keys(enabled_charts_config.counters.clone());
         let enabled_counters = new_set_check_duplicates(enabled_counters)
             .map_err(|id| anyhow::anyhow!("encountered same id twice: {}", id))?;
@@ -130,7 +136,7 @@ impl RuntimeSetup {
             .flat_map(|(name, settings)| {
                 settings
                     .resolutions
-                    .into_enabled()
+                    .into_list()
                     .into_iter()
                     .map(move |r| ChartKey::new(name.clone(), r))
             })
@@ -173,32 +179,59 @@ impl RuntimeSetup {
         Ok(result)
     }
 
-    fn remove_disabled_charts(
-        charts: config::charts::Config<AllCounterSettings, AllLineSettings>,
-    ) -> config::charts::Config<EnabledChartSettings, EnabledChartSettings> {
+    fn keep_enabled_in_section(
+        section: BTreeMap<String, AllChartSettings>,
+        available_resolutions_for_chart: &BTreeMap<String, HashSet<ResolutionKind>>,
+    ) -> anyhow::Result<BTreeMap<String, EnabledChartSettings>> {
+        let mut enabled_section = BTreeMap::new();
+        for (id, settings) in section {
+            let enabled_settings = EnabledChartSettings::from_all(
+                settings,
+                available_resolutions_for_chart
+                    .get(&id)
+                    .unwrap_or(&HashSet::new()),
+            )
+            .map_err(|rs| {
+                anyhow::anyhow!("Some enabled resolutions are not available for chart {id}: {rs:?}")
+            })?;
+            if let Some(enabled_settings) = enabled_settings {
+                enabled_section.insert(id, enabled_settings);
+            }
+        }
+        Ok(enabled_section)
+    }
+
+    /// Keep settings for enabled & existing keys (charts + resolutions)
+    fn keep_enabled(
+        charts: config::charts::Config<AllChartSettings>,
+        all_possible_keys: HashSet<ChartKey>,
+    ) -> anyhow::Result<config::charts::Config<EnabledChartSettings>> {
+        let available_resolutions_for_chart = {
+            let mut map: BTreeMap<String, HashSet<ResolutionKind>> = BTreeMap::new();
+            for key in all_possible_keys {
+                match map.entry(key.name().to_string()) {
+                    Entry::Occupied(mut o) => {
+                        o.get_mut().insert(*key.resolution());
+                    }
+                    Entry::Vacant(v) => {
+                        v.insert(HashSet::from([*key.resolution()]));
+                    }
+                }
+            }
+            map
+        };
         // no need to filter `update_schedule` list because extra names
         // will be ignored anyway
-        let counters = charts
-            .counters
-            .into_iter()
-            .filter_map(|(id, settings)| {
-                Some((id, EnabledChartSettings::from_all_counters(settings)?))
-            })
-            .collect();
-        let lines = charts
-            .lines
-            .into_iter()
-            .filter_map(|(id, settings)| {
-                Some((id, EnabledChartSettings::from_all_lines(settings)?))
-            })
-            .collect();
-        config::charts::Config { counters, lines }
+        let counters =
+            Self::keep_enabled_in_section(charts.counters, &available_resolutions_for_chart)?;
+        let lines = Self::keep_enabled_in_section(charts.lines, &available_resolutions_for_chart)?;
+        Ok(config::charts::Config { counters, lines })
     }
 
     /// Get settings for both counters and line charts in single data structure.
     /// Assumes that config is valid.
     fn extract_united_chart_settings(
-        config: &config::charts::Config<EnabledChartSettings, EnabledChartSettings>,
+        config: &config::charts::Config<EnabledChartSettings>,
     ) -> BTreeMap<String, EnabledChartSettings> {
         config
             .counters

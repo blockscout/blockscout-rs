@@ -4,13 +4,9 @@ use anyhow::Context;
 use itertools::{Either, Itertools};
 
 use crate::config::{
-    env::{
-        self,
-        charts::{CounterSettingsOverwrite, LineSettingsOverwrite},
-        layout::LineChartCategoryOrdered,
-    },
+    env::{self, charts::ChartSettingsOverwrite, layout::LineChartCategoryOrdered},
     json,
-    types::{AllCounterSettings, AllLineSettings, CounterInfo, LineChartCategory, LineChartInfo},
+    types::{AllChartSettings, CounterInfo, LineChartCategory, LineChartInfo},
 };
 use std::collections::{btree_map::Entry, BTreeMap};
 
@@ -19,9 +15,8 @@ pub fn override_charts(
     target: &mut json::charts::Config,
     source: env::charts::Config,
 ) -> Result<(), anyhow::Error> {
-    override_counter_settings(&mut target.counters, source.counters)
-        .context("updating counters")?;
-    override_line_settings(&mut target.line_charts, source.line_charts)
+    override_charts_settings(&mut target.counters, source.counters).context("updating counters")?;
+    override_charts_settings(&mut target.line_charts, source.line_charts)
         .context("updating line categories")?;
     target.template_values.extend(source.template_values);
     Ok(())
@@ -179,24 +174,9 @@ mod override_field {
     }
 }
 
-fn override_counter_settings(
-    target: &mut BTreeMap<String, AllCounterSettings>,
-    source: BTreeMap<String, CounterSettingsOverwrite>,
-) -> Result<(), anyhow::Error> {
-    for (id, settings) in source {
-        match target.entry(id) {
-            Entry::Vacant(v) => {
-                v.insert(settings.try_into()?);
-            }
-            Entry::Occupied(mut o) => settings.apply_to(o.get_mut()),
-        }
-    }
-    Ok(())
-}
-
-fn override_line_settings(
-    target: &mut BTreeMap<String, AllLineSettings>,
-    source: BTreeMap<String, LineSettingsOverwrite>,
+fn override_charts_settings(
+    target: &mut BTreeMap<String, AllChartSettings>,
+    source: BTreeMap<String, ChartSettingsOverwrite>,
 ) -> Result<(), anyhow::Error> {
     for (id, settings) in source {
         match target.entry(id) {

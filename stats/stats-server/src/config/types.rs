@@ -1,6 +1,6 @@
 //! Common types for the configs
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 use cron::Schedule;
 use serde::{Deserialize, Serialize};
@@ -10,41 +10,69 @@ use stats_proto::blockscout::stats::v1 as proto_v1;
 
 use crate::runtime_setup::EnabledChartEntry;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// `None` means 'enable if present'
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
+pub struct ResolutionsSettings {
+    pub day: Option<bool>,
+    pub week: Option<bool>,
+    pub month: Option<bool>,
+    pub year: Option<bool>,
+}
+
+impl ResolutionsSettings {
+    fn into_enabled_field(
+        setting: Option<bool>,
+        kind: ResolutionKind,
+        available_resolutions: &HashSet<ResolutionKind>,
+    ) -> Result<bool, ResolutionKind> {
+        let is_available = available_resolutions.contains(&kind);
+        if let Some(setting) = setting {
+            if is_available {
+                Ok(setting)
+            } else {
+                Err(kind)
+            }
+        } else {
+            Ok(is_available)
+        }
+    }
+
+    pub fn into_enabled(
+        self,
+        available_resolutions: &HashSet<ResolutionKind>,
+    ) -> Result<ResolutionsEnabled, Vec<ResolutionKind>> {
+        let day = Self::into_enabled_field(self.day, ResolutionKind::Day, available_resolutions);
+        let week = Self::into_enabled_field(self.week, ResolutionKind::Week, available_resolutions);
+        let month =
+            Self::into_enabled_field(self.month, ResolutionKind::Month, available_resolutions);
+        let year = Self::into_enabled_field(self.year, ResolutionKind::Year, available_resolutions);
+        match (day, week, month, year) {
+            (Ok(day), Ok(week), Ok(month), Ok(year)) => Ok(ResolutionsEnabled {
+                day,
+                week,
+                month,
+                year,
+            }),
+            (d, w, m, y) => Err([d, w, m, y]
+                .into_iter()
+                .filter_map(|res| res.err())
+                .collect()),
+        }
+    }
+}
+
+/// `true` if the resolution is active for the chart
+#[derive(Debug, Clone)]
 pub struct ResolutionsEnabled {
-    #[serde(default = "enabled_default")]
     pub day: bool,
-    #[serde(default = "enabled_default")]
     pub week: bool,
-    #[serde(default = "enabled_default")]
     pub month: bool,
-    #[serde(default = "enabled_default")]
     pub year: bool,
 }
 
-impl Default for ResolutionsEnabled {
-    fn default() -> Self {
-        Self {
-            day: enabled_default(),
-            week: enabled_default(),
-            month: enabled_default(),
-            year: enabled_default(),
-        }
-    }
-}
-
 impl ResolutionsEnabled {
-    pub fn only_day() -> Self {
-        Self {
-            day: true,
-            week: false,
-            month: false,
-            year: false,
-        }
-    }
-
-    pub fn into_enabled(self) -> Vec<ResolutionKind> {
+    pub fn into_list(self) -> Vec<ResolutionKind> {
         [
             ResolutionKind::Day,
             ResolutionKind::Week,
@@ -53,6 +81,8 @@ impl ResolutionsEnabled {
         ]
         .into_iter()
         .filter(|res| match res {
+            // add new corresponding resolution
+            // to the array above
             ResolutionKind::Day => self.day,
             ResolutionKind::Week => self.week,
             ResolutionKind::Month => self.month,
@@ -71,33 +101,24 @@ impl ResolutionsEnabled {
     }
 }
 
-/// Includes disabled line charts
+/// Includes disabled charts
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct AllLineSettings {
-    #[serde(flatten)]
-    pub inner: AllCounterSettings,
-    #[serde(default = "ResolutionsEnabled::default")]
-    pub resolutions: ResolutionsEnabled,
-}
-
-/// Includes disabled counters. Resolutions are not supported
-/// for them (and sometimes do not make sense)
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct AllCounterSettings {
+pub struct AllChartSettings {
     #[serde(default = "enabled_default")]
     pub enabled: bool,
     pub title: String,
     pub description: String,
     pub units: Option<String>,
+    #[serde(default = "Default::default")]
+    pub resolutions: ResolutionsSettings,
 }
 
 fn enabled_default() -> bool {
     true
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct EnabledChartSettings {
     pub title: String,
     pub description: String,
@@ -106,29 +127,23 @@ pub struct EnabledChartSettings {
 }
 
 impl EnabledChartSettings {
-    pub fn from_all_lines(value: AllLineSettings) -> Option<Self> {
-        if value.inner.enabled {
-            Some(EnabledChartSettings {
-                units: value.inner.units,
-                title: value.inner.title,
-                description: value.inner.description,
-                resolutions: value.resolutions,
-            })
-        } else {
-            None
-        }
-    }
-
-    pub fn from_all_counters(value: AllCounterSettings) -> Option<Self> {
+    /// * `Ok(Some(_))` - The chart is enabled and resolutions are correct
+    /// * `Ok(None)` - The chart is disabled
+    /// * `Err(<resolutions>)` - The chart is enabled, but some enabled resolutions are
+    /// not available for this chart
+    pub fn from_all(
+        value: AllChartSettings,
+        available_resolutions: &HashSet<ResolutionKind>,
+    ) -> Result<Option<Self>, Vec<ResolutionKind>> {
         if value.enabled {
-            Some(EnabledChartSettings {
+            Ok(Some(EnabledChartSettings {
                 units: value.units,
                 title: value.title,
                 description: value.description,
-                resolutions: ResolutionsEnabled::only_day(),
-            })
+                resolutions: value.resolutions.into_enabled(&available_resolutions)?,
+            }))
         } else {
-            None
+            Ok(None)
         }
     }
 }

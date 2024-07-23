@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::config::{
     json,
-    types::{AllCounterSettings, AllLineSettings, EnabledChartSettings, LineChartInfo},
+    types::{AllChartSettings, EnabledChartSettings, LineChartInfo},
 };
 use convert_case::{Case, Casing};
 use serde::Deserialize;
@@ -18,7 +18,7 @@ impl From<LineChartInfo<EnabledChartSettings>> for proto::LineChartInfo {
             enabled_resolutions: value
                 .settings
                 .resolutions
-                .into_enabled()
+                .into_list()
                 .into_iter()
                 .map(|r| String::from(r))
                 .collect(),
@@ -27,12 +27,12 @@ impl From<LineChartInfo<EnabledChartSettings>> for proto::LineChartInfo {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct Config<CounterSettings, LineSettings> {
-    pub counters: BTreeMap<String, CounterSettings>,
-    pub lines: BTreeMap<String, LineSettings>,
+pub struct Config<ChartSettings> {
+    pub counters: BTreeMap<String, ChartSettings>,
+    pub lines: BTreeMap<String, ChartSettings>,
 }
 
-impl From<json::charts::Config> for Config<AllCounterSettings, AllLineSettings> {
+impl From<json::charts::Config> for Config<AllChartSettings> {
     fn from(value: json::charts::Config) -> Self {
         let counters = value
             .counters
