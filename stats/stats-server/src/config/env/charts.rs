@@ -210,7 +210,7 @@ mod tests {
                 line_charts: BTreeMap::from([(
                     "average_txn_fee".to_owned(),
                     ChartSettingsOverwrite {
-                        enabled: Some(true),
+                        enabled: None,
                         title: None,
                         description: None,
                         units: None,
