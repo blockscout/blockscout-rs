@@ -24,5 +24,10 @@
       "type": "NATIVE_DOMAIN_TOKEN"
     }
   ],
-  "protocol": {{ ens_protocol | json_encode() | safe }}
+  "protocol": {{ ens_protocol | json_encode() | safe }},
+  "resolved_with_wildcard": false,
+  "resolver_address": {
+        "hash": "0x4976fb03C32e5B8cfe2b6cCB31c09Ba78EBaBa41"
+  },
+  "stored_offchain": false
 }

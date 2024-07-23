@@ -57,20 +57,22 @@ async fn try_wildcard_resolution(
         return Ok(None);
     };
 
-    if let Some(found_domain) = &maybe_existing_domain {
-        let resolved_with_wildcard = found_domain.resolved_with_wildcard;
-        if !resolved_with_wildcard {
-            // we found domain that resolved by graph node already, skip it
-            return Ok(None);
-        } else {
-            // domain is resolved with wildcard and recheck time is expired, resolve it
-            tracing::info!(
-                domain_id = found_domain.id,
-                domain_name = found_domain.name,
-                "found domain with wildcard-resolution and expired check time. resolving it"
-            );
+    if let Some(domain) = &maybe_existing_domain {
+        if domain.id == from_user.inner.id {
+            if !domain.resolved_with_wildcard {
+                // we found domain that resolved by graph node already, skip it
+                return Ok(None);
+            } else {
+                // domain is resolved with wildcard, so we need to recheck it
+                tracing::info!(
+                    domain_id = domain.id,
+                    domain_name = domain.name,
+                    "found domain with wildcard-resolution, rechecking it"
+                )
+            }
         }
     };
+
     let result = ccip_read::call_to_resolver(from_user, resolver_address)
         .await
         .context("resolve using ccip call")?;
@@ -99,12 +101,7 @@ async fn any_resolver(
     // try to find resolver in db
     let maybe_domain_with_resolver = any_resolver_in_db(db, name_options.clone()).await?;
     if let Some((resolver, found_domain)) = maybe_domain_with_resolver {
-        let found_domain_is_the_same = found_domain.id == from_user.inner.id;
-        if found_domain_is_the_same {
-            Ok(Some((resolver.resolver_address, Some(found_domain))))
-        } else {
-            Ok(Some((resolver.resolver_address, None)))
-        }
+        Ok(Some((resolver.resolver_address, Some(found_domain))))
     } else if protocol.info.registry_contract.is_some() || protocol.info.network_id == 1 {
         // try to find resolver on chain.
         // if custom registry is set, we can try to find resolver in registry

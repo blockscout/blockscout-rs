@@ -42,7 +42,8 @@
           "description": "The Ethereum Name Service (ENS) is a distributed, open, and extensible naming system based on the Ethereum blockchain.",
           "icon_url": "https://i.imgur.com/GOfUwCb.jpeg",
           "docs_url": "https://docs.ens.domains/"
-        }
+        },
+        "try_offchain_resolve": true
       },
       "genome": {
         "tld_list": ["gno"],
