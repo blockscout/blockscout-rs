@@ -24,7 +24,7 @@ pub async fn create_chart<Tz: TimeZone>(
         ..Default::default()
     })
     .on_conflict(
-        sea_query::OnConflict::column(charts::Column::Name)
+        sea_query::OnConflict::columns([charts::Column::Name, charts::Column::Resolution])
             .do_nothing()
             .to_owned(),
     )
