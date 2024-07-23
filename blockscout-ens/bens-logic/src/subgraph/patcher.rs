@@ -35,33 +35,7 @@ impl SubgraphPatcher {
         };
         let level_is_fine = range.contains(&level);
         if protocol.info.try_offchain_resolve && level_is_fine {
-            let maybe_domain_cached = maybe_wildcard_resolution_with_cache(db, from_user).await;
-            match maybe_domain_cached {
-                cached::Return {
-                    value: Some(domain),
-                    was_cached: false,
-                    ..
-                } => {
-                    tracing::info!(
-                        id = domain.id,
-                        name = domain.name,
-                        vid =? domain.vid,
-                        "found domain with wildcard resolution, save it"
-                    );
-                    sql::create_or_update_domain(db, domain, protocol).await?;
-                }
-                cached::Return {
-                    was_cached: true, ..
-                } => {
-                    tracing::debug!(
-                        name = from_user.inner.name,
-                        "domain was cached by ram cache, skip it"
-                    );
-                }
-                cached::Return { value: None, .. } => {
-                    tracing::debug!("domain not found with wildcard resolution");
-                }
-            }
+            offchain_resolve(db, from_user).await?
         };
 
         Ok(())
@@ -123,6 +97,41 @@ impl SubgraphPatcher {
         );
         from_db
     }
+}
+
+async fn offchain_resolve(
+    db: &PgPool,
+    from_user: &DomainNameOnProtocol<'_>,
+) -> Result<(), anyhow::Error> {
+    let protocol = from_user.deployed_protocol.protocol;
+    let maybe_domain_cached = maybe_wildcard_resolution_with_cache(db, from_user).await;
+    match maybe_domain_cached {
+        cached::Return {
+            value: Some(domain),
+            was_cached: false,
+            ..
+        } => {
+            tracing::info!(
+                id = domain.id,
+                name = domain.name,
+                vid =? domain.vid,
+                "found domain with wildcard resolution, save it"
+            );
+            sql::create_or_update_domain(db, domain, protocol).await?;
+        }
+        cached::Return {
+            was_cached: true, ..
+        } => {
+            tracing::debug!(
+                name = from_user.inner.name,
+                "domain was cached by ram cache, skip it"
+            );
+        }
+        cached::Return { value: None, .. } => {
+            tracing::debug!("domain not found with wildcard resolution");
+        }
+    };
+    Ok(())
 }
 
 fn update_domain_name_in_background(pool: Arc<PgPool>, domain_name: DomainNameOnProtocol) {

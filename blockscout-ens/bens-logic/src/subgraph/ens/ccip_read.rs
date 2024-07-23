@@ -6,6 +6,7 @@ use alloy::{
     providers::{ProviderBuilder, RootProvider},
     transports::BoxTransport,
 };
+use alloy_ccip_read::CCIPReader;
 use anyhow::Context;
 use tracing::instrument;
 
@@ -58,9 +59,9 @@ pub async fn get_resolver(name: &DomainNameOnProtocol<'_>) -> Result<Address, an
         .context("get resolver")
 }
 
-fn reader_from_protocol(
-    d: &DeployedProtocol,
-) -> alloy_ccip_read::CCIPReader<RootProvider<BoxTransport>, CustomDomainIdGenerator> {
+type Reader = CCIPReader<RootProvider<BoxTransport>, CustomDomainIdGenerator>;
+
+fn reader_from_protocol(d: &DeployedProtocol) -> Reader {
     let domain_id_provider = CustomDomainIdGenerator::new(d.protocol.info.empty_label_hash);
 
     let provider = ProviderBuilder::new()
