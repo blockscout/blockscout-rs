@@ -40,7 +40,6 @@ use super::auxiliary::PartialCumulative;
 
 pub mod parameter_traits;
 pub mod parameters;
-pub mod resolutions;
 
 /// The source is configurable in many aspects. In particular,
 /// - dependencies

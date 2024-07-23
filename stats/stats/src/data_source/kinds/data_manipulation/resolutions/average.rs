@@ -1,5 +1,4 @@
-// todo: refactor
-
+/// Non-daily average values charts
 use std::{
     cmp::Ordering,
     marker::PhantomData,
@@ -20,16 +19,6 @@ use crate::{
     utils::exclusive_datetime_range_to_inclusive,
     UpdateError,
 };
-
-// // todo: remove?
-// pub trait AggregationBehaviour {
-//     // this chart with other resolution
-//     type ThisChart: DataSource;
-//     // other deps needed for the aggregation
-//     type ResolutionDependencies: DataSource;
-
-//     type Output: TimespanValue<Timespan = Week> + Send;
-// }
 
 /// `DailyWeight` - weight of each day in average source.
 /// I.e. if it's average over blocks, then weight is daily number of blocks.
@@ -94,6 +83,7 @@ where
     }
 }
 
+// Boundaries of resulting range - weeks that contain boundaries of date range
 fn date_range_to_weeks(range: Range<DateTime<Utc>>) -> RangeInclusive<Week> {
     let range = exclusive_datetime_range_to_inclusive(range);
     let start_week = Week::new(range.start().date_naive());
@@ -155,11 +145,11 @@ where
 }
 
 fn weekly_average_from(
-    daily_average: Vec<DateValue<f64>>,
-    day_weights: Vec<DateValue<i64>>,
+    day_average: Vec<DateValue<f64>>,
+    day_weight: Vec<DateValue<i64>>,
 ) -> Vec<WeekValue<f64>> {
     // missing points mean zero, treat them as such
-    let combined_data = zip_same_timespan(daily_average, day_weights);
+    let combined_data = zip_same_timespan(day_average, day_weight);
     let mut weekly_averages = vec![];
     let Some(mut current_week) = combined_data.first().map(|(w, _)| Week::new(*w)) else {
         return vec![];

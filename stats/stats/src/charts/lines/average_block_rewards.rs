@@ -2,10 +2,12 @@ use std::ops::Range;
 
 use crate::{
     data_source::kinds::{
-        data_manipulation::map::{MapParseTo, MapToString},
+        data_manipulation::{
+            map::{MapParseTo, MapToString},
+            resolutions::average::WeeklyAverage,
+        },
         local_db::{
             parameters::update::batching::parameters::{Batch30Days, Batch30Weeks},
-            resolutions::WeeklyAverage,
             DirectVecLocalDbChartSource,
         },
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
