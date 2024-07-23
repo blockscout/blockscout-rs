@@ -266,7 +266,7 @@ macro_rules! construct_update_group {
                 ids
             }
 
-            fn dependency_mutex_ids_of(&self, chart_id: &$crate::charts::ChartKey) -> Option<::std::collections::HashSet<String>> {
+            fn dependency_mutex_ids_of(&self, chart_id: &$crate::ChartKey) -> Option<::std::collections::HashSet<String>> {
                 $(
                     if chart_id == &<$member as $crate::ChartProperties>::key() {
                         return Some(<$member as $crate::data_source::DataSource>::all_dependencies_mutex_ids());
@@ -284,7 +284,7 @@ macro_rules! construct_update_group {
                     ::chrono::DateTime<::chrono::Utc>
                 >,
                 #[allow(unused)]
-                enabled_charts: &::std::collections::HashSet<$crate::charts::ChartKey>,
+                enabled_charts: &::std::collections::HashSet<$crate::ChartKey>,
             ) -> Result<(), sea_orm::DbErr> {
                 let current_time = creation_time_override.unwrap_or_else(|| ::chrono::Utc::now());
                 $(
@@ -302,12 +302,12 @@ macro_rules! construct_update_group {
                 &self,
                 params: $crate::data_source::UpdateParameters<'a>,
                 #[allow(unused)]
-                enabled_charts: &::std::collections::HashSet<$crate::charts::ChartKey>,
+                enabled_charts: &::std::collections::HashSet<$crate::ChartKey>,
             ) -> Result<(), $crate::UpdateError> {
                 let cx = $crate::data_source::UpdateContext::from_params_now_or_override(params);
                 ::tracing::Span::current().record("update_time", ::std::format!("{}",&cx.time));
                 $(
-                    if enabled_charts.contains(&<$member as $crate::charts::ChartProperties>::key()) {
+                    if enabled_charts.contains(&<$member as $crate::ChartProperties>::key()) {
                         <$member as $crate::data_source::DataSource>::update_recursively(&cx).await?;
                     }
                 )*
@@ -391,10 +391,7 @@ impl SyncUpdateGroup {
     }
 
     /// See [`UpdateGroup::dependency_mutex_ids_of`]
-    pub fn dependency_mutex_ids_of(
-        &self,
-        chart_id: &crate::charts::ChartKey,
-    ) -> Option<HashSet<String>> {
+    pub fn dependency_mutex_ids_of(&self, chart_id: &crate::ChartKey) -> Option<HashSet<String>> {
         self.inner.dependency_mutex_ids_of(chart_id)
     }
 }
