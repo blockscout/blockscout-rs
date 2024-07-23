@@ -504,9 +504,9 @@ mod tests {
 
     use crate::{
         counters::TotalVerifiedContracts,
+        data_source::DataSource,
         lines::{NewVerifiedContracts, VerifiedContractsGrowth},
         update_group::InitializationError,
-        Named,
     };
 
     use super::SyncUpdateGroup;
@@ -518,7 +518,7 @@ mod tests {
     #[test]
     fn new_checks_mutexes() {
         let mutexes: BTreeMap<String, Arc<Mutex<()>>> = [(
-            TotalVerifiedContracts::name().to_string(),
+            TotalVerifiedContracts::mutex_id().unwrap(),
             Arc::new(Mutex::new(())),
         )]
         .into();
@@ -538,8 +538,8 @@ mod tests {
                 .unwrap_err(),
             sorted_init_error(InitializationError {
                 missing_mutexes: vec![
-                    VerifiedContractsGrowth::name().to_string(),
-                    NewVerifiedContracts::name().to_string()
+                    VerifiedContractsGrowth::mutex_id().unwrap(),
+                    NewVerifiedContracts::mutex_id().unwrap()
                 ]
             })
         );

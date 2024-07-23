@@ -71,7 +71,6 @@ mod tests {
             point_construction::dt,
         },
         types::ExtendedTimespanValue,
-        Named,
     };
     use chrono::{NaiveDate, Utc};
     use entity::{chart_data, charts};
