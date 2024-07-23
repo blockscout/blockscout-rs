@@ -35,6 +35,15 @@ impl Default for ResolutionsEnabled {
 }
 
 impl ResolutionsEnabled {
+    pub fn only_day() -> Self {
+        Self {
+            day: true,
+            week: false,
+            month: false,
+            year: false,
+        }
+    }
+
     pub fn into_enabled(self) -> Vec<ResolutionKind> {
         [
             ResolutionKind::Day,
@@ -62,17 +71,26 @@ impl ResolutionsEnabled {
     }
 }
 
-/// Includes disabled charts
+/// Includes disabled line charts
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct AllChartSettings {
+pub struct AllLineSettings {
+    #[serde(flatten)]
+    pub inner: AllCounterSettings,
+    #[serde(default = "ResolutionsEnabled::default")]
+    pub resolutions: ResolutionsEnabled,
+}
+
+/// Includes disabled counters. Resolutions are not supported
+/// for them (and sometimes do not make sense)
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct AllCounterSettings {
     #[serde(default = "enabled_default")]
     pub enabled: bool,
     pub title: String,
     pub description: String,
     pub units: Option<String>,
-    #[serde(default = "ResolutionsEnabled::default")]
-    pub resolutions: ResolutionsEnabled,
 }
 
 fn enabled_default() -> bool {
@@ -88,13 +106,26 @@ pub struct EnabledChartSettings {
 }
 
 impl EnabledChartSettings {
-    pub fn from_all(value: AllChartSettings) -> Option<Self> {
+    pub fn from_all_lines(value: AllLineSettings) -> Option<Self> {
+        if value.inner.enabled {
+            Some(EnabledChartSettings {
+                units: value.inner.units,
+                title: value.inner.title,
+                description: value.inner.description,
+                resolutions: value.resolutions,
+            })
+        } else {
+            None
+        }
+    }
+
+    pub fn from_all_counters(value: AllCounterSettings) -> Option<Self> {
         if value.enabled {
             Some(EnabledChartSettings {
                 units: value.units,
                 title: value.title,
                 description: value.description,
-                resolutions: value.resolutions,
+                resolutions: ResolutionsEnabled::only_day(),
             })
         } else {
             None

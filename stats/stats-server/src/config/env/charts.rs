@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-use crate::config::types::{AllChartSettings, ResolutionsEnabled};
+use crate::config::types::{AllCounterSettings, AllLineSettings, ResolutionsEnabled};
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
@@ -14,30 +14,59 @@ pub struct ResolutionsEnabledOverwrite {
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
-pub struct ChartSettingsOverwrite {
+pub struct LineSettingsOverwrite {
+    #[serde(flatten)]
+    pub inner: CounterSettingsOverwrite,
+    pub resolutions: ResolutionsEnabledOverwrite,
+}
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default, deny_unknown_fields)]
+pub struct CounterSettingsOverwrite {
     pub enabled: Option<bool>,
     pub title: Option<String>,
     pub description: Option<String>,
     pub units: Option<String>,
-    pub resolutions: ResolutionsEnabledOverwrite,
 }
 
-macro_rules! overwrite_struct_fields {
-    ($target_struct:ident <- $source_struct:ident {
-        $($field_name:ident),+ $(,)?
-    }) => {
+macro_rules! overwrite_fields {
+    (
+        target: $target:expr,
+        with: $source:expr,
+        fields: {
+            $($field_name:ident),+ $(,)?
+        }
+    ) => {
         $(
-            if let Some($field_name) = $source_struct.$field_name {
-                $target_struct.$field_name = $field_name;
+            if let Some($field_name) = $source.$field_name {
+                $target.$field_name = $field_name;
             }
         )+
     };
 }
 
-impl ChartSettingsOverwrite {
-    pub fn apply_to(self, target: &mut AllChartSettings) {
-        overwrite_struct_fields!(
-            target <- self {
+impl LineSettingsOverwrite {
+    pub fn apply_to(self, target: &mut AllLineSettings) {
+        self.inner.apply_to(&mut target.inner);
+        overwrite_fields!(
+            target: target.resolutions,
+            with: self.resolutions,
+            fields: {
+                day,
+                week,
+                month,
+                year
+            }
+        );
+    }
+}
+
+impl CounterSettingsOverwrite {
+    pub fn apply_to(self, target: &mut AllCounterSettings) {
+        overwrite_fields!(
+            target: target,
+            with: self,
+            fields: {
                 enabled,
                 title,
                 description,
@@ -47,34 +76,37 @@ impl ChartSettingsOverwrite {
     }
 }
 
-impl TryFrom<ChartSettingsOverwrite> for AllChartSettings {
+impl TryFrom<LineSettingsOverwrite> for AllLineSettings {
     type Error = anyhow::Error;
 
-    fn try_from(value: ChartSettingsOverwrite) -> Result<Self, Self::Error> {
+    fn try_from(value: LineSettingsOverwrite) -> Result<Self, Self::Error> {
+        let inner: AllCounterSettings = value.inner.try_into()?;
+        let def_res = ResolutionsEnabled::default();
+        let resolutions = ResolutionsEnabled {
+            day: value.resolutions.day.unwrap_or(def_res.day),
+            week: value.resolutions.week.unwrap_or(def_res.week),
+            month: value.resolutions.month.unwrap_or(def_res.month),
+            year: value.resolutions.year.unwrap_or(def_res.year),
+        };
+        Ok(AllLineSettings { inner, resolutions })
+    }
+}
+
+impl TryFrom<CounterSettingsOverwrite> for AllCounterSettings {
+    type Error = anyhow::Error;
+
+    fn try_from(value: CounterSettingsOverwrite) -> Result<Self, Self::Error> {
         match value {
-            ChartSettingsOverwrite {
+            CounterSettingsOverwrite {
                 enabled: Some(enabled),
                 title: Some(title),
                 description: Some(description),
                 units,
-                resolutions:
-                    ResolutionsEnabledOverwrite {
-                        day: Some(day),
-                        week: Some(week),
-                        month: Some(month),
-                        year: Some(year),
-                    },
-            } => Ok(AllChartSettings {
+            } => Ok(AllCounterSettings {
                 enabled,
                 title,
                 description,
                 units,
-                resolutions: ResolutionsEnabled {
-                    day,
-                    week,
-                    month,
-                    year,
-                },
             }),
             _ => {
                 let mut missing_fields = vec![];
@@ -99,8 +131,8 @@ impl TryFrom<ChartSettingsOverwrite> for AllChartSettings {
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
-    pub counters: BTreeMap<String, ChartSettingsOverwrite>,
-    pub line_charts: BTreeMap<String, ChartSettingsOverwrite>,
+    pub counters: BTreeMap<String, CounterSettingsOverwrite>,
+    pub line_charts: BTreeMap<String, LineSettingsOverwrite>,
     pub template_values: BTreeMap<String, serde_json::Value>,
 }
 
@@ -151,11 +183,13 @@ mod tests {
                 counters: BTreeMap::new(),
                 line_charts: BTreeMap::from([(
                     "average_txn_fee".to_owned(),
-                    ChartSettingsOverwrite {
-                        enabled: None,
-                        title: None,
-                        description: Some("Some runtime-overwritten description".to_owned()),
-                        units: None,
+                    LineSettingsOverwrite {
+                        inner: CounterSettingsOverwrite {
+                            enabled: None,
+                            title: None,
+                            description: Some("Some runtime-overwritten description".to_owned()),
+                            units: None,
+                        },
                         resolutions: ResolutionsEnabledOverwrite {
                             day: None,
                             week: None,
@@ -180,11 +214,13 @@ mod tests {
                 counters: BTreeMap::new(),
                 line_charts: BTreeMap::from([(
                     "average_txn_fee".to_owned(),
-                    ChartSettingsOverwrite {
-                        enabled: Some(true),
-                        title: None,
-                        description: None,
-                        units: None,
+                    LineSettingsOverwrite {
+                        inner: CounterSettingsOverwrite {
+                            enabled: Some(true),
+                            title: None,
+                            description: None,
+                            units: None,
+                        },
                         resolutions: ResolutionsEnabledOverwrite {
                             day: None,
                             week: None,
@@ -209,11 +245,13 @@ mod tests {
                 counters: BTreeMap::new(),
                 line_charts: BTreeMap::from([(
                     "average_txn_fee".to_owned(),
-                    ChartSettingsOverwrite {
-                        enabled: None,
-                        title: None,
-                        description: None,
-                        units: None,
+                    LineSettingsOverwrite {
+                        inner: CounterSettingsOverwrite {
+                            enabled: None,
+                            title: None,
+                            description: None,
+                            units: None,
+                        },
                         resolutions: ResolutionsEnabledOverwrite {
                             day: Some(true),
                             week: None,
@@ -240,17 +278,11 @@ mod tests {
             Config {
                 counters: BTreeMap::from([(
                     "average_block_time".to_owned(),
-                    ChartSettingsOverwrite {
+                    CounterSettingsOverwrite {
                         enabled: Some(true),
                         title: None,
                         description: None,
                         units: None,
-                        resolutions: ResolutionsEnabledOverwrite {
-                            day: None,
-                            week: None,
-                            month: None,
-                            year: None,
-                        },
                     },
                 )]),
                 line_charts: BTreeMap::new(),
@@ -289,23 +321,19 @@ mod tests {
         .map(|(s1, s2)| (s1.to_owned(), s2.to_owned()))
         .into();
 
-        let expected_counter = ChartSettingsOverwrite {
+        let expected_counter = CounterSettingsOverwrite {
             enabled: Some(true),
             title: Some("Average block time".to_owned()),
             description: Some("Some description kek".to_owned()),
             units: Some("s".to_owned()),
-            resolutions: ResolutionsEnabledOverwrite {
-                day: None,
-                week: None,
-                month: None,
-                year: None,
-            },
         };
-        let expected_line_category = ChartSettingsOverwrite {
-            enabled: Some(false),
-            title: None,
-            description: Some("Some runtime-overwritten description".to_owned()),
-            units: None,
+        let expected_line_category = LineSettingsOverwrite {
+            inner: CounterSettingsOverwrite {
+                enabled: Some(false),
+                title: None,
+                description: Some("Some runtime-overwritten description".to_owned()),
+                units: None,
+            },
             resolutions: ResolutionsEnabledOverwrite {
                 day: None,
                 week: None,

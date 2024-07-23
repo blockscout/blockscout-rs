@@ -1,12 +1,13 @@
-use crate::config::types::AllChartSettings;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+
+use crate::config::types::{AllCounterSettings, AllLineSettings};
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
-    pub counters: BTreeMap<String, AllChartSettings>,
-    pub line_charts: BTreeMap<String, AllChartSettings>,
+    pub counters: BTreeMap<String, AllCounterSettings>,
+    pub line_charts: BTreeMap<String, AllLineSettings>,
     pub template_values: BTreeMap<String, serde_json::Value>,
 }
 

@@ -7,7 +7,10 @@ use anyhow::Context;
 use merge::{override_charts, override_layout, override_update_groups};
 use serde::{de::DeserializeOwned, Serialize};
 
-use super::{env, json, types::AllChartSettings};
+use super::{
+    env, json,
+    types::{AllCounterSettings, AllLineSettings},
+};
 use std::path::Path;
 
 pub mod charts;
@@ -51,7 +54,9 @@ where
     }
 }
 
-pub fn read_charts_config(path: &Path) -> Result<charts::Config<AllChartSettings>, anyhow::Error> {
+pub fn read_charts_config(
+    path: &Path,
+) -> Result<charts::Config<AllCounterSettings, AllLineSettings>, anyhow::Error> {
     let overridden_json_config = read_json_override_from_env_config::<
         json::charts::Config,
         env::charts::Config,

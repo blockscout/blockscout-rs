@@ -1,6 +1,6 @@
 use crate::config::{
     self,
-    types::{AllChartSettings, EnabledChartSettings, LineChartCategory},
+    types::{AllCounterSettings, AllLineSettings, EnabledChartSettings, LineChartCategory},
 };
 use cron::Schedule;
 use itertools::Itertools;
@@ -55,7 +55,7 @@ fn new_set_check_duplicates<T: Hash + Eq, I: IntoIterator<Item = T>>(
 
 impl RuntimeSetup {
     pub fn new(
-        charts: config::charts::Config<AllChartSettings>,
+        charts: config::charts::Config<AllCounterSettings, AllLineSettings>,
         layout: config::layout::Config,
         update_groups: config::update_groups::Config,
     ) -> anyhow::Result<Self> {
@@ -63,7 +63,7 @@ impl RuntimeSetup {
     }
 
     fn validated_and_initialized(
-        charts: config::charts::Config<AllChartSettings>,
+        charts: config::charts::Config<AllCounterSettings, AllLineSettings>,
         layout: config::layout::Config,
         update_groups: config::update_groups::Config,
     ) -> anyhow::Result<Self> {
@@ -174,19 +174,23 @@ impl RuntimeSetup {
     }
 
     fn remove_disabled_charts(
-        charts: config::charts::Config<AllChartSettings>,
-    ) -> config::charts::Config<EnabledChartSettings> {
+        charts: config::charts::Config<AllCounterSettings, AllLineSettings>,
+    ) -> config::charts::Config<EnabledChartSettings, EnabledChartSettings> {
         // no need to filter `update_schedule` list because extra names
         // will be ignored anyway
         let counters = charts
             .counters
             .into_iter()
-            .filter_map(|(id, settings)| Some((id, EnabledChartSettings::from_all(settings)?)))
+            .filter_map(|(id, settings)| {
+                Some((id, EnabledChartSettings::from_all_counters(settings)?))
+            })
             .collect();
         let lines = charts
             .lines
             .into_iter()
-            .filter_map(|(id, settings)| Some((id, EnabledChartSettings::from_all(settings)?)))
+            .filter_map(|(id, settings)| {
+                Some((id, EnabledChartSettings::from_all_lines(settings)?))
+            })
             .collect();
         config::charts::Config { counters, lines }
     }
@@ -194,7 +198,7 @@ impl RuntimeSetup {
     /// Get settings for both counters and line charts in single data structure.
     /// Assumes that config is valid.
     fn extract_united_chart_settings(
-        config: &config::charts::Config<EnabledChartSettings>,
+        config: &config::charts::Config<EnabledChartSettings, EnabledChartSettings>,
     ) -> BTreeMap<String, EnabledChartSettings> {
         config
             .counters
