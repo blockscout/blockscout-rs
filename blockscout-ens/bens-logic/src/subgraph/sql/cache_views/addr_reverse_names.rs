@@ -83,6 +83,7 @@ impl AddrReverseNamesView {
                 .expr(Expr::cust("name"))
                 .from((Alias::new(&p.subgraph_schema), Alias::new(view_table_name)))
                 .and_where(Expr::cust("reversed_domain_id = ANY($1)"))
+                .and_where(Expr::cust("resolved_address IS NOT NULL"))
                 .to_owned()
         }))
         .expect("protocols is nonempty");
