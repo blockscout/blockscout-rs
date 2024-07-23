@@ -213,11 +213,8 @@ impl SubgraphReader {
             let domain = self
                 .patcher
                 .patched_detailed_domain(self.pool.clone(), domain, &name);
-            let tokens = extract_tokens_from_domain(
-                &domain,
-                name.deployed_protocol.protocol.info.native_token_contract,
-            )
-            .map_err(|e| anyhow!("failed to extract domain tokens: {e}"))?;
+            let tokens = extract_tokens_from_domain(&domain, &name)
+                .map_err(|e| anyhow!("failed to extract domain tokens: {e}"))?;
             Ok(Some(GetDomainOutput {
                 tokens,
                 domain,
