@@ -218,6 +218,16 @@ macro_rules! delegated_property_with_resolution {
         #[portrait::fill(portrait::delegate($source_type))]
         impl $crate::charts::chart::ChartProperties for $type_name {
             type Resolution = $res;
+
+            fn resolution() -> $crate::charts::chart::ResolutionKind {
+                use $crate::charts::types::Timespan;
+
+                <Self as $crate::charts::chart::ChartProperties>::Resolution::enum_variant()
+            }
+
+            fn key() -> $crate::charts::chart::ChartKey {
+                $crate::charts::chart::ChartKey::new(Self::name(), Self::resolution())
+            }
         }
     };
 }
