@@ -70,17 +70,6 @@ impl Clone for Week {
     }
 }
 
-// todo: check if need removal
-
-// impl TryGetable for Week {
-//     fn try_get_by<I: sea_orm::ColIdx>(
-//         res: &sea_orm::QueryResult,
-//         index: I,
-//     ) -> Result<Self, sea_orm::TryGetError> {
-//         NaiveDate::try_get_by(res, index).map(|d| Week::new(d))
-//     }
-// }
-
 impl super::Timespan for Week {
     fn from_date(date: NaiveDate) -> Self {
         Week::new(date)

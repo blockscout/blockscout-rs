@@ -5,7 +5,7 @@ use sea_orm::{FromQueryResult, Set, TryGetable};
 
 use super::DateValue;
 
-// todo: rename type to avoid confusion
+// Separate type instead of `TimespanValue` just to derive `FromQueryResult`
 /// Internal (database) representation of data points.
 ///
 /// Intended only for reusing the implementation of `FromQueryResult` for
