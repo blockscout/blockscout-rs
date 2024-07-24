@@ -32,6 +32,7 @@ impl<'a> UpdateContext<'a> {
     }
 }
 
+// todo: assoc type
 pub trait Get<T> {
     fn get() -> T;
 }

@@ -19,7 +19,6 @@ pub fn fit_into_range<T, V>(
 ) -> Vec<TimespanValue<T, V>>
 where
     T: Timespan + Ord + Clone,
-    // for<'a> &'a T: Ord,
     V: Clone,
 {
     let trim_range = RangeInclusive::new(

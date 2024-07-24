@@ -10,11 +10,11 @@ use crate::{
         UpdateContext,
     },
     missing_date::fit_into_range,
-    types::DateValue,
+    types::{DateValue, Timespan, TimespanValue},
     ChartProperties, MissingDatePolicy, Named, UpdateError,
 };
 
-use chrono::{Duration, NaiveDate};
+use chrono::{DateTime, Duration, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
 use rand::{distributions::uniform::SampleUniform, rngs::StdRng, Rng, SeedableRng};
 use sea_orm::prelude::*;
@@ -48,14 +48,39 @@ pub fn mocked_lines<T: SampleUniform + PartialOrd + Clone + ToString>(
         .collect()
 }
 
+pub fn mock_trim_lines<T, V>(
+    data: Vec<TimespanValue<T, V>>,
+    query_time: DateTime<Utc>,
+    query_range: Option<Range<DateTimeUtc>>,
+    policy: MissingDatePolicy,
+) -> Vec<TimespanValue<T, V>>
+where
+    T: Timespan + Ord + Clone,
+    V: Clone,
+{
+    let date_range_start = query_range
+        .clone()
+        .map(|r| T::from_date(r.start.date_naive()));
+    let mut date_range_end = query_time;
+    if let Some(r) = query_range {
+        date_range_end = date_range_end.min(r.end)
+    }
+    fit_into_range(
+        data,
+        date_range_start,
+        Some(T::from_date(date_range_end.date_naive())),
+        policy,
+    )
+}
+
 /// Mock remote source. Can only return values from `mocked_lines`, but respects query time
 /// to not include future data.
-pub struct MockLineRetrieve<DateRange, ValueRange, Value, Policy>(
+pub struct PseudoRandomMockLineRetrieve<DateRange, ValueRange, Value, Policy>(
     PhantomData<(DateRange, ValueRange, Value, Policy)>,
 );
 
 impl<DateRange, ValueRange, Value, Policy> RemoteQueryBehaviour
-    for MockLineRetrieve<DateRange, ValueRange, Value, Policy>
+    for PseudoRandomMockLineRetrieve<DateRange, ValueRange, Value, Policy>
 where
     DateRange: Get<Range<NaiveDate>>,
     ValueRange: Get<Range<Value>>,
@@ -68,24 +93,8 @@ where
         cx: &UpdateContext<'_>,
         range: Option<Range<DateTimeUtc>>,
     ) -> Result<Vec<DateValue<String>>, UpdateError> {
-        let date_range_start = if let Some(r) = range.clone() {
-            r.start
-        } else {
-            DateTimeUtc::MIN_UTC
-        };
-        let mut date_range_end = cx.time;
-        if let Some(r) = range {
-            date_range_end = date_range_end.min(r.end)
-        }
         let full_data = mocked_lines(DateRange::get(), ValueRange::get());
-        let data = fit_into_range(
-            full_data,
-            Some(date_range_start.date_naive()),
-            Some(date_range_end.date_naive()),
-            Policy::get(),
-        );
-
-        Ok(data)
+        Ok(mock_trim_lines(full_data, cx.time, range, Policy::get()))
     }
 }
 
@@ -109,11 +118,31 @@ where
     }
 }
 
-pub type MockRetrieve<DateRange, ValueRange, Value, Policy> =
-    RemoteDatabaseSource<MockLineRetrieve<DateRange, ValueRange, Value, Policy>>;
+pub type PseudoRandomMockRetrieve<DateRange, ValueRange, Value, Policy> =
+    RemoteDatabaseSource<PseudoRandomMockLineRetrieve<DateRange, ValueRange, Value, Policy>>;
 
-pub type MockLine<DateRange, ValueRange, Value, Policy> = DirectVecLocalDbChartSource<
-    MockRetrieve<DateRange, ValueRange, Value, Policy>,
+pub type PseudoRandomMockLine<DateRange, ValueRange, Value, Policy> = DirectVecLocalDbChartSource<
+    PseudoRandomMockRetrieve<DateRange, ValueRange, Value, Policy>,
     Batch30Days,
     MockLineProperties<Value, Policy>,
 >;
+
+pub struct PredefinedMockSource<Data, Policy, T, V>(PhantomData<(Data, Policy, T, V)>);
+
+impl<Data, Policy, T, V> RemoteQueryBehaviour for PredefinedMockSource<Data, Policy, T, V>
+where
+    Data: Get<Vec<TimespanValue<T, V>>>,
+    Policy: Get<MissingDatePolicy>,
+    TimespanValue<T, V>: Send,
+    T: Timespan + Ord + Clone,
+    V: Clone,
+{
+    type Output = Vec<TimespanValue<T, V>>;
+
+    async fn query_data(
+        cx: &UpdateContext<'_>,
+        range: Option<Range<DateTimeUtc>>,
+    ) -> Result<Self::Output, UpdateError> {
+        Ok(mock_trim_lines(Data::get(), cx.time, range, Policy::get()))
+    }
+}

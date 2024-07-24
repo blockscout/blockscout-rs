@@ -183,7 +183,7 @@ mod tests {
     use crate::{
         data_source::kinds::data_manipulation::map::MapParseTo,
         gettable_const,
-        lines::MockRetrieve,
+        lines::PseudoRandomMockRetrieve,
         tests::point_construction::{d, dt, v, v_double, v_int, week_of, week_v_double},
         MissingDatePolicy,
     };
@@ -298,8 +298,8 @@ mod tests {
         gettable_const!(Policy: MissingDatePolicy = MissingDatePolicy::FillZero);
 
         type TestedAverageSource = WeeklyAverage<
-            MapParseTo<MockRetrieve<Dates, RandomAveragesRange, f64, Policy>, f64>,
-            MapParseTo<MockRetrieve<Dates, RandomWeightsRange, u64, Policy>, i64>,
+            MapParseTo<PseudoRandomMockRetrieve<Dates, RandomAveragesRange, f64, Policy>, f64>,
+            MapParseTo<PseudoRandomMockRetrieve<Dates, RandomWeightsRange, u64, Policy>, i64>,
         >;
 
         // weeks for this month are
