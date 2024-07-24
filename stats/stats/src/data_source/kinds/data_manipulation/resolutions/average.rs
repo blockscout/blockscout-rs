@@ -1,9 +1,5 @@
 /// Non-daily average values charts
-use std::{
-    cmp::Ordering,
-    marker::PhantomData,
-    ops::{Range, RangeInclusive},
-};
+use std::{cmp::Ordering, marker::PhantomData, ops::Range};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Utc};
@@ -14,11 +10,12 @@ use crate::{
     data_source::{DataSource, UpdateContext},
     types::{
         week::{Week, WeekValue},
-        DateValue, Timespan, TimespanValue,
+        DateValue, TimespanValue,
     },
-    utils::exclusive_datetime_range_to_inclusive,
     UpdateError,
 };
+
+use super::extend_to_timespan_boundaries;
 
 /// `DailyWeight` - weight of each day in average source.
 /// I.e. if it's average over blocks, then weight is daily number of blocks.
@@ -41,6 +38,7 @@ where
     type Output = Vec<WeekValue<f64>>;
 
     fn mutex_id() -> Option<String> {
+        // just an adapter
         None
     }
 
@@ -62,15 +60,7 @@ where
         range: Option<Range<DateTimeUtc>>,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<Self::Output, UpdateError> {
-        let week_range = range.map(date_range_to_weeks);
-        let time_range_for_weeks = week_range.map(|w| {
-            // start of week containing range start
-            let start = w.start().start_timestamp();
-            // start of week following range end (exclusive range again)
-            let week_after_range = w.end().saturating_next_week();
-            let end = week_after_range.start_timestamp();
-            start..end
-        });
+        let time_range_for_weeks = range.map(extend_to_timespan_boundaries::<Week>);
         let daily_averages = DailyAverage::query_data(
             cx,
             time_range_for_weeks.clone(),
@@ -81,14 +71,6 @@ where
             DailyWeight::query_data(cx, time_range_for_weeks, dependency_data_fetch_timer).await?;
         Ok(weekly_average_from(daily_averages, weights))
     }
-}
-
-// Boundaries of resulting range - weeks that contain boundaries of date range
-fn date_range_to_weeks(range: Range<DateTime<Utc>>) -> RangeInclusive<Week> {
-    let range = exclusive_datetime_range_to_inclusive(range);
-    let start_week = Week::new(range.start().date_naive());
-    let end_week = Week::new(range.end().date_naive());
-    start_week..=end_week
 }
 
 /// "zip" two sorted date/value vectors, combining
@@ -223,56 +205,6 @@ mod tests {
     use chrono::NaiveDate;
     use itertools::Itertools;
     use pretty_assertions::assert_eq;
-
-    #[test]
-    fn date_range_to_weeks_works() {
-        // weeks for this month are
-        // 8-14, 15-21, 22-28
-
-        assert_eq!(
-            date_range_to_weeks(
-                dt("2024-07-08T09:00:00").and_utc()..dt("2024-07-14T09:00:00").and_utc()
-            ),
-            week_of("2024-07-08")..=week_of("2024-07-08")
-        );
-        assert_eq!(
-            date_range_to_weeks(
-                dt("2024-07-08T09:00:00").and_utc()..dt("2024-07-14T23:59:59").and_utc()
-            ),
-            week_of("2024-07-08")..=week_of("2024-07-08")
-        );
-        assert_eq!(
-            date_range_to_weeks(
-                dt("2024-07-08T09:00:00").and_utc()..dt("2024-07-15T00:00:00").and_utc()
-            ),
-            week_of("2024-07-08")..=week_of("2024-07-08")
-        );
-        assert_eq!(
-            date_range_to_weeks(
-                dt("1995-12-31T09:00:00").and_utc()..dt("1995-12-31T23:59:60").and_utc()
-            ),
-            week_of("1995-12-31")..=week_of("1995-12-31")
-        );
-        assert_eq!(
-            date_range_to_weeks(
-                dt("1995-12-31T09:00:00").and_utc()..dt("1996-01-01T00:00:00").and_utc()
-            ),
-            week_of("1995-12-31")..=week_of("1995-12-31")
-        );
-
-        assert_eq!(
-            date_range_to_weeks(
-                dt("2024-07-08T09:00:00").and_utc()..dt("2024-07-15T00:00:01").and_utc()
-            ),
-            week_of("2024-07-08")..=week_of("2024-07-15")
-        );
-        assert_eq!(
-            date_range_to_weeks(
-                dt("1995-12-31T09:00:00").and_utc()..dt("1996-01-01T00:00:01").and_utc()
-            ),
-            week_of("1995-12-31")..=week_of("1996-01-01")
-        );
-    }
 
     #[test]
     fn zip_same_timespan_works() {
