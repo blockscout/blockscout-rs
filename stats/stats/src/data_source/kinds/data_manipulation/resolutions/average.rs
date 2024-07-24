@@ -3,14 +3,16 @@ use std::{cmp::Ordering, marker::PhantomData, ops::Range};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Utc};
-use itertools::EitherOrBoth;
+use itertools::{EitherOrBoth, Itertools};
 use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
 
 use crate::{
-    data_source::{DataSource, UpdateContext},
+    data_source::{
+        kinds::data_manipulation::resolutions::reduce_each_timespan, DataSource, UpdateContext,
+    },
     types::{
         week::{Week, WeekValue},
-        DateValue, TimespanValue,
+        DateValue, Timespan, TimespanValue,
     },
     UpdateError,
 };
@@ -132,62 +134,48 @@ fn weekly_average_from(
 ) -> Vec<WeekValue<f64>> {
     // missing points mean zero, treat them as such
     let combined_data = zip_same_timespan(day_average, day_weight);
-    let mut weekly_averages = vec![];
-    let Some(mut current_week) = combined_data.first().map(|(w, _)| Week::new(*w)) else {
-        return vec![];
-    };
-    let mut weight_times_avg_sum = 0f64;
-    let mut total_weight = 0;
-
-    fn push_weekly_average(
-        averages: &mut Vec<WeekValue<f64>>,
-        week: Week,
-        weight_times_avg_sum: &mut f64,
-        total_weight: &mut i64,
-    ) {
-        let value = *weight_times_avg_sum / *total_weight as f64;
-        averages.push(WeekValue::<f64> {
-            timespan: week,
-            value,
-        });
-        *weight_times_avg_sum = 0.0;
-        *total_weight = 0;
-    }
-
-    for (date, values) in combined_data {
-        if current_week != Week::new(date) {
-            push_weekly_average(
-                &mut weekly_averages,
-                current_week,
-                &mut weight_times_avg_sum,
-                &mut total_weight,
-            );
-            current_week = Week::new(date);
-        }
-        match values {
-            EitherOrBoth::Both(avg, weight) => {
-                weight_times_avg_sum += avg * weight as f64;
-                total_weight += weight;
+    let weekly_averages = reduce_each_timespan(
+        combined_data,
+        |(date, _)| Week::from_date(date.clone()),
+        |week_data| {
+            let Some((first_date, _)) = week_data.first() else {
+                return None;
+            };
+            let current_week = Week::new(first_date.clone());
+            let mut weight_times_avg_sum = 0f64;
+            let mut total_weight = 0;
+            for (date, values) in week_data {
+                debug_assert_eq!(
+                    current_week,
+                    Week::from_date(date),
+                    "must've returned only data within current week ({:?}); got {}",
+                    current_week,
+                    date
+                );
+                match values {
+                    EitherOrBoth::Both(avg, weight) => {
+                        weight_times_avg_sum += avg * weight as f64;
+                        total_weight += weight;
+                    }
+                    EitherOrBoth::Left(v) => tracing::warn!(
+                        value = v,
+                        "average value for date {} is present while weight is not",
+                        date
+                    ),
+                    EitherOrBoth::Right(v) => tracing::warn!(
+                        value = v,
+                        "weight for date {} is present average value is not",
+                        date
+                    ),
+                }
             }
-            EitherOrBoth::Left(v) => tracing::warn!(
-                value = v,
-                "average value for date {} is present while weight is not",
-                date
-            ),
-            EitherOrBoth::Right(v) => tracing::warn!(
-                value = v,
-                "weight for date {} is present average value is not",
-                date
-            ),
-        }
-    }
-    push_weekly_average(
-        &mut weekly_averages,
-        current_week,
-        &mut weight_times_avg_sum,
-        &mut total_weight,
+            Some(TimespanValue {
+                timespan: current_week,
+                value: weight_times_avg_sum / total_weight as f64,
+            })
+        },
     );
-    weekly_averages
+    weekly_averages.into_iter().filter_map(|x| x).collect_vec()
 }
 
 #[cfg(test)]

@@ -88,7 +88,7 @@ pub type AverageBlockRewardsWeekly = DirectVecLocalDbChartSource<
 #[cfg(test)]
 mod tests {
     use super::{AverageBlockRewards, AverageBlockRewardsWeekly};
-    use crate::{tests::simple_test::simple_test_chart, ChartProperties};
+    use crate::tests::simple_test::simple_test_chart;
 
     #[tokio::test]
     #[ignore = "needs database to run"]

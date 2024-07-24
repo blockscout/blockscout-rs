@@ -31,10 +31,47 @@ pub fn extend_to_timespan_boundaries<T: Timespan>(
     start..end
 }
 
+/// Produce vector of timespan data `LPoint` from vector of smaller timespan data `SPoint`.
+///
+/// Combine all points that fall within the `LPoint` timespan according to `reduce_timespan`.
+///
+/// `list` must be sorted (all equal timespans must be adjacent, as well as timespans
+/// mapping into the same larger timespan); otherwise the correct result is not guaranteed.
+pub fn reduce_each_timespan<SPoint, LPoint, LTimespan, R, M>(
+    list: Vec<SPoint>,
+    timespan_mapping: M,
+    reduce_timespan: R,
+) -> Vec<LPoint>
+where
+    M: Fn(&SPoint) -> LTimespan,
+    R: Fn(Vec<SPoint>) -> LPoint,
+    LTimespan: Eq,
+{
+    let mut result = vec![];
+    let mut current_l_points = vec![];
+    let Some(mut current_l) = list.first().map(&timespan_mapping) else {
+        return vec![];
+    };
+    for point in list {
+        let this_l = timespan_mapping(&point);
+        if this_l != current_l {
+            current_l = this_l;
+            let reduced = reduce_timespan(std::mem::take(&mut current_l_points));
+            result.push(reduced);
+        }
+        current_l_points.push(point);
+    }
+    if !current_l_points.is_empty() {
+        let reduced = reduce_timespan(std::mem::take(&mut current_l_points));
+        result.push(reduced);
+    }
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{
-        tests::point_construction::{dt, week_of},
+        tests::point_construction::{d, dt, week_of},
         types::week::Week,
     };
 
@@ -45,7 +82,7 @@ mod tests {
     // todo: other timespans
     #[test]
     fn date_range_to_timespan_weeks_works() {
-        // weeks for this month are
+        // weeks for this month (2024-07) are
         // 8-14, 15-21, 22-28
 
         assert_eq!(
@@ -91,5 +128,28 @@ mod tests {
             ),
             week_of("1995-12-31")..=week_of("1996-01-01")
         );
+    }
+
+    #[test]
+    fn reduce_each_timespan_works() {
+        // weeks for this month are
+        // 8-14, 15-21, 22-28
+        assert_eq!(
+            reduce_each_timespan(
+                vec![
+                    d("2024-07-08"),
+                    d("2024-07-09"),
+                    d("2024-07-13"),
+                    d("2024-07-15"),
+                    d("2024-07-21"),
+                ],
+                |d| Week::from_date(*d),
+                |a| a
+            ),
+            vec![
+                vec![d("2024-07-08"), d("2024-07-09"), d("2024-07-13"),],
+                vec![d("2024-07-15"), d("2024-07-21"),]
+            ]
+        )
     }
 }
