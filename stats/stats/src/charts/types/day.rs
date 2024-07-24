@@ -2,7 +2,10 @@ use chrono::{Days, NaiveDate};
 
 use sea_orm::{prelude::*, FromQueryResult, TryGetable};
 
-use crate::{charts::chart_properties_portrait::imports::ResolutionKind, utils::day_start};
+use crate::{
+    charts::chart_properties_portrait::imports::ResolutionKind, impl_into_string_timespan_value,
+    utils::day_start,
+};
 
 use super::{db::DbDateValue, TimespanValue};
 
@@ -58,22 +61,6 @@ impl super::Timespan for NaiveDate {
     }
 }
 
-//todo: remove???
-
-/// Implement non-string date-value type
-macro_rules! impl_into_string_date_value {
-    ($impl_for:ty) => {
-        impl From<$impl_for> for DateValue<String> {
-            fn from(value: $impl_for) -> Self {
-                Self {
-                    timespan: value.timespan,
-                    value: value.value.to_string(),
-                }
-            }
-        }
-    };
-}
-
-impl_into_string_date_value!(DateValue<i64>);
-impl_into_string_date_value!(DateValue<f64>);
-impl_into_string_date_value!(DateValue<Decimal>);
+impl_into_string_timespan_value!(NaiveDate, i64);
+impl_into_string_timespan_value!(NaiveDate, f64);
+impl_into_string_timespan_value!(NaiveDate, Decimal);

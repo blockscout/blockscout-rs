@@ -3,7 +3,7 @@ use std::ops::{Range, RangeInclusive};
 use chrono::{Days, NaiveDate, NaiveWeek, Weekday};
 use rust_decimal::Decimal;
 
-use crate::charts::ResolutionKind;
+use crate::{charts::ResolutionKind, impl_into_string_timespan_value};
 
 use super::TimespanValue;
 
@@ -213,25 +213,9 @@ impl Iterator for WeekRangeIterator {
 
 pub type WeekValue<V> = TimespanValue<Week, V>;
 
-// todo: remove??
-
-/// Implement non-string date-value type
-macro_rules! impl_into_string_date_value {
-    ($impl_for:ty) => {
-        impl From<$impl_for> for WeekValue<String> {
-            fn from(value: $impl_for) -> Self {
-                Self {
-                    timespan: value.timespan,
-                    value: value.value.to_string(),
-                }
-            }
-        }
-    };
-}
-
-impl_into_string_date_value!(WeekValue<i64>);
-impl_into_string_date_value!(WeekValue<f64>);
-impl_into_string_date_value!(WeekValue<Decimal>);
+impl_into_string_timespan_value!(Week, i64);
+impl_into_string_timespan_value!(Week, f64);
+impl_into_string_timespan_value!(Week, Decimal);
 
 #[cfg(test)]
 mod tests {

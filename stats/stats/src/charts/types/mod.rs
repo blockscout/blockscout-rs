@@ -160,6 +160,22 @@ impl<T: Ord> ZeroTimespanValue<T> for TimespanValue<T, String> {
     }
 }
 
+#[macro_export]
+macro_rules! impl_into_string_timespan_value {
+    ($timespan:ty, $value:ty) => {
+        impl From<$crate::charts::types::TimespanValue<$timespan, $value>>
+            for $crate::charts::types::TimespanValue<$timespan, ::std::string::String>
+        {
+            fn from(value: $crate::charts::types::TimespanValue<$timespan, $value>) -> Self {
+                Self {
+                    timespan: value.timespan,
+                    value: value.value.to_string(),
+                }
+            }
+        }
+    };
+}
+
 /// Duration expressed as some timespan `T` repeated
 /// `n > 0` times
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
