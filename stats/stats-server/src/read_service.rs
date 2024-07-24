@@ -72,6 +72,15 @@ fn add_settings_to_layout(
         .collect()
 }
 
+fn convert_resolution(input: proto_v1::Resolution) -> ResolutionKind {
+    match input {
+        proto_v1::Resolution::Unspecified | proto_v1::Resolution::Day => ResolutionKind::Day,
+        proto_v1::Resolution::Week => ResolutionKind::Week,
+        proto_v1::Resolution::Month => ResolutionKind::Month,
+        proto_v1::Resolution::Year => ResolutionKind::Year,
+    }
+}
+
 #[async_trait]
 impl StatsService for ReadService {
     async fn get_counters(
@@ -128,8 +137,7 @@ impl StatsService for ReadService {
         request: Request<proto_v1::GetLineChartRequest>,
     ) -> Result<Response<proto_v1::LineChart>, Status> {
         let request = request.into_inner();
-        let resolution = ResolutionKind::decode_proto_enum(request.resolution)
-            .map_err(|n| Status::invalid_argument(format!("Incorrect resolution {n}")))?;
+        let resolution = convert_resolution(request.resolution());
         let chart_info = self
             .charts
             .charts_info

@@ -94,18 +94,6 @@ impl From<ResolutionKind> for String {
     }
 }
 
-impl ResolutionKind {
-    pub fn decode_proto_enum(value: i32) -> Result<Self, i32> {
-        match value {
-            0 => Ok(Self::Day),
-            1 => Ok(Self::Week),
-            2 => Ok(Self::Month),
-            3 => Ok(Self::Year),
-            n => Err(n),
-        }
-    }
-}
-
 pub trait Named {
     /// Name of this data source that represents its contents
     fn name() -> String;

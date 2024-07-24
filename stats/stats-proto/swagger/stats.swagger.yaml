@@ -70,11 +70,12 @@ paths:
           required: false
           type: string
           enum:
+            - RESOLUTION_UNSPECIFIED
             - DAY
             - WEEK
             - MONTH
             - YEAR
-          default: DAY
+          default: RESOLUTION_UNSPECIFIED
       tags:
         - StatsService
   /health:
@@ -213,8 +214,9 @@ definitions:
   v1Resolution:
     type: string
     enum:
+      - RESOLUTION_UNSPECIFIED
       - DAY
       - WEEK
       - MONTH
       - YEAR
-    default: DAY
+    default: RESOLUTION_UNSPECIFIED
