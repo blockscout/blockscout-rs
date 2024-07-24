@@ -178,9 +178,6 @@ definitions:
         type: array
         items:
           type: string
-        title: |-
-          todo: replace with enum when supported
-          (probably this https://github.com/blockscout/actix-prost/pull/24/files)
   v1LineChartSection:
     type: object
     properties:

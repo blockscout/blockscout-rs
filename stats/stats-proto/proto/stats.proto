@@ -50,13 +50,14 @@ message LineChart { repeated Point chart = 1; }
 
 message GetLineChartsRequest {}
 
+// todo: replace LineChartInfo::enabled_resolutions with enum when supported
+// (probably this https://github.com/blockscout/actix-prost/pull/24/files)
+
 message LineChartInfo {
   string id = 1;
   string title = 2;
   string description = 3;
   optional string units = 4;
-  // todo: replace with enum when supported
-  // (probably this https://github.com/blockscout/actix-prost/pull/24/files)
   repeated string enabled_resolutions = 5;
 }
 

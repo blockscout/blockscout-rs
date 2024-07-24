@@ -122,7 +122,7 @@ pub type ContractsGrowth =
 
 // const B: <NewContracts as DataSource>::Output = 0;
 
-// Alternatively, if we wanted to preform some custom logic on each batch step, we can do
+// Alternatively, if we wanted to preform some custom logic on each batch step, we could do
 #[allow(unused)]
 struct ContractsGrowthCustomBatchStepBehaviour;
 
@@ -138,7 +138,7 @@ impl BatchStepBehaviour<NaiveDate, Vec<DateValue<String>>, ()>
         _main_data: Vec<DateValue<String>>,
         _resolution_data: (),
     ) -> Result<usize, UpdateError> {
-        // do something
+        // do something (just an example, not intended for running)
         todo!();
         // save data
         #[allow(unreachable_code)]
