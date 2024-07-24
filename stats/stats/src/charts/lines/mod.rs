@@ -48,4 +48,4 @@ pub use txns_success_rate::TxnsSuccessRate;
 pub use verified_contracts_growth::VerifiedContractsGrowth;
 
 #[cfg(test)]
-pub use mock::{PseudoRandomMockLine, PseudoRandomMockRetrieve};
+pub use mock::{PredefinedMockSource, PseudoRandomMockLine, PseudoRandomMockRetrieve};

@@ -75,17 +75,17 @@ where
 
 /// Mock remote source. Can only return values from `mocked_lines`, but respects query time
 /// to not include future data.
-pub struct PseudoRandomMockLineRetrieve<DateRange, ValueRange, Value, Policy>(
-    PhantomData<(DateRange, ValueRange, Value, Policy)>,
+pub struct PseudoRandomMockLineRetrieve<DateRange, ValueRange, Policy>(
+    PhantomData<(DateRange, ValueRange, Policy)>,
 );
 
 impl<DateRange, ValueRange, Value, Policy> RemoteQueryBehaviour
-    for PseudoRandomMockLineRetrieve<DateRange, ValueRange, Value, Policy>
+    for PseudoRandomMockLineRetrieve<DateRange, ValueRange, Policy>
 where
-    DateRange: Get<Range<NaiveDate>>,
-    ValueRange: Get<Range<Value>>,
+    DateRange: Get<Value = Range<NaiveDate>>,
+    ValueRange: Get<Value = Range<Value>>,
     Value: SampleUniform + PartialOrd + Clone + ToString + Send + Sync + 'static,
-    Policy: Get<MissingDatePolicy>,
+    Policy: Get<Value = MissingDatePolicy>,
 {
     type Output = Vec<DateValue<String>>;
 
@@ -98,19 +98,15 @@ where
     }
 }
 
-pub struct MockLineProperties<Value, Policy>(PhantomData<(Value, Policy)>);
+pub struct MockLineProperties;
 
-impl<Value, Policy> Named for MockLineProperties<Value, Policy> {
+impl Named for MockLineProperties {
     fn name() -> String {
         "mockLine".into()
     }
 }
 
-impl<Value, Policy> ChartProperties for MockLineProperties<Value, Policy>
-where
-    Value: Sync,
-    Policy: Sync,
-{
+impl ChartProperties for MockLineProperties {
     type Resolution = NaiveDate;
 
     fn chart_type() -> ChartType {
@@ -118,21 +114,21 @@ where
     }
 }
 
-pub type PseudoRandomMockRetrieve<DateRange, ValueRange, Value, Policy> =
-    RemoteDatabaseSource<PseudoRandomMockLineRetrieve<DateRange, ValueRange, Value, Policy>>;
+pub type PseudoRandomMockRetrieve<DateRange, ValueRange, Policy> =
+    RemoteDatabaseSource<PseudoRandomMockLineRetrieve<DateRange, ValueRange, Policy>>;
 
-pub type PseudoRandomMockLine<DateRange, ValueRange, Value, Policy> = DirectVecLocalDbChartSource<
-    PseudoRandomMockRetrieve<DateRange, ValueRange, Value, Policy>,
+pub type PseudoRandomMockLine<DateRange, ValueRange, Policy> = DirectVecLocalDbChartSource<
+    PseudoRandomMockRetrieve<DateRange, ValueRange, Policy>,
     Batch30Days,
-    MockLineProperties<Value, Policy>,
+    MockLineProperties,
 >;
 
-pub struct PredefinedMockSource<Data, Policy, T, V>(PhantomData<(Data, Policy, T, V)>);
+pub struct PredefinedMockSource<Data, Policy>(PhantomData<(Data, Policy)>);
 
-impl<Data, Policy, T, V> RemoteQueryBehaviour for PredefinedMockSource<Data, Policy, T, V>
+impl<Data, Policy, T, V> RemoteQueryBehaviour for PredefinedMockSource<Data, Policy>
 where
-    Data: Get<Vec<TimespanValue<T, V>>>,
-    Policy: Get<MissingDatePolicy>,
+    Data: Get<Value = Vec<TimespanValue<T, V>>>,
+    Policy: Get<Value = MissingDatePolicy>,
     TimespanValue<T, V>: Send,
     T: Timespan + Ord + Clone,
     V: Clone,

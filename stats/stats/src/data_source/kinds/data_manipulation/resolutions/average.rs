@@ -298,8 +298,8 @@ mod tests {
         gettable_const!(Policy: MissingDatePolicy = MissingDatePolicy::FillZero);
 
         type TestedAverageSource = WeeklyAverage<
-            MapParseTo<PseudoRandomMockRetrieve<Dates, RandomAveragesRange, f64, Policy>, f64>,
-            MapParseTo<PseudoRandomMockRetrieve<Dates, RandomWeightsRange, u64, Policy>, i64>,
+            MapParseTo<PseudoRandomMockRetrieve<Dates, RandomAveragesRange, Policy>, f64>,
+            MapParseTo<PseudoRandomMockRetrieve<Dates, RandomWeightsRange, Policy>, i64>,
         >;
 
         // weeks for this month are

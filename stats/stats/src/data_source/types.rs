@@ -33,8 +33,9 @@ impl<'a> UpdateContext<'a> {
 }
 
 // todo: assoc type
-pub trait Get<T> {
-    fn get() -> T;
+pub trait Get {
+    type Value;
+    fn get() -> Self::Value;
 }
 
 /// Usage:
@@ -51,7 +52,8 @@ pub trait Get<T> {
 macro_rules! gettable_const {
     ($name:ident: $type:ty = $value:expr) => {
         pub struct $name;
-        impl $crate::data_source::types::Get<$type> for $name {
+        impl $crate::data_source::types::Get for $name {
+            type Value = $type;
             fn get() -> $type {
                 $value
             }

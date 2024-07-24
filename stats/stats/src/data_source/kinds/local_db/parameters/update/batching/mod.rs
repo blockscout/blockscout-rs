@@ -38,7 +38,7 @@ where
     MainDep: DataSource,
     ResolutionDep: DataSource,
     BatchStep: BatchStepBehaviour<ChartProps::Resolution, MainDep::Output, ResolutionDep::Output>,
-    BatchSizeUpperBound: Get<TimespanDuration<ChartProps::Resolution>>,
+    BatchSizeUpperBound: Get<Value = TimespanDuration<ChartProps::Resolution>>,
     Query: QueryBehaviour<Output = Vec<TimespanValue<ChartProps::Resolution, String>>>,
     ChartProps: ChartProperties;
 
@@ -49,7 +49,7 @@ where
     MainDep: DataSource,
     ResolutionDep: DataSource,
     BatchStep: BatchStepBehaviour<ChartProps::Resolution, MainDep::Output, ResolutionDep::Output>,
-    BatchSizeUpperBound: Get<TimespanDuration<ChartProps::Resolution>>,
+    BatchSizeUpperBound: Get<Value = TimespanDuration<ChartProps::Resolution>>,
     Query: QueryBehaviour<Output = Vec<TimespanValue<ChartProps::Resolution, String>>>,
     ChartProps: ChartProperties,
     ChartProps::Resolution: Timespan + Ord + Clone + Debug + Send,
@@ -401,8 +401,7 @@ mod tests {
         gettable_const!(ThisInputs: SharedInputsStorage = INPUTS.get_or_init(|| Arc::new(Mutex::new(vec![]))).clone());
         gettable_const!(Batch1Day: TimespanDuration<NaiveDate> = TimespanDuration::days(1));
 
-        type ThisRecordingStep =
-            RecordingPassStep<InMemoryRecorder<VecStringStepInput, ThisInputs>>;
+        type ThisRecordingStep = RecordingPassStep<InMemoryRecorder<ThisInputs>>;
         struct ThisTestChartProps;
 
         impl Named for ThisTestChartProps {

@@ -19,13 +19,13 @@ use sea_orm::prelude::DateTimeUtc;
 
 pub struct MockCounterRetrieve<PointDateTime, Value>(PhantomData<(PointDateTime, Value)>)
 where
-    PointDateTime: Get<DateTime<Utc>>,
-    Value: Get<String>;
+    PointDateTime: Get<Value = DateTime<Utc>>,
+    Value: Get<Value = String>;
 
 impl<PointDateTime, Value> RemoteQueryBehaviour for MockCounterRetrieve<PointDateTime, Value>
 where
-    PointDateTime: Get<DateTime<Utc>>,
-    Value: Get<String>,
+    PointDateTime: Get<Value = DateTime<Utc>>,
+    Value: Get<Value = String>,
 {
     type Output = DateValue<String>;
 
@@ -47,23 +47,15 @@ where
     }
 }
 
-pub struct MockCounterProperties<PointDateTime: Get<DateTime<Utc>>, Value: Get<String>>(
-    PhantomData<(PointDateTime, Value)>,
-);
+pub struct MockCounterProperties;
 
-impl<PointDateTime: Get<DateTime<Utc>>, Value: Get<String>> Named
-    for MockCounterProperties<PointDateTime, Value>
-{
+impl Named for MockCounterProperties {
     fn name() -> String {
         "mockCounter".into()
     }
 }
 
-impl<PointDateTime, Value> ChartProperties for MockCounterProperties<PointDateTime, Value>
-where
-    PointDateTime: Get<DateTime<Utc>> + Sync,
-    Value: Get<String> + Sync,
-{
+impl ChartProperties for MockCounterProperties {
     type Resolution = NaiveDate;
 
     fn chart_type() -> ChartType {
@@ -73,5 +65,5 @@ where
 
 pub type MockCounter<PointDateTime, Value> = DirectPointLocalDbChartSource<
     RemoteDatabaseSource<MockCounterRetrieve<PointDateTime, Value>>,
-    MockCounterProperties<PointDateTime, Value>,
+    MockCounterProperties,
 >;
