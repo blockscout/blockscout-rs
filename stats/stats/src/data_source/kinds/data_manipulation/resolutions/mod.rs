@@ -26,7 +26,7 @@ pub fn extend_to_timespan_boundaries<T: Timespan>(
     // start of timespan containing range start
     let start: DateTime<Utc> = timespan_range.start().start_timestamp();
     // start of timespan following range end (to get exclusive range again)
-    let timespan_after_range = timespan_range.end().next_timespan();
+    let timespan_after_range = timespan_range.end().saturating_next_timespan();
     let end = timespan_after_range.start_timestamp();
     start..end
 }

@@ -64,7 +64,7 @@ where
         let now = cx.time;
         let update_from = last_accurate_point
             .clone()
-            .map(|p| p.timespan.next_timespan());
+            .map(|p| p.timespan.saturating_next_timespan());
         let update_range_start = match update_from {
             Some(d) => d,
             None => ChartProps::Resolution::from_date(
@@ -118,7 +118,7 @@ where
     Resolution: Timespan + Clone,
     Query: QueryBehaviour<Output = Vec<TimespanValue<Resolution, String>>>,
 {
-    let previous_step_last_point_timespan = this_step_start.previous_timespan();
+    let previous_step_last_point_timespan = this_step_start.saturating_previous_timespan();
     let last_point_range_values = Query::query_data(
         cx,
         Some(previous_step_last_point_timespan.clone().into_time_range()),

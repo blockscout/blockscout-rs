@@ -142,7 +142,7 @@ where
     Resolution: Timespan + Ord,
 {
     // saturating sub/add
-    let next_after_updated_at = last_updated_at.next_timespan();
+    let next_after_updated_at = last_updated_at.saturating_next_timespan();
     let mark_from_timespan = next_after_updated_at.sub_duration(
         TimespanDuration::timespan_repeats(approximate_until_updated),
     );

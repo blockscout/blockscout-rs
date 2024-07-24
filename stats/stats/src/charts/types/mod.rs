@@ -22,9 +22,9 @@ pub trait Timespan {
     /// to store in database.
     fn into_date(self) -> NaiveDate;
     /// Get the next interval right after the current one (saturating)
-    fn next_timespan(&self) -> Self;
+    fn saturating_next_timespan(&self) -> Self;
     /// Get the interval right before the current one (saturating)
-    fn previous_timespan(&self) -> Self;
+    fn saturating_previous_timespan(&self) -> Self;
     /// Converting type into runtime enum variant
     fn enum_variant() -> ResolutionKind;
     /// Extract the start of given timespan as UTC timestamp
@@ -34,7 +34,7 @@ pub trait Timespan {
     where
         Self: Sized,
     {
-        self.start_timestamp()..self.next_timespan().start_timestamp()
+        self.start_timestamp()..self.saturating_next_timespan().start_timestamp()
     }
     fn add_duration(&self, duration: TimespanDuration<Self>) -> Self
     where

@@ -68,7 +68,7 @@ pub fn trim_out_of_range_sorted<Resolution, Value>(
         .unwrap_or_else(|i| i);
     // irrelevant tail start
     let trim_from_idx = data
-        .binary_search_by_key(&&range.end().next_timespan(), |p| &p.timespan)
+        .binary_search_by_key(&&range.end().saturating_next_timespan(), |p| &p.timespan)
         .unwrap_or_else(|i| i);
     data.truncate(trim_from_idx);
     data.drain(..keep_from_idx);
@@ -163,7 +163,7 @@ where
             None => TimespanValue::<T, V>::with_zero_value(current_timespan.clone()),
         };
         new_data.push(value);
-        current_timespan = current_timespan.next_timespan();
+        current_timespan = current_timespan.saturating_next_timespan();
     }
 
     new_data
@@ -202,7 +202,7 @@ where
                 }),
         };
         new_data.push(value);
-        current_timespan = current_timespan.next_timespan();
+        current_timespan = current_timespan.saturating_next_timespan();
     }
     new_data
 }

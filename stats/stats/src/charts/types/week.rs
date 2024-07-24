@@ -79,11 +79,11 @@ impl super::Timespan for Week {
         self.saturating_first_day()
     }
 
-    fn next_timespan(&self) -> Self {
+    fn saturating_next_timespan(&self) -> Self {
         self.saturating_next_week()
     }
 
-    fn previous_timespan(&self) -> Self {
+    fn saturating_previous_timespan(&self) -> Self {
         self.saturating_previous_week()
     }
 

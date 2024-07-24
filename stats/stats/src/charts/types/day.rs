@@ -26,12 +26,12 @@ impl super::Timespan for NaiveDate {
         self
     }
 
-    fn next_timespan(&self) -> Self {
+    fn saturating_next_timespan(&self) -> Self {
         self.checked_add_days(Days::new(1))
             .unwrap_or(NaiveDate::MAX)
     }
 
-    fn previous_timespan(&self) -> Self {
+    fn saturating_previous_timespan(&self) -> Self {
         self.checked_sub_days(Days::new(1))
             .unwrap_or(NaiveDate::MIN)
     }
