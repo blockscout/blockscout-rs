@@ -43,15 +43,15 @@ impl StatementFromRange for NewTxnsStatement {
 pub type NewTxnsRemote =
     RemoteDatabaseSource<PullAllWithAndSort<NewTxnsStatement, NaiveDate, String>>;
 
-pub struct NewTxnsProperties;
+pub struct Properties;
 
-impl Named for NewTxnsProperties {
+impl Named for Properties {
     fn name() -> String {
         "newTxns".into()
     }
 }
 
-impl ChartProperties for NewTxnsProperties {
+impl ChartProperties for Properties {
     type Resolution = NaiveDate;
 
     fn chart_type() -> ChartType {
@@ -59,7 +59,7 @@ impl ChartProperties for NewTxnsProperties {
     }
 }
 
-pub type NewTxns = DirectVecLocalDbChartSource<NewTxnsRemote, Batch30Days, NewTxnsProperties>;
+pub type NewTxns = DirectVecLocalDbChartSource<NewTxnsRemote, Batch30Days, Properties>;
 pub type NewTxnsInt = MapParseTo<NewTxns, i64>;
 
 #[cfg(test)]

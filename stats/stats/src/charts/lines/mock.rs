@@ -98,15 +98,15 @@ where
     }
 }
 
-pub struct MockLineProperties;
+pub struct Properties;
 
-impl Named for MockLineProperties {
+impl Named for Properties {
     fn name() -> String {
         "mockLine".into()
     }
 }
 
-impl ChartProperties for MockLineProperties {
+impl ChartProperties for Properties {
     type Resolution = NaiveDate;
 
     fn chart_type() -> ChartType {
@@ -120,7 +120,7 @@ pub type PseudoRandomMockRetrieve<DateRange, ValueRange, Policy> =
 pub type PseudoRandomMockLine<DateRange, ValueRange, Policy> = DirectVecLocalDbChartSource<
     PseudoRandomMockRetrieve<DateRange, ValueRange, Policy>,
     Batch30Days,
-    MockLineProperties,
+    Properties,
 >;
 
 pub struct PredefinedMockRetrieve<Data, Policy>(PhantomData<(Data, Policy)>);

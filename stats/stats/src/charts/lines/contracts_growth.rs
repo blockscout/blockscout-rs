@@ -6,15 +6,15 @@ use crate::{
 use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 
-pub struct ContractsGrowthProperties;
+pub struct Properties;
 
-impl Named for ContractsGrowthProperties {
+impl Named for Properties {
     fn name() -> String {
         "contractsGrowth".into()
     }
 }
 
-impl ChartProperties for ContractsGrowthProperties {
+impl ChartProperties for Properties {
     type Resolution = NaiveDate;
 
     fn chart_type() -> ChartType {
@@ -25,8 +25,7 @@ impl ChartProperties for ContractsGrowthProperties {
     }
 }
 
-pub type ContractsGrowth =
-    DailyCumulativeLocalDbChartSource<NewContractsInt, ContractsGrowthProperties>;
+pub type ContractsGrowth = DailyCumulativeLocalDbChartSource<NewContractsInt, Properties>;
 
 #[cfg(test)]
 mod tests {

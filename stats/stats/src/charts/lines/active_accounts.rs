@@ -44,15 +44,15 @@ impl StatementFromRange for ActiveAccountsStatement {
 pub type ActiveAccountsRemote =
     RemoteDatabaseSource<PullAllWithAndSort<ActiveAccountsStatement, NaiveDate, String>>;
 
-pub struct ActiveAccountsProperties;
+pub struct Properties;
 
-impl Named for ActiveAccountsProperties {
+impl Named for Properties {
     fn name() -> String {
         "activeAccounts".into()
     }
 }
 
-impl ChartProperties for ActiveAccountsProperties {
+impl ChartProperties for Properties {
     type Resolution = NaiveDate;
 
     fn chart_type() -> ChartType {
@@ -61,7 +61,7 @@ impl ChartProperties for ActiveAccountsProperties {
 }
 
 pub type ActiveAccounts =
-    DirectVecLocalDbChartSource<ActiveAccountsRemote, Batch30Days, ActiveAccountsProperties>;
+    DirectVecLocalDbChartSource<ActiveAccountsRemote, Batch30Days, Properties>;
 
 #[cfg(test)]
 mod tests {

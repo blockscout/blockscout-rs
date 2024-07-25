@@ -45,15 +45,15 @@ mod db_address_balances {
     impl ActiveModelBehavior for ActiveModel {}
 }
 
-pub struct NativeCoinHoldersGrowthProperties;
+pub struct Properties;
 
-impl Named for NativeCoinHoldersGrowthProperties {
+impl Named for Properties {
     fn name() -> String {
         "nativeCoinHoldersGrowth".into()
     }
 }
 
-impl ChartProperties for NativeCoinHoldersGrowthProperties {
+impl ChartProperties for Properties {
     type Resolution = NaiveDate;
 
     fn chart_type() -> ChartType {
@@ -76,13 +76,7 @@ impl CreateBehaviour for Create {
         init_time: &chrono::DateTime<Utc>,
     ) -> Result<(), DbErr> {
         create_support_table(db).await?;
-        create_chart(
-            db,
-            NativeCoinHoldersGrowthProperties::key(),
-            NativeCoinHoldersGrowthProperties::chart_type(),
-            init_time,
-        )
-        .await
+        create_chart(db, Properties::key(), Properties::chart_type(), init_time).await
     }
 }
 
@@ -115,10 +109,7 @@ pub async fn update_sequentially_with_support_table(
     min_blockscout_block: i64,
     remote_fetch_timer: &mut AggregateTimer,
 ) -> Result<(), UpdateError> {
-    tracing::info!(
-        "start sequential update for chart {}",
-        NativeCoinHoldersGrowthProperties::name()
-    );
+    tracing::info!("start sequential update for chart {}", Properties::name());
     let all_days = match last_accurate_point {
         Some(last_row) => {
             get_unique_ordered_days(cx.blockscout, Some(last_row.timespan), remote_fetch_timer)
@@ -135,7 +126,7 @@ pub async fn update_sequentially_with_support_table(
         }
     };
 
-    for days in all_days.chunks(NativeCoinHoldersGrowthProperties::step_duration_days()) {
+    for days in all_days.chunks(Properties::step_duration_days()) {
         let first = days.first();
         let last = days.last();
         tracing::info!(
@@ -218,7 +209,7 @@ where
     let all_holders = {
         // use BTreeMap to prevent address duplicates due to several queries
         let mut all_rows: BTreeMap<Vec<u8>, address_coin_balances_daily::Model> = BTreeMap::new();
-        let limit = NativeCoinHoldersGrowthProperties::max_rows_fetch_per_iteration();
+        let limit = Properties::max_rows_fetch_per_iteration();
         let mut offset = 0;
         loop {
             let rows = address_coin_balances_daily::Entity::find()
@@ -267,7 +258,7 @@ async fn create_support_table(db: &DatabaseConnection) -> Result<(), sea_orm::Db
                     balance NUMERIC(100,0) NOT NULL
                 )
                 "#,
-            NativeCoinHoldersGrowthProperties::support_table_name()
+            Properties::support_table_name()
         ),
     );
     db.execute(statement).await?;
@@ -277,10 +268,7 @@ async fn create_support_table(db: &DatabaseConnection) -> Result<(), sea_orm::Db
 async fn clear_support_table(db: &DatabaseConnection) -> Result<(), sea_orm::DbErr> {
     let statement = Statement::from_string(
         sea_orm::DatabaseBackend::Postgres,
-        format!(
-            "DELETE FROM {}",
-            NativeCoinHoldersGrowthProperties::support_table_name()
-        ),
+        format!("DELETE FROM {}", Properties::support_table_name()),
     );
     db.execute(statement).await?;
     Ok(())
@@ -291,10 +279,7 @@ where
     C: ConnectionTrait,
 {
     let count = db_address_balances::Entity::find()
-        .filter(
-            db_address_balances::Column::Balance
-                .gte(NativeCoinHoldersGrowthProperties::min_balance_for_holders()),
-        )
+        .filter(db_address_balances::Column::Balance.gte(Properties::min_balance_for_holders()))
         .count(db)
         .await?;
     Ok(count)
@@ -308,7 +293,7 @@ where
     C: ConnectionTrait,
 {
     let mut data = holders.into_iter().peekable();
-    let take = NativeCoinHoldersGrowthProperties::max_rows_insert_per_iteration();
+    let take = Properties::max_rows_insert_per_iteration();
     while data.peek().is_some() {
         let chunk: Vec<_> = data.by_ref().take(take).collect();
         db_address_balances::Entity::insert_many(chunk)
@@ -323,7 +308,7 @@ where
     Ok(())
 }
 
-impl NativeCoinHoldersGrowthProperties {
+impl Properties {
     fn support_table_name() -> String {
         db_address_balances::Entity.table_name().to_string()
     }
@@ -382,14 +367,8 @@ where
     Ok(days)
 }
 
-pub type NativeCoinHoldersGrowth = LocalDbChartSource<
-    (),
-    (),
-    Create,
-    Update,
-    DefaultQueryVec<NativeCoinHoldersGrowthProperties>,
-    NativeCoinHoldersGrowthProperties,
->;
+pub type NativeCoinHoldersGrowth =
+    LocalDbChartSource<(), (), Create, Update, DefaultQueryVec<Properties>, Properties>;
 
 pub type NativeCoinHoldersGrowthInt = MapParseTo<NativeCoinHoldersGrowth, i64>;
 

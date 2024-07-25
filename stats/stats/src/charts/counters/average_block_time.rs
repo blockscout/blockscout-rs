@@ -42,15 +42,15 @@ pub type AverageBlockTimeRemote =
 
 pub type AverageBlockTimeRemoteString = MapToString<AverageBlockTimeRemote>;
 
-pub struct AverageBlockTimeProperties;
+pub struct Properties;
 
-impl Named for AverageBlockTimeProperties {
+impl Named for Properties {
     fn name() -> String {
         "averageBlockTime".into()
     }
 }
 
-impl ChartProperties for AverageBlockTimeProperties {
+impl ChartProperties for Properties {
     type Resolution = NaiveDate;
 
     fn chart_type() -> ChartType {
@@ -61,8 +61,7 @@ impl ChartProperties for AverageBlockTimeProperties {
     }
 }
 
-pub type AverageBlockTime =
-    DirectPointLocalDbChartSource<AverageBlockTimeRemoteString, AverageBlockTimeProperties>;
+pub type AverageBlockTime = DirectPointLocalDbChartSource<AverageBlockTimeRemoteString, Properties>;
 
 #[cfg(test)]
 mod tests {

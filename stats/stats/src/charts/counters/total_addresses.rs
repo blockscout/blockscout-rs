@@ -35,15 +35,15 @@ impl StatementForOne for TotalAddressesStatement {
 pub type TotalAddressesRemote =
     RemoteDatabaseSource<PullOne<TotalAddressesStatement, NaiveDate, String>>;
 
-pub struct TotalAddressesProperties;
+pub struct Properties;
 
-impl Named for TotalAddressesProperties {
+impl Named for Properties {
     fn name() -> String {
         "totalAddresses".into()
     }
 }
 
-impl ChartProperties for TotalAddressesProperties {
+impl ChartProperties for Properties {
     type Resolution = NaiveDate;
 
     fn chart_type() -> ChartType {
@@ -54,8 +54,7 @@ impl ChartProperties for TotalAddressesProperties {
     }
 }
 
-pub type TotalAddresses =
-    DirectPointLocalDbChartSource<TotalAddressesRemote, TotalAddressesProperties>;
+pub type TotalAddresses = DirectPointLocalDbChartSource<TotalAddressesRemote, Properties>;
 
 #[cfg(test)]
 mod tests {

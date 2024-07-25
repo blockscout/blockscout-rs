@@ -53,15 +53,15 @@ impl RemoteQueryBehaviour for TotalBlocksQueryBehaviour {
 
 pub type TotalBlocksRemote = RemoteDatabaseSource<TotalBlocksQueryBehaviour>;
 
-pub struct TotalBlocksProperties;
+pub struct Properties;
 
-impl Named for TotalBlocksProperties {
+impl Named for Properties {
     fn name() -> String {
         "totalBlocks".into()
     }
 }
 
-impl ChartProperties for TotalBlocksProperties {
+impl ChartProperties for Properties {
     type Resolution = NaiveDate;
 
     fn chart_type() -> ChartType {
@@ -72,7 +72,7 @@ impl ChartProperties for TotalBlocksProperties {
     }
 }
 
-pub type TotalBlocks = DirectPointLocalDbChartSource<TotalBlocksRemote, TotalBlocksProperties>;
+pub type TotalBlocks = DirectPointLocalDbChartSource<TotalBlocksRemote, Properties>;
 
 #[cfg(test)]
 mod tests {

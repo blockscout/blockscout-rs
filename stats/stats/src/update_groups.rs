@@ -6,45 +6,154 @@ use crate::{
         TotalNativeCoinTransfers, TotalTokens, TotalTxns, TotalVerifiedContracts,
     },
     lines::{
-        AccountsGrowth, ActiveAccounts, AverageBlockRewards, AverageBlockSize, AverageGasLimit,
-        AverageGasPrice, AverageTxnFee, ContractsGrowth, GasUsedGrowth, NativeCoinHoldersGrowth,
-        NativeCoinSupply, NewAccounts, NewBlocks, NewContracts, NewNativeCoinHolders,
-        NewNativeCoinTransfers, NewTxns, NewVerifiedContracts, TxnsFee, TxnsGrowth,
-        TxnsSuccessRate, VerifiedContractsGrowth,
+        AccountsGrowth, ActiveAccounts, AverageBlockRewards, AverageBlockRewardsWeekly,
+        AverageBlockSize, AverageGasLimit, AverageGasPrice, AverageTxnFee, ContractsGrowth,
+        GasUsedGrowth, NativeCoinHoldersGrowth, NativeCoinSupply, NewAccounts, NewBlocks,
+        NewContracts, NewNativeCoinHolders, NewNativeCoinTransfers, NewTxns, NewVerifiedContracts,
+        TxnsFee, TxnsGrowth, TxnsSuccessRate, VerifiedContractsGrowth,
     },
 };
 
-macro_rules! singleton_groups {
-    ($($chart: ident),+ $(,)?) => {
-        $(
-            ::paste::paste!(
-                construct_update_group!([< $chart Group >] {
-                    charts: [$chart]
-                });
-            );
-        )+
-    };
-}
+// Active accounts is left without resolutions because the chart is non-trivial
+// to calculate somewhat-optimally
+construct_update_group!(ActiveAccountsGroup {
+    charts: [ActiveAccounts]
+});
 
-// Group for chart `Name` is called `NameGroup`
-singleton_groups!(
-    ActiveAccounts,
-    AverageBlockRewards,
-    AverageBlockSize,
-    AverageGasLimit,
-    AverageGasPrice,
-    AverageTxnFee,
-    GasUsedGrowth,
-    NativeCoinSupply,
-    NewBlocks,
-    TxnsFee,
-    TxnsSuccessRate,
-    AverageBlockTime,
-    CompletedTxns,
-    TotalAddresses,
-    TotalBlocks,
-    TotalTokens,
-);
+construct_update_group!(AverageBlockRewardsGroup {
+    charts: [
+        AverageBlockRewards,
+        AverageBlockRewardsWeekly,
+        // AverageBlockRewardsMonthly,
+        // AverageBlockRewardsYearly,
+    ]
+});
+
+construct_update_group!(AverageBlockSizeGroup {
+    charts: [
+        AverageBlockSize,
+        AverageBlockSizeWeekly,
+        // AverageBlockSizeMonthly,
+        // AverageBlockSizeYearly,
+    ]
+});
+
+construct_update_group!(AverageGasLimitGroup {
+    charts: [
+        AverageGasLimit,
+        AverageGasLimitWeekly,
+        // AverageGasLimitMonthly,
+        // AverageGasLimitYearly,
+    ]
+});
+
+construct_update_group!(AverageGasPriceGroup {
+    charts: [
+        AverageGasPrice,
+        AverageGasPriceWeekly,
+        // AverageGasPriceMonthly,
+        // AverageGasPriceYearly,
+    ]
+});
+
+construct_update_group!(AverageTxnFeeGroup {
+    charts: [
+        AverageTxnFee,
+        AverageTxnFeeWeekly,
+        // AverageTxnFeeMonthly,
+        // AverageTxnFeeYearly,
+    ]
+});
+
+construct_update_group!(GasUsedGrowthGroup {
+    charts: [
+        GasUsedGrowth,
+        GasUsedGrowthWeekly,
+        // GasUsedGrowthMonthly,
+        // GasUsedGrowthYearly,
+    ]
+});
+
+construct_update_group!(NativeCoinSupplyGroup {
+    charts: [
+        NativeCoinSupply,
+        NativeCoinSupplyWeekly,
+        // NativeCoinSupplyMonthly,
+        // NativeCoinSupplyYearly,
+    ]
+});
+
+construct_update_group!(NewBlocksGroup {
+    charts: [
+        NewBlocks,
+        NewBlocksWeekly,
+        // NewBlocksMonthly,
+        // NewBlocksYearly,
+    ]
+});
+
+construct_update_group!(TxnsFeeGroup {
+    charts: [
+        TxnsFee,
+        TxnsFeeWeekly,
+        // TxnsFeeMonthly,
+        // TxnsFeeYearly,
+    ]
+});
+
+construct_update_group!(TxnsSuccessRateGroup {
+    charts: [
+        TxnsSuccessRate,
+        TxnsSuccessRateWeekly,
+        // TxnsSuccessRateMonthly,
+        // TxnsSuccessRateYearly,
+    ]
+});
+
+construct_update_group!(AverageBlockTimeGroup {
+    charts: [
+        AverageBlockTime,
+        AverageBlockTimeWeekly,
+        // AverageBlockTimeMonthly,
+        // AverageBlockTimeYearly,
+    ]
+});
+
+construct_update_group!(CompletedTxnsGroup {
+    charts: [
+        CompletedTxns,
+        CompletedTxnsWeekly,
+        // CompletedTxnsMonthly,
+        // CompletedTxnsYearly,
+    ]
+});
+
+construct_update_group!(TotalAddressesGroup {
+    charts: [
+        TotalAddresses,
+        TotalAddressesWeekly,
+        // TotalAddressesMonthly,
+        // TotalAddressesYearly,
+    ]
+});
+
+construct_update_group!(TotalBlocksGroup {
+    charts: [
+        TotalBlocks,
+        TotalBlocksWeekly,
+        // TotalBlocksMonthly,
+        // TotalBlocksYearly,
+    ]
+});
+
+construct_update_group!(TotalTokensGroup {
+    charts: [
+        TotalTokens,
+        TotalTokensWeekly,
+        // TotalTokensMonthly,
+        // TotalTokensYearly,
+    ]
+});
 
 construct_update_group!(NewAccountsGroup {
     charts: [NewAccounts, AccountsGrowth, TotalAccounts]

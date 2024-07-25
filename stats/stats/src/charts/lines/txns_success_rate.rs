@@ -48,15 +48,15 @@ pub type TxnsSuccessRateRemote =
 
 pub type TxnsSuccessRateRemoteString = MapToString<TxnsSuccessRateRemote>;
 
-pub struct TxnsSuccessRateProperties;
+pub struct Properties;
 
-impl Named for TxnsSuccessRateProperties {
+impl Named for Properties {
     fn name() -> String {
         "txnsSuccessRate".into()
     }
 }
 
-impl ChartProperties for TxnsSuccessRateProperties {
+impl ChartProperties for Properties {
     type Resolution = NaiveDate;
 
     fn chart_type() -> ChartType {
@@ -64,11 +64,8 @@ impl ChartProperties for TxnsSuccessRateProperties {
     }
 }
 
-pub type TxnsSuccessRate = DirectVecLocalDbChartSource<
-    TxnsSuccessRateRemoteString,
-    Batch30Days,
-    TxnsSuccessRateProperties,
->;
+pub type TxnsSuccessRate =
+    DirectVecLocalDbChartSource<TxnsSuccessRateRemoteString, Batch30Days, Properties>;
 
 #[cfg(test)]
 mod tests {

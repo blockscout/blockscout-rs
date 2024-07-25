@@ -41,15 +41,15 @@ impl StatementFromRange for NewBlocksStatement {
 pub type NewBlocksRemote =
     RemoteDatabaseSource<PullAllWithAndSort<NewBlocksStatement, NaiveDate, String>>;
 
-pub struct NewBlocksProperties;
+pub struct Properties;
 
-impl Named for NewBlocksProperties {
+impl Named for Properties {
     fn name() -> String {
         "newBlocks".into()
     }
 }
 
-impl ChartProperties for NewBlocksProperties {
+impl ChartProperties for Properties {
     type Resolution = NaiveDate;
 
     fn chart_type() -> ChartType {
@@ -57,7 +57,7 @@ impl ChartProperties for NewBlocksProperties {
     }
 }
 
-pub type NewBlocks = DirectVecLocalDbChartSource<NewBlocksRemote, Batch30Days, NewBlocksProperties>;
+pub type NewBlocks = DirectVecLocalDbChartSource<NewBlocksRemote, Batch30Days, Properties>;
 
 #[cfg(test)]
 mod tests {

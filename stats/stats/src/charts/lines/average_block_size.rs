@@ -41,15 +41,15 @@ impl StatementFromRange for AverageBlockSizeStatement {
 pub type AverageBlockSizeRemote =
     RemoteDatabaseSource<PullAllWithAndSort<AverageBlockSizeStatement, NaiveDate, String>>;
 
-pub struct AverageBlockSizeProperties;
+pub struct Properties;
 
-impl Named for AverageBlockSizeProperties {
+impl Named for Properties {
     fn name() -> String {
         "averageBlockSize".into()
     }
 }
 
-impl ChartProperties for AverageBlockSizeProperties {
+impl ChartProperties for Properties {
     type Resolution = NaiveDate;
 
     fn chart_type() -> ChartType {
@@ -57,8 +57,13 @@ impl ChartProperties for AverageBlockSizeProperties {
     }
 }
 
+// delegated_property_with_resolution!(WeeklyProperties {
+//     resolution: Week,
+//     ..Properties
+// });
+
 pub type AverageBlockSize =
-    DirectVecLocalDbChartSource<AverageBlockSizeRemote, Batch30Days, AverageBlockSizeProperties>;
+    DirectVecLocalDbChartSource<AverageBlockSizeRemote, Batch30Days, Properties>;
 
 #[cfg(test)]
 mod tests {

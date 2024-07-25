@@ -40,15 +40,15 @@ impl StatementFromRange for NewVerifiedContractsStatement {
 pub type NewVerifiedContractsRemote =
     RemoteDatabaseSource<PullAllWithAndSort<NewVerifiedContractsStatement, NaiveDate, String>>;
 
-pub struct NewVerifiedContractsProperties;
+pub struct Properties;
 
-impl Named for NewVerifiedContractsProperties {
+impl Named for Properties {
     fn name() -> String {
         "newVerifiedContracts".into()
     }
 }
 
-impl ChartProperties for NewVerifiedContractsProperties {
+impl ChartProperties for Properties {
     type Resolution = NaiveDate;
 
     fn chart_type() -> ChartType {
@@ -56,11 +56,8 @@ impl ChartProperties for NewVerifiedContractsProperties {
     }
 }
 
-pub type NewVerifiedContracts = DirectVecLocalDbChartSource<
-    NewVerifiedContractsRemote,
-    Batch30Days,
-    NewVerifiedContractsProperties,
->;
+pub type NewVerifiedContracts =
+    DirectVecLocalDbChartSource<NewVerifiedContractsRemote, Batch30Days, Properties>;
 
 pub type NewVerifiedContractsInt = MapParseTo<NewVerifiedContracts, i64>;
 

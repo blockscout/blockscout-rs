@@ -13,15 +13,15 @@ use crate::{
 use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 
-pub struct NewNativeCoinHoldersProperties;
+pub struct Properties;
 
-impl Named for NewNativeCoinHoldersProperties {
+impl Named for Properties {
     fn name() -> String {
         "newNativeCoinHolders".into()
     }
 }
 
-impl ChartProperties for NewNativeCoinHoldersProperties {
+impl ChartProperties for Properties {
     type Resolution = NaiveDate;
 
     fn chart_type() -> ChartType {
@@ -32,7 +32,7 @@ impl ChartProperties for NewNativeCoinHoldersProperties {
 pub type NewNativeCoinHolders = DirectVecLocalDbChartSource<
     MapToString<Delta<NativeCoinHoldersGrowthInt>>,
     Batch30Days,
-    NewNativeCoinHoldersProperties,
+    Properties,
 >;
 
 #[cfg(test)]

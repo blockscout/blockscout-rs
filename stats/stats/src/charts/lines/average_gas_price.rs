@@ -55,15 +55,15 @@ pub type AverageGasPriceRemote =
 
 pub type AverageGasPriceRemoteString = MapToString<AverageGasPriceRemote>;
 
-pub struct AverageGasPriceProperties;
+pub struct Properties;
 
-impl Named for AverageGasPriceProperties {
+impl Named for Properties {
     fn name() -> String {
         "averageGasPrice".into()
     }
 }
 
-impl ChartProperties for AverageGasPriceProperties {
+impl ChartProperties for Properties {
     type Resolution = NaiveDate;
 
     fn chart_type() -> ChartType {
@@ -71,11 +71,8 @@ impl ChartProperties for AverageGasPriceProperties {
     }
 }
 
-pub type AverageGasPrice = DirectVecLocalDbChartSource<
-    AverageGasPriceRemoteString,
-    Batch30Days,
-    AverageGasPriceProperties,
->;
+pub type AverageGasPrice =
+    DirectVecLocalDbChartSource<AverageGasPriceRemoteString, Batch30Days, Properties>;
 
 #[cfg(test)]
 mod tests {

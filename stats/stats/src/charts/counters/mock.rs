@@ -47,15 +47,15 @@ where
     }
 }
 
-pub struct MockCounterProperties;
+pub struct Properties;
 
-impl Named for MockCounterProperties {
+impl Named for Properties {
     fn name() -> String {
         "mockCounter".into()
     }
 }
 
-impl ChartProperties for MockCounterProperties {
+impl ChartProperties for Properties {
     type Resolution = NaiveDate;
 
     fn chart_type() -> ChartType {
@@ -65,5 +65,5 @@ impl ChartProperties for MockCounterProperties {
 
 pub type MockCounter<PointDateTime, Value> = DirectPointLocalDbChartSource<
     RemoteDatabaseSource<MockCounterRetrieve<PointDateTime, Value>>,
-    MockCounterProperties,
+    Properties,
 >;

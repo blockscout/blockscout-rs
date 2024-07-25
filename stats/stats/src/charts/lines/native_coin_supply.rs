@@ -83,15 +83,15 @@ pub type NativeCoinSupplyRemote =
 
 pub type NativeCoinSupplyRemoteString = MapToString<NativeCoinSupplyRemote>;
 
-pub struct NativeCoinSupplyProperties;
+pub struct Properties;
 
-impl Named for NativeCoinSupplyProperties {
+impl Named for Properties {
     fn name() -> String {
         "nativeCoinSupply".into()
     }
 }
 
-impl ChartProperties for NativeCoinSupplyProperties {
+impl ChartProperties for Properties {
     type Resolution = NaiveDate;
 
     fn chart_type() -> ChartType {
@@ -99,11 +99,8 @@ impl ChartProperties for NativeCoinSupplyProperties {
     }
 }
 
-pub type NativeCoinSupply = DirectVecLocalDbChartSource<
-    NativeCoinSupplyRemoteString,
-    Batch30Days,
-    NativeCoinSupplyProperties,
->;
+pub type NativeCoinSupply =
+    DirectVecLocalDbChartSource<NativeCoinSupplyRemoteString, Batch30Days, Properties>;
 
 #[cfg(test)]
 mod tests {

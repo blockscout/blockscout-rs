@@ -42,15 +42,15 @@ impl RemoteQueryBehaviour for TotalContractsQueryBehaviour {
 
 pub type TotalContractsRemote = RemoteDatabaseSource<TotalContractsQueryBehaviour>;
 
-pub struct TotalContractsProperties;
+pub struct Properties;
 
-impl Named for TotalContractsProperties {
+impl Named for Properties {
     fn name() -> String {
         "totalContracts".into()
     }
 }
 
-impl ChartProperties for TotalContractsProperties {
+impl ChartProperties for Properties {
     type Resolution = NaiveDate;
 
     fn chart_type() -> ChartType {
@@ -64,8 +64,7 @@ impl ChartProperties for TotalContractsProperties {
 // todo: reconsider once #845 is solved
 // https://github.com/blockscout/blockscout-rs/issues/845
 // i.e. set dependency to LastPointChart<ContractsGrowth>
-pub type TotalContracts =
-    DirectPointLocalDbChartSource<TotalContractsRemote, TotalContractsProperties>;
+pub type TotalContracts = DirectPointLocalDbChartSource<TotalContractsRemote, Properties>;
 
 #[cfg(test)]
 mod tests {

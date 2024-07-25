@@ -49,15 +49,15 @@ pub type AverageTxnFeeRemote =
 
 pub type AverageTxnFeeRemoteString = MapToString<AverageTxnFeeRemote>;
 
-pub struct AverageTxnFeeProperties;
+pub struct Properties;
 
-impl Named for AverageTxnFeeProperties {
+impl Named for Properties {
     fn name() -> String {
         "averageTxnFee".into()
     }
 }
 
-impl ChartProperties for AverageTxnFeeProperties {
+impl ChartProperties for Properties {
     type Resolution = NaiveDate;
 
     fn chart_type() -> ChartType {
@@ -66,7 +66,7 @@ impl ChartProperties for AverageTxnFeeProperties {
 }
 
 pub type AverageTxnFee =
-    DirectVecLocalDbChartSource<AverageTxnFeeRemoteString, Batch30Days, AverageTxnFeeProperties>;
+    DirectVecLocalDbChartSource<AverageTxnFeeRemoteString, Batch30Days, Properties>;
 
 #[cfg(test)]
 mod tests {

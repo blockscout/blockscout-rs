@@ -41,15 +41,15 @@ impl StatementFromRange for AverageGasLimitStatement {
 pub type AverageGasLimitRemote =
     RemoteDatabaseSource<PullAllWithAndSort<AverageGasLimitStatement, NaiveDate, String>>;
 
-pub struct AverageGasLimitProperties;
+pub struct Properties;
 
-impl Named for AverageGasLimitProperties {
+impl Named for Properties {
     fn name() -> String {
         "averageGasLimit".into()
     }
 }
 
-impl ChartProperties for AverageGasLimitProperties {
+impl ChartProperties for Properties {
     type Resolution = NaiveDate;
 
     fn chart_type() -> ChartType {
@@ -58,7 +58,7 @@ impl ChartProperties for AverageGasLimitProperties {
 }
 
 pub type AverageGasLimit =
-    DirectVecLocalDbChartSource<AverageGasLimitRemote, Batch30Days, AverageGasLimitProperties>;
+    DirectVecLocalDbChartSource<AverageGasLimitRemote, Batch30Days, Properties>;
 
 #[cfg(test)]
 mod tests {

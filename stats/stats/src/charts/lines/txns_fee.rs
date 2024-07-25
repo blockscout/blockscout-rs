@@ -48,15 +48,15 @@ pub type TxnsFeeRemote = RemoteDatabaseSource<PullAllWithAndSort<TxnsFeeStatemen
 
 pub type TxnsFeeRemoteString = MapToString<TxnsFeeRemote>;
 
-pub struct TxnsFeeProperties;
+pub struct Properties;
 
-impl Named for TxnsFeeProperties {
+impl Named for Properties {
     fn name() -> String {
         "txnsFee".into()
     }
 }
 
-impl ChartProperties for TxnsFeeProperties {
+impl ChartProperties for Properties {
     type Resolution = NaiveDate;
 
     fn chart_type() -> ChartType {
@@ -64,7 +64,7 @@ impl ChartProperties for TxnsFeeProperties {
     }
 }
 
-pub type TxnsFee = DirectVecLocalDbChartSource<TxnsFeeRemoteString, Batch30Days, TxnsFeeProperties>;
+pub type TxnsFee = DirectVecLocalDbChartSource<TxnsFeeRemoteString, Batch30Days, Properties>;
 
 #[cfg(test)]
 mod tests {

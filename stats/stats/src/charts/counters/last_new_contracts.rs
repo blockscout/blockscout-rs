@@ -9,15 +9,15 @@ use crate::{
 use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 
-pub struct LastNewContractsProperties;
+pub struct Properties;
 
-impl Named for LastNewContractsProperties {
+impl Named for Properties {
     fn name() -> String {
         "lastNewContracts".into()
     }
 }
 
-impl ChartProperties for LastNewContractsProperties {
+impl ChartProperties for Properties {
     type Resolution = NaiveDate;
 
     fn chart_type() -> ChartType {
@@ -25,8 +25,7 @@ impl ChartProperties for LastNewContractsProperties {
     }
 }
 
-pub type LastNewContracts =
-    DirectPointLocalDbChartSource<LastPoint<NewContracts>, LastNewContractsProperties>;
+pub type LastNewContracts = DirectPointLocalDbChartSource<LastPoint<NewContracts>, Properties>;
 
 #[cfg(test)]
 mod tests {

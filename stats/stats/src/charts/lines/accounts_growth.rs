@@ -2,22 +2,28 @@
 
 use super::new_accounts::NewAccountsInt;
 use crate::{
-    data_source::kinds::local_db::DailyCumulativeLocalDbChartSource, ChartProperties,
-    MissingDatePolicy, Named,
+    data_source::kinds::{
+        data_manipulation::resolutions::last_value::LastValueWeekly,
+        local_db::{
+            parameters::update::batching::parameters::Batch30Weeks,
+            DailyCumulativeLocalDbChartSource, DirectVecLocalDbChartSource,
+        },
+    },
+    ChartProperties, MissingDatePolicy, Named,
 };
 
 use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 
-pub struct AccountsGrowthProperties;
+pub struct Properties;
 
-impl Named for AccountsGrowthProperties {
+impl Named for Properties {
     fn name() -> String {
         "accountsGrowth".into()
     }
 }
 
-impl ChartProperties for AccountsGrowthProperties {
+impl ChartProperties for Properties {
     type Resolution = NaiveDate;
 
     fn chart_type() -> ChartType {
@@ -28,8 +34,15 @@ impl ChartProperties for AccountsGrowthProperties {
     }
 }
 
-pub type AccountsGrowth =
-    DailyCumulativeLocalDbChartSource<NewAccountsInt, AccountsGrowthProperties>;
+// delegated_property_with_resolution!(WeeklyProperties {
+//     resolution: Week,
+//     ..Properties
+// });
+
+pub type AccountsGrowth = DailyCumulativeLocalDbChartSource<NewAccountsInt, Properties>;
+
+// pub type AccountsGrowthWeekly =
+//     DirectVecLocalDbChartSource<LastValueWeekly<AccountsGrowth>, Batch30Weeks, WeeklyProperties>;
 
 #[cfg(test)]
 mod tests {

@@ -44,15 +44,15 @@ impl StatementForOne for CompletedTxnsStatement {
 pub type CompletedTxnsRemote =
     RemoteDatabaseSource<PullOne<CompletedTxnsStatement, NaiveDate, String>>;
 
-pub struct CompletedTxnsProperties;
+pub struct Properties;
 
-impl Named for CompletedTxnsProperties {
+impl Named for Properties {
     fn name() -> String {
         "completedTxns".into()
     }
 }
 
-impl ChartProperties for CompletedTxnsProperties {
+impl ChartProperties for Properties {
     type Resolution = NaiveDate;
 
     fn chart_type() -> ChartType {
@@ -63,8 +63,7 @@ impl ChartProperties for CompletedTxnsProperties {
     }
 }
 
-pub type CompletedTxns =
-    DirectPointLocalDbChartSource<CompletedTxnsRemote, CompletedTxnsProperties>;
+pub type CompletedTxns = DirectPointLocalDbChartSource<CompletedTxnsRemote, Properties>;
 
 #[cfg(test)]
 mod tests {

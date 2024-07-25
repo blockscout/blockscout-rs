@@ -61,15 +61,15 @@ impl MapFunction<Vec<DateValue<Decimal>>> for IncrementsFromPartialSum {
 
 pub type NewGasUsedRemote = Map<GasUsedPartialRemote, IncrementsFromPartialSum>;
 
-pub struct GasUsedGrowthProperties;
+pub struct Properties;
 
-impl Named for GasUsedGrowthProperties {
+impl Named for Properties {
     fn name() -> String {
         "gasUsedGrowth".into()
     }
 }
 
-impl ChartProperties for GasUsedGrowthProperties {
+impl ChartProperties for Properties {
     type Resolution = NaiveDate;
 
     fn chart_type() -> ChartType {
@@ -80,8 +80,7 @@ impl ChartProperties for GasUsedGrowthProperties {
     }
 }
 
-pub type GasUsedGrowth =
-    DailyCumulativeLocalDbChartSource<NewGasUsedRemote, GasUsedGrowthProperties>;
+pub type GasUsedGrowth = DailyCumulativeLocalDbChartSource<NewGasUsedRemote, Properties>;
 
 #[cfg(test)]
 mod tests {

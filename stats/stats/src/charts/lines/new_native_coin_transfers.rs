@@ -45,15 +45,15 @@ impl StatementFromRange for NewNativeCoinTransfersStatement {
 pub type NewNativeCoinTransfersRemote =
     RemoteDatabaseSource<PullAllWithAndSort<NewNativeCoinTransfersStatement, NaiveDate, String>>;
 
-pub struct NewNativeCoinTransfersProperties;
+pub struct Properties;
 
-impl Named for NewNativeCoinTransfersProperties {
+impl Named for Properties {
     fn name() -> String {
         "newNativeCoinTransfers".into()
     }
 }
 
-impl ChartProperties for NewNativeCoinTransfersProperties {
+impl ChartProperties for Properties {
     type Resolution = NaiveDate;
 
     fn chart_type() -> ChartType {
@@ -61,11 +61,8 @@ impl ChartProperties for NewNativeCoinTransfersProperties {
     }
 }
 
-pub type NewNativeCoinTransfers = DirectVecLocalDbChartSource<
-    NewNativeCoinTransfersRemote,
-    Batch30Days,
-    NewNativeCoinTransfersProperties,
->;
+pub type NewNativeCoinTransfers =
+    DirectVecLocalDbChartSource<NewNativeCoinTransfersRemote, Batch30Days, Properties>;
 
 pub type NewNativeCoinTransfersInt = MapParseTo<NewNativeCoinTransfers, i64>;
 
