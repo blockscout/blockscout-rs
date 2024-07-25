@@ -4,15 +4,21 @@ use crate::{
     charts::types::DateValue,
     data_source::{
         kinds::{
-            data_manipulation::map::MapParseTo,
+            data_manipulation::{
+                map::{MapParseTo, MapToString},
+                resolutions::sum::SumWeekly,
+            },
             local_db::{
-                parameters::update::batching::parameters::BatchMaxDays, DirectVecLocalDbChartSource,
+                parameters::update::batching::parameters::{Batch30Weeks, BatchMaxDays},
+                DirectVecLocalDbChartSource,
             },
             remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour, StatementFromRange},
         },
         UpdateContext,
     },
+    delegated_property_with_resolution,
     missing_date::trim_out_of_range_sorted,
+    types::week::Week,
     utils::sql_with_range_filter_opt,
     ChartProperties, Named, UpdateError,
 };
@@ -103,7 +109,17 @@ impl ChartProperties for Properties {
     }
 }
 
+delegated_property_with_resolution!(WeeklyProperties {
+    resolution: Week,
+    ..Properties
+});
+
 pub type NewAccounts = DirectVecLocalDbChartSource<NewAccountsRemote, BatchMaxDays, Properties>;
+pub type NewAccountsWeekly = DirectVecLocalDbChartSource<
+    MapToString<SumWeekly<NewAccountsInt>>,
+    Batch30Weeks,
+    WeeklyProperties,
+>;
 
 pub type NewAccountsInt = MapParseTo<NewAccounts, i64>;
 

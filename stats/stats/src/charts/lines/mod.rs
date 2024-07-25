@@ -26,7 +26,7 @@ mod mock;
 
 pub use accounts_growth::{
     AccountsGrowth,
-    // AccountsGrowthWeekly,
+    AccountsGrowthWeekly,
     // AccountsGrowthMonthly,
     // AccountsGrowthYearly,
 };
@@ -92,7 +92,7 @@ pub use native_coin_supply::{
 };
 pub use new_accounts::{
     NewAccounts,
-    // NewAccountsWeekly,
+    NewAccountsWeekly,
     // NewAccountsMonthly,
     // NewAccountsYearly,
 };

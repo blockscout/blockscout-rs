@@ -9,6 +9,8 @@ use crate::{
             DailyCumulativeLocalDbChartSource, DirectVecLocalDbChartSource,
         },
     },
+    delegated_property_with_resolution,
+    types::week::Week,
     ChartProperties, MissingDatePolicy, Named,
 };
 
@@ -34,15 +36,15 @@ impl ChartProperties for Properties {
     }
 }
 
-// delegated_property_with_resolution!(WeeklyProperties {
-//     resolution: Week,
-//     ..Properties
-// });
+delegated_property_with_resolution!(WeeklyProperties {
+    resolution: Week,
+    ..Properties
+});
 
 pub type AccountsGrowth = DailyCumulativeLocalDbChartSource<NewAccountsInt, Properties>;
 
-// pub type AccountsGrowthWeekly =
-//     DirectVecLocalDbChartSource<LastValueWeekly<AccountsGrowth>, Batch30Weeks, WeeklyProperties>;
+pub type AccountsGrowthWeekly =
+    DirectVecLocalDbChartSource<LastValueWeekly<AccountsGrowth>, Batch30Weeks, WeeklyProperties>;
 
 #[cfg(test)]
 mod tests {

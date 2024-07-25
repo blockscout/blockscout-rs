@@ -6,11 +6,12 @@ use crate::{
         TotalNativeCoinTransfers, TotalTokens, TotalTxns, TotalVerifiedContracts,
     },
     lines::{
-        AccountsGrowth, ActiveAccounts, AverageBlockRewards, AverageBlockRewardsWeekly,
-        AverageBlockSize, AverageGasLimit, AverageGasPrice, AverageTxnFee, ContractsGrowth,
-        GasUsedGrowth, NativeCoinHoldersGrowth, NativeCoinSupply, NewAccounts, NewBlocks,
-        NewContracts, NewNativeCoinHolders, NewNativeCoinTransfers, NewTxns, NewVerifiedContracts,
-        TxnsFee, TxnsGrowth, TxnsSuccessRate, VerifiedContractsGrowth,
+        AccountsGrowth, AccountsGrowthWeekly, ActiveAccounts, AverageBlockRewards,
+        AverageBlockRewardsWeekly, AverageBlockSize, AverageGasLimit, AverageGasPrice,
+        AverageTxnFee, ContractsGrowth, GasUsedGrowth, NativeCoinHoldersGrowth, NativeCoinSupply,
+        NewAccounts, NewAccountsWeekly, NewBlocks, NewContracts, NewNativeCoinHolders,
+        NewNativeCoinTransfers, NewTxns, NewVerifiedContracts, TxnsFee, TxnsGrowth,
+        TxnsSuccessRate, VerifiedContractsGrowth,
     },
 };
 
@@ -32,7 +33,7 @@ construct_update_group!(AverageBlockRewardsGroup {
 construct_update_group!(AverageBlockSizeGroup {
     charts: [
         AverageBlockSize,
-        AverageBlockSizeWeekly,
+        // AverageBlockSizeWeekly,
         // AverageBlockSizeMonthly,
         // AverageBlockSizeYearly,
     ]
@@ -41,7 +42,7 @@ construct_update_group!(AverageBlockSizeGroup {
 construct_update_group!(AverageGasLimitGroup {
     charts: [
         AverageGasLimit,
-        AverageGasLimitWeekly,
+        // AverageGasLimitWeekly,
         // AverageGasLimitMonthly,
         // AverageGasLimitYearly,
     ]
@@ -50,7 +51,7 @@ construct_update_group!(AverageGasLimitGroup {
 construct_update_group!(AverageGasPriceGroup {
     charts: [
         AverageGasPrice,
-        AverageGasPriceWeekly,
+        // AverageGasPriceWeekly,
         // AverageGasPriceMonthly,
         // AverageGasPriceYearly,
     ]
@@ -59,7 +60,7 @@ construct_update_group!(AverageGasPriceGroup {
 construct_update_group!(AverageTxnFeeGroup {
     charts: [
         AverageTxnFee,
-        AverageTxnFeeWeekly,
+        // AverageTxnFeeWeekly,
         // AverageTxnFeeMonthly,
         // AverageTxnFeeYearly,
     ]
@@ -68,7 +69,7 @@ construct_update_group!(AverageTxnFeeGroup {
 construct_update_group!(GasUsedGrowthGroup {
     charts: [
         GasUsedGrowth,
-        GasUsedGrowthWeekly,
+        // GasUsedGrowthWeekly,
         // GasUsedGrowthMonthly,
         // GasUsedGrowthYearly,
     ]
@@ -77,7 +78,7 @@ construct_update_group!(GasUsedGrowthGroup {
 construct_update_group!(NativeCoinSupplyGroup {
     charts: [
         NativeCoinSupply,
-        NativeCoinSupplyWeekly,
+        // NativeCoinSupplyWeekly,
         // NativeCoinSupplyMonthly,
         // NativeCoinSupplyYearly,
     ]
@@ -86,7 +87,7 @@ construct_update_group!(NativeCoinSupplyGroup {
 construct_update_group!(NewBlocksGroup {
     charts: [
         NewBlocks,
-        NewBlocksWeekly,
+        // NewBlocksWeekly,
         // NewBlocksMonthly,
         // NewBlocksYearly,
     ]
@@ -95,7 +96,7 @@ construct_update_group!(NewBlocksGroup {
 construct_update_group!(TxnsFeeGroup {
     charts: [
         TxnsFee,
-        TxnsFeeWeekly,
+        // TxnsFeeWeekly,
         // TxnsFeeMonthly,
         // TxnsFeeYearly,
     ]
@@ -104,7 +105,7 @@ construct_update_group!(TxnsFeeGroup {
 construct_update_group!(TxnsSuccessRateGroup {
     charts: [
         TxnsSuccessRate,
-        TxnsSuccessRateWeekly,
+        // TxnsSuccessRateWeekly,
         // TxnsSuccessRateMonthly,
         // TxnsSuccessRateYearly,
     ]
@@ -113,7 +114,7 @@ construct_update_group!(TxnsSuccessRateGroup {
 construct_update_group!(AverageBlockTimeGroup {
     charts: [
         AverageBlockTime,
-        AverageBlockTimeWeekly,
+        // AverageBlockTimeWeekly,
         // AverageBlockTimeMonthly,
         // AverageBlockTimeYearly,
     ]
@@ -122,7 +123,7 @@ construct_update_group!(AverageBlockTimeGroup {
 construct_update_group!(CompletedTxnsGroup {
     charts: [
         CompletedTxns,
-        CompletedTxnsWeekly,
+        // CompletedTxnsWeekly,
         // CompletedTxnsMonthly,
         // CompletedTxnsYearly,
     ]
@@ -131,7 +132,7 @@ construct_update_group!(CompletedTxnsGroup {
 construct_update_group!(TotalAddressesGroup {
     charts: [
         TotalAddresses,
-        TotalAddressesWeekly,
+        // TotalAddressesWeekly,
         // TotalAddressesMonthly,
         // TotalAddressesYearly,
     ]
@@ -140,7 +141,7 @@ construct_update_group!(TotalAddressesGroup {
 construct_update_group!(TotalBlocksGroup {
     charts: [
         TotalBlocks,
-        TotalBlocksWeekly,
+        // TotalBlocksWeekly,
         // TotalBlocksMonthly,
         // TotalBlocksYearly,
     ]
@@ -149,49 +150,117 @@ construct_update_group!(TotalBlocksGroup {
 construct_update_group!(TotalTokensGroup {
     charts: [
         TotalTokens,
-        TotalTokensWeekly,
+        // TotalTokensWeekly,
         // TotalTokensMonthly,
         // TotalTokensYearly,
     ]
 });
 
 construct_update_group!(NewAccountsGroup {
-    charts: [NewAccounts, AccountsGrowth, TotalAccounts]
+    charts: [
+        NewAccounts,
+        NewAccountsWeekly,
+        // NewAccountsMonthly,
+        // NewAccountsYearly,
+        AccountsGrowth,
+        AccountsGrowthWeekly,
+        // AccountsGrowthMonthly,
+        // AccountsGrowthYearly,
+        TotalAccounts,
+        // TotalAccountsWeekly,
+        // TotalAccountsMonthly,
+        // TotalAccountsYearly
+    ]
 });
 
 construct_update_group!(NewContractsGroup {
     charts: [
         NewContracts,
+        // NewContractsWeekly,
+        // NewContractsMonthly,
+        // NewContractsYearly,
         ContractsGrowth,
+        // ContractsGrowthWeekly,
+        // ContractsGrowthMonthly,
+        // ContractsGrowthYearly,
         // currently can be in a separate group but after #845
         // it's expected to join this group. placing it here to avoid
         // updating config after the fix (todo: remove (#845))
         TotalContracts,
-        LastNewContracts
+        // TotalContractsWeekly,
+        // TotalContractsMonthly,
+        // TotalContractsYearly,
+        LastNewContracts,
+        // LastNewContractsWeekly,
+        // LastNewContractsMonthly,
+        // LastNewContractsYearly
     ],
 });
 
 construct_update_group!(NewTxnsGroup {
-    charts: [NewTxns, TxnsGrowth, TotalTxns],
+    charts: [
+        NewTxns,
+        // NewTxnsWeekly,
+        // NewTxnsMonthly,
+        // NewTxnsYearly,
+        TxnsGrowth,
+        // TxnsGrowthWeekly,
+        // TxnsGrowthMonthly,
+        // TxnsGrowthYearly,
+        TotalTxns,
+        // TotalTxnsWeekly,
+        // TotalTxnsMonthly,
+        // TotalTxnsYearly
+    ],
 });
 
 construct_update_group!(NewVerifiedContractsGroup {
     charts: [
         NewVerifiedContracts,
+        // NewVerifiedContractsWeekly,
+        // NewVerifiedContractsMonthly,
+        // NewVerifiedContractsYearly,
         VerifiedContractsGrowth,
+        // VerifiedContractsGrowthWeekly,
+        // VerifiedContractsGrowthMonthly,
+        // VerifiedContractsGrowthYearly,
         TotalVerifiedContracts,
-        LastNewVerifiedContracts
+        // TotalVerifiedContractsWeekly,
+        // TotalVerifiedContractsMonthly,
+        // TotalVerifiedContractsYearly,
+        LastNewVerifiedContracts,
+        // LastNewVerifiedContractsWeekly,
+        // LastNewVerifiedContractsMonthly,
+        // LastNewVerifiedContractsYearly
     ],
 });
 
 construct_update_group!(NativeCoinHoldersGrowthGroup {
     charts: [
         NativeCoinHoldersGrowth,
+        // NativeCoinHoldersGrowthWeekly,
+        // NativeCoinHoldersGrowthMonthly,
+        // NativeCoinHoldersGrowthYearly,
         NewNativeCoinHolders,
-        TotalNativeCoinHolders
+        // NewNativeCoinHoldersWeekly,
+        // NewNativeCoinHoldersMonthly,
+        // NewNativeCoinHoldersYearly,
+        TotalNativeCoinHolders,
+        // TotalNativeCoinHoldersWeekly,
+        // TotalNativeCoinHoldersMonthly,
+        // TotalNativeCoinHoldersYearly
     ],
 });
 
 construct_update_group!(NewNativeCoinTransfersGroup {
-    charts: [NewNativeCoinTransfers, TotalNativeCoinTransfers],
+    charts: [
+        NewNativeCoinTransfers,
+        // NewNativeCoinTransfersWeekly,
+        // NewNativeCoinTransfersMonthly,
+        // NewNativeCoinTransfersYearly,
+        TotalNativeCoinTransfers,
+        // TotalNativeCoinTransfersWeekly,
+        // TotalNativeCoinTransfersMonthly,
+        // TotalNativeCoinTransfersYearly
+    ],
 });
