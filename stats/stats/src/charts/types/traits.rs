@@ -123,14 +123,14 @@ impl<T: Ord> ZeroTimespanValue<T> for TimespanValue<T, String> {
 ///
 /// but not `Year: ConsistsOf<Week>` or `Month: ConsistsOf<Week>` because week borders might not align
 /// with years'/months' borders.
-pub trait ConsistsOf<SmallerTimespan: Timespan> {
-    /// Construct the timespan from a date within the timespan.
+pub trait ConsistsOf<SmallerTimespan> {
+    /// Construct the timespan containing the smaller timespan.
     ///
-    /// Note that `from` is not a reversible function.
-    /// I.e. for some date `d`, `Timespan::from_date(d).into_date() != d`
+    /// Note that `from` is usually not a reversible function.
+    /// I.e. for some smaller timespan `s`, `T::from_smaller(s).into_smaller() != s`
+    /// can be true
     fn from_smaller(date: SmallerTimespan) -> Self;
-    /// Convert the timespan into a corresponding date
-    /// to store in database.
+    /// Convert the timespan into a corresponding smaller timespan (contained in `self`).
     fn into_smaller(self) -> SmallerTimespan;
 }
 

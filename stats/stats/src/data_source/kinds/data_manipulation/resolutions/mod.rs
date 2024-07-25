@@ -32,20 +32,20 @@ pub fn extend_to_timespan_boundaries<T: Timespan>(
     start..end
 }
 
-/// Produce vector of timespan data `LPoint` from vector of smaller timespan data `SPoint`.
+/// Produce vector of timespan data `LResPoint` from vector of smaller timespan data `HResPoint`.
 ///
-/// Combine all points that fall within the `LPoint` timespan according to `reduce_timespan`.
+/// Combine all points that fall within one `LResPoint` timespan according to `reduce_timespan`.
 ///
 /// `list` must be sorted (all equal timespans must be adjacent, as well as timespans
 /// mapping into the same larger timespan); otherwise the correct result is not guaranteed.
-pub fn reduce_each_timespan<SPoint, LPoint, LTimespan, R, M>(
-    list: Vec<SPoint>,
+pub fn reduce_each_timespan<HResPoint, LResPoint, LTimespan, R, M>(
+    list: Vec<HResPoint>,
     timespan_mapping: M,
     reduce_timespan: R,
-) -> Vec<LPoint>
+) -> Vec<LResPoint>
 where
-    M: Fn(&SPoint) -> LTimespan,
-    R: Fn(Vec<SPoint>) -> LPoint,
+    M: Fn(&HResPoint) -> LTimespan,
+    R: Fn(Vec<HResPoint>) -> LResPoint,
     LTimespan: Eq,
 {
     let mut result = vec![];

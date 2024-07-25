@@ -4,7 +4,7 @@ use crate::{
     data_source::kinds::{
         data_manipulation::{
             map::{MapParseTo, MapToString},
-            resolutions::average::WeeklyAverage,
+            resolutions::average::AverageLowerResolution,
         },
         local_db::{
             parameters::update::batching::parameters::{Batch30Days, Batch30Weeks},
@@ -80,7 +80,13 @@ pub type AverageBlockRewards =
     DirectVecLocalDbChartSource<AverageBlockRewardsRemoteString, Batch30Days, Properties>;
 
 pub type AverageBlockRewardsWeekly = DirectVecLocalDbChartSource<
-    MapToString<WeeklyAverage<MapParseTo<AverageBlockRewards, f64>, MapParseTo<NewBlocks, i64>>>,
+    MapToString<
+        AverageLowerResolution<
+            MapParseTo<AverageBlockRewards, f64>,
+            MapParseTo<NewBlocks, i64>,
+            Week,
+        >,
+    >,
     Batch30Weeks,
     WeeklyProperties,
 >;

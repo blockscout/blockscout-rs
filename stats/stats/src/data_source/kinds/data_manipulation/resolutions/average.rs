@@ -1,5 +1,5 @@
 /// Non-daily average values charts
-use std::{cmp::Ordering, marker::PhantomData, ops::Range};
+use std::{cmp::Ordering, fmt::Debug, marker::PhantomData, ops::Range};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Utc};
@@ -10,34 +10,36 @@ use crate::{
     data_source::{
         kinds::data_manipulation::resolutions::reduce_each_timespan, DataSource, UpdateContext,
     },
-    types::{
-        week::{Week, WeekValue},
-        DateValue, Timespan, TimespanValue,
-    },
+    types::{ConsistsOf, Timespan, TimespanValue},
     UpdateError,
 };
 
 use super::extend_to_timespan_boundaries;
 
-/// `DailyWeight` - weight of each day in average source.
-/// I.e. if it's average over blocks, then weight is daily number of blocks.
+/// `Weight` - weight of each timespan in average source.
+/// E.g. if it's average over blocks, then weight is number of blocks in each point.
 ///
-/// `DailyAverage` and `DailyWeight`'s missing date values are expected to mean zero
+/// `LowerRes` - target resolution of resulting data source. Lower = longer.
+/// E.g. if `LowerRes` is `Week`, then source data is expected to be daily.
+///
+/// `Average` and `Weight`'s missing date values are expected to mean zero
 /// (`FillZero`).
 /// [see "Dependency requirements" here](crate::data_source::kinds)
-pub struct WeeklyAverage<DailyAverage, DailyWeight>(PhantomData<(DailyAverage, DailyWeight)>)
-where
-    DailyAverage: DataSource<Output = Vec<DateValue<f64>>>,
-    DailyWeight: DataSource<Output = Vec<DateValue<i64>>>;
+pub struct AverageLowerResolution<Average, Weight, LowerRes>(
+    PhantomData<(Average, Weight, LowerRes)>,
+);
 
-impl<DailyAverage, DailyWeight> DataSource for WeeklyAverage<DailyAverage, DailyWeight>
+impl<Average, Weight, LowerRes, HigherRes> DataSource
+    for AverageLowerResolution<Average, Weight, LowerRes>
 where
-    DailyAverage: DataSource<Output = Vec<DateValue<f64>>>,
-    DailyWeight: DataSource<Output = Vec<DateValue<i64>>>,
+    Average: DataSource<Output = Vec<TimespanValue<HigherRes, f64>>>,
+    Weight: DataSource<Output = Vec<TimespanValue<HigherRes, i64>>>,
+    LowerRes: Timespan + ConsistsOf<HigherRes> + Eq + Debug + Send,
+    HigherRes: Ord + Clone + Debug + Send,
 {
-    type MainDependencies = DailyAverage;
-    type ResolutionDependencies = DailyWeight;
-    type Output = Vec<WeekValue<f64>>;
+    type MainDependencies = Average;
+    type ResolutionDependencies = Weight;
+    type Output = Vec<TimespanValue<LowerRes, f64>>;
 
     fn mutex_id() -> Option<String> {
         // just an adapter
@@ -62,16 +64,16 @@ where
         range: Option<Range<DateTimeUtc>>,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<Self::Output, UpdateError> {
-        let time_range_for_weeks = range.map(extend_to_timespan_boundaries::<Week>);
-        let daily_averages = DailyAverage::query_data(
+        let time_range_for_lower_res = range.map(extend_to_timespan_boundaries::<LowerRes>);
+        let high_res_averages = Average::query_data(
             cx,
-            time_range_for_weeks.clone(),
+            time_range_for_lower_res.clone(),
             dependency_data_fetch_timer,
         )
         .await?;
         let weights =
-            DailyWeight::query_data(cx, time_range_for_weeks, dependency_data_fetch_timer).await?;
-        Ok(weekly_average_from(daily_averages, weights))
+            Weight::query_data(cx, time_range_for_lower_res, dependency_data_fetch_timer).await?;
+        Ok(lower_res_average_from(high_res_averages, weights))
     }
 }
 
@@ -128,29 +130,33 @@ where
     result
 }
 
-fn weekly_average_from(
-    day_average: Vec<DateValue<f64>>,
-    day_weight: Vec<DateValue<i64>>,
-) -> Vec<WeekValue<f64>> {
+fn lower_res_average_from<LowerRes, HigherRes>(
+    h_res_average: Vec<TimespanValue<HigherRes, f64>>,
+    h_res_weight: Vec<TimespanValue<HigherRes, i64>>,
+) -> Vec<TimespanValue<LowerRes, f64>>
+where
+    LowerRes: ConsistsOf<HigherRes> + Eq + Debug,
+    HigherRes: Ord + Clone + Debug,
+{
     // missing points mean zero, treat them as such
-    let combined_data = zip_same_timespan(day_average, day_weight);
-    let weekly_averages = reduce_each_timespan(
+    let combined_data = zip_same_timespan(h_res_average, h_res_weight);
+    let l_res_averages = reduce_each_timespan(
         combined_data,
-        |(date, _)| Week::from_date(date.clone()),
-        |week_data| {
-            let Some((first_date, _)) = week_data.first() else {
+        |(h_res, _)| LowerRes::from_smaller(h_res.clone()),
+        |one_l_res_data| {
+            let Some((first_h_res, _)) = one_l_res_data.first() else {
                 return None;
             };
-            let current_week = Week::new(first_date.clone());
+            let current_l_res = LowerRes::from_smaller(first_h_res.clone());
             let mut weight_times_avg_sum = 0f64;
             let mut total_weight = 0;
-            for (date, values) in week_data {
+            for (h_res, values) in one_l_res_data {
                 debug_assert_eq!(
-                    current_week,
-                    Week::from_date(date),
-                    "must've returned only data within current week ({:?}); got {}",
-                    current_week,
-                    date
+                    current_l_res,
+                    LowerRes::from_smaller(h_res.clone()),
+                    "must've returned only data within current lower res timespan ({:?}); got {:?}",
+                    current_l_res,
+                    h_res
                 );
                 match values {
                     EitherOrBoth::Both(avg, weight) => {
@@ -159,23 +165,23 @@ fn weekly_average_from(
                     }
                     EitherOrBoth::Left(v) => tracing::warn!(
                         value = v,
-                        "average value for date {} is present while weight is not",
-                        date
+                        timespan =? h_res,
+                        "average value for higher res timespan is present while weight is not",
                     ),
                     EitherOrBoth::Right(v) => tracing::warn!(
                         value = v,
-                        "weight for date {} is present average value is not",
-                        date
+                        timespan =? h_res,
+                        "weight for higher res timespan is present while average value is not",
                     ),
                 }
             }
             Some(TimespanValue {
-                timespan: current_week,
+                timespan: current_l_res,
                 value: weight_times_avg_sum / total_weight as f64,
             })
         },
     );
-    weekly_averages.into_iter().filter_map(|x| x).collect_vec()
+    l_res_averages.into_iter().filter_map(|x| x).collect_vec()
 }
 
 #[cfg(test)]
@@ -185,6 +191,10 @@ mod tests {
         gettable_const,
         lines::{PredefinedMockSource, PseudoRandomMockRetrieve},
         tests::point_construction::{d, d_v, d_v_double, d_v_int, dt, week_of, week_v_double},
+        types::{
+            week::{Week, WeekValue},
+            DateValue,
+        },
         MissingDatePolicy,
     };
 
@@ -269,7 +279,7 @@ mod tests {
 
         let week_1_average = (5.0 * 100.0 + 34.2 * 2.0 + 10.3 * 12.0) / (100.0 + 2.0 + 12.0);
         assert_eq!(
-            weekly_average_from(
+            lower_res_average_from(
                 vec![
                     d_v_double("2024-07-08", 5.0),
                     d_v_double("2024-07-10", 34.2),
@@ -297,9 +307,10 @@ mod tests {
         gettable_const!(RandomWeightsRange: Range<u64> = 1..5);
         gettable_const!(Policy: MissingDatePolicy = MissingDatePolicy::FillZero);
 
-        type TestedAverageSource = WeeklyAverage<
+        type TestedAverageSource = AverageLowerResolution<
             MapParseTo<PseudoRandomMockRetrieve<Dates, RandomAveragesRange, Policy>, f64>,
             MapParseTo<PseudoRandomMockRetrieve<Dates, RandomWeightsRange, Policy>, i64>,
+            Week,
         >;
 
         // weeks for this month are
@@ -349,7 +360,8 @@ mod tests {
         type PredefinedDailyAverage = PredefinedMockSource<MockDailyAverage, Policy>;
         type PredefinedWeights = PredefinedMockSource<MockWeights, Policy>;
 
-        type TestedAverageSource = WeeklyAverage<PredefinedDailyAverage, PredefinedWeights>;
+        type TestedAverageSource =
+            AverageLowerResolution<PredefinedDailyAverage, PredefinedWeights, Week>;
 
         // db is not used in mock
         let empty_db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
