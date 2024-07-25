@@ -183,7 +183,7 @@ mod tests {
     use crate::{
         data_source::kinds::data_manipulation::map::MapParseTo,
         gettable_const,
-        lines::PseudoRandomMockRetrieve,
+        lines::{PredefinedMockSource, PseudoRandomMockRetrieve},
         tests::point_construction::{d, d_v, d_v_double, d_v_int, dt, week_of, week_v_double},
         MissingDatePolicy,
     };
@@ -325,6 +325,50 @@ mod tests {
                 .map(|week_value| week_value.timespan)
                 .collect_vec(),
             vec![week_of("2024-07-08"), week_of("2024-07-15"),]
+        );
+    }
+
+    #[tokio::test]
+    async fn average_weekly_works() {
+        // weeks for this month (2024-07) are
+        // 8-14, 15-21, 22-28
+        gettable_const!(MockDailyAverage: Vec<DateValue<f64>> = vec![
+            d_v_double("2024-07-08", 5.0),
+            d_v_double("2024-07-10", 34.2),
+            d_v_double("2024-07-14", 10.3),
+            d_v_double("2024-07-17", 5.0)
+        ]);
+        gettable_const!(MockWeights: Vec<DateValue<i64>> = vec![
+            d_v_int("2024-07-08", 100),
+            d_v_int("2024-07-10", 2),
+            d_v_int("2024-07-14", 12),
+            d_v_int("2024-07-17", 5)
+        ]);
+        gettable_const!(Policy: MissingDatePolicy = MissingDatePolicy::FillZero);
+
+        type PredefinedDailyAverage = PredefinedMockSource<MockDailyAverage, Policy>;
+        type PredefinedWeights = PredefinedMockSource<MockWeights, Policy>;
+
+        type TestedAverageSource = WeeklyAverage<PredefinedDailyAverage, PredefinedWeights>;
+
+        // db is not used in mock
+        let empty_db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
+
+        let context = UpdateContext {
+            db: &empty_db,
+            blockscout: &empty_db,
+            time: dt("2024-07-30T09:00:00").and_utc(),
+            force_full: false,
+        };
+        let week_1_average = (5.0 * 100.0 + 34.2 * 2.0 + 10.3 * 12.0) / (100.0 + 2.0 + 12.0);
+        assert_eq!(
+            TestedAverageSource::query_data(&context, None, &mut AggregateTimer::new())
+                .await
+                .unwrap(),
+            vec![
+                week_v_double("2024-07-08", week_1_average),
+                week_v_double("2024-07-15", 5.0)
+            ]
         );
     }
 }

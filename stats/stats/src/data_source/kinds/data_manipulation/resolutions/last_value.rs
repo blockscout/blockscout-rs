@@ -102,22 +102,22 @@ mod tests {
 
     use super::LastValueWeekly;
 
-    // weeks for this month (2024-07) are
-    // 8-14, 15-21, 22-28
-    gettable_const!(MockData: Vec<DateValue<i64>> = vec![
-        d_v_int("2024-07-08", 1),
-        d_v_int("2024-07-12", 3),
-        d_v_int("2024-07-27", 5),
-        d_v_int("2024-07-28", 1234),
-    ]);
-    gettable_const!(PolicyGrowth: MissingDatePolicy = MissingDatePolicy::FillPrevious);
-
-    type MockSource = PredefinedMockSource<MockData, PolicyGrowth>;
-
-    type MockSourceWeekly = LastValueWeekly<MockSource>;
-
     #[tokio::test]
     async fn last_value_weekly_works() {
+        // weeks for this month (2024-07) are
+        // 8-14, 15-21, 22-28
+        gettable_const!(MockData: Vec<DateValue<i64>> = vec![
+            d_v_int("2024-07-08", 1),
+            d_v_int("2024-07-12", 3),
+            d_v_int("2024-07-27", 5),
+            d_v_int("2024-07-28", 1234),
+        ]);
+        gettable_const!(PolicyGrowth: MissingDatePolicy = MissingDatePolicy::FillPrevious);
+
+        type MockSource = PredefinedMockSource<MockData, PolicyGrowth>;
+
+        type MockSourceWeekly = LastValueWeekly<MockSource>;
+
         // db is not used in mock
         let empty_db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
 
