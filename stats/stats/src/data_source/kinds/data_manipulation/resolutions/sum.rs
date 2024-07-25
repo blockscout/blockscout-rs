@@ -1,12 +1,17 @@
-//! Construct other resolutions taking last value within the range.
+//! Construct other resolutions taking sum of values within the range.
 //!
-//! Intended for "growth" charts where cumulative number of something
+//! Intended for "new"/"delta" charts where change of something
 //! is presented.
 
-use std::{fmt::Debug, marker::PhantomData, ops::Range};
+use std::{
+    fmt::Debug,
+    marker::PhantomData,
+    ops::{AddAssign, Range},
+};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Utc};
+use rust_decimal::prelude::Zero;
 use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
 
 use crate::{
@@ -20,14 +25,14 @@ use crate::{
 
 use super::{extend_to_timespan_boundaries, reduce_each_timespan};
 
-/// Take last value within each timespan range.
-pub struct LastValueWeekly<DS>(PhantomData<DS>)
+/// Sum points within each timespan range.
+pub struct SumWeekly<DS>(PhantomData<DS>)
 where
     DS: DataSource;
 
-impl<DS, Value> DataSource for LastValueWeekly<DS>
+impl<DS, Value> DataSource for SumWeekly<DS>
 where
-    Value: Send + Debug,
+    Value: AddAssign + Zero + Send + Debug,
     DS: DataSource<Output = Vec<DateValue<Value>>>,
 {
     type MainDependencies = DS;
@@ -67,11 +72,33 @@ where
         Ok(reduce_each_timespan(
             daily_data,
             |t| Week::from_date(t.timespan),
-            |a| {
-                let last = a.into_iter().rev().next();
-                last.map(|p| TimespanValue {
-                    timespan: Week::from_date(p.timespan),
-                    value: p.value,
+            |l_timespan_data| {
+                let Some(TimespanValue {
+                    timespan: first_date,
+                    value: _,
+                }) = l_timespan_data.first()
+                else {
+                    return None;
+                };
+                let current_l_timespan = Week::new(first_date.clone());
+                let mut total = Value::zero();
+                for TimespanValue {
+                    timespan: s_timespan,
+                    value,
+                } in l_timespan_data
+                {
+                    debug_assert_eq!(
+                        current_l_timespan,
+                        Week::from_date(s_timespan),
+                        "must've returned only data within current week ({:?}); got {}",
+                        current_l_timespan,
+                        s_timespan
+                    );
+                    total += value;
+                }
+                Some(TimespanValue {
+                    timespan: current_l_timespan,
+                    value: total,
                 })
             },
         )
@@ -95,10 +122,10 @@ mod tests {
         MissingDatePolicy,
     };
 
-    use super::LastValueWeekly;
+    use super::SumWeekly;
 
     #[tokio::test]
-    async fn last_value_weekly_works() {
+    async fn sum_weekly_works() {
         // weeks for this month (2024-07) are
         // 8-14, 15-21, 22-28
         gettable_const!(MockData: Vec<DateValue<i64>> = vec![
@@ -111,7 +138,7 @@ mod tests {
 
         type MockSource = PredefinedMockSource<MockData, PolicyGrowth>;
 
-        type MockSourceWeekly = LastValueWeekly<MockSource>;
+        type MockSourceWeekly = SumWeekly<MockSource>;
 
         // db is not used in mock
         let empty_db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
@@ -137,7 +164,7 @@ mod tests {
             MockSourceWeekly::query_data(&context, None, &mut AggregateTimer::new())
                 .await
                 .unwrap(),
-            vec![week_v_int("2024-07-08", 3), week_v_int("2024-07-22", 1234),]
+            vec![week_v_int("2024-07-08", 4), week_v_int("2024-07-22", 1239),]
         );
     }
 }

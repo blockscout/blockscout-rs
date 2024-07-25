@@ -10,6 +10,7 @@ use crate::{types::Timespan, utils::exclusive_datetime_range_to_inclusive};
 
 pub mod average;
 pub mod last_value;
+pub mod sum;
 
 // Boundaries of resulting range - timespans that contain boundaries of date range
 fn date_range_to_timespan<T: Timespan>(range: Range<DateTime<Utc>>) -> RangeInclusive<T> {
