@@ -5,7 +5,7 @@ use rust_decimal::Decimal;
 
 use crate::charts::ResolutionKind;
 
-use super::{TimespanDuration, TimespanValue};
+use super::{week::Week, TimespanDuration, TimespanValue};
 
 pub trait Timespan {
     /// Construct the timespan from a date within the timespan.
@@ -110,5 +110,36 @@ impl<T: Ord> ZeroTimespanValue<T> for TimespanValue<T, String> {
             timespan,
             value: "0".to_string(),
         }
+    }
+}
+
+/// Indicates that this timespan can be broken into (multiple) `SmallerTimespan`s.
+///
+/// Examples (types may not be called exactly like this):
+/// - `Week: ConsistsOf<Day>`
+/// - `Month: ConsistsOf<Day>`
+/// - `Year: ConsistsOf<Day>`
+/// - `Year: ConsistsOf<Month>`
+///
+/// but not `Year: ConsistsOf<Week>` or `Month: ConsistsOf<Week>` because week borders might not align
+/// with years'/months' borders.
+pub trait ConsistsOf<SmallerTimespan: Timespan> {
+    /// Construct the timespan from a date within the timespan.
+    ///
+    /// Note that `from` is not a reversible function.
+    /// I.e. for some date `d`, `Timespan::from_date(d).into_date() != d`
+    fn from_smaller(date: SmallerTimespan) -> Self;
+    /// Convert the timespan into a corresponding date
+    /// to store in database.
+    fn into_smaller(self) -> SmallerTimespan;
+}
+
+impl ConsistsOf<NaiveDate> for Week {
+    fn from_smaller(date: NaiveDate) -> Self {
+        Week::from_date(date)
+    }
+
+    fn into_smaller(self) -> NaiveDate {
+        Week::into_date(self)
     }
 }

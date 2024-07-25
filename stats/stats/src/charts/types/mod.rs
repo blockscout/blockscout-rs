@@ -11,7 +11,7 @@ use sea_orm::Set;
 pub use day::DateValue;
 pub use duration::TimespanDuration;
 pub use extended::ExtendedTimespanValue;
-pub use traits::{Timespan, TimespanValueTrait, ZeroTimespanValue};
+pub use traits::{ConsistsOf, Timespan, TimespanValueTrait, ZeroTimespanValue};
 
 /// Some value for some time interval
 #[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
